@@ -1,19 +1,13 @@
-"""PERF-TRANCHE-1 A5/B2 — the two long native calls run with the GIL RELEASED.
+"""The two long native calls run with the GIL RELEASED.
 
-The PERF-BASELINE ledger measured self-play and training in separate drives, so it could
-not see what happens when both run in one process. The PERF-TRANCHE-1 M-1 joint drive did:
-`HexgBuffer.sample_graph_batch` held the GIL for **99.9 %** of every ring-sample window and
-the in-process inference-server thread served **zero** graphs across 16.85 s of them,
-against 79.9 requests/s outside. Twelve self-play workers keep building leaves through that
-stall; nothing answers them.
+Measured before the fix: `HexgBuffer.sample_graph_batch` held the GIL for 99.9% of every
+ring-sample window and the in-process inference thread served zero graphs across 16.85 s of
+them, against 79.9 requests/s outside.
 
-WHAT THESE TESTS CAN AND CANNOT SEE. CPython exposes no "is the GIL held" predicate, so the
-only oracle available from Python is whether another Python thread makes progress while the
-native call runs. That is a TIMING observation, and it is framed to have an enormous margin
-rather than a tight one: a GIL-holding call lets the observer thread advance **not at all**,
-so the assertion is "advanced substantially", not "advanced by N". The authoritative witness
-for these fixes is the joint drive on the box; these tests are the standing regression guard
-that keeps the release from being quietly removed.
+CPython exposes no "is the GIL held" predicate, so the only oracle from Python is whether
+another thread makes progress while the native call runs. That is a timing observation,
+framed with an enormous margin: a GIL-holding call lets the observer advance not at all, so
+the assertion is "advanced substantially", never "advanced by N".
 """
 from __future__ import annotations
 
@@ -24,9 +18,8 @@ import pytest
 
 from mantis import _engine
 
-# A ring whose sample is long enough that a GIL hold would be unmistakable, and short
-# enough to belong in the default tier. Measured, not guessed: 24 stones x 32 sampled
-# graphs runs on the order of a tenth of a second.
+# Measured: 24 stones x 32 sampled graphs runs on the order of a tenth of a second — long
+# enough for a GIL hold to be unmistakable, short enough for the default tier.
 _STONES = 24
 _RECORDS = 256
 _CAPACITY = 512
@@ -48,7 +41,7 @@ def _mk_ring() -> object:
 
 
 class _Observer(threading.Thread):
-    """A second Python thread that only counts. It cannot advance while the GIL is held."""
+    """A second Python thread that only counts; it cannot advance while the GIL is held."""
 
     def __init__(self) -> None:
         # NOT `_stop`: that name shadows `threading.Thread._stop`, which the runtime calls.
@@ -66,7 +59,7 @@ class _Observer(threading.Thread):
 
 
 def _ticks_during(call) -> tuple[int, float]:
-    """`(observer ticks, elapsed ms)` across one native call."""
+    """Return `(observer ticks, elapsed ms)` across one native call."""
     obs = _Observer()
     obs.start()
     time.sleep(0.02)  # let the observer reach steady state before the call
@@ -81,10 +74,10 @@ def _ticks_during(call) -> tuple[int, float]:
 
 
 def test_sample_graph_batch_releases_the_gil() -> None:
-    """B2 — the trainer's longest call is GIL-free.
+    """Prove the trainer's longest call is GIL-free.
 
-    Unreleased, this call is a total serve stall for its whole duration; it is 1 386 ms of a
-    2 769 ms step at run5 shape, so the stall is not a tail case.
+    Unreleased it stalls serving for its whole duration: 1386 ms of a 2769 ms step at run5
+    shape, so this is not a tail case.
     """
     hb = _mk_ring()
     hb.sample_graph_batch(_BATCH)  # warm: first call pays one-time build costs
@@ -102,19 +95,11 @@ def test_sample_graph_batch_releases_the_gil() -> None:
 
 
 def test_next_graph_batch_fuse_releases_the_gil() -> None:
-    """A5 — the inference-path fuse is GIL-free, like the pop it follows.
-
-    The mock producer is the only Python-reachable way to put graphs on this queue, so the
-    batch is sized until the fuse window is resolvable rather than left at a handful.
-    """
+    """Prove the inference-path fuse is GIL-free, like the pop it follows."""
     spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
     batcher = _engine.InferenceBatcher(encoding_spec=spec)
-    # 1024 mock leaves, not a handful: the fuse is the window under test and a batch too
-    # small to resolve would leave this test SKIPPING on a fast host — a green that means
-    # nothing, which is the whole defect this file exists to prevent. Sized by measurement,
-    # not by guess: at 256 the pop+fuse ran 16.7 ms on an idle host, inside the 20 ms
-    # resolution floor below; at 1024 it runs ~43 ms, clear of it with room for a host
-    # faster than this one.
+    # Sized by measurement: at 256 the pop+fuse ran 16.7 ms, inside the 20 ms resolution
+    # floor below and so a silent skip; at 1024 it runs ~43 ms, clear of it.
     n_mock = 1024
     batcher.spawn_mock_graph_games(n_mock)
     for _ in range(400):
@@ -135,19 +120,14 @@ def test_next_graph_batch_fuse_releases_the_gil() -> None:
     )
 
 
-# ── The half the two tests above could not see ────────────────────────────────────────────
-# `_Observer` only counts; it never TOUCHES the ring. So it witnessed the GIL release while
-# staying blind to what the release exposed: `sample_graph_batch` took pyo3's `PyRefMut` for
-# its whole body and held it across the GIL-free window, so any other Python thread that
-# touched the same buffer was refused with `RuntimeError: Already mutably borrowed`. The sole
-# self-play producer does exactly that — `pool_drain.run_stats_loop` reads `.size` — so the
-# guard logged `selfplay_producer_died` and the run ended. Measured on dev at 2026-08-30:
-# one successful `.size` read, then the refusal. These tests are the LAW-07 producer for the
-# repair: exclusion moved to a mutex with every pymethod on `&self`, so a contender WAITS.
+# `_Observer` never touches the ring, so it is blind to what the release exposed: a
+# `PyRefMut` held across the GIL-free window refused any other thread with "Already mutably
+# borrowed" (measured 2026-08-30: one `.size` read, then the refusal, killing the producer).
+# Exclusion is now a mutex with every pymethod on `&self`, so a contender waits.
 
 
 class _RingToucher(threading.Thread):
-    """A second thread that READS the ring, which is what the observer above never did."""
+    """A second thread that reads the ring, which is what the observer above never did."""
 
     def __init__(self, ring: object) -> None:
         super().__init__(daemon=True, name="ring-toucher")
@@ -183,7 +163,7 @@ def _read_ring_during_samples(ring: object, n_samples: int) -> _RingToucher:
 
 
 def test_a_concurrent_reader_is_NOT_refused_while_the_ring_is_sampled() -> None:
-    """The regression guard. Before the repair this raised on the reader's second read."""
+    """Prove a concurrent reader is not refused while the ring is sampled."""
     ring = _mk_ring()
     toucher = _read_ring_during_samples(ring, n_samples=12)
     assert toucher.error is None, (
@@ -196,11 +176,7 @@ def test_a_concurrent_reader_is_NOT_refused_while_the_ring_is_sampled() -> None:
 
 
 def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
-    """Vacuity control for the guard above.
-
-    If the reader finished before the first sample started, a refusal could not have fired
-    and a green would mean nothing. This pins that reads land while sampling is in flight.
-    """
+    """Prove reads land while sampling is in flight, so the refusal guard above is exercised."""
     ring = _mk_ring()
     toucher = _read_ring_during_samples(ring, n_samples=12)
     assert toucher.error is None
@@ -211,8 +187,7 @@ def test_the_concurrent_reader_actually_OVERLAPS_the_sample_window() -> None:
 
 
 def test_the_ring_reports_no_poisoned_lock_recoveries() -> None:
-    """LAW-18: the mutex that replaced the borrow is observable, not silent. A non-zero count
-    means a panic happened under the guard and the seam kept going."""
+    """Prove no poisoned-lock recovery happened: a non-zero count means a panic under the guard."""
     ring = _mk_ring()
     _read_ring_during_samples(ring, n_samples=4)
     assert ring.lock_recoveries == 0

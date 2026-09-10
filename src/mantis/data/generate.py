@@ -1,16 +1,8 @@
-"""Generate bot self-play corpus for bootstrap pretraining.
+"""Generate a bot self-play corpus for bootstrap pretraining.
 
-Library surface (DAG-clean — takes a bot as a parameter, no ``mantis.bots``
-import):
-  - :func:`generate_bot_games` — play + persist unique self-play games.
-  - :func:`load_cached_bot_games` — load cached bot games as move sequences.
-
-The bot is duck-typed via the LOCAL structural :class:`BotLike` protocol below —
-only the three methods the generator calls (``reset`` / ``get_move`` / ``name``).
-A concrete WP12 bot satisfies it structurally with no nominal dependency; the
-CLI ``_make_bot``/``main`` that instantiates concrete bots is deferred to WP12
-(the only place a concrete bot is constructed). Path defaults resolve in the
-caller (no code-side default path; CLAUDE.md R1).
+The bot is duck-typed via the local structural :class:`BotLike` protocol, so this module
+takes a bot as a parameter and never imports ``mantis.bots``. Path defaults resolve in the
+caller — there is no code-side default path.
 """
 
 from __future__ import annotations
@@ -35,7 +27,7 @@ MAX_MOVES_PER_GAME = 500
 
 @runtime_checkable
 class BotLike(Protocol):
-    """Structural protocol for a self-play bot — the 3 methods the generator calls."""
+    """Structural protocol for a self-play bot: the three methods the generator calls."""
 
     def reset(self) -> None: ...
 
@@ -56,23 +48,17 @@ def _play_one_game(
     human_seeding_min_move: int = 10,
     human_seeding_max_move: int = 25,
 ) -> dict[str, Any] | None:
-    """Play one self-play game using bot for both sides.
+    """Play one self-play game with ``bot`` on both sides.
 
-    To ensure opening diversity (deterministic bots at fixed depth always play
-    the same game otherwise), the first n_random_opening moves are random. The
-    bot takes over after that.
+    The first ``n_random_opening`` moves are random for opening diversity, or drawn from a
+    human mid-position when ``use_human_seeding`` is set.
 
-    When use_human_seeding=True, the opening is instead drawn from a real human
-    game mid-position via sample_human_midgame_position().
-
-    Returns a dict with keys: moves, winner, plies, bot_name.
-    Returns None if the game ends without a winner (capped).
+    Returns:
+        A dict of moves, winner, plies and bot_name, or None if the game ended with no winner.
     """
     bot.reset()
-    # AUDIT-1 F-34: identity-BOUND. `Board()` takes the engine defaults (legal-move radius 5,
-    # cluster threshold 5) whatever encoding the games are being generated FOR, so a generated
-    # corpus was radius-5 constrained regardless of the identity it feeds. REQUIRED and
-    # keyword-only: a default would be the same silence one argument out.
+    # Identity-bound: a bare `Board()` takes the engine's default radius whatever encoding
+    # the corpus is generated for, so `encoding_name` is required and keyword-only.
     board = Board.with_encoding_name(encoding_name)
     state = GameState.from_board(board)
     moves: list[tuple[int, int]] = []
@@ -80,11 +66,8 @@ def _play_one_game(
     rng = random.Random(rng_seed + game_idx)
 
     if use_human_seeding and human_corpus_dir:
-        # Try human-seeded opening; fall back to random on failure. Partial progress is
-        # preserved EXACTLY: the closure rebinds the enclosing `state` via `nonlocal` as
-        # it applies, so a mid-sequence failure leaves board/state/moves where the old
-        # inline `try` left them (returning the final state instead would silently
-        # discard the plies already applied to the shared `board`).
+        # The closure rebinds `state` via `nonlocal` as it applies, so a mid-sequence
+        # failure preserves the plies already applied to the shared `board`.
         corpus_dir: str = human_corpus_dir  # narrowed here; closures do not narrow
 
         def _seed_opening() -> None:
@@ -109,14 +92,11 @@ def _play_one_game(
             counters=PIPELINE_COUNTERS,
         )
         if not seeded:
-            # `best_effort` already WARNed the exception under the label; this keeps the
-            # operator-facing event (which game, which fallback) the pipeline had.
+            # `best_effort` already warned the exception; this names the game and fallback.
             log.warning("human_seeding_fallback", game=game_idx, fallback="random_opening")
-            # Fall through to random opening below
             use_human_seeding = False
 
     if not use_human_seeding or not moves:
-        # Random opening moves for diversity (original behaviour)
         for _ in range(n_random_opening):
             legal = board.legal_moves()
             if not legal or board.check_win():
@@ -127,9 +107,8 @@ def _play_one_game(
 
     while (not board.check_win() and board.legal_move_count() > 0
            and len(moves) < MAX_MOVES_PER_GAME):
-        # The UNPACK is inside the counted arm, exactly as the old inline `try` covered
-        # it: a bot returning a non-pair raised inside the old handler and ended the
-        # game, and must still — not escape as a TypeError that kills the whole run.
+        # The unpack sits inside the counted arm: a bot returning a non-pair must end the
+        # game as a counted skip, not escape as a TypeError that kills the run.
         def _next_move(s: GameState = state) -> tuple[int, int]:  # default-bound (B023)
             mq, mr = bot.get_move(s, board)
             return mq, mr
@@ -159,7 +138,7 @@ def _play_one_game(
 
 
 def _game_hash(moves: list[dict[str, Any]]) -> str:
-    """SHA-256 of the move sequence, truncated to 16 hex chars."""
+    """Return the SHA-256 of the move sequence, truncated to 16 hex chars."""
     key = json.dumps(moves, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(key.encode()).hexdigest()[:16]
 
@@ -177,13 +156,13 @@ def generate_bot_games(
     human_seeding_min_move: int = 10,
     human_seeding_max_move: int = 25,
 ) -> int:
-    """Generate n_games unique self-play games and save to output_dir.
+    """Generate ``n_games`` unique self-play games and save them to ``output_dir``.
 
-    Games are named by a hash of their move sequence, so:
-    - Re-running never overwrites existing games with different content
-    - Duplicate games (identical move sequences) are detected and skipped
+    Games are named by a hash of their move sequence, so re-running never overwrites
+    differing content and duplicates are skipped.
 
-    Returns the number of new games saved (excludes duplicates and pre-existing).
+    Returns:
+        The number of new games saved, excluding duplicates and pre-existing files.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 

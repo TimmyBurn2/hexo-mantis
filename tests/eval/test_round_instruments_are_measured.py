@@ -1,23 +1,18 @@
-"""AUDIT-1 F-28 rows B02, B03, B04, B05 — the eval round's constants become measurements.
+"""The eval round's constants become measurements.
 
-FOUR ROWS, ONE CLASS. Each publishes a value that reads as a measurement and is not one:
+Four rows, one class — each published a value that read as a measurement and was not one:
 
-* **B02** — the worker child stamped `"status": "active"` on EVERY rung result. The child has
-  no `LadderState`, so a SATURATED rung playing its off-cadence calibration games was labelled
-  active every round. The parent now stamps the real status, read BEFORE `record_round` so it
-  is the status the rung was PLAYED under. Beside it, the random floor's `RegimeKey` claimed
-  `deploy_matched=True` while playing at `random_model_sims` against a uniform bot — M-3's
-  mislabel one block over. Only the GATE block is deploy-matched (both sides at
-  `spec.gate.deploy_sims`), and that `True` is derived from the construction, so it stays.
-* **B03** — the progress writer defaulted `plies` to `0`, publishing a game that ended at ply
-  zero for a record shape carrying no ply count. `event_manifest.md`'s own row for this writer
-  says an unrecognised shape writes NULLS.
-* **B04** — `eval_round_complete.promoted: false` covered three different rounds: the gate ran
-  and refused, the gate was not scheduled, there was no anchor. `None` is now "no promotion
-  decision was taken".
-* **B05** — the terminal round emitted no `eval_round_started`, while the `eval_round_wall`
-  manifest row names the PAIR as its producer. The one round whose wall time the drain budget
-  is judged on had no start timestamp.
+* the worker child stamped `"status": "active"` on EVERY rung result, because the child has no
+  `LadderState`, so a SATURATED rung's off-cadence calibration games were labelled active. The
+  parent now stamps the real status, read BEFORE `record_round` so it is the status the rung was
+  PLAYED under. Beside it, the random floor's `RegimeKey` claimed `deploy_matched=True` while
+  playing at `random_model_sims` against a uniform bot; only the GATE block is deploy-matched.
+* the progress writer defaulted `plies` to `0`, publishing a game that ended at ply zero for a
+  record shape carrying no ply count. An unrecognised shape writes NULLS.
+* `eval_round_complete.promoted: false` covered three different rounds — the gate ran and
+  refused, the gate was not scheduled, there was no anchor. `None` is now "no decision taken".
+* the terminal round emitted no `eval_round_started`, while the `eval_round_wall` manifest row
+  names the PAIR as its producer.
 """
 from __future__ import annotations
 
@@ -32,7 +27,6 @@ import pytest
 pytest.importorskip("torch")
 
 
-# ── B03: the progress writer ──────────────────────────────────────────────────────────
 
 def _progress_row(tmp_path: Path, record: Any) -> dict[str, Any]:
     """One row through the PRODUCTION writer."""
@@ -58,12 +52,10 @@ def test_a_record_that_HAS_a_ply_count_still_carries_it(tmp_path: Path) -> None:
     assert zero["plies"] == 0 and zero["plies"] is not None
 
 
-# ── B02: the deploy-matched label ─────────────────────────────────────────────────────
 
 def test_only_the_GATE_block_claims_to_be_deploy_matched() -> None:
     """Structural, over the worker's own source: `deploy_matched=True` is legitimate exactly
-    where both sides play at `spec.gate.deploy_sims`. The random floor plays at
-    `random_model_sims` against a uniform bot and used to claim it too."""
+    where both sides play at `spec.gate.deploy_sims`."""
     import ast
     import inspect
 
@@ -86,19 +78,16 @@ def test_only_the_GATE_block_claims_to_be_deploy_matched() -> None:
     )
 
 
-# ── B02: the rung status the parent stamps ────────────────────────────────────────────
 
 class _FakePipeline:
-    """`EvalPipeline._success_result` lifted off the class, ladder collaborator REAL enough to
-    carry statuses — the same stand-in shape `test_strength_floor_refusal_reaches_the_gate.py`
-    uses, so the code exercised is production."""
+    """`EvalPipeline._success_result` lifted off the class, with a ladder collaborator real
+    enough to carry statuses, so the code exercised is production."""
 
     class _Ladder:
         rungs: tuple = ()
         bt_prior_games = 1.0
-        # The three the external-channel assessment threads into its ONE CI authority
-        # (`aggregate.pair_bootstrap_wr_ci`); real values, not stubs, so the stand-in drives
-        # the same arithmetic production does.
+        # The three the external-channel assessment threads into its ONE CI authority; real
+        # values, not stubs, so the stand-in drives the same arithmetic production does.
         bootstrap_resamples = 200
         bootstrap_ci_level = 0.95
         bootstrap_seed = 0
@@ -109,11 +98,9 @@ class _FakePipeline:
         self._eval_cfg = SimpleNamespace(ladder=self._Ladder())
         self._ladder_state_path = Path("/nonexistent/ladder.json")
         self._last_p_hat: dict = {}
-        # R343(b)(iii)/(iv): `_finalize_round` now also drives the external-channel
-        # assessment, so the stand-in carries the REAL method and the state it reads. Stubbing
-        # it out would make this harness green while the producer went unexercised — the same
-        # shape as a fake `save_checkpoint` returning None, which is how the resume sidecar's
-        # missing leg stayed invisible until a box run found it.
+        # `_finalize_round` also drives the external-channel assessment, so the stand-in carries
+        # the REAL method and the state it reads: stubbing it would leave the producer
+        # unexercised while this harness stayed green.
         self._external_history: list = []
         self._degradation_flags = 0
         self._round_counter = 0
@@ -146,8 +133,8 @@ class _FakePipeline:
         return self._last_p_hat
 
     def _check_the_sealbot_rung_identity(self, rungs_raw, result, *, round_id):
-        """The PRODUCTION method, bound through the class — not a stub (AUDIT-1 F-14). It
-        walks `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
+        """The PRODUCTION method, bound through the class — not a stub. It walks
+        `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
         from mantis.eval.pipeline import EvalPipeline
 
         return EvalPipeline._check_the_sealbot_rung_identity(
@@ -173,7 +160,7 @@ def _drive(raw: dict[str, Any], statuses: dict[str, str]) -> tuple[dict, list[di
 
 
 def test_a_SATURATED_rungs_calibration_games_are_not_labelled_active() -> None:
-    """THE PIN (B02). The child stamped `active` unconditionally; the parent reads the truth."""
+    """The child stamped `active` unconditionally; the parent reads the truth."""
     raw = {"rungs": {"sealbot_d5": {"games": 8, "wr": 0.5, "wr_ci_lower": 0.2}},
            "gate": None, "random": {"games": 0, "wr": None}, "skipped_rungs": []}
     result, _events = _drive(raw, {"sealbot_d5": "saturated"})
@@ -198,7 +185,6 @@ def test_a_rung_the_ladder_does_not_know_is_absent_not_active() -> None:
     assert result["rungs"]["mystery"]["status"] is None
 
 
-# ── B04: the three rounds that used to be one observable ──────────────────────────────
 
 def _complete(events: list[dict[str, Any]]) -> dict[str, Any]:
     matches = [e for e in events if e.get("event") == "eval_round_complete"]
@@ -207,7 +193,7 @@ def _complete(events: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def test_a_round_with_no_gate_scheduled_reports_NO_promotion_decision() -> None:
-    """THE PIN (B04). Before: `promoted: false`, identical to a gate that ran and refused."""
+    """Before this, `promoted: false` was identical to a gate that ran and refused."""
     raw = {"rungs": {}, "gate": None, "random": {"games": 4, "wr": 0.5}, "skipped_rungs": []}
     _result, events = _drive(raw, {})
     assert _complete(events)["promoted"] is None
@@ -226,12 +212,11 @@ def test_a_gate_that_RAN_reports_its_decision_either_way(promoted: bool) -> None
     assert _complete(events)["promoted"] is not None
 
 
-# ── B05: the terminal round's start event ─────────────────────────────────────────────
 
 def test_the_terminal_round_emits_the_START_half_of_the_manifest_pair() -> None:
-    """B05, structural over the production source: `_run_terminal_sync` must call
-    `emit_round_started`. The `eval_round_wall` manifest row names the PAIR as its producer,
-    and the terminal round is the one whose wall time the drain budget is judged on."""
+    """Structural over the production source: `_run_terminal_sync` must call
+    `emit_round_started`. The `eval_round_wall` manifest row names the PAIR as its producer, and
+    the terminal round is the one whose wall time the drain budget is judged on."""
     import ast
     import inspect
 

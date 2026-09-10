@@ -740,6 +740,20 @@ class.** Recorded here rather than left as silent drift (R9).
     ambient (E501 dispositioned NEVER; tests/ style-exempt under frozen-oracle edit-aversion
     with the adopted defect classes still live there; pyright strict CARDED adopt-later).
     The trigger self-tests on every run (`--self-test`: one planted violation per arm).
+    R9 AMENDMENT (R346(f), CLEANUP WAVE 2): gate 14 gained a third arm, the COMMENT
+    RATCHET (`tools/ci_gates/comment_lint.py`, floor in
+    `tools/ci_gates/comment_length_floor.txt`, producer `tests/tools/test_comment_lint.py`).
+    It measures three counts over tracked `.py`/`.rs` under `src/`, `tools/`, `crates/`,
+    `tests/` — lines beyond two in a run of own-line comments, banner lines, and lines
+    beyond the first in a docstring — and enforces DIRECTION, not a cap: a measure may not
+    exceed the committed floor, and the floor may not be raised. A cap was rejected because
+    R346(f) itself permits a longer block that states a non-obvious invariant, so a cap
+    needs an exemption list, and an exemption list nobody maintains is how a lint dies. The
+    ruling-citation count is measured and printed but NOT gated: gate 15 requires the token
+    `R8` in every oversized file's justification, so gating it would set two gates against
+    each other. The arm runs before ruff and pyright so a pyright REFUSAL (rc 2, a host
+    condition) cannot suppress the comment measures. It adds NO gate number — the set is
+    still seventeen, and gate 18 stays reserved for RQ-21's `freeze_verify`.
 
 ## 10. Performance doctrine (design constraint, not a pass)
 

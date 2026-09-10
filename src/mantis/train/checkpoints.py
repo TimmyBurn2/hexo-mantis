@@ -1,17 +1,9 @@
-"""The ONE checkpoint loader + envelope-v2 writer/reader (repo_design §6; WP10 §a.1/§c.1).
+"""The ONE checkpoint loader + envelope-v2 writer/reader.
 
->300 justify: four old loaders (`training/checkpoints`, `training/trainer_ckpt_load`,
-`eval/checkpoint_loader`, `viewer/model_loader`) collapse into this single module — the
-highest-value structural win of WP10. It owns the envelope-v2 write path, the ONE read
-path (v2 + the three legacy shapes), the immutable-stamp + provenance-reverify guards,
-the O3b killed-prefix REJECT, the resume-precedence helpers, and the weights-strip path.
-
-Zero-behavior-change doctrine: every reachable numeric op is a pure relocation. The
-approved FAILURE-MODE amendments (immutable stamps, unstamped=failed save,
-`weights_only=True` everywhere, persist-fatal, killed-prefix reject) change how failures
-SURFACE, never a reachable numeric result. All shape-inference (`infer_*_hparams`,
-`_build_min_max_model` sniff-reconstruct, `MODEL_HPARAM_DEFAULTS`) is DELETED — arch
-travels on `metadata.arch` (a WP9 declared dataclass) → `build_net`, never re-derived.
+>300 justify: four old loaders collapse here because they share one envelope — the v2 write
+path, the ONE read path, the stamp and provenance guards, the killed-prefix REJECT, the
+resume-precedence helpers and the weights-strip path. All shape-inference is DELETED: arch
+travels on `metadata.arch` -> `build_net`, never re-derived.
 """
 from __future__ import annotations
 
@@ -43,22 +35,19 @@ from mantis.train.emit import emit_via
 
 _LOG = logging.getLogger(__name__)
 
-# ── Envelope axis (DISTINCT from the config's own schema_version=1) ────────────────────
+# Envelope axis, DISTINCT from the config's own schema_version=1.
 CHECKPOINT_SCHEMA_VERSION = 2
 
-# WP9 O3b (load-bearing): state-dict key prefixes of FALSIFIED-and-DELETED branches. The
-# loader REJECTS any state dict carrying one — it NEVER reconstructs a PMA/gpool pool.
+# State-dict key prefixes of FALSIFIED-and-DELETED branches; the loader REJECTS any state
+# dict carrying one and NEVER reconstructs a PMA/gpool pool.
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 
-# Persist-fatal counter (repo_design §11 / LAW-14): a swallowed persist failure is banned;
-# a FAILED write increments this, never `except: pass`. The watchdog's persist-fatal rule
-# is the literal `> 0` (rc 43), so ONLY run-fatal facts may feed it.
+# A swallowed persist failure is banned; a FAILED write increments this. The watchdog's
+# persist-fatal rule is the literal `> 0` (rc 43), so ONLY run-fatal facts may feed it.
 persist_errors_total = 0
 
-# Quarantine counter (WPCLEAN Phase RES, paying R-QUARANTINE-COUNTER): a quarantine write is
-# the survive-run clause WORKING — deliberately NOT run-fatal — so it counts HERE, not in
-# `persist_errors_total`. Before this split a survivable quarantine fed the watchdog's
-# `> 0` fatal rule and would have killed the run it existed to save.
+# A quarantine write is the survive-run clause WORKING — deliberately NOT run-fatal — so it
+# counts HERE. Feeding it to `persist_errors_total` would kill the run it exists to save.
 quarantine_writes_total = 0
 
 
@@ -71,45 +60,30 @@ class DeclaredEncodingMismatchError(ValueError):
 
 
 class ResumeIdentityMismatchError(ValueError):
-    """A resume's EFFECTIVE identity block differs from the checkpoint's (R345(b)(3)).
+    """A resume's EFFECTIVE identity block differs from the checkpoint's own.
 
-    Distinct from `DeclaredEncodingMismatchError`, which compares a checkpoint's stamp against
-    its own baked config — an internal-consistency check on one artifact. This one compares
-    the artifact against the RUN about to continue from it, after `config_overrides` have been
-    applied, and it covers the whole identity triple rather than the encoding alone. A resume
-    that moves `representation` or `arch_kind` gets a net rebuilt from the checkpoint's stamped
-    arch and a config that claims another; nothing downstream can tell, because every later
-    save re-stamps the arch it was handed.
+    The net is rebuilt from the checkpoint's STAMPED arch while the config claims another, and
+    every later save re-stamps the arch it was handed, so nothing downstream can tell.
     """
 
 
 class ResumeTargetSemanticsError(ValueError):
-    """A resume changes what a STORED replay row MEANS (GUMBEL-REPAIR-1 follow-on).
+    """A resume changes what a STORED replay row MEANS.
 
-    Distinct from `ResumeIdentityMismatchError`, which is about what NET gets built. These
-    leaves build no net and pass its checks; what they decide is whether a recorded row is a
-    visit-count distribution or a completed improved policy, and — through the same one
-    decision — which loss the trainer applies to it.
-
-    A resume is the one moment the two can disagree. `RunConfig` already forces the three
-    flags to move together at MINT (`_policy_target_completed_q_consistency`), so no single
-    config can hold a mixed opinion; nothing carried that decision ACROSS a resume. Since
-    R345(b)(3) a resume restores the replay ring, so moving one of these continues training on
-    a ring full of rows built under the old meaning while producing rows under the new one,
-    and applies the new loss to both. Nothing downstream can notice: a row records no
-    provenance, and both kinds are well-formed distributions over legal moves.
+    These leaves build no net; they decide whether a stored row is a visit-count distribution
+    or a completed improved policy, and which loss applies to it. A resume restores the ring,
+    so moving one trains old and new rows under one loss with no provenance to tell them apart.
     """
 
 
-# ── Envelope dataclasses (the in-memory view of a loaded envelope) ─────────────────────
 @dataclass(frozen=True)
 class CheckpointMetadata:
-    encoding_name: str            # REQUIRED (LAW-11); no fallback
+    encoding_name: str            # REQUIRED; no fallback
     run_id: str                   # provenance stamp (drives the filename); "" on a legacy read
     step: int
     commit_sha: str               # "unknown" outside a git checkout (never blocks a write)
     created_utc: str              # ISO-8601 Z; written ONCE, immutable; "" on a bare legacy read
-    arch: ModelArch | None        # the WP9 declared dataclass — the SOLE arch source at load
+    arch: ModelArch | None        # the declared dataclass — the SOLE arch source at load
     corpus_sha256: str | None = None
 
 
@@ -133,10 +107,8 @@ class LrProvenance:
     override_ignored: bool
 
 
-# ── Stamp helpers ──────────────────────────────────────────────────────────────────────
 def _resolve_commit_sha() -> str:
-    """`git rev-parse HEAD` — best-effort; "unknown" outside a git checkout. Never raises;
-    a metadata write must not be blocked by VCS state (repo_design §6 R3)."""
+    """Return `git rev-parse HEAD`, or "unknown" outside a git checkout; never raises."""
     try:
         out = subprocess.check_output(
             ["git", "rev-parse", "HEAD"],
@@ -155,35 +127,18 @@ def _now_iso() -> str:
     )
 
 
-#: The serialized discriminator's key, and the registry it selects on.
-#:
-#: `representation` ALONE STOPPED BEING A DISCRIMINATOR the moment a second graph arch existed:
-#: `GnnArchV2` declares `representation="graph"` because it consumes the same wire, so a V2
-#: stamp read through the old dispatch rehydrated as `GnnArch`, silently, and the loader then
-#: rebuilt V1's net for a V2 checkpoint. That is a provenance defect of exactly the class LAW-12
-#: exists for, and it is why this is a REGISTRY keyed by the arch's own name rather than another
-#: branch: the next arch adds a row, and `tests/model/test_arch_v2_dispatch.py` holds this
-#: registry set-equal to `build_net`'s dispatch in both directions.
+#: The serialized discriminator's key and the registry it selects on. `representation` alone
+#: stopped discriminating once a second graph arch existed: a V2 stamp rehydrated as `GnnArch`.
 _ARCH_KIND_KEY = "arch_kind"
-#: THE registry, imported rather than restated (R322(d)): a kind vocabulary is a MODEL fact
-#: and this loader is one of its consumers. It was authored here at B1 because the loader is
-#: where the need first bit; candidate D's selector needs the same vocabulary, and two copies
-#: of a discriminator is the duplicate-authority class this file's own docstring warns about.
+#: THE registry, imported rather than restated: two copies of a discriminator is duplicate authority.
 _ARCH_KINDS = ARCH_KINDS
 
-#: What a stamp written BEFORE the discriminator existed resolves to, by representation. Sound
-#: because it is a fact about history rather than a default: at the time those stamps were
-#: written `GnnArch` was the only graph member of the union, so a legacy graph stamp
-#: IS a V1 stamp. A legacy dict whose fields do not fit its target raises rather than being
-#: coerced — LAW-11's no-silent-fallback, applied to the loader.
+#: What a stamp written BEFORE the discriminator existed resolves to, by representation — a
+#: fact about history, not a default. A legacy dict that does not fit its target raises.
 _LEGACY_BY_REPRESENTATION: dict[str, type] = {"graph": GnnArch}
 
-#: The NON-BINDING placeholder pair for each arch-scoped block, for the synthetic config
-#: `strip_and_restamp` writes (R322(d)). A separate table rather than inline literals so the
-#: splice loop stays a loop over `ARCH_SCOPED_KEYS` — the schema's own partition — and a block
-#: added to that registry without a placeholder here fails by `KeyError` at the write, which is
-#: the loud outcome. These are the templates' own values and are never a sized cap: nothing
-#: trains or serves from a stripped artifact's snapshot.
+#: The NON-BINDING placeholder pair for each arch-scoped block, in a table so the splice stays a
+#: loop over `ARCH_SCOPED_KEYS` and a block added there without one fails loudly at the write.
 _SYNTH_ARCH_SCOPED: dict[tuple[str, str], dict[str, int]] = {
     ("train", "microbatch_caps"): {"max_edges": 100_000_000, "max_nodes": 4_000_000},
     ("inference", "fused_graph_caps"): {
@@ -193,23 +148,17 @@ _SYNTH_ARCH_SCOPED: dict[tuple[str, str], dict[str, int]] = {
 
 
 def _arch_to_dict(arch: ModelArch) -> dict[str, Any]:
-    """Serialize a declared arch dataclass to a plain dict of primitives (J14) so the whole
-    v2 payload round-trips under `torch.load(weights_only=True)` — NOT a pickled dataclass.
-
-    Carries `arch_kind` beside the dataclass fields: `representation` is no longer unique
-    across the union, so it can no longer be the discriminator on load.
-    """
+    """Serialize a declared arch dataclass to plain primitives so the v2 payload round-trips
+    under `torch.load(weights_only=True)`, carrying `arch_kind` as the load discriminator."""
     return {**dataclasses.asdict(arch), _ARCH_KIND_KEY: type(arch).__name__}
 
 
 def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
-    """Rehydrate a serialized arch dict, dispatching on `arch_kind` (no shape-inference — the
-    SOLE arch source is this dict).
+    """Rehydrate a serialized arch dict, dispatching on `arch_kind` — the SOLE arch source.
 
     Raises:
-        RepresentationMismatch: the dict names an unknown `arch_kind`; or it carries no
-            `arch_kind` and its `representation` is not 'graph'; or a legacy
-            dict does not fit the arch its representation names.
+        RepresentationMismatch: unknown `arch_kind`; no `arch_kind` with a non-graph
+            `representation`; or a legacy dict that does not fit the arch it names.
     """
     d = dict(d)
     kind = d.pop(_ARCH_KIND_KEY, None)
@@ -239,14 +188,9 @@ def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
 
 
 def stamped_arch_kind(metadata: Mapping[str, Any] | None, *, representation: str) -> str:
-    """THE ONE answer to "which arch kind does this ARTIFACT carry" (R330(e)).
-
-    A v2 stamp names it: `metadata.arch.arch_kind`. A stamp written before the discriminator
-    existed — a v1 envelope, a bare anchor, or a v2 stamp from before B1 — IS the incumbent-era
-    stamp, and resolves through `_LEGACY_BY_REPRESENTATION` for the representation of the
-    encoding it names: a fact about history, not a default, because at the time those stamps were
-    written that kind was the only member of the union on its representation. Never reads a
-    config; a config-less call site that needs an artifact's arch comes here and nowhere else.
+    """Return which arch kind an ARTIFACT carries, from its stamp alone and never a config. A
+    pre-discriminator stamp resolves through `_LEGACY_BY_REPRESENTATION` — a fact about history,
+    not a default.
 
     Raises:
         RepresentationMismatch: the stamp names an `arch_kind` this build does not know, or the
@@ -279,13 +223,11 @@ def _stamp_name(value: Any) -> Any:
 
 
 def _wire_signature(spec: Any) -> tuple[int, int, int]:
-    """The registry-spec input-surface tuple that determines tensor shapes (J6):
-    `(plane count, feature_len, policy width)` = `(n_planes, state_stride, policy_logit_count)`.
-    Two encodings have EQUAL wire signature iff all three match."""
+    """Return the spec tuple that determines tensor shapes — `(n_planes, state_stride,
+    policy_logit_count)`. Two encodings have EQUAL wire signature iff all three match."""
     return (int(spec.n_planes), int(spec.state_stride), int(spec.policy_logit_count))
 
 
-# ── Content hash + filename ────────────────────────────────────────────────────────────
 def _hash_update(h: hashlib._Hash, obj: Any) -> None:
     if isinstance(obj, torch.Tensor):
         h.update(b"\x01T")
@@ -311,9 +253,8 @@ def _hash_update(h: hashlib._Hash, obj: Any) -> None:
 
 
 def content_sha8(payload: Mapping[str, Any]) -> str:
-    """Deterministic first-8-hex content hash over a key-ordered serialization of the whole
-    v2 payload (model_state tensors + metadata + config + state blobs). Stable across
-    save/load round-trips; a one-byte model_state mutation changes it (T-CK-09)."""
+    """Hash the whole v2 payload to 8 hex chars over a key-ordered serialization: stable across
+    save/load round-trips, and a one-byte model_state mutation changes it."""
     h = hashlib.sha256()
     _hash_update(h, payload)
     return h.hexdigest()[:8]
@@ -323,11 +264,9 @@ def checkpoint_filename(run_id: str, step: int, sha8: str) -> str:
     return f"{run_id}_{step:08d}_{sha8}.ckpt"
 
 
-# ── O3b reject ─────────────────────────────────────────────────────────────────────────
 def _reject_killed_prefixes(model_state: Mapping[str, Any]) -> None:
-    """REJECT any state dict carrying a killed-branch prefix (WP9 O3b / F-04/F-05). Fires on
-    BOTH loader surfaces — a stamped v2 can STRUCTURALLY carry a killed key, so the scan runs
-    on the v2 read path too. NEVER reconstructs a pool."""
+    """REJECT any state dict carrying a killed-branch prefix. Fires on BOTH loader surfaces —
+    a stamped v2 can STRUCTURALLY carry a killed key — and NEVER reconstructs a pool."""
     hit = [k for k in model_state if isinstance(k, str) and k.startswith(KILLED_PREFIXES)]
     if hit:
         raise RepresentationMismatch(
@@ -338,11 +277,9 @@ def _reject_killed_prefixes(model_state: Mapping[str, Any]) -> None:
         )
 
 
-# ── Metadata build (immutable stamp) ───────────────────────────────────────────────────
 def _build_stamped_metadata(metadata_kwargs: Mapping[str, Any], step: int) -> dict[str, Any]:
-    """Build the v2 metadata block, stamping `created_utc`/`commit_sha` ONCE. Refuses a
-    `metadata_kwargs` carrying those immutable fields (a re-stamp from a loaded envelope —
-    F-12/LAW-12) and an unresolvable `encoding_name` (LAW-11)."""
+    """Build the v2 metadata block, stamping `created_utc`/`commit_sha` ONCE; refuses
+    `metadata_kwargs` carrying those (a re-stamp) or an unresolvable `encoding_name`."""
     md = dict(metadata_kwargs)
     if "created_utc" in md or "commit_sha" in md:
         raise CheckpointStampError(
@@ -396,7 +333,6 @@ def _assemble_payload(
     return payload
 
 
-# ── Write path ─────────────────────────────────────────────────────────────────────────
 def _write_v2_payload(
     *,
     model_state: Mapping[str, Any],
@@ -411,14 +347,14 @@ def _write_v2_payload(
     allow_quarantine: bool,
 ) -> Path:
     global persist_errors_total
-    # 1. config schema-validated on write (repo_design §6) — raises before any file exists.
+    # 1. config schema-validated on write — raises before any file exists.
     RunConfig.model_validate(dict(config))
     # 2. immutable stamp (unstampable → quarantine under the survive-run flag, else raise).
     try:
         metadata = _build_stamped_metadata(metadata_kwargs, step)
     except CheckpointStampError:
         if not allow_quarantine:
-            raise  # T-CK-05/10/11 — an unstampable save writes nothing.
+            raise  # an unstampable save writes nothing.
         return _write_quarantine(
             model_state, kind, config, optimizer_state, scaler_state, scheduler_state,
             step, metadata_kwargs, checkpoint_dir,
@@ -432,15 +368,11 @@ def _write_v2_payload(
     cdir.mkdir(parents=True, exist_ok=True)
     path = cdir / checkpoint_filename(metadata["run_id"], step, sha8)
     try:
-        # R345(b)(3): temp file → fsync → rename → fsync(dir). A bare `torch.save(payload,
-        # path)` opens the FINAL path for writing, so a kill mid-write leaves a `.ckpt` that
-        # exists, is named for a content hash it does not carry, and fails to load — and it
-        # has already destroyed nothing only because each checkpoint has its own name. The
-        # rename is what makes the artefact appear whole or not at all, which is the property
-        # the bundle manifest then certifies.
+        # Temp file -> fsync -> rename -> fsync(dir): a bare `torch.save(payload, path)` opens
+        # the FINAL path, so a kill mid-write leaves a `.ckpt` whose content hash does not match.
         atomic_write(path, lambda handle: torch.save(payload, handle))
     except Exception:
-        persist_errors_total += 1  # LAW-14: count + abort, never `except: pass`.
+        persist_errors_total += 1  # count + abort, never `except: pass`.
         raise
     return path
 
@@ -456,10 +388,8 @@ def _write_quarantine(
     metadata_kwargs: Mapping[str, Any],
     checkpoint_dir: str | Path,
 ) -> Path:
-    """Survive-run clause (repo_design §6 / C4.5): an unstampable save writes
-    `<path>.quarantine` (NEVER a canonical `.ckpt`) and increments the QUARANTINE counter —
-    not the persist-fatal one (R-QUARANTINE-COUNTER: this path is deliberately survivable,
-    and the watchdog aborts on any nonzero persist count)."""
+    """Write `<path>.quarantine` for an unstampable save and count it as a QUARANTINE, not a
+    persist error — a nonzero persist count aborts the run, and this path is survivable."""
     global quarantine_writes_total
     md = dict(metadata_kwargs)
     q_meta = {
@@ -496,12 +426,9 @@ def save_checkpoint(
     kind: str = "full",
     allow_quarantine: bool = False,
 ) -> Path:
-    """Write an envelope-v2 checkpoint `{run_id}_{step:08d}_{sha8}.ckpt`.
-
-    Validates `config` against config-schema v1, stamps metadata ONCE (encoding_name
-    REQUIRED → else CheckpointStampError), computes the content hash, and persist-fatally
-    writes. A weights save carries model_state + metadata only (no optimizer/scaler/scheduler).
-    """
+    """Write an envelope-v2 checkpoint `{run_id}_{step:08d}_{sha8}.ckpt`: schema-validates
+    `config`, stamps metadata ONCE, content-hashes and persist-fatally writes. A weights save
+    carries model_state + metadata only."""
     base_model = getattr(model, "_orig_mod", model)
     model_state = base_model.state_dict()
     if kind == "full":
@@ -524,7 +451,6 @@ def save_checkpoint(
     )
 
 
-# ── Read path (v2) ─────────────────────────────────────────────────────────────────────
 def _verify_provenance(
     path: Path, payload: Mapping[str, Any], metadata: Mapping[str, Any], expected_run_id: str | None
 ) -> None:
@@ -592,12 +518,10 @@ def load_checkpoint(
     declared_encoding: Any = None,
     decode_override: Any = None,
 ) -> Checkpoint:
-    """Read a v2 envelope. `torch.load(weights_only=True)`; re-verify run_id + content-hash
-    vs the filename (provenance); REJECT any killed-branch prefix (O3b); reconcile
-    declared_encoding (assert) / decode_override (loud, never raises) / stamp sources
-    (disagree → raise); re-validate config; resolve arch from `metadata.arch`. NEVER
-    re-stamps, always weights-only (no pickle-exec fallback), NEVER auto-upgrades a
-    legacy/bare payload."""
+    """Read a v2 envelope, re-verifying provenance and refusing every silent repair:
+    `weights_only=True`, run_id and content hash re-checked against the filename, killed-branch
+    prefixes REJECTED, `declared_encoding` asserting, `decode_override` loud but never raising,
+    and disagreeing stamp sources raising. Never re-stamps, never auto-upgrades."""
     path = Path(path)
     payload = torch.load(path, weights_only=True, map_location="cpu")
 
@@ -658,7 +582,7 @@ def load_checkpoint(
             )
 
     if isinstance(config, dict):
-        RunConfig.model_validate(config)  # config schema-validated on read (repo_design §6)
+        RunConfig.model_validate(config)  # config schema-validated on read
 
     kind = payload.get("kind")
     if not isinstance(kind, str):
@@ -677,22 +601,17 @@ def load_checkpoint(
     )
 
 
-# ── Read path (legacy / anchor import) — the THREE real pre-v2 shapes ──────────────────
+# The read path for the THREE real pre-v2 shapes.
 def load_legacy_weights(
     path: str | Path,
     *,
     declared_encoding: Any = None,
     decode_override: Any = None,
 ) -> Checkpoint:
-    """Distinct read surface for pre-v2 artifacts (bare state_dict / light envelope / full-v1).
-    `torch.load(weights_only=True)`. Resolve arch from the declared/stamped `encoding_name` →
-    registry spec → the STAMP's arch kind (`stamped_arch_kind`, R330(e): a pre-discriminator
-    stamp is the incumbent-era stamp) → `select_arch` (NEVER shape-sniffs — an unregistered
-    encoding raises loudly; an embedded config whose `identity.arch_kind` row disagrees with the
-    stamp raises `CheckpointStampError`). Apply the SAME O3b killed-prefix REJECT. Returns a Checkpoint with NO
-    synthetic run_id/content-hash/created_utc (a legacy anchor is never re-stamped on read;
-    LAW-12); a full-v1 envelope reads via the old→v2 field map (training_date→created_utc,
-    model_architecture/variant→arch, train_config_path DROPPED)."""
+    """Read a pre-v2 artifact on its own surface. Arch comes from the declared or stamped
+    `encoding_name` -> registry spec -> the STAMP's arch kind -> `select_arch`, and is NEVER
+    shape-sniffed; the returned Checkpoint carries no synthetic run_id, content hash or
+    created_utc, because a legacy anchor is never re-stamped on read."""
     if declared_encoding is not None and decode_override is not None:
         raise ValueError("declared_encoding and decode_override are mutually exclusive.")
 
@@ -727,10 +646,8 @@ def load_legacy_weights(
     embedded_config = raw_config if isinstance(raw_config, dict) else {}
     if embedded_config:
         RunConfig.model_validate(embedded_config)  # config snapshot re-validated
-    # R330(e): the ARTIFACT'S stamp is the arch authority. A legacy envelope has no arch in its
-    # stamp, so it resolves to the incumbent-era kind; an embedded config that carries the
-    # selector row and DISAGREES is a contradiction between two records of one artifact and is
-    # refused, never resolved in either's favour.
+    # The ARTIFACT's stamp is the arch authority; an embedded config that carries the selector
+    # row and DISAGREES is two records of one artifact contradicting each other, so it raises.
     kind = stamped_arch_kind(meta, representation=str(spec.representation))
     declared_kind = declared_arch_kind(embedded_config)
     if declared_kind is not None and str(declared_kind) != kind:
@@ -739,12 +656,9 @@ def load_legacy_weights(
             f"the artifact's stamp resolves to {kind!r}; a legacy artifact's arch is its stamp's, "
             "and a config that says otherwise describes a different artifact."
         )
-    # AUDIT-1 F-17. A stamp that carries the WHOLE declared dataclass is rehydrated verbatim;
-    # only a stamp without one falls to `select_arch`, which re-derives the widths from the
-    # embedded config. The distinction is load-bearing for the ANCHOR, whose embedded config is
-    # empty: re-deriving there yields the dataclass field DEFAULTS, so an anchor written by a
-    # run with non-default widths would rebuild at the wrong shape and fail the load — the same
-    # quarantine-on-relaunch this row exists to close, one layer down.
+    # A stamp carrying the WHOLE dataclass is rehydrated verbatim. Load-bearing for the ANCHOR,
+    # whose embedded config is empty: `select_arch` would there yield the field DEFAULTS, so an
+    # anchor from a run with non-default widths would rebuild at the wrong shape.
     stamped_arch = meta.get("arch")
     if isinstance(stamped_arch, Mapping) and _ARCH_KIND_KEY in stamped_arch:
         arch = _arch_from_dict(stamped_arch)
@@ -774,7 +688,7 @@ def load_legacy_weights(
     )
 
 
-# ── Weights-only strip + re-stamp (the ONE sanctioned encoding-change/stamp path) ──────
+# Weights-only strip + re-stamp: the ONE sanctioned encoding-change / re-stamp path.
 def strip_and_restamp(
     src_path: str | Path,
     *,
@@ -784,9 +698,8 @@ def strip_and_restamp(
     declared_encoding: Any = None,
     step: int = 0,
 ) -> Path:
-    """Give a legacy/v2 source a FRESH single v2 stamp — gated on wire-signature equality
-    (T-CK-21/33). Stamped ONCE from the declared encoding + arch, NEVER from a loaded config.
-    A wire-signature mismatch (e.g. v6 8-plane vs v6_live2_ls 4-plane) raises."""
+    """Give a legacy/v2 source a FRESH single v2 stamp, gated on wire-signature equality and
+    stamped ONCE from the declared encoding + arch, never from a loaded config."""
     src_path = Path(src_path)
     raw = torch.load(src_path, weights_only=True, map_location="cpu")
     if isinstance(raw, dict) and raw.get("schema_version") == CHECKPOINT_SCHEMA_VERSION:
@@ -817,11 +730,8 @@ def strip_and_restamp(
             "(the ONE sanctioned encoding-change path)."
         )
 
-    # R330(e): the SOURCE artifact's stamp is the arch across the strip — kind AND widths. A
-    # V2-stamped source used to be rebuilt as the incumbent at default widths and re-stamped as
-    # such — a provenance defect of exactly the class LAW-12 exists for, closed by carrying the
-    # stamped arch verbatim when the stamp has one, and resolving only a pre-discriminator stamp
-    # (which has no arch to carry) to its incumbent-era kind.
+    # The SOURCE artifact's stamp is the arch across the strip — kind AND widths. Only a
+    # pre-discriminator stamp, which has no arch to carry, resolves to its incumbent-era kind.
     raw_meta = raw.get("metadata") if isinstance(raw, dict) else None
     stamped_arch = raw_meta.get("arch") if isinstance(raw_meta, dict) else None
     if isinstance(stamped_arch, Mapping):
@@ -839,29 +749,16 @@ def strip_and_restamp(
         "schema_version": 1,
         "run_id": run_id,
         "seed": 0,
-        # WPMAIN / R120 + R127: `eval_enabled` is a REQUIRED top-level key. Literal, not
-        # derived — R127's "derive from schema defaults if mechanical" arm is VACUOUS here,
-        # because the field is required-with-no-default by construction, so there is no
-        # schema default to read. `True` is what every minted config carries, and a stripped
-        # artifact never boots a run, so this is zero-behaviour placeholder posture — the
-        # same one the pre-existing seed=0 / run_id=<caller> placeholders carry.
+        # Every literal in this synthetic config is a required key with no schema default, at
+        # zero-behaviour placeholder values: a stripped artifact boots no run and trains nothing.
         "eval_enabled": True,
-        # RECAL-PREP / R308(g)(i): `allocator_posture` is a REQUIRED top-level key. `None` —
-        # R119's PLACEHOLDER — is the correct value here and is not a placeholder-by-default:
-        # the posture is a property of the RUN the caps were fitted for, and a stripped
-        # artifact belongs to no run and boots none. Minting a token would state a regime this
-        # payload was never measured under, which is the one thing R308(g)(i) reserves.
+        # `None` is the correct posture, not a placeholder-by-default: the allocator posture is
+        # a property of the RUN the caps were fitted for, and this payload belongs to none.
         "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
-        # `search.kind` is REQUIRED and has no default, so the synthetic payload states one.
         # `puct` is the value that agrees with this payload's own
-        # `train.policy_target: raw_visit_distribution` — the two are one decision, and a
-        # strip artifact that declared a search it did not run would be a stamp that lies.
+        # `train.policy_target: raw_visit_distribution` — the two are one decision.
         "search": {"kind": "puct"},
-        # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
-        # This synthetic config exists only to satisfy the schema-validate-on-write gate
-        # for a strip/restamp utility payload — placeholder values, same posture as the
-        # pre-existing seed=0/run_id=<caller> placeholders above.
         "eval": {
             "random_model_sims": 1, "sealbot_model_sims": 1,
             "random_floor_games": 0, "worker_device": "cpu",
@@ -883,46 +780,23 @@ def strip_and_restamp(
                 "bt_prior_games": 1.0, "bootstrap_seed": 1,
             },
         },
-        # WPSC Phase 2 SC-A1/A2: `train:`/expanded `selfplay:` are now required RunConfig
-        # sections — this synthetic config exists only to satisfy the schema-validate-on-write
-        # gate for a strip/restamp utility payload; placeholder values, same posture as the
-        # pre-existing seed=0/run_id=<caller> placeholders above (zero-behavior-change mint
-        # values, DESIGN_P2.md §1.1/§1.2).
+        # `legal_move_radius_schedule` is gone; the registry alone is the radius authority.
         "train": {
             "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
-            # R332(d) / AUDIT-1 F-06: `train.ema` is a REQUIRED block. `enabled: false` is the
-            # same zero-behaviour placeholder posture as `seed: 0` and `eval_enabled: true`
-            # above — a stripped artifact boots no run, so no EMA shadow is ever built from
-            # this. Stated rather than omitted, because omission is what the block exists to
-            # make impossible.
             "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
-            # WPMAIN / R126 + R127: `train.device` is a REQUIRED closed-vocabulary key.
-            # Literal for the same measured reason as `eval_enabled` above (no schema
-            # default exists to derive from); `"cpu"` is a schema-valid member and nothing
-            # ever boots from a stripped artifact's snapshot, so no third default authority
-            # is created here.
             "device": "cpu",
             "lr_schedule": "cosine", "total_steps": 1_000_000,
             "scheduler_t_max": None, "eta_min": 5e-4,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
-            "max_train_steps": 1_000_000,  # WPAX S-4: required run-length key
-            # WPAX Phase D (R65/R80): required key, no code-side default. `None` is the
-            # EXPLICIT disarmed posture, which is the correct placeholder for a payload
-            # that is not a run: a synthetic config must never claim an armed abort.
+            "max_train_steps": 1_000_000,  # required run-length key
+            # `None` is the EXPLICIT disarmed posture: a config that is not a run claims no abort.
             "draw_rate_abort": None,
-            # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 18 step-coordinator knobs are
-            # required `train.*` keys now (19 until R178(a) deleted `buffer_save_interval`).
-            # Placeholder values, same posture as the rest of this payload — they are the
-            # template's own values because a synthetic config that is not a run must not
-            # invent a different run shape.
+            # The step-coordinator knobs, at the template's own numbers.
             "eval_interval": 1000, "log_interval": 1000,
             "min_buf_size": 1, "replay_capacity": 100_000, "replay_capacity_schedule": [],
             "training_steps_per_game": 1.0, "max_train_burst": 1, "batch_size": 256,
             # (`train.microbatch_caps` is ARCH-SCOPED and is spliced in below, on the graph
-            # route only — R322(d). It used to be an unconditional literal here, which was
-            # correct while the schema required the block on every arch and is a REFUSAL now
-            # that it does not: this payload's representation is `new_spec`'s, so a strip to
-            # a GRID encoding would have written a graph-only cap into a grid config.)
+            # route only: an unconditional literal would write a graph cap into a grid config.)
             "augment": False, "recency_weight": 0.0, "hard_gn_threshold": 1e9,
             "hard_gn_min_steps": 3, "terminal_eval_enabled": True,
             "selfplay_stall_timeout_sec": 1800.0,
@@ -930,11 +804,6 @@ def strip_and_restamp(
             "draw_reward": -0.5, "ply_cap_value": -0.5,
             "fast_policy_weight": 0.0,
         },
-        # WPSC Phase 2 SC-A2: `selfplay:` gains mcts:/playout_cap: sub-blocks + many new
-        # required scalars; `legal_move_radius_schedule` is GONE (DESIGN_P2.md §5); the
-        # registry alone is the radius authority, so this synthetic weights-strip payload
-        # never needed the key to begin with. `inference:` is a new required top-level
-        # section. Placeholder values, same posture as the eval block above.
         "selfplay": {
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0, "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
@@ -950,17 +819,11 @@ def strip_and_restamp(
         },
         "inference": {
             "inference_batch_size": 64, "inference_max_wait_ms": 10,
-            # (`inference.fused_graph_caps` is ARCH-SCOPED and is spliced in below, on the
-            # graph route only — R322(d), for `train.microbatch_caps`' reason.)
+            # (`inference.fused_graph_caps` is ARCH-SCOPED and is spliced in below, graph only.)
         },
-        # WPSC Phase 2 SC-A3: `monitor:` is now a required RunConfig section — placeholder
-        # values, same posture as the eval/train/selfplay blocks above (DESIGN_P2.md §4.2).
         "monitor": {
-            # R242 (ADJ-D12): `monitor.gate_interval` is REQUIRED. The literal is the TEMPLATE
-            # value (1000), which every committed config also mints as its own
-            # `train.log_interval` — the same posture as the `disk_guard` literals below: a
-            # placeholder in a weights-strip payload must never be able to disagree with a
-            # real run's cadence, and this block reaches no coordinator.
+            # The TEMPLATE value, which every committed config also mints as `train.log_interval`:
+            # a placeholder must never be able to disagree with a real run's cadence.
             "gate_interval": 1000,
             "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
             "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -982,21 +845,13 @@ def strip_and_restamp(
                 "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
                 "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
             },
-            # WPMAIN / R122 + R127: the `monitor.disk_guard` family is REQUIRED. Literals at
-            # exactly the MINTED values (60/10/5) for the same measured reason as the two
-            # additions above — required-with-no-default, so nothing to derive from — and at
-            # the minted values so this placeholder can never disagree with a real run's
-            # guard posture.
+            # Literals at exactly the MINTED values (60/10/5), for the reason above.
             "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
-    # THE ARCH-SCOPED BLOCKS, spliced on the route that has them (R322(d)). `ARCH_SCOPED_KEYS`
-    # is the ONE authority on which blocks belong to which representation, so this loop cannot
-    # drift from the schema's own partition — adding a third arch-scoped block adds nothing
-    # here, and RENAMING one breaks loudly at the `_SYNTH_ARCH_SCOPED` lookup rather than
-    # silently writing a config the schema then refuses. The values are the templates' own
-    # NON-BINDING pairs, and their posture is the rest of this payload's: nothing ever trains
-    # or serves from a stripped artifact's snapshot, so no step reads these numbers.
+    # `ARCH_SCOPED_KEYS` is the ONE authority on which blocks belong to which representation, so
+    # RENAMING one breaks loudly at the `_SYNTH_ARCH_SCOPED` lookup rather than silently writing
+    # a config the schema then refuses.
     for key in ARCH_SCOPED_KEYS:
         if new_spec.representation == key.arch:
             synth_config[key.section][key.field] = dict(
@@ -1016,20 +871,10 @@ def strip_and_restamp(
     )
 
 
-# ── Resume-precedence partners (legacy flat-config shape; §c.2) ────────────────────────
-# Resume-DIRECTIVE keys: consumed BY the resume machinery, never carried (F-R-P4-1).
-# These five travel in `config_overrides` as flat mechanism directives (the legacy launch
-# shape, §c.2): `allow_fresh_scheduler` is read from `config_overrides` at the
-# scheduler-restore branch in `resume_trainer`; `total_steps`/`scheduler_t_max` are the
-# `--override-scheduler-horizon` pair; `torch_compile[_mode]` is the dead pre-E0 pair
-# (zero consumers — `TrainHParams.from_config` reads nested `train.*` only). None is a
-# RunConfig key (pinned disjoint by tests/train/test_resume_carried_config_purity.py), and
-# the carried config is re-validated at the ONE writer on every periodic save (R1
-# `extra="forbid"`, LAW-12/LAW-14) — so `resume_trainer` STRIPS exactly these, its own
-# keys, from the resolved config before the Trainer carries it. Deliberately NOT a general
-# unknown-key filter: an unknown key from anywhere else still reaches the writer and
-# raises there — write-time validation stays the error surface (it did its job on the box;
-# this makes the config it validates honest).
+# Resume-DIRECTIVE keys: consumed BY the resume machinery, never carried. None is a RunConfig
+# key, and the carried config is re-validated at the ONE writer on every periodic save, so
+# `resume_trainer` STRIPS exactly these — deliberately NOT a general unknown-key filter, since
+# an unknown key from anywhere else must still reach the writer and raise there.
 RESUME_DIRECTIVE_KEYS: frozenset[str] = frozenset({
     "allow_fresh_scheduler", "scheduler_t_max", "torch_compile", "torch_compile_mode",
     "total_steps",
@@ -1043,23 +888,17 @@ def apply_config_overrides_f1(
     *,
     sink: Any = None,
 ) -> tuple[dict[str, Any], frozenset[str]]:
-    """Apply `overrides` onto the checkpoint-baked config with the CONFRES F1(A) defer rule.
-
-    A DECLARED key wins (E0, incl. an explicit `null`); a base-inherited (non-declared) key
-    that the checkpoint BAKED DEFERS to the baked value (+ a `resume_base_default_deferred_to_baked`
-    warning through the injected sink when they differ). Returns `(resolved_config, deferred_keys)`.
-    Weights-only path (baked is None) or a legacy call (declared_keys is None) → verbatim update
-    (byte-pure), nothing deferred.
-    """
+    """Apply `overrides` onto the checkpoint-baked config under the defer rule: a DECLARED key
+    wins, including an explicit `null`, while a non-declared key the checkpoint BAKED defers to
+    the baked value and emits an event when they differ. Weights-only or legacy calls update
+    verbatim and defer nothing."""
     if baked is None or declared_keys is None:
         resolved = dict(baked or {})
         resolved.update(overrides)
         return resolved, frozenset()
 
     resolved = dict(baked)
-    # The mechanism keys that force-declare themselves into the merge ARE the resume
-    # directives — ONE authority (`RESUME_DIRECTIVE_KEYS`, above), not a second tuple that
-    # drifts from it (R1's duplicated-authority class; F-P4 review SHOULD-3).
+    # The keys that force-declare themselves into the merge ARE the resume directives — one authority.
     declared = frozenset(declared_keys) | {k for k in RESUME_DIRECTIVE_KEYS if k in overrides}
     deferred: set[str] = set()
     for key, override_val in overrides.items():
@@ -1091,9 +930,8 @@ def resolve_lr_provenance(
     *,
     rel_tol: float = 1e-9,
 ) -> LrProvenance:
-    """CONFRES S1 — loud declared-vs-baked LR on a full-checkpoint resume. `override_ignored`
-    is True only when a declared lr is present AND differs (beyond `rel_tol`) from the
-    checkpoint's baked initial lr (the operator asked for an lr the resume silently drops)."""
+    """Report a declared LR the resume drops: `override_ignored` is True only when a declared lr
+    is present AND differs beyond `rel_tol` from the checkpoint's baked initial lr."""
     override_ignored = (
         declared is not None
         and baked is not None
@@ -1107,25 +945,15 @@ def resolve_lr_provenance(
     )
 
 
-# ── Resume path (builds a Trainer — Slice 2 consumer; lazy `cls`) ──────────────────────
-#: The identity leaves a resume may not move (LAW-11). `arch_kind` is OPTIONAL in the schema,
-#: so its absence on both sides is agreement and its absence on ONE side is a move — which is
-#: why the comparison below is over the union of the two key sets rather than over a fixed list.
+#: The identity leaves a resume may not move. `arch_kind` is OPTIONAL, so absence on both sides
+#: is agreement and absence on ONE side is a move — hence a union rather than a fixed list.
 _IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
 
 
-#: The leaves that decide what a STORED replay row MEANS, as `(section, leaf)` pairs.
-#:
-#: NOT identity keys — they change no net — which is why they need their own guard rather
-#: than a widened `_IDENTITY_LEAVES`: that tuple is compared against the artifact's STAMP for
-#: the two leaves a stamp carries, and these three have no stamp to fall back on.
-#:
-#: `search.kind` IS one of them, and it is the one that decides the other. A run that
-#: resumes a ring filled under `puct` while itself searching `gumbel` restores rows that are
-#: visit distributions and applies the completed-Q loss to them; the reverse restores
-#: completed-Q rows and scores them as visit counts. `train.policy_target` is the leaf a
-#: checkpoint STAMP carries, so both are compared: the stamp is the artifact's own record,
-#: and the kind is what produced it.
+#: The `(section, leaf)` pairs that decide what a STORED replay row MEANS. Not identity keys —
+#: they change no net and have no stamp to fall back on, so they need their own guard.
+#: `search.kind` decides the other: resuming a `puct` ring under `gumbel` restores visit
+#: distributions and applies the completed-Q loss to them, and vice versa.
 _TARGET_SEMANTICS_LEAVES: tuple[tuple[str, str], ...] = (
     ("train", "policy_target"),
     ("search", "kind"),
@@ -1137,16 +965,9 @@ def _refuse_target_semantics_drift(
     baked_config: Mapping[str, Any] | None,
     effective_config: Mapping[str, Any],
 ) -> None:
-    """HALT when a resume changes what the replay ring's rows mean.
-
-    Compared AFTER `config_overrides`, for `_refuse_identity_drift`'s reason: before them the
-    run's own configuration does not yet exist. A leaf ABSENT from one side and present on the
-    other is a move, so the comparison is over the union — the same shape the identity guard
-    uses for its optional leaf.
-
-    Returns silently when the checkpoint carries no baked config at all (a weights-only or
-    legacy artifact): there is nothing to compare, and the identity guard takes the same
-    posture in the same situation.
+    """HALT when a resume changes what the replay ring's rows mean, compared AFTER
+    `config_overrides` over the UNION, since a leaf present on one side only is a move. Returns
+    silently when the checkpoint carries no baked config.
 
     Raises:
         ResumeTargetSemanticsError: any target-semantics leaf differs, naming leaf and values.
@@ -1158,9 +979,7 @@ def _refuse_target_semantics_drift(
         baked_section = baked_config.get(section)
         effective_section = effective_config.get(section)
         if not isinstance(baked_section, Mapping) or not isinstance(effective_section, Mapping):
-            # One side does not carry the section — a shape this guard cannot read, and a
-            # shape it must not GUESS at. The mint-time validator is what covers a config
-            # that is merely incomplete.
+            # A shape this guard cannot read and must not GUESS at; mint-time validation covers it.
             continue
         want, got = baked_section.get(leaf), effective_section.get(leaf)
         if want != got:
@@ -1184,13 +1003,9 @@ def _refuse_identity_drift(
     effective_config: Mapping[str, Any],
     arch: ModelArch,
 ) -> None:
-    """HALT when the resuming run's EFFECTIVE identity differs from the checkpoint's.
-
-    Compared AFTER `config_overrides` are applied, because that is the only point at which the
-    run's own identity exists — before it, there is a baked block and a set of overrides, and
-    neither is what the run will use. The checkpoint's side is its baked config where it has
-    one, falling back to the STAMPED arch for `arch_kind` and `representation`, which are facts
-    about the artifact rather than about the config that produced it.
+    """HALT when the resuming run's EFFECTIVE identity differs from the checkpoint's, compared
+    AFTER `config_overrides` — the only point at which the run's own identity exists — and
+    falling back to the STAMPED arch, a fact about the artifact rather than about its config.
 
     Raises:
         ResumeIdentityMismatchError: any identity leaf differs, naming the leaf and both values.
@@ -1198,14 +1013,10 @@ def _refuse_identity_drift(
     baked_identity = (baked_config or {}).get("identity")
     effective_identity = effective_config.get("identity")
     if not isinstance(baked_identity, dict) or not isinstance(effective_identity, dict):
-        # Nothing to compare: a legacy or synthetic artifact with no identity block. The
-        # ENCODING half is still covered by `load_checkpoint`'s stamp-vs-config check, which
-        # runs whatever this one can see.
+        # Nothing to compare; `load_checkpoint`'s stamp-vs-config check still covers ENCODING.
         return
-    # The artifact's own side, read off the DECLARED dataclass rather than off any config:
-    # `type(arch).__name__` is exactly the discriminator `_arch_to_dict` serialises, so the
-    # two cannot drift. `declared_arch_kind` is deliberately NOT used here — it reads a config
-    # mapping's `identity.arch_kind` row, which is the other side of this comparison.
+    # The artifact's side, read off the DECLARED dataclass: `type(arch).__name__` is exactly the
+    # discriminator `_arch_to_dict` serialises. `declared_arch_kind` reads the OTHER side.
     stamped = {
         "representation": arch.representation,
         "arch_kind": type(arch).__name__,
@@ -1252,29 +1063,21 @@ def resume_trainer(
     if arch is None:
         raise CheckpointStampError(f"{path.name}: no arch on the loaded metadata — cannot rebuild the net.")
     model = build_net(arch)
-    # STRICTNESS IS KEYED ON THE KIND (R345(b)(3)), and T-CK-25's reason is why it has to be.
-    # A bare ANCHOR is a genuine SUBSET of the `build_net` key set, so `strict=True` would
-    # reject a healthy one — that argument is sound and is preserved for `kind == "weights"`.
-    # It never covered a FULL checkpoint, where a missing or unexpected key means the stamped
-    # arch and the rebuilt net disagree: under the old blanket `strict=False` the run then
-    # trained a partly randomly-initialised model while its optimizer state, scheduler and step
-    # counter all reported a continuation. Discarding learned weights is the one failure that
-    # looks exactly like training.
+    # STRICTNESS IS KEYED ON THE KIND. A bare ANCHOR is a genuine SUBSET of the `build_net` key
+    # set, so `strict=True` would reject a healthy one; on a FULL checkpoint a missing key means
+    # the stamped arch and the rebuilt net disagree, and a blanket `strict=False` then trained a
+    # partly random model while optimizer, scheduler and step all reported a continuation.
     strict = ck.kind == "full"
     incompatible = model.load_state_dict(ck.model_state, strict=strict)
     if not strict and (incompatible.missing_keys or incompatible.unexpected_keys):
-        # Lenient does not mean unreported: a subset anchor is expected to be missing keys,
-        # and an anchor carrying keys this arch does not have is NOT expected at all.
+        # A subset anchor is expected to be missing keys; unexpected keys are not expected at all.
         _LOG.info(
             "anchor_load_lenient path=%s missing=%d unexpected=%s",
             path.name, len(incompatible.missing_keys), sorted(incompatible.unexpected_keys),
         )
 
-    # CONFRES F1(A)/E0 (S-2, DESIGN_P2.md §6): actually APPLY config_overrides onto the
-    # checkpoint-baked config instead of dropping it on the floor. `baked_config` is the
-    # already-schema-validated `train.*`-nested snapshot; a DECLARED top-level key (e.g.
-    # the whole `"train"` section) wins outright, a base-inherited (non-declared) key that
-    # differs from baked DEFERS to baked + emits `resume_base_default_deferred_to_baked`.
+    # A DECLARED top-level key wins outright; a base-inherited key that differs from baked
+    # DEFERS to baked and emits `resume_base_default_deferred_to_baked`.
     baked_config = ck.config if ck.config else None
     if config_overrides:
         resolved_config, deferred = apply_config_overrides_f1(
@@ -1285,23 +1088,17 @@ def resume_trainer(
             dict(baked_config) if baked_config else dict(fallback_config or {}),
             frozenset(),
         )
-    # Carried-config purity (F-R-P4-1): drop the machinery's OWN directive keys — and only
-    # those — before the Trainer carries the config into every future periodic save. Their
-    # consumers read `config_overrides` directly (e.g. `allow_fresh_scheduler` below), never
-    # the carried config; anything else non-schema still reaches the writer and raises there.
+    # Drop the machinery's OWN directive keys — and only those — before the Trainer carries the
+    # config into every future save; anything else non-schema still reaches the writer and raises.
     config = {k: v for k, v in resolved_config.items() if k not in RESUME_DIRECTIVE_KEYS}
     _refuse_identity_drift(path, baked_config, config, arch)
     _refuse_target_semantics_drift(path, baked_config, config)
-    # Pass the DECLARED arch (metadata.arch) so the Trainer stamps the same arch on re-save
-    # (never re-derives it); the sink threads through for resume-time events (T-CK-18).
+    # Pass the DECLARED arch so the Trainer re-stamps it rather than re-deriving one.
     trainer = cls(model, config, arch=arch, checkpoint_dir=path.parent, device=device, sink=sink)
     trainer.f1_deferred_keys = deferred
 
-    # CONFRES S1 (S-2): lr is resume-state-owned — a declared `lr` is never allowed to win
-    # on a full checkpoint resume, but an operator who declared one anyway must be warned
-    # loudly rather than silently ignored. `baked_lr` reads the NESTED `train.lr` (the flat
-    # top-level `lr` key no longer exists post-SC-A1); `declared_lr` still comes from a bare
-    # flat `"lr"` key in `config_overrides` when `"lr"` is a declared key (E0's own shape).
+    # lr is resume-state-owned: a declared `lr` never wins on a full-checkpoint resume, but an
+    # operator who declared one is warned loudly rather than silently ignored.
     declared_lr = (
         (config_overrides or {}).get("lr")
         if declared_keys and "lr" in declared_keys else None

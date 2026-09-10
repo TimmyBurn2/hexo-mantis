@@ -1,23 +1,8 @@
-"""The coordinator collaborator-seam conformance gate (WPTS Phase T, widened WPCLEAN Phase PC).
+"""Gate the coordinator's collaborator seams: per (module, holder), every attribute and
+getattr-string access on that holder is a subset of its protocols' declared members.
 
-THE CLASS this gate kills: a seam-side call site invoking a collaborator member its protocol
-never declared. TD-1 lived for four WPs exactly because nothing owned this check — nine test
-fakes defined `train_step`, production defined none, and no surface existed on which the
-difference could red anything (CENSUS_C C-17). Phase T built the check for the trainer seam
-(R102 clause ii); R106 ruled the remaining called-and-undeclared families (CENSUS_C
-C-6/C-7/C-10/C-11/C-16 + the Phase-PC re-census rows) the same class at zero runtime effect,
-and this widening is its card: the SEAM_MATRIX below asserts, per (module, holder), that
-every attribute access and getattr-string access on that holder is ⊆ the union of its
-protocols' declared members.
-
-THE SEPARATION (the mutation matrix, R86 "alone"): this gate reads ONLY Protocols and caller
-SOURCES — it never imports or instantiates a concrete collaborator. Removing a protocol
-declaration reds THIS gate alone (runtime never consults a Protocol); removing an
-implementation member reds the behavioural oracles alone, because execution — not this
-scan — is what proves a member exists.
-
-Non-protocol holders (actor_sync, heartbeat_watchdog, subsystems) are deliberately absent:
-CENSUS_C ruled them no-gap with their own pinned postures (C-4, C-12).
+The gate reads ONLY Protocols and caller SOURCES, never a concrete collaborator, so removing a
+declaration reds this gate alone and removing an implementation reds the behavioural oracles.
 """
 from __future__ import annotations
 
@@ -44,9 +29,8 @@ from mantis.train.coordinator.config import (
 from mantis.train.events import PoolTelemetryLike
 
 
-# ── the scanner ──────────────────────────────────────────────────────────────────────────
 def declared_members(*protos: type) -> set[str]:
-    """The declared surface of a protocol union: annotated attributes + public methods."""
+    """Return a protocol union's declared surface: annotated attributes and public methods."""
     members: set[str] = set()
     for proto in protos:
         members |= {n for n in getattr(proto, "__annotations__", {}) if not n.startswith("_")}
@@ -56,17 +40,15 @@ def declared_members(*protos: type) -> set[str]:
 
 
 def _holds(node: ast.expr, aliases: tuple[str, ...]) -> bool:
-    """True when the expression denotes one of the holder aliases: a bare name (`pool`) or
-    the attribute form any owner spells it with (`self.pool`, `coord.eval_pipeline`)."""
+    """Report whether the expression denotes a holder alias, bare or attribute-form."""
     if isinstance(node, ast.Attribute) and node.attr in aliases:
         return True
     return isinstance(node, ast.Name) and node.id in aliases
 
 
 def holder_accesses(source: str, aliases: tuple[str, ...]) -> set[str]:
-    """Every member name the source reaches ON the holder — attribute form AND the
-    getattr-string form (drain.py reaches `drain_pending`/`apply_gate_decision` ONLY via
-    getattr, so an attribute-only scan would self-satisfy there)."""
+    """Return every member name the source reaches on the holder, in both forms: one seam reaches
+    its members ONLY via `getattr`, so an attribute-only scan would self-satisfy there."""
     names: set[str] = set()
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Attribute) and _holds(node.value, aliases):
@@ -84,13 +66,10 @@ def trainer_accesses(source: str) -> set[str]:
     return holder_accesses(source, ("trainer",))
 
 
-# ── the seam matrix ──────────────────────────────────────────────────────────────────────
-# (module, holder aliases, protocol union, sentinels the scanner MUST see there).
-# Sentinels are the anti-self-satisfying arm (LAW-07): an empty or shrunken access set
-# means the scanner lost the seam, and that must red, not pass.
+# (module, holder aliases, protocol union, sentinels the scanner MUST see there). The sentinels
+# are the anti-self-satisfying arm: a shrunken access set means the scanner lost the seam.
 SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, ...]], ...] = (
-    # `train_step_from_tensors` was a sentinel on both rows until R346(f) deleted the dense
-    # step; `step.py` reaches the dispatcher and no longer names any typed entry point itself.
+    # `step.py` reaches the dispatcher and names no typed entry point of its own.
     (step_mod, ("trainer",), (TrainerLike,), ("save_checkpoint", "step")),
     (dispatch_mod, ("trainer",), (TrainerLike,),
      ("train_step_from_graph_batch", "device")),
@@ -102,20 +81,15 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
      ("drain_pending", "apply_gate_decision", "run_evaluation")),
     (step_mod, ("buffer", "pretrained_buffer", "bot_buffer"), (ReplayBufferLike,),
      ("resize", "save_to_path", "size")),
-    # `sample_batch_with_pos` and the dispatcher's `recent_buffer` reads went with the dense
-    # route (R346(f)): the graph arm flows recency in-engine through `recent_frac`, so the only
-    # `recent_buffer` access left in `dispatch` is the refusal that names it.
+    # The graph arm flows recency in-engine, so the only `recent_buffer` access left in
+    # `dispatch` is the refusal that names it.
     (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike, GridRouteBufferLike),
      ("sample_graph_batch",)),
     (persist_mod, ("buffer",), (ReplayBufferLike,), ("save_to_path",)),
     (persist_mod, ("recent_buffer",), (RecentBufferLike,), ("save_to_path", "size")),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),
-    # `runner_stats` LEFT this sentinel with the deleted `emit_training_events` wrapper, and
-    # that is the state R218 rider 1 ORDERED: the Q-O-TWO-POOL-READS collapse passes `rstats`
-    # INTO `emit_iteration_complete_event` so the builder does NOT make its own
-    # `pool.runner_stats()` call — one atomic snapshot, the straddle eliminated. The wrapper
-    # was the last site in this module still calling it. The inverse assertion (the builder
-    # must NOT call it) is the test immediately below the matrix.
+    # `runner_stats` is deliberately NOT a sentinel here: the snapshot is passed INTO the builder
+    # so it makes no call of its own. The inverse assertion is the last test in this file.
     (events_mod, ("pool",), (PoolTelemetryLike,),
      ("recent_move_histories", "x_winrate", "batch_fill_pct")),
     (events_mod, ("buffer",), (ReplayBufferLike,), ("size", "capacity")),
@@ -126,7 +100,6 @@ def _row_accesses(mod: object, aliases: tuple[str, ...]) -> set[str]:
     return holder_accesses(inspect.getsource(mod), aliases)
 
 
-# ── the gate ─────────────────────────────────────────────────────────────────────────────
 def test_every_seam_call_site_is_declared_on_its_protocol() -> None:
     failures: list[str] = []
     for mod, aliases, protos, _ in SEAM_MATRIX:
@@ -144,7 +117,7 @@ def test_every_seam_call_site_is_declared_on_its_protocol() -> None:
 
 
 def test_every_seam_is_actually_exercised_by_the_scan() -> None:
-    """The scan must SEE each seam it guards (the LAW-07 self-satisfying failure mode)."""
+    """Prove the scan actually sees each seam it guards."""
     for mod, aliases, _, sentinels in SEAM_MATRIX:
         accessed = _row_accesses(mod, aliases)
         for load_bearing in sentinels:
@@ -155,14 +128,12 @@ def test_every_seam_is_actually_exercised_by_the_scan() -> None:
 
 
 def test_the_dead_name_stays_dead() -> None:
-    """`train_step` died with TD-1: neither declared on the protocol nor called anywhere on
-    the seam. Its reappearance on either side is the card's regression."""
+    """Prove the dead name is neither declared on the protocol nor called on the seam."""
     assert "train_step" not in declared_members(TrainerLike)
     for mod in (step_mod, dispatch_mod, loop_mod):
         assert "train_step" not in _row_accesses(mod, ("trainer",))
 
 
-# ── mutation self-tests (LAW-07: the gate reds when it must, and is not self-satisfying) ─
 def test_scanner_flags_an_undeclared_call_site_constructed_in_a_fixture() -> None:
     fixture_src = (
         "class C:\n"
@@ -177,9 +148,7 @@ def test_scanner_flags_an_undeclared_call_site_constructed_in_a_fixture() -> Non
 
 
 def test_declaration_removal_reds_the_gate() -> None:
-    """Doctoring a declaration out of each seam's declared set makes the LIVE sources fail —
-    a protocol narrowed under live call sites cannot pass silently. One arm per widened
-    family (trainer / eval / telemetry / recent-buffer)."""
+    """Prove removing a declaration reds the gate against the LIVE sources, one arm per family."""
     assert not _row_accesses(step_mod, ("trainer",)) <= (
         declared_members(TrainerLike) - {"save_checkpoint"})
     assert not _row_accesses(step_mod, ("eval_pipeline",)) <= (
@@ -193,9 +162,7 @@ def test_declaration_removal_reds_the_gate() -> None:
 
 
 def test_the_gate_never_imports_a_collaborator_implementation() -> None:
-    """The separation arm of the mutation matrix, pinned structurally: this module reads
-    Protocols + sources only, so implementation removal CANNOT red it (the behavioural
-    oracles own that direction). Pinned by AST over this module's own imports."""
+    """Prove the gate imports no collaborator implementation, so removing one cannot red it."""
     forbidden_modules = {
         "mantis.train.trainer.core", "mantis.selfplay.pool",
         "mantis.eval.pipeline", "mantis.train.recency_buffer",
@@ -212,22 +179,10 @@ def test_the_gate_never_imports_a_collaborator_implementation() -> None:
 
 
 def test_the_iteration_complete_builder_makes_NO_pool_runner_stats_call() -> None:
-    """R218 rider 1's inverse assertion, landed where the sentinel that implied it used to be.
-
-    The Q-O-TWO-POOL-READS collapse is a SEMANTIC change, not a tidy-up: `rstats` is passed IN
-    so the `target_integrity` snapshot and the `mcts_mean_depth`/cluster block are ONE atomic
-    read instead of two microseconds apart that could straddle a game boundary. A second
-    `pool.runner_stats()` call inside the builder re-opens the straddle silently.
-
-    AUDIT-1 F-47 is why this is written down NOW: `events.py`'s last `pool.runner_stats()` call
-    lived in the retired `emit_training_events` wrapper, so deleting the wrapper moved the
-    sentinel above — and a sentinel that merely stops matching is not the same thing as a rule
-    saying the call must not come back.
-    """
-    # Over the AST's CALL nodes, not the raw source: the builder's own docstring necessarily
-    # names `pool.runner_stats()` to say it does not call it, and a text census cannot tell a
-    # defect from a note about a defect. This session hit that trap three times; REPAIR-2 §6
-    # recorded it as the transferable half, and it transfers.
+    """Prove the iteration-complete builder makes no `pool.runner_stats()` call of its own: the
+    snapshot is passed in so the reads cannot straddle a game boundary."""
+    # Over the AST's CALL nodes, not the raw source: the builder's own docstring names
+    # `pool.runner_stats()` to say it does not call it, and a text census cannot tell them apart.
     body = ast.parse(textwrap.dedent(
         inspect.getsource(events_mod.emit_iteration_complete_event)))
     calls = [n for n in ast.walk(body)

@@ -1,30 +1,16 @@
-"""Q3 red-team A2 — the supervisor's own signal posture, driven as real processes.
+"""The supervisor's own signal posture, driven as real processes.
 
-THE DEFECT. `mantis.monitor.supervise` installed NO signal handlers. Its own catchable death —
-an operator's `kill`, a closed terminal, a `BrokenPipeError` out of `_emit` — therefore ended it
-instantly, and with the run now armed against it (F-816-19) the KERNEL SIGKILLed a healthy run
-mid-save. The run's own save-then-exit path (LAW-16) was reachable only by signalling the RUN
-directly, which is not what an operator supervising a run does. The fix forwards ONE SIGTERM,
-waits out the existing kill grace, escalates, and dies of the signal it was asked to die of.
-
-THE SECOND HALF IS THE PROCESS GROUP, and it is why `test_ctrl_c_on_the_process_group_reaches_
-the_child_exactly_once` is in this file. Fixing the handlers ALONE converts a `Ctrl-C` from
-"SIGKILLed mid-save" into "force-exited mid-save": the tty delivers SIGINT to the run directly
-AND the supervisor forwards SIGTERM, and the run's handler cannot tell two routes from an
-operator's deliberate second press, which is LAW-16's `os._exit(1)`. `spawn_child`'s
-`start_new_session=True` removes the double delivery at the source.
-
-`main` IS DRIVEN ONLY IN A REAL SUBPROCESS, never in-process: it installs process-wide signal
-handlers, and an in-process row would install them in the pytest runner. Every child here is
-bounded by its own timer, so a row that dies mid-way cannot leave a permanent survivor — this
-file must not manufacture the class it exists to detect.
+With no signal handlers the supervisor dies instantly of a catchable signal and the kernel then
+SIGKILLs a healthy run mid-save; it must instead forward ONE SIGTERM, wait out the kill grace,
+escalate, and die of the signal it was sent. `start_new_session=True` on the child is the other
+half: without it a group `Ctrl-C` reaches the run directly AND as a forwarded SIGTERM, which the
+run's handler reads as a deliberate second press. `main` is driven ONLY in a real subprocess —
+in-process it would install handlers in the pytest runner — and every child self-limits.
 
 >300 justify (R8): ONE claim — "a supervisor asked to stop stops its child cooperatively first"
-— whose rows are inseparable because they share ONE harness. Each row is a four-process shape
-(pytest -> supervisor -> arming trampoline -> child) parameterised only by how the child answers
-SIGTERM, and every row's evidence is a log written by that shared child script. Splitting would
-duplicate the child writer and the event reader, and a drifted copy of either silently stops
-witnessing the thing the other half asserts.
+— whose rows share ONE harness (pytest -> supervisor -> trampoline -> child), parameterised only
+by how the child answers SIGTERM and evidenced by that shared child's log. Splitting duplicates
+the child writer and the event reader, and a drifted copy silently stops witnessing.
 """
 from __future__ import annotations
 
@@ -38,12 +24,8 @@ import sys
 import time
 from pathlib import Path
 
-#: F-816-24 made `--config` REQUIRED: the supervisor's thresholds are the minted
-#: `monitor.supervisor_*` keys, so a supervisor with no config now refuses to start. These drives
-#: are about the STOP LADDER and override every threshold on the command line anyway, so they take
-#: a committed config for the load alone rather than minting one per drive — the config PATH is
-#: `tests/monitor/test_supervisor_config_witness.py`'s subject, not this file's. This is the only
-#: change this suite needed; its expectations are untouched.
+#: These drives override every threshold on the command line, so the required `--config` takes a
+#: committed file for the load alone rather than minting one per drive.
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
 
 import pytest
@@ -57,12 +39,9 @@ _LINUX_ONLY = pytest.mark.skipif(
 
 def _write_child(tmp_path: Path, log: Path, marker: Path, *, drain_sec: float,
                  swallow: bool = False, exit_code: int = 0) -> Path:
-    """A child that LOGS every signal it receives, drains, then exits with `exit_code`.
+    """Write a child that LOGS every signal it receives, drains, then exits with `exit_code`.
 
-    The log is the instrument: it is the only way to tell "one SIGTERM from the supervisor"
-    from "a SIGINT from the tty AND a forwarded SIGTERM", which is the whole of the F-2 claim.
-    `swallow` makes the child ignore the request entirely, which is what the escalation row
-    needs. The 180 s bound is the self-limit: nothing here may outlive the row that made it.
+    The log distinguishes one forwarded SIGTERM from a tty SIGINT plus a forwarded SIGTERM.
     """
     script = tmp_path / f"child_{marker.stem}.py"
     body = (
@@ -174,15 +153,10 @@ def _alive(pid: int) -> bool:
         return False
 
 
-# ── the A2a rows ─────────────────────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_a_SIGTERMed_supervisor_forwards_SIGTERM_and_waits_for_the_child(tmp_path) -> None:
-    """THE A2a ROW. A SIGTERM to the supervisor must reach the child as ONE SIGTERM, and the
-    supervisor must still be there when the child finishes draining.
-
-    Two mutants die here: "install a handler and exit immediately" (the child is then SIGKILLed
-    by the kernel through its own arming, and the marker never lands) and "forward SIGKILL"
-    (the log shows no SIGTERM and, again, no marker)."""
+    """A SIGTERM to the supervisor reaches the child as ONE SIGTERM and the supervisor is still
+    there when the child drains. Kills "handler then exit at once" and "forward SIGKILL"."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=3.0)
     sup = _spawn_supervisor(tmp_path, child, err)
@@ -223,14 +197,8 @@ def test_the_supervisor_waits_for_a_child_that_takes_most_of_the_grace(tmp_path)
 
 @_LINUX_ONLY
 def test_a_child_that_ignores_SIGTERM_is_SIGKILLED_after_the_grace_and_reaped(tmp_path) -> None:
-    """The bound. A child that swallows SIGTERM must be SIGKILLed once the grace expires and
-    the supervisor must LEAVE — an unbounded wait is a hang this ladder must not introduce.
-
-    THE RC ROW (RED-TEAM addendum 2, BROKE-IT). This is the grace-timeout escalation path, and
-    the child's `wait()` code here is `-9` — this supervisor's OWN SIGKILL, not a diagnosis.
-    Before the fix that `-9` was propagated as `reason="child_error"`, so `main` returned `-9`
-    and `SystemExit(-9)` became exit status 247. The supervisor must still die OF the SIGTERM
-    the operator sent IT, and say so honestly: `reason="signal"`, never `child_error`."""
+    """A child that swallows SIGTERM is SIGKILLed once the grace expires and the supervisor
+    leaves, dying OF the operator's SIGTERM — the child's `-9` returned made rc 247."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=0.0, swallow=True)
     sup = _spawn_supervisor(tmp_path, child, err, kill_grace_sec=2.0)
@@ -260,16 +228,10 @@ def test_a_child_that_ignores_SIGTERM_is_SIGKILLED_after_the_grace_and_reaped(tm
         _reap(sup, *(p for p in (pid,) if p is not None))
 
 
-# ── the F-2 row ──────────────────────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_ctrl_c_on_the_process_group_reaches_the_child_exactly_once(tmp_path) -> None:
-    """THE F-2 ROW, and the one that proves the handler fix ALONE is insufficient.
-
-    A `Ctrl-C` is a signal to a process GROUP. Without `start_new_session=True` on the child,
-    the run receives the tty's SIGINT directly AND the supervisor's forwarded SIGTERM — two
-    entries in the log below — and the run's own handler reads the second as the operator's
-    force-exit press: `force_teardown_all()` then `os._exit(1)`, mid-save. Against a build
-    without the new session this row reds with two entries, which is exactly its job."""
+    """A group `Ctrl-C` reaches the child exactly once: without `start_new_session=True` it sees
+    the tty's SIGINT AND the forwarded SIGTERM, and the run reads the second as a force-exit."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=1.0)
     sup = _spawn_supervisor(tmp_path, child, err)
@@ -286,12 +248,10 @@ def test_ctrl_c_on_the_process_group_reaches_the_child_exactly_once(tmp_path) ->
         _reap(sup)
 
 
-# ── LAW-16 at the supervisor ─────────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_a_second_signal_force_stops_and_the_supervisor_still_exits(tmp_path) -> None:
-    """LAW-16's two-press affordance, mirrored. The second press re-forwards SIGTERM — the
-    run's OWN second press, so its `force_teardown_all` still runs — and the ladder stays
-    bounded, so everything is gone inside the deadline."""
+    """The second press re-forwards SIGTERM, so the run's own `force_teardown_all` still runs,
+    and the ladder stays bounded — everything is gone inside the deadline."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=30.0)
     sup = _spawn_supervisor(tmp_path, child, err, kill_grace_sec=3.0)
@@ -319,14 +279,8 @@ def test_a_second_signal_force_stops_and_the_supervisor_still_exits(tmp_path) ->
 
 @_LINUX_ONLY
 def test_a_third_signal_force_kills_without_waiting_out_the_grace(tmp_path) -> None:
-    """The THIRD press: `presses >= 3` short-circuits straight to SIGKILL instead of waiting out
-    the (here, generous) grace — the operator's escalation must not be made to wait on it.
-
-    THE RC ROW (RED-TEAM addendum 2, BROKE-IT). This is the second site of the same defect as
-    the grace-timeout row above: the reaped child's code is `-9`, this supervisor's OWN SIGKILL,
-    and must not be relabelled as the child's diagnosis. The supervisor still dies OF the
-    SIGTERM the operator sent it on the FIRST press — the one that unwound the poll loop —
-    regardless of how many further presses followed."""
+    """`presses >= 3` short-circuits to SIGKILL rather than waiting out the grace; the supervisor
+    still dies OF the FIRST press's SIGTERM, and the child's `-9` is its own, not a diagnosis."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=0.0, swallow=True)
     sup = _spawn_supervisor(tmp_path, child, err, kill_grace_sec=90.0)
@@ -361,12 +315,10 @@ def test_a_third_signal_force_kills_without_waiting_out_the_grace(tmp_path) -> N
         _reap(sup, *(p for p in (pid,) if p is not None))
 
 
-# ── the rc contract ──────────────────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_a_clean_signal_stop_leaves_the_run_resolving_to_zero(tmp_path) -> None:
-    """§2.4: nothing is minted. The child resolved to 0, so the supervisor has no diagnosis to
-    carry and dies OF the signal it was asked to die of — its waiter sees "terminated by
-    SIGTERM", which is the truth. Mutants returning 0, 44 or 137 all red here."""
+    """With no child diagnosis to carry the supervisor dies OF the signal, so its waiter sees
+    "terminated by SIGTERM". Mutants returning 0, 44 or 137 all red here."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=0.2, exit_code=0)
     sup = _spawn_supervisor(tmp_path, child, err)
@@ -387,9 +339,8 @@ def test_a_clean_signal_stop_leaves_the_run_resolving_to_zero(tmp_path) -> None:
 
 @_LINUX_ONLY
 def test_a_child_that_exits_nonzero_during_the_stop_propagates_that_code(tmp_path) -> None:
-    """The child's diagnosis OUTRANKS the stop gesture. A disk-guard 47 recorded during the
-    drain must not be erased by the fact that an operator also pressed Ctrl-C, so "always
-    re-raise the signal" is the mutant this row kills."""
+    """A child's nonzero exit during the stop outranks the stop gesture — a disk-guard 47 is not
+    erased by the operator's Ctrl-C, killing the "always re-raise the signal" mutant."""
     log, marker, err = tmp_path / "c.log", tmp_path / "c.marker", tmp_path / "sup.err"
     child = _write_child(tmp_path, log, marker, drain_sec=0.2, exit_code=47)
     sup = _spawn_supervisor(tmp_path, child, err)
@@ -404,20 +355,10 @@ def test_a_child_that_exits_nonzero_during_the_stop_propagates_that_code(tmp_pat
         _reap(sup)
 
 
-# ── the escaping-exception path ──────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_an_exception_escaping_the_loop_stops_the_child_cooperatively(tmp_path) -> None:
-    """THE "`_emit` BrokenPipe MUST NOT SIGKILL THE RUN MID-SAVE" ROW.
-
-    `_emit` writes to stderr on every spawn/exit/stale event. With the log consumer gone that
-    write raises `BrokenPipeError`, which used to unwind the supervisor's main thread in
-    milliseconds — and with the run armed against it, the kernel then SIGKILLed a healthy run
-    mid-save. Here the consumer is closed only AFTER the child is up, and the heartbeat file is
-    never written, so the next emit the supervisor attempts is the staleness one — a
-    deterministic trigger that lands while a real, running child exists to be saved.
-
-    The supervisor must still die LOUD: its stderr is the broken thing, so "loud" is a nonzero
-    rc here, and the exception is re-raised unchanged rather than converted into a clean stop."""
+    """A `BrokenPipeError` out of `_emit` stops the child cooperatively instead of SIGKILLing a
+    healthy run mid-save, and still dies LOUD: nonzero rc, exception re-raised unchanged."""
     log, marker = tmp_path / "c.log", tmp_path / "c.marker"
     child = _write_child(tmp_path, log, marker, drain_sec=1.0)
     read_fd, write_fd = os.pipe()
@@ -450,12 +391,8 @@ def test_an_exception_escaping_the_loop_stops_the_child_cooperatively(tmp_path) 
 
 @_LINUX_ONLY
 def test_a_stop_with_no_child_yet_exits_without_touching_a_null_handle(tmp_path) -> None:
-    """The null-handle guard for the attribute the fix adds. A stop that arrives before the
-    first spawn must be a clean death of the signal, never an `AttributeError` on `child is
-    None` — which is the crash the new `self.child` introduces if unguarded.
-
-    Driven in a subprocess because the path ends in `SIG_DFL` + re-raise, which would kill the
-    test runner."""
+    """A stop before the first spawn is a clean death of the signal, never an `AttributeError`
+    on a null `self.child`. Subprocess-driven: `SIG_DFL` + re-raise would kill the runner."""
     probe = tmp_path / "nullchild.py"
     probe.write_text(
         "import signal, time\n"
@@ -477,13 +414,9 @@ def test_a_stop_with_no_child_yet_exits_without_touching_a_null_handle(tmp_path)
     assert "AttributeError" not in out.stderr, out.stderr
 
 
-# ── the import-time refusal ──────────────────────────────────────────────────────────────
 def test_the_stop_handlers_are_installed_by_main_and_never_at_import(tmp_path) -> None:
-    """`signal.signal` at module scope would install handlers in every process that imports
-    this module — pytest included, where a raised `_SupervisorStop` would end the tier.
-
-    Static half: no `signal.signal(` call at module scope. Dynamic half: a subprocess that
-    imports the module and finds SIGTERM still on its default disposition."""
+    """Handlers are installed by `main`, never at import: a module-scope `signal.signal` arms
+    every importer, pytest included. Checked statically and by a subprocess import."""
     from mantis.monitor import supervise
 
     source = Path(supervise.__file__).read_text(encoding="utf-8")
@@ -513,13 +446,8 @@ def test_the_stop_handlers_are_installed_by_main_and_never_at_import(tmp_path) -
 
 
 def test_the_ladder_is_a_module_function_and_the_frozen_kill_path_is_untouched() -> None:
-    """The structural claim the fix rests on: `Supervisor._kill` may NOT grow a `wait()`.
-
-    `tests/monitor/test_supervisor.py` is frozen and drives `_kill` with a `FakeChild` that has
-    `.pid` and `.poll()` and nothing else, so a `wait()` there is an `AttributeError` in a HELD
-    oracle. The bounded, early-returning wait therefore lives in a module-level function over
-    the real `Popen`. A future edit that moves it back into the class reds here BEFORE it reds
-    the frozen file."""
+    """`Supervisor._kill` may NOT grow a `wait()` — the frozen oracle drives it with a FakeChild
+    carrying only `.pid`/`.poll()`, so the bounded wait lives in a module-level function."""
     import inspect
 
     from mantis.monitor import supervise

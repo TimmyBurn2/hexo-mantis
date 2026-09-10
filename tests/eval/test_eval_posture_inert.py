@@ -1,51 +1,23 @@
-# >300 justify (R8), no line count stated (G-DFIX-4 / R192(e)). The file is ONE claim —
-# "with both postures `null`, behaviour is identical to the tree before the keys existed" —
-# and the claim is only as strong as the number of surfaces it is checked on, so the six
-# surfaces enumerated below are conjuncts of a single assertion rather than six topics. Each
-# also carries its own ARMED mutation arm immediately beside it; splitting the file would put
-# an inertness assertion and the mutation that proves it non-vacuous in different files, which
-# is exactly how an inertness suite rots into a suite that passes against dead code.
-"""THE INERTNESS PROOF for the two early-strength eval postures (F-R-P2B-5).
+# >300 justify (R8): the file is ONE claim — with both postures `null`, behaviour is identical
+# to the tree before the keys existed — and each surface it is checked on sits beside its own
+# ARMED mutation arm. Split them and an inertness suite rots into one that passes on dead code.
+"""The inertness proof for the two early-strength eval postures.
 
-The claim under test WAS narrow and total: **with `eval.ply_cap_adjudication: null` and
-`eval.strength_floor: null` — the value every committed config mints — the run's observable
-behaviour is identical to the tree before these keys existed.**
+The claim was narrow and total: with `eval.ply_cap_adjudication: null` and
+`eval.strength_floor: null` the run's observable behaviour is identical to the tree before
+these keys existed. One half no longer holds — a ruling ARMED `eval.strength_floor` on the
+production set — so the claim splits: `ply_cap_adjudication` is INERT everywhere, and
+`strength_floor` is ARMED on exactly `_ARMED_STRENGTH_FLOOR` and inert on the rest.
 
-**ONE HALF OF THAT IS NO LONGER TRUE, AND THE ROWS BELOW SAY SO BY NAME RATHER THAN BY GOING
-QUIET.** RECAL-SITTING-5's mint (R326, values R324(d), scope Δ10.5) ARMED `eval.strength_floor`
-on the PRODUCTION SET — `run6.yaml`, `run6.yaml` and `run6.yaml` — and on
-nothing else. run6 joins at its own mint: `RUN6_MINT_PREREG.md`'s `strength floor` row is
-CONFIRM at run5's three armed values, carried unchanged, which is the ruling this row asks
-for (R338 / R337(a)).
-`ply_cap_adjudication` is untouched and still inert everywhere. So the claim splits:
+THE ARMED SET IS A CLOSED, NAMED CONSTANT AND NOT A PREDICATE OVER THE FILES: a row that read
+whatever the configs happen to say would go green on an arming that arrived without a ruling,
+which is the event this suite exists to refuse.
 
-  * `ply_cap_adjudication` — INERT on all seven, the original claim, unchanged;
-  * `strength_floor` — ARMED on exactly `_ARMED_STRENGTH_FLOOR`, INERT on the rest.
-
-**THE ARMED SET IS A CLOSED, NAMED CONSTANT AND NOT A PREDICATE OVER THE FILES.** That is the
-whole value of this suite: a row that simply read whatever the configs happen to say would go
-green on an arming that arrived without a ruling, which is the exact event it exists to refuse.
-Widening `_ARMED_STRENGTH_FLOOR` is a mint act with a ruling behind it, not a maintenance edit.
-
-"Observable" is enumerated rather than gestured at, one test per surface:
-
-  1. the SHIPPED VALUE — every config under `configs/` STATES both postures, and states them
-     `null` except where the ruling arms one, so the claim is about the tree as committed and
-     not about a hypothetical config;
-  2. the RESOLVERS — they return `None` for every committed config except the armed pair, where
-     they must return a real spec, so nothing downstream is ever handed a spec by accident;
-  3. the ROUND SPEC — the pipeline's own `_build_round_spec` carries what the config states;
-  4. the RESULT JSON — the worker's sidecar payload carries EXACTLY the six required keys,
-     no `strength_floor` and no `ply_cap_adjudication`, so a consumer iterating the key set
-     sees the same set it saw before;
-  5. the EVENT STREAM — `_emit_posture_events` emits nothing and moves no counter;
-  6. the ARENA — the capped-game label is `"draw"` (that surface is pinned next door, in
-     `tests/arena/test_ply_cap_adjudication.py`, against the same fixture as its mutation).
-
-Every one of those is paired with an ARMED mutation in the same test or the one below it. An
-inertness suite with no mutation arm proves only that the code is unreachable, which is the
-one thing nobody doubted; the mutation arms are what make each `assert` above a statement
-about a live seam.
+"Observable" is enumerated one test per surface: the shipped value, the resolvers, the round
+spec, the sidecar result JSON, the event stream, and the arena's capped-game label (pinned next
+door in `tests/arena/test_ply_cap_adjudication.py`). Each is paired with an ARMED mutation arm
+in the same test or the one below it — without those, the suite proves only that the code is
+unreachable.
 """
 from __future__ import annotations
 
@@ -76,12 +48,11 @@ def _config_paths() -> list[Path]:
     return paths
 
 
-# ── 1. the shipped value ───────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("path", _config_paths(), ids=lambda p: p.name)
 def test_every_committed_config_states_both_postures_and_states_them_disarmed(path) -> None:
-    """R1: the keys are PRESENT (a missing key is an error, not a disarmed posture) and their
-    value is the explicit `null`. Read off the FILE, not off the loaded model, because the
-    claim is about what was minted."""
+    """The keys are PRESENT — a missing key is an error, not a disarmed posture — and their
+    value is the explicit `null`, read off the FILE because the claim is about what was
+    minted."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))
     assert "ply_cap_adjudication" in raw["eval"], (
         f"{path.name}: the posture must be STATED; `extra='forbid'` plus a required field "
@@ -112,7 +83,6 @@ def test_every_committed_config_states_both_postures_and_states_them_disarmed(pa
         )
 
 
-# ── 2. the resolvers ───────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("path", _config_paths(), ids=lambda p: p.name)
 def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> None:
     cfg = load_config(path)
@@ -128,22 +98,16 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
         assert floor is None
 
 
-#: The configs a RULING has armed `eval.strength_floor` on. CLOSED, NAMED, and widened only by
-#: a mint act with a ruling behind it — R326 / the RECAL-SITTING-5 forwarding §0.3, values
-#: R324(d) (`probe_games 4`, `min_decisive_rate 0.25`, `min_winrate 0.0`), scope Δ10.5 (the
-#: production configs only, because no armed-abort row exists for `strength_floor`). R346(f)
-#: left one of those, so the "pair" is now a single name — a NARROWING by deletion, which is
-#: the one way this set may shrink without a new ruling.
-#:
-#: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
-#: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
+#: The configs a RULING has armed `eval.strength_floor` on. CLOSED and NAMED: it is widened only
+#: by a mint act with a ruling behind it, and it is NOT derived from the files, because a
+#: predicate over `configs/` would go vacuous on exactly the event this suite exists to catch.
 _ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml"})
 
 
 def _armed_config():
-    """`dev_example.yaml`'s own raw payload with both postures armed, RE-VALIDATED through
-    `RunConfig`. Going back through the schema (rather than `model_copy`, which skips
-    validation) means this helper also proves the armed shapes are config-legal."""
+    """`dev_example.yaml`'s raw payload with both postures armed, RE-VALIDATED through
+    `RunConfig` rather than `model_copy`, so this also proves the armed shapes are
+    config-legal."""
     from mantis.config.schema import RunConfig
 
     raw = yaml.safe_load((_CONFIG_DIR / "dev_example.yaml").read_text(encoding="utf-8"))
@@ -157,7 +121,7 @@ def _armed_config():
 
 
 def test_the_resolvers_BITE_on_an_armed_block() -> None:
-    """The mutation arm for (2). Without it the two `is None` assertions above would pass
+    """The mutation arm for the resolvers: without it the `is None` assertions above would pass
     against a resolver that returned `None` unconditionally."""
     armed = _armed_config()
     ply = resolve_ply_cap_adjudication(armed.eval)
@@ -168,10 +132,9 @@ def test_the_resolvers_BITE_on_an_armed_block() -> None:
     assert (floor.probe_games, floor.min_decisive_rate, floor.min_winrate) == (4, 0.5, 0.5)
 
 
-# ── 3. the round spec ──────────────────────────────────────────────────────────────────
 def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
-    """Drive the PRODUCTION `_build_round_spec`, not a hand-built spec — the claim is about
-    what the pipeline threads, so a hand-built spec would prove nothing about the wiring."""
+    """Drive the PRODUCTION `_build_round_spec`: the claim is about what the pipeline threads,
+    so a hand-built spec would prove nothing about the wiring."""
     from mantis.eval.pipeline import DrainCaps, EvalPipeline
 
     cfg = load_config(_CONFIG_DIR / config_name)
@@ -182,8 +145,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
         encoding=cfg.identity.encoding, run_id=cfg.run_id, spool_dir=tmp_path / "spool", game_record_dir=str(tmp_path / "spool") + "_games",
         ladder_state_path=tmp_path / "ladder.json", promotion=None, sink=None,
-        # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec.
-        # These fixtures assert the POSTURE fields, so the bound is `None` here.
+        # These fixtures assert the POSTURE fields, so the memory bound is `None` here.
         fused_graph_caps=None,
         inference_batching=None,
     )
@@ -206,9 +168,8 @@ class _StubModel:
 
 
 def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monkeypatch) -> None:
-    """`run6.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
-    process seam. A spec that dropped it would leave the value minted, audited and inert — the
-    knob reporting armed while nothing reads it."""
+    """An armed config's round spec must CARRY the floor across the process seam; a spec that
+    dropped it would leave the value minted, audited and inert."""
     monkeypatch.setattr(
         "mantis.eval.pipeline.write_model_snapshot", lambda model, path: str(path)
     )
@@ -222,9 +183,8 @@ def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monk
 
 
 def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
-    """The specs cross a process seam as JSON, so `to_dict`/`from_dict` must rebuild them —
-    on the `None` arm (unchanged) and on the armed arm (rehydrated to the dataclass, not left
-    as a raw mapping, which would silently give the worker attribute errors)."""
+    """The specs cross a process seam as JSON, so `to_dict`/`from_dict` must rebuild them on
+    both arms — an armed one left as a raw mapping gives the worker attribute errors."""
     import json
 
     from mantis.eval.rounds import GameRecordTarget, GateSpec
@@ -242,10 +202,8 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         game_record=None,
     )
-    # F-816-10 D-1: `RoundSpec` carries the fused-forward memory bound in the SAME shape
-    # as the two postures — a resolver-produced frozen dataclass that `asdict`/`from_dict`
-    # round-trips. Its own round-trip (both arms) is pinned by
-    # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
+    # `RoundSpec` carries the fused-forward memory bound in the SAME shape as the two postures;
+    # its own round-trip is pinned elsewhere, so here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
                          leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
                          fused_graph_caps=None,
@@ -269,11 +227,8 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert isinstance(back_armed.strength_floor, StrengthFloorSpec)
     assert isinstance(back_armed.ply_cap_adjudication, PlyCapAdjudicationSpec)
 
-    # R344(b): `game_record` is the fourth field in that shape, and it is the one the CHILD
-    # dereferences by ATTRIBUTE the moment a round starts. Left as a raw mapping it would raise
-    # `AttributeError: 'dict' object has no attribute 'record_dir'` in a subprocess whose
-    # stderr nobody is reading — which is the exact failure `_REHYDRATED_SPEC_FIELDS`' own
-    # docstring says the table exists to prevent, so it is pinned rather than assumed.
+    # `game_record` is the field the CHILD dereferences by ATTRIBUTE the moment a round starts:
+    # left as a raw mapping it raises in a subprocess whose stderr nobody is reading.
     targeted = RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         leaf_build_threads=1, concurrency=1,
@@ -289,7 +244,6 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back_target.game_record.record_dir == "/tmp/games"
 
 
-# ── 4. the sidecar result JSON ─────────────────────────────────────────────────────────
 def _disarmed_spec() -> Any:
     class _S:
         step = 7
@@ -299,9 +253,8 @@ def _disarmed_spec() -> Any:
 
 
 def test_the_disarmed_result_payload_key_set_is_exactly_the_required_six() -> None:
-    """Not "equivalent" — IDENTICAL, key set included. A consumer that iterates the payload
-    (a future display, the manifest checker, a diff over two runs' sidecars) must see the
-    same set it saw before these postures existed."""
+    """Not "equivalent" — IDENTICAL, key set included, so a consumer that iterates the payload
+    sees the same set it saw before these postures existed."""
     result = _round_result(
         _disarmed_spec(), gate_result=None, rungs_result={}, skipped_rungs=[],
         random_result={"games": 0, "wr": None}, floor_payload=None,
@@ -313,8 +266,7 @@ def test_the_disarmed_result_payload_key_set_is_exactly_the_required_six() -> No
 
 
 def test_the_armed_result_payload_GAINS_exactly_the_two_posture_keys() -> None:
-    """The mutation arm for (4): the extras are real, and they appear only when armed —
-    the same discipline `_broken_result`'s `detail`/`exception_class` extras follow."""
+    """The mutation arm for the payload: the extras are real, and they appear only when armed."""
     from mantis.arena.adjudicate import CRITERION_LONGEST_RUN, PlyCapAdjudicator
 
     class _S:
@@ -338,7 +290,6 @@ def test_the_armed_result_payload_GAINS_exactly_the_two_posture_keys() -> None:
     assert result["ply_cap_adjudication"]["adjudicated"] == 0
 
 
-# ── 5. the event stream ────────────────────────────────────────────────────────────────
 class _RecordingSink:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -348,11 +299,8 @@ class _RecordingSink:
 
 
 class _FakePipeline:
-    """The emitter under test, lifted off `EvalPipeline` without building a poller thread.
-
-    `_emit_posture_events` is an unbound method invoked against this stand-in, so the code
-    exercised is the PRODUCTION method — only the collaborators are stubs.
-    """
+    """The emitter under test, lifted off `EvalPipeline` without building a poller thread —
+    `_emit_posture_events` runs as the PRODUCTION method, only the collaborators are stubs."""
 
     def __init__(self, sink) -> None:
         self._sink = sink
@@ -376,8 +324,8 @@ def test_a_disarmed_round_emits_no_posture_event_and_moves_no_counter() -> None:
 
 
 def test_an_armed_failing_round_emits_the_floor_event_with_BOTH_totals() -> None:
-    """LAW-18 wants a FIRE RATE. `skipped_total` alone cannot tell "the floor never fires"
-    from "the floor never ran", so the denominator rides the same payload."""
+    """A fire rate needs its denominator: `skipped_total` alone cannot tell "the floor never
+    fires" from "the floor never ran"."""
     sink, fake = _emit({"strength_floor": {"passed": False, "decisive_rate": 0.0}})
     assert [e["event"] for e in sink.events] == ["eval_strength_floor"]
     payload = sink.events[0]

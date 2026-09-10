@@ -1,21 +1,13 @@
-"""Item 5 pins — promotion integrity: the right incumbent, both colour legs, one finalise.
+"""Promotion integrity: the right incumbent, both colour legs, one finalise.
 
-Three ways the promotion bar could be wrong while every round still completed, reported a
-win rate, and promoted. None of them raise; all three are silent.
+Three ways the promotion bar could be wrong while every round still completed, reported a win
+rate and promoted. None of them raise:
 
-  (a) WRONG INCUMBENT. `resolve_anchor` defaulted `best_model_path` to a CWD-relative
-      `checkpoints/best_model.pt`, and `train/loop.py` passed nothing — while the promotion
-      WRITE side got the run's real `<out-dir>/checkpoints/best_model.pt`. Read and write
-      named different files for any run not launched from the repo root.
-  (b) A DROPPED COLOUR LEG. `play_paired_match` plays every opening twice with the colours
-      swapped, but `trajectory_hash` is a sha256 over the MOVE LIST alone. When the two
-      legs' move sequences coincide — routine under argmax/temp-0 from a fixed opening,
-      the exact regime LAW-04 exists for — they hashed identically and LAW-04's dedupe threw
-      one away. The kept leg supplies the outcome, so the WR skews to whichever arrived
-      first, on half the eff_n: LAW-04's remedy corrupting the LAW-15 bar it feeds.
-  (c) A DOUBLE FINALISE. The poll loop and the drain both read `self._inflight` and both
-      finalise it; `self._inflight` is not cleared until the end. One round's games could be
-      appended, persisted and gated twice.
+  (a) WRONG INCUMBENT — the anchor READ and the promotion WRITE naming different files.
+  (b) A DROPPED COLOUR LEG — `trajectory_hash` is a sha256 over the MOVE LIST alone, so under
+      argmax from a fixed opening the two swapped-colour legs hash identically, the dedupe
+      throws one away and the kept leg's outcome skews the WR on half the eff_n.
+  (c) A DOUBLE FINALISE — the poll loop and the drain both read and finalise `self._inflight`.
 """
 from __future__ import annotations
 
@@ -30,7 +22,7 @@ from mantis.eval.aggregate import aggregate_rung
 from mantis.train.anchor import canonical_anchor_path, resolve_anchor
 
 
-# ── (a) the anchor read and the promotion write name the same file ─────────────────────
+# (a) the anchor read and the promotion write name the same file
 
 
 def test_resolve_anchor_refuses_to_invent_an_anchor_path() -> None:
@@ -49,12 +41,7 @@ def test_anchor_path_is_derived_from_the_runs_checkpoint_dir(tmp_path: Path) -> 
 
 
 def test_the_run_root_reads_and_writes_the_anchor_through_one_helper() -> None:
-    """Source census: `run.py` must not spell the anchor filename twice.
-
-    The read path (`run_training_loop(best_model_path=)`) and the write path
-    (`DeployTagHooks(best_model_path=)`) are DIFFERENT call sites. Two literals is how they
-    drifted apart in the first place, so the pin is that neither writes one.
-    """
+    """Source census: the anchor READ and WRITE call sites must both derive from one helper."""
     text = (Path(__file__).resolve().parents[2] / "src" / "mantis" / "run.py").read_text(
         encoding="utf-8")
     code = [ln for ln in text.splitlines() if not ln.lstrip().startswith("#")]
@@ -90,15 +77,11 @@ def test_the_training_loop_forwards_the_anchor_path() -> None:
     )
 
 
-# ── (b) both colour legs survive LAW-04 dedupe ─────────────────────────────────────────
+# (b) both colour legs survive LAW-04 dedupe
 
 
 def _leg(colour: int, winner: str) -> dict[str, Any]:
-    """One leg of a colour pair: IDENTICAL trajectory, opposite seat and opposite result.
-
-    This is not a contrived record — it is what a deterministic (argmax / temp-0) paired
-    match from a fixed opening produces whenever the two legs' move sequences coincide.
-    """
+    """One leg of a colour pair: IDENTICAL trajectory, opposite seat and opposite result."""
     return {
         "p1": "cand", "p2": "opponent", "winner": winner,
         "trajectory_hash": "IDENTICAL-ACROSS-BOTH-LEGS",
@@ -108,7 +91,7 @@ def _leg(colour: int, winner: str) -> dict[str, Any]:
 
 
 def test_a_colour_pair_counts_as_two_distinct_games() -> None:
-    """LAW-04 dedupes COPIES; the two legs of a colour pair are not copies."""
+    """Prove the dedupe collapses COPIES only — the two legs of a colour pair are not copies."""
     got = aggregate_rung([_leg(1, "p1"), _leg(-1, "p2")])
     assert got.eff_n == 2, (
         "the two legs of a colour pair collapsed into one distinct game. The surviving "
@@ -122,12 +105,7 @@ def test_a_colour_pair_counts_as_two_distinct_games() -> None:
 
 
 def test_genuine_copies_still_collapse() -> None:
-    """The mutation half. Without it, the fix above could be 'never dedupe anything'.
-
-    Mechanism: two records identical in trajectory AND seat are true copies — the case
-    LAW-04 exists for (a deterministic regime replaying one game inflates a CI by
-    sqrt(copies)). They must still count once.
-    """
+    """The mutation half: records identical in trajectory AND seat must still count once."""
     got = aggregate_rung([_leg(1, "p1"), _leg(1, "p1")])
     assert got.eff_n == 1, (
         f"true copies stopped collapsing — LAW-04's dedupe is disabled, not fixed "
@@ -143,12 +121,7 @@ def test_legacy_records_without_a_seat_are_unaffected() -> None:
 
 
 def test_the_eval_worker_actually_emits_the_seat() -> None:
-    """LAW-07: the dedupe key is only fixed if a live producer supplies the field.
-
-    Without this, `_traj_key` reads `candidate_color`, every real record omits it, and the
-    key qualifier is a constant `None` — the fix would be inert on the production path and
-    green in every unit test that builds records by hand.
-    """
+    """Prove a live producer supplies the seat, or the dedupe key qualifier is a constant None."""
     from mantis.eval.worker import _agg_record
 
     record = _agg_record(SimpleNamespace(
@@ -167,17 +140,14 @@ def test_the_eval_worker_actually_emits_the_seat() -> None:
     )
 
 
-# ── (c) a round finalises exactly once ─────────────────────────────────────────────────
+# (c) a round finalises exactly once
 
 
 def _pipeline(monkeypatch: pytest.MonkeyPatch, reads: list[str]) -> Any:
     """A real `EvalPipeline` with only the two collaborators a finalise reaches stubbed.
 
-    `__new__` without `__init__` on purpose: the guard is pure state + lock, and booting a
-    full pipeline would drag in a worker process, a ladder file and a spool dir — none of
-    which the once-only latch touches. `_read_worker_result` and `unregister_child` are the
-    only things the real method calls out to on the success path, and `reads` records that
-    the ROUND BODY ran, which is what a double finalise duplicates.
+    `__new__` without `__init__` on purpose: the once-only latch is pure state plus lock.
+    `reads` records that the ROUND BODY ran, which is what a double finalise duplicates.
     """
     import mantis.train.lifecycle.signals as signals
     from mantis.eval.pipeline import EvalPipeline
@@ -205,11 +175,7 @@ def _inflight(round_id: str) -> dict[str, Any]:
 def test_a_second_finalise_of_the_same_round_is_suppressed_and_counted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Two routes can hold the same inflight dict; only the first may take effect.
-
-    Drives the REAL `EvalPipeline._finalize_round` twice on one dict — the situation the
-    poll loop and a concurrent drain actually produce.
-    """
+    """Drive the REAL `_finalize_round` twice on one dict; only the first may take effect."""
     from mantis.eval.pipeline import EvalPipeline
 
     reads: list[str] = []
@@ -236,11 +202,7 @@ def test_a_second_finalise_of_the_same_round_is_suppressed_and_counted(
 
 
 def test_the_guard_is_per_round_not_per_pipeline(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Mutation self-test for the latch's LOCATION.
-
-    Mechanism: a `self`-level flag would have to be reset between rounds, and a missed reset
-    silently disables every later finalise. Two DIFFERENT rounds must both run their body.
-    """
+    """Mutation self-test for the latch's LOCATION: two DIFFERENT rounds must both run."""
     from mantis.eval.pipeline import EvalPipeline
 
     reads: list[str] = []

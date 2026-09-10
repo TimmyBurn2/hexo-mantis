@@ -1,25 +1,13 @@
-# >300 justify (R8). WP12-R Phase O declares `runner_stats` on `WorkerPoolLike` — the
-# coordinator now reads the runner snapshot itself for `iteration_complete`'s
-# target-integrity block. It crossed the cap at
-# WPMINT Phase K-B, which DELETED six fields and added no code beyond moving `draw_rate_consec`
-# onto `DrawRateAbortLike` as `consec` — the growth is entirely the `StepCoordinatorConfig`
-# docstring recording WHY six fields are gone and why no field may carry a default; WPCLEAN
-# Phase PC (R106) then completed the protocol declarations against their concretes. This module
-# is the DAG-clean seam layer: the injected-collaborator Protocols, the config dataclass they are
-# typed against, and the outcome record. Splitting it would put a Protocol and the dataclass that
-# consumes it on opposite sides of an import for no gain, and `pooled_draw_rate` sits here
-# because `DrawRateAbortLike` is the shape it is bounded by. Roughly two fifths is that rationale.
-"""Step-coordinator collaborator Protocols + config + outcome (WP10 §a.4 split — `config` slice).
+# >300 justify (R8): the DAG-clean seam layer — the injected-collaborator Protocols, the config
+# dataclass they are typed against, and the outcome record. Splitting it would put a Protocol and
+# the dataclass that consumes it on opposite sides of an import for no gain, and
+# `pooled_draw_rate` sits here because `DrawRateAbortLike` is the shape it is bounded by.
+"""Step-coordinator collaborator Protocols + config + outcome.
 
-The 13-class god-module `training/step_coordinator.py` splits by responsibility (collaborator
-protocol): this file is the DAG-clean seam layer — the injected-collaborator Protocols (no torch
-import), `StepCoordinatorConfig`, `StepOutcome`, and the `RealClock` default.
-`step.py` holds `StepCoordinator.step()`; `drain.py` holds the terminal-eval flush + close_out.
-
-KILL severances (must not re-enter): the `bot_refresh` subprocess family (`bot_corpus_refresh_*`
-config fields) is a DEFINITE KILL (0 config consumers, §e/§f) — those fields are dropped; the
-`bot_refresh.py` slice is NOT created. `EvalPipelineLike` keeps eval an INJECTED seam (no
-`train → eval` import).
+The injected-collaborator Protocols (no torch import), `StepCoordinatorConfig`, `StepOutcome` and
+the `RealClock` default. `step.py` holds `StepCoordinator.step()`; `drain.py` holds the
+terminal-eval flush and close_out. `EvalPipelineLike` keeps eval an INJECTED seam, so there is no
+`train -> eval` import.
 """
 from __future__ import annotations
 
@@ -28,37 +16,26 @@ from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
 
-# ── Protocols (no torch import; the DAG-clean injected seams) ───────────────────────────
 @runtime_checkable
 class TrainerLike(Protocol):
-    """The DECLARED coordinator↔trainer seam (WPTS Phase T, R102 class-kill).
-
-    The members here are exactly what the coordinator-side call sites use (`step.py`,
-    `coordinator/dispatch.py`, `loop.py`), pinned both ways by
-    `tests/train/test_trainer_seam_conformance.py` — an undeclared call site on this seam
-    reds that gate. `train_step` is DEAD (TD-1): the seam is the two TYPED entry points,
-    dispatched by `coordinator/dispatch.py` off the declared representation — never a
-    buffer sniff, and never an untyped adapter joining a buffer to "whichever" path.
-    """
+    """The DECLARED coordinator-to-trainer seam, pinned both ways by the conformance gate so an
+    undeclared call site reds it. `train_step` is DEAD: the seam is the two TYPED entry points,
+    dispatched off the declared representation — never a buffer sniff."""
 
     step: int
     model: Any
     device: Any
-    #: The run's checkpoint directory. Read by the stall watchdog's snapshot-path
-    #: derivation (item 4(c)): the path used to be a CWD-relative code-side default, and
-    #: the trainer is the collaborator that actually knows where this run's artifacts live.
+    #: The run's checkpoint directory, read by the stall watchdog's snapshot-path derivation; it
+    #: used to be a CWD-relative code-side default.
     checkpoint_dir: Any
-    #: R345(b)(3) — the resume-bundle publisher the coordinator INSTALLS on the trainer so a
-    #: periodic checkpoint publishes its ring and sidecar too. Declared on the seam because the
-    #: coordinator writes it: an undeclared write is the same class of hidden coupling as an
-    #: undeclared read, and this gate is what makes that a fact rather than a habit.
+    #: The resume-bundle publisher the coordinator INSTALLS on the trainer — declared because an
+    #: undeclared write is the same hidden coupling as an undeclared read.
     bundle_publisher: Any
 
     def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]: ...
     def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
-    #: R328(d) — the FORWARD-ONLY sibling. Declared here because `dispatch.py`'s
-    #: `run_declared_eval_step` reaches it through the same holder, and the seam
-    #: conformance guard is what turns 'declared' into a fact rather than a habit.
+    #: The FORWARD-ONLY sibling, declared here because `dispatch.py` reaches it through the same
+    #: holder.
     def eval_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]: ...
     def save_checkpoint(self, loss_info: dict[str, float] | None) -> Any: ...
 
@@ -67,30 +44,22 @@ class TrainerLike(Protocol):
 class ReplayBufferLike(Protocol):
     size: int
     capacity: int
-    # The R245(c) compact/spread symmetry-draw counters stood here and LEFT with R346(f):
-    # their reader (`symmetry_draw_block`), their producer (the window-preserving symmetry
-    # gate) and the dense `ReplayBuffer` that carried them are all deleted, so a
-    # `runtime_checkable` protocol still demanding them would refuse every live ring.
+    # The symmetry-draw counters LEFT with their reader, their producer and the dense buffer that
+    # carried them: a `runtime_checkable` protocol still demanding them would refuse every ring.
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
-    #: R345(b)(6) — the last sampled batch's rows-per-game and age quantiles. Declared on the
-    #: SHARED protocol rather than the graph route key because it is a fact about a ring, not
-    #: about which sampler it carries. The second ring that made "shared" mean something is
-    #: deleted (R346(f)); the placement is kept because the reason still holds and moving it
-    #: would say a ring's batch composition is a property of its sampler, which it is not.
+    #: The last sampled batch's rows-per-game and age quantiles, on the SHARED protocol because
+    #: it is a fact about a ring, not about which sampler it carries.
     def last_batch_composition(self) -> dict[str, int]: ...
 
 
 @runtime_checkable
 class GraphRouteBufferLike(Protocol):
-    """The graph route-key (WPCLEAN Phase PC, R106 — declaring dispatch.py's probe).
-
-    Deliberately ONE member and deliberately NOT folded into `ReplayBufferLike`: each engine
-    buffer carries exactly one sampler, and the OTHER route's absence is the
-    `RepresentationRouteError` mismatch signal (`coordinator/dispatch.py`, R102). A shared
-    protocol claiming both members would erase the very asymmetry the typed route keys on.
-    """
+    """The graph route-key, deliberately ONE member and deliberately NOT folded into
+    `ReplayBufferLike`: each engine buffer carries exactly one sampler, and the OTHER route's
+    absence is the `RepresentationRouteError` mismatch signal that a shared protocol claiming
+    both members would erase."""
 
     def sample_graph_batch(self, batch_size: int, *, augment: bool, recent_frac: float) -> Any: ...
 
@@ -104,10 +73,8 @@ class GridRouteBufferLike(Protocol):
 
 @runtime_checkable
 class RecentBufferLike(Protocol):
-    """Completed against `train/recency_buffer.py` (WPCLEAN Phase PC re-census): `size` is
-    read by `coordinator/dispatch.py`'s grid arm and `save_to_path` by
-    `train/buffer_persist.py`'s best-effort snapshot — both existed on the concrete,
-    neither was declared (the C-2b-adjacent drift class R106 rules on)."""
+    """Completed against the concrete recorder: `size` and `save_to_path` both existed on it and
+    neither was declared."""
 
     size: int
 
@@ -118,17 +85,10 @@ class RecentBufferLike(Protocol):
 
 @runtime_checkable
 class DrawRateAbortLike(Protocol):
-    """The RESOLVED draw-rate abort terms, as this seam layer sees them (WPAX Phase D).
-
-    A local Protocol for the same reason every other injected collaborator here has one:
-    this file is the DAG-clean seam layer, so it describes the shape it consumes rather
-    than importing the concrete `mantis.config.resolve.draw_rate.DrawRateAbortSpec`.
-    `None` in the field's type is the EXPLICIT disarmed posture — never an absent value.
-
-    Read-only properties, not plain attributes: the concrete spec is a FROZEN dataclass,
-    and this seam only ever reads the four terms — a writable declaration here would
-    reject the frozen concrete.
-    """
+    """The RESOLVED draw-rate abort terms as this seam layer sees them — a local Protocol,
+    because this file describes the shapes it consumes rather than importing the concretes.
+    `None` is the EXPLICIT disarmed posture, and the members are read-only properties because the
+    concrete spec is a FROZEN dataclass a writable declaration would reject."""
 
     @property
     def threshold(self) -> float: ...
@@ -152,29 +112,17 @@ class WorkerPoolLike(Protocol):
     def current_stride5_p90(self) -> int: ...
     def check_producer_health(self) -> None: ...
     def update_checkpoint_step(self, step: int) -> None: ...
-    # WP12-R Phase O (R164): the coordinator now READS the runner snapshot itself, to build
-    # the `target_integrity` fire-rate block `iteration_complete` carries. It is the one
-    # member this protocol shares with `mantis.train.events.PoolTelemetryLike` — declared
-    # here because the conformance gate (`tests/train/test_trainer_seam_conformance.py`)
-    # measures `step.py`'s pool accesses against THIS protocol, and a called-and-undeclared
-    # member is the TD-1 class R106 exists to kill. `Any` keeps the no-`train → selfplay`
-    # edge, exactly as `PoolTelemetryLike` types it.
+    # The coordinator READS the runner snapshot itself to build the target-integrity block. It is
+    # the one member shared with `PoolTelemetryLike`, declared here because the conformance gate
+    # measures `step.py`'s pool accesses against THIS protocol. `Any` keeps the DAG one-way.
     def runner_stats(self) -> Any: ...
 
 
 @runtime_checkable
 class EvalPipelineLike(Protocol):
-    """The injected eval seam — the ONLY way the coordinator reaches eval (no `train → eval`
-    import). WP11 supplies the concrete pipeline.
-
-    Completed against the concrete (WPCLEAN Phase PC, R106 / CENSUS_C C-10/C-11/C-16):
-    `poll_completed` (step.py's every-iteration mailbox read), `drain_pending` (the
-    teardown flush) and `apply_gate_decision` (the promotion applier) were
-    called-and-undeclared. Declaring them changes NO runtime posture: drain.py keeps its
-    getattr guards — an absent `drain_pending` still no-ops the flush and an absent
-    `apply_gate_decision` still logs `eval_promotion_unapplied` LOUD — the conformance gate
-    (`tests/train/test_trainer_seam_conformance.py`) is what now reds an undeclared call.
-    """
+    """The injected eval seam — the ONLY way the coordinator reaches eval. `poll_completed`,
+    `drain_pending` and `apply_gate_decision` were called-and-undeclared; declaring them changes
+    NO runtime posture, since `drain.py` keeps its getattr guards."""
 
     def run_evaluation(
         self,
@@ -198,7 +146,6 @@ class ClockLike(Protocol):
     def sleep(self, seconds: float) -> None: ...
 
 
-# ── Default implementations ─────────────────────────────────────────────────────────────
 class RealClock:
     def now(self) -> float:
         return time.time()
@@ -207,19 +154,14 @@ class RealClock:
         time.sleep(seconds)
 
 
-# ── close-out drain caps: DELETED, not moved (WPMINT Phase K-A, R93) ────────────────────
-# The four `DEFAULT_FINAL_EVAL_DRAIN_*` / `DEFAULT_TERMINAL_EVAL_HARD_CAP_SEC` constants
-# that stood here are GONE. `monitor.drain.*` is the authority (`DrainCapsConfig` ->
-# `mantis.config.resolve.drain.resolve_drain_caps`), and a named constant beside an
-# authored key is the duplicated-default class R1 exists to kill — one of the four
-# (`DEFAULT_FINAL_EVAL_DRAIN_TIMEOUT_SEC`) had already rotted into a dead twin of a bare
-# `900.0` literal in `run.py` with no reader at all. Re-adding one is a regression.
+# The four drain/terminal-eval cap constants that stood here are GONE: `monitor.drain.*` is the
+# authority, and one of the four had already rotted into a dead twin of a bare literal with no
+# reader at all.
 
 
 def promotion_capable_rounds(stop_step: int | None, eval_interval: int, best_stride: int) -> list[int]:
-    """The round indices in a bounded run that are promotion-capable (best_checkpoint opponent
-    fires → a gate decision can land). Surfaced at launch so a near-empty decision cadence is
-    LOUD, not silent (§D-LOOPFIX W1)."""
+    """Return the round indices in a bounded run that are promotion-capable. Surfaced at launch
+    so a near-empty decision cadence is LOUD, not silent."""
     if stop_step is None or eval_interval <= 0:
         return []
     n_rounds = stop_step // eval_interval
@@ -228,42 +170,21 @@ def promotion_capable_rounds(stop_step: int | None, eval_interval: int, best_str
 
 
 def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | None:
-    """The draw-rate abort's gated statistic (WPMINT Phase DS, operator ruling R92).
+    """Return the draw-rate abort's gated statistic: the POOLED COUNT-WEIGHTED rate
+    `draws / completed` over the UNION of the pool's per-worker windows.
 
-    `counts` is `(draws, completed)` — IN THAT ORDER — summed over the UNION of the pool's
-    per-worker draw windows (`WorkerPool.pooled_draw_counts`). The statistic is the POOLED
-    COUNT-WEIGHTED rate `draws / completed`, a fraction in [0, 1].
+    Returns **`None` = NO OBSERVATION** below `N_pool_min`, and a `float` otherwise — including a
+    genuine `0.0`, which is a real healthy measurement. The bar is answered by TYPE, not by
+    value, so a healthy-looking zero synthesised from no evidence is unrepresentable.
 
-    Returns **`None` = NO OBSERVATION** when `completed < N_pool_min`, and a `float`
-    otherwise — including a genuine `0.0`, which is a real healthy measurement and belongs
-    in the abort history. R92 answers ADJ-19 by TYPE, not by value: below the evidence bar
-    the gate reports nothing, and a healthy-looking `0.0` synthesised from no evidence
-    becomes unrepresentable rather than merely unlikely. Zero-completion starvation lands in
-    the same `None` arm and is explicitly the STALL family's jurisdiction (R92), not this
-    gate's.
+    It replaces an UNWEIGHTED MEAN over workers past a per-worker inclusion bar, which was
+    neither a pool rate nor a worker rate: measured, one worker at 50 games all drawn against 31
+    healthy at 49 FIRED at a true pool rate of 0.0319, the inverse stayed SILENT at 0.968, and a
+    total collapse appended `0.0` to the abort history as a healthy reading.
 
-    WHAT IT REPLACES, and why by ruling rather than by preference. `recent_pool_draw_rate`
-    took an UNWEIGHTED MEAN over the workers past a per-worker inclusion bar — neither a
-    pool rate nor a worker rate. WPMINT Phase DR measured it (RECHECK_D DR-3/DR-4):
-
-    * 32 workers, one at 50 games all drawn, 31 healthy at 49 → included set = {that one},
-      mean = 1.0, **FIRED** at a true pool draw rate of 0.0319;
-    * the inverse — 31 workers drawing 100% at 49 games, 1 healthy at 50 → mean = 0.0,
-      **SILENT** at a true pool draw rate of 0.968;
-    * total collapse with nobody past the bar → empty map → `0.0`, appended to the abort
-      history as a real healthy measurement.
-
-    Count-weighting kills the first two (no worker can carry the pool, none can be excluded
-    into invisibility — there is no inclusion bar left), and the `None` kills the third.
-    Both counterexamples are PERMANENT regression oracles by R92
-    (`tests/selfplay/test_drawrate_pooled_statistic.py`).
-
-    `N_pool_min` is keyword-only and has NO default: it is
-    `train.draw_rate_abort.N_pool_min`, and this is the ONE signature on the path that takes
-    it, so a default here would be a second authority over the operator's pre-registered
-    value (R1). Its top end is bounded by `schema/core.py` against
-    `DRAW_RATE_WINDOW * selfplay.n_workers` — a bar above that ceiling would make this
-    function return `None` for the whole run while the abort audited ARMED.
+    `N_pool_min` is keyword-only with NO default, this being the ONE signature that takes it, and
+    its top end is schema-bounded — a bar above that ceiling returns `None` for the whole run
+    while the abort audits ARMED.
     """
     draws, completed = counts
     if completed < N_pool_min:
@@ -273,50 +194,21 @@ def pooled_draw_rate(counts: tuple[int, int], *, N_pool_min: int) -> float | Non
 
 @dataclass(frozen=True)
 class StepCoordinatorConfig:
-    """Per-step coordinator knobs. EVERY field is CONFIG-AUTHORED and NONE carries a default
-    (WPMINT Phase K-B, `CARD-COORD-KNOBS` / R78 as clarified by R80).
+    """Per-step coordinator knobs. EVERY field is CONFIG-AUTHORED and NONE carries a default.
 
-    `bot_corpus_refresh_*` (the KILLED bot_refresh subprocess family) was DROPPED at WP10.
-    Phase K-B deletes six more — `composition_interval`, `value_probe_interval`,
-    `soft_ew_threshold`, `soft_ew_min_pts`, `instrumentation_enabled`, `bot_corpus_path` —
-    which had NO reader anywhere in `src/` (re-verified at HEAD by grep AND by recording every
-    attribute read on a live instance across the whole test tier). They are deleted rather
-    than authored because a config key with no live consumer is an R1/LAW-08 violation, so
-    typing them into the schema would have created the defect the card exists to close
-    `step.py::_run_training_step` — even though its sibling path knob is gone; that asymmetry
-
-    `draw_rate_consec` is gone too, in the other direction: it MOVED, into
-    `train.draw_rate_abort.consec` and thence onto `DrawRateAbortLike.consec`, because a term
-    of a DISARMED abort is not a fact (R80's "the terms travel together").
-
-    `checkpoint_interval` is DELETED by R178(a) (R116/LAW-08). It was the REPLAY-BUFFER save
-    cadence — never the trainer's, which is `TrainHParams.checkpoint_interval` and is
-    untouched — and its only reader was `step.py`'s D4 `_try_save_buffer` arm, which WP12-R
-    Phase CS (F-CS-2) measured production-dead on every leg. The arm and the config key
-    `train.buffer_save_interval` that fed it are deleted with the field; buffer persistence
-    returns only as ONE design under CARD-RESUME (R178(c), post-mint).
-
-    NO FIELD HAS A DEFAULT, and that is the invariant, not a coincidence: with the schema
-    authoritative a default here is a second authority a caller silently inherits, which is
-    exactly what `draw_rate_threshold: float = 0.0` was and what the drain caps' four
-    `DEFAULT_*` constants were. Construction fails rather than assuming anything.
+    Fields are DELETED rather than authored when they have no reader in `src/`: a config key with
+    no live consumer is the violation this dataclass exists to close. A default here would be a
+    second authority a caller silently inherits, so construction fails rather than assuming.
     """
 
     eval_interval: int
-    #: The NARRATION cadence: the `training_step` payload, the 4 WARN rules and the axis
-    #: distribution. Since R242 (ADJ-D12) it decides nothing about arming — see
-    #: `gate_interval` below. `train.log_interval`.
+    #: The NARRATION cadence: the `training_step` payload, the four WARN rules and the axis
+    #: distribution. It decides nothing about arming — see `gate_interval` below.
     log_interval: int
-    #: The ARMING cadence (R242 / ADJ-D12): the stride at which
-    #: `step.py::_run_gate_interval` runs the LIVE hard-abort gates and publishes the LAW-18
-    #: `monitor_gates` summary. `monitor.gate_interval`, threaded by `compose_run` exactly as
-    #: the four `monitor.drain.*` caps below are — monitor-schema-scoped, resolver-dropped,
-    #: composition-root-threaded. NO default here for their reason: with the schema
-    #: authoritative a default is a second authority a caller silently inherits, and this one
-    #: would silently inherit an ARMING posture. It is a separate field and not a reuse of
-    #: `log_interval` because the defect R242 closes is precisely that the two were one knob:
-    #: at run5's minted `log_interval: 1000` no draw-rate abort could fire and no
-    #: `monitor_gates` event existed before training step 1000.
+    #: The ARMING cadence: the stride at which the LIVE hard-abort gates run and the
+    #: `monitor_gates` summary is published. A separate field and not a reuse of `log_interval`
+    #: because the defect is precisely that the two were one knob: at a minted `log_interval:
+    #: 1000` no draw-rate abort could fire before training step 1000.
     gate_interval: int
     min_buf_size: int
     capacity: int
@@ -329,32 +221,20 @@ class StepCoordinatorConfig:
     hard_gn_threshold: float
     hard_gn_min_steps: int
     stop_step: int | None
-    # WPAX Phase D (R65 + R80): NO default, and it sits HERE — beside `stop_step` — because
-    # these are now precisely the two facts the CONFIG authors on this dataclass. `None` is
-    # EXPLICITLY OFF (`train.draw_rate_abort: null`), never an inherited posture: a literal
-    # the caller always replaces is still a second default authority (R1), which is what
-    # `draw_rate_threshold: float = 0.0` was.
+    # NO default, and it sits beside `stop_step` because these are the two facts the CONFIG
+    # authors on this dataclass. `None` is EXPLICITLY OFF, never an inherited posture: a literal
+    # the caller always replaces is still a second default authority.
     draw_rate_abort: DrawRateAbortLike | None
-    # WPMINT Phase K-A (R93, the DR-11 finding): the four drain/terminal-eval caps join
-    # `stop_step`/`draw_rate_abort` as CONFIG-AUTHORED facts, and so lose their code-side
-    # defaults for the same reason those two have none. `monitor.drain.*` had been minted,
-    # schema-validated and registry-claimed since SC-A3 while `resolve_monitor_config`
-    # popped the block and threw it away — the three defaults below (and a fourth, dead,
-    # `DEFAULT_FINAL_EVAL_DRAIN_TIMEOUT_SEC`) were what the run actually used. A default
-    # here is a second authority over the same number, so there is none: the value arrives
-    # through `mantis.config.resolve.drain.resolve_drain_caps` or construction fails.
+    # The four drain/terminal-eval caps are CONFIG-AUTHORED and lose their code-side defaults for
+    # `stop_step`'s reason: `monitor.drain.*` had been minted and validated while the resolver
+    # popped the block and threw it away, so the defaults were what the run actually used.
     final_eval_drain_timeout_sec: float
     eval_final_drain_safety_factor: float
     eval_final_drain_hard_cap_sec: float
     terminal_eval_hard_cap_sec: float
-    # WPMINT Phase K-B: the last three terminal defaults on this dataclass are GONE. Each was
-    # a second authority that would have survived the schema key beside it —
-    # `terminal_eval_enabled`'s was the LAST of three (Phase K-A retired the
-    # `getattr(cfg, "terminal_eval_enabled", True)` shadow in `drain.py`), and
-    # `selfplay_stall_timeout_sec = 1800.0` sat beside a watchdog LAW-16 calls always-armed
-    # while `watchdog.py`'s own contract lets `<= 0` disable the fire AND still emit the
-    # arm-log. `train.selfplay_stall_timeout_sec`'s `gt=0` is what makes that posture
-    # unwritable; the watchdog keeps its arm for direct constructions.
+    # The last three terminal defaults are GONE; each was a second authority that would have
+    # survived the schema key beside it, and `selfplay_stall_timeout_sec` sat beside a watchdog
+    # whose own contract lets `<= 0` disable the fire while still emitting the arm-log.
     terminal_eval_enabled: bool
     # Self-play stall watchdog (2026-07-11 run2 eval-boundary wedge).
     selfplay_stall_timeout_sec: float
@@ -382,9 +262,5 @@ class StepOutcome:
     consec_high_gn: int
     instrumentation_emitted: list[str]
     pool_overflow_delta: int
-    # AUDIT-1 F-28/C06: `games_per_hour` was a field here too, built as a hard `0.0` by
-    # `_build_outcome` with NO reader anywhere in src/, tests/ or tools/ — a second, always-
-    # zero authority for a fact `iteration_complete` already publishes from
-    # `StepCoordinator._games_per_hour`. Deleted rather than wired: LAW-08 wants a live
-    # consumer, and duplicating a measured field with an unmeasured twin is worse than not
-    # having it.
+    # `games_per_hour` was a field here too, built as a hard `0.0` with NO reader anywhere — a
+    # second, always-zero authority for a fact already published from a measured source.

@@ -1,26 +1,15 @@
-# >300 justify (R8), measured at write: the WPTS Phase T oracle suite (O-T1..O-T7) — the
-# end-to-end graph/grid step oracles, the typed-route unreachability oracles and the mutation
-# "alone" arms are one cohesive contract over ONE seam (the declared training-step dispatcher);
-# splitting it would scatter the mutation matrix the dispatch requires reading as a unit.
-"""WPTS Phase T oracles — TD-1 / CARD-TRAINSTEP-ADAPTER (R102).
+# >300 justify (R8): the end-to-end step oracles, the typed-route unreachability oracles and the
+# mutation "alone" arms are one cohesive contract over ONE seam — the declared training-step
+# dispatcher — and splitting it scatters a mutation matrix that reads as a unit.
+"""The declared training-step dispatcher.
 
-The straight self-play arm (`step.py::_run_training_step`) routes through the DECLARED
-training-step dispatcher (`coordinator/dispatch.py::run_declared_train_step`), keyed on the
-resolved `EncodingSpec.representation` — never a buffer sniff. These oracles pin:
-
-- O-T1: a REAL train step executes end-to-end from the coordinator path for the GRAPH
-  representation (run5's) on CPU-scale data — real `HexgBuffer`, real `Trainer` (tiny GnnNet).
-- O-T2: the dense route is TYPE-UNREACHABLE from a graph config (oracle, not assumption).
-- O-T3: the grid route end-to-end + the old-side recency-mix contract.
-- O-T4: the mixed arm's dense-only feed is typed — a graph spec + pretrained buffer RAISES
-  (CENSUS_C C-2b), never reaches `assemble_mixed_batch`.
-- O-T5: closed match — unknown representation raises; an UNDECLARED encoding raises
-  `MissingEncodingError` from THE resolver (LAW-11 re-pin at this new consumer).
-- O-T6(b): removing the trainer-side implementation reds THIS suite (the step oracle), not the
-  conformance gate (which never imports a trainer) — the "alone" separation, R86.
-- O-T7: the graph arm refuses a non-None recent_buffer and threads
-  `recent_frac=recency_weight` into `sample_graph_batch` (old-side commit-B parity).
-"""
+The straight self-play arm routes through `run_declared_train_step`, keyed on the resolved
+`EncodingSpec.representation` and never on a buffer sniff. Pinned: a REAL train step executes
+end-to-end from the coordinator path for the GRAPH representation; the dense route is
+TYPE-UNREACHABLE from a graph config; an unknown representation raises and an UNDECLARED
+encoding raises `MissingEncodingError` from THE resolver; removing the trainer-side
+implementation reds THIS suite, not the conformance gate; and the graph arm refuses a non-None
+recent_buffer while threading `recency_weight` in as `recent_frac`."""
 from __future__ import annotations
 
 from typing import Any
@@ -49,17 +38,9 @@ GRAPH_ENCODING = "gnn_axis_v1"
 _GSPEC = lookup(GRAPH_ENCODING)
 
 
-# ── builders ─────────────────────────────────────────────────────────────────────────────
 def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
     base: dict[str, Any] = dict(
-        # `checkpoint_interval` is GONE from `StepCoordinatorConfig` (R178(a) deleted the
-        # replay-BUFFER save cadence and its dead `train.buffer_save_interval` key); the
-        # trainer's own periodic save is `TrainHParams.checkpoint_interval` and is
-        # unaffected, and this drive never sets it.
-        # R242 (ADJ-D12): `gate_interval` joins `log_interval` — the ARMING cadence,
-        # split off the narration one. 0 on both here for the same reason: this drive
-        # is about the training step / the checkpoint terminus, not about either
-        # boundary, and 0 keeps both quiet.
+        # The three interval knobs are 0: this drive is about the training step, not a boundary.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=1.0, max_train_burst=1,
         batch_size=4, augment=False, recency_weight=0.0, hard_gn_threshold=1e9,
@@ -74,9 +55,8 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
 
 
 def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real HexgBuffer fed through the real graph push path (the pyclass-roundtrip record
-    shape: stones, policy, current_player, moves_remaining, ply_index, is_full_search,
-    outcome, value_valid, game_length)."""
+    """A real HexgBuffer fed through the real graph push path (stones, policy, current_player,
+    moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length)."""
     hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -104,14 +84,8 @@ class _RunnerStats:
 
 
 class _Pool:
-    """Minimal WorkerPoolLike stand-in for driving step() past O4/O5 (not the subject).
-
-    WP12R Step 3 narration: gained the `PoolTelemetryLike` surface `iteration_complete`
-    reads (`runner_stats`, `avg_game_length`, `x_winrate`, `o_winrate`, `draws`,
-    `sims_per_sec`, `batch_fill_pct`, `search_kind`) because `iteration_complete` now emits
-    per-burst (every O6 return) instead of only at `log_interval` boundaries, so this stub
-    must satisfy `emit_iteration_complete_event` on every `step()` call.
-    """
+    """Minimal WorkerPoolLike stand-in for driving step() past the warmup gates. It carries the
+    telemetry surface `iteration_complete` reads, since that event emits per burst."""
 
     def __init__(self, games_completed: int = 3) -> None:
         self.games_completed = games_completed
@@ -120,7 +94,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -130,13 +104,10 @@ class _Pool:
         return _RunnerStats()
 
 
-#: WP12-R F2: `run_declared_train_step` gained a REQUIRED `caps_provider` — a zero-arg
-#: callable the GRAPH arm alone invokes. A default was refused: it would be a code-side
-#: default for a config-derived value (R1) and a caller that forgot it would silently get an
-#: UNCAPPED step, which is the defect CARD-RUN5-GPU-OOM exists to close. These drives use caps
-#: far past anything the tiny fixtures can build, so every route assertion below is about
-#: ROUTING and none of them accidentally exercises a split — the split's own coverage lives in
-#: `tests/train/test_graph_microbatch*.py`, where the micro-batch count is asserted.
+#: A REQUIRED zero-arg `caps_provider` the GRAPH arm alone invokes. A default was refused: it
+#: would be a code-side default for a config-derived value, and a caller that forgot it would
+#: silently get an UNCAPPED step. These caps are far past anything the fixtures can build, so
+#: every assertion below is about ROUTING and none accidentally exercises a split.
 def _NON_BINDING_CAPS() -> MicrobatchCapsSpec:
     return MicrobatchCapsSpec(max_edges=100_000_000, max_nodes=4_000_000)
 
@@ -176,12 +147,9 @@ def _coordinator(trainer, buffer, full_config, cfg=None, **over) -> StepCoordina
     )
 
 
-# ── O-T1: the end-to-end GRAPH step from the coordinator path ────────────────────────────
 def test_graph_train_step_end_to_end_from_coordinator(tmp_path, mk_config) -> None:
-    """run5's representation: a REAL gradient step executes through step() → the straight
-    self-play arm → the declared dispatcher → `train_step_from_graph_batch`. The rehearsal's
-    wall (rc 40 behind the warmup gate) can no longer hide a missing learner half: this drive
-    IS the training step the CPU box never reached."""
+    """A REAL gradient step executes through step() → the straight self-play arm → the declared
+    dispatcher → `train_step_from_graph_batch`, on the graph representation."""
     trainer = _tiny_graph_trainer(tmp_path, mk_config)
     coord = _coordinator(trainer, _graph_buffer(), mk_config(GRAPH_ENCODING, "graph"))
     out = coord.step()
@@ -207,7 +175,6 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
     assert trainer.step == before + 1
 
 
-# ── O-T2: dense route type-unreachable from a graph config ───────────────────────────────
 def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _graph_buffer(), _GSPEC,
@@ -218,7 +185,6 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
 
-# ── O-T5: closed match (LAW-11 posture) ──────────────────────────────────────────────────
 def test_unknown_representation_raises_named_error() -> None:
     class _AlienSpec:
         name = "alien_v0"
@@ -232,9 +198,7 @@ def test_unknown_representation_raises_named_error() -> None:
 
 
 def test_undeclared_encoding_raises_from_the_one_resolver() -> None:
-    """`resolve_step_spec` is a thin veneer over `resolve_from_config` — an undeclared
-    encoding raises `MissingEncodingError`, never a default (LAW-11 re-pin at the new
-    consumer; the TD-4 lesson applied to TD-1's fix)."""
+    """A thin veneer over `resolve_from_config`: an undeclared encoding raises, never defaults."""
     with pytest.raises(MissingEncodingError):
         resolve_step_spec({})
     with pytest.raises(MissingEncodingError):
@@ -246,7 +210,6 @@ def test_resolver_veneer_agrees_with_identity_declaration(mk_config) -> None:
     assert spec.name == GRAPH_ENCODING and spec.representation == "graph"
 
 
-# ── O-T6(b): implementation removal reds the STEP oracle (this suite), gate stays blind ──
 def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
     class _HalfTrainer:
         step = 0
@@ -266,7 +229,6 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
                             fast_policy_weight_provider=lambda: 0.0)
 
 
-# ── O-T7: graph-arm recency semantics (old-side commit-B parity) ─────────────────────────
 def test_graph_arm_refuses_a_dense_recent_buffer() -> None:
     class _RecentBuf:
         size = 4
@@ -302,15 +264,11 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
     assert len(rec.graph_calls) == 1
     kw = rec.graph_calls[0]
-    # WP12-R F2: the graph entry point takes a PARTITION plus the whole step's denominators,
-    # not eleven loose tensors. The eleven names moved one level down, onto what each part
-    # materialises — asserted below so the pass-through is still checked at tensor level and
-    # this row did not quietly shrink to a signature check.
+    # The graph entry point takes a PARTITION plus the step's denominators, not eleven loose
+    # tensors; those names moved down onto what each part materialises, asserted below.
     assert set(kw) == {"parts", "policy_denominator", "value_denominator", "total_edges",
                        "total_nodes", "caps_max_edges", "caps_max_nodes",
-                       # R345(b)(6): what the sampled batch was made of, carried to the step
-                       # so the trainer can put it on its own event beside the edge and node
-                       # counts. `{}` on a buffer that exposes no reading.
+                       # What the sampled batch was made of; `{}` on a buffer with no reading.
                        "batch_composition"}
     assert len(kw["parts"]) >= 1
     inputs = kw["parts"][0]()
@@ -321,13 +279,9 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
             f"a materialised micro-batch is missing {name!r}")
 
 
-# ── O-T8 (WP12-R F2): the caps provider reaches the GRAPH arm and ONLY the graph arm ──────
 def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
-    """The F2 keyword's contract: the caps are a PROVIDER, called by the graph arm and called
-    once. It was a provider rather than a value because the four frozen grid coordinators
-    carried no `train` section and Python evaluates every argument before the call; the grid
-    route is gone (R346(f)), and what survives is the once-per-step read the census in
-    `test_graph_microbatch_authority.py` freezes."""
+    """The caps are a PROVIDER called ONCE by the graph arm, not a value: Python evaluates every
+    argument before the call."""
     rec = _RecordingTypedTrainer()
     invoked: list[int] = []
 
@@ -343,13 +297,8 @@ def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
 
 
 def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() -> None:
-    """PERF-TRANCHE-1 B1's provider rides the caps provider's contract, and this is why.
-
-    `resolve_sample_threads` reads `full_config["selfplay"]`. The first cut of B1 passed the
-    RESOLVED VALUE here, which Python evaluates before the call; the provider shape is what
-    keeps the derivation at the one place that needs it, and once per step is what the ring
-    rebuild's width is read at.
-    """
+    """`resolve_sample_threads` reads `full_config["selfplay"]`, and passing the RESOLVED VALUE
+    would evaluate it before the call — the provider keeps the derivation where it belongs."""
     rec = _RecordingTypedTrainer()
     invoked: list[int] = []
 

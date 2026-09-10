@@ -1,25 +1,9 @@
-"""`compose_run` with a REAL `RunConfig` syncs on the configured cadence (RED-TEAM-2 F-A).
+"""`compose_run` with a REAL `RunConfig` syncs on the configured cadence.
 
-All 11 `compose_run(...)` call sites in the suite — including both tests written to close
-RED-TEAM-1's F-1 — passed `config=SimpleNamespace()`. Nothing anywhere composed with a real
-`.train`-bearing `RunConfig`, so `_resolve_actor_sync_cadence_steps`'s real-config arm was
-exercised by nothing. RED-TEAM-2 put two plausible edits on that arm — a `* 1000` unit slip
-in the resolver and a `getattr(config, X, None)` lag-lambda fallback in run.py's own house
-idiom — and got **116/116 guard tests passing** while a real-config drive froze the actor at
-step 1 with the watchdog reading lag 0.
-
-**Scope, stated honestly: this closes an AXIS, not the class.** The class is "a
-production-only axis pinned to a single test-only value across the whole suite" — this is
-its third instance (`eval_enabled=False`, then `config=SimpleNamespace()`). This file varies
-the config-shape axis wholesale: a real `RunConfig` routes the real `.train`, `.monitor`,
-`.eval` and `.identity` arms in one drive. It does NOT close the two axes that remain pinned
-in every behavioral drive, because no test can: `_default_step_coordinator_config` is
-monkeypatched (production's `stop_step=0` never enters the burst loop) and `build_run_safety`
-is faked. Those are where RED-TEAM-3 should look. The class-level defenses are structural
-(collapsing the smoke seams, owed to R-TRAINCONFIG-SCHEMA) and operational (an ARMED lag
-watchdog plus a run5 smoke-boot check that counts `actor_sync` events).
-
-NOT frozen: written after ORACLE-WRITE in response to a RED-TEAM finding.
+Every other drive in the suite composes with `config=SimpleNamespace()`, which leaves
+`_resolve_actor_sync_cadence_steps`'s real-config arm unexercised. Two axes stay pinned even
+here because no test can vary them: `_step_coordinator_config` is monkeypatched and
+`build_run_safety` is faked.
 """
 from __future__ import annotations
 
@@ -38,10 +22,11 @@ _STOP_STEP = 6
 
 
 def _frozen_payload():
-    """Reuse the frozen schema oracle's payload builder, by PATH (R5: `tests` is not a
-    package and no `sys.path` mutation is permitted; reading a frozen file is not editing
-    it, R43). Built from the payload rather than from `configs/run6.yaml` so this test
-    pins the RESOLVER's behaviour and not one shipped config's current values."""
+    """Load the frozen schema oracle's payload builder by path, since `tests` is not a package.
+
+    Built from the payload rather than a shipped config so this pins the resolver's behaviour
+    and not one config's current values.
+    """
     path = Path(__file__).resolve().parents[1] / "config" / "test_actor_sync_schema.py"
     spec = importlib.util.spec_from_file_location("_frozen_schema_for_fa", path)
     module = importlib.util.module_from_spec(spec)
@@ -65,7 +50,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -104,8 +89,6 @@ class _Trainer:
         self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -129,16 +112,13 @@ class _Buffer:
     def save_to_path(self, p) -> None: ...
 
 
-#: The UNPATCHED production builder, captured at import so the patch below can delegate to
-#: it without re-entering itself (WPMINT Phase K-A stage 0).
+#: The unpatched production builder, captured at import so the patch below can delegate to it
+#: without re-entering itself.
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
 def _bounded_config(**kwargs) -> StepCoordinatorConfig:
-    """WPMINT Phase K-A stage 0: the harness's own deltas over the REAL builder, not a
-    24-kwarg restatement of it. `draw_rate_abort` (and every other config-authored value)
-    is passed THROUGH untouched; `stop_step` stays the harness's own bound, which is this
-    patch's stated reason for existing."""
+    """Apply the harness's own deltas over the real builder, passing config values through."""
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
                                terminal_eval_enabled=False, eval_interval=1000,
                                log_interval=1, stop_step=_STOP_STEP)
@@ -146,24 +126,22 @@ def _bounded_config(**kwargs) -> StepCoordinatorConfig:
 
 def _real_run_config() -> RunConfig:
     payload = _frozen_payload()(
-        # WPAX S-4: the reachability bound now binds on the RUN LENGTH (6), not on the
-        # LR horizon (1 000 000), so the threshold must fit inside `cadence < threshold
-        # < max_train_steps` — 2 < 4 < 6.
+        # The reachability bound binds on the run length, so the threshold must fit inside
+        # `cadence < threshold < max_train_steps`.
         train_over={"actor_sync_cadence_steps": _CADENCE, "max_train_steps": _STOP_STEP},
         monitor_over={"actor_lag_threshold_steps": _CADENCE + 2},
     )
-    # WPMAIN/R120: the frozen payload mints `eval_enabled: True`, which IS this file's
-    # production posture — stated rather than left implicit now that it is a config fact.
+    # The frozen payload mints `eval_enabled: True`, this file's production posture.
     assert payload["eval_enabled"] is True
     return RunConfig(**payload)
 
 
 def _drive(monkeypatch, *, eval_enabled: bool = True):
-    """Compose with a REAL RunConfig; return (captured build_run_safety kwargs, pool, trainer).
+    """Compose with a real RunConfig; return (captured build_run_safety kwargs, pool, trainer).
 
-    WPMAIN/R120: `eval_enabled` is the CONFIG's fact — `compose_run` has no such parameter —
-    so the posture travels on the payload `_real_run_config` builds (True, this drive's own
-    production posture) rather than on the compose call."""
+    `eval_enabled` is a config fact — `compose_run` has no such parameter — so the posture
+    travels on the payload `_real_run_config` builds.
+    """
     import mantis.train.anchor as _anchor
 
     captured: dict = {}
@@ -179,11 +157,8 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _capture)
-    # WPAX S-4 narrowed this patch's reason: `stop_step` is config-authored now (compose_run
-    # overrides it from train.max_train_steps regardless), so what `_bounded_config` still
-    # buys is `terminal_eval_enabled=False` — this drive is eval_enabled=True and the
-    # production builder's terminal eval round reaches eval/snapshot.py's `.arch` read on a
-    # fake model. That knob has no config key (R-TRAINCONFIG-SCHEMA / ADJ-08).
+    # What this patch buys is `terminal_eval_enabled=False`: the terminal eval round would
+    # reach eval/snapshot.py's `.arch` read on a fake model, and that knob has no config key.
     monkeypatch.setattr(mantis.run, "_step_coordinator_config", _bounded_config)
     monkeypatch.setattr(
         _anchor, "resolve_anchor",
@@ -203,11 +178,8 @@ def test_a_real_run_config_actually_reaches_the_cadence_resolver(tmp_path, monke
 
 
 def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
-    """Kills the resolver unit-slip half of RED-TEAM-2's mutation on its own.
-
-    A `* 1000` slip makes the cadence unreachable inside the run, so the actor takes its
-    single unconditional first sync and then freezes — exactly run3.
-    """
+    """Kill a resolver unit-slip on its own: a `* 1000` slip makes the cadence unreachable
+    inside the run, so the actor takes one unconditional first sync and then freezes."""
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
@@ -228,11 +200,10 @@ def test_sync_follows_the_configured_cadence_under_a_real_config(tmp_path, monke
 
 
 def test_lag_callables_read_live_sources_under_a_real_config(tmp_path, monkeypatch, mk_graph_buffer):
-    """Kills the lag-lambda half on its own — so each edit of the pair dies alone.
+    """Kill a lag-lambda `getattr(config, X, None)` fallback on its own.
 
-    RED-TEAM-2 paired the resolver slip with a `getattr(config, X, None)` fallback on the
-    lag lambda. Asserting only sync volume would let that half survive; asserting only the
-    lambdas would let the resolver slip survive.
+    Asserting only sync volume would let that survive; asserting only the lambdas would let a
+    resolver unit-slip survive.
     """
     captured, pool, trainer, cfg = _drive(monkeypatch)
     mantis.run.compose_run(

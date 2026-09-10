@@ -1,165 +1,47 @@
 #!/usr/bin/env python3
-# >300 justify (R8): the DECLARED input contract, the validator that enforces it, the
-# mantis-core convention audit, the distribution pass and the two recorded selection biases
-# are ONE offline instrument over ONE external artifact. Splitting them would put the
-# contract in one file and the code that enforces it in another — which is precisely how a
-# schema and its checker drift apart — and here the drift would be INVISIBLE, because the
-# dataset is not in the tree and there is nothing to re-check the split halves against.
-"""Offline audit of the external human bootstrap corpus (R247).
+# >300 justify (R8): the DECLARED input contract, the validator that enforces it, the mantis-core
+# convention audit, the distribution pass and the two recorded selection biases are ONE offline
+# instrument over ONE external artifact. Splitting them would put the contract in one file and its
+# checker in another, and the drift would be INVISIBLE — the dataset is not in the tree.
+"""Offline audit of the external human bootstrap corpus.
 
-R247 adopts a Hugging Face human-game corpus as a sha-pinned EXTERNAL bootstrap artifact
-(R7: outside the repo, manifest-indexed) *pending an audit*. This tool is that audit.
+It NEVER downloads anything, NEVER writes inside the repository tree, and NEVER coerces, defaults
+or guesses a field name. A schema mismatch is resolved by amending the DECLARED INPUT CONTRACT
+below, never by the tool papering over it.
 
-It NEVER downloads anything, NEVER writes inside the repository tree, and NEVER coerces,
-defaults or guesses a field name. A schema mismatch is an error the operator resolves by
-amending the DECLARED INPUT CONTRACT below — it is not something this tool papers over.
+DECLARED INPUT CONTRACT (contract_version 2). ``<dataset_dir>/dataset_metadata.json`` is required
+and is a JSON object in EXACTLY ONE of two declared shapes; both keys, or neither, is refused::
 
-================================================================================
-DECLARED INPUT CONTRACT  (contract_version 2)
-================================================================================
-v1 of this block was DECLARED, NOT VERIFIED -- written before the dataset existed on this
-machine, from R247's wording ("human-only, rated, per-game Elo, sha256'd, encoding-free
-axial move lists") plus the shape the in-repo human corpus uses. v2 amends it against the
-dataset as OBSERVED (see AMENDMENT LOG). Amending THIS BLOCK is still the only sanctioned
-response to an exit 3: the tool never coerces, defaults, or guesses a field name.
+    SHAPE A -- {"files": [{"path": "<relative path>", "sha256": "<64 lowercase hex>"}, ...]}
+    SHAPE B -- {"file": "<relative path>", "sha256": "<64 hex>", "bytes": <int>, ...}
 
-Layout::
+``bytes`` is OPTIONAL in shape B and verified when present. Every other shape-B top-level key is
+provenance: recorded in the report, never parsed for meaning. Listed non-record files are
+sha-verified and never parsed.
 
-    <dataset_dir>/
-        dataset_metadata.json      # required, the sha256 manifest
-        <one or more *.jsonl or *.json record files>
-        <any other files>          # sha-verified if listed; never parsed
+Record files are ``*.jsonl`` (one JSON object per non-blank line) or ``*.json`` (a JSON array of
+objects). Every record carries these REQUIRED fields; extra fields are recorded and ignored::
 
-``dataset_metadata.json`` -- a JSON object in EXACTLY ONE of two declared shapes. Both are
-declared here, so accepting either is a contract statement, not a silent widening; a
-manifest carrying both keys, or neither, is refused naming what was found.
+    game_hash  str, non-empty     the dedupe key, and the record's IDENTITY here
+    winner     int, 1 or -1       1 => Player::One, -1 => Player::Two
+    elo        [p1, p2]           ONE RATING PER PLAYER; each entry an int, float, or null
+    moves      list of [q, r]     axial, placement order, one entry per STONE (ply), not turn
 
-    SHAPE A -- multi-file, per-entry pins (v1's declared shape, retained)::
+``game_id`` (str, non-empty) is OPTIONAL and recorded when present.
 
-        {"files": [{"path": "<relative path>", "sha256": "<64 lowercase hex>"}, ...]}
+SCOPE: this is a TRANSCRIPTION of mantis-core's rules, not a call into them — the audit imports no
+`mantis` module and never constructs a `Board`, so it CANNOT observe anything the engine would
+refuse at run time. The winner/coordinate mapping is CHECKED, not asserted: every game is replayed
+and the declared winner must hold a six-run in the final position. KNOWN LIMIT: the axis set
+{(1,0),(0,1),(1,-1)} is invariant under a q<->r relabelling, so a transposed axial convention is
+undetectable by a win-line check.
 
-    SHAPE B -- flat single-file (OBSERVED: the R247 dataset ships this)::
+DEDUPE: there is NO in-repo ``game_hash`` producer for the human corpus — a human game's identity
+is the source UUID filename stem, and the only hash-of-moves in the repo hashes BOT games. So
+without ``--in-repo-corpus`` the leg reports NO IN-REPO REFERENCE AVAILABLE; with it, the leg
+derives a comparable key on BOTH sides via ``derived_move_key`` and labels the result DERIVED.
 
-        {"file": "<relative path>", "sha256": "<64 lowercase hex>", "bytes": <int>, ...}
-
-    ``bytes`` is OPTIONAL in shape B and verified when present -- a declared byte length
-    that disagrees with the file on disk is a pin failure, not a note. Every other
-    top-level key in shape B (``name``, ``n_games``, ``source_filter``, ``created_at``,
-    ...) is provenance: recorded in the report, never parsed for meaning.
-
-Record files -- ``*.jsonl`` (one JSON object per non-blank line) or ``*.json`` (a JSON
-array of objects). Every record is an object carrying these REQUIRED fields; additional
-fields are permitted, recorded, and ignored::
-
-    game_hash  str, non-empty     R247's named dedupe key, and the record's IDENTITY here
-    winner     int, 1 or -1       1 => Player::One, -1 => Player::Two (see MAPPING)
-    elo        [p1, p2]           a 2-element array, ONE RATING PER PLAYER; each entry an
-                                  int, a float, or null (null = exported without metadata)
-    moves      list of [q, r]     axial move list; each entry a 2-element array of ints,
-                                  in placement order, one entry per STONE (ply), not turn
-
-and these OPTIONAL fields, recorded when present and never required::
-
-    game_id    str, non-empty     opaque per-game identifier. NOT required: the R247
-                                  dataset has no game_id -- it carries ``source`` instead
-                                  and keys games by ``game_hash``.
-
-================================================================================
-AMENDMENT LOG
-================================================================================
-v1 -> v2, 2026-08-17, under R278(d) ("certified-before-cited"). The audit's first run
-against ``timmyburn/hexo-bootstrap-corpus`` exited 3 on the manifest shape; the numbers
-then had to be taken by a separate hand pass, and R278(d) rules that a hand pass may not
-be cited into a prereg row. Three declared shapes were wrong, each amended to the shape
-the dataset actually ships, each named in the assertion message that refuses the other:
-
-  * OPEN-2 -- manifest.  DECLARED ``{"files": [...]}``; OBSERVED a flat single-file
-    manifest keyed ``file`` / ``bytes`` / ``sha256`` plus provenance. Amended by declaring
-    shape B alongside shape A and requiring exactly one.
-  * OPEN-5 -- ``elo``.  DECLARED one number per GAME (R247's "per-game Elo"); OBSERVED
-    ``[elo_p1, elo_p2]``, one rating per PLAYER. Amended to the pair. R247's phrase reads
-    as per-player, two values per game. The card had already called this alternative "at
-    least as likely" (`human.py:86-87`), so the widening is to the shape the card named,
-    not to whatever the file happened to hold.
-  * OPEN-7 -- ``game_id``.  DECLARED required; OBSERVED ABSENT. Amended to OPTIONAL, with
-    ``game_hash`` promoted to the record identity used in every diagnostic. ``game_hash``
-    itself is present as R247 predicted, so R247's dedupe premise survives.
-
-OPEN-1/3/4/6 were measured CORRECT and are unchanged. OPEN-8 is DISSOLVED by shape B:
-there is exactly one data file and the manifest already pins it by content sha256, so the
-manifest-vs-roll-up granularity question has no subject.
-
-================================================================================
-MAPPING TO mantis-core  (verified in-repo; file:line cited at each constant below)
-================================================================================
-SCOPE, R328(a): this is a TRANSCRIPTION of mantis-core's rules, not a call into them. The audit
-imports no `mantis` module and never constructs a `Board`, so it verifies the winner convention
-against the constants below and CANNOT observe anything the engine would refuse at run time --
-`legal_moves()` and the encoding registry's `legal_move_radius` are outside its reach by
-construction. R279's CLEAN verdict is therefore about the BYTES and their convention; the first
-thing to push this corpus through the production board was BC-EXEC-1's encoder, which refused
-34.76% of it on a radius this audit had no way to check.
-winner
-    ``crates/mantis-core/src/board/state/core.rs:59-64`` -- ``#[repr(i8)] enum Player {
-    One = 1, Two = -1 }``. There is NO draw member. ``core.rs:77-84`` -- ``#[repr(i8)]
-    enum Cell { Empty = 0, P1 = 1, P2 = -1 }``.
-    ``src/mantis/data/sources/base.py:20,28`` -- ``GameRecord.winner: int`` documented
-    "+1 if player 1 won, -1 if player 2 won".
-    => The mapped domain is EXACTLY {1, -1}. ``winner == 0`` is a DRAW, which is
-    unrepresentable as a ``Player``; it is counted (bias measurement, below) and then
-    reported as a contract violation rather than silently mapped.
-
-coordinates
-    ``crates/mantis-core/src/board/mod.rs:3-14`` -- sparse axial (q, r), directions
-    ``E (+1,0) / W (-1,0) / NE (0,+1) / SW (0,-1) / NW (-1,+1) / SE (+1,-1)``, storage
-    ``FxHashMap<(q,r), Cell>``, UNBOUNDED. The 19x19 tensor is a *sliding view window*
-    centred on the stone bounding-box centroid -- it is NOT a coordinate bound and "it
-    never clips stones".
-    ``core.rs:113-115`` -- the map key is ``(i32, i32)``.
-    => The only hard bound is i32. Coordinates outside the nominal window
-    ``[-9, 9]`` (``core.rs:40-42``, ``zobrist.rs:77-81``) are LEGAL and are reported as a
-    statistic, never rejected.
-
-turn structure (LAW-03: this tool counts PLIES, and says so everywhere)
-    ``board/mod.rs:24-26`` and ``core.rs:118-121`` -- ply 0: player 1 places exactly ONE
-    stone; from then on each player places exactly TWO stones before the turn passes.
-    => mover(0) = P1; for i >= 1, mover(i) = P2 when ((i-1)//2) is even, else P1.
-
-win condition
-    ``board/mod.rs:21-22`` -- six stones of one player in a row along one of the three hex
-    axes. ``core.rs:51-55`` -- ``HEX_AXES = [(1,0), (0,1), (1,-1)]`` (positive directions;
-    the scan uses +/-).
-
-The winner/coordinate mapping is CHECKED, not asserted: every game is replayed and the
-declared winner must actually hold a six-run in the final position under the identity
-mapping. KNOWN LIMIT, stated rather than hidden: the axis SET {(1,0),(0,1),(1,-1)} is
-invariant under a q<->r relabelling (it maps (1,0)<->(0,1) and (1,-1)<->-(1,-1)), so a
-transposed axial convention CANNOT be detected by a win-line check. It would be detected
-only by comparing against the source renderer, which is out of scope for an offline audit.
-
-================================================================================
-DEDUPE -- read this before trusting the dedupe leg
-================================================================================
-R247 says "dedupe overlap vs the in-repo corpus by game_hash". THERE IS NO IN-REPO
-``game_hash`` PRODUCER FOR THE HUMAN CORPUS. Verified:
-  * ``src/mantis/data/sources/human.py:98`` -- a human game's identity is
-    ``game_id_str=path.stem``, i.e. the source UUID of the JSON filename. Not a hash.
-  * ``src/mantis/data/generate.py:147-150`` -- ``_game_hash`` is the ONLY hash-of-moves in
-    the repo. It hashes BOT self-play games and is used as a FILENAME stem; F-06 rules bot
-    games non-canonical, so it is not the human corpus's key.
-Therefore this tool never compares the dataset's ``game_hash`` against an in-repo
-``game_hash``: there is nothing to compare it to. Without ``--in-repo-corpus`` the leg
-reports ``NO IN-REPO REFERENCE AVAILABLE``. With it, the leg derives a comparable key on
-BOTH sides using the canonical move-sequence digest defined in ``derived_move_key`` and
-labels the whole result DERIVED -- it is this tool's construction, not an in-repo contract.
-
-================================================================================
-EXIT CODES
-================================================================================
-    0  clean
-    2  sha256 verification failure (mismatch, missing, or unlisted record file)
-    3  contract violation
-    4  usage / IO error (unreadable dataset dir, refused output path)
+Exit codes: 0 clean · 2 sha256 verification failure · 3 contract violation · 4 usage/IO error.
 """
 from __future__ import annotations
 
@@ -178,10 +60,9 @@ CONTRACT_VERSION = 2
 
 #: The REQUIRED per-record fields. Amending this list means amending the contract block.
 DECLARED_RECORD_FIELDS = ("game_hash", "winner", "elo", "moves")
-#: Recorded when present, never required. ``game_id`` left this tuple's required sibling in
-#: contract v2: the R247 dataset carries no such field (OPEN-7).
+#: Recorded when present, never required: the adopted dataset carries no ``game_id``.
 OPTIONAL_RECORD_FIELDS = ("game_id",)
-#: contract v2, OPEN-5: ``elo`` is one rating per PLAYER, in seat order [p1, p2].
+#: ``elo`` is one rating per PLAYER, in seat order [p1, p2].
 ELO_SEATS = 2
 
 #: crates/mantis-core/src/board/state/core.rs:51-55 (positive directions; scan uses +/-).
@@ -196,21 +77,16 @@ WINNER_DOMAIN = (PLAYER_ONE, PLAYER_TWO)
 I32_MIN = -(2**31)
 I32_MAX = 2**31 - 1
 #: crates/mantis-core/src/board/state/core.rs:40-42 and board/zobrist.rs:77-81. The window
-#: SLIDES (board/mod.rs:12-14) -- this is a reporting reference, never a rejection bound.
+#: SLIDES — this is a reporting reference, never a rejection bound.
 NOMINAL_WINDOW_HALF = 9
-#: src/mantis/data/sources/human.py:115-119 -- the in-repo ingestion filter's move floor,
-#: in PLIES. R247 names the same floor as selection bias (b).
+#: src/mantis/data/sources/human.py:115-119 — the in-repo ingestion filter's move floor, in PLIES,
+#: and the same floor recorded below as selection bias (b).
 DECLARED_MIN_PLIES = 20
-#: The ply caps the report is asked to measure truncation against, in PLIES (LAW-03).
-#: 128 is the live arena/eval literal (`src/mantis/arena/match.py:66 DEFAULT_MAX_PLIES`,
-#: registered as F-816-11); 200 is the candidate R276(g) declined to adopt on a round
-#: number. Both are REPORTING references — this tool recommends neither. Override with
-#: --ply-cap, which replaces the pair rather than adding to it.
+#: The ply caps truncation is measured against, in PLIES. Both are REPORTING references — this
+#: tool recommends neither, and --ply-cap REPLACES the pair rather than adding to it.
 DECLARED_PLY_CAPS = (128, 200)
-#: Fixed histogram bucket width, in PLIES. Stated because a modal bucket is a claim about
-#: the width as much as about the data: "36.8% in the modal bucket" means nothing until the
-#: bucket is named. The report also carries the single most common EXACT ply count, so a
-#: spike at the selection floor cannot hide inside a bucket.
+#: Fixed histogram bucket width, in PLIES: a modal bucket is a claim about the width as much as
+#: about the data, so the report also carries the single most common EXACT ply count.
 HISTOGRAM_BUCKET_PLIES = 20
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -231,9 +107,6 @@ class UsageError(Exception):
     """Bad invocation or unreadable input. Never a statement about the dataset."""
 
 
-# ---------------------------------------------------------------------------
-# sha256 leg
-# ---------------------------------------------------------------------------
 
 def sha256_file(path: Path) -> str:
     """Streaming sha256 hex digest. Binary mode -- takes no ``encoding`` by design."""
@@ -249,9 +122,7 @@ def sha256_file(path: Path) -> str:
 
 class ManifestRow:
     """One pinned file: relative path, expected sha256, and an optional declared length.
-
-    ``expected_bytes`` is None unless the manifest declared one (shape B's ``bytes``).
-    """
+    ``expected_bytes`` is None unless the manifest declared one (shape B's ``bytes``)."""
 
     __slots__ = ("path", "sha256", "expected_bytes")
 
@@ -419,9 +290,6 @@ def verify_shas(dataset_dir: Path, rows: list[ManifestRow]) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# record intake -- strict, loud, never coercing
-# ---------------------------------------------------------------------------
 
 def _describe_moves(value: object) -> str:
     """Diagnostic for a 'moves' payload that is not the declared list-of-[q,r]."""
@@ -534,13 +402,9 @@ def parse_record(obj: object, where: str) -> dict[str, Any]:
 
 
 def record_identity(rec: dict[str, Any]) -> str:
-    """How a game is NAMED in diagnostics.
-
-    contract v2 (OPEN-7): ``game_id`` is optional and the R247 dataset has none, so the
-    identity is ``game_hash`` -- which R247 names as the dedupe key and which is present.
-    When a dataset ships both, both are shown: a diagnostic that drops half an identity
-    sends the reader to the wrong record.
-    """
+    """How a game is NAMED in diagnostics: ``game_hash``, since ``game_id`` is optional and the
+    adopted dataset has none. When a dataset ships both, both are shown — a diagnostic that drops
+    half an identity sends the reader to the wrong record."""
     game_id: str | None = rec.get("game_id")
     if game_id:
         return f"{game_id} ({rec['game_hash']})"
@@ -581,16 +445,10 @@ def iter_records(dataset_dir: Path, rows: list[ManifestRow]) -> Iterator[dict[st
                 yield parse_record(obj, f"{rel}[{idx}]")
 
 
-# ---------------------------------------------------------------------------
-# convention audit -- the mapping is CHECKED, not asserted
-# ---------------------------------------------------------------------------
 
 def mover_of_ply(i: int) -> int:
-    """Which player places stone index ``i``.
-
-    board/mod.rs:24-26 + core.rs:118-121: ply 0 is P1's single stone, then each player
-    places two stones per turn.
-    """
+    """Which player places stone index ``i``: ply 0 is P1's single stone, then each player places
+    two stones per turn (board/mod.rs:24-26 + core.rs:118-121)."""
     if i == 0:
         return PLAYER_ONE
     return PLAYER_TWO if ((i - 1) // 2) % 2 == 0 else PLAYER_ONE
@@ -685,10 +543,8 @@ def audit_conventions(records: list[dict[str, Any]]) -> dict[str, Any]:
     flipped = out["loser_holds_six_run_when_winner_does_not"]
     checked = out["winner_holds_six_run"] + lacks
     if not checked:
-        # AUDIT-1 F-28/A09. With ZERO games in the check the two counters are both 0, `lacks`
-        # is falsy, and the `else` arm below read "CONSISTENT ... on every game replayed" —
-        # a clean bill issued over nothing. An empty corpus, a corpus whose `winner` values
-        # are all outside `WINNER_DOMAIN`, and a corpus that genuinely agrees were one string.
+        # With ZERO games in the check both counters are 0, `lacks` is falsy, and the `else` arm
+        # below read "CONSISTENT ... on every game replayed" — a clean bill issued over nothing.
         out["games_checked"] = 0
         out["verdict"] = (
             "WINNER CONVENTION NOT CHECKED: no game entered the six-run comparison (an empty "
@@ -726,25 +582,18 @@ def audit_conventions(records: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-# ---------------------------------------------------------------------------
-# distributions
-# ---------------------------------------------------------------------------
 
-#: The percentile ladder every distribution in this report carries. p999 is here because a
-#: ply cap is a decision about a right TAIL, and p99 alone cannot show how far the tail runs.
+#: The percentile ladder every distribution carries. p999 is here because a ply cap is a decision
+#: about a right TAIL, and p99 alone cannot show how far the tail runs.
 DECLARED_PERCENTILES: tuple[tuple[str, float], ...] = (
     ("p50", 50.0), ("p90", 90.0), ("p95", 95.0), ("p99", 99.0), ("p999", 99.9),
 )
 
 
 def nearest_rank(ascending: list[float], pct: float) -> float:
-    """The NEAREST-RANK percentile, declared so the number is reproducible.
-
-    ``index = ceil(pct/100 * n) - 1``, clamped to ``[0, n-1]``, over the ASCENDING sample.
-    No interpolation, deliberately: every value reported is a value that actually occurs in
-    the corpus, which is what a ply cap has to be compared against. An interpolating
-    estimator would happily report a p99 of 128.5 plies -- a length no game can have.
-    """
+    """The NEAREST-RANK percentile: ``index = ceil(pct/100 * n) - 1`` clamped to ``[0, n-1]`` over
+    the ASCENDING sample. No interpolation, deliberately — every value reported is one that
+    actually occurs, where an interpolating estimator would report a p99 of 128.5 plies."""
     if not ascending:
         raise ValueError("nearest_rank on an empty sample")
     n = len(ascending)
@@ -753,21 +602,15 @@ def nearest_rank(ascending: list[float], pct: float) -> float:
 
 
 def turns_from_plies(plies: float) -> float:
-    """LAW-03 conversion, stated at every use site rather than assumed.
-
-    ``board/mod.rs:24-26`` + ``core.rs:118-121``: ply 0 places ONE stone, then each player
-    places TWO per turn -- so ``turns = 1 + (plies - 1) / 2``. Halves are real here (a turn
-    can be half-played) and are NOT rounded away: rounding would quietly move a cap.
-    """
+    """Convert plies to turns: ply 0 places ONE stone, then each player places TWO per turn, so
+    ``turns = 1 + (plies - 1) / 2``. Halves are real here (a turn can be half-played) and are NOT
+    rounded away: rounding would quietly move a cap."""
     return 1.0 + (plies - 1.0) / 2.0
 
 
 def describe(values: list[float], *, bins: int = 10) -> dict[str, Any]:
-    """count / min / median / mean / stdev / max, the percentile ladder, and a histogram.
-
-    Bin edges are DERIVED from the observed range, never transcribed, so the histogram
-    cannot go stale against a constant somebody edited elsewhere.
-    """
+    """count / min / median / mean / stdev / max, the percentile ladder, and a histogram whose bin
+    edges are DERIVED from the observed range, so it cannot go stale against a constant."""
     if not values:
         return {"count": 0, "min": None, "median": None, "mean": None, "max": None,
                 "stdev": None, "percentiles": {}, "histogram": []}
@@ -805,12 +648,10 @@ def ply_length_report(
 ) -> dict[str, Any]:
     """The ply-length view a cap decision is actually made from.
 
-    Three things the generic ``describe`` cannot say: the same ladder in TURNS as well as
-    PLIES (LAW-03 -- a cap stated in the wrong unit is off by a factor of two), the fraction
-    of games each candidate cap TRUNCATES, and a fixed-width histogram whose modal bucket is
-    reported next to the single most common EXACT length. That last pair exists because a
-    selection floor produces a spike, and a spike hidden inside a wide bucket reads as a
-    broad mode -- a corpus-quality fact the reader must be able to see, not infer.
+    Three things the generic ``describe`` cannot say: the same ladder in TURNS as well as PLIES,
+    the fraction of games each candidate cap TRUNCATES, and a fixed-width histogram whose modal
+    bucket is reported next to the single most common EXACT length — a selection floor produces a
+    spike, and a spike hidden inside a wide bucket reads as a broad mode.
     """
     if not ply_counts:
         return {"count": 0}
@@ -879,9 +720,8 @@ def ply_length_report(
         "most_common_exact_plies": [
             {"plies": v, "count": c, "share": c / n} for v, c in head
         ],
-        # Answers "does the selection floor SPIKE?" without the reader having to infer it
-        # from a bucket. A floor that binds hard shows up as mass piled on the floor value
-        # itself; a floor that merely truncates a smooth left tail does not.
+        # Answers "does the selection floor SPIKE?" without the reader having to infer it from a
+        # bucket: a floor that binds hard piles mass on the floor value itself.
         "count_at_min_plies": {
             "plies": min_plies,
             "count": exact[min_plies],
@@ -890,28 +730,18 @@ def ply_length_report(
     }
 
 
-# ---------------------------------------------------------------------------
-# dedupe
-# ---------------------------------------------------------------------------
 
 def derived_move_key(moves: list[tuple[int, int]]) -> str:
-    """A canonical digest of a move sequence, DERIVED BY THIS TOOL.
-
-    NOT an in-repo contract and NOT the dataset's ``game_hash``. It exists solely so the
-    two corpora can be compared at all -- see the DEDUPE block in the module docstring.
-    Definition, pinned so it is reproducible: sha256 of the compact JSON encoding of the
-    ordered ``[[q, r], ...]`` list, hex.
-    """
+    """A canonical digest of a move sequence, DERIVED BY THIS TOOL — NOT an in-repo contract and
+    NOT the dataset's ``game_hash``. Definition, pinned so it is reproducible: sha256 of the
+    compact JSON encoding of the ordered ``[[q, r], ...]`` list, hex."""
     payload = json.dumps([[q, r] for q, r in moves], separators=(",", ":"))
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _in_repo_move_keys(corpus_dir: Path) -> tuple[list[str], list[str]]:
-    """Derive move keys from the in-repo human corpus JSON cache.
-
-    Shape per src/mantis/data/sources/human.py:85 -- ``moves[i].x`` / ``moves[i].y`` ARE the
-    axial (q, r); src/mantis/data/generate.py:140 writes the same pair back out.
-    """
+    """Derive move keys from the in-repo human corpus JSON cache, whose ``moves[i].x`` /
+    ``moves[i].y`` ARE the axial (q, r) (src/mantis/data/sources/human.py:85)."""
     keys: list[str] = []
     skipped: list[str] = []
     for path in sorted(corpus_dir.glob("*.json")):
@@ -984,9 +814,6 @@ def dedupe_leg(records: list[dict[str, Any]], corpus_dir: Path | None) -> dict[s
     return leg
 
 
-# ---------------------------------------------------------------------------
-# the two recorded selection biases (R247 requires these in the OUTPUT)
-# ---------------------------------------------------------------------------
 
 def selection_biases(records: list[dict[str, Any]], conv: dict[str, Any]) -> list[dict[str, Any]]:
     """Measured-plus-stated. The measurement is taken here; the statement is R247's."""
@@ -1036,9 +863,6 @@ def selection_biases(records: list[dict[str, Any]], conv: dict[str, Any]) -> lis
     ]
 
 
-# ---------------------------------------------------------------------------
-# output
-# ---------------------------------------------------------------------------
 
 def _repo_root() -> Path:
     """The repository this tool ships in (tools/<this file> -> parents[1])."""
@@ -1046,12 +870,8 @@ def _repo_root() -> Path:
 
 
 def checked_out_path(out: Path) -> Path:
-    """Refuse an output path inside the repository tree (R7).
-
-    The report is a run artifact over an artifact that deliberately lives outside the tree;
-    writing it back in is the exact class R7 exists to stop. Both sides are ``resolve()``d
-    so a symlink cannot walk around the check.
-    """
+    """Refuse an output path inside the repository tree (R7). Both sides are ``resolve()``d so a
+    symlink cannot walk around the check."""
     resolved = out.expanduser().resolve()
     root = _repo_root()
     if resolved == root or root in resolved.parents:
@@ -1064,11 +884,9 @@ def checked_out_path(out: Path) -> Path:
 
 
 def elo_leg(records: list[dict[str, Any]]) -> dict[str, Any]:
-    """contract v2, OPEN-5: ``elo`` is a per-PLAYER pair, so the sample is per PLAYER.
-
-    Stated in the report itself, because "median Elo 1055" over 8698 games and over 17396
-    players are different sentences and only one of them is what this field holds.
-    """
+    """The Elo distribution, sampled per PLAYER because ``elo`` is a per-player pair. Stated in the
+    report itself: "median Elo 1055" over 8698 games and over 17396 players are different
+    sentences."""
     ratings: list[float] = []
     complete_pairs = 0
     null_ratings = 0
@@ -1155,13 +973,9 @@ def build_report(
 
 
 def sha_only_report(dataset_dir: Path, sha_leg: dict[str, Any]) -> dict[str, Any]:
-    """The report emitted when verification fails: no statistics over unpinned bytes.
-
-    Deliberately short-circuits before any record is parsed. Distributions, the convention
-    audit and the bias measurements over bytes that are NOT the pinned bytes would be
-    numbers about an unknown artifact — worse than no numbers, because they read as
-    evidence.
-    """
+    """The report emitted when verification fails: no statistics over unpinned bytes, so it
+    short-circuits before any record is parsed. Numbers about an unknown artifact are worse than
+    no numbers, because they read as evidence."""
     return {
         "tool": "tools/audit_bootstrap_corpus.py",
         "ruling": "R247",
@@ -1273,8 +1087,7 @@ def main(argv: list[str] | None = None) -> int:
         out_path = checked_out_path(args.out)
         rows = load_metadata(dataset_dir)
         sha_leg = verify_shas(dataset_dir, rows)
-        # sha FIRST, and it short-circuits: an unpinned byte invalidates every measurement
-        # that would follow it.
+        # sha FIRST, and it short-circuits: an unpinned byte invalidates every measurement below.
         if not sha_leg["clean"]:
             report, code = sha_only_report(dataset_dir, sha_leg), EXIT_SHA
         else:

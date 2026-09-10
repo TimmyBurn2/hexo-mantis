@@ -1,18 +1,12 @@
 """The exit-code family table in `docs/design/repo_design.md` is DERIVED, not transcribed.
 
-Q3 red-team A4c: rc 71 became a code the SUPERVISOR reads the day F-816-19 put an
-`os._exit(71)` inside `mantis.run.main`'s arming gate, and the design's exit-code table never
-said so. Nothing caught it, and nothing could: `tools/ci_gates/contract_doc_gate.py`'s
-`DEFAULT_DOC` is `docs/contracts/run_config_schema.md` and gate 13 reads no other document, so
-the design doc's binding tables have NO gate coverage at all (queued informationally as RQ-12).
+Collects every `*_EXIT_CODE` constant defined under `src/mantis/**` by AST and compares it with
+the rc tables parsed out of the design doc, in BOTH directions, so a constant with no row and a
+row with no constant are equally loud. Gate 13 reads only the run-config contract doc, so the
+design doc's binding tables have no other coverage.
 
-This file is the cheapest honest answer: a producer test with a live producer, in the default
-tier, that does not mint a CI gate number (which would be its own scope decision). It collects
-every `*_EXIT_CODE` constant DEFINED in `src/mantis/**` by AST and compares it with the rc
-tables parsed out of the design doc — in BOTH directions, so a constant with no row and a row
-with no constant are equally loud. DERIVED, NEVER TRANSCRIBED (R192(e)/G-DFIX-4, the rule gate
-15 enforces on line counts): a hand-written list here would be a second authority that goes
-stale the first time someone adds a code, which is precisely the class that let 71 through.
+A hand-written list here would be a second authority that goes stale the first time someone
+adds a code — the class that let an undocumented rc 71 through.
 """
 from __future__ import annotations
 
@@ -24,16 +18,12 @@ _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
 _DOC = _REPO / "docs" / "design" / "repo_design.md"
 
-#: A table row in the exit-code family: `| <rc> | <constant cell> | <authority> | <delivery> |`.
-#: The rc column must be a bare integer, which is what distinguishes these tables from every
-#: other table in the document without needing to know where they sit.
+#: A table row in the exit-code family. The rc column must be a bare integer, which is what
+#: distinguishes these tables from every other one in the document.
 _ROW = re.compile(r"^\s*\|\s*(\d+)\s*\|(.+?)\|", re.MULTILINE)
 
-#: EVERY constant-shaped name inside the constant cell — deliberately `findall` and not a
-#: single match. Row 42's cell carries TWO names ("`WATCHDOG_STALL_EXIT_CODE`
-#: (= `lifecycle.watchdog.SELFPLAY_STALL_EXIT_CODE`)"), and a one-name-per-row parser would
-#: report `SELFPLAY_STALL_EXIT_CODE` absent on its very first run — a false red that a future
-#: reader silences rather than fixes. The dotted prefix is stripped by the pattern itself.
+#: EVERY constant-shaped name in the cell — `findall`, not one match: row 42's cell carries two
+#: names, and a one-name-per-row parser would report the alias absent. Dotted prefixes strip.
 _CONST = re.compile(r"([A-Z][A-Z0-9_]*_EXIT_CODE)\b")
 
 
@@ -67,9 +57,8 @@ def _documented_exit_codes(doc: Path) -> dict[str, int]:
 
 
 def test_every_exit_code_constant_is_declared_in_the_design_table() -> None:
-    """BOTH directions. A constant with no row is an undocumented code a supervisor may read
-    (that is exactly what rc 71 was); a row naming a constant that no longer exists is a table
-    describing a contract the code has abandoned."""
+    """BOTH directions: an undocumented code a supervisor may read, and a row for a constant
+    that no longer exists, are equally wrong."""
     defined = _defined_exit_codes(_SRC)
     documented = _documented_exit_codes(_DOC)
 
@@ -87,8 +76,8 @@ def test_every_exit_code_constant_is_declared_in_the_design_table() -> None:
 
 
 def test_the_documented_rc_equals_the_constants_actual_value() -> None:
-    """Names matching is not enough — the NUMBER is the contract. A table row that says 71
-    beside a constant that is 70 is worse than no row, because it reads as verified."""
+    """Names matching is not enough — the NUMBER is the contract, and a wrong one reads as
+    verified."""
     defined = _defined_exit_codes(_SRC)
     documented = _documented_exit_codes(_DOC)
     wrong = {name: (documented[name], defined[name])
@@ -98,14 +87,8 @@ def test_the_documented_rc_equals_the_constants_actual_value() -> None:
 
 
 def test_the_row_42_cell_carrying_TWO_constants_yields_BOTH() -> None:
-    """THE PARSER ROW the fix-review required (`Q3_FIX_REVIEW.md` F7).
-
-    Row 42's constant cell is `` `WATCHDOG_STALL_EXIT_CODE` (=
-    `lifecycle.watchdog.SELFPLAY_STALL_EXIT_CODE`) `` — two constant-shaped names in ONE cell,
-    the only such row in the document. A naive one-constant-per-row parser silently drops the
-    alias and reports it absent on the very first run, which is a false red a future reader
-    silences instead of fixing. This row pins the multi-name extraction directly, so the
-    behaviour is a claim rather than an accident of the regex."""
+    """THE PARSER ROW: row 42's cell is the document's only one carrying TWO constant names,
+    so the multi-name extraction is a claim rather than an accident of the regex."""
     documented = _documented_exit_codes(_DOC)
     assert documented.get("WATCHDOG_STALL_EXIT_CODE") == 42
     assert documented.get("SELFPLAY_STALL_EXIT_CODE") == 42, (
@@ -119,11 +102,8 @@ def test_the_row_42_cell_carrying_TWO_constants_yields_BOTH() -> None:
 
 
 def test_the_census_bites_a_planted_undocumented_constant(tmp_path) -> None:
-    """LAW-07 MUTATION SELF-TEST, both halves, run against synthetic inputs so the checker is
-    proven to bite without anyone editing the real table.
-
-    A census that cannot fail is a green light nobody earned — and this one replaces a CI gate,
-    so it carries the burden a gate would have."""
+    """MUTATION SELF-TEST, both halves, against synthetic inputs, so the census is proven to
+    bite without anyone editing the real table."""
     src = tmp_path / "src"
     src.mkdir()
     (src / "mod.py").write_text(

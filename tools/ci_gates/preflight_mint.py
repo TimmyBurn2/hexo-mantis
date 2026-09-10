@@ -1,237 +1,70 @@
 #!/usr/bin/env python3
-# >300 justify (R8). The old clause (2) — "when
-# the freeze lifts, the parent half should be split out and this clause deleted" — is
-# DISCHARGED: the leaf parent layers (shared vocabulary, exit taxonomy, the two
-# predicate evaluators, report helpers, the classifier, the segment/verdict/identity
-# leaves) moved VERBATIM to `preflight_mint_parent.py` (S-3 hunk hashes in
-# wp/WPBOX/DISPATCH_LOG.md) and are re-exported by plain assignment, so every oracle that
-# binds `TOOL.<name>` off this module path keeps binding one object.
-# Two reasons the file is still >300, and saying exactly what stays is the point:
-#
-#  (1) CHILD SIDE (_boot_main, _abort_rc, _load, _apply_burst_override,
-#      _minimum_legal_burst, _burst_floors, _resolve_config_path) — SHRUNK by WPMAIN
-#      (CARD-RUN-MAIN, R121(a)): the boot itself now lives at `mantis.run`
-#      (`build_run_collaborators` + `compose_run`), and `_build_buffer` moved with it as
-#      `mantis.run._select_buffer`. What is left on this side is config surgery and the rc
-#      instrument — the two things that are the TOOL's and not the run's.
-#      `_abort_rc` belongs on this side by the same rule as the rest:
-#      it runs IN the child, after `compose_run` returns, and it is what turns the run's own
-#      `abort_rule` into the process rc a supervisor reads. The parent re-execs ITSELF as
-#      the boot child by os.path.abspath(__file__) (DESIGN_P §6.2) — one file IS the
-#      containment mechanism, not a packaging preference. The frozen O-9/O-10/O-5 token
-#      census and the O-1 parser census sweep THIS file, so the boot and the parser cannot
-#      leave it without an R43 event.
-#
-#  (2) PARENT SIDE THAT STAYS (585 lines of function bodies), each piece pinned by a NAMED
-#      seam rather than by inertia: `verify_source_pins` (SF-4 — the tamper scan lives in
-#      the TOOL, recorded at tests/config/test_armed_abort_manifest.py:5) and the whole
-#      audit half beside it, because the frozen ring-2 monkeypatch seam
-#      (`TOOL.MANIFEST = bad -> main(--audit-only) == 31`,
-#      test_drawrate_arming_surface_named_failure.py) requires the audit read path to see
-#      THIS module's globals at call time; `_burst_tier`/`_tier_block`/`_tier_skeleton`,
-#      which read `_burst_floors` (child closure); `_new_report`, whose `tool_sha256`
-#      hashes THIS file; `_child_argv`/`_run_child` (the self-exec + spool); and the
-#      orchestration (`_run_preflight`/`_run_audit`/`main`), which weaves the audit half,
-#      the child closure and the sibling's leaves. The sibling must never import this file
-#      and never define a `MANIFEST` global — pinned, with the O-2/O-3 census extension,
-#      by tests/tools/test_preflight_parent_census.py.
-#
-# Roughly half the file is comment carrying the "what defect does this line exist for"
-# rationale LAW-07 wants; deleting it is what makes the next reader re-derive MF-5.
-"""CI gate 12 (R61) — the mint preflight: one tool, two modes, one manifest.
+# >300 justify (R8): the parent re-execs ITSELF as the boot child by os.path.abspath(__file__),
+# so ONE FILE is the containment mechanism rather than a packaging preference; the frozen token
+# censuses sweep this file, and the audit read path must see THIS module's globals at call time
+# for the `TOOL.MANIFEST` monkeypatch seam. The parent-only leaves live in
+# `preflight_mint_parent.py` and are re-exported by plain assignment, so every oracle binding
+# `TOOL.<name>` still binds one object.
+"""CI gate 12 — the mint preflight: one tool, two modes, one manifest.
 
-Mode AUDIT (`--audit-only`): no boot, no burst, no GPU. Reads the committed production
-configs through the REAL loader and audits assertion (c) — every `required` row of
-`mantis.config.armed_aborts.MANIFEST` must be ARMED, and every armed row must still be
-ABLE TO FIRE inside its own run — plus manifest integrity and the R56 source-pin tamper
-scan. This is the per-commit CI gate. **rc 0 in this mode covers assertion (c) ONLY**;
-assertions (a) and (b) are reported `not_run`, in the report and on stdout, on every run
-including a green one.
+Mode AUDIT (`--audit-only`): no boot, no burst, no GPU. Reads the committed production configs
+through the REAL loader and audits assertion (c) — every `required` manifest row must be ARMED
+and still ABLE TO FIRE inside its own run — plus manifest integrity and the source-pin tamper
+scan. rc 0 in this mode covers assertion (c) ONLY; (a) and (b) report `not_run` on every run.
 
-Assertion (c)'s SECOND half is R251 / ADJ-D22 and it is not a refinement of the first: the
-audit never read `monitor.gate_interval`, so `gate_interval: 1000000000` on a 40-step run
-produced zero gate boundaries, left the draw-rate threshold armed in the config and unread
-in the run, and audited GREEN. `Mechanism.is_armed` reads a threshold; whether the machinery
-that reads that threshold ever RUNS is a different question, and `ge=1` on the interval bans
-one spelling of "never gate" while permitting every larger one. So `audit_cadence` computes
-each armed row's earliest possible fire step from that config's own cadence keys and refuses
-any row whose value exceeds `EARLIEST_FIRE_FRACTION * train.max_train_steps` — rc 30, the
-same code, because an abort that cannot fire is not armed in any sense that protects the
-run. A large interval is NEVER a sanctioned disarm; the one sanctioned spelling stays the
-explicit R56-style deferred row with an owner and a source pin. `_cadence_self_test` proves
-the trigger fires in both directions before any verdict of it is published.
+Assertion (c)'s second half exists because `Mechanism.is_armed` reads a threshold while whether
+the machinery that reads it ever RUNS is a different question: `gate_interval: 1000000000` on a
+40-step run produced zero gate boundaries and audited green. `audit_cadence` computes each armed
+row's earliest possible fire from that config's own cadence keys and refuses any row past
+`EARLIEST_FIRE_FRACTION * train.max_train_steps` at rc 30; the one sanctioned disarm is an
+explicit deferred row with an owner and a source pin, never a large interval. Every row is judged
+IN ITS OWN SAMPLE CLOCK, and a clock whose period cannot be derived is rc 31 rather than a silent
+fall back to the step clock — an axis judged in a clock it does not tick in audits GREEN on
+exactly the configs it exists to refuse. `_cadence_self_test` proves the trigger fires in both
+directions before any verdict is published.
 
-R265 / ADJ-D38 GENERALISES THAT HALF: every row is judged IN ITS OWN SAMPLE CLOCK. R251
-computed every earliest-fire in TRAINING STEPS, which is the right clock for the draw-rate
-gate (it ticks on `monitor.gate_interval`) and the wrong one for the sealbot-WR trajectory,
-whose evidence arrives once per EVAL ROUND (`train.eval_interval`). A row's cadence now names
-its `SampleClock`, the CLOCK derives its period from a live key — no row may declare the key
-its own axis is sampled by — and the comparison happens in ticks of that clock. A clock whose
-period cannot be derived is rc 31 by name (`SampleClockNotDerivableError`), never a silent
-fall back to the step clock: an axis judged in a clock it does not tick in audits GREEN on
-exactly the configs it exists to refuse. `sealbot_wr_abort` joins the manifest in the same
-ruling as a DEFERRED row — the axis had no row at all, so gate 12 could not compute even a
-false affirmative for it — and is printed, with its clock, on every run.
+Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec`): everything AUDIT does, then
+the REAL `compose_run` boot in production posture, a bounded burst, a timeout-bounded join, and
+assertions (a) sync-cadence and (b) lag-transport over the run's own JSONL segment. **This is the
+MANUAL mint gate — no CI step invokes it.**
 
-Mode PREFLIGHT (`--config --burst-steps --out-dir --timeout-sec`): everything
-AUDIT does, then the REAL `compose_run` boot in production posture, a bounded burst, a
-timeout-bounded join, and assertions (a) sync-cadence and (b) lag-transport over the run's
-own JSONL segment. **This is the MANUAL mint gate — no CI step invokes it.**
+This tool contains NO stand-in for a production object and constructs none: the child calls the
+same builder/composer pair `launch_run` calls, and when a collaborator is missing a method the
+failure reaches the process boundary uncaught. rc 32 is a FALLBACK SNIFF — the literal
+`"object has no attribute"` in the child's stderr tail — never a wall registry; anything else
+lands rc 33 with its traceback in the tail.
 
-R64 posture, which is the whole point: this tool contains NO stand-in for a production
-object — and since WPMAIN it constructs no production object at all. The child calls
-`mantis.run.build_run_collaborators` and `mantis.run.compose_run`, the SAME pair
-`mantis.run.launch_run` calls, so the real trainer, the real self-play pool, the real buffer
-(selected off `config.identity.representation` — never sniffed, never defaulted, LAW-11),
-the run-safety triple, the step-coordinator config and the sync engine are all built by the
-composition root and by nothing here. A CI gate that builds its own collaborators is the
-one-authority violation CARD-RUN-MAIN ended. When a collaborator is missing a method the
-tool does NOT supply one: the failure reaches the process boundary uncaught. Classification honesty (CARD-PREFLIGHT-WALL-CLASSIFIER, resolved at WPCLEAN Phase
-PFC to this WORDING rather than to a wall table): rc 32 is a FALLBACK SNIFF — the literal
-`"object has no attribute"` in the child's stderr tail — not a wall registry. A wall that
-surfaces any other way lands rc 33 with its traceback in the tail, and the register of
-known walls stays the TD cards; an exception-type→card table in this tool would be a second
-authority beside the register (the card's own named risk), so none exists.
+CARD-POOL-ENCODING-BRIDGE has landed: `resolve_from_config` reads `identity.encoding` in its
+nested shape, so the `MissingEncodingError` that used to stop `WorkerPool` construction is gone.
+This docstring previously named `train/coordinator/step.py` as the terminal wall; that was
+measured false — the encoding wall fired FIRST, before `compose_run` was ever called.
 
-**CARD-POOL-ENCODING-BRIDGE (TD-4) HAS LANDED (WPBRIDGE Phase T).** Mode PREFLIGHT used to
-terminate there: `WorkerPool` construction calls `resolve_pool_encoding` ->
-`resolve_from_config`, which raised `MissingEncodingError` because `RunConfig.model_dump()`
-carries `identity.encoding` and no flat top-level `encoding` key. Parent rc **33**, child
-rc 1, ~1.4 s. `resolve_from_config` now reads the nested shape as one of its declared forms
-— one authority, no caller-side injection — and that wall is GONE.
+Where the boot stops now is a config fact. A `train.device: cuda` config dies in `init_trainer`
+on a non-CUDA box (rc 33), which is what stops a cpu preflight false-clearing a cuda run's GPU
+wall; and production configs mint `inference.fused_graph_caps` placeholders that are schema-VALID
+so the repo ships a complete config and runtime-REFUSED so an uncalibrated config cannot
+construct its graph inference server — `UncalibratedFusedGraphCapsError` at the `WorkerPool`
+seam. Calibrating restores clean-boot evidence, and `fused_graph_caps_calibrated` is a DEFERRED
+manifest row so every run says so out loud.
 
-Where the boot stops NOW, measured on the WPBRIDGE dev-box rehearsal (2026-07-29, CPU,
-`--burst-steps 25001 --timeout-sec 300`): **nowhere, inside the rehearsal window.** The child
-boots clean through `init_trainer`, `WorkerPool`, `compose_run`, `build_run_safety` and
-`run_training_loop`, arms both watchdogs (`heartbeat_watchdog_armed`,
-`selfplay_stall_watchdog_armed`), streams `actor_lag_sample` and `system_stats`, and is still
-running healthily when `--timeout-sec` kills it: parent rc **40** `PreflightTimeoutError`,
-child rc -15, EMPTY stderr. `buffer_size` is **0** for the whole window — one CPU self-play
-worker at run5's settings finishes no games, so the coordinator never leaves its warmup arm
-(`_run_loop` O4, `buffer.size < cfg.min_buf_size`) and never takes a training step.
+Containment is a SUBPROCESS, not a thread: `build_run_safety`'s `exit_fn` is `os._exit`, so an
+in-process boot that trips exit 42/43/45 dies without unwinding and no report is written.
 
-CORRECTION, measured 2026-07-30 (WPMAIN / R126 + R130). The paragraph above is preserved as
-the WPBRIDGE record; two of its facts have EXPIRED and a reader must not take them for the
-current tree. (i) `configs/run5.yaml` no longer boots on a CPU box AT ALL: the device is a
-CONFIG FACT now (`train.device`, R126 — the `--device` flag is DELETED from this tool), run5
-mints `cuda`, and the child dies in `init_trainer` with torch's own "Torch not compiled with
-CUDA enabled" -> parent rc **33**. That refusal is the POINT (it is what stops a cpu preflight
-false-clearing a cuda run's GPU wall) and is pinned by
-`tests/tools/test_preflight_mint_process.py::test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer`.
-(ii) On the minted CPU twin the rest of the paragraph still holds — clean boot, both watchdogs
-armed, `buffer_size` 0, killed at the timeout, parent rc **40** — but the CHILD rc is now
-**0, not -15**, with non-empty stderr: the timeout SIGTERMs the child's process group, and
-WPMAIN installed LAW-16's handlers (dead in every composed run before it), so the child
-save-then-exits instead of dying on the signal.
+Exit codes. Every outcome this tool DIAGNOSES is NAMED; rc 1 `PreflightInternalError` is the
+catch-all for one it does not, so a NEW rc 1 is a finding. A child rc in [10, 41] PROPAGATES
+UNCHANGED, and 42-48 are RESERVED by the run's own machinery and never an assertion outcome here.
+46 sits outside the pass-through band, so without its own arm a child exiting 46 would collapse
+to rc 33 and destroy the authored abort signal; `_boot_main` resolves the number from
+`RunHandles.shutdown.abort_rule` through `exit_code_for_abort` and nowhere else, and a rule that
+fired with NO authored code is rc 33 naming the rule.
 
-SECOND CORRECTION, measured 2026-08-17 (F-816-10 / R276(f)), and it EXPIRES the (ii) above
-for as long as the production configs carry the R119 placeholder. `configs/run5.yaml` — and
-therefore its minted CPU twin, which differs from it in `run_id` and `train.device` alone —
-now mints `inference.fused_graph_caps: {max_fused_edges: null, max_fused_nodes: null}`. That
-is the fused graph inference forward's memory bound, and `null` is NOT an off state: it is the
-placeholder, schema-VALID so the repo ships a complete config and gate 7 stays green, and
-runtime-REFUSED so an uncalibrated production config CANNOT CONSTRUCT ITS GRAPH INFERENCE
-SERVER. The twin's boot therefore stops at the `WorkerPool` composition seam with
-`UncalibratedFusedGraphCapsError` naming the member, the calibration entry point
-(`python -m mantis.diagnostics.fusion_calibrate`) and the `--set` line that fixes it: parent
-rc **33** `PreflightBootFailedError`, child rc 1, seconds.
-
-**THIS IS THE DESIGNED BEHAVIOUR AND IT IS ALSO A REAL LOSS, and both halves belong here.**
-It is designed: an unbounded fused inference forward is the defect F-816-10 exists to make
-unconstructible, and a run that boots on a cap nobody measured is exactly the silently-usable
-guess the packet forbids. It is a loss: the clean-boot / both-watchdogs-armed / rc-40 evidence
-recorded in (ii) is UNAVAILABLE from this tool until the operator calibrates at the box and
-mints the pair. The armed-abort manifest carries `fused_graph_caps_calibrated` as a DEFERRED
-row so every gate-12 run says so out loud, and closing that row is what restores this
-paragraph. Until then, a reader must not take (ii) for the current tree.
-
-**CARD-TRAINSTEP-ADAPTER (TD-1) IS DEAD (WPTS, R102).** The straight self-play arm no longer
-calls a `train_step` that does not exist: `step.py::_run_training_step` routes through the
-DECLARED dispatcher (`coordinator/dispatch.py::run_declared_train_step`), keyed on the
-resolved `identity.representation` — graph → `sample_graph_batch` → collate →
-`trainer.train_step_from_graph_batch`; grid → `sample_batch_with_pos` →
-`trainer.train_step_from_tensors`; anything else raises. `TrainerLike` declares both typed
-entry points and the seam is conformance-gated
-(`tests/train/test_trainer_seam_conformance.py`). A real graph gradient step from the
-coordinator path is pinned by `tests/train/test_train_step_dispatch.py`. What a CPU
-rehearsal still cannot prove is THROUGHPUT: one CPU worker at run5's settings may not leave
-warmup inside the window, and that remains a box fact, not a tree defect.
-
-This docstring previously named CARD-TRAINSTEP-ADAPTER (`train/coordinator/step.py:573`,
-rc 32) as the terminal wall, copying DESIGN_P §3.4. That was **measured false**
-by IMPL and re-produced independently by REVIEW-impl: TD-4 fired FIRST, before `compose_run`
-was ever called, so TD-1 was BEHIND TD-4, not in front of it. Corrected here rather than
-carded — a gate whose own docstring states a measured-false fact is the first thing the next
-reader believes about it. DESIGN_P's copy of the same sentence is CARD-DESIGN-P-3.4-ORDERING.
-With TD-4 landed, TD-1 is once again the frontier — but by clearing the wall in front of it,
-not by the ordering DESIGN_P asserted.
-
-Containment is a SUBPROCESS, not a thread: `build_run_safety`'s `exit_fn` is `os._exit` and
-`compose_run` does not override it, so an in-process boot that trips exit 42/43/45 dies
-without unwinding and the evidence report is never written. A tool whose failure mode is
-"no report" cannot report failure.
-
-Exit codes (DESIGN_P §6.3). Every outcome this tool DIAGNOSES is NAMED, and rc 1
-`PreflightInternalError` is the catch-all for a failure it does not: RED-TEAM_P's F-4
-measured that an armed-abort row whose `config_path` does not resolve fell into it, so
-"the tool broke" was reported for a one-line manifest defect. That class is now named at
-rc 31 (`ArmingSurfaceMissingError` -> `PreflightManifestError`, WPAX Phase D); rc 1
-remains what it always was — the outcome nobody diagnosed — and a NEW rc-1 is a finding,
-not a routine failure mode. A child rc in [10, 41] PROPAGATES
-UNCHANGED, so a child exiting 12 exits the parent 12 rather than collapsing to 33. **42–48 are
-RESERVED by the run's own machinery**: 42 stall/livelock, 43 persist-fatal, 44 the supervisor's
-relaunch budget, 45 actor-lag, 46 the cooperative armed-abort code
-(`monitor/heartbeat.py::DRAW_RATE_COLLAPSE_EXIT_CODE`), 47 the second cooperative member —
-the disk-guard abort (`monitor/heartbeat.py::DISK_SPACE_EXHAUSTED_EXIT_CODE`, WPMAIN
-RT-2/R132) — and 48 the third, a terminal eval round that produced no promotion decision
-(`monitor/heartbeat.py::TERMINAL_EVAL_BROKEN_EXIT_CODE`, WP12-R Phase O / R152). None of the
-seven is ever an assertion outcome of this tool.
-
-46 joined that band at WPMINT Phase X (CARD-ABORT-EXIT / R84) and the taxonomy had to move with
-it, in the same change: 46 is outside the [10, 41] pass-through and was outside the reserved
-set, so a child exiting 46 would have fallen through to `PreflightBootFailedError` and
-**collapsed to rc 33** — the tool meant to surface the authored abort signal would have
-destroyed it. 46 also differs from 42/43/45 in one respect this tool must not paper over: the
-child EMITS it deliberately. `_boot_main` reads `RunHandles.shutdown.abort_rule` — the rule
-name the coordinator's own `_fire_hard_abort` recorded — and resolves it through
-`mantis.config.armed_aborts.exit_code_for_abort`, so the number the parent propagates comes
-from the manifest row and from nowhere else. A rule that fired with NO authored code (the
-resolver returns `None` — `grad_norm_hard_abort` and `sealbot_wr_abort` are not
-pre-registered) is rc 33 `PreflightBootFailedError` naming the rule: an abort that stopped the
-run is never reported as a clean boot, and no exit code is invented for a rule nobody
-registered.
-
-MINT TIERS (WPMINT Phase B / CARD-D-BURST-FLOOR). `configs/run5.yaml`'s minimum legal burst is
-**25001**, because arming `train.draw_rate_abort` at `min_step: 25000` puts a third row in
-`_burst_floors` (measured: `max(100+1, 1+1, 25000+1)`). The floor cannot be shrunk — `min_step`
-is a run5 armed value, mint-prereg-only (R82/R85) — and a shorter burst that pretended to cover
-the draw-rate axis is out under R64. So the report says what the burst it ran DOES and DOES NOT
-prove, in a `tier` block derived from `_burst_floors` and finalised by `_finalise_tier`:
-`none` (no burst accepted), `sync_lag` (actor-lag + sync-cadence floors only, on a config with
-no draw-rate row), `full` (a draw-rate `min_step` floor cleared too). BOTH `sync_lag` and
-`full` are required for a mint; `full` COVERS `sync_lag`, so one green `full` run discharges
-both.
-
-That is a deviation from the card's presumptive shape — two SEPARATE preflight runs — and the
-grounds are measured, not argued: `PRODUCTION_CONFIGS` rows must arm `draw_rate_collapse`
-(assertion (c), rc 30 otherwise), an armed row puts `min_step + 1` in the floor set, and
-`_apply_burst_override` refuses anything below the max at rc 11 (measured on the real tool:
-`--burst-steps 101` on run5 -> rc 11, `child: null`, no boot). **On a production config tier
-`sync_lag` is therefore unreachable**, and the only way to reach it is to disarm the row the
-mint exists to arm. Measured on the committed tree: run5's floor is 25001 and the other four
-`configs/` entries' floor is 101 — because only run5 arms the abort. The short tier is not a
-shorter run of run5; it is what a config WITHOUT the armed row already gets.
-
-What the `full` tier costs is an ESTIMATE and a LOWER BOUND, and this tool cannot measure it:
-TD-4 stops the child before `compose_run`, so no burst of any length has ever run here. Basis
-— WP10's recorded bench floor, median 41.66 ms/train-step (IQR 0.76, n=200, gnn_axis_v1/graph/
-bf16, CPU 1-thread, `b29f0bc`) -> 25001 steps is **>= 1041.5 s** of pure train-step compute. The
-MISSING TERM, named rather than guessed: the coordinator is GAME-BOUND. With
-`training_steps_per_game=1.0` and `max_train_burst=1` (`configs/run5.yaml:120-121`), `_steps_budget`
-returns exactly 1, and a round with no new game sleeps instead of training
-(`train/coordinator/step.py:260-266`) — so 25001 train steps needs >= 25001 COMPLETED self-play
-games, generated on run5's `selfplay.n_workers: 1`. That generation time is not in 41.66 ms and
-is not estimated here.
+MINT TIERS. The report says what the burst it ran does and does not prove, in a `tier` block
+derived from `_burst_floors`: `none`, `sync_lag` and `full`, where `full` COVERS `sync_lag`. On a
+production config `sync_lag` is UNREACHABLE, since arming `draw_rate_collapse` is assertion (c)
+and an armed row puts `min_step + 1` in the floor set: measured, run5's floor is 25001 and the
+other four `configs/` entries' floor is 101. What `full` costs is a LOWER BOUND never measured
+here — at the recorded 41.66 ms/train-step, 25001 steps is >= 1041.5 s of pure train-step
+compute, and the coordinator is GAME-BOUND, so it also needs 25001 completed games.
 """
 from __future__ import annotations
 
@@ -264,17 +97,13 @@ from mantis.config.loader import config_identity_sha256, discover_configs, load_
 from mantis.config.schema import RunConfig
 from mantis.diagnostics.workspace_durability import WorkspaceNotDurableError, assert_durable
 
-#: SF-4: every repo-root resolution lives HERE, never in the shipped package.
+#: Every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
 
 
-# ── the parent half (CARD-PREFLIGHT-SPLIT-PARENT-HALF, WPBOX Phase Q) ────────────────
-#: The parent-only half lives in a sibling module, loaded off THIS file's own directory —
-#: never sys.path (frozen O-3) — and re-exported by PLAIN assignment so every oracle that
-#: binds `TOOL.<name>` off this module path keeps binding the one object. The sys.modules
-#: guard keys on the sibling's resolved path: two different trees (the process suite's
-#: byte-copy mini-tree rig) each get THEIR OWN sibling, while repeated loads of one tree
-#: share one, keeping the exception taxonomy a single object set per tree.
+#: The parent-only half loads off THIS file's own directory — never sys.path — and is re-exported
+#: by PLAIN assignment so every oracle binding `TOOL.<name>` binds one object. The sys.modules
+#: guard keys on the sibling's resolved path, so two trees each get their own sibling.
 _PARENT_HALF_PATH = Path(__file__).resolve().with_name("preflight_mint_parent.py")
 _PARENT_HALF_MODULE = "_preflight_mint_parent"
 
@@ -283,16 +112,12 @@ def _load_parent_half():
     import importlib.util
 
     cached = sys.modules.get(_PARENT_HALF_MODULE)
-    # `cached is not None` is provably redundant (`getattr(None, …, None)` is safe and
-    # never equals a path string) — kept as a stated-domain guard, same justify-arm as the
-    # b2 conjunct; the R72 row for it is UNCOVERED by proof, not by oversight.
+    # `cached is not None` is provably redundant; kept as a stated-domain guard.
     if cached is not None and getattr(cached, "__file__", None) == str(_PARENT_HALF_PATH):
         return cached
     spec = importlib.util.spec_from_file_location(_PARENT_HALF_MODULE, _PARENT_HALF_PATH)
-    # Both leaves are pyright-load-bearing (gate 14 basic: the Optional contract must be
-    # narrowed before `spec.loader.exec_module`), unproducible at runtime for a file that
-    # exists — justify-arm; their R72 rows are UNCOVERED by the API's contract, not oversight.
-    # A MISSING sibling fails loudly at exec_module (FileNotFoundError), before any re-export.
+    # Both leaves are pyright-load-bearing (the Optional contract must be narrowed before
+    # `spec.loader.exec_module`) and unproducible at runtime for a file that exists.
     if spec is None or spec.loader is None:
         raise ImportError(f"the preflight parent half is missing beside the tool: "
                           f"{_PARENT_HALF_PATH}")
@@ -324,9 +149,8 @@ WATCHDOG_CODES = _parent_half.WATCHDOG_CODES
 RELAUNCH_BUDGET_CODE = _parent_half.RELAUNCH_BUDGET_CODE
 ARMED_ABORT_CODES = _parent_half.ARMED_ABORT_CODES
 RESERVED_CODES = _parent_half.RESERVED_CODES
-#: Re-published THROUGH the sibling (which imports it from the one authority,
-#: mantis.monitor.heartbeat) — the process suite binds it as a TOOL attribute; a direct
-#: re-import here would be a second import chain for the same number.
+#: Re-published THROUGH the sibling, which imports it from the one authority
+#: (mantis.monitor.heartbeat); a direct re-import here would be a second chain for one number.
 DRAW_RATE_COLLAPSE_EXIT_CODE = _parent_half.DRAW_RATE_COLLAPSE_EXIT_CODE
 
 # Exit taxonomy — the same single object set on both sides of the split.
@@ -382,45 +206,27 @@ _verdict_exit = _parent_half._verdict_exit
 child_config_identity = _parent_half.child_config_identity
 
 
-#: O-4 / §5.4: the burst override writes exactly ONE dotted key and reads nothing, so
-#: `stop_step` keeps exactly one source (`train.max_train_steps` -> `resolve_max_train_steps`
-#: -> `run.py:167-170` -> `step.py:233`). The report's `override.keys` is emitted from this
-#: same constant, so the two cannot disagree. A second entry here would make the preflight a
-#: second run-length (or arming) authority, which is the R1 breach §5.4 discriminates against.
+#: The burst override writes exactly ONE dotted key and reads nothing, so `stop_step` keeps
+#: one source. The report's `override.keys` is emitted from this same constant. A second entry
+#: would make the preflight a second run-length authority.
 OVERRIDE_KEYS: tuple[str, ...] = ("train.max_train_steps",)
 
 REPORT_SCHEMA = "preflight-mint-v1"
-#: Recheck R-9: printed at the TOP of `_run_audit`, i.e. before `_audit_manifest_and_configs`
-#: can raise, so it appears on rc-30 and rc-31 runs too. Made CONDITIONAL rather than moved:
-#: it is the first line a CI log reader sees and it must be true on a red run as well as a
-#: green one. The pinned substring `rc 0 covers assertion (c) ONLY` is preserved verbatim —
-#: `tests/tools/test_preflight_mint.py::test_audit_only_is_green_on_the_real_tree` (BYTE-FROZEN,
-#: `bd8e65e682c6a2dc`) asserts it, and rewording past it is an R43 event. Measured: the first
-#: attempt at this nit dropped the substring and turned the frozen oracle red.
+#: Printed at the TOP of `_run_audit`, before `_audit_manifest_and_configs` can raise, so it
+#: appears on rc-30 and rc-31 runs too. The pinned substring `rc 0 covers assertion (c) ONLY` is
+#: preserved verbatim: a BYTE-FROZEN oracle asserts it and rewording past it turned that red.
 AUDIT_STDOUT_LINE = (
     "preflight: mode=AUDIT — assertions (a) sync and (b) lag were NOT RUN (no boot, no "
     "burst). If this run is green, rc 0 covers assertion (c) ONLY."
 )
 
 
-# ── the manifest's repo-root half (SF-4) ──────────────────────────────────────────────
 def verify_source_pins(
     rows: tuple[ArmedAbort, ...], *, repo_root: str | Path
 ) -> tuple[ArmedAbort, ...]:
-    """R56 tamper-evidence: every `source_pin`'s exact text must still be in its file.
-
-    Returns the BROKEN rows. The asymmetry is the load-bearing part
-    (`silent_encoding_gate.py:338-344`): a pin that matches NOTHING — including a pinned
-    file that no longer exists — is a HARD failure, never a quiet pass.
-
-    R73 name-truth, WPMINT DR-10: this used to say the asymmetry "makes Phase D's deletion
-    of `draw_rate_threshold: float = 0.0` impossible to forget". Phase D landed and that
-    literal is gone. The manifest's one pin now binds `run.py`'s `resolve_draw_rate_abort`
-    threading, so what the scan makes impossible to forget today is deleting, renaming or
-    reordering THAT call. What it does NOT prove is that the right VALUE flows — it is a
-    whole-file substring scan (SF-2's correction); `tests/train/test_drawrate_abort_
-    threading.py`'s O-D2 is the sole witness for "pinned text present, wrong value flowing".
-    """
+    """Tamper-evidence: every `source_pin`'s exact text must still be in its file, returning the
+    BROKEN rows. The asymmetry is load-bearing — a pin that matches NOTHING, a missing pinned
+    file included, is a HARD failure. It does NOT prove the right VALUE flows."""
     root = Path(repo_root)
     broken: list[ArmedAbort] = []
     for row in rows:
@@ -441,78 +247,32 @@ def _resolve_production_configs() -> list[Path]:
     return [REPO_ROOT / rel for rel in PRODUCTION_CONFIGS]
 
 
-#: SF-4 again: the manifest module may make no filesystem call, so DISCOVERY lives here.
+#: The manifest module may make no filesystem call, so DISCOVERY lives here.
 CONFIG_DIR_REL = "configs"
 
 
 def _discovered_configs() -> list[str]:
-    """Every config actually on disk, repo-relative. The scope check's left-hand side.
+    """Every config actually on disk, repo-relative — the scope check's left-hand side.
 
-    ADJ-13 F-1. This used to be its own flat `glob("*.yaml")` — a SECOND answer to "what is a
-    config", beside gate 7's `**/*.yaml` + `**/*.yml`. Measured consequence, both halves:
-
-    * a disarmed `configs/run6.yml` or `configs/prod/run6.yaml` validated under gate 7 (`OK
-      configs/run6.yml`) and was **never audited** by gate 12 — rc 0, no UNDECLARED line, with
-      the actor-lag abort off. MF-7's fix had been fitted to the reviewer's `run6.yaml` rather
-      than to the class, so two of the three ways to add a config still walked through.
-    * the INVERSE, which is worse than a scope miss: a subdirectory config could not be legally
-      DECLARED either. Named in `PRODUCTION_CONFIGS` and present on disk, `configs/prod/run6.yaml`
-      was reported STALE — "declared, absent from disk" — a false statement about a file the
-      tool was looking straight at.
-
-    Discovery is now `mantis.config.loader.discover_configs`, the same call gate 7 makes, and
-    the path is emitted relative to the repo root INCLUDING subdirectory components, so a
-    declaration can name what discovery finds. R71: one authority, and widening it widens both
-    gates together.
-
-    **Corrective pass (recheck R-2), as re-ruled by R75.** Unifying the two globs was not the
-    class. The class was that discovery filtered by EXTENSION while `load_config` filtered by
-    CONTENT, so the launchable set stayed strictly larger than the discovered set and the next
-    suffix walked through: `configs/run6.txt` and `configs/run6.YAML` were schema-valid,
-    DISARMED on the required row, and rc 0 from gate 7 AND gate 12. R75 declined closing that
-    from the loader's side; the protection is the **shared-authority invariant** (loader accepts
-    => audit sees), so `discover_configs` is name-agnostic and this function's left-hand side is
-    complete against everything a run can be launched from under `configs/`, whatever it is
-    called.
+    Discovery is `discover_configs`, the same call gate 7 makes, emitted relative to the repo root
+    INCLUDING subdirectory components: a second flat glob here let a disarmed config validate
+    under gate 7 and never be audited. It is also name-agnostic, because filtering by EXTENSION
+    while `load_config` filters by CONTENT leaves the launchable set strictly larger.
     """
     return sorted(path.relative_to(REPO_ROOT).as_posix()
                   for path in discover_configs(REPO_ROOT / CONFIG_DIR_REL))
 
 
 def _config_declaration_drift() -> tuple[list[str], list[str], list[str]]:
-    """MF-I7 (i). The two tuples must PARTITION `discover_configs(configs/)` — EXACTLY the set
-    gate 7 validates, which after ADJ-13 F-1 is one authority rather than two globs.
+    """The two tuples must PARTITION `discover_configs(configs/)` — exactly the set gate 7
+    validates. Returns (undeclared, stale, overlapping); all three empty is the only legal state.
 
-    Returns (undeclared, stale, overlapping) — all three empty is the only legal state:
-
-    * **undeclared** — a config on disk named by neither tuple. This is the escape REVIEW-impl
-      demonstrated: `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run5.yaml >
-      configs/run6.yaml` then `--audit-only` → **rc 0**, because a config that is not listed is
-      never audited. Nothing pinned `discover_configs(configs/) ⊆ declared`.
-    * **stale** — a tuple naming a config that is not on disk. R65's Phase D re-mints run5; if
-      the re-mint lands under a new filename, an unchecked tuple goes on auditing a file
-      nobody will run. This is `silent_encoding_gate.py:338-344`'s stale-`KNOWN_DEBT` rule.
-    * **overlapping** — a config in BOTH tuples, i.e. two answers to one question.
-
-    Why "audit every config in `configs/`" is NOT what this does, and why that matters: a
-    bare discovery rule would silently start binding a config nobody classified, and the
-    operator would learn about it from a red gate on an unrelated commit with no statement of
-    intent anywhere. The partition keeps ONE authority for *which configs the law binds*
-    (`PRODUCTION_CONFIGS`) and makes its COMPLETENESS machine-checked, so adding a config to
-    `configs/` forces a one-line declaration on one side or the other. "Exempt" and
-    "forgotten" stop being the same observable, which is the whole defect.
-
-    **The scope of that claim, stated exactly** (ADJ-13 F-1 falsified the earlier, wider
-    wording; the recheck falsified the replacement; R75 rules the third): "a config" here means
-    ANY path under `configs/` that is not a real directory — precisely the set gate 7 validates,
-    and a superset of everything `load_config` will read, which is the **shared-authority
-    invariant**. There is no excluded class left to be a hole: a name the loader would read is a
-    name this partition binds. Pinned by, in `tests/tools/test_preflight_mint_process.py`,
-    `test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITED`
-    and
-    `test_gate_12_is_RED_on_every_escape_that_ever_walked_through`,
-    and at the loader level by `tests/config/test_config_discovery_authority.py`'s invariant
-    row — so a later narrowing of discovery cannot silently re-open the gap.
+    Deliberately not "audit every config in `configs/`": a bare discovery rule silently starts
+    binding a config nobody classified, whereas the partition keeps ONE authority for which
+    configs the law binds and makes its COMPLETENESS machine-checked, so "exempt" and "forgotten"
+    stop being the same observable. An UNDECLARED config is never audited — copying run5 with the
+    actor-lag abort flipped off audited rc 0 — a STALE one audits a file nobody will run, and an
+    overlapping one is two answers to one question.
     """
     present = set(_discovered_configs())
     production = set(PRODUCTION_CONFIGS)
@@ -523,21 +283,11 @@ def _config_declaration_drift() -> tuple[list[str], list[str], list[str]]:
 
 
 def _audit_paths(named: Path | None) -> list[Path]:
-    """The configs assertion (c) binds — ONE rule, used by BOTH modes (MF-I7 (ii)).
+    """The configs assertion (c) binds — ONE rule, used by BOTH modes.
 
-    `_run_audit` used to REPLACE the production set when `--config` was given while
-    `_run_preflight` UNIONED it, so `--audit-only --config X` and the full preflight returned
-    rc 0 and rc 30 on the same tree. Two authorities for one law, in one tool. Union is the
-    safe direction: naming a config can only ever ADD scrutiny, never remove it.
-
-    **Recheck R-6 — F-2's class at a site F-2's own census missed.** Set membership IS a
-    path-identity comparison, and the two sides normalised differently: `named` arrives
-    `.resolve()`d from `_resolve_config_path`, while `_resolve_production_configs()` returns a
-    plain `REPO_ROOT / rel`. Under a symlinked `configs/run5.yaml` the union held both spellings
-    of ONE config, which was then audited twice and published twice in `audited_configs`. The
-    direction was fail-safe, which is why it survived; the SCOPING is the lesson — F-2 was
-    censused over `os.path.abspath` call SITES rather than over path COMPARISONS. Both sides
-    now normalise through the same call, so the set is a set of configs rather than of spellings.
+    Union, not replacement: naming a config can only ever ADD scrutiny. Both sides normalise
+    through the same `.resolve()` call, so the set is a set of configs rather than of spellings —
+    under a symlinked config the union once held both spellings and audited it twice.
     """
     paths = {path.resolve() for path in _resolve_production_configs()}
     if named is not None:
@@ -545,7 +295,6 @@ def _audit_paths(named: Path | None) -> list[Path]:
     return sorted(paths)
 
 
-# ── config handling ───────────────────────────────────────────────────────────────────
 def _resolve_config_path(raw: str) -> Path:
     candidate = Path(raw)
     if candidate.is_file():
@@ -568,13 +317,8 @@ def _load(path: Path) -> RunConfig:
 
 def _burst_floors(config: RunConfig) -> list[tuple[str, int, int]]:
     """Every cross-field rule that binds the burst from below: (key, its value, its floor).
-
-    Enumerated rather than folded into one number, because the number alone stopped being
-    enough at WPAX Phase D: a THIRD rule joined the two (`train.draw_rate_abort.min_step`
-    must be inside the run, the twin of the actor-lag rule), and an operator told only the
-    maximum cannot see WHICH rule moved their floor from 101 to 25001. Each row states its
-    own arithmetic, and `_minimum_legal_burst` is their max.
-    """
+    Enumerated rather than folded into one number, because an operator told only the maximum
+    cannot see WHICH rule moved their floor from 101 to 25001."""
     floors = [("monitor.actor_lag_threshold_steps",
                int(config.monitor.actor_lag_threshold_steps),
                int(config.monitor.actor_lag_threshold_steps) + 1),
@@ -593,22 +337,12 @@ def _minimum_legal_burst(config: RunConfig) -> int:
 
 
 def _burst_tier(config: RunConfig, burst_steps: int) -> str:
-    """Which mint tier a burst of this length on this config IS — read off `_burst_floors`.
+    """Which mint tier a burst of this length on this config IS, read off `_burst_floors` so the
+    tier a report claims and the floor arithmetic an operator was shown cannot drift apart.
 
-    Derived from the same three rows the refusal message prints, so the tier a report claims
-    and the floor arithmetic an operator was shown cannot drift apart. Three outcomes:
-
-    * below the max floor -> `none`. No burst was accepted, so no tier was run. Defensive
-      rather than dead: `_run_preflight` calls this only AFTER `_apply_burst_override`
-      returned, but a caller that computed a tier from a REQUESTED burst would publish a tier
-      for a run that never happened, which is the ADJ-13 F-3 class one field over;
-    * clears every floor AND the config declares a draw-rate floor -> `full`;
-    * clears every floor and the config declares NO draw-rate floor -> `sync_lag`.
-
-    The third arm is why the tier is not just "cleared the max": on a config with
+    The `sync_lag` arm is why the tier is not just "cleared the max": on
     `train.draw_rate_abort: null` the max floor is 101 and clearing it says nothing whatever
-    about draw-rate reachability. Calling that `full` would be the overclaim this block exists
-    to prevent — it is the WHOLE of the card's "what does it NOT prove".
+    about draw-rate reachability.
     """
     floors = _burst_floors(config)
     if int(burst_steps) < max(floor for _key, _value, floor in floors):
@@ -618,9 +352,8 @@ def _burst_tier(config: RunConfig, burst_steps: int) -> str:
 
 
 def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
-    """`dump -> mutate ONE key -> model_validate` — byte-for-byte the loader's own final
-    step (`loader.py:39-44`), so every cross-field validator re-runs. NOT F-3's route:
-    F-3's route SKIPS the validators; this one IS the validator."""
+    """`dump -> mutate ONE key -> model_validate` — byte-for-byte the loader's own final step,
+    so every cross-field validator re-runs rather than being skipped."""
     raw = config.model_dump()
     for dotted in OVERRIDE_KEYS:
         section, key = dotted.split(".")
@@ -645,17 +378,10 @@ def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
         ) from exc
 
 
-# ── assertion (c) + the manifest (§8) ─────────────────────────────────────────────────
 def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None:
-    """R56's loud print, on EVERY run including a green one: registered debt that stops
-    being visible stops being debt and starts being the status quo
-    (`silent_encoding_gate.py:346-351`, copied in shape, not reinvented).
-
-    `manifest` is a keyword for the same reason `audit_arming` has one: after WPAX Phase D
-    flipped the draw-rate row the SHIPPED manifest holds ZERO deferred rows, so the only way
-    to drive this mechanism — which survives because CARD-COORD-KNOBS (R78/R80) will feed it
-    rows — is on a synthetic one. Keeping a row deferred so an assertion stayed true was
-    REJECTED by R81: it would shape the shipped manifest to suit a test."""
+    """Print registered debt on EVERY run including a green one: debt that stops being visible
+    stops being debt. `manifest` is a keyword because the SHIPPED manifest can hold zero deferred
+    rows, and keeping one deferred to keep an assertion true would shape it to suit a test."""
     deferred = [row for row in manifest if row.status is Status.DEFERRED]
     if not deferred:
         return
@@ -663,28 +389,19 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
           "closed:")
     for row in deferred:
         print(f"  {row.name}  owner={row.owner}")
-        # R73 name-truth (WPMINT Phase K-B): this line read "arming surface DOES NOT EXIST
-        # yet", which was true of the only deferred row that had ever existed and is FALSE of
-        # the first one to actually reach it — `grad_norm_hard_abort` names
-        # `train.hard_gn_threshold`, a key this same phase authored, and the row is deferred
-        # because nobody has PRE-REGISTERED a value, not because the surface is missing. The
-        # print says which of the two it is instead of asserting one.
-        # Hoisted out of the f-string: the replacement field spanned a line break, which is
-        # 3.12-only syntax — a SyntaxError on the pinned 3.11 CI floor (WPCLEAN Phase LT).
+        # A row can be deferred because its arming surface is missing OR because nobody
+        # pre-registered a value; `surface` is hoisted out of the f-string because a replacement
+        # field spanning a line break is 3.12-only syntax, a SyntaxError on the 3.11 floor.
         surface = "present" if row.ceiling_path is None else f"present, ceiling {row.ceiling_path}"
         print(f"    arming surface: {row.config_path} "
               f"({surface}) — NOT audited, so a mint does not gate on it")
-        # R251 / LAW-08: a deferred row's `cadence` is declared so the flip to REQUIRED stays
-        # a one-field data edit (§8.5), which would leave it a field nothing reads until that
-        # flip. Printed instead — the same rule that put `note` on this path.
+        # A deferred row's `cadence` is declared so the flip to REQUIRED stays a one-field
+        # data edit, which would leave it a field nothing reads until that flip. Printed.
         cadence = "NOT DECLARED" if row.cadence is None else (
             f"{row.cadence.value} over {list(row.cadence_paths)}")
         print(f"    earliest-fire cadence: {cadence} — judged only once this row is REQUIRED")
-        # R265 / ADJ-D38: the CLOCK is printed beside the cadence for the same reason the
-        # cadence is printed at all — it is the field that says which key the row's evidence
-        # arrives on, and a deferred row whose axis nobody can see is the state ADJ-D38
-        # measured on the WR axis. `period_path` is `None` on the two clocks that have no
-        # config period, and the print says WHICH of the two rather than eliding it.
+        # The CLOCK says which key the row's evidence arrives on; `period_path` is `None` on
+        # the two clocks with no config period, and the print says WHICH of the two.
         if row.cadence is not None:
             clock = row.cadence.sample_clock
             tick = (f"1 tick = {clock.period_path}" if clock.period_path is not None
@@ -694,22 +411,15 @@ def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None
         if row.source_pin is not None:
             rel, text = row.source_pin
             print(f"    pinned to {rel}: {text!r}")
-        # SF-I4 / LAW-08: `note` is where "WHY is this row deferred" lives, and it had no
-        # live consumer at all — read only by the oracle's flip simulation. A deferred row
-        # whose reason is invisible is a row nobody can re-adjudicate, which is the same
-        # rot R56's loud print exists to prevent. Printed, not dropped.
+        # `note` is where "why is this row deferred" lives; a deferred row whose reason is
+        # invisible is a row nobody can re-adjudicate.
         print(f"    why: {row.note}")
 
 
-#: Synthetic operands and PERIODS for `_cadence_self_test`, and the run length they are
-#: judged against. HEALTHY is run5's own shape; VACUOUS is ADJ-D22's measured defect — a
-#: sampling period three orders of magnitude past the whole run — and none of it is read from
-#: any config, so the self-test keeps working on a tree whose configs have all moved.
-#:
-#: R265 / ADJ-D38 splits the period OUT of the operand tuple, because that is exactly what the
-#: ruling did to the rows: a period is a property of the axis's SAMPLE CLOCK, not an operand a
-#: row supplies. The same two periods then drive both clocks, which is what makes arm D a
-#: statement about the WR axis rather than a second copy of arm B.
+#: Synthetic operands and PERIODS for `_cadence_self_test`, and the run length they are judged
+#: against: HEALTHY is run5's shape, VACUOUS a sampling period three orders of magnitude past the
+#: whole run. None is read from any config, and the period is separate from the operand tuple
+#: because a period belongs to the axis's SAMPLE CLOCK, not to a row.
 _SELF_TEST_RUN_LENGTH = 1_000_000
 _SELF_TEST_HEALTHY_PERIOD = 1_000
 _SELF_TEST_VACUOUS_PERIOD = 1_000_000_000
@@ -721,30 +431,11 @@ _SELF_TEST_WR = (3, 15_000, 25_000, 2, 20_000)
 
 
 def _cadence_self_test() -> list[str]:
-    """R251 + LAW-07: prove the cadence trigger CAN fire, in BOTH directions, before any
-    verdict of it is trusted. The pattern is gates 8/14/15's — `r8_header_gate.py::self_test`
-    runs on every invocation and refuses to publish a verdict from an instrument it has not
-    just watched work.
+    """Prove the cadence trigger CAN fire, in BOTH directions, before any verdict is trusted.
 
-    It is worth having because this check's failure mode is SILENCE: a fraction read once and
-    discarded, or an `earliest_fire_step` that collapsed to a constant, leaves gate 12 green
-    on exactly the configs it was built to refuse — which is the state of the tree ADJ-D22
-    measured. Both mutations are caught here: an infinite (or absent) bound loses arm B, and a
-    constant computation cannot satisfy A and B at once.
-
-    R265 / ADJ-D38 adds three arms, and they cover the failure mode ADJ-D38 measured rather
-    than ADJ-D22's. Arm D drives the WR axis in the EVAL-ROUND clock in both directions — the
-    axis that had no arm at all before, on the gate LAW-15/F-30 says actually kills runs. Arm
-    E refuses a period table that has collapsed onto one key, which is the mutation that would
-    re-create "every axis audited in one clock" with arms A-D still green. Arm F refuses the
-    step-clock FALLBACK by name: a step-clocked member handed no period must RAISE, because an
-    answer there is the D38 defect in one call.
-
-    Deliberately PURE ARITHMETIC over synthetic operands. It builds no config and no
-    collaborator: O-2 bans a stand-in for a production object inside this tool, and the audit's
-    WIRING to real configs is driven end-to-end elsewhere (the mini-tree rig), not simulated
-    here. Arm E and arm F respect that too — they read the clock TABLE and the members' own
-    refusals, never a config object.
+    This check's failure mode is SILENCE: a fraction read once and discarded, or an
+    `earliest_fire_step` collapsed to a constant, leaves gate 12 green on exactly the configs it
+    was built to refuse. Deliberately PURE ARITHMETIC over synthetic operands.
     """
     failures: list[str] = []
     if not (0.0 < EARLIEST_FIRE_FRACTION <= 1.0):
@@ -847,13 +538,9 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             f"  exemption reasons on record: {reasons}",
             undeclared=undeclared, stale=stale, overlapping=overlapping,
         )
-    # MF-I3: the R56 scan's RESULT is what the report publishes. `source_pins_ok` used to be
-    # the literal `True`, so deleting this call left the report claiming a scan that never
-    # ran — measured: RR-08 removed the call with the whole default tier green. Both report
-    # fields below are now derived from `broken` / `scanned`, so a deleted call is a
-    # NameError, not a quiet green. §8.4 calls this scan "the forcing function that makes
-    # Phase D's flip unforgettable"; a forcing function with no producer is LAW-07's phantom
-    # gate input, which is what it was.
+    # The scan's RESULT is what the report publishes. `source_pins_ok` used to be the literal
+    # `True`, so deleting this call left the report claiming a scan that never ran, with the
+    # whole default tier green. Both report fields are derived from `broken` / `scanned`.
     scanned = [row.name for row in MANIFEST if row.source_pin is not None]
     broken = verify_source_pins(MANIFEST, repo_root=REPO_ROOT)
     if broken:
@@ -869,34 +556,19 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
         try:
             config = _load(path)
             audit = audit_arming(config)
-            # R251 / ADJ-D22: the SECOND half of assertion (c), on the same loaded config so
-            # the two answers cannot be about different bytes. `audit_cadence` judges only the
-            # rows `audit_arming` found ARMED — a disarmed row is the `disarmed` list's, and
-            # naming it twice would send the operator chasing a cadence question about an
-            # abort that is simply off.
-            # `fraction` is passed EXPLICITLY rather than left to the callee's default, and
-            # that is not a style choice: the report block and the rc-30 message below both
-            # interpolate `EARLIEST_FIRE_FRACTION` as read HERE, so a call that let the
-            # default supply it would publish one number while comparing against another the
-            # moment the two could differ. It also makes the tool-level name the ONE the
-            # audit sees, so neutering it reaches the comparison itself and not only the
-            # self-test — the pin-3 mutation would otherwise stop half-way.
+            # The SECOND half of assertion (c), on the same loaded config so the two answers
+            # cannot be about different bytes. `fraction` is passed EXPLICITLY because the report
+            # block and the rc-30 message interpolate it as read HERE.
             verdicts = audit_cadence(config, fraction=EARLIEST_FIRE_FRACTION)
         except ArmingSurfaceMissingError as exc:
-            # F-4, fixed to its class (R71). The shipped module raises the NAMED error; the
-            # tool maps it onto its own already-defined manifest code. Without this the
-            # AttributeError fell through to main's bare `except Exception` and became rc 1
-            # PreflightInternalError — "the tool broke" — for what is a manifest defect the
-            # operator can fix in one line. The message is carried through verbatim so the
-            # row, the full dotted path and the failing segment survive the mapping.
+            # The shipped module raises the NAMED error and the tool maps it onto its own
+            # manifest code; uncaught it became rc 1 "the tool broke" for a one-line defect.
             raise PreflightManifestError(
                 f"an armed-abort row's arming surface does not resolve on {path.name}: {exc}"
             ) from exc
         except SampleClockNotDerivableError as exc:
-            # R265 / ADJ-D38, mapped to its class exactly as F-4's failure is one line up.
-            # An underivable sample clock must reach the operator as a NAMED manifest defect
-            # (rc 31) and never as the tool's own rc 1 internal error — and never, ever as a
-            # quiet fall back to the training-step clock, which is the whole ruling.
+            # An underivable sample clock must reach the operator as rc 31, never as rc 1 and
+            # never as a quiet fall back to the training-step clock.
             raise PreflightManifestError(
                 f"an armed-abort row's SAMPLE CLOCK does not resolve on {path.name}: {exc}"
             ) from exc
@@ -907,11 +579,8 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
                 "config": path.name, "name": verdict.row.name,
                 "cadence": None if verdict.row.cadence is None else verdict.row.cadence.value,
                 "cadence_paths": list(verdict.row.cadence_paths),
-                # R265 / ADJ-D38: the CLOCK the row was judged in, the live key its period
-                # came from and the period itself are published beside the step answer. The
-                # vacuity argument the whole block already makes, one axis further: a reader
-                # must be able to see WHICH clock a row cleared its bound in, because "judged
-                # in the wrong clock" and "judged" were the same observable before this.
+                # "Judged in the wrong clock" and "judged" were the same observable before
+                # the clock, its live period key and the period itself were published here.
                 "sample_clock": verdict.clock.value,
                 "clock_period_path": verdict.clock.period_path,
                 "clock_period_steps": verdict.period_steps,
@@ -933,10 +602,8 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             f"config re-enables the failure the abort exists to catch: {disarmed}"
         )
     if cadence_disarmed:
-        # Ordered AFTER the arming check: a row that is simply off is the plainer diagnosis,
-        # and an operator reading "cannot fire in time" about an abort that is not armed at
-        # all would be chasing the wrong key. Same rc, because it is the same assertion —
-        # an abort that cannot fire is not armed in any sense that protects the run (R251).
+        # Ordered AFTER the arming check: a row that is simply off is the plainer diagnosis, and
+        # the rc is the same because an abort that cannot fire is not armed.
         raise PreflightArmingAuditError(
             "a REQUIRED armed-abort row is ARMED but CADENCE-DISARMED on a production config "
             "— its own cadence keys, in its own SAMPLE CLOCK (R265: the clock its evidence "
@@ -951,25 +618,20 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
     return {
         "module_sha256": _sha256(REPO_ROOT / "src" / "mantis" / "config" / "armed_aborts.py"),
         "required": [row.name for row in (audit.required if audit else ())],
-        # SF-I4 / LAW-08 again: `ArmedAbort.exit_code` was read by nothing but the oracle.
-        # It is the code the abort FIRES with (45 for actor_lag), which is precisely what a
-        # reader of a run's exit status needs to map that number back to a manifest row.
+        # `exit_code` is the code the abort FIRES with — what a reader of a run's exit
+        # status needs to map that number back to a manifest row.
         "required_rows": [{"name": row.name, "config_path": row.config_path,
                            "exit_code": row.exit_code}
                           for row in (audit.required if audit else ())],
-        # …and `AuditResult.deferred` — the tool used to re-derive this list from MANIFEST
-        # directly (RR-07: the field could return `()` with the whole tier green). It is now
-        # read from the audit's own result, so the published block and the audit cannot
-        # disagree about which rows are deferred.
+        # Read from the audit's own result rather than re-derived from MANIFEST, so the
+        # published block and the audit cannot disagree about which rows are deferred.
         "deferred": [{"name": row.name, "owner": row.owner, "config_path": row.config_path,
                       "source_pin": list(row.source_pin) if row.source_pin else None,
                       "note": row.note}
                      for row in (audit.deferred if audit else ())],
         "disarmed": [],
-        # R251: the cadence half is PUBLISHED on the green path too, per config per row, with
-        # the computed step and the bound it cleared. A check whose only visible output is its
-        # own failure is a check nobody can audit for vacuity — the shape MF-3's
-        # `source_pins_ok: True` literal took.
+        # The cadence half is PUBLISHED on the green path too, per config per row: a check
+        # whose only visible output is its own failure is one nobody can audit for vacuity.
         "cadence_fraction": EARLIEST_FIRE_FRACTION,
         "cadence_bound_path": RUN_LENGTH_PATH,
         "cadence": cadence_rows,
@@ -989,13 +651,9 @@ def _tier_skeleton() -> dict:
 
 
 def _tier_block(config: RunConfig, burst_steps: int) -> dict:
-    """The tier block for a burst the cross-field validators ACCEPTED.
-
-    Built in `_run_preflight` AFTER `_apply_burst_override` returns, never before: a burst that
-    was refused (rc 11) is not a tier that ran, and stamping one would publish a coverage claim
-    for a run that never started. `floors` carries every row with its own `cleared` flag so the
-    operator can see WHICH rule made the tier what it is rather than re-deriving it.
-    """
+    """The tier block for a burst the cross-field validators ACCEPTED, built AFTER the override
+    returns: a burst that was refused is not a tier that ran. `floors` carries every row with its
+    own `cleared` flag so the operator can see WHICH rule made the tier what it is."""
     return {"tier": _burst_tier(config, burst_steps),
             "burst_steps": int(burst_steps),
             "floors": [{"key": key, "value": value, "floor": floor,
@@ -1006,10 +664,9 @@ def _tier_block(config: RunConfig, burst_steps: int) -> dict:
 
 
 def _new_report(mode: str) -> dict:
-    """The report skeleton. The `not_run` reason is a PREDICTION here (no boot has happened
-    yet, and `child` is None, so "no boot was spawned" is true at this instant);
-    `_finalise_not_run` re-derives it from the run's own history before the write. The `tier`
-    block is a prediction in exactly the same sense, and `_finalise_tier` is its half."""
+    """The report skeleton. The `not_run` reason and the `tier` block are PREDICTIONS here —
+    no boot has happened yet — and `_finalise_not_run` / `_finalise_tier` re-derive them from
+    the run's own history before the write."""
     not_run_reason = _not_run_reason({"mode": mode, "child": None})
     return _finalise_tier({
         "schema": REPORT_SCHEMA,
@@ -1026,11 +683,10 @@ def _new_report(mode: str) -> dict:
     })
 
 
-# ── CLI ───────────────────────────────────────────────────────────────────────────────
 def _build_parser() -> argparse.ArgumentParser:
-    """R1 posture at the CLI boundary: NO `default=` anywhere. Requiredness is per-MODE and
-    is enforced below, because argparse cannot express "required in mode PREFLIGHT only"
-    and gate 12 invokes `--audit-only` alone."""
+    """No `default=` anywhere: requiredness is per-MODE and enforced below, because argparse
+    cannot express "required in mode PREFLIGHT only" and gate 12 invokes `--audit-only`
+    alone."""
     parser = argparse.ArgumentParser(
         prog="preflight_mint",
         description="CI gate 12 / the mint preflight (R61). --audit-only is the gate; the "
@@ -1068,28 +724,10 @@ def _git_toplevel() -> Path:
 
 
 def _checked_out_dir(raw: str) -> Path:
-    """§9.2. The child's `log_dir` is a real `JsonlEventSink` writing `*.jsonl`, and gate 6
-    rejects stray `*.jsonl` outside `tests/fixtures/`. A gate that can dirty the tree it
-    gates is a gate that will — so the refusal lands BEFORE anything is created.
-
-    ADJ-13 F-2. Both sides of the comparison must resolve symlinks or the comparison is
-    between two different naming schemes. This line was `Path(os.path.abspath(resolved))`,
-    which normalises `..` and makes absolute but does NOT follow symlinks, while
-    `_git_toplevel()` returns a `.resolve()`d path — so a symlink whose target was inside the
-    working tree compared unequal, the refusal never fired, and the tool wrote its evidence
-    report into the repo (measured: `?? reports_redteam_probe/`, rc 33 from the boot wall
-    rather than rc 13 from this guard). The `..`-relative and plain-absolute-inside forms were
-    refused because `abspath` handles those TEXTUALLY; only the one form that needs the
-    filesystem escaped, which is the signature of this class. `.resolve()` is non-strict, so a
-    symlink to a path that does not exist yet still resolves to its target — which is exactly
-    the case that matters, because the guard runs before anything is created.
-
-    Recheck R-10: the line was `resolved = out_dir if out_dir.is_absolute() else (Path.cwd() /
-    out_dir)` followed by `.resolve()`. Once `abspath` became `.resolve()` that cwd-join was
-    DEAD — `Path("rel").resolve()` already resolves against the cwd — and the recheck's own
-    mutation of it was a proven no-op at full tier. A conjunct that cannot change an outcome
-    cannot have a flip row, so it is deleted rather than covered.
-    """
+    """Resolve `--out-dir` and refuse one inside the repo working tree, before anything is
+    created: the child writes `*.jsonl` and gate 6 rejects stray ones. Both sides must
+    `.resolve()`, since `abspath` normalises textually without following symlinks and a symlink
+    into the tree once let the tool write its report into the repo."""
     resolved = Path(raw).expanduser().resolve()
     toplevel = _git_toplevel()
     if resolved == toplevel or toplevel in resolved.parents:
@@ -1102,43 +740,21 @@ def _checked_out_dir(raw: str) -> Path:
     return resolved
 
 
-# ── mode PREFLIGHT: the child (§4) ────────────────────────────────────────────────────
 def _boot_main(args) -> int:
-    """The `--_boot` child: the REAL production posture, through the ONE composition
-    authority, with nothing routed around.
+    """The `--_boot` child: the REAL production posture, through the ONE composition authority.
 
-    WPMAIN (CARD-RUN-MAIN, R121(a)) inverted this function. It used to BUILD the run for
-    itself — seed, out-dirs, trainer, buffer, pool — which made a CI gate the owner of the
-    only real collaborator build in the tree, and made "the preflight boots what run5 boots"
-    a claim with no producer on either side. Every one of those steps now lives at
-    `mantis.run.build_run_collaborators`, and `mantis.run.launch_run` calls the same pair.
-    What survives here is the CONTAINMENT mechanism (the parent re-execs this file with
-    `--_boot`, §6.2) and the tool's own two sanctioned instruments, which wrap AROUND the
-    composer rather than reaching inside it:
+    Every build step lives at `mantis.run.build_run_collaborators`, which `launch_run` calls too.
+    What survives here is the CONTAINMENT mechanism and two instruments that wrap AROUND the
+    composer: `_apply_burst_override`, a CONFIG-level transform before the boot, and the
+    resumed-trainer refusal, a READ-ONLY check between builder and composer — which is why the
+    authority is a PAIR of functions rather than one opaque `boot()`. Nothing may be assigned onto
+    `collab`. The DEVICE and EVAL posture are the config's own.
 
-      1. `_apply_burst_override` — a CONFIG-level transform, BEFORE the boot;
-      2. the §4.2 resumed-trainer refusal — a READ-ONLY check, BETWEEN the builder and the
-         composer, which is why the authority is a PAIR of functions and not one opaque
-         `boot()`: a single call would have needed a preflight hook smuggled inside it,
-         which is the divergence seam the card exists to close.
-
-    Nothing else may sit between the two calls, and nothing may be assigned onto `collab` —
-    a collaborator swapped after the build is a boot the composer never agreed to
-    (`tests/test_run_one_authority.py::test_the_preflight_child_boots_through_one_builder_and_one_composer_only`).
-
-    The DEVICE is the config's own (`train.device`, R126): there is no `--device` flag on
-    this tool any more, so preflighting run5 boots run5's minted device and a `--device cpu`
-    invocation can no longer false-clear a cuda-minted run's memory wall (the WPBOX 16 GiB
-    OOM; LAW-03's instrument-that-cannot-false-clear corollary). The EVAL posture is the
-    config's own too (`eval_enabled`, R120): the child passes nothing and CAN pass nothing.
-
-    F-816-14 (R284(f)): this child is spawned with `start_new_session=True`, which is what lets
-    the parent's timeout `killpg` reach it AND every grandchild in one act — and is also what
-    makes it unreachable by any signal aimed at the parent. Its death therefore depends entirely
-    on the parent living long enough to run its `except TimeoutExpired` block. MEASURED on the
-    local host 2026-08-18: one of these was found at PPID 1, **4 h 06 m old at 682% CPU against
-    its own `--timeout-sec 45.0`**, because its parent had been killed. The first thing the child
-    now does is ask the KERNEL to end it when its parent dies.
+    The child is spawned with `start_new_session=True` so the parent's timeout `killpg` reaches
+    every grandchild, which also makes it unreachable by any signal aimed at the parent: MEASURED
+    2026-08-18, one was found at PPID 1, 4 h 06 m old at 682% CPU against its own
+    `--timeout-sec 45.0`, because its parent had been killed. The first thing it does is ask the
+    KERNEL to end it when its parent dies.
     """
     from mantis.train.lifecycle.signals import arm_parent_death_signal
 
@@ -1149,9 +765,9 @@ def _boot_main(args) -> int:
     from mantis.run import build_run_collaborators, compose_run
 
     collab = build_run_collaborators(config=booted, out_dir=args.out_dir)
-    # §4.2: a run RESUMED past its ceiling terminates having performed zero syncs, which
-    # looks EXACTLY like the frozen actor this preflight exists to find. The builder never
-    # passes `checkpoint_path`, and a nonzero step here is a named refusal, not a warning.
+    # A run RESUMED past its ceiling terminates having performed zero syncs, which looks
+    # EXACTLY like the frozen actor this preflight exists to find. The builder never passes
+    # `checkpoint_path`, and a nonzero step here is a named refusal, not a warning.
     if int(collab.trainer.step) != 0:
         raise PreflightResumedTrainerError(
             f"the freshly-built trainer reports step {int(collab.trainer.step)}, not 0: a "
@@ -1166,28 +782,11 @@ def _boot_main(args) -> int:
 
 
 def _abort_rc(rule: str | None) -> int:
-    """The child's rc, decided by WHETHER AN ABORT FIRED and by nothing else (R84).
+    """The child's rc, decided by WHETHER AN ABORT FIRED and by nothing else.
 
-    This is the CHILD's process boundary. It is no longer the only one in the repo: WPMAIN
-    landed `mantis.run.main()` as a real launcher, and it reads THIS SAME resolver rather
-    than re-deriving the mapping — which is exactly what the OWED paragraph below asked for,
-    and what `repo_design.md`'s own OWED clause is discharged by. Two boundaries, one
-    resolver, and the numbers still come from the manifest row and from nowhere else.
-
-    Three outcomes, and the middle one is the one that must not be quietly rounded off:
-
-    * no rule fired -> 0. `abort_rule is None` is the ONLY thing that means a clean run;
-    * a rule fired WITH an authored code -> that code, resolved from the manifest row. The
-      number is never written here;
-    * a rule fired with NO authored code -> a NAMED failure, never 0 and never an invented
-      number. `grad_norm_hard_abort` and `sealbot_wr_abort` share `_fire_hard_abort` and are
-      not pre-registered; R84 refused to invent codes for them and this refuses again rather
-      than reporting an aborted run as a clean boot.
-
-    DISCHARGED (WPMAIN): the production launcher landed and reads this same resolver —
-    `mantis.run.main`, whose unregistered-rule arm raises `UnregisteredAbortExitError` with
-    this function's own three-outcome doctrine. The clause is kept as the record of what the
-    obligation was, not as an open one.
+    No rule fired -> 0, `abort_rule is None` being the ONLY thing that means a clean run; a rule
+    fired WITH an authored code -> that code, from the manifest row and never written here; a rule
+    fired with NO authored code -> a NAMED failure, never 0 and never an invented number.
     """
     if rule is None:
         return 0
@@ -1213,11 +812,9 @@ def _run_child(args, report: dict) -> dict:
     started = time.monotonic()
     proc = subprocess.Popen(_child_argv(args), start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    # AUDIT-1 F-03. `report["child"]` is assigned BEFORE the blocking `communicate` — the
-    # ordinary place for an interrupt to land — because `_not_run_reason` discriminates on
-    # `child is None` and would otherwise publish "NO boot was spawned" for a child that was
-    # spawned, is running, and may still be holding the card. The record is REPLACED in place
-    # below once the child's outcome is known, so a completed run's block is unchanged.
+    # `report["child"]` is assigned BEFORE the blocking `communicate` — the ordinary place for an
+    # interrupt to land — because `_not_run_reason` discriminates on `child is None` and would
+    # otherwise publish "NO boot was spawned" for a child that is running.
     child: dict = {"rc": None, "rc_convention": RC_CONVENTION, "raised_by": "parent",
                    "spawned": True, "pid": int(proc.pid), "wall_clock_sec": None,
                    "timed_out": False, "outcome": "in_flight"}
@@ -1234,14 +831,9 @@ def _run_child(args, report: dict) -> dict:
             os.killpg(os.getpgid(proc.pid), signal.SIGKILL)
             stdout, stderr = proc.communicate()
     rc = int(proc.returncode)
-    # CARD-PREFLIGHT-CHILD-STDERR-BUDGET (WPCLEAN Phase PFC, the card's spool arm): the
-    # 4000-char tails were an invented budget AND the classifier's input — a truncated
-    # traceback silently downgrades a tree defect from 32 to 33 (REVIEW_IMPL_P's widening).
-    # The FULL streams now spool beside the report; the tails stay (report readability +
-    # the process tests' carriage semantics), and the classifier keeps reading the tail —
-    # a wall's `AttributeError` line is the traceback's LAST line, which a tail keeps and
-    # a head would lose. Spool failure is a run-fatal report defect, not a swallow (LAW-14):
-    # the spool exists precisely for the bytes the tail dropped.
+    # The 4000-char tails were an invented budget AND the classifier's input, so a truncated
+    # traceback silently downgraded a tree defect from 32 to 33. The FULL streams spool beside the
+    # report; the classifier keeps reading the TAIL, where a wall's `AttributeError` line lands.
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)  # a child may die before creating it
     stdout_spool = out_dir / "child_stdout.log"
@@ -1261,7 +853,7 @@ def _run_child(args, report: dict) -> dict:
 
 
 def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
-    """R347(d)'s two START pre-flight HALTs, both decided before the boot.
+    """The two START pre-flight HALTs, both decided before the boot.
 
     Args:
         booted: the config the child will run.
@@ -1283,8 +875,8 @@ def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
                                 f"train.device={booted.train.device!r}, "
                                 f"eval.worker_device={booted.eval.worker_device!r}"}
         return
-    # Imported here and not at module scope: AUDIT mode is the per-commit CI gate and must not
-    # pay torch's import to audit YAML.
+    # Imported here and not at module scope: AUDIT mode is the per-commit CI gate and must
+    # not pay torch's import to audit YAML.
     from mantis.diagnostics.cuda_build_guard import CudaBuildRefusal, check
 
     try:
@@ -1306,20 +898,18 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["assertions"]["c_arming"] = {"verdict": "pass", "disarmed": [],
                                         "required_armed": report["manifest"]["required"]}
     booted = _apply_burst_override(config, args.burst_steps)
-    # WPMINT Phase B: the tier is stamped only once the validators have ACCEPTED the burst, so
-    # a rc-11 refusal leaves `tier: none` — which is the truth, not a placeholder.
+    # Stamped only once the validators have ACCEPTED the burst, so a rc-11 refusal leaves
+    # `tier: none` — the truth, not a placeholder.
     report["tier"] = _tier_block(config, int(args.burst_steps))
     report["override"] = {"keys": list(OVERRIDE_KEYS),
                           "from": int(config.train.max_train_steps),
                           "to": int(args.burst_steps),
-                          # THE one identity authority (F-B1): the same function the child's
+                          # THE one identity authority: the same function the child's
                           # compose_run hashes its own loaded config with.
                           "booted_config_sha256": config_identity_sha256(booted)}
     log_dir = out_dir / "logs"
-    # CARD-PREFLIGHT-OUTDIR-REUSE: refuse a dirty out-dir BEFORE the boot. Scoped exactly
-    # to the hole the card measured — pre-existing segments under THIS run_id, the ones
-    # `_read_segment`'s scope would believe — so a fresh dir, a foreign run_id's litter and
-    # every audit-mode drive are untouched.
+    # Refuse a dirty out-dir BEFORE the boot, scoped to pre-existing segments under THIS
+    # run_id — the ones `_read_segment`'s scope would believe.
     stale = sorted(log_dir.glob(f"events_{booted.run_id}_*.jsonl")) if log_dir.is_dir() else []
     if stale:
         raise PreflightOutDirReusedError(
@@ -1331,10 +921,8 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     child = _run_child(args, report)
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
                         if log_dir.is_dir() else ([], []))
-    # R72 CLOSING PASS. The scan PUBLISHES what it read, so `_watchdog_reason` can say which
-    # of "read and not found" / "nothing was read" actually happened instead of asserting the
-    # first unconditionally. `[]` and "no scan recorded" are different facts and the child
-    # block now distinguishes them.
+    # The scan PUBLISHES what it read, so `_watchdog_reason` can say which of "read and not
+    # found" / "nothing was read" happened. `[]` and "no scan recorded" are different facts.
     child["segments_scanned"] = [str(segment) for segment in segments]
     fired = [event for event in events if event.get("event") == "heartbeat_watchdog_fired"]
     if fired:
@@ -1342,9 +930,8 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["events"] = _events_block(segments, events)
     _classify_child(child)  # the child's status is evaluated BEFORE the predicates
     # F-B1 closure: copy the child's OWN published boot identity into the child block and
-    # compare it to the parent's. Ordered AFTER _classify_child (a dead child is a
-    # child-status failure, not an identity one) and BEFORE the predicates (a burst on the
-    # wrong config proves nothing about sync or lag).
+    # Ordered AFTER _classify_child (a dead child is a child-status failure, not an identity
+    # one) and BEFORE the predicates (a burst on the wrong config proves nothing).
     child["booted_config_sha256"], child["config_identity"] = child_config_identity(
         events, parent_sha=str(report["override"]["booted_config_sha256"]))
     if child["config_identity"] == "mismatch":
@@ -1374,11 +961,8 @@ def _run_audit(args, report: dict) -> None:
         """The subject's own blocks: WHICH config this report is about, and what the
         composition root resolves from it.
 
-        WPMINT Phase K-B (R78's first design question) adds the coordinator block and
-        publishes both in AUDIT mode — the per-commit gate is the report a reader sees most,
-        and the block costs no boot. It is hoisted into a closure so a NAMED subject can be
-        published BEFORE the manifest audit: a red audit used to write a report whose
-        `config` was still `null`, so the artifact could not say which config failed.
+        Hoisted into a closure so a NAMED subject can be published BEFORE the manifest audit:
+        a red audit used to write a report whose `config` was still `null`.
         """
         subject_config = _load(subject)
         report["config"] = _config_block(subject, subject_config)
@@ -1386,10 +970,9 @@ def _run_audit(args, report: dict) -> None:
 
     if named is not None:
         _publish(named)
-    # SF-I9: the manifest audit runs BEFORE anything indexes `paths`. It carries the vacuity
-    # guard, so an empty PRODUCTION_CONFIGS is rc 31 by name rather than an `IndexError`
-    # collapsing through the generic handler into an unnamed rc 1. The hoist above touches
-    # `named` only, which is never an index, so that guard is untouched.
+    # The manifest audit runs BEFORE anything indexes `paths`: it carries the vacuity guard,
+    # so an empty PRODUCTION_CONFIGS is rc 31 by name rather than an `IndexError` collapsing
+    # into an unnamed rc 1.
     report["manifest"] = _audit_manifest_and_configs(paths)
     if named is None:
         _publish(paths[0])
@@ -1404,9 +987,9 @@ def main(argv: list[str] | None = None) -> int:
         try:
             return _boot_main(args)
         except PreflightError as exc:
-            # §6.3a arm 4: the child exits with its OWN named code so the parent can
-            # propagate it unchanged. A tree defect is deliberately NOT caught — its
-            # traceback is what the parent classifies into rc 32.
+            # The child exits with its OWN named code so the parent can propagate it
+            # unchanged. A tree defect is deliberately NOT caught — its traceback is what the
+            # parent classifies into rc 32.
             print(f"preflight child: rc {exc.rc} — {type(exc).__name__}: {exc}",
                   file=sys.stderr)
             return int(exc.rc)
@@ -1417,7 +1000,7 @@ def main(argv: list[str] | None = None) -> int:
     out_dir: Path | None = None
     rc = 0
     try:
-        _print_deferred_rows()  # loud on EVERY run, including a green one (R56)
+        _print_deferred_rows()  # loud on EVERY run, including a green one
         if args.out_dir is not None:
             out_dir = _checked_out_dir(args.out_dir)
         if args.audit_only:
@@ -1437,10 +1020,9 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
     except BaseException as exc:  # noqa: BLE001 — AUDIT-1 F-03: stamp, then RE-RAISE
         # A `KeyboardInterrupt` during a long burst, or a callee's `SystemExit`, used to
-        # unwind past both arms above into the `finally` and land an artifact still carrying
-        # the skeleton's `verdict: "pass", rc: 0`. It is stamped here and RE-RAISED, so the
-        # signal keeps its own semantics at the shell — this arm changes what the report
-        # says, never what the process does.
+        # unwind past both arms above and land an artifact still carrying the skeleton's
+        # `verdict: "pass", rc: 0`. Stamped here and RE-RAISED: this arm changes what the
+        # report says, never what the process does.
         rc = PreflightInterruptedError.rc
         report.update(verdict="fail", rc=rc,
                       failure=PreflightInterruptedError.__name__,

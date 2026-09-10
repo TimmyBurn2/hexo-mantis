@@ -1,30 +1,18 @@
-"""R292(b) class-wide — `MonitorConfig` has ONE construction authority inside `src/`.
+"""`MonitorConfig` has ONE construction authority inside `src/`.
 
-THE CLASS, AND WHY IT NEEDED A SEPARATE ACT FROM THE SUPERVISOR FIX. `F-816-24` was one instance:
-`monitor/supervise.py` built a bare `MonitorConfig()` and used its dataclass literals as flag
-defaults, so four minted keys reached no process. R292(b) SPLIT the work — that packet built the
-mechanism at its own site and this one extends it across the class, after that merge, precisely so
-the extension has a landed mechanism to extend rather than a second design.
+Inside `src/`, the only code that may construct a `MonitorConfig` is
+`mantis.config.resolve.monitor.resolve_monitor_config`, which builds it from a VALIDATED schema
+section by a pure 1:1 field copy; every other production consumer receives one. A bare
+construction elsewhere silently substitutes the dataclass literals for whatever the operator
+minted — armed in the config, absent in effect.
 
-WHAT "ONE AUTHORITY" MEANS HERE, stated as the rule the test enforces: inside `src/`, the only
-code that may construct a `MonitorConfig` is `mantis.config.resolve.monitor.resolve_monitor_config`,
-which builds it from a VALIDATED schema section by a pure 1:1 field copy. Every other production
-consumer receives one. A bare construction anywhere else silently substitutes 29 dataclass literals
-for whatever the operator minted — armed in the config, absent in effect.
+Tests MAY construct one directly: thresholds are their SUBJECT, and routing them through a
+schema and a resolver would test the resolver instead. What a test may not rely on is a
+PRODUCTION path falling back to a bare one. So: src/ constructs once, tests construct freely,
+production never defaults — the first and third mechanically enforced.
 
-THE RULE FOR TESTS, which R292(b) also asks for, and it is deliberately weaker than the src/ rule:
-a test MAY construct a `MonitorConfig` directly, with or without kwargs. Tests are where the
-thresholds are the SUBJECT — `monitor/rules.py`'s fire/no-fire rows need a config whose values they
-chose, and routing them through a schema and a resolver would test the resolver instead. What tests
-may NOT do is rely on a PRODUCTION path falling back to a bare one; that fallback is what this file
-removes. The boundary is therefore "src/ constructs once, tests construct freely, production never
-defaults" — and only the first and third are mechanically enforced, because the second is not a
-defect.
-
-DERIVED BY AST, NEVER BY GREP (R296(f)). A text search for `MonitorConfig(` misses
-`from … import MonitorConfig as MC; MC()` and `import … as m; m.MonitorConfig()`, and hits comments
-and docstrings — this repo has already been bitten by both directions of that, which is why the
-convention exists.
+Derived by AST, never by grep: a text search for `MonitorConfig(` misses `import ... as MC; MC()`
+and hits comments and docstrings, and this repo has been bitten by both directions.
 """
 from __future__ import annotations
 
@@ -33,9 +21,8 @@ from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 
-#: The ONE legitimate construction site in `src/`, as a module path. It is the resolver: a pure
-#: 1:1 field copy off a validated `MonitorSchemaConfig`, with a field-name-equality mutation
-#: self-test behind it (`tests/config/test_monitor_schema.py`).
+#: The ONE legitimate construction site in `src/`, as a module path: a pure 1:1 field copy off a
+#: validated `MonitorSchemaConfig`, with a field-name-equality mutation self-test behind it.
 _THE_AUTHORITY = "config/resolve/monitor.py"
 
 
@@ -63,12 +50,7 @@ def _construction_sites() -> list[str]:
 
 
 def test_only_the_resolver_constructs_a_MonitorConfig_in_src():
-    """The class rule. A new bare construction in `src/` fails here and names itself.
-
-    The name says "only the resolver" again, and now the assertion means it: `F-816-29`'s grant
-    landed, `StepCoordinator`'s fallback is gone, and the allowlist is back to one entry. The name
-    shrank with the assertion, which is the half that is easy to forget.
-    """
+    """The class rule: a new bare construction in `src/` fails here and names itself."""
     offenders = [s for s in _construction_sites() if not s.startswith(_THE_AUTHORITY + ":")]
     assert not offenders, (
         "MonitorConfig is constructed outside the one authority at: " + ", ".join(offenders)
@@ -79,8 +61,8 @@ def test_only_the_resolver_constructs_a_MonitorConfig_in_src():
 
 
 def test_the_authority_itself_is_present_so_this_rule_is_not_vacuous():
-    """A rule with zero matches passes for the wrong reason. This is the positive control: the
-    authority must be found where the rule says it is, or the census above is measuring nothing."""
+    """Positive control: a rule with zero matches passes for the wrong reason, so the authority
+    must be found where the rule says it is."""
     sites = _construction_sites()
     assert any(s.startswith(_THE_AUTHORITY + ":") for s in sites), (
         f"the one authority was not found in the census ({sites}) — either the resolver stopped "
@@ -89,11 +71,10 @@ def test_the_authority_itself_is_present_so_this_rule_is_not_vacuous():
 
 
 def test_no_production_path_falls_back_to_a_bare_config():
-    """The other half: a required parameter cannot silently become a default.
+    """A required parameter cannot silently become a default.
 
-    `StepCoordinator` used to take `monitor_cfg: MonitorConfig | None = None` and fall back to a
-    bare one — the last silent default in the chain, with `build_run_safety` already requiring it
-    one layer up. Derived from the signature, not from the body.
+    Derived from the signature, not the body: `StepCoordinator`'s `monitor_cfg` default used to
+    be the last silent fallback in the chain, with `build_run_safety` already requiring it.
     """
     import inspect
 
@@ -107,10 +88,8 @@ def test_no_production_path_falls_back_to_a_bare_config():
 
 
 def test_the_rule_BITES_on_a_third_construction_site(tmp_path):
-    """LAW-07 self-test. The claim "a third site still fails" is worth exactly as much as a
-    demonstration of it — an allowlist rule that has never been shown to reject anything is
-    indistinguishable from a rule that accepts everything.
-    """
+    """Self-test: an allowlist rule that has never been shown to reject anything is
+    indistinguishable from a rule that accepts everything."""
     planted = tmp_path / "mantis"
     (planted / "somewhere").mkdir(parents=True)
     (planted / "somewhere" / "new_consumer.py").write_text(

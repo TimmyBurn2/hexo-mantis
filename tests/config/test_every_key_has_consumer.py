@@ -1,36 +1,17 @@
-""">300 justify (R8): it is mostly DATA — `CONSUMER_REGISTRY` is the LAW-08 authority itself,
-one entry per schema leaf, and splitting it would create a second registry copy to keep in sync
-(there is already exactly one deliberate duplicate, `test_every_key_has_consumer_p2.py`). The
-tests below are short by comparison. The registry's SIZE is never stated here: it is read at
-HEAD from `len(CONSUMER_REGISTRY)` and pinned only by the bijection, because a transcribed tally
-is re-edited on every edit, is eventually wrong, and is then read as evidence (R8/R192(e),
-derive-or-delete — this header stated 184 while the registry held 191).
+""">300 justify (R8): it is mostly DATA — `CONSUMER_REGISTRY` is the live-consumer authority,
+one entry per schema leaf, and splitting it would create a second registry copy to keep in sync.
+Its size is never stated here, only pinned by the bijection.
 
-O15 — every-key-has-consumer bijection (LAW-08).
-
-SCHEMA KEYS ONLY (not registered encodings — that is gate-8's disjoint concern). Enumerate
-leaf key-paths of RunConfig and assert the set equals an explicit CONSUMER_REGISTRY.
-`selfplay.legal_move_radius_schedule`/`RadiusStage` are GONE (WPSC Phase 2 SC-A2 forced-fallout,
-DESIGN_P2.md §5) — the NIT-3 "enumeration stops at a list[SubModel] field" note that used to
-apply to `RadiusStage.step`/`.radius` no longer has a subject; `selfplay.mcts.*`/`selfplay.
-playout_cap.*` are ordinary nested `StrictModel` leaves, fully enumerated like every other
-section.
-
-THE WALKER IS IMPORTED, NOT COPIED (AUDIT-1 F-44). `mantis.config.schema.leaf_paths` is the one
-derivation; this file held one of five hand-mirrored copies that walked to three different
-answers. WPMINT DR-6 (R93)'s rule — descend through OPTIONAL nested blocks, the R79 arming idiom
-— lives there now, and the test below drives it on a fixture built here.
+Enumerate the leaf key-paths of `RunConfig` and assert the set equals the registry below;
+`mantis.config.schema.leaf_paths` is the ONE walker, imported rather than copied, after this
+file held one of five hand-mirrored copies that walked to three different answers.
 """
 from pydantic import BaseModel
 
 from mantis.config.schema import RunConfig, leaf_paths
 
-# Each value names a REAL WP8/WP11-A reader; every "emit" reader genuinely appears in the
-# O6 payload. WP11-A extends this registry with every eval.gate/eval.ladder leaf (design
-# §c.1) — none of these are yet threaded into config/emit.py's resolved payload (that
-# would break the pre-existing, non-oracle O6 9-knob pin in
-# tests/config/test_resolved_config_emit.py, which this WP does not touch); their live
-# consumer is the eval/bots/arena machinery cited below, not the emit payload.
+# Each value names a REAL reader. The eval.gate/eval.ladder leaves are not threaded into the
+# emit payload; their live consumer is the eval/bots/arena machinery cited below.
 CONSUMER_REGISTRY = {
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
@@ -114,9 +95,8 @@ CONSUMER_REGISTRY = {
     "eval.ladder.bootstrap_seed": (
         "pipeline.py RoundSpec.ladder_bootstrap_seed -> worker.py aggregate_rung (M-2)"
     ),
-    # WPSC Phase 2 SC-A1 (R-TRAINCONFIG-SCHEMA closure): every TrainConfig leaf's live
-    # consumer is TrainHParams.from_config (trainer/core.py), which reads config["train"]
-    # directly (no flat-key fallback).
+    # Every TrainConfig leaf's live consumer is TrainHParams.from_config (trainer/core.py),
+    # which reads config["train"] directly with no flat-key fallback.
     "train.lr": "TrainHParams.from_config -> optimizer ctor (trainer/core.py)",
     "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
     "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
@@ -137,14 +117,9 @@ CONSUMER_REGISTRY = {
     "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
-    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf, because `leaf_paths` used to
-    # recurse only into `isinstance(ann, type) and issubclass(ann, BaseModel)`. WPMINT DR-6
-    # (R93) closes that: the cause was OPTIONALITY, not nesting — `DrawRateAbortConfig |
-    # None` is a `UnionType`, while a NON-optional nested block (`monitor.drain.*`) was
-    # descended into all along. `Block | None` is the house arming idiom (R79), so the hole
-    # was generic to every future arming block: a fourth, wholly unconsumed key inside
-    # `DrawRateAbortConfig` passed the full tier plus gates 7 and 12 green. The three inner
-    # keys are registered individually now, each at the call site that reads it.
+    # The three inner keys are registered individually, each at the call site that reads it:
+    # the walker used to treat an optional `Block | None` as ONE opaque leaf, and a wholly
+    # unconsumed key inside it passed the full tier green.
     "train.draw_rate_abort.threshold":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(threshold=)",
@@ -157,13 +132,8 @@ CONSUMER_REGISTRY = {
     "train.draw_rate_abort.consec":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
-    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 18 step-coordinator knobs (19 until
-    # R178(a) deleted `train.buffer_save_interval`, whose only consumer chain ended in the
-    # no-op `_try_save_buffer` D4 arm — F-CS-2 measured it production-dead). Every
-    # citation below names the path from the ONE resolver to the line that READS the value,
-    # and every one was verified BY MUTATION per R93 (set the knob, drive the production
-    # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
-    # never by grep, because DR-11 proved a grep cannot tell a reader from a `pop`.
+    # Every citation below names the path from the ONE resolver to the line that READS the
+    # value, verified BY MUTATION rather than by grep, which cannot tell a reader from a `pop`.
     "train.eval_interval":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
         " round boundary (+ promotion_capable_rounds)",
@@ -224,10 +194,8 @@ CONSUMER_REGISTRY = {
     "train.draw_reward": "SelfPlayHParams.from_config cross-section read (SC-A2)",
     "train.ply_cap_value": "SelfPlayHParams.from_config cross-section read (SC-A2)",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> run_declared_train_step fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
-    # WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure): every SelfplayConfig/MctsConfig/
-    # PlayoutCapConfig/InferenceConfig leaf's live consumer is SelfPlayHParams.from_config /
-    # InferenceHParams.from_config (mantis.selfplay.hparams), which read the nested
-    # `selfplay`/`selfplay.mcts`/`selfplay.playout_cap`/`inference` sections directly.
+    # Every selfplay/mcts/playout_cap/inference leaf's live consumer is
+    # SelfPlayHParams.from_config / InferenceHParams.from_config, reading the nested sections.
     "selfplay.n_workers": "SelfPlayHParams.from_config -> WorkerPool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
@@ -269,9 +237,8 @@ CONSUMER_REGISTRY = {
     "selfplay.playout_cap.temp_min": "SelfPlayHParams.from_config -> runner temp_min",
     "inference.inference_batch_size": "InferenceHParams.from_config -> inference_server batch size",
     "inference.inference_max_wait_ms": "InferenceHParams.from_config -> inference_server max wait",
-    # F-816-10 (R276(f)): the GRAPH inference forward's memory bound. GRAPH-ROUTE-SCOPED,
-    # and the rows say so: the resolver is called from the graph branch of
-    # `InferenceServer.__init__` alone, so a grid run structurally cannot reach either key.
+    # The GRAPH inference forward's memory bound, GRAPH-ROUTE-SCOPED: the resolver is called
+    # from the graph branch of `InferenceServer.__init__` alone, so a grid run cannot reach it.
     "inference.fused_graph_caps.max_fused_edges":
         "resolve_fused_graph_caps -> FusedGraphCapsSpec.max_fused_edges ->"
         " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
@@ -282,14 +249,10 @@ CONSUMER_REGISTRY = {
         " InferenceServer.__init__ (graph branch only, eager) -> _run_graph_loop"
         " plan_fused_forwards node-term partition; also threaded parent-side into"
         " RoundSpec.fused_graph_caps -> the eval child's LocalInferenceEngine",
-    # WPSC Phase 2 SC-A3 (R-MONITORCONFIG-SCHEMA closure): every MonitorSchemaConfig leaf's
-    # live consumer is resolve_monitor_config (mantis.config.resolve.monitor), the pure 1:1
-    # field-copy onto mantis.monitor.config.MonitorConfig; the 4 monitor.drain.* leaves feed
-    # DrainCaps (run.py) / drain_budget_sec + _run_terminal_sync (eval/pipeline.py) through
-    # their own resolver, mantis.config.resolve.drain.resolve_drain_caps (WPMINT K-A).
-    # ── monitor.gate_interval (R242 / ADJ-D12) — schema-only, like `drain`/`disk_guard`:
-    # named directly by compose_run (one leaf, no shape to resolve) and threaded into
-    # StepCoordinatorConfig. It is the ARMING cadence; train.log_interval is narration.
+    # Every MonitorSchemaConfig leaf's live consumer is resolve_monitor_config, a 1:1 field copy
+    # onto MonitorConfig; the monitor.drain.* leaves feed DrainCaps through their own resolver.
+    # `monitor.gate_interval` is the ARMING cadence, named directly by compose_run, where
+    # train.log_interval is narration.
     "monitor.gate_interval":
         "mantis.run.compose_run -> _step_coordinator_config ->"
         " StepCoordinatorConfig.gate_interval -> step.py _run_gate_interval"
@@ -331,10 +294,8 @@ CONSUMER_REGISTRY = {
     "monitor.supervisor_max_relaunches":
         "monitor/supervise.py::main --config -> load_config"
         " -> resolve_monitor_config -> Supervisor(max_relaunches=) -> the relaunch budget",
-    # WPMINT Phase K-A (R93): these four citations were FALSE until this phase — the block
-    # was popped by resolve_monitor_config and never reached the functions named below, which
-    # a grep could not tell from a read (DR-11). The path is now named end to end and is
-    # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    # These four citations were FALSE until the block stopped being popped before it reached the
+    # functions named below — which a grep could not tell from a read. Now mutation-verified.
     "monitor.disk_guard.interval_sec":
         "resolve_disk_guard -> DiskGuard(interval_sec=…) -> the guard thread's poll cadence"
         " (mantis.run.compose_run, LAW-16 leg 3)",
@@ -359,11 +320,8 @@ def test_schema_leaves_equal_consumer_registry_bijection():
 
 
 def test_no_forward_reference_strings_in_registry():
-    # V-NOOP strengthening (R40, WPSC Phase 3 SC-B4, DESIGN_P3.md §0/§5.1 item 3): the
-    # bijection above is a pure key-SET diff — it never checks that a registry string names
-    # a function that actually reads the field, so an honest-but-unconsumed entry (like
-    # `train.amp_dtype` sat through all of Phase 2, DESIGN_P2 STOP CANDIDATE 4) can pass it
-    # forever. This bans forward-reference-shaped language in CONSUMER_REGISTRY values.
+    # The bijection above is a pure key-SET diff and never checks that a registry string names a
+    # function that reads the field, so an honest-but-unconsumed entry can pass it forever.
     banned = ("SC-B3 wires", "TODO", "will be")
     hits = [
         (key, value)
@@ -375,18 +333,12 @@ def test_no_forward_reference_strings_in_registry():
 
 
 def test_the_walker_descends_into_an_OPTIONAL_block_not_only_a_required_one():
-    """WPMINT DR-6 (R93) — the walker's own predicate, driven on all three shapes at once.
+    """The walker descends into an OPTIONAL block, not only a required one.
 
-    The defect this is the sole witness for: `Block | None` is the house arming idiom (R79),
-    and the pre-DR-6 walker treated such a block as ONE opaque leaf, so a key added inside it
-    had no LAW-08 obligation at all. Measured at Phase DR: a fourth, wholly unconsumed key
-    inside `DrawRateAbortConfig` passed the full tier plus gates 7 and 12, all green. The
-    bijection test above cannot witness this on its own — with the block opaque, the walker
-    and the registry agreed with each other about a key neither could see.
-
-    NIT-3 is asserted in the same breath, because the fix must not swallow it: a
-    `list[SubModel]` field has no single key-path to hand out and stays ONE leaf. Without
-    this arm a "descend into anything that mentions a BaseModel" implementation would pass.
+    `Block | None` is the house arming idiom, and the pre-fix walker treated such a block as ONE
+    opaque leaf, so a key inside it carried no obligation and the bijection could not witness it:
+    with the block opaque, the walker and the registry agreed about a key neither could see. A
+    `list[SubModel]` field stays ONE leaf in the same breath.
     """
     class _Inner(BaseModel):
         a: int
@@ -421,8 +373,8 @@ def test_the_walker_descends_into_an_OPTIONAL_block_not_only_a_required_one():
 
 
 def test_bijection_bites_on_a_real_schema_mutation():
-    # F5: a genuine schema mutation (a throwaway subclass adding a leaf field with no registry
-    # entry) must make the bijection fail — enumeration picks up the new leaf, not set-algebra.
+    # A genuine schema mutation — a throwaway subclass adding a leaf with no registry entry —
+    # must make the bijection fail, because enumeration picks up the new leaf.
     class _MutatedRunConfig(RunConfig):
         phantom_leaf: int  # new schema field, no CONSUMER_REGISTRY entry
 

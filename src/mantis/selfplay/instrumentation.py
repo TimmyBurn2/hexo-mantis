@@ -1,15 +1,10 @@
 """Per-game telemetry for the self-play worker pool.
 
->300 justify: VERBATIM port of the pool's telemetry collaborator. The four pure structural
-metrics (`_compute_stride5_metrics`, `_compute_colony_extension`, `_compute_longest_line`,
-`_compute_n_components`), their shared ply→player rule and the `PoolInstrumentation` state
-machine that consumes them are ONE concern — the per-game structural-metric contract the
-`game_complete` event and the investigation panels read. Splitting the pure functions from
-their only caller would put the PINNED geometry constants on the far side of an import.
-
-`PoolInstrumentation` owns all per-game telemetry state that was previously inline in the
-pool's stats loop. The pool passes its lock into each method; no lock is created or owned
-here.
+>300 justify: VERBATIM port of the pool's telemetry collaborator. The four pure structural metrics,
+their shared ply→player rule and the `PoolInstrumentation` state machine that consumes them are ONE
+concern, and splitting the pure functions from their only caller would put the PINNED geometry
+constants on the far side of an import. The pool passes its lock into each method; no lock is
+created or owned here.
 """
 from __future__ import annotations
 
@@ -22,21 +17,17 @@ from mantis._engine import WIN_LENGTH as _ENGINE_WIN_LENGTH
 from mantis.util.constants import DRAW_RATE_WINDOW as _DRAW_RATE_WINDOW
 from mantis.util.coordinates import axial_distance
 
-# I1 colony-extension detector. Hex distance threshold above which a stone is
-# counted as "colony extension" — disjoint cluster spam behaviour flagged as the
-# primary residual mechanism for pre-W1 fast-game draw collapse (W1 forensics R1).
+# Colony-extension detector: the hex distance above which a stone counts as "colony extension",
+# the residual mechanism flagged for pre-W1 fast-game draw collapse.
 _COLONY_EXT_HEX_DIST = 6
 
-# Class-4 stride-5 detector. Targets the q-axis stride-5 spam pattern (mixed-color
-# stones at distance-5 spacing along a single hex row). Stride 5 is the inclusive
-# boundary of LEGAL_MOVE_RADIUS = 5 and CLUSTER_THRESHOLD = 5; the existing macro
-# detectors (colony_extension_fraction at hex_dist > 6, axis_distribution at
-# distance-1 adjacency) miss it by construction.
+# Stride-5 detector, targeting the q-axis stride-5 spam pattern — mixed-colour stones at
+# distance-5 spacing along a single hex row. Stride 5 is the inclusive boundary of both the legal
+# move radius and the cluster threshold, and the existing macro detectors miss it by construction.
 _STRIDE5_STEP = 5
 
-# B3a structural-metric geometry — READ from the engine, not transcribed beside it
-# (AUDIT-1 F-42). These were three literals whose comments named the Rust owner; a comment
-# is not a pin, and the metric is only comparable to a Rust emit if it is the same number.
+# Structural-metric geometry, READ from the engine rather than transcribed beside it: these were
+# three literals whose comments named the Rust owner, and a comment is not a pin.
 _HEX_AXES = [tuple(axis) for axis in _ENGINE_HEX_AXES]
 _WIN_LENGTH = _ENGINE_WIN_LENGTH
 
@@ -46,21 +37,10 @@ def _compute_stride5_metrics(
 ) -> tuple[int, int]:
     """Class-4 detector — return (stride5_run_max, row_max_density).
 
-    Scans all hex rows in all three axes (matching ``_HEX_AXES``):
-
-      axis_q (E-W,    dq=+1, dr= 0): row keyed by r,        position = q
-      axis_r (NW-SE,  dq= 0, dr=+1): row keyed by q,        position = r
-      axis_s (NE-SW,  dq=+1, dr=-1): row keyed by s=-q-r,   position = q
-
-    ``stride5_run_max`` is the longest chain of stones lying on a single hex
-    row whose along-row coordinates are consecutive at step 5 (e.g. q ∈
-    {3, 8, 13, 18} on the same r-row is a chain of length 4).  Color-blind:
-    we measure stone-on-row geometry, not same-color sub-runs.
-
-    ``row_max_density`` is the maximum stone count on any single hex row in
-    any of the three axes (densest row in the densest direction).
-
-    Per-game cost: O(|stones|).  Budget << 1 ms at typical game length.
+    ``stride5_run_max`` is the longest chain of stones on a single hex row whose along-row
+    coordinates are consecutive at step 5, colour-blind: this measures stone-on-row geometry, not
+    same-colour sub-runs. ``row_max_density`` is the maximum stone count on any single row in any
+    of the three axes. Per-game cost O(|stones|).
     """
     if not move_history:
         return (0, 0)
@@ -100,14 +80,10 @@ def _compute_stride5_metrics(
 def _split_players(
     move_history: list[tuple[int, int]],
 ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
-    """Return ``(p1_stones, p2_stones)`` using the PINNED ply→player rule.
-
-    Ply 0 is P1; thereafter each player places 2 stones before the turn passes
-    (``compound_idx = (ply - 1) // 2``; P1 when that index is odd, else P2).
-    This is the single ply-rule owned by this module (was inline in
-    ``_compute_colony_extension``); the B3a structural metrics reuse it so
-    attribution stays byte-identical to colony_extension_fraction.
-    """
+    """Return ``(p1_stones, p2_stones)`` using the PINNED ply→player rule: ply 0 is P1, and
+    thereafter each player places 2 stones before the turn passes
+    (``compound_idx = (ply - 1) // 2``; P1 when that index is odd, else P2). The structural metrics
+    reuse it so attribution stays byte-identical to `colony_extension_fraction`."""
     p1: list[tuple[int, int]] = []
     p2: list[tuple[int, int]] = []
     for ply, (q, r) in enumerate(move_history):
@@ -117,17 +93,10 @@ def _split_players(
 
 
 def _compute_colony_extension(move_history: list[tuple[int, int]]) -> tuple[int, int]:
-    """Return (colony_extension_count, classified_total) for a finished game.
-
-    A stone counts as "colony extension" if its minimum hex distance to ANY
-    opponent stone at game end is > ``_COLONY_EXT_HEX_DIST``.  Stones of a
-    player with no opponent stones on the board (only possible with a one-move
-    game) are excluded from both numerator and denominator.
-
-    Ply→player rule: ply 0 is P1; thereafter each player places 2 stones before
-    the turn passes (``compound_idx = (ply - 1) // 2``; P2 when even, else P1).
-    Per-game cost: O(|stones|^2); budget <1ms at typical game length.
-    """
+    """Return (colony_extension_count, classified_total) for a finished game: a stone counts as
+    colony extension if its minimum hex distance to ANY opponent stone at game end exceeds
+    ``_COLONY_EXT_HEX_DIST``, and a player with no opponent stones on the board is excluded from
+    both numerator and denominator."""
     if not move_history:
         return (0, 0)
     p1, p2 = _split_players(move_history)
@@ -144,12 +113,9 @@ def _compute_colony_extension(move_history: list[tuple[int, int]]) -> tuple[int,
 
 
 def _longest_straight_run(stones: list[tuple[int, int]]) -> int:
-    """Longest straight consecutive run of ``stones`` along any ``_HEX_AXES`` axis.
-
-    Reproduces the engine `count_in_line`: for each stone, for each axis,
-    run = 1 + walk(+dir) + walk(-dir); take the global max. NOT capped here —
-    the caller caps at ``_WIN_LENGTH`` (the engine never extends past a 6-win).
-    """
+    """Longest straight consecutive run of ``stones`` along any ``_HEX_AXES`` axis, reproducing the
+    engine's `count_in_line`: per stone, per axis, `run = 1 + walk(+dir) + walk(-dir)`, global max.
+    NOT capped here — the caller caps at ``_WIN_LENGTH``."""
     if not stones:
         return 0
     cells = set(stones)
@@ -174,12 +140,8 @@ def _longest_straight_run(stones: list[tuple[int, int]]) -> int:
 
 
 def _components(stones: list[tuple[int, int]], cluster_threshold: int) -> int:
-    """Connected components of ``stones`` under axial_distance <= cluster_threshold.
-
-    Same connectivity as the engine `get_clusters`: BFS flood-fill, edge iff
-    hex_distance <= cluster_threshold. Applied per-player here (golong
-    winner-structure semantics).
-    """
+    """Connected components of ``stones`` under `axial_distance <= cluster_threshold`, the same
+    connectivity as the engine's `get_clusters`: BFS flood-fill, applied per-player here."""
     pts = list(set(stones))
     n = len(pts)
     if n == 0:
@@ -206,18 +168,10 @@ def _compute_longest_line(
     cluster_threshold: int,
     winner_code: int,
 ) -> tuple[int, float]:
-    """Return ``(longest_line, longest_line_fraction)`` for a finished game.
-
-    PER-PLAYER (winner) structure:
-      - decisive game: the WINNER's longest line and stone count.
-      - draw: the more-structured side (max longest_line; its stone count for
-        the fraction denominator).
-    ``longest_line`` is capped at ``_WIN_LENGTH`` (=6). ``longest_line_fraction``
-    = longest_line / max(1, player_stone_count) (colony-norm convention).
-    ``cluster_threshold`` is unused for longest_line but accepted so both B3a
-    structural emitters share one call signature. ``winner_code``: 0=draw,
-    1=P1, 2=P2 (pool convention).
-    """
+    """Return ``(longest_line, longest_line_fraction)`` for a finished game, per-player: the
+    WINNER's on a decisive game, the more-structured side's on a draw. ``longest_line`` is capped at
+    ``_WIN_LENGTH``, and ``cluster_threshold`` is unused here but accepted so both structural
+    emitters share one call signature."""
     if not move_history:
         return (0, 0.0)
     p1, p2 = _split_players(move_history)
@@ -241,13 +195,9 @@ def _compute_n_components(
     cluster_threshold: int,
     winner_code: int,
 ) -> int:
-    """Return PER-PLAYER (winner) ``n_components`` for a finished game.
-
-      - decisive game: the WINNER's component count.
-      - draw: max(n_components_p1, n_components_p2) (headline-max).
-    Connectivity edge iff axial_distance <= ``cluster_threshold`` (engine
-    get_clusters convention). ``winner_code``: 0=draw, 1=P1, 2=P2.
-    """
+    """Return PER-PLAYER (winner) ``n_components`` for a finished game: the WINNER's component
+    count on a decisive game, and the max of the two on a draw. Connectivity edge iff
+    `axial_distance <= cluster_threshold`, the engine's `get_clusters` convention."""
     if not move_history:
         return 0
     p1, p2 = _split_players(move_history)
@@ -262,21 +212,16 @@ def _compute_n_components(
 
 
 class PoolInstrumentation:
-    """Per-game telemetry state for WorkerPool.
-
-    All mutable state is guarded by the pool's lock, which is passed in as a
-    parameter rather than owned here.  This keeps lock-acquisition semantics
-    unchanged from the original inline code.
-    """
+    """Per-game telemetry state for WorkerPool. All mutable state is guarded by the pool's lock,
+    which is passed in as a parameter rather than owned here, so lock-acquisition semantics are
+    unchanged from the original inline code."""
 
     def __init__(self, log_investigation_metrics: bool, cluster_threshold: int) -> None:
         """
         Args:
-            log_investigation_metrics: whether the B3a structural metrics are computed.
-            cluster_threshold: the connectivity edge bound for `n_components`, resolved from
-                the run's encoding (`spec.cluster_threshold`, or the engine's
-                `DEFAULT_CLUSTER_THRESHOLD` where the spec sets none). AUDIT-1 F-42 — this
-                was a literal 5 in this module while `v6w25` runs at 8.
+            log_investigation_metrics: whether the structural metrics are computed.
+            cluster_threshold: the connectivity edge bound for `n_components`, resolved from the
+                run's encoding. This was a literal 5 in this module while `v6w25` runs at 8.
         """
         self._log_investigation_metrics = log_investigation_metrics
         self._cluster_threshold = int(cluster_threshold)
@@ -306,20 +251,13 @@ class PoolInstrumentation:
                int | None, float | None, int | None]:
         """Update all telemetry state for one completed game.
 
-        Returns ``(colony_ext_count, colony_ext_total, colony_ext_frac,
-        stride5_p90, longest_line, longest_line_fraction, n_components)``.
-        Colony + B3a structural stats are all ``None`` when
-        ``log_investigation_metrics`` is False or ``move_history`` is empty —
-        AUDIT-1 F-28/C04: they were six zeros, and "no colony extension was
-        measured" and "the winner extended no stones" are different facts that
-        both landed as ``0`` in the ONE channel.  ``stride5_p90`` is the rolling P90 including
-        this game.
+        The colony and structural stats are all ``None`` when ``log_investigation_metrics`` is False
+        or ``move_history`` is empty: they were six zeros, and "no colony extension was measured"
+        and "the winner extended no stones" are different facts that both landed as ``0``.
 
-        The connectivity edge bound for ``n_components`` is this instance's
-        ``cluster_threshold``, resolved from the RESOLVED ENCODING at construction (AUDIT-1
-        F-42). It was a per-call default of 5 — the engine's fallback — which made every
-        n_components reading on a ``v6w25`` corpus (threshold 8) incomparable with the engine
-        it claims to mirror, with no call site passing anything else.
+        The connectivity edge bound is this instance's ``cluster_threshold``, resolved from the
+        RESOLVED ENCODING at construction; it was a per-call default of 5, which made every reading
+        on a threshold-8 corpus incomparable with the engine it claims to mirror.
         """
         if move_history:
             with lock:
@@ -352,8 +290,7 @@ class PoolInstrumentation:
                 move_history, self._cluster_threshold, winner_code,
             )
         else:
-            # NOT MEASURED, not measured-as-zero (AUDIT-1 F-28/C04). The lever is off, or
-            # the game recorded no moves; either way nothing computed these.
+            # NOT MEASURED, not measured-as-zero: the lever is off, or the game recorded no moves.
             ext_count = ext_total = ext_frac = None
             longest_line = longest_line_frac = n_components = None
 
@@ -363,12 +300,9 @@ class PoolInstrumentation:
         )
 
     def current_stride5_p90(self, lock: threading.Lock) -> int:
-        """Rolling P90 of stride5_run over the last ≤50 completed games.
-
-        Same window + percentile rule as ``on_game_complete``, exposed as a
-        read-only getter so the training step coordinator can gate on it
-        (stride-5 spam hard-abort). Returns 0 when no games yet.
-        """
+        """Rolling P90 of stride5_run over the last completed games, on the same window and
+        percentile rule as ``on_game_complete``, exposed as a read-only getter. Returns 0 when no
+        games yet."""
         with lock:
             if not self._stride5_run_history:
                 return 0
@@ -376,28 +310,17 @@ class PoolInstrumentation:
         return sr[max(0, int(len(sr) * 0.9) - 1)]
 
     def pooled_draw_counts(self, lock: threading.Lock) -> tuple[int, int]:
-        """Class-1: `(Sum(draws), Sum(completed))` over the UNION of the per-worker rolling
-        windows — the raw counts R92's pooled statistic is computed from.
+        """Class-1: `(Sum(draws), Sum(completed))` over the UNION of the per-worker rolling windows.
 
-        WPMINT Phase DS (R92) replaced `per_worker_draw_rates(lock, *, min_samples)` with
-        this. Two things changed and both matter:
+        The retired method returned per-worker rates past a config-authored inclusion bar and the
+        coordinator took an UNWEIGHTED MEAN over that filtered set — neither a pool rate nor a
+        worker rate — measured firing at a true pool draw rate of 0.0319 and staying SILENT at
+        0.968. `Sum/Sum` over the union is count-weighted and has no inclusion bar.
 
-        * **The statistic.** The retired method returned per-worker rates for workers past a
-          config-authored inclusion bar, and the coordinator took an UNWEIGHTED MEAN over
-          that filtered set — neither a pool rate nor a worker rate. Phase DR measured it
-          firing at a true pool draw rate of 0.0319 (one saturated worker carrying the mean
-          while 31 healthy ones were excluded) and staying SILENT at 0.968 (31 collapsing
-          workers excluded into invisibility) — RECHECK_D finding DR-3. `Sum/Sum` over the
-          union is count-weighted and has no inclusion bar to exclude anyone with.
-        * **The bar left this layer.** There is no `min_samples`/`N_pool_min` parameter here
-          by design. Under R92 the bar is an EVIDENCE-SUFFICIENCY rule on the abort
-          DECISION (`train.coordinator.config.pooled_draw_rate`), not an inclusion rule for
-          computing the metric, so telemetry has no business knowing it. A parameter here
-          would put the config authority back inside `mantis.selfplay` (R1).
-
-        `Sum(completed)` is bounded above by `_DRAW_RATE_WINDOW * n_workers` — each deque's
-        own `maxlen` — which is the ceiling `schema/core.py`'s
-        `_draw_rate_evidence_bar_within_configured_capacity` bounds `N_pool_min` against.
+        There is no `min_samples`/`N_pool_min` parameter here by design: the bar is an
+        evidence-sufficiency rule on the abort DECISION, and one here would put the config authority
+        back inside `mantis.selfplay`. `Sum(completed)` is bounded above by
+        `_DRAW_RATE_WINDOW * n_workers`, each deque's own `maxlen`.
         """
         with lock:
             draws = sum(sum(dq) for dq in self._per_worker_draws.values())
@@ -438,11 +361,9 @@ class PoolInstrumentation:
                 rho_val, p_val = spearmanr(ranges, is_draw)
                 rho = float(rho_val) if rho_val == rho_val else None
                 _ = p_val
-            # DV-10 — scipy is an UNDECLARED optional dependency: the frozen original
-            # degrades this ONE derived field to None rather than failing a whole
-            # telemetry read. Absent scipy raises ImportError; a degenerate input raises
-            # inside spearmanr. Both degrade to None, and NO other statement lives inside
-            # the try, so nothing else can be swallowed here.
+            # scipy is an UNDECLARED optional dependency, so this ONE derived field degrades to None
+            # rather than failing a whole telemetry read. Absent scipy raises ImportError and a
+            # degenerate input raises inside spearmanr; NO other statement lives inside the try.
             except Exception:  # noqa: BLE001
                 rho = None
         return {

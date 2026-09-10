@@ -1,20 +1,11 @@
-"""⊕ WP11-A — the main-thread eval-result routing seam (`StepCoordinator.step()` polling).
+"""The main-thread eval-result routing seam: `StepCoordinator.step()`'s eval poll.
 
-RED-at-import until IMPL writes `mantis.eval.pipeline` (the concrete `EvalPipelineLike`).
-ORACLE-FIRST (⊕): the top-level `import mantis.eval.pipeline` raises ModuleNotFoundError
-before any port code exists. `StepCoordinator`/`drain.py` ALREADY EXIST at HEAD (WP13-A) —
-`step()` does not yet call a `_poll_eval_results()` at its top (that call lands with IMPL,
-design §a.4); this suite pins the behavior the addition must produce.
+A non-blocking `poll_completed()` at the TOP of every `step()` iteration, routed through
+`drain._route_eval_result` into `on_eval_round_complete`, all on the MAIN thread — `step()`
+never blocks on eval and never consumes the kick ACK for WR.
 
-Twin of the WP13-A `_pending_eval_result` drain (old `step_coordinator.py` L1120-1125): a
-non-blocking `poll_completed()` at the TOP of every `step()` iteration, routed through
-`drain._route_eval_result` -> `on_eval_round_complete`, all on the MAIN thread — `step()`
-never blocks on eval (WP13-A P-06 twin) and never consumes the kick ACK for WR.
-
->300 justify: one seam (`step()`'s eval-poll integration) exercised against the real
-`StepCoordinator` + `drain.py` with one shared fake-pool/fake-trainer/fake-pipeline harness,
-mirroring `tests/train/test_coordinator_gates.py`'s harness shape so the two suites read as
-one family; splitting the harness from its seven call sites would duplicate it for no gain.
+>300 justify: one seam driven against the real `StepCoordinator` and `drain.py` through one
+shared fake-pool/fake-trainer/fake-pipeline harness its seven call sites would duplicate.
 """
 from __future__ import annotations
 
@@ -40,8 +31,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through, built per file."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -51,10 +41,7 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: What a `StepCoordinator` reads on the graph route; the caps are the NON-BINDING template pair.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -63,34 +50,27 @@ _GRAPH_FULL_CONFIG: dict = {
 }
 
 
-#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11) — read
-#: from a MINTED config, never restated here.
+#: The four drain caps are `monitor.drain.*`, read from a MINTED config and never restated.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
-#: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
-#: config — the 19 coordinator knobs are `train.*` keys now, not builder literals.
+#: From the same minted config: the coordinator knobs are `train.*` keys, not builder literals.
 _KNOBS = resolve_coordinator_knobs(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
-#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
-#: two equal), so these drives keep exactly the cadence they had before R242's split.
+#: `monitor.gate_interval` from the same minted config; a drive that sets `log_interval` MIRRORS
+#: it onto `gate_interval`.
 _GATE_INTERVAL = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
 
 
 def _mirrored(settings: dict) -> dict:
-    """R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names it.
-
-    That mirroring is the SHIPPED posture, not a convenience — every committed config mints
-    `monitor.gate_interval` equal to its own `train.log_interval` — so a drive here that moves
-    only `log_interval` keeps exactly the cadence it had before R242 split the two knobs.
+    """The GATE cadence mirrors the NARRATION cadence unless a drive names it — the SHIPPED
+    posture, since every committed config mints `monitor.gate_interval` equal to
+    `train.log_interval`.
     """
     settings.setdefault("gate_interval", settings["log_interval"])
     return settings
 
 
-# ── fakes (mirrors tests/train/test_coordinator_gates.py's harness shape) ────────────────
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -106,13 +86,13 @@ class FakePool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
         self.recent_move_histories: list = []
-        # E17 (WP-UNFREEZE): sync-call spy surface — the routing suites assert a gate
-        # decision reaches the pool with ZERO sync-shaped calls.
+        # sync-call spy surface: the routing suites assert a gate decision reaches the pool
+        # with ZERO sync-shaped calls.
         self.sync_calls: list = []
         self.checkpoint_step_calls: list[int] = []
 
@@ -141,8 +121,7 @@ class FakeTrainer:
         self.model = object()
         self.device = "cpu"
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
+    # The double conforms to the DECLARED seam: typed entry points plus `device`.
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -170,8 +149,7 @@ class FakeBuffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # DELEGATED to a real `HexgBuffer`: the dispatcher collates the wire for real, so a
         # hand-built payload would be a second wire format for the collate to disagree with.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
@@ -189,9 +167,7 @@ class SpySink:
 
 
 class ThreadIdentSpyEvalPipeline:
-    """An eval pipeline whose `poll_completed()` records the thread it was called from
-    (main-thread proof) and whose `run_evaluation`/`drain_pending`/`apply_gate_decision`
-    are call-count spies (the never-blocks assertion)."""
+    """An eval pipeline that records `poll_completed()`'s calling thread; the rest are spies."""
 
     def __init__(self, *, poll_result=None, ack: dict | None = None) -> None:
         self._poll_result = poll_result
@@ -216,16 +192,14 @@ class ThreadIdentSpyEvalPipeline:
         return None
 
     def apply_gate_decision(self, result) -> int | None:
-        # Single-signature applier (WP-UNFREEZE, R49): a drain that still threads a
-        # sync flag fails here with a TypeError, loudly.
+        # Single-signature applier: a drain that still threads a sync flag fails here loudly.
         self.apply_gate_calls.append({"result": dict(result)})
         return result.get("promoted_step") if result.get("promoted") else None
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
-    """DERIVED from the production builder (WPMINT Phase K-A stage 0) — this file's deltas
-    only. `None` is the EXPLICIT disarmed draw-rate posture; the builder gives it no
-    default and neither does this factory."""
+    """DERIVED from the production builder, this file's deltas only; `None` is the EXPLICIT
+    disarmed draw-rate posture, defaulted by neither the builder nor this factory."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
@@ -254,8 +228,7 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
 
 
 def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
-    """`step()` must poll the injected eval pipeline and route ANY completed round through
-    `on_eval_round_complete`, on the MAIN thread that called `step()`."""
+    """`step()` polls the pipeline and routes a completed round on the MAIN thread."""
     pipe = ThreadIdentSpyEvalPipeline(poll_result={"step": 5, "wr_sealbot": 0.6,
                                                     "promoted": False, "eval_broken_reason": None})
     h = _make_coordinator(eval_pipeline=pipe)
@@ -276,8 +249,7 @@ def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
 
 
 def test_step_never_blocks_on_eval() -> None:
-    """Blocking-call spy: `step()` must make ZERO calls to `drain_pending()` (the WP13-A P-06
-    twin — a blocking drain inside step() is the run3 wedge class)."""
+    """`step()` makes ZERO `drain_pending()` calls: a blocking drain in step() is the wedge."""
     pipe = ThreadIdentSpyEvalPipeline(poll_result=None)
     h = _make_coordinator(eval_pipeline=pipe)
     h.pool.games_completed = 5
@@ -288,8 +260,7 @@ def test_step_never_blocks_on_eval() -> None:
 
 
 def test_kick_ack_busy_sets_eval_skipped_busy_outcome() -> None:
-    """A busy kick ack (`{"kicked": False, "reason": "busy", ...}`) must surface as
-    `eval_skipped_busy` on the returned `StepOutcome` — never silently dropped."""
+    """A busy kick ack must surface as `eval_skipped_busy`, never be silently dropped."""
     pipe = ThreadIdentSpyEvalPipeline(
         ack={"kicked": False, "reason": "busy", "round_id": "r-inflight", "step": 5},
     )
@@ -308,11 +279,7 @@ def test_kick_ack_busy_sets_eval_skipped_busy_outcome() -> None:
 
 
 def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> None:
-    """E7 rewrite (WP-UNFREEZE, R49): a completed round with `promoted=True` routed
-    mid-run (via `poll_completed()`) reaches the ONE single-signature applier — there is
-    no sync flag left to thread (the spy applier rejects one with a TypeError) — and the
-    pool records ZERO sync-shaped calls in the window. The deploy-tag (anchor) write on
-    the REAL applier is pinned in tests/train/test_actor_deploy_independence.py."""
+    """A promoted round routed mid-run reaches the ONE applier with ZERO pool sync calls."""
     result = {"step": 7, "promoted": True, "promoted_step": 7, "wr_sealbot": 0.9,
               "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline(poll_result=result)
@@ -332,10 +299,7 @@ def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> N
 
 
 def test_terminal_route_applies_identically_to_midrun() -> None:
-    """E8 rewrite (WP-UNFREEZE, R49): the terminal route (`drain.run_terminal_eval` ->
-    `_route_eval_result`) calls the SAME single-signature applier as the mid-run route —
-    the mid-run/terminal asymmetry is gone because a gate decision is pool-independent on
-    every route: it applies with the pool stopped and untouched."""
+    """The terminal route calls the SAME applier as the mid-run route, pool stopped."""
     result = {"step": 9, "promoted": True, "promoted_step": 9, "wr_sealbot": 0.9,
               "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline()
@@ -355,21 +319,13 @@ def test_terminal_route_applies_identically_to_midrun() -> None:
 
 
 def test_flush_before_pool_stop_before_terminal_order() -> None:
-    """close_out ordering (disarm-first, O-27 untouched): disarm -> flush_pending_eval ->
-    on_drained -> run_terminal_eval. E34 (WP-UNFREEZE) re-justification: the order
-    survives for drain-BOUNDING reasons alone — the flush joins the in-flight round under
-    its budget before the pool goes down and the terminal eval runs on an unloaded GPU.
-    Gate decisions themselves are now pool-independent on EVERY route (R49): both the
-    flush and the terminal route call the one single-signature applier, so the ordering
-    is no longer what makes a promotion's sync safe — nothing about a promotion syncs."""
+    """close_out ordering: disarm -> flush_pending_eval -> on_drained -> run_terminal_eval, so
+    the flush joins the in-flight round under its budget before the pool goes down."""
     order: list[str] = []
     watchdog = SimpleNamespace(disarm_staleness=lambda: order.append("disarm"))
     pipe = SimpleNamespace(
         drain_pending=lambda: (order.append("flush_pending_eval"), None)[1],
-        # WP12-R Phase O: the terminal call answers a ROUND RESULT whose
-        # `eval_broken_reason` the seam now reads (it used to be discarded), and the
-        # coordinator carries the set-once latch that reads it. The ordering subject
-        # of this test is unchanged.
+        # The terminal call answers a ROUND RESULT whose `eval_broken_reason` the seam reads.
         run_evaluation=lambda *a, **k: (order.append("run_terminal_eval"),
                                         {"eval_broken_reason": None})[1],
     )
@@ -389,14 +345,9 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
 
 
 def test_an_absent_terminal_eval_enabled_raises_instead_of_inheriting_true() -> None:
-    """WPMINT Phase K-A: `run_terminal_eval` reads `cfg.terminal_eval_enabled` as a plain
-    attribute. It used to read `getattr(cfg, "terminal_eval_enabled", True)` — a SECOND
-    default authority beside the dataclass field's own `= True`, and the one that would
-    survive making the field required: a call site that omitted the field would silently
-    inherit "run the terminal eval" from the read site, with every `dataclasses.fields()`
-    assertion still green. The fallback is gone, so an absent field is an AttributeError
-    NAMING the field. This is the producer test for that removal (R4/LAW-07): with the
-    `getattr` restored, this node is the only thing in the suite that reds."""
+    """`run_terminal_eval` reads `cfg.terminal_eval_enabled` as a plain attribute: a `getattr`
+    fallback was a SECOND default authority, and a call site omitting the field would silently
+    inherit "run the terminal eval" with every field census still green."""
     coord = SimpleNamespace(
         eval_pipeline=SimpleNamespace(run_evaluation=lambda *a, **k: None),
         config=SimpleNamespace(),  # no terminal_eval_enabled — the shape a required field makes

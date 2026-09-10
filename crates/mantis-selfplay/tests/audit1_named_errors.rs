@@ -21,7 +21,7 @@ use mantis_search::{MAX_ARMED_SIMS, MAX_CHILDREN_PER_NODE, MAX_NODES};
 use mantis_selfplay::replay::hexg::{HexgBuffer, HEXG_CAPACITY_CEILING};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-// ── F-21: the pool bound is derived, and checked at boot ──────────────────────────────
+// F-21: the pool bound is derived, and checked at boot
 
 #[test]
 fn max_armed_sims_is_derived_from_the_pools_own_two_constants() {
@@ -112,7 +112,7 @@ fn a_zero_or_negative_dirichlet_alpha_is_refused_when_the_noise_is_armed() {
     );
 }
 
-// ── F-38: the buffer constructor ──────────────────────────────────────────────────────
+// F-38: the buffer constructor
 
 #[test]
 fn an_unknown_encoding_is_an_ERR_naming_the_registered_set() {

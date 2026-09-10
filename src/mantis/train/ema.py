@@ -1,15 +1,12 @@
-"""Exponential moving average of model weights (WP10 §a.4 PORT; old training/ema.py).
+"""Exponential moving average of model weights.
 
-The EMA model is updated every ``update_every`` optimizer steps via a decayed running
-mean of the trainer's raw parameters. Self-play inference / eval / best-model promotion
-read EMA weights when EMA is enabled; the trainer's raw weights keep driving the next
-gradient step. Anti-colony lever (kept — context-law run-safety smoothing, not a
-falsified lever). Behaviour-exact; the only change is the docstring path references.
+The EMA model is updated every ``update_every`` optimizer steps from a decayed running mean of
+the trainer's raw parameters. Self-play inference, eval and promotion read the EMA weights when
+it is enabled; the raw weights keep driving the next gradient step.
 
-Hand-rolled state_dict-level EMA (not `torch.optim.swa_utils.AveragedModel`, which
-deep-copies the model on construction — the net carries a PyO3 spec that has no
-deep-copy protocol). A flat ``name -> tensor`` shadow keyed off ``state_dict()`` rides
-all parameters + buffers (`use_buffers=True` semantics), updated in place.
+The EMA is hand-rolled at state_dict level rather than `torch.optim.swa_utils.AveragedModel`,
+which deep-copies the model on construction — the net carries a PyO3 spec with no deep-copy
+protocol. A flat ``name -> tensor`` shadow rides all parameters and buffers, updated in place.
 """
 from __future__ import annotations
 
@@ -21,17 +18,16 @@ import torch
 DEFAULT_DECAY = 0.999
 DEFAULT_UPDATE_EVERY = 10
 
-#: The members `train.ema` must carry. Read by key; absent is an error (R1).
+#: The members `train.ema` must carry. Read by key; absent is an error.
 _EMA_MEMBERS: tuple[str, ...] = ("enabled", "decay", "update_every")
 
 
 class MissingEmaConfigError(ValueError):
-    """`train.ema` is absent or incomplete (AUDIT-1 F-06 / R332(d))."""
+    """`train.ema` is absent or incomplete."""
 
 
 def _base_of(model: torch.nn.Module) -> torch.nn.Module:
-    """Unwrap a `torch.compile` OptimizedModule (`_orig_mod`) if present so the EMA
-    shadow is keyed off the raw module's names."""
+    """Unwrap a `torch.compile` OptimizedModule so the shadow keys off the raw module's names."""
     return getattr(model, "_orig_mod", model)
 
 
@@ -59,7 +55,7 @@ class EmaModel:
             for name, cur in base.state_dict().items():
                 shadow = self._shadow.get(name)
                 if shadow is None:
-                    self._shadow[name] = cur.detach().clone()  # arch change mid-run — re-seed
+                    self._shadow[name] = cur.detach().clone()  # Arch change mid-run: re-seed.
                     continue
                 if cur.dtype.is_floating_point:
                     shadow.mul_(self.decay).add_(cur.detach(), alpha=1.0 - self.decay)
@@ -67,14 +63,12 @@ class EmaModel:
                     shadow.copy_(cur.detach())
 
     def state_dict(self) -> dict[str, torch.Tensor]:
-        """Shallow-copied view of the shadow state (tensors are the EMA's own storage
-        — callers that mutate must clone first)."""
+        """Return a shallow-copied view of the shadow; the tensors are the EMA's own storage."""
         return dict(self._shadow)
 
     @property
     def module(self) -> _EmaModuleView:
-        """A module-like proxy over the shadow (for `state_dict`/`parameters` call
-        sites); NOT a real `nn.Module` — it has no `forward`."""
+        """Return a module-like proxy over the shadow; it is not an `nn.Module` and has no forward."""
         return _EmaModuleView(self)
 
 
@@ -99,16 +93,11 @@ def build_ema_model(model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> Ema
 
 
 def resolve_ema_config(config: Mapping[str, Any]) -> tuple[bool, float, int]:
-    """Read the EMA lever's arming block from `train.ema`. Returns
-    `(enabled, decay, update_every)`.
+    """Read the EMA lever's arming block from `train.ema`.
 
-    AUDIT-1 F-06 / R332(d). THIS FUNCTION USED TO READ FOUR KEYS THAT DO NOT EXIST:
-    `config.get("ema")`, `("ema_enabled", False)`, `("ema_decay", 0.999)` and
-    `("ema_update_every", 10)`, against a `RunConfig` that is `extra="forbid"` and had no `ema`
-    leaf anywhere. So the lever this module's docstring calls an "anti-colony lever (kept)" was
-    OFF on every run, no config could turn it on, and nothing said so — a disabled lever and an
-    absent one produce identical runs. `train.ema` is now a REQUIRED schema block and this
-    reads it BY KEY: absent is an error, never a default (R1/LAW-08).
+    Returns `(enabled, decay, update_every)`, read BY KEY off a required schema block: absent is
+    an error, never a default. Reading it with defaulted `.get`s once left the lever off on
+    every run with no config able to turn it on and nothing saying so.
 
     Raises:
         MissingEmaConfigError: the config carries no `train.ema` block, or it is not a mapping,

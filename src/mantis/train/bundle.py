@@ -1,30 +1,13 @@
-# >300 justify (R8): one subject — what makes a set of files a resume point — and its parts
-# are inseparable. `atomic_write` is the durability primitive every member is published
-# through, the manifest is the commit record over those members, `verify_bundle` is the read
-# side of the hashes `publish_bundle` writes, and `prune_bundles` is retention expressed in
-# terms of completeness rather than filenames. Splitting them would put the hash that is
-# written in one file and the hash that is checked in another, which is the shape LAW-07 calls
-# a phantom gate; and retention that did not read completeness would keep carcasses.
-"""The resume BUNDLE — checkpoint + ring + sidecar, published by a manifest last (R345(b)(3)).
+# >300 justify (R8): one subject — what makes a set of files a resume point — whose parts are
+# inseparable. Splitting them would put the hash that is written in one file and the hash that is
+# checked in another, the shape LAW-07 calls a phantom gate.
+"""The resume BUNDLE — checkpoint + ring + sidecar, published by a manifest last.
 
-WHY A BUNDLE AND NOT THREE SAVES. A resume needs three artefacts to agree: the weights and
-optimizer state, the replay ring they were trained against, and the per-stop facts the
-envelope cannot carry (`train/resume_state.py`). Written independently they can disagree in
-every combination a crash can produce — a checkpoint from step N beside a ring from step N-1,
-a sidecar naming a checkpoint that was never finished. The manifest makes the set atomic at
-the only level that matters: it is written LAST, so a bundle either has one (and its members
-are all present and hash as recorded) or it is not a bundle and no resume will take it.
-
-WHY THE MEMBERS ARE PER-STEP RATHER THAN CANONICAL NAMES. The ring used to live at one
-`replay_buffer.bin` that every save overwrote, so "keep the previous bundle" was impossible
-even in principle — the previous ring was gone the moment the next save started. Naming each
-member for its checkpoint is what makes retention a choice.
-
-DURABILITY IS `fsync`-ORDERED, NOT RENAME-ORDERED. `os.replace` is atomic with respect to
-readers, but a rename made durable before the data it points at leaves a crash window where
-the name resolves to unwritten blocks. Every member is fsynced BEFORE its rename, and the
-containing directory is fsynced after, so the manifest cannot become visible ahead of the
-bytes it certifies.
+The manifest is written LAST, so a bundle either has one, with all members present and hashing as
+recorded, or it is not a bundle and no resume will take it. Members are named per-step, because a
+single overwritten ring path makes keeping the previous bundle impossible in principle, and
+durability is `fsync`-ORDERED: a rename made durable before its data leaves a window where the
+name resolves to unwritten blocks.
 """
 from __future__ import annotations
 
@@ -40,12 +23,11 @@ from typing import Any, BinaryIO
 _LOG = logging.getLogger(__name__)
 
 #: Bumped when a field's MEANING changes, never when one is added — `from_dict` reads every
-#: field explicitly, so an older manifest missing one is refused rather than defaulted (R1).
+#: field explicitly, so an older manifest missing one is refused rather than defaulted.
 BUNDLE_VERSION = 1
 
-#: Appended to the checkpoint's own filename, so the `{run_id}_{step:08d}_{sha8}` grammar
-#: `checkpoints.checkpoint_filename` owns still parses the stem each member is derived from,
-#: and no member can be mistaken for a checkpoint by a directory scan.
+#: Appended to the checkpoint's own filename, so the checkpoint grammar still parses the stem
+#: each member derives from and no member can be mistaken for a checkpoint by a directory scan.
 BUNDLE_SUFFIX = ".bundle.json"
 RING_SUFFIX = ".ring.bin"
 
@@ -66,15 +48,9 @@ def sha256_file(path: str | Path) -> str:
 
 
 def atomic_write(path: str | Path, writer: Callable[[BinaryIO], Any]) -> Path:
-    """Publish `path` atomically: write a temp sibling, fsync it, rename, fsync the directory.
-
-    `writer` receives an open binary handle and writes the whole payload to it. If it raises,
-    the temp file is removed and `path` keeps whatever it held — which is the property a bare
-    `open(path, "wb")` cannot give and the one `File::create` on the Rust ring gave up.
-
-    The temp name is unique per writer and call (pid + random), because a shared fixed
-    `<name>.tmp` makes two concurrent writers race each other's temp file — the defect
-    `monitor/heartbeat.py:250` records having hit.
+    """Publish `path` atomically: write a temp sibling, fsync it, rename, fsync the directory. If
+    `writer` raises, the temp file is removed and `path` keeps what it held; the temp name is
+    unique per writer and call, because a shared fixed one races concurrent writers.
 
     Args:
         path: the final path to publish.
@@ -105,11 +81,8 @@ def atomic_write(path: str | Path, writer: Callable[[BinaryIO], Any]) -> Path:
 
 
 def atomic_publish_existing(path: str | Path) -> None:
-    """Make an already-written file durable: fsync the file, then its directory.
-
-    For members a foreign writer produced in place — the Rust ring, which does its own
-    temp-and-rename inside the engine. The bytes are there; this is the barrier that makes
-    them survive the crash the manifest is about to claim they survive.
+    """Make an already-written file durable: fsync the file, then its directory, for members a
+    foreign writer produced in place such as the Rust ring.
 
     Raises:
         OSError: the file could not be opened or synced.
@@ -133,9 +106,8 @@ def _fsync_dir(directory: Path) -> None:
 
 @dataclasses.dataclass(frozen=True)
 class BundleMember:
-    """One file in a bundle: its name (never a path — bundles are directory-relative), its
-    hash and its size. The size is not redundant with the hash: it makes a truncation
-    visible in the manifest itself, before anything reads a megabyte to find out."""
+    """One file in a bundle: its name (never a path), its hash and its size. The size is not
+    redundant with the hash — it makes a truncation visible in the manifest itself."""
 
     name: str
     sha256: str
@@ -179,7 +151,7 @@ class BundleManifest:
 
     @classmethod
     def from_dict(cls, payload: Any) -> BundleManifest:
-        """Rehydrate, reading every field EXPLICITLY — no `.get(key, default)` anywhere (R1).
+        """Rehydrate, reading every field EXPLICITLY — no `.get(key, default)` anywhere.
 
         Raises:
             BundleError: the payload is not an object, is a version this build does not read,
@@ -230,14 +202,8 @@ def publish_bundle(
     sidecar_path: str | Path,
 ) -> Path:
     """Write the ring and the sidecar beside an ALREADY-WRITTEN checkpoint, then the manifest.
-
-    The checkpoint is written first and by its own writer (`checkpoints.save_checkpoint`), so
-    it arrives here as a fact; the two other members are produced by the callables, and the
-    manifest — hashes and sizes for all three — is published last through `atomic_write`.
-
-    `write_ring` may be `None` for a bundle that deliberately carries no ring (a bare weights
-    save). That is recorded as `ring: null` in the manifest, which is a DIFFERENT fact from a
-    ring that failed to write: the latter raises out of `write_ring` and no manifest appears.
+    `write_ring` may be `None` for a bundle deliberately carrying no ring, recorded as
+    `ring: null` — a DIFFERENT fact from a ring that failed to write, which leaves no manifest.
 
     Args:
         checkpoint_path: the checkpoint, already published.
@@ -329,12 +295,9 @@ def verify_bundle(manifest: BundleManifest, directory: str | Path) -> None:
 
 
 def complete_bundles(directory: str | Path) -> list[BundleManifest]:
-    """Every bundle in `directory` whose manifest parses AND whose members all verify.
-
-    A manifest that does not parse, or whose members disagree with it, is NOT a bundle — it is
-    logged and skipped, because the alternative is offering a resume point that will fail on
-    read. Sorted by step, oldest first.
-    """
+    """Every bundle in `directory` whose manifest parses AND whose members all verify, sorted by
+    step, oldest first. A manifest that does not parse, or whose members disagree with it, is
+    logged and skipped — the alternative is offering a resume point that fails on read."""
     base = Path(directory)
     if not base.is_dir():
         return []
@@ -360,35 +323,13 @@ def newest_complete_bundle(directory: str | Path) -> BundleManifest | None:
 def prune_bundles(directory: str | Path, *, keep: int = 2) -> list[str]:
     """De-commit all but the `keep` newest COMPLETE bundles. Returns the names removed.
 
-    **THE CHECKPOINT IS NEVER DELETED.** Retention removes the manifest, the ring and the
-    sidecar; the `.ckpt` stays. Four grounds, and the first two are binding:
-
-    * R3 / LAW-12 make the checkpoint the ARTEFACT OF RECORD — run-id and content hash in its
-      own filename, stamped once, immutable. Retention is a disk-budget mechanism and has no
-      business deleting provenance.
-    * R345(d) requires STRENGTH-FRONTIER-1 to measure *"run6's own frozen checkpoints (steps
-      ~5k, ~12k, 25k)"*. A retention that deleted checkpoints would destroy two of those three
-      before the block ended — the ruling's own later clause, defeated by its earlier one.
-    * The budget exists for the RING (~24 MB each); a checkpoint is a fraction of that, so
-      deleting it buys almost nothing.
-    * Anchors and `strip_and_restamp` read old checkpoints; sweeping them breaks inputs a
-      later leg still needs.
-
-    A de-committed bundle stops being a RESUME POINT — its manifest is gone, so
-    `complete_bundles` no longer sees it — while remaining a readable artefact. That is the
-    distinction the two words are for.
-
-    Completeness is what is counted, and that is the point: counting manifests would let a
-    torn bundle occupy one of the two retention slots, leaving the run with one usable resume
-    point while its own retention policy reported two.
-
-    Members of an incomplete bundle are deliberately NOT swept here. Sweeping unreferenced
-    files is a different operation with a different failure mode (it can delete a bundle
-    mid-publication), and it is carded rather than smuggled into retention.
+    **THE CHECKPOINT IS NEVER DELETED**: it is the ARTEFACT OF RECORD, the disk budget is the
+    RING's, and anchors still read old checkpoints. COMPLETENESS is counted rather than manifests,
+    since a torn bundle would otherwise occupy a slot; members of an incomplete bundle are NOT
+    swept, that being a different operation with a different failure mode.
 
     Raises:
-        ValueError: `keep` is below 1 — a retention policy that keeps no resume point is not
-            a retention policy.
+        ValueError: `keep` is below 1 — a policy that keeps no resume point is not one.
     """
     if keep < 1:
         raise ValueError(f"prune_bundles: keep={keep} must be >= 1")
@@ -398,9 +339,8 @@ def prune_bundles(directory: str | Path, *, keep: int = 2) -> list[str]:
         return []
     removed: list[str] = []
     for manifest in bundles[: len(bundles) - keep]:
-        # The manifest goes FIRST: it is the commit, so removing it de-commits the bundle
-        # before any member disappears. A crash midway then leaves an incomplete bundle that
-        # `complete_bundles` already refuses, never a manifest pointing at a deleted member.
+        # The manifest goes FIRST: removing the commit de-commits the bundle before any member
+        # disappears, so a crash midway leaves an incomplete bundle `complete_bundles` refuses.
         manifest_name = None
         for path in base.glob(f"*{BUNDLE_SUFFIX}"):
             try:
@@ -422,11 +362,9 @@ def prune_bundles(directory: str | Path, *, keep: int = 2) -> list[str]:
 
 
 def step_of(path: str | Path) -> int | None:
-    """The step encoded in a `{run_id}_{step:08d}_{sha8}` stem, or `None` if it does not parse.
-
-    DERIVED from the filename grammar `checkpoints.checkpoint_filename` owns rather than
-    transcribed, so a grammar change reds here instead of silently mis-ordering bundles.
-    """
+    """Return the step encoded in a checkpoint stem, or `None` if it does not parse. DERIVED
+    from the filename grammar `checkpoints.checkpoint_filename` owns rather than transcribed, so
+    a grammar change reds here instead of silently mis-ordering bundles."""
     match = _STEP_RE.match(Path(path).stem)
     return int(match.group(1)) if match else None
 

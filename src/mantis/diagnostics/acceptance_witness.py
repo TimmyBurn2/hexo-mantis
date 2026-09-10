@@ -1,47 +1,15 @@
-"""The BC acceptance witness — R328(f)'s two halves, measured through the production seam.
+"""The BC acceptance witness, measured through the production seam.
 
-Over the 300-line soft cap (R8) and kept as ONE unit: the file is a single instrument end to end — the
-arm vocabulary, the seeded build, the engine replay, the readout arithmetic and the CLI that
-emits it — and its two repaired halves are only checkable against each other. Splitting the
-measurement away from the arm construction would put the seeded control in one file and the
-number it is the baseline for in another, which is the arrangement that let the first witness
-ship a comparison against a fresh draw.
+Over the 300-line soft cap (R8) and kept as ONE unit: the arm vocabulary, the seeded build, the
+engine replay, the readout arithmetic and the CLI are a single instrument whose two repaired
+halves are only checkable against each other.
 
-R328(f) pre-registers ONE acceptance test for a behaviour-cloned checkpoint: post-BC play
-against the random bot must clear the armed `strength_floor` decisive rate, AND the longest-run
-distribution must show contested play. The first half is a bar the repo already owns
-(`mantis.eval.floor_gate`); the second half is a description of the board, and describing the
-board is where the first witness went wrong twice.
-
-**IT LIVES HERE RATHER THAN AS A BOX SCRIPT BECAUSE ITS FIRST VERSION DID NOT.** Sitting 6's
-witness ran as an ad-hoc file on the box. It returned a passing verdict and two defects rode
-inside it, neither visible in its output:
-
-1. **The control was a DRAW, not a baseline.** The "fresh net" arm called `build_net` with
-   whatever global RNG state the process happened to hold, so the number the BC arm was
-   compared against came from an uncontrolled sample of initialisations. This is F-RESIT-10's
-   defect one path over — the same defect `mantis.diagnostics.worker_sweep` was repaired for,
-   with the same repair: seed through `mantis.util.determinism` immediately before the ONE RNG
-   consumer, from the config's own `seed`, never a literal.
-2. **Stone colour was re-derived from PLY PARITY.** The script assigned
-   `1 if (i // 2) % 2 == 0 else -1` over the move list. The engine hands the first stone to
-   player 1 and then alternates in PAIRS (LAW-03; `tests/arena/test_ply_cap_adjudication.py`
-   states the same order), so that expression is off by one stone from ply 1 onward and splits
-   most lines between the two sides. It was not a subtle wrongness: the BC arm reported twenty
-   wins — every one of which requires a six-in-a-row — with a longest run of 4.
-
-Both repairs are the same repair in the end: **do not re-derive what a live authority already
-holds.** Colour comes from replaying the record through the engine and asking
-`mantis.arena.adjudicate.longest_run`; decisive/wins/draws come from
-`mantis.eval.floor_gate.probe_measurements`; the player comes from
-`mantis.eval.worker.build_candidate_player`, so the witness searches at the same width and
-through the same decode entrance an eval round does.
-
-**WHAT THIS MODULE DOES NOT OWN.** No threshold: the floor's three terms arrive resolved from
-`eval.strength_floor`, and a config that leaves it `null` gets `floor_verdict: null` and a
-readout with no verdict rather than a witness that quietly passes itself (LAW-07/LAW-08). No
-ply cap of its own: it plays at the run's own `selfplay.max_game_moves`, the cap the eval worker plays
-at, passed explicitly at the call site so a reader sees which cap the numbers are under.
+Post-BC play against the random bot must clear the armed `strength_floor` decisive rate AND show
+contested play in the longest-run distribution. The first witness got the second half wrong
+twice: its "fresh net" control was an uncontrolled DRAW rather than a seeded baseline, and it
+re-derived stone colour from PLY PARITY when the engine gives the first stone to player 1 and
+then alternates in PAIRS — so it reported twenty wins, each requiring six in a row, with a
+longest run of 4. Both repairs are the same: do not re-derive what a live authority holds.
 """
 from __future__ import annotations
 
@@ -77,14 +45,12 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.train.checkpoints import load_checkpoint
 from mantis.util.determinism import seed_everything
 
-#: The label reserved for the seeded fresh-initialisation arm. `--arm control=CONTROL` is how
-#: an operator asks for it; every other arm value is a checkpoint path.
+#: The label reserved for the seeded fresh-initialisation arm; every other value is a path.
 CONTROL_CHECKPOINT = "CONTROL"
 
-#: The witness's own regime variant. It plays the floor probe's opponent at the floor probe's
-#: width, so its records are the one set that could plausibly be pooled with a probe's — and
-#: `aggregate_rung`'s MixedRegimeError exists precisely so two differently-purposed sets never
-#: are. A distinct variant is what keeps that impossible rather than merely unlikely.
+#: The witness's own regime variant. It plays the floor probe's opponent at the probe's width,
+#: so its records are the one set that could plausibly be pooled with a probe's — a distinct
+#: variant is what keeps `aggregate_rung`'s MixedRegimeError impossible rather than unlikely.
 WITNESS_VARIANT = "acceptance_witness"
 
 
@@ -94,12 +60,9 @@ class WitnessArmError(ValueError):
 
 @dataclass(frozen=True)
 class ArmSpec:
-    """One side of the witness: a label and the weights behind it.
-
-    `checkpoint is None` is the SEEDED CONTROL — a fresh net at the config's seed. It is a
-    fixed baseline, reproducible from the config alone, which is the whole point of the arm:
-    the BC number means nothing beside a comparison that resamples itself every run.
-    """
+    """One side of the witness: a label and the weights behind it. `checkpoint is None` is the
+    SEEDED CONTROL, a fresh net at the config's seed — a fixed baseline reproducible from the
+    config alone, since the BC number means nothing beside a comparison that resamples itself."""
 
     label: str
     checkpoint: Path | None
@@ -120,15 +83,8 @@ class ArmSpec:
 
 
 def seeded_net(arch: Any, *, seed: int) -> torch.nn.Module:
-    """Build `arch` from a KNOWN RNG state — the control arm's fixed baseline.
-
-    `seed_everything` is documented idempotent and is called here immediately before
-    `build_net`, the ONE RNG consumer on this path, exactly as
-    `mantis.diagnostics.worker_sweep._seeded_net` does and for the same measured reason: an
-    unseeded comparison arm is a fresh draw per invocation, so the quantity the other arm is
-    judged against moves on its own. R30a's one-boot-site rule is not crossed — this process
-    is not a run, it is a COMPARISON between nets, so each one must start from the same state
-    or the comparison is not one.
+    """Build `arch` from a KNOWN RNG state — the control arm's fixed baseline, since unseeded it
+    is a fresh draw per invocation.
 
     Args:
         arch: the resolved `ModelArch` to build.
@@ -142,18 +98,12 @@ def seeded_net(arch: Any, *, seed: int) -> torch.nn.Module:
 
 
 def replay_board(moves: Sequence[tuple[int, int]], *, encoding_name: str) -> Any:
-    """Rebuild a finished game's board by replaying its moves through the ENGINE.
-
-    `GameRecord` carries the move list and not the board, and the move list alone does not say
-    which stone is whose: the engine gives player 1 the first stone and then alternates in
-    PAIRS, so ply index and colour are different alternations (LAW-03). Replaying is how the
-    colour question gets answered by the authority that owns it instead of by arithmetic on
-    the index — the arithmetic is what the first witness got wrong.
+    """Rebuild a finished game's board by replaying its moves through the ENGINE, which is what
+    lets the authority that owns stone colour answer instead of arithmetic on the ply index.
 
     Args:
         moves: the record's `moves`, in play order.
-        encoding_name: the registered encoding the game was played under; it fixes the board's
-            geometry, so a board built under a different one is a different board.
+        encoding_name: the encoding the game was played under; it fixes the board geometry.
 
     Returns:
         The engine board after the last recorded move.
@@ -165,7 +115,7 @@ def replay_board(moves: Sequence[tuple[int, int]], *, encoding_name: str) -> Any
 
 
 def record_runs(record: Any, *, encoding_name: str) -> tuple[int, int]:
-    """`(candidate, opponent)` longest run for one game, both colours from the engine.
+    """Return the `(candidate, opponent)` longest run for one game, both colours from the engine.
 
     Args:
         record: an arena `GameRecord`.
@@ -202,21 +152,19 @@ def _positive_games(raw: str) -> int:
 
 
 def measure_arm(records: Sequence[Any], *, encoding_name: str, floor: Any) -> dict[str, Any]:
-    """The witness readout for one arm: the floor half and the contested-play half.
+    """Build the witness readout for one arm: the floor half and the contested-play half.
 
-    Decisive/wins/draws are `probe_measurements`' — the same arithmetic the armed floor gates
-    on, not a second definition beside it. The run distribution is reported by SEAT and by
-    OUTCOME: `loser_runs` is the half that answers "contested", because a winner's line is 6
-    by definition in a won game and says nothing about whether anyone contested it.
+    Decisive/wins/draws are `probe_measurements`', the same arithmetic the armed floor gates on.
+    The run distribution is reported by SEAT and by OUTCOME, `loser_runs` being the half that
+    answers "contested" since a winner's line is 6 by definition.
 
     Args:
         records: the arm's `GameRecord`s.
         encoding_name: the encoding the games were played under.
-        floor: the resolved `StrengthFloorSpec`, or `None` when `eval.strength_floor` is off.
+        floor: the resolved `StrengthFloorSpec`, or `None` when the floor is off.
 
     Returns:
-        A JSON-ready mapping. `floor_verdict` is `None` on the unarmed posture — an unarmed
-        witness reports numbers and NO verdict rather than a pass it did not measure.
+        A JSON-ready mapping; `floor_verdict` is `None` on the unarmed posture.
     """
     games, decisive, wins, draws = probe_measurements(records)
     runs = [record_runs(rec, encoding_name=encoding_name) for rec in records]
@@ -232,9 +180,8 @@ def measure_arm(records: Sequence[Any], *, encoding_name: str, floor: Any) -> di
     return {
         "games": games,
         "decisive_games": decisive,
-        # AUDIT-1 F-28/A08. A rate over ZERO games is not a rate of zero — and this tool's
-        # whole subject is a decisive-rate bar, so `decisive_rate 0.0` over no games reads as
-        # the strongest possible refusal evidence when nothing was played at all.
+        # A rate over ZERO games is not a rate of zero, and this tool's subject is a
+        # decisive-rate bar, so `decisive_rate 0.0` over no games reads as refusal evidence.
         "decisive_rate": (decisive / games) if games else None,
         "wins": wins,
         "draws": draws,
@@ -264,12 +211,9 @@ def play_arm(
     candidate: Any, opponent: Any, openings: Sequence[Any], *,
     regime_key: RegimeKey, encoding_name: str, max_plies: int, games: int,
 ) -> list[Any]:
-    """Play one arm's games and return at most `games` records.
-
-    No adjudicator is passed: the witness reads decisiveness off the arena's own `terminal`
-    field, and an armed ply-cap adjudicator would convert capped non-results into wins, which
-    is precisely the signal the witness exists to see.
-    """
+    """Play one arm's games and return at most `games` records. No adjudicator is passed: the
+    witness reads decisiveness off the arena's own `terminal` field, and an armed ply-cap
+    adjudicator would convert capped non-results into wins."""
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
         board_factory=lambda: Board.with_encoding_name(encoding_name),
@@ -292,22 +236,17 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
         net.load_state_dict(
             load_checkpoint(arm.checkpoint, declared_encoding=spec.name).model_state
         )
-    # GRID passes `None` for both EXPLICITLY — "this route has no fused graph forward to bound"
-    # and "this route builds no graph collector" — which is the engine's own stated contract
-    # and not a fallback: resolving either on a grid config raises by arch scope (R322(d)).
+    # GRID passes `None` for both EXPLICITLY — this route has no fused graph forward to bound
+    # and builds no graph collector — which is the engine's stated contract, not a fallback.
     graph = is_graph_representation(spec)
     return LocalInferenceEngine(
         net.to(device).eval(), device, encoding_spec=spec,
         fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
         inference_batching=resolve_inference_batching(dump) if graph else None,
         max_in_flight=cfg.selfplay.leaf_batch_size,
-        # AUDIT-1 F-31: the declared autocast dtype, from the config this witness already
-        # holds. `amp_dtype_for` resolves it (LAW-06); this site names no dtype.
-        # R339(c): 1-in-1. THIS DRIVER IS WHERE `F-816-37` FIRED — the STEP 4c acceptance
-        # witness died on it after 14 min 50 s — so it is the last place the class should be
-        # sampled at 1-in-64. The dump rides only when the caller named an output location:
-        # a diagnostic that writes megabytes into whatever directory it was launched from is
-        # the wrong default, and the CLI's `--out` is the one place a location is stated.
+        # The declared autocast dtype, resolved by `amp_dtype_for`; this site names no dtype.
+        # 1-in-1 sampling: this driver is where the class fired, and the dump rides only when the
+        # caller named an output location.
         collate_check_period=1,
         collate_dump=None if dump_dir is None else (
             str(dump_dir),
@@ -320,12 +259,9 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
 
 def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                 device: torch.device, dump_dir: Path | None = None) -> dict[str, Any]:
-    """Play every arm against the random bot and return the full readout.
-
-    The encoding is the CONFIG's (`identity.encoding`) with no override: LAW-11 makes the
-    identity a declared key, and a witness that could re-point it at the command line would be
-    able to report a strength number for a geometry the checkpoint was never trained at.
-    """
+    """Play every arm against the random bot and return the full readout. The encoding is the
+    CONFIG's with no override: a witness that could re-point it could report a strength number
+    for a geometry the checkpoint never saw."""
     cfg = load_config(config_path)
     dump = cfg.model_dump()
     spec = lookup(cfg.identity.encoding)
@@ -338,8 +274,8 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
         "seed": cfg.seed,
         "random_model_sims": sims,
         "leaf_batch_size": leaf_batch_size,
-        # AUDIT-1 F-15: the RUN's cap, from the config this witness already holds — the
-        # arena's module constant is no longer a default anyone can inherit.
+        # The RUN's cap, from the config this witness holds — the arena's module constant is no
+        # longer a default anyone can inherit.
         "max_plies": int(cfg.selfplay.max_game_moves),
         "games_per_arm": games,
         "armed_floor": None if floor is None else {
@@ -356,13 +292,12 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
             records = play_arm(
                 build_candidate_player(engine, sims, spec=spec,
                                        leaf_batch_size=leaf_batch_size,
-                                       # AUDIT-1 F-39: the deploy head's sigma terms are the
-                                       # config's, not the player's signature defaults.
+                                       # the deploy head's sigma terms are the config's, not
+                                       # the player's signature defaults.
                                        c_visit=cfg.selfplay.c_visit,
                                        c_scale=cfg.selfplay.c_scale,
                                        # The RUN'S OWN search, through the one resolver the
-                                       # self-play pool reads — the witness must play the
-                                       # game the run plays.
+                                       # self-play pool reads.
                                        search_kind=resolve_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        gumbel_seed=cfg.seed),
@@ -387,7 +322,7 @@ def main(argv: list[str] | None = None) -> int:
     """CLI entrance: `python -m mantis.diagnostics.acceptance_witness`."""
     parser = argparse.ArgumentParser(description="R328(f) BC acceptance witness")
     parser.add_argument("--config", required=True, type=Path)
-    # `--games 0` measured nothing and then printed a witness about it (F-28/A08).
+    # `--games 0` measured nothing and then printed a witness about it.
     parser.add_argument("--games", required=True, type=_positive_games)
     parser.add_argument("--device", required=True)
     parser.add_argument("--arm", action="append", required=True,

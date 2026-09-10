@@ -64,7 +64,7 @@ def driven(plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch) -> tuple[ws.Rung
     return result, sink.getvalue()
 
 
-# ══ the channel ══════════════════════════════════════════════════════════════════════════
+# the channel
 def test_a_rung_emits_its_own_markers_and_never_the_eval_child_s(driven) -> None:
     _result, log = driven
     records = ws.parse_sweep_markers(log)
@@ -100,7 +100,7 @@ def test_the_rung_end_marker_is_emitted_even_when_the_rung_ooms(
     )
 
 
-# ══ P6 — fail closed ═════════════════════════════════════════════════════════════════════
+# P6 — fail closed
 def test_a_capture_with_no_markers_raises_rather_than_reporting_nothing() -> None:
     with pytest.raises(ValueError, match="no MANTIS_WORKER_SWEEP"):
         ws.parse_sweep_markers("worker_pool_started: n_workers=2\nsome other log line\n")
@@ -123,7 +123,7 @@ def test_non_marker_lines_are_skipped_but_do_not_make_the_reader_pass_vacuously(
     assert [r["phase"] for r in ws.parse_sweep_markers(text)] == ["rung_start"]
 
 
-# ══ P9 — the census over the human screen ════════════════════════════════════════════════
+# P9 — the census over the human screen
 def _report(plan: ws.SweepPlan, result: ws.RungResult, *, counters: bool) -> dict:
     prov = {
         "tool": ws.TOOL, "produced_by": "run5@abc1234", "config_name": "run6.yaml",

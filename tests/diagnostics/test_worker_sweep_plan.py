@@ -54,7 +54,7 @@ def base() -> dict:
     return tomllib.loads(_PLAN.read_text(encoding="utf-8"))
 
 
-# ══ the shipped plan is the one the sitting runs ═════════════════════════════════════════
+# the shipped plan is the one the sitting runs
 def test_the_committed_plan_loads_and_carries_the_operator_ladder() -> None:
     """R309(f)'s bracket, verbatim in substance: (1..14], and 1 is ABSENT because it is
     REJECTED. If this row ever has to change, the change is a pre-registration change."""
@@ -66,7 +66,7 @@ def test_the_committed_plan_loads_and_carries_the_operator_ladder() -> None:
     assert plan.measured_rounds >= plan.plateau_rounds
 
 
-# ══ P4 — every key is required ═══════════════════════════════════════════════════════════
+# P4 — every key is required
 @pytest.mark.parametrize(
     ("section", "key"),
     [(s, k) for s, keys in PLAN_SHAPE.items() for k in keys],
@@ -94,7 +94,7 @@ def test_deleting_a_whole_section_is_a_valueerror(base: dict, tmp_path: Path) ->
         load_plan(_write(tmp_path, base))
 
 
-# ══ nothing is ignored ═══════════════════════════════════════════════════════════════════
+# nothing is ignored
 def test_an_unknown_key_is_refused_not_ignored(base: dict, tmp_path: Path) -> None:
     base["selection"]["knee_pct_v2"] = 90.0
     with pytest.raises(ValueError, match="knee_pct_v2"):
@@ -107,7 +107,7 @@ def test_an_unknown_section_is_refused_not_ignored(base: dict, tmp_path: Path) -
         load_plan(_write(tmp_path, base))
 
 
-# ══ P5 — the rule cannot be un-made by editing the file it is written in ═════════════════
+# P5 — the rule cannot be un-made by editing the file it is written in
 def test_a_plan_cannot_smuggle_n_workers_1_back_into_the_ladder(base: dict,
                                                                 tmp_path: Path) -> None:
     base["ladder"]["rungs"] = [1, 2, 4]
@@ -155,7 +155,7 @@ def test_a_non_positive_round_length_is_refused(base: dict, tmp_path: Path) -> N
         load_plan(_write(tmp_path, base))
 
 
-# ══ THE PINS BITE — the producer test the pins did not have ══════════════════════════════
+# THE PINS BITE — the producer test the pins did not have
 # MEASURED: `RULED_RUNGS`, `MAX_BAND_PCT` and `MIN_PLATEAU_ROUNDS` could be DELETED WHOLE and
 # 151/151 tests stayed green. The committed plan satisfies every pin, so no row ever asked one to
 # reject anything — and a pin nobody has seen reject anything is indistinguishable from no pin.

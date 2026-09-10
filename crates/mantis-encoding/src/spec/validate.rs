@@ -182,7 +182,7 @@ impl RegistrySpec {
             }
         }
 
-        // ── representation-gated invariants ──────────────────────────────────
+        // representation-gated invariants
         // The axis-graph geometry invariants are gated on Graph. The multi-window /
         // legal_move_radius / k_max / n_chain_planes checks above stay universal.
         match self.representation {

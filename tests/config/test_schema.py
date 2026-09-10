@@ -1,16 +1,11 @@
-"""Schema contract tests (run-config-schema v1): unknown/missing keys hard-fail,
-representation is the closed set {grid, graph}, and O16 schema round-trip + every-config-
-validates + no-code-side-defaults + strictness across the full model tree.
+"""Schema contract tests: unknown/missing keys hard-fail, representation is the closed set
+{grid, graph}, and the census covers round-trip, every-config-validates, no code-side defaults
+and strictness across the full model tree.
 
->300 justify (R8): the O16 census and the payload builders are ONE unit and cannot be split.
-The builders below are the only schema-complete payload in this file, and every rejection test
-(`test_missing_*`, `test_nested_unknown_key_rejected`) mutates one of them by a single key --
-so a reviewer judging whether a rejection test still probes what it claims has to read the
-builder on the same screen. The census at the foot then closes the loop from the other side:
-the rejection tests prove hand-picked keys are enforced, the census proves the SAME property
-holds for every field of every model the walk reaches, and its mutation self-test is written
-against the same imports. Splitting them lets a builder drift out from under the rejection
-tests, or a census exemption appear with its counter-example in another file.
+>300 justify (R8): the census and the payload builders are ONE unit. Every rejection test mutates
+a builder by a single key, so a reviewer judging whether one still probes what it claims must read
+the builder on the same screen; the census then proves the SAME property for every field of every
+model the walk reaches. Split, a builder drifts out from under the rejection tests.
 """
 from pathlib import Path
 
@@ -39,10 +34,9 @@ from mantis.train.warmstart import WARM_START_ROW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# WP11-A schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
-# This mirrors tests/eval/test_ladder_config_schema.py's fixture verbatim (kept in one
-# place there; duplicated here only because this file predates the extension and must
-# still construct a schema-complete payload for its own, unrelated assertions).
+# eval.gate/eval.ladder are required fields; this mirrors the ladder-schema fixture verbatim,
+# duplicated here only because this file predates the extension and must still construct a
+# schema-complete payload for its own, unrelated assertions.
 _LADDER_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
@@ -71,10 +65,9 @@ def _valid_eval_block() -> dict:
     }
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to the
-#: census it replaces, so the swap is zero-behavior-change.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven files
+#: carried a hand-written copy, so a new `train.*` key cost eleven edits. The resolved block was
+#: measured byte-identical to the census it replaces.
 _MINTED_TRAIN: dict = load_config(REPO_ROOT / "configs" / "dev_example.yaml").train.model_dump()
 
 
@@ -101,10 +94,8 @@ def _valid_selfplay_block() -> dict:
 def _valid_inference_block() -> dict:
     return {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # `inference.fused_graph_caps` is a REQUIRED block, and the pair here is the template's
+        # NON-BINDING-BY-CONSTRUCTION value, so nothing in this file exercises a split.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
 
@@ -141,9 +132,8 @@ def _valid_payload() -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf whose `null` is the placeholder: refused at boot on a cuda
+        # process, and valued only by the re-calibration sitting.
         "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
@@ -220,7 +210,6 @@ def test_representation_closed_set_rejects_dense():
         RunConfig.model_validate(payload)
 
 
-# ── F1 — representation↔encoding consistency is a RUNTIME guard (not test-only) ──
 def test_f1_graph_encoding_declared_grid_rejected_at_validate():
     # gnn_axis_v1 is a GRAPH encoding; declaring representation=grid must RAISE (LAW-06 pin guard).
     payload = _valid_payload()
@@ -236,11 +225,9 @@ def test_f1_unknown_encoding_rejected_at_validate():
         RunConfig.model_validate(payload)
 
 
-# ── O16 — schema round-trip + every-config-validates + no code-side defaults ──
 def test_o16_every_committed_config_validates():
-    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
-    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
-    # which gate 7 and gate 12 both now make legal.
+    # The ONE discovery authority, not a sixth flat glob: a flat `*.yaml` census is blind to
+    # `configs/prod/run6.yaml`, which both gates now make legal.
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found (gate 7 must never be vacuous)"
     for cfg_path in configs:
@@ -253,31 +240,17 @@ def test_o16_schema_round_trip():
     assert again == cfg
 
 
-# ── O16 census — DERIVED from RunConfig.model_fields, never enumerated ──
-#
-# The predecessor walked a HAND-WRITTEN tuple: RunConfig, IdentityConfig, EvalConfig,
-# SelfplayConfig, TrainConfig, MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig. Every
-# other block in the schema — `GateConfig`, `LadderConfig`, `LadderRung`, `MctsConfig`,
-# `PlayoutCapConfig`, `InferenceConfig`, `DrawRateAbortConfig`, `ReplayCapacityStage`,
-# `MicrobatchCapsConfig` — was added AFTER that tuple was written and never joined it, because
-# nothing made adding a model to the schema also add it here. An enumerated census is a census
-# of what someone remembered; R1's "NO code-side defaults" is a claim about the schema itself.
+# The census is DERIVED from `RunConfig.model_fields`, never enumerated. The predecessor walked a
+# HAND-WRITTEN tuple, and every schema block added after that tuple was written never joined it,
+# because nothing made adding a model to the schema also add it here.
 
 
-#: THE PREDICATE IS THE AUTHORITY'S (AUDIT-1 F-44). This file used to carry a fourth copy of
-#: `_nested_block` plus an `_element_block` twin, and argued the copy was self-defending because
-#: a divergent walker would discover a different model set. `mantis.config.schema.nested_block`
-#: is now the one predicate, in `src/` where a test may import it — R5/LAW-17 bars importing
-#: from a test module, which is what made the copy look necessary.
-#:
-#: WHERE THE CENSUS PARTS COMPANY WITH THE LEAF-PATH WALK, and why the divergence is required:
-#: NIT-3 keeps `list[SubModel]` as ONE leaf because a list element has no single key-path — a
-#: statement about KEY PATHS. It says nothing about the element MODEL, which is still a schema
-#: block whose fields must be required and whose unknown keys must be refused. `eval.ladder.rungs`
-#: (`LadderRung`) and `train.replay_capacity_schedule` (`ReplayCapacityStage`) are reachable ONLY
-#: through the container arm — measured: without it the census misses both, and both ship in every
-#: minted config. So the census asks the SAME predicate its second question
-#: (`descend_containers=True`) instead of holding a second implementation of it.
+#: THE PREDICATE IS THE AUTHORITY'S: `mantis.config.schema.nested_block` is the one predicate,
+#: in `src/` where a test may import it, replacing a fourth local copy. The census parts company
+#: with the leaf-path walk deliberately — keeping `list[SubModel]` as ONE leaf is a statement
+#: about KEY PATHS, and `eval.ladder.rungs` and `train.replay_capacity_schedule` are reachable
+#: ONLY through the container arm, so the census asks the SAME predicate its second question.
+#: the census asks the SAME predicate its second question instead of holding a second walker.
 
 
 def _schema_census(root: type[BaseModel]) -> dict[type[BaseModel], str]:
@@ -300,10 +273,9 @@ def _schema_census(root: type[BaseModel]) -> dict[type[BaseModel], str]:
 
 
 SCHEMA_CENSUS = _schema_census(RunConfig)
-#: Non-vacuity floor, measured at adoption. A derived census that quietly discovers ZERO models
-#: is the vacuous-pass class gate 15 was hardened against in 35f0bfe: it reports green having
-#: asserted nothing. This is a FLOOR and may only ratchet up; the exact-set claim is
-#: `test_o16_census_reaches_every_schema_block`, which is derived on both sides.
+#: Non-vacuity floor, measured at adoption: a derived census that quietly discovers ZERO models
+#: reports green having asserted nothing. A FLOOR that may only ratchet up; the exact-set claim is
+#: `test_o16_census_reaches_every_schema_block`, derived on both sides.
 MIN_SCHEMA_MODELS = 17
 
 
@@ -315,11 +287,7 @@ def test_o16_census_is_not_vacuous():
 
 
 def test_o16_census_covers_every_model_the_hand_written_tuple_named():
-    """The predecessor's eight, as a regression pin: derived must be a SUPERSET of enumerated.
-
-    A walker refactor that lost `monitor.disk_guard` would still clear the floor above; this is
-    what makes that specific loss fatal, and it is why these eight names stay imported.
-    """
+    """The predecessor's eight, as a regression pin: derived must be a SUPERSET of enumerated."""
     legacy = (RunConfig, IdentityConfig, EvalConfig, SelfplayConfig, TrainConfig,
               MonitorSchemaConfig, DrainCapsConfig, DiskGuardConfig)
     missing = [m.__name__ for m in legacy if m not in SCHEMA_CENSUS]
@@ -327,13 +295,7 @@ def test_o16_census_covers_every_model_the_hand_written_tuple_named():
 
 
 def test_o16_census_reaches_every_schema_block():
-    """Exactness, derived on BOTH sides: reachable-from-RunConfig == defined-in-the-package.
-
-    A `StrictModel` subclass that no field points at is dead schema — nothing can supply it, so
-    nothing consumes it (LAW-08's shape) — and a block that exists but is unreachable is also
-    the one thing a reachability census can never check. Either direction failing is a real
-    finding, so both are reported.
-    """
+    """Exactness, derived on BOTH sides: reachable-from-RunConfig == defined-in-the-package."""
     import pkgutil
     from importlib import import_module
 
@@ -357,59 +319,25 @@ def test_o16_census_reaches_every_schema_block():
 
 
 def test_o16_all_fields_required_no_code_side_defaults():
-    # WPMAIN / §3.1 MISS-9: `DiskGuardConfig` is in the census. Without it R122's granted
-    # family would be the one schema block in the tree with no no-pydantic-default census,
-    # and a re-added `interval_sec: float = 60.0` is invisible to every liveness drive (they
-    # supply a value on each path). This test is ALSO the structural holder of R120's "the
-    # code-side default True dies" and R123(c): a re-added SCHEMA default on `eval_enabled`
-    # or `run_id` reds it, which a signature census cannot see (wrong instrument).
-    # `TrainConfig` is reached too, so `train.device` is covered — and now with zero edits for
-    # every FUTURE block as well, which is the point of deriving the set instead of listing it.
-    # THE ONE EXEMPT CLASS IS DERIVED (R322(d)): an ARCH-SCOPED block carries `= None` so a
-    # config of another representation may OMIT it, and that `None` is not a fallback —
-    # `RunConfig._arch_scoped_keys_are_present_iff_their_arch` refuses a config of the owning
-    # arch that omits it AND one of any other arch that carries it. R1's force is intact: no
-    # key's absence silently yields a value. Read off `ARCH_SCOPED_KEYS` so a hand-added
-    # default anywhere else is still a red, and asserted in BOTH directions so a scoped block
-    # that quietly became required is a red too.
+    # `DiskGuardConfig` is in the census, or its family would be the one schema block with no
+    # no-pydantic-default census. This test is ALSO the structural holder of "the code-side default
+    # True dies": a re-added SCHEMA default on `eval_enabled` or `run_id` reds it.
+    # THE ONE EXEMPT CLASS IS DERIVED: an ARCH-SCOPED block carries `= None` so another
+    # representation may OMIT it, and that `None` is not a fallback, because the presence validator
+    # refuses both omission on the owning arch and presence on any other. Read off
+    # `ARCH_SCOPED_KEYS` and asserted BOTH ways.
     exempt = {f"{key.section}.{key.field}" for key in ARCH_SCOPED_KEYS}
     assert exempt, "no key is arch-scoped, so this exemption is unused and should go"
-    # THE SECOND EXEMPT CLASS, one row, grounded (R330(e) / R323(b)): the arch-selector row
-    # `identity.arch_kind` enters production configs ONLY as a minted row at run6's mint, so the
-    # schema must accept its absence today; an absent row resolves in `arch_from_spec_and_config`
-    # to the representation's INCUMBENT kind — a history fact pinned against every minted file by
-    # tests/model/conformance/test_arch_selector_makes_v2_selectable.py, not a value a reader
-    # guessed. Enumerated here by name so a THIRD optional leaf anywhere is still a red.
-    #
-    # THE THIRD EXEMPT ROW, grounded (R332(d) / AUDIT-1 F-19): `identity.warm_start`, the BC
-    # warm-start block, optional for the SAME reason and not a new one — it enters production
-    # configs only as a minted row at run6's mint. It is a BLOCK, so the exemption is on the
-    # PARENT only: `checkpoint` and `net_hash` are REQUIRED inside it and are covered by the
-    # required-field assertion below, which is exactly what makes a path with no expected hash
-    # unconstructible. A FOURTH optional leaf anywhere is still a red.
-    #
-    # THE FOURTH EXEMPT ROW, grounded (R339(b)): `eval.concurrency`, the gate-block
-    # concurrency. Optional for the two rows above's reason and not a new one — it enters
-    # production configs only as a minted row — with one difference worth stating: its default
-    # is not a placeholder but the BEHAVIOUR ITSELF. `concurrency=1` is the serial loop
-    # `play_paired_match` ran before the parameter existed, taken on the same branch with the
-    # same objects, so an absent row and a minted `1` produce the same round rather than merely
-    # a legal one. A FIFTH optional leaf anywhere is still a red.
+    # THE SECOND, THIRD AND FOURTH EXEMPT ROWS, each enumerated by name so a fifth is still a red:
+    # `identity.arch_kind`, whose absent row resolves to the representation's INCUMBENT kind;
+    # `identity.warm_start`, a BLOCK whose exemption is on the PARENT only, since `checkpoint` and
+    # `net_hash` are REQUIRED inside it; and `eval.concurrency`, whose default is not a placeholder
+    # but the BEHAVIOUR ITSELF — `1` is the serial loop that ran before the parameter existed.
     exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
-    # THE FIFTH CLASS IS A REGISTRY, not a row (R347 / CONFIG-1): an OPERATIONAL CONSTANT —
-    # a watchdog deadline, a poll interval, a join bound, a disk threshold, a queue cap, a
-    # diagnostic switch — carries a schema default and leaves the YAML. `OPERATIONAL_DEFAULT_KEYS`
-    # is the ONE authority, declared with per-row grounds beside the schema it describes, and
-    # read off here for the same reason `ARCH_SCOPED_KEYS` is: a default on anything NOT in a
-    # registry is still a red, and a registered key that is still required is a stale
-    # declaration, which the both-ways assertion below catches.
-    #
-    # This is R1's second clause, not an exception to R1. What R1 forbids is a `dict.get(key,
-    # fallback)` at a call site — a SECOND authority the config cannot override. The schema
-    # field is the first and only one, and every arming key stays required: `gate_interval`,
-    # the actor-lag pair, `supervisor_kill_grace_sec` and the WR/axis warn family are all
-    # absent from the registry, deliberately, because that is where R1's
-    # silently-disabled-opponent reason actually bites.
+    # THE FIFTH CLASS IS A REGISTRY, not a row: an OPERATIONAL CONSTANT carries a schema default and
+    # leaves the YAML, and `OPERATIONAL_DEFAULT_KEYS` is the ONE authority. A default on anything
+    # NOT in a registry is still a red, and a registered key that is still required is a stale
+    # declaration. Every arming key stays required, deliberately.
     operational = {key for key, _grounds in OPERATIONAL_DEFAULT_KEYS}
     assert operational, "the operational registry is empty; this exemption should go"
     assert not (operational & exempt), (
@@ -445,12 +373,7 @@ def test_o16_all_fields_required_no_code_side_defaults():
 
 
 def test_o16_every_schema_block_is_strict():
-    """R1's "unknown key = error" is carried by `StrictModel`, so it must hold block by block.
-
-    `extra="forbid"` is not inherited by a block merely because its PARENT forbids extras —
-    pydantic resolves `model_config` per model — so one block declared `BaseModel` would accept
-    any typo'd key inside it while every rejection test above stayed green.
-    """
+    """R1's "unknown key = error" is carried by `StrictModel`, so it must hold block by block."""
     for model, path in SCHEMA_CENSUS.items():
         assert issubclass(model, StrictModel), (
             f"{model.__name__} (config key `{path or '<root>'}`) is not a StrictModel"
@@ -461,12 +384,10 @@ def test_o16_every_schema_block_is_strict():
         )
 
 
-# ── the census's own mutation self-test (LAW-07): it must BITE ──
-#
-# Built from throwaway models that are never registered anywhere, so the real schema is not
-# mutated and no other test can see them. Each plants exactly one of the two defects the census
-# exists to catch, in the two shapes that are easy to miss: nested one level down, and reachable
-# only through the `list[SubModel]` arm.
+# The census's own mutation self-test: it must BITE. Built from throwaway models that are never
+# registered anywhere, each planting exactly one of the two defects the census exists to catch, in
+# the two shapes that are easy to miss — nested one level down, and reachable only through the
+# `list[SubModel]` arm.
 
 
 class _PlantedDefault(StrictModel):
@@ -522,9 +443,8 @@ def test_the_strictness_arm_bites_on_a_planted_permissive_block():
         f"the strictness arm did not bite on both shapes: {offenders}"
     )
     # `_PlantedLoose` is the second shape and the reason the assertion is two-limbed: it DOES
-    # forbid extras, so the `extra=` check alone passes it, and only the `issubclass` limb
-    # catches it. A block that reimplements strictness by hand is outside the one base every
-    # section is supposed to share, and the next `model_config` edit to it is unguarded.
+    # forbid extras, so the `extra=` check alone passes it and only the `issubclass` limb catches
+    # it. A block that reimplements strictness by hand is outside the one base every section shares.
     assert _PlantedLoose.model_config.get("extra") == "forbid"
 
 

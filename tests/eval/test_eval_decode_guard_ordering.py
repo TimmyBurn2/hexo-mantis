@@ -1,21 +1,15 @@
-"""The eval decode guard refuses BEFORE any model snapshot is loaded (LAW-07 producer).
+"""The eval decode guard refuses BEFORE any model snapshot is loaded.
 
-WP12-R RED-TEAM finding D-2. `mantis.eval.errors.EvalDecodeUnsupportedError`'s docstring,
-DESIGN §c.7 and PREREG all state that the guard fires "once per round, at spec-resolution
-time, before any model is loaded" — and nothing in the tree tested it. RED-TEAM's mutation
-M5 relocated `_assert_decode_implements_declared_pooling(enc_spec)` to below the first
-`load_model_snapshot(...)` call in `run_round` and all 85 oracles stayed GREEN with gate 11
-at rc 0. A stated property with no producer is exactly what LAW-07/R4 forbid.
-
-The ordering is not stylistic. A refusal that happens AFTER a checkpoint has been
-deserialised onto `spec.worker_device` has already paid that memory — on the box that
-CARD-RUN5-GPU-OOM is about, "did we load a model before refusing" is a resource question.
+The guard is stated to fire once per round, at spec-resolution time, before any model is
+loaded, and nothing tested it: relocating `_assert_decode_implements_declared_pooling` below
+the first `load_model_snapshot` call in `run_round` left every oracle green. The ordering is
+not stylistic — a refusal after a checkpoint has been deserialised onto `spec.worker_device`
+has already paid that memory.
 
 Method: `mantis.eval.worker` binds `load_model_snapshot` at module scope, so the loader is
 replaced with a recorder that RAISES a sentinel the moment it is reached. The refusal arm
-then asserts the sentinel never fired and the recorder was never called; the control arm
-asserts that the very same recorder IS reached for an admitted encoding, so the refusal
-arm cannot be green because the loader was unreachable for some unrelated reason.
+asserts the recorder was never called; the control arm asserts the same recorder IS reached for
+an admitted encoding, so the refusal arm cannot be green for an unrelated reason.
 """
 from __future__ import annotations
 
@@ -37,10 +31,10 @@ class _LoaderReached(RuntimeError):
 
 
 def _caps_for(enc_name: str):
-    """The fused-forward memory bound this encoding's route needs (F-816-10 D-1).
+    """The fused-forward memory bound this encoding's route needs.
 
     Derived from the encoding, not chosen per call site: the graph route resolves the bound
-    EAGERLY when its `InferenceServer` is constructed, and the grid route never reads it. The
+    EAGERLY when its `InferenceServer` is constructed and the grid route never reads it. The
     value is the template's NON-BINDING-BY-CONSTRUCTION pair, so no round here splits.
     """
     from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
@@ -99,17 +93,13 @@ def _explode_on_load(monkeypatch: pytest.MonkeyPatch) -> list[str]:
 def test_the_refusal_happens_before_any_snapshot_is_loaded(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The M5 producer: a refused encoding must never reach `load_model_snapshot`.
-
-    RED under M5 (guard relocated below the first load): the loader is entered, so
-    `_LoaderReached` propagates instead of `EvalDecodeUnsupportedError` and `reached` is
-    non-empty — both assertions fail. GREEN as shipped.
-    """
+    """A refused encoding must never reach `load_model_snapshot`. RED when the guard sits below
+    the first load: the loader is entered, so `_LoaderReached` propagates instead of
+    `EvalDecodeUnsupportedError`."""
     reached = _explode_on_load(monkeypatch)
-    # NO REGISTERED ENCODING declares an unimplemented pool since R346(f) took the grid rows,
-    # so the refusable input is made by NARROWING the capability constant rather than by
-    # naming an encoding. The guard, the spec and the ordering under test are all the real
-    # ones; only the set of pools the decode claims to implement is moved.
+    # No registered encoding declares an unimplemented pool, so the refusable input is made by
+    # NARROWING the capability constant rather than by naming an encoding: the guard, the spec
+    # and the ordering under test are all the real ones.
     monkeypatch.setattr(worker, "_DECODE_IMPLEMENTED_POLICY_POOLS", frozenset())
 
     with pytest.raises(EvalDecodeUnsupportedError) as excinfo:
@@ -127,12 +117,9 @@ def test_the_refusal_happens_before_any_snapshot_is_loaded(
 def test_an_admitted_encoding_does_reach_the_loader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Control: the SAME recorder is reached for an ADMITTED encoding, so the arm above is
-    not vacuous.
-
-    Without this, "the loader was never called" would also be satisfied by a `run_round`
-    that could not reach the loader at all, or by a patch that never took effect.
-    """
+    """Control: the SAME recorder is reached for an ADMITTED encoding, so the arm above is not
+    satisfied by a `run_round` that could not reach the loader at all, or by a patch that never
+    took effect."""
     reached = _explode_on_load(monkeypatch)
     spec = _spec(tmp_path, "gnn_axis_v1")
 

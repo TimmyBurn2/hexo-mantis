@@ -1,28 +1,19 @@
-"""F-816-24 — the supervisor reads the MINTED config, and the witness proves it in a live process.
+"""The supervisor reads the MINTED config, and the witness proves it in a live process.
 
-ORACLE-FIRST (⊕): every test here is written and reviewed BEFORE the fix and is RED against
-`dev` = `e5abab4`, where `main` builds a bare `MonitorConfig()` (`supervise.py:614`) and offers
-no `--config` at all. The four minted `monitor.supervisor_*` keys reach no process on that head.
+ORACLE-FIRST: every test was written before the fix, against a head where `main` built a bare
+`MonitorConfig()` and offered no `--config`, so the four minted `monitor.supervisor_*` keys
+reached no process.
 
-WHY THE WITNESS OBSERVES `supervisor_forwarding_stop.grace_sec` AND NOT THE CONFIG OBJECT. The
-defect being fixed is precisely that the config and the process DISAGREED, so a test that reads
-the value back out of the config object it just built proves nothing (R291(b)(iii)). That event
-is emitted by `stop_child_cooperatively`, whose `grace_sec` argument is `supervisor._kill_grace`
-passed AT THE STOP SITE by `_stop_and_exit` — so the assertion observes the bound where the
-ladder CONSUMES it, in a real `-m` process, on the real SIGINT path. It is also not a timing
-measurement: the event is emitted before the ladder waits, so nothing here races a clock.
+The witness observes `supervisor_forwarding_stop.grace_sec` and NOT the config object: the defect
+is that the config and the process DISAGREED, so reading the value back out of the object just
+built proves nothing. That event carries `supervisor._kill_grace` from the STOP SITE, in a real
+`-m` process on the real SIGINT path, and is emitted before the ladder waits, so nothing races.
 
->300 justify (R8): ONE claim — *the minted config reaches the running supervisor* — and every
-test here is a face of it that only means something beside the others. They share one harness
-(mint → real `-m` drive → SIGINT → read the supervisor's own stream), and the harness is the
-expensive, defect-prone part: a split would copy it and the copies would drift, which is how the
-witness stops witnessing. The refusal, the override and the two O-18 halves are not separate
-subjects; they are the boundary conditions that make the central assertion mean what it says.
-
-THE DISTINCTIVE VALUE IS THE POINT. Every committed config and both templates mint 30.0, which
-is also the dataclass literal; `MonitorSchemaConfig.supervisor_kill_grace_sec` carries no schema
-default. A witness using 30.0 would pass whether or not the fix works. `_GRACE` is a value no
-authority in the tree can produce by accident.
+>300 justify (R8): ONE claim — the minted config reaches the running supervisor — whose tests
+share one harness (mint → real `-m` drive → SIGINT → read the supervisor's own stream). The
+harness is the expensive, defect-prone part, and a split would copy it and let the copies drift.
+The distinctive values are the point: every committed config mints 30.0, which is also the
+dataclass literal, so a witness using 30.0 would pass whether or not the fix works.
 """
 from __future__ import annotations
 
@@ -43,8 +34,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MINT = REPO_ROOT / "tools" / "mint_config.py"
 SUPERVISE_SRC = REPO_ROOT / "src" / "mantis" / "monitor" / "supervise.py"
 
-#: Minted into the test config. Not 30.0 (every committed config + both templates + the
-#: dataclass literal), not 900.0, not any schema default — there is none for this key.
+#: Minted into the test config. Not 30.0 (every committed config, both templates and the dataclass
+#: literal), not 900.0, and not a schema default — there is none for this key.
 _GRACE = 7.125
 #: Supplied on the command line by the override test, and distinct from `_GRACE` so the two
 #: cannot be confused for one another in an assertion.
@@ -52,37 +43,28 @@ _GRACE_OVERRIDE = 4.25
 #: Also minted, and also distinctive: the drives need a sub-second cadence, and taking it from
 #: the config rather than a flag means a SECOND minted key must reach the process.
 _POLL = 0.075
-#: ALL FOUR subject keys are minted distinctively, and all four are asserted. RED-TEAM broke
-#: `stale_after_sec` and `max_relaunches` back to their dataclass literals (900.0 / 5) inside
-#: `main` and the whole suite stayed green — 40/40 — because nothing here looked at them. The
-#: packet's subject is FOUR keys and §7's promise is that the witness "would fail without the
-#: fix"; that promise held for two of them. A witness that covers half its subject is the
-#: coverage half of the phantom class: real, passing, and silent about what it never checked.
-#: Deliberately LARGE so the staleness rule cannot fire during a drive whose subject is the stop
-#: ladder — the child never writes a heartbeat file, so a small value here would kill and relaunch
-#: it mid-test and quietly change what the other assertions are measuring.
+#: ALL FOUR subject keys are minted distinctively, and all four are asserted: a red-team break of
+#: `stale_after_sec` and `max_relaunches` back to their dataclass literals left the whole suite
+#: green, because nothing here looked at them. Deliberately LARGE so the staleness rule cannot fire
+#: during a drive whose subject is the stop ladder — the child never writes a heartbeat file, so a
+#: small value would kill and relaunch it mid-test.
 _STALE = 611.25
 _RELAUNCHES = 3
 #: Small, distinctive, and used ONLY by the staleness witness below, which needs the rule to fire.
 _STALE_FAST = 0.625
-#: The staleness drive is bounded by the MINTED deadline plus slack, not by the generic deadline:
-#: a supervisor waiting the dataclass 900.0 must be reported as a wrong bound within seconds
-#: rather than surfacing as a minute-long `TimeoutExpired` from inside `subprocess`.
+#: The staleness drive is bounded by the MINTED deadline plus slack, so a supervisor waiting the
+#: dataclass 900.0 is reported as a wrong bound within seconds rather than as a `TimeoutExpired`.
 _STALE_DEADLINE_SEC = 20.0
 
 _DEADLINE_SEC = 60.0
-#: A refusal is a decision taken before anything is spawned, so it is fast or it is not a
-#: refusal. Kept well under `_DEADLINE_SEC` so a supervisor that starts supervising instead of
-#: refusing is reported as the wrong BEHAVIOUR rather than as a slow test.
+#: A refusal is a decision taken before anything is spawned, so it is fast or it is not a refusal.
+#: Kept well under `_DEADLINE_SEC`, so a supervisor that supervises instead of refusing is reported
+#: as the wrong BEHAVIOUR rather than as a slow test.
 _REFUSAL_DEADLINE_SEC = 20.0
 
 
 def _mint(tmp_path: Path, **deltas: object) -> Path:
-    """A MINTED config (R1: minted via the tool, never hand-varied), written to `tmp_path`.
-
-    Never under `configs/` — this carries a test value, and §5 limit 2 of the packet puts test
-    values in minted test fixtures and armed values nowhere near this file.
-    """
+    """A MINTED config (R1: minted via the tool, never hand-varied), written to `tmp_path`."""
     out = tmp_path / "witness.yaml"
     argv = [sys.executable, str(MINT), "--template", "dev", "--out", str(out)]
     for key, value in deltas.items():
@@ -93,11 +75,7 @@ def _mint(tmp_path: Path, **deltas: object) -> Path:
 
 
 def _child_script(tmp_path: Path, log: Path) -> Path:
-    """A child that announces itself and exits ON SIGTERM — it does not swallow it.
-
-    Deliberately cooperative: the ladder emits `supervisor_forwarding_stop` BEFORE its bounded
-    wait, so a prompt child keeps this test off the clock entirely.
-    """
+    """A child that announces itself and exits ON SIGTERM — it does not swallow it."""
     script = tmp_path / "child.py"
     script.write_text(
         "import signal, sys, time, os\n"
@@ -126,11 +104,9 @@ def _spawn_supervisor(tmp_path: Path, child: Path, err: Path, *,
     argv = [sys.executable, "-m", "mantis.monitor.supervise"]
     if config is not None:
         argv += ["--config", str(config)]
-    # NO FLAG OF THE HARNESS'S OWN. An earlier draft passed `--poll-interval-sec 0.1` here, which
-    # made `overrides` legitimately non-empty and broke the two assertions that check exactly what
-    # is and is not reported as overridden. The harness was wrong, not the assertions: the fix is
-    # to MINT the cadence (`_POLL`) so a second minted key has to reach the process for these
-    # drives to work at all, which widens the witness instead of weakening it.
+    # NO FLAG OF THE HARNESS'S OWN: passing one here makes `overrides` legitimately non-empty and
+    # breaks the assertions that check exactly what is and is not reported as overridden. The
+    # cadence is MINTED instead, so a second minted key must reach the process.
     argv += ["--heartbeat-file", str(tmp_path / "hb.json")]
     argv += list(extra or [])
     argv += ["--", sys.executable, str(child)]
@@ -153,14 +129,7 @@ def _events(err: Path) -> list[dict]:
 
 
 def _await_child_ready(proc, log: Path, err: Path) -> None:
-    """Wait for the child's READY line — but stop the instant the SUPERVISOR dies.
-
-    A healthy drive reaches READY in well under a second, so the interesting failure is not
-    slowness, it is a supervisor that refused at argparse and exited before spawning anything.
-    Polling only the log turns that into a generic 60-second timeout with no diagnosis; polling
-    the process too turns it into an immediate failure carrying the supervisor's own stderr,
-    which is the message a reader actually needs (ORACLE review #3).
-    """
+    """Wait for the child's READY line — but stop the instant the SUPERVISOR dies."""
     deadline = time.monotonic() + _DEADLINE_SEC
     while time.monotonic() < deadline:
         if log.exists() and "READY" in log.read_text(encoding="utf-8"):
@@ -192,16 +161,9 @@ def _drive(tmp_path: Path, *, config: Path, extra: list[str] | None = None) -> l
     return _events(err)
 
 
-# ── T1: the real-drive witness (LAW-07 producer) ────────────────────────────────────────
 @pytest.mark.integration
 def test_minted_kill_grace_reaches_the_running_supervisors_stop_ladder(tmp_path):
-    """THE WITNESS. A minted `supervisor_kill_grace_sec` is the bound the LADDER uses.
-
-    Mutation that proves it can fail (LAW-07, R289(u)): restore `defaults = MonitorConfig()`
-    and drop the `--config` read, and the emitted `grace_sec` is 30.0 — the dataclass literal —
-    not `_GRACE`. Run and recorded in the exit report; a producer test that cannot fail is the
-    phantom class.
-    """
+    """THE WITNESS."""
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
                    monitor__supervisor_poll_interval_sec=_POLL,
                    monitor__supervisor_stale_after_sec=_STALE,
@@ -218,12 +180,7 @@ def test_minted_kill_grace_reaches_the_running_supervisors_stop_ladder(tmp_path)
 
 @pytest.mark.integration
 def test_boot_identity_publishes_the_config_sha_and_the_effective_bounds(tmp_path):
-    """The F-B1 parent-side twin: the supervisor publishes the identity of the file IT read.
-
-    PUBLISH, NOT COMPARE (design D3): the supervisor never inspects the child's config, because
-    learning it would mean parsing the verbatim child argv, which `spawn_child`'s contract
-    forbids. Two shas in two streams that a reader CAN compare is the whole remedy.
-    """
+    """The F-B1 parent-side twin: the supervisor publishes the identity of the file IT read."""
     from mantis.config.loader import config_identity_sha256, load_config
 
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
@@ -251,15 +208,9 @@ def test_boot_identity_publishes_the_config_sha_and_the_effective_bounds(tmp_pat
     assert events.index(boot[0]) == 0, "the identity must be the FIRST thing published"
 
 
-# ── T6: the override is PUBLISHED, never silent ─────────────────────────────────────────
 @pytest.mark.integration
 def test_a_command_line_override_is_published_and_is_the_effective_bound(tmp_path):
-    """D2's mechanism, falsified. An override wins — and SAYS SO on the record.
-
-    Without this, D2's central claim (an override is an event in the record, not an invisible
-    hand-variation) would be unfalsified by this packet's own test set, which is the
-    phantom-producer class the packet exists to close.
-    """
+    """D2's mechanism, falsified."""
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
                    monitor__supervisor_poll_interval_sec=_POLL,
                    monitor__supervisor_stale_after_sec=_STALE,
@@ -281,20 +232,7 @@ def test_a_command_line_override_is_published_and_is_the_effective_bound(tmp_pat
 
 @pytest.mark.integration
 def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_path):
-    """A SECOND behavioural witness, on a second key, at its own consumption site.
-
-    RED-TEAM broke `stale_after_sec` back to its dataclass literal and every test still passed,
-    because the only key observed behaviourally was the grace. Published bounds are read off the
-    live object and that is strong; but two of the four keys had no observation that survives
-    someone deciding the boot event should report the args namespace instead.
-
-    So this drive lets the rule FIRE. The child never writes a heartbeat file, the minted
-    `_STALE_FAST` elapses, and the supervisor emits `child_heartbeat_file_never_written` carrying
-    `stale_after_sec=self._tracker.stale_after_sec` — the tracker's own copy, at the moment the
-    tracker acted on it. `max_relaunches` is minted to 0 here so the budget is spent by that first
-    kill and the drive terminates on `RELAUNCH_BUDGET_EXIT_CODE` instead of looping: that exit is
-    itself the fourth key being consumed, so one drive observes both remaining keys behaving.
-    """
+    """A SECOND behavioural witness, on a second key, at its own consumption site."""
     config = _mint(tmp_path, monitor__supervisor_stale_after_sec=_STALE_FAST,
                    monitor__supervisor_poll_interval_sec=_POLL,
                    monitor__supervisor_kill_grace_sec=_GRACE,
@@ -306,11 +244,9 @@ def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_pa
     try:
         proc.wait(timeout=_STALE_DEADLINE_SEC)
     except subprocess.TimeoutExpired:
-        # NAME THE LIKELY CAUSE INSTEAD OF REPORTING A CLOCK. A supervisor that outlives this
-        # bound is almost always one whose staleness deadline is NOT the minted one — the
-        # dataclass literal is 900.0, which is what a broken delivery would leave here, so the
-        # symptom of the defect under test is "this never finished". Reported as that, not as a
-        # bare TimeoutExpired from deep inside subprocess.
+        # NAME THE LIKELY CAUSE INSTEAD OF REPORTING A CLOCK: a supervisor that outlives this bound
+        # is almost always one whose staleness deadline is the dataclass 900.0 rather than the
+        # minted one, so the symptom of the defect under test is "this never finished".
         timed_out = True
     finally:
         if proc.poll() is None:
@@ -338,14 +274,8 @@ def test_the_minted_staleness_bound_is_the_one_the_liveness_rule_FIRES_on(tmp_pa
     )
 
 
-# ── T2: the refusal ─────────────────────────────────────────────────────────────────────
 def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
-    """R1/LAW-11: absent is an error, never a default — and the error NAMES the input.
-
-    `argparse`'s own "the following arguments are required: --config" is true and useless: it
-    tells an operator nothing about what a config is or where one comes from. The refusal
-    pre-scans argv before the parser runs, mirroring `_split_argv` one function away.
-    """
+    """R1/LAW-11: absent is an error, never a default — and the error NAMES the input."""
     child = _child_script(tmp_path, tmp_path / "child.log")
     proc = subprocess.run(
         [sys.executable, "-m", "mantis.monitor.supervise",
@@ -356,10 +286,9 @@ def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
     assert proc.returncode != 0, "a supervisor with no config must refuse to start"
     message = proc.stderr + proc.stdout
     assert "--config" in message, f"the refusal must NAME the missing input: {message!r}"
-    # DESIGN D4 requires the message to point at where a minted config COMES FROM, and the
-    # accepted markers are enumerated rather than left to one phrasing — the review's objection
-    # was that a single required word prescribes wording the design never ordered (#2). The
-    # requirement itself is the design's; this is the set of ways to satisfy it.
+    # The message must point at where a minted config COMES FROM, and the accepted markers are
+    # enumerated rather than left to one phrasing, since a single required word would prescribe
+    # wording the design never ordered.
     remedies = ("mint", "configs/", "tools/mint_config.py", ".yaml")
     assert any(token in message.lower() for token in remedies), (
         "the refusal must point at where a config comes from — argparse's own 'the following "
@@ -368,17 +297,7 @@ def test_a_missing_config_is_a_NAMED_refusal_not_a_default(tmp_path):
 
 
 def test_a_malformed_override_is_refused_but_a_legitimate_zero_is_not(tmp_path):
-    """Well-formedness is refused; POLICY is not (D2). The two must not be confused.
-
-    RED-TEAM drove `--kill-grace-sec=nan` end to end: `Popen.wait(timeout=nan)` never raises
-    `TimeoutExpired`, so the ladder's automatic SIGTERM -> grace -> SIGKILL escalation stopped
-    escalating and only the operator's second and third signal recovered the child. A LAW-16
-    bounded stop became an unbounded one through an input nothing validated — while the MINTED
-    key for the same bound is schema-refused (`Field(ge=0)`).
-
-    `0` is the control, and it is the one that matters: it is falsy, legitimate, and a naive
-    truthiness check would silently drop it from `overrides` and from `effective`.
-    """
+    """Well-formedness is refused; POLICY is not (D2)."""
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE)
     child = _child_script(tmp_path, tmp_path / "child.log")
     for bad in ("nan", "inf", "-1"):
@@ -402,7 +321,6 @@ def test_a_malformed_override_is_refused_but_a_legitimate_zero_is_not(tmp_path):
     assert boot[0]["effective"]["max_relaunches"] == 0
 
 
-# ── T4: O-18, on the path that is actually RUN ──────────────────────────────────────────
 def test_importing_the_supervisor_does_not_import_torch():
     """O-18, import-time half. In a SUBPROCESS: in-process is polluted by pytest's own imports."""
     proc = subprocess.run(
@@ -417,13 +335,7 @@ def test_importing_the_supervisor_does_not_import_torch():
 
 @pytest.mark.integration
 def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
-    """O-18, RUN-TIME half — the one §7's exit criterion is actually about.
-
-    The import-time half alone is a hole: if the config imports were deferred into `main`, an
-    import-only check would pass while the exercised path went untested. This calls the REAL
-    `main` with a REAL minted config in a subprocess and reports `sys.modules` from INSIDE that
-    process, so the observation is of the path that ran, not of a proxy for it.
-    """
+    """O-18, RUN-TIME half — the one §7's exit criterion is actually about."""
     config = _mint(tmp_path, monitor__supervisor_kill_grace_sec=_GRACE,
                    monitor__supervisor_poll_interval_sec=_POLL,
                    monitor__supervisor_stale_after_sec=_STALE,
@@ -447,10 +359,9 @@ def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
     proc = subprocess.run([sys.executable, "-c", probe], capture_output=True, text=True,
                           check=False, timeout=_DEADLINE_SEC)
     assert proc.returncode == 0, proc.stderr
-    # THE PROBE MUST PROVE IT RAN BEFORE ITS torch VERDICT MEANS ANYTHING. Without this, a
-    # `main` that refused at argparse would report torch=False and pass — which is exactly what
-    # this test did on its first ORACLE-WRITE run against the un-fixed head. A witness that
-    # cannot distinguish "the path is clean" from "the path never executed" is the phantom class.
+    # THE PROBE MUST PROVE IT RAN BEFORE ITS torch VERDICT MEANS ANYTHING: a `main` that refused at
+    # argparse would report torch=False and pass, which is what this test did on its first run
+    # against the un-fixed head.
     assert marker.exists(), (
         "the supervisor never spawned its child, so this process never executed the config path "
         f"whose torch-freeness is under test: {proc.stdout!r} {proc.stderr[-400:]!r}"
@@ -462,24 +373,14 @@ def test_running_main_with_a_real_config_does_not_import_torch(tmp_path):
     )
 
 
-# ── T5: one construction authority in this module ───────────────────────────────────────
 def test_the_supervisor_module_constructs_no_MonitorConfig_by_any_shape():
-    """R1/R79: the resolver is the ONE construction authority reachable from this module.
-
-    Broader than the packet's literal wording on purpose: `MonitorConfig()` is the shape that
-    shipped, but `MonitorConfig(supervisor_kill_grace_sec=30.0)` would reintroduce the identical
-    duplicate-authority defect while passing a zero-arg check. Derived by parsing the module, so
-    a reformat cannot defeat it.
-    """
+    """R1/R79: the resolver is the ONE construction authority reachable from this module."""
     tree = ast.parse(SUPERVISE_SRC.read_text(encoding="utf-8"))
 
-    # EVERY LOCAL NAME BOUND TO THE CLASS, derived from the module's own imports rather than
-    # assumed to be the class's own spelling. `from … import MonitorConfig as MC` binds "MC";
-    # `import mantis.monitor.config as _mc` reaches it as an attribute. An earlier draft matched
-    # only a bare `ast.Name` called "MonitorConfig", which both of those escape — in the one
-    # test written to stop this packet's defect from coming back, and right before a queued
-    # packet generalises this mechanism to other sites, which is exactly when an import-shape
-    # drift lands unnoticed (ORACLE review MUST-FIX #1).
+    # EVERY LOCAL NAME BOUND TO THE CLASS, derived from the module's own imports rather than from
+    # the class's own spelling: `from … import MonitorConfig as MC` binds "MC" and `import
+    # mantis.monitor.config as _mc` reaches it as an attribute, both of which a bare `ast.Name`
+    # match escapes.
     bound: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.ImportFrom):

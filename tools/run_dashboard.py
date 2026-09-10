@@ -1,24 +1,14 @@
-# >300 justify (R8): the panel table, the readers that fill it and the renderer are ONE unit.
-# A panel is a producer claim plus the arithmetic over it plus how absence is drawn, and the
-# whole point of this tool is that those three never disagree — a panel whose producer is
-# declared in one file and drawn in another can be drawn from a number the declaration does
-# not cover, which is the invented-number class R333(d) forbids.
+# >300 justify (R8): the panel table, the readers that fill it and the renderer are ONE unit — a
+# panel declared in one file and drawn in another can be drawn from a number the declaration
+# does not cover.
 """The run dashboard: one command, one self-contained HTML file, no server and no new producer.
 
-R333(d). This reads a run record that already exists — the JSONL event stream, and optionally
-the eval ladder's state file — and writes ONE HTML file with no external references: no CDN, no
-JavaScript, no image files beside it. Nothing here emits an event, opens a socket, or touches a
-running process.
+It reads a run record that already exists — the JSONL event stream, and optionally the eval
+ladder's state file — and writes ONE HTML file with no external references.
 
-THE RULE THAT SHAPES EVERY PANEL: **absent is not zero, and it applies to pixels.** A panel whose
-producer does not exist at HEAD is declared BANKED in `BANKED_PANELS` below, named with the
-producer that would fill it, and drawn as a stated gap. A panel whose producer exists but whose
-series is empty in THIS record is drawn as "no rows", naming the event that would carry them.
-Neither is ever drawn as a zero, an empty axis, or a flat line at the bottom of a chart — those
-are the shapes a reader mistakes for a measurement.
-
-REFUSAL, NOT A BLANK PAGE. An unreadable or event-less record raises `EmptyRunRecord`. A tool
-that renders a clean-looking page from nothing is the phantom-gate shape in a different medium.
+Absent is not zero, and it applies to pixels: a panel with no producer at HEAD is declared in
+`BANKED_PANELS` and drawn as a stated gap, one whose series is empty is drawn as "no rows", and
+an event-less record raises `EmptyRunRecord` rather than rendering a page from nothing.
 """
 from __future__ import annotations
 
@@ -41,12 +31,8 @@ class UnknownPanel(RuntimeError):
     """A panel was requested that the panel table does not declare."""
 
 
-# --------------------------------------------------------------------------------------- #
-# The panel table — the producer claim, per panel, checked against the record
-# --------------------------------------------------------------------------------------- #
-#: Panels whose producer DOES NOT EXIST at HEAD. Each row names what would fill it. These are
+#: Panels whose producer DOES NOT EXIST at HEAD, each row naming what would fill it. They are
 #: findings, carried into the page so a reader sees the gap rather than an empty chart.
-#: Measured in REPAIR-3 Leg 4's producer census (`plan/REPAIR3_WORKING_NOTES.md`).
 BANKED_PANELS: dict[str, str] = {
     "average sims/move":
         "NO PRODUCER. `SelfPlayHParams.effective_sims_per_move` is derived in-process and used "
@@ -81,7 +67,7 @@ class Record:
     ladder: dict[str, Any] | None = None
     source: str = ""
     #: The run-record directory, for panels whose producer writes FILES rather than events.
-    #: `None` means "not supplied", which a panel must draw as an absence, never as zero.
+    #: `None` means "not supplied", which a panel draws as an absence, never as zero.
     record_dir: Path | None = None
     by: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
@@ -139,9 +125,6 @@ def load_record(events_path: Path, ladder_path: Path | None = None,
                   record_dir=record_dir)
 
 
-# --------------------------------------------------------------------------------------- #
-# Drawing — inline SVG only
-# --------------------------------------------------------------------------------------- #
 def _esc(value: Any) -> str:
     return html.escape(str(value), quote=True)
 
@@ -202,9 +185,6 @@ def table(headers: list[str], rows: list[list[Any]]) -> str:
     return f'<div class="scroll"><table><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
-# --------------------------------------------------------------------------------------- #
-# The panels
-# --------------------------------------------------------------------------------------- #
 def panel_throughput(rec: Record) -> Panel:
     rows = rec.rows("iteration_complete")
     if not rows:
@@ -474,20 +454,11 @@ def panel_health(rec: Record) -> Panel:
     return Panel("Health", "run_segment_started, watchdogs, disk_*, training_alert", body)
 
 
-#: The page's panels, in order. The names are the census's names.
 def panel_f816_37(rec: Record) -> Panel:
-    """R342(b)(v) — firing count and location.
-
-    The arithmetic is IMPORTED from `mantis.diagnostics.f816_37_rate_bar`, never re-implemented
-    here. Two
-    surfaces disagreeing about how many firings a run had is the failure this shares code to
-    avoid: the bar condemns a host on the number, and a dashboard that drew a different one
-    would be the more visible of the two.
-
-    The producer is FILES (`collate_dumps/*.json` and the run's logs), not events, so this
-    panel needs the record directory. Without it the panel is an ABSENCE, not a zero — a run
-    with no dumps and a run nobody pointed at the dumps look identical otherwise.
-    """
+    """Firing count and location, with the arithmetic IMPORTED from
+    `mantis.diagnostics.f816_37_rate_bar`, so two surfaces cannot disagree about how many
+    firings a run had. The producer is FILES, so without the record directory this panel is an
+    ABSENCE rather than a zero."""
     title, reads = "F-816-37 firings", "collate_dumps/*.json + *.log (files, not events)"
     if rec.record_dir is None:
         return Panel(title, reads, '<p class="absent">ABSENT — no run-record directory was '
@@ -532,9 +503,6 @@ def banked_block(name: str) -> str:
             f'{_esc(BANKED_PANELS[name])}</p>')
 
 
-# --------------------------------------------------------------------------------------- #
-# The page
-# --------------------------------------------------------------------------------------- #
 _CSS = """
 :root { color-scheme: light dark; --fg:#1b1b1b; --bg:#fdfdfc; --muted:#5d5d5d;
         --rule:#d8d5cf; --card:#ffffff; --absent:#8a6d1f; --banked:#8a2f2f; }
@@ -571,11 +539,9 @@ def render(rec: Record, title: str) -> str:
     panels = [fn(rec) for fn in PANELS]
     counts = Counter(str(r.get("event", "?")) for r in rec.events)
     boot = (rec.rows("run_boot_identity") or [{}])[0]
-    # The source is shown by NAME, not by path. A rendered page is an artifact someone will
-    # attach to a record, and an absolute path under a home directory is exactly what CI gate 17
-    # (rule 7) exists to keep out of a public repo — a report should not be the thing that
-    # smuggles one in. The `config_sha256` below is a config hash, not a secret, and is the
-    # provenance a reader needs to know WHICH run this is.
+    # The source is shown by NAME, not by path: a rendered page is an artifact someone attaches
+    # to a record, and an absolute home path is what the host-content gate keeps out of the
+    # repo. `config_sha256` is a config hash, not a secret, and says WHICH run this is.
     header_rows = [
         ["source", Path(rec.source).name],
         ["events", f"{len(rec.events)} rows, {len(counts)} distinct types"],

@@ -30,7 +30,7 @@ def _run5_dump() -> dict[str, Any]:
     return load_config("configs/run6.yaml").model_dump()
 
 
-# ── the seam TD-4 named ─────────────────────────────────────────────────────────────────
+# the seam TD-4 named
 
 
 def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
@@ -60,7 +60,7 @@ def test_pool_still_refuses_a_config_that_declares_no_encoding() -> None:
         resolve_pool_encoding(dump, arch=None)
 
 
-# ── mutation self-test (LAW-07): does this suite actually detect the defect? ─────────────
+# mutation self-test (LAW-07): does this suite actually detect the defect?
 
 
 def _flat_only_resolve(cfg: Mapping[str, Any] | None) -> Any:

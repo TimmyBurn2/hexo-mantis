@@ -1,37 +1,14 @@
-"""Best-model anchor lifecycle — atomic save, resilient load, quarantine (WP10 §a.5/§c.6 IMPROVE).
+"""Best-model anchor lifecycle — atomic save, resilient load, quarantine.
 
 >300 justify: this owns the whole `best_model.pt` artifact lifecycle — atomic save with
-round-trip verify + `.bak` rotation + provenance sidecar, the resilient best→.bak→bootstrap
-load fallback with corrupt-anchor quarantine, the tensor-identity sha256 launch-pin, and the
-anchor↔inference-model sync — one cohesive artifact-IO surface (the old `training/anchor.py`
-ported whole). Splitting it would scatter the save/load/verify invariants that must move
-together.
+round-trip verify, `.bak` rotation and provenance sidecar; the resilient best/.bak/bootstrap
+load fallback with corrupt-anchor quarantine; the tensor-identity sha256 launch pin; and the
+anchor-to-inference-model sync. Splitting it would scatter save/load/verify invariants that
+must move together.
 
-Three ratified WP10 amendments over a pure relocation:
-  * **Representation off the DECLARED arch (§c.6, WP9 O3 census).** The DELETED arch-off-a-live-
-    module representation sniff is REPLACED by the declared `representation` carried on the WP9
-    arch dataclass (`AnchorState.representation`, `trainer.arch.representation`,
-    `Checkpoint.metadata.arch.representation`) — nobody DERIVES arch from a live `nn.Module`'s
-    structure. Reading the declared dataclass `build_net` ATTACHED to the module (`model.arch`)
-    is the other thing: it is the arch-travels-with-the-model convention `build_net` documents
-    and `eval.snapshot.write_model_snapshot` already relies on, and `save_best_model_atomic`
-    uses it to stamp a promoted anchor (AUDIT-1 F-17).
-  * **weights-only everywhere (LAW-12).** `checkpoint_state_sha256` loads weights-only — the old
-    pickle-exec load mode is gone; the round-trip verify was already weights-only.
-  * **DAG-clean (repo_design §2).** `resolve_anchor` takes the `eval_pipeline` INJECTED (no
-    top-level `train → eval` import); the anchor's from-disk read routes through the ONE loader
-    (`mantis.train.checkpoints`), inheriting its O3b killed-prefix REJECT.
-
-**(B) — the preserved corruption guard (dispatcher requirement; RED-TEAM #1).** WP10 killed the
-shape-sniff arch, so `build_net(arch)` may emit a SUPERSET of a legitimate SUBSET anchor's keys
-(a min/max baseline lacks the aux heads). The old eval loader's `strict=True` landing-guard
-(`eval/checkpoint_loader.py::_build_min_max_model`, `strict=False` + explicit E1-C1 allclose
-"value_fc2_bins.weight was NOT loaded" raise, and `_build_gnn_model` `strict=True` +
-"load_state_dict did not land this tensor") would spuriously reject that subset. So the anchor
-load uses **`strict=False` PLUS explicit validation** (`_guarded_load_state_dict`): the missing
-keys must be a SUBSET of the known-optional aux heads, EVERY core tensor (trunk / policy / value)
-MUST land, and unexpected keys MUST be empty. A checkpoint missing a REQUIRED core tensor RAISES
-(never a silent random-head load — the old E1-C1 / F-12 hazard) — NOT a silent `strict=False` drop.
+`build_net(arch)` may emit a SUPERSET of a legitimate SUBSET anchor's keys, so the load uses
+`strict=False` plus explicit validation; a checkpoint missing a REQUIRED core tensor RAISES
+rather than silently loading a random head.
 """
 from __future__ import annotations
 
@@ -58,10 +35,8 @@ _BOOTSTRAP_ANCHOR_CANDIDATES: tuple[str, ...] = (
     "checkpoints/bootstrap_model_v7full.pt",
 )
 
-# (B) corruption guard — state-dict key roots a legitimate SUBSET/min-max baseline anchor may
-# lack (the aux training-only heads `build_net` always emits + the optional input-channel buffer).
-# EVERYTHING ELSE is a CORE tensor (trunk / policy / value) that MUST land on load. Cited from the
-# old eval loader's E1-C1 landing-guard (`_build_min_max_model` value-head allclose raise).
+# State-dict key roots a legitimate SUBSET/min-max baseline anchor may lack. EVERYTHING ELSE is
+# a CORE tensor (trunk / policy / value) that MUST land on load.
 _OPTIONAL_HEAD_PREFIXES: tuple[str, ...] = (
     "opp_reply_conv.",    # aux opponent-reply head
     "opp_reply_fc.",
@@ -79,14 +54,8 @@ class AnchorLoadError(RuntimeError):
     or the state dict carried keys the declared arch does not accept."""
 
 
-#: The canonical anchor (best-model) filename, in ONE place.
-#:
-#: The anchor is the promotion INCUMBENT: every eval round scores the candidate against
-#: whatever this path holds, and a promotion overwrites it. Read and write must therefore
-#: name the same file, and they did not — `resolve_anchor` defaulted to a CWD-relative
-#: `checkpoints/best_model.pt` while the promotion hook was handed the run's real
-#: `<out-dir>/checkpoints/best_model.pt`. A run launched from anywhere but the repo root
-#: consequently evaluated against one file and promoted into another.
+# State-dict key roots a legitimate SUBSET/min-max baseline anchor may lack. EVERYTHING ELSE is
+# a CORE tensor (trunk / policy / value) that MUST land on load.
 CANONICAL_ANCHOR_FILENAME = "best_model.pt"
 
 
@@ -98,8 +67,7 @@ def canonical_anchor_path(checkpoint_dir: str | Path) -> Path:
 @dataclass
 class AnchorState:
     """Resolved best-model anchor + provenance. `best_model` is None only when no eval pipeline
-    is configured (the pre-refactor invariant). `representation` is the DECLARED discriminant
-    ("grid"/"graph") read off the arch — never sniffed off a live module (§c.6)."""
+    is configured. `representation` is the DECLARED discriminant read off the arch."""
 
     best_model: torch.nn.Module | None
     best_model_step: int | None
@@ -107,7 +75,6 @@ class AnchorState:
     representation: str
 
 
-# ══ Atomic save + provenance ═══════════════════════════════════════════════════════════
 def save_best_model_atomic(
     model: torch.nn.Module,
     path: Path,
@@ -118,34 +85,21 @@ def save_best_model_atomic(
 ) -> None:
     """Save ``model``'s weights to ``path`` atomically with one-revision backup.
 
-    Sequence: (1) write ``path.tmp``, (2) round-trip verify the tmp file loads (catches partial
-    writes), (3) rotate any existing ``path`` → ``path.bak``, (4) rename ``path.tmp`` → ``path``.
-    A kill between (3) and (4) leaves ``.bak`` as the recovery copy (``load_best_model_resilient``
-    falls through to it).
-
-    AUDIT-1 F-17 — THE PAYLOAD CARRIES ITS ARCH. This wrote one of two KIND-LESS shapes: a bare
-    ``state_dict`` (``step=None``) or a light envelope with ``step``/``run_id``/``encoding`` and
-    no ``arch`` at all. Nothing on either shape says WHICH arch built it, so the read side
-    rebuilt the INCUMBENT kind for the representation — and for a `GnnArchV2` lineage that is a
-    shape mismatch on ``value_head.*`` (V2's ``pooled_width = 2*head_in``), which unwinds through
-    ``_try_load_anchor``'s trailing except into ``_quarantine_corrupt``. The promoted incumbent
-    of a V2 run was lost on every relaunch, with a WARNING and no error. The payload now carries
-    ``metadata.arch`` (the DECLARED dataclass, ``arch_kind`` included) so the reader rebuilds
-    what was written, read off the model's own declared handle; a promotion whose model carries
-    no handle REFUSES, because a promotion that cannot name its arch is the defect.
+    Write `path.tmp`, round-trip verify it loads, rotate any existing `path` to `path.bak`,
+    rename the tmp into place; a kill between the last two leaves `.bak` as the recovery copy.
+    The payload carries `metadata.arch`, because both older KIND-LESS shapes had the read side
+    rebuild the representation's INCUMBENT kind — a shape mismatch for a V2 lineage that
+    quarantined a good anchor on every relaunch, with a warning and no error.
 
     Args:
-        model: the net whose weights are the anchor. A ``torch.compile``/DDP wrapper is unwrapped.
+        model: the net whose weights are the anchor; a compile/DDP wrapper is unwrapped.
         path: the ``best_model.pt`` slot.
         step: the promotion step, or ``None`` for a launch-time initialisation.
-        run_id: the run that promoted it (provenance).
-        encoding: the encoding name the anchor plays under (LAW-11 — carried, never inferred).
+        run_id: the run that promoted it.
+        encoding: the encoding name the anchor plays under — carried, never inferred.
 
     Raises:
-        AttributeError: ``step`` is supplied but ``model`` carries no declared ``.arch``. A
-            stamped promotion that cannot name its arch is the kind-less artifact this row
-            retires, and the arch-travels-with-the-model convention is how it is named — the
-            SAME read `eval.snapshot.write_model_snapshot` makes, and the same refusal.
+        AttributeError: ``step`` is supplied but ``model`` carries no declared ``.arch``.
     """
     path = Path(path)
     base = getattr(model, "_orig_mod", model)
@@ -183,8 +137,8 @@ def save_best_model_atomic(
         }
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, tmp)
-    # Round-trip verify — torch.save is not atomic on some filesystems and a mid-write kill
-    # produces exactly the truncated zip we defend against. Weights-only (LAW-12).
+    # Round-trip verify: torch.save is not atomic on some filesystems and a mid-write kill
+    # produces exactly the truncated zip we defend against. Weights-only.
     torch.load(tmp, map_location="cpu", weights_only=True)
     if path.exists():
         path.replace(bak)
@@ -205,16 +159,10 @@ def _write_provenance_sidecar(
     tmp.replace(sidecar)
 
 
-# ══ Tensor-identity hash + launch pin ══════════════════════════════════════════════════
-# AUDIT-1 F-32. `state_dict_sha256` USED TO LIVE HERE — canonicalised keys plus raw bytes, no
-# shape and no dtype — and it was a SECOND parameter identity beside
-# `mantis.model.identity.net_param_hash` (sorted `name + shape + dtype + bytes`, R317's
-# observable, consumed by `worker_sweep`, `acceptance_witness` and the T10 conformance rows).
-# The two disagree BY CONSTRUCTION, so a run's `expected_anchor_sha256` and any recorded
-# `net_param_hash` were never comparable — the pin could not be cross-checked against a single
-# observable this repo actually reports. It is deleted; `state_dict_param_hash` is the one
-# denomination, and it keeps the wrapper-prefix canonicalisation that half of the old function
-# had right.
+# `state_dict_sha256` USED TO LIVE HERE — canonicalised keys plus raw bytes, no shape and no
+# dtype — a SECOND parameter identity beside `mantis.model.identity.net_param_hash`. The two
+# disagreed BY CONSTRUCTION, so a run's `expected_anchor_sha256` was never comparable with any
+# recorded `net_param_hash`. `state_dict_param_hash` is now the one denomination.
 def _extract_stored_state(raw: Any) -> dict[str, Any]:
     """The MODEL weights stored in a loaded anchor payload — a bare `state_dict` or a
     `{model_state: …}` provenance wrapper."""
@@ -226,33 +174,17 @@ def _extract_stored_state(raw: Any) -> dict[str, Any]:
 def checkpoint_state_sha256(path: Path) -> str:
     """The parameter identity of the weights STORED in an anchor file.
 
-    ONE denomination with everything else that answers "same net?" — `net_param_hash` over a
-    module, `state_dict_param_hash` over bytes (AUDIT-1 F-32). Hashes the STORED state and not
-    a live model, so a runtime dtype that diverges from disk does not move the answer.
-    Weights-only (LAW-12).
+    ONE denomination with everything else that answers "same net?". Hashes the STORED state
+    rather than a live model, so a runtime dtype diverging from disk does not move the answer.
     """
     raw = torch.load(path, map_location="cpu", weights_only=True)
     return state_dict_param_hash(_extract_stored_state(raw))
 
 
-#: AUDIT-1 F-32, the ARMING half — BANKED at REPAIR-2, and the reason is on the record rather
-#: than in a commit message. The hash duplication is REPAIRED (one denomination,
-#: `state_dict_param_hash`), so the pin below and every `net_param_hash` a sweep or witness
-#: reports are finally the same currency. What is NOT repaired is that nothing ever passes a
-#: value: `run.py` never sets it, there is no schema key and no CLI flag, so
-#: `verify_launch_anchor_pin` is a refusal nobody can reach.
-#:
-#: The audit offers three routes and each needs an authority this session does not have:
-#:   * a SCHEMA KEY — R323(b) puts identity rows into production configs only at the run6
-#:     mint, so minting one here is a mint-class act;
-#:   * a CLI FLAG — the value has to cross `mantis.run.compose_run`, whose parameter tuple is
-#:     PINNED by `tests/test_run_strict_composition.py` with "adding one is a design decision,
-#:     not an edit" (WPAX MF-1). The flag would not violate that rule's SUBSTANCE — an
-#:     invocation fact is not a config fact — but flipping the pinned tuple is exactly the
-#:     decision the pin reserves;
-#:   * DELETING the chain — removing a guard somebody deliberately built, on the judgement of
-#:     the session that found it disarmed.
-#: It is the same shape as F-11's arming bank and belongs on the same screen.
+#: THE ARMING HALF IS BANKED, on the record. The hash duplication is repaired, so this pin and
+#: every reported `net_param_hash` are the same currency — but nothing ever passes a value:
+#: there is no schema key and no CLI flag, so `verify_launch_anchor_pin` is a refusal nobody
+#: can reach.
 def verify_launch_anchor_pin(
     *,
     expected_anchor_sha256: str | None,
@@ -260,10 +192,9 @@ def verify_launch_anchor_pin(
     trainer_step: int | None,
     run_id: str | None,
 ) -> None:
-    """Verify the launch pin on the fresh-init path — hashing the STORED weights of the
-    ``--checkpoint`` the fresh anchor is seeded from (dtype-invariant). No-op when no pin is set;
-    FAILS CLOSED when a pin is set but no verifiable source exists (never launch on an UNVERIFIED
-    incumbent)."""
+    """Verify the launch pin on the fresh-init path, hashing the STORED weights of the
+    ``--checkpoint`` the fresh anchor is seeded from. No-op when no pin is set; FAILS CLOSED
+    when a pin is set but no verifiable source exists."""
     if expected_anchor_sha256 is None:
         return
     if checkpoint_path is not None and Path(checkpoint_path).exists():
@@ -286,12 +217,11 @@ def verify_launch_anchor_pin(
         )
 
 
-# ══ Quarantine + the (B) corruption-guarded from-disk load ═════════════════════════════
-#: The corrupt-or-unreadable-ARTIFACT family, and nothing wider (AUDIT-1 F-17). `torch.load`
-#: raises these on a truncated zip, a non-archive file or an unpicklable payload; the caller
-#: responds by quarantining and trying the next candidate, which is only ever the right answer
-#: for a file that is actually broken. `RuntimeError` is deliberately NOT here: `load_state_dict`
-#: raises it for a SHAPE MISMATCH, which means the artifact is fine and the arch is wrong.
+#: The corrupt-or-unreadable-ARTIFACT family, and nothing wider: `torch.load` raises these on a
+#: truncated zip, a non-archive file or an unpicklable payload, and quarantining is only ever
+#: right for a file that is actually broken. `RuntimeError` is deliberately NOT here —
+#: `load_state_dict` raises it for a SHAPE MISMATCH, where the artifact is fine and the arch is
+#: wrong.
 _CORRUPT_ARTIFACT_ERRORS: tuple[type[BaseException], ...] = (
     OSError, EOFError, zipfile.BadZipFile, pickle.UnpicklingError, ValueError, KeyError,
 )
@@ -309,15 +239,11 @@ def _quarantine_corrupt(path: Path) -> Path:
 def _guarded_load_state_dict(
     model: torch.nn.Module, state: dict[str, Any]
 ) -> list[str]:
-    """(B) corruption guard — load `state` into `model` with `strict=False` PLUS explicit
-    validation that preserves the old eval-loader's landing guard.
-
-    Since WP10 kills the shape-sniff, `build_net(arch)` emits a SUPERSET of a min/max baseline
-    anchor's keys, so `strict=True` would spuriously reject a legitimate SUBSET anchor (T-CK-25).
-    Instead: unexpected keys MUST be empty; the missing keys MUST all be known-optional aux heads;
-    every CORE tensor (trunk / policy / value) MUST land. A checkpoint missing a required core
-    tensor RAISES (never a silent random-head load — the old E1-C1 / F-12 hazard). Returns the
-    (optional-only) missing keys for logging."""
+    """(B) corruption guard — load `state` with `strict=False` PLUS explicit validation, since
+    `build_net(arch)` emits a SUPERSET of a min/max baseline anchor's keys and `strict=True`
+    would reject a legitimate SUBSET. Unexpected keys must be empty, missing keys must all be
+    known-optional aux heads, and every CORE tensor must land; a missing core tensor RAISES
+    rather than silently loading a random head. Returns the optional-only missing keys."""
     result = model.load_state_dict(state, strict=False)
     unexpected = list(result.unexpected_keys)
     if unexpected:
@@ -346,9 +272,8 @@ def _build_anchor_model(
     declared_encoding: str | None,
     device: torch.device,
 ) -> tuple[torch.nn.Module, Any]:
-    """Read an anchor file through the ONE loader (weights-only + O3b killed-prefix REJECT +
-    declared-arch resolution), build the net via `build_net(metadata.arch)`, and load its weights
-    under the (B) corruption guard. Returns `(model, Checkpoint)`; the checkpoint's
+    """Read an anchor through the ONE loader, build the net via `build_net(metadata.arch)` and
+    load its weights under the corruption guard. Returns `(model, Checkpoint)`, whose
     `metadata.arch.representation` is the anchor's DECLARED representation."""
     from mantis.train import checkpoints as _ck
 
@@ -375,22 +300,19 @@ def _try_load_anchor(
     device: torch.device,
     skip_encoding_mismatch: bool = False,
 ) -> tuple[torch.nn.Module, Path, int | None, str] | None:
-    """Attempt to load ``candidate`` as an anchor. Returns
-    ``(model, path, step, representation)`` on success, None on failure (corrupt zip, unreadable).
-
-    A DeclaredEncoding disagreement RAISES by default (D-FORENSIC F1 — a configuration error, not
-    corruption; it must not enter the quarantine/fresh-init machinery). ``skip_encoding_mismatch``
-    restores skip-on-mismatch for FOREIGN multi-candidate bootstrap fallbacks."""
+    """Attempt to load ``candidate`` as an anchor; returns `(model, path, step, representation)`
+    or None on failure. A declared-encoding disagreement RAISES by default — a configuration
+    error, not corruption, and it must not enter the quarantine machinery;
+    ``skip_encoding_mismatch`` restores skip-on-mismatch for FOREIGN bootstrap fallbacks."""
     if not candidate.exists():
         return None
     from mantis.train.checkpoints import DeclaredEncodingMismatchError
 
     try:
         model, ck = _build_anchor_model(candidate, declared_encoding=declared_encoding, device=device)
-        # AUDIT-1 F-35: attribute access, no default. `_build_anchor_model` RAISES when the
-        # stamp resolves no arch, so `ck.metadata.arch` is not None here — and a `"grid"`
-        # default would have made a legacy artifact with an unresolvable arch read as grid at
-        # the one site that decides the anchor's lineage.
+        # Attribute access, no default: `_build_anchor_model` RAISES when the stamp resolves no
+        # arch, and a `"grid"` default would make an unresolvable legacy artifact read as grid
+        # at the one site that decides the anchor's lineage.
         representation = ck.metadata.arch.representation
         step = ck.metadata.step if ck.metadata.step else None
         return (model, candidate, step, representation)
@@ -408,17 +330,13 @@ def _try_load_anchor(
         )
         raise
     except AnchorLoadError:
-        # A required-core-tensor miss / arch mismatch is a LOUD configuration error, not
-        # recoverable corruption — surface it rather than silently quarantining a valid anchor.
+        # A required-core-tensor miss or arch mismatch is a LOUD configuration error, not
+        # recoverable corruption — never silently quarantine a valid anchor.
         raise
     except _CORRUPT_ARTIFACT_ERRORS as exc:
-        # AUDIT-1 F-17. This was a bare `except Exception`, and it is what turned F-17 from a
-        # loud failure into a silent one: a `RuntimeError` from `load_state_dict` — a shape
-        # mismatch, i.e. "this anchor is a different arch than I rebuilt" — landed here beside
-        # genuine disk corruption, and the caller responded by QUARANTINING a perfectly good
-        # file. The named set below is the corrupt/unreadable-artifact family only; anything
-        # else propagates, because a wrong-arch or wrong-config anchor is a configuration
-        # error an operator has to see, not a file to move aside.
+        # This was a bare `except Exception`, which made the defect silent: a `RuntimeError`
+        # from `load_state_dict` — a shape mismatch — landed here beside genuine disk corruption
+        # and the caller QUARANTINED a good file. Anything outside the named family propagates.
         _LOG.warning(
             "anchor_load_failed path=%s error=%s error_type=%s",
             str(candidate), exc, type(exc).__name__,
@@ -433,10 +351,9 @@ def load_best_model_resilient(
     device: torch.device,
     bootstrap_candidates: tuple[str, ...] | None = None,
 ) -> tuple[torch.nn.Module, Path, int | None, str] | None:
-    """Try best_model.pt → its .bak → bootstrap candidates. Returns
-    ``(model, source_path, step, representation)`` or None if all fail.
-
-    On corruption of ``best_model.pt`` the file is quarantined and the next candidate is tried."""
+    """Try best_model.pt, then its .bak, then bootstrap candidates; returns
+    `(model, source_path, step, representation)` or None if all fail. On corruption of
+    ``best_model.pt`` the file is quarantined and the next candidate is tried."""
     candidates = bootstrap_candidates if bootstrap_candidates is not None else _BOOTSTRAP_ANCHOR_CANDIDATES
 
     # 1. Live anchor.
@@ -458,8 +375,8 @@ def load_best_model_resilient(
             _LOG.info("anchor_recovered_from_bak path=%s", str(bak))
             return ref
 
-    # 3. Repo-relative bootstrap candidates — FOREIGN files: an encoding mismatch is by design
-    #    for any non-matching variant, so skip instead of raising.
+    # 3. Repo-relative bootstrap candidates — FOREIGN files, so an encoding mismatch is by
+    #    design for any non-matching variant and skips rather than raising.
     for rel in candidates:
         cand = Path(rel)
         ref = _try_load_anchor(
@@ -472,20 +389,11 @@ def load_best_model_resilient(
     return None
 
 
-# ══ resolve_anchor (injected eval_pipeline; representation off the declared arch) ══════
 def _resolve_declared_encoding(config: Any) -> str | None:
-    """The declared encoding NAME via THE one resolver (WPTS Phase P, ADJ-25/R104) — the
-    private identity-first shape-read this function used to carry is dead, closing the
-    nine-caller family WPBRIDGE collapsed.
-
-    Absence is legal HERE and only here: a WP10-only launch hands the anchor a bare hparams
-    dict that declares nothing, and `AnchorState` carries that truthfully as None. Only
-    `MissingEncodingError` maps to None — a dual-shape declaration that DISAGREES raises
-    `EncodingDeclarationConflictError` through this veneer (corrupt input must not degrade
-    into "no declaration"), and an UNREGISTERED name raises from the registry lookup (the
-    old read returned any string; the cross-check is the LAW-11 posture). The anchor-private
-    `{'encoding': {'name': ...}}` form died with the private read.
-    """
+    """The declared encoding NAME via THE one resolver. Absence is legal HERE and only here,
+    because a launch may hand the anchor a bare hparams dict that declares nothing; only
+    `MissingEncodingError` maps to None, while a disagreeing dual-shape declaration and an
+    unregistered name both raise, since corrupt input must not degrade into "no declaration"."""
     if not isinstance(config, dict):
         return None
     from mantis.encoding.resolvers import MissingEncodingError, resolve_from_config
@@ -510,35 +418,24 @@ def resolve_anchor(
     expected_anchor_sha256: str | None = None,
     bootstrap_candidates: tuple[str, ...] | None = None,
 ) -> AnchorState:
-    """Resolve the best-model anchor (the DEPLOY tag — WP-UNFREEZE, R49: deploy state
-    NEVER writes actor weights, at launch or any other time; the old ``inf_model``
-    launch-time sync arm is deleted, not merely unused).
+    """Resolve the best-model anchor — the DEPLOY tag, which NEVER writes actor weights.
 
-    INJECTED-collaborator contract (§c.6/§c.8): ``eval_pipeline`` is injected (no `train → eval`
-    import); when None the anchor stays unresolved (the pre-refactor invariant). Everything else
-    derives from ``trainer`` (``trainer.arch``/``.config``/``.device``/``.step``/
-    ``.inference_state_dict()``) when not passed explicitly. The trainer/anchor
-    cross-representation check compares DECLARED representations
-    (``trainer.arch.representation`` vs the anchor's ``metadata.arch.representation``) —
-    NEVER an arch-off-a-live-module sniff (§c.6).
+    With `eval_pipeline=None` the anchor stays unresolved; everything else derives from
+    ``trainer`` when not passed. The cross-representation check compares DECLARED
+    representations, never an arch-off-a-live-module sniff.
     """
     config = config if config is not None else dict(getattr(trainer, "config", {}) or {})
-    # A distinct name: rebinding the `device | None` parameter would keep its declared
-    # Optional type; this local is a plain torch.device.
+    # A distinct name: rebinding the `device | None` parameter would keep its declared Optional
+    # type; this local is a plain torch.device.
     resolved_device: torch.device = (
         device if device is not None else getattr(trainer, "device", torch.device("cpu"))
     )
     if declared_encoding is None:
         declared_encoding = _resolve_declared_encoding(config)
-    # NO CWD FALLBACK (item 5(a)). This used to default to `Path("checkpoints/best_model.pt")`
-    # when the caller passed nothing — and `train/loop.py` passed nothing, so the default was
-    # the production path. The promotion WRITE side (`DeployTagHooks`) was meanwhile handed
-    # the run's real `<out-dir>/checkpoints/best_model.pt`. Read and write therefore named
-    # DIFFERENT FILES for any run not launched from the repo root: every round scored the
-    # candidate against a stale or absent incumbent, and promotions landed somewhere the next
-    # round would not look. A wrong incumbent is silently wrong — the round still completes,
-    # still reports a win rate, still promotes — so this fails loud instead (LAW-11's spirit:
-    # an absent identity is an error, never a default).
+    # NO CWD FALLBACK. This used to default to a CWD-relative path while the promotion WRITE
+    # side got the run's real out-dir, so read and write named DIFFERENT FILES for any run not
+    # launched from the repo root — every round scored against a stale incumbent and promotions
+    # landed where the next round would not look, all of it silently.
     if best_model_path is None:
         raise ValueError(
             "resolve_anchor requires an explicit best_model_path. There is no default: the "
@@ -547,11 +444,9 @@ def resolve_anchor(
             "`mantis.train.anchor.canonical_anchor_path(checkpoint_dir)`."
         )
     bmp = Path(best_model_path)
-    # AUDIT-1 F-35: the trainer's DECLARED arch, not a defaulted read. A trainer with no
-    # `.arch` is a composition defect and must surface as one — the `getattr(..., "grid")` that
-    # stood here made the cross-representation lineage check below quietly compare grid to
-    # grid. Read HERE and not at the top of the function: the missing-`best_model_path`
-    # refusal is the louder, earlier failure and stays the first thing a caller sees.
+    # The trainer's DECLARED arch, not a defaulted read: a `getattr(..., "grid")` made the
+    # cross-representation check below quietly compare grid to grid. Read here rather than at
+    # the top so the missing-path refusal stays the first thing a caller sees.
     inf_representation = trainer.arch.representation
 
     if eval_pipeline is None:

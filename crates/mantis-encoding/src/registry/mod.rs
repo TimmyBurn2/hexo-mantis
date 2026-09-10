@@ -88,9 +88,7 @@ pub fn registry_sha_hex() -> &'static str {
     REGISTRY_SHA_HEX.as_str()
 }
 
-// --------------------------------------------------------------------------
 // TOML parsing — runs once via LazyLock.
-// --------------------------------------------------------------------------
 
 fn load() -> HashMap<&'static str, &'static RegistrySpec> {
     let root: Value = toml::from_str(REGISTRY_TOML)
@@ -152,9 +150,7 @@ fn parse_int_or_none(v: Option<&Value>) -> Result<Option<usize>, String> {
             }
         }
         Some(Value::String(s)) if s == "none" => Ok(None),
-        Some(Value::String(s)) => Err(format!(
-            "string value must be \"none\" sentinel; got {s:?}"
-        )),
+        Some(Value::String(s)) => Err(format!("string value must be \"none\" sentinel; got {s:?}")),
         Some(other) => Err(format!(
             "must be integer or string \"none\"; got {:?}",
             other.type_str()

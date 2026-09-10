@@ -184,7 +184,7 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
     ring = _synthetic_ring()
     caps = config["train"]["microbatch_caps"]
 
-    # ── run ≈2 steps through run_training_loop, then request save-then-exit ──────────────
+    # run ≈2 steps through run_training_loop, then request save-then-exit
     state = ShutdownState()
     seen = {"n": 0}
 
@@ -204,7 +204,7 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
     run_training_loop(trainer=tr, shutdown_state=state, step_fn=one_step, max_steps=10)
     assert tr.step == 2, "the loop must have driven exactly 2 training steps"
 
-    # ── the loop wrote a FINAL envelope-v2 checkpoint on shutdown_save ──────────────────
+    # the loop wrote a FINAL envelope-v2 checkpoint on shutdown_save
     ckpts = list(tmp_path.glob("*.ckpt"))
     assert ckpts, "run_training_loop must write an envelope-v2 checkpoint on shutdown_save"
     ckpt = ckpts[0]
@@ -213,13 +213,13 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
     assert payload["schema_version"] == CHECKPOINT_SCHEMA_VERSION == 2
     assert payload["kind"] == "full"
 
-    # ── resume from it (build_net(metadata.arch) + restore optim/scaler/step) ───────────
+    # resume from it (build_net(metadata.arch) + restore optim/scaler/step)
     tr2 = resume_trainer(Trainer, ckpt, fallback_config=config)
     assert tr2.loaded_from_full_checkpoint is True
     assert tr2.step == 2
     assert len(tr2.optimizer.param_groups) == 2
 
-    # ── clean shutdown on a SIMULATED signal (save-then-exit choreography) ──────────────
+    # clean shutdown on a SIMULATED signal (save-then-exit choreography)
     orig_int = signal.getsignal(signal.SIGINT)
     try:
         state2 = ShutdownState()

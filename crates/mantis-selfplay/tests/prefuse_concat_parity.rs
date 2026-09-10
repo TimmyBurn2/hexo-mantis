@@ -1,30 +1,17 @@
-//! ⊕ R335(e) Leg 2 (`S-PREFUSE`) — the parity harness, BANKED with a verdict.
+//! Parity harness for pre-fusing graph wire in the workers instead of on the server.
 //!
-//! WHAT THE CARD TURNS ON. `S-PREFUSE` moves `GraphWire::from_axis_graphs` off the server
-//! thread and into the workers, so the queue carries fused wire. SCOUT §5 P2 risk 3 names the
-//! condition the whole card depends on: *"fusing per worker fuses per worker's SLICE, so a pop
-//! that draws from k workers must concatenate k wires; if that concatenation is done on the
-//! server it re-introduces a share of the term the card removes. The design must fuse to a
-//! worker-local wire that the server can concatenate BY OFFSET ARITHMETIC ALONE, or the card
-//! is worth less than it looks."*
+//! The precondition the design turns on: a pop drawing from k workers must concatenate k
+//! worker-local wires BY OFFSET ARITHMETIC ALONE, or the server re-introduces a share of the
+//! term the change removes. `concat_by_offset` re-fuses nothing — it copies bulk arrays, adds
+//! running bases to the index and offset arrays, and splices `edge_index` — so byte-identity
+//! with a whole-batch fuse is the proof.
 //!
-//! THIS FILE ANSWERS THAT, and it needs no GPU to do it. `concat_by_offset` below re-fuses
-//! NOTHING: it never touches an `AxisGraph`, only the already-fused wires, and it does exactly
-//! the four things a server-side concatenation is allowed to do — copy bulk arrays, add a
-//! running node base to the two index arrays, add running bases to the three offset arrays,
-//! and splice `edge_index`'s two halves. If its output is byte-identical to a whole-batch
-//! `from_axis_graphs`, offset arithmetic alone suffices and the card's seam is viable.
+//! The splice is the non-obvious part: `edge_index` is `[src_global (E) ‖ dst_global (E)]`, so
+//! concatenating two wires is a four-way interleave, not an append. An append passes every
+//! length and offset check while being wrong about every edge.
 //!
-//! THE SPLICE IS THE NON-OBVIOUS PART, and it is why this is a test and not an assertion in a
-//! design note. `edge_index` is `[src_global (E) ‖ dst_global (E)]` — ALL srcs then ALL dsts —
-//! so concatenating two wires is not an append. It is a four-way interleave: A.src, B.src+base,
-//! A.dst, B.dst+base. An implementation that appends would produce a wire that still passes
-//! every length and offset check and is silently wrong about every edge.
-//!
-//! WHAT THIS FILE DOES NOT CLAIM. It does not measure the card. The bar R335(e) sets for
-//! `S-PREFUSE` is `ms/sim` on the CONTENDED CARD, and there is no card in this workspace —
-//! see `PERF_TRANCHE3_RESULTS.md` §3. The leg is banked; this is the half of it that could be
-//! finished honestly, and it is the half that carried the risk.
+//! This measures no throughput: that bar is `ms/sim` on a contended card, and there is none in
+//! this workspace.
 
 #[path = "common/mod.rs"]
 mod common;
@@ -57,7 +44,7 @@ fn assert_field_equal(a: &GraphWireArrays, b: &GraphWireArrays, ctx: &str) {
 #[test]
 fn offset_concatenation_is_byte_identical_to_the_whole_batch_fuse() {
     for (radius, seed) in [(6u16, 0x0A1F_6675_7365_0001u64), (8, 0x0A1F_6675_7365_0002)] {
-        // 40 graphs is the ledger's measured pop; the splits are the plausible worker mixes.
+        // 40 graphs is the measured pop; the splits are the plausible worker mixes.
         let graphs = corpus(40, radius, seed);
         let whole = fuse(&graphs);
         for split in [vec![40], vec![20, 20], vec![8; 5], vec![1; 40], vec![13, 1, 26]] {
@@ -74,11 +61,9 @@ fn offset_concatenation_is_byte_identical_to_the_whole_batch_fuse() {
     }
 }
 
-/// PLANTED BREAK, and it plants the mistake the layout actually invites: appending
-/// `edge_index` wholesale instead of splicing its two halves. The result has the right length
-/// and the right offsets — every structural check the collate runs would pass it — and it is
-/// wrong about every edge in every graph after the first. If this test ever stops failing, the
-/// parity assertion above has stopped comparing `edge_index`.
+/// PLANTED BREAK: append `edge_index` wholesale instead of splicing its halves. The result has
+/// the right length and offsets and is wrong about every edge after the first graph, so if this
+/// stops failing the parity assertion above has stopped comparing `edge_index`.
 #[test]
 fn a_naive_edge_index_append_is_caught() {
     let graphs = corpus(6, 6, 0x0A1F_6675_7365_0003);

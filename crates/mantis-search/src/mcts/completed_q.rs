@@ -1,20 +1,12 @@
 //! Gumbel completed-Q math (Danihelka et al., ICLR 2022 §4; `mctx/_src/qtransforms.py`).
 //!
-//! ONE copy of the arithmetic, shared by the three surfaces that need it: the dense
-//! improved-policy export (`policy.rs::get_improved_policy`), the ragged legal-set export
-//! (`get_improved_policy_ls`) and the root/interior selectors. The two exporters differ
-//! ONLY in off-window handling + output container, and that divergence stays in each
-//! caller's scatter stage; the shared fns return per-child masses in the SAME order the
-//! caller supplied its `CqChild` slice.
-//!
-//! The legacy (pre-Mctx) completion — mixed value off the root's running mean `W/N`,
-//! sigma-scaled against raw Q in [-1, 1] — is DELETED with its dialect. What remains is
-//! `qtransform_completed_by_mix_value`: the mixed value off the root's RAW network value,
-//! min-max rescaled, scaled by `(c_visit + max_visits) * c_scale`.
+//! ONE copy of the arithmetic, shared by the dense improved-policy export, the ragged
+//! legal-set export and the root/interior selectors. Off-window handling and output container
+//! are each caller's scatter stage; the shared fns return per-child masses in the SAME order
+//! the caller supplied its `CqChild` slice.
 
-/// One root child's completed-Q inputs, pre-extracted by the caller's single
-/// child scan. `q_val` is already in ROOT perspective (caller applies the
-/// `mr==1 ? -1 : 1` q_sign flip when reading `w_value`).
+/// One root child's completed-Q inputs. `q_val` is already in ROOT perspective (the caller
+/// applies the `mr==1 ? -1 : 1` q_sign flip when reading `w_value`).
 #[derive(Clone, Copy)]
 pub(super) struct CqChild {
     pub visits: u32,
@@ -23,23 +15,16 @@ pub(super) struct CqChild {
     pub q_val: f32,
 }
 
-/// Zero-visit prior-fallback masses: normalized priors, one per `CqChild` in input
-/// order. When `total_prior == 0` the raw (unnormalized) priors pass through unchanged.
+/// Zero-visit prior-fallback masses: normalized priors, one per `CqChild` in input order.
+/// When `total_prior == 0` the raw (unnormalized) priors pass through unchanged.
 ///
-/// The completed-Q exporters do NOT use this — their own arithmetic already returns the
-/// normalized prior when nothing is visited (see `mctx_completed_qvalues`). It is the
-/// VISIT-COUNT exporter's zero-visit arm (`get_policy_ls`), which has no other way to
-/// answer, so the ls seam keeps ONE fallback authority instead of two.
+/// Only the VISIT-COUNT exporter's zero-visit arm uses it; the completed-Q exporters already
+/// return the normalized prior when nothing is visited.
 #[inline]
 pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
     let mut masses: Vec<f32> = children.iter().map(|ch| ch.prior).collect();
-    // WP12-R Phase T: the normalizer accumulates in f64 (cast once to f32).
-    // A sequential f32 sum drifts ~2e-6 relative over a 192-term sum (measured when
-    // MAX_CHILDREN_PER_NODE was 192; the drift grows with the term count, and R347(c) raised
-    // that cap), so the zero-visit fallback shipped a "distribution" missing unity by more than
-    // the target-integrity oracles tolerate. Bit-identical on every committed
-    // golden fixture (S1/S2_RED3 all-unvisited verified byte-equal); the
-    // divisions below stay f32 — no formula change, accumulation only.
+    // The normalizer accumulates in f64: a sequential f32 sum drifts ~2e-6 relative over a
+    // 192-term sum, which misses unity by more than the target-integrity oracles tolerate.
     let total_prior = masses.iter().map(|&m| f64::from(m)).sum::<f64>() as f32;
     if total_prior > 0.0 {
         for m in &mut masses {
@@ -49,22 +34,15 @@ pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
     masses
 }
 
-// ── Completion ───────────────────────────────────────────────────────────────
-
-/// Mctx's completed Q-values: mixed-value completion off the RAW root value,
-/// min-max rescaled, then scaled by `(c_visit + max_visits) * c_scale`.
+/// Mctx's completed Q-values: mixed-value completion off the RAW root value, min-max
+/// rescaled, then scaled by `(c_visit + max_visits) * c_scale`.
 ///
-/// `c_visit` is Mctx's `maxvisit_init` and `c_scale` is its `value_scale` — the
-/// same slot, not a second knob (see `SelfplayConfig`'s docstring).
+/// `c_visit` is Mctx's `maxvisit_init` and `c_scale` its `value_scale` — the same slot, not a
+/// second knob. `raw_value` is the network's value for the node before any child statistic
+/// entered it, NOT the running mean `W/N`.
 ///
-/// `raw_value` is `tree.raw_values[node]` — the value the network produced for the node
-/// before any child statistic entered it, NOT the running mean `W/N`. The distinction is
-/// the one the deleted legacy completion got wrong.
-///
-/// All-unvisited is not special-cased: every completed value is then `v_mix`,
-/// the rescale maps a constant vector to zeros, and the caller's
-/// `softmax(log_prior + 0)` is the prior. Verified against Mctx's own output for
-/// that case rather than reasoned about.
+/// All-unvisited is not special-cased: every completed value is then `v_mix`, the rescale maps
+/// a constant vector to zeros, and the caller's `softmax(log_prior + 0)` is the prior.
 pub(super) fn mctx_completed_qvalues(
     children: &[CqChild],
     raw_value: f32,
@@ -86,8 +64,8 @@ pub(super) fn mctx_completed_qvalues(
         sum_n += ch.visits;
         max_n = max_n.max(ch.visits);
         if ch.visits > 0 {
-            // Mctx: `prior_probs = maximum(finfo.tiny, prior_probs)` BEFORE the sum,
-            // so a visited child with a zero prior cannot make the denominator zero.
+            // Mctx floors the priors BEFORE the sum, so a visited child with a zero prior
+            // cannot make the denominator zero.
             let p = ch.prior.max(f32::MIN_POSITIVE);
             sum_probs += p;
             prior_weighted_q += p * ch.q_val;
@@ -107,8 +85,7 @@ pub(super) fn mctx_completed_qvalues(
         .map(|ch| if ch.visits > 0 { ch.q_val } else { v_mix })
         .collect();
 
-    // Rescale over the COMPLETED vector — Mctx's `_rescale_qvalues` takes min/max
-    // across all actions AFTER completion, not across the visited ones only.
+    // Min/max run across all actions AFTER completion, not across the visited ones only.
     let mut min_v = f32::INFINITY;
     let mut max_v = f32::NEG_INFINITY;
     for &v in &completed {
@@ -161,12 +138,11 @@ pub(super) fn mctx_improved_policy_masses(
 /// Mctx `_prepare_argmax_input`: `softmax(log_prior + completed_q) - visits / (1 + Σvisits)`,
 /// one score per child in input order. The caller argmaxes it.
 ///
-/// A PURE FUNCTION over three slices rather than a method on the tree, so the parity test
-/// can pin it against Mctx's own `interior_argmax_input` without building a synthetic tree
-/// — the alternative was pinning only the argmax, which many wrong score vectors share.
+/// A pure function over three slices so the parity test can pin the whole score vector, which
+/// many wrong vectors would share an argmax with.
 ///
-/// Empty in, empty out. Empty also on a degenerate softmax (no finite logit, or a sum-exp
-/// that underflows to zero), so the caller can tell "no answer" from "answer 0".
+/// Empty in, empty out. Empty also on a degenerate softmax (no finite logit, or a sum-exp that
+/// underflows to zero), so the caller can tell "no answer" from "answer 0".
 pub(super) fn mctx_interior_argmax_input(
     priors: &[f32],
     completed: &[f32],

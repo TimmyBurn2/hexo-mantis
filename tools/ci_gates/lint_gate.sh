@@ -146,6 +146,12 @@ if [ "${1:-}" = "--self-test" ]; then
   self_test || exit 1
 fi
 
+# R346(f) comment ratchet. FIRST because it needs no node: a pyright refusal must not
+# take the comment measures down with it.
+echo "lint_gate: comment-length ratchet (R346(f))"
+uv run python tools/ci_gates/comment_lint.py \
+  || { echo "lint_gate: COMMENT RATCHET RED" >&2; exit 1; }
+
 echo "lint_gate: ruff (curated select, pyproject-authoritative)"
 run_ruff || { echo "lint_gate: RUFF RED" >&2; exit 1; }
 

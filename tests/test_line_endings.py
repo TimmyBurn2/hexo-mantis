@@ -1,31 +1,15 @@
-"""Line-ending discipline - the pin for the `.gitattributes` protection (P0-02).
+"""Line-ending discipline - the pin for the `.gitattributes` protection.
 
-Byte-significant files are hashed, embedded, or compared byte-for-byte. `core.autocrlf` is a
-PER-DEVELOPER git setting that defaults to `true` on Git for Windows, so without repository-level
-attributes the bytes in a working tree depended on who cloned it. Measured before `.gitattributes`
-existed: 33 of 65 manifest-pinned fixtures failed their sha256 on a Windows checkout, and
-`crates/mantis-encoding/src/registry.toml` - whose sha256 IS the cross-language identity handshake
-- hashed to `1c439678...` instead of `86be0cf1...`, so the compiled extension carried a registry
-identity that no Linux build can produce.
-
-Two independent pins here, because they fail for different reasons:
-
-* `test_gitattributes_marks_every_byte_significant_path` guards the CAUSE. It fails when a rule is
-  weakened, or when a new byte-significant file is added outside the covered globs - the drift that
-  would otherwise be discovered months later as an unexplainable digest mismatch.
-* `test_no_byte_significant_file_was_crlf_converted` guards the SYMPTOM, and names it. The failure
-  it replaces ("sha256 mismatch") sent the reader toward re-minting the manifest, which is the trap:
-  the manifest is right, the checkout is wrong, and a re-mint breaks Linux CI.
-
-Deliberately NOT "assert no fixture contains b'\\r\\n'": some manifest-pinned fixtures
-legitimately do (`b6_hotpath.npz` - chance byte pairs inside pickled/compressed streams).
-That rule would red on correct files. The comparison below is against
-git's own stored blob, so it fires only when the working tree differs from the repository *by line
-endings alone*, and stays silent on ordinary content edits.
-
-This file is deliberately pure ASCII. Its assertion messages are read in a terminal, and a
-non-ASCII message mojibakes on a cp1252 console - which is precisely the platform whose default
-setting causes the defect being diagnosed.
+Byte-significant files are hashed, embedded, or compared byte-for-byte, and `core.autocrlf` is a
+PER-DEVELOPER git setting defaulting to `true` on Git for Windows. Measured before
+`.gitattributes` existed: 33 of 65 manifest-pinned fixtures failed their sha256 on a Windows
+checkout, and `crates/mantis-encoding/src/registry.toml` - whose sha256 IS the cross-language
+identity handshake - hashed to `1c439678...` instead of `86be0cf1...`. One pin guards the CAUSE,
+the other the SYMPTOM, because "sha256 mismatch" sends the reader toward re-minting the
+manifest - the trap: the manifest is right and the checkout is wrong. The comparison is against
+git's own stored blob, so it fires only on a pure line-ending difference. This file is
+deliberately pure ASCII: a non-ASCII assertion message mojibakes on the cp1252 console whose
+default causes the defect.
 """
 from __future__ import annotations
 
@@ -39,14 +23,8 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES_ROOT = REPO_ROOT / "tests" / "fixtures"
 MANIFEST_PATH = FIXTURES_ROOT / "manifest.toml"
 
-#: Byte-significant beyond the fixture manifest: `include_str!`-ed into the engine
-#: (`crates/mantis-encoding/src/registry/mod.rs:25`), and its sha256 is exported across the
-#: FFI as `_engine.registry_sha()` and handshaken by CI gate 8.
-#:
-#: AUDIT-1 F-36 removed the second entry, `manifests.toml`: it and its parser were a SECOND
-#: authority over the corpus/anchor/held-out pins that `mantis.encoding.resolvers` actually
-#: enforces, reached by nothing but their own test, and drifted from the live dicts. There is
-#: one embedded data file now.
+#: Byte-significant beyond the fixture manifest: `include_str!`-ed into the engine, and its
+#: sha256 crosses the FFI as `_engine.registry_sha()` and is handshaken by CI gate 8.
 EMBEDDED_BYTE_SIGNIFICANT = (
     "crates/mantis-encoding/src/registry.toml",
 )
@@ -64,12 +42,8 @@ def _git_bytes(*args: str, stdin: bytes | None = None) -> bytes:
 
 
 def byte_significant_paths() -> list[str]:
-    """Every repo-relative path whose exact bytes are load-bearing.
-
-    Derived, never hand-listed: the fixture half is read out of `manifest.toml` itself, so a row
-    added tomorrow is covered by both pins on the next run without anyone remembering to edit this
-    file. Same derive-don't-transcribe rule the manifest checker follows.
-    """
+    """Every repo-relative path whose exact bytes are load-bearing. Derived, never hand-listed:
+    the fixture half is read out of `manifest.toml`, so a row added tomorrow is covered."""
     rows = tomllib.loads(MANIFEST_PATH.read_bytes().decode("utf-8"))["required"]
     paths = [f"tests/fixtures/{row['path']}" for row in rows]
     paths.extend(EMBEDDED_BYTE_SIGNIFICANT)
@@ -77,11 +51,8 @@ def byte_significant_paths() -> list[str]:
 
 
 def _head_blobs(paths: list[str]) -> dict[str, bytes]:
-    """`path -> bytes as git stores them`, for paths present in HEAD.
-
-    One `git cat-file --batch` call rather than N `git show`s: 67 subprocess spawns is a
-    measurable cost on Windows and this runs in the default tier.
-    """
+    """`path -> bytes as git stores them`, for paths present in HEAD. One `git cat-file --batch`
+    call rather than N `git show`s: 67 subprocess spawns is a measurable cost on Windows."""
     stdin = "".join(f"HEAD:{p}\n" for p in paths).encode("utf-8")
     out = _git_bytes("cat-file", "--batch", stdin=stdin)
     blobs: dict[str, bytes] = {}
@@ -100,11 +71,8 @@ def _head_blobs(paths: list[str]) -> dict[str, bytes]:
 
 
 def crlf_diagnosis(path: str, disk: bytes, blob: bytes) -> str | None:
-    """Return a named diagnosis iff `disk` is `blob` with LF expanded to CRLF, else None.
-
-    The `disk != blob` guard keeps ordinary content edits out: only a pure line-ending expansion is
-    reported, so this cannot red on a legitimately re-minted golden.
-    """
+    """Return a named diagnosis iff `disk` is `blob` with LF expanded to CRLF, else None. The
+    `disk != blob` guard keeps ordinary content edits out, so a re-minted golden cannot red."""
     if disk == blob:
         return None
     if disk.replace(b"\r\n", b"\n") != blob:
@@ -140,14 +108,10 @@ def test_gitattributes_exists_and_sets_an_lf_default() -> None:
 
 
 def test_gitattributes_marks_every_byte_significant_path() -> None:
-    """CAUSE pin: every hashed/embedded path must resolve to `-text` (git reports `unset`).
-
-    Derived from the manifest, so a fixture added under a directory the globs miss fails here
-    rather than silently inheriting the text default.
-    """
+    """CAUSE pin: every hashed or embedded path must resolve to `-text` (git reports `unset`),
+    derived from the manifest so a fixture the globs miss fails here rather than inheriting."""
     paths = byte_significant_paths()
-    # A FLOOR against a broken derivation, not a tally of the manifest: it moves DOWN only when
-    # fixture rows are deleted, and R346(f) took the dense encode/replay/augment banks.
+    # A FLOOR against a broken derivation, not a tally: it moves DOWN only when rows are deleted.
     assert len(paths) >= 40, (
         f"census collapsed to {len(paths)} paths: the derivation is broken and this pin "
         "would be vacuous"
@@ -203,9 +167,6 @@ def test_shell_scripts_are_lf_in_the_working_tree() -> None:
     )
 
 
-# --- LAW-07: the detector's own trigger, self-tested --------------------------------------
-
-
 def test_crlf_diagnosis_bites_on_a_converted_file() -> None:
     """A pin that cannot fail is decoration. Prove the detector fires and names the cause."""
     blob = b"alpha\nbeta\ngamma\n"
@@ -226,11 +187,8 @@ def test_crlf_diagnosis_is_silent_on_clean_and_on_content_edits() -> None:
 
 
 def test_crlf_diagnosis_is_silent_on_binaries_that_contain_crlf_natively() -> None:
-    """3 of the 65 fixtures contain b'\\r\\n' legitimately (.pt / .npz compressed streams).
-
-    Encoded as a real case rather than a comment: a naive `b'\\r\\n' not in raw` pin would red on
-    correct files, and this is the arm that stops someone "simplifying" it back to that.
-    """
+    """Some fixtures contain b'\\r\\n' legitimately, inside compressed streams: a naive
+    `b'\\r\\n' not in raw` pin would red on correct files, so the case is encoded, not commented."""
     blob = b"PK\x03\x04\r\n\x00\x91payload\r\n"
     assert crlf_diagnosis("f.npz", blob, blob) is None, "native CRLF in a binary flagged as damage"
 

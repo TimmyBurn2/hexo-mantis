@@ -48,7 +48,7 @@ def _v2_net(spec):
     return net, arch
 
 
-# ── the function ─────────────────────────────────────────────────────────────────────────
+# the function
 def test_a_v2_stamp_names_its_kind_and_a_pre_discriminator_stamp_is_the_incumbent_era():
     assert stamped_arch_kind({"arch": {"arch_kind": "GnnArchV2"}}, representation="graph") == "GnnArchV2"
     assert stamped_arch_kind({"arch": {"arch_kind": "GnnArch"}}, representation="graph") == "GnnArch"
@@ -65,7 +65,7 @@ def test_an_unknown_stamped_kind_or_representation_is_refused_not_nearest_fitted
         stamped_arch_kind({}, representation="dense")
 
 
-# ── strip_and_restamp: the source's kind crosses the strip ───────────────────────────────
+# strip_and_restamp: the source's kind crosses the strip
 def test_strip_and_restamp_keeps_a_V2_source_V2(tmp_path):
     """THE PLANTED BREAK. Resolve the arch from the incumbent table instead of the stamp and the
     stripped artifact is stamped `GnnArch`: this row reds."""

@@ -1,18 +1,16 @@
-# >300 lines: the five filesystem/registry section emitters (§1-4/§6) are kept
-# together — they share the AuditReport/entry vocabulary and their output format
-# is pinned as one unit; §5 (the hardcode grep) lives in tools/hardcode_scan.py.
+# >300 lines: the filesystem/registry section emitters share the AuditReport/entry vocabulary
+# and their output format is pinned as one unit; §5, the hardcode grep, lives in
+# tools/hardcode_scan.py.
 """Encoding audit section emitters.
 
-Section emitters (canonical order):
+Section emitters, in canonical order:
     §1 _section_registered    — registered encodings (compiled registry)
     §2 _section_checkpoints   — .pt files declared vs inferred (torch)
     §3 _section_corpora       — .npz files sidecar vs filename heuristic
     §4 _section_variants      — variant configs resolve under registry
-    §6 _section_cross_table   — ckpts ↔ corpora via sha256 (INV-1..6)
+    §6 _section_cross_table   — ckpts ↔ corpora via sha256
 
-§5 (_section_hardcode) lives in tools/hardcode_scan.py (loaded dynamically by
-the CLI). §1 reads the compiled registry via `all_specs()`; §6 reproduces the
-WP3 Rust reference INV-1..6 logic.
+§5 (_section_hardcode) lives in tools/hardcode_scan.py, loaded dynamically by the CLI.
 """
 from __future__ import annotations
 
@@ -37,17 +35,11 @@ from mantis.encoding.registry import _load as _load_registry
 from mantis.encoding.resolvers import detect_encoding_from_state_dict
 from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
-# Deliberately-unstamped dead checkpoint directories. These prefixes are
-# skipped in §2 checkpoint audit (info, not error).
+# Deliberately-unstamped dead checkpoint directories: §2 skips them as info, not error.
 _DEAD_CKPT_PREFIXES: tuple[str, ...] = (
     "checkpoints/broken/",
     "checkpoints/pretrain/",
 )
-
-
-# ---------------------------------------------------------------------------
-# Section 1 — Registered encodings
-# ---------------------------------------------------------------------------
 
 
 def _section_registered(report: AuditReport) -> None:
@@ -82,11 +74,6 @@ def _section_registered(report: AuditReport) -> None:
         )
     report.add_finding("info", "§1", f"{len(specs)} encoding(s) registered")
     report.sections["§1"] = sect
-
-
-# ---------------------------------------------------------------------------
-# Section 2 — Checkpoints (torch)
-# ---------------------------------------------------------------------------
 
 
 def _extract_state_dict(obj: object) -> dict | None:
@@ -148,12 +135,9 @@ def _section_checkpoints(
         inferred = "-"
         status = "?"
         try:
-            # AUDIT-1 F-20. `weights_only=False` EXECUTES arbitrary pickle on load, and
-            # `docs/contracts/checkpoint_envelope.md` asserts every read surface is
-            # weights-only with no pickle-exec fallback — an assertion that was false at HEAD,
-            # here and in `resolvers.resolve_from_checkpoint`. A legacy artifact that will not
-            # load weights-only now reports LOAD-ERR, which is a finding an operator can act
-            # on rather than a payload this tool executed to describe.
+            # Weights-only with no pickle-exec fallback, as the checkpoint-envelope contract
+            # requires: a legacy artifact that will not load reports LOAD-ERR instead of being
+            # executed to describe it.
             obj = torch.load(p, map_location="cpu", weights_only=True)
         except (OSError, RuntimeError, ValueError, EOFError) as e:
             sect.rows.append([rel, "-", "-", f"LOAD-ERR ({type(e).__name__})"])
@@ -216,13 +200,8 @@ def _section_checkpoints(
     report.sections["§2"] = sect
 
 
-# ---------------------------------------------------------------------------
-# Section 3 — Corpora (npz sidecar + sha)
-# ---------------------------------------------------------------------------
-
-
 _CORPUS_FILENAME_HEURISTIC: tuple[tuple[str, str], ...] = (
-    # Order matters — most-specific first. Best-effort filename→encoding.
+    # Order matters: most-specific first.
     ("v6w25", "v6w25"),
     ("v6_live2_ls", "v6_live2_ls"),
     ("gnn_corpus_r8", "gnn_axis_r8"),
@@ -231,12 +210,10 @@ _CORPUS_FILENAME_HEURISTIC: tuple[tuple[str, str], ...] = (
 
 
 def _infer_corpus_from_filename(name: str) -> str:
-    """Best-effort filename→encoding heuristic; default v6.
+    """Guess an encoding from a corpus filename, defaulting to v6.
 
-    NOT a resolver. Its only consumer compares the guess against the sidecar's DECLARED
-    encoding purely to emit a `warn` finding when the two disagree; it never selects an
-    encoding for encoding, training or inference, so the default cannot mis-encode
-    anything — the worst it can do is make an audit report's warning noisier or quieter.
+    Not a resolver: the only consumer compares the guess against the sidecar's declared
+    encoding to warn when they disagree, so the default cannot mis-encode anything.
     """
     for needle, encoding in _CORPUS_FILENAME_HEURISTIC:
         if needle in name:
@@ -355,22 +332,14 @@ def _section_corpora(
     report.sections["§3"] = sect
 
 
-# ---------------------------------------------------------------------------
-# Section 4 — Variants
-# ---------------------------------------------------------------------------
-
-
 def _section_variants(report: AuditReport, variants_dir: Path) -> None:
     sect = AuditSection(
         title="§4 Variants",
         headers=("path", "resolved", "status"),
     )
     if not variants_dir.is_dir():
-        # AUDIT-1 F-43. `configs/variants/` DOES NOT EXIST — R1 retired hand-varied configs in
-        # favour of minted ones, so this section warned about a missing directory on every run
-        # of the audit. A warning that always fires is the corrosion R186 names: it teaches its
-        # readers to wave warnings through, and the next REAL one arrives in a record where
-        # that is already the habit. Absence is the EXPECTED state and is reported as info.
+        # Configs are minted, so an absent variants dir is the EXPECTED state and reports as
+        # info: a warning that always fires teaches its readers to wave warnings through.
         sect.notes.append(
             f"no variants dir at {variants_dir} — EXPECTED: configs are minted, never "
             "hand-varied (R1), so this section has nothing to resolve"
@@ -400,9 +369,8 @@ def _section_variants(report: AuditReport, variants_dir: Path) -> None:
             else p
         )
         try:
-            # AUDIT-1 F-45. THE loader's parser, not a second `yaml.safe_load`. This section
-            # exists to report on "whatever `load_config` accepts"; a bare safe_load is
-            # LAST-WINS on a duplicate key, so it reported clean on files the loader refuses.
+            # The loader's own parser: a bare `yaml.safe_load` is last-wins on a duplicate key,
+            # so it reports clean on files `load_config` refuses.
             cfg = parse_config_yaml(p) or {}
         except DuplicateKeyError as e:
             sect.rows.append([rel, "-", "DUPLICATE-KEY"])
@@ -448,21 +416,16 @@ def _section_variants(report: AuditReport, variants_dir: Path) -> None:
     report.sections["§4"] = sect
 
 
-# ---------------------------------------------------------------------------
-# Section 6 — Cross-table consistency (ckpts ↔ corpora via sha256)
-# ---------------------------------------------------------------------------
-
-
 def _section_cross_table(
     report: AuditReport,
     ckpts: list[CheckpointEntry],
     corpora: list[CorpusEntry],
     corpora_dir: Path,
 ) -> None:
-    """INV-1..6 — reproduces the WP3 Rust reference (mantis_encoding::audit).
+    """Cross-check checkpoints against corpora, reproducing the Rust reference invariants.
 
-    Joins ckpt.corpus_sha256 → corpus.sha256 (actual file hash). Emits per-row
-    findings plus an INV-6 sweep for orphan corpora.
+    Joins `ckpt.corpus_sha256` to the corpus file's actual hash, emitting per-row findings
+    plus a sweep for orphan corpora.
     """
     sect = AuditSection(
         title="§6 Cross-table consistency",
@@ -523,7 +486,7 @@ def _section_cross_table(
             )
             report.add_finding("info", "§6", f"{rel} ↔ {match.path.name}: {ck.encoding_name}")
 
-    # INV-6 — orphan corpora (sha unreferenced by any stamped ckpt).
+    # Orphan corpora: a sha unreferenced by any stamped checkpoint.
     for co in corpora:
         if co.sha256 is not None and co.sha256 not in referenced_shas:
             sev: Severity = "warn" if report.strict else "info"

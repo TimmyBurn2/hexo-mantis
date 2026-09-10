@@ -1,15 +1,8 @@
 """Shared temperature utilities for the self-play pipeline.
 
-The module-level `BOARD_SIZE` / `N_ACTIONS` constants of the frozen original are NOT ported
-(self-labelled "DEPRECATED … v6-only legacy"): every geometry/action-space value is
-spec-derived through `mantis.encoding.lookup(name)`, and no new-side consumer of the
-constants exists (LAW-08).
-
-`get_temperature` is the LEGACY mode-based resolver used by the Python-side
-the bot paths. It is NOT the Rust training-path resolver — that one is
-`SelfPlayHParams`' `_resolve_playout_cap_temperature` (`hparams.py`), which feeds
-`SelfPlayRunnerConfig`. Both funnel into `quarter_cosine_temperature`, the ONE shared
-schedule shape.
+`get_temperature` is the mode-based resolver the Python bot paths use; the training path
+resolves through `SelfPlayHParams` in `hparams.py` instead. Both funnel into
+`quarter_cosine_temperature`, the one shared schedule shape.
 """
 from __future__ import annotations
 
@@ -18,7 +11,7 @@ from typing import Any
 
 
 def quarter_cosine_temperature(compound_move: int, threshold: int, temp_min: float) -> float:
-    """Within-game quarter-cosine temperature — the single shared mechanism.
+    """Return the within-game quarter-cosine temperature.
 
     Mirrors the Rust training-path `mantis_search::compute_move_temperature` exactly:
 
@@ -58,7 +51,7 @@ def get_temperature(ply: int, mode: str, config: dict[str, Any]) -> float:
         return 0.0
     if mode == "bootstrap":
         return 0.5
-    # Training / exploration mode: shared compound-turn quarter-cosine.
+    # Training/exploration mode: the shared compound-turn quarter-cosine.
     mcts_cfg = config.get("mcts", config)
 
     def _get(key: str) -> Any:
@@ -66,7 +59,7 @@ def get_temperature(ply: int, mode: str, config: dict[str, Any]) -> float:
 
     threshold = _get("temperature_threshold_compound_moves")
     if threshold is None:
-        # Legacy eval/bot alias: ply-clock threshold → compound-turns ((ply+1)//2).
+        # Legacy eval/bot alias: a ply-clock threshold converts to compound turns.
         legacy_ply = _get("temperature_threshold_ply")
         threshold = (int(legacy_ply) + 1) // 2 if legacy_ply is not None else 0
     threshold = int(threshold)

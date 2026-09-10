@@ -1,36 +1,19 @@
-// R8 >300 justify: ONE oracle (S2w) needs a live graph runner — the mock graph producer,
-// the off-window re-derivation and the drain loop are its single-purpose harness and
-// belong in the frozen file with the assert they feed.
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — S2w: wire/record carry, finalize → drain
-//! (DESIGN_T §1 stage 2w; O-2 "one graph-drain test asserting visits verbatim through
-//! finalize→drain"). Written at T-2, byte-frozen through IMPL. Sits BESIDE the existing
-//! drain suites (drain_shutdown.rs) rather than editing a frozen file.
+// R8 justify: ONE oracle needs a live graph runner — the mock graph producer, the off-window
+// re-derivation and the drain loop are its single-purpose harness.
+//! Wire/record carry through finalize → drain: visits reach the drain verbatim.
 //!
-//! Drive: a REAL 1-worker graph runner (gnn_axis_v1) with a mock graph producer
-//! (uniform legal-node probs through the production `assemble_ls_from_gnn_probs`) and a
-//! 40-ply RANDOM opening, so every recorded position carries off-window visit mass. The
-//! game ply-caps within a few moves; `drain_graph_records` returns the finalized records.
+//! Drive: a REAL 1-worker graph runner (gnn_axis_v1) with a mock graph producer (uniform
+//! legal-node probs through the production `assemble_ls_from_gnn_probs`) and a 40-ply random
+//! opening, so recorded positions carry off-window visit mass. The game ply-caps within a few
+//! moves and `drain_graph_records` returns the finalized records. Measured on this generator:
+//! 8 of 8 records carry off-window visit coords (20 coords) at 8 sims.
 //!
-//! R346(f) EDIT, DISCLOSED. The opening used to be a 40-ply DISPERSED prefix (the r153
-//! line-dispersal rule) planted through `seed_fraction` / `seed_corpus`. Those keys went
-//! with the seed-corpus lever and the runner has no start-position seeding left, so the
-//! opening is `random_opening_plies` instead. MEASURED before the swap rather than
-//! assumed: over the drain, every record still carries off-window visit coords at 8 sims
-//! (8 of 8 records, 20 coords), so the regime the de-vacuum assert exists for is still
-//! reached — and that assert is what would red if a future change stopped reaching it.
+//! Asserts, per drained record: the visit target is a full-mass distribution (Σ == 1 ± 1e-4 —
+//! finalize stamps outcome/value_valid/game_length ONLY and must not touch `visits`), coords
+//! are unique, and across the drain at least one record carries an OFF-WINDOW visit coord,
+//! re-derived from the record's own stones — the de-vacuum precondition.
 //!
-//! Asserts, per drained record: the visit target is a full-mass distribution
-//! (Σ == 1 ± 1e-4 — finalize stamps outcome/value_valid/game_length ONLY, it must not
-//! touch `visits`), coords are unique, and — across the drain — at least one record
-//! carries an OFF-WINDOW visit coord (re-derived from the record's own stones), the
-//! de-vacuum precondition that proves the carry was exercised where the old drop lived.
-//!
-//! PRE-FIX status at HEAD: GREEN is the honest expectation — on the LINE-dispersed
-//! prefix every visited off-window child is COVERED (mint survey: drop 0.000000 on that
-//! generator), so HEAD already exports full mass here and this oracle pins the CARRY,
-//! not the stage-1 defect (which O1r/S1a own). Killer (PREREG_T §3 as amended at T-2):
-//! M-K (a perturbed visit in the finalize push breaks Σ == 1); M-J also reds this suite
-//! (recorded prereg AMENDMENT (T-2) — the record fn is on this path).
+//! Killer: M-K (a perturbed visit in the finalize push breaks Σ == 1); M-J also reds this suite.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -119,7 +102,7 @@ fn s2w_drained_graph_records_carry_full_mass_visits_verbatim() {
     let producer = spawn_graph_producer(runner.graph_producer(), n_actions, served.clone());
 
     runner.start();
-    // Wait (bounded) for >=1 COMPLETED seeded game so drain returns finalized records.
+    // Bounded wait for >=1 COMPLETED game, so drain returns finalized records.
     let deadline = Instant::now() + Duration::from_secs(300);
     let mut records: Vec<GraphRecord> = Vec::new();
     while Instant::now() < deadline {
@@ -166,11 +149,9 @@ fn s2w_drained_graph_records_carry_full_mass_visits_verbatim() {
     );
 }
 
-// ── CTR (POST-FIX ONLY, gated `phase_t_postfix` — see target_integrity_postfix.rs for
-// the gate contract): the LAW-18 `export_offwindow_mass_moves` counter has a LIVE
-// producer — the same drive as S2w, read through `stats_snapshot()`.
-// Killer: M-H (export-counter sub-run). Idle-at-0 asserted before start (the
-// chain_loss_with_fire_rate posture: a disabled/idle lever stays VISIBLE).
+// Post-fix only: `export_offwindow_mass_moves` has a LIVE producer — the same drive as above,
+// read through `stats_snapshot()`, with idle-at-0 asserted before start.
+// Killer: M-H (export-counter sub-run).
 #[cfg(feature = "phase_t_postfix")]
 #[test]
 fn ctr_export_offwindow_mass_moves_fires_on_a_dispersed_run() {

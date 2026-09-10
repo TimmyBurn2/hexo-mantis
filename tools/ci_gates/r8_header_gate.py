@@ -1,63 +1,45 @@
 #!/usr/bin/env python3
 # >300 justify (R8): the marker table, the cap-token stripper, the count detector and the two
-# scoped rules are one gate's single authority; splitting them would create a second place
-# where "what counts as a stated tally" is decided, which is the drift this gate exists to
-# remove (LAW-03). The self-test corpus stays in-file for the same reason gate 11 keeps its
-# own: the arms and the predicate they prove must move together or the proof rots quietly.
-# NOTE: the docstring below quotes banned header forms as EXAMPLES. They sit in later
-# paragraphs, outside this justification block, which is why the gate passes on itself. Keep
-# them there, and keep this paragraph free of figures.
-"""CI gate 15 (P1-01): every oversized file carries an R8 justification, and none states a count.
+# scoped rules are one gate's single authority; splitting them would create a second place where
+# "what counts as a stated tally" is decided, which is the drift this gate exists to remove. The
+# self-test corpus stays in-file so the arms and the predicate they prove move together.
+# NOTE: the docstring below quotes banned header forms as EXAMPLES. They sit in later paragraphs,
+# outside this justification block, which is why the gate passes on itself — keep them there, and
+# keep this paragraph free of figures.
+"""CI gate 15: every oversized file carries an R8 justification, and none states a count.
 
-R8 asks a file over the 300-line soft cap to say WHY it is one unit. It never asked for a
-tally. The repo ratified that distinction as **G-DFIX-4 / R192(e) "derive-or-delete"** and
-applied it to four files, then stalled and never wrote the rule down. This gate is the rule
-written down.
-
-TWO HALVES, and the second is the load-bearing one:
+R8 asks a file over the soft cap to say WHY it is one unit. It never asked for a tally, and the
+repo ratified that distinction as derive-or-delete before stalling; this gate is the rule
+written down. Two halves, of which the second is load-bearing:
 
   * PRESENCE -- a `.py`/`.rs` file over CAP lines under `src/`, `tools/`, `crates/`, `tests/`
-    must carry a justification marker. Measured at the adoption commit: 135 files were over the
-    cap and exactly 2 carried nothing (`tests/monitor/test_supervisor.py`,
-    `tests/train/test_graph_microbatch_bound.py`).
-  * NO COUNT -- a justification may not state a line count. This is what stops the convention
-    re-accreting. Measured at the adoption commit: 47 headers stated one, at least 8 were
-    already wrong, and `src/mantis/run.py` claimed 867 against 1024. A stale count is not
-    noise: it is misinformation a future reader trusts, which is SF-7's own ruling ("a
-    justification which is not true is worse than none") applied to the number, not the prose.
+    must carry a justification marker. Measured at adoption: 135 files over the cap, exactly 2
+    carrying nothing.
+  * NO COUNT -- a justification may not state a line count. Measured at adoption: 47 headers
+    stated one, at least 8 were already wrong, and `src/mantis/run.py` claimed 867 against 1024.
 
-WHY THE NO-COUNT HALF IS NOT MERELY STYLE. The alternative gate -- "re-derive the stated count
-and require it to match" -- was considered and rejected. It automates a transcription instead of
-removing it: every edit to any file over the cap then also edits its own header, forever, to
-maintain a number that `wc -l` already answers for free. Prefer removing the bookkeeping over
-automating it.
+The alternative -- re-derive the stated count and require a match -- was rejected: it automates
+a transcription instead of removing it, editing every over-cap file's header forever to maintain
+a number `wc -l` answers for free.
 
 WHAT IS AND IS NOT A COUNT (measured against every header in the tree, not invented):
 
   fires    "MEASURED size of 488 lines" / "(697, re-measured by `wc -l`" / "(MEASURED 310 lines"
            "R8 >300 justify (402," / "(R8, by 8 lines)" / "pushed this file from 292 to 303 lines"
-  silent   ">300 justify" and "300-line soft cap" -- the cap token itself, stripped before the scan
+  silent   ">300 justify" and "300-line soft cap" -- the cap token itself, stripped before scan
            "the 18 named contract fields" / "O-T1..O-T7" -- digits with no line unit
-           "combines three old modules (`training/warmstart_launch.py` 190, ...)" -- the size of a
-           DELETED predecessor. It cannot go stale, because the file it counts is frozen. The rule
-           bans a number that must be re-edited; this one never must.
+           "combines three old modules (`training/warmstart_launch.py` 190, ...)" -- the size of
+           a DELETED predecessor, which cannot go stale because the file it counts is frozen.
 
-KNOWN BLIND SPOT, stated rather than discovered later: a bare number with no unit word ("...
-`warmstart_launch.py` 190, ...") is invisible to the detector by design, and so is a
-self-referential one written that way. The rule catches the forms the corpus actually uses;
-narrowing further would buy nothing and widening would flag the register ids this repo is made
-of.
+KNOWN BLIND SPOT: a bare number with no unit word is invisible to the detector by design, and so
+is a self-referential one written that way; widening the rule would flag the register ids this
+repo is made of. The marker window is 80 lines, not 15, because the deepest legitimate marker in
+the tree sits at line 75 inside a long module docstring and a 15-line window would have failed
+14 files carrying a real justification -- a measured claim, with its own test.
 
-The marker window is 80 lines, not 15. Measured: the deepest legitimate marker in the tree is
-`tests/tools/test_preflight_mint.py:75`, where the R8 clause is a paragraph inside a long module
-docstring -- the house style for the oracle suites. A 15-line window would have failed 14 files
-that carry a real justification. `test_the_deepest_real_marker_in_the_tree_is_inside_the_window`
-fails if that ever stops being true, so the window is a measured claim and not a guess.
-
-Self-test (LAW-07 -- a gate whose trigger cannot fire is a phantom input): `--self-test` runs
-both halves over a corpus of synthetic headers, each of which MUST or MUST NOT fire. It runs on
-every invocation of the real gate too, so the trigger is proven live at the same moment the
-verdict is issued. The full producer test is tests/tools/test_r8_header_gate.py.
+`--self-test` runs both halves over a corpus of synthetic headers, each of which MUST or MUST
+NOT fire, and it runs on every invocation of the real gate, so the trigger is proven live at the
+same moment the verdict is issued.
 """
 from __future__ import annotations
 
@@ -77,13 +59,11 @@ MARKER_WINDOW = 80
 #: How far a justification block runs from its marker. Terminated by a blank line first.
 BLOCK_MAX = 40
 
-#: Every phrasing that opens a justification in this tree. Deliberately tolerant: the corpus
-#: has six house styles (`# >300 justify`, `// Exceeds the 300-line soft cap`, `//! R8-justify`,
-#: `//! R8: >300 LOC by design`, `# >300 lines:`, `(R8 justification: >300 LOC ...)`) and
-#: forcing one canonical spelling would be a 150-file rewrite that buys nothing.
-#: The `R8 justif` arm requires a following `:` or `(` -- without it, prose that merely NAMES
-#: the rule ("the R8 justification detector must bite", in this gate's own producer test) reads
-#: as a header and silently satisfies the presence check. That was measured here, not imagined.
+#: Every phrasing that opens a justification in this tree. Deliberately tolerant: the corpus has
+#: six house styles and forcing one canonical spelling would be a 150-file rewrite that buys
+#: nothing. The `R8 justif` arm requires a following `:` or `(` — without it, prose that merely
+#: NAMES the rule reads as a header and silently satisfies the presence check, which was measured
+#: here rather than imagined.
 MARKER_RE = re.compile(
     r"(?:[>\u2265]=?\s*300"
     r"|R8[\s-]*justif\w*\s*[:(]"
@@ -99,32 +79,27 @@ MARKER_RE = re.compile(
 CAP_TOKEN_RE = re.compile(r"[>\u2265]=?\s*300|\b300\s*\+|\b300(?=[-\s]line)", re.IGNORECASE)
 
 #: A number welded to a line unit is a tally. `-\s*` catches "a ~120-line harness"; the comma
-#: class catches "1,024 lines"; `\s*` spans a newline because these headers wrap mid-clause;
-#: `L` catches the terse "the old `training/anchor.py`, 659 L".
-#: The lookbehind is load-bearing and was measured, not guessed: without it "a stale size in an
-#: R8 line" and "the r153 line-dispersal rule" both read as tallies. A digit glued to a letter
-#: is an identifier, never a count.
+#: class catches "1,024 lines"; `\s*` spans a newline because these headers wrap mid-clause. The
+#: lookbehind is load-bearing and was measured: without it "a stale size in an R8 line" and "the
+#: r153 line-dispersal rule" both read as tallies. A digit glued to a letter is an identifier.
 COUNT_RE = re.compile(
     r"(?<![A-Za-z0-9_])\d[\d,]*\s*(?:-\s*)?(?:lines?|LOC|L)\b", re.IGNORECASE
 )
-#: The two idioms this repo uses to announce "I transcribed a measurement here", plus the
-#: marker parenthetical. They appear in the corpus ONLY inside count clauses, so they are banned
-#: outright: a header that cites its own `wc -l` is stating a count even in the sentences where
-#: it omits the digits, and `justify (697,` is a size with the unit word left off -- the one
-#: shape a `<number> <unit>` rule cannot see. Case-SENSITIVE on `MEASURED` by design: the
-#: shouted form is the transcription idiom ("stated at this file's MEASURED size"), while
-#: lower-case "measured" is ordinary prose ("the measured 8% ceiling", `tactics/search.rs:13`)
-#: and firing on it would flag nine correct headers.
+#: The two idioms this repo uses to announce "I transcribed a measurement here", plus the marker
+#: parenthetical. They appear in the corpus ONLY inside count clauses, so they are banned
+#: outright: a header citing its own `wc -l` states a count even where it omits the digits, and
+#: `justify (697,` is a size with the unit word left off — the one shape a number-plus-unit rule
+#: cannot see. Case-SENSITIVE on `MEASURED` by design, because the shouted form is the
+#: transcription idiom while lower-case "measured" is ordinary prose in nine correct headers.
 IDIOM_RE = re.compile(
     r"\bwc\s*-\s*l\b|\bre-?measured\b|\bMEASURED\b|\bjustif\w*[^\n]{0,24}?\(\s*\d{2,5}\b"
 )
 
-#: Non-vacuity floors, PER ROOT. A gate that scans nothing finds nothing -- but a single global
-#: floor is not enough: with one number (measured at 100 against 137 over-cap files) a typo that
-#: dropped `src/` entirely still reported green, because the other three roots cleared it on
-#: their own. That was mutation-tested here and it is why this is a dict. Set below the measured
-#: file counts (src 148, tools 14, crates 134, tests 256) with room for deletion, high enough
-#: that losing any ONE root is fatal.
+#: Non-vacuity floors, PER ROOT. A gate that scans nothing finds nothing, and a single global
+#: floor is not enough: with one number a typo that dropped `src/` entirely still reported green,
+#: because the other three roots cleared it alone. That was mutation-tested here. Set below the
+#: measured file counts (src 148, tools 14, crates 134, tests 256) with room for deletion, high
+#: enough that losing any ONE root is fatal.
 MIN_FILES = {"src": 120, "tools": 10, "crates": 110, "tests": 210}
 #: The corpus-wide floors stay too, as a second net: they catch a scope that shrank without any
 #: root vanishing (measured: 137 over the cap, 151 justifications).
@@ -157,7 +132,7 @@ def find_marker(lines: list[str]) -> int | None:
 
 #: Leading comment punctuation, stripped before a line is judged blank. A doc-comment paragraph
 #: break is `//!` or `#` alone, not an empty line, so without this a Rust module doc runs on for
-#: the whole BLOCK_MAX and drags unrelated prose into the justification.
+#: the whole `BLOCK_MAX` and drags unrelated prose into the justification.
 COMMENT_LEAD_RE = re.compile(r"^\s*(?:#+|/{2,}!?|\*)\s*")
 
 
@@ -169,15 +144,12 @@ def _is_break(line: str) -> bool:
     return not COMMENT_LEAD_RE.sub("", line).strip()
 
 
-#: The minimum number of WORDS a justification must carry, after the marker token itself and
-#: the cap spellings are stripped. AUDIT-1 F-25: `check_file` treated ANY `MARKER_RE` match as
-#: a justification, so `# >300` and `# R8 justification:` — both empty of reason — passed, and
-#: R8's "say WHY the file is one unit" was enforced as "the digits 300 appear near the top".
-#: FOUR, and the number is chosen against BOTH ends. It refuses every probe input AUDIT-1 F-25
-#: found accepted — `>300` (0 words), `R8 justification:` (0), `R8 justify: one unit` (2), a
-#: bare `if n >= 300:` in code (1) — and it accepts the TERSEST real header in the tree's own
-#: house styles, e.g. `//! R8: >300 LOC by design -- one indivisible format unit.` A higher
-#: floor would make the gate demand verbosity, which is not the rule R8 states.
+#: The minimum number of WORDS a justification must carry, after the marker token and the cap
+#: spellings are stripped. `check_file` used to treat ANY marker match as a justification, so
+#: `# >300` and `# R8 justification:` — both empty of reason — passed, and "say WHY the file is
+#: one unit" was enforced as "the digits 300 appear near the top". FOUR is chosen against both
+#: ends: it refuses every probe input that was accepted, and it accepts the TERSEST real header
+#: in the tree's own house styles. A higher floor would demand verbosity, which R8 does not.
 MIN_REASON_WORDS = 4
 
 #: A word, for the count above: letters or digits, so punctuation and bare symbols do not pad
@@ -186,12 +158,9 @@ WORD_RE = re.compile(r"[A-Za-z0-9_]{2,}")
 
 
 def reason_words(block: list[str]) -> list[str]:
-    """The words a justification block carries once its own MARKER is removed.
-
-    The marker token is stripped, not merely the cap digits: `R8 justification:` is four
-    tokens of pure announcement and counting them would let a header satisfy the floor by
-    saying its own name.
-    """
+    """The words a justification block carries once its own MARKER is removed. The marker token
+    is stripped, not merely the cap digits: `R8 justification:` is four tokens of pure
+    announcement, and counting them would let a header satisfy the floor by saying its own name."""
     text = "\n".join(COMMENT_LEAD_RE.sub("", line) for line in block)
     text = MARKER_RE.sub(" ", text)
     text = CAP_TOKEN_RE.sub(" ", text)
@@ -209,12 +178,9 @@ def block_at(lines: list[str], start: int) -> list[str]:
 
 
 def counts_in(block: list[str]) -> list[str]:
-    """Every tally in a justification block. THE decision -- gate and self-test share it.
-
-    The comment lead is stripped from each row before the join. These headers wrap mid-clause,
-    so a count routinely lands as `... from 292 to 303` / `# lines; WPCLEAN ...`; leaving the
-    `#` in place puts a non-space between the digits and their unit and the tally walks free.
-    """
+    """Every tally in a justification block. THE decision — gate and self-test share it. The
+    comment lead is stripped from each row before the join, because these headers wrap mid-clause
+    and leaving the `#` puts a non-space between the digits and their unit."""
     text = "\n".join(COMMENT_LEAD_RE.sub("", line) for line in block)
     text = CAP_TOKEN_RE.sub(" ", text)
     hits = [m.group(0) for m in COUNT_RE.finditer(text)]
@@ -223,12 +189,9 @@ def counts_in(block: list[str]) -> list[str]:
 
 
 def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
-    """THE per-file decision: (violations, is_over_cap, carries_a_marker).
-
-    Gate, self-test and producer test all go through this one function. An oracle that
-    re-implemented the decision could drift from the thing it certifies -- the defect class
-    gate 11's own docstring names.
-    """
+    """THE per-file decision: (violations, is_over_cap, carries_a_marker). Gate, self-test and
+    producer test all go through this one function; an oracle that re-implemented the decision
+    could drift from the thing it certifies."""
     violations: list[str] = []
     marker = find_marker(lines)
     over_cap = len(lines) > CAP
@@ -245,9 +208,8 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
 
     block = block_at(lines, marker)
     words = reason_words(block)
-    # SCOPED TO FILES OVER THE CAP. R8's "say WHY" duty exists only for a file that exceeds
-    # the cap; an UNDER-cap file that merely mentions R8 in passing ("R8: keeps every file
-    # under the 300-line soft cap") owes no justification and must not be asked for one. The
+    # SCOPED TO FILES OVER THE CAP: R8's "say WHY" duty exists only for a file that exceeds it,
+    # and an UNDER-cap file that merely mentions R8 in passing owes no justification. The
     # no-count rule below stays universal — a stated tally is misinformation wherever it sits.
     if over_cap and len(words) < MIN_REASON_WORDS:
         violations.append(
@@ -290,7 +252,7 @@ def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int, dict[str, int]]:
     return violations, over_cap, headers, scanned
 
 
-#: (name, synthetic header, must_fire) -- the trigger's own proof. Each arm is the exact defect
+#: (name, synthetic header, must_fire) — the trigger's own proof. Each arm is the exact defect
 #: the corresponding half exists to catch, written the way the corpus writes it.
 SELF_TEST: tuple[tuple[str, list[str], bool], ...] = (
     ("plain reason", ["# >300 justify (R8): one seam, one set of fakes."], False),

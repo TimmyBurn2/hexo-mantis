@@ -1,33 +1,9 @@
-"""⊕ F-816-10 F7 — the R276 seam is UNTOUCHED by the split.
+"""Prove the fused-forward split leaves the graph inference failure seam untouched.
 
-Written by ORACLE-WRITE **before** the feature exists. The design's central failure claim
-(§4.1 property 5) is that everything the split adds sits INSIDE the existing inner `try`, so
-the planner's refusal, a collate error and a real `OutOfMemoryError` all land on the SAME
-`except Exception` -> `graph_inference_forward_failed` log line ->
-`submit_graph_inference_failure(request_ids, ...)` -> `GraphQueue::fail_remaining` ->
-`InferenceSeamFailure` at the worker. **No OOM handler, no retry, no catch-and-degrade, no new
-failure path.**
-
-That claim is only worth anything if the NEGATIVE half is pinned too, so it is: a mid-plan
-failure must submit NOTHING and fail EVERY id UNIFORMLY. R276(f)'s own words are "loud and
-counted, no silent catch-and-retry" — and the shape this packet is most at risk of inventing
-is exactly the tempting one: catch the OOM, halve the cap, try again. Design §4.3 refuses it
-on `graph_wire_split.py`'s recorded grounds (tune-to-green at runtime, R61; and it makes the
-peak-allocation bound unprovable).
-
-The defect each row is the ONLY witness to:
-
-- **FG7-01** — a `FusedGraphOverCap` caught and turned into a skip, a truncation or a drop.
-- **FG7-02** — an `except torch.cuda.OutOfMemoryError` arm added anywhere in the loop. The
-  ONLY reason to add one is to retry, and a retry on a memory failure is the silent
-  catch-and-retry R276(f) forbids by name.
-- **FG7-03** — a per-part submit. It would leave the ids of the successful parts resolved and
-  the rest failed, which is partial-success bookkeeping on a path that has none, and it would
-  break the FFI's `lo[n] == probs.len()` self-consistency check on every part but the last.
-- **FG7-04** — a retry loop. The model call count is the instrument: a retry runs part `k`
-  twice and is invisible to every result assertion, because there are no results.
-- **FG7-05** — a failure that stops naming itself. The log line is the field name the run's
-  own post-mortem greps for; a reworded one is a defect nobody finds.
+Everything the split adds sits INSIDE the existing inner `try`, so a planner refusal, a collate
+error and a real OOM all land on the same handler, log line and failure submission. The negative
+half is pinned too: a mid-plan failure submits NOTHING and fails EVERY id uniformly, with no OOM
+handler and no retry — catching the OOM to halve the cap makes the allocation bound unprovable.
 """
 from __future__ import annotations
 
@@ -44,7 +20,7 @@ _ALL_IDS = [1, 2, 3, 4]
 
 
 def _assert_uniform_seam_failure(batcher, *, n_ids: int) -> None:
-    """The seam's whole contract in one place: nothing submitted, ONE failure, EVERY id."""
+    """Assert the seam's whole contract: nothing submitted, one failure, every id."""
     assert batcher.results == [], (
         f"a failing pop submitted results anyway: {len(batcher.results)} submit(s). The "
         "submit happens only after ALL parts succeed, so a mid-plan failure means nothing "
@@ -60,13 +36,12 @@ def _assert_uniform_seam_failure(batcher, *, n_ids: int) -> None:
         f"the failure message left the EXISTING wrapper: {msg!r}")
 
 
-# ═══ FG7-01 — the refusal travels the seam ═══════════════════════════════════════════════
 @pytest.mark.parametrize("member", ["edges", "nodes"])
 def test_fg7_01_an_over_cap_graph_dies_through_the_existing_seam(
     monkeypatch, caplog, member: str
 ) -> None:
-    """FG7-01 — a single graph over either member is RUN-FATAL through the R276 seam: loud,
-    typed, named, and every waiter released. Never a truncation, never a drop."""
+    """Prove an over-cap graph is run-fatal through the existing seam, with every waiter
+    released — never a truncation, never a drop."""
     payload = H.build_payload([2, 3, 40, 2])
     ec, nc = H.per_graph_counts(payload)
     cap_e = int(ec.max()) - 1 if member == "edges" else 10 ** 9
@@ -88,15 +63,10 @@ def test_fg7_01_an_over_cap_graph_dies_through_the_existing_seam(
     assert batcher.closed == 1, "the loop must still close its batcher on exit"
 
 
-# ═══ FG7-02/04 — a real OOM travels the same seam, mid-plan ══════════════════════════════
 def test_fg7_02_an_out_of_memory_error_in_the_forward_dies_through_the_same_seam(
     monkeypatch, caplog
 ) -> None:
-    """FG7-02 — a genuine `torch.cuda.OutOfMemoryError` raised inside the forward is NOT
-    special-cased. It rides the same `except Exception` as everything else.
-
-    This row is a REGRESSION pin as much as a new one: it holds at HEAD, and its job is to
-    stay held while the split is introduced directly above it."""
+    """Prove a genuine OOM in the forward is not special-cased and rides the same handler."""
     payload = H.build_payload([2, 3, 4, 2])
     net = H.SentinelGraphNet(oom_on_call=1)
     with caplog.at_level(logging.ERROR):
@@ -113,12 +83,8 @@ def test_fg7_02_an_out_of_memory_error_in_the_forward_dies_through_the_same_seam
 def test_fg7_04_a_mid_plan_failure_submits_nothing_and_fails_every_id(
     monkeypatch, caplog
 ) -> None:
-    """FG7-04 — THE negative row. Part 1 of 3 succeeds, part 2 OOMs, part 3 never runs.
-
-    Nothing is submitted, every id fails, and the model is called exactly twice: once for the
-    part that worked and once for the part that died. A third call would be a retry; a fourth
-    would be a retry loop. This is the only row that can see either, because a failing pop
-    produces no results to assert against."""
+    """Prove a mid-plan failure submits nothing and fails every id. The model call count is the
+    instrument: a failing pop produces no results for anything else to assert against."""
     payload = H.build_payload([2, 3, 4, 2])
     ec, _nc = H.per_graph_counts(payload)
     cap_e = int(ec[0]) + int(ec[1])       # graphs 0+1, then 2, then 3
@@ -137,14 +103,8 @@ def test_fg7_04_a_mid_plan_failure_submits_nothing_and_fails_every_id(
 def test_fg7_04_the_successful_parts_output_is_discarded_not_submitted(
     monkeypatch, caplog
 ) -> None:
-    """FG7-04 second limb, stated as its own claim because it is the one an implementer is
-    most likely to get wrong while "improving" the design: the part that SUCCEEDED before the
-    failure must not be submitted on its own.
-
-    A partial submit would resolve some waiters with real policies and fail the rest, which is
-    a half-served pop the Rust side has no vocabulary for — and `fail_remaining` would then
-    leave the already-set waiters untouched (`queues/graph.rs`), so the run would continue on
-    a pop it half-served."""
+    """Prove the successful part's output is discarded rather than submitted on its own: a partial
+    submit is a half-served pop `fail_remaining` cannot undo."""
     payload = H.build_payload([2, 3, 4, 2])
     ec, _nc = H.per_graph_counts(payload)
     with caplog.at_level(logging.ERROR):
@@ -157,7 +117,6 @@ def test_fg7_04_the_successful_parts_output_is_discarded_not_submitted(
         "happens after every part has run (design §4.1 property 3)")
 
 
-# ═══ FG7-03/05 — the negatives, named ════════════════════════════════════════════════════
 def _graph_loop_ast() -> ast.FunctionDef:
     src = (Path(__file__).resolve().parents[2] / "src" / "mantis" / "selfplay"
            / "inference_server.py").read_text(encoding="utf-8")
@@ -168,25 +127,12 @@ def _graph_loop_ast() -> ast.FunctionDef:
 
 
 def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
-    """FG7-03 — the seam SURFACE is unchanged, censused over the shipped source.
+    """Census the shipped loop's failure surface: one submit of each kind, exactly two broad
+    handlers, every narrow handler ending in a bare `raise`, and no OOM-specific handler.
 
-    A behavioural row cannot see a second failure route that this rig never reaches, and it
-    cannot see a `try` that swallows an OOM at a nesting level the fakes never exercise. So
-    this is an `ast` census — a grep cannot tell a call from a string (R93/DR-11):
-
-    * exactly ONE `submit_graph_inference_failure` call and ONE `submit_graph_inference_results`
-      call in the whole loop (the ONE submit per pop, design §4.1 property 3);
-    * exactly TWO BROAD (`except Exception`) handlers — the inner arm that submits the failure
-      over the seam and the outer loop guard — and every OTHER handler must be NARROW (a named
-      exception) and end in a BARE `raise`. R339(c) replaced a flat count of handlers with this
-      because the count was a PROXY: it reds on an arm that merely observes and re-raises
-      (harmless) and stays green if someone rewrites one of the two existing broad arms into a
-      degrade (the actual hazard), so it was wrong in both directions. What may not appear is a
-      third BROAD catch or any arm that swallows; observe-and-re-raise arms are unlimited;
-    * no handler naming `OutOfMemoryError` or `MemoryError` anywhere.
-
-    This row is GREEN at authorship and that is its job: it is the pin that must STAY held
-    while the split is written directly inside the `try` it censuses."""
+    Counting handlers flatly would be a proxy — red on a harmless observe-and-re-raise arm, green
+    if a broad arm became a degrade.
+    """
     fn = _graph_loop_ast()
     calls = [n.func.attr for n in ast.walk(fn)
              if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)]
@@ -198,9 +144,8 @@ def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
         "sites; the ONE submit per pop is what makes the FFI's self-consistency checks hold "
         "against the UNSLICED `legal_offsets`")
     handlers = [n for n in ast.walk(fn) if isinstance(n, ast.ExceptHandler)]
-    # A handler is SUBMITTING if it routes the failure over the seam (the two HEAD arms), and
-    # OBSERVING if it only looks and re-raises. R339(c) added one observing arm — the
-    # F-816-37 dump — and observing arms are unlimited PROVIDED they cannot swallow.
+    # Observing arms — those that only look and re-raise — are unlimited; what is capped is the
+    # broad arms that route a failure over the seam.
     def _is_broad(h: ast.ExceptHandler) -> bool:
         return h.type is None or ast.unparse(h.type) in {"Exception", "BaseException"}
 
@@ -237,10 +182,8 @@ def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
 def test_fg7_05_the_failure_names_the_config_key_the_operator_must_change(
     monkeypatch, caplog
 ) -> None:
-    """FG7-05 — the message that reaches the WORKER (not just the log) names the inference
-    key. `submit_graph_inference_failure`'s `error_msg` is what surfaces as
-    `InferenceSeamFailure` at the worker and in the run's own post-mortem; a refusal that
-    names only "over cap" sends the operator to the wrong knob (R73 name-truth)."""
+    """Prove the worker-facing failure message, not just the log line, names the inference key
+    the operator must change."""
     payload = H.build_payload([2, 3, 40, 2])
     ec, _nc = H.per_graph_counts(payload)
     with caplog.at_level(logging.ERROR):
@@ -257,9 +200,8 @@ def test_fg7_05_the_failure_names_the_config_key_the_operator_must_change(
 
 
 def test_fg7_05_a_healthy_pop_is_the_clean_twin(monkeypatch) -> None:
-    """FG7-05 second limb — the LAW-07 clean twin: the same rig with caps that do not bind
-    submits RESULTS and no failure, so the seam rows above are not passing because the harness
-    fails everything."""
+    """Prove the clean twin: the same rig with non-binding caps submits results and no failure,
+    so the rows above are not passing because the harness fails everything."""
     payload = H.build_payload([2, 3, 4, 2])
     _server, batcher, net = H.drive_one_pop(monkeypatch, payload)
     assert batcher.failures == [], f"the clean twin failed: {batcher.failures}"

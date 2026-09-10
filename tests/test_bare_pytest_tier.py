@@ -1,29 +1,13 @@
 """A bare `pytest` resolves to the DEFAULT TIER, and the other invocations still mean what they
-meant (R330(g)).
+meant.
 
-THE DEFECT, measured three times before it was fixed. The marker expression
-`-m "not integration and not slow"` lived ONLY in the Makefile's `test` target; `pyproject.toml`'s
-`addopts` carried none. A bare `uv run pytest -q` therefore ran the integration superset — ~35
-minutes against ~3 for the tier — and three consecutive box sittings each disclosed having done
-exactly that (sitting 4 Δ10.13, sitting 5 item 1, sitting 6 §11.1). "The lesson has now failed to
-transfer three times, which is itself the finding: it is not a memory problem, it is a missing
-guard" — this file is the guard's witness.
+The witness is a SUBPROCESS, not an assertion on the live `markexpr`: the mechanism under test is
+pytest's own argument resolution against this repo's `pyproject.toml`, and an in-process
+assertion would pin the invocation instead. Each arm collects THIS file — which carries one
+plain, one `integration`-marked and one `slow`-marked function — and reads pytest's summary line.
 
-WHY THE WITNESS IS A SUBPROCESS AND NOT AN ASSERTION ON `config.option.markexpr`. An in-process
-assertion on the live marker expression would read whatever THIS run was invoked with, so it would
-be green under `make test`, green under a bare `pytest`, deselected under `-m integration`, and RED
-under any legitimate targeted `-m` a developer types — a pin on the invocation, not on the
-mechanism. The mechanism is pytest's own argument resolution against THIS repo's `pyproject.toml`,
-and only a real pytest child process exercises it. Each arm below collects THIS file — which
-deliberately carries one plain, one `integration`-marked and one `slow`-marked function — and reads
-pytest's own summary line: `N/M tests collected (K deselected)` is the tier applying, `M tests
-collected` is the whole tree.
-
-THE PLANTED BREAK. Remove `-m ...` from `addopts` and the bare arm reads `M tests collected` with
-no deselection: the first test below fails, naming the superset. Put the expression back without
-the quoting pytest's shlex split needs and every arm fails at collection. Neither the Makefile nor
-CI changes: both keep their EXPLICIT `-m`, and `test_meta_ci.py` still pins them — this file adds
-what happens when nobody typed one.
+PLANTED BREAK: remove `-m ...` from `addopts` and the bare arm reads the whole tree with no
+deselection, failing the first test below.
 """
 from __future__ import annotations
 
@@ -44,8 +28,9 @@ _SUMMARY = re.compile(
 
 
 def _collect(*extra: str) -> tuple[int, int, int]:
-    """Run `pytest --collect-only -q <extra> <this file>` as a CHILD against the repo's own
-    pyproject; return (selected, collected, deselected) read off pytest's summary line.
+    """Collect this file in a pytest CHILD against the repo's own pyproject.
+
+    Returns (selected, collected, deselected) read off pytest's summary line.
 
     Raises:
         AssertionError: the child printed no summary line this parser recognises.
@@ -65,8 +50,7 @@ def _collect(*extra: str) -> tuple[int, int, int]:
 
 
 def test_a_bare_pytest_applies_the_default_tier_to_the_whole_invocation() -> None:
-    """No `-m` typed → the default tier's marker expression deselects the integration and slow
-    functions in this file, and pytest says so on its own summary line."""
+    """With no `-m` typed, the default tier deselects this file's integration and slow arms."""
     selected, collected, deselected = _collect()
     assert deselected == 2 and collected - selected == 2, (
         f"a bare `pytest` collected {selected}/{collected} with {deselected} deselected; the default "
@@ -77,8 +61,7 @@ def test_a_bare_pytest_applies_the_default_tier_to_the_whole_invocation() -> Non
 
 
 def test_an_explicit_integration_tier_still_overrides_the_default() -> None:
-    """`make test.integration` passes `-m integration`; the later expression must WIN, or the CI
-    integration tier would silently run the default tier twice."""
+    """A later `-m integration` must win, or the CI integration tier runs the default tier twice."""
     selected, collected, deselected = _collect("-m", "integration")
     assert selected == 1 and deselected == collected - 1, (
         f"`-m integration` selected {selected}/{collected}; it must select exactly the one "
@@ -87,8 +70,7 @@ def test_an_explicit_integration_tier_still_overrides_the_default() -> None:
 
 
 def test_an_empty_marker_expression_counts_the_whole_tree() -> None:
-    """Gate 3c passes `-m ''` so its collected-test count is of the TREE, not of a tier; an empty
-    expression must clear the default and deselect nothing."""
+    """An empty `-m` clears the default and deselects nothing, so a tree count is not a tier count."""
     selected, collected, deselected = _collect("-m", "")
     assert deselected == 0 and selected == collected, (
         f"`-m ''` still deselected {deselected} of {collected}; gate 3c's whole-tree count would "
@@ -97,8 +79,7 @@ def test_an_empty_marker_expression_counts_the_whole_tree() -> None:
 
 
 def test_the_default_tier_expression_is_the_one_make_and_ci_pin() -> None:
-    """The expression in `addopts` and the one in `make test` are the SAME string, read from both
-    files, so the two paths cannot name two different tiers and call them the default."""
+    """`addopts` and `make test` name the SAME tier string, read from both files."""
     import tomllib
 
     pyproject = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -109,8 +90,7 @@ def test_the_default_tier_expression_is_the_one_make_and_ci_pin() -> None:
 
 
 def test_the_run_header_states_the_tier_it_resolved(request: pytest.FixtureRequest) -> None:
-    """The root conftest prints `TIER: ...` derived from the LIVE marker expression, so a reader of
-    any run's output can see which tier ran without reconstructing it from the command typed."""
+    """The header states the tier it resolved, derived from the live marker expression."""
     markexpr = request.config.getoption("markexpr") or ""
     # No `-q`: quiet mode suppresses the header this arm reads.
     proc = subprocess.run(
@@ -123,7 +103,7 @@ def test_the_run_header_states_the_tier_it_resolved(request: pytest.FixtureReque
     assert expected in header[0], (header[0], expected)
 
 
-# ── the witnesses the arms above collect: one of each tier, deliberately trivial ─────────
+# The witnesses the arms above collect: one of each tier, deliberately trivial.
 def test_plain_witness_is_in_the_default_tier() -> None:
     assert True
 

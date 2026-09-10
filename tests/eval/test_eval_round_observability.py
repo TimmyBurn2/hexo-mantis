@@ -1,37 +1,10 @@
-"""R319(e) — an eval round says how far it got, and never reports a default as a measurement.
+"""An eval round says how far it got, and never reports a default as a measurement.
 
->300 justify (R8). ONE UNIT because every row here pins one surface — the round's self-report — and the two
-defects that surface carried were the SAME defect at two call sites. Splitting the sentinel
-from the progress file would let one half be edited to agree with a change the other half
-exists to refuse, which is how `games_total: 0` survived beside a progress field nothing wrote.
-
-**THE TWO DEFECTS, both measured at RECAL-SITTING-3 and both in the same blind spot.**
-
-(i) `emit_round_complete` was called with a HARDCODED `games_total=0` on every broken path,
-while the success path computed the real sum. The two are indistinguishable to any reader, so
-`games_total: 0` means *"no result file was written"* and reads as *"zero games were played"*.
-The sitting published the second having measured only the first, retracted it in §8.1, and the
-retraction is the reason this file exists. **A default must not be readable as a measurement.**
-
-(ii) `RoundSpec.progress_path` was constructed, threaded across the spawn seam and declared on
-the dataclass — with NO writer and NO reader anywhere in `src/`. A round was observable only as
-*started* and *finished/killed*. That is what made (i) available to get wrong: with no progress
-signal, `games_total` was the only number in the room, and it was a lie. **A declared field with
-no consumer does not remain in the tree.**
-
-**WHAT THIS FILE PINS, and the mutation each row survives without:**
-  - `None`, not `0`, on the broken path — the whole of (i); a row asserting merely "not equal to
-    the success value" would pass on any other plausible-looking integer;
-  - the child WRITES per-game rows, and they carry counters/timestamps ONLY — no moves, no
-    positions, no trajectory hash, so the redaction discipline holds by construction rather than
-    by filtering;
-  - the parent READS the last row back, on the broken path especially — the case the whole
-    feature is for;
-  - a progress-write failure NEVER breaks a round, and a progress-read failure NEVER raises:
-    observability must not become a new failure mode;
-  - **escalation semantics are UNCHANGED** (R319(e)(ii)) — checked structurally, because a
-    future edit that branched on progress would silently turn a reporting field into a policy
-    input, which is exactly the class this sitting keeps finding.
+>300 justify (R8): every row pins ONE surface, the round's self-report, whose two defects were
+the same defect at two call sites. A hardcoded `games_total=0` is indistinguishable from a round
+that played zero games, so the sentinel is `None`. Observability must not become a new failure
+mode: a write failure never breaks a round, a read failure never raises, and escalation
+semantics are unchanged — checked structurally, since branching on progress leaves rows green.
 """
 from __future__ import annotations
 
@@ -49,7 +22,7 @@ _PIPELINE = Path(__import__("mantis.eval.pipeline", fromlist=["x"]).__file__)
 
 
 class _Sink:
-    """The event-sink shape `_emit` actually calls (`.emit(payload)`), not a bare callable."""
+    """The event-sink shape `_emit` calls — `.emit(payload)`, not a bare callable."""
 
     def __init__(self) -> None:
         self.events: list[dict] = []
@@ -60,11 +33,8 @@ class _Sink:
 
 def _game(plies: int = 40, *, winner: str = "draw", terminal: str = "ply_cap",
           candidate_color: int = 1, margin: int | None = None):
-    """A duck-typed GameRecord stand-in, carrying every field the writer reads.
-
-    `margin=None` models BOTH the disarmed posture and a game that never reached the cap:
-    `_play_one_game` attaches `adjudication` on the cap branch alone.
-    """
+    """Build a duck-typed GameRecord stand-in carrying every field the writer reads;
+    `margin=None` models both the disarmed posture and a game that never reached the cap."""
     adjudication = None if margin is None else SimpleNamespace(margin=margin)
     return SimpleNamespace(
         plies=plies, moves=[(1, 2)], trajectory_hash="deadbeef",
@@ -74,11 +44,9 @@ def _game(plies: int = 40, *, winner: str = "draw", terminal: str = "ply_cap",
     )
 
 
-# ── (e)(i) the sentinel ──────────────────────────────────────────────────────────────────
 def test_a_broken_round_reports_games_total_None_not_a_countable_zero() -> None:
-    """THE RETRACTED DEFECT, pinned. `0` is a number a reader will average, compare and
-    believe; `None` is not. This asserts the exact value, because "some falsy thing" would be
-    satisfied by the very `0` that caused the error."""
+    """A broken round reports `games_total=None` — `0` is a number a reader will believe, and
+    the exact value is asserted because "falsy" admits the `0`."""
     sink = _Sink()
     emit_round_complete(sink, round_id="r1", step=25, wall_sec=3600.0,
                         games_total=None, promoted=False, wr_sealbot=None)
@@ -90,8 +58,7 @@ def test_a_broken_round_reports_games_total_None_not_a_countable_zero() -> None:
 
 
 def test_a_successful_round_still_reports_its_real_count() -> None:
-    """The sentinel must not cost the success path its number, or the fix would be a
-    regression wearing a fix's clothes."""
+    """The sentinel must not cost the success path its number."""
     sink = _Sink()
     emit_round_complete(sink, round_id="r1", step=25, wall_sec=12.5,
                         games_total=88, promoted=True, wr_sealbot=0.61)
@@ -99,9 +66,7 @@ def test_a_successful_round_still_reports_its_real_count() -> None:
 
 
 def test_the_broken_call_site_passes_None_and_no_literal_zero() -> None:
-    """STRUCTURAL (R296(f)). The behavioural row above passes whatever the caller hands it;
-    this one pins what the PIPELINE's own broken path actually hands it, so re-introducing the
-    literal reds even if every other row still passes."""
+    """The pipeline's own broken call site passes `None` and no literal zero."""
     tree = ast.parse(_PIPELINE.read_text(encoding="utf-8"))
     passed: list[str] = []
     for node in ast.walk(tree):
@@ -120,10 +85,8 @@ def test_the_broken_call_site_passes_None_and_no_literal_zero() -> None:
     assert "None" in passed, f"no call site passes None; got {passed!r}"
 
 
-# ── (e)(ii) progress is written, read, and harmless when it fails ────────────────────────
 def test_the_child_writes_one_row_per_game_with_counters_only(tmp_path: Path) -> None:
-    """The writer exists at all (it did not before), and what it writes is safe by
-    construction: counters and a timestamp, never a move list or a position."""
+    """The child writes one row per game, safe by construction: counters and a timestamp."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
     screen = progress.sink("gate_screen")
@@ -148,14 +111,11 @@ def test_the_child_writes_one_row_per_game_with_counters_only(tmp_path: Path) ->
         )
 
 
-# ── R320(c) the margin DISTRIBUTION is readable, not just the decisive rate ──────────────
 def test_each_row_carries_the_outcome_facts_the_margin_distribution_needs(
     tmp_path: Path,
 ) -> None:
-    """R320(c) sends a round to measure HOW capped games decide — at what margins, with what
-    seat balance. The adjudicator's own tally is four counters, so it reads the decisive RATE
-    and nothing about its shape; these four per-game fields are what a histogram and a seat
-    split are computed from, and every one was already in hand at the sink."""
+    """Each row carries the four facts a margin histogram and a seat split need — the
+    adjudicator's tally reads the decisive RATE and nothing about its shape."""
     path = tmp_path / "r1_progress.txt"
     sink = _RoundProgress(path).sink("gate_screen")
     sink(_game(plies=128, winner="candidate", candidate_color=1, margin=2))
@@ -176,12 +136,8 @@ def test_each_row_carries_the_outcome_facts_the_margin_distribution_needs(
 
 
 def test_a_ZERO_margin_and_an_ABSENT_one_do_not_collide(tmp_path: Path) -> None:
-    """R319(e)'s order, one field over: a default must not be readable as a measurement.
-    `margin: 0` is the two sides measured EXACTLY LEVEL — the single most interesting bin,
-    because it is the residual-draw bin at `min_margin: 1`. `margin: null` is NO MEASUREMENT
-    (posture disarmed, or the game never reached the cap). A writer that emitted `0` for the
-    absent case would move every unarmed game into the tie bin and read as a hard measurement
-    of perfect balance."""
+    """A measured `margin: 0` and an absent `margin: null` do not collide: `0` is the two
+    sides EXACTLY LEVEL, the residual-draw bin, while `null` is no measurement at all."""
     path = tmp_path / "r1_progress.txt"
     sink = _RoundProgress(path).sink("gate_screen")
     sink(_game(plies=128, winner="draw", margin=0))
@@ -198,9 +154,7 @@ def test_a_ZERO_margin_and_an_ABSENT_one_do_not_collide(tmp_path: Path) -> None:
 
 
 def test_the_disarmed_posture_still_writes_a_complete_row(tmp_path: Path) -> None:
-    """Every shipped config runs disarmed, so the disarmed row is the COMMON case: it must
-    still carry `terminal`, `winner` and the seat, or the shipped tree loses the one instrument
-    that says every game is hitting the cap."""
+    """The disarmed row is the COMMON case and still carries `terminal`, `winner` and seat."""
     path = tmp_path / "r1_progress.txt"
     _RoundProgress(path).sink("gate_confirm")(
         _game(plies=128, winner="draw", terminal="ply_cap", candidate_color=-1, margin=None)
@@ -211,9 +165,8 @@ def test_the_disarmed_posture_still_writes_a_complete_row(tmp_path: Path) -> Non
 
 
 def test_a_record_missing_the_new_fields_degrades_and_never_raises(tmp_path: Path) -> None:
-    """The writer must not become a way to kill a round. A record shape it does not recognise
-    writes nulls, exactly as the OSError arm keeps the round alive — observability must not
-    become a new failure mode, and that promise covers the reader too, not only the disk."""
+    """An unrecognised record shape writes nulls rather than raising: the writer must not
+    become a way to kill a round."""
     path = tmp_path / "r1_progress.txt"
     _RoundProgress(path).sink("rung")(SimpleNamespace(plies=17))
     row = json.loads(path.read_text(encoding="utf-8").strip())
@@ -223,9 +176,7 @@ def test_a_record_missing_the_new_fields_degrades_and_never_raises(tmp_path: Pat
 
 
 def test_the_sink_reads_the_REAL_GameRecord_shape_not_only_the_stand_in() -> None:
-    """The rows above run against a `SimpleNamespace`, which would keep passing if
-    `GameRecord`'s field NAMES changed underneath them — the stand-in-drift class. This one
-    builds the real dataclass and asserts the writer's four field names are its own."""
+    """The writer's field names are the REAL `GameRecord`'s, which the stand-in cannot see."""
     from dataclasses import fields as dataclass_fields
 
     from mantis.arena.match import GameRecord
@@ -238,9 +189,8 @@ def test_the_sink_reads_the_REAL_GameRecord_shape_not_only_the_stand_in() -> Non
 
 
 def test_the_verdict_margin_the_writer_reads_is_the_ADJUDICATORS_OWN() -> None:
-    """End to end through the real adjudicator, so the row's `margin` is pinned to the object
-    that produces it rather than to a hand-built stand-in: a sign flip or a unit change in
-    `PlyCapVerdict` must red here."""
+    """The row's `margin` is pinned to the real adjudicator, so a sign flip or a unit change
+    in `PlyCapVerdict` reds here."""
     from mantis.arena.adjudicate import PlyCapVerdict
 
     verdict = PlyCapVerdict(winner="opponent", criterion="longest_run_margin", margin=-2)
@@ -257,7 +207,7 @@ def test_the_verdict_margin_the_writer_reads_is_the_ADJUDICATORS_OWN() -> None:
 
 
 def test_the_parent_reads_the_LAST_row_back(tmp_path: Path) -> None:
-    """The round-complete payload needs how far it got, which is the newest row."""
+    """The parent reads the LAST row back — how far the round got is the newest row."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
     sink = progress.sink("gate_screen")
@@ -267,8 +217,7 @@ def test_the_parent_reads_the_LAST_row_back(tmp_path: Path) -> None:
 
 
 def test_a_broken_round_now_CARRIES_how_far_it_got(tmp_path: Path) -> None:
-    """The whole point, end to end: the case that produced two blind 3600 s drives.
-    `games_total` is None AND the payload still says game 7 was reached."""
+    """A broken round reports `games_total=None` AND the progress it made."""
     path = tmp_path / "r1_progress.txt"
     progress = _RoundProgress(path)
     sink = progress.sink("gate_screen")
@@ -291,8 +240,8 @@ def test_a_broken_round_now_CARRIES_how_far_it_got(tmp_path: Path) -> None:
 def test_an_unreadable_or_partial_progress_file_returns_None_and_never_raises(
     tmp_path: Path, bad: str,
 ) -> None:
-    """A half-written final line is the NORMAL state of a file being appended to when the
-    writer is killed mid-round — precisely when this is read. It must degrade, not raise."""
+    """A half-written final line is the NORMAL state when the writer was killed mid-round —
+    precisely when this is read — so it degrades rather than raising."""
     path = tmp_path / "p.txt"
     path.write_text(bad, encoding="utf-8")
     result = read_progress(SimpleNamespace(progress_path=str(path)))
@@ -307,9 +256,8 @@ def test_a_missing_file_and_a_spec_without_the_field_both_return_None(tmp_path: 
 def test_a_progress_WRITE_failure_disables_itself_and_never_breaks_the_round(
     tmp_path: Path, capsys,
 ) -> None:
-    """OBSERVABILITY MUST NOT BECOME A NEW FAILURE MODE. Deliberately NOT LAW-14's
-    persistence-is-fatal posture: losing this file costs visibility, while raising would let a
-    diagnostic line kill a round that was otherwise healthy. It fails LOUD on stderr, once."""
+    """A write failure disables progress, reports LOUD on stderr once, and never breaks the
+    round — raising would let a diagnostic line kill a healthy round."""
     blocked = tmp_path / "afile"
     blocked.write_text("i am a file, not a directory", encoding="utf-8")
     progress = _RoundProgress(blocked / "sub" / "p.txt")   # parent mkdir must fail
@@ -322,13 +270,9 @@ def test_a_progress_WRITE_failure_disables_itself_and_never_breaks_the_round(
     )
 
 
-# ── the boundary R319(e)(ii) draws: reporting, NEVER policy ──────────────────────────────
 def test_progress_is_REPORTING_ONLY_and_no_escalation_branches_on_it() -> None:
-    """R319(e)(ii): *escalation semantics UNCHANGED this sitting*. Checked structurally,
-    because the failure mode is silent: a future edit adding `if progress[...]` to the poller
-    or the escalation path would turn a reporting field into a policy input, and every
-    behavioural test here would still pass. The rule is that `read_progress` may only be
-    consumed as an ARGUMENT — never tested, compared, or branched on."""
+    """`read_progress` is consumed only as an ARGUMENT — never tested, compared or branched
+    on, because a poller that branched on it would make a reporting field a policy input."""
     tree = ast.parse(_PIPELINE.read_text(encoding="utf-8"))
     offenders = []
     for node in ast.walk(tree):

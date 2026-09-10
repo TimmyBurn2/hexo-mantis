@@ -1,26 +1,11 @@
-"""Suite C remainder + G-18 — drain arms a ONE-iteration harness cannot see.
+"""Drain arms a ONE-iteration harness cannot see.
 
-IMPL-written (non-⊕) per DESIGN §b / PREREG §3. The ⊕ Suite C golden
-(`test_pool_drain_parity.py`) runs the real drain body for exactly ONE iteration with a
-recording sink, which is the right shape for byte-parity but is structurally blind to two
-things:
-
-  * **C-09** — whether the 5-second `system_stats` cadence carries its "last emitted"
-    marker ACROSS iterations. The marker is a local of the loop; an implementation that
-    hoists it onto the pool and forgets to update it emits every tick, and a
-    one-iteration harness sees exactly one emission either way. The clock here is chosen
-    so a forgotten update produces a SECOND emission.
-  * **C-10** — whether the no-sink default path runs at all. The ⊕ harness always injects
-    a recording sink (C-08 covers only `heartbeat=None`), so nothing exercises the drop
-    branch that every pool built without a monitor will take.
-
-**G-18** rides along because it consumes the same replayed drain script: the instrumentation
-silently DROPS terminal-reason codes outside the known four, so `terminal_reason_counts()`
-under-counts. That is OLD TRUTH, pinned deliberately — it reads exactly like a bug, and
-"fixing" it is a parity violation until a monitoring work package owns the change.
-
-The harness is self-contained (it does not import the ⊕ module) so a change there cannot
-silently reshape these arms.
+The byte-parity golden runs the real drain body for one iteration with a recording sink, which
+is blind to two things: whether the 5-second `system_stats` cadence carries its "last emitted"
+marker ACROSS iterations, and whether the no-sink default path — the branch every unmonitored
+pool takes — runs at all. The unknown-reason under-count rides the same replayed script: codes
+outside the known four are silently DROPPED, pinned deliberately because "fixing" it is a parity
+violation until a monitoring work package owns the change. The harness is self-contained.
 """
 from __future__ import annotations
 
@@ -35,11 +20,9 @@ from mantis.selfplay import pool_drain
 from mantis.selfplay.instrumentation import PoolInstrumentation
 from mantis.selfplay.pool import WorkerPool
 
-# ONE iteration consumes two clock reads (the drain-interval read and the buffer-cadence
-# read); the loop takes one more before it starts. Two iterations therefore need five.
-# 1005.0 → first buffer read at 1006.0 crosses 5 s from the 1000.0 start and RESETS the
-# marker; the second iteration's 1008.0 is only 2 s past the reset, so it must NOT emit —
-# but it IS 8 s past the start, so a marker that never got updated emits twice.
+# One iteration consumes two clock reads and the loop takes one before it starts, so two need
+# five. The 1006.0 read crosses 5 s from the 1000.0 start and RESETS the marker; 1008.0 is 2 s
+# past that reset but 8 s past the start, so a marker that never got updated emits twice.
 CLOCK_TWO_ITERATIONS = (1000.0, 1005.0, 1006.0, 1007.0, 1008.0)
 
 
@@ -115,12 +98,9 @@ class _Clock:
 
 
 class _Pool:
-    """The drain body's read surface, plus the real methods G-18 needs bound to it.
-
-    Binding the REAL `WorkerPool` methods to a stub carrying only their inputs is the same
-    instrument the old-side capture used, so the numbers below come out of production code
-    rather than a re-implementation.
-    """
+    """The drain body's read surface, plus the real methods bound to it: binding the REAL
+    `WorkerPool` methods to a stub carrying only their inputs makes the numbers below come out
+    of production code rather than a re-implementation."""
 
     terminal_reason_counts = WorkerPool.terminal_reason_counts
     buffer_composition = WorkerPool.buffer_composition
@@ -183,17 +163,10 @@ def run_drain(monkeypatch, drain_goldens, collect_data_input):
     return run
 
 
-# ═══ C-09 — the system_stats marker survives across iterations ════════════════════
 def test_system_stats_cadence_two_iterations(run_drain) -> None:
-    """C-09 — PASS iff TWO drain iterations whose clock crosses the 5 s boundary exactly
-    once (relative to the RESET marker) emit exactly ONE `system_stats`.
-
-    The marker is a local of the loop and is reset on every emission. If an implementation
-    hoists it onto the pool and never updates it, the second iteration measures 8 s from
-    the loop start instead of 2 s from the reset, and emits again — at 10 Hz that is an
-    event-stream flood that a monitor cannot see past, and no one-iteration harness can
-    detect it. FAIL in the other direction (zero emissions) means the buffer panel goes
-    permanently stale between training iterations."""
+    """Two iterations crossing the 5 s boundary exactly once relative to the RESET marker emit
+    exactly ONE `system_stats`. A marker hoisted onto the pool and never updated measures 8 s
+    from the loop start instead of 2 s from the reset and emits again — at 10 Hz, a flood."""
     sink = _Sink()
     run_drain(sink=sink, iterations=2)
 
@@ -208,23 +181,16 @@ def test_system_stats_cadence_two_iterations(run_drain) -> None:
 
 
 def test_system_stats_marker_is_not_pool_state(run_drain) -> None:
-    """C-09 (mechanism arm) — PASS iff no `_last_buf_emit`-shaped attribute is left on the
-    pool after the loop. The cadence marker must live in the loop frame; an attribute here
-    is the hoist C-09 exists to catch, in a form a reviewer can grep for."""
+    """No `_last_buf_emit`-shaped attribute may be left on the pool: the cadence marker must
+    live in the loop frame, and an attribute here is the hoist, in a form a reviewer can grep."""
     pool = run_drain(sink=_Sink(), iterations=2)
     leaked = [name for name in vars(pool) if "buf_emit" in name]
     assert not leaked, f"cadence marker leaked onto the pool: {leaked}"
 
 
-# ═══ C-10 — the no-sink default path ═════════════════════════════════════════════
 def test_drain_with_no_sink(run_drain) -> None:
-    """C-10 — PASS iff a full drain iteration with `sink=None` (the constructor default)
-    completes with no error and does all of its real work: the push happens, the counters
-    move, the recorder still sees every game.
-
-    Every pool built without a monitor takes this branch, and the ⊕ suite never does.
-    FAIL = the drop branch raises `AttributeError` on the first drained game, killing the
-    sole producer of training data on any run without an event sink."""
+    """A drain iteration with `sink=None` — the default every unmonitored pool takes, and one the
+    byte-parity suite never does — completes and does all its real work."""
     pool = run_drain(sink=None, iterations=1)
 
     assert len(pool.replay_buffer.dense_calls) == 1
@@ -236,10 +202,9 @@ def test_drain_with_no_sink(run_drain) -> None:
 
 
 def test_no_sink_and_recording_sink_agree_on_everything_else(run_drain) -> None:
-    """C-10 (neutrality arm) — PASS iff injecting a sink changes NOTHING except that the
-    events are observed: same pushes, same counters, same sims bill. FAIL = the emit path
-    has a side effect on drain state, so a monitored run and an unmonitored run produce
-    different training data."""
+    """Injecting a sink changes NOTHING except that the events are observed: same pushes, same
+    counters, same sims bill. A side effect here means a monitored run and an unmonitored run
+    produce different training data."""
     with_sink = run_drain(sink=_Sink(), iterations=1)
     without = run_drain(sink=None, iterations=1)
 
@@ -250,17 +215,10 @@ def test_no_sink_and_recording_sink_agree_on_everything_else(run_drain) -> None:
     assert list(with_sink._game_lengths) == list(without._game_lengths)
 
 
-# ═══ G-18 — the deliberately-pinned unknown-reason under-count ═══════════════════
 def test_terminal_reason_counts_drops_unknown_codes(run_drain, drain_goldens) -> None:
-    """G-18 — PASS iff, after the captured 6-game drain script (one game carrying the
-    unrecognised terminal-reason code 7), `terminal_reason_counts()` reports the captured
-    four-key histogram totalling **5**, not 6.
-
-    This is OLD TRUTH pinned on purpose. The counter accepts any code but the reader
-    surfaces only the four known ones, so an unknown code is counted internally and never
-    reported. It reads exactly like a bug and someone will eventually "fix" it — that fix
-    is a parity violation until a monitoring redesign owns it, and this row is the thing
-    that makes the fix visible instead of silent."""
+    """One of the six captured games carries the unrecognised reason code 7, so
+    `terminal_reason_counts()` reports four keys totalling 5. OLD TRUTH, pinned on purpose: it
+    reads exactly like a bug, and this row makes the eventual "fix" visible instead of silent."""
     pool = run_drain(sink=_Sink(), iterations=1)
     expected = drain_goldens["variants"]["dense_5s_crossed"]["instrumentation_after"][
         "terminal_reason_counts"]
@@ -274,13 +232,8 @@ def test_terminal_reason_counts_drops_unknown_codes(run_drain, drain_goldens) ->
 
 
 def test_buffer_composition_inherits_the_under_count(run_drain, drain_goldens) -> None:
-    """G-18 (propagation arm) — PASS iff `buffer_composition()["n_games_observed"]`
-    inherits the under-count (5 for 6 drained games) and the four terminal fractions are
-    normalised by that same under-count.
-
-    The fractions are therefore inflated relative to games actually played whenever an
-    unknown code appears. Pinned, not corrected: a monitor consuming this field is reading
-    the same number the old run emitted."""
+    """`n_games_observed` inherits the under-count and the four terminal fractions are
+    normalised by it, so they are inflated whenever an unknown code appears. Pinned, not fixed."""
     pool = run_drain(sink=_Sink(), iterations=1)
     composition = pool.buffer_composition()
 

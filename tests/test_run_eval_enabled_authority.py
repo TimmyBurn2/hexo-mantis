@@ -1,28 +1,9 @@
-"""⊕ WPMAIN ORACLE — `eval_enabled` is the CONFIG's fact, not a parameter (R120, O-E1).
+"""`eval_enabled` is the CONFIG's fact, with no code-side default and no forcing route.
 
-RED-at-import until IMPL lands the `RunConfig.eval_enabled` schema field: every drive below
-builds its config through the ONE loader, so the key must exist before any of them runs.
-
-What this file exists to stop, measured at `b482243`:
-
-`eval_enabled` is a `compose_run` PARAMETER with a code-side default `True` (`run.py:172`),
-and the preflight child hardcodes the literal `True` (`preflight_mint.py:917-922`). So the
-dispatch's own R64 clause — "eval_enabled per the config's own value" — named a value that
-did not exist, and R64's "the preflight may never force False" was enforced by a comment.
-R120 promotes it: the code-side default dies, every minted config carries the key, and the
-one composition root is its live consumer.
-
-Why the PARAMETER has to go rather than merely lose its default (§1.5): a required parameter
-is a forcing route with the default removed, not a closed one. "May never force False" is
-only structurally unrepresentable when there is no route to force anything through.
-
-Fakes, disclosed: the eval SIDE is faked on the `eval_enabled=True` arm — `build_eval_pipeline`
-returns a drivable stand-in and the anchor resolver is stubbed, because `run_training_loop`
-seeds the anchor from `trainer.model` and reads `.arch` off it. That is the same harness, for
-the same stated reason, as `tests/test_run_composition.py`'s eval-side drives and
-`tests/train/test_actor_sync_real_config.py::_drive`. The SUBJECT — which branch the config
-selects — is not faked: `build_run_safety` is the real builder and the `wired_sources`
-declaration read below is the one it actually received.
+The parameter goes rather than merely losing its default: a required parameter is a forcing
+route with the default removed, and "may never force False" is unrepresentable only when there
+is no route to force anything through. Fakes: the eval side is stubbed on the True arm; the
+subject — which branch the config selects — is driven through the real `build_run_safety`.
 """
 from __future__ import annotations
 
@@ -52,7 +33,7 @@ class _Pool:
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
+    draw_rate = 0.05  # the third outcome share
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9
@@ -124,18 +105,9 @@ class _Trainer:
 
 def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
            eval_enabled: bool):
-    """One composed run whose ONLY delta is the config's `eval_enabled` value.
-
-    Returns `(handles, wired_sources)` — the declaration `build_run_safety` actually
-    received, which is what decides whether the eval stage is watched by the stall watchdog.
-
-    N4 (dispatcher-ownable backlog): the completed drive leaves `run_safety.watchdog`'s
-    daemon thread running (`close_out` never touches it either, `run.py:899-920` — LAW-16
-    debt CARD-PROTOCOL-COMPLETE, bounded in production because both real callers exit the
-    process right after `compose_run` returns). A live watchdog thread keeps the sink object
-    reachable for the rest of this pytest session, so nothing ever garbage-collects its way
-    to closing the fd. `request.addfinalizer` closes the REAL sink deterministically
-    (idempotent, `sink.py:205-206`) instead of relying on that reachability."""
+    """Compose one run whose ONLY delta is the config's `eval_enabled` value, returning the
+    `wired_sources` declaration `build_run_safety` received. The finalizer closes the real sink
+    because the drive leaves a daemon watchdog thread holding it reachable."""
     declared: dict[str, list[str]] = {}
     real_build = mantis_run.build_run_safety
 
@@ -161,9 +133,8 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
     monkeypatch.setattr(anchor, "resolve_anchor", lambda **_kw: SimpleNamespace(
         best_model=None, best_model_step=None, best_model_path=None, representation="graph"))
 
-    # `dev_example.yaml`, not the armed smoke: this drive bounds `max_train_steps` at
-    # `_DRIVE_STEPS`, and an ARMED `train.draw_rate_abort.min_step` above that is refused by
-    # the schema's own reachability validator. The subject here is `eval_enabled` alone.
+    # `dev_example.yaml`, not the armed smoke: an armed `draw_rate_abort.min_step` above this
+    # drive's `max_train_steps` is refused by the schema's reachability validator.
     config = smoke_run_config(
         "dev_example.yaml", eval_enabled=eval_enabled,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS, "batch_size": 8},
@@ -177,18 +148,14 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
     return handles, declared["wired_sources"]
 
 
-# ══ O-E1 — the mutation oracle ════════════════════════════════════════════════════════
 def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-E1, the liveness half (LAW-08/LAW-07): flip the key in the CONFIG, observe the
-    consumer. Two composed runs, one delta.
+    """Flipping the key in the CONFIG flips the consumer — two composed runs, one delta.
 
-    MUTATION THAT REDS IT: read anything but `config.eval_enabled` in the two branches
-    (`run.py:194` and `:256`) — a surviving literal `True`, or a value carried in from a
-    caller. The `wired_sources` half matters on its own: a run that builds the pipeline but
-    fails to DECLARE the stage gets a loud `heartbeat_source_unwired` instead of stall
-    coverage, so the two must move together."""
+    The `wired_sources` half must move with it: a run that builds the pipeline without
+    DECLARING the stage gets a loud `heartbeat_source_unwired` instead of stall coverage.
+    """
     on_handles, on_wired = _drive(tmp_path / "on", monkeypatch, smoke_run_config,
                                   mk_graph_buffer, request, eval_enabled=True)
     assert on_handles.eval_pipeline is not None, (
@@ -209,18 +176,9 @@ def test_the_config_key_alone_decides_whether_the_eval_pipeline_is_built(
 
 
 def test_no_parameter_can_force_the_eval_posture_or_the_run_identity() -> None:
-    """O-E1, the structural half — R64's "may never force False", made unrepresentable
-    rather than asserted; and R123's same doctrine applied to `run_id`.
-
-    MUTATION THAT REDS IT: re-add either parameter, with or without a default. A required
-    parameter still lets the preflight child pass `False` while run5 passes `True` — the
-    posture divergence "one composition authority" is supposed to close — and a
-    caller-supplied `run_id != config.run_id` splits the JSONL segment identity from the
-    config identity, which is the F-B1 class `run_boot_identity` exists to kill.
-
-    The frozen 6-tuple census (`test_run_strict_composition.py:423`) is the R50-sanctioned
-    flip site for the exact tuple; this is the narrower, independently-held claim that these
-    two names in particular never come back."""
+    """Neither `eval_enabled` nor `run_id` is a parameter of the composition root: a required
+    parameter still lets the preflight child pass `False` while the run passes `True`, and a
+    caller-supplied `run_id` splits the segment identity from the config identity."""
     parameters = list(inspect.signature(compose_run).parameters)
     for banned in ("eval_enabled", "run_id"):
         assert banned not in parameters, (
@@ -230,12 +188,9 @@ def test_no_parameter_can_force_the_eval_posture_or_the_run_identity() -> None:
 
 
 def test_the_key_is_required_with_no_code_side_default() -> None:
-    """O-E1, the R120 clause "the code-side default `True` at the composition root dies".
-
-    MUTATION THAT REDS IT: `eval_enabled: bool = True` on `RunConfig`. That reads harmless —
-    True is today's effective posture — but it moves the authority from the minted config
-    back into the code, and a config that forgets the key then declares nothing while the
-    run evaluates. R1: a default lives only in a schema field, and this field has none."""
+    """The key is required on `RunConfig`, with no code-side default. Killer:
+    `eval_enabled: bool = True` — harmless-looking, but a config that forgets the key then
+    declares nothing while the run evaluates."""
     assert "eval_enabled" in RunConfig.model_fields, (
         "the key is TOP-LEVEL (`schema/core.py`, after `seed`) because it is a "
         "root-composition fact spanning the eval and monitor wired-sources, not an "
@@ -247,16 +202,8 @@ def test_the_key_is_required_with_no_code_side_default() -> None:
 
 
 def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
-    """O-E1's no-route census — O-10's surviving half at its new scope.
-
-    O-10 pinned `eval_enabled=True` as an unconditional LITERAL in the tool and banned any
-    eval-flavoured CLI option. The literal half is superseded by "no route at all" (the
-    child passes nothing, O-A4); the CLI ban is the half that must SURVIVE, and it now
-    covers the launcher too — which never had it.
-
-    MUTATION THAT REDS IT: `--no-eval` on either parser. It would be a run input the CLI
-    decides, over a fact the minted config authors (R1), and it would re-open exactly the
-    escape R64 bans."""
+    """No CLI switch on either caller declares an eval-flavoured option — `--no-eval` would be
+    a run input the CLI decides over a fact the minted config authors."""
     for path in (_RUN_PY, _TOOL_PY):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         declared = {arg.value
@@ -274,17 +221,8 @@ def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
 
 @pytest.mark.parametrize("name", sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")))
 def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_config) -> None:
-    """O-E1's R1-completeness arm — every minted config carries the key EXPLICITLY.
-
-    The axis USED to be an enumeration here, written out because `tests/conftest.py`'s
-    `MINTED_CONFIGS` omitted the one config the preflight actually boots. R346(f) cut the
-    committed set to three and the enumeration outlived two of its members, so the axis is
-    globbed off `configs/` — which cannot omit a newly minted file and cannot outlive a
-    deleted one. The vacuity guard is the row below.
-
-    MUTATION THAT REDS IT: re-mint any one of them without the key. The schema makes that a
-    load-time failure, which is the point: this arm is what turns "the key is required" into
-    "and every shipped config has it"."""
+    """Every minted config declares the key explicitly. The axis is globbed off `configs/`,
+    since an enumeration can both omit a new file and outlive a deleted one."""
     assert smoke_run_config(name).eval_enabled is True, (
         f"{name} must declare eval_enabled explicitly; today's effective posture is the "
         "code default True everywhere, so True is a zero-behaviour mint (§6)"
@@ -292,5 +230,5 @@ def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_co
 
 
 def test_the_minted_axis_is_not_empty() -> None:
-    """Vacuity guard for the glob above: an axis of zero params is a green no-op."""
+    """An axis of zero params would make the row above a green no-op."""
     assert sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")), "configs/ globbed to nothing"

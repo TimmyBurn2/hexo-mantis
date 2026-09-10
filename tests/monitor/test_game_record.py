@@ -1,23 +1,9 @@
-# >300 justify (R8): the store's producer tests over one format. Writer, reader, shard
-# lifecycle, failure posture and the record builders are one contract read from both ends;
-# a reader test that lived apart from the writer test it reads back would be testing a
-# format nobody wrote.
-"""⊕ R344(b) — GAME-RECORD-1's producer tests.
-
-The ruling names two of these itself: *"the producer test asserts the shard closes and
-re-opens byte-exact and that a planted truncated shard is skipped, not fatal"*. The rest are
-the failures this store would otherwise have to discover in a 25 001-step run:
-
-* the SEGMENT half of the shard key. A shard keyed on `(run, hour)` alone lets a resume
-  landing in the same wall-clock hour append to the stopped process's file — the exact TOCTOU
-  `monitor/sink.py` earned its `O_CREAT|O_EXCL` claim over. Two writers, one run, one hour
-  must produce two shards;
-* the FAILURE POSTURE. A lost game record must not end a healthy run, and it must not be
-  silent either — so a write failure counts and disables rather than raising or continuing
-  quietly;
-* the WINNER MAP, because an undecodable outcome recorded as a measured draw is AUDIT-1
-  F-28/C04 in a new file.
-"""
+# >300 justify (R8): the store's producer tests over one format — writer, reader, shard
+# lifecycle, failure posture and record builders are one contract read from both ends.
+"""GAME-RECORD-1's producer tests: the shard closes and re-opens byte-exact, a planted truncated
+shard is skipped rather than fatal, the SEGMENT half of the shard key keeps a resume from
+appending into a stopped process's file, a lost record disables and counts rather than raising
+quietly, and an undecodable outcome is never recorded as a measured draw."""
 from __future__ import annotations
 
 import json
@@ -49,10 +35,8 @@ def _game(i: int) -> dict[str, object]:
 
 
 def test_a_closed_shard_reopens_byte_exact(tmp_path: Path) -> None:
-    """R344(b)'s first named producer assertion. Every record written comes back, in order,
-    field for field — not "the right number of lines".
-
-    MUTATION THAT REDS IT: buffer the writes and drop the `close()` fsync."""
+    """Every record written comes back, in order, field for field — not "the right number of
+    lines". MUTATION THAT REDS IT: buffer the writes and drop the `close()` fsync."""
     writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     written = [_game(i) for i in range(25)]
     for record in written:
@@ -67,12 +51,8 @@ def test_a_closed_shard_reopens_byte_exact(tmp_path: Path) -> None:
 
 
 def test_a_planted_truncated_shard_is_SKIPPED_not_fatal(tmp_path: Path) -> None:
-    """R344(b)'s second named producer assertion, planted rather than hoped for.
-
-    A live shard's last line is routinely partial — the reader is running while the writer
-    is running. The record before the tear must survive, the torn one must be COUNTED, and
-    nothing may raise. Counting is the half that matters: a bare skip cannot tell "one torn
-    tail" from "this file is garbage"."""
+    """A live shard's last line is routinely partial: the record before the tear survives, the
+    torn one is COUNTED, nothing raises. A bare skip cannot tell one tear from a garbage file."""
     writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     for i in range(5):
         writer.write(_game(i))
@@ -89,14 +69,9 @@ def test_a_planted_truncated_shard_is_SKIPPED_not_fatal(tmp_path: Path) -> None:
 
 
 def test_two_writers_in_one_run_and_one_hour_claim_DIFFERENT_shards(tmp_path: Path) -> None:
-    """The segment half of the key, which the ruling's `(run, hour)` wording leaves out.
-
-    A resume inside the same wall-clock hour is exactly this: a second process, same run id,
-    same hour. If the shard were keyed on `(run, hour)` it would append to the stopped
-    process's file — the never-append law `monitor/sink.py` states absolutely.
-
-    MUTATION THAT REDS IT: drop `seg` from `shard_filename`, or open with `"a"` instead of
-    `O_CREAT|O_EXCL`."""
+    """A resume inside the same wall-clock hour is a second process with the same run id, and a
+    shard keyed on `(run, hour)` alone would append into the stopped process's file. MUTATION
+    THAT REDS IT: drop `seg` from `shard_filename`, or open with `"a"`."""
     first = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     second = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     assert first.shard_path != second.shard_path, (
@@ -114,10 +89,8 @@ def test_two_writers_in_one_run_and_one_hour_claim_DIFFERENT_shards(tmp_path: Pa
 
 
 def test_the_index_names_only_shards_whose_bytes_are_down(tmp_path: Path) -> None:
-    """The index is written AFTER the fsync, and it carries the count the reader can check.
-
-    An index naming a shard that is not yet on disk is worse than no index: it is a promise a
-    reader will act on."""
+    """The index is written AFTER the fsync and carries a count the reader can check: an index
+    naming a shard not yet on disk is a promise a reader will act on."""
     writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     for i in range(7):
         writer.write(_game(i))
@@ -135,8 +108,7 @@ def test_the_index_names_only_shards_whose_bytes_are_down(tmp_path: Path) -> Non
 
 
 def test_the_shard_rotates_when_the_utc_hour_turns(tmp_path: Path, monkeypatch) -> None:
-    """The hour rotation R344(b) asks for, driven by a moved clock rather than by waiting.
-
+    """The hour rotation, driven by a moved clock rather than by waiting.
     MUTATION THAT REDS IT: rotate on record COUNT instead of on the hour."""
     import mantis.monitor.game_record as module
 
@@ -156,14 +128,8 @@ def test_the_shard_rotates_when_the_utc_hour_turns(tmp_path: Path, monkeypatch) 
 
 
 def test_a_write_failure_DISABLES_and_COUNTS_and_never_raises(tmp_path: Path) -> None:
-    """LAW-14 says persistence failures are run-fatal; R319(e)(ii) ruled the opposite for a
-    writer whose loss costs VISIBILITY and not correctness, and this is that second kind.
-
-    So the posture is neither `raise` nor `pass`: the store disables itself, the failure is
-    counted, and `persist_errors_total` is the observable that makes a lost record loud
-    (LAW-18). It also stays disabled — retrying once per game into a full volume is how a
-    disk-space failure becomes a log-flood failure.
-
+    """This writer's loss costs VISIBILITY, not correctness, so it disables itself and counts
+    rather than raising or passing; it stays disabled, or one full volume is one error per game.
     MUTATION THAT REDS IT: `except OSError: pass`."""
     writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     writer.write(_game(1))
@@ -180,22 +146,17 @@ def test_a_write_failure_DISABLES_and_COUNTS_and_never_raises(tmp_path: Path) ->
 
 
 def test_an_unsafe_run_id_is_refused_at_the_writer(tmp_path: Path) -> None:
-    """The filename law is enforced at THIS boundary too, not only at the event sink's —
-    `games_<run_id>_seg…` has the same escape and same never-advancing-index failures."""
+    """The filename law is enforced at THIS boundary too: `games_<run_id>_seg…` has the same
+    escape and never-advancing-index failures as the event sink's."""
     for bad in ("", "../escape", "with/slash", " padded "):
         with pytest.raises(RunIdError):
             GameRecordWriter(record_dir=tmp_path, run_id=bad)
 
 
-# --------------------------------------------------------------------------------------- #
-# The recorder — the seam's first concrete implementation
-# --------------------------------------------------------------------------------------- #
 def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: Path) -> None:
-    """`set_step` carries the ACTOR step (the weights that played the game), and the record
-    says so in `step_kind` rather than leaving a reader to assume it is the learner's step.
-
-    MUTATION THAT REDS IT: stamp `step_kind: "learner"`, or record `self._step` before
-    `set_step` has been called as `0` instead of `-1`."""
+    """`set_step` carries the ACTOR step and `step_kind` says so, rather than leaving a reader to
+    assume the learner's. MUTATION THAT REDS IT: stamp `step_kind: "learner"`, or record a game
+    drained before `set_step` as step 0 instead of -1."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=20260719)
     recorder.maybe_record(
         game_id="pre-sync", moves=[(0, 0)], winner_code=0, plies=1, worker_id=0,
@@ -232,11 +193,8 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
 def test_an_undecodable_winner_code_is_unknown_and_NEVER_a_draw(
     tmp_path: Path, winner_code: int, expected: str
 ) -> None:
-    """AUDIT-1 F-28/C04, in this file's own vocabulary: `pool_drain` already refuses to map
-    an unrecognised code onto a real outcome, and the record must not undo that by falling
-    to `draw` — the value it would land on if the map were a `dict.get(code, "draw")`.
-
-    MUTATION THAT REDS IT: `_SEAT_BY_WINNER_CODE.get(code, "draw")`."""
+    """An undecodable code is `unknown`, never the `draw` a `dict.get(code, "draw")` would land
+    on. MUTATION THAT REDS IT: `_SEAT_BY_WINNER_CODE.get(code, "draw")`."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
         game_id="g", moves=[(0, 0)], winner_code=winner_code, plies=1, worker_id=0,
@@ -246,11 +204,8 @@ def test_an_undecodable_winner_code_is_unknown_and_NEVER_a_draw(
 
 
 def test_seat_result_maps_every_arena_outcome_through_the_candidate_colour() -> None:
-    """The eval channel's winner is CANDIDATE-relative and a board is drawn in SEATS. Getting
-    this inversion wrong renders every game the candidate played as black back to front.
-
-    Hand-checkable: candidate moved first (colour 1) and won -> p1; candidate moved second
-    and won -> p2; and each with the opponent winning instead."""
+    """The eval winner is CANDIDATE-relative and a board is drawn in SEATS, so an inverted map
+    renders every game the candidate played as black back to front."""
     assert seat_result("candidate", 1) == "p1"
     assert seat_result("candidate", -1) == "p2"
     assert seat_result("opponent", 1) == "p2"
@@ -260,20 +215,11 @@ def test_seat_result_maps_every_arena_outcome_through_the_candidate_colour() -> 
 
 
 def test_the_production_pool_is_BUILT_with_a_real_recorder() -> None:
-    """R344(b) — *"the producer must exist at step 0"*, pinned at the composition root.
-
-    `compose_run`'s fakes cannot reach this: the recorder is built inside
-    `build_run_collaborators`, which constructs a real trainer. So the assertion is STRUCTURAL
-    over that function's AST — the `WorkerPool(...)` call must bind `recorder=`, and the name
-    it binds must be one a `GameRecorder(...)` call in the same function produced.
-
-    It is AST and not a substring search on purpose: `"GameRecorder" in source` passes on a
-    file that only mentions it in a comment, and `"recorder=" in source` passes on
-    `recorder=None`.
-
-    MUTATION THAT REDS IT: drop the `recorder=` kwarg, or build a `NullRecorder` instead —
-    either of which leaves a run that plays 25 000 games and writes none of them.
-    """
+    """The recorder producer must exist at step 0, pinned structurally: `compose_run`'s fakes
+    cannot reach `build_run_collaborators`, so AST over it requires the `WorkerPool(...)` call to
+    bind `recorder=` to a name a `GameRecorder(...)` in the same function produced — substring
+    search passes on a comment mention or on `recorder=None`. MUTATION THAT REDS IT: drop the
+    `recorder=` kwarg, or build a `NullRecorder`."""
     import ast
     import inspect
 
@@ -313,21 +259,12 @@ def test_the_production_pool_is_BUILT_with_a_real_recorder() -> None:
 
 
 def test_an_hour_rotation_KEEPS_the_writers_own_segment(tmp_path: Path, monkeypatch) -> None:
-    """A run writes from two processes into one directory — the trainer continuously, each
-    eval round's child for its own lifetime — so the segment must name the WRITER and the
-    hour must name the window.
-
-    The defect this pins: if rotation re-scanned for `max(segment) + 1`, a trainer whose hour
-    turned after a round child had claimed segment 2 would take segment 3 for itself, and its
-    own shards would carry three segment numbers across three hours while a reader took each
-    for a different process.
-
-    MUTATION THAT REDS IT: drop `segment=self._segment` from the rotation's claim."""
+    """The segment names the WRITER and the hour names the window, so a rotation that re-scanned
+    for `max(segment) + 1` would spread one trainer over three segment numbers a reader reads as
+    three processes. MUTATION THAT REDS IT: drop `segment=self._segment` from the claim."""
     import mantis.monitor.game_record as module
 
-    # A settable clock rather than a fixed sequence: the number of `_utc_hour` calls is an
-    # implementation detail, and a test that had to predict it would red on a refactor that
-    # changed nothing observable.
+    # A settable clock, not a fixed sequence: the number of `_utc_hour` calls is incidental.
     now = {"hour": "2026090810"}
     monkeypatch.setattr(module, "_utc_hour", lambda when=None: now["hour"])
 
@@ -358,14 +295,8 @@ def test_an_hour_rotation_KEEPS_the_writers_own_segment(tmp_path: Path, monkeypa
 
 
 def test_a_shard_torn_MID_CHARACTER_is_still_only_one_skipped_line(tmp_path: Path) -> None:
-    """The narrow crash mode the byte-level read closes.
-
-    A text-mode reader raises `UnicodeDecodeError` on a line torn inside a multi-byte
-    character, and it raises while ITERATING — so it takes the whole file, including every
-    intact record before the tear. That is the one outcome `read_shard` exists to prevent, and
-    the fact that `json.dumps` defaults to `ensure_ascii=True` makes the case unreachable
-    TODAY rather than impossible: the guarantee would then rest on a default in another module.
-
+    """A line torn MID-CHARACTER is still only one skipped line: a text-mode reader raises
+    `UnicodeDecodeError` while ITERATING, losing every intact record before the tear too.
     MUTATION THAT REDS IT: open the shard in text mode."""
     writer = GameRecordWriter(record_dir=tmp_path, run_id="testrun")
     for i in range(3):

@@ -1,17 +1,14 @@
-"""⊕ R343(c) / CARD-RESUME — the resume sidecar, and the two refusals that make it a mechanism.
+"""The resume sidecar, and the refusals that make it a mechanism.
 
-The defect each row is the ONLY witness to:
+One defect per group of rows:
 
-* a sidecar that round-trips but is never cross-checked lets a ring be resumed into the WRONG
-  weights — so `load_resume_state` refuses a sidecar naming a different checkpoint;
-* a hash that is WRITTEN and never COMPARED is the phantom gate LAW-07 forbids — so
-  `test_planted_ring_corruption_is_refused_on_load` mutates a persisted ring by one byte and
-  asserts the specific `RingIdentityError`, not the family. This is R343(c)'s witness (5) and
-  it is the mutation self-test for witness (1);
-* a `.get(key, default)` read anywhere in `from_dict` would let an older or truncated sidecar
-  resume into an undeclared state (R1) — so every absent-field row asserts a refusal;
-* a captured RNG stream nobody restores is a field, not a mechanism — so the round-trip row
-  drives real draws on both sides of the restore and compares them.
+* a sidecar that round-trips but is never cross-checked resumes a ring into the WRONG weights;
+* a hash that is written and never compared is a phantom gate, so one row flips a byte of a
+  persisted ring and asserts the specific error, not the family;
+* a `.get(key, default)` read in `from_dict` would resume an older sidecar into an undeclared
+  state, so every absent-field row asserts a refusal;
+* a captured RNG stream nobody restores is a field, not a mechanism, so the round-trip row
+  drives real draws on both sides of the restore.
 """
 from __future__ import annotations
 
@@ -94,8 +91,7 @@ def test_unreadable_version_is_refused(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("field", ["run_id", "step", "ring", "round_counter", "rng"])
 def test_a_missing_field_is_refused_never_defaulted(tmp_path: Path, field: str) -> None:
-    """R1: no `.get(key, default)` on a resume read. An absent field is a sidecar this build
-    does not understand, and a default for it resumes into a state nobody declared."""
+    """Prove a missing sidecar field is refused, never defaulted into a state nobody declared."""
     ckpt = tmp_path / "run6_00000750_abcdef12.ckpt"
     ckpt.write_bytes(b"x")
     write_resume_state(_state(tmp_path), ckpt)
@@ -112,12 +108,10 @@ def test_unmodified_ring_verifies(tmp_path: Path) -> None:
 
 
 def test_planted_ring_corruption_is_refused_on_load(tmp_path: Path) -> None:
-    """R343(c) WITNESS (5), and the LAW-07 mutation self-test for witness (1).
+    """Prove a ring corrupted after its hash was recorded is refused on load.
 
-    One byte is flipped in the persisted ring AFTER the sidecar recorded its hash. If the hash
-    were written and never compared this would pass silently and a resume would train on an
-    altered replay buffer. The assertion is the SPECIFIC error, not the family: a test that
-    accepted any exception could not tell a refused corruption from a missing file.
+    The assertion names the specific error: accepting any exception could not tell a refused
+    corruption from a missing file.
     """
     ring = _ring_file(tmp_path)
     raw = bytearray(Path(ring.path).read_bytes())
@@ -135,13 +129,13 @@ def test_a_ring_that_vanished_is_refused_not_skipped(tmp_path: Path) -> None:
 
 
 def test_rng_streams_round_trip_and_reproduce_real_draws() -> None:
-    """A captured stream nobody restores is a field, not a mechanism — so this drives draws."""
+    """Prove the captured RNG streams restore, by comparing real draws either side."""
     random.seed(1234)
     np.random.seed(1234)
     torch.manual_seed(1234)
     blobs = capture_rng_streams()
     expected = (random.random(), float(np.random.rand()), float(torch.rand(1).item()))
-    # advance all three past the captured point
+    # Advance all three past the captured point.
     for _ in range(17):
         random.random()
         np.random.rand()
@@ -152,7 +146,7 @@ def test_rng_streams_round_trip_and_reproduce_real_draws() -> None:
 
 
 def test_an_unknown_rng_stream_is_refused(tmp_path: Path) -> None:
-    """A stream this build cannot restore must stop the resume, not be skipped past."""
+    """Prove a stream this build cannot restore stops the resume rather than being skipped."""
     with pytest.raises(ResumeStateError, match="undeclared sampling regime"):
         restore_rng_streams({"jax": "AAAA"})
 
@@ -163,14 +157,11 @@ def test_an_undecodable_rng_blob_is_refused(tmp_path: Path) -> None:
 
 
 def test_the_sidecar_path_never_unpickles(tmp_path: Path) -> None:
-    """THE SIDECAR IS UNAUTHENTICATED, so it must never be executable input.
+    """Prove the resume module imports no pickle: the sidecar is unauthenticated input.
 
-    Unlike the checkpoint beside it — whose loader re-derives a `content_sha8` and refuses a
-    mismatch — nothing signs this file. A `pickle.loads` over it would hand arbitrary code
-    execution to anyone able to write ONE file into the run's checkpoint directory, a strictly
-    easier target than the checkpoint, and one the ring's own hash check does nothing about.
-    So the module must not import pickle at all, and this row is structural because a
-    behavioural test cannot see a `pickle.loads` that simply has not been reached yet.
+    Nothing signs this file, so unpickling it would hand code execution to anyone able to write
+    one file into the checkpoint directory. Structural, because a behavioural test cannot see a
+    `pickle.loads` that has not been reached yet.
     """
     src = Path(resume_state.__file__).read_text(encoding="utf-8")
     tree = ast.parse(src)
@@ -191,9 +182,10 @@ def test_the_sidecar_path_never_unpickles(tmp_path: Path) -> None:
 
 
 def test_the_sidecar_is_plain_json_with_no_opaque_stream_blob(tmp_path: Path) -> None:
-    """The positive half: the rng streams are TYPED FIELDS a reader can inspect, not one opaque
-    string per stream. A single blob would parse as JSON while still being a serialized object
-    graph, so 'it is JSON' is not on its own the property that matters."""
+    """Prove the RNG streams are typed fields, not one opaque blob per stream.
+
+    A single blob would parse as JSON while still being a serialized object graph.
+    """
     ckpt = tmp_path / "run6_00000750_abcdef12.ckpt"
     ckpt.write_bytes(b"x")
     write_resume_state(_state(tmp_path), ckpt)

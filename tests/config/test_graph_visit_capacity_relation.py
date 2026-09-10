@@ -1,18 +1,10 @@
-"""R255/ADJ-D34 — the graph sims regime must fit the HEXG record format AT MINT.
+"""The graph sims regime must fit the HEXG record format at mint, not at boot.
 
-The Phase-T guard's capacity is DERIVED from the configured sims regime
-(max over armed PCR arms + ``leaf_batch_size`` − 1) by the ONE authority
-``mantis._engine.derived_hexg_visit_capacity`` (Rust: ``replay::hexg``), and the
-schema validates the relation explicitly: a regime the record format cannot
-honor (derived capacity past the ``u16`` visit-count ceiling, 65535) REDs at
-config validation — mint time — never as a boot surprise. ADJ-D34's defect was
-the inversion: a ``MAX_VISITS = 128`` literal made the prereg'd PCR 600/75 row
-un-bootable while every config validated clean.
-
-The dispatch's two pins live here: (1) a 600/75-shaped config validates clean;
-(2) the mutation — a regime exceeding what any capacity can honor is refused by
-the SCHEMA, with the boot guard demoted to defense-in-depth (its own pin is
-Rust-side, ``target_boot_guards.rs``).
+Visit capacity is derived from the sims regime (max over armed PCR arms + ``leaf_batch_size``
+− 1) by the one authority ``mantis._engine.derived_hexg_visit_capacity``, and the schema
+validates the relation: a derived capacity past the ``u16`` visit-count ceiling of 65535 reds
+at config validation. The boot guard is defense-in-depth, pinned Rust-side in
+``target_boot_guards.rs``.
 """
 from __future__ import annotations
 
@@ -29,33 +21,19 @@ _PCR_600_75 = {
 
 
 def test_the_600_75_prereg_shape_validates_clean(smoke_run_config) -> None:
-    """The SIMS-REGIME prereg row (R160/R163/R165) must be mintable: 600/75 on the
-    graph arm validates — the exact shape ADJ-D34 measured as un-bootable."""
+    """Prove a 600/75 sims regime on the graph arm validates clean."""
     config = smoke_run_config("run6.yaml", selfplay=_PCR_600_75)
     assert config.selfplay.playout_cap.n_sims_full == 600
 
 
 #: A leaf-batch wide enough to push the derived capacity past the u16 ceiling on its own.
-#:
-#: AUDIT-1 F-21 CHANGED WHICH AXIS THIS ROW CAN USE, and the interaction is worth stating.
-#: The mutation used to be `n_sims_full: 70_000`. That value is now refused EARLIER, by a
-#: different and TIGHTER ceiling: `MctsConfig`/`PlayoutCapConfig` bound every sims knob at
-#: `MAX_ARMED_SIMS` (= `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS node
-#: pool overflows from `n_simulations` alone above that and `finish_expansion` panics. So on
-#: the SIMS axis the pool bound now subsumes the record-format one — at the pool ceiling the
-#: derived capacity is still nowhere near 65535.
-#:
-#: The record-format relation is NOT subsumed: `leaf_batch_size` is the other term the
-#: capacity is derived from and it carries no such bound, so the ceiling stays reachable and
-#: this suite keeps its subject. Two live ceilings on one derived quantity, and the mutation
-#: drives whichever axis the other does not cover.
+#: The sims axis cannot be used: the tighter `MAX_ARMED_SIMS` pool bound refuses a wild
+#: `n_sims_full` first. `leaf_batch_size` carries no such bound, so the ceiling stays reachable.
 _LEAF_BATCH_OVER_THE_CEILING = 70_000
 
 
 def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) -> None:
-    """The dispatch's mutation pin: no capacity can honor this regime (the per-record visit
-    count is u16), so validation itself refuses — naming the ceiling and saying it is a
-    mint-time error."""
+    """Prove a regime no capacity can honor is refused by validation, naming the ceiling."""
     with pytest.raises(ValidationError, match="65535"):
         smoke_run_config(
             "run6.yaml",
@@ -71,9 +49,7 @@ def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) 
 
 
 def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> None:
-    """The interaction, pinned rather than left for the next reader to rediscover: the old
-    70_000-sim mutation now reds against the POOL bound, not the record format. Both refusals
-    are correct and a config hitting either is unmintable; what changed is which one names it."""
+    """Prove a wild sims regime reds against the node-pool bound, not the record format."""
     with pytest.raises(ValidationError) as excinfo:
         smoke_run_config(
             "run6.yaml",
@@ -89,8 +65,7 @@ def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> 
 
 
 def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
-    """An operator reading the mint error must be able to act on it: the message
-    names the sims-regime keys the capacity is derived from."""
+    """Prove the refusal names the config keys the capacity is derived from."""
     with pytest.raises(ValidationError, match="leaf_batch_size"):
         smoke_run_config(
             "run6.yaml",
@@ -106,14 +81,11 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
 
 
 def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
-    """The scoping half of this relation is RETIRED with the grid path (R346(f)).
+    """Prove the registry has no non-graph representation, so the relation is unconditional.
 
-    It asserted that the SAME wild sims regime validates clean on a grid config, because
-    dense-362 records carry no HEXG visit slot — R250's absence principle, mint-side. There is
-    no grid config and no grid encoding to build one from, so what is pinned instead is that
-    the registry cannot supply one: the relation is unconditional now, and a future row that
-    re-introduced a non-graph representation would red HERE rather than silently re-opening
-    an unscoped arm."""
+    The scoping half retired with the grid path; a re-introduced representation reds here
+    rather than silently re-opening an unscoped arm.
+    """
     from mantis.encoding import all_specs
 
     reps = {str(spec.representation) for spec in all_specs()}
@@ -123,10 +95,7 @@ def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
     )
 
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
-    """Gate-7 invariant, asserted here so a future re-mint cannot regress it
-    silently: all shipped graph configs pass the derivation (their regimes are
-    50-sims/leaf-8 → capacity 57). `run6.yaml` joins at F-P2B (R259) —
-    same regime as run5, and it is the config the R255 relation actually gates next."""
+    """Prove every shipped graph config satisfies the derivation (50-sims/leaf-8 -> capacity 57)."""
     for name in ("run6.yaml", "run6.yaml", "smoke_preflight_armed.yaml", "dev_example.yaml"):
         config = smoke_run_config(name)
         assert config.identity.representation == "graph"

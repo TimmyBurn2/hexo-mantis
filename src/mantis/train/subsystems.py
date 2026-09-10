@@ -1,24 +1,8 @@
-"""Loop subsystem boot — inference/eval model builds + run-safety subsystems (WP10 §a.4/§c.6).
+"""Loop subsystem boot — the run-safety composition root.
 
-The old `training/lifecycle.py` was a NAME-COLLISION trap: it is subsystem-BOOT (model builds +
-monitor/probe/dashboard construction), NOT the run-safety `lifecycle` repo_design §11 defines.
-It lands HERE as `subsystems.py`, freeing the `lifecycle` name for the §11 subsystem.
-
-The DISPLAY-boot half (WebDashboard, `register_renderer`/`register_jsonl_sink`, TB
-`MetricsWriter`, `EarlyGameProbe`, `ValueProbe`) is DEFER/ARCH.
-
-WPMAIN (R116/R121(b)) DELETED `build_subsystems` and `LoopSubsystems`. Both had ZERO callers
-and zero test references, and the disk guard they returned had therefore never been
-constructed in any run — LAW-16's third leg was dead, with its `60/10/5` arriving as
-`config.get("disk_guard", {}).get(...)` code-side defaults over a key that existed in no
-schema and no config. The guard is now composed by `mantis.run.compose_run` from the minted
-`monitor.disk_guard` block through `mantis.config.resolve.disk_guard.resolve_disk_guard`.
-This module's surviving subject is `build_run_safety`.
-
-WP13-A adds `build_run_safety` — the composition root for the run-safety triple (the REAL
-JSONL sink, the heartbeat registry, the INDEPENDENT watchdog thread). This is one of the
-THREE declared `train → mantis.monitor` import sites (census-pinned, O-19); everywhere else
-the sink stays INJECTED, never imported.
+`build_run_safety` builds the REAL JSONL sink, the heartbeat registry and the INDEPENDENT
+watchdog thread. This is one of the THREE declared `train → mantis.monitor` import sites
+(census-pinned); everywhere else the sink stays INJECTED, never imported.
 """
 from __future__ import annotations
 
@@ -41,27 +25,10 @@ from mantis.train.lifecycle.watchdog import watchdog_snapshot_path
 
 _LOG = logging.getLogger(__name__)
 
-# ══ THE MODEL-BUILD HALF IS DELETED (AUDIT-1 F-47) ══════════════════════════════════════
-# `InfModelArch`, `build_inference_model`, `build_eval_model`, `cuda_warmup` and
-# `_synthetic_graph_warmup` stood here with ZERO references anywhere in `src/`, `tests/` or
-# `tools/`. The header above already recorded that WPMAIN deleted `build_subsystems` — the one
-# caller this half ever had — and left the builders behind; this is the rest of that deletion.
-#
-# TWO THINGS WENT WITH THEM, and both are the reason the row mattered more than its size:
-#   * `cuda_warmup` read `getattr(arch.arch, "in_dim", 11)` and `("edge_dim", 5)` — literal
-#     defaults on IDENTITY quantities, read off the LIVE module, which is the sniff
-#     `repo_design` §3 bans and AUDIT-1 F-46 counts.
-#   * The consumer-registry citation for `train.amp_dtype` NAMED `cuda_warmup` as a read site.
-#     A string naming a dead symbol satisfied the LAW-08 bijection, so the key's entry was
-#     evidence of nothing. It now names `InferenceServer._warmup_compile_path`, which reads it.
-#
-# This module's surviving subject is `build_run_safety`, as the header says.
 
-
-# ── WP13-A run-safety composition root ───────────────────────────────────────────────
 class RunSafety(NamedTuple):
-    """The run-safety triple. Tuple-shaped (§a.2 `-> (sink, registry, watchdog)`) with
-    names, so a caller can unpack it or read `run_safety.heartbeat`."""
+    """The run-safety triple, tuple-shaped but named, so a caller can unpack it or read
+    `run_safety.heartbeat`."""
 
     sink: JsonlEventSink
     registry: HeartbeatRegistry
@@ -69,8 +36,8 @@ class RunSafety(NamedTuple):
 
     @property
     def heartbeat(self) -> Callable[[str], None]:
-        """THE `HeartbeatFn` — pass it to `WorkerPool(heartbeat=…)`,
-        `InferenceServer(heartbeat=…)` and `StepCoordinator(heartbeat=…)`."""
+        """THE `HeartbeatFn` — pass it to `WorkerPool`, `InferenceServer` and
+        `StepCoordinator`."""
         return self.registry.beat
 
 
@@ -91,49 +58,25 @@ def build_run_safety(
     """Build the REAL event sink + heartbeat registry + independent watchdog (unstarted).
 
     Wiring contract:
-      * the sink replaces `NullEventSink` everywhere the run injects one (trainer,
-        coordinator, disk guard, pool) — ONE JSONL segment per process start (§11 log
-        identity: a file never spans two run segments);
-      * `run_safety.heartbeat` is handed to the pool / inference server / coordinator so
-        all three pipeline stages beat into ONE registry;
-      * `counters_fn` reads the persist counters as LIVE module/instance ATTRIBUTES —
-        `_checkpoints.persist_errors_total`, never `from … import persist_errors_total`,
-        which binds the int at import and reads a frozen 0 forever after `global … += 1`
-        (O-28). BOTH sources are fatal via the watchdog (LAW-14);
-      * the fire-time snapshot targets `watchdog_snapshot_path(canonical)` — the DISTINCT
-        `.watchdog` path, so an abnormal-exit save can never truncate the resume buffer;
-      * `wired_sources` is REQUIRED and has NO default: the caller must DECLARE which
-        pipeline stages it actually handed `run_safety.heartbeat` to. A declared stage is
-        watched from arm time; an undeclared one gets a loud `heartbeat_source_unwired`
-        event instead of a stall abort. Without the declaration, one forgotten `heartbeat=`
-        kwarg makes a healthy run fire 42 and the supervisor relaunch into the same missing
-        wiring until the budget is gone (RED-TEAM F3) — so this may never be inferred;
-      * `actor_ckpt_step_fn` / `learner_step_fn` are REQUIRED with NO defaults (the E32
-        posture, WP-UNFREEZE §4.3): a default here would silently unwire the actor-lag
-        check. They feed `ActorLagSpec` together with the monitor config's
-        `actor_lag_threshold_steps` / `actor_lag_abort_enabled`, and are read LIVE at
-        poll time;
-      * `monitor_liveness` (AUDIT-1 F-11 / R334(b)) names the MONITORS whose own counters
-        the watchdog reports the liveness of — a monitor thread that swallows its errors is
-        invisible on every observable it publishes, because what it stops publishing IS the
-        evidence. It carries a `()` default, DELIBERATELY unlike the three neighbours above,
-        and the distinction is the failure mode rather than the convenience: an omitted
-        `wired_sources` / `actor_ckpt_step_fn` / `monitor_cfg` makes a healthy run fire or
-        silently disarms a live abort, while an omitted monitor costs an observable and no
-        run. It is not silent either way — `arm()` emits `monitor_liveness_unwired` on an
-        empty tuple, and production's wiring is pinned structurally;
-      * `monitor_cfg` is REQUIRED with NO default, for the SAME reason and by the same
-        posture (WPAX RED-TEAM F-2). It used to default to `None` and fall back to a bare
-        `MonitorConfig()`, whose `actor_lag_abort_enabled` is `False` — so a caller that
-        merely FORGOT the kwarg got a silently DISARMED hard abort while its config said
-        armed. That is the ADJ-07 shape one function downstream of the `compose_run`
-        `monitor_cfg=` parameter WPAX S-2 deleted, and it is the arm that actually
-        constructs `ActorLagSpec`. Three of `ActorLagSpec`'s four inputs are now
-        required-with-no-default; the fourth is derived from this one.
+      * the sink replaces `NullEventSink` everywhere the run injects one — ONE JSONL segment
+        per process start, so a file never spans two run segments;
+      * `run_safety.heartbeat` is handed to the pool / inference server / coordinator, so all
+        three pipeline stages beat into ONE registry;
+      * `counters_fn` reads the persist counters as LIVE module attributes, never a
+        `from … import` that binds the int at import and reads a frozen 0 forever;
+      * the fire-time snapshot targets the DISTINCT `.watchdog` path, so an abnormal-exit save
+        can never truncate the resume buffer;
+      * `wired_sources`, `actor_ckpt_step_fn`, `learner_step_fn` and `monitor_cfg` are REQUIRED
+        with NO default: an omitted one either makes a healthy run fire 42 and relaunch into
+        the same missing wiring, or silently disarms an abort the config says is armed. None
+        of them may be inferred;
+      * `monitor_liveness` carries a `()` default deliberately — an omitted monitor costs an
+        observable and no run, and `arm()` still emits `monitor_liveness_unwired` on an empty
+        tuple.
 
-    The watchdog is returned UNSTARTED: the caller starts it only after the pool is up
-    (an unstarted pool must never be torn down by a fire), and passes it to the
-    coordinator so `close_out` can disarm staleness first (O-27).
+    The watchdog is returned UNSTARTED: the caller starts it only after the pool is up (an
+    unstarted pool must never be torn down by a fire), and passes it to the coordinator so
+    `close_out` can disarm staleness first.
     """
     cfg = monitor_cfg
     sink = JsonlEventSink(log_dir=Path(log_dir), run_id=run_id)
@@ -146,10 +89,9 @@ def build_run_safety(
             saver(str(snapshot_target))
 
     def _persist_errors_total() -> int:
-        # LIVE module-attribute read (O-28): the counter is re-read on EVERY poll. The
-        # ignore is only for the type checker, which cannot infer a `global`-mutated
-        # module counter — never a licence to bind the value (a `from … import` here
-        # would read a frozen 0 forever and silently exempt checkpoint persist failures).
+        # LIVE module-attribute read, re-read on EVERY poll: a `from … import` here would bind
+        # a frozen 0 and silently exempt checkpoint persist failures. The ignore is for the
+        # type checker only, never a licence to bind the value.
         checkpoint_errors = int(
             _checkpoints.persist_errors_total  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
         )

@@ -1,47 +1,21 @@
-# R8 justify: the four `monitor.drain.*` keys are ONE claim under R93 — a citation is
-# verified by MUTATION, never by grep — and each oracle is the SAME drive (real
-# `compose_run`, real minted config, one key distinguishable) with a different key set.
-# They share the composition harness and the spied `build_eval_pipeline`; split across
-# files, the shared drive would be copied four times and the R93 condition would be
-# restated four times instead of held in one place.
+# R8 justify: the four `monitor.drain.*` keys are ONE claim — a citation is verified by
+# MUTATION, never by grep — and each oracle is the SAME drive (real `compose_run`, real minted
+# config, one key distinguishable) with a different key set, sharing the composition harness and
+# the spied `build_eval_pipeline`; split across files the drive would be copied four times.
 """`monitor.drain.*` reaches the consumer its registry entry NAMES — proved by MUTATION.
 
-WPMINT Phase K-A, ruling R93, closing the DR-11 finding.
+The four keys were minted into every config, schema-validated, and claimed by both copies of
+`CONSUMER_REGISTRY` with a citation naming `drain_budget_sec` / `_run_terminal_sync`. They
+reached neither: the monitor resolver did `data.pop("drain")` and `compose_run` built the real
+`DrainCaps` from a hardcoded `900.0` plus three coordinator defaults, and everything stayed
+green because the registry bijection is a key-SET diff and the citation named a real function.
 
-WHAT WAS WRONG. Four keys — `monitor.drain.{final_eval_drain_timeout_sec,
-eval_final_drain_safety_factor, eval_final_drain_hard_cap_sec, terminal_eval_hard_cap_sec}` —
-were minted into every `configs/*.yaml`, schema-validated by `DrainCapsConfig`, and claimed by
-BOTH copies of `CONSUMER_REGISTRY` with a citation naming `drain_budget_sec` /
-`_run_terminal_sync`. They reached neither. `config/resolve/monitor.py` did
-`data.pop("drain")`, and `compose_run` built the real `DrainCaps` from a hardcoded `900.0`
-plus three `StepCoordinatorConfig` terminal defaults. Every existing test passed: the registry
-bijection is a key-SET diff, gates 7 and 12 are blind to an unconsumed key, and the citation
-string named a REAL function — it just named one the value never got to.
-
-WHY THIS FILE IS SHAPED AS A MUTATION. R93's binding condition is that a consumer-registry
-citation be verified by MUTATION — set the knob, observe the consumer — never by grep,
-"because a grep cannot tell a reader from a `pop`". A test that asserted `resolve_drain_caps`
-returns what the config says would have been green throughout the entire defect: the resolver
-is not the consumer. So each oracle below drives the REAL `compose_run` on a REAL minted
-config with ONE key set to a distinguishable value, and reads the number off the object the
-eval pipeline actually bounds its joins with.
-
-WHERE THE OBSERVATION IS TAKEN, and why there. `build_eval_pipeline` is SPIED — the drive
-captures the `coordinator_cfg_caps` it is handed and returns a stand-in pipeline, the same
-instrument and the same reason as `tests/test_run_strict_composition.py`'s encoding oracle.
-That argument object is exactly what `EvalPipeline` stores as `self._caps`, and the other
-half of the journey (`_caps` -> `drain_budget_sec` / `_run_terminal_sync`'s `budget_sec`) is
-already driven end-to-end against real subprocesses by
-`tests/train/test_drain_hardcap_wiring.py`. So the two halves meet at the argument, and
-neither is asserted from the other's side. `build_run_safety` and the anchor seed are faked
-for the reasons those oracles state (a writable log tree, a watchdog thread, and a `.arch`
-read on a fake model) — neither is on the wire under test.
-
-Everything between the config FILE and that argument — the loader, `resolve_drain_caps`,
-`_step_coordinator_config`, `StepCoordinatorConfig`, `compose_run`'s `DrainCaps` lift — runs
-as production code, unpatched. In particular `_step_coordinator_config` is NOT monkeypatched
-here, unlike the five composition drives that suppress terminal eval through it: it is the
-subject.
+Hence the MUTATION shape: asserting that `resolve_drain_caps` returns what the config says would
+have been green throughout the defect, because the resolver is not the consumer. Each oracle
+drives the REAL `compose_run` on a real minted config with ONE key distinguishable and reads the
+number off the spied `coordinator_cfg_caps` argument — exactly what `EvalPipeline` stores as
+`self._caps`, with the rest of the journey driven end-to-end elsewhere. Everything between the
+config FILE and that argument runs unpatched, `_step_coordinator_config` included.
 """
 from __future__ import annotations
 
@@ -56,8 +30,7 @@ from mantis.eval.pipeline import drain_budget_sec
 from mantis.train.coordinator.config import StepCoordinatorConfig
 
 #: One distinguishable value per key. None is a shipped value (900/3/14400/14400), and the
-#: safety factor is deliberately not a divisor of anything else here, so a `_caps` that
-#: reported a stale or defaulted number could not accidentally match.
+#: safety factor divides nothing else here, so a stale or defaulted number cannot match.
 _DISTINGUISHABLE = {
     "final_eval_drain_timeout_sec": 137.0,
     "eval_final_drain_safety_factor": 7.0,
@@ -67,8 +40,8 @@ _DISTINGUISHABLE = {
 _DRAIN_KEYS = tuple(_DISTINGUISHABLE)
 
 
-#: The drive is bounded so it terminates; the three step-clock knobs move together because
-#: the reachability validator spans them (DESIGN_S §6.6 MF-3).
+#: The drive is bounded so it terminates; the three step-clock knobs move together because the
+#: reachability validator spans them.
 _DRIVE_STEPS = 4
 
 
@@ -87,7 +60,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -121,7 +94,6 @@ class _Trainer:
         self.model = object()
         self.device = "cpu"
 
-    # WPTS/TD-1 re-point (R90a): typed seam; the dead `train_step` fake is gone.
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -164,9 +136,8 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
     def _spy_build_eval_pipeline(**kwargs):
         captured.update(kwargs)
         return SimpleNamespace(
-            # WP12-R Phase O: the TERMINAL call returns a ROUND RESULT, and the seam
-            # now READS its `eval_broken_reason` (it used to discard it), so a double
-            # that answers a kick ACK no longer models the contract it stands in for.
+            # The TERMINAL call returns a ROUND RESULT whose `eval_broken_reason` the seam
+            # reads, so a double answering a kick ACK would not model the contract.
             run_evaluation=lambda *a, **k: {"eval_broken_reason": None},
             poll_completed=lambda: None, drain_pending=lambda: None,
             apply_gate_decision=lambda *a, **k: None, stop=lambda: None,
@@ -182,19 +153,14 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
 
     config = smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
-               # WPTS/TD-1: the drive runs the real graph route; minted 256 batch is drag.
+               # the drive runs the real graph route; the minted 256 batch is drag
                "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, "drain": drain_over},
-        # WPMAIN/R120+R123: both are CONFIG facts now; `compose_run` has no parameter for
-        # either, so the drive declares its posture where the config is built.
+        # Both are CONFIG facts; `compose_run` has no parameter for either.
         eval_enabled=True, run_id="drain_wiring",
-        # RECAL-PREP (R308(g)(i)): this drive composes an eval pipeline for a config whose
-        # `eval.worker_device` is cuda, so `compose_run` asserts the allocator posture at
-        # boot — against the environment the spawn-context child would inherit. Every
-        # committed config mints the R119 `null` placeholder (the VALUE is the re-calibration
-        # sitting's act under R282(b)), so the drive states the regime it is composing under,
-        # exactly as an operator's throwaway config does. `default` is the regime CI runs in:
-        # no allocator configuration at all.
+        # This drive composes an eval pipeline for a config whose `eval.worker_device` is cuda,
+        # so `compose_run` asserts the allocator posture at boot; `default` is CI's regime, no
+        # allocator configuration at all.
         allocator_posture="default",
     )
     mantis.run.compose_run(
@@ -205,15 +171,13 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
     return captured["coordinator_cfg_caps"]
 
 
-# ── the four mutations, one per key (R93) ─────────────────────────────────────────────
 @pytest.mark.parametrize("key", _DRAIN_KEYS)
 def test_each_drain_key_changes_the_caps_the_eval_pipeline_bounds_its_joins_with(
     key, tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """Set ONE `monitor.drain` key to a distinguishable value; the composed `DrainCaps` must
-    carry it. Before this phase every one of these four was green-at-the-config and dead at
-    the consumer, so the parametrization is the finding's own shape: four keys, four
-    demonstrations, no shared arm that could carry a sibling."""
+    carry it. All four were green-at-the-config and dead at the consumer, so the
+    parametrization is the finding's shape: no shared arm can carry a sibling."""
     baseline = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     mutated = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                              **{key: _DISTINGUISHABLE[key]})
@@ -238,9 +202,8 @@ def test_each_drain_key_changes_the_caps_the_eval_pipeline_bounds_its_joins_with
 def test_the_drain_budget_arithmetic_moves_with_the_config(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
-    """The registry's cited consumer, driven: `drain_budget_sec` = `min(timeout * factor,
-    hard_cap)`. Both branches of that `min` are exercised from the CONFIG, so the citation
-    names an arithmetic the config genuinely feeds rather than a function it merely reaches."""
+    """The cited consumer, driven: `drain_budget_sec` = `min(timeout * factor, hard_cap)`, with
+    both branches of that `min` exercised from the CONFIG."""
     safety_bound = _composed_caps(
         tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
         final_eval_drain_timeout_sec=10.0, eval_final_drain_safety_factor=2.0,
@@ -259,9 +222,8 @@ def test_the_drain_budget_arithmetic_moves_with_the_config(
 def test_the_terminal_round_budget_is_the_configured_terminal_hard_cap(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
-    """`_run_terminal_sync` passes `self._caps.terminal_eval_hard_cap_sec` as its
-    `budget_sec` (eval/pipeline.py). Its registry entry cites that line, so the composed
-    value must be the configured one and not the drain budget it sits beside."""
+    """`_run_terminal_sync` passes `self._caps.terminal_eval_hard_cap_sec` as its `budget_sec`,
+    so the composed value must be the configured one, not the drain budget beside it."""
     caps = _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                           terminal_eval_hard_cap_sec=4242.0,
                           eval_final_drain_hard_cap_sec=5.0)
@@ -272,12 +234,10 @@ def test_the_terminal_round_budget_is_the_configured_terminal_hard_cap(
     )
 
 
-# ── no second authority survives anywhere on the path (R1/LAW-08) ─────────────────────
 def test_the_builder_takes_drain_caps_as_a_required_keyword_only_parameter() -> None:
-    """The `stop_step`/`draw_rate_abort` rule (R83, MF-2 Attack B) applied to the third
-    config-authored fact: a parameter DEFAULT would move the authority from the dataclass
-    field to this signature, leaving every `dataclasses.fields()` assertion green while a
-    caller that omitted the argument silently inherited a posture."""
+    """A parameter DEFAULT would move the authority from the dataclass field to this signature,
+    leaving every `dataclasses.fields()` assertion green while a caller that omitted the
+    argument silently inherited a posture."""
     param = inspect.signature(mantis.run._step_coordinator_config).parameters.get("drain_caps")
     assert param is not None, (
         "`_step_coordinator_config` must take `drain_caps`: the four caps are "
@@ -292,9 +252,8 @@ def test_the_builder_takes_drain_caps_as_a_required_keyword_only_parameter() -> 
 
 @pytest.mark.parametrize("name", _DRAIN_KEYS)
 def test_no_coordinator_drain_field_carries_a_code_side_default(name) -> None:
-    """`StepCoordinatorConfig`'s four drain fields must be MISSING-defaulted. Three of them
-    carried `DEFAULT_FINAL_EVAL_DRAIN_*` constants, which is what the run really used while
-    the config was popped; the fourth constant had no reader at all."""
+    """`StepCoordinatorConfig`'s four drain fields must be MISSING-defaulted; three carried
+    constants that are what the run really used while the config block was popped."""
     import dataclasses
 
     field = {f.name: f for f in dataclasses.fields(StepCoordinatorConfig)}[name]
@@ -306,9 +265,8 @@ def test_no_coordinator_drain_field_carries_a_code_side_default(name) -> None:
 
 
 def test_the_resolver_is_the_only_read_of_the_drain_block(smoke_run_config) -> None:
-    """`resolve_drain_caps` returns exactly what the loaded config holds, field for field —
-    the transport arm. A resolver that dropped or reordered a field would still satisfy the
-    mutation oracles above for the key it happened to carry."""
+    """`resolve_drain_caps` returns exactly what the loaded config holds, field for field — a
+    resolver that dropped or reordered a field would still satisfy the mutation oracles."""
     config = smoke_run_config(monitor={"drain": dict(_DISTINGUISHABLE)})
     spec = resolve_drain_caps(config.monitor)
     assert isinstance(spec, DrainCapsSpec)

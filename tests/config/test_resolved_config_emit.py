@@ -32,7 +32,7 @@ def _run5() -> ResolvedConfig:
     return resolve_config(load_config(REPO_ROOT / "configs" / "run6.yaml"))
 
 
-# ── O6 emit ────────────────────────────────────────────────────────────────
+# O6 emit
 def test_payload_event_and_eight_knob_key_set():
     payload = _run5().to_event_payload()
     assert payload["event"] == "resolved_config"
@@ -93,7 +93,7 @@ def test_resolved_knob_shape():
     assert kb.value == 1 and kb.source == "file"
 
 
-# ── O7 death-of-merge census (grep-gate, LAW-07 mutation self-test) ─────────
+# O7 death-of-merge census (grep-gate, LAW-07 mutation self-test)
 _FORBIDDEN = (
     "capture_config_layers",
     "merged_layers",

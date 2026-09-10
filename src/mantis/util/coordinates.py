@@ -1,37 +1,14 @@
-"""Hex coordinate helpers shared across Python callers.
+"""Hex coordinate helpers shared across Python callers, on WINDOW-LOCAL axial coordinates.
 
-Mirrors the Rust counterparts in the mantis-selfplay replay symmetry tables
-(`from_flat`, `to_flat`) and mantis-core hex geometry (`hex_distance`). Keep
-these pure — no numpy, no `mantis` imports — so that any script or test can use
-them without dragging in the full project surface.
-
-## Window-local coordinates
-
-`flat_to_axial` and `axial_to_flat` operate on **window-local** axial
-coordinates with origin at the window centre (q, r both in
-`[-half, half]`, where `half = (board_size - 1) // 2`). They are the
-window-local inverse of each other and match the Rust scatter table
-exactly. For cluster-centred global coordinates, compose with a centre
-offset at the call site:
-
-    # Global axial → window-local flat for a cluster at (cq, cr):
-    flat = axial_to_flat(q - cq, r - cr, board_size)
-
-## Distance
-
-`axial_distance` is the hex Manhattan distance between two axial points.
-Accepts int or float tuples (float supports centroid-vs-centroid checks in
-colony detection).
+Kept pure — no numpy, no `mantis` imports — so any script or test can use them; they mirror the
+Rust `from_flat`/`to_flat` scatter tables and mantis-core's `hex_distance`. For cluster-centred
+global coordinates, compose with the centre offset at the call site.
 """
 from __future__ import annotations
 
 
 def flat_to_axial(flat_idx: int, board_size: int) -> tuple[int, int]:
-    """Window-local flat index → axial `(q, r)`.
-
-    Inverse of `axial_to_flat`. Assumes the window is centred on `(0, 0)`
-    with extent `[-half, half]` on each axis. Matches the Rust `from_flat`
-    scatter table byte-exact.
+    """Window-local flat index → axial `(q, r)`, byte-exact with the Rust `from_flat` table.
 
     Args:
         flat_idx: integer in `[0, board_size * board_size)`.
@@ -47,10 +24,8 @@ def flat_to_axial(flat_idx: int, board_size: int) -> tuple[int, int]:
 
 
 def axial_to_flat(q: int, r: int, board_size: int) -> int | None:
-    """Axial `(q, r)` → window-local flat index, or `None` if outside window.
-
-    Inverse of `flat_to_axial`. Returns `None` when the cell lies outside
-    the `[-half, half]` axial window, matching the Rust `to_flat` contract.
+    """Axial `(q, r)` → window-local flat index, or `None` if outside the `[-half, half]`
+    window. Inverse of `flat_to_axial`, matching the Rust `to_flat` contract.
     """
     half = (board_size - 1) // 2
     wq = q + half
@@ -61,13 +36,10 @@ def axial_to_flat(q: int, r: int, board_size: int) -> int | None:
 
 
 def cell_to_flat(cell_str: str, board_size: int) -> int:
-    """Parse a ``"q,r"`` cell string into a window-local flat index.
+    """Parse a ``"q,r"`` cell string (optionally parenthesised) into a window-local flat index.
 
-    Accepts optional surrounding whitespace and parentheses (e.g. ``"(0,0)"``,
-    ``" 3, -4 "``). Raises `ValueError` on invalid format or out-of-window
-    coordinates. Note this differs from `axial_to_flat` by raising rather
-    than returning `None` because a string literal represents caller intent
-    that a specific cell exists.
+    Raises `ValueError` rather than returning `None` on an out-of-window cell, because a string
+    literal represents caller intent that the cell exists.
     """
     tok = cell_str.strip().strip("()")
     parts = tok.split(",")
@@ -84,16 +56,10 @@ def cell_to_flat(cell_str: str, board_size: int) -> int:
 
 
 def axial_distance(a: tuple[float, float], b: tuple[float, float]):
-    """Hex Manhattan distance between two axial points.
+    """Hex Manhattan distance between two axial points, as `max(|dq|, |dr|, |dq + dr|)`.
 
-    Equivalent to `max(|dq|, |dr|, |dq + dr|)` — this is the three-axis
-    form of the standard axial distance and matches the mantis-core
-    `hex_distance` (which uses the `(|dq| + |dr| + |ds|) / 2` identity form).
-
-    Accepts `int` or `float` tuples. Returns `int` for integer inputs,
-    `float` for float inputs — Python's `max` preserves the input type.
-    Callers using float centroids get the exact sub-unit distance without
-    flooring.
+    Accepts `int` or `float` tuples and returns the input's type, so a float centroid gets the
+    exact sub-unit distance without flooring.
     """
     dq = abs(a[0] - b[0])
     dr = abs(a[1] - b[1])

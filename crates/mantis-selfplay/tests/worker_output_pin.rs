@@ -1,26 +1,13 @@
-//! R8-justify: one integration test per golden × (positive pin + LAW-07
-//! mutation) keeps the P-04 pin auditable as a single unit.
+//! R8-justify: one test per golden × (positive pin + mutation arm) keeps the record-byte pin
+//! auditable as a single unit.
 //!
-//! P-04 record byte pin (WP6, `_v1`) — the pyo3-free record/finalize
-//! producers reproduce the dispatcher-frozen goldens byte-for-byte over the
-//! pinned splitmix64 inputs (CAPTURE_LOG §B/§C, mtime-before-IMPL). Written
-//! FIRST-discipline: this pin asserts the ported producers reproduce the frozen
-//! bytes; the dispatcher (not IMPL) produced the goldens.
+//! The record/finalize producers must reproduce the frozen goldens byte-for-byte over the
+//! pinned splitmix64 inputs. Each golden carries a mutation self-test: flipping ONE
+//! load-bearing input element must DIVERGE the serialized output from the golden.
 //!
-//! Each golden carries a LAW-07 mutation self-test: flipping ONE load-bearing
-//! input element must DIVERGE the serialized output from the golden. A checker
-//! that passes a flipped input is a test failure (the mutation tests bite).
-//!
-//! Deviation (CAPTURE_LOG §A): the full mock-NN worker loop is uncapturable
-//! old-side (embedded-numpy wall), so this pin covers the load-bearing
-//! record-byte math directly; the multi-graph fuse INPUT (g8) is the P-09
-//! wire-stage oracle, not this file.
-//!
-//! R346(f): g1–g4 pinned the four DENSE cluster-aggregation producers
-//! (`aggregate_policy{,_to_local}{,_ls}`), which went with the grid path. Their goldens
-//! under `tests/fixtures/worker/` are now orphaned and no producer can regenerate them.
-//! g5–g7 — the graph assemble, the graph record and the outcome finalizer — are what
-//! remains, and each keeps its positive pin and its LAW-07 mutation arm.
+//! g1–g4 pinned the four dense cluster-aggregation producers, which went with the grid path;
+//! their goldens are orphaned and no producer can regenerate them. g5–g7 — graph assemble,
+//! graph record, outcome finalizer — are what remains.
 
 use fxhash::FxHashMap;
 use mantis_core::{Board, Player};
@@ -30,13 +17,13 @@ use mantis_selfplay::records::{
     assemble_ls_from_gnn_probs, finalize_graph_outcome, record_position_graph,
 };
 
-// ── Pinned constants (CAPTURE_LOG §B/§C) ────────────────────────────────────
+// Pinned constants
 const WORKER_GOLDEN_SEED: u64 = 0xB0A2_D601_D000_0006;
 const N_ACTIONS: usize = 362;
 const TRUNK: i32 = 19;
 const HALF: i32 = 9;
 
-// ── Mock-NN splitmix64 stream (CAPTURE_LOG §B, PREREG C-10) ──────────────────
+// Mock-NN splitmix64 stream
 fn splitmix64_step(s: &mut u64) -> u64 {
     *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *s;
@@ -56,7 +43,6 @@ fn fill_stream(seed: u64, n: usize) -> Vec<f32> {
     out
 }
 
-// ── Pinned boards (CAPTURE_LOG §C — PUB `apply_move` API only) ───────────────
 /// Compact board: the frozen `records.rs::small_board()` — 3 stones, P1 to move.
 fn compact_board() -> Board {
     let mut b = Board::new();
@@ -66,7 +52,7 @@ fn compact_board() -> Board {
     b
 }
 
-// ── Serializers (CAPTURE_LOG §C byte layouts, all little-endian) ─────────────
+// Serializers — pinned byte layouts, all little-endian.
 fn ser_vec_f32(v: &[f32]) -> Vec<u8> {
     let mut out = Vec::with_capacity(4 + v.len() * 4);
     out.extend_from_slice(&(v.len() as u32).to_le_bytes());
@@ -140,8 +126,8 @@ fn read_golden(name: &str) -> Vec<u8> {
     std::fs::read(&path).unwrap_or_else(|e| panic!("read golden {}: {e}", path.display()))
 }
 
-// ── Reconstructions (canonical pinned inputs → producer → serialized bytes) ──
-// The `mut_*` closures flip ONE load-bearing input element for the LAW-07 self-test.
+// Reconstructions: canonical pinned inputs → producer → serialized bytes. `mutate` flips ONE
+// load-bearing input element for the mutation self-test.
 
 /// g5 `assemble_ls_from_gnn_probs`: build_axis_graph on two far clusters (q∈[0,5)
 /// P1, q∈[30,35) P2; win_length 6/radius 6/trunk 19); legal_probs =
@@ -178,8 +164,8 @@ fn produce_g5(mutate: bool) -> Vec<u8> {
     let s: f32 = raw.iter().sum();
     let probs: Vec<f32> = raw.iter().map(|p| p / s).collect();
     if mutate {
-        // Flip ONE off-window legal node's coord → its overflow KEY changes
-        // (sum-1 segmented-softmax invariant preserved, so assemble still Ok).
+        // Flipping one off-window node's coord changes its overflow KEY while preserving the
+        // sum-1 invariant, so assemble still returns Ok.
         let off_idx = slots
             .iter()
             .position(|&sl| sl == mantis_graph::OFF_WINDOW_SLOT)
@@ -190,19 +176,13 @@ fn produce_g5(mutate: bool) -> Vec<u8> {
     ser_ls(&ls)
 }
 
-/// g6 `record_position_graph` — WP12-R Phase T RE-POINT (recorded in
-/// IMPL_NOTES_T.md as a §2-census miss: the original pin planted the RAW
-/// fill_stream (Σ ≈ n/2 — not a distribution), which the §3.3 typed tripwire
-/// now refuses; the byte pin for VALID targets lives in the byte-frozen
-/// `target_export_parity.rs` record chain against committed fixture pairs).
-/// Re-pointed legs over the SAME pinned stream (seed ^ 0x30 unchanged):
-///   (a) the raw planting refuses with `MassNotUnity` carrying the exact
-///       pre-filter legal-scan sum (pins the read-by-coord scan — every
-///       planted cell contributes);
-///   (b) the NORMALIZED planting records, and the serialized record equals a
-///       re-derived record over the same coords/masses (layout + coord-read
-///       parity via `ser_graph_record`).
-/// Returns (refusal_sum, ok_record_bytes) for the pin + mutation arms.
+/// g6 `record_position_graph`, two legs over the pinned stream:
+///   (a) the RAW planting (Σ ≈ n/2, not a distribution) refuses with `MassNotUnity` carrying
+///       the exact pre-filter legal-scan sum, which pins the read-by-coord scan;
+///   (b) the NORMALIZED planting records, and its bytes equal a re-derived record over the
+///       same coords/masses.
+/// Returns (refusal_sum, ok_record_bytes). The byte pin for valid targets lives in
+/// `target_export_parity.rs`.
 fn produce_g6(mutate: bool) -> (f64, Vec<u8>) {
     let board = compact_board();
     let legal = board.legal_moves();
@@ -319,7 +299,6 @@ fn produce_g7(mutate: bool) -> Vec<u8> {
     ser_finalize(&out)
 }
 
-// ── The record byte pins (positive: ported producer == frozen golden) ──────
 #[test]
 fn pin_g5_assemble_ls_from_gnn_probs() {
     assert_eq!(
@@ -329,13 +308,8 @@ fn pin_g5_assemble_ls_from_gnn_probs() {
 }
 #[test]
 fn pin_g6_record_position_graph() {
-    // Phase-T re-point: the in-fn asserts (typed refusal carrying the exact
-    // legal-scan sum + normalized-record layout parity) are the pin. The old
-    // `record_position_graph.bin` golden encoded the pre-fix arbitrary-mass
-    // acceptance; it was labeled VOID-AS-ANCHOR (T-4 census, R157) and then
-    // DELETED with its manifest row under operator ruling R162 (QN-1:
-    // outlawed semantics + zero consumers; non-R20-dense — this is the GRAPH
-    // record producer, no dense planes).
+    // The in-fn asserts ARE the pin: there is no golden file, because the old one encoded the
+    // pre-fix arbitrary-mass acceptance and was deleted with its manifest row.
     let (refusal_sum, ok_bytes) = produce_g6(false);
     assert!(
         refusal_sum > 1.0,
@@ -348,7 +322,7 @@ fn pin_g7_finalize_graph_outcome() {
     assert_eq!(produce_g7(false), read_golden("finalize_graph_outcome.bin"));
 }
 
-// ── LAW-07 mutation self-tests (flip ONE input element ⇒ diverge from golden) ─
+// Mutation self-tests: flipping ONE input element must diverge from the golden.
 #[test]
 fn mut_g5_diverges() {
     assert_ne!(
@@ -358,8 +332,7 @@ fn mut_g5_diverges() {
 }
 #[test]
 fn mut_g6_diverges() {
-    // LAW-07 bite, re-pointed: flipping ONE planted mass must diverge BOTH the
-    // refusal sum and the normalized record bytes.
+    // Flipping ONE planted mass must diverge BOTH the refusal sum and the record bytes.
     let (sum_a, bytes_a) = produce_g6(false);
     let (sum_b, bytes_b) = produce_g6(true);
     assert_ne!(

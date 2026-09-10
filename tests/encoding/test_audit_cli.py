@@ -20,7 +20,7 @@ from mantis.encoding.audit import (
 _HAVE_TORCH = importlib.util.find_spec("torch") is not None
 
 
-# ── AuditReport.exit_code contract (unit) ───────────────────────────────────
+# AuditReport.exit_code contract (unit)
 
 
 def test_exit_code_clean_is_zero() -> None:
@@ -44,7 +44,7 @@ def test_exit_code_error_is_two_and_takes_max() -> None:
     assert r.exit_code() == 2
 
 
-# ── CLI exit-code contract e2e (torch-free) ─────────────────────────────────
+# CLI exit-code contract e2e (torch-free)
 
 
 def _empty_dirs(tmp_path):
@@ -96,7 +96,7 @@ def test_cli_error_returns_two_via_bad_variant(tmp_path) -> None:
     assert rc == 2
 
 
-# ── §5 hardcodes — --hardcodes-only runs the scan ───────────────────────────
+# §5 hardcodes — --hardcodes-only runs the scan
 
 
 def test_hardcodes_only_clean_tree_is_zero(tmp_path) -> None:
@@ -116,7 +116,7 @@ def test_hardcodes_only_flags_a_bare_literal(tmp_path) -> None:
     assert main(["audit", "--hardcodes-only", "--strict", "--repo-root", str(tmp_path)]) == 2
 
 
-# ── §6 cross-table INV logic (reproduces the WP3 Rust reference) ─────────────
+# §6 cross-table INV logic (reproduces the WP3 Rust reference)
 
 
 def test_cross_table_inv1_mismatch_is_error(tmp_path) -> None:
@@ -146,7 +146,7 @@ def test_cross_table_inv5_ok_is_info(tmp_path) -> None:
     assert report.exit_code() == 0
 
 
-# ── §1 registered reads the compiled registry ───────────────────────────────
+# §1 registered reads the compiled registry
 
 
 def test_section_registered_lists_all_specs(tmp_path) -> None:
@@ -159,7 +159,7 @@ def test_section_registered_lists_all_specs(tmp_path) -> None:
     assert names == {s.name for s in all_specs()}
 
 
-# ── §2 checkpoints (torch) — skip-with-reason when torch absent ──────────────
+# §2 checkpoints (torch) — skip-with-reason when torch absent
 
 
 @pytest.mark.skipif(not _HAVE_TORCH, reason="torch not installed (model/train are later WPs)")

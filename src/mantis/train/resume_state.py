@@ -1,33 +1,13 @@
-"""The resume sidecar — the per-stop facts envelope v2 cannot carry (R343(c), CARD-RESUME).
+"""The resume sidecar — the per-stop facts envelope v2 cannot carry.
 
-R178(c) opened CARD-RESUME POST-MINT owning "weights + optimizer/scheduler + buffer persistence
-+ launcher surface together … nobody builds any piece of it separately". The mint completed at
-R342; this module is the buffer-persistence and launcher half, and it exists BESIDE envelope v2
-rather than inside it for two reasons that are not stylistic:
+It sits BESIDE envelope v2 because the envelope is stamped ONCE with its `content_sha8` in its own
+filename, so a new field changes the format, the hash and THE ONE LOADER. Its failure posture is
+run-fatal rather than best-effort — a stop that cannot persist its ring must say so loudly, or the
+resume silently refills from empty — and it is a RESUME INPUT, never a provenance record, so a
+sidecar that disagrees with its checkpoint is REFUSED rather than reconciled.
 
-  * the envelope is stamped ONCE and immutable (R3/LAW-12) and its `content_sha8` is embedded in
-    its own filename, so a new field changes the format, the hash and THE ONE LOADER;
-  * a `weights` save deliberately carries model + metadata only, so a new field would need a
-    policy on the strip path — the re-stamping surface LAW-12 exists to keep closed.
-
-FAILURE POSTURE IS LAW-14, NOT BEST-EFFORT, and that is the difference between this file and
-`buffer_persist.py`. That module's counted-swallow is right for a snapshot nothing depends on.
-It is wrong for the one file a resume needs: a stop that cannot persist its ring must say so
-loudly, because the alternative is a resume that silently refills from empty — which is exactly
-what R343(c) forbids and what `REAL_RUN_OPEN_DECISIONS.md` §4 priced at three ring refills per
-12 h under the R342(b)(iv) rate bar.
-
-THE SIDECAR IS A RESUME INPUT AND NEVER A PROVENANCE RECORD. The checkpoint stays the artifact
-of record; a sidecar that disagrees with its checkpoint is REFUSED, never reconciled.
-
->300 justify (R8): ONE subject — what a stop must record for its resume to be lawful — and its
-parts are inseparable by construction. The record's SHAPE (`ResumeState`/`RingRef`), the two
-halves of the ring's identity (`sha256_file` writing it, `verify_ring` comparing it), the RNG
-capture/restore pair, and the write/load pair all share one failure vocabulary
-(`ResumeStateError`/`RingIdentityError`) and one refusal posture. Splitting them would put the
-hash that is written in one file and the hash that is checked in another, which is precisely the
-shape LAW-07 calls a phantom gate; and the capture/restore pair only means anything as a pair,
-since a captured stream nobody restores is a field, not a mechanism.
+>300 justify (R8): ONE subject — what a stop must record for its resume to be lawful. Splitting it
+would put the hash that is written in one file and the hash that is checked in another.
 """
 from __future__ import annotations
 
@@ -43,39 +23,31 @@ from typing import Any
 import numpy as np
 import torch
 
-#: Appended to the checkpoint's own filename, so a sidecar can never be mistaken for a
-#: checkpoint and `checkpoint_filename`'s `{run_id}_{step:08d}_{sha8}.ckpt` grammar still parses
-#: the stem it is derived from.
+#: Appended to the checkpoint's own filename, so a sidecar can never be mistaken for a checkpoint
+#: and the checkpoint grammar still parses the stem it is derived from.
 SIDECAR_SUFFIX = ".resume.json"
 
 #: Bumped when a field's MEANING changes, never when one is added — an older sidecar missing a
-#: field is refused by `from_dict`'s explicit read, which is the check that matters.
+#: field is refused by `from_dict`'s explicit read.
 SIDECAR_VERSION = 1
 
 _HASH_CHUNK = 1 << 20
 
-#: The streams `capture_rng_streams` writes and `restore_rng_streams` honours — ONE
-#: authority, so a stream can never be captured into a sidecar that nothing can restore.
+#: The streams `capture_rng_streams` writes and `restore_rng_streams` honours — ONE authority, so
+#: a stream can never be captured into a sidecar that nothing can restore.
 _RESTORABLE_STREAMS = frozenset({"python", "numpy", "torch", "torch_cuda"})
 
 
 class ResumeStateError(RuntimeError):
-    """The sidecar is absent, unreadable, malformed, or disagrees with its checkpoint.
-
-    A named type and not a bare `RuntimeError` because the supervisor's resumable-halt
-    classification reads it: a resume that cannot trust its own state must stop, and it must be
-    distinguishable from the run-fatal classes around it.
-    """
+    """The sidecar is absent, unreadable, malformed, or disagrees with its checkpoint. Named
+    rather than a bare `RuntimeError` because the supervisor's resumable-halt classification
+    reads it and must tell it from the run-fatal classes around it."""
 
 
 class RingIdentityError(ResumeStateError):
-    """The persisted ring's re-derived sha256 disagrees with the sidecar's record.
-
-    Witness (5)'s refusal (R343(c)): a planted corruption of the persisted ring is refused ON
-    LOAD. Separate from `ResumeStateError` so the planted break can assert the specific refusal
-    rather than the family — a hash that is computed but never compared is the phantom gate
-    LAW-07 exists to forbid, and a test that accepts any exception cannot tell the two apart.
-    """
+    """The persisted ring's re-derived sha256 disagrees with the sidecar's record. Separate from
+    `ResumeStateError` so a planted break can assert the specific refusal rather than the
+    family — a test that accepts any exception cannot tell the two apart."""
 
 
 def sha256_file(path: str | Path) -> str:
@@ -105,30 +77,14 @@ def _b64_to_tensor(blob: str) -> Any:
 def capture_rng_streams() -> dict[str, Any]:
     """Snapshot the PYTHON-SIDE RNG streams `seed_everything` seeds.
 
-    NO PICKLE ANYWHERE ON THIS PATH, and that is a security property rather than a style
-    choice. The sidecar is UNAUTHENTICATED: unlike the checkpoint beside it, which carries a
-    `content_sha8` its loader re-derives and refuses on mismatch, nothing signs this file. A
-    `pickle.loads` over it would hand arbitrary code execution to anyone who can write one file
-    into the run's checkpoint directory — a strictly easier target than the checkpoint, and one
-    the ring's own hash check does nothing to protect. Every stream is therefore encoded as
-    plain JSON scalars, lists and base64 bytes, and `restore_rng_streams` rebuilds the native
-    objects from those by construction.
+    NO PICKLE ANYWHERE ON THIS PATH, as a security property: the sidecar is UNAUTHENTICATED, so a
+    `pickle.loads` over it would hand code execution to anyone who can write one file into the
+    run's checkpoint directory.
 
-    DISCLOSED SCOPE, because the gap is the point (R343(c) witness 4): this captures python,
-    numpy, torch-cpu and torch-cuda. It does NOT capture the replay ring's sampler, which is a
-    Rust `StdRng` living in the engine
-    (`crates/mantis-selfplay/src/replay/hexg/mod.rs`) rather than behind
-    `seed_everything`.
-
-    WHAT THAT COSTS, MEASURED, and it is narrower than it was (R344(a)). The ring is now
-    SEEDED from `config.seed` at the one construction site (`mantis.run._select_buffer`), so
-    two launches of the same config DO reproduce their batch draws — the older and larger half
-    of this gap is closed. What remains is stop/resume CONTINUITY: a resumed ring restarts its
-    stream at draw 1 instead of continuing from where the stop left it, a deterministic REWIND
-    rather than the nondeterminism this note used to describe. Both halves are pinned in
-    `tests/train/test_resume_ring_roundtrip.py`, so the disclosure cannot silently go stale.
-    Closing the remainder needs `StdRng`'s ChaCha word position, reachable only through rand's
-    private backend — refused with grounds, not deferred (`CARD-RING-SAMPLER-SEED`).
+    DISCLOSED SCOPE: python, numpy, torch-cpu and torch-cuda, and NOT the ring's sampler, a Rust
+    `StdRng` in the engine. Two launches of the same config reproduce their draws; what remains is
+    stop/resume CONTINUITY, a deterministic REWIND to draw 1, whose closure needs `StdRng`'s
+    ChaCha word position and is refused with grounds rather than deferred.
     """
     py_version, py_state, py_gauss = random.getstate()
     np_name, np_keys, np_pos, np_has_gauss, np_cached = np.random.get_state()
@@ -150,18 +106,14 @@ def capture_rng_streams() -> dict[str, Any]:
 def restore_rng_streams(streams: dict[str, Any]) -> list[str]:
     """Restore what `capture_rng_streams` captured. Returns the stream names restored.
 
-    Rebuilds each native object FROM TYPED FIELDS — no pickle, so a hostile sidecar can at worst
-    produce a `ResumeStateError`, never code execution (see `capture_rng_streams`).
-
-    A stream present in the sidecar but unrestorable on THIS host is an error, not a skip: the
-    one case that is legitimately absent (`torch_cuda` on a cpu box) is absent from the sidecar
-    too, because the capture side is equally conditional.
+    Rebuilds each native object FROM TYPED FIELDS, so a hostile sidecar can at worst produce a
+    `ResumeStateError`. A stream present but unrestorable on THIS host is an error, not a skip.
 
     Raises:
         ResumeStateError: a stream name this build does not restore, or a malformed payload.
     """
-    # THE NAME IS CHECKED BEFORE THE PAYLOAD IS TOUCHED: an unknown name is what this build
-    # cannot honour, so reporting a decode failure for it would name the wrong defect.
+    # THE NAME IS CHECKED BEFORE THE PAYLOAD IS TOUCHED: reporting a decode failure for an
+    # unknown name would name the wrong defect.
     unknown = sorted(set(streams) - _RESTORABLE_STREAMS)
     if unknown:
         raise ResumeStateError(
@@ -215,13 +167,9 @@ class RingRef:
 
 @dataclasses.dataclass(frozen=True)
 class ResumeState:
-    """Everything a resume needs that the checkpoint does not already carry.
-
-    `round_counter` is the field with no HEAD mechanism at all and the one witness (2) is about:
-    `EvalPipeline._round_counter` resets to 0 on every launch, so without it a resumed run
-    re-enters `round_idx % gate.stride` (`eval/pipeline.py:698`) at a phase the stopped process
-    did not leave it in — the promotion cadence changes silently on every resume.
-    """
+    """Everything a resume needs that the checkpoint does not already carry. `round_counter` is
+    the field with no HEAD mechanism at all: the eval pipeline's counter resets to 0 on every
+    launch, so without it a resumed run re-enters the promotion stride at the wrong phase."""
 
     version: int
     run_id: str
@@ -238,11 +186,8 @@ class ResumeState:
 
     @classmethod
     def from_dict(cls, payload: Any) -> ResumeState:
-        """Rehydrate, reading every field EXPLICITLY.
-
-        No `.get(key, default)` anywhere (R1): a sidecar missing a field is a sidecar this build
-        does not understand, and inventing a default for it is how a resume silently starts from
-        a different state than the one it was told to.
+        """Rehydrate, reading every field EXPLICITLY — inventing a default is how a resume
+        silently starts from a different state than it was told to.
 
         Raises:
             ResumeStateError: the payload is not a mapping, is a version this build does not
@@ -278,15 +223,12 @@ class ResumeState:
 
 
 def write_resume_state(state: ResumeState, checkpoint_path: str | Path) -> Path:
-    """Write `state` atomically beside `checkpoint_path`. Returns the sidecar path.
-
-    Atomic by `os.replace` over a same-directory temp file, for the reason
-    `save_best_model_atomic` is: a stop interrupted mid-write must leave either the previous
-    sidecar or none, never a truncated one that parses.
+    """Write `state` atomically beside `checkpoint_path`, so an interrupted stop leaves either
+    the previous sidecar or none. Returns the sidecar path.
 
     Raises:
-        OSError: the sidecar could not be written — LAW-14, run-fatal at the caller, because a
-            stop that cannot record its ring has not stopped resumably.
+        OSError: the sidecar could not be written — run-fatal at the caller, because a stop that
+            cannot record its ring has not stopped resumably.
     """
     path = sidecar_path_for(checkpoint_path)
     tmp = path.with_name(path.name + ".tmp")
@@ -300,11 +242,9 @@ def write_resume_state(state: ResumeState, checkpoint_path: str | Path) -> Path:
 
 
 def load_resume_state(checkpoint_path: str | Path) -> ResumeState:
-    """Read the sidecar belonging to `checkpoint_path` and cross-check it against it.
-
-    The cross-check is the ONE-TEXT rule applied to artifacts: the checkpoint's filename already
-    carries `{run_id}_{step:08d}_{sha8}`, so a sidecar naming a different checkpoint is a pairing
-    error that must die here rather than resume a ring into the wrong weights.
+    """Read the sidecar belonging to `checkpoint_path` and cross-check it against it: a sidecar
+    naming a different checkpoint is a pairing error that must die here rather than resume a ring
+    into the wrong weights.
 
     Raises:
         ResumeStateError: the sidecar is absent, unreadable, malformed, or names a different
@@ -333,11 +273,8 @@ def load_resume_state(checkpoint_path: str | Path) -> ResumeState:
 
 
 def verify_ring(ring: RingRef) -> None:
-    """Re-derive the persisted ring's sha256 and refuse a mismatch.
-
-    THE COMPARISON IS THE POINT (witness 5). Recording a hash and never checking it is the
-    phantom-gate class LAW-07 exists to forbid, so this function is what the planted break
-    fires against.
+    """Re-derive the persisted ring's sha256 and refuse a mismatch. THE COMPARISON IS THE POINT:
+    a hash recorded and never checked is the phantom-gate class.
 
     Raises:
         RingIdentityError: the file is missing, unreadable, or hashes differently.

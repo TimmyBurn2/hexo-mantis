@@ -1,15 +1,8 @@
-"""SC-A3 oracle — `MonitorSchemaConfig` (31 fields: 29 scalars + the `drain` and `disk_guard`
-sub-blocks) + `DrainCapsConfig` (4 fields) + `DiskGuardConfig` (schema/liveness pinned in
-tests/config/test_disk_guard_keys.py) +
-`resolve_monitor_config` round-trip (DESIGN_P2.md §4 / PREREG_P2.md suite #6).
+"""`MonitorSchemaConfig` + `DrainCapsConfig` + the `resolve_monitor_config` round-trip.
 
-RED-at-import until IMPL lands `mantis.config.schema.monitor.MonitorSchemaConfig` /
-`DrainCapsConfig` + `mantis.config.resolve.monitor.resolve_monitor_config`. Census pattern
-as the other SC-A schema suites. The round-trip tests are the mutation self-test (LAW-07):
-`resolve_monitor_config` must be a pure 1:1 field copy onto `mantis.monitor.config.
-MonitorConfig` — a field-name-equality assertion between the two field sets, so renaming a
-field on EITHER struct without the other breaks this suite.
-"""
+The round-trip tests are the mutation self-test: `resolve_monitor_config` must be a pure 1:1
+field copy onto `mantis.monitor.config.MonitorConfig`, asserted as field-name equality between
+the two field sets, so renaming a field on EITHER struct alone breaks this suite."""
 from __future__ import annotations
 
 import pytest
@@ -23,10 +16,8 @@ from mantis.config.schema import (
 )
 from mantis.monitor.config import MonitorConfig
 
-# Every value = the CURRENT `monitor.config.MonitorConfig` dataclass default, minted
-# verbatim (DESIGN_P2.md §4.2 — zero behavior change; enumerated by direct read of
-# monitor/config.py, the corrected field count — 27 at SC-A3, 29 since WP-UNFREEZE
-# added actor_lag_threshold_steps / actor_lag_abort_enabled (R-30)).
+# Every value is the CURRENT `MonitorConfig` dataclass default, minted verbatim for zero
+# behaviour change.
 VALID_MONITOR_SCALARS: dict = {
     "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
     "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -49,27 +40,18 @@ VALID_DRAIN: dict = {
     "final_eval_drain_timeout_sec": 900.0, "eval_final_drain_safety_factor": 3.0,
     "eval_final_drain_hard_cap_sec": 14400.0, "terminal_eval_hard_cap_sec": 14400.0,
 }
-#: WPMAIN / R122: the minted `monitor.disk_guard` family. It is the SECOND schema-only
-#: sub-block (after `drain`) — it feeds `mantis.train.lifecycle.disk_guard.DiskGuard`
-#: through `resolve_disk_guard` and is NOT part of the 1:1 `MonitorConfig` copy.
+#: The minted `monitor.disk_guard` family: the SECOND schema-only sub-block after `drain`, fed
+#: to `DiskGuard` through `resolve_disk_guard` and NOT part of the 1:1 `MonitorConfig` copy.
 VALID_DISK_GUARD: dict = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
-#: R242 (ADJ-D12): `monitor.gate_interval`, the ARMING cadence. A SCALAR that is nonetheless
-#: NOT in `VALID_MONITOR_SCALARS`, because that name means "scalar of the 1:1 `MonitorConfig`
-#: copy" everywhere in this file (the round-trip test iterates it and reads each name off the
-#: runtime dataclass). `gate_interval` is deliberately schema-only — its reader is
-#: `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval` — so it is a THIRD
-#: enumerated drop in `resolve_monitor_config`, exactly like `drain` and `disk_guard`, and it
-#: belongs on the payload but off the dataclass census. Minted equal to the template's own
-#: `train.log_interval` in every committed config; the value here is that same 1000.
+#: `monitor.gate_interval`, the ARMING cadence: a SCALAR that is nonetheless NOT in
+#: `VALID_MONITOR_SCALARS`, which everywhere here means "scalar of the 1:1 `MonitorConfig` copy".
+#: Schema-only — its reader is `compose_run` -> `StepCoordinatorConfig.gate_interval`.
 VALID_GATE_INTERVAL: int = 1000
 VALID_MONITOR: dict = dict(VALID_MONITOR_SCALARS, gate_interval=VALID_GATE_INTERVAL,
                            drain=dict(VALID_DRAIN), disk_guard=dict(VALID_DISK_GUARD))
 
-#: Re-derived from the population this file NAMES, never transcribed: `MONITOR_FIELDS` is
-#: the payload's own key set, which is `MonitorSchemaConfig.model_fields` (29 copied scalars +
-#: `gate_interval` + the two sub-blocks = 32). The runtime `MonitorConfig` dataclass stays at
-#: 29 — all three of the others are popped BY NAME in `resolve_monitor_config`, each because
-#: it has its own reader elsewhere.
+#: Re-derived from the population this file NAMES, never transcribed; the runtime dataclass is
+#: smaller because the schema-only members are popped BY NAME, each with its own reader.
 MONITOR_FIELDS = sorted(VALID_MONITOR)
 DRAIN_FIELDS = sorted(VALID_DRAIN)
 
@@ -89,7 +71,6 @@ def _drain(**over: object) -> dict:
     return out
 
 
-# ── MonitorSchemaConfig ───────────────────────────────────────────────────────────────
 def test_monitor_valid_payload_constructs_clean():
     cfg = MonitorSchemaConfig.model_validate(VALID_MONITOR)
     assert cfg.alert_entropy_min == 1.0
@@ -106,12 +87,8 @@ def test_monitor_missing_field_rejected(field: str):
 
 @pytest.mark.parametrize("field", sorted(_MONITOR_DEFAULTED))
 def test_an_operational_field_is_OMITTABLE_and_falls_to_its_declared_default(field: str):
-    """The other side of the row above, and the reason the exemption is not a hole.
-
-    R347/CONFIG-1 moved the operational constants out of the YAML, so omitting one must be
-    LEGAL — but it must also land on the value the registry says it lands on. Asserting only
-    "no error" would be satisfied by a default of anything at all, which is how a silent
-    behaviour change would travel."""
+    """Omitting an operational constant must be LEGAL, and must land on the value the registry
+    says: asserting only "no error" would be satisfied by a default of anything at all."""
     payload = _monitor()
     del payload[field]
     cfg = MonitorSchemaConfig.model_validate(payload)
@@ -127,10 +104,8 @@ def test_monitor_extra_key_rejected():
 
 
 def test_monitor_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
-    """R1 with R347/CONFIG-1's partition: a default is legal ONLY where the schema's own
-    registry declares the key operational, and the check runs BOTH ways so neither half can
-    drift — an undeclared default is a red, and a declared key that is still required is a
-    stale exemption nobody can see go stale."""
+    """A default is legal ONLY where the schema's registry declares the key operational, checked
+    BOTH ways: an undeclared default reds, and a declared-but-required key is a stale exemption."""
     for name, field in MonitorSchemaConfig.model_fields.items():
         if name in _MONITOR_DEFAULTED:
             assert not field.is_required(), (
@@ -146,13 +121,9 @@ def test_monitor_has_no_pydantic_level_default_EXCEPT_the_declared_operational_o
 
 
 def test_monitor_gate_interval_is_required_and_at_least_one():
-    """R242 (ADJ-D12) — the ARMING cadence has NO code-side default and no off value.
-
-    `ge=1` for `train.log_interval`'s measured reason applied to THIS knob (WPMINT DR-7): a
-    non-positive stride stops `_run_gate_interval` running the live hard-abort family AND
-    stops the `monitor_gates` summary that would make the deadness readable, together, while
-    gate 12 goes on auditing the draw-rate row ARMED.
-    """
+    """The ARMING cadence has NO code-side default and no off value: a non-positive stride stops
+    the live hard-abort family AND the summary that would make the deadness readable, together,
+    while the audit still calls the row ARMED."""
     assert MonitorSchemaConfig.model_fields["gate_interval"].is_required(), (
         "monitor.gate_interval carries a code-side default — R1/R242: the config is then not "
         "its only authority and a caller inherits an ARMING posture"
@@ -171,7 +142,6 @@ def test_monitor_bound_examples_reject_negative_thresholds():
             MonitorSchemaConfig.model_validate(_monitor(**{field: -1}))
 
 
-# ── DrainCapsConfig ───────────────────────────────────────────────────────────────────
 def test_drain_caps_valid_payload_constructs_clean():
     cfg = DrainCapsConfig.model_validate(VALID_DRAIN)
     assert cfg.final_eval_drain_timeout_sec == 900.0
@@ -179,8 +149,8 @@ def test_drain_caps_valid_payload_constructs_clean():
 
 @pytest.mark.parametrize("field", DRAIN_FIELDS)
 def test_an_omitted_drain_cap_lands_on_its_declared_default(field: str):
-    """All four caps are declared operational (R347/CONFIG-1), so omitting one is legal — and
-    the VALUE is asserted, because "no error" alone would be satisfied by any default."""
+    """Omitting a declared-operational cap is legal, and the VALUE is asserted because "no
+    error" alone would be satisfied by any default."""
     payload = _drain()
     del payload[field]
     cfg = DrainCapsConfig.model_validate(payload)
@@ -195,16 +165,14 @@ def test_drain_caps_extra_key_rejected():
 
 @pytest.mark.parametrize("field", DRAIN_FIELDS)
 def test_drain_caps_zero_or_negative_rejected(field: str):
-    # every DrainCapsConfig field is Field(gt=0) (a zero-or-negative drain/join bound is
-    # domain-nonsense — a subprocess.join(0) is not a real bound).
+    # Every field is `Field(gt=0)`: a `subprocess.join(0)` is not a real bound.
     with pytest.raises(ValidationError):
         DrainCapsConfig.model_validate(_drain(**{field: 0.0}))
 
 
 def test_every_drain_cap_is_a_declared_operational_default():
-    """All four are subprocess-join bounds, so all four are declared — and the equality is
-    asserted rather than the membership, because a fifth cap added without a registry row
-    would pass a one-way check."""
+    """All four are subprocess-join bounds, so all four are declared — and the EQUALITY is
+    asserted, because a fifth cap without a registry row would pass a one-way check."""
     assert set(DrainCapsConfig.model_fields) == operational_default_fields("monitor.drain")
     for name, field in DrainCapsConfig.model_fields.items():
         assert not field.is_required(), (
@@ -212,19 +180,10 @@ def test_every_drain_cap_is_a_declared_operational_default():
         )
 
 
-# ── resolve_monitor_config round-trip (LAW-07 mutation self-test) ─────────────────────
 def test_monitor_schema_scalar_fields_equal_monitor_config_dataclass_fields():
-    # The excluded set is ENUMERATED, one named block per member, and must stay that way:
-    # widening it to "ignore anything the dataclass lacks" would let any future schema field
-    # vanish from this equality silently — which is the same weaken-class move the sibling
-    # census (`tests/config/test_disk_guard_keys.py`) forbids on `resolve_monitor_config`'s
-    # pop. `disk_guard` joins `drain` here for the same reason `drain` was there: it is
-    # schema-only and has its own resolver.
-    # `gate_interval` (R242/ADJ-D12) joins both on the SAME grounds and by the same
-    # discipline — it is NAMED here, never filtered out: its reader is
-    # `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval`, and it is
-    # deliberately absent from `MonitorConfig` because that dataclass defaults every field it
-    # carries, so a 28th code-side default is exactly what R242's "no default" forbids.
+    # The excluded set is ENUMERATED, one named member at a time: widening it to "ignore
+    # anything the dataclass lacks" would let a future schema field vanish silently. Each
+    # excluded name is schema-only with its own reader elsewhere.
     schema_fields = set(MONITOR_FIELDS) - {"gate_interval", "drain", "disk_guard"}
     dataclass_fields = set(MonitorConfig.__dataclass_fields__)
     assert schema_fields == dataclass_fields, (

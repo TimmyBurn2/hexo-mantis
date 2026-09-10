@@ -1,26 +1,16 @@
-""">300 justify (R8): it is mostly DATA — the SECOND copy of `CONSUMER_REGISTRY`, deliberately
-duplicated so the two copies must agree. Splitting it would create a THIRD copy to keep in sync,
-which is the drift the duplication exists to detect. The tests below are short by comparison.
-Neither the registry's SIZE nor this file's own history of size changes is stated here: both are
-read at HEAD from `len(CONSUMER_REGISTRY)` and pinned by the bijection, because a transcribed
-tally is re-edited on every edit and is eventually read as evidence (R8/R192(e), derive-or-delete).
+"""The every-key-has-consumer bijection: every schema leaf names the site that reads it.
 
-SC-A1..A4 oracle — O15 every-key-has-consumer bijection, re-asserted against the FULL
-POST-Phase-2 leaf set (DESIGN_P2.md §1.1/§1.2/§4.2/§4.3 / PREREG_P2.md suite #10; edit-
-target was tests/config/test_every_key_has_consumer.py).
+>300 justify (R8): it is mostly DATA — the SECOND copy of `CONSUMER_REGISTRY`, deliberately
+duplicated so the two copies must agree. Splitting it would create a THIRD copy to keep in
+sync, which is the drift the duplication exists to detect. The registry's size is never stated,
+only derived and pinned by the bijection.
 
-DEVIATION FROM PREREG PATH (logged in ORACLE_NOTES_P2.md): PREREG marks this suite as an
-edit to the existing file. ORACLE-WRITE's writable surface is NEW files only — this is a
-new file carrying the FULL post-Phase-2 registry; IMPL retires the old registry at port time.
-
-THE WALKER IS IMPORTED, NOT COPIED (AUDIT-1 F-44). `mantis.config.schema.leaf_paths` is the one
-derivation. The registry duplication is deliberate; the WALKER duplication was not — five copies
-walked to three different answers, and this file held one of them.
+THE WALKER IS IMPORTED, NOT COPIED: the registry duplication is deliberate, the walker's was
+not — five copies walked to three different answers, and this file held one of them.
 """
 from mantis.config.schema import RunConfig, leaf_paths
 
 CONSUMER_REGISTRY: dict[str, str] = {
-    # ── unchanged from the pre-Phase-2 registry (35 of the original 36; radius dropped) ──
     "schema_version": "loader version-pin + emit",
     "run_id": "mint header stamp + emit",
     "seed": "emit source-tag (acting RNG consumer: mantis.util.determinism.seed_everything, SC-A6)",
@@ -93,7 +83,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "eval.ladder.bootstrap_ci_level": "pipeline.py RoundSpec.ladder_bootstrap_ci_level -> worker.py aggregate_rung",
     "eval.ladder.bt_prior_games": "bt.py fit_bt prior",
     "eval.ladder.bootstrap_seed": "pipeline.py RoundSpec.ladder_bootstrap_seed -> worker.py aggregate_rung",
-    # ── train.* (SC-A1; TrainHParams read sites, DESIGN_P2.md §1.1) ──────────────────────
+    # train.*
     "train.lr": "TrainHParams.lr -> core.py:190 AdamW ctor; resume-owned (orchestrator.py:29)",
     "train.weight_decay": "TrainHParams.weight_decay -> core.py:189 AdamW ctor",
     "train.grad_clip": "TrainHParams.grad_clip -> core.py:409,476 fp16_backward_step max_grad_norm",
@@ -114,10 +104,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",
-    # WPAX Phase D (R65/R80) registered the BLOCK as one leaf; WPMINT DR-6 (R93) makes the
-    # walker descend through OPTIONAL blocks — the cause of the old blindness was
-    # optionality, not nesting — so the three inner keys are registered individually now,
-    # each at the call site that reads it.
+    # The walker descends through OPTIONAL blocks, so the inner keys register individually.
     "train.draw_rate_abort.threshold":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(threshold=)",
@@ -130,13 +117,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.draw_rate_abort.consec":
         "resolve_draw_rate_abort -> StepCoordinatorConfig.draw_rate_abort -> step.py"
         " _run_hard_abort_gates -> check_draw_rate_collapse(consec=) [WPMINT K-B]",
-    # WPMINT Phase K-B (CARD-COORD-KNOBS, R78/R80): the 18 step-coordinator knobs (19 until
-    # R178(a) deleted `train.buffer_save_interval`, whose only consumer chain ended in the
-    # no-op `_try_save_buffer` D4 arm — F-CS-2 measured it production-dead). Every
-    # citation below names the path from the ONE resolver to the line that READS the value,
-    # and every one was verified BY MUTATION per R93 (set the knob, drive the production
-    # path, observe the consumer move) in tests/config/test_coordinator_knobs_wiring.py —
-    # never by grep, because DR-11 proved a grep cannot tell a reader from a `pop`.
+    # The step-coordinator knobs. Each citation names the path from the ONE resolver to the
+    # line that READS the value, verified by mutation: a grep cannot tell a reader from a `pop`.
     "train.eval_interval":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _maybe_kick_eval"
         " round boundary (+ promotion_capable_rounds)",
@@ -193,7 +175,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.draw_reward": "SelfPlayHParams.from_config reads config['train']['draw_reward'] (cross-section)",
     "train.ply_cap_value": "SelfPlayHParams.from_config reads config['train']['ply_cap_value'] (cross-section)",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> _build_graph_parts fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
-    # ── selfplay.* scalars (SC-A2; SelfPlayHParams read sites, DESIGN_P2.md §1.2) ────────
+    # selfplay.* scalars
     "selfplay.n_workers": "SelfPlayHParams.n_workers -> pool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.leaf_batch_size -> runner leaf_batch_size ctor kwarg",
     "selfplay.max_game_moves": "SelfPlayHParams.max_moves_per_game -> runner max_moves_per_game ctor kwarg",
@@ -205,7 +187,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.results_queue_cap": "SelfPlayHParams.results_queue_cap -> runner results_queue_cap ctor kwarg",
     "selfplay.random_opening_plies": "SelfPlayHParams.random_opening_plies -> runner ctor kwarg",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.log_investigation_metrics -> investigation-metrics gate",
-    # ── selfplay.mcts.* (8) ───────────────────────────────────────────────────────────────
+    # selfplay.mcts.*
     "selfplay.mcts.n_simulations": "SelfPlayHParams.n_simulations -> runner n_simulations ctor kwarg",
     "selfplay.mcts.c_puct": "SelfPlayHParams.c_puct -> runner c_puct ctor kwarg",
     "selfplay.mcts.fpu_reduction": "SelfPlayHParams.fpu_reduction -> runner fpu_reduction ctor kwarg",
@@ -214,7 +196,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.mcts.dirichlet_alpha": "SelfPlayHParams.dirichlet_alpha -> runner ctor kwarg",
     "selfplay.mcts.dirichlet_epsilon": "SelfPlayHParams.dirichlet_epsilon -> runner ctor kwarg (mcts.epsilon key pin)",
     "selfplay.mcts.dirichlet_enabled": "SelfPlayHParams.dirichlet_enabled -> runner ctor kwarg",
-    # ── selfplay.playout_cap.* (11) ───────────────────────────────────────────────────────
+    # selfplay.playout_cap.*
     "selfplay.playout_cap.fast_sims": "SelfPlayHParams.fast_sims -> runner fast_sims ctor kwarg (REQUIRED)",
     "selfplay.playout_cap.fast_prob": "SelfPlayHParams.fast_prob -> runner fast_prob ctor kwarg; mutual-exclusion",
     "selfplay.playout_cap.standard_sims": "SelfPlayHParams.standard_sims -> runner standard_sims ctor kwarg",
@@ -223,12 +205,11 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.n_sims_full -> runner n_sims_full ctor kwarg",
     "selfplay.playout_cap.temperature_threshold_compound_moves": "SelfPlayHParams.temp_threshold_compound_moves -> runner ctor kwarg",
     "selfplay.playout_cap.temp_min": "SelfPlayHParams.temp_min -> runner temp_min ctor kwarg",
-    # ── inference.* (8; InferenceHParams read sites) ─────────────────────────────────────
+    # inference.*
     "inference.inference_batch_size": "InferenceHParams.inference_batch_size -> inference_server.py:74 ctor",
     "inference.inference_max_wait_ms": "InferenceHParams.inference_max_wait_ms -> inference_server.py:74 ctor",
-    # F-816-10 (R276(f)): the GRAPH inference forward's memory bound — this copy states
-    # the chain independently of its twin (two independently-maintained registries by
-    # design). Route-scoped: the resolve happens inside the graph branch of the ctor.
+    # The GRAPH forward's memory bound, route-scoped: the resolve happens inside the graph
+    # branch of the ctor. This copy states the chain independently of its twin.
     "inference.fused_graph_caps.max_fused_edges":
         "FusedGraphCapsSpec.max_fused_edges (resolve_fused_graph_caps) -> the graph arm of"
         " InferenceServer.__init__ -> _run_graph_loop plan_fused_forwards edge bound; and"
@@ -237,9 +218,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
         "FusedGraphCapsSpec.max_fused_nodes (resolve_fused_graph_caps) -> the graph arm of"
         " InferenceServer.__init__ -> _run_graph_loop plan_fused_forwards node bound; and"
         " RoundSpec.fused_graph_caps -> LocalInferenceEngine in the eval subprocess",
-    # ── monitor.* (27; resolve_monitor_config -> MonitorConfig, DESIGN_P2.md §4.2) ───────
-    # ── monitor.gate_interval (R242 / ADJ-D12) — schema-only, like `drain`/`disk_guard`:
-    # named directly by compose_run (one leaf, no shape to resolve) and threaded into
+    # monitor.*
+    # `gate_interval` is schema-only: named directly by compose_run and threaded into
     # StepCoordinatorConfig. It is the ARMING cadence; train.log_interval is narration.
     "monitor.gate_interval":
         "mantis.run.compose_run -> _step_coordinator_config ->"
@@ -282,11 +262,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "monitor.supervisor_max_relaunches":
         "monitor/supervise.py::main --config -> load_config"
         " -> resolve_monitor_config -> Supervisor(max_relaunches=) -> the relaunch budget",
-    # ── monitor.drain.* (4; DrainCapsConfig, DESIGN_P2.md §4.3) ──────────────────────────
-    # WPMINT Phase K-A (R93): these four citations were FALSE until this phase — the block
-    # was popped by resolve_monitor_config and never reached the functions named below, which
-    # a grep could not tell from a read (DR-11). The path is now named end to end and is
-    # verified BY MUTATION, per key, in tests/config/test_drain_caps_wiring.py.
+    # monitor.drain.*
+    # These citations are named end to end and verified BY MUTATION, per key: the block was
+    # once popped and never reached the functions named, which a grep cannot tell from a read.
     "monitor.disk_guard.interval_sec":
         "resolve_disk_guard -> DiskGuard(interval_sec=…) -> the guard thread's poll cadence"
         " (mantis.run.compose_run, LAW-16 leg 3)",

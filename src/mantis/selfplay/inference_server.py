@@ -1,28 +1,11 @@
 """THE batched inference server — the one dispatch loop in the tree.
 
->300 justify: the ONE inference loop. Rust owns request concurrency; this module is the
-whole Python side of the dispatch seam — construction (representation dispatch, H2D
-staging, trace/compile setup), the dense loop, the graph loop, the synchronous
-`submit_and_wait` face and the thread-safe weight swap. Splitting the two loops apart
-would create a second place a batch can be prepared, submitted or failed, which is
-exactly the duplication this WP consolidates (three old inference paths → one server).
+>300 justify: the ONE inference loop. Rust owns request concurrency; this module is the whole
+Python side of the dispatch seam, and splitting the dense and graph loops apart would create a
+second place a batch can be prepared, submitted or failed.
 
-Rust owns request concurrency via `InferenceBatcher`. Python runs a thin loop: fetch the
-fused batch from Rust, run the model forward, submit policy/value outputs back, and wake
-the blocked game threads.
-
-The representation is resolved ONCE at construction from the encoding spec (closed match,
-LAW-11 — there is no dense-by-default arm) and selects the loop:
-
-  * grid  → `run()`'s dense loop: pinned-staging H2D, optional TorchScript trace or
-    `torch.compile`, autocast at the configured `amp_dtype`, one merged D2H.
-  * graph → `_run_graph_loop()`: `collate_graph_batch` (the ONE wire reader) →
-    `GnnNet.forward_batch` → per-graph segment softmax → ragged submit. Autocast is
-    bf16 UNCONDITIONALLY on this path (LAW-06) — `amp_dtype_for` owns that pin.
-
-`LocalInferenceEngine`'s graph leg constructs and rides THIS server rather than
-re-implementing a loop (`inference_local.py`), so self-play and offline eval share one
-implementation of the graph seam.
+The representation is resolved ONCE at construction from the encoding spec, a closed match with no
+dense-by-default arm; autocast is bf16 UNCONDITIONALLY on the graph loop (LAW-06).
 """
 from __future__ import annotations
 
@@ -49,24 +32,17 @@ from mantis.selfplay.pool_hooks import EventSink
 
 _LOG = logging.getLogger(__name__)
 
-# Emitted once per dispatched batch when a sink is injected. The named alias
-# `HeartbeatFn` lives with the other injection Protocols in `pool_hooks`; the server
-# only needs the structural type, and must not import the pool to get it.
+# Emitted once per dispatched batch when a sink is injected. The named alias `HeartbeatFn` lives
+# in `pool_hooks`; the server needs only the structural type and must not import the pool for it.
 _HEARTBEAT_SOURCE = "inference_dispatch"
 
 
 def _timing_agg(
     count: int, total_s: float, min_s: float | None, max_s: float | None
 ) -> dict[str, Any] | None:
-    """One timing accumulator as an event sub-block, or `None` when nothing was measured.
-
-    `None` at zero samples is deliberate and is the whole point: a field with no producer
-    on this path must NOT read as a real `0.0` measurement
-    (docs/contracts/event_manifest.md, the unproduced-field convention — the F-10 class in
-    miniature). The RAW `count`/`total_ms` travel beside the derived `mean_ms` so a
-    consumer can difference two consecutive events and recover an INTERVAL mean; the
-    min/max are run-cumulative extremes and do NOT difference.
-    """
+    """One timing accumulator as an event sub-block, or `None` when nothing was measured — the
+    unproduced-field convention. The raw `count`/`total_ms` travel beside the derived `mean_ms` so
+    a consumer can difference two events and recover an INTERVAL mean."""
     if count == 0:
         return None
     return {
@@ -79,28 +55,17 @@ def _timing_agg(
 
 
 def _pow2_bucket(n: int) -> int:
-    """The power-of-two LOWER bound of `n`'s histogram bucket (`1`, `2`, `4`, …).
-
-    Extracted so the occupancy histogram and the fused-part histograms cannot drift apart:
-    two transcriptions of one bucketing rule would put two different keys on the same reading
-    and neither event would say which one it used.
-    """
+    """The power-of-two LOWER bound of `n`'s histogram bucket, extracted so the occupancy and
+    fused-part histograms cannot drift onto two transcriptions of one bucketing rule."""
     return 1 << (n.bit_length() - 1) if n > 0 else 0
 
 
 def _size_agg(
     count: int, total: int, min_n: int | None, max_n: int | None, hist: dict[int, int]
 ) -> dict[str, Any] | None:
-    """One per-part size distribution (fused nodes or fused edges), or `None` at zero samples.
-
-    DISTRIBUTION AND NOT A MEAN, for `_occupancy_agg`'s recorded reason applied to memory: a
-    mean fused-E of 400 k with a max of 9 M is a run that OOMs, and the two readings agree on
-    the mean. For a memory bound the TAIL is the question, so `max` and the histogram travel
-    with it — `max` is what an operator reads at the box to decide whether the cap held.
-
-    `None` at zero samples is the unproduced-field convention: before the first part runs there
-    is no producer, and a zeroed histogram would read as "parts ran and were empty".
-    """
+    """One per-part size distribution (fused nodes or fused edges), or `None` at zero samples. A
+    DISTRIBUTION and not a mean, because for a memory bound the TAIL is the question: a mean
+    fused-E of 400 k with a max of 9 M is a run that OOMs while agreeing on the mean."""
     if count == 0:
         return None
     return {
@@ -119,16 +84,9 @@ def _fusion_bound_hits(
     node_counts: np.ndarray,
     caps: FusedGraphCapsSpec,
 ) -> tuple[int, int]:
-    """`(edge-forced cuts, node-forced cuts)` for one plan — the ATTRIBUTION half of the bound.
-
-    A cut sits between part `m` and part `m+1`, and it happened because adding part `m+1`'s
-    FIRST graph to part `m` would have breached a member. Which member is the whole question an
-    operator asks at the box: an instrument that only counts cuts says the cap bound and cannot
-    say WHICH cap to re-fit, and re-fitting the wrong one moves no peak.
-
-    Edges are tested first, matching the planner's own evaluation order, so a cut that breaches
-    both members is attributed to the same member the planner would name.
-    """
+    """`(edge-forced cuts, node-forced cuts)` for one plan — the ATTRIBUTION half of the bound,
+    because re-fitting the wrong cap moves no peak. Edges are tested first, matching the planner's
+    own order."""
     edges = nodes = 0
     for (g0, g1), (next_g0, _next_g1) in zip(plan, plan[1:], strict=False):
         acc_e = int(edge_counts[g0:g1].sum())
@@ -155,13 +113,8 @@ def _occupancy_agg(
     hist: dict[int, int],
     batch_size: int,
 ) -> dict[str, Any] | None:
-    """The served-batch occupancy distribution, or `None` when nothing was measured.
-
-    A mean ratio alone cannot distinguish "always 1 request per forward" from "sometimes
-    64, sometimes 0" — the two agree on the ratio and disagree completely on what the
-    queue is doing. So min/max and a power-of-two histogram travel with it; the histogram
-    key is the bucket's LOWER bound (`1`, `2`, `4`, … requests per forward).
-    """
+    """The served-batch occupancy distribution, or `None` when nothing was measured: a mean ratio
+    cannot distinguish "always 1 per forward" from "sometimes 64, sometimes 0"."""
     if count == 0:
         return None
     return {
@@ -175,10 +128,8 @@ def _occupancy_agg(
     }
 
 
-#: What a caller hands the server so a contract failure lands on disk: where to write, and a
-#: CALLABLE for the context. A callable and not a dict because the interesting half —  which
-#: block is playing and at what concurrency — changes DURING the round, and a snapshot taken at
-#: construction would record the round's arming rather than the state at the fire (R339(c)).
+#: What a caller hands the server so a contract failure lands on disk. A CALLABLE and not a dict,
+#: because the context changes DURING the round and a snapshot would record the arming, not the fire.
 CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
 
 
@@ -203,31 +154,23 @@ class InferenceServer(threading.Thread):
         self.model = model
         self.model.eval()
         self.device = device
-        # WP12R Step 3 narration (R216/R218): the selfplay-local `EventSink` Protocol
-        # (`pool_hooks.py:32-40`), structural (single `emit(Mapping) -> None`). NOT
-        # `mantis.train.emit.EventSink` — this module must not import the train-side
-        # Protocol (R216: no `selfplay → train` DAG edge). Same structural-typing pattern
-        # as `HeartbeatFn` (`:47-49`: "the server only needs the structural type").
+        # The selfplay-local structural `EventSink`, NOT `mantis.train.emit.EventSink`: this
+        # module must not import the train-side Protocol.
         self._sink = sink
         self._first_enqueued_emitted = False
         self._first_served_emitted = False
-        # Behaviour-neutral by default: with no sink injected the emission points below
-        # do nothing at all. The consuming watchdog is not built here.
+        # Behaviour-neutral by default: with no sink injected the emission points do nothing.
         self._heartbeat = heartbeat
 
-        # R339(c). `None` is the PRE-EXISTING rate and says so: the canary period derived from
-        # the pop width, which run6's `inference_batch_size: 64` makes 1-in-64. The eval path
-        # passes `1` — that path is ~93 games a round, so 1-in-1 is affordable there and
-        # nowhere else, and `F-816-37`'s only occurrence was on it. Not a config key: the rate
-        # is a property of WHICH PATH is running, not of the run.
+        # `None` is the PRE-EXISTING rate — the canary period derived from the pop width, which
+        # run6's `inference_batch_size: 64` makes 1-in-64. Not a config key: it is a path property.
         self._collate_check_period = collate_check_period
         self._collate_dump = collate_dump
         hp = InferenceHParams.from_config(config)
         self._batch_size = hp.inference_batch_size
         self._max_wait_ms = hp.inference_max_wait_ms
 
-        # Encoding spec comes from the registry. Standalone callers (no kwarg) fall back
-        # to resolving from config.
+        # Encoding spec comes from the registry; standalone callers fall back to the config.
         if encoding_spec is None:
             self.encoding_spec: RegistrySpec = resolve_from_config(config)
         elif isinstance(encoding_spec, RegistrySpec):
@@ -237,19 +180,13 @@ class InferenceServer(threading.Thread):
                 f"InferenceServer: unrecognised encoding_spec type "
                 f"{type(encoding_spec).__name__!r}; expected mantis.encoding.EncodingSpec"
             )
-        # Representation discriminant: a `graph` encoding routes to the ragged axis-graph
-        # seam (`_run_graph_loop`); the CNN H2D-staging / TorchScript-trace / (C,H,W)-shape
-        # setup below is grid-only and would be meaningless (n_planes=0, no state stride)
-        # for a graph spec. Closed match — an unknown representation raises rather than
-        # defaulting dense.
+        # Representation discriminant, and a closed match: the CNN staging / trace / (C,H,W) setup
+        # below is grid-only, and an unknown representation raises rather than defaulting dense.
         self._is_graph = is_graph_representation(self.encoding_spec)
         self._policy_len = self.encoding_spec.policy_logit_count
 
-        # ── graph-loop batching instrumentation (LAW-18) ─────────────────────────────
-        # Written ONLY by `_run_graph_loop`. The dense loop leaves every accumulator at
-        # its zero, so `batch_timing_snapshot` reports `None` for each derived reading on
-        # a grid run — "no producer on this path", never a fabricated 0. Assigned before
-        # the representation branch so the accessor never raises on either arm.
+        # Graph-loop batching instrumentation (LAW-18), written ONLY by `_run_graph_loop`, so a
+        # grid run reports `None` per derived reading rather than a fabricated 0.
         self._batch_wait_count = 0
         self._batch_wait_total_s = 0.0
         self._batch_wait_min_s: float | None = None
@@ -264,14 +201,9 @@ class InferenceServer(threading.Thread):
         self._occupancy_hist: dict[int, int] = {}
         self._empty_polls = 0
 
-        # ── fused-forward instrumentation (LAW-18 / R164) ────────────────────────────
-        # The lever's OWN fire rate, in-run. Written ONLY by `_run_graph_loop`; measured PER
-        # PART, because the part is what the GPU sees and what the cap bounds — a pop's total
-        # is recoverable as the sum over its parts and the reverse is not. `fusion_splits` and
-        # `fusion_bound_hits` stay VISIBLE at 0 on the producing path (the `empty_polls`
-        # posture): an idle lever must be distinguishable from a missing one, because §11's
-        # falsifier ("`fusion_splits == 0` across a burst that reaches ply > 120") can only
-        # fire if the zero is published.
+        # The lever's OWN fire rate, in-run, measured PER PART: a pop's total is the sum over its
+        # parts while the reverse is not. The counters stay VISIBLE at 0 on the producing path, or
+        # the falsifier "`fusion_splits == 0` across a burst past ply 120" can never fire.
         self._fusion_parts = 0
         self._fusion_splits = 0
         self._fusion_bound_hits = {"edges": 0, "nodes": 0}
@@ -288,19 +220,13 @@ class InferenceServer(threading.Thread):
         self._fused_caps: FusedGraphCapsSpec | None = None
 
         if self._is_graph:
-            # The fused-forward memory bound, resolved ONCE and EAGERLY on the route that has
-            # one (F-816-10). Eager, not lazy: `__init__` already branches on the
-            # representation, so the read is naturally route-scoped and failing a mis-minted
-            # run in the first second beats failing it three hours in. An explicit spec WINS
-            # over the config and skips the read entirely — that is the D-1 threading arm, for
-            # the standalone callers that have no `RunConfig` to mint a value against and must
-            # NOT grow a second authority by hardcoding one.
+        # The fused-forward memory bound, resolved ONCE and EAGERLY here: failing a mis-minted run
+        # in the first second beats failing it three hours in. An explicit spec WINS over config.
             if fused_graph_caps is None:
                 self._fused_caps = resolve_fused_graph_caps(config)
             else:
                 self._fused_caps = fused_graph_caps
-            # Graph mode: the model is a `GnnNet` consuming block-diagonal graph tensors,
-            # not a CNN. No H2D staging, no trace, no (C,H,W) shape.
+        # Graph mode: block-diagonal graph tensors, not a CNN — no H2D staging, no trace, no shape.
             self._feature_len = 0
             self._shape: tuple[int, int, int] | None = None
             self._board_size = self.encoding_spec.trunk_size
@@ -312,13 +238,11 @@ class InferenceServer(threading.Thread):
             self._traced_model: Any = None
             self._h2d_staging: torch.Tensor | None = None
         else:
-            # H2D staging tensors size to the TRUNK window (the spatial dim the model
-            # actually accepts). For the single-window encodings trunk_size == board_size,
-            # so this is a no-op semantic shift today; multi-window encodings diverge.
+            # H2D staging sizes to the TRUNK window, the spatial dim the model accepts. For
+            # single-window encodings trunk_size == board_size; multi-window encodings diverge.
             board_size = self.encoding_spec.trunk_size
-            # Rust workers emit exactly `spec.kept_plane_indices` planes. The wire width is
-            # the ACTIVE encoding's plane count, never a hard-coded channel count;
-            # sub-selection of input channels happens inside `model.forward()`.
+            # Rust workers emit exactly `spec.kept_plane_indices` planes, so the wire width is the
+            # ACTIVE encoding's plane count and never a hard-coded channel count.
             wire_channels = self.encoding_spec.n_planes
             self._feature_len = wire_channels * board_size * board_size
             self._shape = (wire_channels, board_size, board_size)
@@ -332,8 +256,7 @@ class InferenceServer(threading.Thread):
             self._forward_count = 0
             self._total_requests = 0
 
-            # Pinned host staging buffer for async H2D. Enables a DMA-engine copy on CUDA
-            # (`non_blocking=True`); no-op on CPU.
+            # Pinned host staging buffer: a DMA-engine copy on CUDA, no-op on CPU.
             if self.device.type == "cuda":
                 self._h2d_staging = torch.empty(
                     (self._batch_size, wire_channels, board_size, board_size),
@@ -343,11 +266,8 @@ class InferenceServer(threading.Thread):
             else:
                 self._h2d_staging = None
 
-        # Autocast dtype — representation-aware. The graph loop is pinned to bf16
-        # UNCONDITIONALLY (LAW-06): fp16 GINE sum-aggregation overflows on
-        # production-scale graphs. The dense path reads the `train.amp_dtype` knob and must
-        # match the trainer's choice for weight-sync consistency. R30b: hard key access, no
-        # fallback — config["train"]["amp_dtype"] is a required schema field.
+        # Autocast dtype, representation-aware: bf16 UNCONDITIONALLY on the graph loop (LAW-06),
+        # since fp16 GINE sum-aggregation overflows; the dense path must match the trainer's knob.
         _representation = "graph" if self._is_graph else "grid"
         self._amp_dtype = amp_dtype_for(_representation)
 
@@ -360,24 +280,15 @@ class InferenceServer(threading.Thread):
         self._batcher.close()
 
     def load_state_dict_safe(self, state_dict: dict) -> None:
-        """Thread-safe weight swap — blocks until any in-flight forward completes.
-
-        Callers pass bare (non-``_orig_mod.*``-prefixed) state_dict keys. When
-        ``self.model`` is a compiled `OptimizedModule`, ``load_state_dict`` would
-        otherwise demand the prefixed keys; unwrap once here so the load targets the
-        underlying parameters IN PLACE (the wrapper keeps dispatching through them, and
-        the trace path relies on the same propagation).
-
-        Bumps the batcher's monotonic ``model_version`` after the swap so workers can
-        attribute each move to a specific weight epoch.
-        """
+        """Thread-safe weight swap — blocks until any in-flight forward completes. A compiled
+        ``OptimizedModule`` is unwrapped once so the load targets the underlying parameters IN
+        PLACE, and the batcher's monotonic ``model_version`` is bumped after the swap."""
         with self._weights_lock:
             target = getattr(self.model, "_orig_mod", self.model)
             target.load_state_dict(state_dict)
             target.eval()
             self.model.eval()
-        # Bump after release — workers reading the atomic don't gate on the lock, only on
-        # the post-swap visibility of new params.
+        # Bump after release: workers reading the atomic gate on post-swap visibility, not the lock.
         new_version = self._batcher.bump_model_version()
         _LOG.info(
             "inference_model_version_bump context=%s model_version=%s",
@@ -385,25 +296,17 @@ class InferenceServer(threading.Thread):
         )
 
     def submit_and_wait(self, state: np.ndarray) -> tuple[np.ndarray, float]:
-        """Synchronous single-state inference for test / diagnostic use.
-
-        Runs the model forward in-process under ``_weights_lock``, mirroring the
-        dispatcher loop's hot path (trace/compile model selection, prep, autocast).
-        Bypasses the Rust queue — production self-play goes through the dispatcher thread
-        and Rust workers and does not call this method.
+        """Synchronous single-state inference for test / diagnostic use, bypassing the Rust queue.
 
         Raises:
-            ValueError: prefixed with ``"Model inference failed: "`` if the wrapped model
-                forward raises. Translating the underlying error keeps callers waiting on
-                a `threading.Event` from deadlocking on a thread-bound exception (the
-                dispatcher path carries the same contract through
-                ``submit_inference_failure``).
+            ValueError: prefixed with ``"Model inference failed: "`` if the wrapped model forward
+                raises. Translating it keeps callers waiting on a `threading.Event` from
+                deadlocking on a thread-bound exception.
         """
         # Match the dispatcher's batch-prep contract (explicit C-contiguous f32).
         arr = np.ascontiguousarray(state, dtype=np.float32).reshape(self._shape)
         tensor = torch.from_numpy(arr).unsqueeze(0).to(self.device)
-        # Choose the traced graph when available — it shares parameter storage with
-        # ``self.model``, so weight swaps propagate without re-tracing.
+        # The traced graph shares parameter storage with ``self.model``, so weight swaps propagate.
         fwd_model = self._traced_model if self._traced_model is not None else self.model
         try:
             with self._weights_lock:
@@ -437,20 +340,10 @@ class InferenceServer(threading.Thread):
     def total_requests(self) -> int:
         return self._total_requests
 
-    # ── batching instrumentation (LAW-18) ───────────────────────────────────────
     def _record_batch_wait(self, wait_s: float, n_requests: int) -> None:
-        """Accumulate ONE served pop: the collector wait that produced it + its occupancy.
-
-        AGGREGATE, never emit (LAW-09): this runs once per NN forward — potentially
-        thousands of times a second — so an event per call would make the sink the
-        bottleneck and would itself be the hot-path change this instrument exists to
-        measure around. What reaches the ONE channel is a SNAPSHOT on an existing event.
-
-        `wait_s` is the wall time spent inside `next_graph_batch`, i.e. exactly the Rust
-        collector's `batch_size / 2`-or-deadline wait (`queues/graph.rs`): if it sits at
-        `inference_max_wait_ms` on every forward, the collector never reached its
-        threshold and every batch ran to the deadline.
-        """
+        """Accumulate ONE served pop: the collector wait that produced it plus its occupancy.
+        AGGREGATE, never emit — this runs once per NN forward. `wait_s` pegged at
+        `inference_max_wait_ms` means every batch ran to the collector's deadline."""
         self._batch_wait_count += 1
         self._batch_wait_total_s += wait_s
         if self._batch_wait_min_s is None or wait_s < self._batch_wait_min_s:
@@ -468,16 +361,9 @@ class InferenceServer(threading.Thread):
     def _dump_collate_failure(
         self, wire: Any, error: BaseException, span: tuple[int, int]
     ) -> None:
-        """R339(c): write the offending batch before the caller re-raises. Never raises.
-
-        A server with no dump target configured (every self-play engine) does nothing here —
-        the instrument is armed per PATH. It was once argued that arming it everywhere would
-        put a multi-megabyte write on the hot loop for "a class that has only ever fired on
-        eval": BOTH halves of that are now false. `F-816-37` fired on the TRAINING path at
-        R340 leg 3, and the write only ever happens on a contract failure, which is run-fatal
-        — so there is no hot path to protect. The trainer's own dump is
-        `train/coordinator/dispatch.py::_dump_train_collate`.
-        """
+        """Write the offending batch before the caller re-raises. Never raises. A server with no
+        dump target does nothing: the instrument is armed per PATH, and the write only happens on a
+        contract failure, which is run-fatal."""
         if self._collate_dump is None:
             return
         from mantis.selfplay.collate_dump import write_collate_dump
@@ -496,9 +382,8 @@ class InferenceServer(threading.Thread):
             _LOG.error("F-816-37 dump-on-fire wrote %s", path)
 
     def _record_collate(self, collate_s: float) -> None:
-        """Accumulate ONE successful `collate_graph_batch`. Counted SEPARATELY from the
-        wait: a batch whose collate raises still contributes a real wait sample, and
-        lock-stepping the two counters would hide that asymmetry."""
+        """Accumulate ONE successful `collate_graph_batch`, counted SEPARATELY from the wait: a
+        batch whose collate raises still contributes a real wait sample."""
         self._collate_count += 1
         self._collate_total_s += collate_s
         if self._collate_min_s is None or collate_s < self._collate_min_s:
@@ -508,26 +393,16 @@ class InferenceServer(threading.Thread):
 
     def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
         """Accumulate ONE plan: whether the lever fired, and which member forced each cut.
-
-        `fusion_splits` counts POPS THAT SPLIT, not cuts — it is the LEVER'S OWN FIRE RATE,
-        which is what LAW-18 asks a lever under test to log. The cut count is
-        `fusion_parts - fusion_splits`-shaped information and is carried instead by
-        `fusion_bound_hits`, whose whole job is ATTRIBUTION: an instrument that cannot say
-        which member forced the cut cannot tell the operator which member to re-fit at the box.
-        """
+        `fusion_splits` counts POPS THAT SPLIT, not cuts; attribution is `fusion_bound_hits`, which
+        is what tells an operator which member to re-fit."""
         if n_parts > 1:
             self._fusion_splits += 1
         self._fusion_bound_hits["edges"] += edge_hits
         self._fusion_bound_hits["nodes"] += node_hits
 
     def _record_fusion_part(self, n_nodes: int, n_edges: int) -> None:
-        """Accumulate ONE bounded forward's `(N, E)`. Per PART, never per pop.
-
-        This is the reading the cap is denominated in, so it is measured where the cap applies.
-        `_forward_count` deliberately does NOT move here: it is `batch_fill_pct`'s denominator
-        and means *requests per POP against `inference_batch_size`* — an occupancy, not a
-        GPU-forward count — and it is banked on both sides of the R274(d) bench.
-        """
+        """Accumulate ONE bounded forward's `(N, E)`. Per PART, never per pop, because the part is
+        where the cap applies; `_forward_count` stays a per-POP occupancy denominator."""
         self._fusion_parts += 1
         self._fused_edges_count += 1
         self._fused_edges_total += n_edges
@@ -547,16 +422,9 @@ class InferenceServer(threading.Thread):
         self._fused_nodes_hist[bucket_n] = self._fused_nodes_hist.get(bucket_n, 0) + 1
 
     def _fusion_snapshot(self) -> dict[str, Any] | None:
-        """The `fusion` sub-block, or `None` on a GRID run.
-
-        `None` and not a zeroed block: the grid branch never reads the caps and never plans a
-        split, so it has NO PRODUCER here, and a zeroed block would read as "the fusion lever
-        ran and never fired" — the opposite statement, and the F-10 class in miniature.
-
-        `caps` travels WITH the distributions for the same reason `batch_size`/`max_wait_ms`
-        already ride the block: a histogram whose maximum is 4.4 M edges says nothing until the
-        cap beside it says 4.5 M or 9 M.
-        """
+        """The `fusion` sub-block, or `None` on a GRID run — a zeroed block would read as "the
+        lever ran and never fired". `caps` travels WITH the distributions, because a maximum of
+        4.4 M edges says nothing without the cap beside it."""
         caps = self._fused_caps
         if not self._is_graph or caps is None:
             return None
@@ -579,18 +447,9 @@ class InferenceServer(threading.Thread):
         }
 
     def batch_timing_snapshot(self) -> dict[str, Any]:
-        """Cumulative-since-start snapshot of the graph loop's batching instrument.
-
-        The block that reaches `iteration_complete` (LAW-18: a lever under test logs its
-        own fire rate IN-RUN — a post-hoc offline probe cannot distinguish a starved queue
-        from an ineffective one). `batch_size` and `max_wait_ms` travel with it because a
-        wait or an occupancy is unreadable without the deadline and the denominator that
-        produced it.
-
-        Every derived reading is `None` when its accumulator took no sample — including
-        the whole of a GRID run, whose dense loop is not instrumented and therefore has no
-        producer here.
-        """
+        """Cumulative-since-start snapshot of the graph loop's batching instrument. `batch_size`
+        and `max_wait_ms` travel with it, since a wait or an occupancy is unreadable without the
+        deadline and the denominator behind it; a reading with no sample is `None`, never 0."""
         return {
             "representation": "graph" if self._is_graph else "grid",
             "batch_size": self._batch_size,
@@ -607,48 +466,27 @@ class InferenceServer(threading.Thread):
                 self._batch_wait_count, self._occupancy_total, self._occupancy_min,
                 self._occupancy_max, self._occupancy_hist, self._batch_size,
             ),
-            # An idle counter stays VISIBLE at 0 on the producing path (the
-            # `target_integrity_defects` posture); `None` on the path with no producer.
+            # An idle counter stays VISIBLE at 0 on the producing path; `None` where none exists.
             "empty_polls": self._empty_polls if self._is_graph else None,
-            # The memory bound's own in-run instrument (F-816-10, LAW-18/R164). PRESENT with a
-            # `None` value on a grid run, never absent: an absent key and a null one are the
-            # same statement here only if the key is always there to carry it.
+            # The memory bound's own in-run instrument: PRESENT with a `None` value on a grid run,
+            # never absent, since an absent key and a null one differ only if the key is always there.
             "fusion": self._fusion_snapshot(),
         }
 
-    # ── Thread body ─────────────────────────────────────────────────────────────
     def _run_graph_loop(self) -> None:
-        """Ragged axis-graph inference loop, MEMORY-BOUNDED (F-816-10, verdict V-A).
+        """Ragged axis-graph inference loop, MEMORY-BOUNDED.
 
-        Pull a block-diagonal graph wire from Rust, convert it to a payload ONCE, partition
-        that payload at GRAPH boundaries under `inference.fused_graph_caps`, and run one
-        `collate_graph_batch` + `GnnNet.forward_batch` (bf16 autocast on CUDA — LAW-06) +
-        segment-softmax per PART, freeing each part before the next so only one part's tensors
-        are ever resident. The parts' probs and values are concatenated in plan order and
-        submitted in ONE call against the UNSLICED `legal_offsets`; the Rust side assembles
-        each leaf's legal-set policy, never a dense scatter.
+        Pull a block-diagonal graph wire from Rust, convert it to a payload ONCE, partition that
+        payload at GRAPH boundaries under `inference.fused_graph_caps`, and run one
+        `collate_graph_batch` + `GnnNet.forward_batch` (bf16 autocast — LAW-06) + segment-softmax
+        per PART, freeing each part before the next so only one part's tensors are ever resident.
 
-        THE SPLIT IS PRE-COLLATE, and that seam is the whole design. A post-collate split
-        materialises the full-E tensors first, and a design whose first allocation is
-        proportional to the uncapped quantity cannot meet a bound.
-
-        THE COPY-OUT TRAP IS ALREADY PAID. `PyGraphWire`'s getters COPY into fresh numpy
-        arrays, so reading them per part would copy every array M times.
-        `graph_wire_from_rust` reads each getter exactly ONCE — the same count HEAD's single
-        `collate_graph_batch` did — and the parts are numpy views of that payload. Do not
-        "optimise" this back into per-part getter reads.
-
-        ONE SUBMIT, AFTER EVERY PART HAS RUN. The FFI checks `(ids, probs, legal_offsets,
-        values)` for self-consistency on entry, and the one submit satisfies it with the
-        payload's own unsliced offsets. It also means a mid-plan failure has submitted NOTHING,
-        so every id fails uniformly and there is no partial-success bookkeeping to get wrong.
-
-        Any planner refusal, resolver error or forward exception — including a real
-        `OutOfMemoryError` — dies loud through the SAME `except` via
-        `submit_graph_inference_failure`. The graph queue has no dense interpretation, so there
-        is no silent fallback, and there is deliberately no OOM handler: the only reason to
-        catch a memory failure specifically is to retry, and a retry is the silent
-        catch-and-retry R276(f) forbids by name.
+        The split is PRE-COLLATE, because a design whose first allocation is proportional to the
+        uncapped quantity cannot meet a bound; `PyGraphWire`'s getters COPY, so the payload is read
+        ONCE and the parts are numpy views of it. ONE SUBMIT, after every part has run, against the
+        UNSLICED `legal_offsets`, so a mid-plan failure has submitted NOTHING. Every failure — a
+        real `OutOfMemoryError` included — dies loud through the SAME `except`, and there is
+        deliberately no OOM handler, because the only reason to catch one is to retry.
         """
         from mantis.selfplay.graph_collate import (
             GraphContractError,
@@ -665,9 +503,8 @@ class InferenceServer(threading.Thread):
 
         caps = self._fused_caps
         if caps is None:
-            # Unreachable by construction: the graph branch of `__init__` resolves or is
-            # handed the caps before this thread can start. A None here is a wiring break, and
-            # running unbounded is the one outcome that must not be available.
+            # Unreachable by construction: the caps are resolved before this thread starts. A None
+            # here is a wiring break, and running unbounded must not be an available outcome.
             raise RuntimeError(
                 "InferenceServer graph loop: no fused-graph caps resolved — the graph branch "
                 "of __init__ must produce them before the loop runs (inference.fused_graph_"
@@ -700,10 +537,8 @@ class InferenceServer(threading.Thread):
                     )
                     _wait_s = time.perf_counter() - _t_wait_start
                     if not request_ids:
-                        # An empty pop is a deadline that expired with nothing queued. It
-                        # is NOT a served-batch wait and must not enter the wait mean —
-                        # an idle server would otherwise peg it at max_wait_ms and hide
-                        # what the served batches actually cost.
+                        # An empty pop is a deadline that expired with nothing queued: not a
+                        # served-batch wait, and it must not enter the wait mean.
                         self._empty_polls += 1
                         continue
                     self._record_batch_wait(_wait_s, len(request_ids))
@@ -750,17 +585,12 @@ class InferenceServer(threading.Thread):
                                     canary_period=canary_period,
                                 )
                             except GraphContractError as exc:
-                                # R339(c) DUMP-ON-FIRE. The SLICE is what the check read, so
-                                # the slice is what is saved; the unsliced payload is a
-                                # different object and saving it would answer a question
-                                # nobody asked. The dump can only ADD an artifact — it never
-                                # replaces this raise, and `write_collate_dump` swallows its
-                                # own failures for exactly that reason.
+                                # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is
+                                # what is saved. The dump can only ADD an artifact, never replace it.
                                 self._dump_collate_failure(sub, exc, (g0, g1))
                                 raise
-                            # Per PART, not per pop: `collate.count == sum(M)` where it used to
-                            # equal `queue_wait.count`. The asymmetry is intended and recorded
-                            # so it is not read as a leak.
+                            # Per PART, not per pop: `collate.count == sum(M)`, and the asymmetry
+                            # is recorded so it is not read as a leak.
                             self._record_collate(time.perf_counter() - _t_collate_start)
                             stone_mask = stone_mask_from_batch(batch)
                             if self._forward_count == 0:
@@ -774,8 +604,8 @@ class InferenceServer(threading.Thread):
                                     dtype=self._amp_dtype,
                                     enabled=self.device.type == "cuda",
                                 ):
-                                    # nn.Module.__getattr__ types dynamic attrs as
-                                    # Tensor | Module; `forward_batch` is GnnNet's real method.
+                                    # `forward_batch` is GnnNet's real method; nn.Module's
+                                    # __getattr__ types dynamic attrs as Tensor | Module.
                                     policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
                                         batch.x,
                                         batch.edge_index,
@@ -784,17 +614,13 @@ class InferenceServer(threading.Thread):
                                         stone_mask,
                                         batch.node_offsets,
                                     )
-                            # Segment-softmax in float32 (corrects reduced-precision drift,
-                            # exactly like the dense path re-normalizes exp()). Segment-LOCAL
-                            # by construction, so a part's softmax is the un-split forward's
-                            # softmax for those graphs.
+                            # Segment-softmax in float32 corrects reduced-precision drift and is
+                            # segment-LOCAL, so a part's softmax is the un-split forward's softmax.
                             probs = segment_softmax(
                                 policy_logits.float(), batch.legal_offsets
                             )
-                            # Always-on finiteness gate: a NaN/Inf model output otherwise
-                            # reaches backup() and poisons the tree SILENTLY, and the
-                            # downstream numeric debug asserts are compiled out of release
-                            # builds.
+                            # Always-on finiteness gate: a NaN/Inf output otherwise reaches backup()
+                            # and poisons the tree silently, and the numeric asserts are release-out.
                             if not bool(torch.isfinite(probs).all()) or not bool(
                                 torch.isfinite(value).all()
                             ):
@@ -814,13 +640,11 @@ class InferenceServer(threading.Thread):
                                 int(node_counts[g0:g1].sum()),
                                 int(edge_counts[g0:g1].sum()),
                             )
-                            # One part resident at a time — the bound is on the PEAK, so the
-                            # previous part's device tensors must be gone before the next
-                            # part's are built.
+                            # One part resident at a time: the bound is on the PEAK, so the previous
+                            # part's device tensors must be gone before the next's exist.
                             del sub, batch, stone_mask, policy_logits, value, probs
                         # ONE submit per pop, against the payload's own UNSLICED offsets: the
-                        # parts' offsets are re-based and would segment the concatenation
-                        # wrongly from the first part onward.
+                        # parts' offsets are re-based and would segment the concatenation wrongly.
                         self._batcher.submit_graph_inference_results(
                             request_ids,
                             np.ascontiguousarray(

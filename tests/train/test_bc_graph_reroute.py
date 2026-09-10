@@ -1,19 +1,12 @@
 # >300 justify (R8): ONE oracle over ONE landing. The reroute, the ring's geometry contract,
-# the refused dense-arm flags and the gap-4 disposition are four faces of a single
-# decision — that BC on the graph arch goes THROUGH the shared seam and arms nothing — and a
-# split would let one half go green while the property they jointly assert was false.
-"""The BC-pretrain graph REROUTE and the gap-4 disposition (R325(c)).
+# the refused dense-arm flags and the buried corpus-mix loader are four faces of a single
+# decision — BC on the graph arch goes THROUGH the shared seam and arms nothing — and a split
+# would let one half go green while the property they jointly assert was false.
+"""The BC-pretrain graph REROUTE and the buried corpus-mix loader.
 
-Three groups, each for a defect the others cannot see:
-
-  * THE REROUTE IS A REROUTE — the graph arm reaches `run_declared_train_step`, the SAME
-    declared seam the self-play loop takes, with the providers passed as callables. A test
-    that only checked "a checkpoint appeared" would pass on a second, parallel training path,
-    which is the exact thing this design refuses.
-  * THE RING'S GEOMETRY IS READ, NOT GUESSED — every provenance refusal bites. A guessed
-    capacity silently drops the head of the corpus and every downstream check still passes.
-  * UNARMEDNESS AND THE GAP-4 CONTRACT — nothing selects the route, and the dense-only
-    corpus-mix loader now refuses a non-grid representation BY NAME rather than inside numpy.
+Three groups, each for a defect the others cannot see: the graph arm reaches the SAME declared
+train-step seam the self-play loop takes; the ring's geometry is READ from provenance rather
+than guessed; and nothing selects the route, the dense-only loader being refused BY NAME.
 """
 from __future__ import annotations
 
@@ -57,7 +50,6 @@ def _write_ring(tmp_path: Path, **overrides: Any) -> Path:
     return ring
 
 
-# ── the ring's geometry is READ, not guessed ─────────────────────────────────────────────
 def test_an_absent_sidecar_REFUSES_rather_than_guessing_a_capacity(tmp_path: Path) -> None:
     ring = tmp_path / "corpus.hexg"
     ring.write_bytes(b"x")
@@ -96,8 +88,7 @@ def test_an_absent_ring_is_refused(tmp_path: Path) -> None:
 
 
 def test_a_ring_that_loads_zero_records_is_refused(tmp_path: Path, monkeypatch) -> None:
-    """An empty corpus is not a run. Driven through `load_ring` with a stub buffer, because
-    the refusal is about the LOADED COUNT and not about the file's bytes."""
+    """An empty corpus is not a run — the refusal is about the LOADED COUNT, not the bytes."""
     ring = _write_ring(tmp_path)
 
     class _Buf:
@@ -112,8 +103,8 @@ def test_a_ring_that_loads_zero_records_is_refused(tmp_path: Path, monkeypatch) 
 
 
 def test_the_buffer_is_built_at_the_SIDECARS_geometry(tmp_path: Path, monkeypatch) -> None:
-    """The capacity and visit capacity come from the artifact's own record — the defect this
-    catches is a plausible constant that is smaller than the corpus."""
+    """Capacity and visit capacity come from the artifact's own record, not a plausible constant
+    smaller than the corpus."""
     ring = _write_ring(tmp_path, ring_capacity=4096, ring_visit_capacity=13)
     seen: dict[str, Any] = {}
 
@@ -129,7 +120,6 @@ def test_the_buffer_is_built_at_the_SIDECARS_geometry(tmp_path: Path, monkeypatc
     assert seen == {"capacity": 4096, "encoding": "gnn_axis_v1", "visit_capacity": 13}
 
 
-# ── the launch pin, RE-HOMED here at R327(e) ─────────────────────────────────────────────
 def _stub_buffer(monkeypatch, records: int = 40) -> None:
     class _Buf:
         def __init__(self, *_a, **_k) -> None: ...
@@ -141,10 +131,8 @@ def _stub_buffer(monkeypatch, records: int = 40) -> None:
 
 
 def test_an_encoding_with_NO_launch_pin_is_not_enforced(tmp_path: Path, monkeypatch) -> None:
-    """`resolve_corpus_sha_pin` returning `None` means NOT ENFORCED — the registry's documented
-    contract, and the reason the sha stream is conditional. This is the arm that runs at HEAD:
-    no graph encoding registers a pin today, so a green BC run proves nothing about the check
-    unless this arm is stated beside the one below."""
+    """A `None` pin means NOT ENFORCED — the arm that runs at HEAD, where no graph encoding
+    registers a pin, so a green BC run proves nothing without the arm below."""
     ring = _write_ring(tmp_path)
     _stub_buffer(monkeypatch)
     monkeypatch.setattr(resolvers, "_CORPUS_SHA_PINS", {}, raising=True)
@@ -152,10 +140,8 @@ def test_an_encoding_with_NO_launch_pin_is_not_enforced(tmp_path: Path, monkeypa
 
 
 def test_a_ring_that_is_not_the_PINNED_corpus_is_refused(tmp_path: Path, monkeypatch) -> None:
-    """THE PRODUCER (LAW-07). The pin registry outlived the dense loader that read it; a launch
-    pin says two hosts train on byte-identical bytes, and BC pretrain is the surviving path that
-    trains on a corpus. Registered synthetically because no graph encoding is pinned at HEAD —
-    which is exactly why the check needs a driven witness rather than an inert call site."""
+    """THE PRODUCER: a launch pin says two hosts train on byte-identical bytes. Registered
+    synthetically because no graph encoding is pinned at HEAD."""
     ring = _write_ring(tmp_path)
     _stub_buffer(monkeypatch)
     monkeypatch.setattr(resolvers, "_CORPUS_SHA_PINS", {"gnn_axis_v1": "f" * 64}, raising=True)
@@ -164,9 +150,8 @@ def test_a_ring_that_is_not_the_PINNED_corpus_is_refused(tmp_path: Path, monkeyp
 
 
 def test_the_pin_is_taken_over_the_RING_BYTES_not_the_sidecar(tmp_path: Path, monkeypatch) -> None:
-    """A sidecar can be rewritten beside a swapped ring, so a pin read off provenance would
-    certify the swap. MUTATION SELF-TEST: the ring's true digest passes, and rewriting the
-    sidecar to claim anything at all does not move the verdict."""
+    """A pin read off provenance would certify a swapped ring, so it is taken over the BYTES;
+    rewriting the sidecar does not move the verdict."""
     ring = _write_ring(tmp_path)
     true_sha = hashlib.sha256(ring.read_bytes()).hexdigest()
     _stub_buffer(monkeypatch)
@@ -185,8 +170,7 @@ def test_the_pin_is_taken_over_the_RING_BYTES_not_the_sidecar(tmp_path: Path, mo
 
 
 def test_the_pin_check_runs_INSIDE_load_ring_and_not_only_in_a_helper() -> None:
-    """The seam, asserted structurally. A guard reachable only by calling it directly is a
-    guard nobody calls — the class this whole re-homing exists to end."""
+    """The seam, structurally: a guard reachable only by calling it directly is uncalled."""
     src = (_REPO / "src" / "mantis" / "train" / "pretrain" / "graph_route.py").read_text(
         encoding="utf-8")
     tree = ast.parse(src)
@@ -199,7 +183,6 @@ def test_the_pin_check_runs_INSIDE_load_ring_and_not_only_in_a_helper() -> None:
     )
 
 
-# ── the step budget, on the dense arm's own convention ───────────────────────────────────
 def test_explicit_steps_wins_over_epochs() -> None:
     assert resolve_step_budget(1000, batch_size=32, steps=7, epochs=99) == 7
 
@@ -214,12 +197,9 @@ def test_a_zero_budget_is_refused() -> None:
         resolve_step_budget(100, batch_size=32, steps=0, epochs=1)
 
 
-# ── THE REROUTE IS A REROUTE ─────────────────────────────────────────────────────────────
 def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypatch) -> None:
-    """The property this module exists for: the gradient step is
-    `run_declared_train_step` — the SAME seam the self-play loop takes — and not a second
-    graph training path. Asserted on the CALL, with its spec and its providers, because a
-    parallel path would still produce a checkpoint."""
+    """The gradient step is `run_declared_train_step`, not a second graph training path,
+    asserted on the CALL because a parallel path would still produce a checkpoint."""
     ring = _write_ring(tmp_path, plies=64)
     calls: list[dict[str, Any]] = []
 
@@ -274,9 +254,7 @@ def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypa
 
 
 def test_the_BC_route_passes_zero_recency_and_it_is_STRUCTURAL(tmp_path: Path, monkeypatch) -> None:
-    """A corpus ring has no time ordering, so `recent_frac` has no subject over it. Pinned
-    because reading `train.recency_weight` here would silently treat the newest ring rows as
-    a recent window they are not."""
+    """A corpus ring has no time ordering, so `recent_frac` has no subject over it."""
     assert BC_RECENCY_WEIGHT == 0.0
     ring = _write_ring(tmp_path)
     seen: list[float] = []
@@ -312,10 +290,8 @@ def test_the_BC_route_passes_zero_recency_and_it_is_STRUCTURAL(tmp_path: Path, m
     assert seen == [0.0, 0.0]
 
 
-# ── the CLI branches on the DECLARED representation, not on a model sniff ────────────────
 def test_the_cli_routes_on_the_declared_representation() -> None:
-    """R102's ban: the route is chosen by the declaration, never by an `isinstance` on the
-    built model. Asserted structurally on the CLI's own source."""
+    """The route is chosen by the declaration, never by an `isinstance` on the built model."""
     src = (_REPO / "src/mantis/train/pretrain/cli.py").read_text(encoding="utf-8")
     tree = ast.parse(src)
     fn = next(n for n in ast.walk(tree)
@@ -334,13 +310,11 @@ def test_the_cli_exposes_a_hexg_corpus_override() -> None:
     assert "--corpus-hexg" in src
 
 
-# ── GAP 4 FINAL (R326(d)): the corpus-mix loader is GONE, and the absence is pinned ──────
-#: The buried symbol. Named ONCE so every row below reads the same string and a rename in one
-#: place cannot leave the census watching for a name nobody uses.
+#: The buried symbol, named ONCE so a rename cannot leave the census watching a dead string.
 _BURIED = "load_pretrained_buffer"
 
-#: Where a resurrection could hide. `tests/` is included deliberately: a test that re-defines
-#: or re-imports the symbol would make the census green while the thing was back.
+#: Where a resurrection could hide. `tests/` is included deliberately: a test that re-defines or
+#: re-imports the symbol would make the census green while the thing was back.
 _CENSUS_ROOTS = ("src", "tools", "tests")
 
 
@@ -358,16 +332,8 @@ def _census(predicate: Callable[[ast.AST], bool]) -> list[str]:
 
 
 def test_the_corpus_mix_loader_IS_BURIED_and_nothing_defines_it() -> None:
-    """R326(d): posture (A) is signed, so the loader's (B)-serving rationale expired and the
-    symbol was deleted with a grave line.
-
-    STRUCTURE, NOT TEXT (R296(f)): an `ast` census over DEFINITIONS, so the grave comment that
-    names the symbol — and this file's own `_BURIED` literal — cannot read as a resurrection.
-    A grep would red on the grave marker, which is precisely the evidence the grave exists to
-    leave behind.
-
-    MUTATION THAT REDS IT: someone re-adds the function, or a helper of the same name, anywhere
-    under `src/`, `tools/` or `tests/`."""
+    """The corpus-mix loader is deleted, censused over DEFINITIONS so the grave comment naming
+    the symbol cannot read as a resurrection."""
     hits = _census(lambda n: isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))
                    and n.name == _BURIED)
     assert not hits, (
@@ -377,13 +343,8 @@ def test_the_corpus_mix_loader_IS_BURIED_and_nothing_defines_it() -> None:
 
 
 def test_nothing_IMPORTS_the_buried_loader() -> None:
-    """The second half of the absence, and the one the ruling names: an IMPORT census.
-
-    A definition census alone would pass while a stale `from mantis.train.batch_assembly
-    import load_pretrained_buffer` sat in a module — an `ImportError` at collection time, which
-    is a worse failure than a red row because it takes a whole tier down with it.
-
-    MUTATION THAT REDS IT: any module re-importing the buried name, by either import form."""
+    """The import half: a definition census alone passes while a stale import sits in a module,
+    and that is an `ImportError` at collection time, which takes a whole tier down."""
     def _imports_it(node: ast.AST) -> bool:
         if isinstance(node, ast.ImportFrom):
             return any(alias.name == _BURIED for alias in node.names)
@@ -396,15 +357,8 @@ def test_nothing_IMPORTS_the_buried_loader() -> None:
 
 
 def test_nothing_CALLS_the_buried_loader_by_either_spelling() -> None:
-    """The census the pre-R326(d) file ran, kept and WIDENED rather than deleted with the row
-    it belonged to.
-
-    It watched bare `Name` calls only, so `batch_assembly.load_pretrained_buffer(...)` would
-    have slipped past it — a gap that did not matter while the function existed and one call
-    shape was the only one anybody wrote, and does matter now that the row's job is to prove a
-    thing is gone. Both spellings are checked.
-
-    MUTATION THAT REDS IT: a call site of either shape."""
+    """The call census, WIDENED to both spellings — it watched bare `Name` calls only, which
+    did not matter while the function existed and does now."""
     def _calls_it(node: ast.AST) -> bool:
         if not isinstance(node, ast.Call):
             return False
@@ -416,10 +370,8 @@ def test_nothing_CALLS_the_buried_loader_by_either_spelling() -> None:
     assert not hits, f"{_BURIED} is called at {hits} — the symbol does not exist"
 
 
-# ── unarmedness of the reroute itself ────────────────────────────────────────────────────
 def test_only_the_pretrain_cli_reaches_the_graph_route() -> None:
-    """LANDING IS NOT ARMING. The reroute is reachable from the manual CLI entry point and
-    from nothing else under `src/`."""
+    """LANDING IS NOT ARMING: reachable from the manual CLI entry point and nothing else."""
     hits: list[str] = []
     for path in (_REPO / "src").rglob("*.py"):
         if path.name in {"graph_route.py", "cli.py"}:
@@ -437,42 +389,36 @@ def test_only_the_pretrain_cli_reaches_the_graph_route() -> None:
 
 
 def test_no_shipped_config_names_the_pretrain_route() -> None:
-    """The other half of unarmedness. Asserted on the MODULE PATHS a config would have to
-    name to select this route — not on the substring "pretrain", which legitimately appears in
-    `mixing.pretrained_buffer_path` and `mixing.pretrain_max_samples` and would make this row
-    either vacuous or wrong."""
+    """Asserted on the MODULE PATHS a config must name, not the substring "pretrain", which
+    legitimately appears in `mixing.pretrained_buffer_path`."""
     for cfg in sorted((_REPO / "configs").glob("*.yaml")):
         text = cfg.read_text(encoding="utf-8")
         for token in ("graph_route", "mantis.train.pretrain", "train/pretrain"):
             assert token not in text, f"{cfg.name} names {token}"
 
 
-# ── grid-only flags are refused, not ignored ─────────────────────────────────────────────
 @pytest.mark.parametrize("flag", sorted(DENSE_ARM_FLAGS))
 def test_EVERY_dense_arm_flag_is_refused_not_ignored(flag: str) -> None:
-    """Driven over the SET, not over a hand-listed copy of it: a flag added to
-    `DENSE_ARM_FLAGS` without a refusal, or refused without a stated reason, fails here."""
+    """Driven over the SET: a flag added without a refusal, or without a reason, fails here."""
     with pytest.raises(GraphPretrainError, match="does not read"):
         refuse_dense_arm_flags({flag: 1.0})
     assert DENSE_ARM_FLAGS[flag].strip(), f"{flag} carries no reason"
 
 
 def test_store_true_flags_read_False_as_NOT_supplied() -> None:
-    """`--freeze-trunk-entry` is `store_true`, so its unsupplied value is `False`, not None.
-    Treating False as supplied would refuse every graph pretrain."""
+    """`store_true` flags read `False` as NOT supplied — otherwise every graph pretrain is
+    refused."""
     refuse_dense_arm_flags({"--freeze-trunk-entry": False, "--filters": None})
 
 
 def test_a_flag_outside_the_declared_set_is_itself_an_error() -> None:
-    """The set is the authority. A caller passing an undeclared flag would otherwise get a
-    silent pass — the phantom-gate shape."""
+    """The set is the authority — an undeclared flag would otherwise get a silent pass."""
     with pytest.raises(GraphPretrainError, match="not in DENSE_ARM_FLAGS"):
         refuse_dense_arm_flags({"--not-a-flag": 1})
 
 
 def test_the_cli_hands_over_every_declared_dense_arm_flag() -> None:
-    """The other half: a flag declared in the set but never passed by the CLI would be
-    refused in theory and ignored in practice."""
+    """The other half: a declared flag the CLI never passes is refused in theory only."""
     src = (_REPO / "src/mantis/train/pretrain/cli.py").read_text(encoding="utf-8")
     for flag in DENSE_ARM_FLAGS:
         assert f'"{flag}": args.' in src, f"the CLI never hands {flag} to the refusal"
@@ -483,10 +429,8 @@ def test_no_dense_arm_flags_is_the_clean_case() -> None:
 
 
 def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypatch) -> None:
-    """Production (`Trainer._derive_arch`, `train.orchestrator`) resolves the arch from
-    `RunConfig.model_dump()`. The CLI's flat term dict is the DENSE arm's shape and would
-    resolve a different arch the day a `gnn_*` width key is minted, so this route passes the
-    nested mapping — asserted on the ARGUMENT, not on the resulting object."""
+    """Production resolves the arch from the NESTED config, so the CLI's flat term dict would
+    resolve a different arch the day a `gnn_*` width key is minted. Asserted on the ARGUMENT."""
     ring = _write_ring(tmp_path)
     seen: list[Any] = []
     nested = {"train": {"batch_size": 4}, "identity": {"encoding": "gnn_axis_v1"}}
@@ -524,8 +468,7 @@ def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypa
 
 
 def test_the_flag_refusal_is_REQUIRED_and_undefaulted() -> None:
-    """A caller that could omit `dense_arm_flags` would silently skip the refusal — the same
-    shape as the ignored flags it exists to catch."""
+    """A caller that could omit `dense_arm_flags` would silently skip the refusal."""
     import inspect
     sig = inspect.signature(run_graph_pretrain)
     assert sig.parameters["dense_arm_flags"].default is inspect.Parameter.empty

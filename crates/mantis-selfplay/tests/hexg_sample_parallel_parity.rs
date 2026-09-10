@@ -1,22 +1,11 @@
-//! PERF-TRANCHE-1 B1 — the parallel ring rebuild is BIT-IDENTICAL to the serial one.
+//! The parallel ring rebuild is BIT-IDENTICAL to the serial one.
 //!
-//! `sample_ring` is the trainer's single largest line (ledger §10.5 #1) and PERF-TRANCHE-1's
-//! M-2 measurement split it: 1 221 ms of `build_axis_graph` against 163 ms of fuse and 2 ms
-//! of align, at run5 shape. The rebuild is a serial loop over independent items on a
-//! 24-thread box, so B1 parallelises it — and the ONLY thing that had to move for that to be
-//! safe is the per-sample D6 draw, which is now hoisted and consumed in index order before
-//! any thread starts.
-//!
-//! DETERMINISM IS THE WHOLE GAME, and it has two halves this file tests separately:
-//!
-//! 1. **The generator.** Two buffers seeded identically must draw the SAME symmetries in the
-//!    same order whether the rebuild then runs on one thread or many. A hoist that changed
-//!    the draw ORDER or COUNT would still produce valid training data — differently
-//!    augmented training data, silently, for the rest of the run.
-//! 2. **The reassembly.** `policy_target` is ONE flat concatenation whose segment boundaries
-//!    the collate derives from the graphs' own legal counts. Results returned in completion
-//!    order rather than index order would mis-pair every target against a graph while every
-//!    length still checked out.
+//! Determinism has two halves, tested separately. The GENERATOR: identically seeded buffers must
+//! draw the same symmetries in the same order on one thread or many — a hoist that changed the
+//! draw ORDER or COUNT would still produce valid training data, differently augmented, silently.
+//! The REASSEMBLY: `policy_target` is ONE flat concatenation segmented by the graphs' own legal
+//! counts, so results returned in completion order mis-pair every target while every length
+//! still checks out.
 
 use mantis_graph::AxisGraph;
 use mantis_selfplay::replay::hexg::{GraphRecord, GraphTargets, HexgBuffer};
@@ -38,20 +27,15 @@ fn splitmix64(s: &mut u64) -> u64 {
 /// A ring of deterministic positions wide enough that a chunked split is non-trivial.
 fn filled_buffer(n_records: usize) -> HexgBuffer {
     let mut buf = HexgBuffer::new(CAP, "gnn_axis_v1", VISIT_CAP).expect("graph buffer");
-    // The buffer seeds its generator from ENTROPY (`StdRng::from_rng(&mut rand::rng())`), so
-    // two buffers never agree by construction. Pinning it is what makes serial-vs-parallel a
-    // comparison of the REBUILD rather than of two different samples. Through the method
-    // rather than the field since R344(a): this line is why the method exists.
+    // The buffer seeds its generator from ENTROPY, so two buffers never agree by construction;
+    // pinning it makes serial-vs-parallel a comparison of the REBUILD, not of two samples.
     buf.seed_sampler(0xB1_0000_0001);
     let mut s = SEED;
     for i in 0..n_records {
-        // A compact line of stones plus two legal cells at its ends, so the aligned mass is
-        // always exactly the stored mass (the ALWAYS-ON `mass_drop_check` would otherwise
-        // refuse the record and this file would be testing the refusal path).
-        // Every seventh record is EMPTY. The hoist's guard is `augment && n_stones != 0`
-        // — the identity-symmetry forcing for a stoneless board — and a corpus with no
-        // empty record cannot see a change to it: the draw COUNT would shift while every
-        // drawn value still matched. This is the one input that makes that break visible.
+        // A compact line of stones plus two legal cells at its ends, so the aligned mass equals
+        // the stored mass and `mass_drop_check` does not refuse the record. Every seventh record
+        // is EMPTY: the hoist's guard forces the identity symmetry on a stoneless board, and a
+        // corpus with no empty record cannot see the draw COUNT shift while every value matches.
         let empty = i % 7 == 3;
         let n_stones = if empty {
             0
@@ -169,11 +153,10 @@ fn parallel_rebuild_is_bit_identical_to_serial() {
     }
 }
 
-/// The generator half, isolated: the hoist must not change what is drawn, only when.
+/// The generator half: the hoist must not change what is drawn, only when.
 ///
-/// Two buffers, identical seeds, one sampled serially and one in parallel, TWICE in a row.
-/// If the hoist consumed a different number of draws the second sample would diverge even
-/// where the first agreed — which is the failure a single-sample comparison would miss.
+/// Sampled repeatedly, because a hoist that consumed a different number of draws diverges on the
+/// SECOND sample even where the first agreed.
 #[test]
 fn the_rng_hoist_leaves_the_draw_stream_unchanged_across_repeats() {
     let mut serial = filled_buffer(128);
@@ -187,12 +170,8 @@ fn the_rng_hoist_leaves_the_draw_stream_unchanged_across_repeats() {
     }
 }
 
-/// The reassembly half, isolated: order is INDEX order, not completion order.
-///
-/// The mutation this names: results collected as chunks finish. With uneven chunk cost that
-/// permutes the batch, and `policy_target` — one flat concatenation segmented by the graphs'
-/// own legal counts — would then pair every target with the wrong graph while every LENGTH
-/// still checked out. So the assertion is per-item and positional, never a multiset.
+/// The reassembly half: order is INDEX order, not completion order, so the assertion is
+/// per-item and positional, never a multiset.
 #[test]
 fn results_come_back_in_index_order() {
     let mut serial = filled_buffer(200);
@@ -224,14 +203,9 @@ fn results_come_back_in_index_order() {
 
 /// The hoist's PREDICATE, against a transcription of the original inline draw.
 ///
-/// The parity tests above compare the serial and parallel paths, and both run through the
-/// hoist — so a hoist that changed the draw COUNT would move both arms together and pass
-/// them. This row is the only witness to that: it re-implements the pre-B1 draw exactly as
-/// the loop body performed it (`augment && !record_at(idx).stones.is_empty()`, drawn one
-/// index at a time) and requires the hoisted stream to equal it element for element.
-///
-/// The corpus carries empty-board records deliberately: with none, `n_stones != 0` and
-/// `!stones.is_empty()` never disagree and this test proves nothing.
+/// The parity tests above run BOTH arms through the hoist, so a changed draw COUNT moves them
+/// together and passes. Only this row sees it. The corpus carries empty-board records
+/// deliberately: with none, `n_stones != 0` and `!stones.is_empty()` never disagree.
 #[test]
 fn the_hoisted_draw_matches_the_original_inline_predicate() {
     let indices: Vec<usize> = (0..200usize).map(|i| (i * 7) % 128).collect();
@@ -253,7 +227,7 @@ fn the_hoisted_draw_matches_the_original_inline_predicate() {
         let mut inline_buf = filled_buffer(128);
         let hoisted = hoisted_buf.draw_syms(&indices, augment);
 
-        // The pre-B1 body, transcribed: the predicate reads the MATERIALISED record, and the
+        // The original body, transcribed: the predicate reads the MATERIALISED record and the
         // draw happens inside the per-index step rather than in a pass of its own.
         let inline: Vec<usize> = indices
             .iter()

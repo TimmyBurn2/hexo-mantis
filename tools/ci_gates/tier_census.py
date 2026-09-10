@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
 """Gate 3c's second arm — every DESELECTING marker in `tests/` is declared.
 
-AUDIT-1 F-12. Gate 3c counts COLLECTED tests. `pytest --collect-only` with `-m ''` walks the
-whole tree, so a test carrying `@pytest.mark.slow`, `@pytest.mark.skip`, or a host-true
-`@pytest.mark.skipif` is COUNTED by the floor and EXECUTED by nothing: `make test` runs
-`-m "not integration and not slow"` and `make test.integration` runs `-m integration`. One
-`slow` line is therefore enough to remove a test from every tier the repo runs while the
-collected-test floor, the suite's own green, and every other gate stay rc 0.
+Gate 3c counts COLLECTED tests, and a deselected test is still collected: one `slow` line
+removes a test from every tier the repo runs while the collected-test floor, the suite's own
+green and every other gate stay rc 0.
 
-`tests/model/conformance/test_leaf_forward_throughput_harness.py` already refuses exactly this
-for its own suite — `marker_census` + `require_declared_tier_placement`, scoped to
-`_SLOW_TIER_MEMBERS` — after RED-TEAM planted one `slow` line above a cross-crate legal-set
-claim and every instrument in the repo reported green. This is that guard's TREE-WIDE twin.
-R5 bars importing the conformance helper from here (`tests` is not a package), so the census
-is re-implemented rather than shared; the two are checked against each other by
-`tests/tools/test_tier_census.py`.
+BOTH DIRECTIONS ARE REFUSED: an UNDECLARED marker is a test that left its tier without anyone
+saying so, and a STALE declaration is a standing licence nobody is using, behind which the next
+real one is invisible. A declaration file rather than a count, because the question is which
+tests stopped running — the file names them, so a diff on it is the review.
 
-BOTH DIRECTIONS ARE REFUSED, for the reason the conformance guard states: an UNDECLARED marker
-is a test that left its tier without anyone saying so, and a STALE declaration is a standing
-licence nobody is using, behind which the next real one is invisible.
-
-WHY A DECLARATION FILE AND NOT A COUNT. A count answers "did the number change"; the question
-is "which tests stopped running". The file names them, so a diff on it is the review.
+The conformance suite carries a scoped version of this census; `tests` is not importable, so the
+two are re-implemented separately and checked against each other by `tests/tools/test_tier_census.py`.
 """
 from __future__ import annotations
 
@@ -30,13 +20,12 @@ import ast
 import sys
 from pathlib import Path
 
-#: Markers that REMOVE a test from at least one tier the repo actually runs. `parametrize`,
-#: `usefixtures` and friends are not here: they change how a test runs, never whether.
+#: Markers that REMOVE a test from at least one tier the repo runs. `parametrize` and friends
+#: are not here: they change how a test runs, never whether.
 DESELECTING: frozenset[str] = frozenset({"slow", "skip", "skipif", "integration"})
 
-#: The module-level `pytestmark` form's stand-in test name. It takes a whole file out of the
-#: tier in one line and carries no decorator, which is the form a reader scanning the function
-#: bodies would miss.
+#: Stand-in test name for the module-level `pytestmark` form, which takes a whole file out of a
+#: tier in one line and carries no decorator.
 MODULE_SCOPE = "<module>"
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -106,8 +95,7 @@ def compare(observed: set[Row], declared: set[Row]) -> tuple[list[Row], list[Row
 
 
 def self_test() -> int:
-    """Both refusals must FIRE. A check never shown to fail is indistinguishable from one that
-    always passes (LAW-07)."""
+    """Both refusals must FIRE: a check never shown to fail is indistinguishable from one that always passes."""
     base: set[Row] = {("tests/a/test_x.py", "test_one", "slow")}
     cases = [
         ("clean", base, base, ([], [])),

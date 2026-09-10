@@ -1,32 +1,15 @@
-//! ⊕ CANDIDATE-PARALLEL BATCHING: a Gumbel halving round is ONE inference round trip.
+//! A Gumbel halving round is ONE inference round trip.
 //!
-//! WHAT IS BEING MEASURED, and why a counter rather than a stopwatch. Sequential Halving
-//! visits every candidate alive at the current considered visit level before that level
-//! advances, so a ROUND is `m` descents, then `m/2`, and so on. Issuing them together is the
-//! Gumbel analogue of `leaf_batch_size` — and unlike PUCT's batch it needs no virtual loss,
-//! because the candidates' subtrees are disjoint. The lever is invisible in outputs: a search
-//! that had silently gone back to one leaf per round trip would produce the SAME root visit
-//! counts and the same move, only N times slower. So the width is counted in-run (LAW-18) and
-//! this file reads the counter.
+//! Sequential Halving visits every candidate alive at the current considered visit level before
+//! that level advances, so a ROUND is `m` descents, then `m/2`, and so on; issuing them together
+//! needs no virtual loss because the candidates' subtrees are disjoint. The lever is invisible in
+//! outputs — a search back at one leaf per round trip yields the same visit counts and the same
+//! move, only N times slower — so the width is counted in-run and this file reads the counter.
 //!
-//! THE GRAPH PATH, because after R346(f) it is the only one: the dense recorder this file
-//! used to drive is deleted. The counter read here is the SEARCH's and not the recorder's,
-//! so the arm was always a drive choice; `gnn_axis_r8` is the run6 identity row and the
-//! graph path is not refused under `gumbel` (R347(a) gave it the sparse row).
-//!
-//! THE DRIVEN MEAN AT 320/16 IS NOT 4, AND THE GAP IS ARITHMETIC RATHER THAN A SHORTFALL.
-//! The schedule's round-width profile is DISCONTINUOUS at its budget: the schedule built for
-//! `N_SIMS` simulations and the one built for `N_SIMS - 1` do not have the same mean, and
-//! the Gumbel search gets `N_SIMS - 1` because the ROOT'S OWN EVALUATION IS CHARGED against
-//! `n_simulations` — the same clause that makes "N means N leaves" true. Both numbers are
-//! DERIVED below by `schedule_mean` and printed; neither is transcribed here, because a
-//! transcribed pair goes stale the first time either constant moves (R192(e)).
-//!
-//! R347(c) AMENDED THE CRITERION to "leaves per round trip >= the schedule's own mean at
-//! (N, m)". The two-sided 20 % band it replaces is gone. `(N, m)` is read as the budget the
-//! SEARCH gets — `N_SIMS - 1`, m — because that is the schedule the driver actually walks;
-//! read as `N_SIMS` it would be a floor no charged-root search can clear, which is the
-//! arithmetic the amendment itself says was not done.
+//! The criterion is one-sided: leaves per round trip >= the schedule's own mean at the budget the
+//! SEARCH gets, which is `N_SIMS - 1` because the root's own evaluation is charged. The
+//! schedule's round-width profile is DISCONTINUOUS at its budget, so both means are DERIVED by
+//! `schedule_mean` and printed rather than transcribed.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -169,8 +152,7 @@ fn a_gumbel_round_is_one_round_trip_and_its_width_is_the_halving_phase() {
     );
 
     let mean = leaves as f64 / rounds as f64;
-    // Printed, not merely asserted: the QUANTITY is what a re-mint reads, and a witness that
-    // only says "in band" cannot be quoted (LAW-01, measurement mandatory).
+    // Printed, not merely asserted: a witness that only says "in band" cannot be quoted.
     println!(
         "gumbel round width at {N_SIMS}/{GUMBEL_M}: {leaves} leaves over {rounds} round \
          trips = {mean:.3} leaves per round trip"
@@ -183,13 +165,8 @@ fn a_gumbel_round_is_one_round_trip_and_its_width_is_the_halving_phase() {
          wider than the candidate set it is drawn from"
     );
 
-    // THE CRITERION (R347(c)): at or above the schedule's own mean at the budget the SEARCH
-    // gets, which is `N_SIMS - 1` because the root's own evaluation is charged. One-sided,
-    // and the side is the one that carries the claim: a driver issuing NARROWER rounds than
-    // the schedule's phases is not batching them, while a driver issuing WIDER ones is
-    // bounded already by the structural ceiling asserted above. The upward residual the old
-    // two-sided band existed to admit — a search cut short at `stop()` loses the schedule's
-    // narrow tail rounds — is therefore no longer a reason to hold an upper edge here.
+    // THE CRITERION, one-sided: a driver issuing NARROWER rounds than the schedule's phases is
+    // not batching them, while wider ones are already bounded by the structural ceiling above.
     let expected = schedule_mean(GUMBEL_M, N_SIMS - 1);
     println!(
         "criterion: driven {mean:.3} >= schedule mean {expected:.3} at ({}, {GUMBEL_M}); \
@@ -205,19 +182,17 @@ fn a_gumbel_round_is_one_round_trip_and_its_width_is_the_halving_phase() {
         N_SIMS - 1
     );
 
-    // AND THE THING THE CRITERION EXISTS TO SEPARATE, stated on its own so a future
-    // loosening cannot swallow it: un-batched, every round trip carries exactly one leaf.
+    // Stated on its own so a future loosening cannot swallow it: un-batched, every round trip
+    // carries exactly one leaf.
     assert!(
         mean > 1.0,
         "measured {mean:.3} leaves per round trip: the Gumbel arm is issuing ONE leaf per \
          round trip, which is the pre-batching behaviour"
     );
 
-    // THE DISCONTINUITY ITSELF, asserted as a relation and not against a transcribed pair:
-    // the schedule's mean at `N_SIMS` is STRICTLY GREATER than at `N_SIMS - 1`, which is why
-    // the criterion above has to name which of the two budgets it means. R346(b)'s "4" was
-    // the first of those numbers read as though the search got it; the search gets the
-    // second, because the root is charged.
+    // THE DISCONTINUITY, as a relation rather than a transcribed pair: the schedule's mean at
+    // `N_SIMS` is STRICTLY GREATER than at `N_SIMS - 1`, which is why the criterion must name
+    // which budget it means.
     assert!(
         schedule_mean(GUMBEL_M, N_SIMS) > expected,
         "the {N_SIMS}-vs-{}-discontinuity this file documents no longer holds: schedule mean \

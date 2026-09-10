@@ -1,26 +1,17 @@
-//! `GraphWire` — the block-diagonal ragged graph batch tensor (WP6 D5), the
-//! fuse-out of the graph queue's pop, ported from `inference_bridge.rs:1149` with
-//! pyo3 STRIPPED.
+//! `GraphWire` — the block-diagonal ragged graph batch tensor, the fuse-out of the
+//! graph queue's pop. A plain-Rust flat-`Vec` type: index arrays come out ALREADY
+//! globally offset (`i64`), and `edge_index` is `[src_global (E) ‖ dst_global (E)]`.
 //!
-//! A plain-Rust flat-`Vec` type (the `#[pyclass]` + per-field `#[getter]` numpy
-//! copies are WP7). `from_axis_graphs` computes the block-diagonal fuse
-//! (`inference_bridge.rs:1207`, offset accumulation `:1230-1262`): index arrays
-//! come out ALREADY globally offset (`i64`); `edge_index` is
-//! `[src_global (E) ‖ dst_global (E)]`.
-//!
-//! The fuse's ARITHMETIC is the frozen one; its WRITE PATTERN is not, since
-//! PERF-TRANCHE-1 A1 (ledger §10.1 #2 — 33.78 ms/pop at a derived 1.35 GB/s of output).
-//! Every array is reserved from a sizing pass, `edge_index` is one `2E` buffer written
-//! once instead of an `edge_src`/`edge_dst` pair plus a terminal concat, and the widening
-//! `u32 -> i64 + offset` runs through `extend` over a `TrustedLen` iterator rather than a
-//! per-element `push`. Byte-equality with the pre-A1 write path is pinned by
+//! The write pattern was rebuilt after the fuse measured 33.78 ms/pop at a derived
+//! 1.35 GB/s of output: every array is reserved from a sizing pass, `edge_index` is
+//! one `2E` buffer written once rather than a src/dst pair plus a terminal concat, and
+//! the widening `u32 -> i64 + offset` runs through `extend` over a `TrustedLen`
+//! iterator. Byte-equality with the previous write path is pinned by
 //! `tests/queue_fuse_reserve_parity.rs`, which carries that path transcribed.
 //!
-//! WP6 makes single-read a TYPE guarantee the frozen getters lacked: `take()`
-//! moves every array out exactly once (inner `Option::take()`); a second call is
-//! the NAMED error `WireAlreadyConsumed`. The `-1` off-window sentinel in
-//! `policy_dst_slot` travels VERBATIM (copied from each graph's
-//! `policy_scatter_index.0`, never re-densified — NO fixed-width fallback).
+//! Single-read is a type guarantee: `take()` moves every array out exactly once and a
+//! second call is the named error `WireAlreadyConsumed`. The `-1` off-window sentinel
+//! in `policy_dst_slot` travels verbatim, never re-densified.
 
 use std::fmt;
 
@@ -70,19 +61,15 @@ impl std::error::Error for WireAlreadyConsumed {}
 
 impl GraphWire {
     /// Block-diagonal fuse a batch of per-leaf `AxisGraph`s into ONE ragged wire.
-    /// Single source of the fusion arithmetic (the self-play inference seam and
-    /// the HEXG training sample path both call this). `edge_index` /
-    /// `legal_node_gather` / all offsets come out ALREADY globally offset (`i64`);
-    /// `edge_index` is `[src_global ‖ dst_global]`. Assumes each graph's
-    /// `builder_impl == BUILDER_IMPL_NATIVE` (the caller runs the handshake).
     ///
-    /// Arithmetic is the verbatim port of `from_axis_graphs`
-    /// (`inference_bridge.rs:1207`); the write path is A1's — see the module docs.
+    /// The single source of the fusion arithmetic: the self-play inference seam and the
+    /// HEXG training sample path both call it. Indices and offsets come out already
+    /// globally offset (`i64`). Assumes the caller ran the `builder_impl` handshake.
     #[must_use]
     pub fn from_axis_graphs(graphs: &[AxisGraph], contract_version: u32) -> GraphWire {
         let b = graphs.len();
-        // Sizing pass. `num_nodes`/`num_edges` are O(1) reads of a `len()`, so this costs
-        // B accessor calls and buys every array below an exact single allocation.
+        // Sizing pass: `num_nodes`/`num_edges` are O(1), so B accessor calls buy every
+        // array below an exact single allocation.
         let mut n_total: usize = 0;
         let mut e_total: usize = 0;
         let mut lg_total: usize = 0;
@@ -97,9 +84,8 @@ impl GraphWire {
         let mut node_feat: Vec<f32> = Vec::with_capacity(n_total * NODE_FEAT_DIM);
         let mut node_coords: Vec<i32> = Vec::with_capacity(n_total * 2);
         let mut edge_attr: Vec<f32> = Vec::with_capacity(e_total * EDGE_FEAT_DIM);
-        // ONE `2E` buffer, written once. The src half fills in the first graph walk, the
-        // dst half in the second: no `edge_src`/`edge_dst` pair, and no terminal
-        // `extend` that reallocates and re-moves the src half.
+        // ONE `2E` buffer: the src half fills in the first graph walk, the dst half in the
+        // second, so no terminal concat reallocates and re-moves the src half.
         let mut edge_index: Vec<i64> = Vec::with_capacity(e_total * 2);
         let mut legal_node_gather: Vec<i64> = Vec::with_capacity(lg_total);
         let mut policy_dst_slot: Vec<i32> = Vec::with_capacity(ps_total);
@@ -125,9 +111,8 @@ impl GraphWire {
             node_feat.extend_from_slice(&g.node_feat.0);
             node_coords.extend_from_slice(&g.node_coords);
             edge_attr.extend_from_slice(&g.edge_attr.0);
-            // `extend` over a mapped slice iterator: `TrustedLen`, so the widening
-            // `u32 -> i64 + offset` runs as a sized bulk write, not a per-element push
-            // with a capacity check.
+            // A mapped slice iterator is `TrustedLen`, so the widening runs as a sized bulk
+            // write rather than a per-element push with a capacity check.
             edge_index.extend(g.edge_index.src.iter().map(|&s| node_off + i64::from(s)));
             legal_node_gather.extend(
                 g.legal_node_gather
@@ -148,8 +133,8 @@ impl GraphWire {
             edge_offsets.push(edge_off);
             legal_offsets.push(legal_off);
         }
-        // edge_index = [src_global (E) | dst_global (E)] → reshape (2, E). The dst half
-        // is appended into the SAME reserved buffer, re-walking only the dst slices.
+        // The dst half is appended into the SAME reserved buffer, re-walking only the dst
+        // slices; the result reshapes to (2, E).
         let mut node_off_dst: i64 = 0;
         for g in graphs {
             edge_index.extend(
@@ -183,8 +168,7 @@ impl GraphWire {
         }
     }
 
-    /// Move every array out exactly once. A second call returns
-    /// [`WireAlreadyConsumed`] (single-read guard).
+    /// Move every array out exactly once.
     ///
     /// # Errors
     /// Returns `Err(WireAlreadyConsumed)` if the arrays were already taken.
@@ -192,7 +176,7 @@ impl GraphWire {
         self.arrays.take().ok_or(WireAlreadyConsumed)
     }
 
-    /// Whether the arrays are still present (not yet taken).
+    /// Whether the arrays are still present.
     #[must_use]
     pub fn is_available(&self) -> bool {
         self.arrays.is_some()

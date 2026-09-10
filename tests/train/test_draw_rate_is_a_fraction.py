@@ -1,41 +1,10 @@
-"""F-816-2 — `iteration_complete.draw_rate` is a FRACTION, and the pool owns its denominator.
+"""Prove the emitted `draw_rate` is a fraction whose denominator the pool owns.
 
-MEASURED ON THE BURN'S OWN STREAM, not inferred: at steps 2, 3, 5, 6 and 7 the emitted
-`draw_rate` read 1.3333, 1.5, 1.125, 1.2222 and 1.0909 — values a fraction cannot take. It
-settled to exactly 1.000 once the counts grew, which is the signature of a ratio whose
-denominator lags its numerator rather than of a mis-scaled statistic.
+Measured on a real burn stream: 1.3333, 1.5, 1.125, 1.2222 and 1.0909 — exactly 4/3, 3/2, 9/8,
+11/9 and 12/11, from dividing a LIVE `pool.draws` by a `games_played` snapshot frozen while the
+feeder thread kept draining games in.
 
-THE MECHANISM, derived from the code rather than guessed. The payload built the share by
-hand as `pool.draws / games_played`:
-
-  * the NUMERATOR `pool.draws` is read live inside the event builder;
-  * the DENOMINATOR `games_played` is `StepCoordinator._games_played`, a snapshot taken near
-    the top of `step()` and frozen for the rest of it while the feeder thread keeps draining
-    finished games into the pool.
-
-On a run where every game is a draw the numerator equals the pool's CURRENT
-`games_completed` and the denominator is an EARLIER one, so the ratio is
-`games_completed(t2) / games_completed(t1) >= 1`, decaying toward 1 as the counts grow.
-That reproduces all five observed values exactly (4/3, 3/2, 9/8, 11/9, 12/11). It is the
-same straddle class R218 rider 1 removed between the `target_integrity` and cluster blocks,
-one payload over.
-
-A CORRECTION TO THE QUEUED ROW, stated plainly. F-816-2 reads "and it feeds an armed
-abort". Measured: it does not. `draw_rate_collapse` reads
-`pooled_draw_rate(pool.pooled_draw_counts(), N_pool_min=…)` — `Sum(draws)/Sum(completed)`
-over per-worker windows of 0/1 values, which cannot exceed 1 by construction
-(`instrumentation.py::pooled_draw_counts`). The two statistics share a name and nothing
-else. The defect is real and worth fixing before run5 — a metric whose definition is wrong
-is wrong wherever it is read — but the abort was never exposed to it, and the row's harm
-claim should not be carried forward as measured.
-
-THE FIX: `WorkerPool.draw_rate`, computed under the pool's own lock against the same
-`games_completed` the two win rates use, exactly like `x_winrate` / `o_winrate` — which
-never had this defect for exactly that reason. The three outcome shares now share a
-denominator and sum to 1.
-
-MUTATION THAT REDS THIS FILE (M-DR-1): restore `pool.draws / games_played` in
-`events.py`. The first row below then emits 4/3 and fails on `<= 1.0`.
+Killer: restore `pool.draws / games_played` in the event builder; the first row then emits 4/3.
 """
 from __future__ import annotations
 
@@ -46,8 +15,7 @@ from mantis.train.events import emit_iteration_complete_event
 
 
 def _rstats() -> RunnerStats:
-    """A REAL snapshot — the payload reads several of its fields, and a hand-shaped double
-    would paper over a rename in `pool_hooks`."""
+    """Build a real stats snapshot, so a rename in `pool_hooks` is not papered over."""
     return RunnerStats(
         games_completed=0, positions_generated=0, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
@@ -64,13 +32,8 @@ class _Sink:
 
 
 class _StraddlingPool:
-    """A pool that DRAINS between the coordinator's snapshot and the emit — the exact
-    condition the burn ran under.
-
-    `games_completed` and `draws` both advance to `now`; the caller passes the STALE
-    `games_played` it snapshotted earlier. A 100%-draw run is the worst case and the one
-    that was actually observed, so it is what this double models.
-    """
+    """Model a pool that DRAINS between the coordinator's snapshot and the emit: both counts
+    advance to `now` while the caller passes the stale snapshot."""
 
     search_kind = "puct"
     avg_game_length = 128.0
@@ -80,7 +43,7 @@ class _StraddlingPool:
 
     def __init__(self, *, completed_now: int) -> None:
         self._completed = completed_now
-        self._draws = completed_now  # every game a draw (F-816-6)
+        self._draws = completed_now  # every game a draw
         self.draws = completed_now  # raw count, present only so M-DR-1 is runnable
         self.recent_move_histories: list = []
 
@@ -118,10 +81,8 @@ def _emit(*, completed_now: int, games_played_snapshot: int) -> dict:
 
 
 def test_the_emitted_draw_rate_cannot_exceed_one_when_the_pool_drains_mid_step() -> None:
-    """M-DR-1 — the reproduction, with the burn's own numbers.
-
-    Snapshot at 3 completed games, pool at 4 by emit time: the old form emits 4/3 = 1.3333,
-    which is step 2 of the burn stream verbatim."""
+    """Prove the emitted draw rate cannot exceed one when the pool drains mid-step: at a snapshot
+    of 3 against a pool of 4, the old form emits the burn stream's own 1.3333."""
     payload = _emit(completed_now=4, games_played_snapshot=3)
     assert payload["draw_rate"] <= 1.0, (
         f"draw_rate emitted {payload['draw_rate']} — a fraction above 1. The share is being "
@@ -135,10 +96,8 @@ def test_the_emitted_draw_rate_cannot_exceed_one_when_the_pool_drains_mid_step()
 
 
 def test_the_denominator_is_the_pools_and_not_the_coordinators_snapshot() -> None:
-    """The stale denominator must not influence the value AT ALL.
-
-    Same pool, three wildly different snapshots. A value that moves with the snapshot is
-    still reading the coordinator's number, whether or not it happens to stay under 1."""
+    """Prove the stale snapshot cannot influence the value at all: one that moves with it is still
+    reading the coordinator's number, whether or not it stays under 1."""
     values = {
         snap: _emit(completed_now=8, games_played_snapshot=snap)["draw_rate"]
         for snap in (1, 8, 10_000)
@@ -151,12 +110,8 @@ def test_the_denominator_is_the_pools_and_not_the_coordinators_snapshot() -> Non
 
 
 def test_the_three_outcome_shares_share_a_denominator() -> None:
-    """Why the fix is the pool property and not a clamp.
-
-    `win_rate_p0` and `win_rate_p1` were always computed by the pool against
-    `games_completed`; only the draw share was assembled by the caller. Printing three
-    shares side by side where one has a different denominator makes them incommensurable —
-    and a `min(1.0, …)` would have kept the payload plausible while leaving that true."""
+    """Prove the three outcome shares share a denominator and sum to 1 — why the fix is the pool
+    property and not a clamp, which would keep the payload plausible but incommensurable."""
     payload = _emit(completed_now=8, games_played_snapshot=3)
     total = payload["win_rate_p0"] + payload["win_rate_p1"] + payload["draw_rate"]
     assert abs(total - 1.0) < 1e-9, (

@@ -1,26 +1,13 @@
-# >300 justify (R8): one row, and its arming question cannot be split. The fixtures that
-# build a match, the G=1-versus-factory byte-equality arm and the which-block-carries-it arm
-# all read the SAME constructed round; separating them would let two files disagree about
-# what an unarmed default does, which is the only thing this row asserts.
-"""R339(b) — `eval.concurrency`: the row exists, reaches ONE block, and is inert at its default.
+# >300 justify (R8): one row, and its arming question cannot be split. The fixtures that build a
+# match, the G=1-versus-factory byte-equality arm and the which-block-carries-it arm all read the
+# SAME constructed round; separating them would let two files disagree about the unarmed default.
+"""`eval.concurrency`: the row exists, reaches ONE block, and is inert at its default.
 
-WHAT THE ROW IS FOR. Run6's first real eval round ran 50 min 22 s to 93 games without
-finishing, against its own `round_timeout_sec 3600`. R339(b) rules that the gate GEOMETRY does
-not move and the timeout is not lengthened — it is the stall watchdog's limit — so the lever is
-the concurrency capability tranche-3 landed UNARMED, raised to a config key. The VALUE is picked
-on the box by measurement; nothing here proposes one.
-
-WHY THE SCOPE IS THE CLAIM AND NOT AN IMPLEMENTATION DETAIL. The gate block is ~93 % of the
-round's wall, so it is the only block worth arming; the other three are ~200 s of a ~7 000 s
-round and each pays a real price for threading. The floor probe is a LAW-07 gate input, and the
-rung battery is LAW-04's Elo channel whose per-game trajectory identity is unprovable under
-threading on CUDA (`index_add_`). "Only the gate block is armed" is therefore a property to
-PIN, not a coincidence of where the kwarg was typed — hence the census below counts every
-`play_paired_match` call in a real round and asserts what each one carries.
-
-THE DEFAULT IS THE BEHAVIOUR, NOT A PLACEHOLDER. `concurrency=1` takes the identical serial
-branch on the identical objects, so an absent row and a minted `1` are the SAME round rather
-than merely both legal — which is what makes the row safe to land before its value is known.
+The gate block is ~93 % of a round's wall and the only block worth arming; the floor probe is a
+gate input and the rung battery is the Elo channel, whose per-game trajectory identity is
+unprovable under threading on CUDA. So the census below counts every `play_paired_match` call in
+a real round and asserts what each one carries. `concurrency=1` takes the identical serial branch
+on the identical objects, so an absent row and a minted `1` are the SAME round.
 """
 from __future__ import annotations
 
@@ -44,39 +31,30 @@ from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 
-#: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
-#: radius >= 6 to replay, so the round's encoding has to cover that.
+#: The book is minted against `gnn_axis_v1` and most openings need radius >= 6 to replay.
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run6.yaml"
-#: run6 MINTS the row now — R339(b) said the value is picked on the box, and it was — so the
-#: absent-row parity arm needs a file that still omits it. The smoke profile is that file.
+#: run6 MINTS the row now, so the absent-row parity arm needs a file that still omits it.
 _UNMINTED_CONFIG = _CONFIG.with_name("smoke_preflight_armed.yaml")
 
 
-# ── 1. the schema row ──────────────────────────────────────────────────────────────────
 def _raw(source: Path | None = None) -> dict[str, Any]:
     return yaml.safe_load((source or _CONFIG).read_text(encoding="utf-8"))
 
 
 def test_the_row_name_is_the_key_path_the_schema_actually_carries() -> None:
-    """`EVAL_CONCURRENCY_ROW` is what the exemption list and the contract doc cite, so a rename
-    that moved the field without moving the constant would leave both citing a dead path."""
+    """The constant is what the exemption list and the contract doc cite, so a rename of the
+    field alone would leave both citing a dead path."""
     section, _, field = EVAL_CONCURRENCY_ROW.partition(".")
     assert section == "eval"
     assert field in RunConfig.model_fields["eval"].annotation.model_fields
 
 
 def test_an_absent_row_and_a_minted_one_are_the_SAME_config() -> None:
-    """The parity witness at the config layer: byte-identical dumps, not merely both valid.
-
-    Every config that does not mint the row inherits the default, and a default that produced
-    a DIFFERENT config from the minted `1` would make the row's arrival a silent behaviour
-    change on every file that never mentions it. run6 has since minted its own value, so the
-    subject here is the config that has not — the arm is about the DEFAULT, and a file
-    carrying an armed 8 cannot witness it.
-    """
+    """Byte-identical dumps, not merely both valid: a default producing a DIFFERENT config from
+    the minted `1` would make the row's arrival a silent behaviour change everywhere."""
     raw = _raw(_UNMINTED_CONFIG)
     assert "concurrency" not in raw["eval"], (
         f"{_UNMINTED_CONFIG.name} has grown the key — this row's premise is that some "
@@ -104,22 +82,17 @@ def test_the_row_is_refused_below_one(bad: int) -> None:
 
 
 def test_a_planted_neighbour_key_is_still_refused() -> None:
-    """R1's `extra="forbid"` survives the addition (the packet's named plant).
-
-    `games_in_flight` is the name the capability was nearly given and the one a reader is most
-    likely to reach for; under `extra="forbid"` it must be a boot error rather than a knob that
-    looks armed and reaches nothing.
-    """
+    """`extra="forbid"` survives the addition: `games_in_flight`, the name the capability was
+    nearly given, must be a boot error rather than a knob that reaches nothing."""
     raw = _raw()
     raw["eval"]["games_in_flight"] = 4
     with pytest.raises(ValidationError, match="games_in_flight"):
         RunConfig.model_validate(raw)
 
 
-# ── 2. the serial arm is byte-exact with the factory present ───────────────────────────
 class _CountingBot:
-    """Stateful by design: a shared instance across concurrent games would interleave two
-    games' counters, which is what `player_factory` exists to prevent."""
+    """Stateful by design: a shared instance across concurrent games would interleave two games'
+    counters, which is what `player_factory` exists to prevent."""
 
     def __init__(self, stride: int) -> None:
         self._stride, self._i = stride, 0
@@ -135,12 +108,8 @@ class _CountingBot:
 
 
 class _Opening:
-    """One four-ply opening DERIVED from the engine's legal set, not hand-written.
-
-    The coordinates this replaces ran off the legal set at `op3`: an empty board's legal
-    region is the 5x5 block around the origin whatever the radius, so `(3, 0)` was never a
-    playable first move. R345(b)(2)'s legality boundary is what surfaced it.
-    """
+    """One four-ply opening DERIVED from the engine's legal set: an empty board's legal region is
+    the 5x5 block around the origin whatever the radius, so hand-written coordinates ran off it."""
 
     def __init__(self, i: int) -> None:
         from mantis._engine import Board
@@ -176,19 +145,14 @@ def _play(*, with_factory: bool):
 
 
 def test_passing_the_factory_at_G1_changes_nothing() -> None:
-    """The gate block now ALWAYS hands `play_paired_match` a factory, armed or not — so "the
-    serial path is byte-exact" has to hold with the factory PRESENT, which is a different
-    statement from the one tranche-3 pinned (serial vs concurrent).
-
-    Compared as whole records: `trajectory_hash` is LAW-04's dedupe input and it is in there.
-    """
+    """The gate block ALWAYS hands `play_paired_match` a factory, so byte-exactness has to hold
+    with the factory PRESENT. Compared as whole records, `trajectory_hash` included."""
     assert _play(with_factory=False) == _play(with_factory=True), (
         "handing the serial arm a `player_factory` moved a record — at G=1 the factory must "
         "never be called and the two passed-in players must be the ones that play"
     )
 
 
-# ── 3. the round: which blocks are armed ───────────────────────────────────────────────
 def _net(seed: int):
     spec = lookup(_ENC)
     torch.manual_seed(seed)
@@ -231,11 +195,9 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
 
 
 def _census(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int | None, bool]]:
-    """One `(phase, concurrency-kwarg, factory-present)` row per `play_paired_match` call.
-
-    The phase is read off the record sink's own name rather than off the regime key, because
-    the gate's screen and confirm share a regime key and the two calls must be distinguishable.
-    """
+    """One `(phase, concurrency-kwarg, factory-present)` row per `play_paired_match` call; the
+    phase is read off the record sink's own name, because the gate's screen and confirm share a
+    regime key."""
     rows: list[tuple[str, int | None, bool]] = []
     real = worker.play_paired_match
 
@@ -252,16 +214,9 @@ def _census(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int | None, bool
 
 
 def _phase_of(kwargs: dict[str, Any]) -> str:
-    """`_RoundProgress.sink` closes over its phase name; read it back off the closure.
-
-    Reading the phase from the object the production code already built beats threading a
-    label through the spy: a label the test invents could agree with the wrong call.
-
-    R344(b) put a FAN-OUT between the two — `record_sink` is now `_both(progress.sink(...),
-    games.sink(...))`, whose own closure holds a tuple of sinks rather than a phase — so the
-    walk descends through nested closures and tuples to the first string it finds. Reading
-    cell 0 of the outermost closure was never a contract, only the shape that happened to
-    hold; this states what is actually being asked for."""
+    """`_RoundProgress.sink` closes over its phase name; read it back off the closure, because a
+    label the test invented could agree with the wrong call. The walk descends through nested
+    closures and tuples, since `record_sink` is a fan-out holding a tuple of sinks."""
     return _first_str_in_closure(kwargs["record_sink"])
 
 
@@ -287,13 +242,9 @@ def _first_str_in_closure(value: Any, depth: int = 0) -> str:
 def test_only_the_gate_block_carries_the_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, armed: int
 ) -> None:
-    """THE SCOPE WITNESS, and its own mutation control.
-
-    Parametrised over an UNARMED and an ARMED value so this is not a test that would pass
-    against a hardcoded `concurrency=1`: at `armed=3` the two gate calls must carry 3, and the
-    floor/rung/random calls must still carry nothing. A single-value version of this test would
-    be green against a wire that reached nothing.
-    """
+    """THE SCOPE WITNESS, parametrised over an UNARMED and an ARMED value so it cannot pass
+    against a hardcoded `concurrency=1`: at `armed=3` the two gate calls must carry 3 and the
+    floor/rung/random calls must still carry nothing."""
     rows = _census(monkeypatch)
     worker.run_round(_round_spec(tmp_path, armed))
 

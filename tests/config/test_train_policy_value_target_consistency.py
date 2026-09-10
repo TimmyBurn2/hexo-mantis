@@ -1,18 +1,9 @@
-"""RunConfig cross-section validator: `train.policy_target` must name the target
-`search.kind` produces.
+"""RunConfig cross-section validator: `train.policy_target` must name the target `search.kind` produces.
 
-DEVIATION FROM PREREG PATH (logged in ORACLE_NOTES_P2.md): PREREG names this suite's home
-as `tests/config/test_schema.py` (an existing file). ORACLE-WRITE's writable surface is
-NEW files only — this suite therefore lives in its own new file rather than being folded
-into the existing one; IMPL may merge it in at port time.
-
-THE INVARIANT MOVED, and it got stronger. It used to be a three-way agreement between
-`train.policy_target` and a `completed_q_values` boolean on each of two sections — three
-independently-editable knobs kept in step by a validator. Both booleans are DELETED; the
-producer is now `search.kind`, and the rule is `policy_target == the target that kind
-builds`. Two things follow. The disagreement is now expressible in exactly one shape
-instead of seven, and the surviving key is the one a CHECKPOINT STAMP carries, so a resume
-still has something to compare a restored ring against.
+The rule replaced a three-way agreement between `policy_target` and a `completed_q_values`
+boolean on each of two sections, so a disagreement is now expressible in exactly one shape
+instead of seven. The surviving key is the one a CHECKPOINT STAMP carries, so a resume still has
+something to compare a restored ring against.
 """
 from __future__ import annotations
 
@@ -52,10 +43,8 @@ def _eval_block() -> dict:
     }
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to the
-#: census it replaces, so the swap is zero-behavior-change.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven
+#: files carried a hand-written copy, so a new `train.*` key cost eleven edits.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
@@ -83,17 +72,15 @@ def _selfplay_block(*, n_simulations: int = 50) -> dict:
 def _inference_block() -> dict:
     return {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # A REQUIRED block, at the template's non-binding-by-construction value: nothing here
+        # exercises a split, and the real configs are pinned by test_fused_graph_caps_authority.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
 
 
 def _monitor_block() -> dict:
     return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # The ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -127,9 +114,7 @@ def _payload(
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf; `null` is the placeholder, refused at boot on a cuda process.
         "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
@@ -159,13 +144,10 @@ def test_the_completed_target_under_puct_is_refused():
 
 
 def test_the_raw_target_under_gumbel_is_refused():
-    """The reverse, and it is the one the deleted booleans could never express cleanly: a
-    Gumbel search exports the completed-Q improved policy, and scoring it as a visit
+    """A Gumbel search exports the completed-Q improved policy, so scoring it as a visit
     distribution applies the wrong loss to every row."""
-    # R346(f) deleted the GRID lineage this used to be exercised on. The pairing rule is
-    # exercised on the graph identity now, which R347(a) made legal under `gumbel`: the sparse
-    # row carries the tail mass, so the record-format refusal that used to fire first is gone
-    # and the target rule is reached.
+    # Exercised on the graph identity, which is legal under `gumbel`: the sparse row carries the
+    # tail mass, so the record-format refusal that used to fire first is gone.
     payload = _payload(search_kind="gumbel")
     with pytest.raises(ValidationError, match="policy_target"):
         RunConfig.model_validate(payload)
@@ -182,15 +164,10 @@ def test_the_gumbel_kind_and_the_completed_target_agree():
 
 
 def test_the_gumbel_kind_on_a_graph_run_mints_at_the_minted_slot_bound():
-    """THE BLOCKER THIS TEST USED TO PIN IS CLOSED (R347(a)), and the closure is what is
-    pinned now.
+    """A graph run under `gumbel` mints at a slot bound of m, not the sims regime.
 
-    A graph run under `gumbel` exports a target whose support is the LEGAL SET, and the
-    refusal stood on the HEXG record's visit slot being derived from the sims regime — which
-    bounds visits, not cells. R347(a)'s answer is that the ROW need not carry that support:
-    only `selfplay.gumbel_m` candidates are ever visited, every other legal action's target
-    is the recording prior times one scalar, and the row stores m entries plus that scalar.
-    So the mint decision the old refusal was waiting for was taken, and the slot bound is m.
+    Only `selfplay.gumbel_m` candidates are ever visited; every other legal action's target is the
+    recording prior times one scalar, so the row stores m entries plus that scalar.
     """
     cfg = RunConfig.model_validate(
         _payload(
@@ -204,7 +181,7 @@ def test_the_gumbel_kind_on_a_graph_run_mints_at_the_minted_slot_bound():
 
 
 def test_a_gumbel_m_past_the_minted_bound_is_refused_on_a_graph_run():
-    """The refusal that REPLACED the blocker: m, not the sims regime (R347(a))."""
+    """The bound is m, not the sims regime."""
     with pytest.raises(ValidationError, match="gumbel_m"):
         RunConfig.model_validate(
             _payload(

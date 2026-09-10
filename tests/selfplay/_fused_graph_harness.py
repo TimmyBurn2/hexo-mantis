@@ -1,33 +1,18 @@
-# >300 justify (R8). NO LINE COUNT is stated, per G-DFIX-4 and R192(e)'s derive-or-delete.
-# ONE rig for the whole F-816-10 fused-inference family: the payload builder, the collate
-# stand-in, the identity-keyed stub net, the scripted batcher and the config factory are a
-# single apparatus — every fused-forward oracle drives the SAME `_run_graph_loop` over the
-# SAME wire shape, and the round-trip claim (split == unsplit, positionally) is only
-# meaningful if both sides are produced by one builder. Splitting the builder from the net
-# would let the per-graph identity the net keys on drift away from the identity the builder
-# stamps, and the transposition oracles would go quiet without changing a number.
-"""Shared rig for the F-816-10 memory-bounded graph-inference-fusion oracles.
+# >300 justify (R8): ONE rig for the whole fused-inference family — payload builder, collate
+# stand-in, stub net, scripted batcher and config factory are a single apparatus, and the
+# round-trip claim (split == unsplit) is only meaningful if one builder produces both sides.
+"""Shared rig for the memory-bounded graph-inference-fusion oracles.
 
-Written by ORACLE-WRITE **before** the feature exists. This module imports only surfaces
-that are LIVE at HEAD (`graph_collate`, `graph_wire_split`'s existing names, `InferenceServer`)
-so it collects and runs today; the suites that import the NOT-YET-WRITTEN names
-(`plan_fused_forwards`, `FusedGraphOverCap`, `mantis.config.resolve.fused_graph_caps`) are the
-ones that go RED, which is the correct oracle-first state.
+Written before the feature exists, so it imports only surfaces LIVE at HEAD and collects today,
+while the suites importing the not-yet-written names are the ones that go RED. Real:
+`InferenceServer._run_graph_loop` driven end to end, `segment_softmax`,
+`stone_mask_from_batch`, the finiteness gate, the D2H copies and the submit call. Fake: the ARCH
+(an identity-keyed stub net, so a transposition is visible instead of washed out) and
+`collate_graph_batch` (a faithful wire->tensor transcription).
 
-WHAT IS REAL AND WHAT IS NOT. Real: `InferenceServer._run_graph_loop` (the production loop,
-driven end to end), `segment_softmax`, `stone_mask_from_batch`, the finiteness gate, the
-D2H copies, the submit call and — once IMPL lands — the plan, the slice and the concat.
-Fake: the ARCH (an identity-keyed stub net, so a transposition is visible in the output
-instead of being washed out by a trained net's near-uniform policy) and `collate_graph_batch`
-(replaced by `collate_from_payload`, a faithful wire->tensor transcription; the real collate's
-18-check contract is pinned by its own suites and is not what these rows are about).
-
-THE PER-GRAPH IDENTITY IS CARRIED IN THE NODE FEATURES, NOT IN THE POSITION. `build_payload`
-stamps a globally unique id into `node_feat[:, 0]`, and `SentinelGraphNet` derives both the
-per-legal-node logits and the per-graph value sentinel from THAT id. A part's `node_offsets`
-are re-based by `slice_graph_wire`, so any identity read off a position would differ between
-the split and un-split drives for a CORRECT implementation and the round-trip oracle would
-red on its own rig. The feature-borne id is invariant under the slice; the position is not.
+THE PER-GRAPH IDENTITY IS CARRIED IN THE NODE FEATURES, NOT IN THE POSITION: a part's
+`node_offsets` are re-based by `slice_graph_wire`, so an identity read off a position would
+differ between the split and un-split drives for a CORRECT implementation.
 """
 from __future__ import annotations
 
@@ -48,7 +33,6 @@ NODE_FEAT_DIM = int(GRAPH_SPEC.node_feat_dim or 11)
 EDGE_FEAT_DIM = int(GRAPH_SPEC.edge_feat_dim or 5)
 
 
-# ── the wire ────────────────────────────────────────────────────────────────────────────
 def build_payload(
     legal_counts: list[int],
     edges_per_graph: list[int] | None = None,
@@ -57,22 +41,17 @@ def build_payload(
 ) -> GraphWirePayload:
     """A block-diagonal `GraphWirePayload` over `len(legal_counts)` graphs.
 
-    Node layout per graph is the builder's own `[stones | legal | dummy]`
-    (`graph_collate.stone_mask_from_batch` reads exactly that), with ONE stone and ONE dummy,
-    so `n_nodes[g] == legal_counts[g] + 2`. `node_feat[:, 0]` carries `uid_base + global row`,
-    the identity every oracle keys on.
-
-    UNEQUAL `legal_counts` is the point (D-3): the FFI checks a per-id probs SEGMENT LENGTH
-    (`inference.rs`, `policy_dst_slot.len() != leaf_probs.len()`) and nothing at all about
-    `values[i]` ordering, so a transposition between two SAME-length graphs is invisible to
-    every check downstream of this rig. Callers pass ragged counts on purpose.
+    Node layout per graph is the builder's own `[stones | legal | dummy]` with ONE stone and ONE
+    dummy, and `node_feat[:, 0]` carries the identity every oracle keys on. UNEQUAL
+    `legal_counts` is the point: the FFI checks a per-id probs SEGMENT LENGTH and nothing about
+    `values[i]` ordering, so a transposition between SAME-length graphs is invisible downstream.
     """
     b = len(legal_counts)
     assert b >= 1, "a payload needs at least one graph"
     n_nodes = [int(lc) + 2 for lc in legal_counts]
     if edges_per_graph is None:
-        # Two dummy edges per real node is the builder's own floor
-        # (`crates/mantis-graph/src/lib.rs`), so this is a shape the production wire reaches.
+        # Two dummy edges per real node is the builder's own floor, so the production wire
+        # reaches this shape.
         edges_per_graph = [2 * (n - 1) for n in n_nodes]
     assert len(edges_per_graph) == b, "one edge count per graph"
 
@@ -125,15 +104,11 @@ def per_graph_counts(payload: GraphWirePayload) -> tuple[np.ndarray, np.ndarray]
             np.diff(np.asarray(payload.node_offsets, dtype=np.int64)))
 
 
-# ── the collate stand-in ────────────────────────────────────────────────────────────────
 def collate_from_payload(wire: Any, *_a: Any, **_kw: Any) -> GraphBatch:
     """Transcribe a `GraphWirePayload` (whole or SLICED) into a `GraphBatch`.
 
-    Accepts every extra kwarg the production call site passes so it is a drop-in for
-    `collate_graph_batch` under `monkeypatch.setattr`. It reads only fields the slice
-    re-bases, which is what makes it a faithful stand-in for the split path: a slice that
-    forgot to re-base `legal_node_gather` or `edge_index` produces a batch this function
-    builds WRONG, and the round-trip oracle sees it.
+    It reads only fields the slice re-bases, so a slice that forgot to re-base
+    `legal_node_gather` or `edge_index` builds a WRONG batch the round-trip sees.
     """
     no = np.asarray(wire.node_offsets, dtype=np.int64)
     eo = np.asarray(wire.edge_offsets, dtype=np.int64)
@@ -162,16 +137,12 @@ def collate_from_payload(wire: Any, *_a: Any, **_kw: Any) -> GraphBatch:
     )
 
 
-# ── the identity-keyed stub net ─────────────────────────────────────────────────────────
 class SentinelGraphNet(torch.nn.Module):
     """Finite outputs keyed on the node-feature uid, so a transposition is VISIBLE.
 
-    `policy_logits[j]` is a pseudo-random function of legal node `j`'s own uid, so two graphs
-    of the SAME legal count still get different (shift-invariant) softmax segments — a
-    same-length swap is caught, not only a ragged one. `values[g]` is an affine function of
-    graph `g`'s FIRST node uid, giving each graph its own value sentinel; nothing downstream
-    of the server checks `values[i]` ordering at all (review Finding 9), so this is the only
-    instrument on that axis.
+    `policy_logits[j]` is pseudo-random in legal node `j`'s uid, so two graphs of the SAME legal
+    count get different softmax segments; `values[g]` is affine in graph `g`'s FIRST node uid,
+    and nothing downstream of the server checks `values[i]` ordering at all.
     """
 
     def __init__(self, *, oom_on_call: int | None = None) -> None:
@@ -187,7 +158,7 @@ class SentinelGraphNet(torch.nn.Module):
                 "CUDA out of memory. Tried to allocate 1.72 GiB (simulated)"
             )
         uids = x[:, 0].to(torch.float64)
-        legal_uids = uids.index_select(0, legal_index)  # R284 P-MASK: the wire's gather
+        legal_uids = uids.index_select(0, legal_index)  # the wire's own gather
         logits = 0.31 * ((legal_uids * 13.0 + 5.0) % 17.0)
         b = int(node_offsets.shape[0]) - 1
         first = uids[node_offsets[:-1].to(torch.long)]
@@ -195,14 +166,9 @@ class SentinelGraphNet(torch.nn.Module):
         return logits.to(torch.float32), values.to(torch.float32), torch.zeros(b, 65)
 
 
-# ── the scripted batcher ────────────────────────────────────────────────────────────────
 class ScriptedGraphBatcher:
-    """Serve `pops` (each a `GraphWirePayload`) once each, then stop the loop.
-
-    Mirrors `tests/selfplay/test_inference_batch_timing.py::_FakeGraphBatcher`, but the wire
-    it hands back is a REAL payload rather than an opaque sentinel, because the split reads
-    the wire's own CSR offsets to plan.
-    """
+    """Serve `pops` once each, then stop the loop. The wire is a REAL payload, because the split
+    reads its CSR offsets to plan."""
 
     def __init__(self, pops: list[GraphWirePayload]) -> None:
         self._pops = list(pops)
@@ -233,7 +199,6 @@ class ScriptedGraphBatcher:
         self.closed += 1
 
 
-# ── the config ──────────────────────────────────────────────────────────────────────────
 def graph_cfg(
     max_fused_edges: int | None = 10_000_000,
     max_fused_nodes: int | None = 1_000_000,
@@ -242,12 +207,9 @@ def graph_cfg(
     batch_size: int = 64,
     **over: Any,
 ) -> dict[str, Any]:
-    """The `InferenceServer` config dict, with the NEW `inference.fused_graph_caps` block.
-
-    `omit_block=True` returns the HEAD shape — the block absent entirely — which is what the
-    LAW-11 absence rows drive. The defaults are deliberately far above anything this rig can
-    build, so a caller that does not ask for a split does not get one by accident (MB-24's
-    posture applied to the oracle rig).
+    """The `InferenceServer` config dict with the `inference.fused_graph_caps` block;
+    `omit_block=True` gives the block-absent shape, and the defaults sit far above anything this
+    rig can build.
     """
     inference: dict[str, Any] = {
         "inference_batch_size": batch_size, "inference_max_wait_ms": 20.0,
@@ -260,7 +222,6 @@ def graph_cfg(
     return {"inference": inference, "encoding": "gnn_axis_v1"}
 
 
-# ── the drive ───────────────────────────────────────────────────────────────────────────
 def drive_one_pop(
     monkeypatch: Any,
     payload: GraphWirePayload,
@@ -270,11 +231,7 @@ def drive_one_pop(
     net: torch.nn.Module | None = None,
     batch_size: int = 64,
 ) -> tuple[InferenceServer, ScriptedGraphBatcher, torch.nn.Module]:
-    """Run the REAL `_run_graph_loop` over exactly one pop of `payload`.
-
-    Returns `(server, batcher, net)` so a row can read the submitted results, the failures,
-    the counters and the per-forward call log off one drive.
-    """
+    """Run the REAL `_run_graph_loop` over one pop, returning `(server, batcher, net)`."""
     import mantis.selfplay.graph_collate as collate_mod
 
     monkeypatch.setattr(collate_mod, "collate_graph_batch", collate_from_payload)

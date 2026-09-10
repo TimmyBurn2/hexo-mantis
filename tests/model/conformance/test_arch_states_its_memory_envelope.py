@@ -1,37 +1,17 @@
 # >300 justify (R8): the term type that makes the unit structural, the three probes that emit
 # terms, and the breaks that show a missing/undeclared/underived term is caught are one unit —
 # a unit rule enforced in one file against terms produced in another is enforced on nothing.
-"""T8 — every arch STATES ITS MEMORY ENVELOPE: trainer, eval and serving, in the mint's units.
+"""Every arch STATES ITS MEMORY ENVELOPE: trainer, eval and serving, in the mint's units.
 
-WHY THIS SECTION EXISTS, in the history that ordered it. The memory partition has been
-re-derived BY HAND at three sittings, and it has been wrong at least twice in ways the tree
-could not see: the `eval_child` term went 0.881 → 1.1855 → 3.5293 GiB across three measurements
-(`src/mantis/eval/child_memory.py`, module docstring) and F-816-12 is the case where "one member
-of a partition moved by a large factor and its partner kept the value fitted before the move"
-(`tests/train/test_graph_microbatch_bound.py`, the `_SIZING_BUDGET_GIB` derivation comment).
-Both are the same defect: the partition's terms belong to nothing that changes with the model,
-so nothing re-derives them when the model changes. SEAM_V1_DESIGN §3 makes them the arch's:
-per-arch trainer / eval / serving terms, emitted in the partition machinery's units, so the mint
-GENERALIZES instead of being re-derived per era.
+The memory partition had been re-derived BY HAND at three sittings and was wrong at least twice
+invisibly — the eval-child term went 0.881 → 1.1855 → 3.5293 GiB, and one member of a partition
+moved by a large factor while its partner kept the value fitted before the move. The terms
+belonged to nothing that changes with the model; making them the arch's is what generalizes.
 
-THE UNIT IS A TYPE, NOT A COMMENT. `_SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)`
-is the partition's own conversion, and a term handed over as a bare float is one GiB/bytes slip
-away from being 2^30 wrong in a comparison that will still look reasonable. So a term here is a
-`MemoryTerm`, constructible only through `from_bytes` / `from_gib`, and an envelope that emits a
-bare number is REFUSED rather than coerced. That is the whole of "in the partition machinery's
-units" made mechanical.
-
-THE BASIS IS DECLARED, for the same reason T6 labels its synthetic ladder block. A CUDA peak and
-a CPU resident-storage sum are different quantities; both are useful, neither is the other, and
-an undeclared basis is how the smaller one gets read as the larger. A term without a basis is
-refused. **Nothing in this tier compares a term to a budget** — the budget is the operator's mint
-and lives in `configs/`; this tier proves the terms EXIST, are typed, are complete against the
-dispatch, and MOVE WITH THE ARCH.
-
-WHAT IS NOT CLAIMED, stated rather than implied. The magnitudes this tier reports on CI are
-CPU resident-storage sums at the smallest net each arch admits. They are NOT the mint's numbers,
-they do not replace a sitting's measurement, and no mint decision may be taken from them. What
-generalizes is the SHAPE: three named terms per arch, in one unit, derived from the arch.
+THE UNIT IS A TYPE, NOT A COMMENT: a bare float is one GiB/bytes slip from being 2^30 wrong in a
+comparison that still looks reasonable. THE BASIS IS DECLARED, because an undeclared one is how a
+CPU sum gets read as a device peak. NOTHING HERE COMPARES A TERM TO A BUDGET — the CI magnitudes
+are CPU resident sums at the smallest net each arch admits, and what generalizes is the SHAPE.
 """
 from __future__ import annotations
 
@@ -48,9 +28,8 @@ from mantis.model.build import build_net
 from _corpus import ConformanceRefusal, roster
 from test_arch_states_its_perf_floor import BUILD_SOURCE, arch_kinds_dispatched
 
-#: The partition's own conversion, taken from the one place that performs it
-#: (`tests/train/test_graph_microbatch_bound.py`: `int(_SIZING_BUDGET_GIB * 1024 ** 3)`).
-#: Written once, here, so `MemoryTerm` has exactly one way to cross between the two spellings.
+#: The partition's own conversion, taken from the one place that performs it and written once
+#: here, so `MemoryTerm` has exactly one way to cross between the two spellings.
 _BYTES_PER_GIB = 1024 ** 3
 
 BASIS_CUDA_PEAK = "cuda_peak"
@@ -58,8 +37,8 @@ BASIS_CPU_RESIDENT = "cpu_resident"
 _BASES = frozenset({BASIS_CUDA_PEAK, BASIS_CPU_RESIDENT})
 
 #: The three terms the partition is made of, as the mint names them. Trainer and serving are the
-#: run's own two device tenants; `eval` is the eval CHILD, which `child_memory.py` documents as a
-#: separate process that puts a SECOND model on the card during the gate block.
+#: run's own two device tenants; `eval` is the eval CHILD, a separate process that puts a SECOND
+#: model on the card during the gate block.
 REQUIRED_TERMS: tuple[str, ...] = ("trainer", "eval", "serving")
 
 
@@ -89,12 +68,8 @@ class EnvelopeTermNotDerived(ConformanceRefusal):
 
 @dataclass(frozen=True)
 class MemoryTerm:
-    """One partition term. Bytes, always, plus the basis the bytes were measured on.
-
-    The constructors are the point: `from_gib` performs the partition's own conversion so the
-    GiB spelling never reaches a comparison, and there is no way to build a term that has not
-    stated which quantity it measured.
-    """
+    """One partition term: bytes, always, plus the basis they were measured on. No term can be
+    built without stating which quantity it measured."""
 
     nbytes: int
     basis: str
@@ -131,13 +106,8 @@ class MemoryEnvelope:
 
 
 def resident_bytes(tensors) -> int:
-    """Distinct-storage byte sum over an iterable of tensors.
-
-    DISTINCT STORAGE, not `numel * element_size` per tensor: a view and its base share one
-    allocation, and summing both double-counts an allocation that was made once. Optimizer
-    state, parameters and gradients all alias in ways that make the naive sum wrong upward,
-    which is the direction that would quietly widen a budget.
-    """
+    """Distinct-storage byte sum: a view and its base share one allocation, and optimizer state,
+    parameters and gradients alias in ways that make the naive sum wrong UPWARD."""
     seen: dict[int, int] = {}
     for tensor in tensors:
         if not isinstance(tensor, torch.Tensor):
@@ -150,11 +120,9 @@ def resident_bytes(tensors) -> int:
 def check_envelope_manifest(
     dispatched: frozenset[str], registered: frozenset[str]
 ) -> frozenset[str]:
-    """Set equality against the dispatch, both directions — T7's rule, this tier's subject.
-
-    The census itself is T7's, imported rather than re-walked: two walkers over one dispatch is
-    two authorities, and the one that is not looked at is the one that goes stale.
-    """
+    """Set equality against the dispatch, both directions. The census is imported rather than
+    re-walked: two walkers over one dispatch is two authorities, and the one nobody looks at
+    goes stale."""
     if not dispatched:
         raise ArchDeclaresNoMemoryEnvelope(
             f"the walk of {BUILD_SOURCE.name} found no arch branch, so the required set is "
@@ -199,13 +167,8 @@ def check_terms(arch_kind: str, terms: dict[str, Any]) -> dict[str, MemoryTerm]:
 def check_term_moves_with_arch(
     arch_kind: str, narrow: dict[str, MemoryTerm], wide: dict[str, MemoryTerm]
 ) -> dict[str, int]:
-    """Every term strictly grows when the arch's declared width grows.
-
-    THE HALF A MANIFEST CANNOT GIVE. A registry proves an envelope was written; only this proves
-    it is a function of the arch rather than three constants that happen to be typed correctly.
-    All three terms carry the parameters, so all three must move — a term that does not is
-    reported by name rather than folded into an aggregate.
-    """
+    """Every term strictly grows when the arch's declared width grows — the half a manifest cannot
+    give: only this proves the envelope is a function of the arch rather than three constants."""
     flat = {
         name: wide[name].nbytes - narrow[name].nbytes
         for name in REQUIRED_TERMS
@@ -221,9 +184,7 @@ def check_term_moves_with_arch(
     return {name: wide[name].nbytes - narrow[name].nbytes for name in REQUIRED_TERMS}
 
 
-# --------------------------------------------------------------------------------------- #
-# The registered envelopes — one per arch kind `build_net` dispatches
-# --------------------------------------------------------------------------------------- #
+# ── the registered envelopes — one per arch kind `build_net` dispatches ────────────────
 def _net_tensors(net) -> list[torch.Tensor]:
     return [*net.parameters(), *net.buffers()]
 
@@ -236,13 +197,8 @@ def _serving_term(net, sample: torch.Tensor) -> MemoryTerm:
 
 
 def _eval_term(build_one, sample: torch.Tensor) -> MemoryTerm:
-    """Eval child: TWO nets, because that is what the child's gate block actually holds.
-
-    `src/mantis/eval/child_memory.py` states it: "The GATE BLOCK is the only phase that puts a
-    SECOND model and a SECOND `LocalInferenceEngine` on the card", and a round taken before the
-    first promotion measures a strictly smaller term. The envelope reports the larger, posture,
-    because a floor read as a term is how the 0.881 GiB figure got minted against.
-    """
+    """Eval child: TWO nets, because the gate block is the only phase that puts a SECOND model on
+    the card. A floor read as a term is how the 0.881 GiB figure got minted against."""
     candidate, opponent = build_one(), build_one()
     return MemoryTerm.from_bytes(
         resident_bytes([*_net_tensors(candidate), *_net_tensors(opponent), sample]),
@@ -251,12 +207,9 @@ def _eval_term(build_one, sample: torch.Tensor) -> MemoryTerm:
 
 
 def _trainer_term(net, loss_of) -> MemoryTerm:
-    """Trainer: parameters, gradients and the optimizer's own state after ONE real step.
-
-    `optim.AdamW` is the trainer's optimizer (`train/trainer/core.py`), and its exp_avg /
-    exp_avg_sq only exist AFTER a step — so the step is taken rather than the state modelled.
-    A modelled multiplier here would be a second authority over what the optimizer allocates.
-    """
+    """Trainer: parameters, gradients and optimizer state after ONE real step, because AdamW's
+    exp_avg / exp_avg_sq exist only after one and a modelled multiplier would be a second
+    authority over what the optimizer allocates."""
     optimizer = torch.optim.AdamW(net.parameters(), lr=1e-4)
     optimizer.zero_grad(set_to_none=True)
     loss_of(net).backward()
@@ -274,8 +227,8 @@ def _trainer_term(net, loss_of) -> MemoryTerm:
 
 
 def _gnn_arch(spec, hidden: int, arch_cls=GnnArch):
-    """The graph arch under measurement. `arch_cls` is the ONLY difference between the V1 and
-    V2 envelopes — the three probes below are the arch's, not the version's."""
+    """The graph arch under measurement. `arch_cls` is the ONLY difference between the two
+    envelopes — the three probes are the arch's, not the version's."""
     return arch_cls(
         in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
         hidden=hidden, num_layers=1, policy_hidden=8, value_hidden=8,
@@ -348,13 +301,9 @@ def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
 
 
 def specs_for(arch_kind: str) -> tuple[Any, ...]:
-    """EVERY registered encoding whose representation this arch serves, NAME-SORTED.
-
-    AUDIT-1 F-41. This returned the FIRST match in `all_specs()` order, so the table measured
-    `gnn_axis_v1` and never `gnn_axis_r8` — run6's own identity — and a roster REORDER would
-    have changed which encoding the mint's memory partition was derived from without changing
-    a line of this file. Name-sorted so the order is a property of the registry's contents
-    rather than of its declaration order.
+    """EVERY registered encoding whose representation this arch serves, NAME-SORTED — it returned
+    the FIRST match in roster order, so a REORDER would have changed which encoding the partition
+    was derived from without changing a line here.
 
     Raises:
         ArchDeclaresNoMemoryEnvelope: no registered encoding serves this arch's representation.
@@ -369,8 +318,8 @@ def specs_for(arch_kind: str) -> tuple[Any, ...]:
     return matches
 
 
-#: Every (arch kind, encoding) pair the envelope is defined over — the parametrisation roster,
-#: derived from the registry so a new row joins every arm below with no test edit.
+#: Every (arch kind, encoding) pair the envelope is defined over, derived from the registry so a
+#: new row joins every arm below with no test edit.
 ARCH_SPEC_PAIRS: tuple[tuple[str, str], ...] = tuple(
     (kind, spec.name)
     for kind in sorted(registered_envelopes())
@@ -388,9 +337,7 @@ def envelope_terms(arch_kind: str, encoding: str, narrow: bool = False) -> dict[
     return check_terms(arch_kind, {name: fn(spec) for name, fn in envelope.terms.items()})
 
 
-# --------------------------------------------------------------------------------------- #
-# The manifest, the unit rule and the derivation control — ALL DEFAULT TIER
-# --------------------------------------------------------------------------------------- #
+# ── the manifest, the unit rule and the derivation control — ALL DEFAULT TIER ─────────
 def test_EVERY_arch_build_net_dispatches_HAS_a_registered_memory_envelope(derived):
     dispatched = arch_kinds_dispatched(BUILD_SOURCE)
     registered = frozenset(registered_envelopes())
@@ -399,7 +346,7 @@ def test_EVERY_arch_build_net_dispatches_HAS_a_registered_memory_envelope(derive
 
 
 def test_a_MISSING_envelope_is_refused_by_name():
-    """PB-T8a. The state a third arch lands in until it states an envelope."""
+    """The state a third arch lands in until it states an envelope."""
     with pytest.raises(ArchDeclaresNoMemoryEnvelope, match="GnnArchNext"):
         check_envelope_manifest(
             frozenset({*registered_envelopes(), "GnnArchNext"}),
@@ -427,7 +374,7 @@ def test_the_envelope_emits_EXACTLY_the_partitions_three_terms(arch_kind, encodi
 
 
 def test_a_MISSING_term_is_refused():
-    """PB-T8c. Two of three is the F-816-12 shape: a partition whose members do not all move."""
+    """Two of three is the shape of a partition whose members do not all move."""
     with pytest.raises(EnvelopeTermMissing, match="Missing: \\['serving'\\]"):
         check_terms(
             "GnnArch",
@@ -449,8 +396,8 @@ def test_a_FOURTH_term_the_mint_does_not_know_is_refused():
 
 
 def test_a_BARE_NUMBER_term_is_refused_rather_than_coerced():
-    """PB-T8d. The unit rule, and the reason it is a type: `9.431` is a plausible GiB figure and
-    a catastrophic byte figure, and nothing about the float says which it is."""
+    """The unit rule, and why it is a type: `9.431` is a plausible GiB figure and a catastrophic
+    byte figure, and nothing about the float says which it is."""
     with pytest.raises(EnvelopeTermNotInPartitionUnits, match="2\\^30 wrong"):
         check_terms(
             "GnnArch",
@@ -463,17 +410,16 @@ def test_a_BARE_NUMBER_term_is_refused_rather_than_coerced():
 
 
 def test_an_UNDECLARED_basis_is_refused():
-    """PB-T8e. A CPU sum and a device peak are different quantities; the label is what keeps the
-    smaller from being read as the larger, exactly as T6 labels its synthetic ladder block."""
+    """A CPU sum and a device peak are different quantities; the label is what keeps the smaller
+    from being read as the larger."""
     assert MemoryTerm.from_bytes(1, BASIS_CUDA_PEAK).basis == BASIS_CUDA_PEAK
     with pytest.raises(MemoryBasisUnstated, match="undeclared basis"):
         MemoryTerm.from_bytes(1, "whatever")
 
 
 def test_the_GIB_constructor_performs_the_partitions_own_conversion():
-    """The unit rule's positive half. `from_gib` must be `int(gib * 1024 ** 3)` and nothing else,
-    because the partition's budget line is written that way and a second conversion here would
-    be a second authority over how many bytes a GiB is."""
+    """`from_gib` must be `int(gib * 1024 ** 3)` and nothing else: a second conversion would be a
+    second authority over how many bytes a GiB is."""
     assert MemoryTerm.from_gib(1.0, BASIS_CPU_RESIDENT).nbytes == 1024 ** 3
     assert MemoryTerm.from_gib(9.431, BASIS_CPU_RESIDENT).nbytes == int(9.431 * 1024 ** 3)
     assert MemoryTerm.from_bytes(1024 ** 3, BASIS_CPU_RESIDENT).gib == 1.0
@@ -481,8 +427,8 @@ def test_the_GIB_constructor_performs_the_partitions_own_conversion():
 
 @pytest.mark.parametrize(("arch_kind", "encoding"), ARCH_SPEC_PAIRS)
 def test_EVERY_term_MOVES_when_the_archs_declared_width_moves(arch_kind, encoding, derived):
-    """The derivation control. This is the half that would have caught F-816-12: a term that
-    stays put while the model changes is not a term, whatever it is typed as."""
+    """The derivation control: a term that stays put while the model changes is not a term,
+    whatever it is typed as."""
     narrow = envelope_terms(arch_kind, encoding, narrow=True)
     wide = envelope_terms(arch_kind, encoding, narrow=False)
     deltas = check_term_moves_with_arch(arch_kind, narrow, wide)
@@ -508,8 +454,8 @@ def test_the_derivation_control_does_NOT_fire_when_every_term_moves():
 
 
 def test_resident_bytes_COUNTS_A_SHARED_STORAGE_ONCE():
-    """The accountant's own guard. A view and its base are one allocation; summing both inflates
-    the term, and inflation is the direction that quietly widens a budget."""
+    """A view and its base are one allocation; summing both inflates the term, and inflation is
+    the direction that quietly widens a budget."""
     base = torch.zeros(1024, dtype=torch.float32)
     view = base[:512]
     assert resident_bytes([base]) == base.untyped_storage().nbytes()
@@ -518,14 +464,11 @@ def test_resident_bytes_COUNTS_A_SHARED_STORAGE_ONCE():
     assert resident_bytes([base, other]) == 2 * resident_bytes([base])
 
 
-# --------------------------------------------------------------------------------------- #
-# The MEASUREMENT (`slow`) — a table, no budget comparison
-# --------------------------------------------------------------------------------------- #
+# ── the MEASUREMENT (`slow`) — a table, no budget comparison ──────────────────────────
 @pytest.mark.slow
 def test_report_the_per_arch_memory_envelope(derived):
-    """The table the mint would generalize from. Bytes and GiB per term per arch, with the basis
-    on every row. NOTHING is compared to a budget, and no row is a mint input: these are CPU
-    resident sums at the smallest net each arch admits, and the module docstring says so."""
+    """The table the mint would generalize from — bytes and GiB per term per arch, with the basis
+    on every row. No row is a mint input."""
     rows = [
         {
             "arch_kind": kind,

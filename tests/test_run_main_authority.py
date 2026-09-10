@@ -1,52 +1,12 @@
-# >300 justify (R8). The four rows are ONE census family
-# making ONE claim — that `main` loads what the operator typed and launches it unchanged —
-# over ONE parse of `src/mantis/run.py`, sharing the AST instrument that makes the claim
-# checkable (`_binding_targets` / `_config_binding` / `_launch_call` /
-# `_parsed_args_name`). R5 bars cross-test imports, so a split forks that instrument into two
-# copies,
-# and the helpers ARE the instrument: two copies is two instruments that drift apart while
-# both stay green. Executable content is a minority of the file; the rest is the mutation
-# each row reds against, which is what makes a census auditable at all.
-"""⊕ WPMAIN — `main()`'s body census: the O-A2 twin the ORACLE-WRITE set left open.
+# >300 justify (R8): four rows of ONE census family over ONE parse of `src/mantis/run.py`,
+# sharing the AST instrument that makes the claim checkable. R5 bars cross-test imports, so a
+# split forks that instrument into copies that drift apart while both stay green.
+"""`main()`'s body census — the twin of the `launch_run` body oracle.
 
-REVIEW-impl condition C-5 / finding F-5. `tests/test_run_one_authority.py` applies its
-`_body_without_docstring` instrument to `launch_run` (O-A2, `:274`) and to the preflight
-child's `_boot_main` (O-A4, `:443`) — and to nothing else. `main`, the launcher an operator
-actually types (`python -m mantis.run --config <path> --out-dir <path>`), had NO body census
-at all, so this three-line edit was green through the whole tree:
-
-    config = load_config(args.config)
-    config.train.device = os.environ.get("MANTIS_DEVICE", config.train.device)
-    handles = launch_run(config=config, out_dir=args.out_dir)
-
-Green through O-A1 (one composer, two call sites — unchanged), O-A2 (`launch_run`'s body is
-untouched), O-A3/O-A4 (builder and child untouched), O-A5 (no `or` behind a config fact, and
-an `os.environ.get` roots at `os`, not at `config`), O-B2 (the flag surface is unchanged — no
-`--device` comes back), and `compose_run`'s `revalidate_run_config` (a schema-valid `"cpu"`
-re-validates clean). That is precisely the device false-clear R126 exists to make
-unrepresentable — one level ABOVE the layer R126 closed — and `run.py:641-644` claims it is
-already closed ("no invocation can point either caller somewhere else"). True today,
-structurally undefended until this file.
-
-O-A2's own docstring supplies the argument verbatim: *"a launcher that 'adjusts' the config
-before composing is a divergent path wearing the one-authority name."* `main` IS a launcher.
-This file is its missing twin.
-
-Why a NEW file and not two more lines inside `test_run_one_authority.py`: that file is
-BYTE-FROZEN from the ORACLE-WRITE commit `7c28536`, and R43 queues a frozen-oracle edit
-REGARDLESS OF DIRECTION — a strengthening edit queues too. The one grant spent on this branch
-is R129's, on `tests/test_run_launcher.py`. The price of the freeze is the ~40 lines of AST
-instrument re-derived below (R5 bars cross-test imports); it is disclosed here rather than
-hidden, and the duplication is self-checking in the one way that matters — both copies parse
-the SAME `src/mantis/run.py`, so a divergence between them shows up as one file red and the
-other green on the same tree.
-
-RED-TEAM RT-5 extended this file by one row rather than opening a new one — it is THIS run's
-own working oracle, not a `7c28536` frozen surface, so R43 does not bite. The finding: the
-three rows below close the config OBJECT and every write to `args`, and leave the loader's own
-ARGUMENT and `out_dir=` unread, so an env-driven config PATH is a boot nobody typed that
-passes 35/35 across this file and its three siblings. See
-`test_main_reads_both_run_inputs_off_the_arguments_it_parsed`.
+`main`, the launcher an operator actually types, had no body census at all, so inserting a
+device coercion between the load and the launch was green through every other oracle in the
+tree. These rows pin that `main` launches the loader's own result unmodified, writes to neither
+the config nor the parsed namespace, and reads both run inputs off the arguments it parsed.
 
 Fakes: NONE. Every assertion is a static census over the shipped `src/mantis/run.py`.
 """
@@ -60,15 +20,12 @@ from mantis.run import launch_run, main  # noqa: F401  (the live objects the cen
 _REPO = Path(__file__).resolve().parents[1]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 
-#: The ONE loader (`mantis.config.loader.load_config`) and the ONE launch path. `main` is
-#: allowed to name exactly these two and to put nothing between them.
+#: The ONE loader and the ONE launch path; `main` may name exactly these two, with nothing
+#: between them.
 _LOADER = "load_config"
 _LAUNCHER = "launch_run"
 
-#: Names a config-carrying local may not be called under any circumstances without being the
-#: loader's own direct result. These are the two the tree already uses for a `RunConfig`
-#: (`config` in `run.py`, `cfg` in the resolvers), and O-A5 bans `or`/`.get` fallbacks behind
-#: the same two roots — the ban here is the ASSIGNMENT half of that same posture.
+#: Names a config-carrying local may not take unless it is the loader's own direct result.
 _CONFIG_ROOTS = ("config", "cfg")
 
 
@@ -108,10 +65,8 @@ def _root_name(node: ast.AST) -> str | None:
 def _binding_targets(fn: ast.FunctionDef) -> list[tuple[ast.AST, ast.stmt]]:
     """Every node `fn` can BIND to, paired with the statement that binds it.
 
-    Deliberately wider than `ast.Assign`: an augmented assignment, an annotated assignment, a
-    walrus, a loop variable and a `with ... as` are all writes, and a census that only reads
-    `ast.Assign` is an instrument that cannot support the negative it asserts (R128's standing
-    law, applied to this census's own method)."""
+    Wider than `ast.Assign` on purpose: augmented and annotated assignment, walrus, loop
+    variable and `with ... as` are all writes a narrower census could not support."""
     found: list[tuple[ast.AST, ast.stmt]] = []
 
     def add(target: ast.AST, stmt: ast.stmt) -> None:
@@ -151,8 +106,8 @@ def _launch_call(fn: ast.FunctionDef) -> ast.Call:
 
 
 def _config_binding(fn: ast.FunctionDef) -> tuple[ast.expr, str | None, ast.stmt | None]:
-    """What `main` hands to the launcher: the expression, the local name carrying it (or
-    `None` when the loader's result is forwarded inline), and the statement that bound it."""
+    """What `main` hands the launcher: the expression, the local carrying it (`None` when the
+    loader's result is forwarded inline), and the statement that bound it."""
     kwargs = {kw.arg: kw.value for kw in _launch_call(fn).keywords}
     node = kwargs.get("config")
     assert node is not None, (
@@ -175,14 +130,11 @@ def _config_binding(fn: ast.FunctionDef) -> tuple[ast.expr, str | None, ast.stmt
     return node, node.id, binds[0]
 
 
-# ══ the loaded config reaches the launcher UNMODIFIED ═════════════════════════════════
 def test_main_hands_the_launcher_the_loaders_own_result_and_nothing_else() -> None:
-    """The O-A2 twin, flow half. What `main` passes as `config=` must be the direct result of
-    `load_config(...)` — inline, or via a local bound once from it and used nowhere else.
+    """What `main` passes as `config=` must be `load_config(...)`'s direct result.
 
-    MUTATION THAT REDS IT: `launch_run(config=_adjust(load_config(args.config)), ...)`, or a
-    local that is loaded, touched and then launched. Both keep every other census in the tree
-    green (§F-5), and both are a boot the one-authority property does not cover."""
+    MUTATION THAT REDS IT: `config=_adjust(load_config(args.config))`, or a local that is
+    loaded, touched, then launched — both keep every other census green."""
     fn = _func(_tree(), "main")
     node, name, binding = _config_binding(fn)
 
@@ -202,13 +154,11 @@ def test_main_hands_the_launcher_the_loaders_own_result_and_nothing_else() -> No
         )
 
 
-# ══ nothing in `main` writes to the config it launches with ═══════════════════════════
 def test_nothing_in_main_assigns_onto_the_config_it_launches_with() -> None:
-    """The O-A2 twin, mutation half — and the one that reds F-5's exact three-line edit.
+    """Nothing in `main` may write to the config it launches with.
 
-    MUTATION THAT REDS IT (driven, REVIEW-impl F-5): insert
-    `config.train.device = os.environ.get("MANTIS_DEVICE", config.train.device)` between the
-    load and the launch. Every existing oracle stays green; this assertion does not."""
+    MUTATION THAT REDS IT: `config.train.device = os.environ.get("MANTIS_DEVICE", …)` between
+    the load and the launch — every other oracle in the tree stays green."""
     fn = _func(_tree(), "main")
     _, name, binding = _config_binding(fn)
     banned = {*_CONFIG_ROOTS, *([name] if name else [])}
@@ -226,7 +176,6 @@ def test_nothing_in_main_assigns_onto_the_config_it_launches_with() -> None:
         )
 
 
-# ══ …nor re-points the parsed CLI inputs ══════════════════════════════════════════════
 def _parsed_args_name(fn: ast.FunctionDef) -> tuple[str, ast.stmt]:
     """The local `main` binds `parse_args(...)` to, and the statement that binds it."""
     parsed = [(target, stmt) for target, stmt in _binding_targets(fn)
@@ -249,32 +198,14 @@ def _sole_argument(call: ast.Call, *, label: str) -> ast.expr:
     return values[0]
 
 
-# ══ …and both run inputs come off the parsed CLI, not from anywhere else ══════════════
 def test_main_reads_both_run_inputs_off_the_arguments_it_parsed() -> None:
-    """The C-5 census one ARGUMENT deeper (RED-TEAM RT-5, driven mutation M9).
+    """Both run inputs must be attribute reads off the `parse_args` binding.
 
-    The three rows above close the config OBJECT (what reaches `config=` must be the loader's
-    own direct result) and every WRITE to `args`. They leave the loader's own ARGUMENT
-    unconstrained and never read `out_dir=` at all, so this was **35/35 green** across
-    `test_run_main_authority.py`, `test_run_one_authority.py`, `test_run_launcher.py` and
-    `test_train_device_authority.py`:
-
-        handles = launch_run(
-            config=load_config(os.environ.get("MANTIS_CONFIG", args.config)),
-            out_dir=os.environ.get("MANTIS_OUT_DIR", args.out_dir),
-        )
-
-    `MANTIS_CONFIG=/tmp/other.yaml python -m mantis.run --config configs/run6.yaml …` then
-    boots a config nobody typed — and `run.py`'s own claim that "no invocation can point
-    either caller somewhere else" is false one layer below the layer C-5 just closed. The
-    preflight CHILD is defended against exactly this (`PreflightConfigIdentityError`, the F-B1
-    handshake); `main` publishes the same `run_boot_identity` and nothing compares it.
-
-    MUTATION THAT REDS IT: either half of M9 — an `os.environ.get(..., args.config)` inside
-    `load_config(...)`, or an env-defaulted `out_dir=`. The instrument is SHAPE, not spelling:
-    the argument must be an attribute read rooted at the `parse_args` binding, so any wrapper
-    — `os.environ.get`, `pathlib.Path`, a `_resolve()` helper, a conditional expression —
-    fails it whatever it is named."""
+    The object-level rows leave the loader's own ARGUMENT and `out_dir=` unread, so an
+    env-defaulted path boots a config nobody typed while every census stays green.
+    MUTATION THAT REDS IT: `os.environ.get("MANTIS_CONFIG", args.config)` inside
+    `load_config(...)`, or an env-defaulted `out_dir=`. The instrument is SHAPE, not spelling,
+    so any wrapper fails it whatever it is named."""
     fn = _func(_tree(), "main")
     args_name, _ = _parsed_args_name(fn)
 
@@ -307,13 +238,10 @@ def test_main_reads_both_run_inputs_off_the_arguments_it_parsed() -> None:
 
 
 def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
-    """The same class one step earlier: mutating `args.config` chooses a DIFFERENT config file
-    rather than adjusting the loaded one, and `run.py:641-644` claims neither is possible ("no
-    invocation can point either caller somewhere else").
+    """Nothing may re-point `args.config` / `args.out_dir` after argparse produced them.
 
     MUTATION THAT REDS IT: `args.config = os.environ.get("MANTIS_CONFIG", args.config)` after
-    `parse_args`. argparse's own required-flag census (`test_run_launcher.py:100-133`) reads
-    the PARSER, so it sees nothing at all."""
+    `parse_args` — argparse's own required-flag census reads the PARSER and sees nothing."""
     fn = _func(_tree(), "main")
     args_name, parse_stmt = _parsed_args_name(fn)
 

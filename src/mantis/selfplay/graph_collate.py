@@ -1,36 +1,16 @@
 """The SINGLE wire reader for the GNN ragged-payload contract v1.
 
->300 justify: NEAR-VERBATIM port of THE batch contract reader. The 18 named contract
-errors, the resolver, the structural + semantic check layers and the two hot-path output
-helpers are ONE contract (`docs/contracts/graph_wire.md`) — splitting them would break the
-"one place asserts the wire" property the ADV suite gates, and every split boundary would be
-a new place for the 13-array payload to be re-interpreted.
+>300 justify: the named contract errors, the resolver, the structural + semantic check layers
+and the two hot-path output helpers are ONE contract (`docs/contracts/graph_wire.md`).
+Splitting them would break the "one place asserts the wire" property the ADV suite gates.
 
-`collate_graph_batch` is the one-and-only consumer of the block-diagonal graph wire emitted
-by the Rust `InferenceBatcher.next_graph_batch` (`GraphWire`,
-`crates/mantis-bridge/src/inference.rs`). It lives in a module imported by BOTH the self-play
-hot path (`inference_server.py`) AND the promotion-gate eval path — eval reads self-play's
-seam (`docs/contracts/graph_wire.md`). It is import-safe with no parent-process state and no
-torch import at module scope.
-
-It (1) asserts `contract_version == 1`; (2) asserts the native-builder handshake
-(`builder_impl == 1`) on any training/self-play path unless
-`MANTIS_ALLOW_ORACLE_BUILDER=1`; (3) runs the 19-assertion set (13 structural, always full;
-4 semantic/geometric, full on the trainer path / canary on the hot path; plus the 2
-handshakes above); (4) builds block-diagonal torch tensors.
-
-The count above was 18 / "13 structural" before R284's P-MASK work, and the second half of
-that was already wrong: HEAD carried TWELVE numbered structural checks (1-12) with numbering
-slot 13 vacant, so the docstring asserted a total the file did not hold. Check 13
-(`GatherNotStrictlyIncreasing`) now occupies the vacant slot and the counts are re-derived
-here rather than carried — that the new count matches the old claim is a coincidence and is
-recorded as one, not as evidence the claim was right. There is NO silent fixed-width fallback anywhere — every
-mismatch raises a NAMED error (the F1 silent-corruption class this contract exists to kill).
-
-The OUTPUT is NOT a dense-`[B,362]` scatter: `collate_graph_batch` produces only the INPUT
-`GraphBatch`; the InferenceServer segment-softmaxes the per-legal-node logits and returns
-ragged probs consumed Rust-side by `assemble_ls_from_gnn_probs`. `policy_dst_slot` (incl. the
-−1 off-window sentinel) travels on the wire but is NOT dropped or dense-scattered here.
+`collate_graph_batch` is the one-and-only consumer of the block-diagonal wire emitted by the
+Rust `InferenceBatcher.next_graph_batch`, imported by BOTH the self-play hot path and the
+promotion-gate eval path, and import-safe with no module-scope torch. It asserts the contract
+version and the native-builder handshake, runs the structural checks (always full) and the
+semantic ones (canary on the hot path), then builds block-diagonal torch tensors. Every
+mismatch raises a NAMED error; there is no silent fixed-width fallback anywhere. The OUTPUT is
+not a dense scatter — the InferenceServer segment-softmaxes and returns ragged probs.
 """
 from __future__ import annotations
 
@@ -43,32 +23,23 @@ import numpy as np
 
 from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
 
-# The 3 win axes in axial coords — READ from the engine (AUDIT-1 F-42), not mirrored beside
-# it. Public constant (part of `__all__`) for external callers; the check-14 edge-geometry
-# recompute runs in Rust (`mantis._engine.verify_edge_geometry`) against the same table, and
-# a mirrored copy here could disagree with the one the recompute uses.
+# The 3 win axes in axial coords — READ from the engine, not mirrored: the check-14 geometry
+# recompute runs in Rust against the same table, so a copy here could disagree.
 WIN_AXES: tuple[tuple[int, int], ...] = tuple(
     (int(dq), int(dr)) for dq, dr in _ENGINE_HEX_AXES
 )
 
-# Contract-fixed schema widths (single-sourced against the mantis-graph constants;
-# callers pass spec.node_feat_dim / spec.edge_feat_dim from the registry).
+# Contract-fixed schema widths; callers pass spec.* dims from the registry.
 _OFF_WINDOW_SLOT = -1
 _BUILDER_IMPL_NATIVE = 1
 
 
-# ---------------------------------------------------------------------------
-# The named contract errors (§2.5). All subclass ValueError so existing
-# AUDIT-1 F-52: this said "the 18 named errors" over 20 subclasses. The count is
-# DERIVED by a reader who needs it (R192(e)); a transcribed tally must be re-edited on
-# every addition, will eventually be wrong, and is then read as evidence.
-# loud-fail call sites (die-loud → submit_inference_failure) catch uniformly.
-# ---------------------------------------------------------------------------
+# The named contract errors (§2.5). All subclass ValueError so the die-loud call sites catch
+# uniformly.
 class GraphContractError(ValueError):
     """Base for every graph-wire contract violation."""
 
 
-# --- startup handshake -----------------------------------------------------
 class GraphContractVersionMismatch(GraphContractError):
     pass
 
@@ -81,7 +52,6 @@ class NonNativeSampleBuilder(GraphContractError):
     pass
 
 
-# --- structural layer (13) -------------------------------------------------
 class NodeFeatDimMismatch(GraphContractError):
     pass
 
@@ -127,22 +97,15 @@ class ScatterSlotAliasing(GraphContractError):
 
 
 class GatherNotStrictlyIncreasing(GraphContractError):
-    """`legal_node_gather` is not strictly ascending (check 13).
-
-    The gather is the CONTRACT ORDER of every per-legal-node quantity: `policy_dst_slot[i]`,
-    `segment_softmax`'s segment `i`, and the Rust-side `assemble_ls_from_gnn_probs` all read
-    position `i` as gather position `i`. A boolean-mask gather (`emb[legal_mask]`) instead
-    returns rows in ASCENDING ROW INDEX, so the two orders coincide exactly while this holds
-    and silently mispair priors to cells when it does not. Unchecked until R284's P-MASK
-    design derived it as load-bearing — for the mask formulation too, not only the index one.
-    """
+    """`legal_node_gather` is not strictly ascending (check 13); the gather is the CONTRACT
+    ORDER of every per-legal-node quantity, and a boolean-mask gather returns rows in ascending
+    row index, so the two coincide while this holds and mispair priors silently when it does not."""
 
 
 class EmptyLegalSet(GraphContractError):
     pass
 
 
-# --- semantic / geometric layer (4) ---------------------------------------
 class EdgeAttrGeometryMismatch(GraphContractError):
     pass
 
@@ -159,15 +122,10 @@ class AugRoundTripMismatch(GraphContractError):
     pass
 
 
-# ---------------------------------------------------------------------------
-# Payload + output dataclasses
-# ---------------------------------------------------------------------------
 @dataclass
 class GraphWirePayload:
-    """Pure-Python mirror of the Rust `GraphWire` pyclass. The resolver reads
-    the SAME duck-typed attribute surface from either the Rust wire (numpy via
-    PyO3 getters) or this dataclass (tests / the oracle-built payload). Every
-    array is flat 1-D numpy with the contract dtype (§2.1)."""
+    """Pure-Python mirror of the Rust `GraphWire` pyclass; the resolver reads the SAME
+    duck-typed surface from either. Every array is flat 1-D numpy with the contract dtype."""
 
     contract_version: int
     builder_impl: int
@@ -189,22 +147,12 @@ class GraphWirePayload:
 
 @dataclass
 class GraphBatch:
-    """Collated block-diagonal torch tensors. `x`/`edge_index`/`edge_attr`/
-    `legal_node_gather`/`node_offsets` feed `GnnNet.forward_batch`; the remaining
-    fields support the ragged OUTPUT assemble and stay on device.
+    """Collated block-diagonal torch tensors feeding `GnnNet.forward_batch`, plus the fields
+    the ragged OUTPUT assemble needs.
 
-    (This line named `legal_mask` as the forward's input until 2026-08-21. It had been false
-    since R284/P-MASK repointed `forward_batch` onto `legal_index` — the serve path passes
-    `batch.legal_node_gather`, measured at `inference_server.py:873` — which is the same
-    false-arrow class R291(c) fixed in the consumer registry, in a docstring.)
-
-    `node_coords` was RETIRED here by R297(c) on the RQ-16 per-tensor census: the DEVICE tensor
-    had zero reads anywhere in the tree, so it was an H2D transfer per part that nothing read.
-    The WIRE array of the same name is untouched and is not dead — `_check_semantic` reshapes it
-    for checks 16/17, `verify_edge_geometry` reads the raw flat array zero-copy, and the bridge's
-    assemble path reads `graph.node_coords` directly. Two same-named things; one was measured.
-    Pinned by `tests/selfplay/test_graph_batch_dead_transfer_retired.py`, whose negative control
-    is the wire field."""
+    `node_coords` is deliberately absent: the DEVICE tensor had zero reads, so it was an H2D
+    transfer per part that nothing read. The WIRE array of the same name is live.
+    """
 
     x: Any  # torch.Tensor (N, 11) float
     edge_index: Any  # (2, E) int64
@@ -218,16 +166,14 @@ class GraphBatch:
     extra: dict = field(default_factory=dict)
 
 
-# ---------------------------------------------------------------------------
-# Canary state (hot-path semantic cadence). Trainer runs semantic="full";
-# self-play runs semantic="canary" — first batch after reset + every Nth.
-# ---------------------------------------------------------------------------
+# Canary cadence for the semantic layer: the trainer runs "full", self-play runs "canary" —
+# the first batch after a reset plus every Nth.
 _CANARY_STATE = {"count": 0}
 
 
 def reset_semantic_canary() -> None:
-    """Reset the canary counter — call after every process start / weight swap
-    so the FIRST batch runs the full geometric layer."""
+    """Reset the canary counter after a process start or weight swap, so the FIRST batch runs
+    the full geometric layer."""
     _CANARY_STATE["count"] = 0
 
 
@@ -237,10 +183,7 @@ def _canary_should_run(period: int) -> bool:
     return (n == 0) or (period > 0 and n % period == 0)
 
 
-# ---------------------------------------------------------------------------
-# Geometry helper — window_flat_idx_at_geom (byte-parity with the Rust builder
-# `mantis_graph::window_flat_idx`). Vectorized over coord arrays.
-# ---------------------------------------------------------------------------
+# Geometry helper — byte-parity with the Rust builder's `window_flat_idx`, vectorized.
 #: Fills the `(B, 2)` cell array for graphs with no usable target cell (check 17). `int64`'s
 #: minimum cannot be a board coordinate, so a sentinel row never matches a real one.
 _CELL_SENTINEL: int = np.iinfo(np.int64).min
@@ -260,25 +203,17 @@ def _canonical_slot_vec(
 def _graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
     """Map each element index [0,count) to its graph via CSR `offsets`.
 
-    `repeat`, not `searchsorted`. The previous form allocated a `count`-long `arange` and ran
-    `count` binary searches over a `B`-length array to answer a question the segment LENGTHS
-    already answer: element `i` belongs to graph `g` exactly `offsets[g+1] - offsets[g]` times
-    in a row. `np.repeat(arange(B), diff(offsets))` is one linear fill with neither the arange
-    nor the search, and it agrees on every valid CSR input INCLUDING empty segments — a graph
-    with zero elements repeats zero times, which is the same answer `searchsorted(..., "right")
-    - 1` gives by skipping it. AUDIT-1 F-51 HOT-04; measured ×13.5 on real serve parts.
+    `repeat`, not `searchsorted`: element `i` belongs to graph `g` exactly
+    `offsets[g+1] - offsets[g]` times in a row, so one linear fill replaces a `count`-long
+    arange plus `count` binary searches (measured x13.5 on real serve parts).
 
-    PRECONDITION, which check 5 (`OffsetsNonMonotonic`) establishes before either caller here:
-    `offsets` is non-decreasing with `offsets[0] == 0` and `offsets[-1] == count`. Under a
-    negative segment length `np.repeat` raises rather than returning a wrong array, which is
-    the correct direction for a violated precondition.
+    PRECONDITION, established by check 5: `offsets` is non-decreasing, `offsets[0] == 0`,
+    `offsets[-1] == count`. A negative segment length makes `np.repeat` raise.
     """
     return np.repeat(np.arange(offsets.size - 1, dtype=np.int64), np.diff(offsets))
 
 
-# ---------------------------------------------------------------------------
-# Rust GraphWire → GraphWirePayload adapter (the step-6 wiring reads the pyclass).
-# ---------------------------------------------------------------------------
+# Rust GraphWire -> GraphWirePayload adapter.
 #: The wire surface, DERIVED from the payload this adapter builds rather than transcribed
 #: beside it — a hand-kept second list would drift the moment a field is added.
 _WIRE_SURFACE: tuple[str, ...] = tuple(f.name for f in fields(GraphWirePayload))
@@ -287,17 +222,13 @@ _WIRE_SURFACE: tuple[str, ...] = tuple(f.name for f in fields(GraphWirePayload))
 def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
     """Read one Rust `GraphWire` into a payload, through its single-read `take()`.
 
-    `take()` MOVES the wire's buffers into numpy instead of copying them out getter by
-    getter (PERF-TRANCHE-1 A2, ledger §10.1 #4). It consumes the wire: after this call the
-    pyclass's per-array getters raise `WireAlreadyConsumed`, which is why this is the ONE
-    place production reads a wire. A duck-typed object without `take` — a payload replayed
-    from a fixture, a stub in a test — is read through the getters as before.
+    `take()` MOVES the buffers into numpy rather than copying them out getter by getter, and
+    CONSUMES the wire, which is why this is the ONE place production reads one. A duck-typed
+    object without `take` uses the getters.
 
     Raises:
-        WireAlreadyConsumed: the wire was already taken (a second read of one wire).
-        WireSurfaceIncomplete: `gw` carries neither `take()` nor the `GraphWire` attribute
-            surface — raised from the getter read, which is the only path a wrong-kind
-            object reaches.
+        WireAlreadyConsumed: the wire was already taken.
+        WireSurfaceIncomplete: `gw` carries neither `take()` nor the `GraphWire` surface.
     """
     if not hasattr(gw, "take"):
         return _payload_from_getters(gw)
@@ -325,14 +256,10 @@ def graph_wire_from_rust(gw: Any) -> GraphWirePayload:
 def _payload_from_getters(gw: Any) -> GraphWirePayload:
     """The per-array getter read — for duck-typed wires that carry no `take()`.
 
-    A payload that does not carry the wire surface is refused BY NAME. Callers write
-    `wire, targets = buf.sample_graph_batch(...)` and the two halves transpose easily; handing
-    the targets half (or `None`, or a dict) used to produce a bare
-    `AttributeError: 'GraphTargets' object has no attribute 'contract_version'`, which names
-    neither the function nor what was wrong with the argument. The check sits HERE and not in
-    `graph_wire_from_rust` because probing the surface on a live pyclass would invoke the very
-    copying getters `take()` exists to avoid, and `take()` is the Rust `GraphWire`'s alone —
-    so every wrong kind still arrives here.
+    A payload without the wire surface is refused BY NAME: handing the `targets` half of the
+    `(wire, targets)` pair used to raise a bare `AttributeError` naming neither the function
+    nor the argument. The check sits here because probing a live pyclass would invoke the very
+    copying getters `take()` avoids, so every wrong kind arrives here anyway.
 
     Raises:
         WireSurfaceIncomplete: `gw` lacks one or more `GraphWirePayload` field names.
@@ -364,9 +291,6 @@ def _payload_from_getters(gw: Any) -> GraphWirePayload:
     )
 
 
-# ---------------------------------------------------------------------------
-# The single resolver
-# ---------------------------------------------------------------------------
 def collate_graph_batch(
     wire: Any,
     expected_version: int = 1,
@@ -381,18 +305,14 @@ def collate_graph_batch(
     allow_oracle_builder: bool = False,
     target_argmax_cells: Sequence[tuple[int, int] | None] | None = None,
 ) -> GraphBatch:
-    """Validate + collate one block-diagonal graph wire → `GraphBatch`.
+    """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
 
-    `semantic`: "full" (trainer — every batch), "canary" (hot path — first +
-    every Nth), or "off". The structural layer (13) always runs full. Raises a
-    NAMED `GraphContractError` on any mismatch — never a silent fallback.
+    `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
+    structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
 
-    THE FOUR GEOMETRY PARAMETERS ARE REQUIRED (AUDIT-1 F-41). They used to default to the
-    `gnn_axis_v1` row's values typed here as literals. Every production caller already passed
-    `spec.*`, so the defaults' only consumers were tests that omitted them — which is the
-    shape that makes a re-captured payload at another radius collate under stale geometry with
-    nothing red. They are the EXPECTED geometry the wire is checked against, so a default is a
-    silent expectation.
+    THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
+    checked against, so a default is a silent expectation and a payload re-captured at another
+    radius would collate under stale geometry with nothing red.
 
     Raises:
         GraphContractError: any wire array disagrees with the declared geometry or the
@@ -491,9 +411,7 @@ def collate_graph_batch(
     )
 
 
-# ---------------------------------------------------------------------------
-# Structural layer (13) — index in-range / unique / monotonic / typed.
-# ---------------------------------------------------------------------------
+# Structural layer — index in-range / unique / monotonic / typed.
 def _check_structural(
     node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
     legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
@@ -571,49 +489,23 @@ def _check_structural(
     if np.any(n_stones.astype(np.int64) + 1 > n_nodes_checksum.astype(np.int64)):
         raise NodeCountChecksum("n_stones + 1 > n_nodes_checksum for some graph")
 
-    # 8. EdgeCrossesGraphBoundary — SEGMENTED MIN/MAX, not a per-edge graph id (R284 P-CHECKS).
-    #
-    # An edge in graph g is legal iff BOTH endpoints lie in `[node_offsets[g],
-    # node_offsets[g+1])`. The fuse lays each graph's edges out contiguously, so that is a
-    # per-graph min and max over `edge_offsets` — which `reduceat` computes in ONE pass over the
-    # endpoint arrays with no allocation.
-    #
-    # What this replaced, and why: the previous form built a per-EDGE graph id
-    # (`_graph_of(edge_offsets, E)` = `searchsorted(offsets, arange(E))`, which allocates an
-    # E-long arange and runs E binary searches over a B-length array), then TWO E-long fancy
-    # gathers and TWO E-long comparisons — roughly five large temporaries and six passes to
-    # answer a question that is B intervals wide. MEASURED at the minted cap
-    # (E = 1,942,920): **13.48 ms -> 0.93 ms, 14.4x**, identical verdicts on a clean payload and
-    # on four injected corruptions. At 0.93 ms this reads ~33 GB/s, i.e. it is already
-    # memory-bandwidth-bound, which is the reason it is not in Rust — see the P-CHECKS section of
-    # `plan/R284_PERF_DESIGN.md` for the disclosed departure from R284(b)'s named mechanism.
-    # 7 + 8, ONE segmented pass. AUDIT-1 F-51 HOT-04: check 7 read a global min and max over
-    # the whole `2E` array, and check 8 then computed per-graph extrema over the same data —
-    # so the array was swept twice to answer a question the second sweep already contains.
-    # Every graph's node range lies inside `[0, N)` (check 5 fixes `node_offsets[0] == 0` and
-    # `node_offsets[B] == N`), and the segment starts partition `[0, E)`, so the global bound
-    # is a reduction over the `B`-length segment extrema rather than a second pass over `2E`.
-    #
-    # BOTH NAMED ERRORS SURVIVE, AND SO DOES THEIR PRECEDENCE. `EdgeIndexOutOfBounds` is still
-    # raised first for a payload that violates both, exactly as when check 7 ran ahead of check
-    # 8 — a row out of `[0, N)` is a row that is in NO graph, which is the stronger statement
-    # and the one an operator needs first. Folding a check is not deleting one: deleting one
-    # would be a contract amendment.
+    # 8. EdgeCrossesGraphBoundary — SEGMENTED MIN/MAX, not a per-edge graph id: the fuse lays
+    # each graph's edges out contiguously, so `reduceat` answers "both endpoints inside this
+    # graph's node range" in ONE allocation-free pass. Measured at the minted cap
+    # (E = 1,942,920): 13.48 ms -> 0.93 ms, already memory-bandwidth-bound at ~33 GB/s. Checks 7
+    # and 8 fold into that pass; `EdgeIndexOutOfBounds` still precedes the boundary error,
+    # because a row outside `[0, N)` is in NO graph and is the stronger statement.
     if E > 0:
         ei2 = edge_index.reshape(2, E)
         nonempty = np.diff(edge_offsets) > 0
         if np.any(nonempty):
             # Empty segments are DROPPED rather than special-cased: an empty graph's start
-            # equals the next graph's, so removing it leaves the same partition of [0, E) while
-            # keeping `reduceat` off a start index it would reject.
+            # equals the next graph's, so the partition of [0, E) is unchanged.
             seg_start = edge_offsets[:-1][nonempty]
             seg_lo = node_offsets[:-1][nonempty]
             seg_hi = node_offsets[1:][nonempty]
-            # The two endpoints are UNROLLED rather than looped. A `for` over a 2-tuple is not
-            # the per-item loop the §Q6 hot-path census bans — but the census counts `for`
-            # statements, it fired on this exact edit, and spending an R43 frozen-table grant on
-            # a cosmetic loop would be the wrong use of one. The code says the same thing
-            # without it.
+            # The two endpoints are UNROLLED rather than looped only because the hot-path
+            # census counts `for` statements; the code says the same thing without one.
             src, dst = ei2[0], ei2[1]
             src_lo = np.minimum.reduceat(src, seg_start)
             src_hi = np.maximum.reduceat(src, seg_start)
@@ -627,28 +519,18 @@ def _check_structural(
                     "an edge endpoint is outside its own graph's node range"
                 )
         elif edge_index.min() < 0 or edge_index.max() >= N:
-            # UNREACHABLE while check 5 holds — `edge_offsets[B] == E > 0 == edge_offsets[0]`
-            # forces some segment non-empty — and kept anyway so the named error stays
-            # reachable on any input a test can construct, rather than only on the ones the
-            # preceding checks happen to allow.
+            # UNREACHABLE while check 5 holds, and kept so the named error stays reachable on
+            # any input a test can construct rather than only on those earlier checks allow.
             raise EdgeIndexOutOfBounds(f"edge_index out of [0,{N})")
     # `legal_graph` is used by BOTH check 9 and check 11 and used to be computed twice.
     legal_graph = _graph_of(legal_offsets, Lg) if Lg > 0 else None
 
     # 9. ScatterGatherCrossesGraph
     if Lg > 0:
-        # RANGE FIRST. `node_graph[legal_node_gather]` below is numpy fancy indexing, which
-        # WRAPS a negative row silently (−1 reads the last node of the last graph) and raises a
-        # bare `IndexError` — outside the GraphContractError family, so outside every die-loud
-        # catch site — for a row >= N. Neither is a contract verdict.
-        #
-        # `min`/`max` over the WHOLE array, NOT the two endpoints. The first version of this
-        # guard read `legal_node_gather[0]` and `[-1]` and justified it as O(1) "because check 13
-        # has already established the array is ascending". **That was false and the review caught
-        # it: check 13 is the LAST check in this function and check 9 is the ninth.** Nothing has
-        # established ascent here, so a rogue row in the MIDDLE went straight through to the
-        # fancy index — the exact defect this guard exists to close, still reachable, behind a
-        # comment claiming otherwise. O(Lg) is free beside the O(N) `_graph_of` on the next line.
+        # RANGE FIRST: the fancy index below WRAPS a negative row silently and raises a bare
+        # `IndexError` — outside the GraphContractError family — for a row >= N. `min`/`max`
+        # over the WHOLE array, not the endpoints: check 13 runs LAST, so nothing has
+        # established ascent here and a rogue middle row would go straight through.
         lo_row, hi_row = int(legal_node_gather.min()), int(legal_node_gather.max())
         if lo_row < 0 or hi_row >= N:
             raise ScatterGatherCrossesGraph(
@@ -671,12 +553,9 @@ def _check_structural(
 
     # 11. ScatterSlotAliasing — within one graph, two legal nodes share a slot.
     if Lg > 0 and legal_graph is not None:
-        # AUDIT-1 F-51 HOT-04. `np.unique` answers "are there duplicates" by SORTING, which is
-        # `O(Lg log Lg)` comparisons for a yes/no question. The keys are bounded BY
-        # CONSTRUCTION — `graph * 400 + slot` with `graph < B` and `slot < 362 <= 400`, both
-        # already established by check 4 and check 10 above — so a count over that known range
-        # answers it in one linear pass. Measured ×15 on real serve parts, and it is the largest
-        # single check in the stage.
+        # `np.unique` answers "are there duplicates" by SORTING. The keys are bounded BY
+        # CONSTRUCTION (`graph * 400 + slot`, both bounds from checks 4 and 10), so a count over
+        # that known range answers it in one pass — measured x15, the largest check in the stage.
         in_win = policy_dst_slot != _OFF_WINDOW_SLOT
         keys = (legal_graph[in_win].astype(np.int64) * 400
                 + policy_dst_slot[in_win].astype(np.int64))
@@ -688,12 +567,8 @@ def _check_structural(
         raise EmptyLegalSet("a graph has an empty legal set")
 
     # 13. GatherNotStrictlyIncreasing — ascending, hence unique, hence order-equivalent to the
-    # boolean mask built from it two steps below. The native builder emits `n_stones + j` for
-    # j in [0, n_legal) per graph and the fuse adds a non-decreasing `node_off`, so this holds
-    # by construction; it is asserted rather than trusted because it is the invariant the
-    # per-legal-node output ORDER rests on and nothing else in the 18 covers it (check 9
-    # constrains WHICH graph a row points into, check 11 constrains slot aliasing, neither
-    # constrains order). O(Lg) beside the existing O(E) checks.
+    # boolean mask built from it. True by construction, asserted anyway because it is the
+    # invariant the per-legal-node output ORDER rests on and no other check covers order.
     if Lg > 1 and np.any(np.diff(legal_node_gather) <= 0):
         first = int(np.argmin(np.diff(legal_node_gather) > 0))
         raise GatherNotStrictlyIncreasing(
@@ -707,9 +582,7 @@ def _require_dtype(arr: np.ndarray, want, name: str) -> None:
         raise DtypeMismatch(f"{name} dtype {arr.dtype} != {np.dtype(want)}")
 
 
-# ---------------------------------------------------------------------------
-# Semantic / geometric layer (4) — points at the geometrically-correct thing.
-# ---------------------------------------------------------------------------
+# Semantic / geometric layer — points at the geometrically-correct thing.
 def _check_semantic(
     node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
     legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
@@ -719,22 +592,14 @@ def _check_semantic(
     N = node_feat.size // node_feat_dim
     E = edge_attr.size // edge_feat_dim
     Lg = legal_node_gather.size
-    # `coords` feeds checks 16/17 below (canonical-slot / aug-round-trip);
-    # `nf`/`node_graph`/`node_is_dummy`/`cp` — check 14's old own-Python prep
-    # — are gone: `verify_edge_geometry` (Rust, below) reads the RAW flat
-    # `node_feat`/`node_offsets`/`current_player` arrays directly, zero-copy.
+    # `coords` feeds checks 16/17; check 14's old Python prep is gone because
+    # `verify_edge_geometry` reads the raw flat arrays directly, zero-copy.
     coords = node_coords.reshape(N, 2).astype(np.int64)
 
-    # 14. EdgeAttrGeometryMismatch — recompute attrs from coords + player id.
-    # Compiled Rust re-derivation (`mantis._engine.verify_edge_geometry`) — reads the
-    # SAME post-marshal flat numpy arrays this function already holds as zero-copy
-    # readonly views (no reshape/astype copies, no boolean-mask gather). Eliminates
-    # the `coords[d]-coords[s]` gather, the `np.argmax` onehot, and the `ea[real]`
-    # boolean-mask copy the profiler named as the single largest step cost on the
-    # bs=128 graph step. Every sub-assertion moved verbatim; the Rust fn raises a
-    # plain ValueError on mismatch, caught and re-raised here as the SAME named
-    # `EdgeAttrGeometryMismatch` so every existing die-loud catch site (incl. ADV-8,
-    # injected into this exact post-marshal payload) is unaffected.
+    # 14. EdgeAttrGeometryMismatch — attrs re-derived from coords + player id in Rust over the
+    # same post-marshal zero-copy views, which removes the coord gather, the argmax onehot and
+    # the boolean-mask copy the profiler named as the largest single step cost. The Rust fn
+    # raises a plain ValueError, re-raised here under the same named error.
     if E > 0:
         # deferred: matches the `import torch` pattern above
         from mantis._engine import verify_edge_geometry
@@ -774,16 +639,10 @@ def _check_semantic(
                 "policy_dst_slot != canonical window slot of the gathered (rotated) coord"
             )
 
-    # 17. AugRoundTripMismatch — runtime canary (trainer path with a target):
-    # the target-argmax cell must map to a legal node whose slot equals the
-    # canonical slot of that cell's (rotated) coord. Skipped on inference (no
-    # target).
-    #
-    # R335(e): three linear passes over the flat legal arrays, replacing a per-graph
-    # `np.where` scan plus a Python comprehension that built two `tuple()`s per legal
-    # node. Measured 62.6 ms of a 106.4 ms semantic layer at the run5 train-path part
-    # shape. Same named error, same message, same precedence — pinned against a verbatim
-    # transcription of the loop in `tests/selfplay/test_check17_vectorized_parity.py`.
+    # 17. AugRoundTripMismatch — runtime canary on the trainer path: the target-argmax cell must
+    # map to a legal node whose slot equals the canonical slot of that cell's rotated coord.
+    # Skipped on inference. Three linear passes replaced a per-graph `np.where` scan plus a
+    # comprehension — measured 62.6 ms of a 106.4 ms semantic layer.
     if target_argmax_cells is not None:
         if len(target_argmax_cells) != B:
             raise AugRoundTripMismatch(
@@ -791,9 +650,8 @@ def _check_semantic(
             )
         legal_graph = _graph_of(legal_offsets, Lg) if Lg > 0 else np.array([], dtype=np.int64)
         gcoord = coords[legal_node_gather] if Lg > 0 else np.zeros((0, 2), dtype=np.int64)
-        # Sentinel rows can never equal a coord, so a graph whose cell is None — or whose
-        # cell is not a 2-vector of integers, which the old `tuple()` compare also never
-        # matched — is left unmatchable rather than special-cased downstream.
+        # Sentinel rows can never equal a coord, so a graph with no usable cell is left
+        # unmatchable rather than special-cased downstream.
         want_cells = np.full((B, 2), _CELL_SENTINEL, dtype=np.int64)
         has_cell = np.zeros(B, dtype=bool)
         for g, cell in enumerate(target_argmax_cells):
@@ -818,19 +676,13 @@ def _check_semantic(
                 )
 
 
-# ---------------------------------------------------------------------------
-# Hot-path output helpers — segmented softmax + stone mask. Consumed by the
-# InferenceServer graph loop (and the eval path). Kept here beside the resolver
-# so self-play + eval share ONE implementation.
-# ---------------------------------------------------------------------------
+# Hot-path output helpers — segmented softmax + stone mask, consumed by the InferenceServer
+# graph loop and the eval path. Here beside the resolver so both share ONE implementation.
 def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     """Numerically-stable per-graph softmax over each graph's legal nodes.
 
-    `logits` is the flat `[Lg_total]` per-legal-node tensor `GnnNet.forward_batch`
-    returns; `legal_offsets` is the `[B+1]` CSR pointer segmenting it per graph.
-    Returns `[Lg_total]` probs summing to 1 within each segment — the
-    normalization `assemble_ls_from_gnn_probs` relies on.
-    Vectorized (`scatter_reduce_`/`scatter_add_`), no Python per-graph loop.
+    `logits` is the flat `[Lg_total]` per-legal-node tensor, `legal_offsets` the `[B+1]` CSR
+    pointer segmenting it; the returned probs sum to 1 within each segment.
     """
     import torch
 
@@ -839,8 +691,8 @@ def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     seg = torch.repeat_interleave(
         torch.arange(b, device=logits.device, dtype=torch.long), counts
     )
-    # per-segment max (stability); include_self=False so empty segments (guarded
-    # out by EmptyLegalSet) don't skew — every graph has >=1 legal node.
+    # per-segment max for stability; include_self=False is safe because EmptyLegalSet
+    # guarantees every graph has at least one legal node.
     seg_max = torch.full((b,), float("-inf"), dtype=logits.dtype, device=logits.device)
     seg_max.scatter_reduce_(0, seg, logits, reduce="amax", include_self=False)
     ex = torch.exp(logits - seg_max[seg])
@@ -850,13 +702,9 @@ def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
 
 
 def stone_mask_from_batch(batch: GraphBatch) -> Any:
-    """`(N_total,)` bool mask, True on the stone rows of every graph — the value
-    head's pooling subset (`GnnNet.forward_batch` `stone_mask` arg).
-
-    The builder lays each graph's rows out `[stones | legal | dummy]`
-    (`n_stones[g]` stones first), so a node is a stone iff its within-graph
-    position `< n_stones[g]`. Vectorized from `node_offsets` + `n_stones`.
-    """
+    """`(N_total,)` bool mask, True on the stone rows of every graph — the value head's pooling
+    subset. The builder lays each graph's rows out `[stones | legal | dummy]`, so a node is a
+    stone iff its within-graph position is `< n_stones[g]`."""
     import torch
 
     node_offsets = batch.node_offsets

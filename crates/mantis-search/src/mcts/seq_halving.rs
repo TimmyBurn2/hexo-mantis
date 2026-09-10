@@ -1,17 +1,13 @@
 //! Sequential-Halving visit schedule, ported from Mctx `_src/seq_halving.py`.
 //!
-//! Mctx does not allocate Sequential Halving as "phases × sims-per-candidate".
-//! It precomputes, for the whole search, the sequence of CONSIDERED VISIT COUNTS
-//! — one entry per simulation — and at simulation `i` the root may only descend
-//! into a candidate whose current visit count equals `sequence[i]`. Halving is
-//! then implicit: once every candidate at level `v` has been visited the eligible
-//! set shrinks, and the schedule moves on.
+//! Not "phases x sims-per-candidate": the sequence of CONSIDERED VISIT COUNTS is precomputed
+//! for the whole search, one entry per simulation, and at simulation `i` the root may only
+//! descend into a candidate whose current visit count equals `sequence[i]`. Halving is implicit
+//! — once every candidate at level `v` has been visited the eligible set shrinks.
 //!
-//! WHY THE SHAPE MATTERS AND NOT ONLY THE RATIO. The sequence has length exactly
-//! `num_simulations`, so the budget is consumed exactly. The prior driver derived
-//! `sims_per = remaining_budget / (remaining_phases * candidates)` per phase and
-//! never allocated the integer-division remainder — measured at 49 of 50 and 599
-//! of 600 (`mantis-selfplay/tests/served_sims_exact.rs`).
+//! The sequence has length exactly `num_simulations`, so the budget is consumed exactly. A
+//! per-phase `remaining_budget / (remaining_phases * candidates)` never allocates the
+//! integer-division remainder: measured at 49 of 50 and 599 of 600.
 
 /// Mctx's floor on an eligible candidate's score. Keeps the argmax finite when a
 /// log-prior underflows, without letting a real score reach `-inf`.
@@ -20,13 +16,10 @@ const LOW_LOGIT: f32 = -1e9;
 /// Sequence of considered visit counts, one entry per simulation.
 ///
 /// Verbatim port of `get_sequence_of_considered_visits`. `m <= 1` degenerates to
-/// `0..num_simulations` — a single candidate is visited once per simulation, so
-/// its considered count rises every step.
+/// `0..num_simulations` — a single candidate is visited once per simulation.
 ///
-/// Mctx computes `int(num_simulations / (log2max * num_considered))` as a float
-/// divide truncated to int; this uses integer division, which agrees for every
-/// value representable here (both operands are small positive integers) and does
-/// not depend on binary64 rounding.
+/// Integer division stands in for Mctx's truncated float divide; both operands are small
+/// positive integers, so the two agree without depending on binary64 rounding.
 // `num_simulations` is bounded by `MAX_ARMED_SIMS` at runner construction, so
 // the index never approaches `u32::MAX`.
 #[allow(clippy::cast_possible_truncation)]
@@ -55,14 +48,12 @@ pub fn considered_visits_sequence(m: usize, num_simulations: usize) -> Vec<u32> 
 
 /// Mctx `score_considered`, as a per-candidate score plus an eligibility verdict.
 ///
-/// Returns `None` for a candidate whose visit count is not the considered one —
-/// Mctx's `-inf` penalty, kept as an `Option` so a caller cannot accidentally
-/// carry `-inf` into an arithmetic that would produce `NaN`.
+/// Returns `None` for a candidate whose visit count is not the considered one — Mctx's `-inf`
+/// penalty, kept as an `Option` so a caller cannot carry `-inf` into an arithmetic that would
+/// produce `NaN`.
 ///
-/// `max_logit` is the caller's `max` over the candidate log-priors; Mctx
-/// subtracts it (`logits - max(logits)`) before scoring. The subtraction is a
-/// constant shift and cannot change an argmax, but it is kept because it is what
-/// puts the score on Mctx's scale and hence in range of the `low_logit` floor.
+/// `max_logit` is the caller's `max` over the candidate log-priors. Subtracting it cannot change
+/// an argmax, but it puts the score on Mctx's scale and hence in range of the `low_logit` floor.
 #[inline]
 #[must_use]
 pub fn score_considered(

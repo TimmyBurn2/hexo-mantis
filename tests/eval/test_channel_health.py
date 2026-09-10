@@ -1,18 +1,9 @@
-"""⊕ R343(b)(iii)/(iv) — the saturation rule and the degradation flag, with their planted breaks.
+"""The saturation rule and the degradation flag, with their planted breaks.
 
-The defect each row is the ONLY witness to:
-
-* a SATURATED rung reported as ordinary progress. The burst's screen read 79 % at step 2004 and
-  the rule is expected to trip inside run6's first third, so a label that never fires would let
-  strength claims keep answering to an instrument that has stopped discriminating;
-* a degradation flag that fires on a PLATEAU. The self-play-cycling signature is a drop
-  **while promotions continue**; without the conjunction the flag is a noise generator, and the
-  row that pins it is the one where the same drop with promotions STOPPED must NOT flag;
-* a running maximum that includes the reading being judged — which can never be exceeded by it,
-  so the flag could only ever fire on the first drop. The row drives a recovery-then-drop
-  sequence that a self-inclusive maximum gets wrong;
-* a counter that resets when it should accumulate: two CONSECUTIVE flags are an architect read,
-  so the streak is the operand of a decision and is pinned as such.
+Each row is the only witness to one defect: a SATURATED rung reported as ordinary progress; a
+degradation flag firing on a plateau, when the signature is a drop WHILE PROMOTIONS CONTINUE; a
+running maximum that includes the reading being judged; and a streak counter that resets when
+it should accumulate, since two CONSECUTIVE flags are the operand of an architect read.
 """
 from __future__ import annotations
 
@@ -27,8 +18,7 @@ def _r(idx: int, wins: int, games: int = 32, promoted: bool = True,
 
 
 def test_no_history_is_no_data_never_a_zero() -> None:
-    """A channel with no rounds has not measured 0.0 — it has measured nothing, and a
-    dashboard that draws 0 % for it reports a collapse that did not happen."""
+    """A channel with no rounds has measured nothing, not 0.0."""
     h = assess([])
     assert h.pooled_wr is None and h.label == "NO-DATA" and not h.saturated
 
@@ -61,8 +51,8 @@ def test_only_the_last_window_is_pooled() -> None:
 
 
 def test_a_drop_while_promotions_continue_is_flagged() -> None:
-    """(iv): the self-play-cycling signature — weaker against a FIXED opponent while the
-    internal gate keeps promoting, which is exactly what an internal-only bar cannot see."""
+    """The self-play-cycling signature: weaker against a FIXED opponent while the internal gate
+    keeps promoting."""
     history = [_r(i, 30, promoted=True) for i in range(1, 5)]
     history += [_r(i, 12, promoted=True) for i in range(5, 9)]
     h = assess(history)
@@ -72,8 +62,7 @@ def test_a_drop_while_promotions_continue_is_flagged() -> None:
 
 
 def test_the_same_drop_with_promotions_STOPPED_is_not_flagged() -> None:
-    """THE PLANTED BREAK FOR (iv), and the row that makes the flag a signature rather than a
-    plateau detector. Identical win counts; only `promoted` moves."""
+    """PLANTED BREAK: identical win counts, only `promoted` moves — a signature, not a plateau."""
     history = [_r(i, 30, promoted=True) for i in range(1, 5)]
     history += [_r(i, 12, promoted=False) for i in range(5, 9)]
     h = assess(history)
@@ -93,9 +82,8 @@ def test_a_small_drop_inside_the_ci_is_not_flagged() -> None:
 
 
 def test_the_running_maximum_excludes_the_window_being_judged() -> None:
-    """A self-inclusive maximum can never be exceeded by the reading it contains, so the drop
-    would be measured against itself. Drive a recovery, then a drop: the maximum must remember
-    the EARLIER peak, not the window in hand."""
+    """A self-inclusive maximum could only fire on the first drop: after a recovery and a
+    second drop, the maximum must still remember the EARLIER peak."""
     history = [_r(i, 31, promoted=True) for i in range(1, 5)]   # peak window
     history += [_r(i, 16, promoted=True) for i in range(5, 9)]  # recovery-ish
     history += [_r(i, 8, promoted=True) for i in range(9, 13)]  # the drop being judged
@@ -105,8 +93,7 @@ def test_the_running_maximum_excludes_the_window_being_judged() -> None:
 
 
 def test_consecutive_flags_accumulate_and_a_clean_round_resets_them() -> None:
-    """Two CONSECUTIVE flags are an architect read (R343(b)(iv)), so the streak is the operand
-    of a decision — it must accumulate across calls and reset on a clean reading."""
+    """Two CONSECUTIVE flags are an architect read: the streak accumulates and resets clean."""
     dropped = [_r(i, 30, promoted=True) for i in range(1, 5)]
     dropped += [_r(i, 12, promoted=True) for i in range(5, 9)]
     first = assess(dropped, previous_consecutive_flags=0)
@@ -126,21 +113,15 @@ def test_an_impossible_reading_is_refused_not_pooled() -> None:
 
 
 def test_zero_game_rounds_are_no_data_not_a_loss() -> None:
-    """A skipped rung (R139 grounds, an absent vendor) reports no games. Treating that as 0
-    wins would manufacture a collapse out of an operator-authorized skip."""
+    """A skipped rung reports no games; 0 wins would manufacture a collapse out of a skip."""
     h = assess([_r(i, 0, games=0) for i in range(1, 5)])
     assert h.pooled_wr is None and h.label == "NO-DATA" and not h.degraded
 
 
 def test_the_window_refuses_to_pool_across_a_rung_identity_change() -> None:
-    """AUDIT-1 F-14 applied to a pooled window, and the reason it is not optional.
-
-    `_first_sealbot_wr`'s own docstring: once `sealbot_d5` saturates it draws 0 games
-    off-cadence and the reported number silently becomes `sealbot_d6`'s — so a trajectory rule
-    over a mixed window compares two OPPONENTS and calls the difference a regression. Here a
-    strong d5 history is followed by a weak d6 reading: the pooled WR must be d6's alone, and
-    the degradation flag must NOT fire on the opponent having changed.
-    """
+    """A pooled window must not span a rung identity change: once `sealbot_d5` saturates it
+    draws 0 games off-cadence, so a mixed window compares two OPPONENTS and calls it a
+    regression."""
     history = [_r(i, 30, rung="sealbot_d5") for i in range(1, 5)]
     history += [_r(5, 8, rung="sealbot_d6")]
     h = assess(history)
@@ -152,18 +133,9 @@ def test_the_window_refuses_to_pool_across_a_rung_identity_change() -> None:
     )
 
 
-# ══ THE PRODUCER (LAW-07): the rules must reach the event stream, not just compute ═══════
 def test_the_pipeline_emits_channel_health_from_a_real_round_result() -> None:
-    """R4/LAW-07 — every monitor input cites a LIVE PRODUCER.
-
-    THE DEFECT THIS CLOSES, and it was mine: `channel_health.assess` shipped first with 12
-    green rows and NO caller anywhere in `src/`. The saturation label and the degradation flag
-    were named as dashboard lines in an exit screen while nothing emitted them — a dashboard
-    line with no producer is the phantom-gate shape LAW-07 exists to forbid, and naming one is
-    the overclaim the curation protocol forbids. This row drives the real
-    `EvalPipeline._assess_external_channel` over a real round-result mapping and asserts the
-    event lands.
-    """
+    """The LIVE PRODUCER: `_assess_external_channel` is driven over a real round-result mapping
+    and the event must land — `assess` once shipped with green rows and no caller in `src/`."""
     from types import SimpleNamespace
 
     from mantis.eval.pipeline import EvalPipeline
@@ -190,9 +162,7 @@ def test_the_pipeline_emits_channel_health_from_a_real_round_result() -> None:
 
 
 def test_a_round_the_instrument_did_not_play_is_absent_not_a_loss() -> None:
-    """THE PLANTED BREAK for the producer. A skipped or off-cadence sealbot rung reports no
-    games; recording that as 0 wins would manufacture a collapse out of an operator-authorized
-    skip and trip the degradation flag on the ladder working as designed."""
+    """PLANTED BREAK for the producer: a skipped rung's absent games must not enter as 0 wins."""
     from types import SimpleNamespace
 
     from mantis.eval.pipeline import EvalPipeline
@@ -214,19 +184,8 @@ def test_a_round_the_instrument_did_not_play_is_absent_not_a_loss() -> None:
 
 
 def test_the_round_CI_travels_with_the_win_rate_out_of_ONE_walk() -> None:
-    """R341 §3, closed at R343 — the ROUND CI reaches the round EVENT.
-
-    v3.57 recorded this absent and said recovering it *"needs the ladder state file"*. It did
-    not: `aggregate_rung` already bootstraps the interval and the worker already publishes it
-    per rung (`worker.py`), so the CI simply stopped at the round RESULT and never reached the
-    event an exit screen reads. A win rate printed with no interval invites a reader to treat a
-    32-game reading as a point estimate.
-
-    THE CI COMES FROM THE SAME WALK AS THE WIN RATE, which is AUDIT-1 F-14's rule applied once
-    more: a CI fetched by an independent lookup could belong to a DIFFERENT rung than the `wr`
-    beside it. This row drives `build_round_result` with TWO sealbot rungs where only the
-    second has games, and asserts the published quartet is internally consistent.
-    """
+    """The ROUND CI reaches the round EVENT out of the SAME walk as the win rate; one fetched
+    by an independent lookup could belong to a DIFFERENT rung than the `wr` beside it."""
     from types import SimpleNamespace
 
     from mantis.eval.rounds import build_round_result
@@ -254,8 +213,7 @@ def test_the_round_CI_travels_with_the_win_rate_out_of_ONE_walk() -> None:
 
 
 def test_a_round_with_no_sealbot_games_publishes_no_CI_rather_than_a_zero() -> None:
-    """The planted break: an absent interval is None, never a manufactured 0.0 — a CI of
-    [0, 0] would read as a perfectly-measured total loss."""
+    """PLANTED BREAK: an absent interval is None, never a manufactured 0.0."""
     from types import SimpleNamespace
 
     from mantis.eval.rounds import build_round_result

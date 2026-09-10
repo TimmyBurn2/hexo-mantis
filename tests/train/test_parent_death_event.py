@@ -1,18 +1,12 @@
-"""LAW-18 (Q3 red-team A6) — the parent-death arming lever announces itself IN-RUN.
+"""The parent-death arming lever announces itself in the run's own event stream.
 
-THE DEFECT. The arming decision existed only as a `logging` line on the run's INHERITED stderr
-— which, under a supervisor, IS the supervisor's stderr: the stream that dies with the
-supervisor. So after the exact event the arming exists to handle, no artifact anywhere said
-whether the run had ever been armed, or why it had not been. LAW-18 requires a lever under test
-to log its own fire-rate in-run, and the two sibling watchdogs (`heartbeat_watchdog_armed`,
-`selfplay_stall_watchdog_armed`) already set the shape: the arm-log is UNCONDITIONAL, so that a
-DISABLED lever is visible rather than silent.
+The decision used to live only on the run's inherited stderr, which under a supervisor is the
+supervisor's stderr — gone after exactly the event the arming exists to handle. Like the two
+sibling watchdogs, the arm-log is UNCONDITIONAL, so a disabled lever is visible not silent.
 
-THE CARRIER, and why it is a module latch rather than a signature change. The gate runs at
-`main`'s first statement — before the sink, the out-dir and the run id exist — so the decision
-has to be carried, not returned. Threading it through `launch_run` would touch the signature
-`tests/test_run_launcher.py` drives in-process five times, and that file is FROZEN and HELD.
-A process has exactly ONE arming decision and module scope is exactly that lifetime.
+The decision is carried by a module latch because the gate runs at `main`'s first statement,
+before the sink, the out-dir and the run id exist. A process has exactly one arming decision
+and module scope is exactly that lifetime.
 """
 from __future__ import annotations
 
@@ -47,10 +41,10 @@ def _synthetic(**over) -> ParentDeathDecision:
 def test_an_unsupervised_boot_still_emits_the_arming_event_with_armed_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE LAW-18 ROW. An unsupervised launch takes the `not_supervised` arm and DOES NOT arm —
-    and that must be readable, because "this run is orphanable" is exactly the fact an operator
-    needs after the run has been orphaned. Driven through the REAL gate: the decision is
-    produced by `arm_parent_death_if_supervised`, latched, and read back out."""
+    """Prove an unsupervised boot still emits the arming event, with armed false.
+
+    "This run is orphanable" is the fact an operator needs after the run has been orphaned.
+    """
     monkeypatch.setattr(signals_mod, "_LAST_DECISION", None, raising=False)
     monkeypatch.delenv(PARENT_DEATH_PPID_ENV, raising=False)
 
@@ -69,14 +63,12 @@ def test_an_unsupervised_boot_still_emits_the_arming_event_with_armed_false(
 def test_the_wrapper_case_names_its_reason_in_the_event(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The A4b decision reaches the run's OWN stream, not only stderr. The two refusals are
-    different residuals — `wrapper_chain_too_deep` means "this run WILL survive its supervisor",
-    `ancestry_unreadable` means "the stamp named nothing we are descended from" — and an event
-    that flattened them to `armed=false` would be no better than the log line it replaces.
+    """Prove each refusal reason survives into the payload rather than flattening to armed=false.
 
-    (The gate's own production of these reasons is driven as real process chains in
-    `tests/monitor/test_arm_exec_trampoline.py` and `tests/test_run_pdeathsig.py`; what this
-    row pins is that the reason SURVIVES into the payload.)"""
+    `wrapper_chain_too_deep` means the run will survive its supervisor; `ancestry_unreadable`
+    means the stamp named nothing we descend from. Real process chains drive the gate itself in
+    tests/monitor/test_arm_exec_trampoline.py and tests/test_run_pdeathsig.py.
+    """
     for reason, depth in (("wrapper_chain_too_deep", 3), ("ancestry_unreadable", None)):
         monkeypatch.setattr(
             signals_mod, "_LAST_DECISION", _synthetic(reason=reason, chain_depth=depth),
@@ -91,9 +83,7 @@ def test_the_wrapper_case_names_its_reason_in_the_event(
 def test_the_event_carries_the_same_decision_the_gate_returned(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE ANTI-DRIFT ROW. Every field of the decision must appear in the payload, and the
-    field list is DERIVED from the dataclass rather than transcribed here — a transcribed list
-    would silently stop covering a field the day one is added (R192(e), derive-or-delete)."""
+    """Prove every decision field reaches the payload, over a field list derived from the dataclass."""
     decision = _synthetic(armed=True, reason="wrapper_armed_by_trampoline", chain_depth=2,
                           signal_name="SIGKILL")
     monkeypatch.setattr(signals_mod, "_LAST_DECISION", decision, raising=False)
@@ -120,13 +110,11 @@ def test_the_event_carries_the_same_decision_the_gate_returned(
 def test_a_gate_that_records_nothing_leaves_the_event_absent(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE LAW-07 MUTATION SELF-TEST. With no recorded decision the composition must emit
-    NOTHING rather than a comfortable `armed=false` — proving the producer is the GATE and the
-    event is not manufactured by the emitter.
+    """Prove no recorded decision emits nothing, not a comfortable armed=false.
 
-    A None latch is a real production state, not a contrived one: `launch_run` is entered
-    directly (never through `main`) by the five in-process boots in the frozen
-    `tests/test_run_launcher.py`, and those runs genuinely have no arming decision."""
+    A None latch is a real production state: the in-process boots enter `launch_run` directly,
+    never through `main`, and genuinely have no arming decision.
+    """
     monkeypatch.setattr(signals_mod, "_LAST_DECISION", None, raising=False)
     assert last_parent_death_decision() is None
     assert _parent_death_event(last_parent_death_decision()) is None, (
@@ -136,9 +124,10 @@ def test_a_gate_that_records_nothing_leaves_the_event_absent(
 
 
 def test_the_event_is_emitted_exactly_once_per_segment() -> None:
-    """One emit site, inside `compose_run`, fed by the ONE reader. A duplicate emitter would
-    turn a decision into a counter, and a second `last_parent_death_decision()` call site would
-    be a second authority for reading it."""
+    """Prove there is exactly one emit site and it lives in the composition root.
+
+    A duplicate emitter would turn a decision into a counter.
+    """
     source = inspect.getsource(mantis_run)
     tree = ast.parse(source)
     calls = [node for node in ast.walk(tree)
@@ -155,9 +144,7 @@ def test_the_event_is_emitted_exactly_once_per_segment() -> None:
 
 
 def test_the_arming_event_is_not_a_config_key_and_cannot_be_disabled() -> None:
-    """The sibling law, stated as a row: both watchdogs' arm-logs are unconditional BY
-    CONSTRUCTION, and so is this one. A mutant that gated the emit on a config flag would put
-    the one lever that reports orphanability behind a knob nobody re-checks."""
+    """Prove the arming event reads no config and has exactly two returns, so it cannot be disabled."""
     fn = ast.parse(inspect.getsource(_parent_death_event)).body[0]
     assert isinstance(fn, ast.FunctionDef)
     names = {node.id for node in ast.walk(fn) if isinstance(node, ast.Name)} | {
@@ -177,13 +164,10 @@ def test_the_arming_event_is_not_a_config_key_and_cannot_be_disabled() -> None:
 def test_a_real_boot_writes_the_arming_event_into_the_runs_own_jsonl(
     tmp_path, smoke_run_config,
 ) -> None:
-    """END TO END, and the row that makes every fast row above production-relevant: a REAL
-    composed boot must leave `parent_death_signal_armed` in the run's own event segment on
-    disk. That file is the artifact an operator reads after an orphan; a payload that is
-    correct in-process and never reaches the segment answers nobody.
+    """Prove a real composed boot leaves the arming event in the run's own event segment on disk.
 
-    `integration`-marked for the same reason the launcher's own real-boot rows are: it composes
-    the whole run. The gate is driven FIRST so the latch is populated, exactly as `main` does."""
+    The gate is driven first so the latch is populated, exactly as `main` does.
+    """
     signals_mod._LAST_DECISION = None
     os.environ.pop(PARENT_DEATH_PPID_ENV, None)
     assert arm_parent_death_if_supervised() is False

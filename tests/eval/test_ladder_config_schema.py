@@ -1,32 +1,8 @@
-"""⊕ WP11-A DESIGN §b/§c.1 — ladder + gate schema extension (LadderRung/GateConfig/LadderConfig
-+ the EvalConfig extension). RED-by-assertion: `mantis.config.schema` / `mantis.config.loader`
-already exist and import cleanly today (this is a SCHEMA EXTENSION, not a new module), so every
-test here fails today by `pydantic.ValidationError` (missing/extra key) rather than
-ModuleNotFoundError — the schema simply does not have `eval.gate` / `eval.ladder` /
-`eval.random_floor_games` / `eval.worker_device` / `eval.round_timeout_sec` / `eval.worker_kill_grace_sec` yet.
+"""The ladder + gate schema: LadderRung / GateConfig / LadderConfig and the EvalConfig block.
 
-Byte-frozen through IMPL: fields transcribed verbatim from DESIGN.md §c.1 (rung
-name/bot/variant/depth/opponent_sims/opening_book/deploy_matched/games_max; gate
-stride/screen_games/confirm_games/promotion_winrate/screen_confirm_lo/deploy_sims/
-opening_book/bootstrap_resamples/min_distinct_per_pair/seed_base — NO screen_confirm_hi,
-MUST-FIX 1; ladder rungs/round_games/min_games_per_active_rung/graduation_wr_lower_ci/
-graduation_consec_rounds/activation_wr_lower_ci/calibration_every_k_rounds/calibration_games/
-bootstrap_resamples/bootstrap_ci_level/bt_prior_games/bootstrap_seed). Minted ladder order is
-STATE §5 verbatim, less the kraken/strix rungs whose bot kinds were deleted with the reference
-adapters (each opening_book=book_v1_s20260625_p4, deploy_matched=true, games_max=32).
-
-Note (documented, not a defect): `test_temperature_key_anywhere_in_eval_is_rejected` (all 3
-parametrized cases) and `test_rung_names_unique_and_bot_kind_known` /
-`test_thresholds_bounded_and_activation_not_above_graduation` PASS today — but only because
-the fixture `_payload()` is ALREADY invalid under today's un-extended schema (it carries
-`eval.gate`/`eval.ladder`/etc., all unknown keys under `extra="forbid"`), so `pytest.raises
-(ValidationError)` trivially holds regardless of the specific mutation under test. This is
-not a tautology: post-IMPL, once the base payload validates cleanly (pinned by
-`test_valid_payload_with_full_ladder_and_gate_validates`, RED today), these same tests start
-exercising their real, specific behavior (temperature rejection / name-uniqueness / bound
-checks) — an IMPL that wrongly ACCEPTED a temperature key, a duplicate rung name, or an
-out-of-bounds threshold would make them fail then. Flagged here for RED-TEAM/REVIEW-impl
-auditability, not something ORACLE-WRITE can or should "fix" by weakening the fixture.
+Every mutation below relies on the base payload validating cleanly, pinned by
+`test_valid_payload_with_full_ladder_and_gate_validates` — without it a `pytest.raises
+(ValidationError)` holds trivially for any mutation.
 """
 from __future__ import annotations
 
@@ -74,10 +50,8 @@ def _ladder(**overrides) -> dict:
     return base
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to the
-#: census it replaces, so the swap is zero-behavior-change.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated, so a new
+#: `train.*` key costs no edit here.
 _MINTED_TRAIN: dict = load_config(_REPO / "configs" / "dev_example.yaml").train.model_dump()
 
 
@@ -104,17 +78,15 @@ def _selfplay_block() -> dict:
 def _inference_block() -> dict:
     return {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # `inference.fused_graph_caps` is a REQUIRED block; this pair is the template's
+        # non-binding-by-construction value, so nothing here exercises a split.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
 
 
 def _monitor_block() -> dict:
     return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # the ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -151,9 +123,8 @@ def _payload(**eval_overrides) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf, minted `null` everywhere —
-        # R119's placeholder, refused at boot on a cuda process, valued only by the
-        # re-calibration sitting.
+        # A REQUIRED top-level leaf, minted `null` everywhere and refused at boot on a cuda
+        # process; only the re-calibration sitting gives it a value.
         "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
@@ -168,8 +139,7 @@ def _payload(**eval_overrides) -> dict:
 
 
 def test_valid_payload_with_full_ladder_and_gate_validates() -> None:
-    """Sanity anchor: the fully-populated payload above must itself validate once the schema
-    extension lands (proves the fixture payload is not itself malformed)."""
+    """Sanity anchor: the full payload must itself validate, or every mutation is vacuous."""
     cfg = RunConfig.model_validate(_payload())
     assert len(cfg.eval.ladder.rungs) == len(_LADDER_RUNGS)
     assert cfg.eval.gate.promotion_winrate == 0.55
@@ -243,18 +213,9 @@ def test_rung_order_is_preserved() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """configs/run6.yaml's ladder must equal the STATE §5 rungs in order once re-minted;
-    0.75/0.65/3 must appear ONLY as VALUES of the named schema fields, never as bare code
-    literals in src/mantis/eval (rule 4). Today configs/run6.yaml has no `eval.ladder` key at
-    all (read at HEAD — no `ladder`/`gate` block), so loading it under the extended schema
-    below fails with a named ValidationError; that IS the correct RED state (the re-mint is an
-    IMPL-stage task, not ORACLE-WRITE's)."""
+    """The graduation and activation thresholds are schema VALUES, never bare code literals."""
     assert _RUN5.is_file(), f"expected {_RUN5} to exist at HEAD"
 
-    # Once re-minted (IMPL work), this is the shape that must hold — expressed here so the
-    # assertion exists BEFORE the port (byte-frozen): the rungs in STATE §5 order, and the
-    # literals 0.75 / 0.65 never appear as bare numbers in src/mantis/eval source (they must be
-    # the VALUES the schema fields resolve to, not inline code constants).
     eval_src_dir = _REPO / "src" / "mantis" / "eval"
     if eval_src_dir.is_dir():
         for py_file in eval_src_dir.rglob("*.py"):

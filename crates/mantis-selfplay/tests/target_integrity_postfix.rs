@@ -1,31 +1,23 @@
-// R8 >300 justify: the POST-FIX-ONLY oracle bank (DEG x4, S2a, S2b record-level x3, QA,
-// O4b latch) shares one construction harness and one feature gate; scattering it would
-// scatter the gate IMPL must wire and the freeze audit.
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — the POST-FIX-ONLY Rust oracle bank.
-//! Written at T-2 ORACLE-WRITE, byte-frozen through IMPL.
+// R8 >300 justify: the post-fix-only oracle bank shares one construction harness and one
+// feature gate; scattering it would scatter the gate IMPL must wire and the freeze audit.
+//! Target-integrity oracle bank, POST-FIX only.
 //!
-//! ── GATE (LOUD, enumerated — never a silent skip) ────────────────────────────────────
-//! The whole file compiles ONLY under the crate feature `phase_t_postfix`, because it
-//! binds the POST-FIX contract that does not exist at HEAD:
-//!   * `records::TargetIntegrityError` — enum { MassNotUnity { sum: f64, ply_index,
-//!     n_cells }, EmptyTarget { ply_index, n_legal }, VisitSlotsExceeded { n, max,
-//!     ply_index } }, Display carrying every field (DESIGN_T §3.3/§3.4);
+//! GATE (LOUD, enumerated — never a silent skip). The whole file compiles ONLY under the crate
+//! feature `phase_t_postfix`, because it binds a contract that does not exist before the fix:
+//!   * `records::TargetIntegrityError` — MassNotUnity { sum, ply_index, n_cells }, EmptyTarget
+//!     { ply_index, n_legal }, VisitSlotsExceeded { n, max, ply_index }, Display carrying every
+//!     field;
 //!   * `records::record_position_graph(..) -> Result<GraphRecord, TargetIntegrityError>`;
-//!   * the runner fatal-defect latch: `SelfPlayRunner::store_fatal_defect(String)` +
-//!     `SelfPlayRunner::fatal_defect() -> Option<String>` (store-then-running=false;
-//!     the bridge's `collect_graph_data`/drain face raises from this read — §3.4);
-//!   * `RunnerStatsSnapshot` LAW-18 counters: `export_offwindow_mass_moves`,
-//!     `target_integrity_defects` (§3.6; the second name is fixed HERE — the design left
-//!     it unnamed; recorded in ORACLE_NOTES_T.md). The §3.5 `gridls_zero_policy_rows`
-//!     counter and its CTR producer leg went with the dense recorder at R346(f).
+//!   * the runner fatal-defect latch, `store_fatal_defect(String)` + `fatal_defect() ->
+//!     Option<String>` (store-then-running=false; the bridge's drain face raises from this read);
+//!   * the `RunnerStatsSnapshot` counters `export_offwindow_mass_moves` and
+//!     `target_integrity_defects`.
 //!
-//! IMPL wires the gate by declaring `phase_t_postfix = []` as a DEFAULT feature of
-//! mantis-selfplay in the fix commit, so `cargo test --workspace --locked` runs this
-//! bank with no invocation change. At HEAD the gate is visibly reported: cargo emits an
-//! `unexpected_cfgs` warning naming this exact feature, and ORACLE_NOTES_T.md lists
-//! every gated test with pre-fix status "not-compiled-gated".
+//! The gate is wired by declaring `phase_t_postfix = []` a DEFAULT feature of mantis-selfplay,
+//! so `cargo test --workspace --locked` runs this bank with no invocation change; before that,
+//! cargo emits an `unexpected_cfgs` warning naming this exact feature.
 //!
-//! Killers (PREREG_T §3): DEG — M-C; S2a — M-J; S2b record-level — M-D; O4b — M-N.
+//! Killers: DEG — M-C; S2a — M-J; S2b record-level — M-D; O4b — M-N.
 #![cfg(feature = "phase_t_postfix")]
 
 use mantis_core::board::Board;
@@ -34,9 +26,8 @@ use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::records::{record_position_graph, TargetIntegrityError};
 use mantis_selfplay::replay::hexg::HexgBuffer;
 
-/// Test slot geometry (post-R255: the production value is DERIVED from the sims
-/// regime at composition; 128 keeps these frozen oracles' boundary arithmetic
-/// unchanged — a test geometry choice, not a shipped tunable).
+/// Test slot geometry: the production value is DERIVED from the sims regime at composition, and
+/// 128 keeps these frozen oracles' boundary arithmetic unchanged. Not a shipped tunable.
 const MAX_VISITS: usize = 128;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -51,8 +42,7 @@ fn wide_board() -> Board {
     Board::from_stones(&stones, Player::One, 2, 0, None)
 }
 
-/// Two far clusters (records.rs ls_tests::spread_board) — (28,0) is off the global
-/// window and covered by cluster-2.
+/// Two far clusters — (28,0) is off the global window and covered by cluster-2.
 fn spread_board() -> Board {
     let stones: Vec<((i32, i32), Cell)> = (0..5i32)
         .map(|q| ((q, 0), Cell::P1))
@@ -92,8 +82,6 @@ fn record(
 ) -> Result<mantis_selfplay::replay::hexg::GraphRecord, TargetIntegrityError> {
     record_position_graph(board, ls, TRUNK, 1, 2, 3, true, MAX_VISITS, None)
 }
-
-// ── DEG: the four degenerate constructions, one per §3.3 rev-3 order-arm ─────────────
 
 #[test]
 fn deg_4a_half_mass_raises_mass_not_unity() {
@@ -183,8 +171,6 @@ fn err_text(
     }
 }
 
-// ── S2a: the record carries EVERY ls cell by coord (map equality) ────────────────────
-
 #[test]
 fn s2a_record_carries_every_ls_cell_by_coord() {
     let board = spread_board();
@@ -220,8 +206,6 @@ fn s2a_record_carries_every_ls_cell_by_coord() {
     );
 }
 
-// ── S2b record-level: the MAX_VISITS boundary (flip-set row 5) ───────────────────────
-
 #[test]
 fn s2b_admits_exactly_128_mass_cells() {
     let board = wide_board();
@@ -256,10 +240,9 @@ fn s2b_refuses_129_mass_cells_with_the_typed_error() {
 
 #[test]
 fn s2b_zero_visit_prior_fallback_on_a_wide_root_raises_visit_slots_exceeded() {
-    // The §3.4 stated-reachable raise (predicted RED-as-designed in PREREG): a zero-visit
-    // root with > 128 children ships the prior fallback over its FULL child set (§3.1);
-    // the record guard must refuse it LOUD — a >128-child prior dump under sims >= 2
-    // evidences inference failure, and raising is CORRECT.
+    // The stated-reachable raise: a zero-visit root with > 128 children ships the prior fallback
+    // over its FULL child set, and the record guard must refuse it LOUD — a >128-child prior
+    // dump under sims >= 2 evidences inference failure.
     let board = wide_board();
     let legal = board.legal_moves();
     assert!(
@@ -302,9 +285,8 @@ fn s2b_zero_visit_prior_fallback_on_a_wide_root_raises_visit_slots_exceeded() {
     }
 }
 
-// ── QA: quick-arm parity — export is flag-independent, flag rides the buffer ─────────
-// Construction is IN-WINDOW-ONLY (out of M-J's reach — the T-2 reconciliation: the
-// off-window-mass burden is O1r's; asserted as a precondition below).
+// Construction is IN-WINDOW-ONLY, asserted as a precondition below: the off-window-mass burden
+// belongs to a different oracle.
 
 #[test]
 fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
@@ -344,8 +326,8 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
     }
     let ls = tree.get_policy_ls(1.0, NA);
 
-    // The SAME export recorded under both arms: get_policy_ls ran before the flag exists
-    // (search_drive.rs:709,716-724) — the fix is arm-independent (PROVENANCE_T0 §2).
+    // The SAME export recorded under both arms: get_policy_ls runs before the flag exists, so
+    // the fix is arm-independent.
     let rec_full = record_position_graph(&board, &ls, TRUNK, 1, 2, 3, true, MAX_VISITS, None)
         .expect("full-arm record");
     let rec_quick = record_position_graph(&board, &ls, TRUNK, 1, 2, 3, false, MAX_VISITS, None)
@@ -369,8 +351,6 @@ fn qa_is_full_search_flag_rides_and_the_target_is_flag_independent() {
     assert!(!buf.record_at(1).is_full_search);
     assert_eq!(buf.record_at(0).visits, buf.record_at(1).visits);
 }
-
-// ── O4b + CTR(latch): the fatal-defect latch, red-side ───────────────────────────────
 
 #[test]
 fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {

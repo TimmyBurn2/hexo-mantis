@@ -1,63 +1,15 @@
 #!/usr/bin/env python3
 # >300 justify: the per-function positional table, the binary-mode discriminator, the
 # self-expiring exemption register and the two scoped rules are one gate's single authority;
-# splitting them would create a second place where "what counts as encoding-less I/O" is
-# decided, which is the drift this gate exists to remove (LAW-03).
-"""CI gate 16 (P0-05): no encoding-less text I/O where it can break a run.
+# splitting them would create a second place where "what counts as encoding-less I/O" is decided.
+"""CI gate 16: no encoding-less text I/O where it can break a run.
 
-`open()`, `Path.read_text()` and `Path.write_text()` default to `locale.getpreferredencoding()`.
-On Linux CI that is UTF-8, so this class is invisible there. On a Windows checkout it is the ANSI
-codepage (cp1252 here), and reading any UTF-8 file with a non-ASCII byte raises UnicodeDecodeError.
-
-THIS REPO HAS BEEN BITTEN THREE TIMES BY IT:
-
-  1. tools/check_import_dag.py:107        -- CI gate 9, crashed on any non-ASCII source
-  2. tools/ci_gates/check_tracked_refs.py -- CI gate 10, same
-  3. tests/train/test_anchor.py:28 and tests/train/test_warmstart.py:22 -- at MODULE scope, so
-     pytest died with `Interrupted: 2 errors during collection` and the ENTIRE default tier
-     did not run on Windows (S-19)
-
-The trigger is the repo's own house style: section dividers like `# == ... ==` are U+2550, which
-is undefined in cp1252. `src/mantis/train/anchor.py` carries 621 non-ASCII bytes.
-
-TWO RULES, each with a measured-clean baseline (R98: no gate over a dirty baseline):
-
-  * `tools/`  -- ZERO encoding-less text I/O anywhere. These are the gates themselves; they must
-    not fail on the platform they are meant to protect. Baseline measured at 0 after P0-05.
-  * `tests/`  -- ZERO at MODULE SCOPE. A module-scope failure is COLLECTION-fatal: it takes down
-    the whole tier, not one test. Baseline measured at 0 (one registered exemption, below).
-
-NOT a rule: function-scope calls in `tests/`. 232 of them exist. They are a real backlog, but
-`tests/` is deliberately edit-averse (pyproject.toml:77-81, frozen-oracle discipline), a 232-file
-mechanical diff would bury the 6 real fixes it contains, and each one fails at most its own test
-rather than the run. Registered in tmp/plan/FOUND.md, not silently forgotten.
-
-NOT scanned: `src/`. 31 sites exist there and they are production paths, but they are a separate
-adjudication with a different risk profile (a run that dies mid-training, not a gate that cannot
-start) and P0-05's mandate is the collection blocker. Named here so the omission is deliberate
-and visible rather than an oversight.
-
-WHAT COUNTS AS SAFE, and why each matters:
-  * binary mode (`"rb"`, `mode="wb"`) -- takes no `encoding` at all; demanding one would be
-    wrong, and a gate that fires on correct code gets disabled within a week
-  * `encoding=` as a keyword
-  * `encoding` passed POSITIONALLY -- the index differs per function, hence POSITIONAL_ENCODING
-  * `**kwargs` forwarded -- absence cannot be proven statically, so it is not claimed
-
-ESCAPE HATCH -- for a call that genuinely is not file text I/O (`zipfile.ZipFile.open`, a mock,
-a custom `.open()`), or where the platform encoding is deliberately wanted:
-
-    with p.open("w") as fh:  # encoding-gate: ok -- <why this needs no encoding>
-
-The reason text is mandatory.
-
-KNOWN OVER-APPROXIMATION: any `.open()` is treated as file text I/O, because the receiver's type
-is not reliably decidable statically. Measured at P0-05: of 13 `.open()` attribute calls across
-`tools/`, `tests/` and `src/`, every one inside the GATED scope has a Path-like receiver, so this
-costs zero false positives today. The one true counter-example is `os.open(path, flags)` in
-`src/` (fd-level, takes no encoding) -- out of scope, and it would need the hatch if `src/` is
-ever added. Narrowing this would buy precision with false NEGATIVES, which is the wrong trade for
-a class that fails silently. Pinned by tests/tools/test_encoding_io_gate.py.
+`open()`, `read_text()` and `write_text()` default to the platform codepage, so a non-ASCII UTF-8
+file raises UnicodeDecodeError off a UTF-8 locale — invisible on Linux CI. ZERO under `tools/`, and
+ZERO at MODULE SCOPE under `tests/`, where a failure is collection-fatal for the whole tier; other
+`tests/` sites and all of `src/` are deliberately out of scope. Safe: binary mode, `encoding=` by
+keyword or position, a forwarded `**kwargs`, or `# encoding-gate: ok -- <why>` whose reason text is
+MANDATORY. Any `.open()` counts, since the receiver's type is not statically decidable.
 """
 from __future__ import annotations
 
@@ -68,16 +20,13 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-#: (function, is_method) -> index at which `encoding` appears POSITIONALLY, or None.
-#: The builtin and the Path method DIFFER BY ONE because `Path.open` has no `file` parameter:
+#: (function, is_method) -> the index at which `encoding` appears POSITIONALLY. The builtin and
+#: the Path method differ by one because `Path.open` has no `file` parameter, so collapsing them
+#: into one table would flag correct binary code AND miss a positional encoding:
 #:   open(file, mode, buffering, encoding, ...)      -> encoding 3, mode 1
 #:   Path.open(mode, buffering, encoding, ...)       -> encoding 2, mode 0
 #:   Path.read_text(encoding, errors, newline)       -> encoding 0, no mode
 #:   Path.write_text(data, encoding, errors, ...)    -> encoding 1, no mode
-#: Collapsing these into one table (the first draft did) makes `p.open("rb")` look like text
-#: mode and flags correct binary code -- the false-positive class that gets a gate disabled --
-#: and makes `p.open("r", -1, "utf-8")` look encoding-less. Both directions are wrong, so the
-#: builtin and the method are keyed separately.
 POSITIONAL_ENCODING: dict[tuple[str, bool], int | None] = {
     ("open", False): 3,
     ("open", True): 2,
@@ -91,17 +40,13 @@ POSITIONAL_MODE: dict[tuple[str, bool], int | None] = {
     ("write_text", True): None,
 }
 
-#: The escape token. COMPILED, not a substring (AUDIT-1 F-25): `ESCAPE in line`
-#: accepted a bare `# encoding-gate: ok --` with nothing after it, while this file's own
-#: docstring says the reason text is MANDATORY. `\S` after the dashes is what makes
-#: that sentence true — the same shape `silent_encoding_gate.ESCAPE` already had.
+#: Compiled, not a substring: the trailing `\S` is what makes the mandatory reason text
+#: mandatory, since a bare `# encoding-gate: ok --` would otherwise silence a site.
 ESCAPE_TOKEN = "encoding-gate: ok --"
 ESCAPE = re.compile(re.escape("encoding-gate: ok") + r"\s*--\s*\S")
 
-#: Registered, owned exemptions. NOT an escape hatch: each asserts "this IS a real site, it is
-#: tracked, and it cannot be fixed here". Matched on exact source text, so an entry that stops
-#: matching FAILS the gate -- an exemption can never be silently inherited by whatever replaced
-#: the line it named. (Shape borrowed from gate 11's KNOWN_DEBT, which earned it.)
+#: Registered exemptions, each a real tracked site that cannot be fixed here. Matched on exact
+#: source text, so an entry that stops matching FAILS the gate rather than being inherited.
 EXEMPT: tuple[tuple[str, str, str], ...] = (
     (
         "tests/tools/test_preflight_mint.py",
@@ -113,15 +58,13 @@ EXEMPT: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
-#: Non-vacuity floors. A gate that scans nothing finds nothing. Set below the measured counts
-#: (tools/ 13, tests/ 254 at P0-05) with headroom for deletions, but high enough that a broken
-#: glob or a wrong REPO_ROOT cannot pass silently. The first draft used 15 for tools/ and the
-#: gate correctly refused itself -- which is the behaviour these floors exist to produce.
+#: Non-vacuity floors, set below the measured counts (tools/ 13, tests/ 254) with headroom for
+#: deletions but high enough that a broken glob or a wrong REPO_ROOT cannot pass silently.
 MIN_FILES = {"tools": 10, "tests": 200}
 
 
 def _call_key(node: ast.Call) -> tuple[str, bool] | None:
-    """(name, is_method) for a call we care about, else None."""
+    """Return `(name, is_method)` for a call we care about, else None."""
     if isinstance(node.func, ast.Name):
         return (node.func.id, False)
     if isinstance(node.func, ast.Attribute):
@@ -139,7 +82,7 @@ def _const_str(node: ast.expr | None) -> str | None:
 
 
 def is_binary_mode(node: ast.Call, key: tuple[str, bool]) -> bool:
-    """True if this call opens in binary mode, which correctly takes no `encoding`."""
+    """Report whether this call opens in binary mode, which correctly takes no `encoding`."""
     for kw in node.keywords:
         if kw.arg == "mode":
             mode = _const_str(kw.value)
@@ -152,7 +95,7 @@ def is_binary_mode(node: ast.Call, key: tuple[str, bool]) -> bool:
 
 
 def has_encoding(node: ast.Call, key: tuple[str, bool]) -> bool:
-    """True if `encoding` is supplied by keyword, positionally, or possibly via **kwargs."""
+    """Report whether `encoding` is supplied by keyword, positionally, or via `**kwargs`."""
     for kw in node.keywords:
         if kw.arg == "encoding":
             return True
@@ -163,7 +106,7 @@ def has_encoding(node: ast.Call, key: tuple[str, bool]) -> bool:
 
 
 def is_unsafe(node: ast.Call) -> bool:
-    """THE decision. Both the scan and its producer test go through this one function."""
+    """Decide whether a call is encoding-less text I/O; the scan and its producer test share it."""
     key = _call_key(node)
     if key is None or key not in POSITIONAL_ENCODING:
         return False
@@ -173,7 +116,7 @@ def is_unsafe(node: ast.Call) -> bool:
 
 
 def _module_scope_lines(tree: ast.Module) -> set[int]:
-    """Lines that execute at IMPORT time, i.e. not nested in any def/class."""
+    """Return the line numbers nested inside a def or class, i.e. not import-time."""
     nested: set[int] = set()
     for node in ast.walk(tree):
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
@@ -185,7 +128,7 @@ def _module_scope_lines(tree: ast.Module) -> set[int]:
 
 
 def _justified(lines: list[str], lineno: int) -> bool:
-    """Escape on the line itself, or anywhere in the comment block directly above it."""
+    """Report whether an escape sits on the line or in the comment block directly above it."""
     if ESCAPE.search(lines[lineno - 1]):
         return True
     j = lineno - 2
@@ -197,7 +140,7 @@ def _justified(lines: list[str], lineno: int) -> bool:
 
 
 def scan() -> tuple[list[str], dict[str, int], set[int]]:
-    """Return (violations, files_scanned_per_root, indices_of_matched_exemptions)."""
+    """Return the violations, the files scanned per root, and the matched exemption indices."""
     violations: list[str] = []
     scanned = {root: 0 for root in MIN_FILES}
     matched_exempt: set[int] = set()

@@ -1,17 +1,11 @@
-"""Refuse a CPU-only torch build, and PROVE the CUDA path with a real matmul (R328(e)).
+"""Refuse a CPU-only torch build, and PROVE the CUDA path with a real matmul.
 
-WHY THIS EXISTS, AND WHY IT IS IN-TREE RATHER THAN ON THE BOX. `pyproject.toml` pins torch to
-the PyTorch **CPU** wheel index (`[tool.uv.sources] torch = { index = "pytorch-cpu" }`), which
-is correct for the parity regime that pin was written for and wrong for a GPU host. So every
-`uv sync` on the box replaces a CUDA torch with `2.11.0+cpu`, and it is not a box accident that
-a box script can own — it is the committed configuration doing what it says. A guard that lives
-only on the box is re-lost with the box; this one rides in the repo.
-
-WHY `torch.cuda.is_available()` IS NOT THE CHECK. It answers "did this build find a driver",
-which a CPU wheel answers `False` and a broken CUDA install can answer `True`. The question that
-matters before a run is whether CUDA **computes correctly**, and only an arithmetic result
-answers it. The MINT-CLOSE session hit the downgrade and verified the repair with a real matmul
-against a CPU reference for exactly this reason; that check is now mechanism instead of memory.
+`pyproject.toml` pins torch to the PyTorch CPU wheel index, so every `uv sync` on a GPU host
+replaces a CUDA torch with a `+cpu` one — committed configuration doing what it says, not a
+host accident, which is why the guard rides in the repo. `torch.cuda.is_available()` is not
+the check: it answers "did this build find a driver", which a CPU wheel answers False and a
+broken CUDA install can answer True. Only an arithmetic result answers whether CUDA computes
+correctly.
 """
 
 from __future__ import annotations
@@ -44,11 +38,8 @@ def torch_build() -> dict[str, object]:
         "torch_version": torch.__version__,
         "cuda_toolkit": torch.version.cuda,
         "cuda_available": bool(torch.cuda.is_available()),
-        # AUDIT-1 F-28/A11. `... else 0` published a device count nothing counted: on a
-        # CPU-only host the field read `0` exactly as it would on a CUDA host that saw no
-        # device, and `assert_cuda_build`'s third refusal then named the wrong condition
-        # ("reports CUDA available with device_count 0") for a build that reports no CUDA at
-        # all. `None` = the question was not asked, and it is asked whenever it can be.
+        # `... else 0` published a device count nothing counted, and the third refusal below
+        # then named the wrong condition. `None` = the question was not asked.
         "device_count": (int(torch.cuda.device_count())
                          if torch.cuda.is_available() else None),
     }
@@ -76,9 +67,8 @@ def assert_cuda_build() -> dict[str, object]:
             f"torch {build['torch_version']} carries CUDA {build['cuda_toolkit']} but "
             "torch.cuda.is_available() is False: no usable driver or no visible device."
         )
-    # Reached only past the `cuda_available` refusal above, so the count WAS asked for and
-    # `None` here would mean the two disagree — named as its own refusal rather than crashing
-    # in `int(None)`.
+    # Reached only past the `cuda_available` refusal, so the count WAS asked for: `None` here
+    # means the two disagree, named as its own refusal rather than crashing in `int(None)`.
     count = build["device_count"]
     if count is None:
         raise CudaBuildRefusal(

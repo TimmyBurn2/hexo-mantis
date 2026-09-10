@@ -39,7 +39,7 @@ class _RecordingSink:
         return [e for e in self.events if e.get("event") == name]
 
 
-# ── runner_started + workers_spawned (pool.start) ──────────────────────────────────────
+# runner_started + workers_spawned (pool.start)
 def test_runner_started_emits_on_pool_start() -> None:
     """LAW-07 producer test — `runner_started` emits once when `WorkerPool.start()` runs."""
     from mantis.selfplay.pool import WorkerPool
@@ -102,7 +102,7 @@ def test_workers_spawned_emits_on_pool_start() -> None:
     assert events[0]["n_workers"] == 4
 
 
-# ── game_loop_entered + first_record_drained (pool_drain) ──────────────────────────────
+# game_loop_entered + first_record_drained (pool_drain)
 def _make_drain_pool(games, sink):
     pool = type("P", (), {})()
     pool._stop_event = type("S", (), {"_n": 0, "is_set": lambda self: self._n > 0 or (setattr(self, "_n", self._n + 1) or False)})()
@@ -184,7 +184,7 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
     assert events[0]["representation"] == "dense"
 
 
-# ── first_inference_enqueued + first_inference_served (InferenceServer) ───────────────
+# first_inference_enqueued + first_inference_served (InferenceServer)
 # The inference server's dense/graph loops require heavy torch + batcher mocking to drive
 # end-to-end. The emit LOGIC is a one-shot flag guarded by `request_ids` non-empty (enqueued)
 # and `forward_count == 0` pre-increment (served). These tests drive the emit logic directly

@@ -1,34 +1,13 @@
-"""⊕ O-10 / O-11 / O-16 (+ O-28, O-14) — the INDEPENDENT heartbeat watchdog (L-B).
+"""The INDEPENDENT heartbeat watchdog.
 
-RED-at-import until IMPL writes `mantis.train.lifecycle.heartbeat_watchdog` AND
-`mantis.monitor.heartbeat`. ORACLE-FIRST (⊕): the top-level imports raise ModuleNotFoundError
-before any port code exists. `heartbeat_watchdog` imports `mantis.monitor.heartbeat` only
-(torch-free).
+The crux: a `tick()`-driven stall watchdog is driven from the MAIN loop, so a tick from the wedged
+thread can never fire. This one is an INDEPENDENT thread reading heartbeat STALENESS, so a wedge
+INSIDE an eval call still trips it. Real-thread tests are bounded by
+`threading.Event.wait(timeout=...)`, so a bug fails within ~5 s and never hangs CI.
 
-The crux (run3 lesson): the WP10 `StallWatchdog` is tick()-driven from the MAIN loop, so a
-`tick()` from the wedged thread can never fire. L-B is an INDEPENDENT thread reading heartbeat
-STALENESS — a wedge INSIDE an eval call still trips it.
-
-Covered:
-  * ⊕ O-16 (P-16) fake-clock staleness unit: no fire at age D−ε; fire at first poll age ≥ D;
-    per-source deadlines independent; disarm_staleness stops staleness but persist-fatal still
-    fires + file `seq` keeps advancing; `heartbeat_watchdog_armed` always emitted (even with a
-    disabled deadline ≤ 0).
-  * ⊕ O-10 (P-10) livelock regression: a real watchdog thread fires within the deadline
-    envelope while the "main thread" is wedged forever — snapshot written, exit 42, wedge unset.
-  * ⊕ O-11 (P-11) wedge matrix: wedge exactly one of {train_step, inference_dispatch,
-    selfplay_drain}; the fire names precisely the stale source; the two healthy sources never fire.
-  * O-28 (P-28) checkpoint-source persist-fatal + live-attribute binding.
-  * O-14 (P-14) GIL-starvation: the fire path runs on the watchdog thread while main is blocked;
-    the native-GIL limit is DOCUMENTED (supervisor = backstop).
-
-Real-thread tests are bounded by `threading.Event.wait(timeout=...)` (no pytest-timeout plugin
-in this repo): a bug fails within ~5 s, it never hangs CI.
-
->300 justify: ONE unit under test (the watchdog thread) with one shared harness — the fake
-clock, the `_make_wd` factory and the `_TimedExit` spy are used by every row from the
-fake-clock staleness units through the real-thread livelock/wedge matrix. Splitting by fire
-class would duplicate the harness and let the deterministic and real-thread halves drift.
+>300 justify (R8): ONE unit under test with one shared harness — the fake clock, the `_make_wd`
+factory and the `_TimedExit` spy are used by every row, so splitting by fire class would duplicate
+the harness and let the deterministic and real-thread halves drift.
 """
 from __future__ import annotations
 
@@ -80,10 +59,8 @@ class _Clock:
         self.t += dt
 
 
-# ═══ ⊕ O-16 — fake-clock staleness unit ══════════════════════════════════════════════
 def test_no_fire_below_deadline_fire_at_first_poll_past_deadline(tmp_path, spy_sink):
-    """O-16 / P-16 — no fire at age D−ε; fire at the first poll where age ≥ D; the fire names
-    the stale source and exits 42."""
+    """No fire at age D−ε; fire at the first poll where age ≥ D, naming the stale source, exit 42."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -101,8 +78,8 @@ def test_no_fire_below_deadline_fire_at_first_poll_past_deadline(tmp_path, spy_s
 
 
 def test_per_source_deadlines_are_independent(tmp_path, spy_sink):
-    """O-16 — a short deadline on one source fires while the others (long deadline, beaten) stay
-    silent; the fire names the short-deadline source only."""
+    """A short deadline on one source fires while the others stay silent, and the fire names the
+    short-deadline source only."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -118,19 +95,9 @@ def test_per_source_deadlines_are_independent(tmp_path, spy_sink):
 
 
 def test_arm_log_emitted_even_when_a_deadline_disables_a_source(tmp_path, spy_sink):
-    """O-16 — a source with deadline ≤ 0 is disabled from firing, but the arm-log STILL names it
-    (the WP10 visibility law: a disabled/misconfigured watchdog must be visible, not silent).
-
-    ORACLE CORRECTION (REVIEW-impl F-1, adjudicated): this row previously advanced the clock to
-    10 000 s — 100× past the two POSITIVE deadlines — and asserted zero fires, which contradicts
-    its own docstring ("that source's fire"), PREREG P-16 ("per-source deadlines independent")
-    and `test_per_source_deadlines_are_independent` on the same poll path. Obeying it forced a
-    GLOBAL staleness disable: one zeroed (or missing) deadline would kill both the in-process
-    fire AND the supervisor backstop (the thread stays alive mirroring a fresh `seq` while a
-    pipeline thread wedges) — the run3 class re-armed as a one-character config footgun. The
-    clock now stops short of the positive deadlines for the disabled-source leg, then crosses
-    them to prove the OTHER sources are still armed and that the disabled one is never blamed.
-    """
+    """A source with deadline ≤ 0 is disabled from firing, but the arm-log STILL names it. The
+    clock stops short of the positive deadlines, then crosses them to prove the OTHER sources are
+    armed: asserting zero fires past every deadline would force a GLOBAL staleness disable."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -159,10 +126,9 @@ def test_arm_log_emitted_even_when_a_deadline_disables_a_source(tmp_path, spy_si
 
 
 def test_missing_deadline_for_a_registry_source_is_a_loud_wiring_error(tmp_path, spy_sink):
-    """O-16 (F-1 companion) — a registry source with NO entry in `deadlines` must raise at
-    CONSTRUCTION. Reading it as an implicit 0.0 would silently blind the watchdog to a whole
-    pipeline stage (and, because the thread keeps mirroring a fresh `seq`, the supervisor too).
-    Bites the `deadlines.get(source, 0.0)` footgun."""
+    """A registry source with NO entry in `deadlines` must raise at CONSTRUCTION: reading it as an
+    implicit 0.0 would silently blind the watchdog to a whole pipeline stage, and the supervisor
+    too, since the thread keeps mirroring a fresh `seq`."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     with pytest.raises(ValueError) as ei:
@@ -173,17 +139,9 @@ def test_missing_deadline_for_a_registry_source_is_a_loud_wiring_error(tmp_path,
 
 
 def test_disarm_staleness_stops_stall_fire_but_persist_and_file_stay_live(tmp_path, spy_sink):
-    """O-16 / P-16 — after disarm_staleness(): per-source staleness never fires (advance ≫ D),
-    but the persist-fatal fire STILL works and the heartbeat file `seq` keeps advancing (the
-    supervisor must keep seeing a fresh seq through a long clean close-out).
-
-    RED-TEAM F2 update: `disarm_staleness()` now SWAPS the per-source deadlines for one
-    bounded close-out budget rather than switching staleness off, so this row advances the
-    clock 200×/400× past the 0.5 s per-source deadline while staying INSIDE the close-out
-    budget — which is exactly the property it was written to pin (a legitimately long
-    close-out is quiet). The overrun leg is
-    `test_close_out_overrun_fires_after_the_teardown_budget`.
-    """
+    """After `disarm_staleness()` per-source staleness never fires, but persist-fatal still works
+    and `seq` keeps advancing. The disarm SWAPS the per-source deadlines for one bounded close-out
+    budget, so this drives far past the per-source deadline while staying inside that budget."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -210,14 +168,9 @@ def test_disarm_staleness_stops_stall_fire_but_persist_and_file_stay_live(tmp_pa
 
 
 def test_close_out_overrun_fires_after_the_teardown_budget(tmp_path, spy_sink):
-    """RED-TEAM F2 — a teardown that overruns the close-out budget STILL fires 42.
-
-    Before this fix `disarm_staleness()` switched staleness off permanently while the file
-    mirror kept advancing `seq`, so a wedge during close-out was invisible to BOTH levels:
-    level 1 would not fire and level 2 read a healthy child, for an unbounded window. (The
-    DESIGN's stated mitigation — the drain hard caps — has zero consumers in `src/`; see the
-    R-DRAIN-HARDCAP-CONSUMERS debt.) Bites a disarm that is an off switch.
-    """
+    """A teardown that overruns the close-out budget STILL fires 42. Switching staleness off
+    permanently while the file mirror kept advancing `seq` made a close-out wedge invisible to
+    BOTH levels for an unbounded window."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -243,9 +196,9 @@ def test_close_out_overrun_fires_after_the_teardown_budget(tmp_path, spy_sink):
 
 
 def test_close_out_deadline_zero_keeps_the_old_unbounded_behaviour(tmp_path, spy_sink):
-    """F2 companion — `close_out_deadline_sec <= 0` is the documented off switch for the
-    teardown budget (an operator who genuinely wants an unbounded close-out must say so
-    explicitly; it is never the default)."""
+    """`close_out_deadline_sec <= 0` is the documented off switch for the teardown budget: an
+    operator who genuinely wants an unbounded close-out must say so explicitly, and it is never
+    the default."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -262,7 +215,6 @@ def test_close_out_deadline_zero_keeps_the_old_unbounded_behaviour(tmp_path, spy
     assert not exits
 
 
-# ═══ O-28 — checkpoint-source persist-fatal + live-attribute binding ══════════════════
 def test_checkpoint_source_live_attribute_increment_fires_43(tmp_path, spy_sink, monkeypatch):
     """O-28 / P-28 — an increment of `mantis.train.checkpoints.persist_errors_total` made AFTER
     the watchdog's `counters_fn` is constructed is observed (live module-attribute read) → fire
@@ -286,10 +238,9 @@ def test_checkpoint_source_live_attribute_increment_fires_43(tmp_path, spy_sink,
 
 
 def test_frozen_int_binding_mutant_is_rejected(tmp_path, spy_sink, monkeypatch):
-    """O-28 / P-28 (mutant self-test) — a `counters_fn` that VALUE-BINDS the counter at
-    construction (`frozen = checkpoints.persist_errors_total`) reads 0 forever after a
-    `global … += 1`, so it never fires. This test proves the oracle DISTINGUISHES the footgun:
-    the frozen-int mutant does NOT fire, so IMPL must read the module ATTRIBUTE live."""
+    """A `counters_fn` that VALUE-BINDS the counter at construction reads 0 forever after a
+    `global … += 1`, so it never fires. This proves the oracle DISTINGUISHES the footgun: the
+    frozen-int mutant does NOT fire, so the implementation must read the module ATTRIBUTE live."""
     import mantis.train.checkpoints as checkpoints
 
     clock = _Clock()
@@ -306,7 +257,6 @@ def test_frozen_int_binding_mutant_is_rejected(tmp_path, spy_sink, monkeypatch):
     assert not exits, "the frozen-int binding mutant is blind to the increment (correctly rejected)"
 
 
-# ═══ ⊕ O-10 — L-B livelock regression (real thread) ══════════════════════════════════
 class _TimedExit:
     """Injected exit_fn recording (code, monotonic-timestamp) and setting a fire Event."""
 
@@ -320,10 +270,9 @@ class _TimedExit:
 
 
 def test_livelock_fires_within_envelope_while_main_thread_wedged(tmp_path, spy_sink):
-    """O-10 / P-10 — deadline D=0.5 s, poll 0.1 s; the "main thread" is wedged forever in a mock
-    eval (Event().wait()) so train_step never beats. The INDEPENDENT watchdog fires within
-    D ≤ t_fire − t0 ≤ 2.0 s, writes the .watchdog snapshot, exits 42, and the wedge is STILL set
-    (the fire required NO main-thread cooperation — the run3 45 h wedge class)."""
+    """Deadline 0.5 s, poll 0.1 s; the "main thread" is wedged forever in a mock eval so
+    `train_step` never beats. The INDEPENDENT watchdog fires inside the envelope, writes the
+    snapshot, exits 42, and the wedge is STILL set — the fire needed no main-thread cooperation."""
     wedge = threading.Event()            # the wedged eval: never released during the test
     snap_path = tmp_path / "buffer.bin.watchdog"
 
@@ -336,7 +285,7 @@ def test_livelock_fires_within_envelope_while_main_thread_wedged(tmp_path, spy_s
                  clock=time.monotonic, exit_fn=exit_fn, save_snapshot=_snapshot,
                  hb_file=tmp_path / "hb.json", poll=0.1)
 
-    # A daemon thread stuck in the mock eval — proves the watchdog does not need it to un-wedge.
+    # A daemon thread stuck in the mock eval — the watchdog does not need it to un-wedge.
     threading.Thread(target=wedge.wait, daemon=True).start()
 
     t0 = time.monotonic()
@@ -354,11 +303,10 @@ def test_livelock_fires_within_envelope_while_main_thread_wedged(tmp_path, spy_s
         wedge.set()
 
 
-# ═══ ⊕ O-11 — L-B wedge matrix (real thread) ═════════════════════════════════════════
 @pytest.mark.parametrize("wedged", list(HEARTBEAT_SOURCES))
 def test_wedge_matrix_fire_names_exactly_the_wedged_source(tmp_path, spy_sink, wedged):
-    """O-11 / P-11 — wedge exactly one source (never beat it) while a beater keeps the other two
-    fresh; the fire names precisely the wedged source and never a healthy one. 3/3."""
+    """Wedge exactly one source while a beater keeps the others fresh; the fire names precisely the
+    wedged source and never a healthy one."""
     healthy = [s for s in HEARTBEAT_SOURCES if s != wedged]
     reg = HeartbeatRegistry()
     exit_fn = _TimedExit()
@@ -390,7 +338,6 @@ def test_wedge_matrix_fire_names_exactly_the_wedged_source(tmp_path, spy_sink, w
         beater.join(timeout=2.0)
 
 
-# ═══ O-14 — GIL-starvation scenario + documented limit ═══════════════════════════════
 def test_fire_path_documents_gil_limit_and_supervisor_backstop():
     """O-14 / P-14 — the native-GIL limit is DOCUMENTED: the watchdog module docstring names the
     GIL starvation case and the supervisor as the backstop (missing documentation = FAIL)."""
@@ -421,16 +368,10 @@ def test_fire_path_runs_while_main_thread_holds_a_lock(tmp_path, spy_sink):
         held.release()
 
 
-# ══ RED-TEAM F3 — an UNWIRED source must not be read as a wedge ═══════════════════════
 def test_undeclared_never_beaten_source_warns_instead_of_firing(tmp_path, spy_sink):
-    """RED-TEAM F3 — a source the composition root did NOT declare as wired, and which has
-    never beaten, must NOT age into a 42; it gets a loud `heartbeat_source_unwired` instead.
-
-    Bites the shape the red team constructed: one omitted `heartbeat=` kwarg made a perfectly
-    healthy run fire 42 on `inference_dispatch`, and the supervisor then relaunched into the
-    same missing wiring until the budget was gone (rc 44). Killing a healthy run because a
-    kwarg was forgotten is strictly worse than not watching a stage nothing feeds.
-    """
+    """An UNDECLARED source that has never beaten must NOT age into a 42; it gets a loud
+    `heartbeat_source_unwired` instead. One omitted `heartbeat=` kwarg made a healthy run fire 42
+    and the supervisor relaunch into the same missing wiring until the budget was gone."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -469,9 +410,9 @@ def test_undeclared_never_beaten_source_warns_instead_of_firing(tmp_path, spy_si
 
 
 def test_declared_source_that_never_beats_still_fires(tmp_path, spy_sink):
-    """F3 companion — the carve-out is narrow: a source the root DECLARED as wired is watched
-    from arm time, so a stage that dies before its very FIRST beat is still caught. Bites an
-    over-broad 'never beaten ⇒ never fire' rule that would silently drop wedge coverage."""
+    """The carve-out is narrow: a source the root DECLARED as wired is watched from arm time, so a
+    stage that dies before its very FIRST beat is still caught. Bites an over-broad "never beaten
+    ⇒ never fire" rule that would silently drop wedge coverage."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -488,8 +429,8 @@ def test_declared_source_that_never_beats_still_fires(tmp_path, spy_sink):
 
 
 def test_wired_sources_rejects_an_unknown_source_name(tmp_path, spy_sink):
-    """F3 — a typo'd declaration must fail LOUD at construction, never silently widen or
-    narrow what is watched."""
+    """A typo'd declaration must fail LOUD at construction, never silently widen or narrow what is
+    watched."""
     reg = HeartbeatRegistry(clock=_Clock())
     with pytest.raises(ValueError) as ei:
         HeartbeatWatchdog(
@@ -501,15 +442,9 @@ def test_wired_sources_rejects_an_unknown_source_name(tmp_path, spy_sink):
     assert "typo_source" in str(ei.value)
 
 
-# ══ RED-TEAM F5 — a HUNG optional effect must not swallow the exit ════════════════════
 def test_hung_snapshot_still_exits_within_a_bounded_time(tmp_path, spy_sink):
-    """RED-TEAM F5 — a `save_snapshot` that NEVER returns must not suppress `exit_fn`.
-
-    `best_effort` catches exceptions, not hangs: the red team blocked the snapshot and the
-    fire never reached `exit_fn` for the whole hang, contradicting the docstring's stated
-    guarantee. The fire path now runs each optional effect on its own thread under a hard
-    budget and proceeds regardless. Bites an unbounded snapshot on a wedged filesystem.
-    """
+    """A `save_snapshot` that NEVER returns must not suppress `exit_fn`: `best_effort` catches
+    exceptions, not hangs, so each optional effect runs on its own thread under a hard budget."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -541,9 +476,9 @@ def test_hung_snapshot_still_exits_within_a_bounded_time(tmp_path, spy_sink):
 
 
 def test_fire_complete_publishes_the_best_effort_counters(tmp_path, spy_sink):
-    """RED-TEAM F9 — the fire's outcome reaches the ONE channel: a snapshot that FAILS is
-    recorded in `heartbeat_watchdog_fire_complete` with the counter registry, not only in a
-    stderr WARN moments before `os._exit`."""
+    """The fire's outcome reaches the ONE channel: a snapshot that FAILS is recorded in
+    `heartbeat_watchdog_fire_complete` with the counter registry, not only in a stderr WARN
+    moments before `os._exit`."""
     clock = _Clock()
     reg = HeartbeatRegistry(clock=clock)
     exits: list[int] = []
@@ -563,16 +498,10 @@ def test_fire_complete_publishes_the_best_effort_counters(tmp_path, spy_sink):
     assert wd.counters.get("watchdog_snapshot") == 1
 
 
-# ══ RED-TEAM: GIL starvation is REPRODUCIBLE — assert it, do not merely document it ═══
 def test_gil_starvation_freezes_seq_and_the_supervisor_declares_it_stale(tmp_path, spy_sink):
-    """RED-TEAM upgrade of O-14/P-14 from a documented-limit stance to a REAL test.
-
-    DESIGN §f-R5 said GIL starvation "cannot be reproduced in pure pytest"; the red team
-    reproduced it with one non-yielding C call. This row: (1) starves the watchdog thread
-    with `math.factorial`, (2) asserts the heartbeat `seq` FREEZES across the window (level 1
-    is genuinely blind — the honest limit), (3) asserts the supervisor's own staleness core
-    then declares that frozen seq stale, i.e. level 2 is what covers it.
-    """
+    """GIL starvation, asserted rather than documented: one non-yielding C call starves the
+    watchdog thread, `seq` FREEZES (level 1 is genuinely blind — the honest limit), and the
+    supervisor's own staleness core then declares that frozen seq stale."""
     reg = HeartbeatRegistry()
     wd = _make_wd(registry=reg, deadlines={s: 1e9 for s in HEARTBEAT_SOURCES}, sink=spy_sink,
                  clock=time.monotonic, exit_fn=lambda code: None, save_snapshot=lambda: None,
@@ -587,9 +516,9 @@ def test_gil_starvation_freezes_seq_and_the_supervisor_declares_it_stale(tmp_pat
         elapsed = time.monotonic() - t0
         frozen_state = read_heartbeat_file(hb)
         frozen = frozen_state.seq
-        # A free-running watchdog mirrors once per 0.01 s poll, so this window should have
-        # produced ~elapsed/0.01 increments. At most ONE boundary tick may land on either
-        # side of the read; anything more means the thread was NOT starved.
+        # A free-running watchdog mirrors once per 0.01 s poll, so this window should have produced
+        # ~elapsed/0.01 increments. At most ONE boundary tick may land on either side of the read;
+        # anything more means the thread was NOT starved.
         free_running = elapsed / 0.01
         assert elapsed > 0.2, f"the GIL window was too short to be meaningful ({elapsed:.3f}s)"
         assert frozen - before <= 2 and free_running > 10 * 2, (
@@ -597,18 +526,15 @@ def test_gil_starvation_freezes_seq_and_the_supervisor_declares_it_stale(tmp_pat
             f"{frozen} over {elapsed:.2f}s (a free-running thread would add ~{free_running:.0f}); "
             "this is the documented limit the supervisor exists to cover"
         )
-        # Level 2: the supervisor keys on seq PROGRESSION on its own clock — a frozen seq is
-        # stale no matter how healthy the child looks.
+        # Level 2 keys on seq PROGRESSION on its own clock — a frozen seq is stale no matter how
+        # healthy the child looks.
         tracker = LivenessTracker(stale_after_sec=1.0)
         tracker.reset(now=0.0)
-        # The SAME captured state, twice. Re-READING the live file here raced the watchdog
-        # thread: the GIL window has ended by this line, so the thread is free-running again
-        # at one mirror per 0.01 s poll, and a tick landing between the two reads made
-        # `observe` see PROGRESS — `_last_progress` rebased to 2.0 and `is_stale(2.0)` went
-        # False at a measured ~10 % (WPUF-2 R3). The property under test is "an UNCHANGED seq
-        # observed 2 s apart is stale", so the input must be unchanged by construction, not
-        # by luck — and `frozen_state` is literally the seq that froze during the GIL window,
-        # which is what the docstring claims this leg feeds level 2.
+        # The SAME captured state, twice. Re-READING the live file here raced the watchdog thread:
+        # the GIL window has ended, so a tick landing between the two reads made `observe` see
+        # PROGRESS and `is_stale` go False at a measured ~10%. The property under test is "an
+        # UNCHANGED seq observed 2 s apart is stale", so the input must be unchanged by
+        # construction, not by luck.
         tracker.observe(frozen_state, now=0.0)
         tracker.observe(frozen_state, now=2.0)      # the SAME frozen state, 2 s later
         assert tracker.is_stale(2.0), "the supervisor must declare a frozen seq stale"

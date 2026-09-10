@@ -1,23 +1,17 @@
-//! R8-justify: the P-08 graph queue round-trip and its Q-FIND-1 batch-submit arms share one
-//! mock-producer scaffold; the D6 reason-travels arms are the bulk of the overage.
-//! P-08 — mock-game graph queue round-trip, pyo3-free.
+//! R8-justify: the graph queue round-trip and its batch-submit arms share one mock-producer
+//! scaffold; the reason-travels arms are the bulk of the overage.
+//! Mock-game graph queue round-trip, pyo3-free.
 //!
-//! A MOCK producer (D16 surrogate stand-in; the NN + numpy face is WP7) pops the
-//! queue and submits deterministic results; the blocking consumer receives them.
-//! Covers: submit → mock pop → submit results → consumer receives; single-read
-//! (a second submit for the same id is a no-op); closed-queue underflow (`Err`);
-//! and the D6 reason-travels guarantee (inference failure, `fail_remaining`, AND
-//! the build-side reason travels) with no orphaned waiter.
+//! A MOCK producer pops the queue and submits deterministic results; the blocking consumer
+//! receives them. Covers: submit -> mock pop -> submit results -> consumer receives;
+//! single-read (a second submit for the same id is a no-op); closed-queue underflow (`Err`);
+//! and the reason-travels guarantee (inference failure, `fail_remaining`, and the build-side
+//! reason) with no orphaned waiter.
 //!
-//! P-07's dense half — and the cross-queue disjointness arm that paired the two pools —
-//! went with `DenseQueue` at R346(f). One pool remains, so there is nothing to be
-//! disjoint from.
-//!
-//! The Q-FIND-1 batch-submit arms ride the SAME mock producer: one
-//! `submit_graphs_and_wait` puts a whole leaf batch in flight, so a single pop
-//! serves it, the collector's saturation threshold becomes reachable, submission
-//! order survives an out-of-order producer, and neither a rejected graph nor a
-//! mid-batch producer failure can orphan a waiter.
+//! The batch-submit arms ride the SAME mock producer: one `submit_graphs_and_wait` puts a whole
+//! leaf batch in flight, so a single pop serves it, the collector's saturation threshold becomes
+//! reachable, submission order survives an out-of-order producer, and neither a rejected graph
+//! nor a mid-batch producer failure can orphan a waiter.
 
 use std::thread;
 use std::time::{Duration, Instant};
@@ -27,12 +21,8 @@ use mantis_graph::BUILDER_IMPL_NATIVE;
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::queues::{build_leaf_graph, GraphQueue};
 
-// ── mock producer helpers ────────────────────────────────────────────────────
-
-// A pop batch-size of 2 gives a saturation threshold of 1, so `pop` BLOCKS (up to
-// the timeout) until at least one request is enqueued — the drain waits for the
-// consumer to enqueue rather than racing ahead of it. (batch-size 1 ⇒ threshold 0
-// ⇒ non-blocking spin, which would race the consumer's enqueue.)
+// A pop batch-size of 2 gives a saturation threshold of 1, so `pop` BLOCKS until at least one
+// request is enqueued; batch-size 1 would give threshold 0, a spin that races the consumer.
 
 fn drain_graph(q: &GraphQueue, expected: usize) -> Vec<(u64, mantis_graph::AxisGraph)> {
     let mut got = Vec::new();
@@ -44,8 +34,6 @@ fn drain_graph(q: &GraphQueue, expected: usize) -> Vec<(u64, mantis_graph::AxisG
     }
     got
 }
-
-// ── P-08 graph round-trip + reason-travels ────────────────────────────────────
 
 /// A uniform mock `LegalSetPolicy` over `n_legal` cells (dense-only; the exact
 /// distribution is irrelevant to the queue transport under test).
@@ -82,7 +70,7 @@ fn graph_round_trip_delivers_ls_and_value() {
 
 #[test]
 fn graph_inference_failure_reason_travels() {
-    // D6: an inference-failure reason travels VERBATIM to the waiting caller.
+    // An inference-failure reason travels VERBATIM to the waiting caller.
     let q = GraphQueue::new();
     let qc = q.clone();
     let handle = thread::spawn(move || qc.submit_graph_and_wait(valid_leaf()));
@@ -113,7 +101,7 @@ fn graph_fail_remaining_orphans_none() {
 
 #[test]
 fn graph_build_failure_reason_preserved_and_travels() {
-    // D6 build fix: build_leaf_graph returns the reason (NOT .ok()-swallowed None).
+    // build_leaf_graph returns the reason, NOT an `.ok()`-swallowed None.
     let bad = build_leaf_graph(&[(0, 0, 1)], 2, 2, 6, 6, 19);
     let reason = bad.expect_err("bad current_player ⇒ build error");
     assert_eq!(
@@ -179,8 +167,6 @@ fn graph_closed_before_submit_is_loud() {
     assert_eq!(q.submit_graph_and_wait(valid_leaf()).unwrap_err(), "graph batcher is closed");
 }
 
-// ── Q-FIND-1 batch submit: the whole leaf batch in flight at once ─────────────
-
 /// ONE pop, bounded: retry an empty pop (the submitter thread may not have pushed
 /// yet) but never merge two pops — the width of the FIRST non-empty pop is the
 /// property under test.
@@ -204,9 +190,8 @@ fn ok_results(popped: &[(u64, mantis_graph::AxisGraph)]) -> Vec<Result<(LegalSet
 #[test]
 fn batch_submit_puts_the_whole_leaf_batch_in_flight_before_any_wait() {
     // The property that makes the collector threshold reachable at all: ONE
-    // submit_graphs_and_wait leaves N graphs queued simultaneously, so a single pop
-    // of capacity >= N serves the whole leaf batch in ONE forward. The serial
-    // per-graph submit this replaces could never put more than 1 in the queue.
+    // submit_graphs_and_wait leaves N graphs queued simultaneously, so one pop of capacity >= N
+    // serves the whole leaf batch in ONE forward. Serial per-graph submit could queue only 1.
     let q = GraphQueue::new();
     let n = 8usize;
     let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
@@ -263,9 +248,9 @@ fn a_pop_capacity_below_the_leaf_batch_clears_in_exactly_ceil_n_over_cap_pops() 
 
 #[test]
 fn a_rejected_graph_never_enters_the_queue_and_leaves_no_orphan_waiter() {
-    // The pre-pass handshakes must still run BEFORE any enqueue. A batch carrying one
-    // non-native tag must not half-enqueue: the surviving waiters would block forever
-    // behind a caller that has already been handed a reason (DESIGN §3 A.5).
+    // The pre-pass handshakes must still run BEFORE any enqueue: a batch carrying one non-native
+    // tag must not half-enqueue, or the surviving waiters block forever behind a caller that has
+    // already been handed a reason.
     let q = GraphQueue::new();
     let mut bad = valid_leaf();
     bad.builder_impl = 0;
@@ -295,9 +280,8 @@ fn a_rejected_graph_never_enters_the_queue_and_leaves_no_orphan_waiter() {
 #[test]
 fn batch_submit_preserves_submission_order_through_the_fuse() {
     // `expand_and_backup_ls_at` consumes aggregated_ls / aggregated_values / centers
-    // INDEX-ALIGNED with `leaves`. A map-keyed or reordered return would silently
-    // misalign every leaf's expand frame (the class the always-on trunk assert in
-    // search_drive guards). Position-encoded values make a permutation visible.
+    // INDEX-ALIGNED with `leaves`, so a map-keyed or reordered return would silently misalign
+    // every leaf's expand frame. Position-encoded values make a permutation visible.
     let q = GraphQueue::new();
     let n = 5usize;
     let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
@@ -324,9 +308,8 @@ fn batch_submit_preserves_submission_order_through_the_fuse() {
 
 #[test]
 fn a_reachable_threshold_returns_before_the_deadline() {
-    // With supply >= threshold the pop returns ON the threshold, not on max_wait_ms.
-    // Deliberately generous slack (500 ms deadline, asserted < 250 ms) so this pins
-    // the mechanism, not the box's scheduler.
+    // With supply >= threshold the pop returns ON the threshold, not on max_wait_ms. The slack
+    // (500 ms deadline, asserted < 250 ms) pins the mechanism, not the host scheduler.
     let q = GraphQueue::new();
     let graphs: Vec<mantis_graph::AxisGraph> = (0..8).map(|_| valid_leaf()).collect();
     let qc = q.clone();
@@ -361,10 +344,8 @@ fn an_unreachable_threshold_still_serves_on_the_deadline() {
 
 #[test]
 fn concurrent_batch_submitters_each_receive_only_their_own_results() {
-    // Models n_workers > 1: several threads each batch-submit their own leaf batch
-    // into ONE shared queue and every caller must get back exactly its own graphs'
-    // payloads. `graph_fail_remaining_orphans_none` proves nobody hangs; this proves
-    // nobody gets crossed.
+    // Models n_workers > 1: several threads each batch-submit their own leaf batch into ONE
+    // shared queue and every caller must get back exactly its own graphs' payloads.
     let q = GraphQueue::new();
     let (workers, per_worker) = (4usize, 3usize);
     let mut handles = Vec::new();
@@ -409,9 +390,8 @@ fn concurrent_batch_submitters_each_receive_only_their_own_results() {
 
 #[test]
 fn a_mid_batch_producer_failure_wakes_every_waiter_with_the_reason() {
-    // Under batch submit ALL N are already enqueued, so a failure partway through the
-    // producer's walk must not orphan the tail. `fail_remaining` is the vehicle and
-    // its reason travels verbatim (D6).
+    // Under batch submit ALL N are already enqueued, so a failure partway through the producer's
+    // walk must not orphan the tail; `fail_remaining` is the vehicle and its reason travels.
     let q = GraphQueue::new();
     let n = 6usize;
     let graphs: Vec<mantis_graph::AxisGraph> = (0..n).map(|_| valid_leaf()).collect();
@@ -433,18 +413,12 @@ fn a_mid_batch_producer_failure_wakes_every_waiter_with_the_reason() {
     }
 }
 
-// ── F-19 build-once structural note ───────────────────────────────────────────
-
 #[test]
 fn build_leaf_graph_is_one_native_build_per_leaf() {
     use std::sync::atomic::{AtomicUsize, Ordering};
-    // F-19 (structural, at the surface this stage owns): each leaf is built EXACTLY
-    // once and stamps the native builder_impl. REAL observer: `builds` increments
-    // INSIDE a counting shim wrapped around the actual `build_leaf_graph` call, so it
-    // counts genuine build invocations over the corpus — a redundant/double build
-    // bumps the counter and trips the assert. (The old `builds += 1`-per-iteration
-    // counted loop turns, not builds, so `assert_eq!(n, n)` was tautological and a
-    // double-build slipped through.)
+    // Each leaf is built EXACTLY once and stamps the native builder_impl. `builds` increments
+    // INSIDE a counting shim around the real `build_leaf_graph` call, so it counts genuine build
+    // invocations; a per-iteration counter would count loop turns and pass tautologically.
     let builds = AtomicUsize::new(0);
     let build_once = |stones: &[(i64, i64, i64)]| {
         let g = build_leaf_graph(stones, 1, 2, 6, 6, 19).expect("leaf builds");

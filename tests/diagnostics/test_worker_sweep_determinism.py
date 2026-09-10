@@ -1,37 +1,17 @@
-# ONE CLAIM with two halves that are deliberately not split across files: "the sweep's per-rung
-# network is reproducible, and the control that says so can fail". The mechanism arm (the same
-# seed builds the same net) and the instrument arm (`determinism_verdict`/`_hash_gate` separate
-# AGREE from DIVERGED from REFUSED) are the two things F-RESIT-10 needs together — a reproducible
-# net nobody checks is a claim, and a checker with nothing reproducible under it is a checker of
-# noise. Each arm carries its own planted break in-file, for the reason
-# `test_worker_sweep_reachability.py` states: a predicate and the proof it can fire must move
-# together or the proof rots quietly.
-# (No R8 justification is claimed: this file is under the 300-line cap. Sizes are derived by
-# `wc -l`, never asserted.)
-"""F-RESIT-10's repair, and the control that witnesses it — RE-SPECIFIED by R317(c).
+# ONE CLAIM with two halves deliberately not split: the sweep's per-rung network is reproducible,
+# and the control that says so can fail. Each arm carries its own planted break in-file, so a
+# predicate and the proof it can fire move together.
+"""The per-rung network is seeded, and the control that witnesses it.
 
-**THE DEFECT, measured at the 2026-08-27 re-calibration re-sit.** `mantis.diagnostics.worker_sweep`
-built a fresh `build_net(arch)` per rung from an UNSEEDED RNG, so every rung of the pre-registered
-ladder raced a DIFFERENT random network. On an unbounded board a network's policy decides how far
-stones spread, which decides the graph's node and edge counts, which decides what every fused
-forward costs. So R309(f)'s knee rule — *the smallest rung within 95 % of the best passing rung's
-throughput* — compared rungs on a column that was a function of `n_workers` **and an uncontrolled
-draw**.
+THE DEFECT: the sweep built a fresh `build_net(arch)` per rung from an UNSEEDED RNG, so every
+rung raced a DIFFERENT random network — and on an unbounded board the policy decides how far
+stones spread, hence node and edge counts, hence what a fused forward costs. THE REPAIR is
+`build_sweep_net`, seeding from the config's own `seed` immediately before the one RNG consumer,
+through `mantis.util.determinism`, because importing anything under `mantis.train` pulls eight
+training modules in and the sweep must stay trainer-unreachable.
 
-**The repair** is `build_sweep_net`: seed from the config's own `seed` immediately before the one
-RNG consumer on that path. The module it calls MOVED to `mantis.util.determinism` to make that
-possible — the sweep is guaranteed trainer-unreachable by import at any scope (R309(g),
-`test_worker_sweep_reachability.py`), and importing anything under `mantis.train` was measured to
-pull eight training modules into `sys.modules`.
-
-**THE CHECK WAS THE DEFECT, NOT THE SEEDING (R317).** R315(c)(i) ordered a THROUGHPUT BAND
-(sub-1%, same rung, same seed, twice) as the control — measured 0.5821% AGREE engine-side. Driven
-LIVE on the box at RECAL-SITTING-3, the SAME check on the SAME rung came back 3.9258%, DIVERGED:
-the band was a cross-regime carry, calibrated quiet and asked to certify a live-GPU drive whose
-own within-drive round noise runs ~6% peak-to-peak. **The control is now net-parameter-hash
-equality, no band** (R317(c)(i)) — this tests exactly what the repair above claims, with nothing
-about wall-clock timing in it. The throughput spread is still computed and reported, but it no
-longer gates anything (R317(c)(iii)), and a test below pins that it does not.
+THE CONTROL IS NET-PARAMETER-HASH EQUALITY, NO BAND: the retired throughput band measured 0.58%
+engine-side and 3.93% on the box, against within-drive round noise of ~6% peak-to-peak.
 """
 from __future__ import annotations
 
@@ -46,16 +26,14 @@ from mantis.diagnostics import worker_sweep as ws
 
 _REPO = Path(__file__).resolve().parents[2]
 
-#: A committed GRAPH config — the representation the sweep exists for. Read through the real
-#: loader, never hand-built: a stub config would let this file pass while the production path
-#: read a key that is not there.
+#: A committed GRAPH config, read through the real loader: a stub config would let this file pass
+#: while the production path read a key that is not there.
 _CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
 
 def _net_fingerprint(model: object) -> str:
-    """A content hash of every parameter, key order fixed. Deliberately a SEPARATE
-    implementation from `worker_sweep._net_param_hash` (R81: this is the oracle, not the
-    mechanism re-run against itself)."""
+    """A content hash of every parameter, key order fixed — a SEPARATE implementation from
+    `worker_sweep._net_param_hash`, so this is the oracle and not the mechanism re-run."""
     digest = hashlib.sha256()
     for key, value in sorted(model.state_dict().items()):        # type: ignore[attr-defined]
         digest.update(key.encode("utf-8"))
@@ -75,13 +53,9 @@ def graph_arch():
     return config, arch_from_spec_and_config(resolved.registry_spec, raw)
 
 
-# ── arm 1: the mechanism ─────────────────────────────────────────────────────────────────
 def test_the_same_config_builds_a_BIT_IDENTICAL_network_every_time(graph_arch) -> None:
-    """The repair itself: two `build_sweep_net` calls, same config, byte-identical parameters.
-
-    This is the property the ladder's comparability rests on, and it is now also `_net_param_hash`
-    itself — a second, independent hash (`_net_fingerprint`) is used here so the test does not
-    validate the mechanism using the mechanism's own instrument."""
+    """The repair itself: two `build_sweep_net` calls, same config, byte-identical parameters,
+    checked with an independent hash so the mechanism is not validated by its own instrument."""
     config, arch = graph_arch
     first = _net_fingerprint(ws.build_sweep_net(config, arch, torch.device("cpu")))
     second = _net_fingerprint(ws.build_sweep_net(config, arch, torch.device("cpu")))
@@ -93,7 +67,7 @@ def test_the_same_config_builds_a_BIT_IDENTICAL_network_every_time(graph_arch) -
 
 
 def test_the_seeding_is_what_makes_it_identical_PLANTED_BREAK(graph_arch, monkeypatch) -> None:
-    """LAW-07: the proof the check can fire. Remove the seeding and the fingerprints diverge."""
+    """The proof the check can fire: remove the seeding and the fingerprints diverge."""
     config, arch = graph_arch
     monkeypatch.setattr(ws, "seed_everything", lambda _seed: None)
     first = _net_fingerprint(ws.build_sweep_net(config, arch, torch.device("cpu")))
@@ -115,7 +89,6 @@ def test_the_seed_comes_from_the_CONFIG_and_not_from_a_literal(graph_arch, monke
     )
 
 
-# ── arm 2: the control that reports it (R317(c)) ─────────────────────────────────────────
 def _row(n_workers: int, value: float, net_hash: str | None = "h",
         verdict: str = ws.PLATEAU) -> dict[str, object]:
     return {"n_workers": n_workers, ws.PREREG_METRIC: value, "net_param_hash": net_hash,
@@ -123,9 +96,9 @@ def _row(n_workers: int, value: float, net_hash: str | None = "h",
 
 
 def test_EQUAL_hashes_AGREE_regardless_of_the_old_bands_throughput_spread() -> None:
-    """R317(c)(i): the gate is the hash. This is the SITTING'S OWN measured pair — 276.999 vs
-    267.3991 moves/min, 3.9258% apart, which DIVERGED under the old throughput band — and with
-    equal hashes it must now AGREE: the throughput never controlled the answer to begin with."""
+    """The gate is the hash. This is the sitting's own measured pair — 276.999 vs 267.3991
+    moves/min, 3.9258% apart, which DIVERGED under the retired throughput band — and with equal
+    hashes it must now AGREE."""
     control = ws.determinism_verdict(_row(4, 276.999, "same"), _row(4, 267.3991, "same"),
                                      metric=ws.PREREG_METRIC)
     assert control["verdict"] == ws.AGREE, (
@@ -138,9 +111,8 @@ def test_EQUAL_hashes_AGREE_regardless_of_the_old_bands_throughput_spread() -> N
 
 
 def test_UNEQUAL_hashes_DIVERGE_even_at_a_TINY_throughput_spread_PLANTED_BREAK() -> None:
-    """The inverse: two drives 0.01% apart on throughput — which would have AGREED under any
-    plausible band — must DIVERGE if their nets are not the same. This is the planted break for
-    the re-specified gate: neuter the equality and the old band's favourite case now fails."""
+    """The inverse: two drives 0.01% apart on throughput, which any band would have called AGREE,
+    must DIVERGE when their nets differ."""
     control = ws.determinism_verdict(_row(4, 276.999, "aaa"), _row(4, 276.972, "bbb"),
                                      metric=ws.PREREG_METRIC)
     assert control["verdict"] == ws.DIVERGED, (
@@ -167,7 +139,7 @@ def test_a_zero_throughput_drive_refuses_rather_than_dividing_by_it() -> None:
 
 
 def test_the_control_refuses_TWO_DIFFERENT_RUNGS() -> None:
-    """The control compares ONE rung with itself. Two rungs would be a ladder step wearing the
+    """The control compares ONE rung with itself; two rungs would be a ladder step wearing the
     control's name."""
     with pytest.raises(ValueError, match="ONE rung with itself"):
         ws.determinism_verdict(_row(4, 276.999, "same"), _row(8, 275.396, "same"),
@@ -176,8 +148,8 @@ def test_the_control_refuses_TWO_DIFFERENT_RUNGS() -> None:
 
 @pytest.mark.parametrize("bad", [float("nan"), float("inf"), float("-inf")])
 def test_a_NON_FINITE_ranking_value_refuses(bad: float) -> None:
-    """NaN and +/-inf are values to `json.loads`; `select_knee` learned that the hard way and the
-    control inherits the lesson rather than re-learning it."""
+    """NaN and +/-inf are values to `json.loads`, and the knee selector learned that the hard
+    way."""
     with pytest.raises(ValueError, match="not a measurement"):
         ws.determinism_verdict(_row(4, 276.999, "same"), _row(4, bad, "same"),
                                metric=ws.PREREG_METRIC)
@@ -193,15 +165,13 @@ def test_a_drive_with_NO_HASH_refuses_the_gate_it_has_nothing_to_check() -> None
 
 
 def test_the_bands_constant_is_SUPERSEDED_but_still_pinned_for_history() -> None:
-    """R315(c)(i) pinned it; R317(c) supersedes it as a gate but the value stays on record."""
+    """Superseded as a gate, but the value stays on record."""
     assert ws.RULED_DETERMINISM_BAND_PCT == 1.0
 
 
-# ── arm 2.5: per-rung noise (R330(d), replacing R317(d)'s carried scalar) ────────────────
 def test_the_knee_rule_takes_no_noise_scalar_and_refuses_a_rung_that_cannot_state_its_own() -> None:
-    """R326(a) measured R317(d)'s carried-noise assumption FALSE; R330(d) gives each rung its own
-    rel-SE. There is no scalar parameter left to pass and no default to fall to: a rung row
-    without a measured `rel_se` is refused by name."""
+    """The carried-noise assumption was measured FALSE, so each rung states its own rel-SE: no
+    scalar left to pass, no default to fall to, and a rung without one is refused by name."""
     import inspect
     assert "noise_floor_rel_std" not in inspect.signature(ws.select_knee).parameters
     assert not hasattr(ws, "run_noise_floor") and not hasattr(ws, "read_noise_floor_report")
@@ -211,9 +181,8 @@ def test_the_knee_rule_takes_no_noise_scalar_and_refuses_a_rung_that_cannot_stat
 
 
 def test_the_widening_can_only_pull_the_pick_toward_FEWER_workers() -> None:
-    """R317(d)'s safety property, kept under R330(d): a noisy rung can only ADD rungs to `within`,
-    never remove one, and the pick is still the smallest member — so the pick moves toward fewer
-    workers or stays put, never toward more."""
+    """The safety property: a noisy rung can only ADD rungs to `within`, never remove one, and
+    the pick is still the smallest member — so it moves toward fewer workers or stays put."""
     def rows(rel_se_2: float) -> list[dict]:
         return [{"n_workers": 2, ws.PREREG_METRIC: 91.0, "verdict": ws.PLATEAU,
                  f"{ws.PREREG_METRIC}_spread": {"rel_se": rel_se_2, "n_rounds": 5}},
@@ -229,7 +198,6 @@ def test_the_widening_can_only_pull_the_pick_toward_FEWER_workers() -> None:
     assert noisy["adjusted_threshold"] < quiet["threshold"]
 
 
-# ── arm 3: the CLI modes' refusals ───────────────────────────────────────────────────────
 def test_the_determinism_mode_refuses_n_workers_1_which_the_prereg_REJECTS() -> None:
     assert ws.main(["--determinism-control", "1", "--config", "x", "--plan", "y"]) == ws.RC_REFUSED
 

@@ -192,11 +192,15 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
             }
         }
         Some(_) => {
-            errs.push(format!("[encodings.{name}].kept_plane_indices: not an array"));
+            errs.push(format!(
+                "[encodings.{name}].kept_plane_indices: not an array"
+            ));
             None
         }
         None => {
-            errs.push(format!("[encodings.{name}].kept_plane_indices: missing key"));
+            errs.push(format!(
+                "[encodings.{name}].kept_plane_indices: missing key"
+            ));
             None
         }
     };
@@ -235,8 +239,7 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
     let graph_radius = opt_int(table, "graph_radius", &mut errs).map(|v| v as usize);
     let win_axes = opt_int(table, "win_axes", &mut errs).map(|v| v as usize);
     let contract_version = opt_int(table, "contract_version", &mut errs).map(|v| v as u32);
-    let builder_impl_required =
-        opt_int(table, "builder_impl_required", &mut errs).map(|v| v as u8);
+    let builder_impl_required = opt_int(table, "builder_impl_required", &mut errs).map(|v| v as u8);
 
     // plane_layout: array of strings.
     let plane_layout: Option<Vec<&'static str>> = match table.get("plane_layout") {
@@ -247,7 +250,9 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
                 if let Some(s) = v.as_str() {
                     planes.push(leak_str(s));
                 } else {
-                    errs.push(format!("[encodings.{name}].plane_layout[{i}]: not a string"));
+                    errs.push(format!(
+                        "[encodings.{name}].plane_layout[{i}]: not a string"
+                    ));
                     bad = true;
                     break;
                 }

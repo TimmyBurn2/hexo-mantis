@@ -1,22 +1,13 @@
-"""Shared fixtures for the WP10 ⊕⊕ conformance suites (tests/train/).
+"""Shared fixtures for the `tests/train/` suites.
 
 >300 justify: one shared fixture module for one directory's suites — the spies, the tiny-net
-+ optim/scaler/sched builders, the full `gnn_axis_v1` net, and the `RunConfig`/`TrainHParams`
-block factories (`train`/`selfplay`/`inference`/`monitor`) all have to stay co-located so
-every `tests/train/` suite draws its config shape from ONE place; splitting them would let
-two copies of a block factory drift apart. WPSC Phase 2 SC-A1/SC-A2's `train:`/`selfplay:`
-reshape of `make_run_config` plus the new `full_train_hparams` fixture factory
-(DESIGN_P2.md §2.1) is what pushed this file past the cap.
+and optim/scaler/sched builders, the full `gnn_axis_v1` net, and the `RunConfig`/`TrainHParams`
+block factories must stay co-located so every suite draws its config shape from ONE place;
+splitting them would let two copies of a block factory drift apart.
 
-This conftest imports ONLY already-present layers (torch + mantis.model / mantis.encoding
-/ mantis.config) and NEVER `mantis.train.*` — so it collects cleanly while the two suites
-are RED (the suites import `mantis.train.*`, which does not exist until IMPL; that is the
-correct oracle-first state). Helper spies (EventSink / clock / call recorders) are plain
-duck-typed classes: the injected `EventSink` is a structural Protocol (single `emit` method),
-so a bare class with `.emit` satisfies it without importing the not-yet-written Protocol.
-
-Root conftest already installs the autouse `_reseed` fixture (random/numpy/torch) — this
-file does NOT re-seed and does NOT touch sys.modules (R5/LAW-17).
+This conftest imports only torch and `mantis.model`/`mantis.encoding`/`mantis.config`, never
+`mantis.train.*`, so it collects cleanly. The root conftest installs the autouse reseed
+fixture; this file does not re-seed and does not touch sys.modules.
 """
 from __future__ import annotations
 
@@ -41,11 +32,8 @@ GRAPH_ENCODING = "gnn_axis_v1"
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 
 
-# ── spies (duck-typed; satisfy the structural EventSink / callable seams) ─────────────────
 class SpyEventSink:
-    """Records every emitted event Mapping. Satisfies the structural `EventSink` Protocol
-    (single `emit(event: Mapping)` method). The event NAME travels under the `event` key
-    (mantis emit convention; cf. `mantis.config.emit.ResolvedConfig.to_event_payload`)."""
+    """Record every emitted event Mapping; the event name travels under the `event` key."""
 
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -61,7 +49,7 @@ class SpyEventSink:
 
 
 class FakeClock:
-    """Controllable monotonic clock: `clock()` returns the current fake time `t`."""
+    """Controllable monotonic clock: calling it returns the current fake time `t`."""
 
     def __init__(self, t: float = 0.0) -> None:
         self.t = t
@@ -80,9 +68,8 @@ def fake_clock() -> FakeClock:
     return FakeClock()
 
 
-# ── tiny nets + optim/scaler/scheduler (real torch objects) ──────────────────────────────
 def make_tiny_arch() -> GnnArch:
-    """The DESIGN §b tiny net, graph form: the registered wire dims at toy widths."""
+    """Build the tiny graph net: the registered wire dims at toy widths."""
     spec = lookup(GRAPH_ENCODING)
     return GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
                    hidden=16, num_layers=1, policy_hidden=16, value_hidden=16)
@@ -101,8 +88,8 @@ def tiny_net(tiny_arch: GnnArch) -> torch.nn.Module:
 def make_optim_scaler_sched(
     net: torch.nn.Module, *, lr: float = 1e-3, t_max: int = 1000, eta_min: float = 1e-5
 ):
-    """Two-param-group AdamW (weight-decay split → the golden's `param_groups==2`) + a CPU
-    GradScaler with real state + a CosineAnnealingLR."""
+    """Build a two-param-group AdamW (the golden's `param_groups==2`), a CPU GradScaler with
+    real state, and a CosineAnnealingLR."""
     decay = [p for _, p in net.named_parameters() if p.ndim >= 2]
     no_decay = [p for _, p in net.named_parameters() if p.ndim < 2]
     opt = torch.optim.AdamW(
@@ -122,9 +109,8 @@ def optim_scaler_sched(tiny_net: torch.nn.Module):
     return make_optim_scaler_sched(tiny_net)
 
 
-# ── full gnn_axis_v1 net (registry arch) — the strict-load target for legacy / O3b tests ──
-# The bare O3b anchor and the legacy read path resolve arch from the encoding → the FULL
-# registry arch (the incumbent widths), NOT a tiny net. Built once per session.
+# The legacy read path resolves arch from the encoding, so this is the FULL registry arch at
+# the incumbent widths, not a tiny net.
 @pytest.fixture(scope="session")
 def full_graph_net() -> torch.nn.Module:
     return build_net(arch_from_spec_and_config(lookup(GRAPH_ENCODING), {}))
@@ -132,11 +118,10 @@ def full_graph_net() -> torch.nn.Module:
 
 @pytest.fixture
 def full_graph_state(full_graph_net: torch.nn.Module) -> dict[str, torch.Tensor]:
-    """A fresh shallow copy of the full gnn_axis_v1 state dict (O3b-clean)."""
+    """Return a fresh shallow copy of the full `gnn_axis_v1` state dict."""
     return dict(full_graph_net.state_dict())
 
 
-# WP11-A schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
 def _make_eval_block() -> dict[str, Any]:
     return {
         "random_model_sims": 96, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
@@ -160,12 +145,8 @@ def _make_eval_block() -> dict[str, Any]:
     }
 
 
-# WPSC Phase 2 SC-A1: `train:` is a required RunConfig section.
-# WPMINT Phase K-A stage 0: the block is DERIVED from a MINTED config rather than restated —
-# eleven files carried a hand-written copy, so a new `train.*` key cost eleven edits and gave
-# eleven chances to disagree with the schema. `dev_example.yaml`'s resolved block was measured
-# byte-identical to the census it replaces (which was itself the zero-behavior-change
-# TrainHParams-dataclass-default carry-over, DESIGN_P2.md §1.1/§2), so the swap changes nothing.
+# Derived from a minted config rather than restated, so a new `train.*` key costs no edit here
+# and cannot disagree with the schema.
 _MINTED_TRAIN: dict[str, Any] = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
@@ -174,9 +155,6 @@ def _make_train_block(**over: Any) -> dict[str, Any]:
     return dict(_MINTED_TRAIN, **over)
 
 
-# WPSC Phase 2 SC-A2: `selfplay:` gains `mcts:`/`playout_cap:` sub-blocks + many new required
-# scalars; `legal_move_radius_schedule` is GONE (DESIGN_P2.md §5); `inference:` is a new
-# required top-level section. Zero-behavior-change values carried over (DESIGN_P2.md §1.2).
 def _make_selfplay_block(**over: Any) -> dict[str, Any]:
     base = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
@@ -198,22 +176,15 @@ def _make_selfplay_block(**over: Any) -> dict[str, Any]:
 def _make_inference_block(**over: Any) -> dict[str, Any]:
     base = {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # A non-binding-by-construction pair: no split is exercised here.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
     return base
 
 
-# WPSC Phase 2 SC-A3: `monitor:` is now a required RunConfig section — every value below is
-# the zero-behavior-change `mantis.monitor.config.MonitorConfig` dataclass default carried
-# over verbatim (DESIGN_P2.md §4.2), plus the 4 `DrainCapsConfig` fields (§4.3).
 def _make_monitor_block(**over: Any) -> dict[str, Any]:
     base = {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -241,21 +212,18 @@ def _make_monitor_block(**over: Any) -> dict[str, Any]:
     return base
 
 
-# ── schema-valid / invalid config snapshots (validated against config-schema v1 on write) ─
 def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph",
                     run_id: str = "run5") -> dict[str, Any]:
-    """A complete, schema-v1-valid RunConfig dict (the envelope `config` snapshot).
+    """Build a complete, schema-valid RunConfig dict.
 
-    ARCH-SCOPED BLOCKS ARE DROPPED FOR THE REPRESENTATION THAT DOES NOT HAVE THEM (R322(d)).
-    Driven from `ARCH_SCOPED_KEYS` rather than by deleting names, so a third scoped block
-    needs no edit here.
+    Arch-scoped blocks are dropped for the representation that does not have them, driven from
+    `ARCH_SCOPED_KEYS` rather than by deleting names.
     """
     config = {
         "schema_version": 1,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A required top-level leaf; `null` is the placeholder, refused at boot on a cuda
+        # process.
         "allocator_posture": None,
         "run_id": run_id,
         "seed": 20260718,
@@ -273,10 +241,8 @@ def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph
     return config
 
 
-# ── shared TrainHParams factory (DESIGN_P2.md §2.1 recommendation) — every TrainHParams
-# field is now required (no dataclass default, R-TRAINCONFIG-SCHEMA closure); this factory
-# returns the zero-behavior-change values with **overrides layered on, so a test passes only
-# the fields it cares about instead of enumerating all ~24 at every call site.
+# Every TrainHParams field is required, so this factory layers overrides over a full set and a
+# test passes only the fields it cares about.
 def make_full_train_hparams(**over: Any):
     from mantis.train.trainer.core import TrainHParams
 
@@ -302,18 +268,17 @@ def valid_config() -> dict[str, Any]:
 
 @pytest.fixture
 def invalid_config() -> dict[str, Any]:
-    """A config that fails schema v1 (extra=forbid): a complete config + one unknown key."""
+    """Return a config that fails schema validation: complete, plus one unknown key."""
     cfg = make_run_config()
     cfg["__unknown_knob__"] = True
     return cfg
 
 
-# ── metadata_kwargs (the stamp inputs to save_checkpoint; encoding_name REQUIRED) ─────────
 def make_metadata_kwargs(arch: GnnArch, *, encoding_name: str = GRAPH_ENCODING,
                          run_id: str = "runa", corpus_sha256: str | None = None
                          ) -> dict[str, Any]:
-    """The metadata stamp inputs. `created_utc`/`commit_sha` are stamped ONCE by
-    save_checkpoint (NOT supplied here — supplying them is the restamp error, T-CK-10)."""
+    """Build the metadata stamp inputs; `created_utc`/`commit_sha` are stamped once by
+    `save_checkpoint`, and supplying them here would be a restamp."""
     mk: dict[str, Any] = {"encoding_name": encoding_name, "run_id": run_id, "arch": arch}
     if corpus_sha256 is not None:
         mk["corpus_sha256"] = corpus_sha256
@@ -325,8 +290,7 @@ def metadata_kwargs(tiny_arch: GnnArch) -> dict[str, Any]:
     return make_metadata_kwargs(tiny_arch)
 
 
-# ── factory fixtures (callables, so a test can vary encoding/run_id without importing
-#    conftest by name — R5/LAW-17 keeps the collection style import-hack-free) ─────────────
+# Callable fixtures, so a test can vary encoding/run_id without importing conftest by name.
 @pytest.fixture
 def mk_config():
     return make_run_config
@@ -342,7 +306,6 @@ def mk_optim():
     return make_optim_scaler_sched
 
 
-# ── committed goldens (manifest-tracked) ─────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def resume_goldens() -> dict[str, Any]:
     return json.loads((TRAIN_FIXTURES / "resume_goldens.json").read_text())

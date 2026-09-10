@@ -1,38 +1,12 @@
-"""⊕ WP12-R Phase A / O-A8, O-A8d (DESIGN_A §1.4, PREREG_A §1) — R118/A-1, config-only.
+"""`wr_sealbot` populates config-only: no producer change is required.
 
-A-1 says `wr_sealbot` populates **config-only**: no producer changes. That is a claim about
-today's code, and it is derived rather than assumed — `rounds.py:211` already sets the field
-on every round, `_first_sealbot_wr` (`:135-149`) already selects on `bot == "sealbot"`, and
-run5 already mints two sealbot rungs. The ONLY reason the value is `None` today is that
-`rung_results` never contains a sealbot entry, because `resolve_bot` refuses.
+The producer already sets the field on every round and already selects on `bot == "sealbot"`;
+the value is `None` only because `resolve_bot` refuses, so `rung_results` never carries a
+sealbot entry. Both rows drive the REAL resolver and the REAL `build_round_result` over the
+MINTED ladder, so the float read is produced by the shipped chain rather than by a stub.
 
-So Phase A adds no producer, no config key and no code to `rounds.py` — and these rows are
-what make that falsifiable rather than merely stated.
-
-The defect each row is the ONLY witness to:
-
-- **O-A8 arm 1** — a phase that "delivered `wr_sealbot`" by editing the producer. It drives
-  the REAL `resolve_bot` with a loadable module double and then the REAL `build_round_result`
-  over run5's MINTED ladder, so the float it reads is produced by the shipped chain, not by
-  a stub in the test. MUTATION (M-A18): `_first_sealbot_wr` returns `None` unconditionally —
-  the `isinstance` assertion fails. No `raises`, no working-tree assertion, no firing-order
-  hazard.
-- **O-A8 arm 2** — the selection ORDER against the ladder as MINTED. The existing producer
-  test (`test_wr_sealbot_handshake.py`) pins the rule on a synthetic three-rung ladder; this
-  row pins it on `configs/run6.yaml`'s own rung sequence, which is the object A-1's
-  "config-only" claim is actually about. Neither subsumes the other and neither is rewritten.
-- **O-A8d — RETIRED by R332(b), which LIFTED the R118/A-1 freeze on the producer.** The row
-  was a working-tree `git diff --stat` over `src/mantis/eval/rounds.py`, firing on any
-  uncommitted edit. Its subject — A-1's "value populates in WP12-R Phase A" — has been merged
-  since Phase T closed (R162), so the guard was refusing edits to a live producer on behalf of
-  a discharged claim, and it is what banked AUDIT-1 F-14's producer half in REPAIR-1. **A
-  freeze outlives its subject only by ruling**, and this is the ruling. The behavioural rows
-  above are untouched: they still prove the value populates with no producer change required.
-
-**Not duplicated here** (R79): `test_wr_sealbot_handshake.py::test_round_result_always_
-carries_wr_sealbot` and `::test_sealbot_rung_with_zero_games_this_round_is_skipped_for_the_
-handshake` already execute the unconditional-presence and zero-games rules. Re-running them
-is Phase A's evidence; re-writing them would be a second authority over a live producer test.
+The unconditional-presence and zero-games rules live in `test_wr_sealbot_handshake.py` and are
+deliberately not duplicated here.
 """
 from __future__ import annotations
 
@@ -69,11 +43,10 @@ def _round_kwargs(rungs_config: list[Any], rung_results: dict[str, Any]) -> dict
 def test_a_resolvable_sealbot_rung_makes_wr_sealbot_a_float_with_no_producer_edit(
     monkeypatch, tmp_path: Path
 ) -> None:
-    """O-A8 arm 1.
+    """A resolvable sealbot rung makes `wr_sealbot` a float.
 
-    FIRING ORDER: (1) the resolver returns a factory, (2) the factory constructs, (3) the
-    producer returns a float. Under M-A18 statements (1)-(2) pass and (3)'s `isinstance`
-    fails — the mutation is attributable to the producer and not to the resolver.
+    FIRING ORDER: the resolver returns a factory, the factory constructs, the producer returns a
+    float — so a failure is attributable to the producer and not to the resolver.
     """
     import mantis.bots.sealbot as sealbot_mod
     from mantis.bots.resolve import resolve_bot
@@ -114,9 +87,8 @@ def test_a_resolvable_sealbot_rung_makes_wr_sealbot_a_float_with_no_producer_edi
 
 
 def test_wr_sealbot_selects_the_first_sealbot_rung_of_run5s_minted_ladder() -> None:
-    """O-A8 arm 2. Ladder ORDER is read from the minted config, never transcribed: a re-mint
-    that reordered the rungs would change which depth `wr_sealbot` means, and every monitor
-    threshold reading it (`configs/run6.yaml:211-218`) would silently re-aim."""
+    """Ladder ORDER is read from the minted config, never transcribed: a re-mint that reordered
+    the rungs would change which depth `wr_sealbot` means and silently re-aim every threshold."""
     rungs = _run5_rungs()
     rung_results = {
         "kraken_raw": _rung_result(games=8, wr=0.50),

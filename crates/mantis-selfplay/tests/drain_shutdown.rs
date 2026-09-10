@@ -1,24 +1,10 @@
-//! P-05 — drain-shutdown: a runner stopped mid-game must NOT push false-draw rows
-//! (RE-ANCHOR of `test_drain_shutdown_no_false_draws.rs`, LOCKED DECISION 12).
+//! A runner stopped mid-game must NOT push false-draw rows.
 //!
-//! On `stop()`: `running` flips false, the inference queue closes (waking blocked
-//! waiters with `Err`), workers join. An IN-PROGRESS game hits the §P22
-//! short-circuit (`game.rs`: `if !running { return; }` after the move loop) and is
-//! DROPPED before finalize — it is NEVER recorded as an organic draw. A false draw
-//! is the signature `terminal_reason == 3` (winner None AND plies < max_moves),
-//! which under this regime can ONLY appear from a leaked partial-game finalize.
-//!
-//! Two drives:
-//!   1. FULL MCTS with a MOCK inference producer thread (D16 / CAPTURE_LOG C-10):
-//!      workers block in `submit_graph_and_wait`; `stop()` closes the queue, wakes
-//!      them with `Err`, the worker skips the batch, the move loop sees
-//!      `running=false` and breaks, §P22 drops the game. Exercises the realistic
-//!      "shutdown with inference in flight" path.
-//!   2. RANDOM-ONLY (no producer): the deterministic frozen re-anchor — §P22 fires
-//!      for ANY move-loop exit with `running=false`, including a random-opening break.
-//!
-//! Plus the LAW-07 bite proof: the false-draw checker MUST flag an injected
-//! `terminal_reason == 3` tuple (a checker that passes it is a test failure).
+//! On `stop()` an in-progress game is DROPPED before finalize, never recorded as an organic
+//! draw. A false draw is the signature `terminal_reason == 3` (winner None AND plies <
+//! max_moves), which under these regimes can ONLY come from a leaked partial-game finalize.
+//! Two drives — full MCTS with a mock inference producer (shutdown with inference in flight),
+//! and random-only with no producer — plus a bite proof that the checker flags an injected row.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -33,14 +19,11 @@ use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfi
 
 const ENCODING: &str = "gnn_axis_r8";
 
-// ── the false-draw checker (the thing under test; the bite proof feeds it) ──────
-/// `terminal_reason` is field 4 of `GameResultRow`; `3` = organic draw. A leaked
-/// partial-game finalize is the only way it can appear under these regimes.
+/// `terminal_reason` is field 4 of `GameResultRow`; `3` = organic draw.
 fn has_false_draw(rows: &[GameResultRow]) -> bool {
     rows.iter().any(|r| r.4 == 3)
 }
 
-// ── deterministic MOCK NN (CAPTURE_LOG C-10 / PREREG) ───────────────────────────
 const MOCK_NN_SEED: u64 = 0x4D4F_434B_4E4E_0006;
 
 fn splitmix64_step(s: &mut u64) -> u64 {
@@ -51,11 +34,9 @@ fn splitmix64_step(s: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// Deterministic policy+value from the leaf's legal coords (C-10, re-anchored to the graph
-/// seam): fold each coord into the splitmix stream, then emit one weight per legal node,
-/// NORMALIZED (the segmented-softmax invariant `assemble_ls_from_gnn_probs` checks), and a
-/// value in `[-1,1]`. The exact values are irrelevant to the shutdown invariant — only that
-/// the producer keeps the search fed so workers are genuinely mid-game.
+/// Deterministic policy+value from the leaf's legal coords, NORMALIZED (the segmented-softmax
+/// invariant `assemble_ls_from_gnn_probs` checks). The values are irrelevant to the shutdown
+/// invariant; only that the producer keeps the search fed so workers are genuinely mid-game.
 fn mock_graph_infer(coords: &[(i32, i32)], seed: u64) -> (Vec<f32>, f32) {
     let mut s = seed;
     for &(q, r) in coords {
@@ -75,13 +56,10 @@ fn mock_graph_infer(coords: &[(i32, i32)], seed: u64) -> (Vec<f32>, f32) {
     (probs, value)
 }
 
-/// Spawn a mock producer that pops the graph queue and submits C-10 results until
-/// the queue is closed (by `stop()`). A small `max` gives a saturation threshold of
-/// 1, so the pop returns as soon as a request is present (low latency, no spin).
+/// Spawn a mock producer that serves the graph queue until `stop()` closes it.
 ///
-/// `served` counts the inference requests actually served — a strictly-positive
-/// value proves a worker was genuinely mid-MCTS-search (a leaf batch in flight), the
-/// "worker mid-game" signal that de-vacuums the drain-shutdown oracle below.
+/// `served` counts requests actually served — strictly positive proves a worker was genuinely
+/// mid-MCTS-search, the signal that de-vacuums the drain-shutdown oracle below.
 fn spawn_graph_producer(
     queue: GraphQueue,
     n_actions: usize,
@@ -120,7 +98,6 @@ fn spawn_graph_producer(
     })
 }
 
-// ── Drive 1: full MCTS + mock producer, stop mid-game ───────────────────────────
 #[test]
 fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
     let cfg = SelfPlayRunnerConfig {
@@ -144,12 +121,9 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
 
     runner.start();
     assert!(runner.is_running(), "runner is running after start()");
-    // WAIT FOR THE CONDITION, do not sleep a guessed interval. The state this oracle needs is
-    // "a worker is mid-MCTS-search with a leaf batch in flight", and the fixed 80 ms this used
-    // to sleep stopped reaching it when R347(c) raised `MAX_NODES` to 4M: every worker now
-    // allocates and zeroes its own node pool before its first search, so the window closed on
-    // the boot rather than on a search. Polling the SERVED counter asks for the state itself,
-    // which no boot cost can invalidate; the deadline is a liveness bound, not a tuning knob.
+    // Poll the SERVED counter rather than sleeping a guessed interval: a worker zeroes a 4M-node
+    // pool before its first search, so any fixed window lands on the boot. The deadline is a
+    // liveness bound, not a tuning knob.
     let deadline = Instant::now() + Duration::from_secs(30);
     while served.load(Ordering::Relaxed) == 0 && Instant::now() < deadline {
         thread::sleep(Duration::from_millis(5));
@@ -163,12 +137,8 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
 
     let drained = runner.drain_game_results();
 
-    // POSITIVE (de-vacuum): the mock producer served real inference batches, so a
-    // worker was genuinely mid-MCTS-search (a leaf batch in flight) when `stop()`
-    // fired — the §P22 short-circuit was on a LIVE mid-game path. Were §P22 removed,
-    // that in-progress game would finalize as an organic draw (winner None, plies <
-    // max_moves ⇒ terminal_reason==3), which the checker below would then flag. An
-    // all-ply-cap / empty drain no longer passes this test vacuously.
+    // De-vacuum: served batches prove a worker was mid-MCTS-search when `stop()` fired, so the
+    // short-circuit was on a LIVE mid-game path rather than an empty drain.
     let inferences_served = served.load(Ordering::Relaxed);
     assert!(
         inferences_served >= 1,
@@ -182,7 +152,6 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
     );
 }
 
-// ── Drive 2: random-only (no producer), the deterministic frozen re-anchor ───────
 fn random_only_runner(max_moves: usize) -> SelfPlayRunner {
     SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 4,
@@ -208,11 +177,8 @@ fn random_only_stop_midgame_no_false_draws() {
 
     runner.start();
 
-    // POSITIVE (de-vacuum): wait (bounded) until at least one game has COMPLETED, so
-    // the runner is provably driving games through the live finalize path — every
-    // completed random-only game is a reason-2 ply-cap. This is deterministic (it
-    // WAITS rather than assuming a 30 ms window), unlike the old fixed sleep whose
-    // drain could be empty and pass `!has_false_draw` vacuously.
+    // De-vacuum: wait (bounded) until a game has COMPLETED, so the runner is provably driving
+    // games through the live finalize path; an empty drain would pass `!has_false_draw` vacuously.
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut games: Vec<GameResultRow> = Vec::new();
     while Instant::now() < deadline {
@@ -228,9 +194,8 @@ fn random_only_stop_midgame_no_false_draws() {
          would make the false-draw oracle vacuous (games_completed==0)",
     );
 
-    // Workers are now churning games back-to-back, so a worker is mid-game at the stop
-    // instant, exercising the §P22 short-circuit (a random-opening break with
-    // running=false). Were §P22 removed, that partial game would finalize as reason==3.
+    // Workers churn games back-to-back, so a worker is mid-game at the stop instant; without the
+    // short-circuit that partial game would finalize as reason==3.
     runner.stop();
     games.extend(runner.drain_game_results());
 
@@ -242,19 +207,15 @@ fn random_only_stop_midgame_no_false_draws() {
     );
 }
 
-// ── LAW-07 bite proof: the checker MUST flag an injected reason-3 tuple ─────────
 #[test]
 fn false_draw_checker_bites_on_injected_reason_3() {
-    // A synthetic in-progress finalize would push winner=None, plies < max_moves →
-    // terminal_reason == 3. If the checker passed this, the drain-shutdown oracle
-    // would be vacuous.
+    // A synthetic in-progress finalize: winner=None, plies < max_moves → terminal_reason == 3.
     let injected: GameResultRow = (17, 0, Vec::new(), 0, 3, 0, 0, 0);
     assert!(
         has_false_draw(&[injected]),
         "the false-draw checker MUST flag an injected terminal_reason==3 tuple",
     );
-    // And a clean set (only ply-cap reason 2 + a six-in-a-row win reason 0) is NOT
-    // flagged — the checker is specific to the false-draw signature.
+    // A clean set is NOT flagged: the checker is specific to the false-draw signature.
     let clean: Vec<GameResultRow> = vec![
         (10, 0, Vec::new(), 0, 2, 0, 0, 0), // ply-cap
         (11, 1, Vec::new(), 1, 0, 0, 0, 0), // six-in-a-row win

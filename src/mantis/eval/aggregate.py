@@ -1,32 +1,23 @@
-# >300 justify (R8): one arithmetic unit. Every function here reads the SAME record
-# convention and feeds ONE decision — the promotion gate. `_traj_key`/`_distinct_outcomes`
-# (the LAW-04 dedupe), `pair_bootstrap_wr_ci` (the CI over those distinct games),
-# `aggregate_rung`/`aggregate_gate` (the draw-aware pooled WR) and the two truth-table
-# functions `aggregate_gate` calls are a single chain in which every step's output is the
-# next step's input. Splitting it would put the dedupe key in one file and the estimator
-# that depends on its semantics in another — and the defect this file most recently carried
-# was exactly a dedupe key whose meaning had drifted from what the estimator assumed
-# (colour-paired legs collapsing into one game, biasing the WR the gate then read). The
-# parity citations to run3's `deploy_strength_eval.py` line ranges are load-bearing for the
-# same reason: they must sit beside the arithmetic they certify.
-"""Vectorized aggregation over game-record arrays (design §a.3 aggregate.py).
+# >300 justify (R8): one arithmetic unit. Every function here reads the SAME record convention
+# and feeds ONE decision, the promotion gate, in a chain where each step's output is the next
+# step's input. Splitting it would put the dedupe key in one file and the estimator that depends
+# on its semantics in another — and the defect this file most recently carried was exactly a
+# dedupe key whose meaning had drifted from what the estimator assumed. The run3 parity
+# citations are load-bearing for the same reason: they sit beside the arithmetic they certify.
+"""Vectorized aggregation over game-record arrays (design §a.3).
 
-`aggregate_rung` RAISES `MixedRegimeError` on >1 distinct `regime_key` in one call (A3);
-trajectory-hash dedupe feeds `eff_n` (LAW-04). `pair_bootstrap_wr_ci` is vectorized numpy
-(`rng.integers` index matrix -> mean over axis 1 -> quantiles), no per-game Python loop.
+`aggregate_rung` RAISES `MixedRegimeError` on >1 distinct `regime_key` in one call, and
+trajectory-hash dedupe feeds `eff_n` (LAW-04). `pair_bootstrap_wr_ci` is vectorized numpy with
+no per-game Python loop.
 
 `aggregate_gate` reproduces run3's POOLED draw-aware gate arithmetic EXACTLY
-(deploy_strength_eval.py:494,522-533,560-563): `wr_screen` is the draw-aware WR over the
-screen games ALONE; on escalation the POOLED set (screen + confirm) feeds `wr_confirm`
-(never confirm-only), the distinct-game bootstrap Elo-CI-vs-best, and the effective-n/
-low-power guard — all four read the SAME pooled set. `gate_promotion_decision` /
-`should_escalate` are the ORACLE-CHOSEN pure truth-table functions `aggregate_gate` calls
-(spy-verified in tests/eval/test_gate_parity.py — never reimplemented ad hoc).
+(deploy_strength_eval.py:494,522-533,560-563): `wr_screen` is draw-aware over the screen games
+ALONE, and on escalation the POOLED set feeds `wr_confirm`, the bootstrap Elo-CI-vs-best and
+the low-power guard. `gate_promotion_decision` / `should_escalate` are the oracle-chosen pure
+truth-table functions it calls, never reimplemented ad hoc.
 
-Game records follow the hexo_rl `_play_pair`/round_robin.py convention (parity, per the
-design's own citation): `{"p1", "p2", "winner": "p1"|"p2"|"draw", "moves": [[q, r], ...]}`
-— OR the arena-native `{"regime_key", "trajectory_hash"}` shape when the trajectory hash
-is already computed. Either "moves" or "trajectory_hash" satisfies the LAW-04 dedupe key.
+Game records follow the hexo_rl `_play_pair` convention, or the arena-native
+`{"regime_key", "trajectory_hash"}` shape; either satisfies the LAW-04 dedupe key.
 """
 from __future__ import annotations
 
@@ -52,7 +43,6 @@ __all__ = [
 ]
 
 
-# ── shared record helpers ───────────────────────────────────────────────────────────────
 def _outcome_value(record: Mapping[str, Any]) -> float:
     """1.0 (p1/candidate win), 0.0 (p2/opponent win), 0.5 (draw) — draw-aware."""
     winner = record["winner"]
@@ -68,21 +58,12 @@ def _outcome_value(record: Mapping[str, Any]) -> float:
 def _traj_key(record: Mapping[str, Any]) -> str:
     """The LAW-04 dedupe key: the trajectory, QUALIFIED BY WHO SAT WHERE.
 
-    LAW-04 dedupes COPIES of one game, because a deterministic regime replays the same game
-    and a CI over the raw count is over-confident by sqrt(copies). Two legs of a colour pair
-    are not copies: `play_paired_match` plays every opening twice with the colours swapped,
-    and the two legs have genuinely different outcomes. But `trajectory_hash` is a sha256
-    over the MOVE LIST alone, so when the two legs' move sequences coincide — routine under
-    argmax/temp-0 from a fixed opening, which is exactly the regime LAW-04 is about — they
-    hash identically and the unqualified key threw one away.
-
-    Dropping a leg is not a wash: it biases the win rate toward whichever leg was seen first
-    (its outcome supplies the pair's value) AND halves eff_n, so LAW-04's own remedy was
-    corrupting the LAW-15 promotion bar it feeds. The seat is therefore part of the identity
-    of a game, not metadata about it.
-
-    `candidate_color` is absent on legacy/`moves`-only records; those key as before, so this
-    is additive — a record that never carried a seat cannot start colliding because of one.
+    LAW-04 dedupes COPIES of one game, because a deterministic regime replays the same game and
+    a CI over the raw count is over-confident by sqrt(copies). Two colour-swapped legs are not
+    copies, but `trajectory_hash` is a sha256 over the MOVE LIST alone, so coinciding legs hash
+    identically and the unqualified key threw one away — biasing the win rate toward whichever
+    leg was seen first AND halving eff_n. `candidate_color` is absent on legacy records, which
+    key as before, so this is additive.
     """
     seat = record.get("candidate_color")
     qualifier = f"{record.get('p1')}|{record.get('p2')}|{seat}|"
@@ -116,18 +97,11 @@ def _distinct_outcomes(records: Sequence[Mapping[str, Any]]) -> np.ndarray:
 
 
 def _unit_key(record: Mapping[str, Any]) -> str:
-    """The PAIR key: a matchup and an opening, with the SEAT deliberately absent.
-
-    `_traj_key` qualifies by seat because two colour-swapped legs are two genuinely different
-    games (LAW-04). This key is the level above: both legs of one opening are ONE observation,
-    because they start from the same position and their outcomes are correlated — an opening
-    that is winning for whoever moves first yields a win and a loss almost deterministically,
-    and one the candidate simply understands better yields two wins.
-
-    A record with NO `opening_id` falls back to its own trajectory key, so it is its own unit.
-    Pairing legacy records on a missing field would collapse a whole round into one
-    observation, which reads as a catastrophic loss of power rather than as an absent field.
-    """
+    """The PAIR key: a matchup and an opening, with the SEAT deliberately absent — both legs of
+    one opening are ONE observation, because they start from the same position and their
+    outcomes are correlated. A record with NO `opening_id` falls back to its own trajectory key,
+    since pairing legacy records on a missing field would collapse a round into one
+    observation."""
     opening = record.get("opening_id")
     if opening is None:
         return _traj_key(record)
@@ -135,13 +109,9 @@ def _unit_key(record: Mapping[str, Any]) -> str:
 
 
 def pair_units(records: Sequence[Mapping[str, Any]]) -> list[float]:
-    """One draw-aware outcome value per OPENING PAIR — the bootstrap's resampling unit.
-
-    Both legs of an opening average into one value; an opening with only one leg (a forfeit
-    took the other) contributes that leg. Order is the first-seen order of the keys, which is
-    deterministic for a deterministic record order and is what keeps a seeded bootstrap
-    reproducible.
-    """
+    """One draw-aware outcome value per OPENING PAIR — the bootstrap's resampling unit. Both legs
+    average into one value, and an opening with only one leg contributes that leg. Order is the
+    first-seen order of the keys, which keeps a seeded bootstrap reproducible."""
     by_unit: dict[str, list[float]] = {}
     for record in records:
         by_unit.setdefault(_unit_key(record), []).append(_outcome_value(record))
@@ -160,14 +130,11 @@ def _distinct_per_pair(records: Sequence[Mapping[str, Any]]) -> int:
     return min(len(trajs) for trajs in by_pair.values())
 
 
-# ── pair-bootstrap WR CI (vectorized; degenerate cases never raise) ─────────────────────
 def pair_bootstrap_wr_ci(
     pair_outcomes: np.ndarray, *, resamples: int, ci_level: float, seed: int
 ) -> tuple[float | None, float | None]:
-    """Vectorized bootstrap CI over `pair_outcomes` (one value per DISTINCT game, LAW-04):
-    `rng.integers` index matrix `[resamples, n]` -> mean over axis 1 -> quantiles. `n == 0`
-    degenerates to `(None, None)` — never an exception (all-wins / zero-game inputs both
-    stay well-defined)."""
+    """Vectorized bootstrap CI over `pair_outcomes` (one value per DISTINCT game, LAW-04).
+    `n == 0` degenerates to `(None, None)` — never an exception."""
     arr = np.asarray(pair_outcomes, dtype=np.float64)
     n = arr.shape[0]
     if n == 0:
@@ -181,7 +148,6 @@ def pair_bootstrap_wr_ci(
     return lo, hi
 
 
-# ── per-rung aggregation ─────────────────────────────────────────────────────────────────
 @dataclass(frozen=True)
 class RungAggregate:
     games: int
@@ -235,7 +201,6 @@ def aggregate_rung(
     )
 
 
-# ── gate aggregation (run3 pooled draw-aware arithmetic) ─────────────────────────────────
 def should_escalate(wr_screen: float, screen_confirm_lo: float) -> bool:
     """The SINGLE lower-bound escalation test (deploy_strength_eval.py:504) — NO upper
     band (`screen_confirm_hi` was inert in run3 and is not ported, MUST-FIX 1)."""
@@ -263,11 +228,10 @@ class GateAggregate:
     low_power: bool
     eff_n: int
     promoted: bool
-    #: R345(b)(4) — the pooled game counts, RETAINED beside the decision. A promotion recorded
-    #: as a win rate and a boolean cannot be re-read afterwards: 0.58 over 24 games and 0.58
-    #: over 240 are the same field, and the second is the one worth acting on. Counted over
-    #: GAMES (the pooled set) while the CI is over PAIRS, and that asymmetry is deliberate —
-    #: these are the raw tallies, not the estimator's unit.
+    #: The pooled game counts, RETAINED beside the decision: a promotion recorded as a win rate
+    #: and a boolean cannot be re-read afterwards, since 0.58 over 24 games and 0.58 over 240
+    #: are the same field. Counted over GAMES while the CI is over PAIRS, deliberately — these
+    #: are the raw tallies, not the estimator's unit.
     wins: int = 0
     losses: int = 0
     draws: int = 0
@@ -278,25 +242,13 @@ def aggregate_gate(
     confirm_records: Sequence[Mapping[str, Any]],
     gate_cfg: Any,
 ) -> GateAggregate:
-    """The run3 deploy-strength gate, pooled draw-aware arithmetic EXACTLY (design §a.3).
+    """The run3 deploy-strength gate, pooled draw-aware arithmetic EXACTLY.
 
-    `wr_screen` is draw-aware over the screen games ALONE (:494). Escalation is the single
-    lower-bound test (`should_escalate`). On escalation the POOLED set (screen + confirm)
-    feeds `wr_confirm` (draw-aware, NEVER confirm-only), the bootstrap Elo-CI-vs-best
-    (seeded from `gate_cfg.seed_base`) and the low-power guard — all on the SAME pooled
-    set. `promoted` is `gate_promotion_decision` applied to those pooled outputs.
-
-    UNIT NOTE on `elo_ci_lower_boot` (deviation #5, document-the-unit ruling): despite its
-    name, the value is NOT a per-resample BT/Elo bootstrap bound — it is the pooled
-    distinct-game draw-aware WR bootstrap's lower bound RE-CENTERED to the Elo zero-point
-    (`wr_lower_boot - 0.5`), so it lives in `[-0.5, 0.5]`, never Elo points. This is
-    DECISION-EQUIVALENT to a literal per-resample Elo bootstrap for `gate_promotion_
-    decision`'s `ci_lo_boot > 0.0` test: for the 2-entity candidate-vs-best comparison, any
-    monotone transform of a statistic commutes with taking its quantile, so `wr_lower_boot
-    - 0.5 > 0 ⟺ Elo_lower > 0` — the promotion truth-table cell is bit-identical either
-    way. The field keeps its historical name for run3-parity continuity (see
-    docs/contracts/event_manifest.md's `eval_round_complete` note for the consumer-facing
-    version of this same warning).
+    UNIT NOTE on `elo_ci_lower_boot`: despite its name the value is NOT a per-resample BT/Elo
+    bound — it is the pooled distinct-game WR bootstrap's lower bound RE-CENTERED to the Elo
+    zero-point, so it lives in `[-0.5, 0.5]`. It is DECISION-EQUIVALENT for the
+    `ci_lo_boot > 0.0` test, because any monotone transform commutes with taking a quantile.
+    The field keeps its historical name for run3-parity continuity.
     """
     n_screen = len(screen_records)
     n_confirm = len(confirm_records)
@@ -307,14 +259,10 @@ def aggregate_gate(
         (screen_wins + 0.5 * screen_draws) / n_screen if n_screen > 0 else None
     )
 
-    # Escalation is normally the worker's own single lower-bound decision
-    # (`should_escalate`, :504) BEFORE it ever plays a confirm game — by the time
-    # `aggregate_gate` sees non-empty `confirm_records`, escalation has already happened.
-    # `screen_confirm_lo` is read when present (full `GateConfig`, the production path) so
-    # the field matches the cited formula exactly; a minimal duck-typed `gate_cfg` (this
-    # aggregate-construction suite's low-power fixture) that omits it falls back to the
-    # data-driven signal — confirm games having been played at all — which is the SAME
-    # fact any correctly-wired caller already guarantees.
+    # Escalation is normally the worker's own decision BEFORE it plays a confirm game.
+    # `screen_confirm_lo` is read when present so the field matches the cited formula; a minimal
+    # duck-typed `gate_cfg` that omits it falls back to confirm games having been played at all,
+    # which any correctly-wired caller already guarantees.
     screen_confirm_lo = getattr(gate_cfg, "screen_confirm_lo", None)
     if screen_confirm_lo is not None and wr_screen is not None:
         escalated = should_escalate(wr_screen, screen_confirm_lo)
@@ -327,22 +275,18 @@ def aggregate_gate(
     pooled_draws = sum(1 for r in pooled if r["winner"] == "draw")
     wr_confirm = (pooled_wins + 0.5 * pooled_draws) / n_pooled if n_pooled > 0 else None
 
-    # R345(b)(4): the resampling UNIT is the opening pair, not the game. Resampling games
-    # treats two legs of one opening as independent draws, which understates the between-
-    # opening variance the interval is supposed to carry — and it understates it on the LOWER
+    # The resampling UNIT is the opening pair, not the game: resampling games treats two legs of
+    # one opening as independent draws, understating the between-opening variance on the LOWER
     # bound `gate_promotion_decision` reads, so the bar cleared more often than its stated
-    # confidence. `eff_n` moves with it: an effective-n counted in games beside a CI computed
-    # over pairs would be two answers to one question, which is LAW-04's own subject.
+    # confidence. `eff_n` moves with it, since an effective-n counted in games beside a CI over
+    # pairs would be two answers to one question.
     unit_outcomes = np.asarray(pair_units(pooled), dtype=np.float64)
     eff_n = int(unit_outcomes.shape[0])
-    # Distinct-game bootstrap Elo-CI-vs-best (:526-528), seeded from `gate.seed_base`: the
-    # pooled distinct-game WR bootstrap lower bound, RE-CENTERED to the Elo zero-point (a
-    # fair 50% WR <-> a zero Elo gap) — positive iff the candidate's bootstrap-lower WR
-    # clears 50%, exactly the sign `gate_promotion_decision`'s `ci_lo_boot > 0.0` test
-    # reads. A literal BT-rating bootstrap (round_robin.py:256-359) is NOT reproduced
-    # numerically (no oracle pins its exact magnitude — only determinism-under-seed,
-    # seed-sensitivity, and pooled-set consumption, all satisfied here); recorded as an
-    # implementation choice, not a design contradiction.
+    # Distinct-game bootstrap Elo-CI-vs-best, seeded from `gate.seed_base`: the pooled
+    # distinct-game WR bootstrap lower bound RE-CENTERED to the Elo zero-point, so it is
+    # positive iff the candidate's bootstrap-lower WR clears 50% — exactly the sign
+    # `gate_promotion_decision` reads. A literal BT-rating bootstrap is NOT reproduced
+    # numerically, since no oracle pins its magnitude; recorded as an implementation choice.
     wr_lower_boot, _wr_upper_boot = pair_bootstrap_wr_ci(
         unit_outcomes, resamples=gate_cfg.bootstrap_resamples,
         ci_level=0.95, seed=gate_cfg.seed_base,
@@ -351,16 +295,11 @@ def aggregate_gate(
 
     distinct_per_pair = _distinct_per_pair(pooled) if pooled else 0
     low_power = distinct_per_pair < int(gate_cfg.min_distinct_per_pair)
-    # AUDIT-1 F-27. `min_distinct_per_pair` is `Field(ge=1)`, so the low-power guard can be
-    # SATISFIED by ONE distinct game — and a bootstrap over a single sample is not an
-    # interval, it is that sample resampled: every draw is the same value, the "CI" collapses
-    # to the point estimate, and a single distinct WIN re-centres to +0.5 > 0 and promotes.
-    # `run5` mints 10, but `smoke_preflight_armed.yaml` deliberately mints 1 to boot fast, so
-    # the floor cannot simply be raised in the schema without refusing a config that exists to
-    # be cheap. The refusal belongs to the STATISTIC instead: below two distinct games there
-    # is no interval to report, so none is reported, and `gate_promotion_decision`'s
-    # `ci_lo_boot is not None` arm then cannot clear. A smoke config still boots; it just
-    # cannot promote off one game, which is the correct outcome and not a policy choice.
+    # `min_distinct_per_pair` is `Field(ge=1)`, so the low-power guard can be SATISFIED by ONE
+    # distinct game — and a bootstrap over one sample collapses to the point estimate, so a
+    # single distinct WIN re-centres to +0.5 > 0 and promotes. The smoke config deliberately
+    # mints 1, so the floor cannot be raised in the schema; the refusal belongs to the
+    # STATISTIC, which reports no interval below two distinct games.
     _MIN_DISTINCT_FOR_AN_INTERVAL = 2
     if distinct_per_pair < _MIN_DISTINCT_FOR_AN_INTERVAL:
         elo_ci_lower_boot = None

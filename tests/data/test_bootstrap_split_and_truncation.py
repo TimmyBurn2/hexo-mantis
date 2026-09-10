@@ -1,15 +1,9 @@
-"""R328(d) + the R328 MAX_STONES amendment — the seeded GAME-level split, and the counted truncation.
+"""The seeded GAME-level corpus split, and the counted stone-ceiling truncation.
 
-TWO MECHANISMS, ONE PRODUCER. The encoder is the last place that still knows which plies came
-from which game, so both live there: the split has to be by GAME (a ply-level split puts
-positions from the same game on both sides, and a held-out loss over them measures
-memorisation), and the ring's stone ceiling has to be counted per ROW.
-
-WHY THE TRUNCATION IS COUNTED RATHER THAN RAISED. `push_graph_position` refuses a position with
-more stones than `MAX_STONES`; on the R247 human corpus at radius 8 that is 7 866 of 547 251 ply
-rows across 88 of 8 698 games. The architect ruled the ceiling STAYS and the corpus truncates
-with its loss counted — so `"8 698 / 8 698 games"` can never be read without the row-level
-figure standing beside it in the same provenance.
+Both live in the encoder because it is the last place that still knows which plies came from
+which game: the split must be by GAME (a ply-level split puts positions from one game on both
+sides, so a held-out loss over them measures memorisation), and the ring's stone ceiling must
+be counted per ROW so a game count can never be read without the row-level loss beside it.
 """
 from __future__ import annotations
 
@@ -19,10 +13,8 @@ from pathlib import Path
 import pytest
 
 from mantis.data.bootstrap_encode import CorpusSplit, CorpusEncodeError, encode_corpus
-# Bare module name, the repo's convention for a same-directory test helper
-# (`tests/model/conformance/*` imports `_corpus` the same way). `from tests.data...`
-# is a violation of R5 — there is no package named `tests` — and it resolves only under
-# an invocation that happens to put the rootdir on the path.
+# Bare module name: there is no package named `tests`, so `from tests.data...` resolves only
+# under an invocation that happens to put the rootdir on the path.
 from test_bootstrap_encode import _dataset, _legal_walk, _records  # noqa: PLC2701
 
 _ENC = "gnn_axis_r8"
@@ -36,12 +28,8 @@ def _encode(tmp_path: Path, records, *, split=None, name="a", capacity=4096):
                          visit_capacity=8, split=split)
 
 
-# ═══ the split ═══════════════════════════════════════════════════════════════════════════
 def test_the_two_sides_PARTITION_the_corpus_exactly(tmp_path: Path) -> None:
-    """DISJOINT and EXHAUSTIVE, checked as counts that reconcile — the contamination check.
-
-    This is the property a held-out set exists for: a game on both sides is training data
-    wearing a held-out label, and a game on neither is silently dropped evidence."""
+    """The two sides are disjoint and exhaustive, checked as counts that reconcile."""
     recs = _records(40)
     tr = _encode(tmp_path, recs, split=CorpusSplit(7, 0.25, "train"), name="a")
     ho = _encode(tmp_path, recs, split=CorpusSplit(7, 0.25, "heldout"), name="b")
@@ -52,10 +40,10 @@ def test_the_two_sides_PARTITION_the_corpus_exactly(tmp_path: Path) -> None:
 
 
 def test_assignment_keys_on_the_GAME_HASH_and_not_on_record_ORDER(tmp_path: Path) -> None:
-    """PB-1. Reversing the corpus must not move a single game across the partition.
+    """Reversing the corpus moves no game across the partition.
 
-    An index- or shuffle-based split passes every count-based row above and fails this one:
-    the counts still reconcile, they are just counts of different games."""
+    An index- or shuffle-based split passes every count-based row above and fails this one.
+    """
     recs = _records(40)
     split = CorpusSplit(7, 0.25, "heldout")
     fwd = _encode(tmp_path, recs, split=split, name="a")
@@ -67,10 +55,7 @@ def test_assignment_keys_on_the_GAME_HASH_and_not_on_record_ORDER(tmp_path: Path
 
 
 def test_the_split_is_INDEPENDENT_of_max_games(tmp_path: Path) -> None:
-    """A truncated smoke run draws the same side for the same game as a full run.
-
-    This is what a keyed hash buys over a shuffle, and it is the difference between a smoke
-    config that exercises the real partition and one that exercises a different one."""
+    """A truncated smoke run draws the same side for the same game as a full run."""
     recs = _records(40)
     split = CorpusSplit(7, 0.25, "heldout")
     full = _encode(tmp_path, recs, split=split, name="a")
@@ -80,7 +65,7 @@ def test_the_split_is_INDEPENDENT_of_max_games(tmp_path: Path) -> None:
 
 
 def test_a_DIFFERENT_SEED_gives_a_different_partition(tmp_path: Path) -> None:
-    """PB-3. If the seed is dropped from the hash key, every seed gives one partition."""
+    """Two seeds give different partitions; drop the seed from the key and they would not."""
     recs = _records(60)
     a = _encode(tmp_path, recs, split=CorpusSplit(1, 0.25, "heldout"), name="a")
     b = _encode(tmp_path, recs, split=CorpusSplit(2, 0.25, "heldout"), name="b")
@@ -90,7 +75,7 @@ def test_a_DIFFERENT_SEED_gives_a_different_partition(tmp_path: Path) -> None:
 
 
 def test_an_EMPTY_side_is_REFUSED(tmp_path: Path) -> None:
-    """PB-2. An empty ring is not a small ring."""
+    """An empty side is refused: an empty ring is not a small ring."""
     with pytest.raises(CorpusEncodeError, match="selected ZERO games"):
         _encode(tmp_path, _records(3), split=CorpusSplit(7, 0.99, "train"), name="a")
 
@@ -107,8 +92,7 @@ def test_an_unknown_part_is_REFUSED() -> None:
 
 
 def test_the_provenance_records_the_split_and_NULLS_it_when_absent(tmp_path: Path) -> None:
-    """A split ring and a whole-corpus ring must be distinguishable by a reader who knows
-    nothing about how either was produced."""
+    """A split ring and a whole-corpus ring are distinguishable from provenance alone."""
     whole = _encode(tmp_path, _records(20), name="a")
     part = _encode(tmp_path, _records(20), split=CorpusSplit(7, 0.25, "train"), name="b")
     assert whole["split_seed"] is None and whole["split_part"] is None
@@ -116,12 +100,9 @@ def test_the_provenance_records_the_split_and_NULLS_it_when_absent(tmp_path: Pat
     assert part["split_heldout_frac"] == 0.25
 
 
-# ═══ the counted truncation ══════════════════════════════════════════════════════════════
 def test_a_game_past_the_stone_ceiling_is_TRUNCATED_and_COUNTED(tmp_path: Path) -> None:
-    """The amendment's mechanism: rows over `MAX_STONES` are lost, and the provenance says so.
-
-    Driven with a real over-length game rather than a mocked ceiling, so what is exercised is
-    the same comparison the corpus hit."""
+    """Rows over `MAX_STONES` are lost and the provenance says so, driven with a real
+    over-length game rather than a mocked ceiling."""
     from mantis._engine import max_stones
     ceiling = max_stones()
     long_game = {"game_hash": "long", "winner": 1,
@@ -129,8 +110,7 @@ def test_a_game_past_the_stone_ceiling_is_TRUNCATED_and_COUNTED(tmp_path: Path) 
     prov = _encode(tmp_path, [long_game], name="a", capacity=ceiling + 64)
     assert prov["games"] == 1, "the game is ACCEPTED, not refused"
     assert prov["games_truncated"] == 1
-    # Row j carries j stones, so rows j in [ceiling+1, len(moves)-1] are refused — DERIVED
-    # from the game's own length and the engine's ceiling, never a typed count.
+    # Row j carries j stones, so rows j in [ceiling+1, len(moves)-1] are refused.
     expected_lost = len(long_game["moves"]) - (ceiling + 1)
     assert expected_lost > 0, "the fixture game does not exceed the ceiling; row is vacuous"
     assert prov["rows_refused_over_max_stones"] == expected_lost
@@ -139,7 +119,7 @@ def test_a_game_past_the_stone_ceiling_is_TRUNCATED_and_COUNTED(tmp_path: Path) 
 
 
 def test_a_corpus_INSIDE_the_ceiling_reports_zero_loss(tmp_path: Path) -> None:
-    """The positive control: the counters are not always-on decoration."""
+    """Control: the counters are not always-on decoration."""
     prov = _encode(tmp_path, _records(5), name="a")
     assert prov["rows_refused_over_max_stones"] == 0
     assert prov["games_truncated"] == 0
@@ -147,8 +127,8 @@ def test_a_corpus_INSIDE_the_ceiling_reports_zero_loss(tmp_path: Path) -> None:
 
 
 def test_the_ply_histogram_is_present_and_ORDERS_NUMERICALLY(tmp_path: Path) -> None:
-    """The provenance is written with `sort_keys=True`, so unpadded labels put "64-127" after
-    "512-575". A histogram a reader has to re-sort by eye is one they will read wrong."""
+    """The provenance is written with `sort_keys=True`, so unpadded labels would put "64-127"
+    after "512-575"."""
     recs = _records(5) + [{"game_hash": "long", "winner": 1,
                            "moves": [[q, r] for q, r in _legal_walk(300, seed=9)]}]
     prov = _encode(tmp_path, recs, name="a", capacity=4096)
@@ -160,20 +140,11 @@ def test_the_ply_histogram_is_present_and_ORDERS_NUMERICALLY(tmp_path: Path) -> 
     assert sum(hist.values()) == prov["games"]
 
 
-# ═══ the policy target must actually reach the loss ══════════════════════════════════════
 def test_a_BC_row_CONTRIBUTES_POLICY_GRADIENT_and_is_not_value_only() -> None:
-    """THE DEFECT THIS ROW EXISTS FOR: BC that clones no behaviour.
+    """A BC row must carry `is_full_search=True` or it contributes no policy gradient.
 
-    `ragged_policy_ce` masks by `is_full_search`, and `graph_loss_denominators` sums the same
-    mask for the policy denominator. `encode_game` wrote FALSE on every row — reading the
-    flag's NAME ("was there a search behind this?", correctly no) rather than its ROLE ("does
-    this row contribute policy gradient?", emphatically yes). The consequence was measured on
-    the box, not argued: after 2 000 steps over 511 145 human positions the held-out policy
-    loss read `0.000000` at every evaluation and the unmasked held-out CE had moved from
-    6.1637 to 6.1249 against a uniform reference of 6.2561 — a policy still at initialisation.
-
-    The row asserts the FLAG, because that is the thing with one value and one meaning; the
-    loss being non-zero is a consequence tested where the loss lives.
+    `ragged_policy_ce` masks by that flag and `graph_loss_denominators` sums the same mask, so
+    the flag's ROLE is "does this row contribute policy gradient?", not "was there a search?".
     """
     from mantis.data.bootstrap_encode import encode_game
     from mantis._engine import Board
@@ -189,8 +160,7 @@ def test_a_BC_row_CONTRIBUTES_POLICY_GRADIENT_and_is_not_value_only() -> None:
 
 
 def test_the_policy_DENOMINATOR_over_a_BC_batch_is_the_graph_count_not_zero() -> None:
-    """The consequence, at the place that computes it. A zero denominator is the shape that
-    silently turns the whole policy term into 0 for the entire run."""
+    """A zero policy denominator silently turns the whole policy term into 0 for the run."""
     import numpy as np
 
     from mantis.data.bootstrap_encode import encode_game

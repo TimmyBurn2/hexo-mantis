@@ -1,24 +1,13 @@
-"""R339(c) — `F-816-37` as an INSTRUMENT: 1-in-1 on the eval path, and DUMP-ON-FIRE.
+"""The never-reproduced edge one-hot failure as an INSTRUMENT: 1-in-1, and dump-on-fire.
 
-WHAT THE RULING CHANGES AND WHY. `F-816-37` is one run-fatal graph-contract failure on the eval
-path — *"edge axis one-hot is not a clean one-hot (edge 803217): [0.0, 0.0, 0.5]"* — that has
-never reproduced. Three diagnostics forcing the check on every collate found nothing across
-~1 000 collates and a 90-minute burst produced zero occurrences, so hunting it further buys
-nothing. What the run cannot afford is the NEXT occurrence taking the run down and leaving
-nothing behind, and that is what these two properties fix: the eval path samples the check
-1-in-1 rather than 1-in-64 (`canary_period = int(batch_size)` against
-`inference.inference_batch_size: 64`), and a failure writes the offending batch before the
-exception propagates.
+One run-fatal graph-contract failure — "edge axis one-hot is not a clean one-hot (edge 803217):
+[0.0, 0.0, 0.5]" — that three diagnostics could not reproduce across ~1 000 collates or a
+90-minute burst. What the run cannot afford is the NEXT occurrence leaving nothing behind, so
+the check samples every batch and a failure writes the offending batch before it propagates.
 
-WHY THE CORRUPTION IS REAL AND NOT A PATCHED RAISE. LAW-07 wants a producer test, and a test
-that monkeypatches `collate_graph_batch` to raise would prove the dump code runs while proving
-nothing about the CHECK — which is the half that has to notice. So the plant goes into the wire
-slice, one edge's axis one-hot, exactly where the real failure's signature sits; the real Rust
-`verify_edge_geometry` is what fires, and `EdgeAttrGeometryMismatch` is what propagates.
-
-THE NEGATIVE CONTROL IS HALF THE FILE. A dump test that only ever runs a corrupted round would
-be green against an instrument that dumps on every round, so the uncorrupted round is asserted
-to produce NO dump and to pass.
+The corruption is REAL, not a patched raise: a monkeypatched collate would prove the dump code
+runs while proving nothing about the CHECK. The negative control is half the file, since a dump
+test that only runs a corrupted round is green against one that dumps on every round.
 """
 from __future__ import annotations
 
@@ -92,20 +81,9 @@ def _dumps(tmp_path: Path) -> list[Path]:
     return sorted(tmp_path.glob("collate_dump_*.json"))
 
 
-# ── the rate ───────────────────────────────────────────────────────────────────────────
 def test_every_collate_path_asks_for_one_in_one() -> None:
-    """All three paths' postures, read off the call sites that state them.
-
-    Structural rather than behavioural on purpose: the alternative is counting checks in a
-    round, which measures the round's length as much as the posture. What R342(b)(i) rules is
-    which VALUE each path passes, and that is what is asserted.
-
-    THIS TEST INVERTED AT R342(b)(i). It used to assert that self-play kept the
-    batch-size-derived rate; R339(c)'s ground for that was "a class that has only ever fired on
-    eval", and `F-816-37` has since fired on the training path (R340 leg 3). The condition now
-    is 1-in-1 on every path for the whole run, so the old assertion would pass only on a
-    configuration the ruling forbids.
-    """
+    """Every collate path asks for 1-in-1, read off the call sites that state it — counting
+    checks in a round would measure the round's length as much as the posture."""
     import inspect
 
     eval_src = inspect.getsource(worker)
@@ -128,11 +106,8 @@ def test_every_collate_path_asks_for_one_in_one() -> None:
 
 
 def test_the_selfplay_dump_target_is_a_sibling_of_the_other_two() -> None:
-    """The self-play dump lands beside the trainer's, under one run record.
-
-    Pins the DERIVATION, not a literal path: all three paths deriving from the run's own
-    checkpoint dir is what stops a second path authority appearing.
-    """
+    """The self-play dump lands beside the trainer's, under one run record — the DERIVATION is
+    pinned, not a literal path, so no second path authority can appear."""
     from mantis.selfplay.pool import _collate_dump_target
 
     dump_dir, context_fn = _collate_dump_target({"train": {"checkpoint_dir": "/run/xyz/checkpoints"}})
@@ -140,18 +115,15 @@ def test_the_selfplay_dump_target_is_a_sibling_of_the_other_two() -> None:
     ctx = context_fn()
     assert ctx["path"] == "selfplay" and ctx["concurrency"] == 1, ctx
 
-    # A config with no checkpoint_dir must not raise INSIDE a dump target: the dump exists to
-    # preserve evidence, so it degrades to a relative default rather than taking down the run.
+    # A missing checkpoint_dir degrades to a relative default: a dump exists to preserve
+    # evidence, not to take the run down.
     fallback, _ = _collate_dump_target({})
     assert fallback == "collate_dumps", fallback
 
 
 def test_period_one_runs_the_semantic_layer_on_every_batch() -> None:
-    """`_canary_should_run(1)` is True forever; `_canary_should_run(64)` is not.
-
-    The mechanism the postures above select, pinned as a function so a change to the cadence
-    rule cannot silently turn 1-in-1 into 1-in-something-else.
-    """
+    """Period one runs the semantic layer on EVERY batch, pinned at the function so a change to
+    the cadence rule cannot silently turn 1-in-1 into 1-in-something-else."""
     from mantis.selfplay import graph_collate as gc
 
     gc.reset_semantic_canary()
@@ -163,23 +135,17 @@ def test_period_one_runs_the_semantic_layer_on_every_batch() -> None:
     )
 
 
-# ── the negative control ───────────────────────────────────────────────────────────────
 def test_a_clean_round_dumps_nothing(tmp_path: Path) -> None:
-    """The control. Without it, an instrument that dumped unconditionally would look correct."""
+    """The control: without it an instrument that dumped unconditionally looks correct."""
     worker.run_round(_round_spec(tmp_path))
     assert _dumps(tmp_path) == [], (
         f"a clean round wrote a dump: {[p.name for p in _dumps(tmp_path)]}"
     )
 
 
-# ── the planted corruption ─────────────────────────────────────────────────────────────
 def _plant_one_hot_corruption(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Corrupt ONE edge's axis one-hot in the FIRST wire slice the server collates.
-
-    The plant sits on `slice_graph_wire`'s output — the exact object the check reads — so the
-    production `verify_edge_geometry` is what notices. `[0.0, 0.0, 0.5]` is F-816-37's own
-    observed signature rather than an invented value: a half-written one-hot.
-    """
+    """Corrupt ONE edge's axis one-hot in the FIRST wire slice the server collates: the plant
+    sits on the object the check reads, and `[0.0, 0.0, 0.5]` is the observed signature."""
     from mantis.selfplay import graph_wire_split
 
     state: dict[str, Any] = {"planted": 0}
@@ -201,17 +167,12 @@ def _plant_one_hot_corruption(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]
 def test_a_planted_corruption_DUMPS_and_REDS(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """LAW-07's mutation self-test for the instrument: the check notices, and the batch lands.
-
-    Both halves are asserted because either alone is satisfiable by a broken instrument: a
-    round that reds without dumping is HEAD's behaviour, and a dump without a red would be an
-    instrument that swallowed a run-fatal defect.
-    """
+    """The check notices AND the batch lands: either half alone is satisfiable by a broken
+    instrument — reds without dumping was the old behaviour, and a dump without a red would be
+    an instrument that swallowed a run-fatal defect."""
     state = _plant_one_hot_corruption(monkeypatch)
-    # THE RED HALF, and its shape is the finding's own: the failure does not come back as a
-    # `broken` result, it PROPAGATES out of the round. That is exactly what F-816-37 did in
-    # production — the STEP 4c witness died at 14 min 50 s — and it is why an unbounded rate
-    # on this path is a run-blocker rather than a reporting gap.
+    # The failure PROPAGATES out of the round rather than returning as a `broken` result,
+    # which is what it did in production and why this is a run-blocker, not a reporting gap.
     with pytest.raises(ValueError, match="one-hot"):
         worker.run_round(_round_spec(tmp_path))
     assert state["planted"] == 1, "the corruption never reached a wire slice"
@@ -227,9 +188,8 @@ def test_a_planted_corruption_DUMPS_and_REDS(
     assert "one-hot" in sidecar["error"], sidecar["error"]
     assert sidecar["round_id"] == "f816_37_instrument"
     assert sidecar["step"] == 7
-    # THE HALT-CONDITION FIELD. R339(c) turns its arming halt on whether an occurrence
-    # happened under concurrency, so a dump that could not answer that would not be the
-    # instrument the ruling ordered.
+    # The halt condition turns on whether an occurrence happened under concurrency, so a dump
+    # that could not answer that is not the instrument.
     assert sidecar["concurrency"] == 1
     assert sidecar["phase"].startswith("gate_"), sidecar["phase"]
 
@@ -240,8 +200,8 @@ def test_a_planted_corruption_DUMPS_and_REDS(
         assert "edge_attr" in arrays and "edge_index" in arrays and "node_coords" in arrays, (
             f"the batch is missing the check's own inputs: {sorted(arrays.keys())}"
         )
-        # The corruption itself is IN the saved batch — which is the whole point: a dump that
-        # did not carry the offending bytes would be a timestamp with a message attached.
+        # The corruption is IN the saved batch: a dump without the offending bytes is a
+        # timestamp with a message attached.
         attr = arrays["edge_attr"].reshape(-1, 5)
         assert list(attr[0][:3]) == [0.0, 0.0, 0.5], (
             f"the saved batch does not carry the planted edge: {attr[0][:3]}"

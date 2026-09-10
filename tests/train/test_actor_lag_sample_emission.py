@@ -1,49 +1,12 @@
-"""⊕ WPAX Phase P ORACLE — C-5: TD-6's `actor_lag_sample` emission (DESIGN_P §7.2, M-1).
+"""Oracle for the `actor_lag_sample` emission on the heartbeat watchdog's lag check.
 
-RED-at-EXECUTION, not at collection: TD-6 is a MODIFICATION to a module that already
-imports (`mantis.train.lifecycle.heartbeat_watchdog`), so there is no import anchor to
-hang a collection error on. At HEAD every drive below observes ZERO `actor_lag_sample`
-events, because `_check_actor_lag` emits only on `lag < 0` (`:306`) or `lag > threshold`
-(`:310`/`:316`) — that measured absence IS the RED, and it is stated here so a reader does
-not mistake an execution failure for a broken test.
+RED-at-EXECUTION, not at collection: at HEAD every drive observes ZERO samples, because the lag
+check emits only on `lag < 0` or `lag > threshold`. Without the sample a healthy run emits
+nothing from the lag check, so no observer can tell a live reading from a frozen 0.
 
-What this file exists to stop, in one sentence: assertion (b) of the mint preflight has NO
-SUBJECT at HEAD — a healthy run emits nothing at all from the lag check, so no observer can
-tell a live reading from a frozen 0, which is the exact discrimination R61 sent Phase P to
-make (LAW-18: a lever under test logs its own fire-rate in-run).
-
-The oracles, and the defect each one is the ONLY witness to:
-
-- `..._emits_an_actor_lag_sample_on_a_healthy_poll` — the emission exists at all, and it
-  carries a READING (learner/actor/lag/threshold), not an arming flag. Sole witness to
-  "(b) has a subject". `heartbeat_watchdog_armed` (`:217-221`) carries `{armed,
-  threshold_steps}` — the ARMING, never the reading — and V-2 recorded that mis-framing.
-- `..._sample_and_the_fire_path_carry_THE_SAME_detail` — sole witness to the
-  single-arithmetic-authority property (§7.2: "a sample that disagreed with the fire would
-  be a second authority"). A reimplementation that recomputes the reading passes every
-  other test in this file and fails only this one.
-- `..._reads_the_callables_live_across_polls` — the LAW-07 mutation self-test. Sole witness
-  against a captured-at-ctor reading; ordered-list equality, so a stream that merely
-  *changes* does not satisfy it.
-- `..._is_gated_by_the_file_interval_already_in_the_object` — sole witness to Remedy A's
-  derivation. A private timer, a new module constant or a hardcoded interval all pass the
-  three tests above and fail this one.
-- `test_heartbeat_watchdog_init_gains_NO_new_parameter` — sole witness against MF-1's
-  rejected shape. A required `lag_sample_interval_sec` kwarg turns 7 of the 9 tests in
-  byte-frozen `tests/train/test_actor_lag_watchdog.py` (`5638b90db43866e6`) red, which is an
-  R43 event outside every authorization this run holds (R67 lands AFTER Phase P). This
-  oracle is the only thing in the repo that makes that shape un-reintroducible.
-- `..._no_sample_during_close_out_and_none_without_a_spec` — sole witness that the emission
-  inherits the existing structural gates rather than becoming a fourth one.
-- `..._a_negative_lag_still_samples` — sole witness that the sample is not suppressed by the
-  `lag < 0` arm; the preflight's b5a reads `lag_steps < 0` off the SAMPLE, not only off the
-  `actor_lag_negative` event, and an emission placed after that arm would silence it.
-
-R9 posture: every drive uses the REAL `HeartbeatWatchdog`, the REAL `ActorLagSpec` and the
-REAL `JsonlEventSink` under `tmp_path`. No `*.jsonl` fixture is committed (R7 / gate 6,
-DESIGN §9.3) — the streams are built by driving the real objects and read back off disk.
-
-R8 >300 justify: ONE unit — the sample emission, the two structural gates it inherits (`_staleness_armed` and `spec is None`) and the constructor CENSUS that keeps its interval derived rather than parameterised are one negotiated remedy (TD-6 / MF-1, Remedy A). The census is only meaningful beside the rows it protects: read alone it looks like an arbitrary signature freeze, and read alone the emission rows give no reason the interval could not simply have been a new kwarg.
+R8 >300 justify: ONE unit — the emission, the two structural gates it inherits and the
+constructor CENSUS that keeps its interval derived rather than parameterised are one negotiated
+remedy; the census read alone looks like an arbitrary signature freeze.
 """
 from __future__ import annotations
 
@@ -55,13 +18,12 @@ from types import SimpleNamespace
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
 
-# The event name is the contract surface: `docs/contracts/event_manifest.md` gains a row for
-# it in the SAME commit as this file (M-3 + C-5, gate 10's TOKEN_RE — DESIGN §10.4/SF-3).
+# The event name is the contract surface: the event manifest gains a row for it in the SAME
+# commit as this file.
 SAMPLE_EVENT = "actor_lag_sample"
 
-# The four keys `_check_actor_lag` already builds into `detail` (`heartbeat_watchdog.py:299
-# -300`) and hands to the fire path. The sample must carry the same four — no more, no
-# fewer arithmetic — because it is the SAME dict.
+# The four keys `_check_actor_lag` already builds into `detail` and hands to the fire path. The
+# sample must carry the same four, because it is the SAME dict.
 DETAIL_KEYS = ("learner_step", "actor_ckpt_step", "lag_steps", "threshold_steps")
 
 
@@ -73,9 +35,8 @@ def _registry():
 
 
 def _watchdog(tmp_path: Path, *, spec, sink, file_interval_sec=0.0, clock=None, codes=None):
-    """Staleness structurally silenced (`deadline <= 0` disables that source's fire), so
-    every event observed below comes from the lag check itself. The watchdog THREAD is
-    never started — `poll_once()` is driven directly, zero sleeps."""
+    """Silence staleness structurally (`deadline <= 0`) so every event comes from the lag check;
+    the watchdog THREAD is never started, `poll_once()` is driven directly."""
     return HeartbeatWatchdog(
         registry=_registry(), deadlines={"train_step": 0.0}, sink=sink,
         counters_fn=lambda: 0, heartbeat_file=tmp_path / "hb.json",
@@ -93,21 +54,15 @@ def _spec(*, learner, actor, threshold=100, armed=False):
 
 
 def _read(sink: JsonlEventSink, name: str) -> list[dict]:
-    """Decode the REAL segment file the sink wrote and filter by event name.
-
-    Reading back off disk rather than off a spy is deliberate: the mint preflight's whole
-    observation transport is this file (§7.1), so an emission that never reaches it is
-    invisible to assertion (b) however loudly it was 'emitted'.
-    """
+    """Decode the REAL segment file the sink wrote and filter by event name — this file IS the
+    preflight's observation transport, so an emission that never reaches it is invisible."""
     lines = [ln for ln in sink.path.read_text().splitlines() if ln.strip()]
     return [e for e in (json.loads(ln) for ln in lines) if e.get("event") == name]
 
 
-# ── the producer ──────────────────────────────────────────────────────────────────────
 def test_a_healthy_poll_emits_an_actor_lag_sample_carrying_the_live_reading(tmp_path) -> None:
-    """LAW-18 / TD-6. A HEALTHY poll — lag far under threshold, nothing firing — must put
-    the reading on the wire. The values are rigged to distinct non-zero integers so that a
-    stub emitting a constant (`lag_steps: 0`, or the threshold echoed back) fails."""
+    """A HEALTHY poll puts the reading on the wire. The values are rigged to distinct non-zero
+    integers so a stub emitting a constant or echoing the threshold back fails."""
     sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5a")
     wd = _watchdog(tmp_path, sink=sink, spec=_spec(learner=lambda: 37, actor=lambda: 31,
                                                    threshold=100, armed=True))
@@ -131,9 +86,8 @@ def test_a_healthy_poll_emits_an_actor_lag_sample_carrying_the_live_reading(tmp_
 
 
 def test_the_sample_and_the_exceedance_event_carry_THE_SAME_detail(tmp_path) -> None:
-    """§7.2's load-bearing property: the sample IS the fire path's own `detail` dict, so a
-    sample can never disagree with the reading that fires. Driven at a lag that is over
-    threshold but DISARMED, so both events land on one poll from one `detail`."""
+    """The sample IS the fire path's own `detail` dict, so it can never disagree with the
+    reading that fires. Driven over threshold but DISARMED, so both events land on one poll."""
     sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5b")
     wd = _watchdog(tmp_path, sink=sink, spec=_spec(learner=lambda: 900, actor=lambda: 100,
                                                    threshold=500, armed=False))
@@ -154,9 +108,8 @@ def test_the_sample_and_the_exceedance_event_carry_THE_SAME_detail(tmp_path) -> 
 
 
 def test_a_negative_lag_still_emits_a_sample_beside_the_wiring_bug_event(tmp_path) -> None:
-    """b5a reads `lag_steps < 0` off the SAMPLE as well as off `actor_lag_negative`
-    (§7.4). An emission placed AFTER the `lag < 0` arm would silence the sample on exactly
-    the wiring defect the preflight exists to catch, and every other test here would pass."""
+    """A negative lag is still SAMPLED: the preflight reads `lag_steps < 0` off the sample too,
+    so an emission placed after the `lag < 0` arm would silence exactly the wiring defect."""
     sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5c")
     wd = _watchdog(tmp_path, sink=sink, spec=_spec(learner=lambda: 10, actor=lambda: 50,
                                                    threshold=5, armed=True))
@@ -172,12 +125,9 @@ def test_a_negative_lag_still_emits_a_sample_beside_the_wiring_bug_event(tmp_pat
     )
 
 
-# ── the LAW-07 mutation self-test ─────────────────────────────────────────────────────
 def test_the_sample_reads_the_callables_live_across_polls(tmp_path) -> None:
-    """The O-28 discipline as a MUTATION self-test: a reading captured at ctor/arm — or a
-    constant — reproduces the first row forever. Ordered-list equality over three polls, so
-    a stream that merely *moves* does not satisfy it either (Phase S's `assert lag > 0`
-    trap, DESIGN §7.4)."""
+    """A reading captured at ctor — or a constant — reproduces the first row forever; ordered
+    equality over three polls, so a stream that merely *moves* fails too."""
     sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5d")
     state = {"learner": 5, "actor": 5}
     wd = _watchdog(tmp_path, sink=sink,
@@ -197,14 +147,9 @@ def test_the_sample_reads_the_callables_live_across_polls(tmp_path) -> None:
 
 
 def test_the_sample_is_gated_by_the_file_interval_ALREADY_in_the_object(tmp_path) -> None:
-    """MF-1 / Remedy A: the sample interval is DERIVED from `self._file_interval` — the
-    value `subsystems.py:270` already passes as `file_interval_sec` — so one config fact
-    never enters this ctor twice under two names (LAW-08). A private timer, a new module
-    constant or a hardcoded seconds literal all fail here and nowhere else.
-
-    Both arms are asserted, because only the pair pins a derivation: interval 10 must
-    THIN the stream on the same clock that interval 0 must not.
-    """
+    """The sample interval is DERIVED from `self._file_interval` — the value already passed as
+    `file_interval_sec` — so one config fact never enters this ctor twice under two names. Both
+    arms are asserted, because only the pair pins a derivation."""
     now = {"t": 0.0}
     gated_sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5e_gated")
     gated = _watchdog(tmp_path, sink=gated_sink, file_interval_sec=10.0,
@@ -236,26 +181,11 @@ def test_the_sample_is_gated_by_the_file_interval_ALREADY_in_the_object(tmp_path
 
 
 def test_heartbeat_watchdog_init_gains_NO_new_parameter() -> None:
-    """MF-1's closure, and the reason it is a signature CENSUS rather than a spot check.
+    """The constructor gains NO new parameter, as a signature CENSUS rather than a spot check.
 
-    The rejected shape for TD-6 was a required `lag_sample_interval_sec` ctor kwarg. It was
-    measured to turn 37 tests red across five files — 7 of the 9 in byte-frozen
-    `tests/train/test_actor_lag_watchdog.py` (`5638b90db43866e6`), whose renegotiation R67
-    schedules for AFTER Phase P. A census (not `assert "lag_sample_interval_sec" not in
-    params`) is what makes ANY re-shaping of this constructor visible, including the
-    module-constant-default variant §7.2 also rejects.
-
-    `monitor_liveness` (AUDIT-1 F-11 / R334(b)) IS such a re-shaping and the census DID make
-    it visible — which is the pin working, not the pin being routed around. It is admitted
-    against the rule this census encodes, not despite it, and the grounds are measured rather
-    than argued: TD-6's shape was rejected because a REQUIRED kwarg turned 37 tests red across
-    five files, and this one is OPTIONAL (`()`) and turned exactly ONE test red — this census.
-    It also does not touch TD-6's subject: the lag sample interval still derives from
-    `file_interval_sec`, and so does the liveness sample, which is the same one rule with a
-    third consumer rather than a second authority. Neither of the two files this docstring
-    calls byte-frozen appears in ANY `wp/*/ORACLE_FREEZE*.sha256` row (grepped at the change,
-    rc 1, zero hits), so no frozen-file grant is owed; the "byte-frozen" wording is a WP12-R
-    working-tree convention and is left standing as the record of what it meant.
+    The rejected shape was a required `lag_sample_interval_sec` kwarg, measured to turn 37 tests
+    red across five files. `monitor_liveness` is admitted against this census because it is
+    OPTIONAL, turned exactly one test red, and derives its interval from `file_interval_sec` too.
     """
     params = inspect.signature(HeartbeatWatchdog.__init__).parameters
     assert tuple(params) == (
@@ -281,10 +211,8 @@ def test_heartbeat_watchdog_init_gains_NO_new_parameter() -> None:
 
 
 def test_no_sample_during_close_out_and_none_without_a_spec(tmp_path) -> None:
-    """The emission inherits the two structural gates that already bound `_check_actor_lag`
-    — `_staleness_armed` (`poll_once`, `:276-277`) and `spec is None` (`:294`) — instead of
-    becoming a third, independently-wrong one. This is also what keeps the emission out of
-    the close-out window that MF-5's b4c reasoning depends on."""
+    """The emission inherits the two gates that already bound `_check_actor_lag` instead of
+    becoming a third, which is what keeps it out of the close-out window."""
     closing_sink = JsonlEventSink(log_dir=tmp_path, run_id="oracle_p_c5f_closeout")
     wd = _watchdog(tmp_path, sink=closing_sink,
                    spec=_spec(learner=lambda: 1000, actor=lambda: 0, threshold=10, armed=True))

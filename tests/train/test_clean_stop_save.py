@@ -1,71 +1,23 @@
-# >300 justify (R8).
-# The ten rows are ONE claim — R137's THIRD save leg: a run that reaches its own declared
-# terminus writes EXACTLY ONE stamped checkpoint, a rigged failure is supervisor-distinguishable,
-# and an in-loop abort still writes nothing — over one seam that runs from `step.py`'s O2 arm
-# through a latch on the coordinator to `loop.py`'s post-loop guard and on to the registered
-# persist-fatal chain. R5 bars cross-test imports, so measuring it needs the local
-# `StepCoordinator` harness (the `tests/train/test_abort_exit_signal.py` shape) in this file;
-# a split forks that harness into copies that then drift while both stay green, and it would
-# separate the leg (OC-1) from the driver that makes it exactly-once (OC-2a/OC-2b) and from
-# the guard that closes W-1 (OC-3a/OC-3b) — three halves of one argument. Executable content
-# is a minority; the rest is the per-row "what defect is this the only witness to" rationale
-# LAW-07 asks each row to carry, and the reachability note R166 asks each drive to state.
-"""⊕ WP12-R Phase CS / OC-1..OC-5, OC-7 (R137 / CARD-CLEANSTOP-SAVE) — the third save leg.
+# >300 justify (R8): the ten rows are ONE claim — the third save leg: a run that reaches its own
+# declared terminus writes EXACTLY ONE stamped checkpoint, a rigged failure is
+# supervisor-distinguishable, and an in-loop abort still writes nothing — over one seam running
+# from `step.py`'s O2 arm through a latch on the coordinator to `loop.py`'s post-loop guard and on
+# to the registered persist-fatal chain. R5 bars cross-test imports, so the local `StepCoordinator`
+# harness must live here; a split forks it into copies that drift while both stay green.
+"""The third save leg: a run that reaches `stop_step` writes exactly one final checkpoint.
 
-R129 measured the hole and R137 carded it: at HEAD a run that reaches `stop_step` exits **0**
-with `checkpoints/` **EMPTY**. `coordinator/step.py`'s O2 arm sets `shutdown.running = False`
-and returns without saving; `loop.py`'s `_final_save()` fires only on `shutdown_save`, which
-only a SIGNAL sets; and the trainer's periodic arm is guarded by `interval > 0` against a
-`checkpoint_interval` every minted config mints at 0 — and, at the commit this file was
-written, did not exist at all on the graph representation run5 declares (DESIGN_CS §1.5,
-F-CS-1). **WP12-R CARD-CS2 (R173) has since falsified that second clause**: both step tails
-now call the ONE resolver `Trainer._maybe_periodic_checkpoint`, so the graph arm exists and
-evaluates, and the minted `0` is the sole reason it stays silent. So the 1e6-step run's
-PRODUCT — the terminal weights the terminal eval and the deploy tag are about — is never
-written.
+Before this leg, a run reaching `stop_step` exited 0 with `checkpoints/` EMPTY — the O2 arm set
+`shutdown.running = False` and returned without saving, `loop.py`'s `_final_save()` fires only on
+`shutdown_save` (which only a SIGNAL sets), and the periodic arm is guarded by `interval > 0`
+against a `checkpoint_interval` every minted config mints at 0.
 
-Leg 3 is its OWN semantic, not a differently-triggered `shutdown_save` (DESIGN_CS §2.3): leg 1
-means "a resumption point", leg 2 means "we were interrupted", leg 3 means "the run finished".
+Leg 3 is its OWN semantic: leg 1 means "a resumption point", leg 2 "we were interrupted", leg 3
+"the run finished". Exactly-once comes from the DRIVER, not from any latch inside the leg, so the
+real `run_training_loop` is the only honest instrument for it.
 
-The defect each row is the ONLY witness to:
-
-- **OC-1** — the leg not firing at all, i.e. the whole card. Drives ONE real
-  `StepCoordinator.step()` at the ceiling and reads all five observables the leg publishes:
-  the call on the injected trainer, `shutdown.running`, `shutdown.abort_rule` (still `None` —
-  a clean stop is not an abort, R84), the `clean_stop_saved` latch, the outcome's
-  `checkpoint_saved` flag (asserted HERE precisely because nothing in `src/` reads it —
-  DESIGN_CS §2.2 N-6), and the ONE `clean_stop_save` event with its three fields.
-- **OC-2a** — a leg that re-fires because the driver keeps driving. It cannot be measured by
-  calling `step()` twice by hand: the leg carries NO internal latch (deliberate — exactly-once
-  comes from the DRIVER, DESIGN_CS §2.4), so a hand re-entry saves twice under the CORRECT
-  code too. The real `run_training_loop` is the only honest instrument (PREREG_CS §3.0 T-2).
-- **OC-2b** — W-1, the one reachable double-save window, driven verbatim on the REAL objects:
-  a signal landing INSIDE leg 3's own multi-second `torch.save`. The only row driving the real
-  leg and the real loop guard together.
-- **OC-3a** — leg exclusivity at the guard: `shutdown_save` set during the leg must not buy a
-  second `_final_save()`.
-- **OC-3b** — a coordinator that publishes no `clean_stop_saved` must RAISE, never degrade to
-  a silent `False`, which would re-open W-1 with nobody noticing.
-- **OC-4a** — a swallowed final-save failure: a run reporting success having written nothing
-  (LAW-14; leg 3 catches nothing).
-- **OC-4b** — an event stream claiming a save that never happened. The event is emitted AFTER
-  the write, deliberately UNLIKE `loop.py:87` which emits before its own (Q-CS-6).
-- **OC-4c** — LAW-14's rc authority, at the seam the registered producer test already uses:
-  a REAL write failure counts once on `checkpoints.persist_errors_total` and the INDEPENDENT
-  watchdog's `poll_once()` fires **43**. No new exit code is authored by this card.
-- **OC-5** — an in-loop abort shipping a "product" checkpoint. **SCOPED TO CLASS A**; the
-  docstring names Class B, which CAN coexist with a leg-3 artefact.
-- **OC-7** — a checkpoint written outside the ONE stamp path, or stamped with the wrong
-  step/lineage. R137's literal, at the armed smoke's own minted bound.
-
-**What is real here and what is not.** Real in OC-1..OC-5: the `StepCoordinator`, its config
-built by the PRODUCTION builder off a MINTED config, the `ShutdownState`, `run_training_loop`,
-`_fire_hard_abort`, the draw-rate gate. Fake: the TRAINER (a counter — the subject is control
-flow and the trainer is its instrument), the pool/buffer collaborators, and the sink (a spy).
-OC-3a/OC-3b additionally fake the COORDINATOR, because their subject is the LOOP guard — which
-is exactly why OC-2b exists (PREREG_CS §1, N-4). OC-4c's only substitution is `exit_fn` plus a
-killed `torch.save`, the pattern `tests/monitor/test_persist_fatal.py` and
-`tests/train/test_lifecycle_contract.py` already use. OC-7 fakes nothing about the run.
+Real here: the `StepCoordinator`, its config from the PRODUCTION builder off a MINTED config, the
+`ShutdownState`, `run_training_loop`, `_fire_hard_abort`, the draw-rate gate. Fake: the TRAINER (a
+counter — the subject is control flow), the pool/buffer collaborators, and the sink.
 """
 from __future__ import annotations
 
@@ -95,8 +47,8 @@ from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports, so each
+    file that needs one builds it)."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -106,10 +58,8 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
+#: plus the two sections the route's own resolvers read. The caps are the NON-BINDING pair.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -121,62 +71,52 @@ _GRAPH_FULL_CONFIG: dict = {
 _REPO = Path(__file__).resolve().parents[2]
 _MINTED = load_config(_REPO / "configs" / "dev_example.yaml")
 
-#: The coordinator's non-leg knobs come from a MINTED config through the production
-#: resolvers, never from literals here (WPMINT Phase K-A/K-B; R1).
+#: The coordinator's non-leg knobs come from a MINTED config through the production resolvers,
+#: never from literals here (R1).
 _DRAIN_CAPS = resolve_drain_caps(_MINTED.monitor)
 _KNOBS = resolve_coordinator_knobs(_MINTED.train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
-#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
-#: two equal), so these drives keep exactly the cadence they had before R242's split.
+#: The ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR it
+#: onto `gate_interval`, which is the shipped posture — every committed config mints them equal.
 _GATE_INTERVAL = _MINTED.monitor.gate_interval
 
 
 def _mirrored(settings: dict) -> dict:
-    """R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names it.
+    """Mirror the GATE cadence onto the NARRATION cadence unless a drive names it.
 
-    That mirroring is the SHIPPED posture, not a convenience — every committed config mints
-    `monitor.gate_interval` equal to its own `train.log_interval` — so a drive here that moves
-    only `log_interval` keeps exactly the cadence it had before R242 split the two knobs.
-    """
+    That mirroring is the SHIPPED posture: every committed config mints `monitor.gate_interval`
+    equal to its own `train.log_interval`."""
     settings.setdefault("gate_interval", settings["log_interval"])
     return settings
 
 #: The declared terminus for the leg-3 drives.
 _CEILING = 5
-#: The trainer's step at O2 entry for OC-1/OC-4, DELIBERATELY DISTINCT from `_CEILING`: the
-#: `clean_stop_save` event carries BOTH `step` and `stop_step`, and equal values would let an
-#: implementation that emits one number twice — or swaps the two fields — pass forever. This
-#: is also a REAL production state, not a contrivance: DESIGN_CS §2.4 names the resumed run
-#: whose `trainer.step` already exceeds `stop_step` as firing O2 on its first `step()`.
+#: The trainer's step at O2 entry, DELIBERATELY DISTINCT from `_CEILING`: the `clean_stop_save`
+#: event carries BOTH `step` and `stop_step`, and equal values would let an implementation that
+#: emits one number twice — or swaps the two fields — pass forever.
 _RESUMED_STEP = 7
-#: OC-2a/OC-2b drive the CANONICAL shape instead — the run arriving exactly at its ceiling —
-#: so the file covers both `>` and `==` on the O2 predicate.
+#: The CANONICAL shape — the run arriving exactly at its ceiling — so the file covers both `>`
+#: and `==` on the O2 predicate.
 _LOOP_MAX_STEPS = 5
-#: OC-5's ceiling: far above any step its drive reaches, so its abort is unambiguously BELOW
-#: the terminus and the leg's predicate is genuinely false when the abort fires.
+#: Far above any step the abort drive reaches, so its abort is unambiguously BELOW the terminus.
 _ABORT_CEILING = 1000
 _ABORT_RULE = "draw_rate_collapse"
 
-#: What the fake trainer's `save_checkpoint` hands back. The leg must publish THE WRITER'S
-#: return value on the event, not a path it re-derives from the checkpoint dir.
+#: What the fake trainer's `save_checkpoint` hands back. The leg must publish THE WRITER'S return
+#: value on the event, not a path it re-derives from the checkpoint dir.
 _SAVED_PATH = Path("/checkpoints/oracle_00000007_deadbeef.ckpt")
 
-#: The armed smoke's OWN minted `train.max_train_steps`, which is also R137's literal ("a
-#: clean 200-step run"). Asserted as a PREMISE by OC-7, never used as its drive: M-0 measured
-#: it at 474.6 s against the 300 s tier ceiling (PREREG_CS §5.3).
+#: The armed smoke's OWN minted `train.max_train_steps`. Asserted as a PREMISE, never used as a
+#: drive: measured at 474.6 s against the 300 s tier ceiling.
 _SMOKE_CONFIG = "smoke_preflight_armed.yaml"
 _MINTED_BOUND = 200
-#: OC-7's drive bound, fixed by the PRE-REGISTERED M-0 measurement and its binding decision
-#: rule — the largest member of {200, 100, 50, 32, 16} measuring <= 300 s on the dev box.
-#: Measured, single run each, at `32ec7b9` with the leg absent: 200 -> 474.6 s, 100 -> 319.5 s,
-#: 50 -> 240.2 s. The measurement PRECEDED this row; it was never lowered after seeing a red.
+#: The drive bound, fixed by a PRE-REGISTERED measurement and its binding decision rule — the
+#: largest member of {200, 100, 50, 32, 16} measuring <= 300 s on the dev box. Measured, single
+#: run each, with the leg absent: 200 -> 474.6 s, 100 -> 319.5 s, 50 -> 240.2 s.
 _OC7_BOUND = 50
 
 
-# ── the minimum real-coordinator harness (local by necessity — R5 bars cross-test imports) ──
 class _Pool:
-    """A pool whose draw counts are the only thing OC-5's gate reads off it."""
+    """A pool whose draw counts are the only thing the draw-rate gate reads off it."""
 
     def __init__(self, *, draws: int = 0, completed: int = 0) -> None:
         self.games_completed = 0
@@ -211,10 +151,9 @@ class _Pool:
 
 
 class _Trainer:
-    """The instrument. `attempts` and `saves` are DISTINCT on purpose: a rigged failure must
-    show that the leg REACHED the writer (`attempts == 1`) and that no artefact resulted
-    (`saves == 0`). One counter could not tell "the leg never called" from "the call failed",
-    which is exactly the difference between mutations M-1 and M-5."""
+    """The instrument. `attempts` and `saves` are DISTINCT on purpose: a rigged failure must show
+    that the leg REACHED the writer (`attempts == 1`) and that no artefact resulted (`saves == 0`).
+    One counter could not tell "the leg never called" from "the call failed"."""
 
     def __init__(self, *, step: int = 0, raises: BaseException | None = None,
                  on_save: Any = None) -> None:
@@ -259,9 +198,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire for
+        # real before the trainer stub sees it, so a hand-built payload would be a second format.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -279,8 +217,7 @@ class _Sink:
 
 def _config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder — this file's deltas only. `None` is the EXPLICIT
-    disarmed draw-rate posture; the builder gives it no default and neither does this factory
-    (R1: no code-side default for anything an assertion's meaning depends on)."""
+    disarmed draw-rate posture; neither the builder nor this factory gives it a default (R1)."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=_CEILING, draw_rate_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
@@ -307,25 +244,13 @@ def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: _Pool | 
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, shutdown=shutdown, sink=sink)
 
 
-# ══ OC-1 — the leg fires, once, and publishes what it did ══════════════════════════════
 def test_the_ceiling_arm_saves_once_and_publishes_the_clean_stop_leg() -> None:
-    """OC-1 — the whole card, on ONE real `StepCoordinator.step()` at the terminus.
-
-    MUTATIONS THAT RED IT: M-1 (delete the leg call — `saves`/event/latch all go to 0/False
-    together), M-6 (delete only the `save_checkpoint(...)` inside the leg — `saves` goes to 0
-    while the event and the latch stay, which is M-6's signature and distinguishes it from
-    M-1), M-9 (delete the emit), M-11 (call the leg twice), M-12 (revert the outcome flag),
-    M-2 (`running` never flips).
+    """The leg fires, once, and publishes what it did, on ONE real `StepCoordinator.step()`.
 
     `abort_rule is None` is asserted because a clean stop and an abort both write
-    `running = False`, and `abort_rule` is the ONLY thing that tells them apart (R84). The
-    outcome's `checkpoint_saved` is asserted because NOTHING in `src/` reads it (DESIGN_CS
-    §2.2 N-6) — leg 3 sets it for parity with O3, and without this row that write would be
-    unwitnessed in the whole tree.
-
-    The event's two step fields are read against DISTINCT numbers (`_RESUMED_STEP` 7 vs
-    `_CEILING` 5), so an implementation emitting one of them twice, or swapping them, reds
-    here rather than agreeing with itself forever.
+    `running = False`, and `abort_rule` is the ONLY thing that tells them apart. `checkpoint_saved`
+    is asserted because NOTHING in `src/` reads it. The event's two step fields are read against
+    DISTINCT numbers, so emitting one twice, or swapping them, reds here.
     """
     trainer = _Trainer(step=_RESUMED_STEP)
     h = _harness(trainer=trainer, config=_config(stop_step=_CEILING))
@@ -372,22 +297,12 @@ def test_the_ceiling_arm_saves_once_and_publishes_the_clean_stop_leg() -> None:
     )
 
 
-# ══ OC-2a/OC-2b — exactly once under the REAL driver ═══════════════════════════════════
 def test_the_real_loop_drives_the_ceiling_leg_exactly_once() -> None:
-    """OC-2a — a leg that re-fires because the driver keeps driving.
+    """The leg does not re-fire because the driver keeps driving.
 
-    Why the REAL `run_training_loop` and not two hand calls to `step()` (PREREG_CS §3.0 T-2):
-    the leg carries NO internal latch. Exactly-once is a property of the DRIVER — O2 sets
-    `running = False` and returns, and `while shutdown_state.running` is tested BEFORE each
-    call. A hand re-entry would save twice under the CORRECT code, so it would measure
-    nothing. `max_steps=5` bounds the drive so a mutant that leaves `running` True still
-    terminates and is READABLE (that is M-2's only sound witness; under a production driver,
-    which passes no `max_steps`, M-2 does not terminate at all).
-
-    MUTATIONS THAT RED IT: M-1/M-6 (`saves` 1→0), M-2 (`saves` 1→5), M-11 (1→2).
-
-    Zero `shutdown_save` events is the second half: leg 3 is its OWN semantic, and a run that
-    FINISHED must not leave a stream saying it was interrupted (DESIGN_CS §2.3).
+    The REAL `run_training_loop`, not two hand calls to `step()`: the leg carries NO internal
+    latch, so a hand re-entry would save twice under the CORRECT code and measure nothing. Zero
+    `shutdown_save` events is the second half — a run that FINISHED must not say it was interrupted.
     """
     trainer = _Trainer(step=_CEILING)
     h = _harness(trainer=trainer, config=_config(stop_step=_CEILING))
@@ -408,24 +323,12 @@ def test_the_real_loop_drives_the_ceiling_leg_exactly_once() -> None:
 
 
 def test_a_signal_landing_inside_the_final_write_still_leaves_one_checkpoint() -> None:
-    """OC-2b — W-1 verbatim, on the REAL coordinator AND the REAL loop guard.
+    """A signal landing inside the final write still leaves ONE checkpoint.
 
-    W-1 is the ONE reachable double-save window (DESIGN_CS §2.4): a SIGINT/SIGTERM landing
-    between the entry to `_clean_stop_save` and `loop.py`'s post-loop test. The window spans a
-    full-envelope `torch.save` — `model_state` + `optimizer_state` + `scaler_state` +
-    `scheduler_state` — which is multi-second on run5. It is driven here by making the
-    trainer's `save_checkpoint` set `shutdown_save` as a SIDE EFFECT, which is what a signal
-    arriving mid-write looks like from the loop's side.
-
-    The naive "same content ⇒ same filename ⇒ idempotent" defence is FALSE and must not be
-    leaned on: `sha8` is `content_sha8` over a payload carrying `metadata.created_utc`, which
-    is microsecond-resolution, so two saves at one step are two DISTINCT files.
-
-    This is the only row driving the real leg and the real guard TOGETHER — OC-3a/OC-3b reach
-    the guard through a fake coordinator and OC-1 reaches the leg without the loop, so without
-    this row the production combination is never executed (PREREG_CS §1, N-4).
-
-    MUTATIONS THAT RED IT: M-3 (drop the guard's conjunct → `saves` 1→2), M-1/M-6 (1→0).
+    The one reachable double-save window: a signal landing between the entry to
+    `_clean_stop_save` and `loop.py`'s post-loop test, a window spanning a full-envelope
+    `torch.save`. The "same content ⇒ same filename ⇒ idempotent" defence is FALSE: `sha8` covers
+    a microsecond-resolution `created_utc`, so two saves at one step are two DISTINCT files.
     """
     shutdown = ShutdownState()
     trainer = _Trainer(step=_CEILING,
@@ -454,15 +357,12 @@ def test_a_signal_landing_inside_the_final_write_still_leaves_one_checkpoint() -
     )
 
 
-# ══ OC-3a/OC-3b — the loop-side guard ══════════════════════════════════════════════════
 class _CoordinatorPublishingTheLatch:
-    """A coordinator standing in for a leg-3 `StepCoordinator`: it saves, latches, sets
-    `shutdown_save` (the mid-write signal) and stops the run — all from INSIDE `step()`.
+    """A stand-in leg-3 coordinator: it saves, latches, sets `shutdown_save` and stops the run,
+    all from INSIDE `step()`.
 
-    Setting `shutdown_save` from inside `step()` is REQUIRED, not incidental (PREREG_CS §3.0
-    T-1): `loop.py:91-94` observes an already-set `shutdown_save` at ENTRY, calls
-    `_final_save()` and RETURNS, so an entry-set drive never reaches the post-loop guard these
-    two rows exist to measure.
+    Setting `shutdown_save` from inside `step()` is REQUIRED: an already-set `shutdown_save` at
+    loop ENTRY calls `_final_save()` and RETURNS, never reaching the post-loop guard.
     """
 
     def __init__(self, *, trainer: _Trainer, shutdown: ShutdownState) -> None:
@@ -479,8 +379,8 @@ class _CoordinatorPublishingTheLatch:
 
 class _CoordinatorPublishingNothing:
     """The wiring bug: a coordinator that reaches the guard WITHOUT the flag. Deliberately a
-    distinct class rather than the one above with the attribute deleted — a `del` leaves a
-    class attribute reachable and would make the drive lie about what it is measuring."""
+    distinct class rather than the one above with the attribute deleted — a `del` leaves a class
+    attribute reachable and would make the drive lie about what it is measuring."""
 
     def __init__(self, *, trainer: _Trainer, shutdown: ShutdownState) -> None:
         self._trainer = trainer
@@ -492,13 +392,9 @@ class _CoordinatorPublishingNothing:
 
 
 def test_the_loop_guard_latches_leg_two_out_after_a_clean_stop_save() -> None:
-    """OC-3a — leg exclusivity at the guard, through a coordinator whose own `step()` saves.
-
-    The subject here is `loop.py`, not `step.py`: a coordinator that already wrote the run's
-    FINAL artefact must not buy a second `_final_save()` merely because `shutdown_save` is
-    also set. MUTATION THAT REDS IT: M-3, dropping the `not _clean_stop_already_saved(...)`
-    conjunct → two saves at one step, i.e. two distinct FINAL artefacts.
-    """
+    """The loop guard latches leg 2 out after a clean-stop save. The subject is `loop.py`: a
+    coordinator that already wrote the run's FINAL artefact must not buy a second `_final_save()`
+    merely because `shutdown_save` is also set."""
     shutdown = ShutdownState()
     trainer = _Trainer(step=_CEILING)
     coord = _CoordinatorPublishingTheLatch(trainer=trainer, shutdown=shutdown)
@@ -515,16 +411,10 @@ def test_the_loop_guard_latches_leg_two_out_after_a_clean_stop_save() -> None:
 
 
 def test_a_coordinator_publishing_no_latch_makes_the_loop_raise() -> None:
-    """OC-3b — the wiring bug must be LOUD, never a silent `False`.
+    """A coordinator publishing no latch makes the loop RAISE, never degrade to a silent `False`.
 
-    A silent `False` re-opens exactly the W-1 window the guard exists to close, and it does so
-    invisibly: the run would write two final checkpoints and nothing would say so. This is
-    `close_out`'s posture on `disarm_staleness` verbatim — a duck-typed object missing the
-    member is a wiring bug, and a wiring bug must not degrade into "no guard".
-
-    MUTATIONS THAT RED IT: M-4 (return `False` when the attribute is absent — the defect
-    itself), and M-3 (dropping the conjunct deletes the ONLY call site of the only source of
-    this `TypeError`, so nothing raises at all).
+    A silent `False` re-opens the window the guard exists to close, and invisibly: the run would
+    write two final checkpoints and nothing would say so.
     """
     shutdown = ShutdownState()
     trainer = _Trainer(step=_CEILING)
@@ -544,16 +434,10 @@ def test_a_coordinator_publishing_no_latch_makes_the_loop_raise() -> None:
     )
 
 
-# ══ OC-4a/OC-4b/OC-4c — LAW-14: a final-save failure is fatal, counted, and never faked ══
 def test_a_rigged_final_save_failure_propagates_out_of_step() -> None:
-    """OC-4a — LAW-14: leg 3 catches NOTHING.
-
-    A swallowed final-save failure is a run that reports success having written nothing, and
-    it would also be a SECOND authority for a storage fault's exit code beside the registered
-    persist-fatal chain (OC-4c). MUTATIONS THAT RED IT: M-5 (`try/except Exception: pass`
-    around the leg's save — the defect itself), M-1/M-6 (no save call left in `step()` at all,
-    so nothing raises and this fails DID-NOT-RAISE).
-    """
+    """A rigged final-save failure propagates out of `step()` — leg 3 catches NOTHING (LAW-14).
+    A swallowed failure is a run reporting success having written nothing, and a SECOND authority
+    for a storage fault's exit code beside the registered persist-fatal chain."""
     trainer = _Trainer(step=_RESUMED_STEP, raises=OSError("rigged: the volume went away"))
     h = _harness(trainer=trainer, config=_config(stop_step=_CEILING))
 
@@ -567,18 +451,11 @@ def test_a_rigged_final_save_failure_propagates_out_of_step() -> None:
 
 
 def test_a_failed_final_save_claims_nothing_in_the_stream_or_the_latch() -> None:
-    """OC-4b — an event named for a save is a CLAIM the save happened.
+    """A failed final save claims nothing in the stream or the latch.
 
-    Leg 3 emits AFTER the write, deliberately unlike `loop.py:87`, which emits `shutdown_save`
-    BEFORE its own — so every failed shutdown save today leaves a stream asserting a save that
-    never happened (Q-CS-6, queued rather than silently mirrored). The latch is likewise set
-    after the write, so a failure leaves it `False` and the loop-side guard does NOT skip
+    An event named for a save is a CLAIM the save happened, so leg 3 emits AFTER the write. The
+    latch is set after the write too, so a failure leaves it `False` and the guard does NOT skip
     leg 2 on a run whose leg-3 write died.
-
-    MUTATIONS THAT RED IT: M-10 (move the emit ABOVE the save — G-CS-1: the "ONLY witness of
-    the ORDER" claim that stood here was FALSE and unrun; EXECUTED, M-10 also reds OC-1 on its
-    `path` assert, so OC-1 is a second, independent witness), M-5 (swallow → latch and emit
-    both run after a failure), M-6 (delete the save, keep the emit → the event fires anyway).
     """
     trainer = _Trainer(step=_RESUMED_STEP, raises=OSError("rigged: the volume went away"))
     h = _harness(trainer=trainer, config=_config(stop_step=_CEILING))
@@ -605,25 +482,14 @@ def test_a_real_write_failure_counts_once_and_the_watchdog_fires_forty_three(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tiny_net, optim_scaler_sched,
     valid_config, metadata_kwargs, spy_sink, fake_clock,
 ) -> None:
-    """OC-4c — LAW-14's rc AUTHORITY, at the seam the registered producer test already uses.
+    """A real write failure counts once and the independent watchdog fires 43.
 
-    This card authors NO new exit code: `PERSIST_FATAL_EXIT_CODE = 43` already exists, is
-    already registered (`monitor/producer_manifest.yaml`, id `persist_fatal`), and is already
-    fired by the INDEPENDENT watchdog. What this row adds is a SECOND live producer for that
-    registered input, driven end to end: a real `torch.save` fault inside the ONE writer bumps
-    `checkpoints.persist_errors_total` by exactly 1 and writes no `.ckpt`, and the watchdog's
-    `poll_once()` observes the counter and fires 43.
-
-    Deliberately NOT killed by any leg mutation (PREREG_CS §3.2): it witnesses the SHARED
-    chain, and its killer is the pre-existing `tests/monitor/test_persist_fatal.py` battery.
-    Reading its green as coverage of M-5 would be the phantom-coverage error — the counter is
-    incremented INSIDE `_write_v2_payload` before the re-raise, so a swallow at the LEG site
-    does not move it. That is why OC-4a and OC-4b exist separately.
-
-    `persist_errors_total` is a process-wide module GLOBAL; the monkeypatch pins it to 0 AND
-    restores the pre-test value at teardown, so the increment cannot leak into another suite
-    (the watchdog's persist rule is a literal `> 0`, so a leaked count aborts a later, healthy
-    watchdog on inherited state).
+    No new exit code is authored: 43 already exists, is registered, and is already fired by the
+    INDEPENDENT watchdog. This row adds a SECOND live producer for that registered input, driven
+    end to end. It is deliberately NOT killed by any leg mutation — the counter is incremented
+    INSIDE `_write_v2_payload` before the re-raise, so a swallow at the LEG site does not move it.
+    `persist_errors_total` is a module GLOBAL pinned to 0 and restored, since the watchdog's rule
+    is a literal `> 0` and a leaked count aborts a later, healthy watchdog.
     """
     monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
     before = checkpoints.persist_errors_total
@@ -665,26 +531,13 @@ def test_a_real_write_failure_counts_once_and_the_watchdog_fires_forty_three(
     )
 
 
-# ══ OC-5 — an in-loop abort ships no product checkpoint ════════════════════════════════
 def test_an_in_loop_hard_abort_below_the_ceiling_writes_no_product_checkpoint() -> None:
-    """OC-5 — **SCOPED TO CLASS A: the IN-LOOP aborts.**
+    """An in-loop hard abort below the ceiling writes no product checkpoint. SCOPED TO CLASS A.
 
-    Class A (`grad_norm_hard_abort`, `draw_rate_collapse`, `sealbot_wr_abort`) is recorded by
-    `_fire_hard_abort` INSIDE the burst: `running = False` is set there, the loop exits at
-    `loop.py`'s `while`, `step()` is never re-entered and O2 is never evaluated. So a Class-A
-    abort gets no leg-3 checkpoint STRUCTURALLY, and that is what this row measures.
-
-    **Class B is the counter-class, and it CAN coexist with a leg-3 artefact** —
-    `disk_space_exhausted` (rc 47) and `terminal_eval_broken` (rc 48) are recorded in
-    `compose_run`'s ENCLOSING teardown, strictly AFTER `close_out`, and therefore strictly
-    after leg 3 has written (DESIGN_CS §2.5.1). A row asserting the unscoped "aborted ⇒ no
-    checkpoint" would be asserting something FALSE at HEAD. The clean-vs-aborted distinction
-    is carried by `ShutdownState.abort_rule` and its rc — never by the filesystem (Q-CS-9).
-
-    MUTATIONS THAT RED IT: M-2b (MOVE the save to the top of `step()` so every call saves →
-    `attempts` 0→1 on a run that ABORTED), M-8 (weaken the O2 predicate to drop the step
-    comparison → the first `step()` saves and stops, so the abort never fires and `abort_rule`
-    goes to `None`).
+    Class A is recorded by `_fire_hard_abort` INSIDE the burst, so the loop exits at the `while`,
+    `step()` is never re-entered and O2 is never evaluated — no leg-3 checkpoint, STRUCTURALLY.
+    Class B (rc 47, rc 48) is recorded in `compose_run`'s ENCLOSING teardown, strictly after leg 3
+    has written, so an unscoped "aborted ⇒ no checkpoint" row would assert something FALSE.
     """
     spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50, consec=3)
     trainer = _Trainer(step=0)
@@ -720,50 +573,25 @@ def test_an_in_loop_hard_abort_below_the_ceiling_writes_no_product_checkpoint() 
     )
 
 
-# ══ OC-7 — R137's literal, on the real artefact through THE stamp path ═════════════════
 @pytest.mark.integration
 def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
     tmp_path: Path, smoke_run_config,
 ) -> None:
-    """OC-7 — R137's literal: *"a clean 200-step run ends with exactly ONE final checkpoint"*.
+    """A clean run at the minted bound leaves exactly ONE stamped checkpoint.
 
-    **DEVIATION, pre-registered and measured, not chosen after a red.** R137's 200 is also the
-    armed smoke's own minted `train.max_train_steps`, so the literal and the config agree — and
-    M-0 (PREREG_CS §5.3) measured that bound at **474.6 s** against the tier's 300 s ceiling,
-    with 100 at 319.5 s and 50 at **240.2 s**. The binding decision rule takes the largest
-    member of {200, 100, 50, 32, 16} measuring <= 300 s, which is **50**, and requires the
-    deviation be stated: *the property under test — exactly ONE checkpoint, at
-    `step == stop_step`, through the LAW-12 stamp path — is BOUND-INDEPENDENT; R137's 200 is
-    the illustrative length of a clean run, and OC-6 independently carries the end-to-end truth
-    at 16 on the production `main` rc path.* The three measurements were taken BEFORE this row
-    existed, on a tree where the leg does not exist, precisely so the bound could not be
-    lowered to make a red go away.
+    DEVIATION, pre-registered and measured, not chosen after a red: the armed smoke's own minted
+    bound of 200 measured 474.6 s against the tier's 300 s ceiling, 100 at 319.5 s, 50 at 240.2 s.
+    The binding rule takes the largest member of {200, 100, 50, 32, 16} measuring <= 300 s, which
+    is 50, and the property under test is BOUND-INDEPENDENT. The measurements were taken BEFORE
+    this row existed, so the bound could not be lowered to make a red go away.
 
-    R64 posture — nothing about the RUN is routed around: real `init_trainer` -> `build_net`,
-    real `WorkerPool` self-play on CPU, real graph replay buffer, real coordinator, real
-    `close_out`. The artefact is read back through THE loader (`checkpoints.load_checkpoint`,
-    `torch.load(weights_only=True)`, provenance re-verified against the filename), never by a
-    hand-rolled parse.
+    Nothing about the RUN is routed around, and the artefact is read back through THE loader. NOT
+    asserted, deliberately: that this checkpoint proves the run was clean — it does not (Class B).
 
-    What it is the only witness to: a checkpoint written OUTSIDE the one LAW-12 stamp path, or
-    stamped with the wrong step or lineage. MUTATIONS THAT RED IT: M-1/M-6 (no file), M-2b
-    (many files), M-7 (strip `encoding_name` from the trainer's `metadata_kwargs` →
-    `_build_stamped_metadata` raises and an unstampable artefact is NOT written — "an artifact
-    that cannot be stamped cannot be written"), M-8 (the artefact lands at the wrong step).
-
-    NOT asserted, deliberately: that the presence of this checkpoint proves the run was clean.
-    It does not (Class B, OC-5's docstring). Cleanliness is `abort_rule`, asserted separately.
-
-    **DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort`.** The override below sets it to
-    `None` for THIS test's config only — `configs/` is untouched, gate 12's manifest row is
-    untouched, and the rule's producer stays live in the four other real+armed drives. Grounds:
-    the runner's fire was a TRUE positive of the rule as configured and a FALSE positive of its
-    intent. A 50-step drive is below this rule's jurisdiction — run5's own minted `min_step` is
-    25 000, and the armed smoke's `min_step: 10` is a preflight reachability prop, not a safety
-    judgement — so on a slow host the early 100%-ply-cap-draw regime (an UNTRAINED net, not a
-    collapsed one) crosses the evidence bar and aborts a healthy run. The schema permits no
-    armed-but-unfireable posture, so this is the only legal spelling of "below jurisdiction".
-    Frozen-oracle edit, R43-disclosed and GRANTED diff-scoped by **R288(c)**; queue row F-816-23.
+    DISARMED IN THIS DRIVE, disclosed: `train.draw_rate_abort` is `None` for THIS config only. A
+    50-step drive is below the rule's jurisdiction, so on a slow host the early 100%-ply-cap-draw
+    regime (an UNTRAINED net, not a collapsed one) crosses the evidence bar and aborts a healthy
+    run. The schema permits no armed-but-unfireable posture.
     """
     minted = smoke_run_config(_SMOKE_CONFIG)
     assert int(minted.train.max_train_steps) == _MINTED_BOUND, (

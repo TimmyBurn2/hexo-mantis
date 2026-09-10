@@ -1,49 +1,17 @@
-"""`resolve_fused_graph_caps` — THE one read path for `inference.fused_graph_caps`
-(F-816-10, R276(f), CARD-RUN5-GPU-OOM's inference-side sibling).
+"""`resolve_fused_graph_caps` — THE one read path for `inference.fused_graph_caps`.
 
-`inference.fused_graph_caps` is read HERE and nowhere else. `InferenceServer.__init__` calls
-this ONCE, EAGERLY, inside the GRAPH branch and stores the frozen spec; `_run_graph_loop`
-hands that spec to `plan_fused_forwards` and never reads a config again. The grid branch never
-invokes this function at all — the dense batch is a fixed-shape tensor already bounded by
-`inference_batch_size`, so there is no unbounded quantity there for a cap to bound.
+Read HERE and nowhere else: `InferenceServer.__init__` calls it ONCE, EAGERLY, inside the GRAPH
+branch and stores the frozen spec, while the grid branch never calls it because a dense batch is
+already bounded by `inference_batch_size`. Eager, where `resolve_microbatch_caps` is lazy,
+because `__init__` already branches on the representation and a mis-minted run then fails in the
+first second.
 
-WHY EAGER, WHERE `resolve_microbatch_caps` IS LAZY. The microbatch resolver is handed to the
-dispatcher as a PROVIDER because Python evaluates every argument before the call, so resolving
-at the call site would read `train` on BOTH representations and a grid `full_config` may carry
-no `train` section at all. Here `__init__` ALREADY branches on the representation, so the
-resolution is naturally route-scoped and there is nothing to buy by deferring it — while
-failing a mis-minted run in the first second, instead of three hours in, is the whole value of
-the placeholder posture below.
-
-ABSENCE IS A NAMED RAISE, NEVER A DEFAULT (LAW-11, R1). `MissingFusedGraphCapsError` names the
-LEVEL that is missing — `full_config` not a mapping, no `inference` section, `inference` not a
-mapping, no `fused_graph_caps`, the block not a mapping, or a member absent. Seven levels are
-seven different edits, so one "the caps are absent" message would be a refusal an operator
-cannot act on.
-
-`null` IS NOT AN OFF STATE, and `UncalibratedFusedGraphCapsError` is the subclass that says so.
-It is R119's placeholder: schema-VALID (gate 7 stays green and the repo ships a complete
-config) and runtime-REFUSED (a graph run on an uncalibrated production config cannot construct
-its inference server). "You never minted this" and "your config is malformed" send an operator
-to two different places, so they are two exception types — related by subclassing, because an
-uncalibrated cap IS a special case of an unusable one and a caller handling the general absence
-must not miss the placeholder.
-
-THERE IS NO `.get(...)`, NO `or`-DEFAULT AND NO `except` ON THIS PATH, and that refusal is
-ruled rather than stylistic (F2-ABORT-5(i), transferred verbatim from `resolve/microbatch.py`).
-A defaulting read on the input to a memory-safety cap is the silent-fallback class: **a cap
-that silently becomes absent-and-unbounded is worse than no cap, because it reports as
-present** — the phantom-gate shape R4/LAW-07 exist to kill. An `ast` census over this module
-enforces all three.
-
-ARCH FIRST, THEN ABSENCE, THEN THE PLACEHOLDER (R322(d)). `inference.fused_graph_caps` is
-ARCH-SCOPED to `representation="graph"` in `mantis.config.schema.core.ARCH_SCOPED_KEYS`, and a
-config of any other representation is refused BY NAME before the block is looked for. The three
-refusals are ordered by how specific they are and they answer three different operator
-questions: "this key is not yours", "you never minted this", "you never measured this".
-
-RUN-SCOPED CONSTANTS (R85/R119): both members are sized together from ONE measured fit against
-ONE budget at the box sitting, and are never hand-edited in a minted file.
+ABSENCE IS A NAMED RAISE, NEVER A DEFAULT, and the raise names the LEVEL that is missing, since
+seven levels are seven different edits. `null` is not an off state either: schema-VALID so the
+repo ships a complete config, runtime-REFUSED so an uncalibrated config cannot construct its
+server, and a SUBCLASS because the two refusals send an operator to two different places. There
+is no `.get(...)`, no `or`-default and no `except` here, enforced by an `ast` census — a cap
+that silently becomes unbounded is worse than no cap, because it reports as present.
 """
 from __future__ import annotations
 
@@ -56,29 +24,24 @@ from mantis.config.resolve.arch_scope import refuse_outside_its_arch
 _SECTION, _FIELD = "inference", "fused_graph_caps"
 _KEY = f"{_SECTION}.{_FIELD}"
 _MEMBERS = ("max_fused_edges", "max_fused_nodes")
-#: The entry point that PRODUCES the value, named in the refusal so the operator is not left
-#: to guess where a measured cap comes from (R69: a number without its producing mechanism is
-#: struck, and this is the mechanism).
+#: The entry point that PRODUCES the value, named in the refusal so an operator is not left to
+#: guess where a measured cap comes from.
 _CALIBRATE = "uv run python -m mantis.diagnostics.fusion_calibrate"
 
 
 class MissingFusedGraphCapsError(ValueError):
     """The graph inference forward's memory caps are not declared, at some named level.
 
-    A `ValueError` for the same reason `MissingMicrobatchCapsError` is one: an absent
-    memory-bound key is a configuration ERROR, not a condition to recover from. Raised only on
-    the GRAPH route, and never caught anywhere — it travels the R276 seam as a run-fatal
-    construction failure.
+    A configuration ERROR: raised only on the GRAPH route and never caught, so it travels the
+    seam as a run-fatal construction failure.
     """
 
 
 class UncalibratedFusedGraphCapsError(MissingFusedGraphCapsError):
-    """A member is the `null` placeholder: the cap exists as a key and has no measured value.
+    """A member is the `null` placeholder: the cap exists as a key with no measured value.
 
-    A SUBCLASS, deliberately. An uncalibrated cap is a special case of an unusable one, so a
-    caller that handles the general absence must not miss the placeholder; and it is a
-    DISTINCT type, because "you have not calibrated this yet" carries a remedy the general
-    absence does not — the calibration entry point and the mint line that fixes it.
+    A SUBCLASS, so a caller handling the general absence does not miss it; a DISTINCT type,
+    because it carries a remedy the general absence does not.
     """
 
 
@@ -86,18 +49,10 @@ class UncalibratedFusedGraphCapsError(MissingFusedGraphCapsError):
 class FusedGraphCapsSpec:
     """The resolved per-fused-forward bound: `max_fused_edges` and `max_fused_nodes`, together.
 
-    FROZEN because a resolved run-scoped constant a consumer could rebind is a second authority
-    with extra steps — and this one crosses a process seam (`RoundSpec`), where a rebind in the
-    child would be invisible to the parent that measured the budget.
-
-    A frozen dataclass beside the resolver rather than the pydantic block itself, for
-    `MicrobatchCapsSpec`'s reason: nothing in `mantis.selfplay` or `mantis.eval` should have to
-    import a schema class to consume a resolved value.
-
-    BOTH MEMBERS, because the cost model the calibration fits is `peak ~ a + b*E + c*N` and a
-    bound on bytes needs both terms bounded. E dominates at the production ratio and does not
-    dominate structurally: the builder's two dummy edges per real node force `E >= 2(N-1)`, so
-    an edge-only bound admits an N term LARGER than the E term it bounds.
+    FROZEN because this crosses a process seam, where a rebind in the child would be invisible
+    to the parent that measured the budget. BOTH members, because the fitted cost model is
+    `peak ~ a + b*E + c*N` and the builder's two dummy edges per real node force `E >= 2(N-1)`,
+    so an edge-only bound admits an N term LARGER than the E term it bounds.
     """
 
     max_fused_edges: int
@@ -105,16 +60,13 @@ class FusedGraphCapsSpec:
 
 
 def resolve_fused_graph_caps(full_config: Any) -> FusedGraphCapsSpec:
-    """Return the declared fused-graph-inference caps.
-
-    A config of the WRONG ARCH is refused FIRST and by name; then absence, naming the level;
-    then the R119 placeholder.
-
+    """Return the declared fused-graph-inference caps; the WRONG ARCH is refused first and by
+    name, then absence naming the level, then the `null` placeholder.
     Raises:
         ArchScopedKeyOutsideItsArchError: the config declares a representation other than
-            `graph` (R322(d)).
+            `graph`.
         MissingFusedGraphCapsError: the block, or one of its members, is not declared.
-        UncalibratedFusedGraphCapsError: a member is the R119 `null` placeholder.
+        UncalibratedFusedGraphCapsError: a member is the `null` placeholder.
     """
     refuse_outside_its_arch(full_config, _SECTION, _FIELD)
     if not isinstance(full_config, Mapping):

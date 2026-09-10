@@ -36,7 +36,7 @@ def _load() -> object:
 TOOL = _load()
 
 
-# ── the census reads the tree ─────────────────────────────────────────────────────────
+# the census reads the tree
 
 def test_the_committed_tree_is_green_and_the_declaration_is_not_empty() -> None:
     """R98: a gate is adopted only over a clean baseline — and an EMPTY declaration would
@@ -94,7 +94,7 @@ def test_an_unparseable_test_module_REFUSES_rather_than_being_skipped(tmp_path: 
         TOOL.census(suite)
 
 
-# ── the gate's two directions ─────────────────────────────────────────────────────────
+# the gate's two directions
 
 def test_an_UNDECLARED_marker_is_refused() -> None:
     """THE PIN. This is RED-TEAM's plant, one directory wider."""
@@ -137,7 +137,7 @@ def test_the_tools_own_self_test_fires_every_control() -> None:
     assert "SELF-TEST FAILED" not in proc.stdout
 
 
-# ── gate 3c carries it, and gained its third count arm ────────────────────────────────
+# gate 3c carries it, and gained its third count arm
 
 def test_gate_3c_runs_the_census() -> None:
     """The census is not a gate of its own — it rides 3c, because 'no test was lost' is

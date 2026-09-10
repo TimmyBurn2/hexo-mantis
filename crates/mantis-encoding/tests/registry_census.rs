@@ -21,7 +21,7 @@ const ABSENT: [&str; 11] = [
     "v6tp",
 ];
 
-// ── O-4: census exact-N + names + ARCH/KILL absence ──────────────────────────
+// O-4: census exact-N + names + ARCH/KILL absence
 #[test]
 fn census_exact_n_and_names() {
     assert_eq!(
@@ -59,7 +59,7 @@ fn representation_parse_refuses_grid_by_name() {
     );
 }
 
-// ── O-5: per-field pins ──────────────────────────────────────────────────────
+// O-5: per-field pins
 #[test]
 fn per_field_pins_gnn_axis_v1() {
     let s = lookup("gnn_axis_v1").expect("gnn_axis_v1 is a registered row");

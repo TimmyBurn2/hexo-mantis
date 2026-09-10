@@ -1,35 +1,19 @@
-"""⊕ WP11-A — eval_broken isolation law (mantis.eval.pipeline; design §a.3/§c.3/§c.4).
+"""The eval_broken isolation law: every subprocess join is timeout-bounded and every
+timeout, crash or garbage result escalates to a named `eval_broken` event AND a routed
+broken result — never a hang, never a silent skip.
 
-RED-at-import until IMPL writes `mantis.eval.pipeline`. Isolation law 2 (non-negotiable):
-every subprocess join is timeout-bounded; a timeout/crash/garbage-result ALWAYS escalates
-to a named `eval_broken` event + a routed broken result — never a hang, never a silent
-skip.
-
-These tests deliberately do NOT spawn a real OS subprocess or the real `mantis.eval.worker`
-module (that would make every scenario here torch-import-latency-dependent and racy on a
-signal/pickling boundary). Instead they inject:
-  * a `_FakeProcess` (mutable `alive`/`exitcode` the test flips directly — simulating "the
-    child died", "the child is still alive", "the child exited 0") via a monkeypatched
-    STDLIB `multiprocessing.get_context`, exactly as `test_pipeline_isolation.py` does
-    (same rationale; see that file's docstring for why patching the shared module object
-    is robust regardless of pipeline.py's own import style);
-  * a `FakeClock` (the `clock=` constructor kwarg `build_eval_pipeline` already exposes,
-    §c.3) so a "hung past round_timeout_sec" scenario is driven by advancing a fake
-    monotonic clock, never a real sleep — deterministic and instant.
-
-`drain_pending()` is the synchronous, budget-bounded join point (§c.3: "budget = min(...)")
-— calling it directly after arranging the fake process's state is the natural way to
-exercise the escalation logic without waiting on the pipeline's own background poller
-thread's real-time tick interval. Every call is ALSO wrapped in `_bounded()` (a
-thread-`join(timeout)` test-level hard watchdog) so a real implementation bug that hangs
-cannot hang THIS TEST SUITE — belt and suspenders over the isolation law's own bound.
+No real OS subprocess or worker module is spawned: a `_FakeProcess` whose `alive`/`exitcode`
+the test flips is injected through a monkeypatched stdlib `multiprocessing.get_context`, and
+a `FakeClock` (the `clock=` constructor kwarg) drives the hung-past-timeout scenario without
+a real sleep. `drain_pending()` is the synchronous, budget-bounded join point, so calling it
+directly exercises the escalation without waiting on the background poller's tick. Every
+such call is wrapped in `_bounded()`, a thread-join watchdog, so an implementation bug that
+hangs cannot hang this suite.
 
 >300 justify: five eval_broken scenarios (killed, hung, garbage-json, missing-file,
-never-promotes-never-skips) sharing one fake-process/fake-context/fake-clock harness and
-one minimal-config builder — splitting them would duplicate that harness five times and
-let the escalation-reason taxonomy (join_timeout/exit_nonzero/killed/result_missing/
-result_invalid) drift out of sync across files, which is exactly the "quiet failure path"
-class this suite exists to close.
+never-promotes-never-skips) share one fake-process/fake-context/fake-clock harness and one
+minimal-config builder; splitting them would duplicate the harness and let the escalation
+reason taxonomy drift across files.
 """
 from __future__ import annotations
 
@@ -53,10 +37,6 @@ from mantis.model import GnnArch, build_net
 _GSPEC = lookup("gnn_axis_v1")
 
 
-# ── shared fixtures (self-contained; duplicated from test_pipeline_isolation.py by design
-#    — see WP11A_dispatch/ORACLE_NOTES: two independent oracle-write agents wrote the
-#    tests/eval/ suites in parallel and neither adds a shared conftest.py to avoid a
-#    collision) ─────────────────────────────────────────────────────────────────────────
 def _tiny_model() -> torch.nn.Module:
     arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
                    hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
@@ -124,12 +104,8 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: EvalConfig | None = None, **ov
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
-        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in
-        # the parent and carries it to every `RoundSpec`, because the eval child is a
-        # SECOND allocator on the same card that no in-process bound can see. `None`
-        # is the GRID arm — these fixtures run `v6_live2_ls`, which has no fused graph
-        # forward to bound — and it is written out rather than omitted (the parameter
-        # is required for that reason).
+        # `None` is the no-fused-forward arm; the parameter is required, so it is
+        # written out rather than omitted.
         fused_graph_caps=None,
         inference_batching=None,
     )
@@ -160,8 +136,7 @@ class FakeClock:
 
 
 class _FakeProcess:
-    """Mutable stand-in for a spawned worker process: the test flips `alive`/`exitcode`
-    directly to simulate death-by-signal, a clean exit, or an indefinite hang."""
+    """Stand in for a spawned worker whose `alive`/`exitcode` the test flips directly."""
 
     def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
         self._target = target
@@ -216,8 +191,7 @@ def fake_mp(monkeypatch):
 
 
 def _bounded(fn, *, timeout: float):
-    """Test-level hard watchdog: run `fn` on a daemon thread, fail loudly if it does not
-    return within `timeout` — this test suite must never hang, even under an IMPL bug."""
+    """Run `fn` on a daemon thread and fail loudly if it does not return within `timeout`."""
     box: dict[str, Any] = {}
 
     def _run() -> None:
@@ -232,10 +206,7 @@ def _bounded(fn, *, timeout: float):
 
 
 def _result_path_from_ctx(ctx: _FakeCtx) -> Path:
-    """Best-effort recovery of the result-sidecar path the pipeline told its worker to
-    write to, from the args it passed the (faked) Process constructor — the worker CLI is
-    `python -m mantis.eval.worker <spec.json> <result.json>` (design §a.3), so the second
-    positional-ish path-like arg is the result file."""
+    """Recover the result-sidecar path from the args the pipeline passed the faked Process."""
     assert ctx.process_calls, "no subprocess was ever requested"
     args = ctx.process_calls[-1]["args"] or ()
     candidates = [Path(a) for a in args if isinstance(a, (str, Path)) and str(a).endswith(".json")]
@@ -244,7 +215,6 @@ def _result_path_from_ctx(ctx: _FakeCtx) -> Path:
     return result_candidates[0]
 
 
-# ── scenarios ────────────────────────────────────────────────────────────────────────────
 def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> None:
     sink = _SpySink()
     pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
@@ -253,7 +223,7 @@ def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> 
         assert ack["kicked"] is True
         proc = fake_mp.last_process
         assert proc is not None
-        # simulate SIGKILL mid-round: the process is simply gone, negative signal-style exitcode.
+        # SIGKILL mid-round: the process is gone, with a signal-style exitcode.
         proc.alive = False
         proc.exitcode = -9
 
@@ -345,8 +315,8 @@ def test_missing_result_file_is_eval_broken(fake_mp, tmp_path) -> None:
 
 
 def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) -> None:
-    # Both must hold together — a routed promoted=False result WITH no event (silent), or
-    # an event WITH no routed result (dropped), are each a partial failure this test rejects.
+    # Both must hold together: a result with no event is silent, an event with no result
+    # is dropped, and each alone is a partial failure.
     sink = _SpySink()
     pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
     try:

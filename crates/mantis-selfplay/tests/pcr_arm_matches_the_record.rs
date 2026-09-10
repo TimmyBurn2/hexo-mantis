@@ -1,27 +1,14 @@
-//! ⊕ PCR under BOTH search kinds: the recorded `is_full_search` is the arm that was DRAWN.
+//! PCR under BOTH search kinds: the recorded `is_full_search` is the arm that was DRAWN.
 //!
-//! WHY IT NEEDS A WITNESS AT ALL. Playout-cap randomization draws a per-move arm and the
-//! drawn arm decides the sim budget; the row it records carries a BOOLEAN that downstream
-//! reads as "this row was searched at the full budget" (the policy-loss gate, and the seam a
-//! later ruling would use to discard fast-arm rows entirely). Nothing connected the two: the
-//! recorded flag WAS an OR of the draw with the forced-win hook and the solver hook, so a
-//! census of the flag alone could not say whether the draw fired or a hook did, and the draw
-//! itself had no counter. Both hooks went with the dense path (R346(f)); the counter this
-//! file added (LAW-18: a lever under test logs its own fire rate in-run) stays, because
-//! "the recorded flag is the arm that was drawn" is the claim, not "no hook interfered".
+//! Downstream reads that boolean as "this row was searched at the full budget", and the draw
+//! itself carries a counter so the flag can be compared against what actually fired.
 //!
-//! WHY BOTH KINDS. PCR is drawn in `play_one_move` BEFORE the search kind is dispatched, so
-//! it is meant to be kind-independent — and "meant to be" is what a witness is for.
+//! BOTH KINDS because PCR is drawn in `play_one_move` BEFORE the search kind is dispatched,
+//! so it is meant to be kind-independent. The recorder is held fixed and only the KIND varies.
 //!
-//! WHICH PATH. The graph one, because R346(f) left exactly one recorder. That makes the
-//! two arms of this witness comparable in the way the dense drive used to: the RECORDER is
-//! held fixed and only the KIND varies, which is the whole content of a kind-independence
-//! claim. (The graph path is not refused under `gumbel` — R347(a) gave it the sparse row.)
-//!
-//! THE RESIDUAL IS STATED, NOT ASSUMED AWAY. A move draws its arm before it searches, and a
-//! game's rows reach the drain only when the game FINALIZES — so the counters lead the rows
-//! by at most the moves of one unfinished game. The assertions bound that gap by the ply cap
-//! rather than pretending it is zero.
+//! THE RESIDUAL IS STATED: a move draws its arm before it searches and a game's rows reach the
+//! drain only when the game FINALIZES, so the counters lead the rows by at most the moves of
+//! one unfinished game. The assertions bound that gap by the ply cap rather than assume zero.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -97,9 +84,8 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
-        // The lever: a per-move draw between two DIFFERENT budgets. The two hooks that
-        // could otherwise set the recorded flag (the O1 forced-win and the solver
-        // injectors) were deleted at R346(f), so the flag can only come from the draw.
+        // The lever: a per-move draw between two DIFFERENT budgets. No hook can set the
+        // recorded flag any more, so it can only come from the draw.
         full_search_prob: 0.5,
         n_sims_quick: N_SIMS_QUICK,
         n_sims_full: N_SIMS_FULL,
@@ -154,25 +140,17 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
 }
 
 fn assert_pcr(kind: SearchKind) {
-    // WHY 48 AND NOT 8. Assertions (1) and (3) below need BOTH arms to appear, and the arm
-    // is a fair coin: at 8 rows the chance that one arm never fires is ~2^-8 per side, and
-    // this file was observed red at `full=1 quick=8` before the sample was widened. 48 puts
-    // that tail under 2^-48 without making the drive slow — the arms are drawn per move, so
-    // the cost is a few more four-ply games.
+    // 48 and not 8: assertions (1) and (3) need BOTH arms of a fair coin to appear, and this
+    // file was observed red at `full=1 quick=8`. 48 puts that tail under 2^-48.
     let d = drive(kind, 48);
-    // Printed, not merely asserted: the QUANTITIES are what a re-mint reads, and a witness
-    // that only says "consistent" cannot be quoted (LAW-01, measurement mandatory).
+    // Printed, not merely asserted: a witness that only says "consistent" cannot be quoted.
     println!(
         "{kind:?}: drew full={} quick={}; recorded full={} quick={} (max sims/search {})",
         d.pcr_full, d.pcr_quick, d.full_rows, d.quick_rows, d.max_sims
     );
 
-    // (0) THE DRIVE IS ONE ROW PER MOVE, derived rather than assumed. The dense recorder
-    // could expand one position into K cluster views, and this used to be read off the
-    // k-cluster histogram. The graph recorder emits ONE record per searched move, and the
-    // registry says so: `k_max == 1` on this row means whole-board, one graph per leaf. Read
-    // from the registry rather than stated, so a future multi-view row reds here instead of
-    // silently making the row-vs-counter comparison ill-posed.
+    // (0) ONE ROW PER MOVE, read from the registry (`k_max == 1`) rather than assumed, so a
+    // future multi-view row reds here instead of making the comparisons below ill-posed.
     assert_eq!(
         lookup_or_panic(ENCODING).k_max,
         1,
@@ -180,8 +158,8 @@ fn assert_pcr(kind: SearchKind) {
          row-vs-counter comparisons below are not well posed"
     );
 
-    // (1) THE LEVER FIRES BOTH WAYS — LAW-18's fire rate, on the counter that sits AT the
-    // draw. A lever that only ever drew one arm would make every other assertion vacuous.
+    // (1) THE LEVER FIRES BOTH WAYS, on the counter that sits AT the draw: one arm only would
+    // make every other assertion vacuous.
     assert!(
         d.pcr_full > 0 && d.pcr_quick > 0,
         "{kind:?}: the playout-cap draw produced only one arm (full={}, quick={}) — at \
@@ -190,10 +168,8 @@ fn assert_pcr(kind: SearchKind) {
         d.pcr_quick
     );
 
-    // (2) THE RECORD MATCHES THE DRAW. No hook can set the flag independently any more, so
-    // every full-flagged row must have a full DRAW behind it, and likewise for
-    // quick. The relation is `<=` and not `==` for the reason the header states: the
-    // counters lead the rows by the moves of one unfinished game.
+    // (2) THE RECORD MATCHES THE DRAW: every flagged row must have that draw behind it. `<=`
+    // and not `==` because the counters lead the rows by one unfinished game's moves.
     assert!(
         d.full_rows as u64 <= d.pcr_full,
         "{kind:?}: {} rows are flagged full_search but only {} full arms were drawn — the \
@@ -208,8 +184,8 @@ fn assert_pcr(kind: SearchKind) {
         d.pcr_quick
     );
 
-    // (3) AND BOTH ARMS REACH THE RECORD. A flag that were pinned true would satisfy (2) on
-    // the full side and silently lose the quick arm from the training signal.
+    // (3) BOTH ARMS REACH THE RECORD: a flag pinned true satisfies (2) and silently loses the
+    // quick arm from the training signal.
     assert!(
         d.full_rows > 0 && d.quick_rows > 0,
         "{kind:?}: the recorded rows carry only one arm (full={}, quick={}) — the flag is \
@@ -228,8 +204,8 @@ fn assert_pcr(kind: SearchKind) {
          on moves that never record"
     );
 
-    // (5) THE FULL ARM ACTUALLY SPENDS THE FULL BUDGET. Without this the flag could be
-    // correct while both arms searched the same amount, which is a no-op randomization.
+    // (5) THE FULL ARM SPENDS THE FULL BUDGET: otherwise the flag is correct while both arms
+    // search the same amount, which is a no-op randomization.
     assert_eq!(
         d.max_sims, N_SIMS_FULL as u64,
         "{kind:?}: the widest search served {} leaves against a full arm of {N_SIMS_FULL}",

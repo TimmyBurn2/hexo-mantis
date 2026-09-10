@@ -50,9 +50,7 @@ has_six_run = TOOL.has_six_run
 nearest_rank = TOOL.nearest_rank
 turns_from_plies = TOOL.turns_from_plies
 
-# --------------------------------------------------------------------------------------
 # fixture builders — tiny, inline, never committed
-# --------------------------------------------------------------------------------------
 
 #: A synthetic game whose FINAL position gives Player::One a six-run along the E/W axis
 #: (HEX_AXES[0]); P2's stones are parked far away so they form no run. Stone i is placed by
@@ -142,9 +140,7 @@ def _report(out: Path) -> dict[str, Any]:
     return json.loads(out.read_text(encoding="utf-8"))
 
 
-# --------------------------------------------------------------------------------------
 # in-repo-fact pins (the constants the script maps onto mantis-core)
-# --------------------------------------------------------------------------------------
 
 def test_turn_structure_matches_board_mod_rs_24_26():
     """ply 0 = one P1 stone, then two stones per turn, alternating."""
@@ -159,9 +155,7 @@ def test_six_run_detector_needs_six_collinear_on_a_hex_axis():
     assert not has_six_run({(i, i) for i in range(6)})   # not a hex axis
 
 
-# --------------------------------------------------------------------------------------
 # the clean path
-# --------------------------------------------------------------------------------------
 
 def test_a_conforming_dataset_audits_clean(tmp_path: Path):
     ds = _write_dataset(tmp_path, [_decisive_p1_game(f"g{i}") for i in range(4)])
@@ -249,9 +243,7 @@ def test_the_dedupe_leg_labels_a_supplied_reference_as_derived(tmp_path: Path):
     assert leg["overlapping_games"] == 1
 
 
-# --------------------------------------------------------------------------------------
 # MUTATION SELF-TEST 1 (LAW-07) — the sha leg bites
-# --------------------------------------------------------------------------------------
 
 def test_a_flipped_byte_in_a_data_file_is_caught_by_the_sha_leg(tmp_path: Path):
     recs = [_decisive_p1_game(f"g{i}") for i in range(3)]
@@ -294,9 +286,7 @@ def test_a_missing_listed_file_and_an_unlisted_record_file_both_bite(tmp_path: P
     assert _report(out)["sha256_verification"]["missing"] == ["games.jsonl"]
 
 
-# --------------------------------------------------------------------------------------
 # MUTATION SELF-TEST 2 (LAW-07) — the contract leg bites, naming the field
-# --------------------------------------------------------------------------------------
 
 @pytest.mark.parametrize(
     ("field", "renamed"),
@@ -387,9 +377,7 @@ def test_a_manifest_without_a_files_array_is_refused_by_name(tmp_path: Path):
     assert _run(ds, out) == EXIT_CONTRACT
 
 
-# --------------------------------------------------------------------------------------
 # OPEN-2 (contract v2) — the manifest ships FLAT and SINGLE-FILE, not a files[] array
-# --------------------------------------------------------------------------------------
 
 def test_the_flat_single_file_manifest_is_accepted_as_shape_b(tmp_path: Path):
     """The shape the R247 dataset actually ships: `file` + `sha256` + `bytes`."""
@@ -457,9 +445,7 @@ def test_a_declared_byte_length_that_disagrees_with_disk_is_a_pin_failure(tmp_pa
     assert bad[0]["expected"] == bad[0]["actual"] + 1
 
 
-# --------------------------------------------------------------------------------------
 # OPEN-5 (contract v2) — `elo` is a per-PLAYER pair, not one number per game
-# --------------------------------------------------------------------------------------
 
 def test_the_elo_leg_reports_per_player_and_says_so(tmp_path: Path):
     recs = [_decisive_p1_game("g0"), _decisive_p1_game("g1")]
@@ -507,9 +493,7 @@ def test_a_null_rating_is_carried_not_counted_as_zero(tmp_path: Path):
     assert leg["distribution"]["min"] == 1100.0   # the null did not become a 0
 
 
-# --------------------------------------------------------------------------------------
 # OPEN-7 (contract v2) — `game_id` is ABSENT; identity is `game_hash`
-# --------------------------------------------------------------------------------------
 
 def test_a_record_without_game_id_audits_clean_and_is_named_by_game_hash(tmp_path: Path):
     rec = _decisive_p1_game("g0")
@@ -547,9 +531,7 @@ def test_a_present_game_id_rides_the_identity_alongside_the_hash(tmp_path: Path)
     assert named["game"] == f"uuid-42 ({rec['game_hash']})"
 
 
-# --------------------------------------------------------------------------------------
 # the certified distribution table (R278(d)) — plies AND turns, the ladder, truncation
-# --------------------------------------------------------------------------------------
 
 def test_turns_derive_from_plies_by_the_compound_turn_rule(tmp_path: Path):
     """LAW-03: ply 0 places ONE stone, every later turn places two."""

@@ -1,21 +1,8 @@
-"""The BC acceptance witness's two repaired halves, each with the arm that made it necessary.
+"""The BC acceptance witness's two repairs, each beside the mutation arm that reproduces the defect.
 
-Sitting 6's first witness was an ad-hoc box script. It reported a PASS, and two defects rode
-inside the pass without appearing in its output. This suite pins the repairs and, beside each
-one, the mutation that reproduces the original defect — a repair asserted only in its fixed
-form passes equally against code that never fixed anything (LAW-07's whole complaint).
-
-DEFECT 1, the control arm was a DRAW. `build_net` was called with whatever global RNG state
-the process happened to hold, so the baseline the BC arm was compared against was resampled
-every invocation. Pinned by `net_param_hash` equality across two builds, with the unseeded
-pair asserted UNEQUAL beside it.
-
-DEFECT 2, stone colour was re-derived from PLY PARITY. The script assigned
-`1 if (i // 2) % 2 == 0 else -1`; the engine gives player 1 the first stone and then alternates
-in PAIRS (LAW-03). The planted line below is the same one
-`tests/arena/test_ply_cap_adjudication.py` uses for its win-on-the-cap case: player 1 owns a
-genuine six-in-a-row. The engine reads that as 6; the parity expression reads it as 1, and the
-suite asserts BOTH so the size of the error is on the record rather than described.
+Defect 1: the control arm must be a seeded fixed baseline, not a fresh `build_net` draw.
+Defect 2: stone colour comes from the engine, never from ply parity — player 1 takes the
+first stone and colours then alternate in PAIRS.
 """
 from __future__ import annotations
 
@@ -46,13 +33,8 @@ from mantis.model import GnnArch, build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
-#: A finished game: player 1 completes a six-in-a-row along `(1, 0)` at ply 11. Cells follow
-#: the ENGINE's compound-turn order (ply 0 to player 1, then pairs), which is exactly the order
-#: the ply-parity expression gets wrong.
-#: REACHABLE, which R345(b)(2) made a requirement rather than a nicety. Player -1's cells used
-#: to sit on row `r = 9`, up to 18 hex-steps from the nearest stone — a position no legal
-#: sequence produces at any encoding's `legal_move_radius`, so the witness was reading a
-#: finished game the rules cannot reach. Player 1's winning six is unchanged.
+#: A finished, REACHABLE game: player 1 completes a six along `(1, 0)` at ply 11. Cells follow
+#: the engine's compound-turn order, which is what the ply-parity expression gets wrong.
 _WIN_LINE: list[tuple[int, int]] = [
     (0, 0),          # ply 0      -> player  1
     (0, 4), (1, 4),  # plies 1,2  -> player -1 (adjacent: the loser's longest run is 2)
@@ -67,7 +49,7 @@ _AXES = ((1, 0), (0, 1), (1, -1))
 
 
 class _Record:
-    """The two `GameRecord` fields `record_runs` reads, and nothing else."""
+    """Hold the two `GameRecord` fields `record_runs` reads, and nothing else."""
 
     def __init__(self, moves: list[tuple[int, int]], candidate_color: int) -> None:
         self.moves = tuple(moves)
@@ -75,7 +57,7 @@ class _Record:
 
 
 def _parity_longest_run(moves: list[tuple[int, int]], player: int) -> int:
-    """The ORIGINAL witness's reconstruction, verbatim, kept as the mutation arm."""
+    """Reconstruct runs the original witness's way (ply parity), kept as the mutation arm."""
     stones = {m: (1 if (i // 2) % 2 == 0 else -1) for i, m in enumerate(moves)}
     own = {cell for cell, colour in stones.items() if colour == player}
     best = 0
@@ -92,23 +74,17 @@ def _parity_longest_run(moves: list[tuple[int, int]], player: int) -> int:
 
 
 def _tiny_arch() -> GnnArch:
-    # Registry-true `_ENCODING` dims, minimal width/depth for speed — the same fixture shape
-    # `tests/eval/test_round_end_to_end.py` uses.
+    # Registry-true `_ENCODING` dims, minimal width/depth for speed.
     spec = lookup(_ENCODING)
     return GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
                    hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
 
 
 def _derived_opening() -> Opening:
-    """A four-ply opening DERIVED at `_ENCODING`'s own geometry, not drawn from the book.
+    """Return a four-ply opening derived at `_ENCODING`'s own geometry, not drawn from the book.
 
-    `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
-    radius >= 6 to replay; a draw that lands on one at an encoding whose radius is smaller is
-    a pairing R345(b)(2)'s legality boundary refuses, and the seeded draw at `seed=7` happened
-    to land on exactly that. Deriving the opening from `_ENCODING`'s OWN board keeps the pairing
-    legal whatever the encoding's radius is. What the suite reads — the seat, the run lengths,
-    the decisive count — is unaffected by WHICH legal opening the second game starts from; that
-    it is legal is the part that was never true.
+    Book openings can need a replay radius the encoding under test does not have; deriving
+    keeps the pairing legal at whatever radius the encoding declares.
     """
     board = Board.with_encoding_name(_ENCODING)
     moves: list[tuple[int, int]] = []
@@ -121,7 +97,7 @@ def _derived_opening() -> Opening:
 
 
 def _readout(seed: int) -> dict:
-    """One full witness pass for a SEEDED control arm, on CPU."""
+    """Run one full witness pass for a seeded control arm, on CPU."""
     spec = lookup(_ENCODING)
     device = torch.device("cpu")
     engine = LocalInferenceEngine(
@@ -151,10 +127,6 @@ def _readout(seed: int) -> dict:
         engine.close()
 
 
-# --------------------------------------------------------------------------------------
-# DEFECT 1 — the control must be a fixed baseline, not a fresh draw.
-# --------------------------------------------------------------------------------------
-
 def test_the_seeded_control_is_the_same_net_twice() -> None:
     arch = _tiny_arch()
     assert net_param_hash(seeded_net(arch, seed=1234)) == \
@@ -162,9 +134,7 @@ def test_the_seeded_control_is_the_same_net_twice() -> None:
 
 
 def test_an_unseeded_build_is_a_fresh_draw_which_is_the_defect() -> None:
-    """The mutation arm: without the seam the two builds differ, so the arm the BC number is
-    compared against moves on its own. Without this assertion the test above would pass
-    against a `build_net` that happened to be deterministic for an unrelated reason."""
+    """Prove an unseeded `build_net` draws fresh weights: the mutation arm for the seeded control."""
     arch = _tiny_arch()
     assert net_param_hash(build_net(arch)) != net_param_hash(build_net(arch))
 
@@ -175,10 +145,6 @@ def test_two_seeds_build_two_different_baselines() -> None:
         net_param_hash(seeded_net(arch, seed=9999))
 
 
-# --------------------------------------------------------------------------------------
-# DEFECT 2 — the longest run is the ENGINE's, and the colours are the engine's.
-# --------------------------------------------------------------------------------------
-
 def test_a_known_six_in_a_row_reads_longest_run_six() -> None:
     board = replay_board(_WIN_LINE, encoding_name=_ENCODING)
     assert board.check_win() and board.winner() == 1
@@ -187,15 +153,13 @@ def test_a_known_six_in_a_row_reads_longest_run_six() -> None:
 
 
 def test_the_seat_follows_the_record_not_the_board() -> None:
-    """Same board, other seat: the pair swaps rather than the numbers changing."""
+    """Prove the seat follows the record: same board, other seat, the pair swaps."""
     assert record_runs(_Record(_WIN_LINE, candidate_color=-1),
                        encoding_name=_ENCODING) == (2, 6)
 
 
 def test_ply_parity_colouring_reads_the_same_six_as_one() -> None:
-    """The mutation arm, and the measurement of how wrong the original was: the winning line
-    is six cells and the parity reconstruction finds ONE, for either side. That is why the
-    first witness could report twenty wins — each requiring a six — with a longest run of 4."""
+    """Measure the original defect: the six-cell winning line reads as ONE under ply parity."""
     assert _parity_longest_run(_WIN_LINE, 1) == 1
     assert _parity_longest_run(_WIN_LINE, -1) == 1
 
@@ -204,18 +168,11 @@ def test_a_board_with_no_stones_reads_zero() -> None:
     assert record_runs(_Record([], candidate_color=1), encoding_name=_ENCODING) == (0, 0)
 
 
-# --------------------------------------------------------------------------------------
-# The two repairs together: the readout a witness run produces.
-# --------------------------------------------------------------------------------------
-
 def test_a_seeded_control_reproduces_its_decisive_count_across_two_runs() -> None:
-    """Two independent passes of the same seeded control agree on every measured quantity.
+    """Prove two passes of the same seeded control agree on every measured quantity.
 
-    The decisive count is asserted explicitly AND is non-vacuous: the planted opening is
-    already won when the arena replays it, so both of its colour legs terminate `win` while
-    the book opening's two legs run to the ply cap at fresh-init strength (the all-draw shape
-    F-R-P2B-5 measured). Equality of the trajectory hashes is asserted beside it, because a
-    decisive count alone can agree by coincidence and a move-for-move replay cannot.
+    The decisive count is non-vacuous (the planted opening's two legs are won) and the
+    trajectory hashes are asserted beside it, since counts can agree by coincidence.
     """
     first, second = _readout(1234), _readout(1234)
     assert first["decisive_games"] == second["decisive_games"] == 2
@@ -224,8 +181,7 @@ def test_a_seeded_control_reproduces_its_decisive_count_across_two_runs() -> Non
 
 
 def test_a_different_seed_plays_different_games() -> None:
-    """The mutation arm for the pass above: without the seeding, that agreement is what an
-    uncontrolled draw would have to reproduce by luck."""
+    """Prove a different seed plays different games: the mutation arm for the agreement above."""
     assert _readout(1234)["trajectory_hashes"] != _readout(9999)["trajectory_hashes"]
 
 
@@ -253,10 +209,6 @@ def test_an_armed_floor_reports_its_verdict_and_its_bars() -> None:
     assert verdict["decisive_rate"] == 1.0
 
 
-# --------------------------------------------------------------------------------------
-# The arm vocabulary.
-# --------------------------------------------------------------------------------------
-
 def test_the_control_arm_is_named_not_inferred_from_a_missing_path() -> None:
     assert ArmSpec.parse("control=CONTROL").checkpoint is None
     assert ArmSpec.parse("bc=/x/y.pt").checkpoint == Path("/x/y.pt")
@@ -270,8 +222,5 @@ def test_a_malformed_arm_is_refused(raw: str) -> None:
 
 @pytest.mark.parametrize(("encoding", "radius"), [("gnn_axis_v1", 6), ("gnn_axis_r8", 8)])
 def test_the_witness_board_carries_the_declared_geometry(encoding: str, radius: int) -> None:
-    """`replay_board` names the encoding at every construction, and the encoding is what fixes
-    the geometry — a board built under another one is another board, which is the whole content
-    of the r8 identity change. The two run6-lineage rows are asserted by their radii so this
-    reads as a geometry check rather than a name check."""
+    """Prove `replay_board` builds at the named encoding's geometry, asserted by radius not name."""
     assert replay_board([], encoding_name=encoding).legal_move_radius() == radius

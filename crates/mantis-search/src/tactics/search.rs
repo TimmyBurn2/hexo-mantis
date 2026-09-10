@@ -1,20 +1,10 @@
-// Exceeds the 300-line soft cap: the scored α-β proof core + its 3-valued
-// reference oracle + the in-src soundness fuzz (which reaches pub(crate) solve*)
-// port as one line-auditable unit — splitting would widen the proof internals.
+// Exceeds the 300-line soft cap: the scored α-β proof core, its 3-valued reference oracle and
+// the in-src soundness fuzz (which reaches pub(crate) solve*) are one auditable unit.
 //! Search core — iterative AND-OR threat-space proof over HTTT compound turns.
 //!
-//! Ported from the Python reference solver onto the native `Board`
-//! with **zero clone per node** (`apply_move_tracked`/`undo_move`). Flip-aware
-//! negamax: a child result is negated ONLY when the to-move player flipped
-//! (HTTT places 2 stones/turn — the side-to-move flips every 2 plies, not every
-//! ply). The engine's own turn-flip drives the min/max alternation.
-//!
-//! # DEFERRED (the load-bearing quiet-move work — see `ordering.rs`/`eval.rs`)
-//! This is the threat/double-threat proof core = the measured **8% ceiling**.
-//! The quiet-move alpha-beta BODY + threat-quiescence tail + PVS/LMR/aspiration
-//! are NOT built here. The narrow threat-guided candidate set finds FORCING
-//! wins/losses (mate-in-≤2-turns band); a position whose only escape/win is a
-//! quiet developmental move returns UNKNOWN (never a false proof).
+//! Flip-aware negamax, zero clone per node: a child result is negated ONLY when the to-move
+//! player flipped, which in HTTT is every 2 plies. DEFERRED — the threat/double-threat core
+//! only: a position whose only escape or win is a quiet move returns UNKNOWN, never a proof.
 
 use fxhash::FxHashSet;
 
@@ -25,51 +15,34 @@ use super::ordering::{candidates, order_moves, OrderingState};
 use super::tt::{Bound, ProofTt};
 use super::{outcome_of, Budget, Outcome, TacticalConfig, MATE, NEG_INF, POS_INF, WIN_THRESHOLD};
 
-/// A scored node value. `score` is a mate-distance-aware
-/// value: a proven mate is `±(MATE - ply)` (magnitude >= `WIN_THRESHOLD`); a
-/// heuristic / unresolved node is a bounded score (magnitude < `WIN_THRESHOLD`).
-/// `line` is the principal variation, populated for WIN — `line[0]` is the move
-/// to play; for a 2-stone-turn forcing win `line[0]`/`line[1]` are the
-/// side-to-move's two stones (the A1 override caches `line[1]`). Empty otherwise.
+/// A scored node value: a proven mate is `±(MATE - ply)` (magnitude >= `WIN_THRESHOLD`), a
+/// heuristic or unresolved node is bounded strictly below it. `line` is the PV, WIN only.
 pub struct Scored {
     pub score: i32,
     pub line: Vec<(i32, i32)>,
 }
 
 impl Scored {
-    /// A bounded (non-proof) leaf value — clamped strictly inside the proof
-    /// region so `outcome_of` can NEVER read it as a WIN/LOSS proof.
+    /// A bounded leaf value, clamped so `outcome_of` can NEVER read it as a proof.
     #[inline]
     fn heuristic(score: i32) -> Self {
         Scored { score: clamp_heuristic(score), line: Vec::new() }
     }
 }
 
-/// Clamp a heuristic score strictly inside `(-WIN_THRESHOLD, WIN_THRESHOLD)` so a
-/// non-proof leaf can never masquerade as a mate (the soundness invariant: only
-/// the proof paths in `solve` may emit a mate-magnitude score).
+/// Clamp a heuristic strictly inside `(-WIN_THRESHOLD, WIN_THRESHOLD)`, so only `solve`'s
+/// proof paths may emit a mate-magnitude score.
 #[inline]
 pub(crate) fn clamp_heuristic(score: i32) -> i32 {
     score.clamp(-(WIN_THRESHOLD - 1), WIN_THRESHOLD - 1)
 }
 
-/// Scored α-β AND-OR threat-space proof for `board.current_player` (negamax over
-/// HTTT compound turns). Returns a mate-distance-aware score; the 3-valued
-/// verdict is `outcome_of(score)` at the ROOT (full-window, exact).
+/// Scored α-β AND-OR threat-space proof for `board.current_player`; the 3-valued verdict is
+/// `outcome_of(score)` at the ROOT, full-window.
 ///
-/// # Soundness (the load-bearing property — α-β is pruning ONLY)
-/// NET-FREE: a mate-magnitude score is produced ONLY by a sound proof path —
-/// terminal CF-1 backup (`terminal_value_to_move`), the stone-count shortcuts, an
-/// all-candidates-lose node guarded by the R3 completeness check, or the recall
-/// verify. The value head / `eval.rs` heuristic is NEVER a proof: a heuristic
-/// leaf is `Scored::heuristic` (clamped below `WIN_THRESHOLD`). α-β changes
-/// neither: (a) the ROOT runs a FULL window so its value is EXACT and the verdict
-/// is sound; (b) a proven LOSS is concluded ONLY when the candidate loop ran to
-/// completion with NO β-cutoff, so the all-lose `best` is the exact node value;
-/// (c) the proven-WIN cutoff (`best >= WIN_THRESHOLD`) fires before any sibling is
-/// searched with `β <= -WIN_THRESHOLD`, so no fail-high LOSS bound can propagate
-/// or corrupt a winning PV. The `#[cfg(test)]` 3-valued reference (`solve_3valued`)
-/// + the brute oracle cross-check every verdict.
+/// SOUNDNESS — α-β prunes ONLY and the proof is NET-FREE: a mate-magnitude score comes only
+/// from a sound proof path, a LOSS only from a loop that ran to completion with NO β-cutoff,
+/// and the proven-WIN cutoff fires before any sibling is searched with `β <= -WIN_THRESHOLD`.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn solve(
     board: &mut Board,
@@ -86,8 +59,7 @@ pub(crate) fn solve(
         return Scored::heuristic(0); // budget out => UNKNOWN, never a proof
     }
 
-    // (1) Terminal: the engine-owned CF-1 sign is the ONLY proof sign. Mate
-    //     distance = `ply` (shorter mates score higher in magnitude).
+    // (1) Terminal: the engine-owned CF-1 sign is the ONLY proof sign; mate distance = `ply`.
     if board.check_win() {
         let score = if board.terminal_value_to_move() > 0.0 { MATE - ply } else { -(MATE - ply) };
         return Scored { score, line: Vec::new() };
@@ -96,24 +68,20 @@ pub(crate) fn solve(
     let stm = board.current_player;
     let opp = stm.other();
 
-    // (2) Immediate-win shortcut: side-to-move completes 6 with its next stone.
-    //     Sound stone-count proof (no net). Yields the winning cell for the PV.
+    // (2) Immediate-win shortcut: a sound stone-count proof, yielding the winning cell.
     if board.count_winning_moves(stm) >= 1 {
         let line = board.first_winning_move(stm).map_or_else(Vec::new, |m| vec![m]);
         return Scored { score: MATE - ply, line };
     }
 
-    // (3) Double-threat LOSS shortcut (mr==1 only — provably sound): stm has NO
-    //     immediate win and places exactly ONE stone before the turn flips; opp
-    //     then has >=2 standing win-in-1 cells -> stm blocks <=1 -> LOSS.
+    // (3) Double-threat LOSS shortcut (mr==1 only): stm places one stone before the flip and
+    //     opp then has >=2 standing win-in-1 cells, so stm blocks at most one.
     if board.moves_remaining == 1 && board.count_winning_moves(opp) >= 2 {
         return Scored { score: -(MATE - ply), line: Vec::new() };
     }
 
-    // (4) TT probe — only PROVEN LOSS is trusted as a proof (see `tt.rs`): a WIN
-    //     hit would return an empty PV and could truncate the override line. A
-    //     cached LOSS is game-theoretic; `get_loss_proof` decodes the mate distance
-    //     at THIS node's ply.
+    // (4) TT probe — only a PROVEN LOSS is trusted: a WIN hit has an empty PV and could
+    //     truncate the override line.
     let key = (board.zobrist_hash, stm as i8, board.moves_remaining);
     if let Some(score) = tt.get_loss_proof(key, ply) {
         debug_assert!(score <= -WIN_THRESHOLD, "TT proof probe must decode a mate-magnitude LOSS");
@@ -125,29 +93,21 @@ pub(crate) fn solve(
         return Scored::heuristic(heuristic_leaf(board)); // horizon => non-proof leaf
     }
 
-    // `in_check` (opp threatens an immediate win) is the prune-symmetry premise of
-    // the LOSS conclusion below — captured at the node state, before descent.
+    // `in_check` is the prune-symmetry premise of the LOSS conclusion below, captured at the
+    // node state before descent.
     let in_check = board.count_winning_moves(opp) >= 1;
     let mut moves = candidates(board, stm, opp, cfg.cand_cap, cfg.neighbor_dist);
     if moves.is_empty() {
         return Scored::heuristic(heuristic_leaf(board)); // quiet => cannot prove
     }
     let moves_len = moves.len();
-    // Remember the reduced set so the recall verify (below) searches only the
-    // DROPPED legal moves, not the ones already explored. Built BEFORE ordering so
-    // it is order-independent (ordering is a permutation: same set, same guard).
+    // Built BEFORE ordering so the recall verify's dropped-move set is order-independent.
     let searched: FxHashSet<(i32, i32)> = moves.iter().copied().collect();
-    // Best-first ORDERING (permutation only — never changes the set or a verdict):
-    // TT best move, killers, history. Earlier α-β cutoffs, identical conclusions.
+    // Best-first ORDERING — a permutation only: earlier cutoffs, identical conclusions.
     order_moves(&mut moves, tt.get_best_move(key), ply, ordering);
 
-    // Negamax-α-β OR-node. `best` is the side-to-move's best value over the
-    // candidate set; it stays `NEG_INF` until a child is examined (the all-Err
-    // guard below). A proven-WIN cutoff fires the instant `best >= WIN_THRESHOLD`
-    // (= the old "return on first WIN", PV-identical); the generic `alpha >= beta`
-    // β-cutoff prunes once a heuristic value dominates (the lever the eval/ordering
-    // increments exploit). Either cutoff returns `best` as a BOUND and never
-    // reaches the LOSS-proof logic.
+    // Negamax-α-β OR-node. A proven-WIN cutoff fires at `best >= WIN_THRESHOLD` and the
+    // generic one at `alpha >= beta`; either returns `best` as a BOUND, skipping the LOSS logic.
     let mut best = NEG_INF;
     let mut best_line: Vec<(i32, i32)> = Vec::new();
     let mut cutoff = false;
@@ -158,16 +118,12 @@ pub(crate) fn solve(
             Ok(d) => d,
             Err(_) => continue,
         };
-        // Flip-aware negamax: negate the child value (and flip the window) ONLY
-        // when the to-move side flipped (turn-final stone).
+        // Flip-aware negamax: negate the child value and flip the window ONLY on a flip.
         let flipped = board.current_player != node_player;
         let dchild = depth_left - 1;
 
-        // PVS + LMR (pruning/ordering ONLY — verdict-exact; see the soundness note
-        // above and `verdict_invariance_fuzz_*`). idx 0 = principal variation:
-        // full window, full depth. Later moves: a null-window scout (LMR-reduced
-        // depth for late quiet not-in-check moves), re-searched at FULL depth+window
-        // whenever the scout could affect the node value.
+        // PVS + LMR, pruning/ordering ONLY. idx 0 is the PV (full window, full depth); later
+        // moves get a null-window scout, LMR-reduced when late/quiet/not-in-check.
         let (rc, child_line) = if idx == 0 {
             let (ca, cb) = if flipped { (-beta, -alpha) } else { (alpha, beta) };
             let c = solve(board, dchild, ply + 1, ca, cb, budget, cfg, tt, ordering);
@@ -178,15 +134,8 @@ pub(crate) fn solve(
             let c = solve(board, dchild - reduce, ply + 1, na, nb, budget, cfg, tt, ordering);
             let mut rc = if flipped { -c.score } else { c.score };
             let mut line = c.line;
-            // Re-search at full depth + full window when the scout could matter:
-            //   - PVS scout (reduce==0): the move beats α inside the window
-            //     (alpha < rc < beta) so the null result is not exact.
-            //   - LMR (reduce>0): the reduced search beat α OR was inconclusive
-            //     (UNKNOWN) — either way the reduced value cannot be trusted to
-            //     EXCLUDE a deeper proof, so confirm at full depth. The ONLY case
-            //     we accept the reduced value is a reduced-PROVEN result that does
-            //     not beat α (a sub-α loss proof) — verdict-irrelevant, so skipping
-            //     its full re-search leaves the node value/verdict unchanged.
+            // Re-search at full depth+window whenever the scout could matter. The one reduced
+            // value accepted is a reduced-PROVEN result below α, which is verdict-irrelevant.
             let need_full = if reduce > 0 {
                 rc > alpha || outcome_of(rc) == Outcome::Unknown
             } else {
@@ -203,8 +152,8 @@ pub(crate) fn solve(
 
         if rc > best {
             best = rc;
-            // PV: same player continued (mr was 2) => append the child's line so
-            // it carries stm's 2nd stone; flipped (turn-final) => the move alone.
+            // PV: same player continued (mr was 2) => append the child line; flipped => the
+            // move alone.
             let mut line = vec![(q, r)];
             if !flipped {
                 line.extend(child_line.iter().copied());
@@ -236,11 +185,8 @@ pub(crate) fn solve(
         tt.store_bound(key, best, ply, Bound::Lower, best_line.first().copied(), depth_left);
         return Scored { score: best, line: best_line };
     }
-    // β-cutoff with a non-win `best`: `best` is a fail-high BOUND, not the exact
-    // value, so the LOSS-proof logic below must NOT run (it requires the exact
-    // node value from a fully-examined loop). Returning the bound is sound — it is
-    // strictly above `-WIN_THRESHOLD` (every node has `beta > -WIN_THRESHOLD`; see
-    // the soundness note), so it can never be misread as a proven LOSS.
+    // β-cutoff with a non-win `best`: a fail-high BOUND, so the LOSS-proof logic below must NOT
+    // run. It is strictly above `-WIN_THRESHOLD`, so it cannot be misread as a proven LOSS.
     if cutoff {
         tt.store_bound(key, best, ply, Bound::Lower, best_line.first().copied(), depth_left);
         return Scored { score: best, line: best_line };
@@ -253,18 +199,9 @@ pub(crate) fn solve(
         return Scored::heuristic(best);
     }
 
-    // R3 LOSS-COMPLETENESS GUARD (load-bearing for sound z-LOSS labels).
-    // "Every CANDIDATE loses" only proves "every LEGAL move loses" when the
-    // candidate set provably covered all escapes:
-    //   - `in_check && moves_len < cand_cap`: opp threatens an immediate win, so a
-    //     non-block/non-counter loses to the standing threat (prune symmetry) —
-    //     valid ONLY if the set was not truncated. The `< cand_cap` boundary is
-    //     deliberately PESSIMISTIC (a natural-size-==-cand_cap set is treated as
-    //     truncated -> UNKNOWN, a recall false-negative, never a soundness break).
-    //     Do NOT relax to `<=`.
-    //   - `moves_len >= legal_move_count()`: the candidate set IS the full legal
-    //     set (covers not-in-check / quiet-move nodes where prune symmetry fails).
-    // Otherwise -> the recall verify (if enabled) or conservative UNKNOWN.
+    // R3 LOSS-COMPLETENESS GUARD. "Every CANDIDATE loses" proves "every LEGAL move loses" only
+    // when the set covered all escapes: `in_check && moves_len < cand_cap` (prune symmetry; the
+    // `<` is deliberately PESSIMISTIC, do NOT relax to `<=`) or `moves_len >= legal_move_count()`.
     let loss_complete =
         (in_check && moves_len < cfg.cand_cap) || moves_len >= board.legal_move_count();
     if loss_complete {
@@ -272,12 +209,8 @@ pub(crate) fn solve(
         return Scored { score: best, line: Vec::new() };
     }
 
-    // RECALL-PRESERVING VERIFY (quiet-move body, `neighbor_dist` set). The reduced
-    // candidate set drove the search; certifying a LOSS needs the DROPPED legal
-    // moves too. Search them with a FULL window (NO α-β pruning — preserve exact
-    // recall): any WIN is an escape (return it); any UNKNOWN leaves it unresolved;
-    // only when EVERY dropped move also loses is the LOSS certified. `vbest` tracks
-    // the slowest (least-negative) loss for a correct mate distance.
+    // RECALL-PRESERVING VERIFY: certifying a LOSS needs the DROPPED legal moves too, searched
+    // with a FULL window (NO α-β pruning); `vbest` tracks the slowest loss for mate distance.
     if cfg.neighbor_dist.is_some() {
         let mut vbest = best;
         for (q, r) in board.legal_moves() {
@@ -318,13 +251,8 @@ pub(crate) fn solve(
     Scored::heuristic(0) // candidate set incomplete, verify disabled -> cannot prove LOSS
 }
 
-/// LMR depth reduction for a non-PV candidate. Reduce late (`idx >= 6`) moves at
-/// sufficient depth (`depth_left >= 4`) by one ply; never reduce in check (every
-/// candidate is a forced defense). A standard late-move index/depth
-/// gate. SOUNDNESS: the reduction is VERDICT-EXACT — `solve` re-searches at full
-/// depth whenever a reduced child could affect the node value, so a reduction can
-/// only SKIP the deep re-search of a child already proved losing below α (a
-/// verdict-irrelevant short-cut). It never reduces depth on a move that matters.
+/// LMR depth reduction for a late (`idx >= 6`) non-PV candidate at `depth_left >= 4`, never in
+/// check. VERDICT-EXACT: `solve` re-searches at full depth whenever a reduced child matters.
 #[inline]
 fn lmr_reduction(idx: usize, depth_left: i32, in_check: bool) -> i32 {
     if !in_check && idx >= 6 && depth_left >= 4 {
@@ -334,14 +262,9 @@ fn lmr_reduction(idx: usize, depth_left: i32, in_check: bool) -> i32 {
     }
 }
 
-/// Iterative-deepening + aspiration ROOT driver. Deepens
-/// `1..=max_depth`, reusing the TT + ordering state across iterations for earlier
-/// cutoffs; stops as soon as a depth proves a mate (a proof is final) or the node
-/// budget is exhausted, keeping the deepest COMPLETED result.
-///
-/// SOUNDNESS: every accepted iteration's root window resolves to an EXACT value
-/// (`aspiration_search` widens to ±∞ on a fail), so `outcome_of(score)` is a sound
-/// verdict — the same premise as the single full-window root search.
+/// Iterative-deepening + aspiration ROOT driver over `1..=max_depth`, reusing TT and ordering
+/// state and stopping at a proven mate or an exhausted budget. Every accepted iteration
+/// resolves to an EXACT value, so `outcome_of(score)` is a sound verdict.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn solve_root(
     board: &mut Board,
@@ -378,9 +301,8 @@ pub(crate) fn solve_root(
     result
 }
 
-/// One aspiration-windowed root search at `depth`. A narrow window around the
-/// previous score yields faster cutoffs; a fail-low/high widens that side to ±∞
-/// and re-searches so the RETURNED value is always exact (never a clipped bound).
+/// One aspiration-windowed root search at `depth`; a fail-low/high widens that side to ±∞ and
+/// re-searches, so the RETURNED value is exact and never a clipped bound.
 #[allow(clippy::too_many_arguments)]
 fn aspiration_search(
     board: &mut Board,
@@ -415,11 +337,8 @@ fn aspiration_search(
     }
 }
 
-/// 3-VALUED REFERENCE ORACLE (test-only). The pre-increment-1 proof core,
-/// verbatim, kept as the verdict-invariance oracle for the scored α-β `solve`:
-/// the scored search MUST reproduce this oracle's every WIN/LOSS conclusion (α-β
-/// is a pruning/ordering optimisation, never a verdict change). See
-/// `verdict_invariance_scored_matches_3valued`.
+/// 3-VALUED REFERENCE ORACLE (test-only): the pre-increment-1 proof core, verbatim, kept as
+/// the verdict-invariance target — α-β may never change a verdict.
 #[cfg(test)]
 pub(crate) struct Solved3 {
     pub outcome: Outcome,
@@ -537,7 +456,6 @@ pub(crate) fn solve_3valued(
     Solved3::unknown()
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -552,9 +470,7 @@ mod tests {
         super::super::TacticalSolver::new(TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None })
     }
 
-    // ── Independent exhaustive oracle (full-width AND-OR reference) ─────────
-    // ALL legal moves, no TT, same AND-OR + flip-aware logic. Early-exits on
-    // WIN so finding a defender's escape (the soundness refutation) is cheap.
+    // Independent exhaustive oracle: ALL legal moves, no TT, early-exit on WIN.
     fn brute_solve(board: &mut Board, depth: i32, budget: &mut Budget) -> Outcome {
         if !budget.tick() {
             return Outcome::Unknown;
@@ -606,10 +522,7 @@ mod tests {
         }
     }
 
-    /// Build the crossing-open-fives fork:
-    /// two crossing open-fives for P2 (attacker) centred at (3,3) -> 4 winning
-    /// cells; P1 to move, mr=2 -> can block only 2 -> proven LOSS. Strict legal
-    /// cadence (P1 opener, alternating 2-stone turns).
+    /// Crossing open-fives fork: 4 P2 winning cells, P1 to move at mr=2 blocks 2 -> LOSS.
     fn build_fork() -> Board {
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap(); // P1 opener
@@ -654,13 +567,8 @@ mod tests {
         b
     }
 
-    /// Compact double-threat: two parallel P2 open-fives -> 4 distinct winning
-    /// cells; P1 to move, mr=2 -> blocks <=2 -> proven LOSS. `legal_move_radius`
-    /// is shrunk to 2 so the EXHAUSTIVE brute oracle (no threat pruning)
-    /// confirms the LOSS cheaply — the spread-out `build_fork` has a radius-5
-    /// legal set (~300 cells) that makes the brute branching ~300^2 (the source
-    /// of the slow full-tree confirmation). Both solver and brute see the same
-    /// (small) legal set, so the comparison stays apples-to-apples.
+    /// Compact double-threat: 4 P2 winning cells, P1 to move at mr=2 -> proven LOSS. Radius 2
+    /// keeps the EXHAUSTIVE brute oracle cheap; `build_fork`'s ~300-cell set would be ~300^2.
     fn compact_double_threat(off_q: i32, off_r: i32, vertical: bool) -> Board {
         let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
         for i in 0..5i32 {
@@ -677,13 +585,8 @@ mod tests {
         b
     }
 
-    /// NOT-IN-CHECK tactical position: two parallel P2 open-FOURS (length-4 runs,
-    /// not 5) -> P2 has `threat_moves` (a 5th stone makes a win-in-1) but NO
-    /// `winning_moves` yet, so P1 (to move, mr=2) is NOT in check. This is the
-    /// not-in-check analogue of `compact_double_threat` and the surface the R3
-    /// guard protects: the prune-symmetry premise (`in_check`) is FALSE here, so a
-    /// LOSS may only be concluded when the candidate set is the full legal set.
-    /// Radius 2 keeps the brute oracle cheap.
+    /// NOT-IN-CHECK position (two parallel P2 open-FOURS: threats but no win-in-1) — the
+    /// surface the R3 guard protects, where a LOSS needs the full legal candidate set.
     fn compact_double_open_four(off_q: i32, off_r: i32, vertical: bool) -> Board {
         let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
         for i in 0..4i32 {
@@ -700,19 +603,15 @@ mod tests {
         b
     }
 
-    /// Direct-construction static board: plant stones + turn-phase explicitly.
-    /// Used for the off-window guard test where a far stone shifts the window
-    /// center. `ply = stones.len()`, `last_move = None` (byte-identical to the
-    /// old field-write construction; the `test-fixtures` builder recomputes the
-    /// same bbox from the stone min/max).
+    /// Direct-construction static board for the off-window guard test, where a far stone
+    /// shifts the window centre. `ply = stones.len()`, `last_move = None`.
     fn static_board(stones: &[((i32, i32), Cell)], player: Player, mr: u8) -> Board {
         Board::from_stones(stones, player, mr, stones.len() as u32, None)
     }
 
     #[test]
     fn test1_immediate_win_is_win() {
-        // P1 builds 0..4 on r=0 via strict legal cadence; P1 to move with an
-        // immediate win available -> WIN (NOT a proven loss).
+        // P1 builds 0..4 on r=0 with an immediate win available -> WIN, not a proven loss.
         let mut c = Board::new();
         for &(q, r) in &[
             (0, 0),
@@ -748,12 +647,8 @@ mod tests {
 
     #[test]
     fn test4_fork_is_proven_loss() {
-        // The crossing-open-fives fork (spread-out, radius-5 legal set): P1 to
-        // move, 4 P2 winning cells, mr=2. Assert the (threat-pruned) solver
-        // proves LOSS at two depths. The independent exhaustive brute
-        // confirmation lives in `test5` on the COMPACT loss (radius-2) — the
-        // spread fork's ~300-cell legal set makes the full brute tree ~300^2 and
-        // needlessly slow (~60 s); the solver itself is fast here.
+        // The spread-out fork (radius-5 legal set): the threat-pruned solver proves LOSS at two
+        // depths. Brute confirmation lives in `test5`, where the tree is not ~300^2 (~60 s).
         let f = build_fork();
         assert_eq!(f.current_player, Player::One, "fork: expected P1 to move");
         assert_eq!(f.count_winning_moves(Player::Two), 4, "fork: expected 4 P2 threats");
@@ -766,10 +661,7 @@ mod tests {
 
     #[test]
     fn test5_compact_loss_brute_confirmed() {
-        // POSITIVE forced-loss detection, independently confirmed. Several varied
-        // compact double-threats (offsets + orientations). For each: the solver
-        // proves LOSS (true positive, threat-pruned), the exhaustive brute oracle
-        // AGREES it is a LOSS (soundness), and the TSS is far cheaper than brute.
+        // POSITIVE forced-loss detection: solver LOSS, brute AGREES, and TSS is far cheaper.
         let s = solver();
         let cases = [(0, 0, false), (-3, 4, false), (2, -2, true), (-6, -1, true)];
         for &(q, r, vert) in &cases {
@@ -798,23 +690,13 @@ mod tests {
 
     #[test]
     fn soundness_fuzz_zero_false_loss() {
-        // SOUNDNESS: the solver must NEVER claim LOSS on a position that is not a
-        // forced loss. Every LOSS claim is cross-checked by the independent
-        // exhaustive brute_solve; a brute WIN (defender escape) refutes the LOSS
-        // -> unsound. Two streams feed the check so the LOSS path is genuinely
-        // exercised (random near-terminal play alone yields ~0 forced losses):
-        //   (A) random near-terminal positions  — the soundness CONTROL.
-        //   (B) constructed compact double-threats — guarantee real LOSS claims.
-        // Assert 0 false-LOSS AND that the fuzz is non-vacuous (claims > 0).
+        // SOUNDNESS: every LOSS claim is cross-checked by the exhaustive brute_solve. Two
+        // streams, because random near-terminal play alone yields ~0 forced losses: (A) random
+        // control, (B) constructed double-threats. Assert 0 false-LOSS AND claims > 0.
         let mut rng = Lcg(0x0D_D5_01_5E_12_34_56_78);
-        // Stream (C) below adds NOT-IN-CHECK open-four doubles: the surface the R3
-        // guard protects (no prune symmetry). NOTE this `solver()` is threat-only
-        // (neighbor_dist=None), so the recall VERIFY is disabled and a not-in-check
-        // position falls through to UNKNOWN — i.e. stream C exercises the
-        // not-in-check candidate-generation SURFACE (asserting nic_checked > 0) and
-        // cross-checks any LOSS it does claim, but it does NOT exercise a
-        // verify-certified not-in-check LOSS. The verify path is covered separately
-        // by the `verify_*` tests (which force it via cand_cap=1 truncation).
+        // Stream (C) adds NOT-IN-CHECK open-four doubles. This `solver()` is threat-only, so
+        // the verify is disabled and such a position falls through to UNKNOWN: C exercises the
+        // candidate-generation SURFACE only, the `verify_*` tests cover the certified LOSS.
         let s = solver();
         let mut checked = 0usize;
         let mut bad = 0usize;
@@ -859,8 +741,7 @@ mod tests {
             }
         }
 
-        // (B) constructed double-threats over a grid of offsets/orientations —
-        //     these reliably produce (true) LOSS claims to validate the path.
+        // (B) constructed double-threats over offsets/orientations — reliable true LOSSes.
         for off_q in -8..=4i32 {
             for &(off_r, vert) in &[(0, false), (3, true), (-2, false)] {
                 let bd = compact_double_threat(off_q, off_r, vert);
@@ -874,9 +755,7 @@ mod tests {
             }
         }
 
-        // (C) constructed NOT-IN-CHECK open-four doubles. Each is a genuine
-        //     not-in-check input (opp has no win-in-1); any LOSS claim is
-        //     cross-checked, and the count proves the not-in-check surface ran.
+        // (C) constructed NOT-IN-CHECK open-four doubles; the count proves the surface ran.
         for off_q in -8..=4i32 {
             for &(off_r, vert) in &[(0, false), (3, true), (-2, false)] {
                 let bd = compact_double_open_four(off_q, off_r, vert);
@@ -927,19 +806,9 @@ mod tests {
         assert!(guarded.line.is_empty(), "suppressed proof carries no line");
     }
 
-    /// Build a position that is genuinely a P1 WIN but whose only winning move is
-    /// a `threat_move` counter that `cand_cap` truncation drops:
-    ///   - P2 cluster: a compact double-threat (4 P2 win-in-1 cells) = on its own
-    ///     a forced P1 LOSS (see `test5`). This puts P1 IN CHECK.
-    ///   - P1 line: 0..3 on r=0, far from the P2 cluster. P1 has NO win-in-1 (only
-    ///     4 in a row), but (4,0) is a `threat_move`; at the root (mr=2) P1 plays
-    ///     (4,0) then (5,0) -> 0..5 = six -> P1 WINS on its own turn.
-    /// With a full candidate set the search finds (4,0) -> WIN. With `cand_cap=1`
-    /// the must-block cells come first and (4,0) is truncated out, so the pruned
-    /// search is forced down the losing block sequence and (UNGUARDED) concludes a
-    /// FALSE LOSS. The R3 loss-completeness guard must refuse that LOSS (the
-    /// candidate set was truncated: `in_check && moves_len == cand_cap`, and
-    /// `moves_len < legal_move_count`) and report UNKNOWN instead.
+    /// A genuine P1 WIN whose only winning move is a `threat_move` that `cand_cap` truncation
+    /// drops: the P2 double-threat puts P1 IN CHECK while P1's far line reaches six via
+    /// (4,0)+(5,0). With `cand_cap=1` an UNGUARDED search says FALSE LOSS; R3 must say UNKNOWN.
     fn fork_with_p1_counter() -> Board {
         // P2 compact double-threat far from the origin (radius-2 legal set).
         let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
@@ -958,11 +827,8 @@ mod tests {
 
     #[test]
     fn neighbor_dist_widens_not_in_check_candidates_to_full_legal() {
-        // Quiet-widening mechanism: at a NOT-IN-CHECK node, `neighbor_dist=Some(d)` with d
-        // covering the legal radius makes the candidate set the FULL legal set
-        // (the quiet developmental moves the threat-only set omits). This is what
-        // both raises the 8% ceiling AND lets the R3 guard prove not-in-check
-        // LOSSes (moves_len >= legal_move_count). `None` stays threat-only.
+        // Quiet-widening: at a NOT-IN-CHECK node `neighbor_dist=Some(d)` covering the legal
+        // radius makes the candidate set the FULL legal set. `None` stays threat-only.
         let b = compact_double_open_four(0, 0, false); // P2 open-fours, P1 to move
         let (stm, opp) = (Player::One, Player::Two);
         assert_eq!(b.count_winning_moves(opp), 0, "setup: P1 is NOT in check");
@@ -989,17 +855,8 @@ mod tests {
 
     #[test]
     fn off_window_completing_stone_suppressed() {
-        // Coherence (the COMPLETING cell, not the first, is reachability-
-        // relevant). The A1 override PLACES line[0] AND the cached completing
-        // line[1]; both must be in-window. A P2 block at (-1,0) forces P1's win
-        // rightward: line=[(4,0),(5,0)] — line[0]=(4,0) IN-window (cheb 3) but the
-        // COMPLETING line[1]=(5,0) OFF-window (cheb 4) about center (1,0)/half 3.
-        // The old first-stone-only guard PASSED this (line[0] in) and would drop
-        // the off-window completing stone; the completing-stone guard suppresses
-        // it. (With the current lex move-order line[0] is normally the outermost
-        // stone so line[0] already catches it — the block engineers the in-window-
-        // setup / off-window-completion case that net-policy ordering will make
-        // common; the guard must be correct for it.)
+        // Coherence: the A1 override places line[0] AND the cached completing line[1], so BOTH
+        // must be in-window. Here line[0] is in-window (cheb 3) and line[1] is not (cheb 4).
         let stones = vec![
             ((0, 0), Cell::P1), ((1, 0), Cell::P1), ((2, 0), Cell::P1), ((3, 0), Cell::P1),
             ((-1, 0), Cell::P2),
@@ -1028,19 +885,11 @@ mod tests {
 
     #[test]
     fn spread_multicluster_no_false_proof() {
-        // IMMUNITY (measured, not asserted): a flat [140][140]+70 array board rep
-        // produces phantom mates past |coord|~63 and on multi-cluster geometry. The
-        // native solver is HashMap/run-length based — no flat array, no
-        // windowing/aliasing — so it must emit NO false proof in that exact regime.
-        // Each verdict is cross-checked against the exhaustive brute oracle at coord
-        // magnitudes > 63 and across disjoint clusters.
+        // IMMUNITY (measured, not asserted): a flat [140][140]+70 array rep produces phantom
+        // mates past |coord|~63; this HashMap/run-length solver must emit none in that regime.
         let s = solver();
 
-        // (a) a real forced P1 LOSS translated PAST the OOB boundary (coord 64-90).
-        // The compact double-threat is a brute-CONFIRMED forced loss at the origin
-        // (test5); proving the SAME verdict at |coord|>63 is the translation-
-        // invariance check that rules out any flat-array/aliasing corruption (the
-        // flat-array OOB failure mode) — cheap, no deep oracle needed.
+        // (a) a brute-confirmed forced P1 LOSS translated past the OOB boundary (coord 64-90).
         for &(oq, orr) in &[(70, 70), (-80, 5), (64, -88)] {
             let b = compact_double_threat(oq, orr, false);
             assert!(
@@ -1055,13 +904,8 @@ mod tests {
             );
         }
 
-        // (b) a genuinely MULTI-CLUSTER, non-winning board at large coords (3
-        //     disjoint 3-stone clusters, no 5-run anywhere). Kept within a BOUNDED
-        //     bbox (the legal set is O(stones·ball) only when the bbox is bounded;
-        //     scattering clusters 150 cells apart makes the brute oracle's per-node
-        //     legal rebuild O(bbox) and pathological — a test artifact, not the
-        //     solver's deploy regime). The solver must never fabricate a proof the
-        //     oracle refutes.
+        // (b) a MULTI-CLUSTER non-winning board at large coords, kept within a BOUNDED bbox:
+        //     clusters 150 cells apart make the brute oracle's legal rebuild O(bbox).
         let multi: Vec<((i32, i32), Cell)> = vec![
             ((70, 70), Cell::P1), ((71, 70), Cell::P1), ((70, 71), Cell::P2),
             ((78, 72), Cell::P2), ((79, 72), Cell::P2), ((78, 73), Cell::P1),
@@ -1082,11 +926,8 @@ mod tests {
 
     #[test]
     fn widened_solver_stays_sound() {
-        // SOUNDNESS of the quiet-move widening: with full neighbour coverage the
-        // search visits not-in-check interior nodes with the WIDE candidate set
-        // (the path the body adds). Its verdict must stay consistent with the
-        // exhaustive oracle — a LOSS claim is brute-confirmed LOSS, and a forced-
-        // loss position is NEVER reported a WIN. Non-vacuous (>=1 LOSS proven).
+        // SOUNDNESS of the quiet-move widening: with the WIDE candidate set the verdict must
+        // stay consistent with the exhaustive oracle. Non-vacuous (>=1 LOSS proven).
         let s = super::super::TacticalSolver::new(TacticalConfig {
             cand_cap: 1000,
             window_half: None,
@@ -1114,11 +955,8 @@ mod tests {
 
     #[test]
     fn verify_recovers_truncated_win() {
-        // Recall-preserving verify: the reduced candidate set drove the
-        // search; when all reduced candidates lose, the dropped legal moves are
-        // searched. Here cand_cap=1 truncates away P1's winning counter — the
-        // verify must search the dropped set, find it, and return WIN (the same
-        // position the bare R3 guard could only call UNKNOWN).
+        // Recall-preserving verify: cand_cap=1 truncates away P1's winning counter, so the
+        // verify must search the dropped legal set and return WIN where R3 alone says UNKNOWN.
         let b = fork_with_p1_counter();
         let no_verify = super::super::TacticalSolver::new(TacticalConfig {
             cand_cap: 1,
@@ -1139,10 +977,7 @@ mod tests {
 
     #[test]
     fn verify_certifies_truncated_loss() {
-        // The other verify branch: a real forced loss whose reduced set was
-        // truncated. The dropped legal moves are searched and ALSO all lose, so
-        // the verify certifies the LOSS (brute-confirmed) where the bare guard,
-        // unable to trust the truncated set, returned UNKNOWN.
+        // The other verify branch: the dropped legal moves ALSO all lose, certifying the LOSS.
         let b = compact_double_threat(0, 0, false);
         let no_verify = super::super::TacticalSolver::new(TacticalConfig {
             cand_cap: 1,
@@ -1162,10 +997,7 @@ mod tests {
 
     #[test]
     fn verify_path_is_sound_over_grid() {
-        // SOUNDNESS of the recall verify across a grid: cand_cap=1 forces the
-        // reduced set to truncate at EVERY node, so the LOSS conclusion always
-        // routes through the full-legal verify. Every LOSS it certifies must be a
-        // real LOSS (brute-confirmed); a forced loss is NEVER reported a WIN.
+        // cand_cap=1 truncates at EVERY node, so every LOSS routes through the full verify.
         let s = super::super::TacticalSolver::new(TacticalConfig {
             cand_cap: 1,
             window_half: None,
@@ -1188,28 +1020,15 @@ mod tests {
         }
     }
 
-    // ── RED-TEAM adversarial soundness attacks (throwaway; #[ignore]-marked
-    //    heavy ones run explicitly). Goal: produce a FALSE proof (solver WIN/LOSS
-    //    contradicting the full-width brute oracle) or prove it cannot. ───────────
+    // RED-TEAM soundness attacks: produce a FALSE proof or prove it cannot. Heavy ones are
+    // `#[ignore]`.
 
-    /// RED-TEAM (a)+(c): the verify path on NOT-IN-CHECK positions with a small,
-    /// truncating cand_cap + neighbor widening — the exact surface the handoff
-    /// claims is sound. Run the VERIFY config over a grid of not-in-check open-four
-    /// doubles AND in-check double threats, varying cand_cap (truncation stress)
-    /// and neighbor_dist, cross-checking EVERY proof against the full-width brute
-    /// oracle. Definitive contradictions:
-    ///   solver LOSS  but brute WIN  => FALSE LOSS (a real defender escape exists)
-    ///   solver WIN   but brute LOSS => FALSE WIN
+    /// RED-TEAM: the verify path on NOT-IN-CHECK positions with a truncating cand_cap plus
+    /// neighbor widening, cross-checking EVERY proof against the full-width brute oracle.
     ///
-    /// EXHAUSTIVE / SLOW (`#[ignore]`): the not-in-check verify is a full-width
-    /// expansion (no alpha-beta yet — the perf layer is deferred), so the 96
-    /// budget-1.5M solves run for minutes to a few hours depending on the box.
-    /// This is the on-demand deep soundness sweep — it is the test that actually
-    /// exercises a not-in-check ROOT LOSS certified by the verify (the surface the
-    /// fast in-check truncation tests cover only by code-path).
-    /// Run before promotion / on a perf box:
-    ///   `cargo test --lib tactics::search::tests::redteam_verify_grid_no_false_proof -- --ignored`
-    /// VERIFIED 0 false proofs, 2026-06-29 (19/19, this sweep incl.).
+    /// SLOW (`#[ignore]`): 96 budget-1.5M solves, minutes to hours, and the only test
+    /// exercising a not-in-check ROOT LOSS certified by the verify. VERIFIED 0 false proofs,
+    /// 2026-06-29 (19/19, this sweep incl.).
     #[test]
     #[ignore = "exhaustive full-width verify sweep — minutes; run on-demand (--ignored)"]
     fn redteam_verify_grid_no_false_proof() {
@@ -1273,14 +1092,9 @@ mod tests {
         );
     }
 
-    /// RED-TEAM (a) random stream: random COMPACT positions (radius-2 legal set so
-    /// brute is exhaustive-cheap), VERIFY config with a truncating cand_cap. Every
-    /// LOSS cross-checked against brute; a brute WIN refutes. Bidirectional (WIN
-    /// claims checked too). The not-in-check counter proves the attack surface ran.
-    ///
-    /// EXHAUSTIVE / SLOW (`#[ignore]`): 250 verify-config solves + per-claim brute.
-    /// On-demand companion to the grid sweep. VERIFIED 0 false proofs, 2026-06-29.
-    /// Run: `... redteam_verify_random_compact_no_false_proof -- --ignored`.
+    /// RED-TEAM random stream: random COMPACT positions under a truncating cand_cap, every
+    /// claim cross-checked bidirectionally. SLOW (`#[ignore]`): 250 verify-config solves plus
+    /// per-claim brute. VERIFIED 0 false proofs, 2026-06-29.
     #[test]
     #[ignore = "exhaustive random verify sweep — run on-demand (--ignored)"]
     fn redteam_verify_random_compact_no_false_proof() {
@@ -1295,8 +1109,7 @@ mod tests {
         let mut win_claims = 0usize;
         let mut samples = 0usize;
         let mut attempt = 0usize;
-        // Generate compact random positions: play random legal moves but keep the
-        // board in a small coordinate box so the radius-2 legal set stays small.
+        // Random legal moves kept inside a small box, so brute stays exhaustive-cheap.
         while samples < 250 && attempt < 4000 {
             attempt += 1;
             let mut bd = Board::new();
@@ -1353,11 +1166,8 @@ mod tests {
         );
     }
 
-    /// RED-TEAM (b): flip-aware negamax SIGN. A genuine 2-stone-turn forcing WIN
-    /// (P1 has 0..3 on r=0; plays (4,0) then completes six). A flip-sign bug would
-    /// mislabel this WIN as LOSS/UNKNOWN. Assert WIN, then REALIZE the returned
-    /// same-turn line and confirm it produces a real 6-in-a-row (independent of the
-    /// brute oracle, which shares the flip logic and could not catch a flip bug).
+    /// RED-TEAM: flip-aware negamax SIGN. Asserts WIN on a 2-stone forcing win, then REALIZES
+    /// the line — independent of the brute oracle, which shares the flip logic.
     #[test]
     fn redteam_flip_sign_two_stone_win_realized() {
         let stones: Vec<((i32, i32), Cell)> =
@@ -1382,9 +1192,7 @@ mod tests {
         assert_ne!(v.prove(&b, 12, 500_000).result, LOSS, "winnable position must never be a LOSS");
     }
 
-    /// RED-TEAM (d): budget exhaustion must NEVER manufacture a proof. A genuine
-    /// not-in-check verify target starved of budget must return UNKNOWN, never a
-    /// (possibly-false) LOSS/WIN. Sweep tiny budgets across the boundary.
+    /// RED-TEAM: a budget-starved target must return UNKNOWN, never a manufactured proof.
     #[test]
     fn redteam_budget_exhaustion_no_false_proof() {
         let v = super::super::TacticalSolver::new(TacticalConfig {
@@ -1392,8 +1200,7 @@ mod tests {
             window_half: None,
             neighbor_dist: Some(2),
         });
-        // A real forced LOSS (brute-confirmed) so the full-budget result is LOSS;
-        // every STARVED result must be UNKNOWN (proof requires completing the search).
+        // A brute-confirmed forced LOSS, so the full-budget result is LOSS.
         let b = compact_double_threat(0, 0, false);
         let mut bb = Budget::new(2_000_000);
         assert_eq!(brute_solve(&mut b.clone(), 12, &mut bb), LOSS, "setup: truly a forced LOSS");
@@ -1418,10 +1225,7 @@ mod tests {
 
     #[test]
     fn neighbor_dist_does_not_widen_in_check_nodes() {
-        // IN CHECK the threat-only set is already complete; widening would only
-        // bloat it (and risk truncating a real block past cand_cap). The compact
-        // double-threat (4 P2 win-in-1 cells) puts P1 in check; the candidate set
-        // must be identical with and without neighbor_dist.
+        // IN CHECK the threat-only set is already complete, so widening must not change it.
         let b = compact_double_threat(0, 0, false);
         let (stm, opp) = (Player::One, Player::Two);
         assert!(b.count_winning_moves(opp) >= 1, "setup: P1 IS in check");
@@ -1432,9 +1236,7 @@ mod tests {
 
     #[test]
     fn r3_guard_suppresses_truncated_false_loss() {
-        // SOUNDNESS (R3): an incomplete candidate set must NEVER yield a LOSS.
-        // Here `cand_cap=1` truncates away P1's winning counter; the unguarded
-        // search would conclude a FALSE LOSS. The guard must report UNKNOWN.
+        // SOUNDNESS (R3): `cand_cap=1` drops P1's winning counter, so unguarded means FALSE LOSS.
         let b = fork_with_p1_counter();
         // Test-setup invariants: P1 is in check (4 P2 threats), has no win-in-1,
         // but the position is truly a WIN (full-legal brute finds the counter).
@@ -1452,11 +1254,7 @@ mod tests {
         );
     }
 
-    // ── scored α-β + mate distance ──────────────────────────────────────────────
-
-    /// Drive the scored α-β core directly (full root window) and return the
-    /// verdict + raw score + PV. (The public `prove` surface exposes only the
-    /// verdict; the score is the increment-1 deliverable under test.)
+    /// Drive the scored α-β core directly (full root window) and return verdict + score + PV.
     fn run_scored(
         b: &Board,
         cfg: &TacticalConfig,
@@ -1471,8 +1269,7 @@ mod tests {
         (outcome_of(s.score), s.score, s.line)
     }
 
-    /// The pre-increment-1 3-valued reference oracle's verdict (the invariance
-    /// target — α-β must never change it).
+    /// The pre-increment-1 3-valued oracle's verdict — the invariance target.
     fn run_3valued(b: &Board, cfg: &TacticalConfig, depth: i32, budget: u64) -> Outcome {
         let mut board = b.clone();
         let mut bud = Budget::new(budget);
@@ -1530,10 +1327,7 @@ mod tests {
 
     #[test]
     fn verdict_invariance_scored_matches_3valued() {
-        // THE INVARIANCE GATE (red-team): the scored α-β `solve` must reproduce
-        // the pre-change 3-valued core's verdict on EVERY test position — across
-        // WIN / LOSS / UNKNOWN, threat-only and verify (neighbor_dist) configs,
-        // and the truncating cand_cap=1 surfaces. α-β is pruning/ordering ONLY.
+        // THE INVARIANCE GATE: scored α-β must reproduce the 3-valued verdict everywhere.
         type Case = (Board, TacticalConfig, i32, u64, &'static str);
         let cfg = |cand_cap, neighbor_dist| TacticalConfig {
             cand_cap,
@@ -1588,32 +1382,15 @@ mod tests {
         assert!(c.check_win(), "PV must realize a real 6, got {line:?}");
     }
 
-    // ── PVS / LMR / aspiration + killers/history ────────────────────────────────
-
     #[test]
     #[allow(clippy::nonminimal_bool)] // the explicit "not (WIN,LOSS) and not (LOSS,WIN)" form is intentional (VERBATIM)
     fn verdict_invariance_fuzz_scored_matches_3valued() {
-        // REVIEW-REQUESTED HARDENING. The fixed 13-case `verdict_invariance_*` is
-        // widened to a RANDOMIZED stream so the fail-soft mate-bound corners (PVS
-        // null-window, LMR reduction, ordering permutation) are stressed, not just
-        // the hand-picked cases. The scored α-β `solve` (PVS + LMR + killers /
-        // history / TT ordering) is VERDICT-EXACT vs the plain 3-valued oracle —
-        // they share the candidate set + budget, so:
-        //   - they must NEVER contradict (one WIN, other LOSS) — the hard invariant;
-        //   - when BOTH are conclusive they must be EQUAL;
-        //   - any scored verdict is additionally brute-confirmed (compact => cheap).
-        // (A scored-conclusive / oracle-UNKNOWN split is an allowed α-β pruning win,
-        // never a soundness break — and is asserted brute-sound.)
+        // The fixed 13-case invariance test widened to a RANDOMIZED stream, stressing the
+        // fail-soft mate-bound corners. Scored and oracle share candidate set + budget, so they
+        // must never contradict and must be EQUAL when both are conclusive; a
+        // scored-conclusive / oracle-UNKNOWN split is an allowed pruning win, asserted sound.
         let mut rng = Lcg(0xF17E_55ED_2026_0629);
-        // THREAT-ONLY configs: PVS + LMR + killers/history/TT ordering (the
-        // increment-4 additions under test) ALL run on the threat-only path; the
-        // recall VERIFY (neighbor_dist=Some) deliberately uses NO PVS/LMR (kept
-        // full-window for exact recall) so this fuzz needs no verify config — and a
-        // depth-deep full-width verify on a random non-loss board is a minutes-long
-        // full-legal expansion, not the fast-suite budget. The verify path's
-        // soundness is covered by `verify_path_is_sound_over_grid` + the #[ignore]
-        // red-team sweeps. Varied cand_cap (incl. cand_cap=1 truncation) stresses
-        // the PVS/LMR mate-bound corners + the R3 guard interaction.
+        // THREAT-ONLY configs: the recall VERIFY uses no PVS/LMR and is covered elsewhere.
         let cfgs = [(1usize, None), (2, None), (40, None)];
         let (mut win, mut loss, mut unknown, mut checked, mut exact_agree) = (0, 0, 0, 0, 0);
 
@@ -1630,8 +1407,7 @@ mod tests {
                 assert_eq!(scored, reference, "FUZZ INVARIANCE: both conclusive but unequal (cand={cand}, nd={nd:?})");
                 *exact += 1;
             }
-            // brute-confirm any scored verdict (the ultimate soundness gate). Boards
-            // are radius-2 compact so the full-width brute terminates cheaply.
+            // Brute-confirm any scored verdict; radius-2 boards keep it cheap.
             if scored == LOSS || scored == WIN {
                 let mut bb = Budget::new(200_000);
                 let brute = brute_solve(&mut b.clone(), 12, &mut bb);
@@ -1649,9 +1425,7 @@ mod tests {
             *checked += 1;
         };
 
-        // (A) random COMPACT boards (tight ±2 box + radius-2 legal set so the
-        //     full-width brute + oracle stay cheap), one random threat-only config
-        //     each.
+        // (A) random COMPACT boards, one random threat-only config each.
         let (mut samples, mut attempt) = (0, 0);
         while samples < 36 && attempt < 4000 {
             attempt += 1;
@@ -1686,8 +1460,7 @@ mod tests {
             check(&bd, cand, nd, 6, 40_000, &mut win, &mut loss, &mut unknown, &mut checked, &mut exact_agree);
         }
 
-        // (B) constructed double-threats (in-check + not-in-check) across every
-        //     config — guarantee a stream of forced-LOSS verdicts under truncation.
+        // (B) constructed double-threats guaranteeing forced-LOSS verdicts under truncation.
         for off_q in -4..=3i32 {
             for &(off_r, vert) in &[(0, false), (3, true)] {
                 for builder in 0..2 {
@@ -1702,12 +1475,8 @@ mod tests {
             }
         }
 
-        // (C) constructed WIN positions translated over a grid + every config —
-        //     WIN-side coverage. P1 holds 0..4 on r=off (an open FIVE: an immediate
-        //     win via the pre-candidate shortcut, so WIN is proven instantly for ANY
-        //     cand_cap incl. truncation, and the brute returns WIN at its first
-        //     count_winning_moves check — keeps this stream cheap + deterministic).
-        //     Radius-2 capped so the rare truncation path can't expand a wide tree.
+        // (C) constructed WIN positions over a grid: an open FIVE proves WIN instantly for ANY
+        //     cand_cap, and radius-2 stops the rare truncation path expanding a wide tree.
         for off in -4..=3i32 {
             let stones: Vec<((i32, i32), Cell)> =
                 (0..5).map(|q| ((q, off), Cell::P1)).collect();
@@ -1729,10 +1498,7 @@ mod tests {
 
     #[test]
     fn iterative_deepening_proves_short_mate_and_is_idempotent() {
-        // The ID + aspiration root driver (public `prove`) must prove a forced mate
-        // and — mate-early-stop — return the SAME verdict regardless of max_depth
-        // (a deeper cap cannot change a proven mate). Also a generous cap must not
-        // blow the node budget on the shallow proof (early-stop bounds the work).
+        // The ID + aspiration driver must return the SAME verdict regardless of max_depth.
         let s = solver();
         let b = compact_double_threat(0, 0, false); // forced P1 LOSS in a few plies
         let shallow = s.prove(&b, 6, 400_000);
@@ -1749,8 +1515,7 @@ mod tests {
 
     #[test]
     fn iterative_deepening_win_pv_is_realizable() {
-        // ID/aspiration must not corrupt the root WIN PV (deploy override plays
-        // line[0..2]). The 2-stone forcing win replayed must complete a real 6.
+        // ID/aspiration must not corrupt the root WIN PV; the replayed line must complete a 6.
         let s = solver();
         let two: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let b = static_board(&two, Player::One, 2);
@@ -1762,8 +1527,6 @@ mod tests {
         c.apply_move(r.line[1].0, r.line[1].1).unwrap();
         assert!(c.check_win(), "ID WIN PV must realize a real 6, got {:?}", r.line);
     }
-
-    // ── net-policy candidate ordering (the proof stays net-free) ──
 
     /// Drive the scored core with an OPTIONAL `PolicyPrior` wired into ordering.
     fn run_scored_pol(
@@ -1786,13 +1549,8 @@ mod tests {
 
     #[test]
     fn verdict_invariant_to_net_policy_ordering() {
-        // Increment 5 — the CRITICAL property: wiring a net policy into candidate
-        // ORDERING must NEVER change a WIN/LOSS verdict (the proof core reads the
-        // net nowhere). An ADVERSARIAL prior (a deterministic per-move pseudo-random
-        // value) maximally permutes the candidate order; the verdict + the WIN PV
-        // realizability must be invariant vs the no-policy run — across WIN / LOSS /
-        // UNKNOWN, threat-only + verify (neighbor_dist) configs, and cand_cap=1
-        // truncation. (The proof core stays net-free; ordering is a permutation.)
+        // The CRITICAL property: net policy in candidate ORDERING must NEVER change a verdict.
+        // An ADVERSARIAL prior maximally permutes the order; verdict and PV must be invariant.
         use super::super::ordering::PolicyPrior;
         struct Adversarial;
         impl PolicyPrior for Adversarial {

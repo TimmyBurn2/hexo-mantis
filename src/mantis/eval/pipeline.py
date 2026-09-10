@@ -1,18 +1,13 @@
-"""EvalPipeline — async kick + persistent poller + bounded drains (design §a.3/§c.3
-pipeline.py). Out-of-process eval inference ONLY: `build_eval_pipeline` has NO `device`/
-`model` constructor kwargs — an in-process CUDA path is unrepresentable here. The worker
-subprocess is spawned under `multiprocessing.get_context("spawn")` (own CUDA context);
-every subprocess join is timeout-bounded (isolation laws 1 + 2).
+"""EvalPipeline — async kick + persistent poller + bounded drains (design §a.3/§c.3).
 
-The pipeline owns exactly ONE persistent poller/keepalive thread (started at
-`build_eval_pipeline`, stopped only by `stop()`) that beats `heartbeat("eval_round")`
-EVERY tick, with or without an in-flight round — so a between-round gap can never
-false-fire the watchdog; round PROGRESS is bounded separately by `round_timeout_sec`.
+Out-of-process eval inference ONLY: no `device`/`model` kwargs, so an in-process CUDA path is
+unrepresentable; the worker is spawned under `get_context("spawn")` and every join is
+timeout-bounded (isolation laws 1 + 2). The ONE poller thread beats `heartbeat("eval_round")`
+every tick with or without an in-flight round, so a between-round gap cannot false-fire the
+watchdog; round PROGRESS is bounded separately by `round_timeout_sec`.
 
->300 justify: one isolation-law seam (kick/ack, spawn-context, join-boundedness, the
-persistent poller, drain/kill escalation, round-result assembly) sharing one in-flight
-round record and one mailbox — splitting the kick path from the poller from the drain
-path would scatter the exact state machine the run3 45h livelock class exists to bound.
+>300 justify: one isolation-law seam sharing one in-flight round record and one mailbox —
+splitting kick from poller from drain would scatter that state machine.
 """
 from __future__ import annotations
 
@@ -56,38 +51,26 @@ from mantis.eval.snapshot import write_model_snapshot
 _LOG = logging.getLogger(__name__)
 
 #: The poller thread's fixed tick — small enough that an idle beat is observable in a few
-#: tens of milliseconds (heartbeat tests), cheap enough to run for a whole round's life.
+#: tens of milliseconds, cheap enough to run for a whole round's life.
 _POLL_TICK_SEC = 0.02
 
-#: RED-TEAM-2 F-RT2-1 (BLOCKER fix), layer 2 (structural, defense-in-depth): mirrors
-#: `mantis.config.schema._EVAL_TIMEOUT_CEILING_SEC`. `multiprocessing.Process.join`
-#: cannot accept a non-finite timeout (raises `OverflowError` deep inside
-#: `selectors.select()`'s `math.ceil(timeout*1e3)`) — schema validation (layer 1) makes a
-#: non-finite `worker_kill_grace_sec`/drain-budget value unreachable through a config
-#: load, but every `proc.join(...)` call site in this module bounds its timeout
-#: defensively regardless: isolation law 2 ("every subprocess join is timeout-bounded")
-#: must hold unconditionally, not only for schema-validated inputs — a future non-YAML
-#: config source, a hand-built test fixture, or an arithmetic bug upstream (e.g.
-#: `drain_budget_sec`'s multiply) must never be able to smuggle a non-finite value into a
-#: real `Process.join()` and silently kill the poller thread the way F1's original
-#: failure mode did.
+#: Mirrors `mantis.config.schema._EVAL_TIMEOUT_CEILING_SEC`: `Process.join` raises
+#: `OverflowError` on a non-finite timeout, so every join here bounds its own regardless.
 _JOIN_TIMEOUT_CEILING_SEC = 86400.0
 
 
 def _bounded_join_timeout(timeout: float) -> float:
     """Clamp `timeout` to a finite, non-negative value `Process.join()` can always accept.
-    `inf`/`-inf`/`nan` (not `math.isfinite`) collapse to the one-day ceiling; a finite value
-    is clamped to `[0.0, _JOIN_TIMEOUT_CEILING_SEC]`. Never raises."""
+    Non-finite values collapse to the one-day ceiling. Never raises."""
     if not math.isfinite(timeout):
         return _JOIN_TIMEOUT_CEILING_SEC
     return max(0.0, min(timeout, _JOIN_TIMEOUT_CEILING_SEC))
 
 
-# ── R-DRAIN-HARDCAP: DrainCaps + the join-bound arithmetic (P-1, pre-registered WIRE) ────
 @dataclass(frozen=True)
 class DrainCaps:
-    """The 4 drain-cap fields lifted from `StepCoordinatorConfig` (coordinator/config.py:
-    176-180) — every field gains a live consumer here (R-DRAIN-HARDCAP-CONSUMERS)."""
+    """The 4 drain-cap fields lifted from `StepCoordinatorConfig`; each gains a live consumer
+    here."""
 
     final_eval_drain_timeout_sec: float
     eval_final_drain_safety_factor: float
@@ -107,16 +90,7 @@ def drain_budget_sec(caps: DrainCaps) -> float:
 def drain_or_kill(
     proc: Any, *, budget_sec: float, worker_kill_grace_sec: float, clock: Callable[[], float]
 ) -> EvalBrokenReason | None:
-    """Bounded join -> (if still alive) terminate -> bounded join -> kill -> bounded join.
-
-    Returns the typed reason the drain escalated with, or `None` when the child exited
-    inside its budget; every join carries a bound (isolation law 2).
-
-    WP12-R Phase O (R152/R79): the old `(bool, str)` return was two authorities for one
-    fact — a `True` beside a healthy-drain spelling, and a `False` beside `join_timeout`,
-    were both constructible — and the healthy half was a reason spelling no member spells.
-    Absence IS the clean state, so there is no second field left to disagree.
-    """
+    """Bounded join -> terminate -> bounded join -> kill -> bounded join."""
     del clock  # the caller advances/consults its own clock; every join below is bounded
     proc.join(_bounded_join_timeout(budget_sec))
     if not proc.is_alive():
@@ -128,7 +102,6 @@ def drain_or_kill(
     return EvalBrokenReason.JOIN_TIMEOUT
 
 
-# ── pure event builders (sink.emit + return the exact emitted payload) ──────────────────
 def _emit(sink: Any, payload: Mapping[str, Any]) -> None:
     if sink is not None:
         sink.emit(dict(payload))
@@ -151,22 +124,7 @@ def emit_round_complete(
     promoted: bool | None, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
     wr_sealbot_ci_lower: float | None = None, wr_sealbot_ci_upper: float | None = None,
 ) -> dict[str, Any]:
-    """R319(e)(i): `games_total` is `int | None`, and `None` is the BROKEN-round value.
-
-    AUDIT-1 F-28/B04: `promoted` is `bool | None`, and `None` means NO PROMOTION DECISION WAS
-    TAKEN — the gate was not scheduled this round, or there was no best anchor to play, or the
-    round broke before the gate block. `False` means the gate ran and refused. Those are
-    different facts about the run and both used to be `false`.
-
-    It used to be a hardcoded `0` on every broken path, which is a DEFAULT WEARING A
-    MEASUREMENT'S CLOTHES: a reader cannot tell "the round played no games" from "the round
-    was killed before it could report", and RECAL-SITTING-3 published the former having
-    measured only the latter (§8.1 of the sitting record). `None` is unreadable as a count, so
-    the mistake is not available to make twice.
-
-    `progress` carries the child's last per-game progress row when one exists (R319(e)(ii)) —
-    so a broken round now says HOW FAR it got instead of nothing at all.
-    """
+    """Build the round-complete payload; `games_total` is `None` on a broken round."""
     payload = {
         "event": "eval_round_complete", "round_id": round_id, "step": step,
         "wall_sec": wall_sec, "games_total": games_total, "promoted": promoted,
@@ -188,18 +146,7 @@ def emit_strength_floor(
     sink: Any, *, round_id: str, step: int, floor: Mapping[str, Any],
     checked_total: int, skipped_total: int,
 ) -> dict[str, Any]:
-    """The strength floor's ONE event — the probe's verdict AND its in-run fire rate.
-
-    One event rather than a pass channel and a separate skip channel, because they are one
-    fact ("what did this round's floor probe decide") and two channels for one fact is how
-    the two drift. LAW-18 wants a FIRE RATE and not a flag, so both running totals ride the
-    payload: `checked_total` is every armed round that probed, `skipped_total` the subset
-    that short-circuited. A reader with only the second cannot tell a floor that never fires
-    from a floor that never ran.
-
-    Emitted ONLY on an armed round — the disarmed posture produces no `strength_floor` key on
-    the worker result, so this builder is never reached and the stream is byte-unchanged.
-    """
+    """The strength floor's ONE event — the probe's verdict AND its in-run fire rate."""
     payload = {
         "event": "eval_strength_floor", "round_id": round_id, "step": step,
         **dict(floor), "checked_total": checked_total, "skipped_total": skipped_total,
@@ -211,13 +158,7 @@ def emit_strength_floor(
 def emit_ply_cap_adjudication(
     sink: Any, *, round_id: str, step: int, adjudication: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """The ply-cap criterion's in-run fire rate (LAW-18), one event per armed round.
-
-    The tally is the ADJUDICATOR's own count of the capped games it saw and how it resolved
-    them, carried up from the worker rather than re-derived from the aggregates — the
-    aggregates record a winner, not whether a rule or a criterion produced it. Emitted only
-    on an armed round, for the same reason as the floor event above.
-    """
+    """The ply-cap criterion's in-run fire rate, one event per armed round."""
     payload = {
         "event": "eval_ply_cap_adjudication", "round_id": round_id, "step": step,
         **dict(adjudication),
@@ -226,27 +167,15 @@ def emit_ply_cap_adjudication(
     return payload
 
 
-#: The CLOSED skip-reason partition (WP12-R Phase A, DESIGN_A §2.7(4)). Order is the
-#: resolver's own: the R139-ruled skip first, then the three ways a sealbot rung can fail to
-#: resolve. The set is closed on purpose — a reason nothing recognises must be a loud failure,
-#: never a fifth bucket invented at emission time, because the whole value of the partition is
-#: that "4 rungs skipped as ruled" and "6 rungs skipped because the box is misconfigured" stop
-#: looking identical to every consumer.
+#: The CLOSED skip-reason partition, in the resolver's own order. A reason nothing recognises
+#: is a loud failure, never a fifth bucket invented at emission time.
 SKIP_REASON_CLASSES: tuple[str, ...] = (
     "operator_authorized", "vendor_absent", "build_absent", "load_failed",
 )
 
 
 def _classify_skip_reason(reason: str) -> str | None:
-    """The reason's class, or None when nothing recognises it.
-
-    Classification is by marker substring against `mantis.bots.resolve.SKIP_REASON_MARKERS` —
-    the SAME literals the refusal strings are built from, imported rather than re-transcribed,
-    so a resolver whose wording drifted out of this classifier's reach cannot do it silently.
-    Exactly one marker must match: zero is an unrecognised reason and two would mean the
-    partition stopped partitioning, and both are reported the same way (loudly, with no
-    counter event) rather than guessed at.
-    """
+    """The reason's class, or None when nothing recognises it."""
     if set(SKIP_REASON_MARKERS) != set(SKIP_REASON_CLASSES):
         raise ResultContractError(
             f"the skip-class partition disagrees with its markers: classes "
@@ -263,16 +192,7 @@ def _classify_skip_reason(reason: str) -> str | None:
 def emit_device_memory(
     sink: Any, *, round_id: str, step: int, device_memory: Mapping[str, Any],
 ) -> dict[str, Any]:
-    """Publish the CHILD's own device-memory readout (RECAL-PREP, R308(g)(ii)).
-
-    Emitted from the child's payload rather than from anything the parent measures: the term
-    this exists to bound is the child's, in the child's own process and CUDA context, and a
-    parent-side reading of it is exactly the substitute reading that has under-measured it
-    three times. Unconditional whenever the payload arrives — including the `available: false`
-    arm, where every counter is `null`. A reader must be able to tell "this round had no
-    counters" from "nobody looked", and dropping the unmeasured rounds would silently bias the
-    series a growth verdict is taken over.
-    """
+    """Publish the CHILD's own device-memory readout, from the child's payload."""
     payload = {
         "event": EVAL_DEVICE_MEMORY_EVENT, "round_id": round_id, "step": step,
         "device_memory": dict(device_memory),
@@ -282,16 +202,8 @@ def emit_device_memory(
 
 
 def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink: Any) -> None:
-    """Per skipped rung: an `eval_rung_skipped` event, an ERROR log line, AND — new in WP12-R
-    Phase A — one `eval_rung_skip_class` counter event carrying the running per-class count.
-
-    The fourth channel exists because R164 made LAW-18 mean IN-RUN FIRE-RATE, not "there is a
-    log line somewhere". The first three channels all answer "some rungs skipped"; none of
-    them answers the question R143 says has to be legible WHILE the run is going — whether
-    these are the skips the operator AUTHORISED. Hence one counter event per rung, emitted
-    alongside its skip through the same injected sink: a single aggregate at round end would
-    be precisely the "log line somewhere" R164 ruled out.
-    """
+    """Per skipped rung: an `eval_rung_skipped` event, an ERROR log line, and one
+    `eval_rung_skip_class` counter event carrying the running per-class count."""
     counts: dict[str, int] = dict.fromkeys(SKIP_REASON_CLASSES, 0)
     for entry in skipped:
         payload = {"event": "eval_rung_skipped", "round_id": round_id,
@@ -317,33 +229,16 @@ def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink:
 
 
 def _result_tmp_path(result_path: str) -> Path:
-    """The `.tmp` the worker writes for `result_path`, derived the way the worker derives it.
-
-    `worker.py` spells it `target.with_suffix(target.suffix + ".tmp")`, which for a
-    `…_result.json` target is exactly `str(target) + ".tmp"`. Two derivations of one fact in
-    two files is a drift risk, so the two spellings are pinned against each other by a producer
-    row rather than trusted — the cutover battery is going to edit the worker's write lines.
-    """
+    """The `.tmp` the worker writes for `result_path`, derived the way the worker derives it."""
     return Path(result_path + ".tmp")
 
 
 def _remove_result_tmp(result_path: str) -> None:
-    """Delete THIS round's `<result>.json.tmp` once its writer is gone (F-816-20 item 3a).
+    """Delete THIS round's `<result>.json.tmp` once its writer is gone.
 
-    THE LITTER. The worker writes `tmp.write_text(...)` then `tmp.replace(target)`. A kill
-    between those two lines leaves the `.tmp` on disk FOREVER: round ids are unique, so nothing
-    ever writes that name again. Atomicity is intact — a reader sees the complete old file or
-    nothing — so this is litter, never corruption, but litter with no expiry.
-
-    It only ever removes the `.tmp`, NEVER the target, so the worker's tmp+replace stays
-    exactly as atomic as it was. Callers guard on the child being confirmed dead: unlinking a
-    tmp a LIVE writer is about to `replace()` would turn litter into a failed round, which is
-    the fix being worse than the defect.
-
-    NEVER FATAL, and that is load-bearing rather than polite: this runs in `_finalize_round`'s
-    un-caught prologue, outside the catch-all that converts anything to
-    `eval_broken(round_completion_error)`. A round is not broken by a file we could not delete,
-    and an exception escaping here would kill the poller thread silently.
+    Removes only the `.tmp`, only for a child the caller has confirmed dead, and NEVER
+    fatally: it runs in `_finalize_round`'s un-caught prologue, where a raise would kill
+    the poller thread silently.
     """
     try:
         _result_tmp_path(result_path).unlink(missing_ok=True)
@@ -352,14 +247,8 @@ def _remove_result_tmp(result_path: str) -> None:
 
 
 def _drop_result_tmp_if_writer_gone(inflight: dict[str, Any]) -> None:
-    """Remove one round's `.tmp` iff its worker is confirmed dead. The ONE decision, shared by
-    the two teardown routes that reach it (`_finalize_round` and `stop()`).
-
-    `spec` is read through `.get` and checked FIRST so the liveness call is short-circuited
-    when a record carries no spec: both call sites sit in un-caught prologues, and a `KeyError`
-    or `AttributeError` there would kill the poller thread — the silent-thread-death class the
-    catch-all further down exists to prevent, and which it cannot reach from here.
-    """
+    """Remove one round's `.tmp` iff its worker is confirmed dead — the ONE decision, shared
+    by `_finalize_round` and `stop()`."""
     spec = inflight.get("spec")
     proc = inflight.get("proc")
     if spec is None or proc is None or proc.is_alive():
@@ -368,16 +257,7 @@ def _drop_result_tmp_if_writer_gone(inflight: dict[str, Any]) -> None:
 
 
 def read_progress(spec: Any) -> dict[str, Any] | None:
-    """R319(e)(ii): the CHILD's last per-game progress row, or `None` if it wrote none.
-
-    Read-only and total: any failure to read returns `None`. This is reporting, and a
-    diagnostic file must never be able to fail a round that was otherwise fine — the same
-    reasoning the child's writer disables itself on `OSError` rather than raising.
-
-    ESCALATION SEMANTICS ARE UNCHANGED BY THIS FUNCTION AND MUST STAY SO (R319(e)(ii)): no
-    caller may branch on the value. It exists so a killed round can say how far it got, which
-    is exactly what nobody could tell during RECAL-SITTING-3's two 3600 s drives.
-    """
+    """The CHILD's last per-game progress row, or `None` if it wrote none."""
     path = getattr(spec, "progress_path", None)
     if not path:
         return None
@@ -400,14 +280,10 @@ def read_progress(spec: Any) -> dict[str, Any] | None:
 
 def _worker_entry(spec_path: str, result_path: str) -> None:
     """The spawn-ctx `Process` target (module-level so spawn can pickle-by-reference).
-    Torch/worker imports stay LAZY — this function body is the only place the parent
-    process's import of `mantis.eval.pipeline` ever touches `mantis.eval.worker`.
 
-    F-816-14 (R284(f)): the FIRST thing it does is ask the kernel to kill it when its parent
-    dies. `daemon=True` and the `stop()` teardown below both cover the paths where the parent
-    RUNS; this covers the path where the parent is killed outright, which is the one that left a
-    child holding 458 MiB of the card after a SIGTERM. Armed before the torch import so the
-    window in which this process is both heavy and unreapable is as short as it can be."""
+    Torch/worker imports stay LAZY, and the FIRST statement asks the kernel to kill this
+    process when its parent dies — the path that once left a child holding 458 MiB.
+    """
     from mantis.train.lifecycle.signals import arm_parent_death_signal
 
     arm_parent_death_signal()
@@ -446,13 +322,8 @@ class EvalPipeline:
         clock: Callable[[], float] = time.monotonic,
         mp_ctx_name: str = "spawn",
     ) -> None:
-        # F-816-20 item 2. A WHITELIST equality on the NAME STRING, checked at construction
-        # and BEFORE any directory is made: a round is a long way into a run, so a refusal
-        # that arrives thirty minutes in is a worse instrument than one that arrives at boot,
-        # and a pipeline that is going to be refused should not leave a work dir behind.
-        # Keyed on the name and never on the context OBJECT, deliberately: five suites
-        # monkeypatch `multiprocessing.get_context` and take this default, so a check that
-        # inspected the returned context would red every one of them.
+        # A whitelist equality on the context NAME STRING, before any directory is made.
+        # Never on the context OBJECT: five suites monkeypatch `get_context`.
         if mp_ctx_name != "spawn":
             raise ValueError(
                 f"mp_ctx_name={mp_ctx_name!r} is refused; only 'spawn' is supported. TWO "
@@ -468,94 +339,54 @@ class EvalPipeline:
         self._eval_cfg = eval_cfg
         self._caps = caps
         self._encoding = encoding
-        #: The graph inference forward's memory bound (F-816-10 D-1), resolved ONCE in the
-        #: PARENT through its one read path and carried to every round's `RoundSpec`. REQUIRED
-        #: and keyword-only, with no default, because the eval child is a SECOND allocator on
-        #: the same card that no in-process bound can see: a default here would be a value
-        #: nobody minted, standing in for the one the operator measured. `None` is the GRID
-        #: arm, where there is no fused graph forward to bound.
+        #: The graph forward's memory bound, resolved ONCE in the PARENT. Required with no
+        #: default: the eval child is a SECOND allocator no in-process bound can see. `None`
+        #: is the GRID arm.
         self._fused_graph_caps = fused_graph_caps
-        #: The deploy head's MCTS leaf-batch width (R318(b)), carried to every round's
-        #: `RoundSpec`. NOT defaulted, for `fused_graph_caps`' reason: it is the config's own
-        #: `selfplay.leaf_batch_size`, and a default here would be a search regime nobody
-        #: minted standing in for the one the net was trained under.
+        #: The deploy head's MCTS leaf-batch width. NOT defaulted: a default would be a search
+        #: regime nobody minted standing in for the one the net was trained under.
         self._leaf_batch_size = int(leaf_batch_size)
-        #: The run's `selfplay.max_game_moves`, resolved ONCE in the parent and carried to every
-        #: round. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1 F-15): a default here is
-        #: the `DEFAULT_MAX_PLIES = 128` module constant put back, and the ply cap is half of
-        #: the ply-cap x adjudication matrix that is an operator-owed prereg row.
+        #: The run's `selfplay.max_game_moves`. NOT defaulted: a default is the
+        #: `DEFAULT_MAX_PLIES = 128` module constant put back on an operator-owed prereg axis.
         self._max_plies = int(max_plies)
-        #: `selfplay.{c_visit, c_scale}` — the deploy head's sigma terms, resolved ONCE in the
-        #: parent. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1 F-39): a default here
-        #: is `DeployHeadPlayer`'s own `50.0`/`1.0` put back one layer out, on the search
-        #: regime LAW-15's deploy-matched bar is defined by.
+        #: `selfplay.{c_visit, c_scale}`, the deploy head's sigma terms. NOT defaulted: a
+        #: default is `DeployHeadPlayer`'s own `50.0`/`1.0` put back one layer out.
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
-        #: The run's `search.kind` and `selfplay.gumbel_m`, resolved ONCE in the parent and
-        #: carried to every round's `RoundSpec`. NOT defaulted, for `c_visit`'s reason and
-        #: for a stronger one: before this the eval head's search regime came from
-        #: `DeployHeadPlayer`'s own body, so "deploy-matched" was a claim about a regime the
-        #: config never stated.
+        #: The run's `search.kind` and `selfplay.gumbel_m`. NOT defaulted: the eval head's
+        #: regime used to come from `DeployHeadPlayer`'s body, which the config never stated.
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)
-        #: The graph collector's batching geometry (PERF-TRANCHE-1 G-2, ledger F-2), resolved
-        #: ONCE in the parent and carried to every round's `RoundSpec`. NOT defaulted, for
-        #: `leaf_batch_size`' reason: these two knobs were LITERALS in the child's hand-made
-        #: server dict, and a default here would put them straight back.
+        #: The graph collector's batching geometry. NOT defaulted: these two were LITERALS in
+        #: the child's hand-made server dict, and a default would put them back.
         self._inference_batching = inference_batching
-        #: The eval leaf-graph build's WIDTH (NIGHTRUN-1 E1), derived ONCE in the parent by
-        #: `resolve_leaf_build_threads` and carried to every round's `RoundSpec`.
-        #: DEFAULTED TO 1, and the reason is the same one `HexgBuffer.sample_graph_batch`'s
-        #: `n_threads` carries: 1 is the SERIAL path — the exact-parity control and the
-        #: behaviour that shipped — not a host reservation this layer invented. What keeps
-        #: that from becoming a silently-disabled lever is a PRODUCER TEST over `run.py`'s
-        #: own AST (`tests/eval/test_leaf_build_threads_wiring.py`), because a widened build
-        #: that stopped being threaded would show up as nothing at all: correct results,
-        #: 95 % of the eval path back in a serial loop.
+        #: The eval leaf-graph build's WIDTH, derived ONCE in the parent. DEFAULTED TO 1
+        #: because 1 is the SERIAL path, the exact-parity control. A producer test over
+        #: `run.py`'s AST keeps it from silently disabling: a build that stopped being threaded
+        #: shows up as correct results with 95 % of the eval path back in a serial loop.
         self._leaf_build_threads = max(1, int(leaf_build_threads))
-        #: The allocator REGIME the round's caps were fitted under (RECAL-PREP, R308(g)(i)),
-        #: resolved ONCE in the parent and carried to every round's `RoundSpec`. Unlike
-        #: `fused_graph_caps` this one carries a DEFAULT, and the reason is stated rather than
-        #: convenient: the safety here is not "a value is present" but "a cuda child that was
-        #: handed no token RAISES" (`assert_posture_token`), so `None` cannot excuse an
-        #: assertion — it can only fail one. `None` is the not-cuda arm.
+        #: The allocator REGIME the round's caps were fitted under. It carries a DEFAULT
+        #: because the safety is "a cuda child handed no token RAISES", which `None` can only
+        #: fail, never excuse. `None` is the not-cuda arm.
         self._allocator_posture = allocator_posture
         self._run_id = run_id
         self._spool_dir = Path(spool_dir)
         self._spool_dir.mkdir(parents=True, exist_ok=True)
-        #: R344(b): the run's game-record directory, THREADED from the composition root
-        #: rather than derived from `spool_dir.parent`. Deriving it would make this a second
-        #: authority for a path `mantis.run` already owns, and the two would agree until the
-        #: day one of them moved.
+        #: The run's game-record directory, THREADED from the composition root — deriving it
+        #: from `spool_dir.parent` would be a second authority for a path `mantis.run` owns.
         self._game_record_dir = Path(game_record_dir)
-        # Spec/result/progress sidecar files live in a SIBLING directory, never nested
-        # under spool_dir: spool_dir holds ONLY model snapshot (.pt) files — the LAW-12
-        # one-loader carve-out this WP pins (test_snapshots_are_not_checkpoints walks
-        # every file under spool_dir and torch.load()s it).
-        #
-        # SCOPED BY `run_id` (RQ-13 / clause (l)). Nothing locks an out-dir, and round ids are
-        # a PER-RUN counter (`r{round_idx:06d}_{step}`), so two runs sharing one out-dir wrote
-        # identical sidecar filenames into one directory. `run_id` is safe to put in a path by
-        # TYPE rather than by inspection: the schema constrains it to `^[a-z0-9][a-z0-9_\-]*$`
-        # (`config/schema/core.py`), so it cannot contain a separator or a `..` — a sanitizer
-        # here would be a second authority for a constraint pydantic already enforces.
+        # Sidecars live in a SIBLING directory: spool_dir holds ONLY snapshot (.pt) files, the
+        # LAW-12 one-loader carve-out a test pins by torch.load()ing everything there. SCOPED
+        # BY `run_id` because round ids are a per-run counter, so two runs sharing an out-dir
+        # wrote identical sidecar names; the schema constrains `run_id`, so a sanitizer here
+        # would be a second authority for it.
         self._work_dir = self._spool_dir.parent / f"{self._spool_dir.name}.work" / self._run_id
         self._work_dir.mkdir(parents=True, exist_ok=True)
-        # F-816-20 item 3a, the sweep. This is the ONLY handle the "the run itself was
-        # SIGKILLed" case has: no code ran in that process, so the only thing that can ever
-        # clean its litter is a LATER pipeline over the same work dir — which is exactly what
-        # a `--resume-from` relaunch into the same `--out-dir` is. The precondition is that at
-        # CONSTRUCTION this pipeline has no live writer, and a second pipeline over one work
-        # dir is already impossible: `build_eval_pipeline` has one call site, once per
-        # process, and the dir is derived from `--out-dir` AND `run_id`. The second half is
-        # new with RQ-13 and it is the half that makes the precondition structural: derived
-        # from the out-dir alone, the claim was false exactly when two runs shared one, which
-        # is the case A5 raised and nothing prevents. A relaunch still reaches its OWN litter
-        # because `--resume-from` supplies the same `--config`, hence the same run_id and the
-        # same out-dir (`run.py`: `run_id = config.run_id`, `log_dir = out_dir / "logs"`). Only the `.tmp` suffix is in
-        # scope — results, specs, progress sidecars and snapshots are never touched. No age
-        # threshold: that would be an unmeasured constant bought to solve a race the
-        # precondition already excludes.
+        # The litter sweep, the ONLY handle the "the run itself was SIGKILLed" case has. Its
+        # precondition — no live writer at construction — is structural because the dir derives
+        # from `--out-dir` AND `run_id`; from the out-dir alone it was false exactly when two
+        # runs shared one. Only `.tmp` is in scope, and no age threshold, which would be an
+        # unmeasured constant against a race the precondition already excludes.
         for stale in self._work_dir.glob("*_result.json.tmp"):
             try:
                 stale.unlink(missing_ok=True)
@@ -573,34 +404,20 @@ class EvalPipeline:
         self._mailbox: list[dict[str, Any]] = []
         self._round_counter = 0
         self._last_p_hat: dict[str, float] = {}
-        # R343(b)(iii)/(iv) — the EXTERNAL channel's own history, and the consecutive-flag
-        # counter the ruling makes the operand of an architect read. IN-MEMORY and it resets on
-        # resume, which is stated rather than hidden: every reading is also EMITTED as
-        # `eval_channel_health`, so the durable series is the event stream (what a dashboard
-        # reads anyway) and this window is the in-run convenience. Unlike `_round_counter`,
-        # nothing downstream branches on it, so a reset costs a shortened window and never a
-        # changed cadence.
+        # The EXTERNAL channel's history and consecutive-flag counter. IN-MEMORY, resetting on
+        # resume: every reading is also emitted, so the durable series is the event stream.
         self._external_history: list[ChannelRoundReading] = []
         self._degradation_flags = 0
-        #: Times `_finalize_round` was re-entered for a round it had already finalised and
-        #: the duplicate was SUPPRESSED. Reads 0 in a healthy run. Non-zero means the poll
-        #: loop and a drain both reached the same in-flight round — see the guard in
-        #: `_finalize_round` for why that double-counts a promotion (LAW-18).
+        #: Times `_finalize_round` was re-entered for an already-finalised round and the
+        #: duplicate was SUPPRESSED. Non-zero means a promotion is being double-counted.
         self._double_finalize_suppressed = 0
-        #: The strength floor's LAW-18 fire rate, as a pair rather than a single count:
-        #: `checked` is every armed round that probed, `skipped` the subset the probe
-        #: short-circuited. Both stay 0 for the whole life of a pipeline whose config mints
-        #: `eval.strength_floor: null`, because the worker result then carries no floor key
-        #: at all. A skip count without its denominator cannot tell "the floor never fires"
-        #: from "the floor never ran", which is precisely the distinction LAW-18 was written
-        #: about.
+        #: The strength floor's fire rate as a pair — probed rounds and the subset
+        #: short-circuited. Both stay 0 when the config mints `eval.strength_floor: null`.
         self._floor_checked_total = 0
         self._floor_skipped_total = 0
 
-        # LAZY: the ladder state is only ever needed once a round is actually kicked
-        # (`_build_round_spec`/`_success_result`) — deferring construction means a
-        # pipeline built for a narrow purpose (e.g. only exercising the heartbeat poller)
-        # need not hand a fully-populated `eval_cfg.ladder` up front.
+        # LAZY: the ladder state is only needed once a round is kicked, so a pipeline built to
+        # exercise the poller alone need not hand a fully-populated `eval_cfg.ladder` up front.
         self._ladder_state: LadderState | None = None
 
         self._stop_event = threading.Event()
@@ -609,7 +426,6 @@ class EvalPipeline:
         )
         self._poller.start()
 
-    # ── construction helpers ─────────────────────────────────────────────────────────
     def _ensure_ladder_state(self) -> LadderState:
         if self._ladder_state is None:
             self._ladder_state = self._load_or_init_ladder_state()
@@ -617,7 +433,7 @@ class EvalPipeline:
 
     def _load_or_init_ladder_state(self) -> LadderState:
         # LAW-14: a load failure (corrupt/unreadable state file) RAISES — it must never
-        # silently discard graduation streaks/saturation history by "starting fresh" [M-1].
+        # silently discard graduation streaks or saturation history by "starting fresh".
         if self._ladder_state_path.exists():
             return LadderState.load(self._ladder_state_path, ladder_cfg=self._eval_cfg.ladder)
         return LadderState.initial(self._eval_cfg.ladder)
@@ -626,7 +442,6 @@ class EvalPipeline:
         if self._heartbeat is not None:
             self._heartbeat(source)
 
-    # ── the persistent poller thread ────────────────────────────────────────────────────
     def _poll_loop(self) -> None:
         while not self._stop_event.is_set():
             self._beat("eval_round")
@@ -645,23 +460,17 @@ class EvalPipeline:
                 self._escalate_and_finalize(inflight)
 
     def _escalate_and_finalize(self, inflight: dict[str, Any]) -> None:
-        # F-RT2-1 layer 2: `_bounded_join_timeout` is the ONLY guard between this call
-        # and a real OverflowError -- this method is invoked directly from `_poll_loop`,
-        # entirely OUTSIDE `_finalize_round`'s F1 layer-2 catch-all, so an uncaught
-        # exception here would kill the poller thread silently exactly like F1's original
-        # failure mode (RED-TEAM-2 F-RT2-1).
+        # `_bounded_join_timeout` is the ONLY guard between this call and a real OverflowError:
+        # this runs from `_poll_loop`, outside the catch-all, so a raise kills the poller.
         proc = inflight["proc"]
         proc.terminate()
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
         proc.kill()
         proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
-        # The round exceeded `round_timeout_sec`, its PROGRESS budget. The joins above are
-        # the kill sequence, not the cause — this path reported `JOIN_TIMEOUT` until R316(c),
-        # which told an operator the child would not exit when it had in fact been killed for
-        # running long. The genuine join timeout is `_drain_escalate`'s, and it keeps the name.
+        # The round exceeded `round_timeout_sec`, its PROGRESS budget; the joins above are the
+        # kill sequence, not the cause. `JOIN_TIMEOUT` here misreported that as a stuck child.
         self._finalize_round(inflight, escalated_reason=EvalBrokenReason.ROUND_TIMEOUT)
 
-    # ── kick / ack ───────────────────────────────────────────────────────────────────
     def run_evaluation(
         self, model: Any, step: int, best: Any, *, full_config: dict[str, Any],
         best_model_step: int | None, ignore_stride: bool = False,
@@ -692,7 +501,6 @@ class EvalPipeline:
         )
         return {"kicked": True, "round_id": round_id, "step": step, "reason": None}
 
-    # ── resume seam (R343(c) witness 2) ──────────────────────────────────────────────────
     @property
     def round_counter(self) -> int:
         """Rounds this pipeline has kicked. READ-ONLY; `restore_round_state` is the writer."""
@@ -706,22 +514,8 @@ class EvalPipeline:
     def restore_round_state(self, *, round_counter: int, last_p_hat: Mapping[str, float]) -> None:
         """Resume the round counter and `p_hat` a stopped process left behind.
 
-        THE DEFECT THIS CLOSES (R343(c) witness 2). `_round_counter` and `_last_p_hat` are
-        in-memory and reset to 0/{} on every launch, while `_build_round_spec` gates the
-        PROMOTION channel on `round_idx % cfg.gate.stride` and allocates the EXTERNAL channel
-        from `allocate_games(round_idx, p_hat)`. So a resumed run re-enters both at a phase the
-        stopped process did not leave it in: round ids restart at `r000001`, the gate's modular
-        arithmetic realigns to the restart rather than to the run, and the ladder allocates
-        against a `p_hat` of 0.5 it has already measured otherwise. `LadderState` survives a
-        restart on disk; these two did not, which is why the eval history could look continuous
-        while the cadence underneath it silently changed.
-
-        Refuses a BACKWARD move: round ids are monotonic within a run and a counter that went
-        down would mint a `round_id` that already exists on disk.
-
         Raises:
-            ValueError: `round_counter` is negative, or lower than the counter already reached.
-        """
+            ValueError: `round_counter` is negative, or lower than the counter already reached."""
         if round_counter < 0:
             raise ValueError(f"round_counter must be >= 0, got {round_counter}")
         if round_counter < self._round_counter:
@@ -736,26 +530,13 @@ class EvalPipeline:
     def _assess_external_channel(
         self, result: Mapping[str, Any], *, round_id: str, step: int,
     ) -> None:
-        """Read R343(b)(iii)'s SATURATION label and (iv)'s DEGRADATION flag, and publish them.
-
-        THE PRODUCER for both. `channel_health.assess` is the arithmetic; this is the live
-        consumer that gives it a round to read and a stream to report on — without it the two
-        rules would be a library nobody calls, which is the phantom-gate shape LAW-07 forbids
-        and exactly what a dashboard line with no producer means.
-
-        Reads `wr_sealbot` / `wr_sealbot_games` / `wr_sealbot_rung` — the trio
-        `_first_sealbot_wr` publishes out of ONE walk precisely so the value and the identity
-        cannot drift apart (AUDIT-1 F-14) — and never re-derives them here.
-
-        WARN-ONLY for run6 (G-3 stands): this emits and counts; it stops nothing. Two
-        CONSECUTIVE flags are an architect read, which is a decision for a person.
-        """
+        """Read the saturation label and the degradation flag, and publish them."""
         wr = result.get("wr_sealbot")
         games = result.get("wr_sealbot_games")
         rung = result.get("wr_sealbot_rung")
         if wr is None or not games or rung is None:
-            # No sealbot rung recorded a game this round (skip-counted, or off-cadence). NOT a
-            # zero: a round the instrument did not play is absent from the series, never a loss.
+            # No sealbot rung recorded a game this round. NOT a zero: a round the instrument
+            # did not play is absent from the series, never a loss.
             return
         self._external_history.append(ChannelRoundReading(
             round_idx=self._round_counter, games=int(games),
@@ -813,12 +594,8 @@ class EvalPipeline:
         if terminal:
             alloc = {rung.name: rung.games_max for rung in cfg.ladder.rungs}
         else:
-            # Deviation #3 REVERTED (dispatcher ruling, FIX-PASS Part 4): scheduling
-            # semantics are the design's pre-registered STATE §5 activation law, verbatim
-            # — no pipeline-level top-up for dormant rungs. A dormant rung behind an
-            # unresolvable predecessor stays dormant (0 games) until its predecessor's
-            # own measured round clears `activation_wr_lower_ci`; the e2e fixture (Part 3)
-            # makes rung0 a RESOLVABLE stub so activation flows lawfully instead.
+            # Scheduling is the design's pre-registered activation law, verbatim: a dormant
+            # rung stays dormant until its predecessor clears `activation_wr_lower_ci`.
             alloc = self._ensure_ladder_state().allocate_games(round_idx, self._current_p_hat())
 
         run_gate = (best is not None) and (round_idx % cfg.gate.stride == 0 or terminal)
@@ -854,49 +631,41 @@ class EvalPipeline:
             ladder_bootstrap_seed=cfg.ladder.bootstrap_seed,
             game_record=GameRecordTarget(record_dir=str(self._game_record_dir),
                                         run_id=self._run_id),
-            # The two early-strength postures, resolved through their ONE read path (R1/LAW-08)
-            # and carried to the child. Both are `None` for every committed config.
+            # The two early-strength postures, resolved through their ONE read path and
+            # carried to the child. Both are `None` for every committed config.
             ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
             strength_floor=resolve_strength_floor(cfg),
-            # Resolved once in the parent (F-816-10 D-1), not re-read here: the child has no
-            # `RunConfig` and its `LocalInferenceEngine` builds its graph server from a
-            # hand-made dict, so this is the only way the bound reaches the second allocator.
+            # Resolved once in the parent: the child has no `RunConfig` and builds its graph
+            # server from a hand-made dict, so this is the only route to the second allocator.
             fused_graph_caps=self._fused_graph_caps,
-            # R318(b), same seam and same reason: the deploy head must search at the width the
-            # net's targets were generated at, and the child cannot read the config to find it.
+            # Same seam and same reason: the deploy head must search at the width the net's
+            # targets were generated at, and the child cannot read the config to find it.
             leaf_batch_size=self._leaf_batch_size,
-            # AUDIT-1 F-31, same seam and same reason: the child's DENSE autocast had no
-            # `dtype=` at all, so it ran at torch's device default while the run declared
-            # otherwise — on the path LAW-15 reads the promotion bar off.
-            # AUDIT-1 F-15, same seam and same reason: the eval arena capped at a module
-            # constant while the run declared `selfplay.max_game_moves`.
+            # Same seam: the child's DENSE autocast had no `dtype=` and ran at torch's device
+            # default on the path LAW-15 reads the bar off; the ply cap was a module constant.
             max_plies=self._max_plies,
-            # AUDIT-1 F-39, same seam and same reason: two REQUIRED schema keys the deploy
-            # head was never given, so it searched at its own signature defaults.
+            # Same seam and same reason: two REQUIRED schema keys the deploy head was never
+            # given, so it searched at its own signature defaults.
             c_visit=self._c_visit, c_scale=self._c_scale,
             search_kind=self._search_kind, gumbel_m=self._gumbel_m,
-            # G-2, same seam and same reason: the child's graph server wrote its pop width
-            # and pop deadline as literals, and 33 % of the eval path's ms/sim was the
-            # deadline one of them set (ledger F-2).
+            # Same seam: the child's graph server wrote its pop width and pop deadline as
+            # literals, and 33 % of the eval path's ms/sim was the deadline one of them set.
             inference_batching=self._inference_batching,
-            # NIGHTRUN-1 E1, same seam and same reason: the leaf build's width is a HOST
-            # reservation and the child has no config to derive one from.
+            # Same seam and same reason: the leaf build's width is a HOST reservation and the
+            # child has no config to derive one from.
             leaf_build_threads=self._leaf_build_threads,
-            # R339(b), same seam and same reason. Read straight off `cfg` rather than cached on
-            # the pipeline: it is one int with no resolver, and a cached copy is the second
-            # authority the neighbouring rows all exist to remove.
+            # Same seam. Read straight off `cfg` rather than cached: it is one int with no
+            # resolver, and a cached copy is the second authority these rows exist to remove.
             concurrency=cfg.concurrency,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
-            # the parent's boot assertion says nothing about the child's, and the child has no
-            # config to resolve one from.
+            # the parent's boot assertion says nothing about the child's.
             allocator_posture=self._allocator_posture,
         )
         return spec, dict(alloc), run_gate, candidate_path
 
     def _spawn_worker(self, spec: RoundSpec) -> Any:
-        # F-816-20 item 1. THE FIRST STATEMENT, ahead of the spec write: the single choke
-        # point both callers pass through, so the invariant lives in one place rather than in
-        # two copies free to drift.
+        # THE FIRST STATEMENT, ahead of the spec write: the single choke point both callers
+        # pass through, so the invariant lives in one place rather than in two copies.
         if threading.current_thread() is not threading.main_thread():
             raise RuntimeError(
                 "eval worker spawn attempted from thread "
@@ -913,8 +682,8 @@ class EvalPipeline:
         spec_path = self._work_dir / f"{spec.round_id}_spec.json"
         spec_path.write_text(json.dumps(spec.to_dict()))
         ctx = multiprocessing.get_context(self._mp_ctx_name)
-        # typeshed's BaseContext omits Process (it lives on the concrete contexts);
-        # every real context returned by get_context has it.
+        # typeshed's BaseContext omits Process (it lives on the concrete contexts); every real
+        # context returned by get_context has it.
         proc = ctx.Process(  # pyright: ignore[reportAttributeAccessIssue]
             target=_worker_entry, args=(str(spec_path), spec.result_path),
             kwargs={}, daemon=True,
@@ -924,7 +693,6 @@ class EvalPipeline:
         register_child(proc)
         return proc
 
-    # ── mailbox / bounded drains ───────────────────────────────────────────────────────
     def poll_completed(self) -> dict | list | None:
         with self._lock:
             if not self._mailbox:
@@ -950,18 +718,11 @@ class EvalPipeline:
     def _finalize_round(
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
     ) -> dict[str, Any] | None:
-        # ONCE-ONLY (item 5(c)). Two independent routes finalise: `_poll_loop` (proc no
-        # longer alive, or round timeout via `_escalate_and_finalize`) and the drain
-        # (`drain_pending` / the terminal-eval path). Both read `self._inflight` and then
-        # act, and `self._inflight` is not cleared until the END of this method — so both
-        # can hold the SAME dict and finalise it twice. That is not a harmless repeat: it
-        # appends the round's result to the mailbox TWICE, calls `unregister_child` twice,
-        # persists the ladder twice, and — through `apply_gate_decision` on the second copy
-        # — can promote off one round's games counted as two.
-        #
-        # The latch lives on the `inflight` dict rather than on `self`, because it must be
-        # per-ROUND: a `self`-level flag would have to be reset between rounds and a missed
-        # reset silently disables the guard forever.
+        # ONCE-ONLY. `_poll_loop` and the drain both read `self._inflight` before it is cleared
+        # at the END of this method, so both can finalise the SAME dict — appending twice,
+        # persisting twice, promoting off one round's games counted as two. The latch lives on
+        # the `inflight` dict because it must be per-ROUND: a `self`-level flag would need a
+        # reset between rounds, and a missed reset disables the guard forever.
         with self._lock:
             if inflight.get("_finalized"):
                 self._double_finalize_suppressed += 1
@@ -975,39 +736,27 @@ class EvalPipeline:
                     "suppressed_total": self._double_finalize_suppressed,
                 })
                 # The first finalise's result if it has already been produced; `None` while
-                # it is still in flight, which `drain_pending`/`poll_completed` already
-                # treat as "nothing ready" (their declared `dict | list | None`).
+                # it is still in flight, which the callers already treat as "nothing ready".
                 return inflight.get("_result")
             inflight["_finalized"] = True
 
         proc = inflight["proc"]
         from mantis.train.lifecycle.signals import unregister_child
         unregister_child(proc)
-        # F-816-20 item 3a, case 1 — the child died, the run lives. Every finalising route
-        # (`_poll_loop`, `_escalate_and_finalize`, `drain_pending`, `_run_terminal_sync`)
-        # converges here, so one guarded unlink at this point covers all four. It is placed in
-        # this un-caught prologue deliberately: it has been made non-raising by construction,
-        # and a deletion failure must never manufacture a broken round.
+        # The child died, the run lives; all four finalising routes converge here. Non-raising
+        # by construction, so a deletion failure can never manufacture a broken round.
         _drop_result_tmp_if_writer_gone(inflight)
         wall_sec = max(self._clock() - inflight["t0"], 0.0)
         exit_code = getattr(proc, "exitcode", None)
 
-        # F1 fix, layer 2 (isolation law 2, structural): the entire round-completion
-        # decision (including scheduling `allocate_games` for next round, deep inside
-        # `_read_worker_result` -> `_success_result`) runs under one catch-all. ANY
-        # uncaught exception here — not just the KeyError RED_TEAM's Finding F1 reproduced
-        # — converts to a named `eval_broken(round_completion_error)` result that IS
-        # delivered (mailbox append below always runs), instead of propagating out of the
-        # poller thread (silent thread death -> `poll_completed()` returns None forever ->
-        # the `eval_round` heartbeat stops -> up to the watchdog staleness deadline of
-        # silent hang; RED_TEAM.md Finding F1 consequences). The round terminates loudly
-        # every time, never a hang, never a silent skip.
+        # The whole round-completion decision runs under one catch-all: any uncaught exception
+        # becomes a delivered `eval_broken(round_completion_error)` instead of propagating out
+        # of the poller thread, where silent death stops the heartbeat and hangs the run to the
+        # watchdog staleness deadline.
         try:
             if escalated_reason is not None:
-                # `phase` is a FUNCTION of the reason, which is why it stays on the payload rather
-                # than folding into the enum. Both escalating routes arrive here: the drain's
-                # genuine join timeout, and `_poll_loop`'s round-budget kill. A constant "drain"
-                # would send a supervisor triaging a round timeout to look at the drain budget.
+                # `phase` is a FUNCTION of the reason, so it stays on the payload: a constant
+                # "drain" would send a supervisor triaging a round timeout to the drain budget.
                 phase = ("round_timeout" if escalated_reason is EvalBrokenReason.ROUND_TIMEOUT
                          else "drain")
                 result = self._broken_result(inflight, reason=escalated_reason, exit_code=exit_code,
@@ -1020,15 +769,8 @@ class EvalPipeline:
             else:
                 result = self._read_worker_result(inflight, exit_code=exit_code, wall_sec=wall_sec)
         except Exception as exc:  # noqa: BLE001 -- deliberate catch-all, see docstring above
-            # The traceback is logged HERE, at the raising site, and not inside the one
-            # emitter: `_LOG.exception` is only correct with a live exception in flight,
-            # and `_broken_result`'s other call sites (the drain and worker-exit arms
-            # above) have none. This is the shape the sibling exception-bearing route
-            # (`ladder_persist_failed`) already uses at `_success_result`'s catch, so both
-            # routes log identically and the emitter stays uniform across all seven
-            # reasons. `repr(exc)` says WHAT was raised; only the traceback says WHERE, and
-            # on a catch-all that is the whole diagnostic value — "never a swallowed
-            # exception, never a bare log line" (isolation law 2).
+            # The traceback is logged at the raising site, not in the emitter: `_LOG.exception`
+            # is only correct with a live exception, and the other call sites have none.
             detail = repr(exc)
             _LOG.exception(
                 "eval_round_completion_failed round_id=%s step=%s detail=%s",
@@ -1073,14 +815,8 @@ class EvalPipeline:
         wall_sec: float, phase: str, detail: str | None = None,
         exception_class: str | None = None,
     ) -> dict[str, Any]:
-        """THE broken-round emitter — one event, one payload builder, one
-        `build_round_result` call site for every one of the seven routes (R152).
-
-        `detail`/`exception_class` are the two payload extras the round-completion route
-        carries; they are emitted iff present, so the payload of the other six routes is
-        byte-unchanged. The typed `reason` is written ONCE and read by both the event and
-        the routed mapping, so the stream and `promote.py` cannot disagree.
-        """
+        """THE broken-round emitter — one event, one payload builder, one `build_round_result`
+        call site for all seven routes."""
         payload: dict[str, Any] = {
             "event": "eval_broken", "round_id": inflight["round_id"], "step": inflight["step"],
             "reason": reason, "exit_code": exit_code, "phase": phase,
@@ -1100,8 +836,8 @@ class EvalPipeline:
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
-            # R319(e)(i): None, never 0 — a broken round MEASURED nothing, and a count here is
-            # a default a reader will mistake for one (it already was, §8.1).
+            # None, never 0 — a broken round MEASURED nothing, and a count here is a default
+            # a reader will mistake for one (it already was).
             games_total=None, promoted=False, wr_sealbot=result["wr_sealbot"],
             progress=read_progress(inflight.get("spec")),
         )
@@ -1120,11 +856,8 @@ class EvalPipeline:
             name: {"games": info.get("games", 0), "wr": info.get("wr"), "ci_lo": info.get("wr_ci_lower")}
             for name, info in rungs_raw.items()
         }
-        # AUDIT-1 F-28/B02. The worker child has no `LadderState`, so it used to stamp
-        # `"status": "active"` on every rung — including a SATURATED rung playing its
-        # off-cadence calibration games. The status is read HERE, from the one authority, and
-        # BEFORE `record_round`: what a reader wants is the status the rung was PLAYED under,
-        # not the one recording this round's result produced.
+        # The worker has no `LadderState` and stamped `"status": "active"` on every rung,
+        # saturated ones included. Read BEFORE `record_round`: the status it was PLAYED under.
         played_under = self._ensure_ladder_state()
         for name, info in rungs_raw.items():
             try:
@@ -1136,12 +869,8 @@ class EvalPipeline:
         try:
             self._ensure_ladder_state().save(self._ladder_state_path)
         except LadderStateError:
-            # LAW-14: a persistence failure is run-fatal — it must surface as a named
-            # round failure (the eval_broken-class path), never degrade to a log line
-            # [M-1]. The games ALREADY PLAYED this round are discarded along with it: the
-            # ladder's own on-disk state of record (activation/graduation streaks) did not
-            # durably advance, so reporting those games as a normal success would silently
-            # drift the in-memory state ahead of the persisted state.
+            # LAW-14: a persistence failure is run-fatal. The games already played go with it,
+            # since the ladder's on-disk state did not durably advance.
             _LOG.exception("ladder_state_persist_failed round_id=%s", inflight["round_id"])
             return self._broken_result(
                 inflight, reason=EvalBrokenReason.LADDER_PERSIST_FAILED, exit_code=None,
@@ -1149,10 +878,8 @@ class EvalPipeline:
                 detail=f"ladder state persist failed: {self._ladder_state_path}",
             )
 
-        # M-5: fold the best/gate entity into the SAME global BT fit (design §a.3 bt.py —
-        # "ONE global fit across candidate + best + all rungs") — the gate's pooled W/L
-        # anchors the Elo scale to best exactly like a rung would; a fit that omits it
-        # still recovers rung-vs-candidate ratings but never the candidate-vs-best gap.
+        # Fold the best/gate entity into the SAME global BT fit: a fit that omits it still
+        # recovers rung-vs-candidate ratings but never the candidate-vs-best gap.
         rung_entities = [
             rung.name for rung in self._eval_cfg.ladder.rungs if rung.name in rungs_raw
         ]
@@ -1191,12 +918,8 @@ class EvalPipeline:
         games_total += int(random_raw.get("games", 0) or 0)
         if gate_raw:
             games_total += int(gate_raw.get("n_pooled") or gate_raw.get("n_screen") or 0)
-        # AUDIT-1 F-05. The strength-floor probe plays REAL games, and on a REFUSED floor it
-        # plays the only games of the round: the worker returns from PHASE 0 with `gate=None`,
-        # `rungs={}` and `random.games = 0`, so the three terms above sum to a computed 0 while
-        # `eval_strength_floor.games` beside it reports N. `games_total` is the round's games,
-        # not its ladder games — and a fabricated 0 here is exactly the misread RECAL §8.1 paid
-        # for. Run5 and shakedown both ARM the floor, so this is reachable, not hypothetical.
+        # On a REFUSED strength floor the probe plays the only games of the round, so the terms
+        # above sum to 0 while `eval_strength_floor.games` reports N. This is the round's games.
         floor_raw = raw.get("strength_floor")
         if floor_raw:
             games_total += int(floor_raw.get("games", 0) or 0)
@@ -1209,18 +932,13 @@ class EvalPipeline:
             schedule_next=schedule_next, eval_round_wall_sec=wall_sec, reason=None,
             detail=None, random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
-            # R324(d). The floor's verdict has to reach the LAW-15 gate, and the ONLY route
-            # from the worker child to that gate is this mapping. `_emit_posture_events`
-            # below reads the same `raw` key for the event channel; neither is the other's
-            # source, so a floor payload that stops arriving silences BOTH rather than
-            # leaving one of them reporting a stale verdict.
+            # The floor's verdict reaches the LAW-15 gate ONLY through this mapping.
+            # `_emit_posture_events` reads the same `raw` key; neither is the other's source,
+            # so a floor payload that stops arriving silences both rather than staling one.
             strength_floor=raw.get("strength_floor"),
         )
-        # AUDIT-1 F-14. The identity is published by the PRODUCER (R332(b) lifted the
-        # R118/A-1 freeze on `mantis.eval.rounds`, so `_first_sealbot_wr` now returns
-        # `(wr, rung, games)` out of the one walk that selects them). This is the AGREEMENT
-        # CHECK over that publication, and it stays: an independent walk of the same ladder
-        # that refuses when the two derivations disagree (R104, agreement-or-raise).
+        # The identity is published by the producer out of one walk; this is the AGREEMENT
+        # CHECK over it — an independent walk that refuses when the two disagree.
         self._check_the_sealbot_rung_identity(
             rungs_raw, result, round_id=inflight["round_id"],
         )
@@ -1228,20 +946,12 @@ class EvalPipeline:
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             games_total=games_total,
-            # AUDIT-1 F-28/B04. `promoted: False` used to cover three different rounds — the
-            # gate ran and refused, the gate was not scheduled, there was no best anchor to
-            # play against — and a reader counting "rounds that failed the gate" counted all
-            # three. A promotion DECISION was taken iff the worker returned a gate result,
-            # and `gate_raw` — the worker payload's own key — is the evidence. It is read
-            # here because that is where the payload is; the R118/A-1 freeze that ORIGINALLY
-            # forced the placement is lifted (R332(b)), so this is a choice now, not a
-            # constraint, and moving it would be re-opening a ratified row.
+            # `promoted: False` used to cover gate-refused, gate-not-scheduled and no-anchor
+            # alike. A decision was taken iff the worker returned a gate result.
             promoted=(result["promoted"] if gate_raw else None),
             wr_sealbot=result["wr_sealbot"],
-            # R341 §3, closed at R343: the ROUND CI travels with the win rate it belongs to.
-            # v3.57 recorded this absent and said recovering it needed the ladder state file;
-            # it did not — `aggregate_rung` already bootstrapped it and the worker already
-            # published it per rung, and it simply stopped at the round RESULT.
+            # The ROUND CI travels with the win rate it belongs to; it was already bootstrapped
+            # and published per rung, and simply stopped at the round RESULT.
             wr_sealbot_ci_lower=result.get("wr_sealbot_ci_lower"),
             wr_sealbot_ci_upper=result.get("wr_sealbot_ci_upper"),
             progress=read_progress(inflight.get("spec")),
@@ -1263,17 +973,9 @@ class EvalPipeline:
     ) -> None:
         """Refuse a round whose published sealbot identity disagrees with an independent walk.
 
-        AUDIT-1 F-14. The selection rule lives in `mantis.eval.rounds._first_sealbot_wr`,
-        which since R332(b) publishes `(wr, rung, games)` from the one walk that picks them.
-        This walks the SAME ladder in the SAME order and refuses on any disagreement — a
-        trajectory ring labelled by the wrong rung is worse than one with no label at all,
-        and the coordinator restarts the series on a rung change, so a wrong name silently
-        discards real observations.
-
         Raises:
             ResultContractError: the independent walk disagrees on the rung, its WR or its
-                game count.
-        """
+                game count."""
         expected: tuple[Any, Any, Any] = (None, None, None)
         for rung in self._eval_cfg.ladder.rungs:
             if getattr(rung, "bot", None) != "sealbot":
@@ -1296,13 +998,7 @@ class EvalPipeline:
             )
 
     def _emit_posture_events(self, inflight: dict[str, Any], raw: Mapping[str, Any]) -> None:
-        """The two armed-posture channels, driven by the worker payload's OWN key set.
-
-        Presence of the key IS the arming evidence, and it comes from the child that actually
-        played the round — not from the parent's config read, which would report "armed" for
-        a round the worker never applied it to. On a disarmed run neither key exists, neither
-        counter moves and neither event is emitted, so the stream is byte-identical.
-        """
+        """The two armed-posture channels, driven by the worker payload's OWN key set."""
         floor = raw.get("strength_floor")
         if floor is not None:
             self._floor_checked_total += 1
@@ -1319,7 +1015,6 @@ class EvalPipeline:
                 adjudication=adjudication,
             )
 
-    # ── terminal (synchronous, ignore_stride) ───────────────────────────────────────────
     def _run_terminal_sync(
         self, model: Any, step: int, best: Any, *, best_model_step: int | None,
     ) -> dict[str, Any]:
@@ -1330,12 +1025,8 @@ class EvalPipeline:
             model, step, best, round_id=round_id, round_idx=round_idx, terminal=True,
         )
         proc = self._spawn_worker(spec)
-        # AUDIT-1 F-28/B05. The terminal round emitted `eval_round_complete` with no
-        # `eval_round_started` beside it, while the `eval_round_wall` manifest row names the
-        # PAIR as its producer — so the one round that runs at the very end of a run, whose
-        # wall time is exactly what the drain budget is judged on, had no start timestamp to
-        # subtract from. The kick path has emitted it since the beginning; this is the same
-        # emit, at the same point in the sequence (after the spawn, before the drain).
+        # The terminal round emitted `eval_round_complete` with no `eval_round_started`, while
+        # the `eval_round_wall` row names the PAIR as its producer.
         emit_round_started(
             self._sink, round_id=round_id, step=step, scheduled=scheduled,
             gate_scheduled=gate_scheduled, ts=time.time(),
@@ -1349,11 +1040,8 @@ class EvalPipeline:
             proc, budget_sec=self._caps.terminal_eval_hard_cap_sec,
             worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec, clock=self._clock,
         )
-        # `_finalize_round` returns `None` only when the round was ALREADY finalised by
-        # another route. `inflight` here is local to this call and has never been published
-        # to `self._inflight`, so no other route can hold it and the suppression arm is
-        # structurally unreachable — asserted rather than assumed, so a future change that
-        # DOES publish it fails loudly instead of returning a `None` the caller unpacks.
+        # `_finalize_round` returns `None` only when another route already finalised, and this
+        # `inflight` is never published to `self._inflight` — asserted, not assumed.
         result = (self._finalize_round(inflight, escalated_reason=reason) if reason is not None
                   else self._finalize_round(inflight))
         assert result is not None, (
@@ -1362,11 +1050,9 @@ class EvalPipeline:
         )
         return result
 
-    # ── gate-decision delegation (the ONE call site lives in promote.py) ────────────────
     def apply_gate_decision(self, result: Mapping[str, Any]) -> int | None:
         return apply_gate_decision(self._promotion, result)
 
-    # ── teardown ─────────────────────────────────────────────────────────────────────
     def stop(self) -> None:
         self._stop_event.set()
         if self._poller.is_alive():
@@ -1383,13 +1069,8 @@ class EvalPipeline:
                 if proc.is_alive():
                     proc.kill()
                     proc.join(_bounded_join_timeout(self._eval_cfg.worker_kill_grace_sec))
-            # F-816-20 item 3a on the teardown route (review RC-2). This method NEVER calls
-            # `_finalize_round` — it runs its own terminate -> join -> kill -> join — and it is
-            # called unconditionally from `compose_run`'s teardown on EVERY run exit. A round
-            # in flight at ordinary shutdown is routine, not pathological, so without this line
-            # the commonest producer of the litter is the one route the per-round unlink does
-            # not reach. Same guard, same decision function: a writer that survived the kill
-            # keeps its tmp.
+            # The teardown route's litter sweep: this method never calls `_finalize_round` and
+            # runs on EVERY run exit, the commonest producer the per-round unlink cannot reach.
             _drop_result_tmp_if_writer_gone(inflight)
 
 
@@ -1418,9 +1099,8 @@ def build_eval_pipeline(
     clock: Callable[[], float] = time.monotonic,
     mp_ctx: str = "spawn",
 ) -> EvalPipeline:
-    """The ONE constructor — NO `device`, NO `model` parameter (isolation law 1: an
-    in-process CUDA eval path is unrepresentable; models arrive only through
-    `run_evaluation`'s protocol args and are IMMEDIATELY serialized-and-dropped)."""
+    """The ONE constructor — NO `device`, NO `model` parameter (isolation law 1: an in-process
+    CUDA eval path is unrepresentable)."""
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,

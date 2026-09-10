@@ -1,29 +1,18 @@
-# R8 justify: one manifest CHECKER — the loader, the four producer-kind verifiers, the
-# producer-test resolver and the deselection refusal are one decision procedure over one
-# document, and every row of that document is checked by all of them in sequence. A verifier
-# living apart from the loader could be handed a row shape the loader never produces, which is
-# the class this whole file exists to make un-shippable.
-"""Producer-manifest loader + checker — the seam-7 contract enforcer (WP13-A §c.3).
+# R8 justify: one manifest CHECKER — loader, the producer-kind verifiers, the producer-test
+# resolver and the deselection refusal are one decision procedure over one document, applied
+# to every row in sequence; a verifier living apart from the loader could be handed a row
+# shape the loader never produces.
+"""Producer-manifest loader and checker: every gate/monitor input cites a live producer and test.
 
-Every headless gate/monitor input cites a LIVE producer and a NAMED producer test
-(R4/LAW-07). `verify_manifest` resolves both halves of every row and raises
-`ManifestError` naming the offending row when either is dead — the mechanical answer to
-F-10 (a silently-unported feature that fed a gate nobody noticed had gone quiet) and to
-LAW-07's provenance (a phantom gate input once armed an abort chain no producer fed).
+Resolution rules per producer kind:
+  * `symbol`        — import the module, resolve the dotted attribute.
+  * `event_literal` — the literal appears as a CODE string constant (never an identifier
+    substring, never a docstring occurrence) in the named module's source.
+  * `seam`          — the named attr resolves AND the row names the owing WP (`pending: <WP>`).
+Every row's `producer_test` node (`<path>::<test_fn>`) must resolve to a real test function.
 
-Resolution rules (§c.3):
-  * `kind: symbol`       — import the module, resolve the dotted attribute.
-  * `kind: event_literal`— the QUOTED literal (`["']<lit>["']`) appears in the named
-    module's SOURCE. Quoted-only on purpose: an identifier substring such as
-    `self._train_step` can never satisfy a `train_step` row.
-  * `kind: seam`         — the named attr resolves AND the row names the WP that owes the
-    concrete producer (`pending: <WP>`); a pending gate with no owner is the
-    silently-dead-forever class.
-Every row: the `producer_test` node (`<path>::<test_fn>`) exists — the file resolves under
-`repo_root` and an ast walk finds the function. A stale node id is therefore un-shippable.
-
-Import budget: stdlib + `yaml` at module scope (O-18/O-19 — the supervisor's package must
-stay torch-free); producer modules are imported LAZILY inside the checker, never here.
+Import budget: stdlib + `yaml` at module scope; producer modules are imported LAZILY inside
+the checker so the supervisor's package stays torch-free.
 """
 from __future__ import annotations
 
@@ -64,9 +53,8 @@ def load_manifest(path: Path | str) -> dict[str, Any]:
     """
     target = Path(path)
     try:
-        # AUDIT-1 F-45. THE config parser. `yaml.safe_load` is last-wins on a duplicate key,
-        # and this file is a GATE INPUT (LAW-07): a duplicated row id would silently drop the
-        # first row's producer and cadence while the manifest still parsed clean.
+        # `yaml.safe_load` is last-wins on duplicates; a duplicated row id would silently
+        # drop the first row's producer while the manifest still parsed clean.
         raw: Any = parse_config_yaml(target)
     except (OSError, UnicodeDecodeError, DuplicateKeyError, yaml.YAMLError) as exc:
         raise ManifestError("<file>", f"unreadable manifest {target}: {exc!r}") from exc
@@ -107,7 +95,6 @@ def verify_manifest(path: Path | str, repo_root: Path | str) -> int:
     return len(gates)
 
 
-# ── row halves ───────────────────────────────────────────────────────────────────────
 def _verify_row(row_id: str, row: Mapping[str, Any], root: Path) -> None:
     producer_raw = row.get("producer")
     if not isinstance(producer_raw, dict):
@@ -159,16 +146,10 @@ def _verify_seam(row_id: str, row: Mapping[str, Any], producer: Mapping[str, Any
 
 
 def _string_constants(tree: ast.AST) -> set[str]:
-    """Every string constant in ``tree`` that is NOT a docstring.
+    """Return every string constant in ``tree`` that is not a docstring.
 
-    AUDIT-1 F-10. The check used to be `re.search` over raw module SOURCE, so
-    `eval/pipeline.py`'s module docstring — which contains `heartbeat("eval_round")` as
-    PROSE — satisfied the `eval_round` row on its own. Delete the live `self._beat(
-    "eval_round")` call and the row still resolved: the manifest's whole purpose is that a
-    producer cannot vanish silently, and a docstring is exactly a producer that does not run.
-
-    Docstrings are excluded structurally (the first statement of a module, class or function
-    body), not by heuristic, so a real literal that happens to sit near one still counts.
+    Docstrings are excluded structurally (first statement of a module, class or function
+    body), not by heuristic: a documented producer is not a live one.
     """
     docstrings: set[int] = set()
     for node in ast.walk(tree):
@@ -211,10 +192,8 @@ def _verify_producer_test(row_id: str, row: Mapping[str, Any], root: Path) -> No
     if not node or "::" not in str(node):
         raise ManifestError(row_id, "row needs a 'producer_test' node id (<path>::<test_fn>)")
     rel, _, test_name = str(node).partition("::")
-    # The node must be a COLLECTED test, not merely "some function of that name exists in
-    # that file" — a `conftest.py::__init__` and a private helper both satisfied the weaker
-    # check (RED-TEAM F11). This does not prove the test exercises the producer (the row's
-    # prose and review do), but it does stop a row pointing at a non-test.
+    # The node must be a COLLECTED test, not merely a function of that name in that file:
+    # a `conftest.py::__init__` and a private helper both satisfy the weaker check.
     parts = Path(rel).parts
     if not parts or parts[0] != "tests" or not Path(rel).name.startswith("test_") \
             or Path(rel).suffix != ".py":
@@ -239,14 +218,13 @@ def _verify_producer_test(row_id: str, row: Mapping[str, Any], root: Path) -> No
     raise ManifestError(row_id, f"producer_test {test_name!r} not found in {rel}")
 
 
-#: Markers that REMOVE a test from the default tier. A producer test carrying one of these is
-#: a producer test that does not run when the manifest is checked, which is the same standing
-#: as no producer test at all (AUDIT-1 F-10's sibling, GATE-C03).
+#: Markers that REMOVE a test from the default tier; a producer test that does not run is
+#: the same standing as no producer test at all.
 _DESELECTING_MARKERS = frozenset({"skip", "skipif", "slow", "integration"})
 
 
 def _marker_names(decorators: list[ast.expr]) -> set[str]:
-    """The `pytest.mark.<name>` names on a decorator list, called or bare."""
+    """Return the `pytest.mark.<name>` names on a decorator list, called or bare."""
     names: set[str] = set()
     for node in decorators:
         target = node.func if isinstance(node, ast.Call) else node
@@ -276,7 +254,6 @@ def _refuse_deselected(row_id: str, rel: str, func: ast.FunctionDef | ast.AsyncF
         )
 
 
-# ── resolution helpers ───────────────────────────────────────────────────────────────
 def _resolve_dotted(row_id: str, target: str) -> Any:
     """Resolve ``pkg.mod.Attr.sub`` — the longest importable module prefix, then getattr."""
     parts = target.split(".")
@@ -287,9 +264,8 @@ def _resolve_dotted(row_id: str, target: str) -> Any:
         try:
             module = importlib.import_module(candidate)
         except ImportError as exc:
-            # DISTINGUISH "no such module" from "this module EXISTS but fails to import"
-            # (RED-TEAM F14): silently walking to a shorter prefix reported an unimportable
-            # module as a renamed SYMBOL, pointing the operator at the wrong defect.
+            # "No such module" and "module exists but fails to import" are different
+            # defects; walking to a shorter prefix would report the latter as a rename.
             if _module_exists(candidate):
                 raise ManifestError(
                     row_id,
@@ -308,8 +284,8 @@ def _resolve_dotted(row_id: str, target: str) -> Any:
         try:
             obj = getattr(obj, attr)
         except AttributeError as exc:
-            # An INSTANCE counter (`self.persist_errors_total = 0` in `__init__`) is a real
-            # producer that `getattr` on the class cannot see — resolve it from the source.
+            # An instance counter assigned in `__init__` is a real producer that `getattr`
+            # on the class cannot see — resolve it from the source instead.
             if isinstance(obj, type) and _class_assigns_attr(obj, attr):
                 return None
             raise ManifestError(row_id, f"{target!r} does not resolve ({attr!r} missing)") from exc
@@ -343,7 +319,7 @@ def _module_exists(module: str) -> bool:
 
 
 def _module_source(row_id: str, module: str) -> str:
-    """The SOURCE text of ``module`` without importing it (find_spec → origin)."""
+    """Return the source text of ``module`` without importing it."""
     try:
         spec = importlib.util.find_spec(module)
     except (ImportError, ValueError) as exc:

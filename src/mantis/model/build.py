@@ -1,12 +1,11 @@
-"""`build_net` — the ONE model construction authority (repo_design §3).
+"""`build_net` — the ONE model construction authority.
 
-Dispatch on the declared arch dataclass (a closed union — no wildcard on the kind,
-LAW-11): `GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`. The arch travels on the
-declared dataclass; nobody infers it from module structure (the old
-`model_representation` live-`nn.Module` sniff is DELETED and grep-gate-banned).
+Dispatch is on the declared arch dataclass, a closed union with no wildcard on the kind:
+`GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`. The arch travels on that dataclass and is
+never inferred from module structure.
 
-`RepresentationMismatch` is defined in `arch` (the lowest layer that raises it) and
-re-exported here so `mantis.model.build.RepresentationMismatch` resolves.
+`RepresentationMismatch` is defined in `arch`, the lowest layer that raises it, and
+re-exported here.
 """
 from __future__ import annotations
 
@@ -20,32 +19,21 @@ __all__ = ["build_net", "RepresentationMismatch"]
 
 
 def build_net(arch: ModelArch) -> nn.Module:
-    """Construct the model for `arch` — the ONE authority.
+    """Construct the model for `arch`, and attach the declared arch to it as a handle.
 
-    Graph (`GnnArch`) → `GnnNet(arch)`; (`GnnArchV2`) → `GnnNetV2(arch)`.
-    The construction builds the SAME nn layers (same names/order) as the old kwargs
-    ctors → state-dict byte-identical. An arch that is neither raises
-    `RepresentationMismatch` (unreachable for the closed union — explicit, no silent
-    default).
+    The attached handle is the build side of the arch-travels-with-the-model convention the
+    snapshot and load paths require; it carries the declared dataclass instance and derives
+    nothing from the live module's structure.
 
-    TD-2 (WPAX Phase P): this also supplies the BUILD side of the arch-travels-with-the-
-    model convention. `eval/snapshot.py:45-51` documents that convention and RAISES without
-    it (`getattr(model, "arch", None)`, `:48`), and `:82` implements the LOAD side — nothing
-    implemented the build side, so the terminal eval (`eval/pipeline.py:312`) and the anchor
-    snapshot died on the first snapshot of a freshly-built net. This is NOT the repo_design
-    §3 ban: what §3 bans is DERIVING arch metadata from a live module's structure; what
-    happens below is carrying the DECLARED dataclass instance — the very object §3 says
-    arch travels on — as a handle."""
+    Raises:
+        RepresentationMismatch: `arch` is neither `GnnArch` nor `GnnArchV2`.
+    """
     net: nn.Module
-    # GnnArchV2 IS TESTED BEFORE GnnArch, and the order is load-bearing rather than stylistic:
-    # were V2 ever made a subclass of V1, `isinstance(arch, GnnArch)` would match it and this
-    # function would silently build V1's net for a V2 arch. V2 is a SIBLING dataclass so the
-    # order is not what saves us today — it is the second line of defence, and the pair is
-    # pinned by tests/model/test_arch_v2_dispatch.py.
+    # GnnArchV2 is tested first as a second line of defence: were V2 ever made a subclass of
+    # V1, `isinstance(arch, GnnArch)` would match it and silently build V1's net.
     if isinstance(arch, GnnArchV2):
         net = GnnNetV2(arch)
-    # Defensive runtime check: the declared type is a closed union, but a caller can
-    # still pass a non-arch at runtime (build_net(object()) → RepresentationMismatch).
+    # The declared type is a closed union, but a caller can still pass a non-arch at runtime.
     elif isinstance(arch, GnnArch):  # pyright: ignore[reportUnnecessaryIsInstance]
         net = GnnNet(arch)
     else:
@@ -53,9 +41,8 @@ def build_net(arch: ModelArch) -> nn.Module:
             f"build_net: arch is neither GnnArch nor GnnArchV2 "
             f"(got {type(arch).__name__})."
         )
-    # THE declared instance, never a copy or a re-derivation: a copy would be a second
-    # authority for the run's identity. Plain attribute assignment, so the handle lands in
-    # `__dict__` and in NONE of `_parameters` / `_buffers` / `_modules` — `state_dict()` is
-    # byte-identical and LAW-12's checkpoint key set is unchanged.
+    # THE declared instance, never a copy: a copy would be a second authority for the run's
+    # identity. Plain assignment keeps the handle in `__dict__` and out of `_parameters` /
+    # `_buffers` / `_modules`, so `state_dict()` is byte-identical.
     net.arch = arch  # pyright: ignore[reportAttributeAccessIssue, reportArgumentType] — plain __dict__ handle; nn.Module.__setattr__ is annotated Tensor | Module only
     return net

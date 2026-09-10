@@ -50,7 +50,7 @@ _GATE_INTERVAL = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
 
 
-# ── shared spies ──────────────────────────────────────────────────────────────────────
+# shared spies
 class _CallSpy:
     def __init__(self) -> None:
         self.calls: list[tuple[tuple, dict]] = []
@@ -104,7 +104,7 @@ def _routing_coord(pipeline) -> SimpleNamespace:
     )
 
 
-# ── O-U2: both directions ─────────────────────────────────────────────────────────────
+# O-U2: both directions
 def test_gate_pass_advances_deploy_tag_and_never_touches_actor(tmp_path) -> None:
     """Gate PASS moves ONLY the deploy tag: anchor advanced + save_anchor once, while an
     actor-target spy (held elsewhere in the harness) records ZERO calls in the window."""
@@ -172,7 +172,7 @@ def test_apply_gate_decision_has_no_sync_parameter() -> None:
     )
 
 
-# ── O-U6: regime_key honesty survives the split ──────────────────────────────────────
+# O-U6: regime_key honesty survives the split
 class _KickSpyPipeline:
     def __init__(self) -> None:
         self.received: list[dict] = []

@@ -1,27 +1,9 @@
-"""R345(b)(3) — a checkpoint that is not a continuation point is not a resume.
-
-THREE DEFECTS, ONE LEG. At HEAD a stop wrote three files with three different durability
-postures and no relationship between them:
-
-  * the CHECKPOINT went straight to its final path (`torch.save(payload, path)`), with no
-    temp file, no `fsync` and no rename — a kill mid-write leaves a `.ckpt` that exists, is
-    named for a content hash it does not have, and fails to load;
-  * the RING was worse. `HexgBuffer::save_to_path_impl` opened with `File::create`, which
-    TRUNCATES the existing file before the first new byte is written, so a kill mid-save
-    leaves no ring at all rather than the previous one — the single most expensive file in
-    the run, written in the one way that destroys the old copy first;
-  * the SIDECAR was already atomic, which is what makes the other two visible as choices
-    rather than as house style.
-
-And nothing tied them together: `_maybe_periodic_checkpoint` wrote the checkpoint ALONE, so
-every periodic artefact was weights plus optimizer state with no ring and no sidecar — not a
-continuation point, whatever its name suggested. A run killed between periodic saves resumed
-from a checkpoint whose ring refilled from empty, which is what R343(c) forbids.
+"""A checkpoint that is not a continuation point is not a resume.
 
 THE MANIFEST IS THE COMMIT. Members are written to temp, fsynced and renamed; the manifest
 naming them and their hashes is written LAST, by the same atomic route. A bundle without its
-manifest is incomplete BY CONSTRUCTION and a resume will not take it — which is the property
-that makes "two complete bundles retained" a meaningful guarantee rather than a file count.
+manifest is incomplete BY CONSTRUCTION and a resume will not take it — the property that makes
+"two complete bundles retained" a guarantee rather than a file count.
 """
 from __future__ import annotations
 
@@ -46,13 +28,8 @@ def _member_files(directory: Path) -> set[str]:
     return {p.name for p in directory.iterdir() if p.is_file()}
 
 
-# ── atomic publication ──────────────────────────────────────────────────────────────────
 def test_a_failed_write_leaves_the_previous_file_intact(tmp_path: Path) -> None:
-    """The property `File::create` and a bare `torch.save` both give up.
-
-    The writer raises halfway; the target must still hold the OLD bytes, and no temp file may
-    be left behind to be mistaken for a partial artefact later.
-    """
+    """The writer raises halfway: the target still holds the OLD bytes and no temp file survives."""
     target = tmp_path / "thing.bin"
     B.atomic_write(target, lambda handle: handle.write(b"first"))
     assert target.read_bytes() == b"first"
@@ -98,7 +75,6 @@ def test_the_checkpoint_is_written_through_a_temp_file(tmp_path: Path) -> None:
     assert written.is_file()
 
 
-# ── the bundle ──────────────────────────────────────────────────────────────────────────
 def test_publishing_a_bundle_writes_the_manifest_last(tmp_path: Path) -> None:
     """Order is the whole contract: the manifest's existence is the commit."""
     order: list[str] = []
@@ -130,7 +106,7 @@ def test_publishing_a_bundle_writes_the_manifest_last(tmp_path: Path) -> None:
 
 
 def test_a_bundle_whose_member_changed_underneath_is_refused(tmp_path: Path) -> None:
-    """A hash in the manifest that nothing compares against is a phantom gate (LAW-07)."""
+    """A hash in the manifest that nothing compares against is a phantom gate."""
     manifest_path = _publish_a_bundle(tmp_path, step=10)
     manifest = B.read_manifest(manifest_path)
     B.verify_bundle(manifest, tmp_path)  # the control: it verifies before we touch it
@@ -138,10 +114,8 @@ def test_a_bundle_whose_member_changed_underneath_is_refused(tmp_path: Path) -> 
     ring = tmp_path / manifest.ring.name
     original = ring.read_bytes()
 
-    # SAME LENGTH, different bytes — so the hash is the only thing that can catch it. A
-    # length-changing tamper would be caught by the size field and prove nothing about the
-    # hash, which is the check that has to work when a file is silently corrupted in place
-    # (F-816-37's own signature is a single flipped exponent bit).
+    # SAME LENGTH, different bytes, so the hash is the only thing that can catch it: in-place
+    # corruption has been seen as a single flipped exponent bit, which changes no length.
     ring.write_bytes(bytes(b ^ 0xFF for b in original))
     with pytest.raises(B.BundleError, match="sha256"):
         B.verify_bundle(manifest, tmp_path)
@@ -156,11 +130,8 @@ def test_a_bundle_whose_member_is_corrupt_is_not_offered_as_a_resume_point(
 ) -> None:
     """The manifest EXISTING is not the same fact as the bundle being intact.
 
-    Found by a mutation that removed `verify_bundle` from `complete_bundles` and passed every
-    other test in this file: the hashes were written, compared on demand, and never consulted
-    on the path a resume actually takes. A silently corrupted ring — F-816-37's own signature
-    is a single flipped exponent bit, which changes no length — would have been handed to a
-    resume as a valid continuation point.
+    Without this, the hashes are written and compared on demand but never consulted on the path
+    a resume actually takes, and a silently corrupted ring is handed over as a continuation point.
     """
     _publish_a_bundle(tmp_path, step=10)
     _publish_a_bundle(tmp_path, step=20)
@@ -197,7 +168,6 @@ def test_the_newest_complete_bundle_is_the_one_offered(tmp_path: Path) -> None:
     )
 
 
-# ── retention ───────────────────────────────────────────────────────────────────────────
 def test_two_complete_bundles_are_retained_and_the_rest_are_de_committed(
     tmp_path: Path,
 ) -> None:
@@ -219,13 +189,8 @@ def test_two_complete_bundles_are_retained_and_the_rest_are_de_committed(
 
 
 def test_retention_never_deletes_a_checkpoint(tmp_path: Path) -> None:
-    """R3/LAW-12 and R345(d) both need old checkpoints; only the resume point is retired.
-
-    R345(d) measures STRENGTH-FRONTIER-1 on run6's own frozen checkpoints at steps ~5k, ~12k
-    and 25k. A retention that swept `.ckpt` files would delete two of those three before the
-    block ended — the ruling's later clause defeated by its earlier one, silently, months
-    after the code was written.
-    """
+    """Only the resume point is retired: the strength frontier is measured on old frozen
+    checkpoints, so a retention that swept `.ckpt` files would delete its own inputs."""
     for step in (10, 20, 30, 40):
         _publish_a_bundle(tmp_path, step=step)
     before = {n for n in _member_files(tmp_path) if n.endswith(".ckpt")}
@@ -237,7 +202,7 @@ def test_retention_never_deletes_a_checkpoint(tmp_path: Path) -> None:
 
 
 def test_retention_never_drops_below_one_complete_bundle(tmp_path: Path) -> None:
-    """Mutation half. `keep=2` with only one bundle present must delete nothing."""
+    """`keep=2` with only one bundle present must delete nothing."""
     _publish_a_bundle(tmp_path, step=10)
     assert B.prune_bundles(tmp_path, keep=2) == []
     assert B.newest_complete_bundle(tmp_path) is not None
@@ -259,7 +224,6 @@ def test_an_incomplete_bundle_is_never_counted_as_one_of_the_two(tmp_path: Path)
     )
 
 
-# ── fixture ─────────────────────────────────────────────────────────────────────────────
 def _publish_a_bundle(directory: Path, *, step: int) -> Path:
     ckpt = directory / f"run_{step:08d}_abcd1234.ckpt"
     ckpt.write_bytes(f"checkpoint {step}".encode())

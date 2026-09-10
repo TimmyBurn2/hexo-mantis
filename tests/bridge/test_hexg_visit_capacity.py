@@ -83,7 +83,7 @@ def test_an_unknown_kind_is_refused_rather_than_defaulted() -> None:
         _derive(search_kind="mctx")
 
 
-# ── the composed buffer's slots ARE the derived capacity ────────────────────────
+# the composed buffer's slots ARE the derived capacity
 
 
 def test_buffer_ctor_requires_an_explicit_visit_capacity() -> None:

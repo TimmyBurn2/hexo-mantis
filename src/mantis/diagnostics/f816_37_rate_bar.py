@@ -1,32 +1,16 @@
-"""R342(b)(iv) — the pre-registered rate bar that CONDEMNS the host with no further ruling.
+"""Pre-registered memory-corruption rate bar: condemn a host on rate or on location.
 
-R342 stays R341(a)'s condemnation and lets this host train, on conditions. This is condition
-(iv), and it is the one with teeth: *"more than 3 firings in any 12 h of the run, or any firing
-outside the wire arrays (weights, ring headers, indices), CONDEMNS the host again with no
-further ruling needed — the operator relocates."*
+Two channels, because "outside the wire arrays" cannot be read from collate dumps alone — a
+`GraphContractError` is by construction about the wire, so a dump scan would score a
+weights-side corruption as a clean run:
 
-TWO CHANNELS, BECAUSE "OUTSIDE THE WIRE ARRAYS" CANNOT BE READ FROM COLLATE DUMPS ALONE.
-A `GraphContractError` is by construction about the wire, so a scan of `collate_dumps/` can
-only ever report in-wire firings and would score a weights-side corruption as a clean run.
-The two channels are therefore:
+  * IN-WIRE      `collate_dumps/collate_dump_*.json`; these count toward the 3-in-12h rate.
+  * OUT-OF-WIRE  checkpoint content-hash mismatches and ring-header / index failures, read
+                 from the run's log. Any one condemns immediately, whatever the rate.
 
-  * IN-WIRE   `collate_dumps/collate_dump_*.json` — the 1-in-1 checks on the three collate
-              paths (R342(b)(i)). These count toward the 3-in-12h rate.
-  * OUT-OF-WIRE  a checkpoint content-hash mismatch (the weights channel, R342(b)(ii)), and
-              ring-header / index failures, read from the run's log. ANY of these condemns
-              immediately, without reference to the rate.
-
-WHY A RATE AND NOT A COUNT. One firing is the bound run6 starts under and R342(a) accepts it as
-an uptime cost. Four in twelve hours is a different machine state, and the bar exists so that
-judgement is made by arithmetic on the record rather than by whoever is watching at the time.
-
-EXIT CODES. 0 = bar clear; 1 = CONDEMNED, relocate; 2 = REFUSING to report — the scan could not
-prove it ran. A checker that finds nothing because it looked nowhere must fail, not pass.
-
-IT LIVES UNDER `mantis.diagnostics` AND NOT `tools/` because two surfaces read it — this CLI and
-the dashboard's R342(b)(v) panel — and `tools/` is not an importable package. The alternative was
-a `sys.path` write, which R5 forbids outright, or a second copy of the arithmetic, which is the
-exact way the bar and the panel would come to disagree about how many firings a run had.
+Exit codes: 0 = bar clear; 1 = condemned, relocate; 2 = refusing to report, because the scan
+could not prove it ran. It lives here rather than in `tools/` so this CLI and the dashboard
+panel share one copy of the arithmetic.
 """
 from __future__ import annotations
 
@@ -60,10 +44,9 @@ class Firing:
 
 
 def _dump_time(path: Path, sidecar: dict[str, object]) -> float:
-    """Epoch seconds for a dump, from its filename stamp, else its mtime.
+    """Return epoch seconds for a dump, from its filename stamp, else its mtime.
 
-    `write_collate_dump` names files `collate_dump_{round_id}_{ms}.json`, so the stamp is
-    authoritative and survives a file copy; mtime does not, and is the fallback only.
+    The stamp is authoritative because it survives a file copy; mtime does not.
     """
     m = re.search(r"_(\d{10,})\.json$", path.name)
     if m:
@@ -75,11 +58,11 @@ def _dump_time(path: Path, sidecar: dict[str, object]) -> float:
 
 
 def scan_dumps(record: Path) -> list[Firing]:
-    """Every in-wire firing under a run record, oldest first.
+    """Return every in-wire firing under a run record, oldest first.
 
     Raises:
-        json.JSONDecodeError: a sidecar is unreadable. Deliberately NOT swallowed — a dump that
-            cannot be parsed is evidence that must be looked at, not a zero.
+        json.JSONDecodeError: a sidecar is unreadable. Not swallowed — an unparseable dump is
+            evidence, not a zero.
     """
     out: list[Firing] = []
     for path in sorted(record.rglob("collate_dump_*.json")):
@@ -96,7 +79,7 @@ def scan_dumps(record: Path) -> list[Firing]:
 
 
 def scan_logs(record: Path) -> list[Firing]:
-    """Every out-of-wire signature in the run's logs, oldest first."""
+    """Return every out-of-wire signature in the run's logs, oldest first."""
     out: list[Firing] = []
     for path in sorted(record.rglob("*.log")):
         mtime = path.stat().st_mtime
@@ -112,10 +95,10 @@ def scan_logs(record: Path) -> list[Firing]:
 
 
 def worst_window(firings: list[Firing]) -> tuple[int, float]:
-    """Largest count in any WINDOW_SEC window, and that window's start.
+    """Return the largest count in any WINDOW_SEC window, and that window's start.
 
-    Rolling over firing times rather than fixed calendar buckets: a bar stated as "in any 12 h"
-    is violated by four firings spanning 11 h 59 m even when they straddle two clock buckets.
+    Rolling over firing times, not calendar buckets: four firings spanning 11 h 59 m violate an
+    "in any 12 h" bar even when they straddle two clock buckets.
     """
     best, at = 0, 0.0
     for i, anchor in enumerate(firings):

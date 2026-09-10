@@ -1,22 +1,13 @@
-// Exceeds the 300-line soft cap (R8): the sample path is ONE unit — the weighted index
-// draw, the RNG hoist that feeds it, the parallel rebuild that consumes the hoist, and
-// the per-record align whose mass check refuses the batch. The hoist and the rebuild in
-// particular are a determinism pair: split apart, a reader can change the draw order in
-// one file and the parallel reassembly in another and see neither break the other.
+// Exceeds the 300-line soft cap (R8): the sample path is ONE unit — the weighted index draw, the
+// RNG hoist, the parallel rebuild that consumes it and the per-record align. The hoist and the
+// rebuild are a determinism pair: split apart, a reader can change the draw order in one file
+// and the parallel reassembly in another and see neither break the other.
 //! HEXG sample path — rebuild-at-sample via the native builder.
 //!
-//! Weighted-sample record indices, then per sampled record: draw a uniform D6
-//! element, coord-rotate the stored stones AND the visit-map keys by it, rebuild
-//! via `mantis_graph::build_axis_graph` (which stamps `builder_impl = 1`), and
-//! align the rotated visit-keys to the built legal nodes by coord → the
-//! per-legal-node policy target.
-//!
-//! Ported from the predecessor engine's `replay_buffer/hexg/sample.rs` with the
-//! FFI + graph-wire strip: the terminal block-diagonal graph-wire fuse
-//! (`from_axis_graphs`, whose wire type lives in the predecessor inference-bridge
-//! module → WP6) is deferred, so the core returns the buffer-owned
-//! `(Vec<AxisGraph>, GraphTargets)` — for the single-graph oracle local == global,
-//! so the fuse changes no computed value (R-1). Error type → `Result<_, String>`.
+//! Weighted-sample record indices, then per sampled record: draw a uniform D6 element,
+//! coord-rotate the stored stones AND the visit-map keys by it, rebuild via
+//! `mantis_graph::build_axis_graph`, and align the rotated visit-keys to the built legal nodes
+//! by coord → the per-legal-node policy target. The terminal graph-wire fuse is deferred.
 
 use std::collections::HashSet;
 
@@ -27,9 +18,8 @@ use rand::RngExt;
 use super::super::sym::{rotate_axial, N_SYMS};
 use super::{GraphRecord, GraphTargets, HexgBuffer};
 
-/// Compare aligned visit mass against the mass stored at push time; LOUD-fail,
-/// naming the record's `game_id`/`ply`, when they diverge beyond tolerance.
-/// Pure (no bindings) so it is directly unit-testable.
+/// Compare aligned visit mass against the mass stored at push time; LOUD-fail, naming the
+/// record, when they diverge beyond tolerance. Pure, so it is unit-testable.
 pub fn mass_drop_check(
     game_id: i64,
     ply_idx: u16,
@@ -57,8 +47,7 @@ pub fn mass_drop_check(
 }
 
 impl HexgBuffer {
-    /// Sample a single index by weighted rejection (32-attempt cap, then
-    /// unconditional accept). Identical to `ReplayBuffer::weighted_sample_one`.
+    /// Sample one index by weighted rejection, 32-attempt cap then unconditional accept.
     #[inline]
     pub fn weighted_sample_one(&mut self) -> usize {
         const MAX_REJECT: usize = 32;
@@ -72,8 +61,7 @@ impl HexgBuffer {
         self.rng.random_range(0..self.size)
     }
 
-    /// Newest-slots window size for the `recent_frac` selection: head-relative
-    /// `[head - window, head)` mod capacity, clamped to `size`.
+    /// Newest-slots window for `recent_frac`: `[head - window, head)` mod capacity, clamped.
     #[inline]
     #[must_use]
     pub fn recent_window(&self) -> usize {
@@ -93,18 +81,10 @@ impl HexgBuffer {
             .collect()
     }
 
-    /// R345(b)(6) — remember WHAT this batch was made of, for the per-batch line the trainer
-    /// logs. Two quantities, and each answers a question loss alone cannot:
-    ///
-    /// * ROWS PER GAME. With every row tagged `-1` the dedupe was inert, so a batch could be
-    ///   a dozen positions from one game counted as a dozen samples. The max tells a reader
-    ///   whether the guard is doing anything.
-    /// * AGE, in rows back from the newest. A ring that has stopped being fed keeps sampling
-    ///   happily from older and older data, and the loss curve does not say so — the age
-    ///   distribution is the thing that does.
-    ///
-    /// Stored rather than returned so the hot sample path keeps its signature; a reader that
-    /// wants the numbers asks for them after the batch it cares about.
+    /// Remember WHAT this batch was made of, for the trainer's per-batch line: rows per game
+    /// says whether the dedupe guard is doing anything, and age in rows back from the newest is
+    /// what says a ring has stopped being fed. Stored rather than returned, so the hot sample
+    /// path keeps its signature.
     fn record_batch_composition(&mut self, indices: &[usize]) {
         let mut per_game: FxHashMap<i64, u32> = FxHashMap::default();
         let mut ages: Vec<u32> = Vec::with_capacity(indices.len());
@@ -113,8 +93,7 @@ impl HexgBuffer {
             if gid != -1 {
                 *per_game.entry(gid).or_insert(0) += 1;
             }
-            // Rows back from the newest, in insertion order. `head` points one past the
-            // newest, so the newest slot is `head - 1` modulo the capacity.
+            // `head` points one past the newest, so the newest slot is `head - 1` mod capacity.
             let newest = (self.head + self.capacity - 1) % self.capacity;
             ages.push(((newest + self.capacity - idx) % self.capacity) as u32);
         }
@@ -131,10 +110,8 @@ impl HexgBuffer {
         };
     }
 
-    /// Sample `batch_size` slot indices, deduping by `game_id` (untagged -1 slots
-    /// skip the guard). `recent_frac == 0.0` is byte-identical to the full-ring
-    /// weighted sample; `> 0.0` draws `round(batch_size * recent_frac)` from the
-    /// newest slots and the remainder weighted-uniform.
+    /// Sample `batch_size` slot indices, deduping by `game_id` (untagged -1 slots skip the
+    /// guard). `recent_frac == 0.0` is byte-identical to the full-ring weighted sample.
     pub fn sample_indices(&mut self, batch_size: usize, recent_frac: f32) -> Vec<usize> {
         const MAX_RETRIES: usize = 8;
         let mut indices: Vec<usize> = if recent_frac > 0.0 && self.size > 0 {
@@ -179,21 +156,12 @@ impl HexgBuffer {
         indices
     }
 
-    /// Rebuild + align `batch_size` sampled records. Returns the buffer-owned
-    /// `(Vec<AxisGraph>, GraphTargets)`; the block-diagonal graph-wire fuse
-    /// (`from_axis_graphs`) is deferred to WP6 (R-1). See module docs.
-    /// The per-sample D6 draws for one batch, in INDEX ORDER — the RNG hoist B1 needs.
+    /// The per-sample D6 draws for one batch, in INDEX ORDER — the RNG hoist.
     ///
-    /// The draw is the only generator use in the rebuild body, and the parallel rebuild
-    /// cannot share `&mut self.rng`. Hoisting it here consumes the generator in exactly the
-    /// order and count the serial loop did, which is what makes the parallel path
-    /// BIT-IDENTICAL rather than merely equivalent-in-distribution.
-    ///
-    /// `self.n_stones[idx] != 0` stands in for the original `!rec.stones.is_empty()` so the
-    /// draw does not require materialising a record first. They are the same predicate —
-    /// `record_at` builds `stones` with exactly `n_stones[slot]` entries — and
-    /// `tests/hexg_sample_parallel_parity.rs` pins the equivalence against a transcription
-    /// of the original inline draw rather than leaving it asserted here.
+    /// The parallel rebuild cannot share `&mut self.rng`, and hoisting the draw consumes the
+    /// generator in exactly the order and count the serial loop did, which is what makes the
+    /// parallel path BIT-IDENTICAL. `n_stones[idx] != 0` stands in for `!rec.stones.is_empty()`
+    /// so no record is materialised first, an equivalence pinned by the parity test.
     pub fn draw_syms(&mut self, indices: &[usize], augment: bool) -> Vec<usize> {
         indices
             .iter()
@@ -252,8 +220,7 @@ impl HexgBuffer {
         let mut argmax_valid: Vec<u8> = Vec::with_capacity(batch_size);
 
         // Reassembly is IN INDEX ORDER, not completion order: `policy_target` is one flat
-        // concatenation whose segment boundaries the collate derives from the graphs'
-        // own legal counts, so a permutation here would silently mis-pair every target.
+        // concatenation whose segment boundaries the collate derives from the legal counts.
         for out in per_item {
             policy_target.extend_from_slice(&out.policy_target);
             explicit_mask.extend_from_slice(&out.explicit_mask);
@@ -298,22 +265,12 @@ struct SampleOut {
     is_full_search: u8,
 }
 
-/// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning
-/// the results IN INDEX ORDER.
-///
-/// B1, against ledger §10.5 line #1. The measured split of `sample_ring` at run5 shape is
-/// 1 221 ms of `build_axis_graph` against 163 ms of fuse and 2 ms of align — 88 % of the
-/// trainer's single largest line is a SERIAL loop over an embarrassingly parallel rebuild,
-/// on a 24-thread box. Each item touches only its own record, so the only thing that had to
-/// move for this to be safe was the generator draw, hoisted by the caller.
-///
-/// `std::thread::scope` and a chunked split rather than a work-stealing pool: rayon is
-/// absent from this workspace and adding it is a `vendor/pins.toml` event, which is a real
-/// cost this repo prices deliberately. The items are near-uniform in size (one sampled
-/// position each), so static chunking loses little to imbalance.
-///
-/// `n_threads <= 1` runs the serial path in this thread — the exact-parity control, and the
-/// posture for a caller that has no threads to spare.
+/// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
+/// results IN INDEX ORDER. Measured on the run5 shape, `sample_ring` splits 1 221 ms of
+/// `build_axis_graph` against 163 ms of fuse and 2 ms of align — a serial loop over an
+/// embarrassingly parallel rebuild whose items touch only their own record. `std::thread::scope`
+/// with a chunked split rather than a work-stealing pool, because rayon is absent and adding it
+/// is a pins event; `n_threads <= 1` runs the serial path here, the exact-parity control.
 fn build_and_align_batch(
     items: &[(GraphRecord, i64, usize)],
     params_base: &BuildParams,
@@ -344,8 +301,8 @@ fn build_and_align_batch(
             })
             .collect();
         for h in handles {
-            // A panicking worker is turned into the NAMED error the caller already handles,
-            // never re-raised as a panic that would cross the FFI (R2/LAW-13).
+            // A panicking worker becomes the NAMED error the caller already handles, never a
+            // panic that would cross the FFI.
             per_chunk.push(h.join().unwrap_or_else(|_| {
                 Err("HEXG sample: a rebuild worker thread panicked".to_string())
             }));
@@ -379,12 +336,10 @@ fn build_and_align_one(
         moves_remaining: rec.moves_remaining,
         ..*params_base
     };
-    // Rebuild — the builder emits the correctly re-indexed graph and
-    // stamps builder_impl=1. edge_index is NEVER cached across aug.
+    // The builder re-indexes and stamps builder_impl=1; edge_index is NEVER cached across aug.
     let g = build_axis_graph(&StoneList { stones }, &params);
 
-    // Rotate the visit-map KEYS by the SAME element, so the policy target
-    // follows each cell to its new location.
+    // Rotate the visit-map KEYS by the SAME element, so the target follows each cell.
     let mut vmap: FxHashMap<(i32, i32), f32> = FxHashMap::default();
     let stored_mass: f32 = rec.visits.iter().map(|&(_, _, prob)| prob).sum();
     for &(q, r, prob) in &rec.visits {
@@ -392,9 +347,7 @@ fn build_and_align_one(
         vmap.insert((rq, rr), prob);
     }
 
-    // Align to the built legal nodes (gather order == the segment order):
-    // target[i] = rotated_visit_map[coord_of_legal_node_i] or 0. No
-    // off-window drop — every legal node gets its coord's mass.
+    // Align to the built legal nodes (gather order == segment order); no off-window drop.
     let mut best_prob = f32::NEG_INFINITY;
     let mut best_coord: Option<(i32, i32)> = None;
     let mut aligned_mass = 0.0f32;
@@ -414,10 +367,8 @@ fn build_and_align_one(
         }
     }
 
-    // ALWAYS-ON contract check: compare aligned mass against the mass
-    // stored at push time and LOUD-fail, naming the record, when they
-    // diverge beyond tolerance. `rotate_axial` is exact integer-lattice
-    // math, so a legit producer's mass survives the align bit-for-bit.
+    // ALWAYS-ON contract check: `rotate_axial` is exact integer math, so a legitimate
+    // producer's mass survives the align bit-for-bit.
     mass_drop_check(game_id, ply_idx, stored_mass, aligned_mass)?;
 
     let (argmax_q, argmax_r, argmax_valid) = match best_coord {

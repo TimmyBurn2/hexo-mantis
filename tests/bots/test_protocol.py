@@ -1,15 +1,9 @@
-"""⊕ WP11-A bots — BotProtocol + RandomBot + resolve_bot (design §a.2, §b bots suite).
+"""BotProtocol + RandomBot + resolve_bot.
 
-RED-at-import until IMPL writes `mantis.bots.protocol` / `mantis.bots.random_bot` /
-`mantis.bots.resolve`. ORACLE-FIRST (⊕): the top-level import raises ModuleNotFoundError
-before any port code exists.
-
-Rung-resolution census at HEAD (DESIGN.md census verdict): 0 of 6 ladder rungs resolve
-locally — sealbot is WP12-R property. `resolve_bot` must raise
-`RungUnresolvable` for each, with a reason string that DISTINGUISHES "env key unset" from
-"env key set but no adapter installed" (dispatch: env keys / vendor pins only, no host
-path, no default endpoint — a set-but-unadapted env key is not a silent fallback to a
-default host).
+An external kind that cannot resolve raises `RungUnresolvable` carrying its `.rung` and a
+non-empty `.reason`, and that reason names NO environment variable: the authority for where a
+vendored engine lives is `vendor/pins.toml` + `make vendor`, and two authorities for one fact
+is what the env-key channel was.
 """
 from __future__ import annotations
 
@@ -23,10 +17,7 @@ from mantis.bots import BotProtocol, RandomBot, RungUnresolvable, resolve_bot
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "bots"
 
 _KNOWN_KINDS = ("random", "sealbot")
-#: ⊕ WP12-R Phase A: these keys are DELETED from `src/` (DESIGN_A §2.2(2)). They survive
-#: HERE, in the oracle, as the names a refusal reason may never speak — which is the only
-#: thing left to say about them. The module docstring above describes the pre-Phase-A
-#: contract and is retained as provenance for what the rewritten row below replaced.
+#: DELETED from `src/`; they survive here only as the names a refusal reason may never speak.
 _ENV_KEYS = {
     "sealbot": "MANTIS_BOT_SEALBOT",
 }
@@ -74,33 +65,18 @@ def test_resolver_resolves_random_locally():
 
 @pytest.mark.parametrize("kind", sorted(_ENV_KEYS))
 def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
-    """⊕ WP12-R Phase A rewrite (PREREG_A §9, "Modified, not added").
+    """An external kind that cannot resolve carries a `.rung` and a non-empty `.reason` that
+    names NO environment variable.
 
-    THE OLD CONTRACT IS DELETED. Until Phase A this row asserted the env-key contract —
-    `MANTIS_BOT_*` unset versus set-but-unadapted as two distinguishable reasons. DESIGN_A
-    §2.2(2) deletes that channel as argued (R125/R79): for `sealbot` the authority for where
-    the engine lives is `vendor/pins.toml` + `make vendor`, and two authorities for one fact
-    is R79's exact prohibition; for `kraken`/`strix` the key was a silent-arming surface with
-    nothing behind it, since R139 rules both out for run5 with named grounds.
-
-    What survives, and what this row now pins, is the invariant BOTH contracts share: an
-    external kind that cannot resolve says so with a `.rung` and a non-empty `.reason`, and
-    the reason names NO environment variable. `kraken` and `strix` were the other two
-    parametrized kinds and are DELETED bot kinds now, so the parametrization is derived from
-    `_ENV_KEYS` rather than typed — a kind that leaves the resolver leaves this row with it,
-    and one that arrives has to be added to the map to be excused.
-
-    Not a duplicate of O-A1/O-A2 (`tests/bots/test_sealbot_resolve.py`): those assert WHICH
-    command each refusal names and that kraken/strix carry R139's grounds per rung. This row
-    asserts only the shape every external kind shares, which is what `protocol.py`'s
-    `RungUnresolvable` contract is about.
+    The parametrization is derived from `_ENV_KEYS` rather than typed, so a kind that leaves
+    the resolver leaves this row with it, and one that arrives has to be added to be excused.
     """
     env_key = _ENV_KEYS[kind]
     monkeypatch.setenv(env_key, "some_adapter_module:build")
 
     if kind == "sealbot":
-        # The one kind that CAN resolve, on a box where `make vendor` plus the build have
-        # run. Both outcomes are legal; neither may consult the deleted channel.
+        # The one kind that CAN resolve, where `make vendor` plus the build have run. Both
+        # outcomes are legal; neither may consult the deleted env channel.
         try:
             factory = resolve_bot(kind, depth=5, opponent_sims=128)
         except RungUnresolvable as exc:

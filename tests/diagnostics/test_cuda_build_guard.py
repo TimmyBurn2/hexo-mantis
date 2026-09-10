@@ -31,7 +31,7 @@ def _run(*args: str) -> subprocess.CompletedProcess[str]:
         capture_output=True, text=True, check=False)
 
 
-# ═══ the refusal arm — this host's real state ════════════════════════════════════════════
+# the refusal arm — this host's real state
 @pytest.mark.skipif(torch.version.cuda is not None,
                     reason="loud skip: this host has a CUDA torch build, so the CPU-only "
                            "refusal arm has no subject here")
@@ -71,7 +71,7 @@ def test_r328e_03_json_refusal_carries_the_verdict_and_the_build() -> None:
     assert payload["torch_version"] == torch.__version__
 
 
-# ═══ the matmul arm — the half `is_available()` cannot answer ════════════════════════════
+# the matmul arm — the half `is_available()` cannot answer
 def _patch_cuda_transport(monkeypatch: pytest.MonkeyPatch, perturbation: float) -> None:
     """Make `Tensor.cuda()` a CPU identity, optionally corrupting one operand's transport."""
     state = {"calls": 0}
@@ -136,7 +136,7 @@ def test_r328e_08_a_zero_device_build_refuses(monkeypatch: pytest.MonkeyPatch) -
         guard.assert_cuda_build()
 
 
-# ═══ the claim the refusal makes about the tree ══════════════════════════════════════════
+# the claim the refusal makes about the tree
 def test_r328e_09_the_refusals_pyproject_claim_is_true_of_the_shipped_pyproject() -> None:
     """The message says the pin causes this. Derived from the file, so it cannot become a lie.
 

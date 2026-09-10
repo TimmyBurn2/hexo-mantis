@@ -1,24 +1,11 @@
-"""LadderState — opponent-ladder scheduling + CI-hysteresis graduation (design §a.3
-ladder.py; STATE §5 verbatim). Every threshold/cadence/n is a schema field
-(`mantis.config.schema.LadderConfig`) — never a code literal (rule 4).
+"""LadderState — opponent-ladder scheduling + CI-hysteresis graduation.
 
-Transitions:
-  * activation — a DORMANT rung activates when its IMMEDIATE PREDECESSOR's most recent
-    MEASURED round's lower-CI >= `activation_wr_lower_ci` (sticky); a rung that is itself
-    handed a measured round while still dormant self-activates on that same evidence (it
-    is plainly being played).
-  * graduation — an ACTIVE rung SATURATES when the pair-bootstrap lower CI of WR >=
-    `graduation_wr_lower_ci` for `graduation_consec_rounds` CONSECUTIVE MEASURED
-    qualifying rounds (STATE §5 verbatim, no "full-n" qualifier). Counter semantics
-    (pre-registered, MUST-FIX 5): a round where the rung recorded ZERO games neither
-    advances nor resets the streak (transparent); a MEASURED sub-threshold round resets it
-    to 0. Saturated is terminal — calibration cadence forever, never retired.
-
-Scheduling: `allocate_games` splits `round_games` across ACTIVE rungs proportional to
-p*(1-p) (numpy, largest-remainder rounding), floors each at `min_games_per_active_rung`,
-then CLAMPS each at `games_max` (no redistribution of the clamped excess — deterministic,
-total may undershoot). SATURATED rungs get `calibration_games` every
-`calibration_every_k_rounds`-th round, forever.
+Every threshold/cadence/n is a `mantis.config.schema.LadderConfig` field, never a code
+literal. A DORMANT rung activates when its IMMEDIATE PREDECESSOR's most recent measured
+round has lower-CI >= `activation_wr_lower_ci` (sticky), or when it is itself handed a
+measured round. An ACTIVE rung SATURATES after `graduation_consec_rounds` consecutive
+measured rounds at lower-CI >= `graduation_wr_lower_ci`; a zero-game round HOLDS the
+streak, a measured sub-threshold round resets it, and saturated is terminal.
 """
 from __future__ import annotations
 
@@ -37,22 +24,9 @@ _DORMANT = "dormant"
 _ACTIVE = "active"
 _SATURATED = "saturated"
 
-#: RED-TEAM F1 (BLOCKER) fix, layer 1 (root cause). `allocate_games` must be TOTAL over
-#: every ACTIVE rung, not just the rungs present in this round's freshly-fit `bt_probs`
-#: (an active rung that just activated this same round, or that failed to resolve while a
-#: sibling played, is absent from `bt_probs` and was previously an unconditional
-#: `bt_probs[name]` KeyError — see mantis-migration/wp/WP11A/RED_TEAM.md Finding F1).
-#:
-#: This is NOT a tunable knob (hence no schema field, no `Field(...)` bound, no mint
-#: value) — it is the exact mathematical boundary of the STATE §5 information-weighting
-#: formula: scheduling weight is `p*(1-p)` ("play whoever yields the most information",
-#: plan/STATE_2026-07-24.md:104-105, the KataGo/BayesElo variance-sampling citation). The
-#: no-information point is `p=0.5`; the derivative `d/dp[p(1-p)] = 1-2p` is zero exactly at
-#: `p=0.5`, i.e. `p(1-p)` is MAXIMIZED there (`0.25`, the largest value the weight can take).
-#: A rung the fit has no data for this round is, by definition, the point of maximum
-#: uncertainty — so it is CORRECT (not merely a safe default) for it to receive the
-#: highest-information scheduling weight, exactly the STATE §5 intent, until a real p̂
-#: measurement narrows it away from 0.5.
+#: Not a tunable knob: `p*(1-p)` is maximised at `p=0.5`, so a rung this round's fit has
+#: no data for is by definition the point of maximum uncertainty and correctly receives
+#: the highest information-weighted share until a real p̂ narrows it.
 UNINFORMATIVE_P_HAT = 0.5
 
 
@@ -88,7 +62,6 @@ class LadderState:
             rung_states[rung.name] = _RungState(name=rung.name, status=status)
         return cls(ladder_cfg, rung_states)
 
-    # ── accessors ─────────────────────────────────────────────────────────────────────
     def status(self, rung: str) -> str:
         return self._rungs[rung].status
 
@@ -98,13 +71,11 @@ class LadderState:
     def rungs(self) -> list[LadderRung]:
         return list(self._cfg.rungs)
 
-    # ── round recording (activation + graduation transitions) ──────────────────────────
     def record_round(
         self, round_idx: int, results: Mapping[str, Mapping[str, Any]], *, sink: Any = None
     ) -> None:
-        """`results` maps rung name -> `{"games", "wr", "ci_lo"}` for every rung that
-        recorded >=1 game this round. A rung ABSENT from `results` played zero games and
-        is untouched (streak HELD — the transparent case)."""
+        """Record each rung's `{"games", "wr", "ci_lo"}`; a rung ABSENT from `results`
+        played zero games and is untouched, with its streak HELD."""
         rung_names = [r.name for r in self._cfg.rungs]
         for name in rung_names:
             entry = results.get(name)
@@ -123,8 +94,7 @@ class LadderState:
         state.history.append({"round_idx": round_idx, "games": games, "wr": wr, "ci_lo": ci_lo})
 
         if games == 0:
-            # A rung PRESENT with games=0 is an explicit zero-game round: HELD, loud —
-            # distinguished from "absent" only for bookkeeping/history completeness.
+            # A rung PRESENT with games=0 is an explicit zero-game round: HELD, loud.
             if sink is not None:
                 sink.emit({
                     "event": "eval_ladder_zero_game_round", "rung": name, "round_id": str(round_idx),
@@ -132,8 +102,7 @@ class LadderState:
             return
 
         if state.status == _DORMANT:
-            # Direct evidence of play while dormant is itself an activation signal (the
-            # scheduler only ever hands games to a rung it means to have running).
+            # Direct evidence of play while dormant is itself an activation signal.
             state.status = _ACTIVE
 
         if state.status == _SATURATED:
@@ -173,21 +142,22 @@ class LadderState:
                         "round_id": str(round_idx), "trigger_ci": ci_lo,
                     })
 
-    # ── scheduling ───────────────────────────────────────────────────────────────────
     def allocate_games(
         self, round_idx: int, bt_probs: Mapping[str, float]
     ) -> dict[str, int]:
-        """`round_games` split across ACTIVE rungs ∝ p(1-p) (largest-remainder rounding),
-        floored at `min_games_per_active_rung`, CLAMPED at each rung's `games_max` (excess
-        not redistributed). SATURATED rungs get `calibration_games` every
-        `calibration_every_k_rounds`-th round, else 0 — forever."""
+        """Split `round_games` across ACTIVE rungs proportional to p(1-p).
+
+        Largest-remainder rounding, floored at `min_games_per_active_rung`, CLAMPED at each
+        rung's `games_max` with the excess NOT redistributed, so the total may undershoot.
+        SATURATED rungs get `calibration_games` every `calibration_every_k_rounds`-th round.
+        """
         alloc: dict[str, int] = {}
         games_max = {rung.name: rung.games_max for rung in self._cfg.rungs}
         active_names = [
             rung.name for rung in self._cfg.rungs if self._rungs[rung.name].status == _ACTIVE
         ]
         if active_names:
-            # F1 fix (layer 1): `.get(name, UNINFORMATIVE_P_HAT)`, never a bare `[name]` —
+            # `.get(name, UNINFORMATIVE_P_HAT)`, never a bare `[name]`: the split must be
             # total over ALL active rungs, not just the ones `bt_probs` happens to cover.
             weights = np.array(
                 [
@@ -222,7 +192,6 @@ class LadderState:
                 alloc[rung.name] = 0
         return alloc
 
-    # ── persistence (LAW-14: no silent except) ─────────────────────────────────────────
     def save(self, path: str | Path) -> None:
         target = Path(path)
         payload = {name: state.to_dict() for name, state in self._rungs.items()}
@@ -247,9 +216,7 @@ class LadderState:
 
 
 def _synthetic_cfg_from_rungs(rung_states: Mapping[str, _RungState]) -> LadderConfig:
-    """Round-trip convenience: rebuild a MINIMAL valid `LadderConfig` naming exactly the
-    persisted rungs, for callers that only need `status`/`consec` back (no live
-    scheduling config available at this call site)."""
+    """Rebuild a MINIMAL valid `LadderConfig` naming exactly the persisted rungs."""
     rungs = [
         LadderRung(
             name=name, bot="random", variant="raw", depth=None, opponent_sims=None,
@@ -257,11 +224,8 @@ def _synthetic_cfg_from_rungs(rung_states: Mapping[str, _RungState]) -> LadderCo
         )
         for name in rung_states
     ]
-    # NOTE: these numbers are placeholder scheduling knobs for a config-less round-trip
-    # ONLY (this call site never has the ORIGINAL LadderConfig — the caller passing one
-    # explicitly always wins). They deliberately avoid the STATE §5 threshold VALUES
-    # (never as bare code literals, rule 4 — see test_minted_configs_carry_the_ladder_
-    # verbatim's source-grep oracle).
+    # Placeholder scheduling knobs for a config-less round-trip only; they deliberately
+    # avoid the real threshold VALUES, which may never appear as bare code literals.
     return LadderConfig(
         rungs=rungs, round_games=1, min_games_per_active_rung=0,
         graduation_wr_lower_ci=0.99, graduation_consec_rounds=3, activation_wr_lower_ci=0.5,

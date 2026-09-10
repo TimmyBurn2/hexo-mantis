@@ -5,13 +5,9 @@ use fxhash::{FxHashMap, FxHashSet};
 use super::super::zobrist::ZobristTable;
 use crate::ply::Ply;
 
-// ── MoveDiff ──────────────────────────────────────────────────────────────────
-
-/// Captures everything mutated by one `apply_move_tracked` call so that
-/// `undo_move` can reverse it in O(1) without any HashMap scan.
-///
-/// All fields are private; the only way to construct a `MoveDiff` is through
-/// `apply_move_tracked`, and the only way to consume it is through `undo_move`.
+/// Captures everything mutated by one `apply_move_tracked` call so `undo_move` can reverse it
+/// in O(1) with no HashMap scan. All fields are private: the only constructor is
+/// `apply_move_tracked` and the only consumer is `undo_move`.
 #[derive(Debug, Clone)]
 pub struct MoveDiff {
     pub(crate) q: i32,
@@ -54,8 +50,6 @@ pub const HEX_AXES: [(i32, i32); 3] = [
     (1, -1), // SE / NW
 ];
 
-// ── Player ────────────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(i8)]
 pub enum Player {
@@ -72,8 +66,6 @@ impl Player {
     }
 }
 
-// ── Cell ─────────────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[repr(i8)]
 pub enum Cell {
@@ -83,11 +75,8 @@ pub enum Cell {
     P2 = -1,
 }
 
-// ── BoardGeometry ────────────────────────────────────────────────────────────
-
-/// Plain geometry values for a Board. Spec/registry resolution is NOT this
-/// crate's job — callers (upstream layers) resolve names to values and pass
-/// the values in.
+/// Plain geometry values for a Board. Spec/registry resolution is NOT this crate's job —
+/// callers resolve names to values and pass the values in.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BoardGeometry {
     /// Hex-ball radius for legal-move expansion.
@@ -98,25 +87,17 @@ pub struct BoardGeometry {
     pub cluster_window_size: usize,
 }
 
-// ── Board ─────────────────────────────────────────────────────────────────────
-
-/// Sparse game board.  All state needed to continue a game from any position.
+/// Sparse game board — all state needed to continue a game from any position.
 ///
-/// # Thread safety
-///
-/// `Board` is `Send + !Sync`: the lazily-rebuilt legal-move cache uses
-/// `UnsafeCell` with deliberately NO `unsafe impl Sync`, so a `&Board`
-/// cannot cross threads at the type level. No engine caller shares one Board
-/// between threads (workers own their boards); any FFI wrapper that needs
-/// `Sync` supplies its own synchronization at its own layer.
+/// `Send + !Sync`: the legal-move cache uses `UnsafeCell` with deliberately NO
+/// `unsafe impl Sync`, so a `&Board` cannot cross threads at the type level.
 #[derive(Debug)]
 pub struct Board {
     /// Sparse stone map: (q, r) → Cell.
     pub(crate) cells: FxHashMap<(i32, i32), Cell>,
     /// Whose turn it is.
     pub current_player: Player,
-    /// How many moves the current player still has to place this turn.
-    /// Starts at 1 on ply 0 (P1's single first move), then 2 for every turn.
+    /// How many moves the current player still has to place this turn: 1 on ply 0, then 2.
     /// A within-turn count — deliberately a bare `u8`, not a Ply/Turn index.
     pub moves_remaining: u8,
     /// Total half-moves placed so far.
@@ -135,98 +116,54 @@ pub struct Board {
     /// Last 4 stones placed (q, r).
     pub(crate) action_anchors: [(i32, i32); 4],
     pub(crate) action_anchors_count: usize,
-    /// Lazily-maintained set of all currently legal moves.
-    ///
-    /// Uses interior mutability so that `legal_moves_set(&self)` can rebuild
-    /// on demand without requiring `&mut self` (callers legitimately hold
-    /// `&Board` references at rebuild time, e.g. search leaf expansion).
-    ///
-    /// Invariant: when `cache_dirty` is false, `legal_cache` is correct.
-    /// When `cache_dirty` is true, `legal_moves_set()` rebuilds it.
+    /// Lazily-maintained set of all currently legal moves, behind interior mutability so
+    /// `legal_moves_set(&self)` can rebuild without `&mut self`. When `cache_dirty` is false
+    /// the cache is correct; when true, `legal_moves_set()` rebuilds it.
     ///
     /// # Safety invariants (INV-1..INV-4)
     ///
-    /// The crate's three `unsafe` expressions (two in
-    /// `board::moves::legal_moves_set`, one in `Clone::clone` below) rest on:
+    /// The crate's three `unsafe` expressions (two in `board::moves::legal_moves_set`, one in
+    /// `Clone::clone` below) rest on:
     ///
-    /// - **INV-1.** The only `&mut` into `legal_cache` is created inside
-    ///   `legal_moves_set`'s rebuild block, entered iff `cache_dirty == true`,
-    ///   and is dropped before the shared return borrow is created.
-    /// - **INV-2.** `cache_dirty` transitions false→true only inside methods
-    ///   taking `&mut self` (`apply_move`, `undo_move`,
-    ///   `set_legal_move_radius`, `mark_cache_dirty`) or on boards not yet
-    ///   shared (`with_geometry`'s
-    ///   local, Clone's freshly built value). Enforced by privacy, not
-    ///   comments: the field is private to `state::core`; the sole
-    ///   crate-visible true-setter is `mark_cache_dirty(&mut self)`.
-    /// - **INV-3.** Every `&FxHashSet` returned by `legal_moves_set` borrows
-    ///   `*self`, so the borrow checker rejects any `&mut self` call — hence
-    ///   any dirty-true transition, hence any rebuild — while such a
-    ///   reference is live.
-    /// - **INV-4.** The rebuild block — everything up to (but not including)
-    ///   its terminal `clear_cache_dirty()` call — calls NO Board method and
-    ///   reads NOTHING through the cache: its body touches only plain fields
-    ///   (`cells`, the bbox fields, `legal_move_radius`) plus the local
-    ///   `&mut` it owns. (`clear_cache_dirty()` itself touches only the
-    ///   `Cell` flag, never the cache.) This excludes re-entrancy:
-    ///   `cache_dirty` is also true DURING a rebuild (it is cleared only at
-    ///   the end), so without INV-4 a call issued from inside the rebuild
-    ///   block (`legal_moves_set` re-entry, or `clone()`'s shared cap read)
-    ///   could create a second borrow aliasing the live exclusive one with no
-    ///   other invariant violated. Adding ANY call inside the rebuild block
-    ///   is a review failure.
+    /// - **INV-1.** The only `&mut` into `legal_cache` is created inside `legal_moves_set`'s
+    ///   rebuild block, entered iff `cache_dirty == true`, and dropped before the shared
+    ///   return borrow is created.
+    /// - **INV-2.** `cache_dirty` goes false->true only in `&mut self` methods, or on boards
+    ///   not yet shared. Enforced by privacy: the field is private to `state::core` and the
+    ///   sole crate-visible true-setter is `mark_cache_dirty(&mut self)`.
+    /// - **INV-3.** Every `&FxHashSet` returned by `legal_moves_set` borrows `*self`, so the
+    ///   borrow checker rejects any `&mut self` call — hence any rebuild — while it is live.
+    /// - **INV-4.** The rebuild block calls NO Board method and reads nothing through the
+    ///   cache. This is what excludes re-entrancy: `cache_dirty` is also true DURING a
+    ///   rebuild, so a call issued from inside the block could create a second borrow
+    ///   aliasing the live exclusive one with no other invariant violated. Adding ANY call
+    ///   inside the rebuild block is a review failure.
     ///
-    /// The soundness boundary spans TWO modules and is policed by review:
-    /// `state::core` (owns the flag and its privacy — safe code HERE can
-    /// still set the flag through `&self`, so any NEW `&self` write of
-    /// `cache_dirty` in this module is a review failure) and `board::moves`
-    /// (holds the unsafe blocks that rely on these invariants).
-    ///
-    /// `pub(crate)` is harmless: misuse from safe code is impossible
-    /// (`UnsafeCell::get` yields a raw pointer).
+    /// The soundness boundary spans `state::core` (owns the flag and its privacy — a NEW
+    /// `&self` write of `cache_dirty` here is a review failure) and `board::moves` (holds the
+    /// unsafe blocks). `pub(crate)` is harmless: `UnsafeCell::get` yields a raw pointer.
     pub(crate) legal_cache: UnsafeCell<FxHashSet<(i32, i32)>>,
-    /// Set to true by any mutating operation (apply_move / undo_move).
-    /// Cleared by `legal_moves_set()` after a full rebuild.
-    ///
-    /// PRIVATE to `state::core`: the false→true transition is gated behind
-    /// `&mut self` (`mark_cache_dirty`) — see the `legal_cache` safety
-    /// invariants (INV-2).
+    /// Set true by any mutating operation, cleared by `legal_moves_set()` after a rebuild.
+    /// PRIVATE to `state::core`: the false->true transition is gated behind `&mut self`.
     cache_dirty: StdCell<bool>,
-    /// Per-board legal-move radius override.
-    ///
-    /// `legal_moves_set()` rebuilds by hex-ball expansion at this radius.
-    /// Default is the canonical `moves::DEFAULT_LEGAL_MOVE_RADIUS` (5).
+    /// Per-board legal-move radius override; `legal_moves_set()` rebuilds by hex-ball
+    /// expansion at this radius. Default `moves::DEFAULT_LEGAL_MOVE_RADIUS` (5).
     pub(crate) legal_move_radius: i32,
-    /// Per-board cluster connectivity threshold.
-    ///
-    /// Two stones share a cluster iff their `hex_distance` is ≤ this value.
-    /// Default is `moves::DEFAULT_CLUSTER_THRESHOLD` (5, matching the v6
-    /// wire format). Wider-window corpus generation overrides to 8.
+    /// Per-board cluster connectivity threshold: two stones share a cluster iff their
+    /// `hex_distance` is <= this. Default 5 (v6 wire format); wide-window corpora use 8.
     pub(crate) cluster_threshold: i32,
-    /// Per-board cluster window side length.
-    ///
-    /// `get_cluster_views()` emits 2-plane snapshots of this side length.
-    /// Default is `BOARD_SIZE` (19, v6 wire format).
+    /// Per-board cluster window side length, used by `get_cluster_views()` for its 2-plane
+    /// snapshots. Default `BOARD_SIZE` (19, v6 wire format).
     pub(crate) cluster_window_size: usize,
 }
 
 impl Board {
-    /// Create an empty board ready for the first move.
-    ///
-    /// The baked constants (radius 5, threshold 5, window 19) are game-rules
-    /// constants, not config defaults — config-identity resolution happens
-    /// upstream; this legacy ctor stays byte-exact.
+    /// Create an empty board ready for the first move. The baked constants (radius 5,
+    /// threshold 5, window 19) are game-rules constants, not config defaults.
     pub fn new() -> Self {
-        // Pre-populate legal_cache with the 5×5 region centred at (0,0).
-        // This restricts the first move to a 25-cell neighbourhood, keeping
-        // the search branching factor at ~24 for the entire game (matching the
-        // bbox+2 semantics used after every stone is placed).
-        //
-        // The rules say "all cells legal for empty board", but hundreds of root
-        // children would multiply per-sim evaluation cost for no strategic
-        // benefit — the first move's location is arbitrary.
-        //
-        // cache_dirty starts false — no rebuild needed until a stone is placed.
+        // Pre-populated with the 5x5 region at (0,0), restricting the first move to 25 cells
+        // so branching stays ~24 for the whole game. The rules make every cell legal on an
+        // empty board, but hundreds of root children cost evaluation for no strategic gain.
         let mut init_cache = FxHashSet::default();
         init_cache.reserve(50);
         for dq in -2i32..=2 {
@@ -257,14 +194,8 @@ impl Board {
         }
     }
 
-    /// Construct a Board from plain geometry values.
-    ///
-    /// The sole non-default Board ctor. Callers resolve any named
-    /// configuration to values BEFORE calling — this crate never sees names.
-    ///
-    /// Marks `cache_dirty=true` (the legal cache built in `new()` is for the
-    /// default radius 5; non-default radii require a rebuild on the first
-    /// `legal_moves_set()` call). Debug-asserts the window is odd and >= 7.
+    /// Construct a Board from plain geometry values — the sole non-default ctor. Callers
+    /// resolve names to values BEFORE calling; this crate never sees names.
     pub fn with_geometry(g: BoardGeometry) -> Board {
         debug_assert!(
             g.cluster_window_size >= 7 && g.cluster_window_size % 2 == 1,
@@ -288,9 +219,8 @@ impl Board {
         }
     }
 
-    /// Override the cluster connectivity threshold for this Board. Affects
-    /// only `get_clusters()` / `get_cluster_views()`; legal-move expansion is
-    /// unchanged.
+    /// Override the cluster connectivity threshold. Affects only `get_clusters()` /
+    /// `get_cluster_views()`; legal-move expansion is unchanged.
     pub fn set_cluster_threshold(&mut self, threshold: i32) {
         self.cluster_threshold = threshold;
     }
@@ -300,9 +230,8 @@ impl Board {
         self.cluster_threshold
     }
 
-    /// Override the cluster window side length. Used by `get_cluster_views()`
-    /// to size the 2-plane snapshot. Caller must use an odd value (>= 7);
-    /// panic enforced by debug_assert.
+    /// Override the cluster window side length, used by `get_cluster_views()` to size the
+    /// 2-plane snapshot. Caller must use an odd value >= 7; enforced by debug_assert.
     pub fn set_cluster_window_size(&mut self, size: usize) {
         debug_assert!(
             size >= 7 && size % 2 == 1,
@@ -316,63 +245,43 @@ impl Board {
         self.cluster_window_size
     }
 
-    /// Override the legal-move radius for this Board.
-    ///
-    /// Marks `legal_cache` dirty so the next `legal_moves_set()` rebuilds at
-    /// the new radius. Used by self-play callers that vary the radius per
-    /// game; this setter has no Rust-level guard (any boundary-layer guard
-    /// lives at the boundary).
+    /// Override the legal-move radius, marking `legal_cache` dirty. No Rust-level guard: any
+    /// boundary-layer guard lives at the boundary.
     pub fn set_legal_move_radius(&mut self, radius: i32) {
         self.legal_move_radius = radius;
         self.cache_dirty.set(true);
     }
 
-    /// Current legal-move radius (default 5, may be overridden via
-    /// `set_legal_move_radius`).
+    /// Current legal-move radius (default 5).
     pub fn legal_move_radius(&self) -> i32 {
         self.legal_move_radius
     }
 
-    // ── Legal-cache dirty-flag protocol ───────────────────────────────────────
-    // The ONLY crate-visible surface over `cache_dirty`; see the `legal_cache`
-    // field doc (INV-1..INV-4) for the invariants this protocol enforces.
+    // The ONLY crate-visible surface over `cache_dirty`; the `legal_cache` field doc
+    // (INV-1..INV-4) carries the invariants this protocol enforces.
 
     /// Whether the legal-move cache needs a rebuild.
     pub(crate) fn cache_is_dirty(&self) -> bool {
         self.cache_dirty.get()
     }
 
-    /// Mark the legal-move cache clean (rebuild complete). False-only setter;
-    /// safe through `&self` — a false transition can never arm a rebuild.
+    /// Mark the cache clean. False-only setter, safe through `&self`: a false transition can
+    /// never arm a rebuild.
     pub(crate) fn clear_cache_dirty(&self) {
         self.cache_dirty.set(false);
     }
 
-    /// Invalidate the legal-move cache: the next `legal_moves_set()` call
-    /// performs a full rebuild. The sole crate-visible true-setter; requires
-    /// `&mut self` (INV-2), so it cannot be called while a `&FxHashSet`
-    /// returned by `legal_moves_set()` is live (INV-3).
-    ///
-    /// `pub` (not `pub(crate)`): the `compile_fail,E0502` doctest pinned on
-    /// `legal_moves_set` compiles as an external crate and must reach this
-    /// method so the pin fails for the right reason (E0502, not a
-    /// private-method error).
+    /// Invalidate the legal-move cache. The sole crate-visible true-setter; requires
+    /// `&mut self` (INV-2), so it cannot run while a `&FxHashSet` is live (INV-3). `pub` and
+    /// not `pub(crate)` because the `compile_fail,E0502` doctest compiles as an external
+    /// crate and must reach it, so the pin fails for E0502 and not a private-method error.
     pub fn mark_cache_dirty(&mut self) {
         self.cache_dirty.set(true);
     }
 
-    // ── Window ────────────────────────────────────────────────────────────────
-
-    /// Centre of the trunk-sized view window: centroid of the bounding
-    /// box. Defaults to (0, 0) on an empty board.
-    ///
-    /// Uses truncating-toward-zero integer division `(a+b)/2` to preserve
-    /// frame calibration for legacy checkpoints trained against this
-    /// semantic. Migrating to `i32::midpoint` (floor toward -∞) would shift
-    /// the absolute NN window by ≤1 cell on negative-odd bbox sums — see the
-    /// falsified register (midpoint row) and the inv18 pin tests.
-    // Truncate-toward-zero semantics preserves anchor calibration for legacy
-    // checkpoints (predecessor forensic record; pinned by inv18/inv18b).
+    /// Centre of the trunk-sized view window: bbox centroid, `(0, 0)` when empty. Truncating
+    /// `(a+b)/2` is deliberate — `i32::midpoint` floors toward -inf and would shift the NN
+    /// window by <=1 cell on negative-odd bbox sums, breaking legacy anchor calibration.
     #[allow(clippy::manual_midpoint)]
     pub fn window_center(&self) -> (i32, i32) {
         if !self.has_stones {
@@ -383,12 +292,8 @@ impl Board {
         (cq, cr)
     }
 
-    /// Window-relative flat index for axial (q, r) — geometry-aware.
-    ///
-    /// Result is in [0, trunk_sz²). Returns usize::MAX for out-of-window coords.
-    ///
-    /// Dispatches via `self.cluster_window_size` (the NN-input frame geometry;
-    /// window indexing uses it, not the canvas size).
+    /// Window-relative flat index for (q, r), `usize::MAX` when out of window. Dispatches via
+    /// `self.cluster_window_size`, the NN-input frame geometry, not the canvas size.
     #[inline]
     pub fn window_flat_idx(&self, q: i32, r: i32) -> usize {
         let (cq, cr) = self.window_center();
@@ -397,27 +302,15 @@ impl Board {
         Self::window_flat_idx_at_geom(q, r, cq, cr, trunk_sz, half)
     }
 
-    /// Window-relative flat index for axial (q, r) at a specific center —
-    /// legacy default-geometry (19/9) associated fn.
-    ///
-    /// Callers that need a non-19 trunk must use `window_flat_idx_at_geom`
-    /// and thread `(trunk_sz, half)` from values extracted at the boundary.
-    /// This wrapper keeps byte-exact behaviour for default-geometry call sites.
+    /// Flat index at a specific centre, legacy default geometry (19/9). A non-19 trunk must
+    /// go through `window_flat_idx_at_geom` with `(trunk_sz, half)` threaded from the boundary.
     #[inline]
     pub fn window_flat_idx_at(q: i32, r: i32, cq: i32, cr: i32) -> usize {
         Self::window_flat_idx_at_geom(q, r, cq, cr, BOARD_SIZE as i32, HALF)
     }
 
-    /// Window-relative flat index kernel — caller-threaded geometry.
-    ///
-    /// Scalar-only API: per-hot-loop callers pre-extract `(trunk_sz, half)`
-    /// once at their boundary and pass the integer pair in. Marked
-    /// `#[inline]` so the compiler can fold the bounds check + index math
-    /// into the caller.
-    ///
-    /// `trunk_sz`: per-cluster NN input side length (= `Board::cluster_window_size`
-    ///   cached on Board for self-dispatch).
-    /// `half`:     `(trunk_sz - 1) / 2` — pre-computed by caller.
+    /// Flat-index kernel with caller-threaded geometry: hot-loop callers pre-extract
+    /// `(trunk_sz, half)` once, and `#[inline]` folds the bounds check into the caller.
     #[inline]
     pub fn window_flat_idx_at_geom(
         q: i32, r: i32, cq: i32, cr: i32, trunk_sz: i32, half: i32,
@@ -436,10 +329,8 @@ impl Board {
         self.cells.get(&(q, r)).copied().unwrap_or(Cell::Empty)
     }
 
-    /// Axial coordinates (q, r) from a window-relative flat index.
-    ///
-    /// Dispatches via `self.cluster_window_size` so non-default windows
-    /// decode correctly.
+    /// Axial coordinates (q, r) from a window-relative flat index; dispatches via
+    /// `self.cluster_window_size` so non-default windows decode correctly.
     #[inline]
     pub fn window_coords(&self, flat: usize) -> (i32, i32) {
         let (cq, cr) = self.window_center();
@@ -451,8 +342,6 @@ impl Board {
     }
 
     /// Whether (q, r) is inside the current trunk-sized view window.
-    ///
-    /// Dispatches via `self.cluster_window_size`.
     #[inline]
     pub fn in_window(&self, q: i32, r: i32) -> bool {
         let (cq, cr) = self.window_center();
@@ -462,8 +351,6 @@ impl Board {
         let wr = r - cr + half;
         wq >= 0 && wq < trunk_sz && wr >= 0 && wr < trunk_sz
     }
-
-    // ── Queries ───────────────────────────────────────────────────────────────
 
     /// Iterator over all occupied cells: yields `(&(q, r), &Cell)` pairs.
     pub fn cells_iter(&self) -> impl Iterator<Item = (&(i32, i32), &Cell)> {
@@ -476,29 +363,18 @@ impl Board {
         self.cells.get(&(q, r)).copied().unwrap_or(Cell::Empty)
     }
 
-    // ── Move application ──────────────────────────────────────────────────────
-
     /// Apply a move at (q, r) for the current player.
     ///
-    /// Returns `Err` only if the cell is already occupied. The board is
-    /// conceptually infinite — `apply_move` performs no window or radius
-    /// check, and any previously-empty (q, r) is accepted. Window / radius /
-    /// bbox-margin constraints are the caller's responsibility
-    /// (`legal_moves_set` for search, `legal_move_radius` for self-play,
-    /// etc.); this entry point is the unconditional cell-write primitive.
-    ///
-    /// After a successful move:
-    /// - `moves_remaining` decrements.
-    /// - When it reaches 0 the turn passes: `current_player` flips and
-    ///   `moves_remaining` resets to 2.
+    /// `Err` only if the cell is occupied: the board is conceptually infinite and this does no
+    /// window or radius check, so those constraints are the caller's. `moves_remaining`
+    /// decrements, and at 0 the turn passes — player flips, count resets to 2.
     pub fn apply_move(&mut self, q: i32, r: i32) -> Result<(), &'static str> {
         if self.cells.contains_key(&(q, r)) {
             return Err("cell already occupied");
         }
 
-        // Update bounding box FIRST so that window_flat_idx uses the final
-        // bounding box — this keeps the Zobrist hash position-deterministic
-        // (same stone set → same bbox → same centre → same hash).
+        // Bounding box FIRST so `window_flat_idx` sees the final bbox, which keeps the
+        // Zobrist hash position-deterministic (same stone set -> same centre -> same hash).
         if self.has_stones {
             if q < self.min_q { self.min_q = q; }
             if q > self.max_q { self.max_q = q; }
@@ -520,11 +396,8 @@ impl Board {
         };
         self.cells.insert((q, r), cell);
 
-        // Mark legal cache dirty — legal_moves_set() will rebuild lazily.
-        // This avoids 24+ HashSet operations on every apply_move (the search
-        // hot path calls apply_move ~2D times per simulation during traversal
-        // and reconstruction, but legal_moves_set() is only needed once per
-        // sim at leaf expansion).
+        // Lazy invalidation: the search hot path calls apply_move ~2D times per simulation
+        // but needs `legal_moves_set()` once, at leaf expansion.
         self.cache_dirty.set(true);
 
         // Update action anchors (last 4 stones).
@@ -592,10 +465,8 @@ impl Board {
             debug_assert!(false, "undo_move expected placed stone to exist");
         }
 
-        // Mark legal cache dirty — it will be rebuilt lazily on next access.
-        // This avoids O(24) HashSet operations per undo (undo is called ~D
-        // times per sim during selection traversal but legal_moves_set() is
-        // not called until leaf expansion).
+        // Lazy invalidation for the same reason as apply_move: undo runs ~D times per sim
+        // during selection traversal, and `legal_moves_set()` is not called until expansion.
         self.cache_dirty.set(true);
 
         self.zobrist_hash = diff.prev_zobrist_hash;
@@ -623,20 +494,11 @@ impl Default for Board {
 
 impl Clone for Board {
     fn clone(&self) -> Self {
-        // Skip copying legal_cache contents — rebuilding a HashSet of N entries
-        // is O(N) allocation and dominates clone cost on the search hot path
-        // (every leaf expansion reconstructs a board via clone + apply_move*).
-        //
-        // We set cache_dirty = true unconditionally so that the first
-        // legal_moves_set() call on the clone rebuilds from `cells` (which IS
-        // correctly copied).  This is safe even when diffs is empty (root node
-        // expansion) because the rebuild is always correct given a valid `cells`.
-        // SAFETY: shared read of the cache's len through the UnsafeCell.
-        // Clone takes `&self`, so per INV-1 no exclusive borrow can be live:
-        // the only `&mut` ever created exists inside `legal_moves_set`'s
-        // rebuild block, which per INV-4 calls no Board method — `clone()`
-        // can never run while it exists. Coexisting shared reads (a live
-        // `&FxHashSet` from `legal_moves_set`) alias this read harmlessly.
+        // legal_cache contents are NOT copied: rebuilding N entries dominates clone cost on
+        // the search hot path, and `cache_dirty = true` makes the clone rebuild from `cells`.
+        // SAFETY: shared read of the cache's len through the UnsafeCell. Clone takes `&self`,
+        // so per INV-1 no exclusive borrow can be live — the only `&mut` exists inside
+        // `legal_moves_set`'s rebuild block, which per INV-4 calls no Board method.
         let cap = unsafe { (*self.legal_cache.get()).len() };
         Board {
             cells: self.cells.clone(),
@@ -661,34 +523,18 @@ impl Clone for Board {
     }
 }
 
-// NOTE: deliberately NO `unsafe impl Sync for Board` — the `UnsafeCell` cache
-// makes Board auto-`!Sync` (no impl to write; a `&Board` cannot cross threads
-// at the type level), while Board stays auto-`Send` (worker threads own their
-// boards). The crate carries exactly three `unsafe` expressions (two in
-// `board::moves::legal_moves_set`, one in `Clone::clone` above), each resting
-// on INV-1..INV-4 (see the `legal_cache` field doc). A fourth `unsafe` block
-// touching the cache is a review failure.
+// Deliberately NO `unsafe impl Sync for Board`: the `UnsafeCell` cache makes Board auto-!Sync
+// while it stays auto-Send. The crate's three `unsafe` expressions each rest on INV-1..INV-4;
+// a fourth touching the cache is a review failure.
 
-// ── Test-fixture builder (feature `test-fixtures`, OFF by default) ─────────────
-//
-// A public stone-planting builder that reproduces the frozen `static_board` /
-// `fwm_board` construction exactly. Additive + feature-gated: when the feature
-// is OFF (the default for `cargo build`) this block is not compiled and no
-// existing path can reference it, so production behaviour is byte-untouched.
-// Consumed only by test/bench targets in downstream crates (e.g. the search
-// crate's tactics soundness fuzz + mcts unit suite) that need non-legal-cadence
-// positions the public `apply_move` cadence cannot reach.
+// Test-fixture builder, feature `test-fixtures`, OFF by default, so production behaviour is
+// byte-untouched. Downstream test/bench targets use it for positions the public `apply_move`
+// cadence cannot reach.
 #[cfg(feature = "test-fixtures")]
 impl Board {
-    /// Test-only static-position builder. Plants `stones` (bbox recomputed from
-    /// their min/max), marks the legal cache dirty (so `legal_moves_set()`
-    /// rebuilds on demand), and sets the turn-structure fields explicitly.
-    ///
-    /// `ply` is explicit because consumers vary it (`static_board` passes
-    /// `stones.len()`; the mcts quiescence/CF-1 fixtures pass a specific ply).
-    /// `last_move` is `Some(..)` only for a terminal-win fixture — `check_win`
-    /// reads `last_move` alone, so a fixture asserting `check_win()` must supply
-    /// the completing cell, and one asserting `!check_win()` leaves it `None`.
+    /// Test-only static-position builder: plants `stones`, recomputes the bbox, marks the
+    /// cache dirty and sets the turn-structure fields explicitly. `last_move` is `Some(..)`
+    /// only for a terminal-win fixture, since `check_win` reads `last_move` alone.
     pub fn from_stones(
         stones: &[((i32, i32), Cell)],
         to_move: Player,
@@ -752,8 +598,7 @@ mod from_stones_tests {
         assert_eq!(b.ply, Ply::new(7));
         assert_eq!(b.last_move, Some((4, 1)));
 
-        // mark_cache_dirty => legal_moves_set rebuilds against the planted stones
-        // (non-empty; excludes the occupied cells; radius-5 ball around them).
+        // mark_cache_dirty => legal_moves_set rebuilds against the planted stones.
         let legal = b.legal_moves_set();
         assert!(!legal.is_empty(), "legal set must rebuild from planted stones");
         assert!(!legal.contains(&(2, 1)), "occupied cell is not legal");
@@ -762,8 +607,7 @@ mod from_stones_tests {
 
     #[test]
     fn from_stones_terminal_win_reads_last_move() {
-        // A 6-in-a-row with last_move on the line makes check_win() true (it reads
-        // last_move only); no last_move leaves it false.
+        // check_win() reads last_move only, so a 6-in-a-row with it on the line wins.
         let six: Vec<((i32, i32), Cell)> =
             (0..WIN_LENGTH as i32).map(|q| ((q, 0), Cell::P1)).collect();
         let win = Board::from_stones(&six, Player::One, 1, 11, Some((5, 0)));
@@ -783,13 +627,12 @@ mod from_stones_tests {
 
 #[cfg(test)]
 mod geometry_tests {
-    //! Re-anchored geometry-ctor pins (2 of the predecessor's 9 spec-ctor
-    //! tests survive the registry decoupling; the rest die with the spec
-    //! binding or defer to the encoding crate).
+    //! Re-anchored geometry-ctor pins: 2 of the predecessor's 9 spec-ctor tests survive the
+    //! registry decoupling.
     use super::*;
 
-    /// Asymmetric values (radius 4, threshold 7, window 9) so a `with_geometry`
-    /// transcription bug swapping the two same-typed i32 fields cannot pass.
+    /// Asymmetric values (radius 4, threshold 7, window 9) so a `with_geometry` transcription
+    /// bug swapping the two same-typed i32 fields cannot pass.
     #[test]
     fn with_geometry_propagates_fields() {
         let b = Board::with_geometry(BoardGeometry {

@@ -20,7 +20,7 @@ from mantis.diagnostics.fusion_calibrate import _recommend
 _REPO = Path(__file__).resolve().parents[2]
 
 
-# ── A03: a plan whose sampler cannot produce a series is refused at LOAD ──────────────
+# A03: a plan whose sampler cannot produce a series is refused at LOAD
 
 def _plan_text(*, round_sec: float, interval: float) -> str:
     base = (_REPO / "tools" / "worker_sweep_plan.toml").read_text(encoding="utf-8")
@@ -54,7 +54,7 @@ def test_a_sampler_that_cannot_produce_a_series_is_refused(
         ws.load_plan(path)
 
 
-# ── A05: "seen in this sweep" includes the points that OOM'd ──────────────────────────
+# A05: "seen in this sweep" includes the points that OOM'd
 
 _FIT = {"a_bytes": 1_000_000.0, "b_bytes_per_edge": 100.0, "c_bytes_per_node": 200.0,
         "operating_edges_per_node": 4.0}
@@ -80,7 +80,7 @@ def test_a_graph_the_sweep_OOMd_on_counts_as_SEEN(tmp_path: Path) -> None:
     )
 
 
-# ── A06 / A07: the markers reader and the printed wall ────────────────────────────────
+# A06 / A07: the markers reader and the printed wall
 
 def test_a_round_with_no_timestamps_reports_no_wall_instead_of_crashing() -> None:
     """THE PIN (A06). `max(...)` over a sequence containing `None` raises `TypeError`, which
@@ -115,7 +115,7 @@ def test_a_series_with_no_timed_round_at_all_says_unmeasured() -> None:
     assert "wall_sec=unmeasured (0/1 rounds carry a wall)" in out.getvalue()
 
 
-# ── A08: rates over zero games ────────────────────────────────────────────────────────
+# A08: rates over zero games
 
 def test_the_witness_reports_no_rate_over_zero_games() -> None:
     """THE PIN (A08). This tool's whole subject is a decisive-rate bar, so `decisive_rate
@@ -138,7 +138,7 @@ def test_a_witness_over_zero_games_is_refused_at_the_CLI() -> None:
             _positive_games(bad)
 
 
-# ── A09: a verdict over zero games ────────────────────────────────────────────────────
+# A09: a verdict over zero games
 
 def test_the_convention_audit_does_not_certify_over_zero_games() -> None:
     """THE PIN (A09). With nothing in the check both counters are 0, `lacks` is falsy, and the
@@ -157,7 +157,7 @@ def test_the_convention_audit_does_not_certify_over_zero_games() -> None:
     assert out["games_checked"] == 0
 
 
-# ── A10: git_dirty ────────────────────────────────────────────────────────────────────
+# A10: git_dirty
 
 def _provenance(monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
                 *, porcelain: str | None) -> dict[str, Any]:
@@ -192,7 +192,7 @@ def test_git_dirty_still_reports_a_real_answer_when_git_answers(
     assert _provenance(monkeypatch, tmp_path, porcelain=" M f.py")["git_dirty"] is True
 
 
-# ── A11: device_count ─────────────────────────────────────────────────────────────────
+# A11: device_count
 
 def test_device_count_is_absent_when_the_question_was_never_asked(
     monkeypatch: pytest.MonkeyPatch,

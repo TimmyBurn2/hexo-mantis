@@ -1,25 +1,14 @@
 # >300 justify (R8): ONE gate's producer suite. The MUST-FIRE and MUST-NOT-FIRE tables are a
-# single discrimination claim, not two lists — every row of each is a near-miss of the other
-# (a terse `L`-unit size is a tally; a bare number beside a deleted module's path is not; the
-# cap token written in LOC form is silent while a smaller LOC figure is a count), and that is
-# exactly the pairing a reviewer must see on one screen before widening either. Splitting them
-# lets a new MUST-FIRE row silently contradict a MUST-NOT-FIRE row in the other file, which is
-# the false-positive class that gets a gate disabled. The presence rows and the whole-tree
-# baseline drive the SAME spec-loaded `GATE` object through the SAME `check_file`, and R5 bars
-# the cross-test import that would rejoin a split. NOTE for anyone editing above line 80: this
-# file quotes banned headers as data, so its own justification must stay the FIRST marker in
-# the file, and must itself quote no figure, or the gate fails itself.
-"""CI gate 15's producer test (LAW-07): the R8 justification detector must BITE.
+# single discrimination claim, not two lists — every row of each is a near-miss of the other,
+# and that pairing must be visible on one screen before either is widened. Split, a new
+# MUST-FIRE row can silently contradict a MUST-NOT-FIRE row in the other file. This file quotes
+# banned headers as data, so its own justification must stay the FIRST marker in the file and
+# must itself quote no figure, or the gate fails itself.
+"""CI gate 15's producer test: the R8 justification detector must BITE.
 
-Both halves are exercised through `r8_header_gate.check_file` -- the SAME function the gate's
-scan calls. An oracle that re-implemented the decision could drift from the thing it certifies,
-which is the defect class this repo keeps finding (gate 11's docstring says so in its own words).
-
-The no-count corpus below is not invented. Every MUST-FIRE string is a real header from this
-tree at the adoption commit, and every MUST-NOT-FIRE string is a real clause that a naive
-detector flags: `r153 line-dispersal` and `a stale size in an R8 line` are the two false
-positives the first draft produced, and the deleted-predecessor sizes are the case the rule
-deliberately permits (a number that counts a frozen file can never need re-editing).
+Both halves run through `r8_header_gate.check_file`, the SAME function the gate's scan calls.
+Every MUST-FIRE string is a real header from this tree; every MUST-NOT-FIRE string is a real
+clause that a naive detector flags.
 """
 from __future__ import annotations
 
@@ -34,11 +23,7 @@ GATE_PATH = REPO_ROOT / "tools" / "ci_gates" / "r8_header_gate.py"
 
 
 def _load_gate():
-    """Load the gate by PATH.
-
-    R5/LAW-17 ban `sys.path` mutation and `tools/` is not an importable package, so the gate is
-    spec-loaded from its file exactly as the other gate oracles do it.
-    """
+    """Spec-load the gate from its path: `tools/` is not importable and sys.path must not be mutated."""
     spec = importlib.util.spec_from_file_location("_r8_header_gate", GATE_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -53,8 +38,6 @@ GATE = _load_gate()
 def _body(n: int) -> list[str]:
     return [f"x = {i}" for i in range(n)]
 
-
-# --- half 1: the no-count rule ------------------------------------------------------------
 
 MUST_FIRE = [
     pytest.param(
@@ -173,11 +156,7 @@ def test_the_rule_holds_across_a_wrapped_multi_line_clause() -> None:
 
 
 def test_a_count_outside_the_justification_paragraph_is_not_the_headers_problem() -> None:
-    """The block ends at the paragraph. Prose further down the docstring is not a justification.
-
-    This is deliberate and it is what keeps the gate off unrelated documentation -- including
-    this gate's own docstring, which quotes every banned form as an example.
-    """
+    """The block ends at the paragraph, so prose further down a docstring is not a justification."""
     lines = [
         '"""Module summary.',
         "",
@@ -190,9 +169,6 @@ def test_a_count_outside_the_justification_paragraph_is_not_the_headers_problem(
     violations, _over, marker = GATE.check_file("f.py", lines)
     assert marker is True
     assert not violations
-
-
-# --- half 2: the presence rule ------------------------------------------------------------
 
 
 def test_exactly_at_the_cap_needs_no_justification() -> None:
@@ -233,8 +209,7 @@ def test_every_house_style_of_header_is_recognised(name: str, header: list[str])
 
 
 def test_a_justification_below_the_marker_window_does_not_count() -> None:
-    """80 lines, not the whole file. The auditor's `grep the file` criterion called two files
-    justified on the strength of an `R8` token in a test body 400 lines down."""
+    """The marker window is the file head, not the whole file: an `R8` token in a test body is not a header."""
     lines = [*_body(GATE.MARKER_WINDOW + 5), "# >300 justify (R8): too late to be a header.",
              *_body(400)]
     violations, _over, marker = GATE.check_file("f.py", lines)
@@ -243,8 +218,8 @@ def test_a_justification_below_the_marker_window_does_not_count() -> None:
 
 
 def test_the_deepest_real_marker_in_the_tree_is_inside_the_window() -> None:
-    """The window is 80 because the corpus put a real justification at line 75, not because 80
-    is a round number. If a legitimate header ever sits deeper, this fails rather than the file."""
+    """The window is armed by the deepest real marker measured in the corpus (line 75); a deeper
+    legitimate header fails here rather than failing the file."""
     deepest = 0
     for path in GATE.source_files():
         lines = path.read_text(encoding="utf-8").splitlines()
@@ -252,9 +227,6 @@ def test_the_deepest_real_marker_in_the_tree_is_inside_the_window() -> None:
         if marker is not None:
             deepest = max(deepest, marker + 1)
     assert 0 < deepest <= GATE.MARKER_WINDOW, f"deepest marker is at line {deepest}"
-
-
-# --- the gate as a whole ------------------------------------------------------------------
 
 
 def _scratch_tree(root: Path, rel: str, text: str | bytes) -> None:
@@ -267,8 +239,7 @@ def _scratch_tree(root: Path, rel: str, text: str | bytes) -> None:
 
 
 def test_a_non_utf8_source_is_reported_not_crashed_on(tmp_path: Path) -> None:
-    """Gates 9 and 10 BOTH crashed with UnicodeDecodeError for want of `encoding=`. A gate that
-    dies on the input it is meant to judge reports nothing at all (S-19)."""
+    """A gate that dies on the input it judges reports nothing at all."""
     _scratch_tree(tmp_path, "src/bad.py", "# >300 justify\n".encode() + b"x = '\xff\xfe'\n")
     violations, _over, _headers, _scanned = GATE.scan(tmp_path)
     assert violations and "not UTF-8" in violations[0]
@@ -292,7 +263,7 @@ def test_the_scan_finds_a_planted_defect_in_a_scratch_tree(tmp_path: Path) -> No
 
 
 def test_gate_is_green_on_the_committed_tree() -> None:
-    """The baseline R98 requires: a gate may only be adopted over a clean baseline."""
+    """A gate is adopted only over a clean baseline."""
     violations, over_cap, headers, scanned = GATE.scan()
     assert not violations, "gate 15 baseline is dirty:\n" + "\n\n".join(violations)
     assert over_cap >= GATE.MIN_OVER_CAP
@@ -302,19 +273,15 @@ def test_gate_is_green_on_the_committed_tree() -> None:
 
 
 def test_the_non_vacuity_floors_would_fire_on_an_empty_tree(tmp_path: Path) -> None:
-    """`scanned nothing, found nothing` must never read as green (gate 16's own lesson)."""
+    """`scanned nothing, found nothing` must never read as green."""
     _, over_cap, headers, scanned = GATE.scan(tmp_path)
     assert over_cap < GATE.MIN_OVER_CAP and headers < GATE.MIN_HEADERS
     assert all(scanned[root] < floor for root, floor in GATE.MIN_FILES.items())
 
 
 def test_the_floors_are_per_root_because_one_global_floor_was_measured_too_weak() -> None:
-    """A single corpus-wide floor let a typo that dropped `src/` entirely report GREEN.
-
-    Mutation-tested at adoption: renaming `src` in `ROOTS` left 109 over-cap files, which
-    cleared the then-floor of 100. Each root now carries its own floor, so losing any one of
-    them is fatal on its own. This test pins the SHAPE, not the numbers.
-    """
+    """A single corpus-wide floor let a typo that dropped `src/` report GREEN: at adoption,
+    renaming `src` in `ROOTS` still left 109 over-cap files against the then-floor of 100."""
     _violations, _over, _headers, scanned = GATE.scan()
     assert set(GATE.MIN_FILES) == set(GATE.ROOTS), (
         "every scanned root needs its own floor, or losing that root reads as green"
@@ -324,7 +291,7 @@ def test_the_floors_are_per_root_because_one_global_floor_was_measured_too_weak(
 
 
 def test_the_gates_own_self_test_passes() -> None:
-    """LAW-07: the trigger proves it can fire on every invocation, including this one."""
+    """The trigger proves it can fire on every invocation, including this one."""
     assert GATE.self_test() == 0
 
 
@@ -334,20 +301,9 @@ def test_the_self_test_covers_both_halves() -> None:
     assert any(not must_fire for _n, _h, must_fire in GATE.SELF_TEST)
 
 
-# ── AUDIT-1 F-25: the marker was enforced, the REASON was not ─────────────────────────
-#
-# `check_file` treated any `MARKER_RE` match as a justification. The audit probed the decision
-# function directly and found all three of these accepted: `# >300`, `# R8 justification:`,
-# and — because the window is a raw line scan — a bare `if n >= 300:` in code. R8 asks WHY the
-# file is one unit; it was being enforced as "the digits 300 appear near the top".
-
 def _over_cap(header: list[str]) -> list[str]:
-    """A file over the cap carrying `header`, so `check_file` reaches its reason arm.
-
-    The blank line is load-bearing: `block_at` runs to the next paragraph break, so without
-    it the file BODY would be read as part of the justification and every header would clear
-    the word floor on code it does not own.
-    """
+    """A file over the cap carrying `header`. The blank line is load-bearing: `block_at` runs to
+    the next paragraph break, so without it the file body reads as part of the justification."""
     return [*header, "", *[f"line_{i} = {i}" for i in range(GATE.CAP + 5)]]
 
 
@@ -371,8 +327,7 @@ def test_a_marker_with_no_REASON_is_a_violation(header: list[str]) -> None:
 
 
 def test_a_REAL_justification_is_accepted() -> None:
-    """The control, and it is what keeps the floor honest: the shortest header this gate is
-    meant to accept must still pass."""
+    """The control: the shortest header the gate is meant to accept must still pass."""
     header = ["# R8 justify: the loader and its four verifiers are one decision procedure "
               "over one document and cannot be split without one half asserting a shape the "
               "other never builds."]
@@ -382,16 +337,13 @@ def test_a_REAL_justification_is_accepted() -> None:
 
 
 def test_the_marker_TOKEN_itself_does_not_count_toward_the_reason() -> None:
-    """`R8 justification:` is four tokens of pure announcement; counting them would let a
-    header satisfy the floor by saying its own name."""
+    """The marker tokens are pure announcement; counting them would let a header satisfy the floor by naming itself."""
     words = GATE.reason_words(["# R8 justify: >= 300"])
     assert words == [], words
 
 
 def test_an_UNDER_cap_file_that_merely_mentions_R8_owes_no_reason() -> None:
-    """The scoping, pinned. R8's duty exists only for a file over the cap; two files in this
-    tree say "R8: 300-line soft cap not exceeded" as a NOTE, and demanding a justification
-    from them would be the gate inventing a rule."""
+    """The duty exists only for a file over the cap; an under-cap NOTE owes no reason."""
     lines = ["\"\"\"A short module.", "", "R8: 300-line soft cap not exceeded.", "\"\"\""]
     violations, over_cap, has_marker = GATE.check_file("f.py", lines)
     assert not over_cap and has_marker
@@ -399,8 +351,7 @@ def test_an_UNDER_cap_file_that_merely_mentions_R8_owes_no_reason() -> None:
 
 
 def test_the_no_count_rule_still_applies_to_an_under_cap_file() -> None:
-    """…and the OTHER half is deliberately NOT scoped: a stated tally is misinformation a
-    reader trusts wherever it sits."""
+    """The no-count half is deliberately NOT scoped: a stated tally misinforms wherever it sits."""
     lines = ["# R8 justify: this file is one unit for reasons stated at length here now.",
              "# It is 42 lines long."]
     violations, _over_cap, _marker = GATE.check_file("f.py", lines)
@@ -408,6 +359,6 @@ def test_the_no_count_rule_still_applies_to_an_under_cap_file() -> None:
 
 
 def test_the_committed_tree_passes_the_tightened_rule() -> None:
-    """R98: a rule is adopted only over a clean baseline."""
+    """A rule is adopted only over a clean baseline."""
     violations, _over, _hdr, _scanned = GATE.scan()
     assert violations == [], violations[:5]

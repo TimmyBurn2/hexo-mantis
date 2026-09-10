@@ -1,23 +1,15 @@
-"""`resolve_fast_policy_weight` — THE one read path for `train.fast_policy_weight` (R347(b)).
+"""THE one read path for `train.fast_policy_weight`.
 
-WHAT THE KEY IS. Fast-arm rows (`is_full_search == 0`) have always trained VALUE; their
-POLICY was gated off entirely, by a binary mask that was neither declared nor readable in a
-config. This key is the declared WEIGHT that replaces the gate, and its minted `0.0`
-reproduces the gate exactly.
+The declared POLICY weight a fast-arm row (`is_full_search == 0`) carries; a minted `0.0`
+reproduces the binary gate it replaced.
 
-WHY A RESOLVER AND NOT A `TrainHParams` FIELD. It is consumed on the GRAPH training route
-only, by `train/coordinator/dispatch.py::_build_graph_parts`, which is handed a zero-arg
-PROVIDER rather than a value — the same shape and the same grounds as
-`resolve_microbatch_caps` and `resolve_sample_threads`. Python evaluates every argument
-before the call, so resolving at the dispatcher's call site would read `full_config["train"]`
-on BOTH representations, and the four frozen grid coordinators construct a `full_config` with
-no `train` section at all. A `TrainHParams` field would ALSO work for the training step and
-would then be a second authority over the same leaf for the pretrain and held-out routes,
-which reach the dispatcher directly.
+A resolver rather than a `TrainHParams` field: it is consumed on the GRAPH route only, through
+a zero-arg PROVIDER. Python evaluates every argument before the call, so resolving at the
+dispatcher's call site would read `full_config["train"]` on BOTH representations, and the grid
+coordinators construct a `full_config` with no `train` section at all.
 
-ABSENCE IS A NAMED RAISE, NEVER A DEFAULT (LAW-11, R1). The schema is the sole default
-authority; a `.get(..., 0.0)` here would silently disarm an armed ablation and report as
-present, which is the phantom-input class R4/LAW-07 exist to kill.
+ABSENCE IS A NAMED RAISE, NEVER A DEFAULT: a `.get(..., 0.0)` here would silently disarm an
+armed ablation and report as present.
 """
 from __future__ import annotations
 

@@ -1,32 +1,11 @@
-"""The Trainer — one gradient step + envelope-v2 checkpoint IO (WP10 §a.4/§c.7 PORT).
+"""The Trainer — one gradient step + envelope-v2 checkpoint IO.
 
->300 justify: the `Trainer` owns the full per-step training surface (optimizer / scaler /
-scheduler / EMA lifecycle, the dense-CNN step, the graph-GNN step, the periodic-checkpoint
-seam `_maybe_periodic_checkpoint` — THE one reader of `train.checkpoint_interval`, which
-both step tails call (R173) — and the checkpoint save/load delegates) — ONE cohesive
-responsibility kept in one file so the training-step numeric contract is greppable.
-Behaviour-exact relocation of `hexo_rl/training/trainer.py`,
-routed through the new-repo seams, with the ratified WP10 amendments + KILL severances:
-
-  * `save_checkpoint` writes envelope v2 via `checkpoints.save_checkpoint(kind="full", ...)`
-    → `{run_id}_{step:08d}_{sha8}.ckpt` (the old `checkpoint_{step}.pt`/`inference_only.pt`/
-    EMA-sidecar names are replaced); `load_checkpoint` delegates to `checkpoints.resume_trainer`
-    (§c.7). No shape-inference — arch travels on `self.arch` (a WP9 declared dataclass).
-  * autocast dtype is REPRESENTATION-AWARE off the DECLARED arch (`self.arch.representation`
-    → `amp_dtype_for`), NOT a `model_representation(module)` sniff (WP9-deleted, §c.4). The
-    graph path is bf16-pinned (LAW-06).
-  * DEFINITE-KILL branches SEVERED (never re-enter): `per_class_target_temperature` (F-02/F-28),
-    `track_b_grad_attribution`/`track_b_buffer_snapshot` (F-22..F-33).
-  * The display/metrics half (per-source entropy split, perf probes, value-spread canary,
-    structlog train_step lines) DEFERS→WP13 — training-side events route through the injected
-    `EventSink`; the reachable NUMERIC path (forward/loss/backward/optim/scheduler/EMA/step) is
-    behaviour-exact.
-
-Training hyperparameters ARE first-class `TrainConfig` schema fields (R-TRAINCONFIG-SCHEMA
-closure, WPSC Phase 2 SC-A1): the minted `configs/*.yaml` `train:` section is the sole default
-authority (R1). `TrainHParams` is now the RUNTIME dataclass a resolver (`from_config`) builds
-from the validated `RunConfig.train` section — it is no longer an independent default
-authority; every field is a REQUIRED constructor argument (no `=` default on the dataclass).
+>300 justify (R8): the `Trainer` owns the full per-step training surface — optimizer / scaler /
+scheduler / EMA lifecycle, the graph-GNN step, the periodic-checkpoint seam (THE one reader of
+`train.checkpoint_interval`) and the checkpoint save/load delegates — ONE cohesive responsibility
+kept in one file so the numeric contract is greppable. Autocast dtype comes from the DECLARED arch
+and the graph path is bf16-pinned (LAW-06); hyperparameters come from the minted `train:` section
+through a resolver, so `TrainHParams` is not a second default authority (R1).
 """
 from __future__ import annotations
 
@@ -68,9 +47,8 @@ from mantis.train.losses import (
 _LOG = logging.getLogger(__name__)
 
 def build_param_groups(model: nn.Module, weight_decay: float) -> list[dict[str, Any]]:
-    """Split params for AdamW weight decay: 2D+ weights decay, 1D params / biases don't
-    (nanoGPT / KataGo precedent; the no-decay group counters late-training plasticity loss).
-    Yields exactly TWO param groups (pinned by T-CK-19 `param_groups==2`)."""
+    """Split params for AdamW weight decay: 2D+ weights decay, 1D params / biases do not. The
+    no-decay group counters late-training plasticity loss. Yields exactly TWO param groups."""
     decay: list[torch.Tensor] = []
     no_decay: list[torch.Tensor] = []
     for name, p in model.named_parameters():
@@ -88,14 +66,9 @@ def build_param_groups(model: nn.Module, weight_decay: float) -> list[dict[str, 
 
 @dataclass(frozen=True)
 class TrainHParams:
-    """Training hyperparameters — the RUNTIME object a `Trainer` (and every test bypassing
-    `.from_config`) constructs and passes around. R-TRAINCONFIG-SCHEMA closure (WPSC Phase 2
-    SC-A1): every field is a REQUIRED constructor argument — NO Python dataclass default.
-    `TrainConfig` (the schema, `mantis.config.schema.train`) is the sole default authority
-    (R1); a dataclass default here would be a second, independently-editable authority for
-    the same knob, exactly what R1 forbids. `.from_config` builds this from a validated
-    `RunConfig.train` section (`config["train"]`), never from flat legacy keys.
-    """
+    """Training hyperparameters — the RUNTIME object a `Trainer` constructs and passes around.
+    Every field is a REQUIRED constructor argument with NO Python default: `TrainConfig` is the
+    sole default authority, and a default here would be a second, independently-editable one."""
 
     lr: float
     weight_decay: float
@@ -112,9 +85,8 @@ class TrainHParams:
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
-        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No
-        flat-key fallback: `config['train']` (a `TrainConfig.model_dump()`-shaped, no-terminal-
-        default dict — every field present) is REQUIRED."""
+        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No flat-key
+        fallback: `config['train']` is REQUIRED, with every field present."""
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
         if not isinstance(train, dict):
@@ -133,14 +105,10 @@ class TrainHParams:
 def _assert_policy_target_consistency(train: dict[str, Any], search: dict[str, Any]) -> None:
     """`train.policy_target` must name the target the SEARCH built.
 
-    The `RunConfig`-level `model_validator` (schema/core.py) enforces this at
-    schema-validate time; this is the defensive runtime assertion at the actual
-    `.from_config` consumer, for a caller that hands `TrainHParams.from_config` a dict
-    never routed through `RunConfig.model_validate`.
-
-    A mapping carrying no `search` section is not checked here — a bare `train`-only dict
-    is a legacy/resume shape with no search to disagree with, and inventing a default kind
-    to compare against would be the code-side default R1 forbids.
+    The `RunConfig`-level `model_validator` enforces this at schema-validate time; this is the
+    defensive runtime assertion for a caller whose dict never went through it. A mapping carrying
+    no `search` section is not checked — inventing a default kind to compare against would be the
+    code-side default R1 forbids.
 
     Raises:
         ValueError: the declared target is not the one `search.kind` produces.
@@ -160,17 +128,16 @@ def _assert_policy_target_consistency(train: dict[str, Any], search: dict[str, A
 
 
 class Trainer:
-    """Manages one training step and checkpoint IO.
+    """Manage one training step and checkpoint IO.
 
     Args:
-        model:  a net built by `mantis.model.build_net(arch)` (HexTacToeNet / GnnNet).
-        config: the WP8 RunConfig snapshot (nested; schema-validated on checkpoint write) OR a
-                legacy flat config (resume).
-        arch:   the declared arch dataclass (the SOLE arch source at save). Derived from
-                `config` when omitted.
+        model:  a net built by `mantis.model.build_net(arch)`.
+        config: the RunConfig snapshot, or a legacy flat config on resume.
+        arch:   the declared arch dataclass, the SOLE arch source at save; derived from `config`
+                when omitted.
         checkpoint_dir / device: as named.
         train_hparams: explicit `TrainHParams`; derived from `config` when omitted.
-        sink:   the injected `EventSink` (training-side events + the O-CHAIN fire-rate report).
+        sink:   the injected `EventSink`.
     """
 
     def __init__(
@@ -187,29 +154,20 @@ class Trainer:
         self.device = device or torch.device("cpu")
         self.model = model.to(self.device)
         self.config = config
-        #: AUDIT-1 F-32 / R338 — THE LAUNCH PIN'S VERIFICATION SOURCE, declared here rather than
-        #: attached from outside. `train/anchor.py::verify_launch_anchor_pin` reads it through
-        #: `getattr(trainer, "checkpoint_source", None)` and FAILS CLOSED when a pin is set and
-        #: this is `None`; before the run6 mint NOTHING in the tree ever set it, so arming the
-        #: pin would have refused every fresh launch. `init_trainer`'s fresh branch fills it from
-        #: `identity.warm_start` — the artifact the fresh anchor is seeded from (R336(d)) — and
-        #: leaves it `None` on a resume and on any run with no warm-start row, which is the
-        #: no-pin posture every run before the row had.
+        #: THE LAUNCH PIN'S VERIFICATION SOURCE: `verify_launch_anchor_pin` reads it and FAILS
+        #: CLOSED when a pin is set and this is `None`. Filled from `identity.warm_start` on a
+        #: fresh launch, `None` on a resume and on any run with no warm-start row.
         self.checkpoint_source: str | Path | None = None
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
 
-        # autocast dtype off the DECLARED arch representation (§c.4; no module sniff).
-        # R30b: hard key access, no fallback — config["train"] is already required by
-        # TrainHParams.from_config's own no-fallback read (Phase 2 precedent).
-        # AUDIT-1 F-35: attribute access, no default (LAW-11 — no dense-by-default).
+        # Off the DECLARED arch representation, no module sniff, no default (LAW-11).
         representation = self.arch.representation
         self.amp_dtype = amp_dtype_for(representation)
 
-        # bf16 needs no GradScaler; with `train.fp16` deleted there is no path that does. The
-        # scaler OBJECT stays: `save_checkpoint` writes its state, and dropping it would move
-        # the resume bundle's shape (protected set).
+        # bf16 needs no GradScaler, but the scaler OBJECT stays: `save_checkpoint` writes its
+        # state, and dropping it would move the resume bundle's shape.
         self.fp16 = False
         self._scaler_enabled = False
         self._autocast_enabled = self.amp_dtype == torch.bfloat16
@@ -224,9 +182,8 @@ class Trainer:
         self.scheduler = self._build_scheduler()
 
         from mantis.train.ema import build_ema_model, resolve_ema_config
-        # AUDIT-1 F-06: the block is REQUIRED, so it is read from the config as given. The
-        # `{}` fallback that stood here made an absent block indistinguishable from a declared
-        # OFF — which is exactly how the lever stayed silently disabled.
+        # The block is REQUIRED and read as given: a `{}` fallback made an absent block
+        # indistinguishable from a declared OFF, which is how a lever stays silently disabled.
         _ema_enabled, _ema_decay, self.ema_update_every = resolve_ema_config(config)
         self.ema_model = (
             build_ema_model(getattr(self.model, "_orig_mod", self.model), decay=_ema_decay)
@@ -236,31 +193,22 @@ class Trainer:
         self.scaler = GradScaler(device=self.device.type, enabled=self._scaler_enabled)
 
         self.step = 0
-        #: Non-finite guard counters (item 6). Both MUST read 0 in a healthy run. Non-zero
-        #: means a NaN/inf was produced and suppressed — the F-11 cascade caught early
-        #: rather than after it had written NaN into every weight.
+        #: Non-finite guard counters. Both MUST read 0 in a healthy run; non-zero means a NaN/inf
+        #: was produced and suppressed before it wrote NaN into every weight.
         self.nonfinite_loss_microbatches = 0
         self.nonfinite_grad_steps = 0
-        #: Training steps on which NO optimizer step was taken (R345(b)(1)) — the gradient
-        #: was non-finite, or every micro-batch was skipped so there was no gradient at all.
-        #: Distinct from `nonfinite_grad_steps`, which used to count the same condition AFTER
-        #: the weights had already been overwritten; this one counts a step that did not
-        #: happen, and `self.step` does not advance with it.
+        #: Training steps on which NO optimizer step was taken. Distinct from
+        #: `nonfinite_grad_steps`, which counted the same condition AFTER the weights were
+        #: overwritten; `self.step` does not advance with this one.
         self.skipped_steps = 0
-        #: R345(b)(3) — the injected resume-bundle publisher, called with
-        #: `(checkpoint_path, step)` AFTER a periodic checkpoint is written. `None` means this
-        #: trainer publishes no bundle, which is a bench/fixture posture and is RECORDED on the
-        #: `periodic_checkpoint_save` event as `bundle: false` rather than left to be inferred.
-        #: The trainer holds neither the replay ring nor the coordinator's per-stop facts, so
-        #: it cannot write the other two members itself; the cadence stays here (R173) and the
-        #: members come from whoever owns them.
+        #: The injected resume-bundle publisher, called with `(checkpoint_path, step)` AFTER a
+        #: periodic checkpoint. `None` is a bench/fixture posture, RECORDED as `bundle: false`.
         self.bundle_publisher: Callable[[Path, int], Any] | None = None
-        # CONFRES F1(A) back-prop: keys the resume F1 defer preserved (empty on a fresh run).
+        # Keys the resume F1 defer preserved (empty on a fresh run).
         self.f1_deferred_keys: frozenset[str] = frozenset()
         self.loaded_from_full_checkpoint = False
         self.ckpt_had_value_fc2_bins = False
 
-    # ── construction helpers ────────────────────────────────────────────────────────────
     @staticmethod
     def _derive_arch(config: Any) -> ModelArch:
         cfg = dict(config) if isinstance(config, dict) else {}
@@ -281,7 +229,6 @@ class Trainer:
     def _base_model(self) -> nn.Module:
         return getattr(self.model, "_orig_mod", self.model)
 
-    # ── graph (GNN) training step — the numeric core, bench + injected-buffer driver ──────
     def eval_step_from_graph_batch(
         self,
         *,
@@ -294,28 +241,18 @@ class Trainer:
         caps_max_nodes: int,
         batch_composition: dict[str, int] | None = None,
     ) -> dict[str, float]:
-        """FORWARD-ONLY loss over a partitioned graph batch — no gradient, no state (R328(d)).
+        """FORWARD-ONLY loss over a partitioned graph batch — no gradient, no state.
 
-        THE SIBLING OF `train_step_from_graph_batch`, sharing its `parts` contract and its
-        denominators so the two numbers are commensurable. What is ABSENT is absent rather
-        than skipped: no `zero_grad`, no `backward`, no `clip_and_step`, no `self.step`
-        increment, no scheduler step, no EMA update, no `_maybe_periodic_checkpoint`. A held-out
-        reading that moved any of those would be a training step wearing an evaluation's name.
-
-        THE MODE IS RESTORED IN A `finally`, and that is load-bearing rather than tidy: an
-        evaluation that left the model in `eval()` would change every LATER training step's
-        dropout and normalisation behaviour, and the loss curve would look BETTER for it —
-        a corruption that reads as an improvement.
-
-        THE RETURN DELIBERATELY OMITS `grad_norm` AND `lr`. `train/coordinator/step.py` reads
-        `loss_info.get("grad_norm", 0.0)` and feeds it to `grad_norm_hard_abort`; an eval dict
-        carrying that key could be routed there by a later edit and would report a gradient
-        that was never computed. Omitting it means such a routing raises rather than silently
-        passing a fabricated zero.
+        The sibling of `train_step_from_graph_batch`, sharing its `parts` contract and denominators
+        so the two numbers are commensurable. What is ABSENT is absent rather than skipped: no
+        `zero_grad`, `backward`, `clip_and_step`, `self.step` increment, scheduler step, EMA update
+        or `_maybe_periodic_checkpoint`. THE MODE IS RESTORED IN A `finally`, because leaving the
+        model in `eval()` would change every LATER step's dropout and normalisation and the loss
+        curve would look BETTER for it. The return DELIBERATELY omits `grad_norm` and `lr`, so a
+        later edit routing this dict into `grad_norm_hard_abort` raises rather than passing a zero.
 
         Args:
-            parts: zero-arg callables, each materialising one micro-batch (lazily, so only one
-                is resident at a time — the same bound the training step relies on).
+            parts: zero-arg callables, each materialising one micro-batch lazily.
             policy_denominator: the whole batch's policy denominator.
             value_denominator: the whole batch's value denominator.
             total_edges: edges across the un-split batch, for the caller's records.
@@ -324,8 +261,8 @@ class Trainer:
             caps_max_nodes: the resolved micro-batch node cap.
 
         Returns:
-            `{"loss", "policy_loss", "value_loss"}`, summed over the parts exactly as the
-            training step sums them.
+            `{"loss", "policy_loss", "value_loss"}`, summed over the parts as the training step
+            sums them.
 
         Raises:
             GraphEmptyBatchError: `parts` is empty, so there is nothing to evaluate.
@@ -381,33 +318,14 @@ class Trainer:
         caps_max_nodes: int,
         batch_composition: dict[str, int] | None = None,
     ) -> dict[str, float]:
-        """One gradient update from a PARTITIONED graph batch (WP12-R F2, CARD-RUN5-GPU-OOM).
+        """One gradient update from a PARTITIONED graph batch. bf16 autocast (LAW-06).
 
-        The numeric core of the old `_train_on_batch`-graph sibling. bf16 autocast (LAW-06).
-        GnnNet ships policy + dist65 value only, so there is no aux/entropy branch
-        (standing §6.3).
-
-        `parts` is a Sequence of ZERO-ARG CALLABLES and that is load-bearing. `Sequence` gives
-        `len()` for the LAW-18 counter without consuming anything; the callables make
-        materialisation LAZY, which is the whole bound — a `Sequence` of already-collated
-        batches would hold every micro-batch resident at once, defeating the cap while passing
-        every count-based oracle. The loop materialises one, uses it, and drops the reference
-        before the next `make()`.
-
-        ONE OPTIMIZER STEP PER TRAINING STEP. `zero_grad` once before the loop, `backward`
-        once per part, `clip_and_step` ONCE after it, one `self.step` increment, one scheduler
-        step, one EMA update, one `trainer_step` event and one `_maybe_periodic_checkpoint`
-        call (R173's seam is untouched and still fires exactly once per training step).
-        Clipping is nonlinear in the whole gradient and `grad_norm` is an armed gate's input,
-        so clipping once is a correctness requirement, not a preference.
-
-        SINGLE TAIL: exactly one `return`, the last statement, returning a dict literal with
-        exactly `loss`, `policy_loss`, `value_loss`, `grad_norm`, `lr`. There is no early
-        return on any path — the degenerate-mask cases return finite-or-`nan` through this
-        same tail, and the two failure paths RAISE. That matters because
-        `train/coordinator/step.py` reads `loss_info.get("grad_norm", 0.0)`: a path returning
-        a dict without the key would silently feed `grad_norm_hard_abort` a `0.0` that always
-        passes its threshold.
+        `parts` is a Sequence of ZERO-ARG CALLABLES and that is load-bearing: `Sequence` gives
+        `len()` without consuming anything, and the callables keep materialisation LAZY — already
+        collated batches would all be resident at once, defeating the cap while passing every
+        count-based oracle. ONE OPTIMIZER STEP PER TRAINING STEP: clipping is nonlinear in the
+        whole gradient and `grad_norm` is an armed gate's input. SINGLE TAIL, five keys — a path
+        returning a dict without `grad_norm` would feed `grad_norm_hard_abort` a passing `0.0`.
         """
         if len(parts) == 0:
             raise GraphEmptyBatchError(
@@ -421,8 +339,8 @@ class Trainer:
         policy_total = 0.0
         value_total = 0.0
         contributing = 0
-        # R347(a)/LAW-18 — every row's tail mass alpha, from step 0. Collected across the
-        # micro-batch split so the reading is the STEP's distribution and not one part's.
+        # Every row's tail mass alpha, collected across the split so the reading is the STEP's
+        # distribution and not one part's.
         tail_alphas: list[float] = []
         for make in parts:
             inputs = make()
@@ -431,8 +349,8 @@ class Trainer:
             )
             with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                           enabled=self._autocast_enabled):
-                # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
-                # `forward_batch` is GnnNet's real method.
+                # `forward_batch` is GnnNet's real method; `nn.Module.__getattr__` types dynamic
+                # attrs as Tensor | Module.
                 policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
                     inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
                     inputs.stone_mask, node_offsets=inputs.node_offsets)
@@ -454,18 +372,10 @@ class Trainer:
                                                 value_mask=inputs.value_valid,
                                                 denominator=value_denominator)
                 loss = policy_loss + value_loss
-            # Non-finite guard on the PRODUCTION graph step (item 6), mirroring the pretrain
-            # trainer's (`pretrain/trainer.py`). Without it a single NaN/inf microbatch loss
-            # backwards into a NaN clip coefficient, which writes NaN to EVERY weight — the
-            # model is destroyed in one step and the run continues reporting numbers. That is
-            # falsified row F-11's exact cascade (0×−inf in aux CE → NaN total loss → BN
-            # poisoning), and the pretrain path was guarded while the path that trains run5
-            # was not.
-            #
-            # The microbatch is SKIPPED, not zeroed: its gradient contribution is undefined,
-            # and dropping it keeps the remaining microbatches' step valid. Counted so the
-            # skip is never silent — a run quietly dropping half its microbatches looks
-            # exactly like a healthy one on loss alone (LAW-18).
+            # Without this guard one NaN/inf microbatch loss backwards into a NaN clip coefficient,
+            # which writes NaN to EVERY weight while the run keeps reporting numbers. SKIPPED, not
+            # zeroed — its gradient contribution is undefined — and counted, because a run dropping
+            # half its microbatches looks exactly like a healthy one on loss alone (LAW-18).
             if not torch.isfinite(loss):
                 self.nonfinite_loss_microbatches += 1
                 if (self.nonfinite_loss_microbatches <= 5
@@ -484,17 +394,10 @@ class Trainer:
             value_total += value_loss.item()
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
 
-        # R345(b)(1) — THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH.
-        # Two ways there is not, and both used to advance the clock anyway:
-        #   * every micro-batch skipped. `.grad` stays zeroed, so `clip_and_step` returns a
-        #     perfectly finite `0.0` and the step, the scheduler and the EMA all fired on a
-        #     gradient that was never computed. On a FRESH optimizer the weight delta is
-        #     numerically zero and nothing shows; with momentum accumulated Adam applies the
-        #     decayed `exp_avg` and the weights genuinely move.
-        #   * a non-finite gradient from a FINITE loss — a different quantity from the
-        #     micro-batch guard above, reached by a different route (a `sqrt(0)` derivative,
-        #     an fp32 overflow). `clip_and_step` now refuses the step itself; here we refuse
-        #     the clock that would have gone with it.
+        # THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH. Both ways there is not
+        # used to advance the clock anyway: every micro-batch skipped (`.grad` stays zeroed, so
+        # `clip_and_step` returns a finite `0.0` and accumulated momentum genuinely moves the
+        # weights), and a non-finite gradient from a FINITE loss, reached by a different route.
         if contributing == 0:
             grad_norm = float("nan")
             self.optimizer.zero_grad(set_to_none=True)
@@ -509,11 +412,9 @@ class Trainer:
             if self.ema_model is not None and self.step % self.ema_update_every == 0:
                 self.ema_model.update_parameters(self._base_model())
         else:
-            # `nonfinite_grad_steps` is KEPT and still counted: the monitor rules and the
-            # event manifest read it, and the condition it names did occur. What changed is
-            # what it means — it is now "a step was refused", not "a step destroyed the
-            # model". `skipped_steps` is the count of steps that did not happen, which is the
-            # quantity a reader needs to reconcile `self.step` against wall-clock progress.
+            # `nonfinite_grad_steps` is KEPT — the monitor rules and event manifest read it — but
+            # now means "a step was refused". `skipped_steps` reconciles `self.step` against
+            # wall-clock progress.
             self.nonfinite_grad_steps += 1
             self.skipped_steps += 1
             reason = "no_contributing_microbatch" if contributing == 0 else "nonfinite_gradient"
@@ -527,18 +428,13 @@ class Trainer:
                 "nonfinite_grad_steps": self.nonfinite_grad_steps,
             })
         lr = self.optimizer.param_groups[0]["lr"]
-        # `result` stays the FIVE-key loss_info contract (OF2-9: one tail, five keys). The
-        # non-finite counters ride the EVENT, not the return: `loss_info` is consumed by the
-        # coordinator's gates and by checkpoint metadata, and widening it would change a
-        # contract those readers pin — while the event stream is where LAW-18 in-run counters
-        # belong anyway.
+        # `result` stays the FIVE-key loss_info contract; the counters ride the EVENT instead,
+        # because widening `loss_info` changes a contract the gates and checkpoint metadata pin.
         result = {"loss": loss_total, "policy_loss": policy_total,
                   "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
-        # `trainer_step`, not `training_step` — same reason as the dense tail's emit above.
-        # A REFUSED step emits `trainer_step_skipped` INSTEAD, above: emitting both would put
-        # a step in the stream that the step counter does not carry, and `periodic_checkpoint`
-        # must not fire either — `self.step` did not move, so the cadence boundary it already
-        # crossed would be crossed a second time and write a duplicate artefact.
+        # A REFUSED step emits `trainer_step_skipped` INSTEAD: emitting both would put a step in
+        # the stream the step counter does not carry, and `periodic_checkpoint` must not fire
+        # either — `self.step` did not move, so a crossed cadence boundary would be crossed twice.
         if stepped:
             emit_via(self._sink, {"event": "trainer_step", "step": self.step,
                                   "representation": "graph", **result,
@@ -549,18 +445,15 @@ class Trainer:
                                   "nonfinite_loss_microbatches": self.nonfinite_loss_microbatches,
                                   "nonfinite_grad_steps": self.nonfinite_grad_steps,
                                   "skipped_steps": self.skipped_steps,
-                                  # R345(b)(6): what the sampled batch was made of. Rides the
-                                  # step event rather than its own, because it is a property
-                                  # OF this step's batch and a second event at the same
-                                  # cadence is a second thing to keep in sync.
+                                  # What the sampled batch was made of. Rides the step event
+                                  # rather than its own: a second event at the same cadence is a
+                                  # second thing to keep in sync.
                                   **(batch_composition or {}),
-                                  # R347(a): the same reasoning for the tail mass — a
-                                  # property of this step's rows.
+                                  # The same reasoning for the tail mass.
                                   **tail_mass_block(tail_alphas)})
             self._maybe_periodic_checkpoint(result)
         return result
 
-    # ── checkpoint IO ─────────────────────────────────────────────────────────────────────
     def inference_state_dict(self) -> dict[str, torch.Tensor]:
         """The state_dict self-play / eval / promotion consume (EMA weights when EMA is on)."""
         if self.ema_model is not None:
@@ -577,43 +470,21 @@ class Trainer:
     def _maybe_periodic_checkpoint(self, loss_info: dict[str, float] | None) -> Path | None:
         """THE periodic-checkpoint seam — the ONE reader of `train.checkpoint_interval`.
 
-        R173: the interval read and the periodic write live here and nowhere else, so the
-        dense step and the graph step share ONE authority for the cadence rather than each
-        carrying its own (`R1`: two independently-editable readers of one key is the
-        duplicated-authority class). `0` disables — the value most shipped configs still
-        mint (`config/schema/train.py:231`, `ge=0`); `shakedown_20260807.yaml` is the first
-        production config to mint a nonzero value. A positive `N` fires at `N, 2N, 3N, …`
-        against `self.step`, which is the POST-increment step number in both callers
-        (the dense tail and the graph tail), so the boundary is the step whose gradient
-        update the artefact contains.
-
-        rule 3 / LAW-12: the write is `self.save_checkpoint`, the SAME entry legs 2 and 3
-        call, so the artefact rides the one stamp path — validated config, stamp built once,
-        `{run_id}_{step:08d}_{sha8}.ckpt`. This method authors no second write surface.
-
-        LAW-14: a failure is NOT caught. `_write_v2_payload` counts it on
-        `checkpoints.persist_errors_total` and re-raises; that counter is the persist-fatal
-        watchdog's registered input. A swallow here would be the silent-except LAW-14 bans,
-        and would let a run report a cadence it never wrote.
-
-        LAW-18: the event lands AFTER the write and carries the WRITER's returned path —
-        `loop.py`'s pre-emit ordering is deliberately NOT mirrored (the argument is
-        `coordinator/step.py::_clean_stop_save`'s, and it applies unchanged to a leg that
-        fires N times instead of once: a pre-emit puts a false record in the stream on every
-        failed write).
+        Both step tails share ONE authority for the cadence. `0` disables; a positive `N` fires at
+        `N, 2N, 3N, …` against the POST-increment `self.step`, so the boundary is the step whose
+        gradient update the artefact contains. The write is `self.save_checkpoint`, the same entry
+        legs 2 and 3 call, so the artefact rides the one stamp path (LAW-12). A failure is NOT
+        caught (LAW-14) — the counter it bumps is the persist-fatal watchdog's registered input —
+        and the event lands AFTER the write, since a pre-emit falsifies the stream on a failed one.
         """
         interval = int(self.hp.checkpoint_interval)
         if interval <= 0 or self.step % interval != 0:
             return None
         path = self.save_checkpoint(loss_info)
-        # R345(b)(3): the ring and the sidecar go NEXT, and the manifest that commits all three
-        # goes last. A failure here is NOT caught, for the same LAW-14 reason the write above
-        # is not: a bundle that failed to publish must not be announced as one that did, and
-        # the event below is what announces it.
-        # The publisher returns the manifest path when it published, or `None` when it
-        # declined — the disk-guard posture declines, because persisting a large ring on the
-        # one abort that fires BECAUSE THE DISK IS FULL deepens the condition that fired. A
-        # decline is reported as `bundle: false`, which is the truth, not an error.
+        # The ring and the sidecar go NEXT, the manifest that commits all three goes last, and a
+        # failure is NOT caught (LAW-14). The publisher returns `None` when it DECLINES — the
+        # disk-guard posture declines, because persisting a large ring on the abort that fires
+        # BECAUSE THE DISK IS FULL deepens the condition that fired. A decline is `bundle: false`.
         bundled = False
         if self.bundle_publisher is not None:
             bundled = self.bundle_publisher(path, self.step) is not None
@@ -623,16 +494,16 @@ class Trainer:
             "interval": interval,
             "representation": self.arch.representation,
             "path": None if path is None else str(path),
-            # A checkpoint that is not a continuation point and a checkpoint that is must be
+            # A checkpoint that is not a continuation point and one that is must be
             # distinguishable in the stream. Before this field they were not.
             "bundle": bundled,
         })
         return path
 
     def save_checkpoint(self, loss_info: dict[str, float] | None = None) -> Path:
-        """Write an envelope-v2 FULL checkpoint via the ONE writer (§c.7): filename
-        `{run_id}_{step:08d}_{sha8}.ckpt`, immutable stamp, config schema-validated on write.
-        `encoding_name` from the registry resolver, `arch` from `self.arch`."""
+        """Write an envelope-v2 FULL checkpoint via the ONE writer: `{run_id}_{step:08d}_{sha8}.ckpt`,
+        immutable stamp, config schema-validated on write. `encoding_name` from the registry resolver,
+        `arch` from `self.arch`."""
         cfg = self.config if isinstance(self.config, dict) else {}
         metadata_kwargs = {
             "encoding_name": self._resolve_encoding_name(),
@@ -667,11 +538,7 @@ class Trainer:
 
 
 def _resolve_spec(config: Any):
-    """Resolve the encoding spec from a config. Both the WP8 NESTED `identity.encoding` shape
-    and the legacy FLAT `encoding` shape are read by `resolve_from_config` itself, which is the
-    ONE authority for where an encoding may be declared (TD-4 / CARD-POOL-ENCODING-BRIDGE); this
-    function is now just the non-dict coercion the Trainer's own callers need. Keeps
-    `metadata.encoding_name` consistent with `config.identity.encoding` (the loader's
-    stamp-source check, T-CK-30) — unchanged, and now by the same route every other caller
-    takes rather than by a private bridge only this module had."""
+    """Resolve the encoding spec from a config. Both the NESTED `identity.encoding` shape and the
+    legacy FLAT `encoding` shape are read by `resolve_from_config` itself, the ONE authority for
+    where an encoding may be declared; this is just the non-dict coercion its callers need."""
     return resolve_from_config(dict(config) if isinstance(config, dict) else {})

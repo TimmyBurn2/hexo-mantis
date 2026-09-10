@@ -1,25 +1,19 @@
-//! R8-justify: the per-game control flow (`run_worker_thread` entry destructure +
-//! `run_one_game` + `init_per_game_board` + the §P22 shutdown short-circuit + the
-//! Copy per-game arg-bundles) is one cohesive orchestrator lifted from the frozen
-//! `inner.rs` game band (`:275/:426/:448/:562/:618`); the fn-entry destructure
-//! pattern must stay together with the game loop it feeds.
+//! R8-justify: the per-game control flow (`run_worker_thread`'s entry destructure,
+//! `run_one_game`, `init_per_game_board`, the shutdown short-circuit and the Copy per-game
+//! arg-bundles) is one cohesive orchestrator, and the fn-entry destructure pattern must stay
+//! together with the game loop it feeds.
 //!
-//! Per-game control flow (WP6 D1/D2/D3/D11) — the worker-thread entry
-//! `run_worker_thread` builds the tree once (`new_full` + `configure_quiescence`;
-//! NO interior_selector, D10) and runs the outer game loop; `run_one_game` inits
-//! a fresh per-game `Board` (each worker OWNS its board, `Send + !Sync`, D3),
-//! runs the per-move loop, honours the §P22 shutdown short-circuit (drop an
-//! in-progress game — never finalize a partial as a draw, D12), and dispatches
-//! the hoisted `is_graph` finalize branch. Representation is resolved ONCE into a
-//! Copy `WorkerGeometry` (D2); the per-move hot path sees cheap integer locals.
+//! Per-game control flow. The worker-thread entry `run_worker_thread` builds the tree once
+//! (`new_full` + `configure_quiescence`, no interior_selector) and runs the outer game loop.
+//! `run_one_game` inits a fresh per-game `Board` (each worker OWNS its board, `Send + !Sync`),
+//! runs the per-move loop, honours the shutdown short-circuit — an in-progress game is DROPPED,
+//! never finalized as a partial draw — and dispatches the hoisted `is_graph` finalize branch.
+//! Representation is resolved ONCE into a Copy `WorkerGeometry`, so the per-move hot path sees
+//! cheap integer locals.
 //!
-//! `init_per_game_board` builds the board from the spec-derived `BoardGeometry`
-//! (the frozen `Board::with_registry_spec` mapping — cluster window / threshold /
-//! legal radius); the `None → v6` board arm is KILLED (D2, absent spec = error at
-//! `new()`), and `legal_move_radius_jitter` is NEVER authored (D7 — the one
-//! behavioural block is dead for every registry spec). The curriculum
-//! per-game radius-override chain (A9, R25 commit B) is DELETED — dead weight,
-//! no live caller once the Python-side curriculum plumbing is gone.
+//! `init_per_game_board` builds the board from the spec-derived `BoardGeometry`; there is no
+//! `None -> v6` board arm (an absent spec is an error at `new()`), and
+//! `legal_move_radius_jitter` is NEVER authored, being dead for every registry spec.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
@@ -45,8 +39,7 @@ use super::search_drive::{
 use super::stats::WorkerStats;
 use super::{GameResultRow, WorkerResultRow};
 
-/// Per-game-init scalar context (frozen `inner.rs:189`, MINUS the killed
-/// `legal_move_radius_jitter` field, D7). `Copy`.
+/// Per-game-init scalar context. `Copy`.
 #[derive(Clone, Copy)]
 struct PerGameInitCtx {
     max_moves: usize,
@@ -55,19 +48,19 @@ struct PerGameInitCtx {
     fast_sims: usize,
     standard_sims: usize,
     draw_reward: f32,
-    /// §178: terminal-via-ply-cap outcome (distinct from `draw_reward`).
+    /// Terminal-via-ply-cap outcome, distinct from `draw_reward`.
     ply_cap_value: f32,
     results_queue_cap: usize,
     worker_id: usize,
 }
 
-/// Per-worker STATIC per-move scalar config, built ONCE at proto-build and copied
-/// through the COLD layers into `MovePlayContext` (frozen `inner.rs:220`). `Copy`.
+/// Per-worker STATIC per-move scalar config, built ONCE at proto-build and copied through the
+/// COLD layers into `MovePlayContext`. `Copy`.
 #[derive(Clone, Copy)]
 #[allow(clippy::struct_excessive_bools)]
 struct WorkerMoveCfg {
     leaf_batch_size: usize,
-    /// DERIVED HEXG visit capacity (R255) — `Some` iff this is a graph run.
+    /// DERIVED HEXG visit capacity — `Some` iff this is a graph run.
     visit_capacity: Option<usize>,
     temp_threshold: usize,
     temp_min: f32,
@@ -84,7 +77,7 @@ struct WorkerMoveCfg {
     dirichlet_enabled: bool,
 }
 
-/// Per-game state outputs from `init_per_game_board` (frozen `inner.rs:593`).
+/// Per-game state outputs from `init_per_game_board`.
 struct PerGameInit {
     board: Board,
     /// Per-game graph-record accumulator — `Vec::new()` (no alloc) for grid games;
@@ -95,9 +88,8 @@ struct PerGameInit {
     game_sims: usize,
 }
 
-/// Per-worker thread entry (frozen `inner.rs:275`). Owns its `MCTSTree`, RNG and
-/// per-game `Board` (D3). Builds the tree once, then loops `run_one_game` until
-/// `stop()` flips `running`.
+/// Per-worker thread entry. Owns its `MCTSTree`, RNG and per-game `Board`; builds the tree once,
+/// then loops `run_one_game` until `stop()` flips `running`.
 pub(crate) fn run_worker_thread(
     worker_id: usize,
     stats: WorkerStats,
@@ -106,8 +98,8 @@ pub(crate) fn run_worker_thread(
     params: WorkerParams,
     geometry: WorkerGeometry,
 ) {
-    // Destructure geometry into local scalars so the per-sim hot path sees cheap
-    // integers, never a `&RegistrySpec` field access (D2).
+    // Destructure geometry into local scalars so the per-sim hot path sees cheap integers,
+    // never a `&RegistrySpec` field access.
     let WorkerGeometry {
         policy_stride,
         agg_trunk_sz,
@@ -179,20 +171,16 @@ pub(crate) fn run_worker_thread(
     } = params;
 
     let mut tree = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
-    // Configure quiescence once per worker (the amended setter; D10 — NO
-    // interior_selector, WP4 killed it).
+    // Configure quiescence once per worker.
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
-    // Same posture as quiescence: per-WORKER configuration, set once, survives
-    // `new_game`.
+    // Same posture as quiescence: per-WORKER configuration, set once, survives `new_game`.
     tree.configure_search(search_kind, c_visit, c_scale);
     let mut rng = rng();
-    // Per-move model-version snapshot (frozen `inner.rs:1214`): each `play_one_move`
-    // dedup-pushes `model_version` (default 0 until WP7 wires the NN setter), so a
-    // played-out game's drain tuple `(mv_min, mv_max, mv_distinct)` is (0, 0, 1).
+    // Per-move model-version snapshot: each `play_one_move` dedup-pushes `model_version`, so a
+    // played-out game's drain tuple `(mv_min, mv_max, mv_distinct)` is (0, 0, 1) until it moves.
     let mut version_seen: Vec<u64> = Vec::with_capacity(8);
 
-    // Resolve the per-game `BoardGeometry` ONCE from the spec (the frozen
-    // `Board::with_registry_spec` mapping — the None board arm is KILLED, D2).
+    // Resolve the per-game `BoardGeometry` ONCE from the spec; there is no None board arm.
     let board_geometry = BoardGeometry {
         legal_move_radius: registry_spec.legal_move_radius as i32,
         cluster_threshold: registry_spec
@@ -215,7 +203,6 @@ pub(crate) fn run_worker_thread(
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
     };
-    // WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14).
     let fatal_latch = FatalDefectLatch {
         slot: &fatal_defect,
         fires: &target_integrity_defects,
@@ -250,9 +237,8 @@ pub(crate) fn run_worker_thread(
         search_kind,
         dirichlet_enabled,
     };
-    // R345(b)(6) adds `graph_game_seq` as the sixth member: the game-id source travels with
-    // the other finalize counters rather than as a seventh parameter, which is the shape the
-    // tuple already exists to avoid.
+    // `graph_game_seq` is the sixth member: the game-id source travels with the other finalize
+    // counters rather than as a seventh parameter, which is what the tuple exists to avoid.
     let finalize_counters: (
         &AtomicUsize,
         &AtomicU64,
@@ -293,9 +279,8 @@ pub(crate) fn run_worker_thread(
     }
 }
 
-/// Per-game loop body (frozen `inner.rs:448`). Init board + per-game state, run
-/// the inner move loop, honour the §P22 shutdown short-circuit, then dispatch the
-/// hoisted `is_graph` finalize branch.
+/// Per-game loop body. Init board + per-game state, run the inner move loop, honour the shutdown
+/// short-circuit, then dispatch the hoisted `is_graph` finalize branch.
 #[allow(clippy::too_many_arguments)]
 fn run_one_game(
     tree: &mut MCTSTree,
@@ -383,8 +368,8 @@ fn run_one_game(
             break;
         }
 
-        // §115 random-opening plies: skip MCTS + recording for the first
-        // `random_opening_plies` plies (skipped entirely for a seeded game).
+        // Random-opening plies: skip MCTS + recording for the first `random_opening_plies`
+        // plies (skipped entirely for a seeded game).
         if board.ply.index() < init_ctx.random_opening_plies {
             let legal = board.legal_moves();
             if legal.is_empty() {
@@ -418,9 +403,9 @@ fn run_one_game(
         }
     }
 
-    // §P22 — drain shutdown skip: if the move loop broke because `running` was
-    // flipped false by `stop()`, the game is IN PROGRESS, not terminal. Returning
-    // here short-circuits to the outer `while running…` guard (D12/P-05).
+    // Drain shutdown skip: if the move loop broke because `running` was flipped false by
+    // `stop()`, the game is IN PROGRESS, not terminal, so returning here short-circuits to the
+    // outer `while running...` guard.
     if !running.load(Ordering::Relaxed) {
         return;
     }
@@ -448,24 +433,22 @@ fn run_one_game(
     );
 }
 
-/// Per-game board + state initializer (frozen `inner.rs:618`). Builds the board
-/// from the spec-derived `BoardGeometry` (the `None → v6` arm is KILLED, D2),
-/// pre-sizes the record vectors, dry-replays an optional seed prefix, samples
-/// per-game rotation, and resolves the playout cap. The `legal_move_radius_jitter`
-/// block is NEVER authored (D7 — dead for every registry spec).
+/// Per-game board + state initializer. Builds the board from the spec-derived `BoardGeometry`,
+/// pre-sizes the record vectors, dry-replays an optional seed prefix, samples per-game rotation,
+/// and resolves the playout cap.
 fn init_per_game_board(
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
 ) -> PerGameInit {
-    // Spec is ALWAYS resolved (absent = error at `new()`, LAW-11) → build with the
-    // spec-derived geometry. NO `Board::new()` fallback (D2).
+    // The spec is ALWAYS resolved (absent = error at `new()`), so the board is built with the
+    // spec-derived geometry; there is no `Board::new()` fallback.
     let board = Board::with_geometry(board_geometry);
     let move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
     version_seen.clear();
 
-    // D7: `legal_move_radius_jitter` is KILLED (dead for every registry spec).
+    // `legal_move_radius_jitter` is KILLED: dead for every registry spec.
 
     // KataGo-style playout cap randomisation.
     let is_fast_game = init_ctx.fast_prob > 0.0 && rng.random::<f32>() < init_ctx.fast_prob;

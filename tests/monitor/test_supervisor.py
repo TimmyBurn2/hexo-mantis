@@ -1,29 +1,13 @@
-# >300 justify (R8): ONE subject — the supervisor's relaunch decision — reached through ONE
-# scripted harness (`FakeChild` + `_Clock` + `_make_supervisor`'s injected spawn/kill/sleep).
-# The exit-code table (0 stop, 42 relaunch, 43 stop, 48 stop, any other propagate, budget
-# exhausted loud) and the stale-`seq` SIGTERM→SIGKILL→relaunch ladder are two routes to that
-# SAME decision, and `test_exit_code_equality_pin` only reads as a pin while the rc rows that
-# consume 42 sit beside it. `LivenessTracker`'s seq/pid rows are the input the decision is
-# computed FROM, so splitting them puts a verdict in one file and its premise in another;
-# R5 bars cross-test imports, so any split also forks the harness into copies free to drift.
-"""⊕ O-12 / O-17 / O-13(ii,iii) — the out-of-process supervisor (L-C).
+# >300 justify (R8): ONE subject — the supervisor's relaunch decision — through ONE scripted
+# harness. The exit-code table and the stale-`seq` kill ladder are two routes to that SAME
+# decision, and `LivenessTracker`'s seq/pid rows are the input it is computed FROM; cross-test
+# imports are barred, so any split also forks the harness into drifting copies.
+"""The out-of-process supervisor: a torch-free, host-neutral babysitter.
 
-RED-at-import until IMPL writes `mantis.monitor.supervise`. ORACLE-FIRST (⊕): the top-level
-`import mantis.monitor.supervise` raises ModuleNotFoundError before any port code exists.
-Torch-free host-neutral babysitter (§c.5).
-
-`Supervisor` takes injected `spawn_fn/kill_fn/clock` (+ `sleep_fn` advancing the fake clock)
-so the loop is driven deterministically; `LivenessTracker` is the seq/pid staleness core.
-
-PASS bars:
-  * O-12 / P-12: a frozen `seq` ⇒ exactly one SIGTERM→(grace)→SIGKILL→relaunch; a child
-    exit 42 ⇒ one relaunch with ZERO kill calls — the two paths are DISTINCT by construction.
-  * O-17 / P-17: 0→stop rc 0; 42→relaunch; 43→stop rc 43 (persist faults are not transient);
-    other rc→propagate no relaunch; budget exceeded→loud nonzero. Equality pin
-    `SELFPLAY_STALL_EXIT_CODE == WATCHDOG_STALL_EXIT_CODE == 42`.
-  * O-13(ii): an mtime touch WITHOUT a `seq` change still counts stale (seq-keyed, never mtime).
-  * O-13(iii): a `pid` change resets the seq baseline (a child restart is not forgery).
-"""
+`Supervisor` takes injected `spawn_fn`/`kill_fn`/`clock` and a `sleep_fn` that advances the fake
+clock, so the loop is driven deterministically; `LivenessTracker` is the seq/pid staleness core.
+A frozen `seq` and a child exit 42 are DISTINCT paths by construction, and staleness is
+seq-keyed, never mtime."""
 from __future__ import annotations
 
 import json
@@ -41,10 +25,8 @@ from mantis.monitor.supervise import LivenessTracker, Supervisor
 from mantis.train.lifecycle.watchdog import SELFPLAY_STALL_EXIT_CODE
 
 
-# ── scripted child + clock harness ────────────────────────────────────────────────────
 class FakeChild:
-    """A scripted child process handle: `.poll()` walks `poll_returns` (the last value
-    repeats forever); `.pid` is fixed."""
+    """A scripted child handle: `.poll()` walks `poll_returns`, the last value repeating."""
 
     def __init__(self, pid: int, poll_returns: list[int | None]) -> None:
         self.pid = pid
@@ -98,9 +80,8 @@ def _make_supervisor(children, *, hb_file, stale_after=10.0, poll=1.0, grace=1.0
     return sup, spawns, kills, clock
 
 
-# ── O-17 exit-code contract ───────────────────────────────────────────────────────────
 def test_exit_code_equality_pin() -> None:
-    """O-17 — a single restart-wrapper key: the two authorities agree at 42."""
+    """A single restart-wrapper key: the two authorities agree at 42."""
     assert SELFPLAY_STALL_EXIT_CODE == WATCHDOG_STALL_EXIT_CODE == 42
 
 
@@ -112,8 +93,7 @@ def test_child_exit_zero_stops_rc_zero(tmp_path: Path) -> None:
 
 
 def test_child_exit_43_stops_no_relaunch(tmp_path: Path) -> None:
-    """O-17 — persist-fatal (43) is NOT transient: relaunching would loop the storage fault, so
-    the supervisor stops loud with rc 43 and does not respawn."""
+    """Persist-fatal (43) is NOT transient — relaunching would loop the storage fault."""
     sup, spawns, kills, _ = _make_supervisor([FakeChild(1, [PERSIST_FATAL_EXIT_CODE])],
                                              hb_file=tmp_path / "hb.json")
     assert sup.run() == 43
@@ -121,16 +101,14 @@ def test_child_exit_43_stops_no_relaunch(tmp_path: Path) -> None:
 
 
 def test_child_exit_other_rc_propagates_no_relaunch(tmp_path: Path) -> None:
-    """O-17 — an arbitrary rc (config/code error, e.g. 7) is propagated with NO relaunch (a
-    crash-loop is worse than a loud stop)."""
+    """An arbitrary rc is propagated with NO relaunch: a crash-loop is worse than a loud stop."""
     sup, spawns, kills, _ = _make_supervisor([FakeChild(1, [7])], hb_file=tmp_path / "hb.json")
     assert sup.run() == 7
     assert len(spawns) == 1 and kills == []
 
 
 def test_child_exit_42_relaunches_without_kill(tmp_path: Path) -> None:
-    """O-12 / O-17 — child rc 42 (stall/livelock, the transient class) ⇒ exactly one relaunch
-    with ZERO kill calls (distinct from the stale-seq kill path)."""
+    """Child rc 42 gives one relaunch with ZERO kill calls, distinct from the stale-seq path."""
     sup, spawns, kills, _ = _make_supervisor(
         [FakeChild(1, [42]), FakeChild(2, [0])], hb_file=tmp_path / "hb.json")
     assert sup.run() == 0
@@ -139,9 +117,8 @@ def test_child_exit_42_relaunches_without_kill(tmp_path: Path) -> None:
 
 
 def test_relaunch_budget_exceeded_exits_loud(tmp_path: Path) -> None:
-    """O-17 — a child that keeps exiting 42 past `max_relaunches` ⇒ a loud NONZERO exit (a
-    crash-loop must not be papered over forever)."""
-    children = [FakeChild(i, [42]) for i in range(1, 6)]  # spawns until budget blows
+    """A child that keeps exiting 42 past `max_relaunches` exits loud and NONZERO."""
+    children = [FakeChild(i, [42]) for i in range(1, 6)]
     sup, spawns, kills, _ = _make_supervisor(children, hb_file=tmp_path / "hb.json",
                                              max_relaunches=2)
     rc = sup.run()
@@ -149,15 +126,13 @@ def test_relaunch_budget_exceeded_exits_loud(tmp_path: Path) -> None:
     assert len(spawns) == 3, "initial spawn + max_relaunches(2) respawns, then stop"
 
 
-# ── O-12 stale-seq liveness (distinct from child exit) ────────────────────────────────
 def test_frozen_seq_triggers_sigterm_then_sigkill_then_relaunch(tmp_path: Path) -> None:
-    """O-12 / P-12 — a running child whose heartbeat-file `seq` is frozen past stale_after ⇒
-    exactly one SIGTERM, then SIGKILL after the grace window, then one respawn. Bites a
-    supervisor that only reacts to child EXIT (the GIL-starvation hole)."""
+    """A frozen `seq` past stale_after gets one SIGTERM, then SIGKILL after the grace, then one
+    respawn — biting a supervisor that only reacts to child EXIT."""
     hb = tmp_path / "hb.json"
     write_heartbeat_file(hb, seq=5, pid=100, ages={"train_step": 0.0}, wall_ts=0.0)  # frozen
     wedged = FakeChild(100, [None])        # never exits, never responds to SIGTERM
-    recovered = FakeChild(200, [0])        # the relaunched child exits cleanly
+    recovered = FakeChild(200, [0])
     sup, spawns, kills, _ = _make_supervisor([wedged, recovered], hb_file=hb,
                                              stale_after=10.0, poll=1.0, grace=1.0)
     assert sup.run() == 0
@@ -168,11 +143,9 @@ def test_frozen_seq_triggers_sigterm_then_sigkill_then_relaunch(tmp_path: Path) 
     assert len(spawns) == 2, "exactly one relaunch after the stale kill"
 
 
-# ── O-13(ii,iii) LivenessTracker seq/pid semantics ────────────────────────────────────
 def test_tracker_mtime_touch_without_seq_change_counts_stale() -> None:
-    """O-13(ii) — the tracker keys on `seq` progression only; observing the SAME seq at a
-    later time (an mtime touch with no real progress) accrues staleness. Bites an
-    mtime/wall-clock-derived liveness decision."""
+    """The tracker keys on `seq` progression only, so an mtime touch with no real progress still
+    accrues staleness."""
     from mantis.monitor.heartbeat import read_heartbeat_file  # noqa: F401 — API presence pin
 
     tracker = LivenessTracker(stale_after_sec=900.0)
@@ -186,14 +159,12 @@ def test_tracker_seq_progress_resets_staleness() -> None:
     """O-13 — a real `seq` advance resets the staleness clock (a live child is never killed)."""
     tracker = LivenessTracker(stale_after_sec=900.0)
     tracker.observe(_State(seq=5, pid=1), now=0.0)
-    tracker.observe(_State(seq=6, pid=1), now=800.0)   # progress
+    tracker.observe(_State(seq=6, pid=1), now=800.0)
     assert tracker.is_stale(1000.0) is False           # 1000 - 800 = 200 < 900
 
 
 def test_tracker_pid_change_resets_seq_baseline() -> None:
-    """O-13(iii) — a `pid` change (child restart) resets the seq baseline; a seq that DROPS to
-    a lower value under a new pid is NOT an instant staleness. Bites a supervisor that treats a
-    legitimate restart as forgery/stall."""
+    """A `pid` change resets the seq baseline: a legitimate restart is not forgery."""
     tracker = LivenessTracker(stale_after_sec=900.0)
     tracker.observe(_State(seq=50, pid=100), now=0.0)
     tracker.observe(_State(seq=1, pid=200), now=950.0)  # new child: pid changed, seq dropped
@@ -208,12 +179,9 @@ class _State:
         self.pid = pid
 
 
-# ══ RED-TEAM F6 — a pid FLIP must not manufacture freshness ═══════════════════════════
 def test_tracker_pid_flip_between_two_writers_does_not_stay_fresh_forever() -> None:
-    """RED-TEAM F6 — the pid rebase is ONE-SHOT PER PID. Two writers alternating pids on one
-    heartbeat path (`111, 112, 111, 112 …`) with a FROZEN seq kept `is_stale` False forever,
-    because every flip re-based the window — a dead child that the supervisor never kills.
-    Only the FIRST sighting of a genuinely new pid re-bases."""
+    """The pid rebase is ONE-SHOT PER PID: alternating pids under a FROZEN seq kept `is_stale`
+    False forever, because every flip re-based the window."""
     tracker = LivenessTracker(stale_after_sec=10.0)
     tracker.observe(_State(seq=7, pid=111), now=0.0)
     now = 0.0
@@ -226,8 +194,7 @@ def test_tracker_pid_flip_between_two_writers_does_not_stay_fresh_forever() -> N
 
 
 def test_tracker_first_sighting_of_each_new_pid_still_rebases() -> None:
-    """F6 companion — the fix must not break O-13(iii): a genuine restart chain
-    (pid 100 → 200 → 300, each seen once) still re-bases and is never an instant kill."""
+    """A genuine restart chain (pid 100 → 200 → 300, each seen once) still re-bases."""
     tracker = LivenessTracker(stale_after_sec=10.0)
     tracker.observe(_State(seq=50, pid=100), now=0.0)
     tracker.observe(_State(seq=1, pid=200), now=100.0)
@@ -236,13 +203,9 @@ def test_tracker_first_sighting_of_each_new_pid_still_rebases() -> None:
     assert tracker.is_stale(205.0) is False
 
 
-# ══ RED-TEAM F3′ — "never written at all" is a CONFIG fault, not a stall ══════════════
 def test_never_written_heartbeat_file_is_reported_distinctly(tmp_path: Path) -> None:
-    """RED-TEAM F3′ — a `--heartbeat-file` that does not match the child's makes the
-    supervisor kill a perfectly HEALTHY child until the budget is gone. It still kills (a
-    child that cannot be observed cannot be trusted), but it must say WHICH fault it is:
-    `child_heartbeat_file_never_written` names the path, instead of a generic
-    `child_heartbeat_stale` that sends the operator hunting a wedge that does not exist."""
+    """A `--heartbeat-file` that does not match the child's kills a HEALTHY child until the
+    budget is gone; it must NAME that fault rather than report a generic stale heartbeat."""
     import io
 
     child = FakeChild(pid=501, poll_returns=[None] * 50)
@@ -251,7 +214,7 @@ def test_never_written_heartbeat_file_is_reported_distinctly(tmp_path: Path) -> 
         [child, FakeChild(pid=502, poll_returns=[0])], hb_file=tmp_path / "absent.json",
         stale_after=5.0, max_relaunches=1,
     )
-    sup._stream = stream                          # capture the supervisor's own JSON lines
+    sup._stream = stream
     sup.run()
     events = [json.loads(ln)["event"] for ln in stream.getvalue().splitlines()]
     assert "child_heartbeat_file_never_written" in events, events
@@ -261,9 +224,8 @@ def test_never_written_heartbeat_file_is_reported_distinctly(tmp_path: Path) -> 
 
 
 def test_supervisor_loop_survives_a_reader_that_raises(tmp_path: Path) -> None:
-    """RED-TEAM F4 (level-2 half) — an exception out of the heartbeat READ must not kill the
-    supervisor loop and leave the child unsupervised. The failure is recorded
-    (`heartbeat_read_failed`) and treated as "no progress observable" (the safe side)."""
+    """An exception out of the heartbeat READ is recorded and treated as "no progress
+    observable", never allowed to kill the loop."""
     import io
 
     def _exploding_reader(_path):
@@ -275,40 +237,24 @@ def test_supervisor_loop_survives_a_reader_that_raises(tmp_path: Path) -> None:
                                                    stale_after=1e9, max_relaunches=1)
     sup._read_heartbeat = _exploding_reader
     sup._stream = stream
-    rc = sup.run()                                 # must terminate normally, not explode
+    rc = sup.run()
     assert rc == 0
     events = [json.loads(ln)["event"] for ln in stream.getvalue().splitlines()]
     assert "heartbeat_read_failed" in events
 
 
-# ── WP12-R Phase O / O-19 (R152) — child rc 48 is a loud stop, never a relaunch ───────
 def test_child_exit_48_stops_loud_and_never_relaunches(tmp_path: Path) -> None:
-    """O-19. Phase O authors exit code 48 (a terminal eval that produced no promotion
-    decision), and the supervisor above the run has to do the right thing with it WITHOUT a
-    supervisor change. This row is the check that the "no change needed" claim is measured
-    rather than assumed — it is the third cooperative member's half of the same
-    already-existing arm that 45, 46 and 47 rely on (`_on_child_exit`'s "any code that is not
-    0/43/42 is propagated with a `supervisor_stop {reason: child_error}` and no respawn").
-
-    NOT a ⊕ row: it pins behaviour the supervisor already has, so it must be GREEN at HEAD
-    and stay green. That is the point — an rc that quietly acquired a relaunch arm would turn
-    a completed-but-degraded run into a crash loop, and relaunching a run that already
-    FINISHED is nonsense: the burst is over, the buffer is saved, and a second launch would
-    repeat the whole training run.
-
-    Driven at 48 as a plain integer rather than through the manifest constant deliberately:
-    the subject is the supervisor's arm for "any other code", and importing the constant
-    would make this row red for the taxonomy's reasons instead of the supervisor's.
-
-    MUTATION THAT REDS IT (M-O19): add 48 to the relaunch arm (`code != WATCHDOG_STALL_EXIT_
-    CODE` becoming `code not in (WATCHDOG_STALL_EXIT_CODE, 48)`) — `spawns` grows to 2."""
+    """Child rc 48 — a terminal eval that produced no promotion decision — is a loud stop, never
+    a relaunch, on the existing "any code that is not 0/43/42 propagates" arm. GREEN at HEAD by
+    design: relaunching a FINISHED run repeats the whole burst. MUTATION THAT REDS IT: add 48 to
+    the relaunch arm — `spawns` grows to 2."""
     import io
     import json as _json
 
     stream = io.StringIO()
     sup, spawns, kills, _ = _make_supervisor(
         [FakeChild(1, [48]), FakeChild(2, [0])], hb_file=tmp_path / "hb.json")
-    sup._stream = stream                          # capture the supervisor's own JSON lines
+    sup._stream = stream
 
     assert sup.run() == 48, (
         "a cooperative armed-abort code PROPAGATES unchanged — rewriting it to a supervisor "

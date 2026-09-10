@@ -1,40 +1,11 @@
-"""`resolve_microbatch_caps` — THE one read path for `train.microbatch_caps`
-(WP12-R dispatch 6 phase F2, CARD-RUN5-GPU-OOM, R179).
+"""`resolve_microbatch_caps` — THE one read path for `train.microbatch_caps`.
 
-`train.microbatch_caps` is read HERE and nowhere else. `StepCoordinator._microbatch_caps`
-memoises this call and hands the dispatcher the BOUND METHOD; `run_declared_train_step` passes
-that callable to `_graph_step` alone and the graph arm invokes it once. The grid arm is not
-given the provider at all, so a grid run structurally cannot reach this function — which is
-why a grid `full_config` that carries no `train` section stays loadable, and why the four
-FROZEN grid coordinators that construct exactly such a config keep working.
-
-WHY THE PROVIDER RATHER THAN THE VALUE. Python evaluates every argument before the call, so
-resolving at the call site would read `full_config["train"]` on BOTH representations — the
-defect this indirection exists to prevent (DESIGN_DFIX §3.11.1). "Eager for the router, lazy
-for the routed" is the rule: `spec` is resolved eagerly because it DECIDES the route; the caps
-are meaningful only on one branch OF that decision.
-
-ARCH FIRST, THEN ABSENCE (R322(d)). `train.microbatch_caps` is ARCH-SCOPED to
-`representation="graph"` in `mantis.config.schema.core.ARCH_SCOPED_KEYS`, and this resolver
-refuses a config of any other representation BY NAME before it looks for the block at all.
-Until B2 the only thing standing between a grid config and an answer was the call-site gate
-described above; the schema required the key on every arch and this function served it to
-either. The gate was one `if` at one call site, and the class it belongs to is the one where
-the NEXT call site forgets it.
-
-ABSENCE IS A NAMED RAISE, NEVER A DEFAULT (LAW-11, R1). `MissingMicrobatchCapsError` names the
-level that is missing — `full_config` not a mapping, no `train` section, `train` not a mapping,
-no `microbatch_caps`, `microbatch_caps` not a mapping, or a member absent. This is the
-`resolve_from_config` / `MissingEncodingError` posture the same call already relies on for the
-encoding (`train/coordinator/dispatch.py:45-52`).
-
-THERE IS NO `.get(...)` ON THIS PATH, and that refusal is ruled rather than stylistic
-(F2-ABORT-5(i)). A defaulting read on the input to a memory-safety cap is the silent-fallback
-class: **a cap that silently becomes absent-and-unbounded is worse than no cap, because it
-reports as present** — the phantom-gate shape R4/LAW-07 exist to kill.
-
-RUN-SCOPED CONSTANTS (R85/R179): both members are sized together from ONE measured cost model
-at mint prereg and are never hand-edited in a minted file.
+The coordinator memoises this call and hands the dispatcher the BOUND METHOD, which reaches the
+graph arm alone, so a grid run structurally cannot reach this function and a grid config carrying
+no `train` section stays loadable. A provider rather than a value because Python evaluates every
+argument before the call. The arch-scope refusal comes FIRST and by name; absence is then a named
+raise, never a default, and there is no `.get(...)` on this path — a cap that silently becomes
+absent-and-unbounded is worse than no cap, because it reports as present.
 """
 from __future__ import annotations
 
@@ -49,26 +20,19 @@ _KEY = f"{_SECTION}.{_FIELD}"
 
 
 class MissingMicrobatchCapsError(ValueError):
-    """The graph training step's memory caps are not declared, at some named level.
-
-    A `ValueError` for the same reason `MissingEncodingError` is one: an absent identity-class
-    key is a configuration ERROR, not a condition to recover from. Raised only on the GRAPH
-    route (the grid arm never invokes the provider), and never caught by `_graph_step`.
-    """
+    """The graph training step's memory caps are not declared, at some named level — a
+    configuration ERROR rather than a condition to recover from, raised only on the GRAPH
+    route and never caught."""
 
 
 @dataclass(frozen=True)
 class MicrobatchCapsSpec:
     """The resolved per-micro-batch bound: `max_edges` and `max_nodes`, together.
 
-    A frozen dataclass beside the resolver rather than the pydantic block itself, for
-    `DrawRateAbortSpec`'s reason: `train/coordinator/` is the DAG-clean seam layer and nothing
-    in `mantis.train` should have to import a schema class to consume a resolved value.
-
-    BOTH MEMBERS, because the cost model the sizing pass fitted is `peak ~ a + b*E + c*N` and
-    a bound on bytes needs both terms bounded. E dominates at the production ratio
-    (E/N ~ 26.8) and does not dominate structurally: a micro-batch of many low-degree graphs
-    passes an edge-only bound and can be arbitrarily large in N.
+    A frozen dataclass beside the resolver, so nothing in `mantis.train` imports a schema class
+    to consume a resolved value. BOTH members, because the fitted cost model is
+    `peak ~ a + b*E + c*N`: E dominates at the production ratio (E/N ~ 26.8) but not
+    structurally, and many low-degree graphs pass an edge-only bound at arbitrary N.
     """
 
     max_edges: int
@@ -83,9 +47,9 @@ def resolve_microbatch_caps(full_config: Any) -> MicrobatchCapsSpec:
 
     Raises:
         ArchScopedKeyOutsideItsArchError: the config declares a representation other than
-            `graph` (R322(d)). Refused ahead of every presence check on purpose: a resolver
-            that only refuses ABSENCE is green by accident on a grid config — green because the
-            block happens not to be there — and turns red the moment anyone re-adds it.
+            `graph`. Refused ahead of every presence check on purpose: a resolver that only
+            refuses ABSENCE is green by accident on a grid config, and turns red the moment
+            anyone re-adds the block.
         MissingMicrobatchCapsError: the block, or one of its members, is not declared.
     """
     refuse_outside_its_arch(full_config, _SECTION, _FIELD)

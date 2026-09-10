@@ -1,45 +1,15 @@
-# >300 justify (R8). The
-# seven rows are ONE claim — a fired disk guard is supervisor-distinguishable from a clean run
-# — over ONE harness: the collaborator stand-ins, the rigged `disk_usage`, the config writer
-# and the `main()` driver are the bulk of it and every end-to-end row needs all of them. R5 bars
-# cross-test imports, so a split forks that harness into two copies which then drift while both
-# stay green, and it would ALSO fork the drive's one safety property — the guard delivers a
-# REAL SIGTERM here, so the wait-for-fire hook and the bounded signal wait must stay in one
-# place. Executable content is a minority: the rest is the mutation each row reds against,
-# which is the whole of what R84's template asks a mutation test to carry.
-"""⊕ WPMAIN RED-TEAM RT-2 / R132 — the disk-guard abort's process rc, DRIVEN.
+# >300 justify (R8): the seven rows are ONE claim — a fired disk guard is
+# supervisor-distinguishable from a clean run — over ONE harness that every end-to-end row needs.
+# R5 bars cross-test imports, so a split forks that harness, and it would also fork the drive's
+# one safety property: the guard delivers a REAL SIGTERM here.
+"""The disk-guard abort's process rc, DRIVEN.
 
-The finding, measured on this branch before the fix: `DiskGuard.check_once` SIGTERMs its own
-pid below `fail_gb`; `install_signal_handlers._stop` sets `shutdown_save=True` /
-`running=False` and **never** `abort_rule`; `abort_rule` had exactly ONE writer in all of
-`src/` (`train/coordinator/step.py`'s `_fire_hard_abort`). So `mantis.run.main` read
-`rule is None` and returned **0**. A run the disk guard killed reported SUCCESS, and the
-supervisor above relaunches into the same full volume — R44's class (a green that lies) on the
-leg this WP armed for the first time in any run.
-
-R132's mandate is R84's template verbatim: a registered exit code, resolved through
-`exit_code_for_abort`, a manifest row, a contract doc in the same commit, and a MUTATION
-proving a fired guard is supervisor-distinguishable from a clean run. This file is that
-mutation, plus the second arm.
-
-**What is real here and what is not.** Real: `mantis.run.main` (the launcher an operator
-types), `launch_run`, `compose_run`, the real `DiskGuard` on its real thread, the real
-`install_signal_handlers` handlers, a real `ShutdownState`, a real `HexgBuffer`, a real minted
-config written to disk and read back through the ONE loader, the real manifest and the real
-resolver. A REAL `SIGTERM` is delivered to this process by the guard's own `os.kill` in the
-end-to-end drives — that is the mechanism under test and faking it would test the fake. Fake:
-`build_run_collaborators`' three collaborators (trainer/pool are the injected seam every
-composition drive in this suite stands in), and `shutil.disk_usage`, which is rigged so the
-threshold can be crossed on demand — the alternative is filling a real volume, and it is the
-house precedent (`tests/train/test_lifecycle_contract.py::_fake_disk_usage`).
-
-**The rc measured is `main`'s RETURN VALUE**, which `run.py`'s `sys.exit(main())` hands the
-OS unchanged; that two-line `__main__` glue is censused statically by
-`tests/test_run_main_authority.py` and is not re-driven here. Everything between the guard's
-`os.kill` and that number is live.
-
-R5 bars cross-test imports, so the collaborator stand-ins below are re-derived rather than
-imported from `tests/test_run_root_lifecycle.py` (which is byte-frozen at `7c28536` besides).
+The finding, measured before the fix: `DiskGuard.check_once` SIGTERMs its own pid below
+`fail_gb`; the signal handler sets `shutdown_save`/`running` and NEVER `abort_rule`, which had
+exactly ONE writer in all of `src/`. So `mantis.run.main` read `rule is None` and returned 0 — a
+run the disk guard killed reported SUCCESS. REAL here: `main`, `launch_run`, `compose_run`, the
+real `DiskGuard` on its real thread, the real signal handlers, a real minted config read back
+through the ONE loader, and a REAL SIGTERM from the guard's own `os.kill`.
 """
 from __future__ import annotations
 
@@ -68,13 +38,11 @@ from mantis.train.lifecycle.signals import ShutdownState
 
 _REPO = Path(__file__).resolve().parents[1]
 
-#: The bounded burst. 3 is the smallest legal run at cadence 1 (the reachability validator
-#: spans cadence < actor_lag_threshold < max_train_steps).
+#: The bounded burst; 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
 
-#: A guard cadence short enough to fire inside a sub-second burst. The thresholds are the
-#: minted SHAPE (fail < warn, both > 0); which side of them a drive lands on is decided by the
-#: rigged `shutil.disk_usage`, never by the numbers here.
+#: A guard cadence short enough to fire inside a sub-second burst; which side of the thresholds
+#: a drive lands on is decided by the rigged usage, never by these numbers.
 _DRIVE_GUARD = {"interval_sec": 0.02, "warn_gb": 4.0, "fail_gb": 2.0}
 
 #: Rigged free space, in decimal GB (`disk_guard.py`'s `/1e9` divisor).
@@ -92,7 +60,6 @@ def _fake_disk_usage(free_gb: float):
     return _usage
 
 
-# ── the drivable collaborators (injection-first contract) ─────────────────────────────
 class _Pool:
     search_kind = "gumbel"
     avg_game_length = 20.0
@@ -182,8 +149,7 @@ class _Drive:
 
 
 def _write_config(tmp_path: Path, smoke_run_config) -> Path:
-    """A REAL minted config, bounded, guard-cadenced, written to disk so `main --config`
-    reads it back through the ONE loader (no fixture object is smuggled past the CLI)."""
+    """A REAL minted config written to disk, so `main --config` reads it back through the loader."""
     config = smoke_run_config(
         "dev_example.yaml", eval_enabled=False,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
@@ -198,19 +164,10 @@ def _write_config(tmp_path: Path, smoke_run_config) -> Path:
 
 def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
                 free_gb: float, wait_for_fire: bool) -> _Drive:
-    """Run `mantis.run.main(--config … --out-dir …)` over a rigged filesystem.
-
-    `wait_for_fire` blocks the fake train step until the guard's latch is set, so the drive
-    measures the FIX and never a race: without it a 3-step burst can outrun a 0.02 s poll and
-    the run would exit 0 for a reason that has nothing to do with the defect.
-
-    N4 (dispatcher-ownable backlog): on a COMPLETED compose_run `close_out` never touches
-    `run_safety.sink` (`run.py:899-920` — LAW-16 debt CARD-PROTOCOL-COMPLETE, bounded in
-    production because both real callers exit the process right after `compose_run`
-    returns). `request.addfinalizer` closes the REAL sink deterministically (idempotent,
-    `sink.py:205-206`), registered at the sink's own construction rather than after
-    `compose_run` returns, so a drive that raises from inside `compose_run` still closes.
-    """
+    """Run `mantis.run.main(--config … --out-dir …)` over a rigged filesystem. `wait_for_fire`
+    blocks the fake train step until the guard's latch is set, so the drive measures the FIX and
+    never a race; the REAL sink is closed by a finalizer registered at its own construction,
+    because `close_out` never touches it on a completed `compose_run`."""
     drive = _Drive()
     tmp_path = Path(tmp_path)
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -267,9 +224,8 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, reques
 
 
 def _await_signal(state: ShutdownState) -> None:
-    """CPython delivers a signal to the main thread at a bytecode boundary, so the handler
-    may still be pending when `compose_run` returns. Bounded wait, then assert — a race must
-    fail this file loudly, never leave a SIGTERM pending into the next test."""
+    """CPython delivers a signal at a bytecode boundary, so the handler may still be pending when
+    `compose_run` returns. Bounded wait, then assert — never a SIGTERM left pending."""
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and state.stop_count < 1:
         time.sleep(0.005)
@@ -280,20 +236,12 @@ def _events(run_safety) -> list[dict]:
             Path(run_safety.sink.path).read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-# ══ RT-2 — the rc is distinguishable ══════════════════════════════════════════════════
 def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """THE A/B R132 names: same launcher, same config shape, same guard — one rigged volume
-    apart — and the two runs must not hand a supervisor the same number.
-
-    Measured before the fix (RED-TEAM probe E1, and again with no rigged filesystem at all in
-    probe J1): `disk_alert_levels: ["critical"] … abort_rule: null … MAIN_RC: 0`. The guard
-    stopped the run and the process said "clean".
-
-    MUTATION THAT REDS IT: see the two below — suppress the recording, or drop the
-    root's transfer. Either restores rc 0 while every other assertion in this file holds.
-    """
+    """THE A/B: same launcher, config shape and guard, one rigged volume apart, and the two runs
+    must not hand a supervisor the same number. Measured before the fix: `abort_rule: null …
+    MAIN_RC: 0`. MUTATION THAT REDS IT: suppress the recording, or drop the root's transfer."""
     fired = _drive_main(tmp_path / "fired", monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     state = fired.handles.shutdown
@@ -341,13 +289,8 @@ def test_a_run_the_disk_guard_killed_exits_47_and_a_clean_run_exits_0(
 def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """R84's one-authority half. The number must come from the row, not from a second
-    literal at the launcher — otherwise moving the row's `exit_code` leaves the process
-    exiting the old number and the manifest lying about it.
-
-    MUTATION THAT REDS IT: `return 47` in `main` beside the resolver call. Every assertion in
-    the test above stays green; this one reds, because the rewired manifest moves the
-    resolver's answer and a literal cannot follow it."""
+    """The number must come from the manifest row, not a literal at the launcher. MUTATION THAT
+    REDS IT: `return 47` beside the resolver call — a literal cannot follow a rewired row."""
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
     _await_signal(drive.handles.shutdown)
@@ -367,14 +310,8 @@ def test_the_rc_is_resolved_off_the_manifest_row_and_is_never_a_literal(
 def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """THE MUTATION R84's template requires, driven rather than described (R81 under R86: it
-    kills the PRODUCTION writer, not a test helper, and its casualty is in-subject).
-
-    `ShutdownState.record_abort` is the one writer of `abort_rule`. Neutered, the guard still
-    fires, still SIGTERMs, still logs its critical alert, still stops the run through
-    save-then-exit — and the process reports **0**. That is the defect exactly, restored, and
-    it is what the two tests above would look like if the fix were deleted. An oracle nobody
-    has seen red is not evidence."""
+    """THE MUTATION R84's template requires: `record_abort` neutered, the guard still fires, still
+    SIGTERMs, still stops the run — and the process reports 0."""
     monkeypatch.setattr(ShutdownState, "record_abort", lambda self, rule: False)
     drive = _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                         request, free_gb=_CRITICAL_GB, wait_for_fire=True)
@@ -389,22 +326,12 @@ def test_suppressing_the_recording_collapses_the_rc_back_to_zero(
     )
 
 
-# ══ RT-2b — the guard never supplies LAW-16's second press ════════════════════════════
 def test_the_critical_arm_signals_once_per_run_while_the_alert_keeps_firing() -> None:
-    """RT-2b. The guard polls every `interval_sec` (minted 60 s) on a condition that does not
-    clear itself, so an UNLATCHED arm supplies the second press of the two-press force-exit
-    ITSELF: `_stop` hits `stop_count >= 2` and `sys.exit(1)`s from a signal handler, at an
-    arbitrary point in the main thread, MID-SAVE — against `close_out`'s 14400 s drain caps.
-    The two-press force-exit is the OPERATOR's affordance and it stays theirs.
-
-    `os.kill` is CAPTURED, not delivered: the RED state of this oracle must be an assertion
-    failure, never a dead pytest process, and an unlatched arm would deliver a real second
-    SIGTERM into a real handler here.
-
-    MUTATION THAT REDS IT: drop the `if first_fire:` guard around `os.kill` — three kills.
-    THE OTHER DIRECTION, equally required: latch the whole arm (skip the emit too) and the
-    alert count drops to 1, hiding a disk condition that is still getting worse from the one
-    observer watching the stream."""
+    """The guard polls on a condition that does not clear itself, so an UNLATCHED arm supplies the
+    second press of the two-press force-exit ITSELF: `sys.exit(1)` from a signal handler, MID-SAVE,
+    against `close_out`'s drain caps. `os.kill` is CAPTURED, not delivered, so the RED state is an
+    assertion failure rather than a dead pytest process. MUTATION THAT REDS IT: drop the
+    `if first_fire:` guard; in the other direction, latching the emit too drops the alert count."""
     kills: list = []
     alerts: list = []
 
@@ -436,13 +363,9 @@ def test_the_critical_arm_signals_once_per_run_while_the_alert_keeps_firing() ->
 
 
 def test_the_latch_is_a_produced_fact_and_starts_false() -> None:
-    """The carrier's own contract. `critical_fired` is not a config proxy (R79) — there is no
-    config value beside it; it is "my critical arm signalled this process", produced by the
-    guard and read by the one composition root after `stop()` joins the thread.
-
-    MUTATION THAT REDS IT: initialise it True (every composed run would then report rc 47),
-    or make it a settable attribute the root could write — the fact would stop being the
-    guard's."""
+    """`critical_fired` is not a config proxy: it means "my critical arm signalled this process",
+    produced by the guard and read after `stop()` joins the thread. MUTATION THAT REDS IT:
+    initialise it True, or make it settable by the root."""
     guard = DiskGuard(watch_path=Path("."), interval_sec=60.0, warn_gb=4.0, fail_gb=2.0,
                       keep_all=False, sink=type("_S", (), {"emit": lambda self, p: None})())
     assert guard.critical_fired is False, "a guard that has not fired has not fired"
@@ -450,14 +373,9 @@ def test_the_latch_is_a_produced_fact_and_starts_false() -> None:
         guard.critical_fired = True     # type: ignore[misc]
 
 
-# ══ the carrier and the row ═══════════════════════════════════════════════════════════
 def test_record_abort_is_set_once_and_the_first_fire_wins() -> None:
-    """`ShutdownState.record_abort` is THE writer of `abort_rule` for BOTH fire paths since
-    R132 added the second one. Set-once is what stops two authorities disagreeing: a disk-full
-    event during a draw-rate collapse must not re-label the collapse.
-
-    MUTATION THAT REDS IT: a plain assignment (last writer wins) — the shape the field had
-    when it was written at exactly one site and the invariant was prose."""
+    """`record_abort` is THE writer for BOTH fire paths, and set-once stops two authorities
+    disagreeing. MUTATION THAT REDS IT: a plain assignment, last writer wins."""
     state = ShutdownState()
     assert state.abort_rule is None
     assert state.record_abort("draw_rate_collapse") is True
@@ -470,17 +388,11 @@ def test_record_abort_is_set_once_and_the_first_fire_wins() -> None:
 
 
 def test_the_manifest_row_is_required_and_its_pin_still_binds_the_transfer() -> None:
-    """The row R132 mandates, and the one thing about it that can rot silently.
-
-    REQUIRED and not DEFERRED because nothing is owed: `monitor.disk_guard.fail_gb` is a
-    minted operator value on every committed config, its schema carries `gt=0`, and the block
-    is a required field — so a validated `RunConfig` arms this row by construction. What the
-    row is FOR is the drift: `_dotted` short-circuits a mid-walk `None` to DISARMED, so making
-    the block nullable would go RED on run5 instead of the guard quietly disappearing again.
-
-    MUTATION THAT REDS IT: rename the constant, delete the transfer line in `compose_run`, or
-    move it above `disk_guard.stop()` — the last one is the subtle failure (the latch would be
-    read before the guard thread is joined) and the pin's exact text is what catches it."""
+    """The row is REQUIRED because nothing is owed: `fail_gb` is minted with `gt=0` in a required
+    block, so a validated `RunConfig` arms it by construction. What it is FOR is the drift, since
+    `_dotted` short-circuits a mid-walk `None` to DISARMED. MUTATION THAT REDS IT: rename the
+    constant, delete the transfer line, or move it above `disk_guard.stop()` — the last is the
+    subtle one, since the latch would be read before the guard thread is joined."""
     row = next(r for r in MANIFEST if r.name == DISK_SPACE_ABORT_RULE)
     assert row.status is Status.REQUIRED and row.owner is None, (
         "a REQUIRED row carries no owner (an owner reads as already-excused); "

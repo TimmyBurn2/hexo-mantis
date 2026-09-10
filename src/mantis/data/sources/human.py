@@ -43,9 +43,7 @@ class HumanGameSource(CorpusSource):
             if record is not None:
                 yield record
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _load(self, path: Path) -> GameRecord | None:
         ok, data = best_effort(

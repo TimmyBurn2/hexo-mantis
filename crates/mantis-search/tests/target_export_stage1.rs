@@ -1,38 +1,25 @@
-// R8 >300 justify: the four stage-1 exporter oracles (S1a x3 arms + S1b) share one
-// search-driving harness (generators + no-drop prior + run loop) that must stay byte-equal
-// to the r153 instruments'; splitting would fork the harness the oracles' provenance
-// depends on.
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — S1a / S1b: the stage-1 exporter sum + full-set
-//! oracles, written BEFORE the fix (T-2 ORACLE-WRITE; frozen bytes through IMPL).
+// R8 >300 justify: the four stage-1 exporter oracles share one search-driving harness
+// (generators + no-drop prior + run loop) that must stay byte-equal to the r153 instruments';
+// splitting would fork the harness the oracles' provenance depends on.
+//! The stage-1 exporter's sum and full-set oracles.
 //!
-//! POST-FIX contract (DESIGN_T §3.1/§3.2, authority records.rs:468-479 + R34/R153/R156):
-//! `get_policy_ls` and `get_improved_policy_ls` export the visit/improved distribution
-//! over the FULL root-child set — in- AND off-window, covered or not — summing to 1;
-//! zero-visit roots return the prior-fallback distribution (the improved exporters'
-//! semantics); no coverage gate anywhere in the export.
+//! `get_policy_ls` and `get_improved_policy_ls` export the visit/improved distribution over
+//! the FULL root-child set — in- and off-window alike — summing to 1, and a zero-visit root
+//! returns the prior-fallback distribution. There is no coverage gate anywhere in the export.
 //!
-//! PRE-FIX status at HEAD (recorded in ORACLE_NOTES_T.md): S1a-T1 RED (sum < 1 on the
-//! band-2 position, HEAD drop 0.306122), S1a-T0 RED (all-zero export on the degenerate
-//! board), S1a-ZV RED (all-zero instead of prior fallback), S1b RED (uncovered child
-//! absent from the improved export — the subset-renorm arm).
+//! Killers: reinstating a coverage gate in `get_policy_ls`, or a pre-softmax drop in
+//! `get_improved_policy_ls`.
 //!
-//! Killers (PREREG_T §3): S1a — M-A (coverage gate reinstated in `get_policy_ls`);
-//! S1b — M-B (pre-softmax drop reinstated in `get_improved_policy_ls`).
-//!
-//! Positions come from the r153 instruments' generators at fixed seeds (LCG verbatim),
-//! so every construction is reproducible and shared with the O1r fixture family.
-//!
-//! R346(f) note: the constructions used to census the visited children that were off-window
-//! AND uncovered by any K-cluster window. `Board::get_cluster_views` went with the dense path
-//! and the export was already coverage-free, so the census is now over OFF-WINDOW visited
-//! children — the class that routes to `overflow`, which is the class every assertion below
-//! is actually about. The preconditions still refuse a vacuous pass.
+//! Positions come from the r153 instruments' generators at fixed seeds (LCG verbatim), so
+//! every construction is reproducible and shared with the O1r fixture family. The census is
+//! over OFF-WINDOW visited children, the class that routes to `overflow`; the preconditions
+//! refuse a vacuous pass.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 
-const N_SIMS: usize = 50; // run5 target-generation regime (PROVENANCE_T0 §1)
+const N_SIMS: usize = 50; // The run's target-generation regime.
 const LEAF_BATCH: usize = 8;
 const TOL: f64 = 1e-6;
 
@@ -49,7 +36,7 @@ fn geometry() -> (BoardGeometry, usize, i32) {
     )
 }
 
-/// The no-drop uniform legal-set prior — byte-equal to the leg-2 instrument's.
+/// The no-drop uniform legal-set prior, byte-equal to the leg-2 instrument's.
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
@@ -114,7 +101,7 @@ fn export_mass(ls: &LegalSetPolicy) -> f64 {
         + ls.overflow.values().map(|&p| f64::from(p)).sum::<f64>()
 }
 
-/// Read the exported mass at a board coord (dense by flat, else overflow, else 0).
+/// Read the exported mass at a board coord: dense by flat, else overflow, else 0.
 fn mass_at(ls: &LegalSetPolicy, board: &Board, q: i32, r: i32, n_actions: usize) -> f64 {
     let flat = board.window_flat_idx(q, r);
     if flat < n_actions {
@@ -124,9 +111,8 @@ fn mass_at(ls: &LegalSetPolicy, board: &Board, q: i32, r: i32, n_actions: usize)
     }
 }
 
-/// Precondition harness: run the production search on a generator board and return the
-/// tree plus the (visited, off-window) child census — the constructions must PROVE they
-/// exercise the defect regime rather than pass vacuously.
+/// Run the production search on a generator board and return the tree plus the (visited,
+/// off-window) child census, so a construction can prove it exercises the defect regime.
 struct Setup {
     board: Board,
     tree: MCTSTree,
@@ -162,10 +148,9 @@ fn setup(seed: u64, plies: usize, sims: usize) -> Setup {
     Setup { board, tree, n_actions, visited, visited_offwindow }
 }
 
-// ── S1a arm 1: T > 0 — full-mass export, off-window mass carried ─────────────────────
 #[test]
 fn s1a_t1_export_sums_to_unity_with_offwindow_mass_carried() {
-    // Band-2 position (survey: seed 8675309 ply 3, n_legal 232, HEAD drop 0.306122).
+    // Band-2 position: seed 8675309 ply 3, n_legal 232, measured pre-fix drop 0.306122.
     let s = setup(8_675_309, 3, N_SIMS);
     assert!(
         !s.visited_offwindow.is_empty(),
@@ -191,15 +176,10 @@ fn s1a_t1_export_sums_to_unity_with_offwindow_mass_carried() {
     }
 }
 
-// ── S1a arm 2: T = 0 — uncovered one-hot lands in overflow (flip-set row 7) ───────────
 #[test]
 fn s1a_t0_uncovered_best_child_exports_a_one_hot() {
-    // Degenerate board (survey: seed 20260731 ply 53, HEAD drop 1.000000 — every visited
-    // child off-window + uncovered, so the argmax child is deterministically uncovered).
-    // Construction deviation from flip-set row 7's "two-cluster golden board" recorded in
-    // ORACLE_NOTES_T.md: that board has no uncovered LEGAL cell at gnn geometry; this one
-    // provably does, and the predicate (best child uncovered -> one-hot in overflow) is
-    // row 7's, unchanged.
+    // Degenerate board: seed 20260731 ply 53, measured pre-fix drop 1.000000 — every visited
+    // child is off-window, so the argmax child is deterministically off-window too.
     let s = setup(20_260_731, 53, N_SIMS);
     let (best_q, best_r, best_v) = *s
         .visited
@@ -228,12 +208,9 @@ fn s1a_t0_uncovered_best_child_exports_a_one_hot() {
     );
 }
 
-// ── S1a arm 3: zero-visit root — prior fallback == the improved siblings' semantics
-//    (flip-set row 8) ───────────────────────────────────────────────────────────────────
 #[test]
 fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
-    // ONE expand pass: the root expands (sim 1 is consumed by the root expansion), its
-    // children all carry 0 visits — the sims=1 regime DESIGN_T §3.1 names.
+    // One expand pass: sim 1 is consumed by the root expansion, so every child has 0 visits.
     let s = setup(8_675_309, 3, 1);
     assert!(
         s.visited.is_empty(),
@@ -243,7 +220,7 @@ fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
     let ls = s.tree.get_policy_ls(1.0, s.n_actions);
     let improved = s.tree.get_improved_policy_ls(s.n_actions, 50.0, 1.0);
 
-    // Both are the prior fallback over the FULL child set → identical by coord, sum 1.
+    // Both are the prior fallback over the FULL child set: identical by coord, sum 1.
     let total = export_mass(&ls);
     assert!(
         (total - 1.0).abs() <= TOL,
@@ -267,7 +244,6 @@ fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
     }
 }
 
-// ── S1b: improved-ls FULL-SET check — the anti-subset-renorm oracle ──────────────────
 #[test]
 fn s1b_improved_ls_keeps_every_child_including_uncovered() {
     let s = setup(8_675_309, 3, N_SIMS);
@@ -277,7 +253,7 @@ fn s1b_improved_ls_keeps_every_child_including_uncovered() {
     );
     let improved = s.tree.get_improved_policy_ls(s.n_actions, 50.0, 1.0);
     let total = export_mass(&improved);
-    // A sum check ALONE cannot see arm 3 (subset renorm sums to 1); the full-set
+    // A sum check alone cannot see a subset renorm, which also sums to 1; the full-set
     // presence check below is the load-bearing assert.
     assert!((total - 1.0).abs() <= 1e-4, "improved-ls must sum to 1, got {total}");
 
@@ -292,7 +268,7 @@ fn s1b_improved_ls_keeps_every_child_including_uncovered() {
              (policy.rs:261-264 form, §1.1 arm 3) redistributed it over the subset (M-B)"
         );
     }
-    // And the off-window children specifically (the arm-3 victims) are present.
+    // And the off-window children specifically are present.
     for &(q, r) in &s.visited_offwindow {
         assert!(
             improved.overflow.contains_key(&(q, r)),

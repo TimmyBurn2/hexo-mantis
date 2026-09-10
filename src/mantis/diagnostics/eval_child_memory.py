@@ -1,54 +1,26 @@
-# R8 justify: the stopping RULE, the two readers that feed it (the live `--events` path and
-# the `--markers` path over captured child stdout) and the renderer that prints the series are
-# one unit — the rule's whole point is that a verdict is a function of a stated sample, so a
-# reader living apart from the rule could hand it a series shaped differently from the one the
-# rule was pre-registered against, which is the failure this tool exists to end.
+# R8 justify: the stopping RULE, the two readers that feed it and the renderer are one unit — a
+# verdict is a function of a stated sample, so a reader living apart from the rule could hand it
+# a series shaped differently from the one the rule was pre-registered against.
 """`python -m mantis.diagnostics.eval_child_memory` — has the eval-child term CONVERGED?
 
-WHAT THIS REPLACES, and why it is a tool rather than a paragraph. `F816_10_BOX_PROCEDURE.md`
-STEP 1d samples `nvidia-smi` per process during "any burst that reaches one eval round" and
-takes the maximum. That procedure produced **0.881 GiB** (41 samples), then **1.1855** (709
-samples, running maximum flat for the final 30% of a 24-minute drive) — and the strengthened
-STEP 4 then measured **3.5293**, falsifying the mint the 1.1855 was carried into. The sitting's
-own words: *a term measured by watching until it looks flat is not a bound*
-(`RECAL_EXIT_2026-08-22.md` §11b).
-
-The replacement is not a longer look. It is a STATED STOPPING RULE, applied by something other
-than the person who wants the answer:
+A STATED STOPPING RULE, applied by something other than the person who wants the answer, in
+place of "sample until the maximum looks flat" — which reported 0.881 GiB (41 samples) and then
+1.1855 GiB (709 samples) for a term later measured at 3.5293 GiB.
 
     PLATEAU      no round in the trailing window set a new maximum exceeding the previous
                  running maximum by more than `--band-pct`
     GROWING      one did
     (refusal)    fewer than `--plateau-rounds` measured rounds exist
 
-Both parameters are REQUIRED and have no defaults. A default here would be a stopping rule
-nobody chose, applied to a mint-critical term — which is the class this tool exists to end, one
-layer up.
+Both parameters are REQUIRED and have no defaults. Exit 0 PLATEAU, 1 GROWING, 2 REFUSED (no
+rounds of the expected kind, too few rounds, or an unreadable input): it FAILS CLOSED, never
+"0 rounds, plateau", because a reader that guesses is worse than no reader — an earlier one
+collapsed a whole run into one poll and reported 1 392 GiB on a 16 GiB card.
 
-EXIT CODES, because a sitting gates on them:
-    0   PLATEAU
-    1   GROWING
-    2   REFUSED — no rounds of the expected kind, too few rounds, or an unreadable input
-
-**IT FAILS CLOSED, and that is the load-bearing half.** No events of the expected kind is rc 2
-with a named refusal, never "0 rounds, plateau". A marker file with no markers is rc 2. The
-sitting's own `peaks.py` split polls on an assumption about a CSV header, collapsed a whole run
-into one poll and reported **1 392 GiB on a 16 GiB card**; a plausible-looking wrong number
-would have been minted against. A reader that guesses is worse than no reader.
-
-TWO TRANSPORTS, ONE RULE. `--events` reads the run's own JSONL event stream
-(`eval_round_device_memory`, emitted by `mantis.eval.pipeline` from the child's own payload);
-`--markers` reads captured child stdout (`MANTIS_EVAL_MEM` lines) for a sitting that has only a
-burst log. Exactly one may be given: a tool that silently preferred one input over another
-would answer about a file the operator did not think it was reading.
-
-UNMEASURED ROUNDS ARE REPORTED, NEVER DROPPED. A round whose child had no CUDA counters ships
-`available: false` with every counter `null`. It is listed, counted and named in the readout,
-and excluded from the verdict by name — because silently dropping it would bias the series
-without saying so, and "we had no counters that round" is itself a finding about the drive.
-
-EVERY FIGURE CARRIES ITS SAMPLING LIMIT. Rounds observed and the wall seconds they cover print
-beside the peaks, per the block's own convention.
+TWO TRANSPORTS, ONE RULE: `--events` reads the run's own JSONL event stream and `--markers`
+captured child stdout, and exactly one may be given. A round whose child had no CUDA counters
+is listed, counted and named but excluded from the verdict, and every figure prints the rounds
+observed and the wall seconds they cover.
 """
 from __future__ import annotations
 
@@ -64,8 +36,7 @@ from mantis.eval.child_memory import EVENT, MARKER, parse_marker_lines
 PLATEAU = "PLATEAU"
 GROWING = "GROWING"
 
-#: The refusal exit code. `2` is argparse's own usage-error code, and this tool's refusals are
-#: the same kind of thing: the caller did not give it something it can answer about.
+#: The refusal exit code, `2` for argparse's own reason: the caller gave nothing answerable.
 RC_REFUSED = 2
 
 GIB = 1024 ** 3
@@ -107,12 +78,8 @@ def _reading_from_payload(payload: Any, *, round_id: str, step: int | None) -> R
 
 
 def read_rounds_from_events(text: str) -> list[RoundReading]:
-    """Extract the per-round readings from a JSONL event stream.
-
-    A line that is not JSON is SKIPPED — a run log carries lines that are not events, and
-    refusing on one would make the tool unusable against real captures. The refusal comes from
-    finding no ROUNDS, which is the thing the verdict actually needs, not from finding a line
-    the reader could not parse.
+    """Extract the per-round readings from a JSONL event stream; a non-JSON line is SKIPPED,
+    since the refusal comes from finding no ROUNDS.
     """
     rounds: list[RoundReading] = []
     for raw in text.splitlines():
@@ -145,12 +112,9 @@ def read_rounds_from_events(text: str) -> list[RoundReading]:
 
 
 def read_rounds_from_markers(text: str) -> list[RoundReading]:
-    """Extract the per-round readings from captured child stdout markers.
-
-    `parse_marker_lines` refuses a file with no markers; this function then groups the phase
-    records by `round_id` IN FIRST-APPEARANCE ORDER. Order matters — the verdict is about a
-    trailing window — and the child writes its marks in phase order, so first appearance is
-    round order.
+    """Extract the per-round readings from captured child stdout markers, grouped by `round_id`
+    IN FIRST-APPEARANCE ORDER — the verdict is about a trailing window, and the child writes its
+    marks in phase order.
     """
     grouped: dict[str, list[dict[str, Any]]] = {}
     for record in parse_marker_lines(text):
@@ -166,12 +130,8 @@ def read_rounds_from_markers(text: str) -> list[RoundReading]:
             available=any(bool(r.get("available")) for r in records),
             peak_bytes=max(measured) if measured else None,
             reserved_peak_bytes=max([r for r in reserved if r is not None], default=None),
-            # AUDIT-1 F-28/A06. `r["t_mono_sec"]` is `None` on a round the child could not
-            # stamp, and `max()` over a list containing `None` raises `TypeError` — which
-            # escaped `--markers` entirely and exited with GROWING's code, so an unreadable
-            # capture presented as a measured growth verdict. Absent stamps are filtered, the
-            # way `_from_phases` above already filters them, and a round with none reports
-            # `wall_sec=None` — which `_render` already prints as `n/a`.
+            # Absent stamps are filtered: `max()` over a list containing `None` raises
+            # TypeError, which escaped `--markers` and exited with GROWING's code.
             wall_sec=_span(r.get("t_mono_sec") for r in records),
             phases=tuple(str(r.get("phase")) for r in records),
         ))
@@ -179,11 +139,8 @@ def read_rounds_from_markers(text: str) -> list[RoundReading]:
 
 
 def _span(stamps: Any) -> float | None:
-    """`max - min` over the stamps that EXIST, or `None` when fewer than two do.
-
-    One stamp is an instant, not a span; zero is nothing. Both used to be either a `TypeError`
-    (an absent stamp in the sequence) or a fabricated `0.0` (AUDIT-1 F-28/A06).
-    """
+    """`max - min` over the stamps that EXIST, or `None` when fewer than two do; one stamp is an
+    instant, not a span."""
     values = [float(s) for s in stamps if s is not None]
     return (max(values) - min(values)) if len(values) >= 2 else None
 
@@ -191,13 +148,8 @@ def _span(stamps: Any) -> float | None:
 def classify(peaks: list[float] | list[int], *, plateau_rounds: int, band_pct: float) -> str:
     """Apply the stopping rule to a series of per-round peaks, oldest first.
 
-    The window is TRAILING and the comparison is against the running maximum BEFORE each
-    round in it. Growth outside the window is history rather than a live trend — otherwise a
-    series that ever rose could never converge, and the rule would have exactly one arm.
-
-    Refuses rather than answering on a series shorter than the window. That refusal is the
-    reason this is a function and not an eyeball: the shape it declines to judge is exactly
-    the shape STEP 1d has twice reported a bound from.
+    The window is TRAILING and each round is compared against the running maximum BEFORE it, or
+    a series that ever rose could never converge. A series shorter than the window is REFUSED.
     """
     if plateau_rounds < 1:
         raise ValueError(f"plateau_rounds must be >= 1, got {plateau_rounds}")
@@ -226,10 +178,8 @@ def _render(rounds: list[RoundReading], *, plateau_rounds: int, band_pct: float,
             verdict: str | None, refusal: str | None, out: Any) -> None:
     measured = [r for r in rounds if r.available and r.peak_bytes is not None]
     unmeasured = [r for r in rounds if r not in measured]
-    # AUDIT-1 F-28/A07. `sum(r.wall_sec or 0.0 ...)` counted every round whose wall could not
-    # be measured as ZERO SECONDS, so the printed total was an understatement presented as a
-    # total. It is summed over the rounds that HAVE a wall, and the count is printed beside
-    # it — a total over 3 of 12 rounds is a different fact from a total over 12.
+    # Summed over the rounds that HAVE a wall, with the count printed beside it: counting an
+    # unmeasurable round as zero seconds made the printed total an understatement.
     timed = [r.wall_sec for r in rounds if r.wall_sec is not None]
     wall_str = f"{sum(timed):.1f} over {len(timed)}/{len(rounds)} timed round(s)" if timed \
         else f"unmeasured (0/{len(rounds)} rounds carry a wall)"
@@ -269,8 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     source = parser.add_mutually_exclusive_group(required=True)
     source.add_argument("--events", help="run event JSONL carrying eval_round_device_memory")
     source.add_argument("--markers", help=f"captured child stdout carrying {MARKER} lines")
-    # NO DEFAULTS, deliberately (see the module docstring): a stopping rule nobody chose,
-    # applied to a mint-critical term, is the defect this tool exists to end one layer up.
+    # NO DEFAULTS, deliberately: a stopping rule nobody chose, applied to a mint-critical term.
     parser.add_argument("--plateau-rounds", type=int, required=True,
                         help="trailing window, in measured rounds")
     parser.add_argument("--band-pct", type=float, required=True,

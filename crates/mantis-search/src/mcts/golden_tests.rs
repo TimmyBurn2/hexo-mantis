@@ -62,7 +62,7 @@ fn s4_puct_dirichlet_bits() -> Vec<u32> {
         .collect()
 }
 
-// ── Golden roster: (name, live_bits) computed from the live code ──────────────
+// Golden roster: (name, live_bits) computed from the live code
 
 /// All goldens as `(line-key, live u32 bits)`. The line-key must match the
 /// prefix in `golden_bits.txt`. One source of truth for both capture + assert.
@@ -94,7 +94,7 @@ fn parse_golden(key: &str) -> Vec<u32> {
     panic!("golden key {key:?} not found in golden_bits.txt");
 }
 
-// ── Capture (ignored) — regenerates golden_bits.txt from the live code ────────
+// Capture (ignored) — regenerates golden_bits.txt from the live code
 
 #[test]
 #[ignore]
@@ -115,7 +115,7 @@ fn test_capture_goldens_print() {
     print!("{s}");
 }
 
-// ── Byte-identity assertions (non-ignored) ────────────────────────────────────
+// Byte-identity assertions (non-ignored)
 
 #[test]
 fn test_golden_s4_puct_dirichlet_unchanged() {

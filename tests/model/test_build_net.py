@@ -46,7 +46,7 @@ def test_no_killed_branch_keys_on_any_constructed_net() -> None:
             assert not k.startswith(killed), f"{enc}: killed-branch key {k!r}"
 
 
-# ── RepresentationMismatch / no-dense-default (LAW-11) ────────────────────────
+# RepresentationMismatch / no-dense-default (LAW-11)
 
 
 def test_absent_representation_raises_no_default() -> None:

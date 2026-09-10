@@ -1,42 +1,14 @@
-"""⊕ WP12R Step 3 narration — oracle 2 (parts ii+iii): `game_complete` DELIVERED to the
-sink in production.
+"""`game_complete` is DELIVERED to the sink in production, not merely emitted.
 
-RED-at-IMPL until the narration chunk's parts (ii)+(iii) land. One oracle, falsifying:
+The event was already emitted by the drain loop and golden-pinned, but the production
+`WorkerPool` was constructed with `sink=None`, so every one of them was dropped.
 
-  O-N2 — the production `WorkerPool` at `run.py:349` is NOT built with `sink=None`. With
-         a sink injected, `game_complete` (already emitted at `pool_drain.py:177`,
-         golden-pinned by C-03/J-05) is DELIVERED, not dropped. A run-equivalent that
-         produces N games yields N `game_complete` events at the sink.
-         FALSIFYING MUTATION: revert `run.py:349` to `sink=None`. This oracle MUST turn RED
-         (zero delivered `game_complete` events / the construction site passes `sink=None`).
+Two arms. SOURCE: the `WorkerPool(...)` call in `run.py` does not pass `sink=None` — an AST
+check, because that keyword is the exact defect. RUNTIME: a pool built with a non-None sink
+delivers N `game_complete` events for N drained games, which is the delivery-count witness
+beside the goldens that pin only the payload shape.
 
-R215: "game_complete IS emitted at pool_drain.py:177 (golden-pinned) but DROPPED in
-production because the production WorkerPool is constructed with sink=None at run.py:349."
-R216: "The fix for (ii) and (iii) is ONE change: inject a sink at run.py:349. game_complete
-needs NO re-wiring and must NOT break the C-03/J-05 goldens — the event is already correct,
-only undelivered."
-R217: "The narration chunk's grant covers ONLY the sink= keyword argument at run.py:349."
-R218: "ORACLE-WRITE stage is authorized. Two oracles per R214 §7: ... (2) parts (ii)+(iii)
-N games yield N delivered game_complete events with sink=None revert turning RED. Both
-mutations driven both ways. C-03/J-05 goldens stay GREEN."
-
-Two test arms:
-
-  (a) SOURCE — `run.py`'s `build_run_collaborators` does NOT pass `sink=None` to the
-      `WorkerPool(...)` construction call. This is the J-05 precedent (AST-inspecting
-      `pool_drain.py` for the game_complete payload, applied to `run.py` for the injection
-      site). RED at HEAD (`run.py:349` is `sink=None`), GREEN after IMPL, RED on the revert
-      mutation. This arm bites the EXACT defect R215/R216 name: the production pool built
-      with `sink=None`.
-
-  (b) RUNTIME — a pool built with a non-None sink delivers N `game_complete` events for N
-      drained games. This reuses the scripted drain harness from
-      `test_pool_drain_parity.py` (ScriptedPool + RecordingSink) with a non-None sink and
-      asserts delivery. GREEN at HEAD (the scripted harness injects a sink directly —
-      delivery was never the bug, only the production injection). This arm MUST stay GREEN
-      after IMPL; if it REDS, the injection broke the delivery contract (not the oracle).
-      It is the runtime witness that C-03/J-05's payload-shape goldens extend to actual
-      delivery-count parity.
+FALSIFYING MUTATION: revert the construction site to `sink=None`; both arms must red.
 """
 from __future__ import annotations
 
@@ -55,7 +27,6 @@ from mantis.selfplay.instrumentation import PoolInstrumentation
 _RUN_PY = Path(__file__).resolve().parents[2] / "src" / "mantis" / "run.py"
 
 
-# ── recording collaborators (structural EventSink, same shape as test_pool_drain_parity) ─
 class _RecordingSink:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -126,7 +97,7 @@ class _ScriptedBuffer:
 
 def _make_scripted_pool(games, sink):
     """Minimal pool surface for `run_stats_loop` — just enough to drain N games and emit N
-    `game_complete` events. Mirrors `test_pool_drain_parity.py`'s ScriptedPool shape."""
+    `game_complete` events."""
     pool = type("ScriptedPool", (), {})()
     pool._stop_event = _OneShotStop()
     pool._is_graph = False
@@ -163,28 +134,16 @@ def _make_scripted_pool(games, sink):
 
 
 def _make_games(n: int) -> list[tuple]:
-    """N scripted game-result 10-tuples (the `drain_game_results` shape). Winner_code 1
-    (x wins), 4 plies, empty move history, no solver fires."""
+    """N scripted game-result 10-tuples (the `drain_game_results` shape): winner 1, 4 plies,
+    empty move history, no solver fires."""
     return [(4, 1, [], 0, 0, 0, 0, 0, 0, 0) for _ in range(n)]
 
 
-# ═══ O-N2 (a) — SOURCE: run.py does NOT pass sink=None to WorkerPool ═════════════════════
 def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:
-    """O-N2 (a) — SOURCE arm. The `WorkerPool(...)` construction call inside
-    `build_run_collaborators` in `run.py` does NOT pass `sink=None`.
-
-    RED at HEAD (`run.py:349` is `sink=None, heartbeat=None`). GREEN after IMPL injects a
-    sink (the `_DeferredSink` adapter per DESIGN §4.2). RED on the falsifying mutation
-    (revert `run.py:349` to `sink=None`).
-
-    This is the J-05 precedent (AST-inspecting `pool_drain.py` for the `game_complete`
-    payload key set) applied to `run.py` for the injection site. It bites the EXACT defect
-    R215/R216 name: the production pool built with `sink=None`, which drops every
-    `game_complete` and `system_stats` event the drain loop emits.
-
-    R217 grant boundary: this test inspects `sink=` ONLY. The `heartbeat=` keyword at the
-    same call site is R208's subject and is NOT asserted here.
-    """
+    """SOURCE arm: the `WorkerPool(...)` construction call in `run.py` does NOT pass
+    `sink=None`, which is what dropped every `game_complete` and `system_stats` event the
+    drain loop emits. Only `sink=` is inspected; the `heartbeat=` keyword is another oracle's
+    subject."""
     source = _RUN_PY.read_text()
     tree = ast.parse(source)
 
@@ -199,8 +158,7 @@ def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:
         "O-N2 (a): no `WorkerPool(...)` construction call found in run.py — the injection "
         "site the oracle inspects has moved or been renamed."
     )
-    # The production construction is inside `build_run_collaborators`; there is exactly one
-    # such call in run.py (verified at design time, run.py:349).
+    # There is exactly one production construction call in run.py.
     assert len(worker_pool_calls) == 1, (
         f"O-N2 (a): expected exactly one `WorkerPool(...)` call in run.py; found "
         f"{len(worker_pool_calls)}. The oracle inspects the ONE production construction "
@@ -219,8 +177,7 @@ def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:
         "The production pool must inject a sink (R216: inject a sink at run.py:349)."
     )
 
-    # RED at HEAD: sink_kwarg.value is `ast.Constant(value=None)` (i.e. `sink=None`).
-    # GREEN after IMPL: sink_kwarg.value is a Call/Name (the `_DeferredSink()` adapter).
+    # At the defect it is `ast.Constant(None)`; once injected it is the adapter's Call/Name.
     is_none = (isinstance(sink_kwarg.value, ast.Constant)
                and sink_kwarg.value.value is None)
     assert not is_none, (
@@ -232,27 +189,16 @@ def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:
     )
 
 
-# ═══ O-N2 (b) — RUNTIME: N games yield N delivered game_complete events ═════════════════
 def test_on2b_n_games_yield_n_delivered_game_complete_events(monkeypatch) -> None:
-    """O-N2 (b) — RUNTIME arm. A pool built with a non-None sink delivers N
-    `game_complete` events for N drained games.
-
-    GREEN at HEAD (the scripted harness injects a sink directly — delivery was never the
-    bug, only the production injection). This arm MUST stay GREEN after IMPL; if it REDS,
-    the injection broke the delivery contract (not the oracle).
-
-    This is the runtime witness that C-03/J-05's payload-shape goldens extend to actual
-    delivery-count parity: N games in → N `game_complete` events at the sink, none dropped.
-    The C-03 golden (tests/selfplay/test_pool_drain_parity.py:332-352) pins the PAYLOAD
-    SHAPE against a stub RecordingSink; this test pins the DELIVERY COUNT for an arbitrary N.
-    """
+    """RUNTIME arm: a pool built with a non-None sink delivers N `game_complete` events for N
+    drained games. Green already — delivery was never the bug, only the production injection —
+    so a red here means the injection broke the delivery contract rather than the oracle."""
     n = 7
     sink = _RecordingSink()
     pool = _make_scripted_pool(_make_games(n), sink)
 
     monkeypatch.setattr(pool_drain, "time", _ScriptedTime([1000.0, 1002.0, 1006.5]))
-    # The test is about EVENT DELIVERY, not buffer pushes — no-op the push arms so the
-    # drain loop runs without unpacking the (empty) `collect_data()` result.
+    # The test is about EVENT DELIVERY, not buffer pushes, so the push arms are no-ops.
     monkeypatch.setattr(pool_drain, "push_dense", lambda pool, collected: None)
     monkeypatch.setattr(pool_drain, "push_graph", lambda pool, collected: None)
 

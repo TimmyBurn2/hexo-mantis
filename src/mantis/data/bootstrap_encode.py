@@ -1,43 +1,20 @@
 # >300 justify: the replay, the record stamp and the provenance the artifact is worthless
 # without are ONE producer over ONE external contract. Splitting the encoder from the
-# provenance would let an artifact be written whose sidecar was computed elsewhere, which is
-# the class the corpus sidecar (`corpus_io`) already exists to close one layer up.
+# provenance would let an artifact be written whose sidecar was computed elsewhere.
 """Encode an audited move-list bootstrap corpus into GRAPH-PATH training records.
 
-WHY THIS EXISTS. `tools/audit_bootstrap_corpus.py` CERTIFIES a corpus of axial move lists
-(`{game_hash, winner, elo, moves: [[q, r], ...]}`, contract v2), and R279 made that
-certification prereg grounds. Nothing in the tree could then USE it: SITTING4-PREP-1 §3.5
-measured the gap — *"the encoder between them does not exist in-tree"*, `corpus_io.save_corpus`
-has zero non-test callers, and `mantis.data.generate` produces bot self-play games as JSON move
-lists, not arrays. This module is that encoder for the GRAPH arch, which is the one run5 and
-run6 actually train.
+The corpus audit CERTIFIES axial move lists and that certification is prereg grounds, but the
+encoder between them did not exist in-tree. This is it, for the GRAPH arch, and it is
+CAPABILITY, NOT POSTURE: no config selects it and no production path reaches it.
 
-**IT IS CAPABILITY, NOT POSTURE.** Nothing here is selected by any config, armed by any
-resolver or reached by any production path. `train.mixing.pretrained_buffer_path` resolves
-through `resolve_corpus_path` to `data/gnn_corpus_v1.hexg` for `gnn_axis_v1`, and this module
-is what can produce that file — but a run consumes it only if the operator mints the key.
-Landing is not arming.
+One row per PLY, pushed through the production `HexgBuffer.push_graph_position` — the same ring
+self-play writes and the trainer samples. The POSITION is replayed on a production `Board`, one
+`apply_move` per stone, because the corpus is per-STONE; the POLICY TARGET is a one-hot, since
+BC has no visit distribution and the engine refuses a `visits` row that is not one; the VALUE
+TARGET is `mantis._engine.graph_row_outcome` itself, because a transcription would drift.
 
-WHAT IT PRODUCES, and why in this shape. One row per PLY, pushed through the production
-`HexgBuffer.push_graph_position` — the same ring the self-play worker writes and the same one
-the trainer samples. No new artifact format is invented: the trainer's own `.hexg` is the
-target, so the loader that reads it already exists and is already tested.
-
-THE THREE THINGS A ROW NEEDS, each taken from an authority rather than restated:
-  * the POSITION — replayed on a production `Board`, one `apply_move` per stone. The corpus
-    is per-STONE (the audit's contract says so explicitly), and Hex Tac Toe's compound
-    two-stone turn is the BOARD's business, tracked by `moves_remaining`.
-  * the POLICY TARGET — a one-hot on the stone actually played. Behaviour cloning has no
-    visit distribution to copy, and the engine refuses a `visits` row that is not a
-    distribution, so a one-hot is both the honest target and the only admissible one.
-  * the VALUE TARGET — `mantis._engine.graph_row_outcome`, which IS
-    `mantis_selfplay::records::finalize_graph_outcome`. A Python transcription of that sign
-    convention would agree today and drift the first time the §178 split moves.
-
-WHAT IT REFUSES, loudly, and never coerces: an illegal move against the replayed board, a
-winner outside `{+1, -1}`, an empty move list, a record missing a required field, a source
-file whose sha256 disagrees with its manifest. A corpus is training data; a coerced record is
-a wrong label that no downstream check can see.
+It REFUSES loudly and never coerces: an illegal move, a winner outside `{+1, -1}`, an empty
+move list, a missing field, or a sha256 disagreeing with the manifest.
 """
 from __future__ import annotations
 
@@ -53,13 +30,12 @@ from typing import Any
 
 from mantis.encoding import assert_not_heldout_sha
 
-#: The runner's terminal-reason code for a normal decided/drawn end. `2` is the ply-cap
-#: branch, which a completed human game never takes — a corpus game ended, it was not
-#: truncated by our search budget.
+#: The runner's terminal-reason code for a normal decided/drawn end. `2` is the ply-cap branch,
+#: which a completed human game never takes.
 _TERMINAL_DECIDED = 0
 
 #: Values the decided branch never reads. Named rather than passed as bare zeros so a reader
-#: can see they are inert here, and so a future draw-aware corpus has one place to change.
+#: can see they are inert, and so a future draw-aware corpus has one place to change.
 _PLY_CAP_VALUE = 0.0
 _DRAW_REWARD = 0.0
 
@@ -80,11 +56,8 @@ def sha256_of(path: Path) -> str:
 
 
 def _require_record(rec: Any, idx: int) -> tuple[str, int, list[tuple[int, int]]]:
-    """The audit's contract v2, re-checked at the point of USE.
-
-    Re-checked and not trusted: the audit runs over a dataset directory and this runs over
-    whatever the caller hands it, and "it was audited once" is not a property of the object
-    in front of us (LAW-01).
+    """The audit's contract v2, re-checked at the point of USE — the audit ran over a dataset
+    directory, this runs over whatever the caller hands it.
 
     Raises:
         CorpusEncodeError: any required field absent, of the wrong type, or out of range.
@@ -95,9 +68,8 @@ def _require_record(rec: Any, idx: int) -> tuple[str, int, list[tuple[int, int]]
     if not isinstance(game_hash, str) or not game_hash:
         raise CorpusEncodeError(f"record {idx}: `game_hash` absent or not a non-empty string")
     winner = rec.get("winner")
-    # `isinstance(..., bool)` FIRST: `True == 1` in Python, so a bare membership test admits
-    # a boolean winner and stamps every row of that game with a real sign. Caught by this
-    # module's own oracle rather than in a corpus.
+    # `isinstance(..., bool)` FIRST: `True == 1` in Python, so a bare membership test admits a
+    # boolean winner and stamps every row of that game with a real sign.
     if isinstance(winner, bool) or winner not in (1, -1):
         raise CorpusEncodeError(
             f"record {game_hash}: `winner` is {winner!r}; the contract declares 1 or -1. "
@@ -123,11 +95,9 @@ def encode_game(
     moves: Sequence[tuple[int, int]], winner: int, *, board_factory: Any,
     game_hash: str = "<unnamed>",
 ) -> Iterator[tuple[Any, ...]]:
-    """Yield one `push_graph_position` row per ply of one completed game.
-
-    The row tuple is in the ENGINE'S POSITIONAL ORDER, which is also the order
-    `mantis.selfplay.pool_push.push_graph` forwards verbatim — so a row produced here and a
-    row produced by self-play are the same object to the ring.
+    """Yield one `push_graph_position` row per ply of one completed game, in the ENGINE'S
+    POSITIONAL ORDER — what `pool_push.push_graph` forwards verbatim, so a row from here and one
+    from self-play are the same object to the ring.
 
     Args:
         moves: axial `(q, r)` per STONE, in placement order.
@@ -171,16 +141,11 @@ def encode_game(
             rec_player,
             int(board.moves_remaining),
             ply,
-            # TRUE, and the flag's ROLE decides this rather than its NAME. Its ONLY semantic
-            # consumer is `losses.graph_policy_row_weights`, which turns it into the row's
-            # POLICY WEIGHT — 1 here, `train.fast_policy_weight` on a fast-arm row (R347(b),
-            # minted 0.0, which is the value-only quick-search exception this comment was
-            # written against); `recency_buffer` defaults
-            # it to 1, so TRUE is the neutral value. A BC row's one-hot IS a policy target
-            # worth learning from, so FALSE here zeroed the policy loss and its denominator on
-            # EVERY row: measured at 2 000 steps over 511 145 human positions, held-out policy
-            # loss read 0.000000 throughout and the unmasked held-out CE moved 6.1637 -> 6.1249
-            # against a uniform reference of 6.2561. Behaviour cloning that cloned no behaviour.
+            # TRUE, decided by the flag's ROLE and not its NAME: its only semantic consumer
+            # turns it into the row's POLICY WEIGHT, and `recency_buffer` defaults it to 1. A
+            # BC row's one-hot IS a policy target, and FALSE zeroed the policy loss and its
+            # denominator on EVERY row — measured 0.000000 held-out policy loss across 2 000
+            # steps over 511 145 human positions.
             True,                              # is_full_search: the policy target is learnable
 
             float(outcome),
@@ -209,10 +174,8 @@ def _iter_records(path: Path) -> Iterator[Any]:
 
 
 def _manifest_pin(dataset_dir: Path) -> tuple[Path, str]:
-    """The single record file and its declared sha256, from the audit's contract v2 manifest.
-
-    Both declared manifest shapes are accepted and EXACTLY ONE must match, which is the
-    audit's own rule rather than a widening invented here.
+    """The single record file and its declared sha256, from the audit's manifest. Both declared
+    shapes are accepted and EXACTLY ONE must match, which is the audit's own rule.
 
     Raises:
         CorpusEncodeError: the manifest is absent, matches neither shape or both, or names
@@ -249,19 +212,15 @@ def _manifest_pin(dataset_dir: Path) -> tuple[Path, str]:
 
 
 def _ply_histogram(lengths: list[int], bucket: int = 64) -> dict[str, int]:
-    """Game-length histogram in `bucket`-ply bins, as `{"<lo>-<hi>": count}`.
-
-    Carried in the provenance because the truncation's SHAPE is what a reader needs and a
-    single "88 games truncated" cannot show it: the loss is the late phase of the longest
-    games, and only the distribution says how long those are.
-    """
+    """Game-length histogram in `bucket`-ply bins. Carried in the provenance because the
+    truncation's SHAPE is what a reader needs: a single "88 games truncated" cannot show that
+    the loss is the late phase of the longest games."""
     out: dict[str, int] = {}
     width = max((len(str(n)) for n in lengths), default=1)
     for n in lengths:
         lo = (n // bucket) * bucket
-        # ZERO-PADDED so lexicographic order IS numeric order. The provenance is written with
-        # `sort_keys=True`, which re-sorts these keys and put "64-127" after "512-575" — a
-        # histogram a reader has to re-sort by eye is one they will read wrong.
+        # ZERO-PADDED so lexicographic order IS numeric order: the provenance is written with
+        # `sort_keys=True`, which otherwise puts "64-127" after "512-575".
         key = f"{lo:0{width}d}-{lo + bucket - 1:0{width}d}"
         out[key] = out.get(key, 0) + 1
     return dict(sorted(out.items()))
@@ -271,21 +230,10 @@ def _ply_histogram(lengths: list[int], bucket: int = 64) -> dict[str, int]:
 class CorpusSplit:
     """A seeded, GAME-level partition of the corpus into `train` and `heldout`.
 
-    ONE object rather than three parameters, so the split cannot be half-specified: a seed
-    without a fraction, or a fraction without a part, would each be a partition nobody
-    declared. `None` means no split — the whole corpus, the behaviour that already existed.
-
-    THE SPLIT IS BY GAME AND NOT BY PLY, and that is the whole point. The corpus encodes one
-    row per PLY; a ply-level split puts positions from the SAME game on both sides, and a
-    held-out loss measured over them is measuring memorisation of a game the model has already
-    seen 60 positions of. The encoder is the last place that still knows which plies came from
-    which game.
-
-    ASSIGNMENT IS A KEYED HASH OF THE GAME'S OWN IDENTITY, not a shuffle of an order. Three
-    consequences a shuffle would not give: the partition is INDEPENDENT of record order and of
-    `max_games`, so a truncated smoke run draws the same side for the same game as a full run;
-    it is reproducible from the seed alone, with no permutation to store; and it can never
-    split a game, because the game is the unit being hashed.
+    ONE object rather than three parameters, so the split cannot be half-specified. BY GAME AND
+    NOT BY PLY: a ply-level split puts positions from the SAME game on both sides. Assignment is
+    a KEYED HASH of the game's own identity, so it is independent of record order and of
+    `max_games`, reproducible from the seed alone, and can never split a game.
     """
 
     seed: int
@@ -319,16 +267,14 @@ def encode_corpus(
 
     Args:
         dataset_dir: the audited dataset (manifest + one record file).
-        out_path: the `.hexg` artifact to write. Its provenance sidecar is written beside it.
+        out_path: the `.hexg` artifact; its provenance sidecar is written beside it.
         encoding: the registered graph encoding the ring is bound to.
-        capacity: the ring's record capacity. Sized by the CALLER from the corpus, never
-            guessed here: a ring smaller than the corpus silently drops the head.
+        capacity: the ring's record capacity, sized by the CALLER — a ring smaller than the
+            corpus silently drops the head.
         visit_capacity: the ring's per-row visit-slot capacity.
-        max_games: stop after this many games. For smoke runs; recorded in the provenance so
-            a truncated artifact can never read as a whole one.
-        split: a `CorpusSplit` selecting one side of a seeded game-level partition, or None
-            for the whole corpus. Recorded in the provenance, so a split artifact can never
-            read as a whole one either.
+        max_games: stop after this many games; recorded so a truncated artifact cannot read as
+            a whole one. `split` is recorded likewise.
+        split: one side of a seeded game-level partition, or None for the whole corpus.
 
     Returns:
         The provenance mapping that was written beside the artifact.
@@ -347,9 +293,9 @@ def encode_corpus(
             "R279's certification handshake; a corpus that does not match its pin is a "
             "different corpus."
         )
-    # The handshake above proves the file is the file the manifest names. It does NOT prove the
-    # file is outside the evaluation hold-out set — different properties, and a corpus that
-    # passes the first and fails the second is contaminated training data (R327(e)).
+    # The handshake proves the file is the file the manifest names. It does NOT prove the file
+    # is outside the evaluation hold-out set — passing the first and failing the second is
+    # contaminated training data.
     assert_not_heldout_sha(actual_sha, path=record_path)
 
     from mantis._engine import max_stones  # noqa: PLC0415 — extension
@@ -370,11 +316,10 @@ def encode_corpus(
         lost_here = 0
         for row in encode_game(moves, winner, board_factory=(
                 lambda: Board.with_encoding_name(encoding)), game_hash=game_hash):
-            # THE RING'S STONE CEILING IS CHECKED BEFORE THE PUSH, not caught after it.
-            # `push_graph_position` refuses a wider position by raising, and catching that
-            # would make the count depend on an error STRING; `len(stones)` against the
-            # engine's own `max_stones()` is the same fact read on the near side. Rows are
-            # counted, never dropped silently: R328(c) rules the residue a finding.
+            # THE STONE CEILING IS CHECKED BEFORE THE PUSH: catching `push_graph_position`'s
+            # refusal would make the count depend on an error STRING, while `len(stones)`
+            # against `max_stones()` is the same fact on the near side. Rows are counted,
+            # never dropped silently.
             if len(row[0]) > ceiling:
                 lost_here += 1
                 continue
@@ -411,19 +356,17 @@ def encode_corpus(
         "games": games,
         "plies": plies,
         "winners": {"p1": winners[1], "p2": winners[-1]},
-        # The corpus's own dedupe key (R247/LAW-04), hashed as a SET so the artifact carries
-        # a checkable identity for its game population without carrying the population.
+        # The corpus's own dedupe key, hashed as a SET so the artifact carries a checkable
+        # identity for its game population without carrying the population.
         "game_hash_set_sha256": hashlib.sha256(
             "\n".join(sorted(hashes)).encode("utf-8")
         ).hexdigest(),
         "truncated_at_max_games": max_games,
         # NULL when unsplit, so a whole-corpus ring and a split ring are distinguishable by a
-        # reader that knows nothing about how either was produced.
-        # THE ROW-LEVEL TRUTH, carried so that "8 698 / 8 698 games" can never be read alone.
-        # A game whose late positions exceed the ring's fixed-width stone slot is ACCEPTED and
-        # TRUNCATED, by ruling (R328 amendment): MAX_STONES stays 256 because the run's own
-        # games never reach it, and the price is these rows. `plies` above is what LANDED;
-        # `plies_offered` is what the corpus held.
+        # reader who knows nothing about how either was produced.
+        # THE ROW-LEVEL TRUTH, so "8 698 / 8 698 games" can never be read alone: a game whose
+        # late positions exceed the fixed-width stone slot is ACCEPTED and TRUNCATED by ruling.
+        # `plies` is what LANDED; `plies_offered` is what the corpus held.
         "max_stones_ceiling": ceiling,
         "plies_offered": plies + rows_over_ceiling,
         "rows_refused_over_max_stones": rows_over_ceiling,

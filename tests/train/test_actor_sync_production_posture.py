@@ -1,22 +1,7 @@
 """Actor sync runs in PRODUCTION posture (`eval_enabled=True`), unconditionally.
 
-RED-TEAM F-1. The frozen §2.4 pin sweeps only `ast.If`, so constructing the engine with a
-*conditional expression* — `ActorSync(...) if not eval_enabled else None`, an `ast.IfExp` —
-evaded it. Worse, every behavioral sync-through-`compose_run` test ran
-`eval_enabled=False`, so **no test exercised the posture a real run uses**. RED-TEAM applied
-that two-line regression to a repo copy and **all 106 guard tests passed** while a driven
-`compose_run(eval_enabled=True)` produced zero weight pushes ever and a lag reading frozen
-at 0 — run3's silent freeze, resurrected, with the exit-45 gate blinded.
-
-The lesson, and why the behavioral test below is the real fix: **a structural pin can only
-ban the shapes someone thought to enumerate.** `ast.If` was enumerated; `ast.IfExp` was not.
-A behavioral assertion in production posture cannot be evaded by changing the shape of the
-construction, because it observes the consequence rather than the syntax.
-
-The structural test here is kept as the cheap early-warning half, and is deliberately
-written to reject conditionality in ANY form rather than to enumerate node types.
-
-NOT frozen: written after ORACLE-WRITE in response to a RED-TEAM finding.
+A structural pin can only ban the shapes it enumerates: an `ast.IfExp` ternary walked
+through the `ast.If`-only pin, so the behavioral test below observes the consequence.
 """
 from __future__ import annotations
 
@@ -48,7 +33,7 @@ class _SyncRecordingPool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -87,8 +72,6 @@ class _Trainer:
         self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -112,23 +95,15 @@ class _Buffer:
     def save_to_path(self, p) -> None: ...
 
 
-#: The UNPATCHED production builder, captured at import so the patch below can delegate to
-#: it without re-entering itself (WPMINT Phase K-A stage 0).
+#: Captured at import so the patch below can delegate without re-entering itself.
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
 def _bounded_config(**kwargs) -> StepCoordinatorConfig:
-    """The deploy side must be CONSTRUCTED — that is the posture under test — but must not
-    RUN a round: `eval_interval` beyond `stop_step` suppresses the periodic kick and
-    `terminal_eval_enabled=False` suppresses the close-out one. Executing a round would
-    demand a snapshot-able model with a real `.arch`, which is a different test's subject.
-    What is asserted here is that sync happens while the deploy machinery exists, not
-    anything about round execution.
+    """Build the production config, then bound it so no eval round actually runs.
 
-    WPMINT Phase K-A stage 0: expressed as the harness's own deltas over the REAL builder
-    rather than a 24-kwarg restatement of it. `draw_rate_abort` (and every other
-    config-authored value) is passed THROUGH; `stop_step` stays the harness's own bound,
-    which is this patch's stated reason for existing.
+    Expressed as deltas over the REAL builder, so every config-authored value passes
+    through and only `stop_step` is the harness's own bound.
     """
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
                                terminal_eval_enabled=False, eval_interval=1000,
@@ -145,15 +120,7 @@ def _fake_run_safety(**_kwargs):
 
 
 def _install_harness(monkeypatch):
-    """Replace the three collaborators this test is not about.
-
-    With `eval_enabled=True` the composition root exercises more of the production path
-    than any previous test did, so it reaches real machinery that needs a real
-    `torch.nn.Module` with a declared `.arch`: `resolve_anchor` builds a net from
-    `trainer.arch`. Building one is a different test's subject (`test_anchor_wiring.py`
-    owns anchor publication), so it is stubbed here. The SYNC path is left entirely real —
-    stubbing it would defeat the point.
-    """
+    """Replace the three collaborators this test is not about; the sync path stays real."""
     import mantis.train.anchor as _anchor
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
@@ -170,12 +137,7 @@ def _install_harness(monkeypatch):
 def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
-    """THE F-1 pin. Production posture, observed by consequence rather than syntax.
-
-    `eval_enabled=True` is what run5 launches with. Before this test, every behavioral
-    sync assertion ran with the deploy side absent, so a regression that disabled sync
-    exactly when the deploy side EXISTS was invisible to the entire suite.
-    """
+    """THE production-posture pin: sync observed by consequence rather than syntax."""
     pool, trainer = _SyncRecordingPool(), _Trainer()
     _install_harness(monkeypatch)
 
@@ -184,7 +146,7 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
                    "batch_size": 8},
             monitor={"actor_lag_threshold_steps": _STOP_STEP - 1},
-            # WPMAIN/R120: run5's posture is a CONFIG fact; no parameter can carry it.
+            # The posture is a CONFIG fact; no parameter can carry it.
             eval_enabled=True),
         trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
@@ -214,9 +176,8 @@ def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
         pool, trainer = _SyncRecordingPool(), _Trainer()
         _install_harness(monkeypatch)
         mantis.run.compose_run(
-            # WPMAIN/R120: the loop variable is now a CONFIG delta, so ONE config is built
-            # per posture INSIDE the loop — `compose_run` has no `eval_enabled` parameter to
-            # carry it, and both drive semantics are byte-preserved.
+            # The loop variable is a CONFIG delta, so one config is built per posture
+            # inside the loop; both drive semantics are byte-preserved.
             config=smoke_run_config(
                 train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
                        "batch_size": 8},
@@ -246,13 +207,8 @@ def _actor_sync_assignment() -> ast.Assign:
 
 
 def test_actor_sync_construction_is_conditional_in_no_form_at_all():
-    """Complements the frozen `ast.If`-only pin, which a ternary walked straight through.
-
-    Written as "the assigned value contains NO conditional node of any kind" rather than
-    as a list of banned node types, because the frozen pin's failure was precisely that it
-    enumerated. `ast.IfExp` was the tenth resurrection route; the eleventh would be
-    whatever else an enumeration forgets.
-    """
+    """Bans conditional nodes of ANY kind, because the frozen pin enumerated and a
+    ternary walked through it."""
     node = _actor_sync_assignment()
     conditional = [
         n for n in ast.walk(node.value)

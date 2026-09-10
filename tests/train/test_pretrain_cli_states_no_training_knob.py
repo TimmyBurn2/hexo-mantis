@@ -1,31 +1,13 @@
-"""F-816-25 / R296(b) — the pretrain CLI states no `train.*` value; the minted config does.
+"""The pretrain CLI states no `train.*` value; the minted config does.
 
-THE DEFECT, MEASURED BEFORE THE FIX. `_build_arg_parser` carried code-side literal defaults for
-five values `TrainConfig` also mints, three of them DIVERGENT at `configs/run6.yaml`:
+The CLI once carried code-side literal defaults for keys `TrainConfig` also mints, several
+divergent from `configs/run6.yaml` (lr 2x, batch_size 2x, eta_min 50x), and
+`BootstrapTrainer.__init__` carried its own `config.get(key, literal)` fallbacks — a fix a
+`dict.get` would silently defeat, which is why the trainer is in scope here.
 
-    --lr             0.002   vs  train.lr                  0.001    (2x)
-    --batch-size     512     vs  train.batch_size          256      (2x)
-    --aux-weight     0.15    vs  train.aux_opp_reply_weight 0.0     (both DELETED by R346(f))
-    --weight-decay   0.0001  vs  train.weight_decay        0.0001   (agreed)
-    --aux-chain-weight 0.0   vs  train.aux_chain_weight    0.0      (both DELETED by R346(f))
-
-**A SIXTH SHADOW AND FIVE MORE FALLBACKS, found by reading past the parser.** The row as filed
-counted the argparse surface only. `_resume_into` carried `1e-5` for `eta_min` against
-`train.eta_min: 0.0005` — a **50x** divergence and the largest of the set — and
-`BootstrapTrainer.__init__` carried its OWN `config.get(key, literal)` fallback for `lr`,
-`weight_decay`, `pretrain_total_steps` and `pretrain_eta_min`. Deleting the flags alone would
-have left a fix a `dict.get` silently defeats, which is why the trainer is in this file's scope.
-
-WHAT IS ASSERTED, AND WHY STRUCTURALLY. The rows below read the parser OBJECT and the module's
-AST, never a hand-listed copy of the shadowed names: `SHADOWED_TRAIN_KEYS` is imported from the
-CLI and `TrainConfig`'s own fields are the other authority, so a seventh shadow added later
-lands RED here instead of passing a list nobody updated (R296(f), structure-not-text).
-
-WHAT THIS FIX DOES NOT DO, stated so the row is not read as bigger than it is: it does not
-unblock a BC-pretrain. That path is blocked by three larger things this file does not touch —
-the certified corpus is axial MOVE LISTS with no encoder to training arrays in-tree, `data/`
-has no producer (`save_corpus` has zero non-test callers), and this CLI is DENSE-ONLY while both
-production configs are graph.
+The rows read the parser OBJECT and the module's AST, never a hand-listed copy of the
+shadowed names: `SHADOWED_TRAIN_KEYS` is imported from the CLI and `TrainConfig`'s own
+fields are the other authority, so a later shadow lands red rather than passing a stale list.
 """
 from __future__ import annotations
 
@@ -47,8 +29,8 @@ _REPO = Path(__file__).resolve().parents[2]
 _CLI = _REPO / "src" / "mantis" / "train" / "pretrain" / "cli.py"
 _CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
 
-#: The flag spellings the six keys had. Kept as the historical record of what was deleted —
-#: the ASSERTION derives its subject from `SHADOWED_TRAIN_KEYS`, not from this map.
+#: The flag spellings the deleted keys had; the assertions derive their subject from
+#: `SHADOWED_TRAIN_KEYS`, never from this map.
 _DEAD_FLAGS: dict[str, str] = {
     "lr": "--lr",
     "weight_decay": "--weight-decay",
@@ -63,21 +45,15 @@ def _parser_option_strings() -> set[str]:
     return {opt for action in _build_arg_parser()._actions for opt in action.option_strings}
 
 
-# ── 1. every shadowed key is a real schema leaf, so the subject exists ──────────────────
-
 def test_every_shadowed_key_is_a_live_TrainConfig_leaf() -> None:
-    """The premise. A "shadow" of a key the schema does not mint would be no defect at all,
-    and this row is what stops the set below from drifting into fiction."""
+    """Prove every shadowed key is a live `TrainConfig` leaf, so the set below has a subject."""
     fields = set(TrainConfig.model_fields)
     missing = [k for k in SHADOWED_TRAIN_KEYS if k not in fields]
     assert missing == [], f"not TrainConfig leaves: {missing}"
 
 
-# ── 2. the parser states none of them ──────────────────────────────────────────────────
-
 def test_the_parser_carries_no_flag_for_any_shadowed_key() -> None:
-    """Read off the parser OBJECT, so a flag re-added under any spelling is caught by its
-    dest rather than by a string search for the old name."""
+    """Prove no shadowed key has a flag, read off the parser object by dest not by spelling."""
     dests = {a.dest for a in _build_arg_parser()._actions}
     readded = sorted(k for k in SHADOWED_TRAIN_KEYS if k in dests and k != "eta_min")
     assert readded == [], (
@@ -87,9 +63,11 @@ def test_the_parser_carries_no_flag_for_any_shadowed_key() -> None:
 
 
 def test_the_surviving_eta_min_override_carries_no_literal_default() -> None:
-    """`--eta-min` SURVIVES, and the distinction is the point: an explicit operator override
-    is not a shadow. What made it one was its code-side `1e-5` — 50x from `train.eta_min`'s
-    minted 0.0005 — so the default must be `None` and the base must come from the config."""
+    """Prove the surviving `--eta-min` override defaults to None, so the base comes from the config.
+
+    An explicit operator override is not a shadow; its code-side `1e-5` against a minted
+    0.0005 was what made it one.
+    """
     (action,) = [a for a in _build_arg_parser()._actions if a.dest == "eta_min"]
     assert action.default is None, (
         f"--eta-min default is {action.default!r}; an override's absent value must mean "
@@ -98,8 +76,7 @@ def test_the_surviving_eta_min_override_carries_no_literal_default() -> None:
 
 
 def test_config_is_REQUIRED_and_has_no_default_path() -> None:
-    """A default config path would be the same defect wearing a different hat: the CLI would
-    once again decide the numbers when the operator said nothing."""
+    """Prove --config is required with no default path, so silence never picks the numbers."""
     (action,) = [a for a in _build_arg_parser()._actions if a.dest == "config"]
     assert action.required is True
     assert action.default is None
@@ -111,20 +88,15 @@ def test_config_is_REQUIRED_and_has_no_default_path() -> None:
 @pytest.mark.parametrize("flag", ["--lr", "--batch-size", "--aux-weight", "--weight-decay",
                                   "--aux-chain-weight"])
 def test_each_deleted_flag_is_REJECTED_rather_than_ignored(flag: str) -> None:
-    """A deleted flag that parsed silently would let an old command line run with the operator
-    believing it took effect. argparse refuses an unknown option, and this row pins that it is
-    still the behaviour after the deletion."""
+    """Prove each deleted flag is rejected, never parsed and ignored under an old command line."""
     assert flag not in _parser_option_strings()
     with pytest.raises(SystemExit):
         _build_arg_parser().parse_args(["--config", "x", "--encoding", "v6", flag, "1"])
 
 
-# ── 3. the config is the authority, for every config the repo ships ─────────────────────
-
 @pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: p.name)
 def test_training_terms_reproduces_the_YAML_own_numbers(path: Path) -> None:
-    """Read the file's own text as the reference, not the loaded object, so this row would
-    catch a resolver that transformed a value on its way through the schema."""
+    """Prove `training_terms` reproduces the YAML's own numbers, read from the file's text."""
     raw = yaml.safe_load(path.read_text(encoding="utf-8"))["train"]
     terms = training_terms(load_config(path).train)
 
@@ -135,10 +107,7 @@ def test_training_terms_reproduces_the_YAML_own_numbers(path: Path) -> None:
 
 
 def test_the_run5_divergences_the_row_measured_are_now_GONE() -> None:
-    """The numbers F-816-25 actually measured that still have a key, asserted as VALUES rather
-    than as the absence of a flag — the difference between "the surface changed" and "the run
-    would now use the minted number". The `--aux-weight` divergence it also measured went with
-    `train.aux_opp_reply_weight` (R346(f)): the shadow and the key it shadowed are both gone."""
+    """Prove the measured divergences are gone as VALUES, not merely as an absent flag."""
     terms = training_terms(load_config(_REPO / "configs" / "run6.yaml").train)
     assert terms["lr"] == pytest.approx(0.001)          # was 0.002 on the parser
     assert terms["batch_size"] == 256                    # was 512
@@ -146,9 +115,7 @@ def test_the_run5_divergences_the_row_measured_are_now_GONE() -> None:
 
 
 def test_training_terms_is_the_ONLY_place_the_CLI_reads_these_off_a_config() -> None:
-    """AST, not grep: every `train_cfg.<attr>` access in the CLI must sit inside
-    `training_terms`. A second reader elsewhere would be a second authority again, which is
-    exactly the shape the fix removed."""
+    """Prove by AST that every `train_cfg.<attr>` access in the CLI sits inside `training_terms`."""
     tree = ast.parse(_CLI.read_text(encoding="utf-8"))
     inside = {
         lineno
@@ -168,10 +135,8 @@ def test_training_terms_is_the_ONLY_place_the_CLI_reads_these_off_a_config() -> 
     assert stray == [], f"train_cfg read outside training_terms: {stray}"
 
 
-# ── 5. LAW-07: the guards are shown able to fire ───────────────────────────────────────
-
 def test_the_parser_guard_FIRES_against_a_parser_that_carries_a_shadow() -> None:
-    """Without this the parser rows would pass vacuously the day someone renamed a dest."""
+    """Prove the parser guard bites a planted shadow, so the rows above are not vacuous."""
     p = argparse.ArgumentParser()
     p.add_argument("--lr", type=float, default=0.002)
     dests = {a.dest for a in p._actions}

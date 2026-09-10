@@ -38,7 +38,7 @@ _DEPLOY_TAG_FIELDS = {
 }
 
 
-# ── census machinery (kept feedable so the bite tests can bite) ───────────────────────
+# census machinery (kept feedable so the bite tests can bite)
 def _sync_calls_in_source(text: str) -> list[str]:
     """Attribute-method CALLS of the two sync methods (never bare defs/forwarder names)."""
     found: list[str] = []
@@ -66,7 +66,7 @@ def _tokens_present(text: str, tokens: tuple[str, ...]) -> list[str]:
     return sorted(t for t in tokens if t in text)
 
 
-# ── S1: the sync call-site set is exactly {train/actor_sync.py}, calling BOTH ─────────
+# S1: the sync call-site set is exactly {train/actor_sync.py}, calling BOTH
 def test_sync_call_sites_are_exactly_the_actor_sync_engine() -> None:
     engine = _SRC / "train" / "actor_sync.py"
     sites = _files_calling_sync(_SRC, exclude=_EXCLUDED)
@@ -85,7 +85,7 @@ def test_s1_census_would_notice_a_second_sync_call_site() -> None:
     assert _sync_calls_in_source("def sync_inference_weights(self, sd): ...") == []
 
 
-# ── S2: ZERO sync call sites in eval/arena (stated separately — E28's rationale) ──────
+# S2: ZERO sync call sites in eval/arena (stated separately — E28's rationale)
 def test_no_sync_call_site_under_eval_or_arena() -> None:
     offenders: dict[Path, set[str]] = {}
     for pkg in ("eval", "arena"):
@@ -102,7 +102,7 @@ def test_s2_census_would_notice_an_eval_side_call_site(tmp_path) -> None:
     assert _files_calling_sync(tmp_path / "eval") == {bad: {"update_checkpoint_step"}}
 
 
-# ── S3: the engine carries no deploy-side token, however reached ──────────────────────
+# S3: the engine carries no deploy-side token, however reached
 def test_actor_sync_engine_carries_no_deploy_side_token() -> None:
     engine = _SRC / "train" / "actor_sync.py"
     assert engine.is_file(), "mantis/train/actor_sync.py must exist (the sync engine)"
@@ -118,7 +118,7 @@ def test_s3_census_would_flag_a_deploy_token() -> None:
     assert _tokens_present("plain sync code", _S3_TOKENS) == []
 
 
-# ── S4: the deploy side has no attribute through which to reach a pool ────────────────
+# S4: the deploy side has no attribute through which to reach a pool
 def test_deploy_tag_hooks_field_set_is_exactly_the_deploy_collaborators() -> None:
     assert set(DeployTagHooks.__dataclass_fields__) == _DEPLOY_TAG_FIELDS, (
         "DeployTagHooks must carry EXACTLY the deploy-side collaborators (R49 "
@@ -140,7 +140,7 @@ def test_s4_census_would_flag_a_pool_reference() -> None:
     assert "pool" in _tokens_present("target = pool", _S4_TOKENS)
 
 
-# ── S5: eval never grows a lag/actor-step reader (the KEPT half of E10, GAPS-2) ───────
+# S5: eval never grows a lag/actor-step reader (the KEPT half of E10, GAPS-2)
 def test_no_actor_lag_mechanism_in_eval() -> None:
     offenders: list[str] = []
     for py_file in sorted((_SRC / "eval").rglob("*.py")):
@@ -155,7 +155,7 @@ def test_s5_census_would_flag_an_eval_lag_reader() -> None:
     assert _tokens_present("lag = actor_ckpt_step_fn()", _S5_TOKENS) == ["actor_ckpt_step"]
 
 
-# ── §2.4: compose_run builds ActorSync UNCONDITIONALLY (production wiring pin) ────────
+# §2.4: compose_run builds ActorSync UNCONDITIONALLY (production wiring pin)
 def test_compose_run_builds_actor_sync_unconditionally() -> None:
     """`ActorSync(` is constructed in `compose_run`'s function body, under NO `if` —
     the same no-conditional shape as the pool.start() ordering pin. `actor_sync=None`

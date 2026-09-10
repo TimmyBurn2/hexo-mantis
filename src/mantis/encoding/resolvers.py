@@ -1,14 +1,12 @@
-# >300 lines: ports the OLD resolver surface whole (config/checkpoint/state-dict
-# resolvers + corpus/anchor/held-out registries + the unified detector) as one
-# cohesive delegating shim; splitting would scatter the single resolver authority.
+# >300 lines: ports the OLD resolver surface whole (config/checkpoint/state-dict resolvers +
+# corpus/anchor/held-out registries + the unified detector) as one cohesive delegating shim;
+# splitting would scatter the single resolver authority.
 """Encoding resolvers — config-form, checkpoint-form, state-dict detection.
 
-The `resolve_*` functions are the blessed paths to construct an `EncodingSpec`
-outside the registry itself. The state-dict detector is UNIFIED (LOCKED #7): the
-two historic divergent detectors (filename-first vs shape-first) converge into
-ONE precedence — marker/stamp FIRST for grid AND graph, then a single
-deterministic shape fallback over the registered set. A filename is NEVER a
-dispatch signal.
+The `resolve_*` functions are the blessed paths to construct an `EncodingSpec` outside the
+registry itself. The state-dict detector is UNIFIED: marker/stamp FIRST for grid AND graph, then
+a single deterministic shape fallback over the registered set. A filename is NEVER a dispatch
+signal.
 """
 from __future__ import annotations
 
@@ -34,36 +32,21 @@ class ShapeMismatchError(Exception):
 
 
 class EncodingDeclarationConflictError(EncodingRegistryError):
-    """Raised when a config declares an encoding in TWO shapes that DISAGREE (R104).
-
-    NOT a subclass of `MissingEncodingError`, deliberately: a corrupt declaration must
-    never be classified as an absent one — the anchor maps `MissingEncodingError → None`
-    (absence is legal there) and a conflict must not degrade into "no declaration".
-    """
+    """Raised when a config declares an encoding in TWO shapes that DISAGREE. NOT a subclass of
+    `MissingEncodingError`: the anchor maps that to `None`, so a corrupt declaration must not
+    degrade into an absent one."""
 
 
 class AmbiguousGraphMarkerError(EncodingRegistryError):
-    """An unstamped graph state dict cannot be resolved: >1 graph encoding is registered.
-
-    The marker key says the checkpoint is a graph; it has never said WHICH graph. While
-    `gnn_axis_v1` was the only graph row that under-determination was invisible. R328(b) added
-    a second (`gnn_axis_r8`), and the two differ ONLY in a geometry no checkpoint stamp records
-    (`CheckpointMetadata` carries `encoding_name`, not `registry_sha`) — so a guess here is
-    unfalsifiable downstream. Gate 11 cannot catch this shape by its own docstring's admission
-    (affirmative dispatch), which is why the refusal is in the code and not in a gate.
-    """
+    """An unstamped graph state dict cannot be resolved: >1 graph encoding is registered. The
+    marker key says the checkpoint is a graph, never WHICH graph, and the two rows differ only in
+    a geometry no stamp records — so a guess here is unfalsifiable downstream."""
 
 
 class MissingEncodingError(EncodingRegistryError):
-    """Raised when an encoding value is absent (R28, LAW-11).
-
-    A subclass of `EncodingRegistryError` — a caller catching the parent for
-    "encoding trouble in general" keeps working, while a caller wanting to
-    distinguish "never specified" from "specified but unknown to the
-    registry" can catch this subclass specifically. The retired behaviour
-    silently resolved an absent encoding to the "v6" default; that default
-    arm is killed — an absent encoding is now always an error.
-    """
+    """Raised when an encoding value is absent (LAW-11). A subclass of `EncodingRegistryError`, so
+    a caller wanting to distinguish "never specified" from "unknown to the registry" can catch
+    this one; the retired default arm is dead and an absent encoding is always an error."""
 
 
 # Sentinel used by expand_auto_paths to detect unresolved artifact paths.
@@ -71,18 +54,11 @@ _AUTO = "<auto>"
 
 
 def normalize_encoding_name(enc: Any) -> str:
-    """Coerce a config encoding value to its registry name string.
-
-    Accepts the three forms that show up at consumer sites:
-      - str ``"v6"``                           → returned as-is
-      - dict ``{"version": "v6", ...}`` or
-             ``{"name": "v6", ...}``           → version/name extracted
-      - object with ``.name`` (EncodingSpec)   → ``.name`` returned
+    """Coerce a config encoding value to its registry name string, accepting a str, a dict carrying
+    ``version``/``name``, or an object with ``.name``.
 
     Raises:
-        MissingEncodingError: if ``enc`` is ``None`` — an explicit encoding
-            name/dict/EncodingSpec is required (LAW-11, R28); the v6 default
-            arm is retired.
+        MissingEncodingError: if ``enc`` is ``None`` — an explicit encoding is required (LAW-11).
     """
     if enc is None:
         raise MissingEncodingError(
@@ -123,12 +99,8 @@ _SCATTERED_KEYS_TO_FIELD: dict[str, str] = {
 
 
 def _check_scattered_keys(cfg: Mapping[str, Any], spec: EncodingSpec) -> None:
-    """Raise EncodingRegistryError if any scattered key disagrees with spec.
-
-    Consistency rule: if a key is present in the config AND the registry spec
-    has a non-None value for the corresponding field, the integers must match.
-    Keys absent from the config or with `None` registry values are skipped.
-    """
+    """Raise EncodingRegistryError if any scattered key disagrees with spec: where a key is present
+    in the config AND the registry spec has a non-None value, the integers must match."""
     if not cfg:
         return
     disagreements: list[str] = []
@@ -163,10 +135,8 @@ def _check_scattered_keys(cfg: Mapping[str, Any], spec: EncodingSpec) -> None:
         )
 
 
-# ---------------------------------------------------------------------------
-# Canonical artifact paths per encoding name. Repo-relative (no leading slash).
-# Keyed by registered encoding name; only registered specs reach these lookups.
-# ---------------------------------------------------------------------------
+# Canonical artifact paths per encoding name, repo-relative and keyed by registered encoding name;
+# only registered specs reach these lookups.
 
 _CORPUS_PATHS: dict[str, str] = {
     "gnn_axis_v1": "data/gnn_corpus_v1.hexg",
@@ -174,27 +144,20 @@ _CORPUS_PATHS: dict[str, str] = {
 }
 
 _CORPUS_SHA_PINS: dict[str, str] = {
-    # Launch-pinned sha256 — a corpus with a pin must be byte-identical across
-    # hosts. Absence of an encoding here means "no launch pin enforced". The one pin this
-    # carried was on a dense corpus and went with the grid path (R346(f)); the dict stays
-    # because the mechanism does, and an EMPTY pin set is a truthful "none enforced".
+    # Launch-pinned sha256: a corpus with a pin must be byte-identical across hosts, and absence
+    # of an encoding here means "no launch pin enforced". The dict stays because the mechanism
+    # does, and an EMPTY pin set is a truthful "none enforced".
 }
 
 
 def resolve_corpus_sha_pin(spec: Any) -> str | None:
-    """Launch-pinned sha256 for encoding *spec*'s canonical corpus, if any.
-
-    Returns the lowercase-hex sha256 string, or `None` when no pin is
-    registered for `spec.name` — callers must treat `None` as "not enforced".
-    """
+    """Launch-pinned sha256 for encoding *spec*'s canonical corpus, or `None` when no pin is
+    registered — callers must treat `None` as "not enforced"."""
     return _CORPUS_SHA_PINS.get(spec.name)
 
 
-# ---------------------------------------------------------------------------
-# Held-out corpus registry — sha256 -> (label, on-disk byte size). A held-out
-# corpus loaded through a TRAINING corpus path is a hard, labelled error. The
-# size is a cheap stat-only pre-filter before a full sha256 stream.
-# ---------------------------------------------------------------------------
+# Held-out corpus registry — sha256 -> (label, on-disk byte size). A held-out corpus loaded
+# through a TRAINING corpus path is a hard, labelled error.
 _HELDOUT_CORPUS_SHAS: dict[str, tuple[str, int]] = {
     "s5_post20260704": (
         "88f99c2b5fea7495484e4e9cc1af831d1e053221dc7e0f9c8f5d3ab6f27aa69e",
@@ -204,20 +167,15 @@ _HELDOUT_CORPUS_SHAS: dict[str, tuple[str, int]] = {
 
 
 def held_out_shas() -> frozenset[str]:
-    """All registered held-out corpus sha256 values.
-
-    Any of these loaded through a TRAINING corpus path is a hard, labelled
-    error — see `assert_not_heldout_sha`.
-    """
+    """All registered held-out corpus sha256 values; any of these loaded through a TRAINING corpus
+    path is a hard, labelled error — see `assert_not_heldout_sha`."""
     return frozenset(sha for sha, _size in _HELDOUT_CORPUS_SHAS.values())
 
 
 def assert_not_heldout_sha(actual_sha: str, *, path: Any) -> None:
     """Raise if *actual_sha* is a registered held-out corpus sha.
 
-    Held-out corpora exist ONLY for future BC/architecture reads; they must
-    NEVER enter a training corpus load. Call this from any training-path corpus
-    loader BEFORE using the file's contents.
+    Call this from any training-path corpus loader BEFORE using the file's contents.
 
     Args:
         actual_sha: sha256 of the file actually on disk (freshly streamed).
@@ -237,24 +195,11 @@ def assert_not_heldout_sha(actual_sha: str, *, path: Any) -> None:
             )
 
 
-# GRAVE (R327(e), 2026-08-31): `heldout_size_bytes` stood here — a stat-only pre-filter whose
-# whole purpose was letting a caller SKIP the `assert_not_heldout_sha` sha256 stream. Its one
-# caller was the dense corpus-mix loader R326(d) deleted, which streamed the sha only when the
-# size matched. On the surviving BC path the stream is UNCONDITIONAL — `encode_corpus` needs the
-# sha for R279's manifest handshake before it needs it for the hold-out gate — so the filter can
-# only skip the assertion, never the stream, and skipping the assertion is strictly worse than
-# making it. The sizes stay in `_HELDOUT_CORPUS_SHAS` as the registry's record of the artifact;
-# what went is the accessor with nothing left to accelerate. Zero call sites when it went.
-
 
 def _assert_no_registry_overlap() -> None:
-    """Resolver-level static invariant: `_CORPUS_SHA_PINS` and
-    `_HELDOUT_CORPUS_SHAS` must never share a sha256 — a held-out set
-    accidentally also registered as a launch corpus pin (or vice versa) would
-    silently defeat both gates. Called once at import time (below) so a bad
-    registry entry fails loudly at first import; also directly callable from
-    tests against a monkeypatched registry.
-    """
+    """`_CORPUS_SHA_PINS` and `_HELDOUT_CORPUS_SHAS` must never share a sha256: a held-out set
+    also registered as a launch corpus pin would silently defeat both gates. Called once at import
+    so a bad registry entry fails loudly, and directly callable from tests."""
     overlap = set(_CORPUS_SHA_PINS.values()) & held_out_shas()
     if overlap:
         raise EncodingRegistryError(
@@ -267,23 +212,17 @@ def _assert_no_registry_overlap() -> None:
 _assert_no_registry_overlap()
 
 
-# The three dense bootstrap anchors went with the grid path (R346(f)); the graph lineage
-# warm-starts from `identity.warm_start`, which is a minted config row and not a path table.
+# The graph lineage warm-starts from `identity.warm_start`, a minted config row, not a path table.
 _ANCHOR_PATHS: dict[str, str] = {}
 
 
-# ---------------------------------------------------------------------------
-# Architecture resolver — ONE registry-derived map from an encoding NAME to the
-# arch facts consumers used to hardcode (plane count, kept-index list, stone
-# slots, policy width). Every field is computed from `lookup(name)`.
-#
+# Architecture resolver — ONE registry-derived map from an encoding NAME to the arch facts
+# consumers used to hardcode. Every field is computed from `lookup(name)`.
 @dataclass(frozen=True)
 class ArchSpec:
-    """Registry-derived architecture facts for a single encoding.
-
-    A thin, typed, immutable view over the registry `EncodingSpec` — every
-    field is computed from `lookup(name)`, never hardcoded.
-    """
+    """Registry-derived architecture facts for a single encoding: a thin, typed, immutable view
+    over the registry `EncodingSpec`, every field computed from `lookup(name)` and never
+    hardcoded."""
 
     name: str
     k_max: int                     # = spec.k_max
@@ -291,11 +230,8 @@ class ArchSpec:
 
 
 def resolve_arch(name: Any) -> ArchSpec:
-    """Resolve an encoding NAME (str / dict / EncodingSpec) to its `ArchSpec`.
-
-    The one registry-derived resolver: never shape-sniff a checkpoint, never
-    hardcode a plane count or kept-index list — call this by name.
-    """
+    """Resolve an encoding NAME (str / dict / EncodingSpec) to its `ArchSpec` — the one
+    registry-derived resolver, so never shape-sniff a checkpoint or hardcode a plane count."""
     spec = lookup(normalize_encoding_name(name))
     return ArchSpec(
         name=spec.name,
@@ -335,12 +271,9 @@ def resolve_anchor_path(spec: Any) -> Path:
 
 
 def expand_auto_paths(config: dict[str, Any], spec: Any) -> None:
-    """Expand ``<auto>`` literals in *config* using the canonical artifact paths.
-
-    Mutates *config* in-place. Handles both flat top-level keys and the nested
-    keys present in variant YAML files. Only expands when the current value is
-    the literal string ``"<auto>"``.
-    """
+    """Expand ``<auto>`` literals in *config* using the canonical artifact paths, in place. Handles
+    both flat top-level keys and the nested keys in variant YAML files, and only where the current
+    value is the literal string ``"<auto>"``."""
     if config.get("corpus_npz") == _AUTO:
         config["corpus_npz"] = str(resolve_corpus_path(spec))
     if config.get("bootstrap_anchor") == _AUTO:
@@ -349,8 +282,8 @@ def expand_auto_paths(config: dict[str, Any], spec: Any) -> None:
     mixing = config.get("mixing")
     if isinstance(mixing, dict) and mixing.get("pretrained_buffer_path") == _AUTO:
         mixing["pretrained_buffer_path"] = str(resolve_corpus_path(spec))
-        # Stamp provenance so a corpus loader can require a sha pin for THIS
-        # path — only <auto>-resolved paths carry the flag.
+        # Stamp provenance so a corpus loader can require a sha pin for THIS path — only
+        # <auto>-resolved paths carry the flag.
         mixing["_pretrained_buffer_path_auto_resolved"] = True
 
     eval_cfg = config.get("eval_pipeline")
@@ -363,37 +296,19 @@ def expand_auto_paths(config: dict[str, Any], spec: Any) -> None:
 
 
 def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
-    """Return an `EncodingSpec` from a config mapping. THE one authority for
-    *where in a config an encoding is declared* (CARD-POOL-ENCODING-BRIDGE / TD-4).
+    """Return an `EncodingSpec` from a config mapping — THE one authority for where in a config an
+    encoding is declared.
 
-    Accepts three DECLARED shapes:
-      - `cfg['encoding'] = "v6w25"`             (legacy flat, string form)
-      - `cfg['encoding'] = {'version': 'v6'}`   (legacy flat, mapping form)
-      - `cfg['identity']['encoding'] = "v6w25"` (WP8 nested — what `RunConfig`
-        actually dumps; `IdentityConfig.encoding` is a required, defaultless,
-        registry-cross-checked field, `config/schema/core.py:50`)
-
-    AGREEMENT-OR-RAISE (WPTS Phase P, ADJ-25/R104): there is no precedence
-    between the shapes. A config carrying BOTH must carry the SAME name; two
-    declarations that disagree raise `EncodingDeclarationConflictError` — a
-    dual-shape config that disagrees with itself is corrupt input, and the one
-    authority refuses to silently pick a side.
-
-    The nested shape is NOT a fallback and NOT a default: it reads a key the
-    schema requires the operator to declare, and an absent declaration still
-    raises. Before TD-4 this knowledge was duplicated in two private bridges
-    (`train/trainer/core.py::_resolve_spec`, `train/orchestrator.py`) and absent
-    from five other call sites — the pool among them, which is why mode
-    PREFLIGHT could not boot. Adding a shape here rather than a sixth private
-    bridge is the R1 "one authority" requirement: a caller-side
-    `d["encoding"] = d["identity"]["encoding"]` injection is exactly the
-    code-side default authority R1 and LAW-11 forbid.
+    Three DECLARED shapes are accepted: `cfg['encoding']` as a string or as a mapping carrying
+    `version`, and `cfg['identity']['encoding']`, which is what `RunConfig` dumps. There is no
+    precedence between them: a config carrying BOTH must carry the SAME name, and a disagreement
+    raises `EncodingDeclarationConflictError` rather than picking a side. The nested shape is not a
+    fallback — an absent declaration still raises, and a caller-side injection of one shape into
+    the other would be the code-side default authority LAW-11 forbids.
 
     Raises:
-        MissingEncodingError: if `cfg` is `None`, declares an encoding in NONE
-            of the three shapes, or has a mapping-form `encoding` with no
-            `version` key — an explicit encoding is required (LAW-11, R28); the
-            v6 default arm is retired.
+        MissingEncodingError: if `cfg` is `None`, declares an encoding in NONE of the three
+            shapes, or has a mapping-form `encoding` with no `version` key.
     """
     if cfg is None:
         raise MissingEncodingError(
@@ -408,10 +323,9 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
     if section is None:
         section = nested
     elif nested is not None:
-        # WPTS Phase P (ADJ-25 / R104): BOTH shapes declared. Disagreement is CORRUPT
-        # INPUT, not a precedence question — the one authority refuses to silently pick a
-        # winner (the same posture `checkpoints.py` takes on ambiguous payloads). Flat
-        # malformation raises its own error below before the comparison can pass.
+        # BOTH shapes declared. Disagreement is CORRUPT INPUT, not a precedence question, so the
+        # one authority refuses to pick a winner; flat malformation raises its own error below
+        # before the comparison can pass.
         flat_name = section if isinstance(section, str) else (
             section.get("version") if isinstance(section, Mapping) else None
         )
@@ -459,15 +373,12 @@ def _graph_specs() -> list[EncodingSpec]:
     return [s for s in all_specs() if s.representation == "graph"]
 
 
-#: REPORT-ONLY, and the restriction is the whole of AUDIT-1 F-20's second half. The function
-#: below dispatches on an ARCH-STRUCTURAL key, so a V3 graph arch that renames its trunk entry
-#: resolves nothing. `checkpoints.load_legacy_weights` — the
-#: loader for exactly these artifacts — REFUSES to shape-sniff and says so in its docstring;
-#: two postures on one question is the duplicate-authority class, and the loader's is the one
-#: that governs. NOTHING ON A DISPATCH PATH MAY CALL THIS: the encoding a run uses comes from a
-#: stamp or from an explicit declaration. `mantis.encoding.audit_sections` calls it to REPORT a
-#: declared-vs-inferred reconciliation for an operator, which selects no behaviour, and
-#: `tests/encoding/test_no_shape_sniff_dispatch.py` is what keeps that the only caller.
+#: REPORT-ONLY. The function below dispatches on an ARCH-STRUCTURAL key, so a V3 graph arch that
+#: renames its trunk entry resolves nothing, and `checkpoints.load_legacy_weights` — the loader
+#: for exactly these artifacts — REFUSES to shape-sniff, which is the posture that governs.
+#: NOTHING ON A DISPATCH PATH MAY CALL THIS: the encoding a run uses comes from a stamp or an
+#: explicit declaration. `mantis.encoding.audit_sections` calls it to REPORT a declared-vs-inferred
+#: reconciliation, which selects no behaviour.
 def detect_encoding_from_state_dict(
     state: Mapping[str, Any],
     ckpt_label: str,
@@ -475,21 +386,12 @@ def detect_encoding_from_state_dict(
 ) -> EncodingSpec | None:
     """Detect a registry encoding from a model state-dict.
 
-    UNIFIED precedence (LOCKED #7 — the filename-beats-shape KILL). Applies to
-    ALL kinds (grid AND graph):
-
-      1. STAMP  — an embedded ``metadata['encoding_name']`` wins outright.
-      2. MARKER — the graph-representation marker key
-                  (`_probes.GNN_GRAPH_MARKER_KEY`) → the graph encoding.
-      3. ONE deterministic shape fallback — probe in_channels (first conv) and
-         n_actions (policy fc), then match uniquely over the registered grid
-         set. strict=True raises `ValueError` on ambiguity/miss; strict=False
-         returns None. The filename (`ckpt_label`) is used ONLY in error text —
-         NEVER as a dispatch signal.
+    UNIFIED precedence for grid and graph alike: an embedded ``metadata['encoding_name']`` STAMP
+    wins outright, then the graph-representation MARKER key, then ONE deterministic shape fallback
+    matching uniquely over the registered grid set. The filename is used ONLY in error text.
 
     Args:
-        state: Model state-dict (key → tensor), optionally with a `metadata`
-               envelope carrying an `encoding_name` stamp.
+        state: Model state-dict (key → tensor), optionally with a `metadata` envelope.
         ckpt_label: Free-form label/path used only in error messages.
         strict: If True, raise ValueError on no canonical match; else None.
     """
@@ -500,8 +402,7 @@ def detect_encoding_from_state_dict(
         if isinstance(stamped, str):
             return lookup(stamped)
 
-    # 2. MARKER — a graph state dict has no grid conv marker; resolve by marker
-    #    BEFORE any shape probe so it beats shape (and filename).
+    # 2. MARKER — resolve by marker BEFORE any shape probe, so it beats shape and filename.
     if _GNN_GRAPH_MARKER_KEY in state:
         graph = _graph_specs()
         if len(graph) != 1:
@@ -525,26 +426,11 @@ def detect_encoding_from_state_dict(
 def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
     """Return an `EncodingSpec` for a saved checkpoint — from its STAMP, never its shape.
 
-    AUDIT-1 F-20, and it repairs two separate things.
-
-    **The pickle-exec hole.** This read `torch.load(path, weights_only=False)`, which executes
-    arbitrary pickle on load. `docs/contracts/checkpoint_envelope.md` asserts *"every read
-    surface is `torch.load(weights_only=True)`; there is no pickle-exec fallback"* — an
-    assertion that was FALSE at HEAD, on a surface reachable from the pretrain CLI's
-    `--resume` (without `--encoding`) and from the audit CLI.
-
-    **The shape sniffer.** When the stamp was absent it fell through to
-    `detect_encoding_from_state_dict`, which dispatches on an ARCH-STRUCTURAL key
-    (`representation.input_proj.weight`) and then on conv/policy-fc shapes across the
-    registered grid set. A V3 graph arch that renames `input_proj` is silently classified as
-    GRID. Meanwhile `checkpoints.load_legacy_weights` — the loader for exactly these
-    artifacts — REFUSES to shape-sniff and says so. Two postures on one question; the loader's
-    is the one kept.
-
-    An artifact with no `encoding_name` in its stamp now RAISES by name. That is a harder
-    failure than the old `DeprecationWarning`, and deliberately: the warning's advice ("stamp
-    metadata explicitly") is the only correct action, and emitting it while proceeding on a
-    guess is what let unstamped artifacts stay unstamped.
+    This read `torch.load(weights_only=False)`, executing arbitrary pickle against a contract that
+    asserts no pickle-exec fallback exists; absent a stamp it also fell through to a shape sniffer
+    dispatching on an ARCH-STRUCTURAL key, so a graph arch that renames `input_proj` was silently
+    classified as GRID. An artifact with no `encoding_name` now RAISES by name, deliberately
+    harder than the old warning, since proceeding on a guess is what left artifacts unstamped.
 
     Raises:
         EncodingRegistryError: the payload is not a mapping, carries no

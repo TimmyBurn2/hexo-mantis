@@ -1,18 +1,8 @@
-"""Shared loaders for the WP-SP ⊕ oracle suites (tests/selfplay/).
+"""Shared golden loaders for the selfplay oracle suites.
 
-Written by ORACLE-WRITE **before** any `mantis.selfplay` port code exists. It still imports
-NO `mantis.selfplay.*` — the suites import that, and the oracle-first separation is why. It
-does now import `_wire_geometry`, a sibling helper that reads `mantis.encoding.registry`, which
-AUDIT-1 F-41 made necessary: the collate's geometry parameters are required, so the fixture that
-supplies them must read the registry row the capture was built at rather than retype its numbers.
-That layer ships in the same package as every suite here and is not the module under test.
-
-Every golden here is dispatcher-captured old-side truth promoted into
-`tests/fixtures/selfplay/` (manifest-tracked, sha-pinned). Nothing is synthesized: if a
-value is not in the capture it is not asserted (see wp/WPSP/ORACLE_NOTES.md §gaps).
-
-Root conftest already installs the autouse `_reseed` fixture — this file does NOT re-seed
-and does NOT touch sys.path or sys.modules (R5/LAW-17).
+Imports no `mantis.selfplay.*` — the suites do that, so this file stays import-clean while they
+are RED. Every golden is dispatcher-captured old-side truth under `tests/fixtures/selfplay/`
+(manifest-tracked, sha-pinned); nothing is synthesized.
 """
 from __future__ import annotations
 
@@ -39,8 +29,7 @@ PAYLOAD_ARRAY_FIELDS: tuple[str, ...] = (
 )
 PAYLOAD_SCALAR_FIELDS: tuple[str, ...] = ("contract_version", "builder_impl", "n_graphs")
 
-# Payload fixture stem → npz file. `empty_legal` is the old file's hand-built
-# 1-stone/0-legal single-graph payload (A-14).
+# `empty_legal` is the old file's hand-built 1-stone/0-legal single-graph payload.
 _PAYLOAD_NPZ = {
     "b6": COLLATE_DIR / "b6_payload.npz",
     "b1": COLLATE_DIR / "b1_payload.npz",
@@ -50,8 +39,7 @@ _PAYLOAD_NPZ = {
 _COLLATED_NPZ = {
     "b6": COLLATE_DIR / "b6_collated.npz",
     "b1": COLLATE_DIR / "b1_collated.npz",
-    # semantic="full" and semantic="off" produced byte-identical B=0 output old-side
-    # (per-tensor sha-equal); ONE golden, both arms assert against it.
+    # semantic="full" and semantic="off" produced byte-identical B=0 output; ONE golden serves both.
     "b0": COLLATE_DIR / "b0_collated.npz",
 }
 
@@ -61,38 +49,36 @@ def _load_npz(path: Path) -> dict[str, np.ndarray]:
         return {k: z[k] for k in z.files}
 
 
-# ── captured goldens (session-scoped; read once) ──────────────────────────────────────
 @pytest.fixture(scope="session")
 def collate_expectations() -> dict[str, Any]:
-    """#C1/#C2/#C2b/#C2c — payload + collate metadata and the ADV expectation table."""
+    """Payload + collate metadata and the ADV expectation table."""
     return json.loads((COLLATE_DIR / "collate_expectations.json").read_text())
 
 
 @pytest.fixture(scope="session")
 def drain_goldens() -> dict[str, Any]:
-    """#C3b — the scripted drain/push golden, 5 variants."""
+    """The scripted drain/push golden, 5 variants."""
     return json.loads((DRAIN_DIR / "drain_goldens.json").read_text())
 
 
 @pytest.fixture(scope="session")
 def encoding_resolve_golden() -> dict[str, Any]:
-    """#C3a — `_resolve_encoding_for_pool` outcome per registered encoding."""
+    """`_resolve_encoding_for_pool` outcome per registered encoding."""
     return json.loads((POOL_DIR / "encoding_resolve.json").read_text())
 
 
 @pytest.fixture(scope="session")
 def runner_config_goldens() -> dict[str, Any]:
-    """#C3d — the SelfPlayRunnerConfig ctor-kwarg/attr golden (KILLed fields removed)."""
+    """The SelfPlayRunnerConfig ctor-kwarg/attr golden."""
     return json.loads((POOL_DIR / "runner_config_goldens.json").read_text())
 
 
 @pytest.fixture(scope="session")
 def pure_function_battery() -> dict[str, Any]:
-    """#C3c — 22 move histories × the instrumentation pure functions."""
+    """22 move histories × the instrumentation pure functions."""
     return json.loads((INSTR_DIR / "pure_function_battery.json").read_text())
 
 
-# ── payload / collated array banks ────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def _payload_bank() -> dict[str, dict[str, np.ndarray]]:
     return {name: _load_npz(path) for name, path in _PAYLOAD_NPZ.items()}
@@ -106,7 +92,7 @@ def collated_golden() -> dict[str, dict[str, np.ndarray]]:
 
 @pytest.fixture(scope="session")
 def hotpath_golden() -> dict[str, np.ndarray]:
-    """#C1(i)-hot: the seeded logits, old `segment_softmax` output, old `stone_mask`."""
+    """The seeded logits, old `segment_softmax` output, old `stone_mask`."""
     return _load_npz(COLLATE_DIR / "b6_hotpath.npz")
 
 
@@ -115,12 +101,10 @@ def payload_fields(
     _payload_bank: dict[str, dict[str, np.ndarray]],
     collate_expectations: dict[str, Any],
 ) -> Callable[[str], dict[str, Any]]:
-    """Factory → a FRESH ctor-kwarg dict for `GraphWirePayload` (arrays copied per call).
+    """Factory → a FRESH ctor-kwarg dict for `GraphWirePayload`.
 
-    Copies matter: every ADV test mutates its payload in place, and a shared buffer would
-    leak one test's corruption into the next (the old capture harness cloned for the same
-    reason). Kept out of the test modules so the not-yet-written dataclass is imported
-    only there — this conftest stays import-clean while the suites are RED.
+    Arrays are copied per call: every ADV test mutates its payload in place, so a shared buffer
+    would leak one test's corruption into the next.
     """
     def make(name: str) -> dict[str, Any]:
         arrays = _payload_bank[name]
@@ -136,14 +120,9 @@ def payload_fields(
 def wire_geometry(_payload_bank: dict[str, dict[str, np.ndarray]]) -> dict[str, int]:
     """The four geometry kwargs `collate_graph_batch` REQUIRES, read off the registry.
 
-    AUDIT-1 F-41: those parameters used to default to `gnn_axis_v1`'s values typed as literals
-    in `graph_collate.py`, and the defaults' only consumers were tests that omitted them. Every
-    test now states its geometry, and states it by asking the registry rather than by retyping
-    the row — so a registry edit moves the tests instead of leaving them asserting a stale fact.
-
-    The row-to-capture association is DERIVED here, not declared: the captured `node_feat` and
-    `edge_attr` arrays must divide by the row's dims. A re-capture at a row with different dims
-    fails this fixture rather than collating under the wrong geometry.
+    The row-to-capture association is DERIVED, not declared: the captured `node_feat` and
+    `edge_attr` arrays must divide by the row's dims, so a re-capture at a row with different
+    dims fails here rather than collating under the wrong geometry.
     """
     spec = spec_for(COLLATE_FIXTURE_ENCODING)
     arrays = _payload_bank["b6"]
@@ -160,7 +139,6 @@ def wire_geometry(_payload_bank: dict[str, dict[str, np.ndarray]]) -> dict[str, 
     return geometry_kwargs(COLLATE_FIXTURE_ENCODING)
 
 
-# ── drain fixture inputs (#C3b scripted `collect_data` rows + captured push args) ──────
 @pytest.fixture(scope="session")
 def collect_data_input() -> tuple[np.ndarray, ...]:
     """The scripted `collect_data()` 10-tuple the capture fed the old drain loop.
@@ -189,18 +167,11 @@ def graph_pushed() -> dict[str, np.ndarray]:
 def graph_rows_input() -> list[tuple[Any, ...]]:
     """The scripted `collect_graph_data()` rows, rebuilt from the capture recipe.
 
-    Recipe (`drain_goldens.json._constants.graph_rows_recipe`): 3 opaque tuples
-    (f32[6], i64[4], int, float) the pool forwards verbatim, plus a TRAILING runner game id
-    (R345(b)(6)). The id is the one field the drain reads and translates; everything before
-    it is still forwarded uninspected, which is what C-02 asserts.
-
-    The first two rows share game 100 and the third is game 101, so the row exercises the
-    property that matters: two positions of one game must land under ONE allocated buffer id.
-    A fixture where every row had its own game would pass an implementation that allocated
-    per ROW, which is the `-1` sentinel's behaviour wearing real numbers.
-
-    Rebuilt (not loaded) so the *input* identity objects are ours: C-02 asserts the drain
-    forwards these exact objects, so they must be constructible test-side.
+    Each row is opaque tuple data the pool forwards verbatim plus a TRAILING runner game id, the
+    one field the drain reads and translates. The first two rows share game 100 and the third is
+    game 101, so two positions of one game must land under ONE allocated buffer id — a fixture
+    where every row had its own game would pass a per-ROW allocator. Rebuilt rather than loaded
+    so the input identity objects are ours to assert on.
     """
     return [
         (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 100),

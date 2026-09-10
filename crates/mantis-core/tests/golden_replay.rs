@@ -19,7 +19,7 @@ use mantis_core::board::{Board, BoardGeometry, Player};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-// ── Fixture schema (board-golden-v1) ─────────────────────────────────────────
+// Fixture schema (board-golden-v1)
 
 #[derive(Deserialize)]
 struct Golden {
@@ -88,7 +88,7 @@ struct Terminal {
     terminal_value_to_move: f32,
 }
 
-// ── Replay checker ───────────────────────────────────────────────────────────
+// Replay checker
 
 fn fixture_path() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -193,7 +193,7 @@ fn verify(golden: &Golden) -> Vec<String> {
     div
 }
 
-// ── Tests ────────────────────────────────────────────────────────────────────
+// Tests
 
 /// ⊕ The golden replay: every recorded field of all 27 games must match.
 #[test]

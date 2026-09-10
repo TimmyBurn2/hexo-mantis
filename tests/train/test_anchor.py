@@ -1,17 +1,7 @@
-"""test_anchor — the anchor consumer-of-record (WP10 §a.5/§c.6; LAW-08 CI consumer).
+"""The anchor's consumer-of-record: save, load, quarantine and identity.
 
-R8 justification: this file is ONE unit because the anchor's save, load, quarantine and
-identity invariants are one artifact lifecycle and only mean anything together. Every row here
-either writes a `best_model.pt` and reads it back, or asserts what happens when that round trip
-is broken — a save test in one file and its load test in another would let a change pass both
-while breaking the pair, which is exactly the shape AUDIT-1 F-17 was: the write dropped the
-arch and the read invented one, and each half looked fine alone.
-
-Exercises `save_best_model_atomic` round-trip verify + `.bak` rotation, `_quarantine_corrupt`,
-the `load_best_model_resilient` fallback chain, and representation-off-the-declared-arch (a census
-that `model_representation` is NOT imported/used — WP9 O3). PLUS the (B) corruption guard: a
-checkpoint missing a required CORE key RAISES (never a silent random-head load — the old E1-C1 /
-F-12 hazard), while a legitimate SUBSET anchor loads clean.
+>300 justify (R8): these are ONE artifact lifecycle and mean nothing apart — split, a change can
+pass both files while breaking the pair, the write dropping the arch and the read inventing one.
 """
 from __future__ import annotations
 
@@ -42,18 +32,17 @@ def _full_net() -> torch.nn.Module:
     return build_net(arch_from_spec_and_config(lookup(_ENC), {}))
 
 
-# ══ atomic save + .bak rotation + provenance ═══════════════════════════════════════════
 def test_save_best_model_atomic_roundtrip_and_bak_rotation(tmp_path: Path) -> None:
     net = _full_net()
     path = tmp_path / "best_model.pt"
 
-    save_best_model_atomic(net, path)  # bare state_dict (step=None)
+    save_best_model_atomic(net, path)  # bare state_dict
     assert path.exists()
-    assert not path.with_suffix(path.suffix + ".bak").exists()  # first save → no bak yet
+    assert not path.with_suffix(path.suffix + ".bak").exists()  # first save, no bak yet
     reloaded = torch.load(path, map_location="cpu", weights_only=True)
     assert isinstance(reloaded, dict) and "representation.input_proj.weight" in reloaded
 
-    save_best_model_atomic(net, path)  # second save rotates the prior → .bak
+    save_best_model_atomic(net, path)  # the second save rotates the prior into .bak
     assert path.with_suffix(path.suffix + ".bak").exists()
 
 
@@ -70,11 +59,8 @@ def test_save_best_model_atomic_provenance_sidecar(tmp_path: Path) -> None:
     assert sidecar.exists() and '"step": 750' in sidecar.read_text()
 
 
-# ══ AUDIT-1 F-17 — the anchor names its own arch ═══════════════════════════════════════
 def test_a_promoted_anchor_carries_the_DECLARED_arch_kind(tmp_path: Path) -> None:
-    """The payload says WHICH arch built it. It used to say nothing, so the read side rebuilt
-    the representation's INCUMBENT kind — correct by coincidence for an incumbent lineage and
-    wrong for any other."""
+    """The payload says WHICH arch built it, or the read side rebuilds the INCUMBENT kind."""
     arch = arch_from_spec_and_config(lookup(_ENC), {})
     path = tmp_path / "best_model.pt"
     net = _full_net()
@@ -86,8 +72,7 @@ def test_a_promoted_anchor_carries_the_DECLARED_arch_kind(tmp_path: Path) -> Non
 
 
 def test_a_promotion_that_cannot_NAME_its_arch_is_REFUSED(tmp_path: Path) -> None:
-    """The planted break for the row: a stamped save with no arch is exactly the kind-less
-    artifact F-17 is about, and it is now unconstructible rather than silently written."""
+    """PLANTED BREAK: a stamped save with no arch is unconstructible, not silently written."""
     handle_less = _full_net()
     del handle_less.arch
     with pytest.raises(AttributeError, match="declared '.arch'"):
@@ -97,14 +82,9 @@ def test_a_promotion_that_cannot_NAME_its_arch_is_REFUSED(tmp_path: Path) -> Non
 
 
 def test_a_NON_INCUMBENT_lineage_survives_a_save_load_round_trip(tmp_path: Path) -> None:
-    """THE DEFECT, end to end. Write an anchor for a kind that is NOT its representation's
-    incumbent, read it back through the production resilient loader, and assert the rebuilt net
-    is that kind — not the incumbent, and not a quarantine.
-
-    Before the repair the payload named no kind, `stamped_arch_kind` fell to
-    `_LEGACY_BY_REPRESENTATION`, and the shape load failed into `_quarantine_corrupt`: the
-    promoted incumbent of a non-incumbent lineage was lost on EVERY relaunch, with a WARNING.
-    """
+    """A non-incumbent lineage survives a round trip through the production loader, rebuilding
+    as its own kind and not into a quarantine. With no kind in the payload the shape load
+    quarantines, losing that lineage's promoted incumbent on EVERY relaunch."""
     from mantis.encoding import lookup as _lookup
     from mantis.model import ARCH_KINDS, INCUMBENT_ARCH_KIND, select_arch
 
@@ -139,15 +119,9 @@ def test_a_NON_INCUMBENT_lineage_survives_a_save_load_round_trip(tmp_path: Path)
 
 
 def test_an_anchor_with_NON_DEFAULT_widths_rebuilds_at_ITS_widths(tmp_path: Path) -> None:
-    """The second half of F-17, and the reason the stamped arch is rehydrated VERBATIM rather
-    than re-derived. `stamped_arch_kind` recovers the KIND, but `select_arch` then re-derives
-    the WIDTHS from the artifact's embedded config — and an anchor embeds no config, so every
-    width would fall to the dataclass default. A run at any non-default width would rebuild at
-    the wrong shape and quarantine, with the kind entirely correct.
-
-    Planted break: rehydrate through `select_arch(spec, {}, ...)` instead of the stamped dict
-    and this reds on the shape load.
-    """
+    """An anchor at non-default widths rebuilds at ITS widths, which is why the stamped arch is
+    rehydrated VERBATIM: re-deriving takes widths from a config an anchor does not carry.
+    PLANTED BREAK: rehydrate through `select_arch(spec, {}, ...)` and the shape load reds."""
     from mantis.encoding import lookup as _lookup
     from mantis.model import select_arch
 
@@ -171,14 +145,9 @@ def test_an_anchor_with_NON_DEFAULT_widths_rebuilds_at_ITS_widths(tmp_path: Path
 
 
 def test_a_WRONG_ARCH_anchor_RAISES_rather_than_being_quarantined(tmp_path: Path) -> None:
-    """AUDIT-1 F-17, the except-clause half. A shape mismatch on load means the artifact is
-    intact and the arch is wrong — a configuration error an operator must SEE. The bare
-    `except Exception` caught it beside genuine corruption and answered by moving a good file
-    aside, so the failure looked like disk rot and the run silently fresh-inited.
-
-    Constructed by stamping a NARROW net's weights under a DEFAULT-width arch, so the rebuild
-    is the wrong shape while the file itself is perfectly readable.
-    """
+    """A wrong-arch anchor RAISES rather than quarantining: the artifact is intact and the arch
+    is wrong, a configuration error an operator must SEE. Built by stamping a NARROW net under a
+    DEFAULT-width arch, so the rebuild is wrong-shaped while the file reads perfectly."""
     from mantis.encoding import lookup as _lookup
     from mantis.model import select_arch
 
@@ -188,17 +157,15 @@ def test_a_WRONG_ARCH_anchor_RAISES_rather_than_being_quarantined(tmp_path: Path
 
     path = tmp_path / "best_model.pt"
     save_best_model_atomic(build_net(narrow), path, step=3, run_id="r", encoding=spec.name)
-    # Rewrite the stamp to claim the DEFAULT widths while the tensors stay narrow.
+    # Claim the DEFAULT widths in the stamp while the tensors stay narrow.
     payload = torch.load(path, map_location="cpu", weights_only=True)
     payload["metadata"]["arch"] = {
         **dataclasses.asdict(default_arch), "arch_kind": type(default_arch).__name__,
     }
     torch.save(payload, path)
 
-    # `RuntimeError` covers both arms and that is deliberate: `AnchorLoadError` IS a
-    # `RuntimeError` subclass, and a pure SHAPE mismatch on a present key comes straight from
-    # `torch.nn.Module.load_state_dict` as a bare `RuntimeError`. What this row pins is that
-    # NEITHER is swallowed — the type is secondary, the propagation is the claim.
+    # `RuntimeError` covers both arms deliberately: `AnchorLoadError` subclasses it, and a
+    # pure shape mismatch arrives as a bare one. The claim is that NEITHER is swallowed.
     with pytest.raises(RuntimeError, match="size mismatch|did not land|unexpected key"):
         load_best_model_resilient(
             path, declared_encoding=spec.name, device=_CPU, bootstrap_candidates=(),
@@ -209,9 +176,7 @@ def test_a_WRONG_ARCH_anchor_RAISES_rather_than_being_quarantined(tmp_path: Path
 
 
 def test_a_GENUINELY_corrupt_anchor_is_still_quarantined(tmp_path: Path) -> None:
-    """The control for the row above: narrowing the except must not stop the mechanism it was
-    narrowed inside. A file that is not a torch archive at all still quarantines and falls
-    through."""
+    """Control for the row above: a file that is not a torch archive still quarantines."""
     path = tmp_path / "best_model.pt"
     path.write_bytes(b"not a torch file at all")
     assert load_best_model_resilient(
@@ -229,11 +194,8 @@ def test_quarantine_corrupt_renames(tmp_path: Path) -> None:
 
 
 def test_the_anchor_hash_is_wrapper_invariant_and_is_THE_net_param_hash() -> None:
-    """AUDIT-1 F-32. The anchor's identity used to be `state_dict_sha256` — its OWN hash, with
-    no shape and no dtype — so a run's `expected_anchor_sha256` could never be compared with
-    the `net_param_hash` a sweep or an acceptance witness reports. One denomination now, and
-    both halves are asserted: the wrapper invariance the old function had right, and the
-    agreement with the module-level hash it could not have."""
+    """The anchor's identity is wrapper-invariant AND is the module-level `net_param_hash` —
+    a separate anchor-only hash is uncomparable with what a sweep or a witness reports."""
     from mantis.model.identity import net_param_hash, state_dict_param_hash
 
     net = _full_net()
@@ -246,7 +208,6 @@ def test_the_anchor_hash_is_wrapper_invariant_and_is_THE_net_param_hash() -> Non
     )
 
 
-# ══ resilient load fallback chain ══════════════════════════════════════════════════════
 def test_load_best_model_resilient_loads_valid_anchor(tmp_path: Path) -> None:
     net = _full_net()
     path = tmp_path / "best_model.pt"
@@ -259,7 +220,7 @@ def test_load_best_model_resilient_loads_valid_anchor(tmp_path: Path) -> None:
     model, source_path, _step, representation = ref
     assert isinstance(model, torch.nn.Module)
     assert source_path == path
-    assert representation == "graph"  # declared, off the arch — not a module sniff
+    assert representation == "graph"  # declared, off the arch, not a module sniff
 
 
 def test_load_best_model_resilient_recovers_from_bak(tmp_path: Path) -> None:
@@ -267,14 +228,14 @@ def test_load_best_model_resilient_recovers_from_bak(tmp_path: Path) -> None:
     path = tmp_path / "best_model.pt"
     save_best_model_atomic(net, path)   # writes best
     save_best_model_atomic(net, path)   # rotates the valid copy into .bak
-    path.write_bytes(b"corrupt zip")    # clobber the live best_model.pt
+    path.write_bytes(b"corrupt zip")    # clobbers the live best_model.pt
 
     ref = load_best_model_resilient(
         path, declared_encoding=_ENC, device=_CPU, bootstrap_candidates=(),
     )
     assert ref is not None
     _model, source_path, _step, _rep = ref
-    assert source_path == path.with_suffix(path.suffix + ".bak")  # recovered from .bak
+    assert source_path == path.with_suffix(path.suffix + ".bak")
     assert any(".corrupt-" in p.name for p in tmp_path.iterdir())  # best was quarantined
 
 
@@ -285,15 +246,13 @@ def test_load_best_model_resilient_returns_none_when_all_fail(tmp_path: Path) ->
     ) is None
 
 
-# ══ representation off the DECLARED arch — no model_representation sniff (WP9 O3) ═══════
 def test_no_model_representation_sniff_in_anchor_source() -> None:
-    """Census (WP9 O3): the DELETED `model_representation(module)` sniff is NOT imported or used.
-    Representation travels on the declared arch (`AnchorState.representation`)."""
+    """The deleted `model_representation` sniff is neither imported nor used."""
     assert "model_representation" not in _ANCHOR_SRC
 
 
 def test_no_pickle_exec_load_in_anchor_source() -> None:
-    """LAW-12: anchor loads are weights-only everywhere (no pickle-exec load surface)."""
+    """Anchor loads are weights-only everywhere — no pickle-exec load surface."""
     assert "weights_only=False" not in _ANCHOR_SRC
 
 
@@ -307,10 +266,9 @@ def test_anchor_state_carries_declared_representation(tmp_path: Path) -> None:
     assert ref is not None
     model, source_path, step, representation = ref
     state = AnchorState(model, step, source_path, representation)
-    assert state.representation == "graph"  # discriminant read off the arch
+    assert state.representation == "graph"  # the discriminant, read off the arch
 
 
-# ══ (B) corruption guard — the RED-TEAM #1 preserved landing guard ═════════════════════
 def _core_and_optional_keys() -> "tuple[list[str], list[str]]":
     sd = _full_net().state_dict()
     optional = [k for k in sd if k.startswith(_OPTIONAL_PREFIXES)]
@@ -319,12 +277,8 @@ def _core_and_optional_keys() -> "tuple[list[str], list[str]]":
 
 
 def test_B_missing_core_key_raises_not_silent_random_head(tmp_path: Path) -> None:
-    """A checkpoint missing a REQUIRED CORE tensor RAISES — never a silent random-head load
-    (the old E1-C1 / F-12 hazard the eval-loader landing-guard existed to kill).
-
-    The optional-subset twin this row used to sit beside is GONE: `_OPTIONAL_HEAD_PREFIXES`
-    names the dense aux heads, and the graph net carries none of them, so a "missing only the
-    aux heads" anchor is not a state that exists any more."""
+    """A checkpoint missing a REQUIRED CORE tensor RAISES, never a silent random-head load.
+    The optional-subset twin is gone: those prefixes name dense aux heads a graph net lacks."""
     full = _full_net().state_dict()
     core_key = "policy_head.mlp.0.weight"
     assert core_key in full and not core_key.startswith(_OPTIONAL_PREFIXES)

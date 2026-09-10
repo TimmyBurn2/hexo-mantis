@@ -1,26 +1,14 @@
-"""AUDIT-1 F-19 / R332(d) — the BC warm-start entry EXISTS, and it refuses the wrong artifact.
+"""The BC warm-start entry exists, and it refuses the wrong artifact.
 
-THE DEFECT. `train/warmstart.py` was imported by NOTHING under `src/`:
-`maybe_warmstart_gnn_from_bc` and `assert_dist65_bins_seeded` had zero references anywhere,
-and the transfer primitive `model/gnn.py::load_representation_policy_from_bc` had exactly one
-caller — that dead function. So BC-EXEC could produce a BC checkpoint and no production path
-could consume it. The module read `gnn_warm_start.checkpoint` and
-`combined_config.get("value_head_type", "scalar")` — keys the schema does not have, with
-code-side defaults under them (R1's class).
+The identity names a checkpoint by path AND net hash; the selector resolves it through the
+artifact stamp; the loaded net's hash equals the checkpoint's, and a CPU smoke plays one
+legal game from it.
 
-R332(d) DECIDED it BUILT rather than deleted, and specified the shape: *the identity names a
-checkpoint by path AND net hash; the one selector authority resolves it through the artifact
-stamp; pinning test: the loaded net's hash equals the checkpoint's; a CPU smoke plays one legal
-game from it.* This file is that.
+`net_param_hash` is taken over the net REBUILT from the checkpoint's own stamp — sorted
+`name + shape + dtype + bytes` — not a file digest, which moves with re-saves and metadata.
 
-WHAT THE HASH IS, because it is easy to assume a file digest. `net_param_hash` is taken over
-the net REBUILT FROM the checkpoint's own stamp — sorted `name + shape + dtype + bytes`. A file
-digest moves with re-saves and metadata; the parameter hash is what a prereg means when it
-names an artifact, and it is the same currency `worker_sweep` and `acceptance_witness` report.
-
-NOT HERE, deliberately: the 20/20-vs-random step-0 reproduction. R332(d) puts that at the mint
-sitting, on the checkpoint of record — it is a strength claim about a real artifact, not
-something a synthetic fixture can stand in for.
+The 20/20-vs-random step-0 reproduction is deliberately not here: it is a strength claim
+about a real artifact, made at the mint sitting on the checkpoint of record.
 """
 from __future__ import annotations
 
@@ -50,8 +38,7 @@ def _spec() -> Any:
 
 
 def _arch() -> Any:
-    """A deliberately NARROW graph arch: small enough to build fast, and different from the
-    dataclass defaults so a rebuild that ignored the stamp would be visible."""
+    """Build a narrow graph arch, differing from the dataclass defaults so an ignored stamp shows."""
     import dataclasses
 
     base = select_arch(_spec(), {}, arch_kind="GnnArch")
@@ -59,7 +46,7 @@ def _arch() -> Any:
 
 
 def _write_source(tmp_path: Path, arch: Any) -> tuple[Path, str]:
-    """Write a BC-shaped source checkpoint through the ONE writer, and return its net hash."""
+    """Write a BC-shaped source checkpoint through the one writer and return it with its net hash."""
     from mantis.train.checkpoints import save_checkpoint
 
     from _warmstart_config import minimal_config  # noqa: PLC0415
@@ -79,26 +66,22 @@ def _config_with_row(checkpoint: Path, net_hash: str) -> dict[str, Any]:
                          "warm_start": {"checkpoint": str(checkpoint), "net_hash": net_hash}}}
 
 
-# ══ the resolver: an absent row is no warm start, never a guess ════════════════════════
 def test_a_config_with_no_row_declares_no_warm_start() -> None:
     assert resolve_bc_warm_start({"identity": {"encoding": _ENC, "representation": "graph"}}) is None
     assert resolve_bc_warm_start({}) is None
 
 
 def test_a_row_missing_its_hash_is_REFUSED_not_defaulted() -> None:
-    """The whole reason `warm_start` is a BLOCK. A path with no expected hash lets a run
-    warm-start from whatever file is sitting there."""
+    """Prove a row with no hash is refused: a bare path warm-starts from whatever file is there."""
     with pytest.raises(ValueError, match="net_hash"):
         resolve_bc_warm_start({"identity": {"warm_start": {"checkpoint": "/x.pt"}}})
 
 
 def test_the_row_has_exactly_one_reader() -> None:
-    """`WARM_START_ROW` names the dotted key so the row has one reader to change, the
-    `ARCH_KIND_ROW` pattern."""
+    """Prove `WARM_START_ROW` names the dotted key, so the row has exactly one reader."""
     assert WARM_START_ROW == "identity.warm_start"
 
 
-# ══ THE WITNESS R332(d) NAMES: the loaded net's hash equals the checkpoint's ════════════
 def test_the_warm_started_net_carries_the_declared_checkpoints_hash(tmp_path: Path) -> None:
     arch = _arch()
     source, source_hash = _write_source(tmp_path, arch)
@@ -111,8 +94,8 @@ def test_the_warm_started_net_carries_the_declared_checkpoints_hash(tmp_path: Pa
     report = apply_bc_warm_start(fresh, BcWarmStart(source, source_hash), spec=_spec())
     assert report["loaded_keys"], "the transfer reported no keys"
 
-    # The transferred half is byte-equal to the source; the value head is untouched, so the
-    # WHOLE-net hash is deliberately NOT asserted equal — that would be a different claim.
+    # Only the transferred half is byte-equal; the value head is untouched, so the whole-net
+    # hash is deliberately not asserted equal.
     src_state = build_net(arch)
     src_state.load_state_dict(torch.load(source, map_location="cpu", weights_only=True)["model_state"])
     for key, value in src_state.state_dict().items():
@@ -121,8 +104,7 @@ def test_the_warm_started_net_carries_the_declared_checkpoints_hash(tmp_path: Pa
 
 
 def test_a_checkpoint_that_is_NOT_the_declared_net_is_REFUSED(tmp_path: Path) -> None:
-    """The refusal the hash exists for: the file at that path is not the artifact the prereg
-    named, so the run stops rather than training from whatever is there."""
+    """Prove a checkpoint that is not the declared net is refused rather than trained from."""
     arch = _arch()
     source, _ = _write_source(tmp_path, arch)
     wrong = "0" * 64
@@ -138,9 +120,7 @@ def test_an_absent_checkpoint_is_a_named_refusal(tmp_path: Path) -> None:
 
 
 def test_the_transfer_is_graph_only_and_says_so(tmp_path: Path) -> None:
-    """No REGISTERED encoding declares a non-graph representation since R346(f), so the refusal
-    is driven from a spec-shaped stub — the same way the LAW-11 arms elsewhere reach a
-    representation the registry cannot mint."""
+    """Prove the transfer is graph-only, driven from a spec stub since no registered encoding is not."""
     class _NonGraphSpec:
         name = "not_a_graph"
         representation = "hexcanvas"
@@ -153,7 +133,6 @@ def test_the_transfer_is_graph_only_and_says_so(tmp_path: Path) -> None:
         )
 
 
-# ══ the hook fires from a config, and is a no-op without the row ═══════════════════════
 def test_the_hook_fires_from_a_config_row_and_no_ops_without_one(tmp_path: Path) -> None:
     arch = _arch()
     source, source_hash = _write_source(tmp_path, arch)
@@ -168,8 +147,7 @@ def test_the_hook_fires_from_a_config_row_and_no_ops_without_one(tmp_path: Path)
 
 
 def test_init_trainer_is_the_live_consumer() -> None:
-    """LAW-08: the key has a live consumer, and this names it. A census, not a mention count —
-    the call must be in `init_trainer`'s source."""
+    """Prove `init_trainer` is the live consumer, by the call appearing in its own source."""
     import inspect
 
     from mantis.train import orchestrator
@@ -181,19 +159,11 @@ def test_init_trainer_is_the_live_consumer() -> None:
     )
 
 
-# ══ THE CPU SMOKE R332(d) NAMES: one legal game, played from the warm-started net ══════
 def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Path) -> None:
-    """R332(d)'s second witness. The hash check proves the right WEIGHTS arrived; this proves
-    the resulting net is one you can actually play a game with — that the transfer left a
-    forward the PRODUCTION eval path can drive, on CPU, producing legal moves to a terminal.
+    """Prove the warm-started net plays one legal game on CPU through the production eval seam.
 
-    Driven through the real seam and not a stand-in: `LocalInferenceEngine` (graph arm) ->
-    `DeployHeadPlayer(expand_fn=..., c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)` -> `mantis.arena.match._play_one_game`, which is what the
-    eval worker builds for a graph candidate. A warm start that "succeeds" and hands back a net
-    the inference server cannot run would red here rather than in a run.
-
-    NOT a strength claim: the opponent is the same player, and the 20/20-vs-random reproduction
-    belongs at the mint sitting on the checkpoint of record (R332(d)).
+    The hash check proves the right weights arrived; this proves the transfer left a forward
+    the inference server can drive. Not a strength claim: both seats are the same player.
     """
     from mantis.arena.match import _play_one_game
     from mantis.arena.deploy_head import DeployHeadPlayer
@@ -216,8 +186,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
         max_in_flight=4, )
     try:
         def _player() -> Any:
-            # `n_sims` deliberately small: this is a liveness smoke on the default tier, not a
-            # search-quality measurement. `leaf_batch_size` is threaded, never defaulted (R318(b)).
+            # `n_sims` is small: a liveness smoke, not a search-quality measurement.
             return DeployHeadPlayer(
                 expand_fn=_graph_expand_fn(engine, spec), n_sims=4, leaf_batch_size=2, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0,
             )

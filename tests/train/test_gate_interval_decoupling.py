@@ -1,47 +1,17 @@
-# >300 justify (R8), and NO tally is stated (G-DFIX-4 / R192(e), derive-or-delete). ONE claim
-# — "arming rides monitor.gate_interval and narration rides train.log_interval, and neither
-# decides the other" — asserted from many angles over ONE set of fakes and ONE builder-derived
-# config factory. The pins are only evidence BECAUSE they share that factory: each states
-# the two knobs APART, and a second file would need its own copy of the harness, which would
-# then be a second authority on what a drive at "gate_interval=4, log_interval=5" even is.
-# That is the drift this suite exists to catch, so the harness stays with the rows it drives.
-# The RED-TEAM close (P7-P10) added rows and no harness: each of the four was a mutation the
-# committed suite let through at zero failures, and every one of them is driven through the
-# same `_config` / `_coordinator` / `_drive` triple the original rows use.
-"""⊕ R242 / ADJ-D12 — the ARMING cadence is `monitor.gate_interval`, not `train.log_interval`.
+# >300 justify (R8). ONE claim — "arming rides monitor.gate_interval and narration rides
+# train.log_interval, and neither decides the other" — asserted from many angles over ONE set
+# of fakes and ONE builder-derived config factory. The pins are evidence only BECAUSE they
+# share that factory: a second file would need its own harness copy, which would then be a
+# second authority on what a drive at "gate_interval=4, log_interval=5" even is.
+"""ORACLE — the ARMING cadence is `monitor.gate_interval`, not `train.log_interval`.
 
-THE DEFECT, as measured. `coordinator/step.py::_run_log_interval` early-returned unless
-`self._train_step % cfg.log_interval == 0`, and BOTH the live hard-abort gates
-(`_run_hard_abort_gates`, whose `draw_rate_collapse` row gate 12 audits ARMED on
-`configs/run6.yaml`) and the LAW-18 `monitor_gates` summary sat downstream of that guard. At
-run5's minted `train.log_interval: 1000` that means: no draw-rate observation could be taken,
-and no `monitor_gates` event could exist, before training step 1000. Armed machinery with a
-blind first kilometre — and the instrument that would have made the deadness readable was
-switched off by the same knob.
-
-R242 splits the two. `log_interval` is NARRATION (`training_step`, the 4 WARN rules, the axis
-distribution); `monitor.gate_interval` is ARMING. Every committed config mints the two EQUAL,
-so no shipped behaviour and no armed value moves as this lands — the re-scaled stride and the
-`consec` re-derived in gate-interval units are mint-prereg rows, not code. What lands is the
-CAPABILITY to state them apart, and the pins below are what make the split real rather than
-described. Each names the mutation that reds it.
-
-P1 gate visibility BELOW the narration boundary — the defect's direct inverse.
-P2 the abort fires on exactly the Nth OBSERVATION under the new cadence (observations
-   counted, not just the fire).
-P3 the gate's check count is `steps // gate_interval` and NOT `steps // log_interval`.
-P4 narration stays `log_interval`-gated — the half of R210 that survives R242.
-P5 `iteration_complete` still emits per coordinator step, independent of BOTH knobs (R210).
-P6 no code-side default anywhere: a config MISSING `monitor.gate_interval` fails to load.
-
-The RED-TEAM close added four more, each named by the 0-failure mutation it now reds:
-P7 the BUILDER's `gate_interval` parameter carries no default (the schema half is P6; this
-   is the second-authority half, R1/MF-2 Attack B).
-P8 a fire on a NON-FINAL burst iteration survives into `StepOutcome` (the OR-fold).
-P9 the gate boundary runs and publishes with NO `loss_info` at all — the VALUE of the
-   decoupling P1 pins only the SIGNATURE of.
-P10 a SKIPPED boundary neither advances nor RESETS `consec` — the true cadence semantic,
-   after this bundle shipped a false one in three places.
+THE DEFECT, as measured: both the live hard-abort gates and the `monitor_gates` summary sat
+behind `_run_log_interval`'s guard, so at a minted `train.log_interval: 1000` no draw-rate
+observation could be taken and no `monitor_gates` event could exist before training step 1000
+— armed machinery with a blind first kilometre, and the instrument that would have shown it
+switched off by the same knob. Every committed config mints the two knobs EQUAL, so no armed
+value moved; what landed is the CAPABILITY to state them apart, and each pin below names the
+mutation that reds it.
 """
 from __future__ import annotations
 
@@ -79,10 +49,9 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
+#: plus the two sections the route's resolvers read. The caps are the template's NON-BINDING
+#: pair — nothing here exercises a split.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -98,13 +67,11 @@ _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
 _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
-#: run5's own minted narration cadence. Named, not invented: the defect is about what happens
-#: BEFORE this many training steps, so every drive below that is "large log_interval" uses
-#: exactly the number the production config ships.
+#: run5's own minted narration cadence, named rather than invented: the defect is about what
+#: happens BEFORE this many training steps.
 _RUN5_LOG_INTERVAL = 1000
 
 
-# ── fakes (the harness shape tests/train/test_coordinator_gates.py established) ──────────
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -180,9 +147,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire
+        # for real, so a hand-built payload would be a second wire format to disagree with.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -199,11 +165,9 @@ class _Sink:
 
 
 def _config(**overrides) -> StepCoordinatorConfig:
-    """DERIVED from the production builder (the WPMINT K-A/K-B precedent).
-
-    Unlike the sibling harnesses this one does NOT mirror `gate_interval` onto `log_interval`:
-    every drive here states BOTH knobs, because stating them apart is the whole subject.
-    """
+    """DERIVED from the production builder. Unlike the sibling harnesses this one does NOT
+    mirror `gate_interval` onto `log_interval`: every drive states BOTH knobs, because stating
+    them apart is the whole subject."""
     return dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
@@ -243,17 +207,11 @@ def _checks(h, gate: str = "draw_rate_collapse") -> int:
     return 0 if not summaries else summaries[-1]["gates"][gate]["checks"]
 
 
-# ══ P1 — gate visibility BELOW the narration boundary (the defect's direct inverse) ═════
 def test_p1_gates_are_visible_and_advancing_far_below_the_log_interval_boundary() -> None:
-    """P1 — at run5's `log_interval=1000` with `gate_interval=1`, the gates run and publish on
-    every training step while ZERO `training_step` events have been emitted.
-
-    At HEAD this was impossible by construction: both lived behind the `log_interval` guard,
-    so twenty training steps produced zero `monitor_gates` events and zero gate checks.
-
-    MUTATION THAT REDS IT: move `_run_hard_abort_gates` / `_emit_monitor_gates` back inside
-    `_run_log_interval` (the HEAD shape) — `monitor_gates` goes empty and `checks` stays 0.
-    """
+    """P1 — at `log_interval=1000` with `gate_interval=1` the gates run and publish on every
+    training step while ZERO `training_step` events have been emitted; at HEAD twenty steps
+    produced zero `monitor_gates` events. Killer: move the gates and the summary back inside
+    `_run_log_interval`."""
     h = _coordinator(config=_config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=1))
     _drive(h, outer=5)
 
@@ -283,17 +241,12 @@ def test_p1_gates_are_visible_and_advancing_far_below_the_log_interval_boundary(
     )
 
 
-# ══ P2 — the abort fires on exactly the Nth OBSERVATION under the new cadence ═══════════
 def test_p2_the_draw_rate_abort_fires_on_exactly_the_nth_gate_interval_observation() -> None:
-    """P2 — armed `consec=3`, `gate_interval=2`, `log_interval=1000`: observations land at
-    training steps 2/4/6 and the abort fires at step 6, on the THIRD one and not before.
-
-    The observation COUNT is asserted, not merely the fire: a gate that fired for the right
-    reason at the wrong cadence, or one that sampled twice per boundary, would both satisfy a
-    fire-only assertion. The threshold/consec/min_step are chosen HERE and not read from a
-    config — R242 moved no armed value, and this pin must not become a second authority over
-    the ones the operator pre-registers.
-    """
+    """P2 — armed `consec=3`, `gate_interval=2`, `log_interval=1000`: observations land at steps
+    2/4/6 and the abort fires at step 6, on the THIRD and not before. The observation COUNT is
+    asserted, not merely the fire, because a gate firing at the wrong cadence satisfies a
+    fire-only assertion. The terms are chosen here, so this pin is no second authority over the
+    operator's pre-registered values."""
     pool = _Pool(draw_counts=(90, 100))
     cfg = _config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=2,
                   draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
@@ -311,8 +264,7 @@ def test_p2_the_draw_rate_abort_fires_on_exactly_the_nth_gate_interval_observati
         f"the 3rd observation lands at step 6 (boundaries 2/4/6), got {aborts[0]['step']}"
     )
     # The burst that fired runs to its end (`running=False` ends the OUTER loop, not the
-    # in-flight burst — pre-existing, and why step 8 records a `hard_abort_after_stop`), so
-    # the boundary list runs 2/4/6/8 and the fire is read at ITS OWN summary.
+    # in-flight burst), so the boundary list runs 2/4/6/8 and step 8 records an after-stop.
     boundaries = [e["step"] for e in h.sink.named("monitor_gates")]
     assert boundaries == [2, 4, 6, 8], f"one summary per gate_interval boundary; got {boundaries}"
     at_fire = next(e for e in h.sink.named("monitor_gates") if e["step"] == 6)
@@ -324,18 +276,11 @@ def test_p2_the_draw_rate_abort_fires_on_exactly_the_nth_gate_interval_observati
     assert at_fire["gates"]["draw_rate_collapse"]["fires"] == 1
 
 
-# ══ P3 — the check count follows gate_interval and NOT log_interval ═════════════════════
 def test_p3_the_gate_check_count_follows_gate_interval_and_not_log_interval() -> None:
-    """P3 — the anti-regression pin. With `gate_interval=4` and `log_interval=5` over 20
-    training steps the gate is checked `20 // 4 = 5` times, which is NOT `20 // 5 = 4`.
-
-    The two knobs are deliberately given values that DISAGREE on this drive, because equal
-    values (the shipped posture) cannot distinguish the fixed code from the defect.
-
-    MUTATION RUN, AND ITS RESULT: replacing `cfg.gate_interval` with `cfg.log_interval` in
-    `_run_gate_interval`'s guard makes the count 4 and the boundaries [5, 10, 15, 20] — this
-    test fails on both assertions.
-    """
+    """P3 — with `gate_interval=4` and `log_interval=5` over 20 steps the gate is checked
+    `20 // 4 = 5` times, not `20 // 5 = 4`; the knobs deliberately DISAGREE, because equal
+    values cannot distinguish the fixed code from the defect. Killer: read `cfg.log_interval`
+    in `_run_gate_interval`'s guard."""
     h = _coordinator(config=_config(log_interval=5, gate_interval=4))
     _drive(h, outer=5)
 
@@ -353,16 +298,10 @@ def test_p3_the_gate_check_count_follows_gate_interval_and_not_log_interval() ->
     )
 
 
-# ══ P4 — narration stays log_interval-gated (the half of R210 that survives) ════════════
 def test_p4_narration_follows_log_interval_and_not_gate_interval() -> None:
-    """P4 — with `log_interval=5` and `gate_interval=1` over 20 training steps there are 4
-    `training_step` events, not 20. R242 supersedes R210 only in ARMING scope; "training_step
-    alerting stays gated" is untouched, and this is the pin that keeps the split from
-    over-reaching into narration.
-
-    MUTATION THAT REDS IT: drop the `log_interval` guard from `_run_log_interval` (or point it
-    at `gate_interval`) — the count becomes 20.
-    """
+    """P4 — with `log_interval=5` and `gate_interval=1` over 20 steps there are 4
+    `training_step` events, not 20: the split must not over-reach into narration. Killer: drop
+    the `log_interval` guard, or point it at `gate_interval`."""
     h = _coordinator(config=_config(log_interval=5, gate_interval=1))
     _drive(h, outer=5)
 
@@ -374,15 +313,9 @@ def test_p4_narration_follows_log_interval_and_not_gate_interval() -> None:
     )
 
 
-# ══ P5 — R210 intact: iteration_complete is independent of BOTH knobs ═══════════════════
 def test_p5_iteration_complete_still_emits_per_coordinator_step() -> None:
-    """P5 — `iteration_complete` emits once per coordinator step (per burst) at
-    `log_interval=1000` AND `gate_interval=1000`, i.e. with both boundaries un-crossed. R210's
-    decoupling is not disturbed by R242's.
-
-    MUTATION THAT REDS IT: re-couple `_emit_iteration_complete` to either boundary — the
-    count drops from 5 to 0 on this drive.
-    """
+    """P5 — `iteration_complete` emits once per coordinator step with BOTH boundaries
+    un-crossed. Killer: re-couple `_emit_iteration_complete` to either boundary."""
     h = _coordinator(config=_config(log_interval=_RUN5_LOG_INTERVAL,
                                     gate_interval=_RUN5_LOG_INTERVAL))
     _drive(h, outer=5)
@@ -396,18 +329,11 @@ def test_p5_iteration_complete_still_emits_per_coordinator_step() -> None:
     )
 
 
-# ══ P6 — no code-side default: a config MISSING the key fails to load ══════════════════
 def test_p6_a_config_missing_monitor_gate_interval_fails_to_load(tmp_path) -> None:
-    """P6 — R1/R242: the ARMING cadence has NO default anywhere, so a config that omits it is
-    a LOAD FAILURE, not a run that quietly inherits a stride.
-
-    The subject is a MISSING REQUIRED key, not `extra="forbid"`: the failure mode R242 guards
-    against is a config saying nothing about arming and the code choosing for it. Driven
-    against a real minted config with exactly that one key removed, through the real loader.
-
-    MUTATION THAT REDS IT: give `MonitorSchemaConfig.gate_interval` any default at all (or
-    let `compose_run` fall back to `log_interval`) — the load succeeds.
-    """
+    """P6 — the ARMING cadence has NO default anywhere, so a config that omits it is a LOAD
+    FAILURE rather than a run inheriting a stride. The subject is a MISSING REQUIRED key, driven
+    against a real minted config through the real loader. Killer: give the schema field any
+    default, or fall back to `log_interval`."""
     payload = yaml.safe_load(_DEV_CONFIG_PATH.read_text(encoding="utf-8"))
     assert payload["monitor"].pop("gate_interval") == _GATE_INTERVAL, (
         "the minted config must carry the key for its removal to mean anything"
@@ -420,29 +346,12 @@ def test_p6_a_config_missing_monitor_gate_interval_fails_to_load(tmp_path) -> No
 
 
 def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interval() -> None:
-    """P6 companion — the dispatcher rider, asserted rather than described: R242 authored a
-    MECHANISM and moved NO armed value, and the way that is true is that every committed
-    config mints `monitor.gate_interval == train.log_interval`.
+    """P6 companion — every committed config mints `monitor.gate_interval == train.log_interval`,
+    which is how "this moved no armed value" is true rather than said.
 
-    This is a PREREG BLANK wired to current effective behaviour. When the operator picks a
-    real gate stride at mint prereg this test is expected to be RE-POINTED by that ruling —
-    it is not a law that the two must agree forever, it is the record that they agree TODAY
-    and therefore that this bundle changed no cadence. Deleting it instead of re-pointing it
-    would erase the only in-repo evidence for that claim.
-
-    F-P2B (R259 shakedown): the seventh committed config, `run6.yaml`, mints
-    BOTH knobs to 100 — the equal-mint held only because MAIN ratified the ninth delta
-    `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
-    first mint carried gate_interval alone and this very assertion refused it. The count
-    below ratchets 6 -> 7 so a further config cannot slip past the equality sweep unseen —
-    and 7 -> 8 at run6's mint (R338), which mints NEITHER knob: `RUN6_MINT_PREREG.md` proposes
-    no cadence row, so run6 carries the dev template's equal pair and the sweep still bites.
-    R346(f) cut `configs/` to run6, one smoke profile and dev_example, so the count is 3 — a
-    DOWN-ratchet against a deletion, which keeps the "cannot slip past unseen" property in
-    both directions.
-    Enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7 and 12
-    consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape (legal per
-    ADJ-13 F-1) could escape (N4, F-P2B/N4).
+    A PREREG BLANK wired to current behaviour: when the operator picks a real gate stride this
+    is expected to be RE-POINTED, not deleted. The count ratchets in BOTH directions so no
+    config slips past the sweep, and enumeration goes through the ONE discovery authority.
     """
     configs = discover_configs(_REPO / "configs")
     assert len(configs) == 3, f"expected the three committed configs, found {configs}"
@@ -455,22 +364,13 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
         )
 
 
-# ══ P7 — the BUILDER carries no default for the arming cadence (R1 / MF-2 Attack B) ═════
 def test_p7_the_builder_takes_gate_interval_as_a_required_keyword_only_parameter() -> None:
     """P7 — `_step_coordinator_config`'s `gate_interval` parameter must have NO default.
 
-    P6 pins the SCHEMA half (a config that omits the key fails to load). This is the BUILDER
-    half, and they are different authorities: a `gate_interval: int = 1000` on this signature
-    leaves every schema assertion, every `dataclasses.fields()` census and P6 itself GREEN,
-    while any caller that forgets the argument silently inherits an ARMING cadence. That is
-    exactly the migration MF-2 Attack B describes — the literal does not die, it moves from
-    the builder BODY to the builder SIGNATURE — and `run.py`'s own docstring commits to it
-    ("a required keyword-only parameter with no default").
-
-    MUTATION RUN, AND ITS RESULT: the RED-TEAM gave the parameter a default and measured
-    1267 collected, 0 failures over the full tier. Re-run with this pin in place it reds
-    exactly this test. The schema-default case is caught four times over; the builder was not
-    caught once.
+    P6 pins the SCHEMA half; this is the BUILDER half, a different authority. A default on this
+    signature leaves every schema assertion and P6 itself GREEN while a caller that forgets the
+    argument silently inherits an ARMING cadence — the literal moves from the body to the
+    signature. Killer, measured: a default here reds only this test in the full tier.
     """
     param = inspect.signature(_step_coordinator_config).parameters.get("gate_interval")
     assert param is not None, (
@@ -486,32 +386,18 @@ def test_p7_the_builder_takes_gate_interval_as_a_required_keyword_only_parameter
     assert param.kind is inspect.Parameter.KEYWORD_ONLY
 
 
-# ══ P8 — a fire on a NON-FINAL burst iteration survives into StepOutcome (the OR-fold) ══
 def test_p8_a_fire_on_a_non_final_burst_iteration_survives_into_the_step_outcome() -> None:
     """P8 — `hard_abort_fired = self._run_gate_interval(cfg) or hard_abort_fired`: the fold,
     not a plain assignment.
 
-    The drive fires at training step 6, the SECOND of a four-step burst (steps 5-8). The burst
-    runs to its end — `running=False` ends the OUTER loop, not the in-flight burst — so step 8
-    crosses another gate boundary and `_fire_hard_abort` returns False there (it records a
-    `hard_abort_after_stop` instead). Under a plain assignment that False OVERWRITES the True
-    from step 6 and the `StepOutcome` reports a clean burst on the iteration that killed the
-    run.
+    The drive fires at step 6, the SECOND of a four-step burst; the burst runs to its end, so
+    step 8 crosses another boundary returning False, and a plain assignment would report a
+    clean burst on the iteration that killed the run.
 
-    STATED HONESTLY, because overstating a pin is worse than not having it: `StepOutcome`'s
-    `hard_abort_fired` has NO PRODUCTION CONSUMER TODAY. Measured, not assumed: repo-wide in
-    `src/` the name appears exactly twice — its `StepOutcome` field declaration and the
-    `step()` body that sets it — and `train/loop.py`'s driver calls `coordinator.step()` and
-    discards the return. The run's real stop signal is `ShutdownState.running` /
-    `abort_rule`, which the fire writes directly, so it is not lost. This pin
-    defends the DECLARED contract of the outcome record and any future consumer of it, NOT a
-    live failure. It is still worth pinning: the field is public, it is the only per-iteration
-    record of the decision, and a silently-lossy fold is the kind of thing a future consumer
-    inherits rather than discovers.
-
-    MUTATION RUN, AND ITS RESULT: the RED-TEAM replaced the fold with `hard_abort_fired =
-    self._run_gate_interval(cfg)` and measured 1267 collected, 0 failures over the full tier.
-    Re-run with this pin in place it reds exactly this test, on the last assertion.
+    STATED HONESTLY: this field has NO production consumer today — measured, the name appears
+    twice in `src/` and the driver discards the return — so this defends the DECLARED contract,
+    not a live failure. Killer, measured: a plain assignment reds only this test's last
+    assertion.
     """
     pool = _Pool(draw_counts=(90, 100))
     cfg = _config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=2,
@@ -548,26 +434,15 @@ def test_p8_a_fire_on_a_non_final_burst_iteration_survives_into_the_step_outcome
     )
 
 
-# ══ P9 — the gate boundary runs with NO loss_info: the VALUE, not just the signature ════
 def test_p9_the_gate_boundary_gates_and_emits_with_no_loss_info_at_all() -> None:
-    """P9 — `_run_gate_interval` must gate and publish when `_last_loss_info` is `None` and
-    when it is `{}`.
+    """P9 — `_run_gate_interval` must gate and publish when `_last_loss_info` is `None` and when
+    it is `{}`.
 
-    P1 pins that `_run_gate_interval` takes no `loss_info` PARAMETER. That is the signature,
-    and a signature is not the behaviour: adding `if not self._last_loss_info: return False`
-    to the method body re-couples arming to the trainer having produced a loss dict without
-    touching the signature at all. This drives the VALUE — a coordinator that has never run a
-    training step, so `_last_loss_info` is genuinely `None`.
-
-    STATED HONESTLY: inside the burst this mutation is NEAR-INERT, because D2 populates
-    `_last_loss_info` before `_run_gate_interval` is reached on every iteration. What it
-    breaks is the DECLARED decoupling — "the gates' producer is the POOL, not the trainer" —
-    and any path that reaches the boundary before or without a training step. The pin defends
-    the contract, not a live failure, and says so.
-
-    MUTATION RUN, AND ITS RESULT: the RED-TEAM put `if not self._last_loss_info: return
-    False` at the top of `_run_gate_interval` and measured 1267 collected, 0 failures over the
-    full tier. Re-run with this pin in place it reds exactly this test.
+    P1 pins that the method takes no `loss_info` PARAMETER, but a signature is not the
+    behaviour: an early return on a falsy `_last_loss_info` re-couples arming to the trainer
+    without touching it. STATED HONESTLY, that mutation is NEAR-INERT inside the burst, where
+    D2 populates the dict first; what it breaks is the DECLARED decoupling — the gates' producer
+    is the POOL. Killer, measured: that early return reds only this test.
     """
     h = _coordinator(config=_config(log_interval=_RUN5_LOG_INTERVAL, gate_interval=1))
     assert h.coord._last_loss_info is None, (
@@ -582,9 +457,8 @@ def test_p9_the_gate_boundary_gates_and_emits_with_no_loss_info_at_all() -> None
     )
     assert _checks(h) == 1, "and the gate must have been CHECKED, not merely emitted about"
 
-    # The falsy-but-present case takes the same arm as `None` under `if not ...`, so it is
-    # driven too: the mutation is spelled `not`, and `{}` is what a trainer that returned an
-    # empty loss dict would leave behind.
+    # The falsy-but-present case takes the same arm as `None` under `if not ...`, so `{}` is
+    # driven too — that is what a trainer returning an empty loss dict leaves behind.
     h.coord._last_loss_info = {}
     h.coord._train_step = 2
     assert h.coord._run_gate_interval(h.config) is False
@@ -592,14 +466,10 @@ def test_p9_the_gate_boundary_gates_and_emits_with_no_loss_info_at_all() -> None
     assert _checks(h) == 2
 
 
-# ══ P10 — a SKIPPED boundary neither advances nor RESETS consec (the true semantic) ═════
 class _BlackoutPool(_Pool):
-    """A pool whose `pooled_draw_counts` is SCRIPTED per call: one call per gate boundary.
-
-    `(0, 0)` is below any `N_pool_min`, so `pooled_draw_rate` returns `None` = NO OBSERVATION
-    (R92) and `_sample` skip-counts it. That is the production shape of an evidence blackout —
-    the early-run regime where too few games have completed — not a synthetic hook.
-    """
+    """A pool whose `pooled_draw_counts` is SCRIPTED per call, one call per gate boundary.
+    `(0, 0)` is below any `N_pool_min`, so the rate is `None` = NO OBSERVATION and `_sample`
+    skip-counts it — the production shape of an early-run evidence blackout."""
 
     def __init__(self, script: list[tuple[int, int]]) -> None:
         super().__init__()
@@ -613,33 +483,19 @@ class _BlackoutPool(_Pool):
 
 
 def test_p10_a_skipped_boundary_neither_advances_nor_resets_consec() -> None:
-    """P10 — `consec` counts consecutive OBSERVATIONS, and observations are only ATTEMPTED
-    once per boundary: a boundary that observes nothing neither advances NOR RESETS the
-    counter, so the step span a fire covers is a LOWER BOUND and never a product.
+    """P10 — `consec` counts consecutive OBSERVATIONS, only ATTEMPTED once per boundary: a
+    boundary that observes nothing neither advances NOR RESETS the counter, so the step span a
+    fire covers is a LOWER BOUND and never a product.
 
-    THE FALSE CLAIM THIS PINS AGAINST, verbatim from the bundle that shipped it
-    (`step.py::_sample`): "'consecutive OBSERVATIONS' below means consecutive gate-interval
-    boundaries, and a rule's `consec` is denominated in them." Measured FALSE by this drive.
-    The same claim reached the MINT RECORD through `config/armed_aborts.py`'s
-    `draw_rate_collapse` NOTE ("at run5's gate_interval 1000 the three samples still span 2000
-    steps", "holds 25 samples by step 25000") and through `DrawRateAbortConfig.consec`'s own
-    docstring — both of which hold ONLY if every boundary yields an observation, and the
-    early-run regime where `N_pool_min` is unmet is precisely what R242 exists to instrument.
-    `monitor/rules.py::check_draw_rate_collapse` had the semantic right all along
-    ("`consec` counts consecutive OBSERVATIONS here, not consecutive gate runs"); the three
-    texts are corrected to agree with it, and this is the drive that keeps them there.
+    THE FALSE CLAIM THIS PINS AGAINST, shipped in three places at once: that "consecutive
+    OBSERVATIONS" means consecutive boundaries. That holds only if every boundary yields an
+    observation, and the early-run regime where `N_pool_min` is unmet is exactly what this
+    cadence split exists to instrument.
 
-    THE DRIVE: `gate_interval=1`, `consec=3`, so a boundary lands on every training step. An
-    observation at step 1, an EIGHT-boundary blackout over steps 2-9, then observations at
-    steps 10 and 11. The abort fires at step 11 on `consec=3` — three observations spanning
-    ELEVEN steps, with eight unobserved boundaries between the first and the second. Under the
-    false semantic the fire would have needed three consecutive boundaries and could not have
-    happened at all.
-
-    MUTATION RUN, AND ITS RESULT: making a skip RESET the counter (`history.clear()` in both
-    of `_sample`'s skip arms) — i.e. implementing the false semantic the bundle described —
-    leaves the abort UNFIRED on this drive (`assert (0 == 1)`, zero `hard_abort` events), and
-    it reds nothing else in the five suites that touch the split.
+    THE DRIVE: an observation at step 1, an EIGHT-boundary blackout over steps 2-9, then
+    observations at 10 and 11; the abort fires at step 11 on three observations spanning eleven
+    steps. Killer, measured: making a skip RESET the counter leaves the abort UNFIRED here and
+    reds nothing else in the five suites that touch the split.
     """
     script = [(9, 10)] + [(0, 0)] * 8 + [(9, 10), (9, 10)]
     pool = _BlackoutPool(script)

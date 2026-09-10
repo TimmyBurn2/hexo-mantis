@@ -39,8 +39,6 @@ pub use state::{
 pub use moves::WIN_LENGTH;
 pub use moves::{hex_ball_cells, DEFAULT_CLUSTER_THRESHOLD, DEFAULT_LEGAL_MOVE_RADIUS};
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,7 +106,6 @@ mod tests {
         assert_eq!(b.legal_move_count(), 25);
         b.apply_move(0, 0).unwrap();
         // The default-radius hex ball around (0,0), minus the one occupied cell.
-        // AUDIT-1 F-49: this read `90` with the formula only in the comment.
         assert_eq!(b.legal_move_count(), hex_ball_cells(DEFAULT_LEGAL_MOVE_RADIUS) - 1);
     }
 
@@ -130,11 +127,16 @@ mod tests {
         // P1: (0,0)…(5,0). P2 fillers on different rows.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
-        b.apply_move(-9, 5).unwrap(); b.apply_move(-9, 6).unwrap();
-        b.apply_move(1, 0).unwrap(); b.apply_move(2, 0).unwrap();
-        b.apply_move(-9, 7).unwrap(); b.apply_move(-9, 8).unwrap();
-        b.apply_move(3, 0).unwrap(); b.apply_move(4, 0).unwrap();
-        b.apply_move(-9, -5).unwrap(); b.apply_move(-9, -6).unwrap();
+        b.apply_move(-9, 5).unwrap();
+        b.apply_move(-9, 6).unwrap();
+        b.apply_move(1, 0).unwrap();
+        b.apply_move(2, 0).unwrap();
+        b.apply_move(-9, 7).unwrap();
+        b.apply_move(-9, 8).unwrap();
+        b.apply_move(3, 0).unwrap();
+        b.apply_move(4, 0).unwrap();
+        b.apply_move(-9, -5).unwrap();
+        b.apply_move(-9, -6).unwrap();
         b.apply_move(5, 0).unwrap();
         assert!(b.player_wins(Player::One), "P1 should win along E axis");
         assert!(!b.player_wins(Player::Two), "P2 fillers must not win");
@@ -145,11 +147,16 @@ mod tests {
         // NE axis: (0,0),(0,1),(0,2),(0,3),(0,4),(0,5)
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
-        b.apply_move(-1, 0).unwrap(); b.apply_move(-2, 0).unwrap();
-        b.apply_move(0, 1).unwrap(); b.apply_move(0, 2).unwrap();
-        b.apply_move(-3, 0).unwrap(); b.apply_move(-4, 0).unwrap();
-        b.apply_move(0, 3).unwrap(); b.apply_move(0, 4).unwrap();
-        b.apply_move(-5, 0).unwrap(); b.apply_move(-6, 0).unwrap();
+        b.apply_move(-1, 0).unwrap();
+        b.apply_move(-2, 0).unwrap();
+        b.apply_move(0, 1).unwrap();
+        b.apply_move(0, 2).unwrap();
+        b.apply_move(-3, 0).unwrap();
+        b.apply_move(-4, 0).unwrap();
+        b.apply_move(0, 3).unwrap();
+        b.apply_move(0, 4).unwrap();
+        b.apply_move(-5, 0).unwrap();
+        b.apply_move(-6, 0).unwrap();
         b.apply_move(0, 5).unwrap();
         assert!(b.player_wins(Player::One), "P1 should win along NE axis");
     }
@@ -159,11 +166,16 @@ mod tests {
         // NW axis: (0,0),(-1,1),(-2,2),(-3,3),(-4,4),(-5,5)
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
-        b.apply_move(1, 0).unwrap(); b.apply_move(2, 0).unwrap();
-        b.apply_move(-1, 1).unwrap(); b.apply_move(-2, 2).unwrap();
-        b.apply_move(3, 0).unwrap(); b.apply_move(4, 0).unwrap();
-        b.apply_move(-3, 3).unwrap(); b.apply_move(-4, 4).unwrap();
-        b.apply_move(5, 0).unwrap(); b.apply_move(6, 0).unwrap();
+        b.apply_move(1, 0).unwrap();
+        b.apply_move(2, 0).unwrap();
+        b.apply_move(-1, 1).unwrap();
+        b.apply_move(-2, 2).unwrap();
+        b.apply_move(3, 0).unwrap();
+        b.apply_move(4, 0).unwrap();
+        b.apply_move(-3, 3).unwrap();
+        b.apply_move(-4, 4).unwrap();
+        b.apply_move(5, 0).unwrap();
+        b.apply_move(6, 0).unwrap();
         b.apply_move(-5, 5).unwrap();
         assert!(b.player_wins(Player::One), "P1 should win along NW axis");
     }
@@ -172,10 +184,14 @@ mod tests {
     fn five_in_row_is_not_win() {
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
-        b.apply_move(-1, -1).unwrap(); b.apply_move(-2, -2).unwrap();
-        b.apply_move(1, 0).unwrap(); b.apply_move(2, 0).unwrap();
-        b.apply_move(-3, -3).unwrap(); b.apply_move(-4, -4).unwrap();
-        b.apply_move(3, 0).unwrap(); b.apply_move(4, 0).unwrap();
+        b.apply_move(-1, -1).unwrap();
+        b.apply_move(-2, -2).unwrap();
+        b.apply_move(1, 0).unwrap();
+        b.apply_move(2, 0).unwrap();
+        b.apply_move(-3, -3).unwrap();
+        b.apply_move(-4, -4).unwrap();
+        b.apply_move(3, 0).unwrap();
+        b.apply_move(4, 0).unwrap();
         // P1 has (0,0),(1,0),(2,0),(3,0),(4,0) = 5 in a row — not a win
         assert!(!b.check_win(), "5 in a row should not be a win");
     }
@@ -185,11 +201,16 @@ mod tests {
         // P2 builds 6 along E: (0,-1)..(5,-1).  P1 fillers at r=3..6.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap(); // P1 single first move
-        b.apply_move(0, -1).unwrap(); b.apply_move(1, -1).unwrap();
-        b.apply_move(0, 3).unwrap(); b.apply_move(0, 4).unwrap();
-        b.apply_move(2, -1).unwrap(); b.apply_move(3, -1).unwrap();
-        b.apply_move(0, 5).unwrap(); b.apply_move(0, 6).unwrap();
-        b.apply_move(4, -1).unwrap(); b.apply_move(5, -1).unwrap();
+        b.apply_move(0, -1).unwrap();
+        b.apply_move(1, -1).unwrap();
+        b.apply_move(0, 3).unwrap();
+        b.apply_move(0, 4).unwrap();
+        b.apply_move(2, -1).unwrap();
+        b.apply_move(3, -1).unwrap();
+        b.apply_move(0, 5).unwrap();
+        b.apply_move(0, 6).unwrap();
+        b.apply_move(4, -1).unwrap();
+        b.apply_move(5, -1).unwrap();
         assert!(b.player_wins(Player::Two), "P2 should win along E axis");
         assert!(!b.player_wins(Player::One), "P1 fillers must not win");
     }
@@ -200,34 +221,45 @@ mod tests {
         // P1 fillers at q=-1,-2,-3,-4 (E axis, only 4 stones).
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap(); // P1 single first move
-        b.apply_move(8, -2).unwrap(); b.apply_move(8, -1).unwrap();
-        b.apply_move(-1, 0).unwrap(); b.apply_move(-2, 0).unwrap();
-        b.apply_move(8, 0).unwrap(); b.apply_move(8, 1).unwrap();
-        b.apply_move(-3, 0).unwrap(); b.apply_move(-4, 0).unwrap();
-        b.apply_move(8, 2).unwrap(); b.apply_move(8, 3).unwrap();
-        assert!(b.player_wins(Player::Two), "P2 wins near right window edge at q=8");
-        assert!(!b.player_wins(Player::One), "P1 fillers (4 in a row) must not win");
+        b.apply_move(8, -2).unwrap();
+        b.apply_move(8, -1).unwrap();
+        b.apply_move(-1, 0).unwrap();
+        b.apply_move(-2, 0).unwrap();
+        b.apply_move(8, 0).unwrap();
+        b.apply_move(8, 1).unwrap();
+        b.apply_move(-3, 0).unwrap();
+        b.apply_move(-4, 0).unwrap();
+        b.apply_move(8, 2).unwrap();
+        b.apply_move(8, 3).unwrap();
+        assert!(
+            b.player_wins(Player::Two),
+            "P2 wins near right window edge at q=8"
+        );
+        assert!(
+            !b.player_wins(Player::One),
+            "P1 fillers (4 in a row) must not win"
+        );
     }
 
-    // ── Sliding-window tests ───────────────────────────────────────────────────
-
     #[test]
-    // Tests internal single-window helpers (window_center / in_window) used by
-    // search move generation.
+    // Covers the internal window_center / in_window helpers used by move generation.
     fn single_window_center_slides_with_bbox() {
         // After P1@(0,0) and P2@(8,0) the window must slide right.
         // Both stones must remain visible; the left side must also be accessible.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap(); // P1
         b.apply_move(8, 0).unwrap(); // P2 — forces window right
-        // Bounding box: [0,8]×[0,0]; centre = (4,0)
+                                     // Bounding box: [0,8]×[0,0]; centre = (4,0)
         assert_eq!(b.window_center(), (4, 0));
         // (0,0) and (8,0) must both be within the 19×19 window
         assert!(b.in_window(0, 0), "left stone must remain in window");
         assert!(b.in_window(8, 0), "right stone must remain in window");
         // Left edge of window is now 4-9 = -5; right edge is 4+9 = 13
         assert!(b.in_window(-5, 0), "left window edge must be reachable");
-        assert!(!b.in_window(-6, 0), "one beyond left edge must be out-of-window");
+        assert!(
+            !b.in_window(-6, 0),
+            "one beyond left edge must be out-of-window"
+        );
     }
 
     #[test]
@@ -237,13 +269,15 @@ mod tests {
         b.apply_move(0, 0).unwrap();
         let r = DEFAULT_LEGAL_MOVE_RADIUS;
         assert_eq!(b.legal_move_count(), hex_ball_cells(r) - 1);
-        // A second stone at hex-distance exactly r: the union of two balls, minus their
-        // overlap, minus the two occupied cells. The overlap of two radius-r balls whose
-        // centres are r apart is the r-lens; at r = 5 the whole expression is 91+91-36-2 = 144.
-        // Kept as a LITERAL for the second stone deliberately: the lens count is not a
-        // one-line formula, and deriving it here would re-implement the very set under test.
+        // Two balls of radius r whose centres are r apart, minus the r-lens overlap, minus the
+        // two occupied cells: at r = 5 that is 91+91-36-2 = 144. Kept a literal because
+        // deriving the lens count here would re-implement the set under test.
         b.apply_move(r, 0).unwrap();
-        assert_eq!(b.legal_move_count(), 144, "r = {r}: two balls minus the r-lens minus 2");
+        assert_eq!(
+            b.legal_move_count(),
+            144,
+            "r = {r}: two balls minus the r-lens minus 2"
+        );
     }
 
     #[test]
@@ -252,37 +286,48 @@ mod tests {
         // every cell at hex_distance ≥ 6 must NOT be legal.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
-        let legal: std::collections::HashSet<(i32, i32)> =
-            b.legal_moves().into_iter().collect();
+        let legal: std::collections::HashSet<(i32, i32)> = b.legal_moves().into_iter().collect();
 
         // Every legal cell is within hex_distance 5 of (0,0).
         for &(q, r) in &legal {
-            assert!(super::state::hex_distance(0, 0, q, r) <= 5,
-                "legal cell ({q},{r}) has hex_distance > 5 from (0,0)");
+            assert!(
+                super::state::hex_distance(0, 0, q, r) <= 5,
+                "legal cell ({q},{r}) has hex_distance > 5 from (0,0)"
+            );
         }
 
         // Spot checks on the boundary along the E axis.
         assert!(legal.contains(&(5, 0)), "(5,0) at distance 5 must be legal");
-        assert!(!legal.contains(&(6, 0)), "(6,0) at distance 6 must NOT be legal");
-        assert!(!legal.contains(&(8, 0)), "(8,0) (old radius) must NOT be legal");
+        assert!(
+            !legal.contains(&(6, 0)),
+            "(6,0) at distance 6 must NOT be legal"
+        );
+        assert!(
+            !legal.contains(&(8, 0)),
+            "(8,0) (old radius) must NOT be legal"
+        );
 
         // And along the NE axis.
         assert!(legal.contains(&(0, 5)), "(0,5) at distance 5 must be legal");
-        assert!(!legal.contains(&(0, 6)), "(0,6) at distance 6 must NOT be legal");
+        assert!(
+            !legal.contains(&(0, 6)),
+            "(0,6) at distance 6 must NOT be legal"
+        );
 
-        // Cluster-forming radius: a second stone at exactly distance 5 still
-        // produces a single connected cluster (the threshold boundary is
-        // inclusive).
+        // The cluster threshold boundary is inclusive: two stones exactly 5 apart stay one
+        // cluster.
         b.apply_move(5, 0).unwrap();
         let clusters = b.get_clusters();
-        assert_eq!(clusters.len(), 1, "stones 5 apart must remain in one cluster");
+        assert_eq!(
+            clusters.len(),
+            1,
+            "stones 5 apart must remain in one cluster"
+        );
     }
 
     #[test]
     fn set_legal_move_radius_replaces_default() {
-        // Per-Board radius change should change the legal_moves_set and
-        // remain reproducible across calls.  Defaults unchanged (5);
-        // changes honoured at 4 and 6.
+        // A per-Board radius change must move legal_moves_set and stay reproducible.
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap();
 
@@ -296,21 +341,25 @@ mod tests {
         // Lower to 4: cell at distance 5 disappears from legal set.
         b.set_legal_move_radius(4);
         assert_eq!(b.legal_move_radius(), 4);
-        let legal_r4: std::collections::HashSet<(i32, i32)> =
-            b.legal_moves().into_iter().collect();
+        let legal_r4: std::collections::HashSet<(i32, i32)> = b.legal_moves().into_iter().collect();
         assert!(legal_r4.contains(&(4, 0)));
-        assert!(!legal_r4.contains(&(5, 0)),
-                "cell at distance 5 must drop out at radius 4");
+        assert!(
+            !legal_r4.contains(&(5, 0)),
+            "cell at distance 5 must drop out at radius 4"
+        );
 
         // Raise to 6: cell at distance 6 becomes legal.
         b.set_legal_move_radius(6);
         assert_eq!(b.legal_move_radius(), 6);
-        let legal_r6: std::collections::HashSet<(i32, i32)> =
-            b.legal_moves().into_iter().collect();
-        assert!(legal_r6.contains(&(6, 0)),
-                "cell at distance 6 must enter at radius 6");
-        assert!(!legal_r6.contains(&(7, 0)),
-                "cell at distance 7 must remain illegal at radius 6");
+        let legal_r6: std::collections::HashSet<(i32, i32)> = b.legal_moves().into_iter().collect();
+        assert!(
+            legal_r6.contains(&(6, 0)),
+            "cell at distance 6 must enter at radius 6"
+        );
+        assert!(
+            !legal_r6.contains(&(7, 0)),
+            "cell at distance 7 must remain illegal at radius 6"
+        );
 
         // Clone must preserve the override.
         let cloned = b.clone();
@@ -322,11 +371,8 @@ mod tests {
 
     #[test]
     fn cluster_threshold_splits_at_distance_six() {
-        // Two isolated colonies at axial distance 6 must form TWO clusters
-        // under the default threshold of 5 (under the historical threshold of
-        // 8 they would have been one).  We seed the colonies via direct
-        // `cells` insertion to bypass the legal-move radius cap (R=5 would
-        // block placement at distance 6 from any stone).
+        // Two colonies at axial distance 6 must split under the default threshold of 5. Seeded
+        // by direct `cells` insertion because the radius cap blocks placement that far out.
         let mut b = Board::new();
         b.cells.insert((0, 0), state::Cell::P1);
         b.cells.insert((0, 1), state::Cell::P1);
@@ -340,7 +386,6 @@ mod tests {
             2,
             "stones at axial distance 6 must split into 2 clusters under threshold=5 (was 1 under threshold=8)"
         );
-        // Sanity: each colony has exactly the 2 stones we seeded.
         for c in &clusters {
             assert_eq!(c.len(), 2, "each colony has 2 stones");
         }
@@ -380,7 +425,9 @@ mod tests {
             let idx = (next_u64(&mut seed) as usize) % legal.len();
             let (q, r) = legal[idx];
 
-            let diff = board.apply_move_tracked(q, r).expect("move should be legal");
+            let diff = board
+                .apply_move_tracked(q, r)
+                .expect("move should be legal");
             diffs.push(diff);
 
             assert_eq!(board.zobrist_hash, recompute_zobrist(&board));
@@ -408,12 +455,13 @@ mod tests {
         assert_eq!(board.ply, empty.ply);
         assert_eq!(board.last_move, empty.last_move);
         assert_eq!(board.action_anchors_count, empty.action_anchors_count);
-        assert_eq!(*board.legal_moves_set(), *empty.legal_moves_set(), "undo must restore legal moves to the initial 25-cell set");
+        assert_eq!(
+            *board.legal_moves_set(),
+            *empty.legal_moves_set(),
+            "undo must restore legal moves to the initial 25-cell set"
+        );
     }
-
 }
-
-// ── Property-based tests ───────────────────────────────────────────────────────
 
 #[cfg(test)]
 mod prop_tests {
@@ -423,12 +471,8 @@ mod prop_tests {
 
     proptest! {
         /// apply_move_tracked + undo_move always restores the exact 128-bit Zobrist hash.
-        ///
-        /// Generates a random sequence of up to 20 moves, applies all of them, then
-        /// undoes them all in reverse order. The final hash must equal the initial hash
-        /// of an empty board, regardless of the move sequence.
         #[test]
-        #[cfg_attr(miri, ignore)] // proptest persistence/entropy under Miri — excluded set per prereg
+        #[cfg_attr(miri, ignore)] // proptest persistence/entropy is unsupported under Miri
         fn undo_restores_hash(indices in proptest::collection::vec(0usize..361, 1..=20usize)) {
             let mut board = Board::new();
             let initial_hash = board.zobrist_hash;
@@ -456,12 +500,10 @@ mod prop_tests {
             prop_assert_eq!(board.has_stones, false, "has_stones must be false after full undo");
         }
 
-        /// Partial undo/redo: undo k steps then replay the same k moves → same hash.
-        ///
-        /// This proves that undo_move is perfectly inverse to apply_move, not just for
-        /// a full sequence but for any prefix of arbitrary length.
+        /// Partial undo/redo: undo k steps, replay the same k moves, same hash — so undo is
+        /// inverse to apply on any prefix, not only on a full sequence.
         #[test]
-        #[cfg_attr(miri, ignore)] // proptest persistence/entropy under Miri — excluded set per prereg
+        #[cfg_attr(miri, ignore)] // proptest persistence/entropy is unsupported under Miri
         fn partial_undo_redo_preserves_hash(
             indices in proptest::collection::vec(0usize..361, 2..=15usize),
             undo_fraction in 1usize..=8usize,

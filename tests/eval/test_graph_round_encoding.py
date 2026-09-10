@@ -1,35 +1,11 @@
 # >300 justify (R8): one question — which encoding an eval round binds and decodes — asked
-# once per arm over ONE shared round-spec builder. The grid arms, the graph arm and the
-# refusal arm are only comparable because they are constructed identically; split across
-# files, a builder edit could move one arm's geometry while every file stayed green.
-"""⊕ WP12-R Phases B+C — an eval round must decode the encoding the round DECLARED.
+# once per arm over ONE shared round-spec builder, so the arms are only comparable because they
+# are constructed identically.
+"""Prove an eval round decodes the encoding the round DECLARED, not a constant.
 
-Oracle-first (PREREG WP12-R §1), byte-frozen through IMPL. At HEAD `mantis.eval.worker`
-constructs `LocalInferenceEngine` with no spec at both sites (`:78`, `:193`), so
-`inference_local.py:70-71` binds `lookup("v6")` for EVERY declared encoding: board geometry
-comes from `RoundSpec.encoding` while the inference decode comes from a constant, and the
-two are never shown to agree. All four registered encodings were driven end to end through
-the real `run_round` at HEAD (PREREG §3): `v6` correct; `v6w25` COMPLETES a round while
-decoding a 362-wide policy for a 626-action board (silently wrong — every flat index >= 361
-is dropped at `inference_local.py:200-201`); `v6_live2_ls` dies in the conv channel check;
-`gnn_axis_v1` dies because the dense arm calls `GnnNet.forward`, which R138 forbids adding.
-
-Pre-registered HEAD verdicts (PREREG §1). These are RED at RUN, not at collection: every
-module they import exists at HEAD — this is a behaviour defect, not a missing port.
-
-    RED   test_graph_eval_round_runs_end_to_end             NotImplementedError ... forward
-    RED   test_both_engines_bind_the_declared_graph_spec    same raise; bindings are "v6"
-    GREEN test_dense_v6_round_is_byte_stable_and_deterministic     R20-protected grid arm
-    GREEN test_declared_grid_encoding_is_bound_and_decodes[v6]     fix is a no-op here
-    RED   test_declared_grid_encoding_is_bound_and_decodes[v6w25]  completes, binds "v6"
-    RED   test_no_drop_pooling_encoding_is_refused_with_a_named_error   conv 4-vs-8 channels
-    RED   test_the_decode_capability_set_is_closed_over_the_registry    guard absent
-
-The rounds here run IN-PROCESS. Production spawns a child (`eval/pipeline.py:364`); that
-seam is already covered by the integration-tier `tests/eval/test_round_end_to_end.py`, and
-the graph `InferenceServer` is a daemon thread (`inference_server.py:66`), so an in-process
-round cannot hang the suite at exit. What is covered NOWHERE is the decode — that is what
-this file adds, and it belongs in the tier CI runs first because it guards a mint blocker.
+Board geometry comes from `RoundSpec.encoding` while the inference decode came from a hardcoded
+lookup: a mismatched pair can COMPLETE a round while silently dropping every flat policy index
+past the narrower board's width.
 """
 from __future__ import annotations
 
@@ -46,20 +22,15 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
-# The ONE opening book in the repo, and the probe's parameter set (PREREG §5) verbatim, so
-# every sha recorded there is re-derivable from these fixtures: candidate seed 1 / best
-# seed 2, deploy_sims=2, seed_base=20260625, minimal width and depth.
+# The repo's one opening book and the probe's parameter set verbatim, so every recorded sha is
+# re-derivable: candidate seed 1, best seed 2, deploy_sims=2, seed_base=20260625.
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 
 
 def _net(enc_name: str, *, seed: int) -> torch.nn.Module:
-    """A registry-TRUE net for `enc_name`: its dims come from the spec, never a literal.
-
-    A net sized from a hard-coded board_size/in_channels would agree with the wrong
-    encoding by coincidence — which is precisely the confusion these oracles exist to
-    detect — so the arch is derived from the same registry row the round declares.
-    """
+    """Build a net whose dims come from `enc_name`'s registry row: a hard-coded size would agree
+    with the wrong encoding by coincidence, the exact confusion these oracles detect."""
     spec = lookup(enc_name)
     torch.manual_seed(seed)
     arch = GnnArch(
@@ -73,12 +44,8 @@ def _net(enc_name: str, *, seed: int) -> torch.nn.Module:
 
 
 def _caps_for(enc_name: str):
-    """The fused-forward memory bound this encoding's route needs (F-816-10 D-1).
-
-    Derived from the encoding, not chosen per call site: the graph route resolves the bound
-    EAGERLY when its `InferenceServer` is constructed, and the grid route never reads it. The
-    value is the template's NON-BINDING-BY-CONSTRUCTION pair, so no round here splits.
-    """
+    """Derive the fused-forward memory bound this encoding's route needs; the graph route resolves
+    it eagerly at construction, at a non-binding pair so no round here splits."""
     from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
     from mantis.encoding import lookup
 
@@ -90,7 +57,7 @@ def _caps_for(enc_name: str):
 def _round_spec(
     tmp_path: Path, enc_name: str, *, rung_games: int = 0, floor_games: int = 0
 ) -> RoundSpec:
-    """A real `RoundSpec` for `enc_name` with a gate block of 2 screen + 2 confirm games."""
+    """Build a real `RoundSpec` for `enc_name` with a 2-screen, 2-confirm gate block."""
     candidate = tmp_path / f"candidate_{enc_name}.pt"
     best = tmp_path / f"best_{enc_name}.pt"
     write_model_snapshot(_net(enc_name, seed=1), candidate)
@@ -124,21 +91,11 @@ def _round_spec(
 
 
 def _openings_at(enc_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Drive the round from openings DERIVED at `enc_name`'s own geometry.
+    """Drive the round from openings derived at `enc_name`'s own geometry.
 
-    `book_v1_s20260625_p4` is the repo's only book and is minted against `gnn_axis_v1`
-    (`tools/mint_opening_book.py`, radius 6). Measured over its 512 openings, 292 of them
-    (57.03%) require `legal_move_radius >= 6` to replay — so under a radius-5 grid encoding
-    like `v6` the round starts from positions the rules cannot reach. Nothing detected that
-    until R345(b)(2) put a legality boundary in the match loop; before it, those openings
-    were simply played.
-
-    This suite's subject is which SPEC the round binds and whether the round is
-    deterministic, not which openings it draws, so the openings are derived here rather than
-    drawn from a book whose geometry does not match. Deriving them also removes a silent
-    dependency on WHICH single opening `seed_base` happened to select. Whether the repo
-    should ALSO ship a radius-5 book is an artifact decision on the architect's ledger, not
-    this suite's to make.
+    The repo's only book is minted at radius 6 and 292 of its 512 openings (57.03%, measured) need
+    `legal_move_radius >= 6` to replay, so a narrower encoding would start from unreachable
+    positions; deriving them also drops a dependency on which one `seed_base` selected.
     """
     from mantis._engine import Board
     from mantis.arena.books import Opening
@@ -161,12 +118,8 @@ def _openings_at(enc_name: str, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _recorded_bindings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]]:
-    """Record `(spec.name, is_graph)` for every engine the round ACTUALLY constructs.
-
-    A real subclass that delegates to the real `__init__` — never a stub — so what is
-    recorded is what the production engine bound, including the representation dispatch it
-    derived from that spec. The returned list is filled in construction order.
-    """
+    """Record `(spec.name, is_graph)` in construction order for every engine the round builds,
+    through a real subclass so what is recorded is what production bound."""
     bound: list[tuple[str, bool]] = []
 
     class _RecordingEngine(LocalInferenceEngine):
@@ -178,32 +131,20 @@ def _recorded_bindings(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, bool]
     return bound
 
 
-# ── ⊕ O-1 ─────────────────────────────────────────────────────────────────────────────
 def test_graph_eval_round_runs_end_to_end(tmp_path: Path) -> None:
-    """A `gnn_axis_v1` round completes — the run5 encoding, on the real worker path.
-
-    HEAD: RED with `NotImplementedError: Module [GnnNet] is missing the required "forward"
-    function` — the dense arm, reached because the engine bound the dense default, calls
-    `model(...)` on a graph net. Exercises BOTH construction sites: `:78` (the best anchor,
-    via the gate block) and `:193` (the candidate).
-    """
+    """Prove a graph round completes on the real worker path, exercising both engine construction
+    sites: the best anchor via the gate block, and the candidate."""
     result = worker.run_round(_round_spec(tmp_path, "gnn_axis_v1"))
 
     assert result["gate"] is not None, "run_gate=True with a best snapshot must play a gate"
     assert result["gate"]["n_screen"] == 2
 
 
-# ── ⊕ O-2 ─────────────────────────────────────────────────────────────────────────────
 def test_both_engines_bind_the_declared_graph_spec(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Every engine the round builds binds the DECLARED spec, not a constant.
-
-    O-1 proves the round runs; this proves it runs on the right decode. At HEAD the
-    recorded bindings are `[('v6', False), ('v6', False)]` for a `gnn_axis_v1` round
-    (measured), which is the whole defect: the declared encoding reaches `board_factory`
-    and the `RegimeKey` stamps but never the inference decode.
-    """
+    """Prove every engine the round builds binds the declared spec: the row above proves the
+    round runs, this proves it runs on the right decode."""
     bound = _recorded_bindings(monkeypatch)
 
     worker.run_round(_round_spec(tmp_path, "gnn_axis_v1"))
@@ -213,16 +154,9 @@ def test_both_engines_bind_the_declared_graph_spec(
     assert all(is_graph for _name, is_graph in bound), f"graph dispatch not taken: {bound}"
 
 
-# ── ⊕ O-8b ────────────────────────────────────────────────────────────────────────────
 def test_the_decode_capability_set_is_closed_over_the_registry() -> None:
-    """The guard's REACH over the live registry, pinned to a literal written here.
-
-    The expected set is frozen in this test and is never derived from the constant under
-    test: an assertion of the form "the helper fires iff the pool is outside the helper's
-    own constant" is not an oracle — widening the constant flips both sides together and it
-    stays green (measured, PREREG §5b). A future registry row declaring an unimplemented
-    pool reds this, and so does any widening of the capability set.
-    """
+    """Pin the guard's reach over the live registry to a literal written here: deriving it from
+    the constant under test would let a widening flip both sides together and stay green."""
     from mantis.eval.errors import EvalDecodeUnsupportedError
 
     def _guard_fires(spec) -> bool:
@@ -232,9 +166,7 @@ def test_the_decode_capability_set_is_closed_over_the_registry() -> None:
             return True
         return False
 
-    # EMPTY since R346(f): the three grid rows carried the unimplemented pools, and every
-    # registered row now declares `policy_pool="none"`. Frozen as a literal all the same —
-    # a future row declaring an unimplemented pool reds this, and so does any widening of
-    # the capability set below.
+    # Empty because every registered row now declares `policy_pool="none"`; frozen as a
+    # literal all the same, so a future unimplemented pool or a widened set reds this.
     assert {spec.name for spec in all_specs() if _guard_fires(spec)} == set()
     assert worker._DECODE_IMPLEMENTED_POLICY_POOLS == frozenset({"none", "scatter_max"})

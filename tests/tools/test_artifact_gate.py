@@ -98,7 +98,7 @@ def test_artifact_dirs_rejected_at_any_size(tmp_path):
     assert "VIOLATION artifact-dir: checkpoints/tiny.pt" in res.stdout
 
 
-# ── WP0 RED-TEAM row A closure (WPCLEAN Phase RES): renames and case arrive too ────────
+# WP0 RED-TEAM row A closure (WPCLEAN Phase RES): renames and case arrive too
 
 def _run_gate_rename(tree: Path, old_rel: str, new_rel: str, blob: bytes) -> subprocess.CompletedProcess:
     """Base commit CONTAINS old_rel; the commit under test `git mv`s it to new_rel — an

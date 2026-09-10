@@ -1,27 +1,13 @@
-"""AUDIT-1 F-32 / R334(c) SHAPE A, ARMED at the run6 mint (R338) — the launch pin's TWO ends.
+"""The launch pin's TWO ends, against the same warm-start row.
 
-THE DEFECT THIS FILE EXISTS FOR, and it is the mirror of the one the audit found. The audit
-recorded `verify_launch_anchor_pin` as *"a refusal nobody can reach"*: nothing passed
-`expected_anchor_sha256`, so the guard was inert. Arming it from `identity.warm_start` and
-changing nothing else makes it a refusal nobody can PASS — because the guard's other input,
-`getattr(trainer, "checkpoint_source", None)`, was set by NOTHING in the tree, and the guard
-FAILS CLOSED when a pin is set and no source is readable. Run6's first launch has no
-`best_model.pt` and none of `_BOOTSTRAP_ANCHOR_CANDIDATES`, so it takes exactly that branch.
-A guard that refuses every launch is not stricter than one that never fires; it is broken in
-the other direction, and both directions ship green if only one end is tested.
+An inert guard and a guard that refuses every launch are both broken, and both ship green if
+only one end is tested: the PIN end derives `expected_anchor_sha256` from `identity.warm_start`,
+and the SOURCE end has `init_trainer`'s fresh branch set `checkpoint_source` from that same row.
+The guard FAILS CLOSED when a pin is set and no source is readable.
 
-SO BOTH ENDS ARE TESTED HERE, against the same row:
-  * the PIN end — `mantis.run` derives `expected_anchor_sha256` from `identity.warm_start`,
-    one source, no hand-synced twin (R334(c));
-  * the SOURCE end — `init_trainer`'s fresh branch sets `checkpoint_source` from that same
-    row, so the artifact the guard hashes is the one R336(d) calls the step-0 anchor.
-
-AND THE EQUALITY BETWEEN THEM IS MEASURED, NOT ASSUMED. `warm_start.net_hash` is
-`net_param_hash` over a net REBUILT from the artifact's stamp; the guard's side is
-`checkpoint_state_sha256` — `state_dict_param_hash` over the STORED state. F-32 unified the
-DENOMINATION and the docstrings say so, but "the same function" is not "the same value on this
-artifact": a buffer the rebuild adds, or one the save drops, moves one side and not the other.
-The row below writes a real checkpoint through the ONE writer and asserts the two agree on it.
+The equality between the two currencies is MEASURED, not assumed: `warm_start.net_hash` hashes a
+net REBUILT from the artifact's stamp, while the guard hashes the STORED state, so a buffer the
+rebuild adds or the save drops moves one side and not the other.
 """
 from __future__ import annotations
 
@@ -40,8 +26,7 @@ _ENC = "gnn_axis_v1"
 
 
 def _arch() -> Any:
-    """A deliberately NARROW graph arch — small enough to build fast, and off the dataclass
-    defaults so a rebuild that ignored the stamp would be visible."""
+    """A deliberately NARROW graph arch, off the dataclass defaults so a rebuild that ignored the stamp is visible."""
     import dataclasses
 
     base = select_arch(lookup(_ENC), {}, arch_kind="GnnArch")
@@ -74,10 +59,8 @@ def _config_with_row(checkpoint: Path, net_hash: str) -> dict[str, Any]:
     return cfg
 
 
-# ══ the guard's own contract, both directions ══════════════════════════════════════════
 def test_a_pinned_fresh_init_REFUSES_when_no_source_is_readable() -> None:
-    """The half that makes the wiring necessary. This is not a hypothetical: it is what an
-    armed pin did on EVERY fresh launch before `checkpoint_source` had a producer."""
+    """What an armed pin did on EVERY fresh launch before `checkpoint_source` had a producer."""
     with pytest.raises(RuntimeError, match="no readable --checkpoint"):
         verify_launch_anchor_pin(expected_anchor_sha256="a" * 64, checkpoint_path=None,
                                  trainer_step=0, run_id="run6")
@@ -113,10 +96,9 @@ def test_a_SWAPPED_artifact_at_the_pinned_path_REFUSES(tmp_path: Path) -> None:
                                  trainer_step=0, run_id="run6")
 
 
-# ══ THE DENOMINATION EQUALITY, measured on a real artifact ═════════════════════════════
 def test_the_row_hash_and_the_guard_hash_AGREE_on_the_artifact(tmp_path: Path) -> None:
-    """`net_param_hash` over the stamp-rebuilt net vs `checkpoint_state_sha256` over the
-    stored state. F-32 made them one denomination; this asserts they are one VALUE here."""
+    """One denomination is not one VALUE: the stamp-rebuilt hash and the stored-state hash must
+    agree on a real artifact."""
     source, net_hash = _write_source(tmp_path, _arch())
     assert checkpoint_state_sha256(source) == net_hash, (
         "the row's currency and the guard's currency disagree on this artifact, so a pin "
@@ -124,11 +106,9 @@ def test_the_row_hash_and_the_guard_hash_AGREE_on_the_artifact(tmp_path: Path) -
     )
 
 
-# ══ the SOURCE end: `init_trainer` gives the guard something to hash ═══════════════════
 def test_init_trainer_sets_the_guards_fresh_init_source_from_the_row(tmp_path: Path) -> None:
-    """THE SOURCE IS WRITTEN AT THE ARCH THE CONFIG RESOLVES, not at this file's narrow one:
-    the warm start really fires here, and a source built at a different depth would be refused
-    by `load_representation_policy_from_bc` on a key mismatch — a real guard, wrong subject."""
+    """The source is written at the arch the CONFIG resolves, not this file's narrow one: the warm
+    start really fires here, and another depth would be refused on a key mismatch — wrong subject."""
     from mantis.model.arch import arch_from_spec_and_config
     from mantis.train.orchestrator import init_trainer
 
@@ -140,8 +120,7 @@ def test_init_trainer_sets_the_guards_fresh_init_source_from_the_row(tmp_path: P
     source, net_hash = _write_source(tmp_path, config_arch)
     trainer = init_trainer(config=_config_with_row(source, net_hash),
                            device=torch.device("cpu"), checkpoint_dir=tmp_path / "ckpt")
-    # `BcWarmStart.checkpoint` is a `Path`, and `verify_launch_anchor_pin` takes `str | Path`,
-    # so the comparison is made in the resolver's own type rather than by stringifying either.
+    # Compared in the resolver's own `Path` type rather than by stringifying either side.
     assert getattr(trainer, "checkpoint_source", None) == source, (
         "the fresh branch must name the warm-start artifact as the pin's verification source; "
         "without it an armed pin refuses every fresh launch"
@@ -161,16 +140,11 @@ def test_init_trainer_leaves_the_source_None_when_no_row_is_declared(tmp_path: P
     assert getattr(trainer, "checkpoint_source", "unset") is None
 
 
-# ══ THE MINTED ROW, on the artifact it names ═══════════════════════════════════════════
 def test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE() -> None:
-    """R336(c)'s 4b act, asserted where the act happened: the row minted into
-    `configs/run6.yaml` names a checkpoint, and BOTH currencies must answer the same thing
-    about it — otherwise the pin derived from the row refuses the very file the row names.
+    """Both currencies must answer the same thing about the artifact the minted row names.
 
-    **LOUD-SKIPS RATHER THAN PASSING when the artifact is absent, and that is the point.**
-    `checkpoints/` is never tracked (R7), so the file exists on the box that produced it and
-    nowhere else. A row that quietly passed on a missing file would be the phantom-gate shape:
-    green everywhere, checked nowhere. The skip names what was not verified.
+    LOUD-SKIPS rather than passing when the artifact is absent: `checkpoints/` is never tracked,
+    so a quiet pass on a missing file would be green everywhere and checked nowhere.
     """
     from mantis.config.loader import load_config
     from mantis.model import build_net

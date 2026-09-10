@@ -20,7 +20,7 @@ from mantis.config.resolve.nsims import resolve_eval_model_sims
 
 
 
-# ── O9-O11 — UNCHANGED by Phase 2 ───────────────────────────────────────────────────────
+# O9-O11 — UNCHANGED by Phase 2
 def test_o9_sims_regime_parity_unchanged(production_config):
     """O9 (twin) — the resolver is a PASSTHROUGH of the config's own value, no eval-only re-derivation.
 
@@ -53,7 +53,7 @@ def test_o11_encoding_regime_parity_unchanged(production_config):
     assert production_config.identity.representation == "graph"
 
 
-# ── O12 — REPLACED (radius field removed entirely, DESIGN_P2.md §5 shape (ii)) ─────────
+# O12 — REPLACED (radius field removed entirely, DESIGN_P2.md §5 shape (ii))
 def test_o12_production_config_has_no_radius_field_at_all(production_config):
     assert not hasattr(production_config.selfplay, "legal_move_radius_schedule")
     assert not hasattr(production_config.selfplay, "legal_move_radius")

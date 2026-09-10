@@ -1,0 +1,8 @@
+# The comment-length ratchet's floor (R346(f)). One `<measure> <count>` record per line.
+# A measure may not EXCEED its floor, and the floor may only ever be LOWERED. A commit that
+# takes a measure below its floor lowers the floor in the same commit; gate 14 says so.
+# Set by CLEANUP WAVE 2's tree-wide comment pass, measured on the tree it landed on.
+# The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
+comment_excess_lines 3551
+banner_comment_lines 23
+docstring_excess_lines 13561

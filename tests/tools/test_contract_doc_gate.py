@@ -1,15 +1,11 @@
-"""Test the tester: CI gate 13 must bite on a stale contract-doc citation (LAW-07).
+"""Test the tester: CI gate 13 must bite on a stale contract-doc citation.
 
-The gate exists because contract #5's doc drifted through four schema versions with every gate
-green — repo_design §4's v2 amendment MEASURED that nothing in the repo named the file. A gate
-added to close that class is worthless unless its trigger is itself demonstrated, so every arm
-below is a MUTATION with its counterexample beside it, in both directions:
+Every arm is a mutation with its counterexample beside it, in both directions:
 
 * the DOC side — a phantom key, a retired symbol, a wrong count, a live key smuggled into the
   "deliberately absent" list, and the heading deleted;
-* the SCHEMA side — a new leaf on `RunConfig` reds the gate against the UNMODIFIED shipped doc.
-  That arm is the one that proves the gate reads the live authority rather than a transcription:
-  a gate built on a copied key list would stay green through it.
+* the SCHEMA side — a new leaf on `RunConfig` reds the gate against the UNMODIFIED shipped doc,
+  which is what proves the gate reads the live authority rather than a transcribed key list.
 """
 from __future__ import annotations
 
@@ -48,11 +44,10 @@ def doc_text() -> str:
 
 
 def _mutate(tmp_path: Path, text: str, old: str, new: str, count: int = -1) -> Path:
-    """Write a mutated copy of the doc, REFUSING a no-op edit.
+    """Write a mutated copy of the doc, refusing a no-op edit.
 
-    A mutation arm whose `str.replace` silently matched nothing is a test that passes for the
-    wrong reason — the exact vacuity class R87 exists to catch — so the substring is asserted
-    present before the edit.
+    A `str.replace` that matched nothing would leave the arm passing for the wrong reason, so
+    the anchor is asserted present first.
     """
     assert old in text, f"mutation anchor not present in the shipped doc: {old!r}"
     mutated = text.replace(old, new, count) if count >= 0 else text.replace(old, new)
@@ -61,8 +56,6 @@ def _mutate(tmp_path: Path, text: str, old: str, new: str, count: int = -1) -> P
     path.write_text(mutated, encoding="utf-8")
     return path
 
-
-# ── the negative pole: the shipped doc is clean ────────────────────────────────────────
 
 def test_the_shipped_contract_doc_passes_the_gate():
     res = _run(REAL_DOC)
@@ -74,8 +67,6 @@ def test_an_absent_doc_is_a_named_failure_not_a_silent_pass(tmp_path):
     assert res.returncode == 2
     assert "does not exist" in res.stdout
 
-
-# ── doc-side mutations ─────────────────────────────────────────────────────────────────
 
 def test_a_phantom_config_key_reds_the_gate(tmp_path, doc_text):
     doc = _mutate(tmp_path, doc_text, "`train.max_train_steps`", "`train.no_such_knob`", 1)
@@ -95,29 +86,12 @@ def test_a_retired_resolver_symbol_reds_the_gate(tmp_path, doc_text):
     assert "does not resolve" in res.stdout
 
 
-#: The doc's own stated leaf count, DERIVED from the live schema rather than transcribed.
-#: A literal here is exactly the defect gate 13 exists to catch, one layer up: it goes stale
-#: the moment any phase adds a leaf, and it goes stale SILENTLY as a mutation anchor that
-#: matches nothing — which `_mutate` refuses, but only after the arm has stopped testing what
-#: it names. WP12-R F2 is the phase that made this concrete (174 -> 176).
-#:
-#: The gate module arrives through the `gate_module` FIXTURE, which loads it by
-#: `importlib.util.spec_from_file_location` (`:37`). The first version of this helper did
-#: `from tools.ci_gates.contract_doc_gate import _leaf_paths` instead, and that import is
-#: UNRESOLVABLE under the project's own test command: `tools/` and `tools/ci_gates/` carry no
-#: `__init__.py`, so the name only resolves as a PEP 420 namespace package when the repo root
-#: happens to be on `sys.path` — true under `python -m pytest` (which prepends CWD), FALSE
-#: under `uv run pytest` (a console script, which does not). It was the only `from tools.`
-#: import in the suite. Recorded here rather than only in a log: a helper whose import cannot
-#: resolve is indistinguishable from one that was never called.
+#: The doc's stated leaf count, derived from the live schema: a literal would go stale as a
+#: mutation anchor that matches nothing, which is the defect gate 13 exists to catch.
+#: The gate arrives through the `gate_module` fixture because `tools/` carries no `__init__.py`,
+#: so `from tools.ci_gates...` resolves only when the repo root happens to be on `sys.path`.
 def _live_count_claim(gate_module) -> str:
-    """The count read through the SAME symbol the gate uses, so this can never drift from it.
-
-    AUDIT-1 F-44: the gate's private `_leaf_paths` is gone and `mantis.config.schema.leaf_paths`
-    is the one walker. It is read off `gate_module` rather than imported here, so a gate that
-    swapped in a different walker would still be measured by ITS walker, which is the property
-    the fixture-loaded module exists to give.
-    """
+    """Return the count read through the same walker the gate uses, off `gate_module` itself."""
     from mantis.config.schema import RunConfig
     return f"**{len(gate_module.leaf_paths(RunConfig))} leaf key-paths**"
 
@@ -136,8 +110,6 @@ def test_a_doc_that_states_no_count_reds_the_gate(tmp_path, doc_text, gate_modul
     assert res.returncode == 1
     assert "does not state its leaf-key-path count" in res.stdout
 
-
-# ── the reversed region: "deliberately absent" is checked, not exempted ────────────────
 
 def test_a_live_key_listed_as_deliberately_absent_reds_the_gate(tmp_path, doc_text):
     doc = _mutate(tmp_path, doc_text, "**`eval.gate.screen_confirm_hi`.**",
@@ -158,19 +130,14 @@ def test_deleting_the_absent_heading_cannot_silently_retire_the_reversed_check(
 
 
 def test_the_absent_section_accepts_a_key_that_really_is_gone(tmp_path, doc_text):
-    """The counterexample to the arm above: the reversed check is a real discriminator, not a
-    blanket refusal of every key path under the heading."""
+    """Prove the reversed check discriminates, rather than refusing every key under the heading."""
     doc = _mutate(tmp_path, doc_text, "**`eval.gate.screen_confirm_hi`.**",
                   "**`eval.gate.no_such_dead_knob`.**", 1)
     assert _run(doc).returncode == 0
 
 
-# ── the bare-symbol arm (WPCLEAN Phase RES — the DSV2-2 blind-spot closure) ────────────
-
 def test_a_dead_validator_name_in_the_claim_column_reds_the_gate(tmp_path, doc_text):
-    """The DSV2-2 reproduction, now with the opposite verdict: at WPMINT close-out a doc
-    naming a validator that does not exist left this gate at rc 0 (the recorded blind
-    spot). The bare-symbol arm makes exactly that mutation red."""
+    """Prove a doc naming a validator that does not exist reds the gate, not rc 0 as it once did."""
     doc = _mutate(tmp_path, doc_text, "`_draw_rate_evidence_bar_within_configured_capacity`",
                   "`_draw_rate_floor_validator_that_never_existed`", 1)
     res = _run(doc)
@@ -180,10 +147,7 @@ def test_a_dead_validator_name_in_the_claim_column_reds_the_gate(tmp_path, doc_t
 
 
 def test_a_stale_bare_name_in_prose_stays_clean_the_stated_bound(tmp_path, doc_text):
-    """The discriminating negative that DOCUMENTS the arm's bound: `min_samples` is a
-    retired key cited as history in the version table and in a rule cell's prose — both
-    legitimate, both outside the claim columns, both must stay rc 0. The arm is a
-    claim-column check, not a doc-wide truth oracle (the gate docstring says so)."""
+    """Prove a retired name cited in prose stays clean: the arm checks claim columns, not the doc."""
     assert "`min_samples`" in doc_text  # the historical citations are really there
     assert _run(REAL_DOC).returncode == 0
 
@@ -197,8 +161,7 @@ def test_emptying_the_cross_field_table_cannot_silently_retire_the_arm(tmp_path,
 
 
 def test_a_dead_model_name_in_the_second_cell_reds_the_gate(tmp_path, doc_text):
-    # The anchor is a LIVE cross-field row; `_entropy_sign` was the previous one and went
-    # with `train.entropy_reg_weight` (R346(f)).
+    # The anchor must be a LIVE cross-field row.
     doc = _mutate(tmp_path, doc_text, "| `_stages_are_strictly_increasing` | `TrainConfig` |",
                   "| `_stages_are_strictly_increasing` | `RetiredTrainConfig` |", 1)
     res = _run(doc)
@@ -206,15 +169,12 @@ def test_a_dead_model_name_in_the_second_cell_reds_the_gate(tmp_path, doc_text):
     assert "RetiredTrainConfig" in res.stdout
 
 
-# ── the schema-side mutation: the gate reads the LIVE authority ────────────────────────
-
 def test_the_unmutated_schema_agrees_with_the_shipped_doc(gate_module):
     assert gate_module.check(REAL_DOC) == []
 
 
 def test_a_new_leaf_on_RunConfig_reds_the_gate_against_the_UNCHANGED_doc(gate_module):
-    """The gate-12 pattern's own proof. Nothing about the doc changes here — only the schema —
-    and the gate must notice. A gate built over a transcribed key list would stay green."""
+    """Prove a new schema leaf reds the gate with the doc unchanged."""
     live = gate_module.RunConfig
     mutated = create_model("_MutatedRunConfig", __base__=live, phantom_leaf=(int, ...))
     gate_module.RunConfig = mutated
@@ -224,5 +184,5 @@ def test_a_new_leaf_on_RunConfig_reds_the_gate_against_the_UNCHANGED_doc(gate_mo
         gate_module.RunConfig = live
     assert failures, "a new schema leaf must red the contract-doc gate"
     assert any("leaf key-paths" in line for line in failures), failures
-    # and the restoration is real, not assumed
+    # The restoration is real, not assumed.
     assert gate_module.check(REAL_DOC) == []

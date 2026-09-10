@@ -1,22 +1,14 @@
-"""R345(b)(1) — a non-finite GRADIENT must not reach `optimizer.step`.
+"""A non-finite GRADIENT must not reach `optimizer.step`.
 
-THE DISTINCTION FROM `test_nonfinite_guard.py`, WHICH IS THE WHOLE LEG. That suite pins the
-guard on a non-finite LOSS: a microbatch whose loss is NaN is skipped before its backward.
-This one pins the guard on a non-finite GRADIENT, which is a different quantity reached by a
-different route — a perfectly finite loss can backward into a NaN or inf `.grad` (a
-`sqrt(0)` derivative, a `0 x inf` in a fused kernel, an fp32 overflow in an accumulation).
-At HEAD that path had no guard at all: `clip_and_step` ran `clip_grad_norm_` and
-`optimizer.step()` unconditionally, and the `if not math.isfinite(grad_norm)` branch in the
-graph tail executed AFTER the optimizer had already written a NaN-scaled update into every
-weight. The counter it incremented was a post-mortem.
+Distinct from `test_nonfinite_guard.py`, which pins the guard on a non-finite LOSS: a finite
+loss can backward into a NaN or inf `.grad` (a `sqrt(0)` derivative, a `0 x inf` in a fused
+kernel, an fp32 overflow in an accumulation), and that path once had no guard at all.
 
-THE SECOND HALF IS THE CLOCK. When every microbatch is skipped the loop leaves `.grad` at
-zero, `clip_grad_norm_` returns a finite `0.0`, and the step took its optimizer step, its
-`self.step` increment, its scheduler step and its EMA update on a gradient that does not
-exist. With a fresh optimizer the weight delta is numerically zero and the defect is
-invisible; with momentum already accumulated it is not, because Adam's update on a zero
-gradient is `exp_avg` decayed, not nothing. So `test_an_all_skipped_step_advances_no_clock`
-takes a healthy step FIRST — the momentum is the instrument.
+When every microbatch is skipped, `.grad` stays at zero, `clip_grad_norm_` returns a finite
+`0.0` and the step takes its optimizer, scheduler and EMA moves on a gradient that does not
+exist. A fresh optimizer hides that (the delta is numerically zero); accumulated momentum
+does not, because Adam's update on a zero gradient is a decayed `exp_avg`. So the
+all-skipped row takes a healthy step first — the momentum is the instrument.
 """
 from __future__ import annotations
 
@@ -27,11 +19,11 @@ from typing import Any
 import pytest
 import torch
 
-import _microbatch_harness as H  # the shared graph-step harness (rootdir-relative, house convention)
+import _microbatch_harness as H  # the shared graph-step harness
 
 
 def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
-    """One real graph training step through the PRODUCTION dispatch (R155)."""
+    """Take one real graph training step through the production dispatch."""
     from mantis.config.resolve.microbatch import MicrobatchCapsSpec
     from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
 
@@ -47,27 +39,24 @@ def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
 
 
 def _poison_one_gradient(model: torch.nn.Module) -> Any:
-    """Make ONE parameter's gradient non-finite while every loss stays finite.
+    """Make one parameter's gradient non-finite while every loss stays finite.
 
-    A backward hook on the parameter, which is the real mechanism and not a stub of one: the
-    forward, the loss and the whole autograd graph are untouched and finite, and the NaN
-    enters exactly where a `sqrt(0)` derivative or a fused-kernel `0 x inf` would put it —
-    in `.grad`, after backward, before the optimizer reads it.
+    A backward hook puts the NaN where a `sqrt(0)` derivative would: in `.grad`, after
+    backward, before the optimizer reads it. The forward and autograd graph stay finite.
     """
     param = next(p for p in model.parameters() if p.requires_grad)
     return param.register_hook(lambda g: g * float("nan"))
 
 
 def _optimizer_clock(optimizer: Any) -> list[float]:
-    """Every `step` counter Adam keeps in its own state — the clock the guard must not move."""
+    """Return every `step` counter Adam keeps in its own state: the clock the guard must not move."""
     return [float(s["step"]) for s in optimizer.state.values() if "step" in s]
 
 
-# ── the gradient guard ──────────────────────────────────────────────────────────────────
 def test_a_nonfinite_gradient_from_a_finite_loss_never_reaches_the_optimizer(
     tmp_path: Path,
 ) -> None:
-    """The leg's subject: finite loss, non-finite `.grad`, weights must not move."""
+    """Prove a finite loss with a non-finite `.grad` moves no weights and no step counter."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     buffer = H.uniform_graph_buffer()
     handle = _poison_one_gradient(trainer.model)
@@ -98,7 +87,7 @@ def test_a_nonfinite_gradient_from_a_finite_loss_never_reaches_the_optimizer(
 
 
 def test_the_skipped_step_is_named_counted_and_on_the_event_stream(tmp_path: Path) -> None:
-    """LAW-18: a lever under test logs its own fire-rate in-run, under its own name."""
+    """Prove the skipped step is counted and named on the in-run event stream."""
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     handle = _poison_one_gradient(trainer.model)
@@ -123,12 +112,10 @@ def test_the_skipped_step_is_named_counted_and_on_the_event_stream(tmp_path: Pat
 def test_an_all_skipped_microbatch_set_advances_no_clock(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Every microbatch non-finite ⇒ no step, no scheduler tick, no optimizer-state move.
+    """Prove an all-skipped microbatch set takes no step, scheduler tick or optimizer-state move.
 
-    The healthy step first is the instrument, not scene-setting: on a FRESH Adam a zero
-    gradient produces a numerically zero update, so the defect hides. With momentum already
-    accumulated the decayed `exp_avg` moves the weights, and the all-skipped step becomes
-    visible as the weight change it should never have made.
+    The healthy step first is the instrument: on a fresh Adam a zero gradient produces a
+    numerically zero update, so only accumulated momentum makes the defect visible.
     """
     import mantis.train.trainer.core as core
 
@@ -166,14 +153,8 @@ def test_an_all_skipped_microbatch_set_advances_no_clock(
     )
 
 
-# ── mutation half: none of the above may be satisfied by refusing to train ──────────────
 def test_a_healthy_step_steps_advances_the_clock_and_counts_nothing(tmp_path: Path) -> None:
-    """Without this, `always skip` passes every assertion above.
-
-    Mechanism: the guard fires only on a non-finite pre-clip gradient norm and only on a
-    zero-contribution microbatch set, so a healthy step must move the weights, advance
-    `self.step`, advance Adam's own state, and leave `skipped_steps` at 0.
-    """
+    """Prove a healthy step still steps, so an unconditional skip cannot satisfy the rows above."""
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     buffer = H.uniform_graph_buffer()
@@ -195,13 +176,10 @@ def test_a_healthy_step_steps_advances_the_clock_and_counts_nothing(tmp_path: Pa
 
 
 def test_the_loss_info_contract_stays_five_keys_on_a_skipped_step(tmp_path: Path) -> None:
-    """OF2-9's single tail survives the guard: the skip rides the EVENT, not the return.
+    """Prove a skipped step still returns all five `loss_info` keys: the skip rides the event.
 
-    `train/coordinator/step.py` reads `loss_info.get("grad_norm", 0.0)` and feeds it to
-    `grad_norm_hard_abort`, whose comparison is an R56 SOURCE PIN. A skipped step must
-    therefore still return all five keys, with `grad_norm` non-finite — which the pinned
-    `math.isfinite(step_gn) and ...` already handles by resetting its consecutive counter,
-    exactly as it does today for a NaN. The pin is not touched by this leg.
+    The hard-abort consumer reads `grad_norm` off this return, so dropping a key would
+    change what the abort compares.
     """
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     handle = _poison_one_gradient(trainer.model)

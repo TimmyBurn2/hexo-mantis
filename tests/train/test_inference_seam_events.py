@@ -1,36 +1,12 @@
-"""F-816-9 Phase C — the SEAM counter reaches the RUN's OWN STREAM (R275(b), LAW-18/R164).
+"""The inference-seam counter reaches the RUN's OWN STREAM.
 
-`inference_failures_total` is the SEAM conjunct's in-run instrument. The Rust legs
-(`crates/mantis-selfplay/tests/search_seam_fatal.rs`) prove the counter FIRES and that a
-drain shutdown does not fire it; `tests/selfplay/test_inference_seam_counter.py` proves it
-reaches the Python `RunnerStats` surface. This file owns the last stage: surface → the
-`iteration_complete.target_integrity` block a live run emits. LAW-18's own text is that a
-post-hoc offline probe cannot distinguish "starved" from "ineffective", and R164 is the
-ruling that a counter readable only by a test calling `runner_stats(pool)` is not an in-run
-instrument at all.
+The Rust legs prove `inference_failures_total` FIRES and a sibling suite proves it reaches
+`RunnerStats`; this file owns the last stage, the `iteration_complete.target_integrity` block a
+live run emits, because a counter only a test can read is not an in-run instrument.
 
-WHY THIS FILE CARRIES ITS OWN HARNESS rather than adding a row to
-`tests/train/test_target_counter_events.py`, which already drives a `StepCoordinator`: that
-file is a ⊕ frozen Phase-O oracle bank and editing it is an R43 queue event. The duplication
-is the ~60 lines of injected doubles, and it is disclosed here rather than hidden. The claim
-is also genuinely a different one: the frozen bank's `_COUNTERS` is transcribed to pin THE
-THREE Phase-T counters, and a fourth counter appended to that tuple would have widened an
-oracle whose stated subject is those three.
-
-MUTATIONS THAT RED THIS FILE:
-  * M-SEAMEV-1 — drop `inference_failures_total` from
-    `mantis.train.coordinator.step._TARGET_INTEGRITY_COUNTERS`; the key vanishes from the
-    block and the counter is back to being readable only by a test.
-  * M-SEAMEV-2 — omit zero-valued counters from the report; the idle-at-0 row goes RED, and
-    that row is the load-bearing one for a RUN-FATAL counter, which reads 0 in every run
-    that survives to emit.
-  * M-SEAMEV-3 — publish `target_integrity_defects`' value in the seam counter's slot; the
-    distinctness row goes RED and nothing else here notices.
-
-Real: the shipped `StepCoordinator`, its real `_run_log_interval` boundary, the real event
-payloads, and the real `RunnerStats` dataclass — so a field rename in `pool_hooks` reds this
-file. Fake: the pool/trainer/buffer seam, and the counter VALUES (a real advance needs a
-live Rust runner, which the Rust legs own).
+MUTATIONS THAT RED IT: drop the counter from `_TARGET_INTEGRITY_COUNTERS`; omit zero-valued
+counters (the idle-at-0 row is load-bearing for a RUN-FATAL counter, which reads 0 in every run
+that survives to emit); or publish the defects counter's value in the seam slot.
 """
 from __future__ import annotations
 
@@ -51,8 +27,8 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through; each file that needs one builds
+    it, because cross-test imports are barred."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -62,10 +38,9 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
+#: plus the sections the route's own resolvers read. The caps are non-binding — nothing here
+#: exercises a split.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -80,8 +55,8 @@ _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
 _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
-#: Transcribed, not derived from the payload under test: an oracle that read its expectation
-#: off its own subject would be satisfied by any consistent renaming (R81).
+#: Transcribed, not derived from the payload under test: an oracle that read its expectation off
+#: its own subject would be satisfied by any consistent renaming.
 _SEAM = "inference_failures_total"
 _DEFECTS = "target_integrity_defects"
 _SLOTS = ("total", "delta", "per_position")
@@ -104,7 +79,7 @@ class _Pool:
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
+    draw_rate = 0.05  # the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9
@@ -117,7 +92,7 @@ class _Pool:
     @property
     def games_completed(self) -> int:
         # A step only runs when new games have arrived, so a CONSTANT count would silently
-        # collapse a two-emit drive into one (the house rig).
+        # collapse a two-emit drive into one.
         self._games += 1
         return self._games
 
@@ -173,9 +148,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # DELEGATED to a real `HexgBuffer`: the dispatcher collates the wire for real before the
+        # trainer stub sees it, so a hand-built payload would be a second wire format.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -228,12 +202,9 @@ def _integrity(payload: dict) -> dict:
 
 
 def test_iteration_complete_carries_the_inference_seam_counter() -> None:
-    """The emission leg (M-SEAMEV-1).
-
-    A run that dies at the seam must be able to say so IN ITS OWN STREAM. Pre-R275(b) a
-    failed inference produced no event at all — it produced a silently degraded search, and
-    the only trace was a target-integrity refusal a hundred plies downstream that named
-    neither the failure nor the leaf."""
+    """The emission leg: a run that dies at the seam must say so IN ITS OWN STREAM. Before it, a
+    failed inference produced no event at all — only a target-integrity refusal a hundred plies
+    downstream that named neither the failure nor the leaf."""
     block = _integrity(_drive(
         _stats(positions=1200, seam=0, defects=0),
         _stats(positions=2400, seam=1, defects=0),
@@ -253,11 +224,9 @@ def test_iteration_complete_carries_the_inference_seam_counter() -> None:
 
 
 def test_the_idle_seam_counter_is_visible_at_zero() -> None:
-    """M-SEAMEV-2 — the idle-at-0 posture, which for THIS counter is the normal case.
-
-    The seam latch is run-fatal, so `inference_failures_total` reads 0 in every run that
-    survives to emit. That permanent zero is the posture, not an unproduced field, and it is
-    the only thing that distinguishes "no inference has failed" from "nobody is counting"."""
+    """The idle-at-0 posture, which for THIS counter is the normal case: the seam latch is
+    run-fatal, so the counter reads 0 in every run that survives to emit. That permanent zero is
+    what distinguishes "no inference has failed" from "nobody is counting"."""
     block = _integrity(_drive(
         _stats(positions=500, seam=0, defects=0),
         _stats(positions=1000, seam=0, defects=0),
@@ -273,12 +242,9 @@ def test_the_idle_seam_counter_is_visible_at_zero() -> None:
 
 
 def test_the_two_conjunct_counters_are_distinct_in_the_stream() -> None:
-    """M-SEAMEV-3 — the whole reason the SEAM conjunct got its own counter.
-
-    R275(b) splits the F-816-9 class into two conjuncts, and the split only buys anything if
-    a reader can tell which one fired. Seam advanced with defects at 0 says the run died
-    BEFORE any target was built; the reverse says the seam held and the exporter caught
-    something else. One shared counter would make those two readings identical."""
+    """The reason the seam conjunct got its OWN counter: seam advanced with defects at 0 says the
+    run died BEFORE any target was built, and the reverse says the seam held and the exporter
+    caught something else. One shared counter makes those two readings identical."""
     block = _integrity(_drive(
         _stats(positions=100, seam=0, defects=0),
         _stats(positions=200, seam=7, defects=0),

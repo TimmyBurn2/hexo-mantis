@@ -1,22 +1,10 @@
-"""AUDIT-1 F-39 — no bridge signature default stands behind a config key.
+"""No bridge signature default stands behind a config key.
 
-THE DEFECT. Four authorities answered "what is the self-play regime?", and three disagreed:
-`SelfPlayHParams`' dataclass defaults, `bridge/runner.rs::PySelfPlayRunnerConfig::new`'s
-`#[pyo3(signature = (n_workers = 4, max_moves_per_game = 128, ..., draw_reward = -0.1,
-selfplay_rotation_enabled = false, ...))]` (transcribed into BOTH `_engine.pyi` twins), the
-`MCTSTree` ctor signature, and the schema — which has no default at all. Measured
-disagreements: `n_workers` 4 / 1 / 14, `rotation_enabled` false / True / true, `draw_reward`
-−0.1 / −0.5 / −0.5.
-
-WHY IT IS DORMANT AND WHY THAT IS NOT SAFETY. `build_runner_config` passes every kwarg, so the
-defaults never fire today. That makes them invisible, not harmless: a kwarg added to the Rust
-ctor WITH a default and forgotten in `build_runner_config` compiles, type-checks and RUNS on
-the bridge's value — a regime nobody minted, on the path the run's own targets come from.
-
-WHAT THIS CENSUS IS. The audit's own pin: parse `_engine.pyi` and assert no parameter whose
-name equals a `RunConfig` leaf carries a `= <literal>` default. It is deliberately keyed on the
-SCHEMA rather than on a hand-written list of knobs, so a key minted tomorrow is covered the day
-it lands, and a default that shadows nothing (a genuine convenience) is not touched.
+`build_runner_config` passes every kwarg, so the `#[pyo3(signature = ...)]` defaults
+transcribed into `_engine.pyi` never fire today — but a kwarg added to the Rust ctor with a
+default and forgotten in `build_runner_config` compiles and RUNS on the bridge's value.
+The census is keyed on the SCHEMA rather than a hand-written knob list, so a key minted
+tomorrow is covered the day it lands and a default that shadows nothing is untouched.
 """
 from __future__ import annotations
 
@@ -32,25 +20,11 @@ _STUBS = (
 )
 
 
-#: THE REGISTERED DEBT — the 34 defaults present when this census landed (REPAIR-2, R332(d)).
-#:
-#: NOT AN ESCAPE HATCH, and not an allowlist that grows: a row here asserts "this default IS a
-#: real second authority, it is tracked, and removing it is a separate act". The census reds on
-#: anything NEW, and it ALSO reds on a row here that no longer exists — so the register cannot
-#: quietly outlive the defaults it names.
-#:
-#: WHY THEY ARE NOT REMOVED IN THIS LEG, measured rather than asserted. They live in the Rust
-#: `#[pyo3(signature = ...)]` blocks (`bridge/runner.rs`, `bridge/mcts.rs`) of which the stubs
-#: are transcriptions, so removing them means: 2 Rust signatures + 66 Rust reference sites + 30
-#: Python construction sites (21 `MCTSTree(`, 9 `SelfPlayRunnerConfig(`), each of which would
-#: then have to pass ~20 keywords. The DEFECT is dormant — `build_runner_config` passes every
-#: kwarg, which is exactly why nobody has seen it — and a half-done removal is worse than none:
-#: a signature where SOME parameters are required and some default is harder to reason about
-#: than one where all default. AUDIT-1 sizes F-39 at M; this half is not M.
-#:
-#: The live consequence F-39 names IS repaired: `c_visit`/`c_scale` reach the eval deploy head
-#: from the config (`RoundSpec` -> `build_candidate_player`), and `DeployHeadPlayer`'s own
-#: `= 50.0` / `= 1.0` are gone — that was the one with a LAW-15 bar behind it.
+#: The defaults present when this census landed. NOT an allowlist that grows: the census
+#: reds on anything NEW and also on a row here that no longer exists, so the register
+#: cannot outlive the defaults it names. They live in the Rust `#[pyo3(signature = ...)]`
+#: blocks, so removing them means rewriting ~30 Python construction sites to pass ~20
+#: keywords each; a half-done removal is worse than none.
 REGISTERED_DEBT: frozenset[str] = frozenset({
     "__init__(c_puct=1.5)",
     "__init__(c_scale=1.0)",
@@ -85,12 +59,10 @@ REGISTERED_DEBT: frozenset[str] = frozenset({
 
 def _config_leaf_names() -> set[str]:
     """Every field NAME in `RunConfig`, unqualified — the vocabulary a bridge default could
-    shadow. Derived from the live schema through the ONE walker (AUDIT-1 F-44).
+    shadow.
 
-    `descend_containers` is the mode that reaches a name inside a `list[SubModel]`: a bridge
-    default shadowing `LadderRung.depth` shadows a config key just as surely as one shadowing
-    `train.lr`, and the unqualified vocabulary is every SEGMENT of every reachable path — the
-    block names included, since a block name is a key a config writes too.
+    `descend_containers` reaches names inside a `list[SubModel]`, and the vocabulary is every
+    SEGMENT of every reachable path, block names included, since a block name is a key too.
     """
     return {segment
             for path in leaf_paths(RunConfig, descend_containers=True)
@@ -108,9 +80,8 @@ def test_neither_engine_stub_defaults_a_parameter_that_shadows_a_config_key() ->
     """The load-bearing row. A `= <literal>` on a name the schema also owns is a second
     authority over one number, sitting where nobody reads it."""
     leaves = _config_leaf_names()
-    #: `max_moves_per_game` is the bridge's spelling of `selfplay.max_game_moves`; the rename
-    #: happens at `build_runner_config`, so the census has to know both names or the one that
-    #: matters most escapes it.
+    #: `max_moves_per_game` is the bridge's spelling of `selfplay.max_game_moves`, renamed at
+    #: `build_runner_config`, so the census must know both names.
     aliases = {"max_moves_per_game": "max_game_moves", "epsilon": "dirichlet_epsilon"}
     offenders: list[str] = []
     for stub in _STUBS:

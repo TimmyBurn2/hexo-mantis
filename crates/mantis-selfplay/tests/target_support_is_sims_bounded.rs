@@ -1,44 +1,17 @@
-// R8 justify: ONE claim — "what bounds an exported HEXG row's support" — measured on a real
-// runner, plus the two structural facts that make the measurement conclusive (the zero-mass
-// filter, and the refusal that kills the one child-count-wide exporter arm). The drive and
-// the two facts are the same argument at two altitudes; split them and the numbers stop
-// being evidence for the claim they were taken for.
-//! ⊕ the exported target's support is bounded by the SIM BUDGET, not by the root's child
-//! count.
+// >300 justify (R8): ONE claim — what bounds an exported HEXG row's support — measured on a
+// real runner, plus the structural facts that make the measurement conclusive.
+//! The exported target's support is bounded by the SIM BUDGET, not the root's child count.
 //!
-//! WHY THIS FILE EXISTS. `GUMBEL_REPAIR_1_EXIT.md` §4(a) claimed that raising the root cap
-//! under the corrected Gumbel dialect could put two ROW KINDS in one replay ring — a
-//! truncated-support row and a full-legal-support one — and that a resume across a dialect
-//! change was the way they would mix. **That claim was wrong**, and this file is the
-//! measurement that retires it rather than a note saying so.
+//! Under `search.kind: puct` the target is the visit-count distribution, whose three arms are:
+//! zero temperature, one-hot, support 1; positive total, where an UNVISITED child contributes
+//! zero mass and the recorder keeps an entry only when `p > 0.0`, so the support is the VISITED
+//! children; and zero total, the prior fallback over the FULL child set, which IS
+//! child-count-wide and is DEAD while recording, since `refuse_zero_visit_export` is its exact
+//! complement and runs first. The root cap changes which actions CAN be visited, not how many
+//! ARE.
 //!
-//! THE DERIVATION, which the drive below confirms end to end. Under `search.kind: puct` —
-//! the ONLY kind a graph run can boot (see below) — the exported target is `get_policy_ls`,
-//! the visit-count distribution. It has three arms and only one is reachable while
-//! recording:
-//!
-//!  * `temperature == 0.0` → one-hot on the most-visited child. Support 1.
-//!  * `total > 0.0` → `visits^(1/T) / total` per child. An UNVISITED child contributes
-//!    `0^(1/T) = 0`, and `records::record_position_graph` keeps an entry only `if p > 0.0`,
-//!    so unvisited children are dropped before the row is built. **Support = the VISITED
-//!    children**, which `n_simulations` bounds.
-//!  * `total == 0.0` → the prior-fallback distribution over the FULL child set. This arm IS
-//!    child-count-wide — and it is DEAD on the recording path:
-//!    `records::refuse_zero_visit_export` runs BEFORE the exporter and is its exact
-//!    complement (it sums the same children's visits and is run-fatal at 0), so a search
-//!    that would take this arm never reaches a record at all.
-//!
-//! The root cap changes which actions CAN be visited. It does not change how many ARE, and
-//! only the visited ones are stored.
-//!
-//! AND THE COMPLETED TARGET, THE OTHER ROW KIND, IS BOUNDED BY A DIFFERENT QUANTITY.
-//! `search.kind: gumbel` on a graph run now boots (R347(a)), and its row is SPARSE: the m
-//! sampled candidates' exact entries plus one tail mass, so its width is the minted
-//! `selfplay.gumbel_m` and NOT the sims regime. The two row kinds therefore have two
-//! bounds, each derived by the same one authority from the kind the run declared, and this
-//! file measures the PUCT one. (The grid path used to sit outside the question entirely —
-//! it recorded fixed-width dense rows with no variable-length visit vec — and went with the
-//! dense recorder at R346(f), so both bounds now describe the only path there is.)
+//! A Gumbel row, the other kind, is SPARSE, so its width is the minted `selfplay.gumbel_m` and
+//! not the sims regime. Two row kinds, two bounds; this file measures the PUCT one.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -55,8 +28,7 @@ use mantis_selfplay::replay::hexg::GraphRecord;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 const LEAF_BATCH: usize = 8;
-/// Small enough that the sim budget is FAR below the r8 legal-move count, which is what
-/// makes "sims-bounded" and "child-count-bounded" different predictions.
+/// Small enough that the sim budget is FAR below the r8 legal-move count.
 const SIMS: usize = 24;
 
 fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
@@ -141,14 +113,12 @@ fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
     rows
 }
 
-/// THE MEASUREMENT. A real driven r8 game: every exported row's support is at most the sim
-/// budget, however wide the root's legal set is.
+/// A real driven r8 game: every exported row's support is at most the sim budget.
 #[test]
 fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
     let rows = drive(SearchKind::Puct, 6);
 
-    // The bound the derivation predicts: one stored entry per VISITED child, and a search
-    // spends at most `SIMS` visits across the root's children.
+    // One stored entry per VISITED child, and a search spends at most `SIMS` visits.
     for row in &rows {
         assert!(
             !row.visits.is_empty(),
@@ -169,10 +139,8 @@ fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
         );
     }
 
-    // THE DRIVE MUST REACH THE REGIME WHERE THE TWO BOUNDS DIVERGE, or everything above is
-    // vacuous: if every recorded root held fewer legal moves than the per-node cap, nothing
-    // truncated and the row widths would be small for a reason that has nothing to do with
-    // what is being claimed. Rebuild each recorded position and count its legal set.
+    // The drive must reach the regime where the two bounds diverge, or the rows above are
+    // small for a reason that has nothing to do with the claim.
     let widest_legal = rows
         .iter()
         .map(|row| {
@@ -192,11 +160,8 @@ fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
         })
         .max()
         .unwrap_or(0);
-    // The CHILD COUNT a row could have had is `min(n_legal, cap)`, and it is that against
-    // the sim budget that decides whether the two predictions differ. Written as the cap
-    // alone while the cap sat below every r8 legal set; R347(c) raised it past them, at which
-    // point the cap stopped being the binding term and a cap-only guard started asking for a
-    // regime this drive cannot reach — while the property it guards was never in doubt.
+    // The child count a row could have had is `min(n_legal, cap)`, and it is that against the
+    // sim budget that decides whether the two predictions differ.
     let widest_children = widest_legal.min(MAX_CHILDREN_PER_NODE);
     println!(
         "widest recorded legal set {widest_legal}, per-node cap {MAX_CHILDREN_PER_NODE}, so \
@@ -211,13 +176,8 @@ fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
     );
 }
 
-/// The structural half, stated as its own property: the exporter arm that IS child-count-wide
-/// is unreachable while recording, because the refusal that guards it is its exact
-/// complement.
-///
-/// `get_policy_ls`'s prior-fallback arm fires on `total == 0.0` — every root child unvisited.
-/// `refuse_zero_visit_export` sums those same children's visits and is run-fatal at 0, and it
-/// runs FIRST. The two conditions are the same condition, so the wide arm cannot ship a row.
+/// The child-count-wide exporter arm is unreachable while recording: it fires on zero total,
+/// and the refusal sums the same visits, is run-fatal at 0, and runs FIRST.
 #[test]
 fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
     use mantis_search::MCTSTree;
@@ -228,10 +188,8 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
     board
         .apply_move(0, 0)
         .expect("(0,0) is legal on a fresh board");
-    // Grown until the legal set clears the per-node cap, rather than left at one stone: the
-    // state this test needs is a Gumbel root WIDER than the cap, and one radius-8 ball stopped
-    // being that when R347(c) raised the cap. Stepping outward by exactly one radius keeps
-    // every move legal from the stone before it and grows the union monotonically.
+    // Grown until the legal set clears the per-node cap: the state needed is a root WIDER than
+    // the cap. Stepping outward by one radius keeps every move legal and grows the union.
     let mut q = 0;
     while board.legal_moves().len() <= MAX_CHILDREN_PER_NODE {
         q += 8;
@@ -255,8 +213,8 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
     let stride = 19 * 19 + 1;
     tree.expand_and_backup(&[vec![1.0f32 / stride as f32; stride]], &[0.25]);
 
-    // The root is expanded over the full legal set and NO child has been visited — precisely
-    // the state the prior-fallback arm exists for.
+    // Root expanded over the full legal set with NO child visited — the fallback arm's own
+    // state.
     assert!(
         tree.root_n_children() > MAX_CHILDREN_PER_NODE,
         "the Gumbel root must be wider than the per-node cap for this to be the \

@@ -1,16 +1,9 @@
-"""Resolved-config emit surface (REBUILD — thin per-knob source-tagging).
+"""Resolved-config emit surface: per-knob ``(value, source)`` tagging.
 
-The frozen deep-merge/layer-reconstruct machinery is DELETED (explicit-complete configs have no
-layers to reconstruct). What survives is per-knob ``(value, source)`` tagging + ``to_event_payload``
-for the resolved_config event (docs/contracts/event_manifest.md). No inputs_seen, no
-precedence_family, no layer chain; "checkpoint" source is not producible in WP8 (no loader).
-
-The payload carries the 7 schema leaf keys (source="file") plus the derived ``amp_dtype``
-(source="derived") = 8 knobs. The 7-key schema portion is identical to O15's CONSUMER_REGISTRY's
-original (pre-WP11-A/pre-WPSC) 8-key set, minus ``selfplay.legal_move_radius_schedule``
-(WPSC Phase 2 SC-A2: the field no longer exists — the encoding registry alone is the radius
-authority, DESIGN_P2.md §5/§9 — no replacement leaf is added, per the same precedent WP11-A
-set of not threading every new schema leaf into this payload).
+Explicit-complete configs have no layers to reconstruct, so there is no merge provenance here —
+just the tagging and ``to_event_payload`` for the resolved_config event
+(docs/contracts/event_manifest.md). Not every schema leaf is threaded into the payload: it
+carries the seven schema leaves plus the derived ``amp_dtype``.
 """
 from __future__ import annotations
 
@@ -26,24 +19,17 @@ from mantis.config.resolve.encoding import reconcile_encoding
 from mantis.config.schema import RunConfig
 from mantis.util.yaml_io import parse_config_yaml
 
-#: The run directory's COMPLETE resolved-config record (R347 / CONFIG-1).
+#: The run directory's COMPLETE resolved-config record.
 RESOLVED_CONFIG_FILENAME = "resolved_config.yaml"
 
 
 def write_resolved_config(config: RunConfig, out_dir: str | Path) -> Path:
     """Write the run's COMPLETE resolved config into its own run directory.
 
-    R347/CONFIG-1'S OTHER HALF, and the thing that makes the YAML shrink safe. Once the
-    operational constants carry schema defaults, the shipped file no longer STATES every value
-    the run used — so the run itself has to. This writes the post-validation `model_dump()`,
-    which carries every leaf including the ones no config mentioned, into the run directory
-    beside `logs/` and `checkpoints/`. A schema default that moves later therefore cannot
-    rewrite what an old run is recorded as having used.
-
-    STRICT, and proven on the BYTES rather than on the object: the file is read back and
-    re-validated through `RunConfig`, so a document that would not load is a boot failure here
-    rather than an unreadable record discovered months later. `RunConfig`'s serializer drops
-    the arch-scoped blocks this arch does not have, which is what makes the round trip hold.
+    The shipped config no longer states every value the run used once the operational constants
+    carry schema defaults, so the post-validation `model_dump()` is recorded instead: a schema
+    default that moves later cannot rewrite what an old run is recorded as having used. The
+    bytes are read back and re-validated, so an unloadable record is a boot failure here.
 
     Args:
         config: the validated run config.
@@ -63,8 +49,8 @@ def write_resolved_config(config: RunConfig, out_dir: str | Path) -> Path:
     return path
 
 
-# Resolver-vocab source → thin WP8 emit vocab. A declared config value is a "file" source; the
-# encoding resolver reports "variant"/"checkpoint" — remap so provenance speaks the emit vocab.
+# Resolver vocab -> emit vocab: a declared config value is a "file" source, but the encoding
+# resolver reports "variant"/"checkpoint".
 _SOURCE_REMAP = {"variant": "file", "default": "file", "cli": "cli", "checkpoint": "checkpoint"}
 
 
@@ -104,9 +90,8 @@ class ResolvedConfig:
 def resolve_config(cfg: RunConfig) -> ResolvedConfig:
     """Build a ResolvedConfig from a validated RunConfig.
 
-    The 8 schema leaves tag as "file" (declared config values); ``amp_dtype`` is the one derived
-    knob (source="derived", from resolve_amp_dtype(representation)). The encoding routes through
-    reconcile_encoding (declared, no stamp → source "variant") and remaps variant→"file" (NIT-2).
+    Schema leaves tag as "file"; ``amp_dtype`` is the one derived knob. The encoding routes
+    through `reconcile_encoding`, whose "variant" source remaps to "file".
     """
     enc = reconcile_encoding(cfg.identity.encoding, None)
     knobs: dict[str, ResolvedKnob] = {

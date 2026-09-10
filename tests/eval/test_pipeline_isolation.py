@@ -1,38 +1,20 @@
-"""⊕ WP11-A — eval pipeline isolation laws (mantis.eval.pipeline; design §a.3/§c.3).
+"""Eval pipeline isolation laws.
 
-RED-at-import until IMPL writes `mantis.eval.pipeline` (+ `mantis.eval.promote`,
-`mantis.eval.snapshot`). ORACLE-FIRST: the top-level imports raise ModuleNotFoundError
-before any port code exists.
+Isolation law 1: eval inference is NEVER in-process. `build_eval_pipeline` has NO
+`device`/`model` constructor kwargs, the worker spawns under a `multiprocessing.get_context
+("spawn")` context, and every `.join(` call in pipeline.py carries a `timeout=`. These tests
+patch the STDLIB `multiprocessing.get_context` — the shared module object, so the patch holds
+whichever way pipeline.py imports the name — with a `_FakeProcess` that never spawns, so
+kick-latency assertions are deterministic.
 
-Isolation law 1 (non-negotiable, run3 45h livelock heritage): eval inference is NEVER
-in-process. `build_eval_pipeline` has NO `device`/`model` constructor kwargs — the type
-surface itself cannot express an in-process CUDA path. The worker subprocess is spawned
-under a `multiprocessing.get_context("spawn")` context (own CUDA context); every
-`.join(` call in pipeline.py carries a `timeout=`. These tests patch the STDLIB
-`multiprocessing.get_context` (not a `mantis.eval.pipeline`-qualified name — the patch
-targets the shared module object, so it works regardless of how pipeline.py imports the
-name, as long as it does the ordinary `import multiprocessing; multiprocessing.get_context(...)`
-attribute-lookup idiom) with a `_FakeProcess` that never really spawns an OS process, so
-kick-latency assertions are deterministic and fast regardless of what a REAL worker would
-do (torch import, model load, ...).
-
-IMPL API pin introduced by this oracle (design leaves this as a convention, not
-pseudocode): the model object passed to `run_evaluation` carries its declared `arch`
-dataclass as a plain `.arch` attribute — mirrors the established `trainer.arch` /
-`InfModelArch` convention that was in this tree until AUDIT-1 F-47 deleted it with
-`mantis.train.subsystems.build_inference_model` (both had zero callers; `HexTacToeNet`/`GnnNet` themselves do NOT store `.arch`, so
-something upstream of the model must carry it, and `.arch` on the model instance is this
-suite's concrete choice for that seam). If IMPL threads arch through differently (e.g. an
-explicit `write_model_snapshot(model, path, arch=...)` kwarg), that is a narrow interface
-mismatch to flag at IMPL, not a design contradiction — no test here asserts on the
-snapshot's internal payload shape, only on where the file lands and that it carries no
-checkpoint-envelope keys.
+The model passed to `run_evaluation` carries its declared `arch` dataclass as a plain `.arch`
+attribute. Nothing here asserts on the snapshot's payload shape, only on where the file lands
+and that it carries no checkpoint-envelope keys.
 
 >300 justify: one isolation-law seam (kick/ack, no-module-retained, spawn-context,
-join-boundedness, snapshot-vs-checkpoint) sharing one fake-process/fake-context harness
-and one minimal-config builder — splitting by behavior would duplicate that harness
-across files and let the isolation-law halves drift out of sync with each other, which is
-the exact run3-livelock-class risk this suite exists to pin.
+join-boundedness, snapshot-vs-checkpoint) sharing one fake-process/fake-context harness and one
+minimal-config builder — splitting by behavior would duplicate that harness and let the
+isolation-law halves drift out of sync.
 """
 from __future__ import annotations
 
@@ -59,13 +41,11 @@ _SRC_ARENA = _SRC / "arena"
 _TORCH_FREE_EVAL_MODULES = ("pipeline.py", "ladder.py", "bt.py", "aggregate.py", "rounds.py", "errors.py")
 
 
-# ── shared fixtures (self-contained; no conftest.py — avoids a collision with the
-#    sibling oracle-write agent's files landing in the same tests/eval/ directory) ──────
 def _tiny_model() -> torch.nn.Module:
     arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
                    hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
-    net.arch = arch  # see module docstring: the declared-arch-travels-with-the-model convention
+    net.arch = arch  # the declared arch travels with the model
     return net
 
 
@@ -126,12 +106,8 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
-        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in
-        # the parent and carries it to every `RoundSpec`, because the eval child is a
-        # SECOND allocator on the same card that no in-process bound can see. `None`
-        # is the GRID arm — these fixtures run `v6_live2_ls`, which has no fused graph
-        # forward to bound — and it is written out rather than omitted (the parameter
-        # is required for that reason).
+        # The parent resolves the fused-forward memory bound ONCE and carries it to every
+        # `RoundSpec`; `None` is the GRID arm, which `v6_live2_ls` here takes.
         fused_graph_caps=None,
         inference_batching=None,
     )
@@ -140,9 +116,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
 
 
 class _FakeProcess:
-    """Stands in for `multiprocessing.context.Process`: `.start()` never actually spawns
-    or runs any target — models "a stub worker" without incurring real subprocess/torch
-    import overhead, so kick-latency assertions are deterministic."""
+    """Stands in for `multiprocessing.context.Process`: `.start()` spawns and runs nothing."""
 
     def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
         self._target = target
@@ -193,7 +167,6 @@ def fake_mp(monkeypatch):
     return requested, ctx
 
 
-# ── kick / ack plumbing ──────────────────────────────────────────────────────────────
 def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> None:
     pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path), leaf_batch_size=1)
     try:
@@ -205,7 +178,7 @@ def test_kick_returns_ack_immediately_and_never_blocks(fake_mp, tmp_path) -> Non
         assert elapsed < 0.1, f"kick took {elapsed:.3f}s (must be a non-blocking ack, <100ms)"
         assert ack["kicked"] is True
         assert {"kicked", "round_id", "step", "reason"} <= set(ack)
-        assert "wr_sealbot" not in ack   # P-06 heritage: the kick ack NEVER carries WR
+        assert "wr_sealbot" not in ack   # the kick ack NEVER carries WR
     finally:
         pipeline.stop()
 
@@ -264,15 +237,13 @@ def test_snapshots_are_not_checkpoints(fake_mp, tmp_path) -> None:
             assert checkpoint_dir.resolve() not in p.resolve().parents
             payload = torch.load(p, map_location="cpu", weights_only=True)
             if isinstance(payload, dict):
-                # a checkpoint ENVELOPE (WP10) carries provenance keys a spool snapshot
-                # must never carry — the LAW-12 one-loader carve-out this test pins.
+                # a checkpoint ENVELOPE carries provenance keys a spool snapshot must not.
                 assert "envelope_version" not in payload
                 assert "checkpoint_stamp" not in payload
     finally:
         pipeline.stop()
 
 
-# ── source-level census (isolation laws structural pins) ────────────────────────────────
 def test_parent_side_eval_modules_have_no_inference_surface() -> None:
     banned: list[str] = []
     files = sorted(_SRC_EVAL.glob("*.py")) + sorted(_SRC_ARENA.glob("*.py"))

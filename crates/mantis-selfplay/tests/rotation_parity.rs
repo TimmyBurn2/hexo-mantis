@@ -1,18 +1,10 @@
-//! P-06 — rotation parity, GRAPH half: the axis-graph inference path is rotation-free.
+//! Rotation parity, GRAPH half: the axis-graph inference path is rotation-free.
 //!
-//! The dense half of this file (the three window-scatter sites — input forward-scatter
-//! before inference, policy inverse-scatter after it, record/aux forward-scatter at
-//! finalize — and the `SymTables` scatter kernels they drove) went with the grid path
-//! (R346(f)). Their source-presence pin named functions that no longer exist and would
-//! have asserted a deleted mechanism into existence, so it is gone rather than relaxed.
-//!
-//! What remains is the claim that never depended on a window: `build_leaf_graph` takes NO
-//! `sym_idx` (coord pre-rotation is HEXG sample-time augmentation, not inference), so the
-//! built graph is always the canonical frame, and `rotate_axial` — the primitive the HEXG
-//! sample path rotates with — is inverted exactly by `inv_sym`. Proved two ways that must
-//! not be separated: numerically, and by reading the builder's ARGUMENT LIST at the call
-//! site, because a builder that is rotation-free and unreached passes the numeric half
-//! alone.
+//! `build_leaf_graph` takes NO `sym_idx` — coord pre-rotation is sample-time augmentation, not
+//! inference — so the built graph is always the canonical frame, and `rotate_axial` is inverted
+//! exactly by `inv_sym`. Proved two ways that must not be separated: numerically, and by
+//! reading the builder's ARGUMENT LIST at the call site, since a builder that is rotation-free
+//! and unreached passes the numeric half alone.
 
 use mantis_selfplay::queues::build_leaf_graph;
 use mantis_selfplay::replay::sym::{rotate_axial, N_SYMS};
@@ -74,14 +66,11 @@ fn graph_build_is_rotation_free_and_deterministic() {
     );
 }
 
-/// The argument tokens of the last CALL to `name` in `src`, comma-split at paren
-/// depth 0 with whitespace collapsed. `None` when `name` is never called.
+/// The argument tokens of the last CALL to `name` in `src`, comma-split at paren depth 0 with
+/// whitespace collapsed. `None` when `name` is never called.
 ///
-/// A call is distinguished from the `use` import and from a string literal mentioning
-/// the name by requiring the `(` and by taking the LAST occurrence — the import sits
-/// above every call site. Nested calls and tuples inside an argument are handled by
-/// the depth counter; the pinned call has neither, and a future one that did would
-/// still split correctly.
+/// The `(` and the LAST occurrence are what distinguish a call from the `use` import, which
+/// sits above every call site; nested calls and tuples are handled by the depth counter.
 fn call_args(src: &str, name: &str) -> Option<Vec<String>> {
     let open = src.rfind(&format!("{name}("))? + name.len() + 1;
     let bytes: Vec<char> = src[open..].chars().collect();
@@ -128,11 +117,9 @@ fn call_args(src: &str, name: &str) -> Option<Vec<String>> {
 
 const SEARCH: &str = include_str!("../src/runner/search_drive.rs");
 
-/// Strip Rust line (`//…`) and block (`/* … */`) comments so a source-presence pin
-/// verifies LIVE code, not a marker that survives only in a comment. Tracks
-/// double-quoted string literals (with `\` escapes) so a `//` or `/*` inside a
-/// string is not mistaken for a comment. (The pinned file carries no raw strings or
-/// `'"'` char literals, so this minimal scanner is exact for it.)
+/// Strip Rust line and block comments so a source-presence pin verifies LIVE code, not a
+/// marker that survives only in a comment. Double-quoted literals (with `\` escapes) are
+/// tracked; the pinned file carries no raw strings or `'"'` char literals, so this is exact.
 fn strip_comments(src: &str) -> String {
     let chars: Vec<char> = src.chars().collect();
     let mut out = String::with_capacity(src.len());
@@ -176,12 +163,9 @@ fn strip_comments(src: &str) -> String {
 
 /// The graph inference must pass NO `sym_idx` to the builder.
 ///
-/// Read as an ARGUMENT LIST, not as a source line. The literal one-line form this
-/// used to `contains` was a hostage to rustfmt: GUMBEL-REPAIR-1 touched this file,
-/// rustfmt split the call across seven lines, and the pin reported the rotation-free
-/// property BROKEN while the call was unchanged — the same false red R345 §4d.2
-/// recorded on `inv_dws3_reanchor.rs`. `call_args` is insensitive to exactly what
-/// formatting moves (whitespace between argument tokens) and to nothing else: a
+/// Read as an ARGUMENT LIST, not as a source line: a one-line `contains` is a hostage to
+/// rustfmt, which once split the call across seven lines and reported the property BROKEN while
+/// the call was unchanged. `call_args` is insensitive to whitespace and to nothing else — a
 /// seventh argument, a renamed argument or a reordering all still red.
 #[test]
 fn graph_build_call_passes_no_sym_idx() {
@@ -198,8 +182,7 @@ fn graph_build_call_passes_no_sym_idx() {
         ]),
         "graph build call must pass NO sym_idx (rotation-free at inference)",
     );
-    // Doc-marker (English phrase, never a code token) — matched on RAW source, since
-    // stripping comments is exactly what would (correctly) remove it.
+    // Doc-marker, matched on RAW source: stripping comments would (correctly) remove it.
     assert!(
         SEARCH.contains("rotation-free"),
         "graph rotation-free-at-inference marker removed from search_drive.rs",

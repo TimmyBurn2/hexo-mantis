@@ -1,17 +1,8 @@
-"""Check 8's segmented-reduction formulation — the flip-set for its OWN boundaries (R71/R72).
+"""Check 8's segmented-reduction formulation — the flip-set for its OWN boundaries.
 
-R284's P-CHECKS work replaced check 8 (`EdgeCrossesGraphBoundary`) with a per-graph min/max over
-`edge_offsets` (`np.minimum.reduceat`) instead of a per-EDGE graph id plus two E-long gathers and
-two E-long comparisons. Measured at the minted cap (E = 1,942,920): **13.48 ms -> 0.93 ms**.
-
-`test_graph_collate_adv.py::test_adv_3_edge_crosses_graph` is the parity row and still passes —
-but it drives ONE corruption (edge 0's src into the next graph), and the new formulation has
-failure modes the old one did not: it reasons about SEGMENT EXTREMES rather than per-edge
-identity, and it drops empty edge segments to keep `reduceat` off a start index it rejects.
-
-Every conjunct of the shipped predicate gets a flip (R72). There are four —
-`min(src) < lo`, `max(src) >= hi`, `min(dst) < lo`, `max(dst) >= hi` — and a corruption that
-only trips one of them is exactly what a partial rewrite would miss.
+The check is a per-graph min/max over `edge_offsets` (`np.minimum.reduceat`) rather than a
+per-EDGE graph id plus two E-long gathers: 13.48 ms -> 0.93 ms at the minted cap. It reasons
+about SEGMENT EXTREMES and drops empty edge segments, so each conjunct gets its own flip.
 """
 from __future__ import annotations
 
@@ -47,17 +38,10 @@ def _shape(fields):
 def test_each_conjunct_of_the_containment_predicate_flips(
     payload_fields, endpoint, direction
 ) -> None:
-    """R72: all four conjuncts. `src`/`dst` × `min < lo` / `max >= hi`.
-
-    The corruption targets a MIDDLE graph, and that is what makes the row bite. Both
-    replacement values are then real node indices of NEIGHBOURING graphs — strictly inside the
-    global `[0, N)` — so check 7 (`EdgeIndexOutOfBounds`) cannot see either, and a formulation
-    that reduced over the whole array instead of per segment would call both clean.
-
-    The first draft aimed at the LAST graph and two of the four rows failed for the wrong
-    reason: for the last graph `hi == N`, so `at_or_above_hi` leaves the global range and check
-    7 fires first. Recorded rather than silently re-aimed — a flip-set row that fires through a
-    DIFFERENT check is not a flip of the conjunct it names."""
+    """All four conjuncts: `src`/`dst` × `min < lo` / `max >= hi`, on a MIDDLE graph so both
+    replacement values stay inside the global `[0, N)` where check 7 cannot see them. Aimed at
+    the LAST graph, two rows fire through check 7 instead, which is not a flip of their
+    conjunct."""
     fields = payload_fields("b6")
     E, eo = _shape(fields)
     no = np.asarray(fields["node_offsets"])
@@ -74,11 +58,9 @@ def test_each_conjunct_of_the_containment_predicate_flips(
 
 
 def test_an_edge_inside_the_GLOBAL_range_but_outside_ITS_graph_is_caught(payload_fields) -> None:
-    """The defect the segmentation exists to catch, isolated. Graph 0's first edge is pointed at
-    a node of the LAST graph — a perfectly valid node index, inside `[0, N)`, that belongs to
-    another game. Check 7 (`EdgeIndexOutOfBounds`) cannot see it; only per-graph containment
-    can, and a formulation that reduced over the whole array instead of per segment would call
-    this clean."""
+    """The defect the segmentation exists to catch, isolated: graph 0's first edge points at a
+    node of the LAST graph — a valid index inside `[0, N)` belonging to another game, which only
+    per-graph containment can see."""
     fields = payload_fields("b6")
     no = np.asarray(fields["node_offsets"])
     fields["edge_index"][0] = int(no[-2])   # first node of the last graph
@@ -87,18 +69,10 @@ def test_an_edge_inside_the_GLOBAL_range_but_outside_ITS_graph_is_caught(payload
 
 
 def test_a_graph_with_ZERO_edges_still_makes_its_stolen_edges_cross(payload_fields) -> None:
-    """Moving graph 0's edges into graph 1 at the OFFSET level: graph 0 keeps its nodes and legal
-    set (so checks 4/5/6/12 stay satisfied) and simply owns no edges. Its former edges now belong
-    to graph 1 — which makes them cross-graph — so the corruption must STILL be caught, and
-    caught for the containment reason rather than by an index error.
-
-    RENAMED (R73). Its first name claimed it proved "the segmentation does not break on an empty
-    edge segment", and its docstring described a mode it did not construct — it spoke of a
-    TRAILING empty segment, whose start equals the array length and which `reduceat` genuinely
-    rejects, while building a LEADING one, whose start is 0 and which `reduceat` accepts happily.
-    It also could not discriminate: it asserts a RAISE, and the two mutants of the empty-segment
-    handling raise the same error on it. The row that actually guards the drop is the CLEAN one
-    below."""
+    """Moving graph 0's edges into graph 1 at the OFFSET level: it keeps its nodes and legal set
+    and owns no edges, so its former edges must still be caught for the containment reason. It
+    does NOT guard the empty-segment drop — its LEADING empty segment is one `reduceat` accepts,
+    and both mutants of that handling also raise here."""
     fields = payload_fields("b6")
     eo = np.asarray(fields["edge_offsets"]).copy()
     eo[1] = 0                              # graph 0: [0, 0) -> zero edges
@@ -113,18 +87,10 @@ def test_a_CLEAN_payload_carrying_an_empty_edge_segment_still_collates(
 ) -> None:
     """THE row that guards the empty-segment drop, and the only one that does.
 
-    The mutation table the review built against the shipped check 8 is the reason this exists:
-    every mutant of the four conjuncts, of `>=` vs `>`, of segmented vs whole-array, and of
-    deleting check 8 outright, was caught by some row. **Two were caught by nothing** — removing
-    the `nonempty` filter, and truncating `seg_lo`/`seg_hi` positionally instead of filtering
-    them by the same mask. Both are silent on every corrupted payload and both fire on a CLEAN
-    one, which is exactly the shape no `pytest.raises` row can see.
-
-    The three positions are not decoration. `reduceat` rejects a start index equal to the array
-    length, so only the TRAILING case reaches that mode — it is the one that turns a dropped
-    filter into an `IndexError` rather than a wrong verdict — while leading and middle catch the
-    bounds-misalignment mutant. A payload whose edges are all moved into one graph is legal by
-    every other check, so a correct implementation must call it CLEAN.
+    Two mutants are caught by nothing else — removing the `nonempty` filter, and truncating
+    `seg_lo`/`seg_hi` positionally instead of by the same mask — because both are silent on every
+    corrupted payload and fire on a CLEAN one. Only the TRAILING position reaches the mode where
+    `reduceat` rejects a start index equal to the array length.
     """
     fields = payload_fields("b6")
     eo = np.asarray(fields["edge_offsets"]).copy()
@@ -133,8 +99,8 @@ def test_a_CLEAN_payload_carrying_an_empty_edge_segment_still_collates(
     E = int(eo[-1])
     B = len(eo) - 1
     assert B >= 3, "this row needs three graphs to place an empty segment in the middle"
-    # Give EVERY edge to one graph, and point every endpoint inside that graph's node range so
-    # the payload stays legal. The other graphs then own zero edges.
+    # Give EVERY edge to one graph, with every endpoint inside that graph's node range, so the
+    # payload stays legal and the other graphs own zero edges.
     g = {"leading": B - 1, "middle": 0, "trailing": 0}[position]
     if position == "middle":
         g = 1
@@ -149,14 +115,13 @@ def test_a_CLEAN_payload_carrying_an_empty_edge_segment_still_collates(
 
 
 def test_the_clean_twin_still_collates(payload_fields) -> None:
-    """LAW-07's other half — and the row that would catch a formulation which rejects
-    everything, which every one of the corruption rows above would happily pass."""
+    """The other half of the producer test: it catches a formulation that rejects everything,
+    which every corruption row above would happily pass."""
     batch = _collate(payload_fields("b6"))
     assert batch.n_graphs >= 2
 
 
 def test_a_b1_single_graph_payload_still_collates(payload_fields) -> None:
-    """B = 1 is the degenerate segmentation: one segment covering every edge. Pinned because it
-    is the case where a per-graph reduction and a whole-array reduction coincide, i.e. the case
-    that cannot distinguish a correct implementation from the incorrect one."""
+    """B = 1 is the degenerate segmentation, where a per-graph and a whole-array reduction
+    coincide — the case that cannot distinguish a correct implementation from the incorrect one."""
     assert _collate(payload_fields("b1")).n_graphs == 1

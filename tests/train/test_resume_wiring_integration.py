@@ -1,26 +1,13 @@
-"""SC-A5 oracle — `resume_trainer` actually CALLS `apply_config_overrides_f1` /
-`resolve_lr_provenance` end-to-end (DESIGN_P2.md §6 / PREREG_P2.md suites #11-#12).
+"""`resume_trainer` actually CALLS `apply_config_overrides_f1` / `resolve_lr_provenance`
+end-to-end.
 
-RED at HEAD (not RED-at-import — `mantis.train.checkpoints`/`mantis.train.trainer.core`
-already exist): `resume_trainer` currently drops `config_overrides` on the floor except for
-`allow_fresh_scheduler` (verified at HEAD by direct read, DESIGN_P2.md §6) — every test
-below fails until SC-A5 wires the two already-tested pure functions into its body.
-
-IMPL-DECISION NOTE (flagged in ORACLE_NOTES_P2.md, per DESIGN_P2.md §6's own explicit
-"IMPL decision, not resolved here"): `RunConfig` is `extra="forbid"` at every level, so a
-REAL saved checkpoint's baked config cannot carry bare flat legacy keys (e.g. a top-level
-`"aux_chain_weight"`) the way the pre-SC-A1 `resume_goldens.json` fixture does — that
-fixture's OWN unit tests (T-CK-16/17/20) are unaffected (they call the pure functions
-directly with synthetic dicts, never through a real checkpoint). For THIS integration
-suite, ORACLE-WRITE resolves DESIGN's open question by treating `"train"` (the whole
-nested section) as the F1(A) declared/base-inherited unit — the only key shape that both
-(a) is a real top-level `RunConfig` key a real baked config can carry, and (b) round-trips
-through `apply_config_overrides_f1`'s flat dict-key comparison unmodified. The lr-specific
-loud-warning check is pinned assuming `resume_trainer` reads `baked_lr` via the NESTED
-`baked_config["train"]["lr"]` (not a flat top-level `"lr"`, which no longer exists post-
-SC-A1) while `declared_lr` continues to come from a bare flat `"lr"` key in
-`config_overrides` (matching DESIGN_P2.md §6's literal sketch) — a flat-only baked-lr read
-would make the warning permanently unreachable post-SC-A1, defeating S-2's purpose.
+`RunConfig` is `extra="forbid"` at every level, so a real baked config cannot carry bare flat
+legacy keys; this suite therefore treats `"train"`, the whole nested section, as the
+declared/base-inherited unit — the only key shape that is both a real top-level `RunConfig`
+key and round-trips through the flat dict-key comparison unmodified. The lr-specific loud
+warning is pinned assuming the baked lr is read NESTED as `baked_config["train"]["lr"]` while
+the declared lr comes from a bare flat `"lr"` override; a flat-only baked read would make the
+warning permanently unreachable.
 """
 from __future__ import annotations
 
@@ -63,19 +50,17 @@ def _eval_block() -> dict:
     }
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to this
-#: file's census except for `lr_schedule`, which this file pins itself below.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated: eleven
+#: files carried a hand-written copy, so a new `train.*` key cost eleven edits. `lr_schedule`
+#: is the one leaf this file pins itself below.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
 #: Every config this file builds is a GRAPH config, and it says so once. The block builders read
-#: it so the arch-scoped blocks are dropped AT SOURCE (R322(d)) — which matters here beyond
-#: validity: these oracles compare an OVERRIDE block against the BAKED one, so a block builder
-#: that emitted a key the assembled config had stripped would make the two differ and the
-#: comparison would be measuring this file's own inconsistency.
+#: it so arch-scoped blocks are dropped AT SOURCE: these oracles compare an OVERRIDE block
+#: against the BAKED one, so a builder emitting a key the assembled config strips would make the
+#: comparison measure this file's own inconsistency.
 _REPRESENTATION = "graph"
 
 
@@ -88,9 +73,8 @@ def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
 
 
 def _train_block(*, lr: float = 1e-3) -> dict:
-    # This file's own delta: `lr_schedule="none"` — the resume oracles below compare
-    # optimizer/LR state across a save→load, and a live schedule would move the number they
-    # compare.
+    # This file's own delta, `lr_schedule="none"`: the resume oracles compare optimizer/LR state
+    # across a save->load, and a live schedule would move the number they compare.
     return _drop_foreign_arch_keys(
         "train", dict(_MINTED_TRAIN, lr=lr, lr_schedule="none")
     )
@@ -115,16 +99,15 @@ def _selfplay_block() -> dict:
 def _inference_block() -> dict:
     return _drop_foreign_arch_keys("inference", {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and every config here is GRID,
-        # so it is stripped by the helper above rather than minted and ignored. Left in the
-        # literal so the strip is visible at the site it applies to.
+        # `fused_graph_caps` is ARCH-SCOPED, so the helper above strips it when it does not
+        # belong to `_REPRESENTATION`. Left in the literal so the strip is visible here.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     })
 
 
 def _monitor_block() -> dict:
     return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # The ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -152,9 +135,8 @@ def _full_config(*, lr: float = 1e-3) -> dict:
     config = {
         "schema_version": 1, "run_id": "resume_wiring", "seed": 20260725,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf; `null` is the placeholder, refused at boot on a cuda
+        # process and valued only by the re-calibration.
         "allocator_posture": None,
         "identity": {"encoding": ENCODING, "representation": "graph"},
         "eval": _eval_block(),
@@ -242,14 +224,9 @@ def test_no_config_overrides_leaves_baked_train_section_untouched(
 
 
 def test_resume_trainer_docstring_no_longer_asserts_unimplemented_f1_e0_semantics():
-    # PREREG suite #12 — a light introspection oracle (LAW-07-flavored, not behavioral;
-    # the real behavior is pinned by the five tests above). At HEAD, `resume_trainer`'s
-    # docstring already CLAIMS the F1(A)/E0 frozen-key rules + the loud lr-ignored warning
-    # (checkpoints.py:777-783) — falsely, since neither is wired (DESIGN_P2.md §6). S-2's
-    # "correct the src-side docstring" clause means: once SC-A5 lands, that claim must be
-    # TRUE (pinned behaviorally by the five tests above) AND the docstring must not hedge
-    # the claim as aspirational/unimplemented — a bare string-presence check that no
-    # "not yet"/"TODO"/"future work" caveat survives alongside the F1(A)/E0 claim.
+    # A light introspection oracle: the real behavior is pinned by the five tests above. The
+    # docstring must describe the F1(A)/E0 override rule and must not hedge it as aspirational,
+    # which it once did while neither rule was wired.
     doc = (resume_trainer.__doc__ or "").lower()
     assert "f1(a)" in doc or "e0" in doc, (
         "the docstring must still describe the F1(A)/E0 override-application rule"

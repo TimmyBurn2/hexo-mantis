@@ -1,74 +1,26 @@
 # >300 justify (R8). The seven rows are ONE claim — a BROKEN TERMINAL eval round is
-# supervisor-distinguishable from a clean run, and a MID-RUN one is deliberately not — over
-# one seam that runs from `drain.run_terminal_eval` through a set-once latch on the
-# coordinator to `mantis.run.main`'s rc. Measuring it needs the whole ladder in one place:
-# the drivable collaborators, the `main()` driver, the rigged volume for the first-fire-wins
-# arm and a real `EvalPipeline` for the stream discriminators. R5 bars cross-test imports, so
-# a split forks that harness into copies which then drift while both stay green, and it would
-# fork the ONE property the rows share — that they all read the SAME `ShutdownState`.
-# Executable content is a minority; the rest is the per-row mutation and the "what defect is
-# this the only witness to" rationale LAW-07 asks each row to carry.
-"""⊕ WP12-R Phase O / O-05..O-10, O-32 (R152/R133) — the terminal round's reason reaches the
-process exit code, and a mid-run one still does not.
+# supervisor-distinguishable from a clean run and a MID-RUN one deliberately is not — over one
+# seam running from `drain.run_terminal_eval` through a set-once latch to `mantis.run.main`'s
+# rc. Measuring it needs the whole ladder in one place: drivable collaborators, the `main()`
+# driver, a rigged volume and a real `EvalPipeline`. R5 bars cross-test imports, so a split
+# forks that harness into copies that drift while both stay green.
+"""The terminal round's reason reaches the process exit code, and a mid-run one still does not.
 
-R133's caveat, verbatim: **"rc 0 does not certify eval health"**. It is measured, not
-suspected. At HEAD `drain.close_out` computes the terminal round's result, routes it, and
-then THROWS THE RETURN VALUE AWAY one frame below `ShutdownState` — the only object that can
-carry an outcome to `main` (`drain.py:171`). `promote.py:43` is the single production reader
-of broken-ness anywhere in `src/`, and all it does is refuse to promote. So a run whose
-terminal battery was killed, whose worker returned garbage, or whose ladder state never
-reached disk exits **0**, and the supervisor above it records a clean finish. This file is
-the instrument that makes that false.
+At HEAD `drain.close_out` computed the terminal round's result, routed it, then threw the
+return value away one frame below `ShutdownState` — the only object that can carry an outcome
+to `main` — so a run whose terminal battery was killed exited 0 and the supervisor recorded a
+clean finish.
 
-What Phase O adds, and what each oracle here is the ONLY witness to:
+Per-row mutations: M-O5 call the recorder from `flush_pending_eval`; M-O6 latch a constant;
+M-O7 a second recorder call, M-O7b `self.run_terminal_eval()` inside `step()`; M-O8 delete the
+root's read; M-O9 move the terminal read before the disk-guard read; M-O10 replace the
+re-parse with `if raw:`; M-O32 drop the `_terminal` round-id suffix.
 
-- O-05 (2 nodes) — the OTHER direction, and it is not decoration: R133's split says a
-  mid-run break stays non-fatal (rounds recur; persistent breakage is the watchdog's
-  jurisdiction). An over-firing latch would satisfy every other row in this file. Sole
-  witness that the two mid-run routes (`step._poll_eval_results`, `drain.flush_pending_eval`)
-  leave the latch untouched. MUTATION (M-O5): call the recorder from `flush_pending_eval`.
-- O-06 — the latched value IS the routed result's, read in one expression off the routed
-  mapping. A latch that re-derives its own reason can disagree with the round it came from,
-  and rc 48 would still be right, so O-08 cannot see it. MUTATION (M-O6): latch a constant.
-- O-07 — the census that keeps R133's split structural rather than conditional. TWO
-  conjuncts, both scoped to `src/`: one writer of the latch, reachable only from the one
-  function that passes `ignore_stride=True`; and no third `run_terminal_eval` site, in particular no
-  caller of the public delegate `StepCoordinator.run_terminal_eval` (zero at HEAD), which is
-  the mid-loop route a one-site census cannot see. MUTATIONS: M-O7 (a second recorder call)
-  reds conjunct (i); M-O7b (`self.run_terminal_eval()` inside `step()`) reds conjunct (ii).
-- O-08 (7 nodes) — THE R152 kill, parametrised over all seven reason classes. Sole witness
-  that a broken terminal round exits 48. MUTATION (M-O8): delete the root's read → rc 0 on
-  all seven, which is HEAD.
-- O-09 (2 nodes) — first-fire-wins. `record_abort` is set-once, so a disk-full run whose
-  terminal eval then breaks must report 47, not 48, and a draw-rate collapse recorded
-  mid-loop must keep 46. ORDER is the argument: the terminal read sits AFTER the disk-guard
-  read. MUTATION (M-O9): move it before → arm (a) reports 48 and the ROOT CAUSE is lost.
-- O-10 — a reason spelling no enum member spells is a loud `ValueError` at the process
-  boundary, never a silent rc 0. This is the runtime half of the unrepresentability claim:
-  pyright (gate 14) is real but a `# type: ignore` slips past it. MUTATION (M-O10): replace
-  the re-parse with `if raw:`.
-- O-32 (2 nodes) — terminal-vs-mid-run is distinguishable IN THE STREAM, which R133 names as
-  the interim instrument. Both discriminators exist at HEAD and NOTHING reads them: no test
-  in the tree asserts on the `_terminal` round-id suffix. MUTATION (M-O32): drop the suffix
-  from `pipeline.py:598` → red, while O-08 stays green (the latch never reads the round id).
-
-**What is real here and what is not.** Real, in the `main()` drives: `mantis.run.main`, the
-argument parsing, `launch_run`, `compose_run`, the real minted config read back through the
-ONE loader, real `install_signal_handlers`, a real `ShutdownState`, the real `DiskGuard` on
-its own thread, the real `StepCoordinator`, the real `drain` epilogue, the real armed-abort
-manifest and the real `exit_code_for_abort`. Fake: the three injected collaborators
-(trainer/pool/buffer — the seam every composition drive in this suite stands in), `shutil.
-disk_usage` (rigged so a threshold can be crossed on demand; the house precedent is
-`tests/train/test_lifecycle_contract.py::_fake_disk_usage`), and the EVAL PIPELINE, whose
-`run_evaluation(ignore_stride=True)` returns a rigged round result. That last substitution is
-the subject boundary, stated: which reason a real round PRODUCES is
-`tests/eval/test_eval_broken_reason_routes.py`'s subject (O-02); what the seam DOES with a
-produced reason is this file's. O-32 uses the REAL `EvalPipeline` because its subject is the
-round id that pipeline mints.
-
-The rc measured is `main`'s RETURN VALUE, which `run.py`'s `sys.exit(main())` hands the OS
-unchanged; that two-line `__main__` glue is censused statically by
-`tests/test_run_main_authority.py` and is not re-driven here.
+REAL in the `main()` drives: everything from `mantis.run.main` down to `exit_code_for_abort`.
+FAKE: the three injected collaborators, `shutil.disk_usage`, and the eval pipeline, whose
+`run_evaluation(ignore_stride=True)` returns a rigged result — the subject boundary, since
+which reason a real round PRODUCES is `tests/eval/test_eval_broken_reason_routes.py`'s subject.
+O-32 uses the REAL `EvalPipeline` because its subject is the round id that pipeline mints.
 """
 from __future__ import annotations
 
@@ -107,10 +59,8 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
+#: plus the sections the route's resolvers read. The caps are the template's NON-BINDING pair.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -135,17 +85,15 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 _CONFIGS = _REPO / "configs"
 
-#: The seven censused reason spellings (DESIGN_O §a.2), transcribed rather than derived from
-#: the enum under test: an oracle that read its own expectation off the subject would be
-#: satisfied by any consistent renaming (R81).
+#: The seven censused reason spellings, transcribed rather than derived from the enum under
+#: test: an oracle reading its expectation off the subject accepts any consistent renaming.
 _SEVEN_REASONS = (
     "join_timeout", "killed", "exit_nonzero", "result_missing", "result_invalid",
     "ladder_persist_failed", "round_completion_error",
 )
 
 #: The rule name the composition root records for a broken terminal round, and the code the
-#: manifest authors for it. Both are read from the shipped manifest at assert time (O-08);
-#: the spelling here is the INDEPENDENT statement of what the row must be called.
+#: manifest authors for it — the INDEPENDENT statement of what the row must be called.
 _TERMINAL_RULE = "terminal_eval_broken"
 
 #: The bounded burst. 3 is the smallest legal run at cadence 1 (the reachability validator
@@ -154,32 +102,26 @@ _DRIVE_STEPS = 3
 #: Rigged free space, in decimal GB (`disk_guard.py`'s `/1e9` divisor).
 _HEALTHY_GB = 500.0
 _CRITICAL_GB = 1.0
-#: A guard cadence short enough to fire inside a sub-second burst. Which side of the
-#: thresholds a drive lands on is decided by the rigged `shutil.disk_usage`, never by these.
+#: A guard cadence short enough to fire inside a sub-second burst; which side of the
+#: thresholds a drive lands on is decided by the rigged `shutil.disk_usage`.
 _DRIVE_GUARD = {"interval_sec": 0.02, "warn_gb": 4.0, "fail_gb": 2.0}
 
 _DEV_CONFIG = load_config(_CONFIGS / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
-#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
-#: two equal), so these drives keep exactly the cadence they had before R242's split.
+#: The builder's fifth config-authored parameter, `monitor.gate_interval` — the ARMING
+#: cadence. Harnesses that set `log_interval` mirror it onto `gate_interval`, the shipped
+#: posture: every committed config mints the two equal.
 _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
 
 def _mirrored(settings: dict) -> dict:
-    """R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names it.
-
-    That mirroring is the SHIPPED posture, not a convenience — every committed config mints
-    `monitor.gate_interval` equal to its own `train.log_interval` — so a drive here that moves
-    only `log_interval` keeps exactly the cadence it had before R242 split the two knobs.
-    """
+    """The GATE cadence mirrors the NARRATION cadence unless a drive names it — the shipped
+    posture, so a drive that moves only `log_interval` keeps its pre-split cadence."""
     settings.setdefault("gate_interval", settings["log_interval"])
     return settings
 
 
-# ══ shared drivable collaborators ═════════════════════════════════════════════════════
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -238,8 +180,7 @@ class _Pool:
 
 class _Trainer:
     """A trainer stand-in carrying a REAL declared arch + net: `resolve_anchor` builds the
-    anchor from `trainer.arch` and loads `inference_state_dict()` into it, so a bare object
-    cannot stand in once an eval pipeline is composed."""
+    anchor from `trainer.arch`, so a bare object cannot stand in once a pipeline is composed."""
 
     def __init__(self, on_step: Any = None) -> None:
         self.step = 0
@@ -282,9 +223,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # The graph route's sampler, DELEGATED to a real `HexgBuffer`: the dispatcher collates
+        # the wire for real, so a hand-built payload would be a second wire format.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -297,8 +237,8 @@ class _SpySink:
         self.events.append(dict(event))
 
     def named(self, name: str) -> list[dict]:
-        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect
-        # and must be loud rather than silently filtered out of every assertion below.
+        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect and
+        # must be loud rather than silently filtered out of every assertion below.
         return [e for e in self.events if e["event"] == name]
 
     def order(self) -> list[str]:
@@ -306,9 +246,8 @@ class _SpySink:
 
 
 def _broken_round(reason: str, *, round_id: str = "r000001_3_terminal", step: int = 3) -> dict:
-    """A BROKEN round-result mapping in the post-R152 shape. Hand-built on purpose: the
-    subject here is what the SEAM does with a produced reason, and which reason a real round
-    produces is `tests/eval/test_eval_broken_reason_routes.py`'s subject (O-02)."""
+    """A BROKEN round-result mapping in the post-R152 shape, hand-built: which reason a real
+    round produces is `tests/eval/test_eval_broken_reason_routes.py`'s subject."""
     return {"step": step, "round_id": round_id, "promoted": False, "promoted_step": None,
             "wr_sealbot": None, "wr_random": None, "eval_round_wall_sec": 0.5,
             "eval_broken_reason": reason, "eval_broken_detail": None,
@@ -358,8 +297,7 @@ class _FakeEvalPipeline:
 
 def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
                       config_overrides: dict | None = None) -> SimpleNamespace:
-    """A REAL `StepCoordinator` over the drivable collaborators — the object that must carry
-    the terminal latch, so the latch's ABSENCE is an AttributeError here rather than a
+    """A REAL `StepCoordinator`, so the latch's ABSENCE is an AttributeError here rather than a
     `SimpleNamespace` silently answering `None`."""
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
@@ -381,7 +319,6 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 
 
-# ══ the `main()` drive ════════════════════════════════════════════════════════════════
 def _fake_disk_usage(free_gb: float):
     def _usage(_path):
         total = int(free_gb * 1_000_000_000) * 4
@@ -403,28 +340,22 @@ class _Drive:
 
 
 def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
-    """A REAL minted config, bounded, written to disk so `main --config` reads it back
-    through the ONE loader (no fixture object is smuggled past the CLI). `smoke_preflight_armed.yaml`
-    already mints `eval_enabled: true` and `train.terminal_eval_enabled: true` — the two
-    conditions the rc needs — so nothing here has to invent them."""
+    """A REAL minted config written to disk so `main --config` reads it back through the ONE
+    loader. `smoke_preflight_armed.yaml` already mints the two keys the rc needs."""
     base = load_config(_CONFIGS / "smoke_preflight_armed.yaml").model_dump()
     train = dict(base["train"])
     train.update({"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                   "batch_size": 8, "log_interval": 1})
-    # The armed draw-rate floor is rescaled with the run for the same reason the lag threshold
-    # and the gate interval are below: this drive is 3 steps long and the base config's minted
-    # floor is 10, which the cross-field validator rightly refuses as an abort that can never
-    # fire. R346(f) left one smoke profile and it is an ARMED one.
+    # The armed draw-rate floor is rescaled with the run: this drive is 3 steps long and the
+    # base config's floor of 10 is an abort that can never fire.
     if train["draw_rate_abort"] is not None:
         train["draw_rate_abort"] = {**train["draw_rate_abort"], "min_step": 1}
     train.update(train_overrides)
     base["train"] = train
     monitor = dict(base["monitor"])
-    # R242 (ADJ-D12): the ARMING cadence is `monitor.gate_interval` now, not
-    # `train.log_interval`. This drive sets `log_interval: 1` above so the draw-rate abort can
-    # take an observation on every step of a 3-step burst; that is an ARMING requirement, so
-    # it is the gate knob that has to carry it. Left at the config's own minted interval the gate would
-    # never run and O-09 arm (b) would measure a run that stopped for a different reason.
+    # The ARMING cadence is `monitor.gate_interval`, not `train.log_interval`, and this drive
+    # needs an observation on every step of a 3-step burst; at the config's own interval the
+    # gate would never run and O-09 arm (b) would measure a different stop reason.
     monitor.update({"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                     "gate_interval": 1,
                     "disk_guard": dict(_DRIVE_GUARD)})
@@ -439,19 +370,10 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
                 *, pipeline: _FakeEvalPipeline, free_gb: float = _HEALTHY_GB,
                 wait_for_fire: bool = False, draw_counts: tuple[int, int] = (0, 0),
                 **train_overrides: Any) -> _Drive:
-    """Run `mantis.run.main(--config … --out-dir …)` end to end with the eval pipeline
-    substituted at its construction site.
-
-    `wait_for_fire` blocks the fake train step until the disk guard's latch is set, so the
-    first-fire-wins arm measures the ORDER and never a race: without it a 3-step burst can
-    outrun a 0.02 s poll and the run would exit for a reason unrelated to the subject.
-
-    N4 (dispatcher-ownable backlog): on a COMPLETED compose_run `close_out` never touches
-    `run_safety.sink` (`run.py:899-920` — LAW-16 debt CARD-PROTOCOL-COMPLETE, bounded in
-    production because both real callers exit the process right after `compose_run`
-    returns). `request.addfinalizer` closes the REAL sink deterministically (idempotent,
-    `sink.py:205-206`) so this in-process `main()` drive does not hold the segment file's
-    fd open for the rest of the pytest session."""
+    """Run `mantis.run.main` end to end with the eval pipeline substituted at its construction
+    site. `wait_for_fire` blocks the fake train step until the disk guard's latch is set, so
+    the first-fire-wins arm measures the ORDER and never a race, and `request.addfinalizer`
+    closes the REAL sink, which `close_out` never touches."""
     drive = _Drive()
     drive.pipeline = pipeline
     tmp_path.mkdir(parents=True, exist_ok=True)
@@ -489,11 +411,8 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
     monkeypatch.setattr(mantis_run, "build_eval_pipeline", lambda **_kw: pipeline)
     monkeypatch.setattr(mantis_run, "DiskGuard", _RecordedGuard)
 
-    # The finalizer is registered here, at the SINK'S OWN construction — not after
-    # `compose_run` returns — because O-10's drive raises from INSIDE `compose_run`'s own
-    # body (the re-parse in its teardown), so `real_compose(**kwargs)` never returns for
-    # that row and a post-return registration would silently skip exactly the row this
-    # fix was proven against.
+    # Registered at the SINK'S OWN construction, not after `compose_run` returns, because
+    # O-10's drive raises from INSIDE `compose_run` and would skip a post-return registration.
     real_build_run_safety = mantis_run.build_run_safety
 
     def _recording_build_run_safety(**kwargs: Any):
@@ -516,15 +435,14 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
 
 
 def _await_signal(state: ShutdownState) -> None:
-    """CPython delivers a signal to the main thread at a bytecode boundary, so the handler
-    may still be pending when `compose_run` returns. Bounded wait — a race must fail loudly,
-    never leave a SIGTERM pending into the next test."""
+    """CPython delivers a signal at a bytecode boundary, so the handler may still be pending
+    when `compose_run` returns. Bounded wait: a race must fail loudly, never leave a SIGTERM
+    pending into the next test."""
     deadline = time.monotonic() + 5.0
     while time.monotonic() < deadline and state.stop_count < 1:
         time.sleep(0.005)
 
 
-# ══ the REAL EvalPipeline rig (O-32 only: the round id is the pipeline's own) ══════════
 def _tiny_model():
     spec = lookup("gnn_axis_v1")
     arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
@@ -604,33 +522,24 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
             encoding="v6_live2_ls", save_anchor=lambda *a, **k: None,
             guarded_load=lambda *a, **k: None),
         sink=sink,
-        # F-816-10 D-1: the GRID arm (`v6_live2_ls` has no fused graph forward to
-        # bound), stated because the parameter carries no default.
+        # The GRID arm (`v6_live2_ls` has no fused graph forward to bound), stated because the
+        # parameter carries no default.
         fused_graph_caps=None,
         inference_batching=None,
     )
-    # The persistent poller would finalize a round the drive is about to finalize itself;
-    # its own survival is `tests/eval/test_round_completion_error.py`'s subject, and a race
-    # here would make WHICH path minted the round id nondeterministic.
+    # The persistent poller would finalize a round the drive is about to finalize itself; a
+    # race here would make WHICH path minted the round id nondeterministic.
     pipeline._stop_event.set()          # noqa: SLF001 -- deliberate, test-only quiescing
     pipeline._poller.join(5.0)          # noqa: SLF001
     assert not pipeline._poller.is_alive()   # noqa: SLF001
     return pipeline
 
 
-# ══ O-05 — the mid-run routes never reach the latch ════════════════════════════════════
 def test_neither_mid_run_route_writes_the_terminal_latch(tmp_path, monkeypatch) -> None:
-    """O-05, node 1. R133's split, pinned behaviourally on both mid-run routes.
+    """O-05, node 1: neither mid-run route may reach the terminal recorder, and the PREMISE
+    assertions stop this passing vacuously.
 
-    `step._poll_eval_results` (`step.py:718-726`) and `drain.flush_pending_eval`
-    (`drain.py:96-109`) both call `_route_eval_result` and return; neither may reach the
-    terminal recorder. The PREMISE assertions are what stop this row from passing vacuously:
-    a coordinator with no latch at all also "leaves the latch untouched", which is the state
-    of the tree before this phase and proves nothing.
-
-    MUTATION THAT REDS IT (M-O5): call `_record_terminal_outcome` from `flush_pending_eval`
-    too. rc 48 on a mid-run break is R133's split violated — rounds recur, and a run that
-    dies on the first flaky eval round is strictly worse than one that keeps going."""
+    MUTATION THAT REDS IT (M-O5): call `_record_terminal_outcome` from `flush_pending_eval`."""
     broken = _broken_round("killed", round_id="r000001_3", step=3)
     pipeline = _FakeEvalPipeline(poll_result=dict(broken), drain_result=dict(broken))
     harness = _make_coordinator(eval_pipeline=pipeline, sink=_SpySink())
@@ -659,14 +568,10 @@ def test_neither_mid_run_route_writes_the_terminal_latch(tmp_path, monkeypatch) 
 
 
 def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch, request) -> None:
-    """O-05, node 2 — the same claim at the process boundary, end to end.
+    """O-05, node 2 — the same claim at the process boundary: a mid-run break with a clean
+    terminal round must exit 0, with the latch observably present-and-None.
 
-    A mid-run round breaks; the TERMINAL round is clean. The run must exit 0, and the latch
-    must be observably present-and-None afterwards (the premise that keeps this from being a
-    green over a feature that does not exist).
-
-    MUTATION THAT REDS IT (M-O5): as above — the mid-run break would latch and this run
-    would exit 48 despite a clean terminal battery."""
+    MUTATION THAT REDS IT (M-O5): as above — this run would exit 48."""
     pipeline = _FakeEvalPipeline(
         terminal_result=_clean_round(), poll_result=_broken_round("result_invalid",
                                                                  round_id="r000001_1", step=1),
@@ -689,18 +594,11 @@ def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch,
     )
 
 
-# ══ O-06 — the latch IS the routed result's reason ═════════════════════════════════════
 def test_the_latched_reason_is_the_routed_results_own_value(tmp_path) -> None:
-    """O-06, all seven reasons.
+    """O-06, all seven reasons: the latch is a COPY of `result["eval_broken_reason"]` made in
+    ONE expression off the routed mapping, so it cannot disagree with its round.
 
-    The latch is a COPY of `result["eval_broken_reason"]` — the design says so out loud, and
-    a copy is a second place the fact is written. What keeps the copy honest is that it is
-    made in ONE expression off the routed mapping itself: no derivation, no recomputation,
-    nothing that could disagree with the round it came from.
-
-    MUTATION THAT REDS IT (M-O6): latch a constant (e.g. always `JOIN_TIMEOUT`). rc 48 is
-    still 48, so O-08 stays green — this row is the only witness that the number the operator
-    then goes looking for in the stream is the one that actually happened."""
+    MUTATION THAT REDS IT (M-O6): latch a constant. rc 48 is still 48 and O-08 stays green."""
     for reason in _SEVEN_REASONS:
         pipeline = _FakeEvalPipeline(terminal_result=_broken_round(reason))
         harness = _make_coordinator(eval_pipeline=pipeline, sink=_SpySink())
@@ -714,15 +612,11 @@ def test_the_latched_reason_is_the_routed_results_own_value(tmp_path) -> None:
         )
 
 
-# ══ O-07 — the census that keeps the split structural ══════════════════════════════════
 def _calls_named(name: str) -> list[tuple[str, str, str]]:
     """Every call to `name` under `src/mantis`, as (module, enclosing function, receiver).
 
-    AST, not grep: `grep` cannot tell a call from a `def`, from a docstring mention, or from
-    the RECEIVER — and the receiver is the whole of conjunct (ii) (a `drain.` call and a
-    `self.` call are different routes). The receiver is reported as the dotted source text
-    so a failure names the offending site in the operator's own vocabulary.
-    """
+    AST, not grep: grep cannot tell a call from a `def`, from a docstring mention, or from the
+    RECEIVER — and the receiver is the whole of conjunct (ii)."""
     found: list[tuple[str, str, str]] = []
     for path in sorted(_SRC.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
@@ -750,33 +644,17 @@ def _calls_named(name: str) -> list[tuple[str, str, str]]:
 def test_the_terminal_latch_has_one_writer_and_the_terminal_route_has_no_third_caller() -> None:
     """O-07, TWO conjuncts, both scoped to `src/`.
 
-    Conjunct (i): `record_terminal_eval_reason(` has exactly ONE call site in production, in
-    `drain.py`, and it is REACHABLE ONLY from `drain.run_terminal_eval` — the one function
-    that passes `ignore_stride=True`. That is what makes R133's split structural rather than
-    a conditional somebody can get wrong later.
+    (i) `record_terminal_eval_reason(` has exactly ONE production call site, REACHABLE ONLY
+    from `drain.run_terminal_eval`. Reachability and not lexical containment: the write lives
+    in a one-line private helper, which must itself have one call site inside
+    `run_terminal_eval`.
 
-    "Reachable only from" and not "written inside", deliberately: the design's own shape puts
-    the write in a one-line private helper (`_record_terminal_outcome`) that
-    `run_terminal_eval` calls, so an oracle demanding the literal call site be lexically
-    inside `run_terminal_eval` would be red on a CORRECT implementation. What the claim
-    actually needs is that no OTHER function can reach the writer, and that is checked
-    directly: if the writer sits in a helper, that helper itself must have exactly one call
-    site and it must be inside `run_terminal_eval`. A helper with a second caller reds here,
-    which is the defect the lexical form was reaching for.
+    (ii) `drain.run_terminal_eval` has a SECOND entry point, the public delegate
+    `StepCoordinator.run_terminal_eval`, with zero callers in `src/`; a future mid-loop caller
+    would write the latch mid-run while (i) stayed green. Scoped to `src/` because `tests/`
+    legitimately drives `drain.run_terminal_eval`.
 
-    Conjunct (ii): the census a one-site check cannot do. `drain.run_terminal_eval` has a
-    SECOND entry point — the public delegate `StepCoordinator.run_terminal_eval`
-    (`step.py:733-735`), which has ZERO callers in `src/` today. A future mid-loop caller of
-    that delegate would write the latch mid-run while conjunct (i) stayed green at exactly
-    one call site.
-
-    Scoped to `src/` deliberately: `tests/` legitimately drives `drain.run_terminal_eval`
-    directly (this file does, above), so a tests-inclusive census would be red on arrival and
-    would be measuring the wrong tree.
-
-    MUTATIONS: M-O7 (a second `record_terminal_eval_reason(` anywhere in `src/`) reds
-    conjunct (i); M-O7b (`self.run_terminal_eval()` inside `StepCoordinator.step()`) reds
-    conjunct (ii) and leaves conjunct (i) untouched."""
+    MUTATIONS: M-O7 reds conjunct (i); M-O7b reds conjunct (ii) and leaves (i) untouched."""
     writers = _calls_named("record_terminal_eval_reason")
     assert len(writers) == 1, (
         "the terminal latch must have EXACTLY ONE writer in `src/` — a second writer is a "
@@ -807,11 +685,8 @@ def test_the_terminal_latch_has_one_writer_and_the_terminal_route_has_no_third_c
         "`drain.close_out` and the `StepCoordinator` delegate that forwards to `drain`. A "
         f"third site is a new route into the terminal battery. Found: {terminal_calls}"
     )
-    # The two legitimate shapes, and only these two: the module's own bare-name call inside
-    # `drain.py` (`close_out` → `run_terminal_eval(coord)`), and the delegate forwarding to
-    # the module (`step.py` → `drain.run_terminal_eval(self)`). Anything with another
-    # receiver — `self.run_terminal_eval()`, `coord.run_terminal_eval()` — is a caller of the
-    # PUBLIC delegate, which is the mid-loop route conjunct (ii) exists to forbid.
+    # The two legitimate shapes and only these: `drain.py`'s own bare-name call, and the
+    # delegate forwarding to the module. Any other receiver is the mid-loop route (ii) forbids.
     delegate_callers = [
         site for site in terminal_calls
         if not (site[2] == "drain"
@@ -824,25 +699,14 @@ def test_the_terminal_latch_has_one_writer_and_the_terminal_route_has_no_third_c
     )
 
 
-# ══ O-08 — THE kill: a broken terminal round exits 48 ══════════════════════════════════
 @pytest.mark.parametrize("reason", _SEVEN_REASONS)
 def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch, request) -> None:
-    """O-08 — R152's whole point, and the discharge condition for R133's caveat.
-
-    Measured at HEAD: the terminal round breaks, `_finalize_round` emits `eval_broken`,
-    `drain.run_terminal_eval` routes the result — and `main` returns **0**. A broken terminal
-    round and a clean one are the same observable at the process boundary, so "the run
-    finished" and "the run finished with no promotion decision at all" are indistinguishable
-    to the supervisor above (LAW-15: no promotion decision = deliverable incomplete).
-
-    The rc is asserted THROUGH the manifest row and the ONE resolver, never against a
-    literal: a second literal at the launcher would go on returning the old number after the
-    row moved, and the manifest would be lying about it.
+    """O-08 — a broken terminal round exits 48; measured at HEAD it returned 0, so a run with
+    no promotion decision at all was indistinguishable to the supervisor. The rc is asserted
+    THROUGH the manifest row and the ONE resolver, never against a literal.
 
     MUTATION THAT REDS IT (M-O8): delete `shutdown.record_abort(TERMINAL_EVAL_BROKEN_ABORT_
-    RULE)` from `run.py`'s teardown. Every other row in this file stays green and this one
-    returns to 0, which is HEAD.
-    """
+    RULE)` from `run.py`'s teardown; every other row stays green."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round(reason))
     drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
@@ -869,13 +733,9 @@ def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch, request
 
 
 def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch, request) -> None:
-    """O-08's CONTROL, and the reason it is not optional (R84's template is a DIFFERENCE, not
-    a number): an oracle whose control also answered 48 would prove nothing about the seam.
-    A latch that fired on EVERY terminal round would pass all seven rows above and ship a run
-    that always exits 48.
-
-    This is the in-file twin of `tests/test_run_launcher.py::…` (integration tier), which
-    drives the same claim on a real bounded `launch_run` over `smoke_preflight_armed.yaml`."""
+    """O-08's CONTROL: a latch that fired on EVERY terminal round would pass all seven rows
+    above and ship a run that always exits 48. The in-file twin of the integration-tier
+    `tests/test_run_launcher.py` drive over a real bounded `launch_run`."""
     pipeline = _FakeEvalPipeline(terminal_result=_clean_round())
     drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
@@ -889,21 +749,13 @@ def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch, request) -> No
     )
 
 
-# ══ O-09 — first fire wins: the ROOT CAUSE survives ════════════════════════════════════
 def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(
     tmp_path, monkeypatch, request
 ) -> None:
-    """O-09 arm (a). ORDER is the argument, not a convenience.
+    """O-09 arm (a). ORDER is the argument: the volume kills the run, the terminal battery then
+    breaks BECAUSE of it, and `record_abort` is set-once.
 
-    A full volume kills the run; the terminal battery then breaks BECAUSE the volume is full.
-    `record_abort` is set-once, so the rule that stopped the run must be the one that
-    actually stopped it — a supervisor told "terminal eval degraded" (48) goes looking at the
-    eval ladder instead of at the disk. The terminal read therefore sits AFTER the
-    disk-guard read in `compose_run`'s outer `finally`.
-
-    MUTATION THAT REDS IT (M-O9): move the terminal read before the disk-guard read. Arm (b)
-    below stays green (the draw-rate rule is recorded mid-loop, before either), which is why
-    this arm exists separately."""
+    MUTATION THAT REDS IT (M-O9): move the terminal read before the disk-guard read."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("join_timeout"))
     drive = _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline,
                         free_gb=_CRITICAL_GB, wait_for_fire=True)
@@ -929,11 +781,8 @@ def test_a_disk_full_run_whose_terminal_eval_also_broke_reports_47(
 def test_a_draw_rate_collapse_that_precedes_a_broken_terminal_round_reports_46(
     tmp_path, monkeypatch, request
 ) -> None:
-    """O-09 arm (b). The mid-loop fire, which is recorded BEFORE the epilogue runs at all.
-
-    A collapsed run's terminal battery will very often break too (the pool is stopped, the
-    volume may be full, the run is unwinding), and re-labelling the collapse as "terminal
-    eval degraded" would hide the finding the abort exists to surface.
+    """O-09 arm (b): the mid-loop fire is recorded BEFORE the epilogue runs, so a collapse is
+    not re-labelled by the terminal battery that breaks with it.
 
     MUTATION THAT REDS IT: make `record_abort` last-writer-wins instead of set-once."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("exit_nonzero"))
@@ -954,41 +803,22 @@ def test_a_draw_rate_collapse_that_precedes_a_broken_terminal_round_reports_46(
     )
 
 
-# ══ O-10 — an unregistered spelling is loud at the boundary ════════════════════════════
 def test_an_unregistered_reason_spelling_raises_at_the_root(tmp_path, monkeypatch, request) -> None:
-    """O-10 — the RUNTIME half of the unrepresentability claim.
+    """O-10 — the RUNTIME half of the unrepresentability claim: a `# type: ignore` slips past
+    pyright and the result crosses a JSON boundary, so the root RE-PARSES the latched string.
 
-    §b.3's three typed chokepoints make a bare string a pyright error, and gate 14 is held at
-    ZERO — but a `# type: ignore` slips past a type checker, and the round result crosses a
-    JSON boundary where types do not travel at all. So the composition root RE-PARSES the
-    latched string through the enum before naming the rule: a spelling no member spells is a
-    loud `ValueError` at the process boundary, never a silent rc 0.
-
-    MUTATION THAT REDS IT (M-O10): replace `EvalBrokenReason(raw)` with `if raw:`. Every O-08
-    row stays green — the seven registered spellings still resolve — and only an unregistered
-    one goes quiet, which is exactly the case a type checker was never going to catch."""
+    MUTATION THAT REDS IT (M-O10): replace `EvalBrokenReason(raw)` with `if raw:`."""
     pipeline = _FakeEvalPipeline(terminal_result=_broken_round("not_a_registered_reason"))
 
     with pytest.raises(ValueError, match="not_a_registered_reason"):
         _drive_main(tmp_path, monkeypatch, request, pipeline=pipeline)
 
 
-# ══ O-32 — terminal vs mid-run is distinguishable IN THE STREAM ════════════════════════
 def test_a_terminal_round_is_marked_terminal_in_the_stream(tmp_path, monkeypatch) -> None:
-    """O-32, node 1. R133 names the run's own event stream as the interim instrument, so the
-    two discriminators it depends on must not be implicit.
+    """O-32, node 1: both stream discriminators exist at HEAD and nothing reads either, so
+    their absence would be invisible. Driven through the REAL `EvalPipeline` over one sink.
 
-    Both exist at HEAD and NOTHING reads either: a grep of `tests/` finds no assertion on the
-    `_terminal` round-id suffix. An unread discriminator is one refactor away from being
-    gone, and its absence would be invisible — which is the F-10 class.
-
-    Driven through the REAL `EvalPipeline` because the round id is the pipeline's own
-    (`pipeline.py:598`), over one sink shared with `drain`, so the ordering assertion is
-    about ONE stream and not two.
-
-    MUTATION THAT REDS IT (M-O32): drop the `_terminal` suffix from the round-id format.
-    O-08 stays green — the latch reads `eval_broken_reason`, never the round id — which is
-    why this row is not redundant with it."""
+    MUTATION THAT REDS IT (M-O32): drop the `_terminal` suffix from the round-id format."""
     ctx = _FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
     sink = _SpySink()
@@ -1018,10 +848,7 @@ def test_a_terminal_round_is_marked_terminal_in_the_stream(tmp_path, monkeypatch
 
 def test_a_mid_run_round_carries_neither_terminal_discriminator(tmp_path, monkeypatch) -> None:
     """O-32, node 2 — the contrast arm, without which node 1 is satisfied by stamping
-    `_terminal` on every round and emitting `terminal_eval` unconditionally.
-
-    A mid-run round is kicked by the stride and drained by the teardown flush; it must carry
-    neither discriminator."""
+    `_terminal` on every round. A mid-run round must carry neither discriminator."""
     ctx = _FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
     sink = _SpySink()

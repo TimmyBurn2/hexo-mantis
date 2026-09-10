@@ -1,41 +1,28 @@
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — T-3 loop-2 addition (RED_TEAM_T F-RT-1/F-RT-3;
-//! dispatcher freeze addition FA-3): the SIGN-COVERAGE oracles. NOT part of the T-2
-//! frozen bytes — additive.
+//! Sign-coverage oracles for `record_position_graph`'s guarded-quantity == shipped-quantity
+//! check.
 //!
-//! Subject: the guarded-quantity == shipped-quantity conjunct in
-//! `record_position_graph` (the loop-2 stored-sum check). Pre-loop-2, a
-//! sign-cancelling ls ({+1.5, −0.5}: PRE-filter scan sum == 1, stored mass == 1.5)
-//! CONSTRUCTED a non-distribution record and shipped it to the loss at 1.5× weight —
-//! R161 unconstructibility defeated by cancellation (RED_TEAM_T §1 F-RT-1, reproducer
-//! verbatim as case 1). Negative mass reaches the ls in production only through the
-//! sign-unchecked GNN seam (`assemble_ls_from_gnn_probs` checks Σ and slots, not sign)
-//! — defence-in-depth, not a live-softmax defect.
+//! A sign-cancelling ls ({+1.5, −0.5}: pre-filter scan sum 1, stored mass 1.5) once constructed
+//! a non-distribution record and shipped it to the loss at 1.5× weight — unconstructibility
+//! defeated by cancellation. Negative mass reaches the ls in production only through the
+//! sign-unchecked GNN seam, so this is defence in depth, not a live-softmax defect.
 //!
-//! Cases: (1) the verbatim {+1.5, −0.5} reproducer at the direct constructor —
-//! `MassNotUnity` carrying the SHIPPED sum 1.5 (≠ the scanned 1.0 — the
-//! pre-vs-post-filter equality pin); (2)+(3) the full production chain through BOTH
-//! production expands (`expand_and_backup_ls_at` / `expand_and_backup_ls`):
-//! negative-mixture prior → sims-1 zero-visit §3.1 fallback passes the negative
-//! through → export Σ==1 with a negative entry (asserted precondition) → record
-//! REFUSES; (4) over-unity Σ=2.0 → `MassNotUnity` (the frozen bank had no over-unity
-//! case); (5) F-RT-3 admit-side: Σ = 1 + 5e-5 (all-positive, within the ABSOLUTE
-//! 1e-4 TOL) is ADMITTED — pins the intended window width.
+//! Cases: (1) the reproducer at the direct constructor, whose error carries the SHIPPED sum,
+//! not the cancelled scan sum; (2)+(3) the same through both production expands; (4) over-unity
+//! Σ=2.0; (5) the admit side, Σ = 1 + 5e-5, within the absolute 1e-4 TOL.
 //!
-//! Killer: M-P (the stored-sum equality reverted → cases 1-3 red; 4/5 stay their
-//! colors — recorded in PREREG_T AMENDMENT A-9).
+//! Killer: M-P (revert the stored-sum equality → cases 1-3 red, 4/5 keep their colours).
 
 use mantis_core::board::Board;
 use mantis_core::{Cell, Player};
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::records::{record_position_graph, TargetIntegrityError};
-/// Test slot geometry passed explicitly to `record_position_graph` (post-R255
-/// the production value is DERIVED from the sims regime at composition).
+/// Test slot geometry; the production value is derived from the sims regime at composition.
 const VISIT_CAP: usize = 128;
 
 const NA: usize = 362;
 const TRUNK: i32 = 19;
 
-/// Three well-separated stones → a wide legal set (the postfix bank's wide_board).
+/// Three well-separated stones, giving a wide legal set.
 fn wide_board() -> Board {
     let stones: Vec<((i32, i32), Cell)> =
         vec![((0, 0), Cell::P1), ((8, 0), Cell::P2), ((0, 8), Cell::P1)];
@@ -69,7 +56,6 @@ fn record(
     record_position_graph(board, ls, TRUNK, 1, 2, 3, true, VISIT_CAP, None)
 }
 
-// ── (1) the F-RT-1 reproducer, verbatim: {+1.5, −0.5} — scan Σ==1, stored 1.5 ────────
 #[test]
 fn sign_cancelling_ls_is_unconstructible_and_the_error_carries_the_shipped_sum() {
     let board = wide_board();
@@ -78,8 +64,7 @@ fn sign_cancelling_ls_is_unconstructible_and_the_error_carries_the_shipped_sum()
         .expect_err("a sign-cancelling non-distribution target must be unconstructible");
     match err {
         TargetIntegrityError::MassNotUnity { sum, n_cells, .. } => {
-            // The error carries the SHIPPED (post-filter) mass — the quantity the
-            // record would have stored — not the cancelled scan sum.
+            // The shipped (post-filter) mass, not the cancelled scan sum.
             assert!(
                 (sum - 1.5).abs() < 1e-6,
                 "MassNotUnity must carry the shipped sum 1.5 (scan sum was 1.0), got {sum}"
@@ -90,21 +75,18 @@ fn sign_cancelling_ls_is_unconstructible_and_the_error_carries_the_shipped_sum()
     }
 }
 
-// ── (2)+(3) full production chains through BOTH expands ─────────────────────────────
-/// Compact board (3 close stones): n_legal < MAX_CHILDREN_PER_NODE, so EVERY
-/// legal cell — including the negative-prior one — becomes a root child (on an
-/// over-192-legal board the top-K sort cuts the most-negative prior and the
-/// chain self-heals; the defect regime needs the full child set).
+/// Compact board: n_legal < MAX_CHILDREN_PER_NODE, so every legal cell — the negative-prior
+/// one included — becomes a root child. Above the cap the top-K sort cuts the most-negative
+/// prior and the chain self-heals, so the defect regime needs the full child set.
 fn compact_board() -> Board {
     let stones: Vec<((i32, i32), Cell)> =
         vec![((0, 0), Cell::P1), ((2, 0), Cell::P2), ((0, 2), Cell::P1)];
     Board::from_stones(&stones, Player::One, 2, 0, None)
 }
 
-/// Drive a negative-mixture PRIOR through `expand` at sims=1 (zero-visit root →
-/// the §3.1 prior fallback passes negatives through when total_prior > 0), assert
-/// the export is Σ==1 WITH a negative entry (the defect regime, preconditioned),
-/// then assert the record REFUSES with `MassNotUnity`.
+/// Drive a negative-mixture prior through `expand` at sims=1, where the zero-visit prior
+/// fallback passes negatives through; assert the export is Σ==1 with a negative entry, then
+/// that the record refuses.
 fn drive_negative_prior_chain(use_at: bool) {
     let board = compact_board();
     let legal = board.legal_moves();
@@ -114,8 +96,7 @@ fn drive_negative_prior_chain(use_at: bool) {
          cell becomes a child",
         legal.len()
     );
-    // Negative mixture summing to 1 over the legal set: one cell at +1.5, one at
-    // −0.5, rest 0 — mirrors the reproducer through the production seam.
+    // A negative mixture summing to 1 over the legal set, through the production seam.
     let mut prior = LegalSetPolicy {
         dense: vec![0.0; NA],
         overflow: Default::default(),
@@ -176,7 +157,6 @@ fn negative_prior_chain_through_expand_and_backup_ls_refuses_at_record() {
     drive_negative_prior_chain(false);
 }
 
-// ── (4) over-unity: Σ = 2.0 (all-positive) → MassNotUnity ───────────────────────────
 #[test]
 fn over_unity_all_positive_is_unconstructible() {
     let board = wide_board();
@@ -193,11 +173,10 @@ fn over_unity_all_positive_is_unconstructible() {
     }
 }
 
-// ── (5) F-RT-3 admit-side: within the ABSOLUTE 1e-4 TOL is ADMITTED ─────────────────
 #[test]
 fn within_tol_sum_is_admitted_the_documented_window() {
     let board = wide_board();
-    let ls = ls_on_first_legal(&board, &[0.6, 0.4 + 5.0e-5]); // Σ = 1 + 5e-5 < TOL
+    let ls = ls_on_first_legal(&board, &[0.6, 0.4 + 5.0e-5]); // Σ = 1 + 5e-5, inside TOL
     let rec = record(&board, &ls)
         .expect("a within-TOL (1 + 5e-5) all-positive target is ADMITTED — F-RT-3 pin");
     assert_eq!(rec.visits.len(), 2);

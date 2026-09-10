@@ -1,42 +1,18 @@
-# >300 justify (R8): the format, its writer, its reader and the two builders that turn a
-# played game into one are ONE unit. A record shape defined apart from the writer that stores
-# it drifts from it, and a reader defined apart from both is a second authority over the same
-# bytes — which is exactly the failure this store exists to make impossible for a run's games.
+# >300 justify (R8): the format, its writer, its reader and the two builders that turn a played
+# game into one are ONE unit. A record shape defined apart from its writer drifts from it, and a
+# reader defined apart from both is a second authority over the same bytes.
 """The GAME RECORD store: every game a run plays, written where it can be read back.
 
-R344(b). A run that does not write its games cannot be viewed, replayed, or mined, and the
-producer must exist at step 0 — so this is a WRITER that ships with the run, not a report
-generated afterwards from something else.
+A run that does not write its games cannot be viewed, replayed or mined, and the producer must
+exist at step 0 — so this is a WRITER that ships with the run, not a later report. It is NOT a
+second event stream: `game_complete` still carries move lists into the JSONL event channel, but
+that stream is keyed by TIME, while this one is keyed by GAME with an index over its shards.
 
-WHAT IT IS NOT. It is not a second event stream. `game_complete` already carries a self-play
-game's move list into the JSONL event channel and keeps doing so; that stream is keyed by
-TIME and mixes forty event kinds, which is the wrong shape for "show me game 1 837". This
-store is keyed by GAME, one record per line, with an index over its shards.
-
-FORMAT: JSONL, by the ruling's own conditional — *"length-delimited msgpack (falls back to
-JSONL if msgpack is not already a dependency — no new hard dependency for this)"*. `msgpack`
-is not in `pyproject.toml`'s dependencies or its one extra, so the fallback fires and there is
-nothing here to decide.
-
-SHARDS ARE KEYED BY (run, SEGMENT, hour), NOT BY (run, hour), and the segment is not
-decoration. `monitor/sink.py` claims its event segments with `O_CREAT|O_EXCL` so that no file
-ever spans two run segments — a law it earned when a scan-then-append TOCTOU put two process
-headers in one file. Keying a game shard on the hour alone would reintroduce exactly that: a
-resume landing in the same wall-clock hour would append to the stopped process's shard. The
-hour rotation the ruling asks for therefore happens WITHIN a segment.
-
-FAILURE POSTURE, matching the two neighbours that already ruled it. Construction RAISES: a
-store that cannot open at boot is a loud startup error, not a mid-run surprise (the
-`JsonlEventSink` posture). After construction, a write failure increments
-`persist_errors_total`, logs an ERROR and disables the store — the eval progress writer's
-posture under R319(e)(ii), for its reason: losing the record of a game must not kill a run
-that is otherwise healthy, and the counter is what makes the loss visible rather than silent.
-
-READING IS PART OF THE FORMAT, so it lives here. A reader in another module is a second
-authority over the same bytes, and the one thing this store must survive is being read while
-it is being written: the last line of a live shard is routinely a partial line. `read_shard`
-SKIPS a trailing partial record and counts it; it does not raise, and it does not silently
-treat the file as ending cleanly.
+SHARDS ARE KEYED BY (run, SEGMENT, hour): keying on the hour alone would let a resume in the
+same wall-clock hour append to the stopped process's shard. Construction RAISES, but after it a
+write failure increments `persist_errors_total`, logs and disables the store, because losing a
+record must not kill a healthy run. READING lives here too: `read_shard` SKIPS a partial
+trailing record and COUNTS it.
 """
 from __future__ import annotations
 
@@ -82,11 +58,7 @@ def index_filename(run_id: str) -> str:
 
 
 def next_segment_index(record_dir: Path, run_id: str) -> int:
-    """`max(existing segment index for run_id) + 1`, 1 when the run has no shard yet.
-
-    Segments are per-`run_id`, exactly as the event sink's are: one run's resumes never
-    advance another run's counter.
-    """
+    """`max(segment index for run_id) + 1`, or 1; segments are per-`run_id`."""
     highest = 0
     if record_dir.is_dir():
         for entry in record_dir.iterdir():
@@ -121,23 +93,12 @@ class GameRecordWriter:
         self._shard_games = 0
         self._opened_at = datetime.now(tz=UTC).isoformat()
 
-    # -- shard lifecycle ----------------------------------------------------------------
     def _claim(self, hour: str, *, segment: int | None = None) -> tuple[int, str, Path, Any]:
-        """Atomically claim a shard for `hour`; return its open handle.
-
-        The claim is `O_CREAT|O_EXCL` for the event sink's reason: two processes starting at
-        the same instant must not both believe they own one file. A loser re-scans and
-        advances its SEGMENT, so the two runs' games never interleave in one shard.
-
-        `segment` is REUSED on an hour rotation and only scanned for at construction, and the
-        difference is not cosmetic. A run writes from TWO processes into one directory — the
-        trainer continuously, and each eval round's child for its own lifetime — so a trainer
-        that re-scanned at every rotation would step over whatever segment the last round's
-        child took, and its own shards would carry three segment numbers across three hours.
-        The segment names the WRITER; the hour names the window. Re-scanning conflates them,
-        and there is no collision to avoid: this writer only ever rotates FORWARD, so
-        `(its own segment, a new hour)` is a filename nothing can already hold.
-        """
+        """Atomically claim a shard for `hour` and return its open handle. `O_CREAT|O_EXCL`, so
+        two processes starting at one instant cannot both own a file and a loser advances its
+        SEGMENT. `segment` is scanned for only at construction, because a run writes from TWO
+        processes into one directory and re-scanning each rotation would step over the last eval
+        child's segment."""
         last_exc: OSError | None = None
         for _ in range(_MAX_SHARD_CLAIM_RETRIES):
             claim = next_segment_index(self._dir, self._run_id) if segment is None else segment
@@ -159,8 +120,7 @@ class GameRecordWriter:
         ) from last_exc
 
     def _close_shard(self) -> None:
-        """fsync, close, and append this shard's row to the index. Order is load-bearing:
-        the index may only name a shard whose bytes are already on the platter."""
+        """fsync, close and index this shard; the index may only name bytes already on disk."""
         if self._handle.closed:
             return
         try:
@@ -188,15 +148,9 @@ class GameRecordWriter:
         self.persist_errors_total += 1
         _LOG.error("game_record_%s_failed path=%s: %r", where, self._path, exc)
 
-    # -- the write path -----------------------------------------------------------------
     def write(self, record: Mapping[str, Any]) -> None:
-        """Append one game record, rotating the shard when the UTC hour has turned.
-
-        Never raises: a lost game record must not end a healthy run. A failure disables the
-        store, counts, and logs — `persist_errors_total` is the observable that makes the
-        loss loud (LAW-18), and a disabled store stays disabled rather than retrying into a
-        full volume once per game.
-        """
+        """Append one game record, rotating the shard on the UTC hour. Never raises: a failure
+        disables the store, counts and logs, so a lost record cannot end a healthy run."""
         if self._disabled:
             return
         try:
@@ -230,28 +184,14 @@ class GameRecordWriter:
         return self._index_path
 
 
-# --------------------------------------------------------------------------------------- #
-# Reading — same module, because the format has one authority
-# --------------------------------------------------------------------------------------- #
 def read_shard(path: Path | str) -> tuple[list[dict[str, Any]], int]:
-    """Return `(records, skipped)` from one shard, tolerating a partial trailing line.
-
-    A shard being written has no closing guarantee on its last line, and a shard whose
-    process was killed mid-write keeps that partial line forever. Both are the SAME shape to
-    a reader and neither is fatal: the malformed line is skipped and COUNTED, so a caller can
-    tell "one torn tail" from "this file is garbage" — the distinction a bare `try: continue`
-    throws away.
-
-    Header/footer rows (`record` in {shard_opened, shard_closed}) are not games and are not
-    returned.
-    """
+    """Return `(records, skipped)` from one shard, tolerating a partial trailing line: a live
+    shard has no closing guarantee on its last line and a killed process leaves one forever, so
+    the malformed line is skipped and COUNTED. Header/footer rows are not games."""
     records: list[dict[str, Any]] = []
     skipped = 0
-    # BINARY, decoded per line. Text mode would raise `UnicodeDecodeError` on a line torn
-    # mid-character and take the whole file with it — the one outcome this function exists to
-    # prevent. `json.dumps` defaults to `ensure_ascii=True` so a torn line is ASCII today and
-    # the case is unreachable; relying on that would make the guarantee depend on a default in
-    # another module. A line that will not decode is skipped and counted like any other.
+    # BINARY, decoded per line: text mode would raise `UnicodeDecodeError` on a line torn
+    # mid-character and take the whole file with it, which is what this function prevents.
     with Path(path).open("rb") as handle:
         for raw in handle:
             try:
@@ -289,23 +229,14 @@ def iter_run_games(record_dir: Path | str, run_id: str) -> Iterator[dict[str, An
         yield from records
 
 
-# --------------------------------------------------------------------------------------- #
-# The record shape — ONE authority, two producers
-# --------------------------------------------------------------------------------------- #
-#: Self-play's Rust terminal codes, already mapped to these names by `pool_drain`.
-#: Repeated here as the record's declared vocabulary rather than imported, because a record
-#: written to disk must not change meaning when a producer's internal mapping does.
+#: Self-play's Rust terminal codes, already mapped by `pool_drain`. Repeated here as the record's
+#: declared vocabulary, so a record on disk cannot change meaning when a producer's mapping does.
 TERMINATIONS = ("six_in_a_row", "colony", "ply_cap", "other_draw", "unknown")
 
 
 def _axial(moves: Any) -> list[list[int]]:
-    """`[(q, r), ...]` -> `[[q, r], ...]`, one entry per PLY.
-
-    PLIES, not turns: a turn places two stones (the first turn one), so the move list is the
-    flat ply sequence and a viewer derives the turn grouping from its own index. Storing the
-    grouping would be storing a derivation, and the corpus pipeline's `GameRecord.moves` is
-    already the flat sequence — this is the field the two formats share.
-    """
+    """`[(q, r), ...]` -> `[[q, r], ...]`, one entry per PLY rather than per turn, which is the
+    flat sequence the corpus pipeline's `moves` already uses."""
     return [[int(q), int(r)] for q, r in moves]
 
 
@@ -323,23 +254,10 @@ def selfplay_record(
     served_sims: int,
     game_id_byte_hash: str | None = None,
 ) -> dict[str, Any]:
-    """One self-play game as a record.
-
-    `step` is the ACTOR step — the training step whose weights played this game, forwarded by
-    `ActorSync` through `WorkerPool.update_checkpoint_step`. It is NOT the learner's live
-    step, and the record says which it is in `step_kind` rather than leaving a reader to
-    assume (LAW-03: verify the measurement unit before framing anything on it).
-
-    `colors` is ABSENT here, deliberately. On the eval channels it says which seat the
-    candidate held; in self-play both seats are the same net, so there is nothing for it to
-    say and a `{"p1": 1, "p2": -1}` tautology would read like information (R4's "absent is
-    not zero", applied to a field).
-
-    `search_stats` is likewise absent on this channel and it is a GAP, not a nothing: the
-    per-position visit distribution exists in the engine and reaches the replay ring, but
-    every row is pushed `game_id=-1` by construction, so no position can be attributed to a
-    game without an engine change on the hot drain path. `CARD-GAME-RECORD-SELFPLAY-STATS`
-    names the producer that would fill it.
+    """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
+    this game, not the learner's live step — and `step_kind` says so. `colors` is ABSENT because
+    both seats are the same net. `search_stats` is a GAP, not a nothing: the visit distribution
+    reaches the replay ring but every row is pushed `game_id=-1`.
     """
     record: dict[str, Any] = {
         "contract": GAME_RECORD_CONTRACT,
@@ -357,8 +275,7 @@ def selfplay_record(
         "moves": _axial(moves),
     }
     if game_id_byte_hash is not None:
-        # LAW-04's dedupe input, carried so effective-n can be counted off the RECORD rather
-        # than recomputed from the moves by every later consumer.
+        # LAW-04's dedupe input, carried so effective-n is counted off the RECORD.
         record["game_id_byte_hash"] = game_id_byte_hash
     return record
 
@@ -382,20 +299,9 @@ def eval_record(
     trajectory_hash: str | None = None,
     search_stats: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
-    """One eval-channel game as a record.
-
-    `step` is the ROUND's step (`RoundSpec.step`) — the learner step the candidate snapshot
-    was cut at — so `step_kind` distinguishes it from self-play's actor step.
-
-    `result` is SEAT-relative (`p1`/`p2`/`draw`, p1 being the side that moved first) and
-    `colors` says which seat the candidate held. The arena's own `winner` is
-    candidate-relative; converting here rather than storing both keeps one fact in one field,
-    and a viewer that renders a board needs the seat, not the role.
-
-    `search_stats` is present when the candidate's search exposed its root — the visit
-    distribution and root value the deploy head computes and, before R344(b), discarded one
-    line before returning its move.
-    """
+    """Build one eval-channel game as a record. `step` is the ROUND's step, distinguished by
+    `step_kind` from self-play's actor step; `result` is SEAT-relative and `colors` says which
+    seat the candidate held, because a viewer needs the seat, not the role."""
     if channel not in CHANNELS:
         raise ValueError(
             f"eval_record: channel {channel!r} is not one of {CHANNELS} — an unnamed channel "
@@ -427,10 +333,8 @@ def eval_record(
 
 
 def seat_result(winner: str, candidate_color: int) -> str:
-    """Arena `winner` (`candidate`/`opponent`/`draw`) -> seat result (`p1`/`p2`/`draw`).
-
-    `candidate_color` is `1` when the candidate moved first. A viewer draws seats, not roles,
-    so the record stores the seat and `colors` recovers the role.
+    """Convert an arena `winner` to a seat result; `candidate_color` is `1` when the candidate
+    moved first.
 
     Raises:
         KeyError: `winner` is not one of the arena's three values.

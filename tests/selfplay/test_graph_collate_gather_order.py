@@ -1,21 +1,8 @@
-"""Check 13 (`GatherNotStrictlyIncreasing`) — the gather ORDER invariant, made fail-loud.
+"""Make the gather ORDER invariant fail loud.
 
-NOT part of Suite A (`test_graph_collate_adv.py`), deliberately: that suite is a PARITY port
-whose every row asserts the exception class an old-side capture produced, and this check has no
-old-side row because it did not exist old-side. It is a NEW producer test for a NEW assertion
-(LAW-07), filed under R284's P-MASK design §1.4.
-
-WHY THE CHECK EXISTS. `legal_node_gather` is the CONTRACT ORDER of every per-legal-node
-quantity — `policy_dst_slot[i]`, `segment_softmax`'s segment `i`, and the Rust-side
-`assemble_ls_from_gnn_probs` all read position `i` as gather position `i`. The boolean-mask
-formulation `emb[legal_mask]` instead returns rows in ASCENDING ROW INDEX. The two coincide
-exactly while the gather ascends, and silently mispair priors to cells when it does not. That
-made the invariant load-bearing for the code as it stood BEFORE P-MASK as well as after — it
-was simply never checked. Nothing else in the 18 covers it: check 9 constrains which graph a
-row points into, check 11 constrains slot aliasing, neither constrains order.
-
-LAW-07: every corruption row carries its clean twin, following Suite A's stated discipline —
-a resolver that rejected everything would otherwise pass this file.
+`legal_node_gather` is the CONTRACT ORDER of every per-legal-node quantity, while the boolean-mask
+formulation returns rows in ascending row index: the two coincide only while the gather ascends,
+and no other structural check constrains order. Every corruption row carries its clean twin.
 """
 from __future__ import annotations
 
@@ -43,16 +30,14 @@ def _collate(fields: dict, **kw):
 
 
 def test_check_13_is_a_named_member_of_the_contract_error_family() -> None:
-    """Every die-loud call site catches `GraphContractError`; a check that raised outside the
-    family would escape all of them (the F1 silent-corruption class wearing a new exception)."""
+    """Prove the check is in the contract-error family, which every die-loud call site catches."""
     assert issubclass(GatherNotStrictlyIncreasing, GraphContractError)
     assert issubclass(GatherNotStrictlyIncreasing, ValueError)
 
 
 def test_a_swapped_adjacent_pair_raises_named(payload_fields) -> None:
-    """The MINIMAL corruption: two adjacent gather rows swapped. Same set, same length, same
-    graph — only the ORDER moves, which is precisely what every other structural check is blind
-    to and what the byte-parity of the P-MASK gather rests on."""
+    """Prove a swapped adjacent pair raises by name: same set, same length, same graph, so only
+    the ORDER moves."""
     fields = payload_fields("b6")
     g = fields["legal_node_gather"]
     g[0], g[1] = int(g[1]), int(g[0])
@@ -62,8 +47,7 @@ def test_a_swapped_adjacent_pair_raises_named(payload_fields) -> None:
 
 
 def test_a_duplicated_row_raises_named(payload_fields) -> None:
-    """A repeat is non-strict without being descending — the `<= 0` half of the predicate, which
-    a `< 0` check would wave through (R72: every conjunct appears in some flip-set)."""
+    """Prove a duplicated row raises by name — the non-strict half a `< 0` check waves through."""
     fields = payload_fields("b6")
     fields["legal_node_gather"][1] = int(fields["legal_node_gather"][0])
     with pytest.raises(GatherNotStrictlyIncreasing):
@@ -81,15 +65,8 @@ def test_a_reversed_gather_raises_named(payload_fields) -> None:
 
 @pytest.mark.parametrize("stem", ["b0", "b1", "b6"])
 def test_clean_twin_every_collatable_payload_still_collates(payload_fields, stem) -> None:
-    """LAW-07's other half. Every payload the bank expects to collate CLEAN must still do so —
-    if the native builder did not in fact emit ascending gathers, check 13 would break the
-    production path, and that is exactly the failure this twin exists to make impossible to
-    miss.
-
-    `empty_legal` is deliberately NOT in this list and its absence is not an oversight: it is a
-    CORRUPTION fixture, the hand-built 1-stone/0-legal payload whose whole purpose is to raise
-    `EmptyLegalSet` (`test_graph_collate_adv.py::test_empty_legal_set`). Listing it as a clean
-    twin would assert the opposite of what the bank says it is."""
+    """Prove every payload the bank expects to collate clean still does, so this check cannot
+    break the production path. `empty_legal` is absent because it is a corruption fixture."""
     batch = _collate(payload_fields(stem))
     g = np.asarray(payload_fields(stem)["legal_node_gather"])
     assert g.size == 0 or bool(np.all(np.diff(g) > 0))
@@ -104,25 +81,12 @@ def test_clean_twin_every_collatable_payload_still_collates(payload_fields, stem
          "negative-in-the-MIDDLE", "far-past-N-in-the-MIDDLE", "exactly-N-in-the-MIDDLE"],
 )
 def test_a_gather_row_outside_0_N_dies_NAMED_and_not_by_numpy(payload_fields, row, where) -> None:
-    """The range hole check 13 exposed and did not itself close (isolated review, finding 2).
+    """Prove a gather row outside [0, N) dies NAMED, before numpy's fancy index sees it.
 
-    `_check_structural`'s check 9 reads `node_graph[legal_node_gather]` — numpy FANCY INDEXING,
-    which for a negative row WRAPS silently (−1 reads the last node of the last graph, and the
-    old boolean-mask formulation then gathered that row and placed it LAST: a silent mispairing)
-    and for a row >= N raises a bare `IndexError`, which is not a `GraphContractError` and so
-    escapes every die-loud catch site in the tree.
-
-    Both are now refused by name, BEFORE the fancy index.
-
-    THE `middle` ROWS ARE THE ONES THAT MATTER, and they exist because the first version of this
-    file did not have them. That version placed every corruption at index 0 or −1 — precisely the
-    two positions the first version of the GUARD inspected — so it was green against a guard that
-    read only the endpoints while justifying itself with "check 13 has already established the
-    array is ascending". Check 13 is the LAST check in `_check_structural`; check 9 is the ninth.
-    A rogue row in the MIDDLE reached the fancy index and died as a bare `IndexError`, outside
-    the `GraphContractError` family and therefore outside every die-loud catch site in the tree.
-    A flip-set that only probes the positions the implementation happens to look at is not a
-    flip-set."""
+    Fancy indexing WRAPS silently on a negative row and raises a bare `IndexError` past N, outside
+    the contract-error family. The `middle` rows are the load-bearing ones: an endpoints-only
+    flip-set passes a guard that inspects only endpoints, and the order check runs last.
+    """
     fields = payload_fields("b6")
     g = fields["legal_node_gather"]
     n_nodes = int(fields["node_offsets"][-1])
@@ -137,15 +101,7 @@ def test_a_gather_row_outside_0_N_dies_NAMED_and_not_by_numpy(payload_fields, ro
 
 
 def test_the_Lg_le_1_boundary_cannot_raise(payload_fields) -> None:
-    """The guard's other conjunct: `Lg > 1`. `b0` carries `Lg == 0` and collates clean, which
-    pins the short-circuit at zero.
-
-    `Lg == 1` is NOT asserted here, and the reason is recorded rather than left as a silent gap:
-    a valid one-legal-node payload is not constructible from the committed bank by truncation —
-    `legal_node_gather`, `legal_offsets`, `policy_dst_slot`, `n_nodes_checksum`, `n_stones` and
-    the node rows themselves are coupled by checks 4/6/15, and a hand-built one would be exactly
-    the synthesized payload this suite's siblings refuse on principle. What covers it is the
-    conjunct itself: `Lg > 1` short-circuits identically at 0 and 1, the 0 arm is measured here,
-    and the `<=` half of the comparison is flipped by the duplicate-row row above (R72)."""
+    """Prove the `Lg <= 1` boundary cannot raise, measured at 0; the conjunct short-circuits
+    identically at 1, which the committed bank cannot construct by truncation."""
     batch = _collate(payload_fields("b0"))
     assert int(batch.legal_offsets[-1]) == 0

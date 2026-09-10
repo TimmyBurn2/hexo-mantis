@@ -1,21 +1,12 @@
-"""⊕ Suite C — scripted drain/push GOLDENS (WP-SP, C-01 … C-08).
+"""Scripted drain/push GOLDENS.
 
->300 justify: one scripted harness (stub pool + recording collaborators + patched clock)
+>300 justify (R8): one scripted harness — stub pool, recording collaborators, patched clock —
 feeds all eight rows; splitting it would duplicate the harness and let the two copies drift.
 
-Written oracle-first against the dispatcher's old-side capture (#C3b, wp/WPSP/CAPTURE_LOG.md)
-BEFORE any port code. RED at import until IMPL writes `mantis.selfplay.pool_drain` /
-`mantis.selfplay.instrumentation`.
-
-Harness = the capture harness, re-pointed at the new free-function split: the REAL drain body
-runs against a stub pool carrying exactly the attribute surface it reads, every collaborator
-records, the clock is a scripted sequence, and the stop event releases after ONE iteration.
-`time` is patched on the `pool_drain` module exactly as the capture patched it on the old pool
-module (DESIGN §b Suite C: "same scripted stubs + patched clock as the capture harness").
-
-Seams this suite FIXES (ORACLE_NOTES §J2 — DESIGN names them but not their attribute
-spellings): `pool._sink` (EventSink, DV-4), `pool._heartbeat` (HeartbeatFn, §c.5),
-`pool._recorder` (RecorderLike, DV-4). Everything else is the old attribute surface verbatim.
+Written oracle-first against the old-side capture BEFORE any port code. The REAL drain body runs
+against a stub pool carrying exactly the attribute surface it reads, every collaborator records,
+the clock is a scripted sequence, and the stop event releases after ONE iteration. Seams the
+design names but does not spell: `pool._sink`, `pool._heartbeat`, `pool._recorder`.
 """
 from __future__ import annotations
 
@@ -33,14 +24,13 @@ from mantis.selfplay.instrumentation import PoolInstrumentation
 
 GAME_ID_RE = re.compile(r"[0-9a-f]{32}")
 
-# Dense push arrays in their canonical order (DESIGN §c.2 `push_dense_many` parameter names
-# == the old positional order of the raw `push_many`).
+# Dense push arrays in their canonical order: the facade's parameter names are the old positional
+# order of the raw push.
 DENSE_PUSH_NAMES = (
     "states", "chain", "pols", "vals", "own", "wl", "glens", "ifs",
     "position_indices", "value_target_valid",
 )
-# npz key per canonical name in `drain/dense_pushed.npz` (capture recorded 9 positional +
-# 1 keyword).
+# npz key per canonical name; the capture recorded 9 positional and 1 keyword.
 DENSE_PUSH_NPZ = {
     "states": "push_many_0_arg0", "chain": "push_many_0_arg1", "pols": "push_many_0_arg2",
     "vals": "push_many_0_arg3", "own": "push_many_0_arg4", "wl": "push_many_0_arg5",
@@ -54,10 +44,9 @@ CLOCK_CROSSED = (1000.0, 1002.0, 1006.5)
 CLOCK_NOT_CROSSED = (1000.0, 1002.0, 1003.25)
 
 
-# ── recording collaborators (duck-typed; the injected Protocols are structural) ────────
 class RecordingBuffer:
-    """Records every push. Answers BOTH the raw engine method names and the §c.2 facade
-    name, so the golden binds the BYTES pushed rather than which veneer forwarded them."""
+    """Records every push. Answers BOTH the raw engine method names and the facade name, so the
+    golden binds the BYTES pushed rather than which veneer forwarded them."""
 
     def __init__(self, size: int = 1234, capacity: int = 5678) -> None:
         self.size = size
@@ -87,12 +76,9 @@ class RecordingBuffer:
         self.graph_calls.append((args, dict(kwargs)))
 
     def next_game_id(self) -> int:
-        """The ring's own id allocator (R345(b)(6)), which the push now calls once per GAME.
-
-        Recorded so C-02 can assert the CALL COUNT: allocating once per row would tag every
-        position as its own game, which is the untagged sentinel's behaviour with real numbers
-        in it, and no assertion on the ids alone would catch that.
-        """
+        """The ring's own id allocator, which the push calls once per GAME. Recorded so the CALL
+        COUNT can be asserted: allocating once per row would tag every position as its own game,
+        and no assertion on the ids alone would catch that."""
         self.next_game_id_calls += 1
         return 900 + self.next_game_id_calls
 
@@ -202,8 +188,8 @@ class ScriptedPool:
     """Exactly the attribute surface the drain body reads (capture `PoolStub`, plus the
     three DV-4/§c.5 injection seams)."""
 
-    # Winner-code → name map, provided so the drain body may read it off the pool OR off its
-    # own module constant; the emitted payload is what the golden actually pins.
+    # Winner-code → name map, provided so the drain body may read it off the pool OR off its own
+    # module constant; the emitted payload is what the golden actually pins.
     _WINNER_NAMES = {0: "draw", 1: "x", 2: "o"}
 
 
@@ -278,13 +264,10 @@ def _assert_array(actual: Any, expected: np.ndarray, label: str) -> None:
     assert np.array_equal(actual, expected), f"{label}: bytes differ from the captured push"
 
 
-# ═══ C-01 — dense push bytes ══════════════════════════════════════════════════════════
 def test_dense_drain_push_bytes(run_drain, drain_goldens, dense_pushed):
-    """C-01 — PASS iff ONE dense push happens and every one of its 10 arrays is byte- and
-    dtype-identical to the capture (f16 states/chain, f32 policies/values, u8 ownership /
-    winning-line / is_full_search / value_target_valid, u16 game_lengths / position_indices).
-    FAIL = the dense training-data path drifted: the DRAW-MASK (value_target_valid), the
-    CF-4 ply index (position_indices), or the f16 wire cast."""
+    """ONE dense push happens and every one of its 10 arrays is byte- and dtype-identical to the
+    capture. A failure is the dense training-data path drifting: the draw mask, the ply index, or
+    the f16 wire cast."""
     pool, _ = run_drain()
     golden = _variant(drain_goldens, "dense_5s_crossed")
 
@@ -301,9 +284,8 @@ def test_dense_drain_push_bytes(run_drain, drain_goldens, dense_pushed):
 
 
 def test_dense_zero_rows_pushes_nothing(run_drain, drain_goldens):
-    """C-01 (guard arm) — PASS iff `collect_data()` returning n==0 produces NO push at all
-    (neither replay nor recent). The capture pins the `if n > 0` guard explicitly. FAIL = a
-    'helpful' empty push writes a zero-row batch into the replay buffer every idle tick."""
+    """`collect_data()` returning n==0 produces NO push at all: a "helpful" empty push would write
+    a zero-row batch into the replay buffer every idle tick."""
     pool, _ = run_drain(dense_n=0)
     golden = _variant(drain_goldens, "dense_zero_rows")
 
@@ -314,19 +296,12 @@ def test_dense_zero_rows_pushes_nothing(run_drain, drain_goldens):
             == golden["counters_after"]["self_play_positions_pushed"] == 0)
 
 
-# ═══ C-02 — graph push rows ═══════════════════════════════════════════════════════════
 def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_rows_input):
-    """C-02 — PASS iff each `collect_graph_data()` row's leading fields are forwarded, in
-    order, with the record objects UNCHANGED (identity — the drain inspects nothing and copies
-    nothing), and its TRAILING runner game id is translated to a buffer-allocated one.
+    """Each graph row's fields are forwarded UNCHANGED and its runner game id is translated.
 
-    THE `game_id=-1` PIN IS GONE, and R345(b)(6) is why: every self-play row used to be pushed
-    untagged, which made `sample_indices`'s same-game dedupe inert on all real data. What is
-    pinned instead is the translation — one allocation per GAME, not per row — because that is
-    the property an implementation can get wrong while still passing "the ids are not -1".
-
-    FAIL = the HEXG write path drifted, a row got re-materialized, or the allocation moved
-    off the game boundary."""
+    What is pinned is the TRANSLATION — one allocation per GAME, not per row — because that is the
+    property an implementation can get wrong while still passing "the ids are not -1".
+    """
     pool, _ = run_drain(is_graph=True)
     golden = _variant(drain_goldens, "graph")
 
@@ -358,30 +333,17 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
     )
 
 
-# ═══ C-03 — the game_complete event payload golden ════════════════════════════════════
 def test_game_complete_payload_golden(run_drain, drain_goldens):
-    """C-03 — PASS iff the six emitted `game_complete` payloads equal the capture on ALL 21
-    keys except the uuid `game_id` (format-checked only): the LAW-04 dedupe
-    `game_id_byte_hash`, the winner map {0:−1, 1:0, 2:1} with unknown code → **null**, the
-    terminal-reason names with unknown code → "unknown", the stride5 / colony / longest-line /
-    n_components metrics, and the seeded / solver_fires counters. FAIL = the event contract
-    WP13-A will build against drifted — including a dropped, added, or reordered key.
+    """The six emitted `game_complete` payloads equal the capture on ALL 21 keys except the uuid.
 
-    **THE CAPTURE WAS UPDATED, DELIBERATELY, BY AUDIT-1 F-28/C04 — two cells, and each is a
-    fabrication this fixture had frozen:**
+    A failure is the event contract drifting — including a dropped, added, or reordered key.
 
-    * **Game 5** carries `winner_code = 3`, which no map entry covers. It was captured as
-      `winner: -1` — a measured DRAW — while `pool_drain`'s own log line beside it printed
-      `winner=unknown` off `_WINNER_NAMES[...] if winner_code < 3 else "unknown"`. Two
-      readings of one game, and the ONE channel carried the wrong one. It is `null`.
-    * **Game 3** has an EMPTY move history, so nothing computed its colony-extension trio or
-      its longest-line/n_components pair; all five were captured as `0`/`0.0`. They are
-      `null`. A zero longest line is a legitimate measurement for other games in this very
-      capture (game 1 reports `longest_line_fraction: 0.5`), which is why the absent case
-      cannot share its value.
-
-    Everything else in the capture is byte-identical, including the stride5 pair — a
-    stride-5 run of zero over no stones IS a measurement, and G-14 pins it as one.
+    THE CAPTURE WAS UPDATED DELIBERATELY IN TWO CELLS, each a fabrication it had frozen. One game
+    carries a winner code no map entry covers and was captured as a measured DRAW while the log
+    line beside it printed `winner=unknown`. Another has an EMPTY move history, so nothing computed
+    its colony or longest-line metrics and all five were captured as zeros — and a zero longest
+    line is a legitimate measurement for other games in this very capture, which is why the absent
+    case cannot share its value. Both are now null.
     """
     pool, _ = run_drain()
     golden = _variant(drain_goldens, "dense_5s_crossed")
@@ -402,7 +364,7 @@ def test_game_complete_payload_golden(run_drain, drain_goldens):
         for key, want in expected.items():
             assert actual[key] == want, f"event {i}: {key} = {actual[key]!r} != {want!r}"
 
-    # The LAW-04 dedupe property the capture verified: byte-identical move sequences collide.
+    # The dedupe property the capture verified: byte-identical move sequences collide.
     hashes = [e["game_id_byte_hash"] for e in expected_events]
     assert hashes[2] == hashes[5], (
         "capture pins games 2 and 5 (identical move sequences) to the SAME byte hash — the "
@@ -410,12 +372,9 @@ def test_game_complete_payload_golden(run_drain, drain_goldens):
     )
 
 
-# ═══ C-04 — B5 sims/sec billing ═══════════════════════════════════════════════════════
 def test_sims_per_sec_billing(run_drain, drain_goldens):
-    """C-04 — PASS iff the per-MOVE bill reproduces capture exactly: positions_generated
-    100→340 ⇒ delta 240; 240 × 111 effective sims = 26 640 added to `_total_sims`; elapsed
-    2.0 s ⇒ `_sims_per_sec` 13 320.0. FAIL = the bill regressed to the falsified per-GAME
-    undercount (a ~100× understatement of throughput)."""
+    """The per-MOVE bill reproduces the capture exactly (240 moves × 111 effective sims over 2.0 s
+    ⇒ 13 320.0), rather than the falsified per-GAME undercount that understated throughput ~100×."""
     pool, scripted = run_drain()
     counters = _variant(drain_goldens, "dense_5s_crossed")["counters_after"]
 
@@ -426,14 +385,10 @@ def test_sims_per_sec_billing(run_drain, drain_goldens):
     assert scripted.sleeps == _variant(drain_goldens, "dense_5s_crossed")["sleeps"] == [0.1]
 
 
-# ═══ C-05 — counters mirror runner truth ══════════════════════════════════════════════
 @pytest.mark.parametrize("variant,is_graph", [("dense_5s_crossed", False), ("graph", True)])
 def test_counters_mirror_runner(run_drain, drain_goldens, variant, is_graph):
-    """C-05 — PASS iff games_completed / x_wins / o_wins / draws mirror the runner exactly and
-    positions_pushed / self_play_positions_pushed equal the captured row count (4 dense,
-    3 graph), with `_game_lengths` = (plies+1)//2 per game and `_avg_game_length` 28.5.
-    FAIL = the pool's public counters desync from runner truth (the numbers the monitor and
-    the training loop both read)."""
+    """The public counters mirror the runner exactly, with the captured pushed-row counts, per-game
+    lengths and average. A failure desyncs the numbers the monitor and the training loop read."""
     pool, _ = run_drain(is_graph=is_graph)
     counters = _variant(drain_goldens, variant)["counters_after"]
 
@@ -447,13 +402,10 @@ def test_counters_mirror_runner(run_drain, drain_goldens, variant, is_graph):
     assert pool._avg_game_length == counters["_avg_game_length"] == 28.5
 
 
-# ═══ C-06 — recent-buffer per-row push ════════════════════════════════════════════════
 def test_recent_buffer_per_row_push(run_drain, drain_goldens, dense_pushed):
-    """C-06 — PASS iff the recency path takes one `push` per row (4), with the captured f16
-    planes / f32 policy / u8 ownership+winning_line arrays and PYTHON scalars — `outcome` a
-    float, `is_full_search` and `value_target_valid` bools, never numpy scalars (the capture
-    recorded their kinds explicitly). FAIL = the recency path drifted, or numpy scalars leak
-    into a surface that treats them as Python bools."""
+    """The recency path takes one `push` per row with the captured arrays and PYTHON scalars —
+    never numpy scalars, whose kinds the capture recorded explicitly, into a surface that treats
+    them as Python bools."""
     pool, _ = run_drain()
     golden = _variant(drain_goldens, "dense_5s_crossed")
     expected_calls = golden["recent_buffer_calls"]
@@ -474,9 +426,8 @@ def test_recent_buffer_per_row_push(run_drain, drain_goldens, dense_pushed):
 
 
 def test_recent_buffer_absent_is_tolerated(run_drain, drain_goldens, dense_pushed):
-    """C-06 (guard arm) — PASS iff `recent_buffer is None` leaves the replay push completely
-    unchanged (byte-identical to the capture) and raises nothing. FAIL = the recency path is
-    not optional, so a pool configured without it dies mid-run."""
+    """`recent_buffer is None` leaves the replay push byte-identical and raises nothing, so a pool
+    configured without the recency path does not die mid-run."""
     pool, _ = run_drain(recent_buffer=False)
     assert pool.recent_buffer is None
     assert len(pool.replay_buffer.dense_calls) == 1
@@ -485,18 +436,10 @@ def test_recent_buffer_absent_is_tolerated(run_drain, drain_goldens, dense_pushe
         _assert_array(call[name], dense_pushed[DENSE_PUSH_NPZ[name]], f"push.{name}")
 
 
-# ═══ C-07 — system_stats cadence ══════════════════════════════════════════════════════
 def test_system_stats_cadence(run_drain, drain_goldens):
-    """C-07 — PASS iff a clock crossing the 5 s boundary emits exactly one `system_stats`
-    payload (equal to capture) AFTER the six `game_complete` events, and a clock that does
-    NOT cross emits none. FAIL = warmup-visibility emission drifted — either it stops (blind
-    monitor) or it fires every tick (event-stream flood).
-
-    WP12R Step 3 narration: the event stream now also carries lifecycle events
-    (`game_loop_entered`, `first_record_drained`) not in the old capture golden. The
-    `event_order` comparison filters to the golden's tracked types (`game_complete` +
-    `system_stats`) so C-07's cadence assertion holds against the old capture while the
-    new lifecycle events travel in the same stream."""
+    """A clock crossing the 5 s boundary emits exactly one `system_stats` payload after the six
+    `game_complete` events, and one that does not cross emits none. The order comparison filters to
+    the golden's tracked types, since the stream now also carries lifecycle events."""
     _GOLDEN_TYPES = {"game_complete", "system_stats"}
     crossed_golden = _variant(drain_goldens, "dense_5s_crossed")
     pool, _ = run_drain(clock=CLOCK_CROSSED)
@@ -517,13 +460,10 @@ def test_system_stats_cadence(run_drain, drain_goldens):
     )
 
 
-# ═══ C-08 — heartbeat emission point (behavior-neutral by default) ════════════════════
 def test_heartbeat_emission_at_drain(run_drain):
-    """C-08 — PASS iff an injected `HeartbeatFn` receives exactly ONE "selfplay_drain" call
-    per loop iteration, AND the default `heartbeat=None` produces zero side effects: the same
-    events, the same pushes, the same counters. Behaviour-neutrality is the verdict, not a
-    nicety — this emission point exists for WP13-A's watchdog, which is not wired here.
-    FAIL = the emission point is missing, fires more than once, or changes drain behaviour."""
+    """An injected `HeartbeatFn` receives exactly ONE call per loop iteration, and the default
+    `None` produces zero side effects — same events, pushes and counters. Behaviour-neutrality is
+    the verdict, not a nicety: this emission point exists for a watchdog not wired here."""
     beat = RecordingHeartbeat()
     with_beat, _ = run_drain(heartbeat=beat)
     assert beat.sources == ["selfplay_drain"], (
@@ -544,10 +484,9 @@ def test_heartbeat_emission_at_drain(run_drain):
     assert with_beat.games_completed == without_beat.games_completed
 
 
-# ═══ recorder seam (captured alongside C-03; the DV-4 no-op-default collaborator) ══════
-#: Every kwarg `maybe_record` is called with, asserted as a SET so drift reds in BOTH
-#: directions — a dropped field and a smuggled one. Only the golden-valued subset is
-#: compared by value below: `game_id` is a fresh uuid4 per game and can never be a golden.
+#: Every kwarg `maybe_record` is called with, asserted as a SET so drift reds in BOTH directions —
+#: a dropped field and a smuggled one. Only the golden-valued subset is compared by value:
+#: `game_id` is a fresh uuid4 per game and can never be a golden.
 _RECORDER_KWARGS = {
     "game_id", "moves", "winner_code", "plies", "worker_id", "terminal_reason",
     "game_id_byte_hash", "served_sims",
@@ -555,16 +494,12 @@ _RECORDER_KWARGS = {
 
 
 def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
-    """C-03 (recorder arm) — PASS iff `recorder.maybe_record` is called once per drained game
-    with the captured moves / winner_code / plies. FAIL = the replay-recorder seam
-    (DV-4's injected collaborator) silently stops seeing games.
+    """`recorder.maybe_record` is called once per drained game with the captured fields.
 
-    R344(b) WIDENED the seam and the golden moved with it: `game_length` was RENAMED to
-    `plies` carrying the same values, because `game_length=plies` is what this call site
-    always passed while the drain computes a real game length separately as `(plies + 1) //
-    2` — the golden was recording plies under a name that means something else (LAW-03). The
-    seam is now this run's GAME RECORD producer, so a silent stop here is not a lost display
-    surface any more; it is a run that plays 25 000 games and writes none of them."""
+    The golden's `game_length` was RENAMED to `plies` carrying the same values: this call site
+    always passed plies while the drain computes a real game length as `(plies + 1) // 2`, so the
+    golden was recording plies under a name that means something else (LAW-03).
+    """
     pool, _ = run_drain()
     expected = _variant(drain_goldens, "dense_5s_crossed")["recorder_calls"]
 

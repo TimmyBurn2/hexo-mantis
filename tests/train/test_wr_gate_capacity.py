@@ -1,51 +1,20 @@
-# >300 justify (R8): one ring, one claim, and the claim has two halves that only mean
-# something together — the capacity must GROW with the minted consec keys and rule B's peak
-# window must NOT grow with it. Split across two files, a reader could satisfy either half
-# alone (that is exactly the naive D36 extension ADJ-D38 warns against), and the bit-identity
-# sweep would sit on the other side of an import from the drives that establish what it is
-# identical TO. The pre-D38 replica, the corpus it replays and the live-coordinator harness
-# are one apparatus and belong in one unit.
-"""R265 / ADJ-D38 oracle — the sealbot-WR ring's capacity is DERIVED (from the two minted
-consec keys and from rule B's own peak window), never a literal, so NO schema-legal consec is
-unfireable; and rule B's peak window does NOT widen with the deeper ring.
+# >300 justify (R8): one ring, one claim, and the claim has two halves that only mean something
+# together — the capacity must GROW with the minted consec keys and rule B's peak window must NOT
+# grow with it. Split across two files a reader could satisfy either half alone, and the
+# bit-identity sweep would sit across an import from the drives that establish what it matches.
+"""The sealbot-WR ring's capacity is DERIVED — from the two minted consec keys and from rule B's
+own peak window — so no schema-legal consec is unfireable, and rule B's peak window does NOT
+widen with the deeper ring.
 
-WHAT WENT WRONG. `step.py::on_eval_round_complete` trimmed the WR ring to a literal
-`WR_HISTORY_DEPTH = 5` while all three triggers in `monitor/rules.py::
-sealbot_wr_trajectory_alert` refuse on `len(history) >= their consec`: any schema-legal
-`monitor.wr_collapse_consecutive_evals` or `monitor.wr_rolling_consecutive_evals` >= 6
-(`ge=0`, no upper bound) was PERMANENTLY unfireable while `monitor.wr_hard_abort_enabled`
-armed the abort — ADJ-D36's class, one gate over, on the axis LAW-15/F-30 names as the one
-that actually kills runs. Worse on the audit side: the axis had no `ArmedAbort` row at all,
-so gate 12 could not compute even a FALSE affirmative for it.
+WHAT WENT WRONG: `on_eval_round_complete` trimmed the ring to a literal depth of 5 while all
+three triggers refuse on `len(history) >= their consec`, so any schema-legal consec >= 6 was
+PERMANENTLY unfireable while the abort was armed. WHY THIS IS NOT THE DRAW-RATE FIX COPIED: the
+ring served TWO masters, the consec tails AND `peak_wr`, so deriving the capacity alone would
+raise rule B's bar — a behavioural change no ruling authorizes.
 
-WHY THIS IS NOT ADJ-D36's FIX COPIED. The WR ring served TWO masters: the consec tails AND
-`peak_wr`, which rule B took over the WHOLE ring. Deriving the capacity alone would have
-widened rule B's peak window with it — a peak over more evals is a HIGHER bar for
-`wr < peak * ratio`, i.e. a behavioural change to an armed rule that no ruling authorizes. So
-the capacity DERIVES and the window is NAMED (`monitor/rules.py::WR_PEAK_WINDOW_EVALS`),
-beside the predicate that reads it.
-
-THE DRIVES BELOW STATE THE MUTATIONS THAT RED THEM:
-
-* a resurrected trim literal (5, or a "generous" 64) — the capacity pin measures three
-  DIFFERENT lengths for three consec pairs, so no constant satisfies it, and the
-  above-depth fire drive reds for any literal below its consec;
-* capacity keyed to only ONE of the two consec knobs — the capacity pin's third pair moves
-  only the rolling knob;
-* capacity keyed to the consecs but NOT floored by the peak window — the bit-identity sweep
-  reds on every pair whose max consec is below 5 (the ring would shrink under rule B);
-* a whole-ring `peak_wr` (the naive D36 extension) — the peak-window drive reds, because the
-  8-eval history it uses fires trigger B under a whole-ring peak and must not under the
-  windowed one;
-* no trim at all — the capacity pin reds on the drive length;
-* a trim on the SKIP path — the absent-WR drive reds;
-* `>=` -> `>` on any trigger's length gate — the above-depth fire drive reds one eval late.
-
-The coordinator config comes from the production builder (`mantis.run.
-_step_coordinator_config`) and `on_eval_round_complete` is called DIRECTLY, so one call is
-one routed eval round — the same posture `tests/train/test_drawrate_gate_capacity.py` takes
-for its own gate, with the fakes duplicated locally per R5 (no cross-test import). R7 /
-gate 6: nothing here writes a file.
+Mutations the drives red on: a resurrected trim literal; a capacity keyed to one consec knob
+only; a capacity not floored by the peak window; a whole-ring `peak_wr`; no trim at all; a trim
+on the SKIP path; and `>=` -> `>` on any length gate.
 """
 from __future__ import annotations
 
@@ -63,14 +32,11 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
-#: The DELETED `WR_HISTORY_DEPTH`. A test INPUT and a historical fact, not an authority: the
-#: fix must make every value above it fireable without any shipped code knowing the number.
-#: It is written here as the old depth AND asserted equal to rule B's surviving window,
-#: because those were the same literal and the window is the half that must not move.
+#: The DELETED trim depth — a test INPUT and a historical fact, not an authority. It is asserted
+#: equal to rule B's surviving window, because those were one literal.
 _OLD_DEPTH = 5
 
 
-# ── local fakes (R5: no cross-test import) ────────────────────────────────────────────
 class _Buffer:
     size, capacity = 1000, 100_000
 
@@ -130,18 +96,11 @@ def _round(h, index: int, wr: float) -> None:
         {"step": index * h.config.eval_interval, "wr_sealbot": wr})
 
 
-# ── the D36 class on the WR axis, closed: an above-the-old-depth consec FIRES ──────────
 def test_a_wr_consec_above_the_old_depth_fires_at_the_consec_th_eval_round() -> None:
-    """`wr_collapse_consecutive_evals = 8` fires at exactly the 8th routed eval round.
-
-    REDs on the clipped code — `del ring[:-5]` caps `len(history)` at 5 forever, so
-    `len(history) >= 8` is unsatisfiable and the abort NEVER fires however long the collapse
-    runs. The not-fired-through-7 half pins the other direction: a widened tail or length-gate
-    drift that fires EARLY is caught here too, not only the unfireable defect.
-
-    `wr_rolling_consecutive_evals = 9` is deliberately HIGHER, so the first satisfiable
-    trigger is the collapse pair's and the measured round is 8 rather than the rolling rule's.
-    """
+    """`wr_collapse_consecutive_evals = 8` fires at exactly the 8th routed eval round. REDs on the
+    clipped code, where `len(history)` caps at 5 forever and the abort never fires; the
+    not-fired-through-7 half catches a drift that fires EARLY. The rolling knob is deliberately
+    HIGHER, so the measured round is the collapse pair's."""
     cfg = _monitor_cfg(wr_hard_abort_enabled=True,
                        wr_collapse_consecutive_evals=8, wr_rolling_consecutive_evals=9,
                        wr_early_death_min_step=0, wr_collapse_min_step=0,
@@ -162,15 +121,10 @@ def test_a_wr_consec_above_the_old_depth_fires_at_the_consec_th_eval_round() -> 
 
 
 def test_the_wr_ring_capacity_is_derived_from_BOTH_consec_keys_and_the_peak_window() -> None:
-    """After 14 healthy rounds the ring holds EXACTLY `max(peak window, collapse, rolling)`
-    — measured for three pairs that give three DIFFERENT answers.
-
-    That is what makes this a DERIVATION pin rather than a size pin. `(2, 3)` answers 5 (the
-    peak window floors it, which is the half that keeps rule B's window intact); `(8, 3)`
-    answers 8 (the collapse knob); `(2, 11)` answers 11 (the rolling knob ALONE — a capacity
-    keyed to only the collapse knob reds here and nowhere else). Any constant gives one
-    answer for all three; no trim at all gives 14 for all three.
-    """
+    """After 14 healthy rounds the ring holds EXACTLY `max(peak window, collapse, rolling)`,
+    measured for three pairs giving three DIFFERENT answers — a DERIVATION pin, not a size pin.
+    `(2, 3)` answers 5, `(8, 3)` answers 8, `(2, 11)` answers 11; any constant gives one answer
+    for all three and no trim gives 14."""
     for collapse, rolling in ((2, 3), (8, 3), (2, 11)):
         cfg = _monitor_cfg(wr_collapse_consecutive_evals=collapse,
                            wr_rolling_consecutive_evals=rolling)
@@ -187,13 +141,9 @@ def test_the_wr_ring_capacity_is_derived_from_BOTH_consec_keys_and_the_peak_wind
 
 
 def test_a_round_carrying_no_WR_neither_appends_nor_trims_the_ring() -> None:
-    """The skip path must not touch the ring — the R92/BUG-1 contract on this axis.
-
-    A routed round whose result has no `wr_sealbot` is skip-counted and appends nothing; if
-    it also TRIMMED, a deep ring would be clipped by an evidence blackout and an
-    above-the-old-depth consec would need a fresh unbroken run of observations after every
-    absent WR. Driven ABOVE the old depth, where a wrong answer is observable at all.
-    """
+    """The skip path must not touch the ring: a round with no `wr_sealbot` appends nothing, and if
+    it also TRIMMED, an above-depth consec would need a fresh unbroken run after every blackout.
+    Driven ABOVE the old depth, where a wrong answer is observable."""
     cfg = _monitor_cfg(wr_collapse_consecutive_evals=9, wr_rolling_consecutive_evals=9)
     h = _coordinator(monitor_cfg=cfg)
     for index in range(1, 8):
@@ -207,21 +157,12 @@ def test_a_round_carrying_no_WR_neither_appends_nor_trims_the_ring() -> None:
     assert h.sink.named("sealbot_wr_gate_skipped"), "the skip must be visible (LAW-18)"
 
 
-# ── the peak window: preserved EXACTLY, and it is the half D36's pattern would have broken ─
 def test_rule_B_takes_its_peak_over_its_OWN_window_never_over_the_whole_ring() -> None:
-    """The constraint ADJ-D38 names by hand: the ring depth was ALSO a semantic constant of
-    rule B, so a derived capacity must not carry the peak window with it.
-
-    The 8-eval history below is chosen so the two answers DIFFER, which is the only way to
-    witness which one is live: the whole-ring peak (0.80) puts rule B's bar at 0.40 and the
-    trailing 0.20s all clear it — trigger B WOULD fire — while the windowed peak (0.30 over
-    the last five) puts the bar at 0.15, which they do not. The rule must return None.
-
-    Both discriminating quantities are DERIVED from the history in the drive rather than
-    transcribed, so the pin survives an edit to the numbers and fails only if the WINDOW
-    moves. The positive control below it fires the same trigger on a history whose peak IS
-    inside the window, so this is not merely "rule B never fires".
-    """
+    """The ring depth was ALSO a semantic constant of rule B, so a derived capacity must not carry
+    the peak window with it. The 8-eval history is chosen so the two answers DIFFER: the
+    whole-ring peak (0.80) puts rule B's bar at 0.40 and the trailing 0.20s clear it, while the
+    windowed peak (0.30) puts it at 0.15. Both quantities are DERIVED in the drive, so the pin
+    fails only if the WINDOW moves, and the positive control fires from inside the window."""
     cfg = _monitor_cfg()                                   # ratio 0.5, consec 3, mins 25000
     history = [(23000, 0.80), (24000, 0.80), (25000, 0.80), (26000, 0.30),
                (27000, 0.30), (28000, 0.20), (29000, 0.20), (30000, 0.20)]
@@ -249,10 +190,8 @@ def test_rule_B_takes_its_peak_over_its_OWN_window_never_over_the_whole_ring() -
     )
 
 
-# ── bit-identity for every consec at or below the old depth ───────────────────────────
-#: Sequences chosen to exercise a fire and a non-fire on each trigger, plus a recovering dip
-#: (the §175/L34 asymmetry) and a run longer than the old ring, so the replica and the live
-#: coordinator are compared across evictions rather than only on short histories.
+#: Sequences exercising a fire and a non-fire on each trigger, a recovering dip, and a run
+#: longer than the old ring, so replica and coordinator are compared across evictions.
 _CORPUS: tuple[tuple[str, tuple[float, ...]], ...] = (
     ("healthy", (0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5)),
     ("early_death", (0.01, 0.01, 0.01, 0.01, 0.01, 0.01)),
@@ -264,14 +203,9 @@ _CORPUS: tuple[tuple[str, tuple[float, ...]], ...] = (
 
 
 def _pre_d38_replica(sequence, cfg, eval_interval):
-    """The PRE-D38 machine, replayed: append, `del ring[:-5]`, then the trajectory rule.
-
-    The shipped rule can stand in for the pre-D38 one HERE and only here, and the assert says
-    why: with the ring clipped to five entries `history[-WR_PEAK_WINDOW_EVALS:]` is the whole
-    history, so the windowed peak and the old whole-ring peak are the same number by
-    construction. That is exactly the claim "bit-identical for every consec <= the old depth"
-    reduces to, which is why this replica is honest rather than circular.
-    """
+    """The PRE-D38 machine replayed. The shipped rule can stand in for the pre-D38 one HERE only,
+    and the assert says why: with the ring clipped to five, the windowed peak and the old
+    whole-ring peak are the same number by construction."""
     ring: list[tuple[int, float]] = []
     fired: list[bool] = []
     for index, wr in enumerate(sequence, start=1):
@@ -284,9 +218,8 @@ def _pre_d38_replica(sequence, cfg, eval_interval):
 
 
 def test_the_old_depth_and_rule_Bs_window_were_ONE_literal() -> None:
-    """The premise the whole bit-identity claim rests on, stated rather than assumed: the
-    number rule B kept is the number the ring was clipped to. If they ever differ, "identical
-    for consec <= the old depth" stops meaning what this file says it means."""
+    """The premise the bit-identity claim rests on: the number rule B kept is the number the ring
+    was clipped to."""
     assert WR_PEAK_WINDOW_EVALS == _OLD_DEPTH, (
         "rule B's peak window is no longer the deleted ring depth, so the pre-D38 replica "
         f"below is replaying a machine that never existed; got {WR_PEAK_WINDOW_EVALS}"
@@ -294,17 +227,10 @@ def test_the_old_depth_and_rule_Bs_window_were_ONE_literal() -> None:
 
 
 def test_every_consec_at_or_below_the_old_depth_is_BIT_IDENTICAL_to_the_clipped_ring() -> None:
-    """The behavioural-equivalence proof, driven over the whole legal region the change was
-    allowed to leave alone: both consec knobs from 0 through the old depth, six sequences.
-
-    Compared per round, not just at the end: the ring CONTENTS and whether the trajectory
-    rule fired. Every committed config sits inside this region (collapse 3, rolling 2), so a
-    single mismatch here is a shipped behavioural change — which this ruling does not grant.
-
-    `consec = 0` is included deliberately. It does NOT disable a trigger — `history[-0:]` is
-    the WHOLE ring in Python — so it arms a weaker-evidence variant, and the sweep pins that
-    the variant behaves identically on both sides rather than quietly moving with the ring.
-    """
+    """The behavioural-equivalence proof over the region the change was allowed to leave alone:
+    both consec knobs from 0 through the old depth, six sequences, compared per round on ring
+    CONTENTS and on whether the rule fired. `consec = 0` is included deliberately, since
+    `history[-0:]` is the WHOLE ring in Python."""
     checked = 0
     for collapse in range(_OLD_DEPTH + 1):
         for rolling in range(_OLD_DEPTH + 1):
@@ -335,21 +261,11 @@ def test_every_consec_at_or_below_the_old_depth_is_BIT_IDENTICAL_to_the_clipped_
     )
 
 
-# ── the audit tie: the published earliest fire is deliverable IN EVAL ROUNDS ───────────
 def test_the_published_earliest_fire_round_is_deliverable_above_the_old_depth() -> None:
-    """`Cadence.EVAL_ROUND_CONSEC`'s published number, matched against a REAL coordinator
-    firing at a consec the old ring could never satisfy — R265's half of ADJ-D38, and the
-    reason the two halves ship together.
-
-    The operands and the period are READ OFF the harness, never re-typed: the whole point is
-    that the audit's number and the machine share one authority, and a hand-copied operand
-    would be that authority forked (the correction D36's own audit-tie drive took).
-
-    On the clipped code this arithmetic answers 8 rounds while the machine never fires at all
-    — an audit publishing a number the run structurally cannot deliver is precisely what R251
-    exists to refuse, and it is what gate 12 would have started doing for this axis the
-    moment the row was added without the ring fix.
-    """
+    """`Cadence.EVAL_ROUND_CONSEC`'s published number, matched against a REAL coordinator firing
+    at a consec the old ring could never satisfy. The operands and the period are READ OFF the
+    harness, never re-typed, because the audit's number and the machine must share one authority.
+    On the clipped code the arithmetic answers 8 rounds while the machine never fires at all."""
     cfg = _monitor_cfg(wr_hard_abort_enabled=True,
                        wr_collapse_consecutive_evals=8, wr_rolling_consecutive_evals=9,
                        wr_early_death_min_step=0, wr_collapse_min_step=0,

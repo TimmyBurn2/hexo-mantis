@@ -1,41 +1,13 @@
-# >300 justify (R8), no tally stated (G-DFIX-4 / R192(e)). ONE decoupling claim driven by TWO
-# oracles that must see the SAME emit: O-N1 counts the `iteration_complete` events a burst
-# produces and O-N1b counts the `pool.runner_stats()` calls THOSE SAME events cost. The
-# `_CountingPool` spy is the instrument for both, so splitting the file would fork the fake
-# that makes each other's numbers meaningful. It crossed the cap when R242/ADJ-D12 re-pointed
-# the `monitor_gates` assertion here onto `monitor.gate_interval` — the growth is that
-# explanation, which a future reader needs precisely because the assertion did NOT move.
-"""⊕ WP12R Step 3 narration — oracle 1 (part i): `iteration_complete` decoupled from
-`log_interval` + the R218 rider 1 `Q-O-TWO-POOL-READS` collapse oracle.
+# >300 justify (R8): ONE decoupling claim driven by two oracles that must see the SAME emit —
+# one counts the `iteration_complete` events a burst produces, the other the
+# `pool.runner_stats()` calls those same events cost. The `_CountingPool` spy is the instrument
+# for both, so a split forks the fake that makes each side's numbers meaningful.
+"""`iteration_complete` is decoupled from `log_interval`, and costs ONE pool read per emit.
 
-RED-at-IMPL until the narration chunk's part (i) lands. Two oracles, both falsifying:
-
-  O-N1  — `iteration_complete` emits on EVERY coordinator step (every O6 burst return),
-          INDEPENDENT of `log_interval`. At `log_interval=1000`, a `step()` at
-          `_train_step < 1000` emits exactly ONE `iteration_complete` carrying `games_total`.
-          The `training_step` alerting path does NOT fire at step < `log_interval`
-          (R210: "training_step alerting stays gated").
-          FALSIFYING MUTATION: re-introduce the
-          `self._train_step % cfg.log_interval != 0` early return on the
-          `iteration_complete` path (re-couple to `_run_log_interval`). This oracle MUST turn
-          RED (zero `iteration_complete` emits at step < `log_interval`).
-
-  O-N1b — R218 rider 1 collapse: `emit_iteration_complete_event` uses the `RunnerStats`
-          snapshot passed from `_target_integrity_report` (ONE `pool.runner_stats()` call
-          per emit), NOT its own `pool.runner_stats()` call at `events.py:297`.
-          FALSIFYING MUTATION: re-introduce the second `pool.runner_stats()` call inside
-          `emit_iteration_complete_event` (drop the `rstats` kwarg, restore the local
-          `rstats = pool.runner_stats()`). This oracle MUST turn RED (two calls per emit).
-
-R210: "games_total is a per-iteration counter, not a training-logging event."
-R214: "the narration DESIGN's ORACLE-WRITE stage must assert, mutation-tested, that
-iteration_complete emits on every coordinator step at run5's log_interval=1000."
-R218 rider 1: "the Q-O-TWO-POOL-READS collapse is a SEMANTIC CHANGE — the target_integrity
-snapshot and the mcts_mean_depth/cluster-stats snapshot become ONE atomic read instead of
-two microseconds-apart reads that could straddle a game boundary. The oracle for part (i)
-MUST assert that emit_iteration_complete_event uses the snapshot passed from
-_target_integrity_report (not its own pool.runner_stats() call), and a falsifying mutation
-that re-introduces the second runner_stats() call MUST turn RED."
+`games_total` is a per-iteration counter, not a training-logging event, so the emit rides every
+coordinator step while the `training_step` alerting path stays `log_interval`-gated. The single
+`runner_stats()` read is a semantic change, not a saving: the target-integrity block and the
+mcts/cluster block become one atomic read instead of two that could straddle a game boundary.
 """
 from __future__ import annotations
 
@@ -58,8 +30,7 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """Build a real graph ring the coordinator stubs sample through."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -69,10 +40,8 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: What a `StepCoordinator` reads on the graph route: the dispatch identity plus the sections
+#: its resolvers read. The caps are the NON-BINDING pair — nothing here exercises a split.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -81,20 +50,17 @@ _GRAPH_FULL_CONFIG: dict = {
 }
 
 
-# ── minted-config-derived constants (WPMINT Phase K-A/K-B precedent, same as
-#    test_coordinator_gates.py — no hand-restated knobs) ─────────────────────────────────
+# Constants derived from the minted config — no hand-restated knobs.
 _CONFIG = load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_CONFIG.train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config.
+#: The ARMING cadence, from the same minted config.
 _GATE_INTERVAL = _CONFIG.monitor.gate_interval
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
-    """R242 (ADJ-D12): `gate_interval` MIRRORS `log_interval` unless a drive names it —
-    the shipped posture (every committed config mints the two equal), which is what lets
-    the R210 conjunct below keep asserting exactly what it asserted before the split."""
+    """Build a coordinator config whose `gate_interval` mirrors `log_interval` unless a drive
+    names it — the shipped posture, since every committed config mints the two equal."""
     settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
     settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
@@ -105,7 +71,6 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     )
 
 
-# ── fakes (minimal, same surface as test_coordinator_gates.py) ──────────────────────────
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -115,8 +80,7 @@ class _RunnerStats:
 
 
 class _CountingPool:
-    """FakePool with a `runner_stats` call counter — the R218 rider 1 collapse oracle's
-    spy. The counter is what O-N1b reads; every other surface matches FakePool."""
+    """A pool fake whose `runner_stats` call counter is the collapse oracle's instrument."""
 
     def __init__(self) -> None:
         self.games_completed = 0
@@ -124,7 +88,7 @@ class _CountingPool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -185,8 +149,7 @@ class _FakeBuffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # Delegated to a real `HexgBuffer`: the dispatcher collates the wire for real, so a
         # hand-built payload would be a second wire format for the collate to disagree with.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
@@ -241,18 +204,12 @@ def _make_coordinator(*, pool=None, config=None):
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer, sink=sink)
 
 
-# ═══ O-N1 — iteration_complete emits every coordinator step, not just at log_interval ═══
 def test_on1_iteration_complete_emits_below_log_interval() -> None:
-    """O-N1 (R214 part (i) oracle) — at `log_interval=1000`, a `step()` at `_train_step`
-    well below 1000 emits exactly ONE `iteration_complete` carrying `games_total`.
+    """At `log_interval=1000` a step well below 1000 emits exactly ONE `iteration_complete`
+    carrying `games_total`.
 
-    RED until IMPL decouples `iteration_complete` from `_run_log_interval`. Currently
-    `_run_log_interval` (`step.py:576`) early-returns on `self._train_step % cfg.log_interval
-    != 0`, so at `_train_step=1, log_interval=1000` ZERO `iteration_complete` events emit.
-
-    FALSIFYING MUTATION (drive both ways after IMPL): re-introduce the
-    `self._train_step % cfg.log_interval != 0` early return on the `iteration_complete`
-    path. This test MUST turn RED (zero emits).
+    Killer: re-introduce the `_train_step % cfg.log_interval != 0` early return on the emit
+    path, which drops the count to zero.
     """
     cfg = _make_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
@@ -275,20 +232,11 @@ def test_on1_iteration_complete_emits_below_log_interval() -> None:
 
 
 def test_on1_training_step_alerting_stays_gated_below_log_interval() -> None:
-    """O-N1 conjunct (R210: "training_step alerting stays gated") — at `log_interval=1000`,
-    a `step()` at `_train_step < 1000` does NOT emit the coordinator's `training_step`
-    event, does NOT run the WARN rules (no `training_alert`), and does NOT emit
-    `monitor_gates`. These stay on their `log_interval` cadence.
+    """The alerting path stays gated: below `log_interval` there is no `training_step`, no
+    `training_alert` and no `monitor_gates`.
 
-    This conjunct is GREEN at HEAD (the gating is unchanged for the alerting path) and MUST
-    stay GREEN after IMPL (the decoupling removes the gate for `iteration_complete` ONLY).
-
-    R242 (ADJ-D12) NOTE, so the `monitor_gates` line below is not misread: that event now
-    rides `monitor.gate_interval`, not `log_interval`. It is still absent on this drive
-    because `_make_config` MIRRORS the two knobs — the shipped posture, since every committed
-    config mints them equal — so this test asserts exactly what it always did, at exactly the
-    cadence the run actually ships. The two knobs stated APART are pinned in
-    `tests/train/test_gate_interval_decoupling.py`.
+    `monitor_gates` rides `monitor.gate_interval`, which this drive MIRRORS onto `log_interval`
+    as every committed config does; the two knobs stated apart are pinned elsewhere.
     """
     cfg = _make_config(log_interval=1000)
     h = _make_coordinator(config=cfg)
@@ -309,26 +257,12 @@ def test_on1_training_step_alerting_stays_gated_below_log_interval() -> None:
     )
 
 
-# ═══ O-N1b — R218 rider 1: Q-O-TWO-POOL-READS collapse (ONE runner_stats() per emit) ═══
 def test_on1b_collapse_one_runner_stats_call_per_iteration_complete() -> None:
-    """O-N1b (R218 rider 1) — `emit_iteration_complete_event` uses the `RunnerStats`
-    snapshot passed from `_target_integrity_report` (ONE `pool.runner_stats()` call per
-    emit), NOT its own `pool.runner_stats()` call at `events.py:297`.
+    """Exactly ONE `pool.runner_stats()` call fires per `iteration_complete` emit — the
+    snapshot `_target_integrity_report` took, passed on rather than re-read.
 
-    RED until IMPL collapses the two reads into one (passes the `rstats` kwarg). Currently
-    TWO `runner_stats()` calls fire per `iteration_complete` emit: one at `step.py:650`
-    (`_target_integrity_report`) and one at `events.py:297` (inside
-    `emit_training_events`/`emit_iteration_complete_event`).
-
-    FALSIFYING MUTATION (drive both ways after IMPL): re-introduce the second
-    `pool.runner_stats()` call inside `emit_iteration_complete_event` (drop the `rstats`
-    kwarg, restore the local `rstats = pool.runner_stats()`). This test MUST turn RED (two
-    calls per emit, not one).
-
-    SEMANTIC CHANGE (R218): the collapse ELIMINATES the straddle — the target_integrity
-    block and the mcts_mean_depth/cluster block become ONE atomic read instead of two
-    microseconds-apart reads that could straddle a game boundary. This is more correct, not
-    neutral.
+    Killer: restore the local `rstats = pool.runner_stats()` inside the emit, which is two
+    reads that can straddle a game boundary.
     """
     cfg = _make_config(log_interval=1000)
     h = _make_coordinator(config=cfg)

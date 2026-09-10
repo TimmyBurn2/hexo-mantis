@@ -1,21 +1,18 @@
-//! R8: >300 LOC by design — the save path, the two-pass atomic load (parse +
-//! commit), and the little-endian cursor are one indivisible format unit; the
-//! atomicity proof depends on the parser and committer living together.
+//! R8 justify: >300 by design — the save path, the two-pass atomic load (parse + commit)
+//! and the little-endian cursor are one indivisible format unit; the atomicity proof
+//! depends on the parser and committer living together.
 //!
-//! HEXG v2 on-disk format — a SEPARATE format from dense HEXB. Ported from the
-//! predecessor engine's `replay_buffer/hexg/persist.rs` with the FFI-binding strip
-//! (the error type becomes `Result<_, String>`; error strings preserved).
+//! HEXG v2 on-disk format, separate from dense HEXB.
 //!
-//! v2 (R347(a)) added the per-record `tail_mass` α of the sparse Gumbel row. A v1 payload has
-//! a different per-record layout at a byte offset the parser cannot detect from the data, so
-//! the version field is checked BEFORE any record is read and a v1 file is refused by name.
+//! v2 added the per-record `tail_mass` of the sparse Gumbel row. A v1 payload differs at a
+//! byte offset the parser cannot detect from the data, so the version field is checked
+//! before any record is read and a v1 file is refused by name.
 //!
 //! Header (little-endian native):
 //!   [magic:   u32 = 0x48455847]  ("HEXG" — distinct from HEXB 0x48455842)
 //!   [version: u32 = 2]
-//!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the
-//!                                          buffer's DERIVED `visit_capacity`
-//!                                          (R255); reject on mismatch)
+//!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the buffer's
+//!                                          DERIVED `visit_capacity`; reject on mismatch)
 //!   [capacity: u64] [size: u64]
 //!   [encoding_name_len: u32] [encoding_name: [u8; N]]
 //!   For each of `size` records (oldest → newest):
@@ -26,12 +23,9 @@
 //!     visits: n_visits × (q:i16, r:i16, prob:f32)
 //!
 //! ## Failure-atomicity contract
-//! A load that fails for ANY reason (truncation, bound-check, geometry) leaves
-//! `self` EXACTLY as it was before the call — only a fully-parsed payload commits.
-//! Two-pass parse-then-apply: pass 1 (`parse_records`, a free fn that cannot touch
-//! `self`) reads the whole payload into a local `Vec<ParsedRecord>`; any `?`
-//! failure returns immediately without a single byte written to `self`. Pass 2
-//! (`commit_records`) runs only once parsing fully succeeded and is infallible.
+//! A load that fails for any reason leaves `self` exactly as it was: pass 1
+//! (`parse_records`, a free fn that cannot touch `self`) stages the whole payload, and
+//! pass 2 (`commit_records`) runs only once parsing fully succeeded and is infallible.
 
 use std::io::{BufWriter, Read, Write};
 use std::sync::atomic::Ordering;
@@ -40,10 +34,9 @@ use super::{weight_bucket, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES};
 
 impl HexgBuffer {
     /// Save all records (oldest → newest) to `path` in HEXG v2 format.
-    /// R345(b)(3): published through `atomic_save` — temp, fsync, rename, fsync(dir). This
-    /// used to open `path` itself with `File::create`, which truncates the previous ring to
-    /// zero before writing a byte, so a kill mid-save destroyed the resume input rather than
-    /// leaving the older copy of it.
+    ///
+    /// Published through `atomic_save` (temp, fsync, rename, fsync(dir)), so a kill
+    /// mid-save leaves the older ring intact rather than a truncated one.
     pub fn save_to_path_impl(&self, path: &str) -> Result<(), String> {
         crate::replay::atomic::atomic_save(path, |w| self.write_payload(w))
     }
@@ -114,9 +107,9 @@ impl HexgBuffer {
         Ok(())
     }
 
-    /// Load records written by `save_to_path_impl`. Returns the number loaded.
-    /// Missing file → 0. LOUD-FAILs on magic / version / slot-geometry / encoding
-    /// mismatch. Two-pass atomic (see module docs).
+    /// Load records written by `save_to_path_impl` and return the number loaded.
+    ///
+    /// A missing file is 0; magic, version, slot-geometry and encoding mismatches fail loud.
     pub fn load_from_path_impl(&mut self, path: &str) -> Result<usize, String> {
         let mut file = match std::fs::File::open(path) {
             Ok(f) => f,
@@ -174,17 +167,16 @@ impl HexgBuffer {
             ));
         }
 
-        // ── PASS 1 (parse, no mutation of `self`) ──
+        // Pass 1: parse, with no mutation of `self`.
         let parsed = parse_records(&mut cur, size, self.visit_capacity)?;
 
-        // ── PASS 2 (commit) ──
+        // Pass 2: commit.
         self.commit_records(&parsed);
         self.size = size;
         self.head = size % self.capacity;
 
-        // game_id re-base: a fresh self-play game id must never collide with a
-        // just-loaded record's game_id. Monotonic; `saturating_add` avoids the
-        // i64::MAX overflow. Empty file → `max()` is `None` → guarded no-op.
+        // Re-base the game id so a fresh game never collides with a loaded record's;
+        // `saturating_add` avoids the i64::MAX overflow.
         if let Some(max_gid) = parsed.iter().map(|r| r.game_id).max() {
             self.next_game_id = self.next_game_id.max(max_gid.saturating_add(1));
         }
@@ -192,8 +184,9 @@ impl HexgBuffer {
         Ok(size)
     }
 
-    /// PASS 2 helper: write every parsed record into its slot and rebuild the
-    /// weight-bucket histogram. Every write here is infallible.
+    /// Write every parsed record into its slot and rebuild the weight-bucket histogram.
+    ///
+    /// Pass 2; every write here is infallible.
     fn commit_records(&mut self, parsed: &[ParsedRecord]) {
         for b in &self.weight_buckets {
             b.store(0, Ordering::Relaxed);
@@ -234,8 +227,9 @@ impl HexgBuffer {
     }
 }
 
-/// PASS 1 helper: parse `size` records from `cur` into an owned staging Vec. A
-/// free function (no `&self`) — structurally cannot touch a `HexgBuffer`, so any
+/// Parse `size` records from `cur` into an owned staging Vec.
+///
+/// A free function with no `&self`, so it structurally cannot touch a `HexgBuffer` and any
 /// `?` failure leaves the caller's buffer untouched.
 fn parse_records(
     cur: &mut Cursor,
@@ -324,7 +318,7 @@ struct ParsedRecord {
     visit_probs: Vec<f32>,
 }
 
-/// Minimal little-endian cursor over the loaded byte buffer (no external dep).
+/// Minimal little-endian cursor over the loaded byte buffer.
 struct Cursor<'a> {
     buf: &'a [u8],
     pos: usize,

@@ -1,37 +1,24 @@
-"""`resolve_sample_threads` — THE one derivation for the ring sample's rebuild width.
+"""THE one derivation for the ring sample's rebuild width.
 
-PERF-TRANCHE-1 B1, against ledger §10.5 line #1. `sample_graph_batch` is the trainer's
-single largest line, and this tranche's M-2 measurement split it: **1 221 ms of
-`build_axis_graph` against 163 ms of fuse and 2 ms of align** per step at run5 shape. The
-rebuild is a serial loop over independent items on a 24-thread box, so it is parallelised —
-and this module decides how wide.
+Armed against a measurement that split `sample_graph_batch`, the trainer's largest line, into
+1 221 ms of `build_axis_graph` against 163 ms of fuse and 2 ms of align per step at run5 shape.
+A DERIVED prediction, not a measured optimum.
 
-WHY A DERIVATION AND NOT A CONFIG KEY. A thread budget is a property of the HOST and of what
-the run has already committed elsewhere, and both inputs already exist: `os.cpu_count()` is
-the host, and `selfplay.n_workers` is what the run has promised to self-play. Minting a
-third number that has to be kept consistent with those two by hand is the second-authority
-shape R1 exists to refuse — and it would go stale the first time the run moved to a
-different box. Nothing here is a code-side DEFAULT: there is no value standing in for one
-the operator did not supply, only arithmetic over values they did.
+Derived rather than minted as a config key: both inputs already exist (`os.cpu_count()` and
+`selfplay.n_workers`), and a third hand-synced number would go stale on the next box. Nothing
+here is a code-side default — only arithmetic over values the operator supplied.
 
-THE RESERVATION IS THE POINT. During a training step the self-play workers are still
-running, so a pool sized to the whole machine takes its threads from them: the step gets
-faster while the run gets slower, which is the only level that matters (the research
-packet's JC-4). The budget therefore reserves `n_workers` threads for self-play and one for
-the inference-server thread, and takes what is left.
-
-**This is a DERIVED prediction, not a measured optimum.** The contended arm — trainer
-stepping while the workers run — is what decides whether the reservation is right, and its
-reading belongs beside this docstring the day it exists.
+THE RESERVATION IS THE POINT: self-play workers are still running during a training step, so a
+pool sized to the whole machine takes its threads from them and the run gets slower while the
+step gets faster.
 """
 import os
 from collections.abc import Mapping
 from typing import Any
 
 _KEY = "selfplay.n_workers"
-#: The inference-server thread. One, not a fudge factor: `WorkerPool` starts exactly one
-#: (`pool.py`, `self._inference_server`), and the PERF-BASELINE ledger measures it at 97.8 %
-#: occupancy in the contended regime, so it is a whole thread and not a share of one.
+#: The inference-server thread. One, not a fudge factor: `WorkerPool` starts exactly one, and it
+#: was measured at 97.8 % occupancy contended, so it is a whole thread and not a share of one.
 _SERVER_THREADS = 1
 
 
@@ -40,7 +27,7 @@ class MissingSampleThreadsInputError(ValueError):
 
 
 def resolve_sample_threads(full_config: Any, *, cpu_count: int | None = None) -> int:
-    """The number of OS threads the ring sample's rebuild may use. Always >= 1.
+    """Return the number of OS threads the ring sample's rebuild may use. Always >= 1.
 
     Args:
         full_config: the whole validated config mapping (`RunConfig.model_dump()`).

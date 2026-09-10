@@ -46,7 +46,7 @@ def _graph_engine() -> LocalInferenceEngine:
                                 inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8, )
 
 
-# ══ I-02 — graph branch ══════════════════════════════════════════════════════════
+# I-02 — graph branch
 def test_graph_infer_batch_no_attributeerror_and_correct_shape() -> None:
     engine = _graph_engine()
     try:

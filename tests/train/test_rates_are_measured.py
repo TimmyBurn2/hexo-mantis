@@ -26,7 +26,7 @@ import pytest
 from mantis.train.coordinator.config import StepOutcome
 
 
-# ── C06: the field is gone, and the real one is not ───────────────────────────────────
+# C06: the field is gone, and the real one is not
 
 def test_StepOutcome_carries_no_unmeasured_games_per_hour() -> None:
     names = {f.name for f in dataclasses.fields(StepOutcome)}
@@ -43,7 +43,7 @@ def test_the_measured_games_per_hour_still_exists_on_the_coordinator() -> None:
     assert callable(StepCoordinator._games_per_hour)
 
 
-# ── C07: the pool starts UNMEASURED ───────────────────────────────────────────────────
+# C07: the pool starts UNMEASURED
 
 class _FreshPool:
     """The two pool readings at construction, read off the REAL class rather than restated.
@@ -87,7 +87,7 @@ def test_a_measured_rate_is_carried_through_unchanged() -> None:
     assert pool.avg_game_length == 12.5
 
 
-# ── C07: the coordinator's own clock ──────────────────────────────────────────────────
+# C07: the coordinator's own clock
 
 def test_a_rate_over_zero_elapsed_is_absent_not_zero() -> None:
     from mantis.train.coordinator.step import StepCoordinator
@@ -107,7 +107,7 @@ def test_a_rate_over_zero_elapsed_is_absent_not_zero() -> None:
     assert StepCoordinator._steps_per_hour(stub) == pytest.approx(3.0)
 
 
-# ── the payload the rules and the perf floors actually read ───────────────────────────
+# the payload the rules and the perf floors actually read
 
 def _iteration_complete(pool: Any, *, gph: Any, sph: Any) -> dict[str, Any]:
     """The PRODUCTION builder, driven with the collaborators it takes."""

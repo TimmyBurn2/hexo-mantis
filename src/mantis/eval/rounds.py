@@ -1,16 +1,12 @@
-# Exceeds the 300-line soft cap (R8): the round contract and its rehydration are ONE
-# unit — every field carried across the eval process seam, the table that says which of
-# them must be rebuilt as a dataclass on the far side, and the result-shape validation
-# the child answers with. A field split from its rehydration row arrives in the child as
-# a raw mapping and fails at the first attribute read, in a subprocess nobody is reading.
-"""RoundSpec + build_round_result + resolve_ladder_rungs (design §a.3 rounds.py).
+# Exceeds the 300-line soft cap (R8): the round contract and its rehydration are ONE unit — the
+# fields carried across the eval process seam, the table saying which must be rebuilt as a
+# dataclass on the far side, and the result-shape validation the child answers with. A field
+# split from its rehydration row arrives as a raw mapping and fails at the first attribute read.
+"""RoundSpec + build_round_result + resolve_ladder_rungs.
 
-`RoundSpec` is PATHS AND PRIMITIVES ONLY — a torch module is not a representable field
-(isolation law: the type surface cannot carry a live model across the process seam).
-`build_round_result` assembles the coordinator-facing round-result mapping (§c.2);
-it UNCONDITIONALLY sets `wr_sealbot` — the concrete producer the WP13-A G-2 prereg flip
-points at. `resolve_ladder_rungs` is the parent-side per-rung resolution unit: a
-`RungUnresolvable` is CAUGHT and recorded, never fatal to the round.
+`RoundSpec` is PATHS AND PRIMITIVES ONLY — the type surface cannot carry a live model across the
+process seam. `build_round_result` UNCONDITIONALLY sets `wr_sealbot`, and `resolve_ladder_rungs`
+CATCHES a `RungUnresolvable` and records it rather than failing the round.
 """
 from __future__ import annotations
 
@@ -25,9 +21,8 @@ from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
 
-#: The contract-doc / schema-census name of the gate-block concurrency row (R339(b)). It lives
-#: beside the spec that carries it for `ARCH_KIND_ROW`'s reason: the name belongs with the
-#: consumer, not with the test that asserts on it.
+#: The contract-doc / schema-census name of the gate-block concurrency row: it lives beside the
+#: spec that carries it, because the name belongs with the consumer, not with the test.
 EVAL_CONCURRENCY_ROW = "eval.concurrency"
 
 __all__ = [
@@ -40,13 +35,11 @@ __all__ = [
 ]
 
 
-# ── the parent-side per-rung resolver unit ──────────────────────────────────────────────
 def resolve_ladder_rungs(
     rungs: Sequence[Any], resolve_bot_fn: Callable[..., Any]
 ) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """Attempt `resolve_bot_fn(rung.bot, depth=rung.depth, opponent_sims=rung.opponent_sims)`
-    per rung; a `RungUnresolvable` is CAUGHT and appended to `skipped` — NEVER raised
-    further (never fatal to the round). Re-evaluated fresh every call (never sticky)."""
+    """Resolve each rung's bot; a `RungUnresolvable` is CAUGHT and appended to `skipped`, never
+    raised further. Re-evaluated fresh every call."""
     resolved: dict[str, Any] = {}
     skipped: list[dict[str, str]] = []
     for rung in rungs:
@@ -59,15 +52,11 @@ def resolve_ladder_rungs(
     return resolved, skipped
 
 
-# ── the worker round spec (JSON-(de)serializable; paths + primitives only) ─────────────
 def _rehydrate(cls: Any, payload: Any) -> Any:
-    """Rebuild an optional posture spec from its JSON mapping; `None` stays `None`.
-
-    Already-typed values pass through unchanged so a spec built in-process (the terminal
-    round never round-trips through JSON on the parent side) and one read back from the
-    worker's spec file take the same path — the alternative, two construction routes, is how
-    a field ends up meaning one thing in-process and another across the seam.
-    """
+    """Rebuild an optional posture spec from its JSON mapping; `None` stays `None`, and
+    already-typed values pass through so an in-process spec and one read back from the worker's
+    spec file take the same path — two construction routes are how a field ends up meaning one
+    thing in-process and another across the seam."""
     if payload is None or isinstance(payload, cls):
         return payload
     return cls(**payload)
@@ -75,26 +64,18 @@ def _rehydrate(cls: Any, payload: Any) -> Any:
 
 @dataclass(frozen=True)
 class GameRecordTarget:
-    """Where the eval CHILD writes its game records (R344(b)).
-
-    Paths-and-primitives, in the shape the three posture specs beside it already use: the
-    parent resolves it once and it crosses the process seam as data. `None` on `RoundSpec`
-    means this round records no games — the state every test-constructed spec is in, and one
-    production must never be in, which is why the pipeline's supply of it is pinned.
-
-    The child claims its OWN shard segment under `record_dir` (`O_CREAT|O_EXCL`), so a round
-    child and the live trainer writing into one directory can never share a file.
-    """
+    """Where the eval CHILD writes its game records: resolved once in the parent and carried as
+    data. `None` means this round records none — the state every test-constructed spec is in and
+    one production must never be in. The child claims its OWN shard under `record_dir` with
+    `O_CREAT|O_EXCL`, so a round child and the live trainer can never share a file."""
 
     record_dir: str
     run_id: str
 
 
-#: The optional resolver-produced specs `from_dict` must REHYDRATE, as DATA rather than as
-#: three transcribed statements. One loop over one table is what keeps the set closed: a field
-#: added to `RoundSpec` and forgotten here arrives in the child as a raw mapping and fails at
-#: the child's first attribute read — which, on `fused_graph_caps`, would be at the moment it
-#: tries to bound a forward, in a subprocess whose stderr nobody is reading.
+#: The resolver-produced specs `from_dict` must REHYDRATE, as DATA rather than transcribed
+#: statements: a field added to `RoundSpec` and forgotten here arrives in the child as a raw
+#: mapping and fails at its first attribute read, in a subprocess whose stderr nobody reads.
 _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
     ("ply_cap_adjudication", PlyCapAdjudicationSpec),
     ("strength_floor", StrengthFloorSpec),
@@ -136,12 +117,9 @@ class RoundSpec:
     """PATHS AND PRIMITIVES ONLY — a torch module is not representable here."""
 
     round_id: str
-    #: R345(b)(4) — the round's ordinal within the run, monotone and resume-restored
-    #: (`EvalPipeline.restore_round_state`). It is what makes each round's opening subset
-    #: non-overlapping with the last: `round_openings` windows a `seed_base`-seeded
-    #: permutation of the book by this index. Parsing it back out of `round_id` was the
-    #: alternative and is the transcription class R192(e) refuses — the id's format is a
-    #: display decision, not a data contract.
+    #: The round's ordinal within the run, monotone and resume-restored; it is what makes each
+    #: round's opening subset non-overlapping with the last. Parsing it back out of `round_id`
+    #: would be transcription — the id's format is a display decision, not a data contract.
     round_index: int
     step: int
     candidate_snapshot: str
@@ -158,104 +136,50 @@ class RoundSpec:
     round_timeout_sec: float
     result_path: str
     progress_path: str
-    # M-2: eval.ladder.bootstrap_{resamples,ci_level,seed} threaded to the live rung
-    # aggregation path (worker.py's `aggregate_rung` calls) — these three schema fields
-    # had NO live consumer before (worker.py silently used aggregate.py's own signature
-    # defaults instead), which is exactly the silently-disabled-knob class R1/LAW-08 exist
-    # to kill.
+    # The three ladder bootstrap keys threaded to the live aggregation path; before this they
+    # had NO live consumer, the worker silently using the aggregator's signature defaults.
     ladder_bootstrap_resamples: int
     ladder_bootstrap_ci_level: float
     ladder_bootstrap_seed: int
-    #: R344(b): where this round's games are WRITTEN, or `None` for a round that records
-    #: none. Same shape and same reason as the three postures below — resolved once in the
-    #: parent, carried across the seam as data, rehydrated by the table above.
+    #: Where this round's games are WRITTEN, or `None` for a round that records none. Same shape
+    #: and reason as the postures below: resolved once in the parent, carried as data.
     game_record: GameRecordTarget | None
-    #: The two early-strength eval postures (F-R-P2B-5), resolved ONCE in the parent by
-    #: `mantis.config.resolve.eval_posture` and carried across the process seam as plain
-    #: dataclasses — paths-and-primitives still holds, since both are frozen records of
-    #: scalars that `dataclasses.asdict`/`from_dict` round-trip without a schema import in
-    #: the child. `None` is the ARMED=NO posture every committed config mints, and on that
-    #: arm neither the arena loop nor `run_round` takes a new branch.
+    #: The two early-strength eval postures, resolved ONCE in the parent and carried as frozen
+    #: dataclasses that round-trip without a schema import. `None` is the ARMED=NO posture.
     ply_cap_adjudication: PlyCapAdjudicationSpec | None
     strength_floor: StrengthFloorSpec | None
-    #: The graph inference forward's memory bound (F-816-10, D-1), in the SAME shape and for
-    #: the same reason as the two postures above: resolved ONCE in the parent by
-    #: `mantis.config.resolve.fused_graph_caps` and carried across the process seam as a plain
-    #: frozen dataclass. It is here because the eval worker is a SECOND allocator on the same
-    #: card — `eval.worker_device: cuda` plus a spawn-context subprocess — that no in-process
-    #: bound can see, and its `LocalInferenceEngine` builds its graph server from a hand-made
-    #: dict with no `RunConfig` to resolve against. `None` is the GRID arm: a grid eval round
-    #: has no fused graph forward to bound, and `None` must round-trip as `None` rather than
-    #: as a rehydration failure.
+    #: The graph inference forward's memory bound: the eval worker is a SECOND allocator on the
+    #: same card that no in-process bound can see, and its engine builds a server from a
+    #: hand-made dict with no `RunConfig`. `None` is the GRID arm and must round-trip as `None`.
     fused_graph_caps: FusedGraphCapsSpec | None
-    #: The EVAL leaf-graph build's width (NIGHTRUN-1 E1), derived ONCE in the parent by
-    #: `mantis.config.resolve.leaf_build_threads` and carried here for `fused_graph_caps`'
-    #: reason: the child has no `RunConfig` to derive a host reservation from. A plain int,
-    #: so it needs no `_REHYDRATED_SPEC_FIELDS` row — `asdict`/`from_dict` round-trip it as
-    #: itself. `1` is the serial path and the exact-parity control.
+    #: The EVAL leaf-graph build's width, derived in the parent because the child has no
+    #: `RunConfig`. `1` is the serial path and the exact-parity control.
     leaf_build_threads: int
-    #: The deploy head's MCTS leaf-batch width (R318(b)) — the config's OWN
-    #: `selfplay.leaf_batch_size`, carried across the process seam so the eval child searches
-    #: under the SAME regime the net's policy/value targets were generated in. Here for
-    #: `fused_graph_caps`' reason: the child has no `RunConfig` to resolve against. NOT
-    #: defaulted, unlike `allocator_posture` below — no consumer can refuse a bad value on this
-    #: axis the way `assert_posture_token` refuses a missing posture, so a default would
-    #: silently restore the k=1 train/deploy mismatch this field exists to close. A plain int,
-    #: so it round-trips through `asdict`/`from_dict` with no rehydration entry.
+    #: The deploy head's MCTS leaf-batch width, so the eval child searches under the SAME regime
+    #: the net's targets came from. NOT defaulted: a default silently restores the k=1 mismatch.
     leaf_batch_size: int
-    #: The run's `selfplay.max_game_moves`, carried across the process seam for `amp_dtype`'s
-    #: reason (AUDIT-1 F-15). `arena/match.py::DEFAULT_MAX_PLIES = 128` defaulted every eval
-    #: game, and its own comment said it "mirrors the production self-play default" — a copy of
-    #: a bridge signature default, itself a copy of the minted key. So the moment
-    #: `max_game_moves` is re-minted, eval keeps capping at 128 silently and the draw channel
-    #: changes meaning with no config diff, on the bar LAW-15 reads deploy-matched.
+    #: The run's `selfplay.max_game_moves`. A hardcoded 128 capped every eval game as a copy of a
+    #: copy of the minted key, so a re-mint left eval capping silently and the draw channel
+    #: changing meaning with no config diff.
     max_plies: int
-    #: The deploy head's completed-Q sigma terms, `selfplay.{c_visit, c_scale}` — REQUIRED
-    #: schema keys that the eval head never received (AUDIT-1 F-39). `DeployHeadPlayer`
-    #: defaulted them to `50.0` / `1.0` on its own signature and `eval/worker.py` constructed it
-    #: with only `n_sims` and `leaf_batch_size`, so the deploy-matched bar searched at a regime
-    #: nobody minted — and the moment `c_visit` is re-minted, LAW-15's "deploy-matched" claim
-    #: quietly stops being true. Threaded here for `leaf_batch_size`' reason exactly.
+    #: The deploy head's completed-Q sigma terms — REQUIRED schema keys the eval head never
+    #: received, so the deploy-matched bar searched at a regime nobody minted.
     c_visit: float
     c_scale: float
-    #: The run's `search.kind` and `selfplay.gumbel_m`, carried across the process seam for
-    #: `c_visit`'s reason and closing the same hole one layer deeper. `DeployHeadPlayer`
-    #: used to run a search regime that appeared in NO config at all — a PUCT tree with a
-    #: Gumbel-scored root pick — so the deploy-matched bar was matched to nothing. The kind
-    #: is resolved ONCE in the parent by `mantis.config.resolve.resolve_search_kind`, the
-    #: SAME authority `SelfPlayHParams.from_config` reads. NOT defaulted, for
-    #: `leaf_batch_size`' reason exactly.
+    #: The run's `search.kind` and `selfplay.gumbel_m`. The deploy head used to run a regime in
+    #: NO config at all — a PUCT tree with a Gumbel-scored root pick — so the kind is resolved by
+    #: the SAME authority `SelfPlayHParams.from_config` reads. NOT defaulted.
     search_kind: str
     gumbel_m: int
-    #: The graph collector's batching geometry — pop width and pop deadline — resolved ONCE in
-    #: the parent by `mantis.config.resolve.inference_batching` and carried across the process
-    #: seam, for `fused_graph_caps`' reason: the child's `LocalInferenceEngine` builds its graph
-    #: server from a hand-made dict with no `RunConfig` to resolve against, and before this
-    #: field those two knobs were LITERALS in that dict. The ledger measured the cost of a
-    #: literal that is wrong for the route (F-2): at the single-stream deploy head, 33 % of the
-    #: eval path's ms/sim was the collector's own deadline. NOT defaulted, for
-    #: `leaf_batch_size`' reason — no consumer can refuse a bad value on this axis, so a
-    #: default would silently restore the hardcode. `None` is the GRID arm: a grid eval round
-    #: builds no graph server, so there is no collector geometry to carry.
+    #: The graph collector's batching geometry, resolved in the parent. These two knobs were
+    #: LITERALS in the child's hand-made server dict, and a literal wrong for the route cost 33%
+    #: of the eval path's ms/sim in the collector's own deadline. `None` is the GRID arm.
     inference_batching: InferenceBatchingSpec | None
-    #: The CUDA caching allocator REGIME the round's caps were fitted under (RECAL-PREP,
-    #: R308(g)(i)), as the config's own minted token. Here for `fused_graph_caps`' reason and
-    #: on the same seam: the child is a SECOND allocator on the same card, in its own process,
-    #: and a posture is a property of the PROCESS's environment — so the parent's boot
-    #: assertion says nothing about the child's, and the child has no `RunConfig` to resolve
-    #: against. `None` is the NOT-CUDA arm: a cpu eval child has no caching allocator to
-    #: govern. It is the one field on this dataclass carrying a DEFAULT, and the default is
-    #: safe for the reason `ArmedAbort.ceiling_path`'s is: the consumer REQUIRES a token
-    #: whenever `worker_device` is cuda and raises without one, so `None` can neither excuse
-    #: an assertion nor pass for a posture. What it buys is that a round spec built by a test
-    #: that has no opinion about allocators does not have to state one.
-    #: THE GATE-BLOCK CONCURRENCY (R339(b)), the config's own `eval.concurrency`. Here for
-    #: `leaf_batch_size`' reason and on the same seam: the child has no `RunConfig` to read it
-    #: from. NOT defaulted, for `leaf_batch_size`' reason exactly — a spec that silently
-    #: carried `1` while the config minted `4` is the silently-disabled-knob class (R1/LAW-08),
-    #: and this is the one row R339(b) makes run6's start conditional on. Its consumer is
-    #: `worker._play_gate_block`; every other block plays serial by construction, so this value
-    #: never reaches them.
+    #: The allocator REGIME the caps were fitted under, as the config's minted token: a posture
+    #: is a property of the PROCESS's environment, so the parent's assertion says nothing about
+    #: the child's. Its default is safe because the consumer REQUIRES a token under cuda.
+    #: The gate-block concurrency. NOT defaulted: a spec silently carrying `1` while the config
+    #: minted `4` is the silently-disabled-knob class.
     concurrency: int
     allocator_posture: str | None = None
 
@@ -272,7 +196,6 @@ class RoundSpec:
         return cls(**payload)
 
 
-# ── worker result-contract validation ───────────────────────────────────────────────────
 _REQUIRED_RESULT_KEYS = (
     "step", "gate", "rungs", "skipped_rungs", "random", "worker_pid",
 )
@@ -289,26 +212,15 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
     return raw
 
 
-# ── the round-result builder (§c.2) ─────────────────────────────────────────────────────
 def _first_sealbot_wr(
     rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
 ) -> tuple[float | None, str | None, int | None, float | None, float | None]:
-    """`(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung (ladder
-    order) with >=1 game this round; all-`None` if no sealbot rung recorded a game
-    (skip-counted at the coordinator, G-2).
+    """Return `(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung with
+    >= 1 game this round; all-`None` if none recorded a game.
 
-    AUDIT-1 F-14, producer half, completed under R332(b) — the R118/A-1 freeze on this file
-    is LIFTED. The WR alone is not a series: once `sealbot_d5` saturates it draws 0 games
-    off-cadence and the reported number silently becomes `sealbot_d6`'s, so a trajectory rule
-    testing `wr < peak * ratio` compares two opponents. The identity travels with the value
-    out of the SAME walk that selects it, so the two cannot drift.
-
-    THE CI JOINED THE TUPLE FOR THAT SAME REASON (R341 §3, closed at R343). The round CI was
-    already computed — `aggregate_rung` bootstraps it and the worker publishes it per rung — but
-    it stopped at the round RESULT and never reached the round EVENT, so an exit screen had a
-    win rate with no interval beside it. It is taken from THIS walk rather than by a second
-    lookup, because a CI fetched independently could be the CI of a DIFFERENT rung than the
-    `wr` it is printed next to, which is exactly the drift this function exists to prevent.
+    Once a sealbot rung saturates it draws 0 games off-cadence and the reported number silently
+    becomes the next rung's, so the identity and the CI travel with the value out of the SAME
+    walk that selects it.
     """
     for rung in rungs_config:
         if getattr(rung, "bot", None) != "sealbot":
@@ -366,17 +278,12 @@ def build_round_result(
     candidate_snapshot_path: str | None = None,
     strength_floor: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Assemble the coordinator-facing round-result mapping (§c.2). `wr_sealbot` is
-    UNCONDITIONALLY present — success, broken, and all-skip rounds alike.
+    """Assemble the coordinator-facing round-result mapping, with `wr_sealbot` UNCONDITIONALLY
+    present — success, broken and all-skip rounds alike.
 
-    WP12-R Phase O (R152/R79): ONE authority for "did this round break" — the typed
-    `reason`, where `None` IS the clean state. The `eval_broken: bool` parameter and the
-    `error: str | None` parameter are DELETED rather than defaulted: a defaulted survivor
-    is a MIGRATED authority, not an absent one (`run.py:366-372`, MF-2 Attack B), and
-    `eval_broken=True, error=None` was constructible while both existed. `detail` is PROSE
-    beside the reason (`repr(exc)`, a persistence message) and never a reason spelling —
-    nothing under `src/` may branch on it
-    (`tests/eval/test_round_result_reason_shape.py::test_no_module_under_src_branches_on_the_eval_broken_detail`).
+    ONE authority for "did this round break": the typed `reason`, where `None` IS the clean
+    state, with no defaulted boolean survivor beside it. `detail` is PROSE and nothing under
+    `src/` may branch on it.
     """
     promoted = (reason is None) and _gate_result_promoted(gate_result)
     _sealbot_reading = _first_sealbot_wr(rungs_config, rung_results)
@@ -388,9 +295,8 @@ def build_round_result(
         "wr_sealbot": _sealbot_reading[0],
         "wr_sealbot_rung": _sealbot_reading[1],
         "wr_sealbot_games": _sealbot_reading[2],
-        # R341 §3 / R343: the ROUND CI, beside the win rate it belongs to and out of the same
-        # walk that selected both. A bare win rate on an exit screen invites a reader to treat
-        # a 32-game reading as a point estimate.
+        # The ROUND CI, beside the win rate it belongs to and out of the same walk that
+        # selected both: a bare win rate invites a reader to treat 32 games as a point estimate.
         "wr_sealbot_ci_lower": _sealbot_reading[3],
         "wr_sealbot_ci_upper": _sealbot_reading[4],
         "wr_random": random_wr,
@@ -407,11 +313,9 @@ def build_round_result(
         result["worker_pid"] = worker_pid
     if candidate_snapshot_path is not None:
         result["candidate_snapshot_path"] = candidate_snapshot_path
-    # R324(d): PRESENCE is the arming evidence, exactly as it is on the worker payload this
-    # copies from. A disarmed round — every committed config — produces no key here, so the
-    # routed mapping is byte-identical to what it was before the floor existed. A key
-    # written unconditionally as `None` would report "armed, and it passed nothing" for a
-    # round the worker never applied the floor to.
+    # PRESENCE is the arming evidence, as on the worker payload this copies from: a disarmed
+    # round produces no key, and a key written unconditionally as `None` would report "armed, and
+    # it passed nothing".
     if strength_floor is not None:
         result["strength_floor"] = dict(strength_floor)
     return result

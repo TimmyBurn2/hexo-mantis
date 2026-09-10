@@ -1,13 +1,8 @@
-"""`SelfplayConfig`/`MctsConfig`/`PlayoutCapConfig`/`InferenceConfig` — self-play + inference
-knobs as first-class schema fields (R-SELFPLAYCONFIG-SCHEMA closure, DESIGN_P2.md §3).
+"""Self-play and inference knobs as first-class schema fields.
 
-`legal_move_radius`/`legal_move_radius_schedule` are DELIBERATELY ABSENT (DESIGN_P2.md §5,
-shape (ii)): the encoding registry alone is the radius authority for every run today — nothing
-in the current build path reads a config-level radius override, so a schema field for it would
-be a consumer-less knob (R1/LAW-08). `RadiusStage`/`resolve_radius_from_schedule` are formally
-retired by a later chunk (SC-A4); dropping the field from this class is forced now because a
-`SelfplayConfig` reshape cannot carry it AND satisfy `extra="forbid"` simultaneously with the
-old key.
+`legal_move_radius` / `legal_move_radius_schedule` are DELIBERATELY ABSENT: the encoding registry
+alone is the radius authority, and nothing in the build path reads a config-level override, so a
+schema field for it would be a consumer-less knob (R1/LAW-08).
 """
 
 from pydantic import Field, model_validator
@@ -15,23 +10,16 @@ from pydantic import Field, model_validator
 from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_gumbel
 from mantis.config.schema._base import StrictModel
 
-#: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE (AUDIT-1 F-21).
-#:
-#: `finish_expansion` panics on pool overflow, and `select_leaves` expands TT-hit leaves
-#: without counting them against the batch, so one move can add up to
-#: `4 * sims * MAX_CHILDREN_PER_NODE` children. `n_simulations` was `Field(ge=1)` with NO
-#: ceiling, so a config could arm a budget that halts the run at the first move crossing it.
-#: Derived from `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)` in `mantis-search` and read across
-#: the bridge rather than re-typed — a literal here would be a second authority for a bound
-#: only the pool knows, and it would go stale the day either constant moves.
+#: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE. `finish_expansion`
+#: panics on pool overflow and `select_leaves` expands TT-hit leaves without counting them, so one
+#: move can add up to `4 * sims * MAX_CHILDREN_PER_NODE` children. Derived across the bridge rather
+#: than re-typed: a literal would be a second authority for a bound only the pool knows.
 MAX_ARMED_SIMS: int = mcts_max_armed_sims()
 
-#: The same bound under `search.kind: gumbel`, which spends `MAX_ROOT_CHILDREN` pool slots
-#: on its root instead of `MAX_CHILDREN_PER_NODE`. It is LOWER, and it is a second constant
-#: rather than a smaller shared one so the ceiling a PUCT config validates against does not
-#: move. Field bounds below keep the LOOSE value — a `Field(le=...)` cannot see a key in
-#: another SECTION — and the tighter one is applied by
-#: `RunConfig._search_kind_fits_the_node_pool`.
+#: The same bound under `search.kind: gumbel`, which spends `MAX_ROOT_CHILDREN` pool slots on its
+#: root. It is LOWER, and it is a second constant rather than a smaller shared one so the ceiling a
+#: PUCT config validates against does not move. The field bounds below keep the LOOSE value —
+#: a `Field(le=...)` cannot see a key in another SECTION — and `RunConfig` applies the tighter one.
 MAX_ARMED_SIMS_GUMBEL: int = mcts_max_armed_sims_gumbel()
 
 
@@ -44,8 +32,7 @@ class MctsConfig(StrictModel):
     quiescence_enabled: bool
     quiescence_blend_2: float = Field(ge=0, le=1)
     dirichlet_alpha: float = Field(gt=0)
-    # The schema field IS the config key (`mcts.dirichlet_epsilon`) — retires hparams.py's
-    # `mcts.epsilon`-vs-`dirichlet_epsilon` key/field-spelling mismatch by construction.
+    # The schema field IS the config key, which retires the old key/field spelling mismatch.
     dirichlet_epsilon: float = Field(ge=0, le=1)
     dirichlet_enabled: bool
 
@@ -59,15 +46,13 @@ class PlayoutCapConfig(StrictModel):
     full_search_prob: float = Field(ge=0, le=1)
     n_sims_quick: int = Field(ge=0, le=MAX_ARMED_SIMS)
     n_sims_full: int = Field(ge=0, le=MAX_ARMED_SIMS)
-    # The schema field IS the config key — retires hparams.py's
-    # `_resolve_playout_cap_temperature` key/field-spelling shim by construction.
+    # The schema field IS the config key, which retires the old resolver shim.
     temperature_threshold_compound_moves: int = Field(ge=0)
     temp_min: float = Field(ge=0)
 
     @model_validator(mode="after")
     def _mutual_exclusion(self) -> "PlayoutCapConfig":
-        # Ports hparams.py's two frozen hard errors onto the schema seam, plus the Phase-2
-        # "PCR quick>full" RED-TEAM-lens check (REV1 MUST-FIX #4).
+        # The two frozen hard errors, plus the "PCR quick > full" check.
         if self.full_search_prob > 0.0 and self.fast_prob > 0.0:
             raise ValueError(
                 "playout_cap: fast_prob and full_search_prob are mutually exclusive"
@@ -86,10 +71,8 @@ class PlayoutCapConfig(StrictModel):
                 "playout_cap: n_sims_quick must be <= n_sims_full (quick>full is a "
                 "nonsensical playout-cap-randomization preset)"
             )
-        # V-PCR (R40, WPSC Phase 3 SC-B4): the two genuinely-missing PlayoutCapConfig
-        # checks. Gated on "both presets are set" (n_sims_quick>0 and n_sims_full>0), NOT
-        # on full_search_prob>0 — gating there would false-fire on every minted config's
-        # all-zero disabled shape (0, 0, 0.0).
+        # Gated on "both presets are set", NOT on `full_search_prob > 0`: gating there would
+        # false-fire on every minted config's all-zero disabled shape.
         if self.n_sims_quick > 0 and self.n_sims_full > 0:
             if self.n_sims_quick == self.n_sims_full:
                 raise ValueError(
@@ -106,21 +89,17 @@ class PlayoutCapConfig(StrictModel):
 
 
 class SelfplayConfig(StrictModel):
-    """Self-play worker/search knobs (`# selfplay ns` + monitoring/instrumentation in
-    `hparams.py`). See the module docstring for why no radius field exists here.
+    """Self-play worker/search knobs. See the module docstring for why no radius field exists.
 
-    ``c_scale`` IS Mctx's ``value_scale`` under ``search.kind: gumbel`` — the same slot in
-    ``(c_visit + max_visits) * scale * q``, where ``c_visit`` is Mctx's ``maxvisit_init``.
-    A second key for the same slot would be the duplicate-authority class R1 exists to
-    kill. BOTH ARE REQUIRED WITH NO DEFAULT and the schema will not guess either: the
-    published board-game setting (Danihelka et al. App. F: "In all Go and chess
-    experiments, Gumbel MuZero scales the Q-values by cvisit = 50 and cscale = 1.0") and
-    the mctx library's own Atari default (0.1) differ by an order of magnitude, and which
-    one a run arms changes how peaked every exported target is. The mint states the value.
+    ``c_scale`` IS Mctx's ``value_scale`` under ``search.kind: gumbel`` — the same slot as
+    ``c_visit``'s ``maxvisit_init`` — so a second key for it would be the duplicate-authority
+    class. BOTH ARE REQUIRED WITH NO DEFAULT: the published board-game setting (cvisit = 50,
+    cscale = 1.0) and the mctx library's Atari default (0.1) differ by an order of magnitude, and
+    which one a run arms changes how peaked every exported target is.
 
-    ``gumbel_m`` is Mctx's ``max_num_considered_actions`` and ``gumbel_explore_moves`` the
-    span of opening plies that sample from the visit distribution instead of taking the
-    Sequential-Halving winner; both are inert under ``search.kind: puct``.
+    ``gumbel_m`` is Mctx's ``max_num_considered_actions`` and ``gumbel_explore_moves`` the span of
+    opening plies that sample instead of taking the Sequential-Halving winner; both are inert
+    under ``search.kind: puct``.
     """
 
     n_workers: int = Field(ge=1)
@@ -130,75 +109,37 @@ class SelfplayConfig(StrictModel):
     c_scale: float = Field(gt=0)
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
-    # OPERATIONAL CONSTANT (R347/CONFIG-1): a queue's back-pressure bound.
+    # OPERATIONAL CONSTANT: a queue's back-pressure bound.
     results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)
-    # OPERATIONAL CONSTANT (R347/CONFIG-1): a diagnostic verbosity switch. It gates only
-    # what is WRITTEN, never what is played, which is what makes it operational rather than
-    # the silently-disabled-opponent class R1 exists for.
+    # OPERATIONAL CONSTANT: a diagnostic verbosity switch. It gates only what is WRITTEN, never
+    # what is played, which is what makes it operational rather than a disabled-opponent knob.
     log_investigation_metrics: bool = True
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
 
 
 class FusedGraphCapsConfig(StrictModel):
-    """The GRAPH inference forward's memory bound — ONE block, ONE fact (F-816-10, R276(f);
-    `MicrobatchCapsConfig`'s shape applied to the other consumer of the same card).
+    """The GRAPH inference forward's memory bound — ONE block, ONE fact.
 
-    The fact is "how big may ONE fused inference forward be", and it has TWO INSEPARABLE
-    components, which is why this is a nested block and not two flat keys: the members are
-    sized TOGETHER from ONE measured cost model against ONE budget (`peak ~ a + b*E + c*N`,
-    so `a + b*max_fused_edges + c*max_fused_nodes <= budget`), and two independent keys would
-    give two authorities over one byte budget and let an operator mint one and forget the
-    other.
-
-    `inference.inference_batch_size` bounds the number of GRAPHS in a pop; it bounds neither
-    quantity that drives memory. E and N are SUMS over the fused graphs, and Design A raised
-    the fuse to `n_workers x leaf_batch_size` / `inference_batch_size` graphs without
-    re-fitting the partner term of the budget the training cap was sized against — the
-    inference term has no bound at all today, so any change that raises it invalidates the
-    train-side fit. Both caps divide ONE card and must be re-fitted together.
-
-    BOTH MEMBERS, because N is unbounded off-distribution by the builder's own arithmetic:
+    The fact is "how big may ONE fused inference forward be", and its TWO components are
+    INSEPARABLE: they are sized TOGETHER from ONE measured cost model against ONE budget
+    (`peak ~ a + b*E + c*N`), so two flat keys would be two authorities over one byte budget.
+    `inference_batch_size` bounds the number of GRAPHS in a pop and neither quantity that drives
+    memory. BOTH MEMBERS, because N is unbounded off-distribution by the builder's own arithmetic:
     two dummy edges per real node force `E >= 2(N-1)`, so an edge-only cap `C` admits
-    `N <= C/2 + 1` — and at the measured per-node byte cost that unbounded member's worst
-    case EXCEEDS the bounded member's. One member bounds neither term of `peak ~ a + b*E +
-    c*N`.
+    `N <= C/2 + 1`, whose worst case exceeds the bounded member's at the measured per-node cost.
 
-    `ge=1` on the int arm and NO "uncapped" sentinel: the off state is deliberately
-    unrepresentable, because an unbounded fused forward is the defect this block exists to
-    make unconstructible and a disable sentinel would be a switch for turning the fix off
-    (R79, `MicrobatchCapsConfig`'s recorded refusal). The bound is the mechanism's own range:
-    a fused forward of zero edges is not a fused forward.
+    `ge=1` and NO "uncapped" sentinel: the off state is deliberately unrepresentable. `null` is not
+    an off state either — it is the placeholder that is schema-VALID, so the repo ships a complete
+    config, and runtime-REFUSED, so a graph run on an uncalibrated production config cannot
+    construct its inference server; the error names the member, the calibration entry point and the
+    mint line.
 
-    `null` IS NOT AN OFF STATE. It is the R119 placeholder: schema-VALID, so gate 7 stays
-    green and the repo ships a complete config, and runtime-REFUSED, so a graph run on an
-    uncalibrated production config CANNOT CONSTRUCT ITS INFERENCE SERVER.
-    `UncalibratedFusedGraphCapsError` names the member, the calibration entry point that
-    produces the value and the `tools/mint_config.py --set` line that mints it. The value is
-    the operator's act at the box sitting, from `python -m mantis.diagnostics.
-    fusion_calibrate` — never a dispatcher's number on a mint-critical card. The in-repo
-    precedent for a schema-valid, production-illegal placeholder awaiting an operator mint is
-    `train.checkpoint_interval: 0` (R137) and `eval.random_floor_games: 0` (R147/R272(d));
-    the difference — and it is an improvement on both — is that this one RAISES instead of
-    running.
-
-    GRAPH-ROUTE ONLY, AND NOW SCOPED BY THE SCHEMA RATHER THAN BY A CALL SITE (R322(d)): the
-    scoping lives in `core.ARCH_SCOPED_KEYS` and is enforced by
-    `RunConfig._arch_scoped_keys_are_present_iff_their_arch`, so a non-graph config carrying
-    this block is REFUSED at validation instead of being required to mint one. The dense batch
-    is a fixed-shape tensor already bounded by
-    `inference_batch_size`, so there is no unbounded quantity there for a cap to bound. The
-    five non-production configs mint values that are NON-BINDING BY CONSTRUCTION (derived
-    from each template's own `max_game_moves` and the registry's widest legal-move radius,
-    never chosen), because a smoke config whose cap bound would make CI exercise a split by
-    accident and the split's coverage must come from the oracles.
-
-    Read by ONE path: `mantis.config.resolve.fused_graph_caps.resolve_fused_graph_caps` ->
-    `InferenceServer.__init__` (the GRAPH branch only, EAGERLY at construction) ->
-    `_run_graph_loop`'s `plan_fused_forwards` partition. Eager and not lazy because `__init__`
-    already branches on the representation, so the read is naturally route-scoped, and
-    failing a mis-minted run in the first second beats failing it three hours in.
+    GRAPH-ROUTE ONLY, scoped by the schema rather than by a call site, so a non-graph config
+    carrying this block is REFUSED at validation. Read by ONE path, EAGERLY at
+    `InferenceServer.__init__`'s graph branch, because failing a mis-minted run in the first second
+    beats failing it three hours in.
     """
 
     max_fused_edges: int | None = Field(ge=1)
@@ -206,19 +147,13 @@ class FusedGraphCapsConfig(StrictModel):
 
 
 class InferenceConfig(StrictModel):
-    """Inference-server knobs (`InferenceHParams`'s R1-exception, closed by SC-A2).
-
-    A SIBLING of `SelfplayConfig` on `RunConfig` (not nested): `InferenceHParams` is already
-    a fully separate dataclass from `SelfPlayHParams` at the Python level
-    (`inference_server.py` builds it independently of `pool.py`'s `SelfPlayHParams`), so the
-    schema stays 1:1 with that split.
-    """
+    """Inference-server knobs. A SIBLING of `SelfplayConfig` on `RunConfig`, not nested: the two
+    hparams dataclasses are already fully separate at the Python level, so the schema stays 1:1
+    with that split."""
 
     inference_batch_size: int = Field(ge=1)
     inference_max_wait_ms: int = Field(ge=0)
-    # ARCH-SCOPED (R322(d)): `None` is the ABSENCE of the key, never a value — see
-    # `TrainConfig.microbatch_caps` for the shape and `RunConfig` for the enforcement.
-    # It does NOT collide with the R119 `null` PLACEHOLDER, which lives on the two
-    # MEMBERS and means "minted but uncalibrated"; absence of the BLOCK means "this arch
-    # has no such key", and the two are distinguished by `model_fields_set`.
+    # ARCH-SCOPED: `None` is the ABSENCE of the key, never a value. It does NOT collide with the
+    # `null` PLACEHOLDER on the two MEMBERS, which means "minted but uncalibrated"; absence of the
+    # BLOCK means "this arch has no such key", and the two are distinguished by `model_fields_set`.
     fused_graph_caps: FusedGraphCapsConfig | None = None

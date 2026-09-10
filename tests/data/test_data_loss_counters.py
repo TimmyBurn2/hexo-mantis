@@ -1,33 +1,17 @@
-# >300 justify (R8). ONE unit because it is ONE closure: the counter, its producer at every
-# arm, and its destination are the same claim, and splitting them is exactly the half-wired
-# state LAW-07 forbids — a producer file that passes while the sink key is gone, or a census
-# that passes while nothing feeds it, would each be green in isolation and wrong together.
-# The census and its mutation self-test must also sit beside the arms they police, or the
-# next person to add an arm reds a file they never opened.
-"""Item 8 — every `data/**` skip/truncate loss is COUNTED and READ (LAW-14 / LAW-18 / LAW-07).
+# >300 justify (R8). ONE closure: the counter, its producer at every arm, and its destination
+# are the same claim; split apart, a producer file passes while the sink key is gone and a
+# census passes while nothing feeds it. The census and its mutation self-test sit beside the
+# arms they police so adding an arm reds the file that owns it.
+"""Every `data/**` skip/truncate loss is COUNTED and READ.
 
-`data/**` used to lose training rows and corpus games through twelve blind
-`except Exception` arms plus three un-excepted off-window row drops. All of them were
-invisible: a corpus where one file is corrupt and a corpus where EVERY game truncates at
-ply 3 produced byte-identical logs.
+Each test DRIVES the failure — nothing is asserted from source text — and then asserts the
+value reaches its destination, since a counter only a test can see is half-wired. The
+offline arms (`corpus_analysis`, `corpus_metrics`, `generate`, `human_seeding`,
+`sources/human`) feed `PIPELINE_COUNTERS` and reach `log_pipeline_losses`.
 
-Every test below DRIVES the failure — nothing is asserted from source text — and then
-asserts the value reaches its DESTINATION, because a counter only a test can see is the
-half-wired state LAW-07 forbids:
-
-  - IN-RUN: the three dense replayers and their `REPLAY_COUNTERS` registry are DELETED with
-    the grid path (R346(f)), and so is the `monitor_gates.data_loss_counters` key they fed —
-    a registry with no producer publishes an always-empty mapping that reads as "nothing was
-    lost" forever. What is left below is the OFFLINE half. The
-    drives below call `_emit_monitor_gates` directly, so no cadence key is constructed here
-    and the R242 split cannot silently re-point what these assert.
-  - OFFLINE (`corpus_analysis`, `corpus_metrics`, `generate`, `human_seeding`,
-    `sources/human`) → `PIPELINE_COUNTERS` → `log_pipeline_losses` on the data logger.
-
-Plus the item's MUTATION PIN: a mechanical census proving `src/mantis/data/**` holds ZERO
-blind-except swallow arms outside the sanctioned wrapper, derived by scanning the source
-(never a transcribed line-number list — line numbers rot), carrying its own self-test
-proving the detector BITES a planted bare `except Exception: pass`.
+The mutation pin is a mechanical census proving `src/mantis/data/**` holds zero blind-except
+swallow arms outside the sanctioned wrapper, derived by scanning the source rather than from
+a transcribed line list, with its own self-test proving the detector bites a planted swallow.
 """
 from __future__ import annotations
 
@@ -54,8 +38,10 @@ _DATA_ROOT = Path(mantis.data.__file__).resolve().parent
 # occupied`, which is the illegal-move truncation every replayer swallows.
 _ILLEGAL = [(0, 0), (1, 0), (0, 0), (2, 0)]
 def _delta(counters: BestEffortCounters, label: str, fn: Callable[[], object]) -> int:
-    """Counts added under ``label`` by running ``fn``. Delta, not absolute: the registries
-    are process-global by design (they accumulate across a whole run)."""
+    """Return the counts added under ``label`` by running ``fn``.
+
+    A delta, not an absolute: the registries are process-global and accumulate across a run.
+    """
     before = counters.get(label)
     fn()
     return counters.get(label) - before
@@ -66,7 +52,6 @@ def _write(path: Path, payload: object) -> None:
     path.write_text(json.dumps(payload), encoding="utf-8")
 
 
-# ══ OFFLINE producers ════════════════════════════════════════════════════════════════
 def test_unreadable_cached_bot_game_is_counted_and_skipped(tmp_path: Path) -> None:
     _write(tmp_path / "ok.json", {"moves": [{"x": 0, "y": 0}]})
     (tmp_path / "bad.json").write_text("{not json", encoding="utf-8")
@@ -126,8 +111,7 @@ class _BotThatExplodes:
 
 
 def test_generate_seeding_fallback_and_bot_move_error_are_counted(tmp_path: Path) -> None:
-    """Both `generate.py` in-game arms in one drive: an empty human corpus makes seeding
-    raise (fallback to random), then the bot raises and ends the game."""
+    """Drive both `generate.py` in-game arms: seeding falls back to random, then the bot raises."""
     seed_label = "data.generate.human_seeding_failed_fallback_random"
     bot_label = "data.generate.bot_move_error_truncated_game"
     before = (lc.PIPELINE_COUNTERS.get(seed_label), lc.PIPELINE_COUNTERS.get(bot_label))
@@ -145,11 +129,11 @@ class _BotWithBadMoveShape:
 
 
 def test_the_wrapper_covers_everything_the_old_try_covered(tmp_path: Path) -> None:
-    """Behaviour-exactness of the conversion itself. The old inline `try` blocks covered
-    MORE than the one raising call — the unpack of the bot's move, and the eligibility
-    comparison against a `moveCount` that parses but is not comparable. Wrapping only the
-    call would have let those escape as a live TypeError and killed a corpus job that used
-    to skip one game, which is a REGRESSION dressed as a safety fix."""
+    """Prove the wrapper covers everything the old inline `try` blocks did.
+
+    Those blocks spanned more than the raising call — the move unpack and the eligibility
+    comparison — so wrapping only the call would turn a counted skip into a live TypeError.
+    """
     _write(tmp_path / "weird.json", {"moveCount": "twenty", "moves": []})
     n = _delta(lc.PIPELINE_COUNTERS, "data.human_seeding.index_game_unreadable_skipped",
                lambda: _build_file_index(str(tmp_path), 1))
@@ -160,7 +144,6 @@ def test_the_wrapper_covers_everything_the_old_try_covered(tmp_path: Path) -> No
     assert m == 1, "a bot returning a non-pair must be a COUNTED skip, not a raise"
 
 
-# ══ OFFLINE consumer — the counters reach the pipeline log ════════════════════════════
 def test_log_pipeline_losses_publishes_the_snapshot(caplog) -> None:
     lc.PIPELINE_COUNTERS.increment("data.sources.human.game_unreadable_skipped")
     with caplog.at_level(logging.INFO, logger="mantis.data.loss_counters"):
@@ -172,8 +155,7 @@ def test_log_pipeline_losses_publishes_the_snapshot(caplog) -> None:
 
 
 def test_offline_entry_points_flush_their_losses(tmp_path: Path, caplog) -> None:
-    """LAW-08: the offline registry has a LIVE consumer at the entry point that owns the
-    arms — not only in this test file."""
+    """Prove the offline registry has a live consumer at the entry point, not only in this file."""
     (tmp_path / "bad.json").write_text("{no", encoding="utf-8")
     with caplog.at_level(logging.INFO, logger="mantis.data.loss_counters"):
         load_cached_bot_games(tmp_path)
@@ -181,16 +163,14 @@ def test_offline_entry_points_flush_their_losses(tmp_path: Path, caplog) -> None
     assert any("load_cached_bot_games" in m for m in flushes), flushes
 
 
-# ══ THE CENSUS + its mutation self-test ══════════════════════════════════════════════
 _BLIND = {"Exception", "BaseException"}
 
 
 def _blind_except_sites(root: Path) -> list[str]:
-    """Every `except:` / `except Exception:` / `except BaseException:` handler under ``root``.
+    """Return every blind `except` handler under ``root``, derived by scanning the tree.
 
-    Derived by SCANNING the tree, never from a transcribed line list. The sanctioned
-    wrapper `mantis.monitor.best_effort` owns the one blind except in the repo's optional-
-    effect path and lives outside this root, so the expected count here is exactly zero.
+    The sanctioned wrapper `mantis.monitor.best_effort` lives outside this root, so the
+    expected count here is exactly zero.
     """
     sites: list[str] = []
     for path in sorted(root.rglob("*.py")):
@@ -213,8 +193,7 @@ def test_data_holds_zero_blind_except_swallow_arms() -> None:
 
 
 def test_the_census_bites_a_planted_swallow(tmp_path: Path) -> None:
-    """LAW-07 mutation self-test: the detector is not vacuous. Each planted form is the exact
-    shape item 8 removed — including the bare `except:` a future edit could reach for."""
+    """Prove the census is not vacuous: each planted swallow form, including bare `except:`, bites."""
     (tmp_path / "planted_pass.py").write_text(
         "def f():\n    try:\n        g()\n    except Exception:\n        pass\n",
         encoding="utf-8")
@@ -228,9 +207,7 @@ def test_the_census_bites_a_planted_swallow(tmp_path: Path) -> None:
 
 
 def test_the_census_does_not_fire_on_a_narrow_except(tmp_path: Path) -> None:
-    """The discriminating negative: `data/**`'s legitimate narrow handlers (optional-import
-    `except ImportError`, `except (OSError, JSONDecodeError)`) are NOT swallow arms and the
-    census must leave them alone — otherwise it would push a real fix toward `except Exception`."""
+    """Prove the census leaves narrow handlers alone; firing on them would push fixes toward blind ones."""
     (tmp_path / "narrow.py").write_text(
         "try:\n    import rich\nexcept ImportError:\n    rich = None\n", encoding="utf-8")
     assert _blind_except_sites(tmp_path) == []

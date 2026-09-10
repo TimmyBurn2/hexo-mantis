@@ -1,23 +1,10 @@
-# >300 justify (R8): each witness is a claim V2 makes plus the measurement that would falsify
-# it, and the pair only means anything together — a witness whose falsifier lives in another file
-# can be weakened on one side without the other side going red.
-"""The PRE-REGISTERED behavioral witnesses for `GnnNetV2` (SEAM-B1 Leg 2).
+# >300 justify (R8): each witness is a claim plus the measurement that falsifies it, and split
+# across files one side can be weakened without the other going red.
+"""The pre-registered behavioral witnesses for `GnnNetV2`.
 
-Registered BEFORE any V2 line existed, in the governance workspace at
-`plan/SEAM_B1_LEG2_PREREG.md` §2, and reproduced here as the tests that read them. Each witness
-names the CLAIM, the MEASUREMENT, and the OUTCOME THAT FALSIFIES the claim — the Q-C10 shape.
-
-THE FRAME, common to every witness and load-bearing: CPU, seeded, both nets built at the SAME
-declared widths, `eval()`, `no_grad()`, **random init**. These are comparisons of FUNCTION FORM.
-NOTHING HERE IS A STRENGTH CLAIM in either direction, and no row may be cited as evidence that
-V2 plays better — F-01 is the standing fence, where static probes passed while self-play
-collapsed to 0–1 %. Strength is operator-only, on the box, post-mint.
-
-TWO OF THESE WITNESSES CAN FALSIFY A CANDIDATE'S PREMISE, not just its implementation, and that
-is deliberate. W-C1(ii) reads V1's own dummy-aggregation growth curve — which the WP-AXIS2 memo
-records as UNMEASURED in-tree — and a flat V1 curve would mean the hazard C(i) targets does not
-exist on this wire. That outcome was registered as a live possibility before the number was
-seen, so if it fires it is a finding, not a test to relax.
+Common frame, load-bearing: CPU, seeded, both nets at the SAME widths, `eval()`, `no_grad()`,
+random init. These compare FUNCTION FORM. NOTHING HERE IS A STRENGTH CLAIM in either direction
+— static probes have passed while self-play collapsed to 0-1 %.
 """
 from __future__ import annotations
 
@@ -27,12 +14,10 @@ import torch
 from mantis.model import GnnArch, GnnArchV2, build_net, net_param_hash
 from mantis.model.gnn_v2 import GnnNetV2
 
-#: The seed every witness builds under. An instrument parameter: it fixes WHICH random nets are
-#: compared, and no claim below depends on its value.
+#: An instrument parameter: it fixes WHICH random nets are compared, and no claim uses it.
 _SEED = 20260830
 
-#: Widths. Small enough to be a default-tier test, and identical across the two arches — the
-#: comparison is of readout and aggregation, so any width difference would confound it.
+#: Identical across the two arches — a width difference would confound the comparison.
 _WIDTHS = {"in_dim": 11, "edge_dim": 5, "hidden": 8, "num_layers": 2,
            "policy_hidden": 8, "value_hidden": 8}
 
@@ -47,14 +32,8 @@ def _nets() -> tuple[torch.nn.Module, torch.nn.Module]:
 
 
 def _star_graph(n_real: int, n_stones: int = 3) -> dict:
-    """A synthetic graph with `n_real` real nodes plus ONE dummy wired bidirectionally to all.
-
-    SYNTHETIC AND LABELLED AS SUCH. It reproduces the wire's dummy topology
-    (`crates/mantis-graph/src/lib.rs`: the dummy is bidirectionally connected to every real node
-    with all-zero attrs) at node counts a constructed position need not reach, because the claim
-    under test is about how the aggregation SCALES. It is not a position and no reachability is
-    implied by it — T6's rule about never letting a synthetic point pass for a reachable one.
-    """
+    """Build a synthetic graph: `n_real` real nodes plus ONE dummy wired to all of them.
+    It reproduces the wire's dummy topology; it is not a position and implies no reachability."""
     dummy = n_real
     n = n_real + 1
     src = torch.cat([torch.arange(n_real), torch.full((n_real,), dummy)])
@@ -82,14 +61,8 @@ def _value_of(net, g: dict) -> torch.Tensor:
     return value
 
 
-# ── W-A1 — the readout consumes a MAX statistic V1 cannot see ────────────────────────────
 def _readout_value(net, emb: torch.Tensor, masks: dict, is_v2: bool) -> torch.Tensor:
-    """Drive the READOUT from a given trunk embedding, through the net's own value head.
-
-    The perturbation the witness needs is on the trunk EMBEDDING, so the trunk is not in the
-    path — see the disclosure on the witness below for why that is what was registered and why
-    it matters.
-    """
+    """Drive the READOUT from a trunk embedding, leaving the trunk out of the path."""
     from mantis.model.gnn import segment_mean_with_fallback
     from mantis.model.gnn_v2 import segment_max_with_fallback
 
@@ -115,24 +88,10 @@ def _readout_masks(n_real: int, n_stones: int) -> dict:
 
 
 def test_W_A1_a_spike_that_raises_the_MAX_without_moving_the_MEAN_moves_only_V2() -> None:
-    """CLAIM: V2's readout is sensitive to the maximum over real nodes; V1's mean is not.
-    MEASUREMENT: raise the TRUNK EMBEDDING of one node that is real but NOT a stone, so the
-    stone-masked mean is untouched by construction. FALSIFIER: V2's |Δvalue| not strictly
-    greater than V1's.
+    """V2's readout sees a spike on a real non-stone node; V1's stone-masked mean cannot.
 
-    DISCLOSURE — this witness's FIRST implementation fired, and the diagnosis is recorded here
-    rather than smoothed away, because a pre-registered falsifier that fires is the one moment
-    the record earns its cost. That implementation deviated from the registered measurement in
-    two ways at once: it perturbed the INPUT rather than the trunk embedding, so the pre-norm
-    LayerNorm attenuated the spike and message passing spread it; and it spiked a STONE node,
-    which sits in the mean's 3-element denominator and therefore moves the mean MORE than it
-    moves a max over 64 nodes. It also compared |Δvalue| across two nets whose value heads have
-    different fan-in (V2's is 2x wide, so its init scale is ~1/sqrt(2) of V1's) — a confound
-    that would have made the comparison unreadable even had the spike been placed correctly.
-    Implemented as registered, V1's delta is EXACTLY zero, which is what removes the confound:
-    no head-scale difference can make zero the larger number.
-
-    The spike magnitude and node counts are INSTRUMENT PARAMETERS, not thresholds on a subject.
+    Spiking a NON-stone node makes V1's delta EXACTLY zero, which removes the confound that the
+    two value heads have different fan-in and so are not comparable in |Δvalue| magnitude.
     """
     v1, v2 = _nets()
     masks = _readout_masks(n_real=64, n_stones=3)
@@ -158,9 +117,7 @@ def test_W_A1_a_spike_that_raises_the_MAX_without_moving_the_MEAN_moves_only_V2(
 
 
 def test_W_A1_control_a_spike_on_the_DUMMY_row_moves_NEITHER_net() -> None:
-    """The negative control. Without it, W-A1 passes on a V2 whose max spans every row
-    including the wire's own artefact — which would be a different net making a different claim.
-    """
+    """Negative control: without it the row above passes on a V2 whose max spans the dummy."""
     v1, v2 = _nets()
     masks = _readout_masks(n_real=64, n_stones=3)
     torch.manual_seed(_SEED)
@@ -175,25 +132,17 @@ def test_W_A1_control_a_spike_on_the_DUMMY_row_moves_NEITHER_net() -> None:
 
 
 def test_W_A1_control_the_delta_of_an_UNPERTURBED_graph_is_zero_for_both() -> None:
-    """The measured quantity is a DELTA; two differently-shaped value heads do not produce the
-    same value, so "the values match" could never have been this control."""
+    """The measured quantity is a DELTA — two differently-shaped heads never match on value."""
     v1, v2 = _nets()
     g = _star_graph(n_real=64)
     assert float((_value_of(v1, g) - _value_of(v1, g)).abs().max()) == 0.0
     assert float((_value_of(v2, g) - _value_of(v2, g)).abs().max()) == 0.0
 
 
-# ── W-A2 — the max spans REAL nodes, dummy excluded, and the exclusion is DERIVED ─────────
 def test_W_A2_the_readout_IGNORES_the_dummy_row_and_SEES_a_real_one() -> None:
-    """CLAIM: the max is taken over `real = stone | legal`, so the dummy is excluded — and the
-    exclusion is derived from the wire's two masks, since the wire carries no `real_mask`.
-    MEASUREMENT: two arms. FALSIFIER: the value moves when the DUMMY row alone is made extreme
-    (the dummy is in the max), or it does NOT move when a REAL row is made extreme (the readout
-    ignores everything and the first arm passes vacuously).
-
-    Driven at the readout rather than through the trunk: message passing would carry a dummy
-    perturbation into real nodes and both arms would move for a reason that is not the max.
-    """
+    """The max ignores the dummy row and sees a real one; the second arm stops the first
+    passing vacuously. Driven at the readout, since message passing would carry a dummy
+    perturbation into real nodes and move both arms for a reason that is not the max."""
     from mantis.model.gnn_v2 import segment_max_with_fallback
 
     n_real, d = 8, 4
@@ -219,9 +168,8 @@ def test_W_A2_the_readout_IGNORES_the_dummy_row_and_SEES_a_real_one() -> None:
 
 
 def test_W_A2_the_real_mask_is_DERIVED_from_the_wires_two_masks() -> None:
-    """The derivation half. A literal `N-1` would be right today — the dummy IS the last row —
-    and would be a code-side constant standing in for a wire fact the moment the builder
-    reorders. So the mask is built from `stone | legal` and this drives that construction."""
+    """The real mask is built from `stone | legal`, not a literal `N-1`: the latter is right
+    only until the builder reorders the rows."""
     stone = torch.tensor([True, True, False, False, False])
     legal = torch.tensor([2, 3])
     real = GnnNetV2.real_mask_from_batch(stone, legal)
@@ -230,8 +178,8 @@ def test_W_A2_the_real_mask_is_DERIVED_from_the_wires_two_masks() -> None:
 
 
 def test_W_A2_the_max_FALLS_BACK_to_all_nodes_when_none_are_masked() -> None:
-    """The fallback exists so both halves of the readout degenerate the same way; without it a
-    graph with no real nodes would hand the value head a dtype floor, which reads as a number."""
+    """The max falls back to all nodes when none are masked; otherwise a graph with no real
+    nodes hands the value head a dtype floor, which reads as a number."""
     from mantis.model.gnn_v2 import segment_max_with_fallback
 
     emb = torch.tensor([[1.0], [5.0], [2.0]])
@@ -240,12 +188,9 @@ def test_W_A2_the_max_FALLS_BACK_to_all_nodes_when_none_are_masked() -> None:
     assert float(out[0, 0]) == 5.0
 
 
-# ── W-A3 — batched and deploy readouts agree on the new branch ────────────────────────────
 def test_W_A3_forward_single_AGREES_with_forward_batch_on_one_graph() -> None:
-    """CLAIM: V2's deploy twin computes the same readout as its batched path, in the sense V1's
-    pair is already held to. MEASUREMENT: one graph through both. FALSIFIER: a disagreement
-    exceeding V1's own, measured here rather than assumed — the MEAN half carries V1's ~5e-7
-    accumulation-order drift and the MAX half adds no drift term, so V2 must not be worse."""
+    """V2's deploy twin agrees with its batched path, against V1's own gap measured here: the
+    MAX half is order-independent, so V2 must not be worse than V1's ~5e-7 drift."""
     v1, v2 = _nets()
     g = _star_graph(n_real=32)
     args = (g["x"], g["edge_index"], g["edge_attr"])
@@ -265,11 +210,9 @@ def test_W_A3_forward_single_AGREES_with_forward_batch_on_one_graph() -> None:
     )
 
 
-# ── W-C1 — the dummy's aggregation is flat in N where V1's grows ──────────────────────────
 def _dummy_agg_norms(net, counts: tuple[int, ...]) -> list[float]:
-    """`‖agg[dummy]‖₂` at the FIRST conv, captured by a forward hook on the one aggregation
-    authority. Hooked rather than recomputed: a Python re-implementation of the aggregation
-    would be a second authority and could agree with itself while the real one drifted."""
+    """Return `‖agg[dummy]‖₂` at the first conv, hooked on the one aggregation authority: a
+    re-implementation could agree with itself while the real one drifted."""
     captured: list[torch.Tensor] = []
 
     def hook(_module, _inputs, output):
@@ -289,18 +232,11 @@ def _dummy_agg_norms(net, counts: tuple[int, ...]) -> list[float]:
 
 
 def test_W_C1_the_dummy_row_GROWS_with_N_under_V1_and_is_FLATTER_under_V2() -> None:
-    """CLAIM: V2 degree-normalizes the dummy's incoming aggregation, so its magnitude stops
-    tracking the real-node count. MEASUREMENT: `‖agg[dummy]‖` at a ladder of node counts, from a
-    hook on the conv itself. FALSIFIER, TWO-SIDED and both sides required:
+    """V2 degree-normalizes the dummy's incoming aggregation, so `‖agg[dummy]‖` stops tracking
+    the real-node count where V1's grows.
 
-      (i) V2's growth ratio at V1's — the normalization is not in the path;
-      (ii) V1's ratio ≈ 1 — the hazard C(i) targets does not exist on this wire, in which case
-           **C(i) is unmotivated on the evidence** and that is a finding to report rather than a
-           test to relax. The memo records this curve as UNMEASURED in-tree, so (ii) was a live
-           possibility when this was registered.
-
-    The ladder is SYNTHETIC and labelled: it reproduces the wire's dummy topology at node counts
-    chosen to span an order of magnitude, and no reachability is claimed for any of them.
+    Two-sided: V2's ratio at V1's means the normalization is not in the path; V1's ratio near 1
+    means the hazard has no subject on this wire, and that is a finding, not a test to relax.
     """
     v1, v2 = _nets()
     counts = (16, 128, 1024)
@@ -325,14 +261,9 @@ def test_W_C1_the_dummy_row_GROWS_with_N_under_V1_and_is_FLATTER_under_V2() -> N
 
 
 def test_W_C2_real_node_aggregation_is_UNTOUCHED_when_the_dummy_is_absent() -> None:
-    """CLAIM: C(i) normalizes the DUMMY's incoming sum only; real-node GINE sums and the count
-    signal they carry are byte-identical to V1's. MEASUREMENT: remove the dummy's edges and
-    forward both nets from identical weights. FALSIFIER: any difference at all.
-
-    This is the witness that keeps C(i) from quietly becoming the global mean aggregation the
-    memo explicitly does NOT propose — that would destroy GINE's injectivity premise, and it
-    would look exactly like C(i) from the outside.
-    """
+    """With the dummy's edges removed the two trunks are byte-identical from equal weights —
+    a global mean aggregation would destroy GINE's injectivity and look the same from
+    outside."""
     v1, v2 = _nets()
     v2.load_state_dict(
         {k: v.clone() for k, v in v1.state_dict().items() if not k.startswith("value_head.")},
@@ -352,11 +283,9 @@ def test_W_C2_real_node_aggregation_is_UNTOUCHED_when_the_dummy_is_absent() -> N
     )
 
 
-# ── W-ID1 — V2 has its own canonical identity ─────────────────────────────────────────────
 def test_W_ID1_the_canonical_hash_SEPARATES_the_two_arches_and_is_STABLE() -> None:
-    """CLAIM: `net_param_hash` denominates V2 distinctly. FALSIFIER: equal hashes across the two
-    arches (the identity does not separate them), or unequal hashes across two builds of one
-    arch (the identity is not stable, and a golden over it would mean nothing)."""
+    """`net_param_hash` separates the two arches and is stable across two builds of one — a
+    golden over an unstable identity would mean nothing."""
     v1, v2 = _nets()
     assert net_param_hash(v1) != net_param_hash(v2)
     again_v1, again_v2 = _nets()
@@ -364,10 +293,8 @@ def test_W_ID1_the_canonical_hash_SEPARATES_the_two_arches_and_is_STABLE() -> No
     assert net_param_hash(v2) == net_param_hash(again_v2)
 
 
-#: V2's OWN GOLDEN, at its own slot. Measured on the implementation this commit lands, at the
-#: widths and seed above, twice. It denominates the identity primitive for V2 the way
-#: `test_net_param_hash_promotion.py`'s literal does for V1: a digest that moved without the
-#: arch moving would void every cross-drive comparison R317(c)(i) makes.
+#: V2's golden, measured twice at the widths and seed above; a digest that moves without the
+#: arch moving voids every cross-drive comparison.
 _V2_GOLDEN = "620b2ada10d3d0c4d5372c7ea2a2297666c5843adbfbebc37e7d05855bebdf73"
 
 
@@ -380,16 +307,16 @@ def test_the_V2_golden_holds() -> None:
 
 
 def test_the_V2_golden_is_NOT_the_V1_golden() -> None:
-    """PK2's second half. A golden slot that happened to hold V1's digest would pass every test
-    above and denominate the wrong net."""
+    """A golden slot holding V1's digest would pass every row above and denominate the wrong
+    net."""
     v1, _v2 = _nets()
     assert net_param_hash(v1) != _V2_GOLDEN
 
 
 @pytest.mark.parametrize("net_kind", ["v1", "v2"])
 def test_both_arches_FORWARD_on_a_real_wire_position(net_kind) -> None:
-    """The synthetic star graph is a topology, not a position. This drives both nets on a wire
-    the engine actually produced, so no witness above rests on synthetic input alone."""
+    """Drive both nets on a wire the engine actually produced, so no witness above rests on
+    synthetic input alone."""
     import mantis.encoding as encoding
     from mantis._engine import Board, HexgBuffer
     from mantis.selfplay.graph_collate import collate_graph_batch

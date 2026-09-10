@@ -1,26 +1,13 @@
 """The strength floor's ROUND WIRING — a refusing probe stops the round before the gate block.
 
-WHAT WAS ALREADY PROVEN AND WHAT WAS NOT. `test_strength_floor_gate.py` proves the DECISION
-RULE as a pure function, and `test_eval_posture_inert.py` proves the result payload's key set
-and the event channel. Neither drives `run_round`, so the claim the mechanism actually exists
-for — **a failing probe refuses the round CHEAPLY, before the expensive phase runs** — had no
-witness anywhere in the tree. That claim is about `run_round`'s branching, not about
-arithmetic, and it is what this file adds.
-
-CHEAPNESS IS ASSERTED STRUCTURALLY, NOT BY WALL TIME. The round's own phase series
-(`device_memory["phases"]`, written by `DeviceMemoryProbe.mark` at every phase boundary and
-attached UNCONDITIONALLY on both exit paths) shows whether `gate_block` was ever entered. A
-timing assertion would measure this machine; the phase series measures the branch. The second
-half is a game census over the ONE function every phase plays through, so "no gate games were
-played" is counted rather than inferred from the absence of a result key.
-
-WHY THE PROBE'S OUTCOMES ARE SYNTHETIC AND NOTHING ELSE IS. The rule reads
-`GameRecord.terminal` and `GameRecord.winner`, and no checkpoint that exists off-box produces
-a controlled decisive rate — EVAL-CHANNEL-1 measured 0/40 against a near-self opponent and had
-no arm at all against `random`, which is who the probe plays. So the probe's RECORDS are
-planted, per test, and everything downstream of them is production: `evaluate_strength_floor`
-decides unpatched, `run_round` branches unpatched, and every OTHER phase plays real games
-through the real arena. The seam is one function and it is the same one production calls.
+The DECISION RULE is proven as a pure function elsewhere; neither that nor the payload pin
+drives `run_round`, so the claim the mechanism exists for — a failing probe refuses the round
+CHEAPLY, before the expensive phase runs — had no witness. Cheapness is asserted STRUCTURALLY:
+the round's phase series, attached unconditionally on both exit paths, shows whether
+`gate_block` was entered, where a timing assertion would measure this machine. A census over the
+ONE function every phase plays through makes "no gate games were played" a count. Only the
+PROBE's outcomes are synthetic — no available checkpoint produces a controlled decisive rate
+against `random` — and everything downstream of them is production.
 """
 from __future__ import annotations
 
@@ -43,22 +30,16 @@ from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 
-#: The grid encoding and the one shipped book — a real registry row and a real book, so the
-#: round this file drives is the production round shape and not a fixture-only one.
-#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
-#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+#: A real registry row and the one shipped book, so this drives the production round shape.
+#: A DENSE encoding at radius 8: 292 of the book's 512 openings need radius >= 6 to replay.
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 
 
 def _net(*, seed: int) -> torch.nn.Module:
-    """A registry-TRUE net for `_ENC`, minimal width and depth.
-
-    Dims come from the spec rather than from literals: a net sized by hand would agree with
-    the wrong encoding by coincidence, which is the confusion `test_graph_round_encoding.py`
-    exists to detect and which this file has no reason to re-introduce.
-    """
+    """A registry-TRUE net for `_ENC`: dims come from the spec, since a hand-sized net would
+    agree with the wrong encoding by coincidence."""
     spec = lookup(_ENC)
     torch.manual_seed(seed)
     arch = GnnArch(
@@ -72,12 +53,9 @@ def _net(*, seed: int) -> torch.nn.Module:
 
 
 def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
-    """A real `RoundSpec` with a REAL anchor, so the gate block is reachable.
-
-    `best_snapshot` is not None and `run_gate` is True on purpose: a round with no anchor
-    skips the gate block for an unrelated reason, and a refusal test that could not tell those
-    two apart would pass against a mechanism that does nothing.
-    """
+    """A real `RoundSpec` with a REAL anchor, so the gate block is reachable: a round with no
+    anchor skips that block for an unrelated reason, and a refusal test that could not tell
+    those apart would pass against a mechanism that does nothing."""
     candidate = tmp_path / "candidate.pt"
     best = tmp_path / "best.pt"
     write_model_snapshot(_net(seed=1), candidate)
@@ -120,12 +98,9 @@ def _record(regime_key: RegimeKey, *, winner: str, terminal: str, idx: int) -> G
 def _plant_probe_outcomes(
     monkeypatch: pytest.MonkeyPatch, *, winner: str, terminal: str
 ) -> list[tuple[str, str, int]]:
-    """Plant the FLOOR PROBE's outcomes only; every other phase plays for real.
-
-    Returns the live game census — one `(bot, variant, n_records)` row per
-    `play_paired_match` call, in call order — which is what makes "the gate block played
-    nothing" a COUNT rather than an inference from a missing result key.
-    """
+    """Plant the FLOOR PROBE's outcomes only; every other phase plays for real. Returns the live
+    census — one `(bot, variant, n_records)` row per `play_paired_match` call, in call order —
+    which makes "the gate block played nothing" a COUNT."""
     census: list[tuple[str, str, int]] = []
     real = worker.play_paired_match
 
@@ -149,19 +124,12 @@ def _phases(result: dict[str, Any]) -> list[str]:
     return [p["phase"] for p in result["device_memory"]["phases"]]
 
 
-# ── the two rounds ─────────────────────────────────────────────────────────────────────
-
 def test_a_no_signal_round_REFUSES_before_the_gate_block_ever_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """EVAL-CHANNEL-1's regime, driven through the real round: every probe game a ply-cap
-    non-result, so `decisive_rate` is 0.0 and any non-zero bar refuses.
-
-    The three assertions are deliberately different KINDS of evidence — the verdict, the phase
-    series and the game census — because a round could satisfy any one of them for the wrong
-    reason: a `passed: False` verdict says nothing about whether the round then stopped, and a
-    missing `gate` key is also what a round with no anchor produces.
-    """
+    """Every probe game a ply-cap non-result, so `decisive_rate` is 0.0 and any non-zero bar
+    refuses. Three KINDS of evidence — verdict, phase series, census — because a `passed: False`
+    says nothing about whether the round stopped."""
     census = _plant_probe_outcomes(monkeypatch, winner="draw", terminal=TERMINAL_PLY_CAP)
     floor = StrengthFloorSpec(probe_games=4, min_decisive_rate=0.25, min_winrate=0.0)
 
@@ -175,8 +143,7 @@ def test_a_no_signal_round_REFUSES_before_the_gate_block_ever_runs(
     assert _phases(result) == ["round_start", "floor_probe", "round_end"], _phases(result)
     assert census == [("random", FLOOR_PROBE_VARIANT, 4)], census
 
-    # And the round is a healthy REFUSAL, not a broken one: it returns a normal result whose
-    # gate is absent, which is the same route a no-anchor round takes to not promoting.
+    # A healthy REFUSAL: a normal result whose gate is absent, the route a no-anchor round takes.
     assert result["gate"] is None
     assert result["rungs"] == {}
     assert result["random"] == {"games": 0, "wr": None}
@@ -185,11 +152,8 @@ def test_a_no_signal_round_REFUSES_before_the_gate_block_ever_runs(
 def test_a_decisive_round_PASSES_and_the_gate_block_then_runs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The same round, the same bar, the same net — only the probe's outcomes differ.
-
-    Holding everything else fixed is what makes the pair a CONTROL rather than two unrelated
-    rounds: the only thing that can explain the different phase series is the verdict.
-    """
+    """The same round, bar and net — only the probe's outcomes differ, so the only thing that
+    can explain a different phase series is the verdict."""
     census = _plant_probe_outcomes(monkeypatch, winner="candidate", terminal=TERMINAL_WIN)
     floor = StrengthFloorSpec(probe_games=4, min_decisive_rate=0.25, min_winrate=0.0)
 
@@ -204,8 +168,7 @@ def test_a_decisive_round_PASSES_and_the_gate_block_then_runs(
     assert phases[-1] == "round_end", phases
     assert result["gate"] is not None
 
-    # The probe played its 4 games AND the gate block played its own — the pass arm pays the
-    # probe's cost on top, which is the trade §5.2 of EVAL_POSTURE_OPTIONS prices.
+    # The probe played its 4 games AND the gate block its own: the pass arm pays both.
     assert census[0] == ("random", FLOOR_PROBE_VARIANT, 4), census
     assert len(census) > 1 and sum(n for _, _, n in census[1:]) > 0, census
 
@@ -213,11 +176,8 @@ def test_a_decisive_round_PASSES_and_the_gate_block_then_runs(
 def test_the_disarmed_posture_plays_no_probe_and_reaches_the_gate_block_first(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`strength_floor: null` — every committed config — must leave the phase order alone.
-
-    This is the identity arm the two above are measured against. Without it, a mechanism that
-    reordered the round unconditionally would satisfy both of them.
-    """
+    """`strength_floor: null` — every committed config — must leave the phase order alone: the
+    identity arm, without which a mechanism that reordered unconditionally would pass both."""
     census = _plant_probe_outcomes(monkeypatch, winner="draw", terminal=TERMINAL_PLY_CAP)
 
     result = worker.run_round(_round_spec(tmp_path, None))

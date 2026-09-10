@@ -1,24 +1,9 @@
-"""Rung verdicts, the OOM extension-stop, the ladder walk, and the rounds that were not measured.
+"""Pin rung verdicts, the OOM extension-stop, the ladder walk, and the unmeasured rounds.
 
->300 justify (R8): ONE SUBJECT — what a rung's verdict IS, and what the ladder does with it.
-The verdict rows and the `walk_ladder` rows cannot be separated without one of them losing its
-meaning: the OOM rows are simultaneously a statement about a rung (it fails) and about the ladder
-(only the EXTENSION stops), the thread-bound row is about which rungs are RUN, and the
-termination row exists because a verdict token was added without the walk's predicate being
-updated. Splitting by "verdict" and "walk" would put each half of every R309(f) clause in a
-different file, and the clauses are what this suite is about. The `_round`/`_rung` builders are
-shared for `0bb4381`'s reason: a fixture and the rows that read it move together or the rows
-quietly stop testing what their names say.
-
-THE DISCIPLINE THIS SUITE PINS is `mantis.diagnostics.eval_child_memory`'s, carried onto a
-second instrument: a verdict comes from a STATED STOPPING RULE applied to a SERIES, REFUSED is
-never a verdict, and a round nobody could measure is listed and named rather than dropped.
-
-The 2026-08-22 sitting is why. `eval_child` looked converged at 41 samples and at 709 and was
-2.98x larger the first time a round was allowed to complete (`RECAL_EXIT_2026-08-22.md` §11b).
-The lesson generalises past that one term: *a term measured by watching until it looks flat is
-not a bound*, and a sweep that picked a worker count off a rung whose memory was still climbing
-would be the same defect with a different subject.
+>300 justify (R8): an OOM row is simultaneously about a rung (it fails) and about the ladder (only
+the EXTENSION stops), so splitting by "verdict" and "walk" would put each half of every clause in
+a different file. A verdict comes from a STATED stopping rule on a SERIES, REFUSED is never a
+verdict, and an unmeasurable round is listed rather than dropped.
 """
 from __future__ import annotations
 
@@ -60,10 +45,8 @@ def _rung(n_workers: int, peaks: list[float | None], *, moves: int = 1000,
                          refusal=refusal, produced_by="test")
 
 
-# ══ the stopping rule is the IMPORTED one ════════════════════════════════════════════════
 def test_the_stopping_rule_is_the_eval_child_instrument_s_own_function() -> None:
-    """One stopping rule in this tree, one place it can be wrong. If this ever stops being
-    true, two instruments can disagree about what "plateau" means on the same series."""
+    """Prove the stopping rule is the imported one, so no two copies can disagree."""
     from mantis.diagnostics import eval_child_memory
 
     assert ws.classify is eval_child_memory.classify
@@ -77,12 +60,11 @@ def test_a_flat_series_plateaus(plan: ws.SweepPlan) -> None:
     assert rung.verdict == ws.PLATEAU
 
 
-# ══ P2 — a GROWING rung is excluded from the knee set ════════════════════════════════════
 def test_a_rising_series_verdicts_growing_and_is_excluded_from_the_knee_set(
     plan: ws.SweepPlan,
 ) -> None:
-    """The rise is INSIDE the trailing window on purpose: growth outside it is history, and a
-    series that ever rose could otherwise never converge."""
+    """Prove a rising series verdicts GROWING and is excluded from the knee set; the rise is
+    inside the trailing window, or a series that ever rose could never converge."""
     growing = _rung(8, [900.0, 1000.0, 1000.0, 1400.0, 1900.0, 2600.0], moves=4000, plan=plan)
     flat = _rung(2, [900.0, 1000.0, 1000.0, 1001.0, 1000.0, 1002.0], moves=1000, plan=plan)
     assert growing.verdict == ws.GROWING
@@ -95,19 +77,17 @@ def test_a_rising_series_verdicts_growing_and_is_excluded_from_the_knee_set(
     )
 
 
-# ══ REFUSED is never a verdict ═══════════════════════════════════════════════════════════
 def test_a_host_with_no_counters_refuses_rather_than_reporting_a_plateau(
     plan: ws.SweepPlan,
 ) -> None:
-    """`0 rounds, plateau` is the reading this whole family exists to refuse."""
+    """Prove a host with no counters refuses rather than reporting `0 rounds, plateau`."""
     rung = _rung(4, [None, None, None, None, None, None], plan=plan)
     assert rung.verdict == ws.REFUSED
     assert rung.refusal and "measured rounds" in rung.refusal
 
 
 def test_unmeasured_rounds_are_listed_and_counted_not_dropped(plan: ws.SweepPlan) -> None:
-    """Silently dropping them would bias the series without saying so, and "we had no counters
-    that round" is itself a finding about the drive."""
+    """Prove unmeasured rounds are listed and counted, not silently dropped from the series."""
     rung = _rung(4, [900.0, 1000.0, None, 1001.0, None, 1002.0], plan=plan)
     row = rung.as_dict(plan.metric)
     assert row["rounds_total"] == 6
@@ -117,9 +97,8 @@ def test_unmeasured_rounds_are_listed_and_counted_not_dropped(plan: ws.SweepPlan
     assert [r["available"] for r in row["rounds"]] == [True, True, False, True, False, True]
 
 
-# ══ the two sinks ════════════════════════════════════════════════════════════════════════
 def test_the_larger_of_the_two_sinks_governs() -> None:
-    """The box block's standing rule, which needs BOTH numbers to be applied at all."""
+    """Prove the larger of the two sinks governs, which needs both numbers recorded."""
     reading = ws.RoundReading(index=0, warmup=False, wall_sec=60.0, games=1, moves=10,
                               available=True, sampled_peak_bytes=9 * _MIB,
                               allocator_peak_bytes=4 * _MIB, card_samples=60)
@@ -130,16 +109,9 @@ def test_the_larger_of_the_two_sinks_governs() -> None:
     assert inverted.governing_peak_bytes == 9 * _MIB
 
 
-# ══ P3 — a synthetic OOM fails its rung and stops the EXTENSION, as the register writes it ══
 def test_an_oom_fails_its_own_rung_and_stops_only_the_extension(plan: ws.SweepPlan) -> None:
-    """R309(f) VERBATIM: *"an OOM at a rung is data that fails the rung and stops the ladder's
-    EXTENSION, never a sitting failure."* The base rungs above the OOM are STILL WALKED.
-
-    An earlier cut stopped the whole ladder, on the plausible physical argument that a higher
-    rung OOMs harder. Plausible is not the test: this is a pre-registered operator row closed
-    with "no post-hoc movement", so the widening is FILED as an adjudication (F-WS-2) and the
-    clause is implemented as written until it comes back. This row is what would red if someone
-    took it quietly."""
+    """Prove an OOM fails its own rung and stops only the EXTENSION; base rungs above it are
+    still walked, whatever the plausible physical argument for stopping the whole ladder."""
     calls: list[int] = []
 
     def runner(n_workers: int) -> ws.RungResult:
@@ -182,11 +154,9 @@ def test_an_oom_anywhere_closes_the_extension_even_if_the_top_rung_passed(
     assert "EXTENSION" in stopped
 
 
-# ══ D-11 — extension starts above the HIGHEST rung run, never above the best passing one ══
 def test_extension_never_proposes_a_rung_inside_the_base_bracket(plan: ws.SweepPlan) -> None:
-    """With 2, 4, 8 PLATEAU and 12, 14 GROWING, "best passing + step" would propose 10 — a rung
-    inside the base bracket, below two rungs already measured as failing, and one neither
-    R309(f) ("extension past 14") nor R309(g) (the base ladder) names at all."""
+    """Prove the extension starts above the HIGHEST rung run: "best passing + step" would propose
+    a rung inside the base bracket, below two already measured as failing."""
     def runner(n_workers: int) -> ws.RungResult:
         peaks = ([900.0, 1000.0, 1000.0, 1001.0, 1000.0, 1002.0] if n_workers <= 8
                  else [900.0, 1000.0, 1000.0, 1400.0, 1900.0, 2600.0])
@@ -221,10 +191,7 @@ def test_extension_walks_past_the_top_of_the_ladder_while_gains_persist(
 def test_a_real_cuda_oom_inside_a_rung_is_caught_and_becomes_that_rung_s_verdict(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """The synthetic break is raised where a real one lands — inside the rung's construction,
-    which is where `F-R302-1` actually OOM'd (the GNN training forward, 3.3 s after the first
-    game). If the guard did not cover the BUILD, that OOM would escape as a crash and the
-    ladder would be lost rather than truncated."""
+    """Prove a real CUDA OOM inside a rung's CONSTRUCTION becomes that rung's verdict."""
     def explode(*_args: Any, **_kwargs: Any) -> Any:
         raise torch.OutOfMemoryError("CUDA out of memory (synthetic)")
 
@@ -237,20 +204,18 @@ def test_a_real_cuda_oom_inside_a_rung_is_caught_and_becomes_that_rung_s_verdict
     assert "synthetic" in (result.refusal or "")
 
 
-# ══ a rung that produced nothing is refused, not reported as zero ════════════════════════
 def test_a_rung_that_generated_no_moves_is_refused_with_its_sampling_limit(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """A round shorter than the work it samples reports 0, and 0 from a healthy rung is a
-    sampling limit, not a measurement. Reporting it as throughput would rank a working rung
-    last."""
+    """Prove a rung that generated no moves is refused with its sampling limit named, since
+    reporting the 0 as throughput would rank a working rung last."""
     class _Stats:
         games_completed = 0
         positions_generated = 0
 
     class _Pool:
         _producer_exc = None
-        # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
+        # drive_rung hashes `pool.model` right after the build, so a mock pool needs one.
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
 
         def start(self) -> None: ...
@@ -269,14 +234,11 @@ def test_a_rung_that_generated_no_moves_is_refused_with_its_sampling_limit(
     assert "sampling limit" in (result.refusal or "")
 
 
-# ══ the ladder respects the box, and says which bound stopped it ═════════════════════════
 def test_the_base_bracket_is_walked_WHOLE_even_on_a_box_with_fewer_threads(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """R309(f) attaches the thread bound to the EXTENSION; R309(g) fixes the base ladder. An
-    earlier cut skipped base rungs above the bound, which on an 8-vCPU instance silently reduced
-    a pre-registered bracket to `2, 4, 8` — an executor narrowing a pre-registered clause on a
-    plausible physical argument, which is the shape the design review sent back once already."""
+    """Prove the base bracket is walked whole on a box with fewer threads: the bound attaches to
+    the EXTENSION only, and skipping base rungs silently truncates a pre-registered bracket."""
     monkeypatch.setattr(ws, "thread_bound", lambda: (4, "os.sched_getaffinity(0)"))
     ran: list[int] = []
 
@@ -297,13 +259,8 @@ def test_the_base_bracket_is_walked_WHOLE_even_on_a_box_with_fewer_threads(
 def test_the_ladder_TERMINATES_when_an_extension_rung_fails(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch, verdict: str,
 ) -> None:
-    """THE DEFECT THIS CLOSES DID NOT TERMINATE. The extension chose the highest rung whose
-    verdict was in an ENUMERATED set; a later verdict token was added and not added to that set,
-    so the same extension rung was proposed and re-driven forever — a fourteen-minute pool build
-    and teardown per iteration, unbounded, on a rented box, with no report ever written.
-
-    The predicate is now "the last rung run", which needs no enumeration to stay correct. This
-    row is parametrized over the two tokens that broke it and would break again on a third."""
+    """Prove the ladder terminates when an extension rung fails; the predicate is "the last rung
+    run", since an enumerated verdict set left a new token out and re-drove one rung forever."""
     monkeypatch.setattr(ws, "thread_bound", lambda: (64, "os.cpu_count()"))
     ran: list[int] = []
 
@@ -325,10 +282,7 @@ def test_the_ladder_TERMINATES_when_an_extension_rung_fails(
 def test_the_stated_stop_reason_is_true_when_every_base_rung_fails(
     plan: ws.SweepPlan,
 ) -> None:
-    """The one field a reader consults for WHY the ladder ended used to assert a thread bound
-    that did not apply — five rungs run on a 16-thread box, reported as "no rung was run: every
-    base rung is above the measured thread bound 16". A ladder that states the wrong why is
-    worse than one that states none."""
+    """Prove the stated stop reason is true when every base rung fails."""
     results, stopped = ws.walk_ladder(
         plan,
         runner=lambda n: ws.RungResult(n_workers=n, verdict=ws.RUNG_ERROR, rounds=(),
@@ -345,7 +299,6 @@ def test_the_thread_bound_is_measured_and_names_which_call_answered() -> None:
     assert source in ("os.sched_getaffinity(0)", "os.cpu_count()")
 
 
-# ══ the plan's own toml is the one the suite reasons about ═══════════════════════════════
 def test_the_plan_fixture_is_the_committed_file_and_not_a_copy() -> None:
     assert tomllib.loads(_PLAN.read_text(encoding="utf-8"))["provenance"]["prereg_ruling"] \
         == "R309(f)"

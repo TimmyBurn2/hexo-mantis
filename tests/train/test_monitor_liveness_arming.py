@@ -1,37 +1,17 @@
-"""AUDIT-1 F-11's ARMING half, closed by R334(b) — SHAPE A plus the `poll_once` last-emit age.
+"""The arming half of the disk-guard audit — SHAPE A plus the `poll_once` last-emit age.
 
-WHAT WAS STILL OPEN AFTER REPAIR-1. `tests/train/test_disk_guard_failure_is_visible.py` closed
-the OBSERVABILITY half — the guard counts its own ticks and emits `disk_guard_error` — and its
-docstring states in as many words what it did not close: *"The ARMING mechanism is not — gate 12
-still reads a config number for this row."* So a guard whose `check_once` raised on every tick
-still audited ARMED, because `Mechanism.CONFIG_THRESHOLD_GT_ZERO` reads
-`monitor.disk_guard.fail_gb > 0` and a threshold nobody reads is indistinguishable from a
-threshold being read.
+Gate 12 reads a config number, so a guard whose `check_once` raised on every tick still audited
+ARMED: a threshold nobody reads is indistinguishable from one being read. SHAPE A gives the
+arming predicate a PRODUCER-LIVENESS operand while leaving gate 12 untouched, since with no
+probe answer the new mechanism is byte-for-byte the old one. SHAPE B was REJECTED in its form,
+and the rejection is asserted rather than described: a guard made a fifth heartbeat source sits
+on an instrument whose stall code is 42, the class the supervisor RELAUNCHES on.
 
-WHAT R334(b) RULED, and both halves are driven here.
+THE PLANTED DEAD-GUARD BREAK is a real `DiskGuard` whose every tick raises, and the contrast is
+the finding: config-only says ARMED, live says DISARMED, same config, same process.
 
-* **SHAPE A.** The arming predicate gains a PRODUCER-LIVENESS operand and **gate 12 is
-  untouched**: `audit_arming` keeps its signature and every verdict, because with no probe
-  answer supplied the new mechanism is byte-for-byte the old one. A second entry point,
-  `audit_arming_live`, is what a process with real subsystems calls.
-* **SHAPE B WAS REJECTED IN ITS FORM**, and the rejection is asserted rather than described:
-  making the guard a fifth heartbeat source would put a monitor thread on an instrument whose
-  stall code is **42, the class the supervisor RELAUNCHES on** — a crash loop into a filling
-  volume. So `_check_monitor_liveness` REPORTS and never fires, and
-  `test_a_stalled_monitor_never_exits_the_process` is the row that holds that line.
-
-THE PLANTED DEAD-GUARD BREAK is `test_THE_PLANTED_BREAK_*`: a real `DiskGuard` whose every tick
-raises, driven through its real loop, against the real manifest. The contrast it produces is the
-whole finding — **config-only says ARMED, live says DISARMED, on the same config in the same
-process.**
-
-R8 >300 justify: ONE unit, because the finding IS a comparison. The manifest half, the planted
-dead-guard break and the `poll_once` age half are the same mechanism observed at three layers,
-and the break's whole value is the CONTRAST it produces — the config-only audit and the live
-audit disagreeing about the same row, on the same config, in the same process. Splitting them
-would put the two sides of that comparison in different files, so a reader could see either
-verdict without the one that makes it mean something, and the control rows (a healthy guard,
-every committed config) would drift away from the break they exist to falsify.
+R8 >300 justify: ONE unit, because the finding IS that comparison — split, a reader could see
+either verdict without the one that makes it mean something.
 """
 from __future__ import annotations
 
@@ -83,7 +63,6 @@ def _disk_row() -> ArmedAbort:
     return rows[0]
 
 
-# ─────────────────────────── the manifest half ────────────────────────────
 
 
 def test_the_disk_row_carries_the_live_producer_mechanism_and_the_exported_probe_name() -> None:
@@ -103,13 +82,10 @@ def test_the_disk_row_carries_the_live_producer_mechanism_and_the_exported_probe
 def test_GATE_12_IS_UNTOUCHED_the_config_only_verdict_is_identical_to_the_old_mechanism(
     value: Any,
 ) -> None:
-    """The load-bearing claim of shape A, proven over a value battery rather than asserted.
-
-    With NO probe answer the new mechanism must answer exactly what
-    `CONFIG_THRESHOLD_GT_ZERO` answers — that is what makes `audit_arming`, and therefore CI
-    gate 12, byte-unchanged. A single divergence here would move a verdict on a committed
-    config without anyone deciding to.
-    """
+    """The load-bearing claim of shape A, proven over a value battery rather than asserted: with
+    NO probe answer the new mechanism must answer exactly what `CONFIG_THRESHOLD_GT_ZERO`
+    answers, which is what keeps gate 12 byte-unchanged. A single divergence would move a
+    verdict on a committed config without anyone deciding to."""
     old = Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(value)
     new = Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER.is_armed(value)
     assert old == new, f"the two mechanisms disagree on {value!r} with no probe supplied"
@@ -171,7 +147,6 @@ def test_the_live_audit_DIVERGES_from_the_config_audit_when_the_producer_is_dead
     assert DISK_SPACE_ABORT_RULE in [r.name for r in live.disarmed]
 
 
-# ────────────────────── the planted dead-guard break ──────────────────────
 
 
 def _guard(tmp_path: Path, sink: _Sink, *, interval: float = 0.01) -> DiskGuard:
@@ -193,15 +168,11 @@ def _drive_loop(guard: DiskGuard, *, until: int, attr: str, timeout: float = 5.0
 def test_THE_PLANTED_BREAK_a_guard_whose_every_tick_raises_reads_ARMED_statically_and_DISARMED_live(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE producer test (LAW-07), and the break is planted in the producer rather than in the
-    predicate: a real `DiskGuard`, its real `_loop` thread, its real counters, against the real
-    `MANIFEST` and a real committed config.
-
-    The two assertions at the end are the finding stated as a contrast. The config-only audit
-    — what CI gate 12 runs — reports the abort ARMED, and it is not wrong to: the threshold is
-    minted and positive. The live audit reports it DISARMED, because nothing is reading that
-    threshold. Before R334(b) no instrument in the repo could tell those two runs apart.
-    """
+    """THE producer test (LAW-07), with the break planted in the producer rather than the
+    predicate: a real `DiskGuard`, its real loop and counters, against the real manifest and a
+    real committed config. The config-only audit reports ARMED and is not wrong to — the
+    threshold is minted and positive — while the live audit reports DISARMED, because nothing
+    is reading it."""
     import shutil as _shutil
 
     def _boom(_path: Any) -> Any:
@@ -253,7 +224,6 @@ def test_every_committed_production_config_still_passes_the_live_audit_with_a_li
         assert not live.disarmed, f"{rel} newly reports {[r.name for r in live.disarmed]}"
 
 
-# ───────────────────────── the `poll_once` age half ─────────────────────────
 
 
 class _Clock:
@@ -266,15 +236,10 @@ class _Clock:
 
 def _watchdog(tmp_path: Path, sink: _Sink, clock: _Clock,
               sample_fn: Any, exits: list[int]) -> HeartbeatWatchdog:
-    """A REAL `HeartbeatRegistry` on the same fake clock, one source, deadline `0.0`.
-
-    Deliberately not a stub: the staleness branch runs on every poll beside the liveness
-    check, so a stub registry would let these rows pass by dodging the code path they share
-    with production. A `0.0` deadline is the watchdog's own documented "this source cannot
-    fire" spelling, which isolates the axis under test without disabling the one beside it —
-    and `test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS` would be vacuous if staleness could
-    not reach `exit_fn` at all, so the registry stays real.
-    """
+    """A REAL `HeartbeatRegistry` on the same fake clock, one source, deadline `0.0`. Not a stub,
+    because the staleness branch runs on every poll beside the liveness check; `0.0` is the
+    watchdog's own "this source cannot fire" spelling, isolating the axis under test without
+    disabling the one beside it."""
     return HeartbeatWatchdog(
         registry=HeartbeatRegistry(sources=("train_step",), clock=clock),
         deadlines={"train_step": 0.0}, sink=sink, counters_fn=lambda: 0,
@@ -370,13 +335,10 @@ def test_a_RECOVERED_monitor_says_so_and_can_stall_again(tmp_path: Path) -> None
 
 
 def test_a_stalled_monitor_NEVER_EXITS_THE_PROCESS(tmp_path: Path) -> None:
-    """R334(b)'s rejection of shape B, held as an assertion rather than as a comment.
-
-    The stall watchdog's own code is 42 — the TRANSIENT class the supervisor RELAUNCHES on.
-    A disk guard raising every tick that could reach `exit_fn` would stall-abort and be
-    relaunched into the same broken state: a crash loop into a filling volume, on the leg
-    whose whole purpose is stopping a run before the volume fills.
-    """
+    """The rejection of shape B, held as an assertion rather than a comment. The stall
+    watchdog's own code is 42 — the TRANSIENT class the supervisor RELAUNCHES on — so a disk
+    guard raising every tick that could reach `exit_fn` would stall-abort and be relaunched into
+    the same broken state: a crash loop into a filling volume."""
     sink, clock, exits = _Sink(), _Clock(), []
     frozen = MonitorSample(checks_total=1, errors_total=999, interval_sec=1.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: frozen, exits)
@@ -405,7 +367,6 @@ def test_the_liveness_wiring_is_named_at_ARM_TIME_in_both_directions(tmp_path: P
     assert armed["monitor_liveness"] == "monitor_liveness_unwired"
 
 
-# ───────────────── the production wiring, pinned STRUCTURALLY ─────────────────
 
 
 def _compose_run_ast() -> Any:
@@ -435,8 +396,8 @@ def _calls_named(node: Any, name: str) -> list[Any]:
 
 
 def test_the_composition_root_DECLARES_the_disk_guard_as_a_watched_monitor() -> None:
-    """Without this the mechanism is a phantom: an audit nothing calls and a watchdog told
-    about no monitors. Structural, not textual — the keyword must be present on the real
+    """Without this the mechanism is a phantom: an audit nothing calls and a watchdog told about
+    no monitors. Structural, not textual — the keyword must be present on the real
     `build_run_safety` call and its value must construct a `MonitorLivenessSpec`."""
     import ast
 
@@ -453,8 +414,8 @@ def test_the_composition_root_DECLARES_the_disk_guard_as_a_watched_monitor() -> 
 
 
 def test_the_composition_root_RUNS_the_live_arming_audit_off_the_exported_probe_name() -> None:
-    """The probe key must be the imported CONSTANT, never a string literal: two literals is
-    the duplicated-authority shape, and a rename would then silently produce a
+    """The probe key must be the imported CONSTANT, never a string literal: two literals is the
+    duplicated-authority shape, and a rename would then silently produce a
     `ProducerProbeMissingError` at teardown instead of failing here."""
     import ast
 
@@ -486,23 +447,16 @@ def test_THE_VACUITY_CONTROL_the_census_fires_on_a_stripped_function() -> None:
     assert not _calls_named(stripped, "_emit_live_arming_audit")
 
 
-# ─────── the defect this leg introduced, and the row that keeps it dead ───────
 
 
 def test_THE_LIVE_AUDIT_EMITS_WHERE_THE_SINK_IS_STILL_OPEN_ON_BOTH_PATHS() -> None:
     """A REGRESSION ROW for a defect this leg introduced and the gate set caught.
 
-    The audit was first written beside the disk guard's own teardown, which reads correctly
-    and is one line too late: `run_safety.sink.close()` runs on the PARTIAL-composition path
-    and `disk_guard.stop()` runs AFTER it, so the emit hit a closed file. `JsonlEventSink`
-    COUNTS a failed write as a persistence failure rather than raising (LAW-14), and the
-    heartbeat watchdog turns a non-zero persist counter into `os._exit(43)` — so a teardown
-    DIAGNOSTIC took the whole pytest process down mid-tier, with no assertion able to see it.
-
-    The rule the placement now obeys: **the only point in the ladder where the sink is open on
-    both paths is the top of the `finally`.** This asserts that structurally — the audit call
-    must appear BEFORE the `coordinator is None` branch that owns `sink.close()` — because a
-    later editor moving it back down would reproduce the same silent process kill.
+    The audit was first written beside the disk guard's own teardown, one line too late:
+    `sink.close()` runs on the PARTIAL path and `disk_guard.stop()` after it, so the emit hit a
+    closed file, the sink COUNTED the failed write, and the watchdog turned a non-zero persist
+    counter into `os._exit(43)`. The only point where the sink is open on both paths is the top
+    of the `finally`, so the audit call must precede the `coordinator is None` branch.
     """
     import ast
 
@@ -532,9 +486,9 @@ def test_THE_LIVE_AUDIT_EMITS_WHERE_THE_SINK_IS_STILL_OPEN_ON_BOTH_PATHS() -> No
 
 
 def test_the_audit_survives_a_composition_that_never_BUILT_a_disk_guard() -> None:
-    """The partial path's other half. A run that failed before the guard existed has no
-    producer to ask, and the truthful answer is DISARMED — never a `ProducerProbeMissingError`
-    that would then be emitted as the audit's own failure on every failed boot."""
+    """The partial path's other half. A run that failed before the guard existed has no producer
+    to ask, and the truthful answer is DISARMED — never a `ProducerProbeMissingError` emitted as
+    the audit's own failure on every failed boot."""
     config = load_config(_PRODUCTION)
     live = audit_arming_live(config,
                              probes={DISK_GUARD_LIVENESS_PROBE: lambda: None is not None})
@@ -544,19 +498,11 @@ def test_the_audit_survives_a_composition_that_never_BUILT_a_disk_guard() -> Non
 def test_THE_LIVENESS_SAMPLE_IS_SILENT_DURING_CLOSE_OUT_because_it_is_self_fatal_otherwise(
     tmp_path: Path,
 ) -> None:
-    """The second defect this leg introduced, and the reason the gate is structural.
-
-    The check first ran on EVERY poll, armed or not, on the argument that a monitor's death is
-    not a pipeline stall. That argument is about WHEN the reading is interesting; it ignored
-    WHO takes it. The watchdog's own thread emits through the sink it also polices, so an emit
-    after `sink.close()` is a failed write, `JsonlEventSink` COUNTS a failed write instead of
-    raising (LAW-14), and `counters_fn` — the FIRST thing `poll_once` reads — answers a
-    non-zero count with `os._exit(43)`.
-
-    Measured, not reasoned: `monitor_liveness_sample` landed in a closed sink and a leaked
-    watchdog exited the whole pytest process 43 three files later, with nothing in the tier
-    able to attribute it.
-    """
+    """The second defect this leg introduced, and the reason the gate is structural. The check
+    first ran on EVERY poll, on the argument that a monitor's death is not a pipeline stall —
+    an argument about WHEN the reading is interesting that ignored WHO takes it. The watchdog's
+    thread emits through the sink it polices, so an emit after `sink.close()` is a counted
+    failed write and `counters_fn` answers a non-zero count with `os._exit(43)`."""
     sink, clock, exits = _Sink(), _Clock(), []
     live = MonitorSample(checks_total=1, errors_total=0, interval_sec=60.0)
     wd = _watchdog(tmp_path, sink, clock, lambda: live, exits)

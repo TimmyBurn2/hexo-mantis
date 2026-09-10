@@ -1,20 +1,10 @@
-"""Item 7 (eval-kick half) — the eval round must not be SKIPPED by a multi-step burst.
+"""The eval round must not be SKIPPED by a multi-step burst.
 
-THE DEFECT. `_maybe_kick_eval` tests `self._train_step % cfg.eval_interval != 0`, and it was
-called ONCE after the whole training burst. With `max_train_burst > 1` a burst steps over the
-exact multiple — interval 5, burst 3, `_train_step` going 4 → 7 — and the modulo is never
-satisfied on the step the coordinator happens to observe. The round is not delayed, it is
-LOST: `_eval_round_last_step` is keyed on the round index, so nothing retries it. A long run
-could go many intervals without an eval while the config said otherwise, and the only visible
-symptom is an eval cadence quietly slower than the one that was minted.
-
-Moving the call INSIDE the burst tests the boundary per training step, so every exact
-multiple is hit.
-
-SCOPE. Item 7's other half — decoupling `monitor_gates` and the four other gated families
-from `train.log_interval` — is NOT implemented and is NOT pinned here. It conflicts with
-R210, which authorized decoupling `iteration_complete` ONLY and ruled in terms that
-`training_step alerting stays gated`. See ADJ-D12 in the adjudication queue.
+`_maybe_kick_eval` tests `self._train_step % cfg.eval_interval != 0`. Called ONCE after a whole
+burst, a `max_train_burst > 1` run steps OVER the exact multiple (interval 5, burst 3, step
+4 -> 7) and the round is not delayed but LOST, because `_eval_round_last_step` is keyed on the
+round index and nothing retries it. Calling INSIDE the burst tests the boundary per training
+step, so every exact multiple is hit.
 """
 from __future__ import annotations
 
@@ -47,12 +37,9 @@ def _burst_loop(fn: ast.FunctionDef) -> ast.For:
 
 
 def test_the_eval_kick_is_called_inside_the_burst_loop() -> None:
-    """Structural, because the defect is invisible behaviourally at `max_train_burst == 1`.
-
-    At burst 1 the old placement and the new one are the same program — every step is a
-    boundary candidate — so a behavioural test at the default burst passes either way. The
-    bug only exists when a burst spans the multiple, and the fix is exactly "which side of
-    the loop the call sits on". That is what is asserted.
+    """Structural, because at `max_train_burst == 1` the old placement and the new one are the
+    same program: the bug exists only when a burst spans the multiple, and the fix is exactly
+    which side of the loop the call sits on.
 
     MUTATION THAT REDS IT: move `self._maybe_kick_eval(cfg)` back below the loop.
     """
@@ -76,12 +63,9 @@ def test_the_eval_kick_is_called_inside_the_burst_loop() -> None:
 
 
 def test_the_kick_outcomes_are_or_folded_across_the_burst() -> None:
-    """Per-step kicking makes the two outcomes burst accumulators, not a single return.
-
-    Without the fold, a kick on an early step of the burst would be overwritten by a
-    later step's `(False, False)` and the `eval_kicked_off` the outcome reports would be
-    wrong — a round that DID fire, reported as not fired.
-    """
+    """Per-step kicking makes the two outcomes burst accumulators, not a single return: without
+    the fold, an early-step kick is overwritten by a later step's `(False, False)` and a round
+    that DID fire is reported as not fired."""
     fn = _step_method()
     src = ast.unparse(_burst_loop(fn))
     assert "eval_kicked_off = eval_kicked_off or" in src, (
@@ -99,11 +83,9 @@ def test_the_kick_outcomes_are_or_folded_across_the_burst() -> None:
 def test_the_kick_still_guards_on_the_interval_modulo() -> None:
     """The fix must not become 'kick every step'.
 
-    Mechanism: moving the call inside the loop without keeping
-    `self._train_step % cfg.eval_interval != 0` would kick an eval round on EVERY training
-    step — which the busy-ack would mostly reject, but would also burn a round index per
-    step and turn the eval cadence into 'continuous'. The modulo is what makes per-step
-    testing correct rather than per-step firing.
+    Moving the call inside the loop without keeping `self._train_step % cfg.eval_interval != 0`
+    would burn a round index per step and turn the eval cadence into 'continuous'. The modulo is
+    what makes per-step TESTING correct rather than per-step firing.
     """
     tree = ast.parse(_STEP_PY.read_text(encoding="utf-8"))
     kick = next(n for n in ast.walk(tree)

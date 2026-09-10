@@ -1,14 +1,9 @@
-"""⊕ R344(b) — the EVAL channels write their games, with the search stats the head already had.
+"""The EVAL channels write their games, with the search stats the head already had.
 
-The self-play half is pinned in `tests/monitor/test_game_record.py`. This is the other half,
-driven through the REAL `worker.run_round`: a round plays a gate block and a random floor, and
-every game of both must land in the store with the fields a viewer needs.
-
-WHY THE STATS ROW IS HERE AND NOT IN THE UNIT TESTS. `DeployHeadPlayer.select_move` computes
-`get_root_children_info()` and, before R344(b), threw it away one line before returning the
-move. The claim "the eval channel's per-position stats need no engine change" is only worth
-anything if a REAL round produces them, so this drives one rather than asserting the head in
-isolation.
+The self-play half is pinned in `tests/monitor/test_game_record.py`; this half drives the REAL
+`worker.run_round`, so a round plays a gate block and a random floor and every game of both must
+land in the store. The stats row is here rather than in a unit test because the claim that the
+per-position stats need no engine change is worth nothing unless a REAL round produces them.
 """
 from __future__ import annotations
 
@@ -81,10 +76,9 @@ def _play(tmp_path: Path) -> list[dict]:
 
 
 def test_a_real_round_writes_every_game_it_played(tmp_path: Path) -> None:
-    """Both armed blocks land, each on its own channel and phase.
-
-    MUTATION THAT REDS IT: drop `games.sink(...)` from any one of the five fan-outs — the
-    round still plays, still promotes or does not, and silently stops recording one block."""
+    """Both armed blocks land, each on its own channel and phase. MUTATION THAT REDS IT: drop
+    `games.sink(...)` from any one of the five fan-outs — the round still plays, still promotes
+    or does not, and silently stops recording one block."""
     records = _play(tmp_path)
     assert records, "a round that played games wrote none of them"
 
@@ -100,11 +94,9 @@ def test_a_real_round_writes_every_game_it_played(tmp_path: Path) -> None:
 
 
 def test_every_eval_record_carries_what_a_viewer_needs(tmp_path: Path) -> None:
-    """The field list R344(b) names, asserted per record rather than on one sample.
-
-    `step_kind` is `round` here and `actor` on the self-play channel: the two channels
-    attribute a game to a training step by different measurements, and a record that did not
-    say which would invite a reader to plot them on one axis (LAW-03)."""
+    """The field list, asserted per record rather than on one sample. `step_kind` is `round`
+    here and `actor` on the self-play channel: the two channels attribute a game to a training
+    step by different measurements, so a record must say which."""
     for record in _play(tmp_path):
         assert record["run_id"] == _RUN_ID
         assert record["step"] == 7000 and record["step_kind"] == "round"
@@ -121,23 +113,11 @@ def test_every_eval_record_carries_what_a_viewer_needs(tmp_path: Path) -> None:
 
 
 def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> None:
-    """The claim that made R344(b)'s eval half a wiring job: the deploy head already computes
-    the visit distribution and the root value, and only ever discarded them.
-
-    Also pins the two shape decisions a reader depends on.
-
-    **`by` names the side that searched, and on THIS channel that is both of them.** The gate
-    plays candidate net against ANCHOR net — two deploy heads — so its stats list covers every
-    ply from both sides, while a rung or floor game (a plain bot opponent) carries only the
-    candidate's. A list without `by` reads identically in the two cases, and a consumer that
-    assumed one-sided would halve every per-move statistic it computed on the gate.
-
-    **`visits` carries the SUPPORT** — visited children only — because a zero-visit child is
-    part of the distribution, carries none of its information, and at radius 8 would be most of
-    the bytes.
-
-    MUTATION THAT REDS IT: stop stashing `last_root`, or capture it AFTER the argmax where it
-    could describe a different search than the move beside it."""
+    """The deploy head already computes the visit distribution and the root value and only ever
+    discarded them. `by` names the side that searched, and on THIS channel that is both — the
+    gate plays two deploy heads, while a rung or floor game carries only the candidate's, so an
+    unlabelled list reads identically in the two cases. `visits` carries the SUPPORT only.
+    MUTATION THAT REDS IT: capture `last_root` AFTER the argmax, or stop stashing it."""
     gate_games = [r for r in _play(tmp_path) if r["channel"] == "promotion"]
     assert gate_games, "no gate games to read stats from"
 
@@ -163,18 +143,10 @@ def test_the_gate_block_carries_PER_POSITION_SEARCH_STATS(tmp_path: Path) -> Non
 
 
 def test_an_EMPTY_support_is_recorded_not_dropped(tmp_path: Path) -> None:
-    """An entry whose support is empty is still a search, and it is kept.
-
-    MEASURED, not hypothesised: a local boot of `configs/smoke_preflight_armed.yaml` — which
-    mints `eval.gate.deploy_sims: 1` — produced 127 roots and **every one of them had an empty
-    support**. At one simulation the root is expanded and nothing is backed up to a child, so
-    there is no visited child to record. That is correct behaviour, and a first cut of this
-    file asserted it could not happen.
-
-    Dropping such an entry would be worse than keeping it twice over: `root_value` is real
-    information, and `len(search_stats)` would stop counting the plies that were searched.
-
-    MUTATION THAT REDS IT: skip the append when the support is empty."""
+    """An entry whose support is empty is still a search, and it is kept: measured, a boot at
+    `deploy_sims: 1` produced 127 roots with an empty support each, because at one simulation
+    nothing is backed up to a child. Dropping them loses a real `root_value` and stops
+    `len(search_stats)` counting searched plies. MUTATION THAT REDS IT: skip the empty append."""
     records = [r for r in _play(tmp_path) if r.get("search_stats")]
     assert records, "no stats to check"
     for record in records:
@@ -186,22 +158,15 @@ def test_an_EMPTY_support_is_recorded_not_dropped(tmp_path: Path) -> None:
 
 
 def test_a_round_with_no_target_writes_nothing_and_does_not_raise(tmp_path: Path) -> None:
-    """`game_record=None` is the no-op arm every test-built spec is in. It must be quiet, and
-    it must not create the directory either — an empty `games/` beside a run would read as a
-    run that recorded nothing, which is a different claim from a round that was never asked
-    to."""
+    """`game_record=None` must be quiet AND must not create the directory: an empty `games/`
+    reads as a run that recorded nothing, a different claim from one never asked to."""
     worker.run_round(_round_spec(tmp_path, None))
     assert not (tmp_path / "games").exists()
 
 
 def test_the_pipeline_ALWAYS_gives_its_rounds_a_record_target() -> None:
-    """`game_record=None` is legitimate for a test-built spec and never for production.
-
-    Nothing else pins that: every row above drives a spec this file constructed, so all of
-    them would stay green with the pipeline handing its real rounds `None`. Structural over
-    the AST rather than a substring search — `"game_record" in source` passes on a comment,
-    and `game_record=None` in the production builder is exactly the defect.
-
+    """`game_record=None` is legitimate for a test-built spec and never for production, and
+    nothing else pins that. AST, not substring: `"game_record" in source` passes on a comment.
     MUTATION THAT REDS IT: drop the kwarg, or pass `game_record=None`."""
     import ast
     import inspect
@@ -223,17 +188,10 @@ def test_the_pipeline_ALWAYS_gives_its_rounds_a_record_target() -> None:
 
 
 def test_an_unwritable_record_dir_does_NOT_break_the_round(tmp_path: Path, capsys) -> None:
-    """The posture inversion between the two writers, pinned because it is easy to get
-    backwards and expensive when it is.
-
-    In `mantis.run` an un-openable store RAISES: the run has not started, and a run that
-    cannot write its games should say so before it plays 25 000 of them. Inside a ROUND the
-    calculus inverts — the round produces the promotion decision the run gates on, so killing
-    it over an unwritable directory converts a lost record into a broken round, a skipped
-    gate and an `eval_broken` an operator has to read.
-
-    MUTATION THAT REDS IT: let the `GameRecordWriter` construction propagate out of
-    `_RoundGameRecords.__init__`."""
+    """The posture inverts between the two writers: in `mantis.run` an un-openable store RAISES,
+    since the run has not started, but inside a ROUND killing it turns a lost record into a
+    broken round and a skipped gate. MUTATION THAT REDS IT: let the `GameRecordWriter`
+    construction propagate out of `_RoundGameRecords.__init__`."""
     blocked = tmp_path / "blocked"
     blocked.write_text("not a directory", encoding="utf-8")   # mkdir will fail on this path
 

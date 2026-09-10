@@ -1,50 +1,21 @@
 """P1 — NO TRAINER STEP IS REACHABLE FROM THE WORKER SWEEP, checked structurally.
 
->300 justify (R8): ONE CLAIM, three arms and their planted breaks. The three checks are not
-independent tests that happen to sit together — each exists because the others cannot see a
-particular escape (an import-closure walk misses a subprocess; a `sys.modules` witness misses a
-source edge that never executes; a process census misses an import), and the claim P1 makes is
-the CONJUNCTION. Splitting the file would let one arm be deleted or weakened without the
-argument for why the remaining two are insufficient having to be made anywhere, which is the
-exact failure the arms exist to prevent. The two closure walkers (`import_closure`,
-`process_creation_offenders`) are shared by the live rows and by their planted-break rows for the
-same reason `0bb4381` keeps a self-test corpus in-file: the predicate and the proof it can fire
-must move together or the proof rots quietly.
+>300 justify (R8): ONE CLAIM, three arms and their planted breaks. Each arm covers an escape the
+others cannot see — an import walk misses a subprocess, a `sys.modules` witness misses a source
+edge that never executes, a process census misses an import — so the claim is their CONJUNCTION
+and a split would let one arm be weakened without the argument for the other two being made
+anywhere. The closure walkers are shared by the live rows and their planted-break rows so the
+predicate and the proof it can fire move together.
 
-R309(g) orders Phase W to run SELF-PLAY ONLY: *"no trainer step executes before the mint, so
-the voided-caps row is not crossed"*. A comment saying so is not a mechanism, and R296(f)
-(STRUCTURE-NOT-TEXT) is the standing convention for exactly this — a guard that matches text
-is evidence about the pattern, never about the artifact.
+Phase W is SELF-PLAY ONLY: no trainer step may execute before the mint, and a comment saying so
+is not a mechanism. STATIC walks the import closure of `mantis.diagnostics.worker_sweep` at
+EVERY scope (`tools/check_import_dag.py` is top-level-only by design; it answers cycles).
+BEHAVIOURAL imports the module in a fresh subprocess and reads `sys.modules` — IMPORT TIME ONLY.
+PROCESS censuses the AST for a launched Python entry point, which both import arms pass green.
 
-THREE CHECKS, and they fail in different ways on purpose:
-
-  * STATIC — the transitive import closure of `mantis.diagnostics.worker_sweep` over
-    `src/mantis`, counting imports at EVERY SCOPE. A function-body import is precisely the
-    loophole a top-level-only walk misses, and `tools/check_import_dag.py` is top-level-only
-    BY DESIGN (it answers a different question: cycles). So this walk is its own, and wider.
-  * BEHAVIOURAL — a fresh subprocess imports the module and reports whether `mantis.train`
-    reached `sys.modules`. **Its coverage is IMPORT TIME ONLY**, stated at that width because an
-    earlier version of this sentence claimed "one an `importlib` call could open that no AST
-    names" — true only for a call that executes at import. A dynamic import in a FUNCTION BODY is
-    invisible to it, which is the same loophole arm 1 was widened to close for static imports.
-    Arm 3 is what covers the dynamic and process cases.
-  * PROCESS — an AST census that the driver launches no Python entry point. The first two arms
-    are BOTH import-time and neither says anything about what the process does after import; a
-    `subprocess.run([sys.executable, "-m", "mantis.run", ...])` keeps both green and steps a
-    trainer anyway. That arm is below, with its own planted breaks.
-
-WHAT P1 THEREFORE CLAIMS, narrowed to what the checks witness: the driver process never imports
-the trainer, AND it creates no process that could. The two together are the no-trainer-step
-property; either alone is not.
-
-WHY A SUBPROCESS OF `python -m mantis.run` WOULD NOT HAVE PASSED EITHER CHECK HONESTLY: the
-driver's own closure would read clean while a trainer stepped in the child. That is the
-structure-not-text failure wearing the check's own uniform, and it is the route the design
-records as REJECTED.
-
-THE PLANTED BREAK IS THE PROOF THE CHECK CAN FIRE (LAW-07). Both arms are run against a
-temp-tree copy of the module with a train import inserted, and both must red. An import ban
-never shown to reject anything is indistinguishable from one that accepts everything.
+Both import arms are also run against a temp-tree copy carrying a PLANTED BREAK, a train
+import, and must red:
+a ban never shown to reject anything is indistinguishable from one that accepts everything.
 """
 from __future__ import annotations
 
@@ -62,9 +33,7 @@ _SRC = Path(__file__).resolve().parents[2] / "src"
 _PKG_ROOT = _SRC / "mantis"
 _ENTRY = "mantis.diagnostics.worker_sweep"
 
-#: Reaching either of these makes a trainer step constructible in this process. `mantis.run`
-#: is on the list for a reason of its own: it imports `mantis.train.orchestrator` at module
-#: top level, so importing it is importing the trainer by another name.
+#: Reaching either makes a trainer step constructible; `mantis.run` imports the orchestrator.
 _BANNED_PREFIXES = ("mantis.train",)
 _BANNED_EXACT = ("mantis.run",)
 
@@ -83,9 +52,8 @@ def _module_table(pkg_root: Path) -> dict[str, Path]:
 def _import_targets(mod: str, is_pkg: bool, node: ast.Import | ast.ImportFrom) -> list[str]:
     """Dotted targets of one import statement, relative imports resolved.
 
-    Lifted in SHAPE from `tools/check_import_dag.py::_import_targets` and deliberately not
-    imported from it: that tool walks top-level statements only, and this walk's whole point
-    is that it does not."""
+    Lifted in SHAPE from `tools/check_import_dag.py` and not imported from it: that tool walks
+    top-level statements only, and this walk must not."""
     if isinstance(node, ast.Import):
         return [alias.name for alias in node.names]
     if node.level == 0:
@@ -150,7 +118,6 @@ def banned_members(closure: set[str]) -> list[str]:
     )
 
 
-# ══ arm 1 — the static walk over the shipped tree ═════════════════════════════════════════
 def test_the_sweep_cannot_reach_the_trainer_by_an_import_at_any_scope() -> None:
     closure = import_closure(_ENTRY, _PKG_ROOT)
     found = banned_members(closure)
@@ -159,15 +126,13 @@ def test_the_sweep_cannot_reach_the_trainer_by_an_import_at_any_scope() -> None:
         "step executes before the mint and the voided-caps row is not crossed. An import is "
         "reachability; a comment is not."
     )
-    # A closure that collapsed to the entry module alone would pass the assertion above while
-    # proving nothing, which is the vacuous-guard shape this repo keeps finding.
+    # A closure collapsed to the entry module alone would pass the row above proving nothing.
     assert len(closure) > 5, (
         f"the closure of {_ENTRY} is {sorted(closure)} — too small to be the real one; the "
         "walk is not seeing the imports it is supposed to be walking"
     )
 
 
-# ══ arm 2 — the runtime witness ═══════════════════════════════════════════════════════════
 def test_importing_the_sweep_does_not_put_the_trainer_into_sys_modules() -> None:
     program = textwrap.dedent(
         f"""
@@ -193,7 +158,6 @@ def test_importing_the_sweep_does_not_put_the_trainer_into_sys_modules() -> None
     )
 
 
-# ══ LAW-07 — the planted break, both arms ════════════════════════════════════════════════
 @pytest.fixture()
 def planted_tree(tmp_path: Path) -> Path:
     """A copy of `src/mantis` whose sweep module imports the trainer inside a function."""
@@ -211,8 +175,7 @@ def planted_tree(tmp_path: Path) -> Path:
 
 
 def test_the_static_walk_reds_on_a_planted_lazy_trainer_import(planted_tree: Path) -> None:
-    """The mutation is deliberately a FUNCTION-BODY import — the exact shape a top-level-only
-    walk (CI gate 9's) waves through, and therefore the shape this oracle exists for."""
+    """The plant is a FUNCTION-BODY import — the shape a top-level-only walk waves through."""
     found = banned_members(import_closure(_ENTRY, planted_tree))
     assert found, (
         "the static walk did not see a function-scope `from mantis.train...` import planted "
@@ -221,36 +184,20 @@ def test_the_static_walk_reds_on_a_planted_lazy_trainer_import(planted_tree: Pat
     )
 
 
-# ══ arm 3 — NO PROCESS CREATION OF A PYTHON ENTRY POINT ══════════════════════════════════
-# The hole the first two arms cannot see, and it is not hypothetical: the driver already
-# contains `subprocess` (the report's `git_commit` provenance shells out, exactly as
-# `fusion_calibrate.py` does). Given that, a single line —
-#
-#     subprocess.run([sys.executable, "-m", "mantis.run", "--config", cfg, "--out-dir", d])
-#
-# — keeps arm 1 green (no `mantis.train*` import EDGE appears in the source closure), keeps arm
-# 2 green (nothing enters THIS interpreter's `sys.modules`), and steps a trainer on the box
-# before the mint. That is the route the design names as REJECTED, and a rejection with no
-# mechanism is text wearing structure's clothes — the very R296(f) class the other two arms
-# invoke in their own defence.
-#
-# THE PREDICATE, stated so it is not wider than what it checks: within `worker_sweep.py`,
-# (a) `sys.executable` may not appear at all, (b) `os.exec*` / `os.spawn*` / `os.posix_spawn*`
-# / `os.system` / `multiprocessing.Process` may not be called, and (c) every `subprocess.*`
-# call's argv must be a LITERAL list of string constants whose program name is on a one-entry
-# allowlist. A literal argv is what makes the check decidable at all: an argv built at runtime
-# is a program this census cannot read, so it is refused rather than guessed at.
+# arm 3 — no process creation of a Python entry point: the driver already imports `subprocess`
+# for its `git` provenance, so one `subprocess.run([sys.executable, "-m", "mantis.run", ...])`
+# keeps both import arms green and steps a trainer anyway. THE PREDICATE: `sys.executable` may
+# not appear; `os.exec*`/`os.spawn*`/`os.system`/`multiprocessing.Process` may not be called;
+# every `subprocess.*` argv must be a literal list whose program is on a one-entry allowlist,
+# because an argv built at runtime is a program this census cannot read.
 
 _PROCESS_APIS = ("run", "Popen", "call", "check_call", "check_output", "system", "Process",
                  "popen", "fork", "forkpty", "spawn", "spawn_main", "run_module", "run_path",
                  "ProcessPoolExecutor", "startfile", "import_module")
 _EXEC_PREFIXES = ("exec", "spawn", "posix_spawn")
-#: The ONE program the driver may launch: `git`, for the report's own commit provenance
-#: (R287(a) — a figure with no commit identity cannot be compared to anything later).
+#: The ONE program the driver may launch: `git`, for the report's own commit provenance.
 _ALLOWED_PROGRAMS = {"git"}
-#: Modules that can start a process or import one by name. They may not be imported BY NAME
-#: (`from subprocess import run` produces an `ast.Name` callee that an owner-keyed census cannot
-#: see) and, apart from `subprocess` and `os`, may not be imported at all.
+#: Process/import modules: none may be imported BY NAME, and only `subprocess` and `os` at all.
 _PROCESS_MODULES = {"subprocess", "multiprocessing", "runpy", "concurrent", "importlib", "pty"}
 _MODULE_OWNERS = {"subprocess", "os", "multiprocessing", "mp", "runpy", "importlib",
                   "concurrent", "futures", "pty"}
@@ -261,9 +208,7 @@ def process_creation_offenders(path: Path) -> list[str]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     offenders: list[str] = []
     for node in ast.walk(tree):
-        # (0) the process modules may not be imported BY NAME, and most may not be imported at
-        # all. A bare-name import is what let `from subprocess import run` past an owner-keyed
-        # census — the callee is then an `ast.Name` and the owner the census keys on is gone.
+        # (0) `from subprocess import run` leaves an `ast.Name` callee with no owner to key on.
         if isinstance(node, ast.ImportFrom) and (node.module or "").split(".")[0] \
                 in _PROCESS_MODULES:
             offenders.append(
@@ -280,14 +225,12 @@ def process_creation_offenders(path: Path) -> list[str]:
         if not isinstance(node, ast.Call):
             continue
         func = node.func
-        # (1) `__import__(...)` and any bare-name process API. A bare name here means either a
-        # by-name import (already flagged above) or a local shadow; either way the census cannot
-        # read the callee, and an unreadable callee is refused rather than guessed at.
+        # (1) A bare name is a by-name import or a local shadow; the callee is then unreadable,
+        # and an unreadable callee is refused rather than guessed at.
         if isinstance(func, ast.Name) and func.id in ("__import__", *_PROCESS_APIS):
             offenders.append(f"line {node.lineno}: bare-name call to {func.id}")
             continue
-        # (2) `getattr(os, "exec" + "vp")` — a dynamic attribute fetch on a process module is a
-        # callee spelled at runtime, which is the same unreadable-callee case.
+        # (2) A dynamic attribute fetch on a process module is a callee spelled at runtime.
         if isinstance(func, ast.Name) and func.id == "getattr" and len(node.args) >= 2 and \
                 isinstance(node.args[0], ast.Name) and node.args[0].id in _MODULE_OWNERS:
             attr = node.args[1]
@@ -314,10 +257,8 @@ def process_creation_offenders(path: Path) -> list[str]:
                 offenders.append(f"line {node.lineno}: {owner}.{func.attr} with no literal argv")
                 continue
             argv = node.args[0]
-            # The decidable property is the PROGRAM — `argv[0]` — and nothing else: arguments
-            # handed to `git` cannot launch a Python entry point, while an argv whose HEAD is
-            # computed is a program this census cannot read. So the head must be a string
-            # constant and the tail may be anything (the driver splats `*args` into it).
+            # Only the PROGRAM — `argv[0]` — is decidable, so the head must be a string
+            # constant; the tail may be anything (the driver splats `*args` into it).
             if not (isinstance(argv, ast.List) and argv.elts
                     and isinstance(argv.elts[0], ast.Constant)
                     and isinstance(argv.elts[0].value, str)):
@@ -355,8 +296,8 @@ def test_the_process_census_reds_on_a_planted_mantis_run_subprocess(tmp_path: Pa
 
 
 def test_the_process_census_reds_on_a_runtime_built_argv(tmp_path: Path) -> None:
-    """A census that only rejected the LITERAL escape would teach the next author to build the
-    argv one line earlier. An unreadable argv is refused, not waved through."""
+    """A runtime-built argv is refused, not waved through — rejecting only the literal escape
+    teaches the next author to build the argv one line earlier."""
     planted = tmp_path / "worker_sweep.py"
     planted.write_text(
         "import subprocess\n"
@@ -370,8 +311,7 @@ def test_the_process_census_reds_on_a_runtime_built_argv(tmp_path: Path) -> None
 def test_the_process_census_accepts_the_git_provenance_call_it_is_shaped_around(
     tmp_path: Path,
 ) -> None:
-    """The shape the ban is built around, stated rather than left implicit: if this row ever
-    fails, the census has stopped fitting the tool and one of the two must move."""
+    """The `git` shape the ban is built around; a red here means census and tool have parted."""
     planted = tmp_path / "worker_sweep.py"
     planted.write_text(
         "import subprocess\n"
@@ -382,10 +322,9 @@ def test_the_process_census_accepts_the_git_provenance_call_it_is_shaped_around(
     assert process_creation_offenders(planted) == []
 
 
-# ══ the behavioural planted break for arm 2 (R5: PYTHONPATH, never a sys.path write) ══════
 def test_the_runtime_witness_reds_on_a_planted_trainer_import(planted_tree: Path) -> None:
-    """Arm 2's own LAW-07 row. The temp package is reached through `PYTHONPATH` on the CHILD's
-    environment — never a `sys.path` mutation, which R5 bans repo-wide."""
+    """Arm 2's own planted break. The temp package is reached through `PYTHONPATH` on the
+    CHILD's environment — never a `sys.path` mutation, which R5 bans repo-wide."""
     program = textwrap.dedent(
         f"""
         import importlib, sys
@@ -438,15 +377,10 @@ def test_the_runtime_witness_reds_on_a_planted_trainer_import(planted_tree: Path
 def test_the_process_census_reds_on_every_escape_the_red_team_walked_past(
     tmp_path: Path, label: str, source: str,
 ) -> None:
-    """LAW-07, eight arms. THE MEASURED DEFECT: the first cut of this census keyed on the CALL
-    SHAPE — an `ast.Attribute` callee whose owner was one of four module names — and all eight of
-    these escapes passed all three reachability arms. Its three planted breaks all used the
-    `subprocess.run([...])` attribute form, so the census was proven to fire only on the shape it
-    was written around. That is the overclaiming class `0bb4381` names, turned on the checks' own
-    argument.
+    """Every escape the first cut of this census walked past must red.
 
-    THE SHIPPED MODULE CONTAINS NONE OF THESE — P1 was TRUE of the artifact before this row
-    existed. What was false is what the arms claimed about the artifact TOMORROW."""
+    That cut keyed on the CALL SHAPE — an `ast.Attribute` callee owned by one of four modules —
+    and all eight passed, because all three planted breaks used that one shape."""
     planted = tmp_path / "worker_sweep.py"
     planted.write_text(source, encoding="utf-8")
     assert process_creation_offenders(planted), f"escape {label!r} was certified as safe"

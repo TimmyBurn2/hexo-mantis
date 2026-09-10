@@ -1,31 +1,12 @@
-"""⊕ WP12-R Phase A / O-A9 arm (b) (DESIGN_A §1.8/§5, PREREG_A §1) — the rung seat.
+"""The head answers OUTSIDE the 361-cell window from the RUNG seat, not just the gate seat.
 
-R138's third oracle already exists, is green and is FROZEN:
-`tests/eval/test_eval_selfplay_child_parity.py::test_head_plays_an_off_window_move_against_
-random_bot` (`:404`). Phase A does not re-write it — DESIGN_A §6.2 makes that a design
-constraint, not a preference, because the file is frozen at
-`ORACLE_FREEZE_EVALDECODE.sha256:2`. Phase A's obligation is narrower: re-run it and record
-the result, and extend the claim to the seat R147 turns into a production rung.
+The rung builds its player at `_model_sims_for_kind(spec, bot)` — a DIFFERENT sims authority
+from `gate.deploy_sims` — so a window confinement re-appearing at this seat would leave the
+frozen gate-seat oracle green while every sealbot rung number measured that asymmetry instead
+of strength.
 
-**Why the rung seat is not the seat the frozen row measures.** The frozen row builds the
-player directly at `n_sims=1`. `_play_rung_block` (`worker.py:240-262`) builds it at
-`_model_sims_for_kind(spec, rung_job.bot)` — a DIFFERENT sims authority, wired by M-3
-precisely so the rung plays at the per-kind value and never at `gate.deploy_sims`. A window
-confinement that survived at the gate seat and re-appeared at the rung seat would leave the
-frozen row green and every sealbot number wrong: the head would answer only inside the
-361-cell window against an opponent (SealBot, and RandomBot at the floor) that samples the
-full legal set. This is the seat where the ladder asymmetry would actually be paid for.
-
-MUTATION (M-A15, transient): make `build_candidate_player` return the grid arm for a graph
-spec. **The kill arrives as an ERROR, not as the named assertion** — R144's known chain
-(`GnnNet` has no `forward`) makes `select_move` raise before the assertion is reached — so
-the cell is labelled `[reached, error-mode]` and NOT "RED via `assert off_window_moves`".
-PREREG_A §3 registers an assertion-mode alternative if IMPL wants one.
-
-The stub net is the ONE stand-in: `LocalInferenceEngine`, the graph decode, the expand and
-`DeployHeadPlayer` are all production, and the net is a stand-in only because the assertion
-needs determinism. It is duplicated from the frozen file rather than imported — R5 bars
-cross-test imports, and §6.2 requires this arm to land in a NEW file.
+The stub net is the ONE stand-in and is duplicated rather than imported, since cross-test
+imports are barred; everything else on the path is production.
 """
 from __future__ import annotations
 
@@ -45,10 +26,8 @@ from mantis.eval import worker
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _ENC = "gnn_axis_v1"
-#: F-816-10 D-1: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED
-#: keyword — it hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is
-#: THREADED from a parent resolver and never hardcoded at the site. Non-binding by
-#: construction here: nothing in this file exercises a split.
+#: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED keyword. The pair
+#: here is non-binding by construction: nothing in this file exercises a split.
 _CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURE = (
     Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity" / "dispersed_r6_v1.json"
@@ -58,10 +37,8 @@ _FIXTURE = (
 #: `to_flat(q, r) >= 361` is exactly "off-window" — the same test the Rust leg applies.
 _OFF_WINDOW_FLAT = 361
 
-#: The two dispersed positions with the largest off-window child sets (measured from the
-#: fixture at ORACLE-WRITE: 134 and 145 expected off-window children). Chosen because a
-#: position with few off-window options makes an absent off-window move ambiguous between
-#: "the head is confined" and "the head preferred an in-window cell".
+#: The two dispersed positions with the largest off-window child sets (134 and 145 measured
+#: from the fixture); fewer options would make an absent off-window move ambiguous.
 _POSITIONS = (2, 3)
 
 
@@ -77,11 +54,8 @@ class _RuleNet(torch.nn.Module):
         logits: list[float] = []
         for g in range(n_graphs):
             lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            # `legal_index` is the wire's `legal_node_gather` (R284 P-MASK): the ROWS of the
-            # legal nodes, not a dense mask. Counting index entries that fall in this graph's
-            # `[lo, hi)` row range is the same count as summing the mask's bits over it, for
-            # every payload the contract admits — the gather is strictly ascending, hence
-            # unique (wire check 13). The stub's OUTPUT is unchanged; nothing it asserts moves.
+            # `legal_index` gathers the ROWS of the legal nodes, not a dense mask; the gather is
+            # strictly ascending, so counting entries in `[lo, hi)` equals summing mask bits.
             n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
             logits.extend(_rule_logit(i) for i in range(n_legal))
         return (
@@ -106,8 +80,7 @@ def graph_engine():
 
 
 def _position(index: int) -> dict:
-    """Re-nest the FLAT fixture (`p0_*`, `p1_*`, ...). A missing key is a KeyError, never a
-    default — the fixture either carries the position or it does not."""
+    """Re-nest the FLAT fixture (`p0_*`, `p1_*`, ...); a missing key raises, never defaults."""
     fx = json.loads(_FIXTURE.read_text())
     prefix = f"p{index}_"
     return {k[len(prefix):]: v for k, v in fx.items() if k.startswith(prefix)}
@@ -122,12 +95,10 @@ def _board(pos: dict) -> Board:
 
 
 def _rung_round_spec() -> SimpleNamespace:
-    """The four per-kind sims fields `_model_sims_for_kind` reads off a `RoundSpec`.
+    """The per-kind sims fields `_model_sims_for_kind` reads off a `RoundSpec`.
 
-    `sealbot_model_sims` is **1** here and not run5's 128: the subject is which AUTHORITY
-    the rung seat reads, not how deep it searches, and 128 sims per half-ply over 8 plies is
-    a benchmark, not an oracle. `gate.deploy_sims` is set to a DIFFERENT value so a seat
-    that silently read the gate's authority would be visible rather than coincidental.
+    The subject is which AUTHORITY the rung seat reads, not search depth, so `gate.deploy_sims`
+    carries a DIFFERENT value: a seat reading it would be visible rather than coincidental.
     """
     return SimpleNamespace(
         sealbot_model_sims=1, random_model_sims=4,
@@ -139,9 +110,7 @@ def _rung_round_spec() -> SimpleNamespace:
 def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_opponent(
     graph_engine, position_index: int
 ) -> None:
-    """O-A9 arm (b). The head is built exactly as `_play_rung_block` builds it — through
-    `_model_sims_for_kind`, not at a hand-picked `n_sims` — and must answer OUTSIDE the
-    361-cell window against an opponent that samples the full legal set."""
+    """Build the head as `_play_rung_block` does and prove it answers outside the window."""
     engine, spec = graph_engine
     round_spec = _rung_round_spec()
     rung_sims = worker._model_sims_for_kind(round_spec, "sealbot")

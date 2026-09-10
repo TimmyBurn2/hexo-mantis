@@ -1,33 +1,10 @@
-"""F-RESIT-14's gate hole: a round that BROKE must reach LAW-15's gate AS a broken round.
+"""A round that BROKE must reach the promotion gate AS a broken round.
 
-**THE HOLE, measured at the 2026-08-27 re-calibration re-sit.** Every in-run eval round of the
-90-minute validation burst ended `eval_broken` — the round-progress budget
-(`eval.round_timeout_sec`) escalating through `_escalate_and_finalize`. So the promotion gate
-never fired for the life of the burst. What `step.py::on_eval_round_complete` emitted each time
-was `sealbot_wr_gate_skipped` with `reason: "wr_sealbot_absent"` — **byte-identical to what a
-perfectly healthy round that happened to carry no sealbot number emits.**
-
-A round that COULD NOT RUN is not a round that ran without a number. Read off the event stream,
-the two were the same fact, and a promotion bar reported as merely un-evidenced when the evidence
-PATH has failed is LAW-15's gate with a door in it: nothing in the stream distinguishes "the bar
-was not met" from "the bar was never measured".
-
-**What this file pins.** The gate is ENTERED on a broken round (it always was — `checks`
-increments before any branch), and it now NAMES the failure: `reason: "eval_round_broken"` with
-the typed reason carried on the payload. The healthy-but-metric-less arm is unchanged, which is
-the half that makes the first assertion mean something — a blanket rename would satisfy "broken
-rounds say something different" while destroying the distinction it exists to draw.
-
-**Why the producer half is here too.** The gate can only read `eval_broken_reason` if the round
-result carries it, and the two live in different modules. `build_round_result` is driven directly
-so this file witnesses the WHOLE path — producer to consumer — rather than asserting a key it
-also invents (R69: a measurement travels with its mechanism).
-
-**NOT claimed here, and it is the larger half of F-RESIT-14.** Why the round exceeded its budget
-at all is a WORKLOAD fact, not a code one — the box carried no bootstrap checkpoint, so the gate
-block played two randomly-initialised players and no game ended early. Fixing that is a config or
-prereg decision and is the architect's; this file closes the reporting hole, which is the part
-that is engine-side and was silently wrong regardless of why any given round broke.
+A round that COULD NOT RUN is not a round that ran without a number, but both used to emit
+`sealbot_wr_gate_skipped` with `reason: "wr_sealbot_absent"` — byte-identical on the stream, so
+nothing distinguished "the bar was not met" from "the bar was never measured". The
+healthy-but-metric-less arm stays unchanged, or the fix is a blanket rename. The producer half
+is driven here too, since the gate can only read a key the round result carries.
 """
 from __future__ import annotations
 
@@ -46,18 +23,9 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _make_coordinator():
-    """A minimal coordinator, harness PRIVATE to this file — the house convention.
-
-    Not imported from a sibling test module: `tests` is not a package (R5 — single collection
-    root, no package named `tests` below it, zero `sys.path` mutation), so a
-    `from tests.train... import` resolves under one pytest invocation and raises
-    `ModuleNotFoundError` under another. This file was written that way first and the count
-    gate's `uv run pytest --collect-only` caught it while a direct `python -m pytest` had not —
-    which is precisely the unreproducible-collection failure R5 exists to close.
-
-    The config is DERIVED from the production builder (`mantis.run._step_coordinator_config`)
-    rather than hand-written as a kwarg census, so a new coordinator knob costs this file no
-    edit — the same discipline the frozen `tests/eval/test_wr_sealbot_handshake.py` states."""
+    """Build a minimal coordinator, harness PRIVATE to this file: `tests` is not a package, so
+    a sibling-module import resolves under one pytest invocation and not another. The config is
+    DERIVED from the production builder, so a new knob costs this file no edit."""
     from mantis.config.loader import load_config
     from mantis.config.resolve.coordinator import resolve_coordinator_knobs
     from mantis.config.resolve.drain import resolve_drain_caps
@@ -122,18 +90,14 @@ def _make_coordinator():
     )
     return SimpleNamespace(coord=coord, sink=sink)
 
-#: Every reason the taxonomy spells. The gate must name ALL of them, not the one that happened to
-#: be measured — a guard written around `join_timeout` alone would be silent on the next reason,
-#: and `ROUND_COMPLETION_ERROR` is the one that fires when the pipeline's own catch-all trips.
+#: Every reason the taxonomy spells: a guard written around one reason would be silent on the
+#: next.
 _REASONS = tuple(EvalBrokenReason)
 
 
 def _broken_round(reason: EvalBrokenReason, *, step: int = 5000) -> dict[str, object]:
-    """A REAL broken round result, built by the production producer.
-
-    Driven through `build_round_result` rather than hand-written: the gate reads
-    `eval_broken_reason`, and a hand-built mapping would let this file pass while the producer
-    stopped emitting the key the consumer depends on."""
+    """Build a REAL broken round result through the production producer — a hand-built mapping
+    would let this file pass while the producer stopped emitting the key."""
     return build_round_result(
         step=step, round_id=f"r000001_{step}", rungs_config=[], rung_results={},
         gate_result=None, skipped_rungs=[], bt={}, schedule_next={},
@@ -149,13 +113,9 @@ def _skip_event(result) -> dict[str, object]:
     return dict(events[0])
 
 
-# ── the producer half ────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("reason", _REASONS, ids=[r.value for r in _REASONS])
 def test_the_producer_carries_the_reason_the_gate_reads(reason: EvalBrokenReason) -> None:
-    """`build_round_result` puts the typed reason on the mapping, for every member.
-
-    The gate's whole ability to tell a broken round from a quiet one rests on this key being
-    present and truthful on the real payload."""
+    """`build_round_result` puts the typed reason on the mapping, for every member."""
     result = _broken_round(reason)
     assert result["eval_broken_reason"] is reason
     assert result["wr_sealbot"] is None, (
@@ -168,14 +128,10 @@ def test_the_producer_carries_the_reason_the_gate_reads(reason: EvalBrokenReason
     )
 
 
-# ── the consumer half: the timeout path reaching the gate ────────────────────────────────
 @pytest.mark.parametrize("reason", _REASONS, ids=[r.value for r in _REASONS])
 def test_a_broken_round_reaches_the_gate_and_is_NAMED_there(reason: EvalBrokenReason) -> None:
-    """The gate is entered, the skip is counted, and the event says the round BROKE.
-
-    `join_timeout` is the member the re-sit measured — the round-progress budget escalating —
-    and it is parametrized alongside the rest so this row cannot be satisfied by a guard written
-    around one reason."""
+    """The gate is entered, the skip is counted, and the event says the round BROKE — over the
+    whole taxonomy, so a guard written around one reason cannot satisfy it."""
     event = _skip_event(_broken_round(reason))
     assert event["reason"] == "eval_round_broken", (
         "a round that could not run must not be reported with the same reason string as a "
@@ -189,11 +145,8 @@ def test_a_broken_round_reaches_the_gate_and_is_NAMED_there(reason: EvalBrokenRe
 
 
 def test_the_gate_is_ENTERED_by_a_broken_round_and_not_skipped_before_it() -> None:
-    """`checks` increments for a broken round: the gate ran and declined, it was not bypassed.
-
-    This is the literal reading of "a timeout exit must FIRE the gate, never walk around it" —
-    a round that never reached the gate would leave `checks` untouched and the failure invisible
-    to the per-gate counters `monitor_gates` publishes."""
+    """`checks` increments for a broken round: the gate ran and declined rather than being
+    walked around, which would leave the failure invisible to the per-gate counters."""
     harness = _make_coordinator()
     before = dict(harness.coord._gate_stats["sealbot_wr_abort"])
     harness.coord.on_eval_round_complete(_broken_round(EvalBrokenReason.JOIN_TIMEOUT))
@@ -203,11 +156,9 @@ def test_the_gate_is_ENTERED_by_a_broken_round_and_not_skipped_before_it() -> No
     assert after["fires"] == before["fires"], "a broken round must never FIRE the abort"
 
 
-# ── the half that makes the first one mean something ─────────────────────────────────────
 def test_a_HEALTHY_round_with_no_sealbot_number_still_says_wr_sealbot_absent() -> None:
-    """The distinction, from the other side. Without this row the fix could be a blanket rename
-    — every skip newly called `eval_round_broken` — which would satisfy "broken rounds say
-    something different" while destroying the very distinction the change exists to draw."""
+    """A healthy metric-less round is unchanged; without this row the fix could be a blanket
+    rename that destroys the very distinction it exists to draw."""
     clean = build_round_result(
         step=5000, round_id="r000002_5000", rungs_config=[], rung_results={},
         gate_result=None, skipped_rungs=[], bt={}, schedule_next={},
@@ -225,12 +176,8 @@ def test_a_HEALTHY_round_with_no_sealbot_number_still_says_wr_sealbot_absent() -
 
 
 def test_the_two_cases_are_DISTINGUISHABLE_on_the_stream_PLANTED_BREAK() -> None:
-    """The planted break, stated as the property rather than as a mutation.
-
-    Before the fix these two events were byte-identical in `reason`, which is precisely why the
-    re-sit's burst could end every round broken with nothing in the stream saying so. If the
-    consumer stops reading `eval_broken_reason` the two collapse back together and this row is
-    the one that reds — no other assertion in this file compares them."""
+    """The two cases are distinguishable on the stream. PLANTED BREAK: stop the consumer
+    reading `eval_broken_reason` and they collapse back into byte-identical events."""
     broken = _skip_event(_broken_round(EvalBrokenReason.JOIN_TIMEOUT))
     clean = build_round_result(
         step=5000, round_id="r000003_5000", rungs_config=[], rung_results={},
@@ -245,33 +192,24 @@ def test_the_two_cases_are_DISTINGUISHABLE_on_the_stream_PLANTED_BREAK() -> None
 
 
 def test_a_mapping_WITHOUT_the_key_does_not_kill_the_poller() -> None:
-    """`.get`, not a subscript — and the asymmetry with `apply_gate_decision` is deliberate.
-
-    There a subscript is right: on the PROMOTION path an absent reason must never read as clean
-    (R152/LAW-11). Here a `KeyError` would propagate out of the eval poller thread, which is the
-    F1 failure mode the whole pipeline is built against — a visible skip converted into a silent
-    hang. The terminal and hand-built routes legitimately deliver mappings that predate the key,
-    and the FROZEN `tests/eval/test_wr_sealbot_handshake.py` drives exactly such a mapping."""
+    """A mapping without the key reads as clean here, unlike on the promotion path: a
+    `KeyError` here would propagate out of the eval poller thread and convert a visible skip
+    into a silent hang."""
     event = _skip_event({"step": 5000, "wr_sealbot": None})
     assert event["reason"] == "wr_sealbot_absent"
     assert event["eval_broken_reason"] is None
 
 
 def test_every_reason_the_taxonomy_spells_is_covered_by_this_file() -> None:
-    """The parametrisations above must be over the WHOLE taxonomy, not a snapshot of it.
-
-    A member added later — the round-progress timeout wants one of its own (see this file's
-    closing note) — must arrive already covered rather than silently outside the rows that
-    claim to cover every reason. Set equality, never a count: a cardinality check is a rename
-    away from meaningless, which is the derive-or-delete lesson this repo keeps re-learning."""
+    """The rows above are parametrised over the WHOLE taxonomy, read at run time. Set
+    equality, never a count: a cardinality check is one rename away from meaningless."""
     assert set(_REASONS) == set(EvalBrokenReason), (
         "the reasons this file drives must be the taxonomy itself, read at run time"
     )
 
 
 def test_the_round_budget_the_resit_measured_against_is_a_LIVE_config_fact() -> None:
-    """F-RESIT-14's arithmetic — a round killed at ~62 min against `eval.round_timeout_sec` —
-    rests on a bound this row re-derives at HEAD rather than quoting from a document."""
+    """The round budget the re-sit measured against is re-derived at HEAD, never quoted."""
     from pathlib import Path
 
     from mantis.config.loader import load_config

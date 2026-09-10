@@ -1,23 +1,10 @@
-"""⊕ WP11-A DESIGN §b/§c — eval reads the SAME sims resolver seam self-play does (rule 3;
-dispatch item 6). Retires two zero-consumer keys: `eval.random_model_sims` (already exists at
-HEAD but has no live consumer — the random floor is the consumer this WP wires) and
-`eval.sealbot_model_sims` (consumer = sealbot rungs).
+"""Eval reads the SAME sims resolver seam self-play does, retiring two zero-consumer keys
+(`eval.random_model_sims`, `eval.sealbot_model_sims`).
 
-RED-at-import (file-level): the top-level `from mantis.bots.resolve import resolve_bot` below
-is the RED-at-import anchor — `mantis.bots` does not exist yet, so THIS WHOLE FILE fails
-collection today (mirrors the house convention in tests/train/test_coordinator_gates.py's
-top-level `check_sealbot_wr_hard_abort` anchor import). Per-test provenance, for the record
-(all currently unreachable behind the same collection error, but documented so IMPL's
-green-transition is auditable test-by-test):
-  * the kraken/strix sub-cases of `test_unknown_opponent_and_none_value_raise_*` would be
-    RED-by-assertion even without the anchor (against the EXISTING
-    `mantis.config.resolve.nsims.resolve_eval_model_sims` — `_KNOWN_OPPONENTS` is
-    `("random", "sealbot")` at HEAD, so kraken/strix currently, pre-IMPL, wrongly raise
-    "unknown eval opponent" instead of resolving);
-  * the random/sealbot sub-cases of `test_unknown_opponent_and_none_value_raise_pre_existing_
-    green` exercise ALREADY-GREEN pre-existing behavior — kept for completeness, not a new pin;
-  * every other test needs `mantis.bots.resolve` / spies on `mantis.config.resolve.nsims`
-    together, and is RED-at-import via the same anchor.
+RED-at-import: the top-level `from mantis.bots.resolve import resolve_bot` below is the anchor —
+`mantis.bots` does not exist yet, so the whole file fails collection today. The kraken/strix
+sub-cases would be red by assertion even without it; the random/sealbot sub-cases of
+`test_unknown_opponent_and_none_value_raise_pre_existing_green` are already-green HEAD behaviour.
 """
 from __future__ import annotations
 
@@ -47,52 +34,26 @@ def test_none_value_still_raises_for_every_known_opponent() -> None:
             resolve_eval_model_sims(opponent, None)
 
 
-# ── the actual eval-side call sites — RED-at-import (mantis.bots.resolve doesn't exist) ──
-# NOTE (ORACLE-CHOSEN seam): `resolve_bot` is fed the ALREADY-RESOLVED config value as
-# `opponent_sims` (a real int, never None — None is reserved for "this rung has no sims
-# dimension at all", e.g. sealbot's fixed `depth`) and is required to route it THROUGH
-# `resolve_eval_model_sims(kind, opponent_sims)` for every kind (including "random" and
-# "sealbot", whose numeric result may be otherwise unused by the constructed bot) — this is
-# precisely how dispatch item 6 retires the two zero-consumer keys: the resolver call itself
-# is the consumer, independent of whether the bot constructor does anything with the int.
+# `resolve_bot` is fed the ALREADY-RESOLVED config value as `opponent_sims` (a real int; None
+# is reserved for "this rung has no sims dimension at all") and must route it through
+# `resolve_eval_model_sims(kind, opponent_sims)` for every kind — the resolver call itself is
+# the consumer, independent of whether the constructed bot uses the int.
 class _RoutingReached(Exception):
     """Raised BY THE SPY, from inside `resolve_eval_model_sims`, and by nothing else.
 
-    ⊕ WP12-R Phase A / G-A3. This sentinel is the instrument: it can only escape `resolve_bot`
-    if the routing call executed BEFORE any `return` or `raise` on every path — which is the
-    ordering itself, observed directly instead of inferred from an unrelated exception.
+    The sentinel can only escape `resolve_bot` if the routing call executed before any `return`
+    or `raise` on every path, so the ordering is observed directly rather than inferred.
     """
 
 
 def test_sealbot_rung_model_sims_route_through_resolve_eval_model_sims(monkeypatch) -> None:
     """`resolve_bot("sealbot", …)` must route sims through `resolve_eval_model_sims` FIRST.
 
-    **⊕ WP12-R Phase A, G-A3: the MECHANISM is re-pointed; the SUBJECT is unchanged.**
-
-    The subject — sims routing runs before the resolution outcome — is load-bearing: it is the
-    R93 trap DESIGN_A §2.2(4) found. `eval.{kraken,strix}_model_sims` have exactly ONE live
-    consumer each, and the only route to it is this call, so an ordering change would turn two
-    consumer-registry citations false while `test_every_key_has_consumer.py` stayed green.
-
-    **What was wrong with observing it through `pytest.raises(RungUnresolvable)`.** That form
-    was an ACCIDENT of the rung being unresolvable. It made the row assert two things at once —
-    the ordering, and that sealbot cannot resolve — and only the second is environment-stable.
-    After the §2.2 rewrite, on a box where the vendored engine is fetched and BUILT, sealbot
-    RESOLVES and the row failed `DID NOT RAISE` for a reason that has nothing to do with its
-    subject. Measured both ways: `1 failed` with a built tree, `1 passed` without.
-
-    Worse, the CI-green reading was hollow: the row passed **because an unrelated raise fired**,
-    so CI had never once observed the ordering it is named for. ORACLE_NOTES_A F-A4 predicted
-    this exact fragility before any production code existed and deliberately did not pre-empt
-    it; G-A3 is the ruling that followed the prediction coming true.
-
-    **The re-point.** The spy RAISES instead of returning. The sentinel reaches the caller only
-    if the routing ran before `resolve_bot` could return a factory or raise its own refusal —
-    so the assertion IS the ordering, and it holds identically whether or not the engine is
-    built, because the sentinel escapes long before the sealbot arm is reached. Strictly more
-    coverage than the sealed form, not less: the row now observes its own subject for the first
-    time, in both environments.
-    """
+    The spy RAISES rather than returning, so the sentinel reaches the caller only if the routing
+    ran before `resolve_bot` could return a factory or raise its own refusal — the assertion IS
+    the ordering. Observing it through `pytest.raises(RungUnresolvable)` instead was an accident
+    of the rung being unresolvable: measured `1 failed` with a built vendor tree and `1 passed`
+    without, so CI had never once observed the ordering the row is named for."""
     import mantis.config.resolve.nsims as nsims_mod
     from mantis.bots.resolve import resolve_bot
 
@@ -114,12 +75,11 @@ def test_sealbot_rung_model_sims_route_through_resolve_eval_model_sims(monkeypat
 
 
 def test_random_floor_routes_through_resolver(monkeypatch) -> None:
-    """The random floor (RandomBot) has no model_sims of its own (it is not a search bot), but
-    the resolver contract is still the ONE authority named opponent -> sims for every
-    resolver-routed opponent kind; `resolve_bot("random", ...)` must not bypass it silently —
-    it must route `cfg.eval.random_model_sims` through `resolve_eval_model_sims` too (retiring
-    the zero-consumer key `eval.random_model_sims` per dispatch item 6), even though the
-    resulting int has no further effect on RandomBot's uniform-legal-move behavior."""
+    """`resolve_bot("random", ...)` must route through the resolver too.
+
+    RandomBot has no model_sims of its own, but the resolver is the ONE authority named
+    opponent -> sims, and the routing call is what makes `eval.random_model_sims` a live
+    consumer even though the resulting int changes nothing about uniform-legal-move play."""
     import mantis.config.resolve.nsims as nsims_mod
     from mantis.bots.resolve import resolve_bot
 
@@ -138,27 +98,13 @@ def test_random_floor_routes_through_resolver(monkeypatch) -> None:
     )
 
 
-# ── ⊕ WP12-R Phase A / O-A6 — the routing survives the §2.2 resolver rewrite ────────────
-# The three rows above pin the routing against HEAD's control flow, each hard-requiring the
-# refusal shape HEAD produces. DESIGN_A §2.2 rewrites that control flow: `sealbot` gains a
-# real adapter arm and the kraken/strix refusal becomes R139's grounds. The row below is the
-# POST-REWRITE pin, and it is a different claim from the three above — it asserts the
-# routing per kind while being AGNOSTIC about whether the kind resolves or raises, which is
-# what makes it survive both CI (no vendor tree, sealbot raises) and a box (extension built,
-# sealbot returns a factory). The three above are not rewritten: they are HEAD's pins and
-# re-running them is Phase A's evidence, not a second authority.
-#
-# THE TRAP, and it is why this row exists at all (DESIGN_A §2.2(4)): `eval.kraken_model_sims`
-# and `eval.strix_model_sims` have exactly ONE live consumer each —
-# `test_every_key_has_consumer.py:52-53` cites `resolve_eval_model_sims`, and the only route
-# to it for those kinds is `resolve.py:52-53`. Hoisting the grounds-bearing raise above the
-# routing call would instantly turn two consumer-registry citations into the precise
-# falsehood R93 exists to catch, and `test_every_key_has_consumer.py` would stay GREEN —
-# that a LAW-08 bijection test cannot see this is the whole reason R93 demands mutation over
-# grep. The row stays parametrized and asserts PER KIND: a single aggregated "the spy was
-# called" assertion would be green under a mutation that broke one kind's routing, and the row
-# would be unfalsifiable. The kraken/strix cells that were its sharpest members went with the
-# bot kinds themselves (R346(f)).
+# The routing must survive the resolver rewrite: this row asserts routing PER KIND while being
+# agnostic about whether a kind resolves or raises, so it holds both in CI (no vendor tree,
+# sealbot raises) and on a box with the extension built. The three rows above are HEAD's pins.
+# THE TRAP: `eval.{kraken,strix}_model_sims` have exactly ONE live consumer each, reached only
+# through this call, so hoisting a refusal above the routing would falsify two consumer-registry
+# citations while the LAW-08 bijection test stayed green. A single aggregated "the spy was
+# called" assertion would be green under a mutation that broke one kind's routing.
 @pytest.mark.parametrize("kind", ["random", "sealbot"])
 def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     monkeypatch, kind: str
@@ -177,8 +123,7 @@ def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     try:
         resolve_bot(kind, depth=5 if kind == "sealbot" else None, opponent_sims=128)
     except RungUnresolvable:
-        pass  # the refusal is the EXPECTED outcome for sealbot in CI; the routing must
-        # already have happened by the time it fires (SR-3 / DESIGN §2.2(4))
+        pass  # sealbot's refusal is expected in CI; the routing must already have happened.
 
     assert (kind, 128) in calls, (
         f"resolve_bot({kind!r}, ...) did not reach resolve_eval_model_sims. The routing must "

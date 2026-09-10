@@ -80,7 +80,7 @@ def _alerts(payload: dict[str, Any]) -> list[str]:
     return [e["rule"] for e in fired]
 
 
-# ── the premise, re-derived rather than assumed ────────────────────────────────────────
+# the premise, re-derived rather than assumed
 
 def test_the_real_trainer_tail_produces_no_policy_entropy(tmp_path: Path) -> None:
     """F-01's premise. If this reds, a producer appeared and the builder should carry it —
@@ -93,7 +93,7 @@ def test_the_real_trainer_tail_produces_no_policy_entropy(tmp_path: Path) -> Non
         assert key in graph, f"graph tail dropped {key}: {sorted(graph)}"
 
 
-# ── the audit's PIN, on both arms ──────────────────────────────────────────────────────
+# the audit's PIN, on both arms
 
 def test_the_real_graph_tail_yields_absent_entropy_and_fires_no_alert(
     tmp_path: Path
@@ -116,7 +116,7 @@ def test_a_MEASURED_entropy_below_the_floor_still_fires(tmp_path: Path) -> None:
     assert "entropy_collapse" in _alerts(payload)
 
 
-# ── the rest of the family (F-28 INST-C02/C03) ─────────────────────────────────────────
+# the rest of the family (F-28 INST-C02/C03)
 
 def test_every_unproduced_field_travels_as_None_never_a_fabricated_zero(
     tmp_path: Path

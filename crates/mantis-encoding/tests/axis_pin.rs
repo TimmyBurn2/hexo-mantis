@@ -1,22 +1,14 @@
-//! AUDIT-1 F-42 — the hex axis basis is ONE ordered table, wherever it is typed.
+//! The hex axis basis is ONE ordered table, wherever it is typed.
 //!
-//! THE DEFECT. The three hex axes were typed SIX times: `mantis_core::board::HEX_AXES`,
-//! `mantis_graph::WIN_AXES`, `mantis_selfplay::replay::sym::HEX_BASIS` ("mirroring the board
-//! HEX_AXES"), and three Python copies. `validate.rs` pinned `win_axes == WIN_AXES.len()` —
-//! the COUNT — and nothing pinned the ORDER, which is what is load-bearing: chain planes are
-//! laid out in `HEX_AXES` order, edge one-hots in `WIN_AXES` order, and `axis_perm` is derived
-//! from the basis. Swap two entries in one copy and every consumer keeps compiling while the
-//! meaning of axis index 1 silently changes on one seam and not the others.
+//! The ORDER is what is load-bearing: chain planes are laid out in `HEX_AXES` order, edge
+//! one-hots in `WIN_AXES` order, and `axis_perm` is derived from the basis, so swapping two
+//! entries in one copy relabels axis index 1 on one seam and not the others while everything
+//! still compiles.
 //!
-//! WHY A PIN AND NOT ONE OWNER. `mantis-core` and `mantis-graph` are BOTH declared dep-free
-//! roots by `repo_design.md` §2 (`mantis-core → (nothing in-workspace)`,
-//! `mantis-graph → (nothing; dep-free, wasm32-clean)`), so neither can import the other and
-//! one owner is not reachable without a §2 amendment. This crate is the lowest node that sees
-//! both, so agreement-or-raise (R104's shape) is the mechanism actually available. The
-//! `sym::HEX_BASIS` copy — in a crate that DOES depend on core — is deleted rather than pinned.
+//! A PIN AND NOT ONE OWNER because `mantis-core` and `mantis-graph` are both dep-free roots
+//! and neither can import the other; this crate is the lowest node that sees both.
 //!
-//! PLANTED BREAK (verified): swap two entries of either table and
-//! `hex_axes_agree_across_crates` reds.
+//! PLANTED BREAK (verified): swap two entries of either table and this file reds.
 
 use mantis_core::board::{HEX_AXES, WIN_LENGTH};
 use mantis_graph::WIN_AXES;
@@ -33,8 +25,8 @@ fn hex_axes_agree_across_crates() {
 
 #[test]
 fn the_axis_order_itself_is_pinned_not_just_the_agreement() {
-    // Equality alone would stay green if BOTH tables were reordered together — and both are
-    // baked into every frozen fixture and every trained checkpoint. This is the value.
+    // Equality alone stays green if BOTH tables are reordered together, and this order is
+    // baked into every frozen fixture and every trained checkpoint.
     assert_eq!(
         HEX_AXES,
         [(1, 0), (0, 1), (1, -1)],
@@ -47,14 +39,19 @@ fn the_axis_order_itself_is_pinned_not_just_the_agreement() {
 fn the_registry_refuses_a_win_length_the_engine_does_not_play() {
     use mantis_encoding::parse_encoding_toml;
 
-    // AUDIT-1 F-42. The validator used to check `win_length` "present and positive", so a 7
-    // loaded cleanly while `Board::player_wins`, `CHAIN_CAP` and the bridge threat scan all
-    // went on playing 6.
+    // A `win_length` the validator merely checks positive loads cleanly while the engine goes
+    // on playing 6.
     let body = graph_body().replace("win_length              = 6", "win_length              = 7");
     let err = parse_encoding_toml("gnn_wlprobe", &body)
         .expect_err("a win_length the engine does not play must be REFUSED");
-    assert!(err.contains("win_length"), "the error must name the field: {err}");
-    assert!(err.contains(&WIN_LENGTH.to_string()), "…and the value it requires: {err}");
+    assert!(
+        err.contains("win_length"),
+        "the error must name the field: {err}"
+    );
+    assert!(
+        err.contains(&WIN_LENGTH.to_string()),
+        "…and the value it requires: {err}"
+    );
     // The control: the shipped 6 still loads.
     assert!(parse_encoding_toml("gnn_wlok", &graph_body()).is_ok());
 }
@@ -92,14 +89,11 @@ notes                   = "test"
     .to_string()
 }
 
-/// AUDIT-1 F-41. `mantis_graph::BuildParams` used to carry `impl Default`, so a call site
-/// writing `BuildParams::default()` meant one specific registry row while reading as "the usual
-/// geometry" — and a second graph row (`gnn_axis_r8`) exists that differs in `radius`. The
-/// `Default` is gone and `V1_GEOMETRY` names the row; this pins the name to the row's own values.
+/// `V1_GEOMETRY` names a specific registry row, and a second graph row differs in `radius`, so
+/// the named constant is pinned to that row's own values.
 ///
-/// It lives HERE because `mantis-graph` is dep-free by `repo_design` §2 and cannot read the
-/// registry: this is the lowest crate that sees both. Planted break: change any field of
-/// `V1_GEOMETRY` and this reds.
+/// It lives HERE because `mantis-graph` is dep-free and cannot read the registry; this is the
+/// lowest crate that sees both. Planted break: change any field of `V1_GEOMETRY` and this reds.
 #[test]
 fn the_named_build_geometry_equals_the_registry_row_it_names() {
     let spec = mantis_encoding::lookup("gnn_axis_v1").expect("gnn_axis_v1 registered");
@@ -120,9 +114,8 @@ fn the_named_build_geometry_equals_the_registry_row_it_names() {
     );
 }
 
-/// The other direction: the r8 row is NOT the named constant, so a test that wants r8 must say
-/// so. Without this, "V1_GEOMETRY" could drift into meaning whatever the registry's first graph
-/// row happens to be, which is the ordering dependence F-41 is about.
+/// The other direction: the r8 row is NOT the named constant, so `V1_GEOMETRY` cannot drift
+/// into meaning whatever the registry's first graph row happens to be.
 #[test]
 fn the_named_geometry_is_not_silently_every_graph_row() {
     let r8 = mantis_encoding::lookup("gnn_axis_r8").expect("gnn_axis_r8 registered");
@@ -134,16 +127,14 @@ fn the_named_geometry_is_not_silently_every_graph_row() {
     );
 }
 
-/// AUDIT-1 F-49. `mantis-graph`'s dense-parity test replicates the predecessor engine's legal
-/// ball at a hand-typed `radius = 5`, deliberately — it is dep-free by `repo_design` §2 and an
-/// import would make it the same authority twice. What did not exist is a check that the
-/// replicated number still equals the constant it replicates. This is that check, in the lowest
-/// crate that sees both. Planted break: change `DEFAULT_LEGAL_MOVE_RADIUS` and this reds with
-/// the graph-side literal named.
+/// `mantis-graph`'s dense-parity arm replicates the legal ball at a hand-typed `radius = 5`
+/// because it is dep-free and cannot import the constant; this checks the two still agree.
+/// Planted break: change `DEFAULT_LEGAL_MOVE_RADIUS` and this reds naming the graph literal.
 #[test]
 fn the_graph_parity_arms_replicated_radius_still_equals_the_engine_default() {
     assert_eq!(
-        mantis_core::board::DEFAULT_LEGAL_MOVE_RADIUS, 5,
+        mantis_core::board::DEFAULT_LEGAL_MOVE_RADIUS,
+        5,
         "mantis-graph's `dense_parity` arm replicates this value as a literal `5i32` \
          (crates/mantis-graph/src/lib.rs, `let radius = 5i32`). It is dep-free and cannot \
          import the constant, so moving the constant means moving that literal too."

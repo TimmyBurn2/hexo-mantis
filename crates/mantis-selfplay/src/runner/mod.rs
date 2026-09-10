@@ -1,21 +1,7 @@
-//! R8-justify: the pure-Rust `SelfPlayRunner` core (the ~40-field accumulator/
-//! queue-owning struct + its resolving ctor + start/stop/drain lifecycle) is one
-//! indivisible unit — the frozen `game_runner/mod.rs` was a single long module; the
-//! phase bodies split into sibling modules (`spawn`/`game`/…) but the struct and its
-//! lifecycle stay together so the ownership story is greppable in one file.
-//!
-//! Self-play runner core (WP6 D1) — the pyo3-STRIPPED half of the frozen
-//! `game_runner/mod.rs`. Owns the shared `Arc` accumulators, the dense + graph
-//! inference queues (`crate::queues`), the result queues, and the LAW-18
-//! in-run fire counters. `start`/`stop`/
-//! `is_running`/`drain_game_results` are the pure-Rust lifecycle; a producer
-//! handle exposes the queues so a MOCK producer (tests) / the WP7 NN producer
-//! face can `pop_batch` + `submit_results`.
-//!
-//! DROPPED to WP7 (R6/LAW-17 — pyo3 only in the bridge): the `#[pyclass]`
-//! `SelfPlayRunner` face, every `#[getter]`, `collect_data` (10-numpy-array),
-//! `collect_graph_data`, and the `batcher()` pymethod. The in-run fire counters'
-//! READ getters are WP7-owed write-only debt (R9).
+//! R8-justify: the pure-Rust `SelfPlayRunner` core — the queue-owning accumulator struct, its
+//! resolving ctor and the start/stop/drain lifecycle — is one indivisible unit: the phase bodies
+//! split into sibling modules, but the struct and its lifecycle stay together so the ownership
+//! story is greppable in one file. No pyo3 lives here.
 
 pub mod atomics;
 pub mod config;
@@ -39,10 +25,8 @@ use mantis_encoding::{all_specs, lookup, RegistrySpec};
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
 
-/// Per-row training tuple produced by self-play workers (frozen `mod.rs:44`).
-/// Field order: `(feat, chain, policy, outcome, plies, combined_aux_u8,
-/// is_full_search, ply_index, value_valid)`. The P-04 pin destructures this
-/// carrier exhaustively — a carrier-type change bites.
+/// Per-row training tuple produced by self-play workers. The P-04 pin destructures this carrier
+/// exhaustively, so a carrier-type change bites.
 pub type WorkerResultRow = (
     Vec<f32>,
     Vec<f32>,
@@ -55,110 +39,76 @@ pub type WorkerResultRow = (
     u8,
 );
 
-/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]
-/// (frozen `mod.rs:54`). Field order: `(plies, winner_code, move_history,
-/// worker_id, terminal_reason, model_version_min, model_version_max,
-/// model_version_distinct)`. The `seeded` / `solver_fires` slots went with the
-/// seed-corpus and solver levers (R346(f)).
+/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`].
 pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32);
 
-/// Flat snapshot of the runner's LAW-18 in-run counter atomics, each read once
-/// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
-/// counters — see the module doc). RAW cumulative counts ONLY: the fixed-point
-/// ×1_000_000 accumulators (`*_accum`) are handed back UNDIVIDED so the WP7 bridge
-/// derives the 4 means itself (`accum / (count × 1e6)`; the SEAM does NOT compute
-/// means). ADJ-D32 / R249: the two cluster means are `None` at `count == 0` — a mean
-/// over zero samples is not a measurement — while the two MCTS means keep a `0.0`
-/// zero-guard, because their count advances on every arm and its zero is transient.
-/// The distinction lives at the bridge; this snapshot carries only raw counts.
-/// Every field maps 1:1 to a [`SelfPlayRunner`]
-/// counter of the same name. Cumulative since `start()`; monotone across calls.
+/// Flat snapshot of the runner's in-run counter atomics, each read once via a `Relaxed` load.
+/// RAW cumulative counts ONLY: the fixed-point accumulators are handed back UNDIVIDED so the
+/// bridge can derive the means, since a cluster mean over zero samples is not a measurement.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct RunnerStatsSnapshot {
-    // ── win / throughput ──
     pub games_completed: usize,
     pub positions_generated: usize,
     pub x_wins: u64,
     pub o_wins: u64,
     pub draws: u64,
     pub positions_dropped: u64,
-    // ── MCTS-health accumulators (`*_accum` are fixed-point ×1e6; the bridge
-    //    derives `mcts_mean_depth` / `mcts_mean_root_concentration` from these) ──
+    // MCTS-health accumulators; `*_accum` are fixed-point x1e6 and the bridge derives the means.
     pub mcts_depth_accum: u64,
     pub mcts_conc_accum: u64,
     pub mcts_stat_count: u64,
     pub mcts_quiescence_fires: u64,
-    /// R335(c) — the largest leaf count ANY one search served. Must never exceed the
-    /// search budget; `search_drive::run_mcts_search` `fetch_max`es it per search.
+    /// The largest leaf count ANY one search served; must never exceed the search budget.
     pub max_sims_per_search: u64,
-    /// LAW-18 — playout-cap randomization's fire rate, counted at the DRAW. `full + quick`
-    /// is every searched move; a run with `full_search_prob == 0` counts every move `full`,
-    /// because the un-randomized arm searches the game budget.
+    /// Playout-cap randomization's fire rate, counted at the DRAW; at `full_search_prob == 0`
+    /// every move counts `full`.
     pub pcr_full_moves: u64,
     pub pcr_quick_moves: u64,
-    /// LAW-18 — the Gumbel halving round's WIDTH, as the two terms of a mean:
-    /// `gumbel_round_leaves / gumbel_rounds` is leaves per inference round trip. BOTH zero
-    /// on a PUCT run, which issues no rounds — a reader publishes the ABSENCE, never a 0/0.
+    /// The Gumbel round's WIDTH as the two terms of a mean. BOTH zero on a PUCT run, whose
+    /// reader publishes the ABSENCE rather than a 0/0.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
-    // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ──
     /// Moves whose exported policy target carried off-window (overflow) mass.
     pub export_offwindow_mass_moves: u64,
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
-    /// R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and
-    /// halted the run (must read 0 in a healthy run; a drain shutdown does NOT
-    /// count here, `search_drive::InferenceSeamFailure`). Encoding-INDEPENDENT
-    /// (R250/R256 mapping re-derived from code): both `infer_and_expand` arms —
-    /// the dense queue and the graph queue — have a failure leg, so the mechanism
-    /// is live on every arm and the counter is published on every arm.
+    /// Leaf inferences that FAILED on an open queue and halted the run; a drain shutdown does
+    /// NOT count here.
     pub inference_failures_total: u64,
     /// Worker threads that died by panic (must read 0 in a healthy run).
     pub worker_panics: u64,
 }
 
-/// Pure-Rust self-play runner core. Spawns worker threads (`spawn.rs`) that run
-/// full games, stream training rows into the result queues, and track win stats
-/// plus MCTS/solver fire-rate counters. Every worker OWNS its `Board`
-/// (`Board` is `Send + !Sync`, D3) — there is NO shared-board Arc.
+/// Pure-Rust self-play runner core: spawns worker threads that run full games, stream training
+/// rows into the result queues and track win stats plus fire-rate counters. Every worker OWNS its
+/// `Board` — there is NO shared-board Arc.
 pub struct SelfPlayRunner {
-    /// Resolved encoding spec (never `None` — an absent identity key is rejected
-    /// at `new()`, LAW-11).
+    /// Resolved encoding spec; never `None`, since an absent identity key is rejected at `new()`.
     spec: &'static RegistrySpec,
-    /// Runner config (with `standard_sims` already resolved to the effective
-    /// budget).
+    /// Runner config, with `standard_sims` already resolved to the effective budget.
     config: SelfPlayRunnerConfig,
-    /// HEXG visit-slot capacity, DERIVED once at composition from the sims
-    /// regime (`replay::hexg::derived_visit_capacity`, R255/ADJ-D34). `None` on
+    /// HEXG visit-slot capacity, DERIVED once at composition from the sims regime. `None` on
     /// grid runs — dense-362 records carry no visit slot; never a default.
     visit_capacity: Option<usize>,
 
     graph_queue: GraphQueue,
 
-    // ── shared result queues ──
     results: Arc<Mutex<VecDeque<WorkerResultRow>>>,
     graph_results: Arc<Mutex<VecDeque<GraphRecord>>>,
     recent_game_results: Arc<Mutex<VecDeque<GameResultRow>>>,
 
-    // ── control ──
     running: Arc<AtomicBool>,
     handles: Arc<Mutex<Vec<JoinHandle<()>>>>,
-    /// Worker threads that died by panic. MUST read 0 in a healthy run.
-    ///
-    /// Before this counter existed a panicking worker was invisible: `thread::spawn`
-    /// captures the panic in its `JoinHandle`, `stop()` discarded that result
-    /// (`let _ = handle.join()`), and `running` stayed `true` — so the pool silently ran
-    /// with fewer workers, or none, and presented as "slow" rather than "broken". Written
-    /// from two places: `spawn::WorkerPanicGuard` on the unwind itself (live, mid-run) and
-    /// `stop()`'s join-result check (belt-and-braces, at shutdown).
+    /// Worker threads that died by panic. MUST read 0 in a healthy run: before this counter a
+    /// panicking worker was invisible, since the panic sat in its `JoinHandle`, `stop()`
+    /// discarded it and `running` stayed `true`, so the pool ran with fewer workers and presented
+    /// as "slow" rather than "broken".
     worker_panics: Arc<AtomicU64>,
 
-    /// WP7 NN model-version snapshot source. Each worker reads this once per move and
-    /// dedup-pushes it into `version_seen` (drain tuple `mv_min/mv_max/mv_distinct`).
-    /// Defaults to 0 (no-NN); WP7 wires the real setter when the NN producer lands.
+    /// Model-version snapshot source, read once per move by each worker and dedup-pushed into
+    /// the drain tuple. Defaults to 0 on a no-NN run.
     model_version: Arc<AtomicU64>,
 
-    // ── win / throughput accumulators ──
     games_completed: Arc<AtomicUsize>,
     positions_generated: Arc<AtomicUsize>,
     x_wins: Arc<AtomicU64>,
@@ -166,7 +116,6 @@ pub struct SelfPlayRunner {
     draws: Arc<AtomicU64>,
     positions_dropped: Arc<AtomicU64>,
 
-    // ── MCTS-health accumulators (LAW-18; read getters WP7-owed) ──
     mcts_depth_accum: Arc<AtomicU64>,
     mcts_conc_accum: Arc<AtomicU64>,
     mcts_stat_count: Arc<AtomicU64>,
@@ -177,35 +126,26 @@ pub struct SelfPlayRunner {
     gumbel_round_leaves: Arc<AtomicU64>,
     gumbel_rounds: Arc<AtomicU64>,
 
-    // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
     export_offwindow_mass_moves: Arc<AtomicU64>,
     target_integrity_defects: Arc<AtomicU64>,
     /// R275(b) SEAM conjunct fire count (see the snapshot field).
     inference_failures_total: Arc<AtomicU64>,
     /// R345(b)(6): the monotonic graph-game id source. See `WorkerAtomics::graph_game_seq`.
     graph_game_seq: Arc<AtomicU64>,
-    /// The fatal-defect latch (DESIGN_T §3.4): a worker panic is NOT loud —
-    /// `stop()` swallows join results — so a `TargetIntegrityError` at the
-    /// record dispatch stores its message here (store-then-`running=false`)
-    /// and the bridge drain face raises it as a typed Python exception.
+    /// The fatal-defect latch: a worker panic is NOT loud, since `stop()` swallows join results,
+    /// so a `TargetIntegrityError` stores its message here and the drain face raises it typed.
     fatal_defect: Arc<Mutex<Option<String>>>,
 }
 
 impl SelfPlayRunner {
-    /// Construct a runner from a native [`SelfPlayRunnerConfig`]. Resolves the
-    /// `encoding_name` to a `&'static RegistrySpec` (absent / unknown = `Err`,
-    /// LAW-11), runs the effective-sim / playout-cap validations (error strings
-    /// verbatim from the frozen pyo3 ctor, `PyValueError` stripped to
-    /// `Result<_, String>`), and constructs the owned queues + accumulators.
+    /// Construct a runner from a native [`SelfPlayRunnerConfig`], resolving `encoding_name` to a
+    /// `&'static RegistrySpec` and running the sim-budget / playout-cap validations.
     ///
     /// # Errors
-    /// Returns `Err(msg)` when `encoding_name` is absent or unknown, or when a
-    /// sim-budget / playout-cap invariant is violated.
+    /// Returns `Err(msg)` when `encoding_name` is absent or unknown, or when a sim-budget /
+    /// playout-cap invariant is violated.
     pub fn new(mut config: SelfPlayRunnerConfig) -> Result<Self, String> {
-        // Resolve the identity key. Absent spec = error (LAW-11 — the frozen
-        // `None → v6` fallback is killed, D2); unknown name = error naming the
-        // bad name + the registry hint (error string verbatim, `PyValueError`
-        // stripped).
+        // Absent spec = error (no `None -> v6` fallback); unknown name = error naming it.
         let spec: &'static RegistrySpec = match config.encoding_name.as_deref() {
             Some(name) => match lookup(name) {
                 Some(spec) => spec,
@@ -227,10 +167,8 @@ impl SelfPlayRunner {
             }
         };
 
-        // Effective standard-search sim budget: `standard_sims` wins, else
-        // `n_simulations` — the ONE resolution rule, shared with the capacity
-        // derivation below (`effective_standard_sims`). Reject zero on the
-        // *effective* value.
+        // Effective standard-search sim budget: `standard_sims` wins, else `n_simulations` — the
+        // ONE resolution rule, and zero is rejected on the *effective* value.
         let effective_standard = crate::replay::hexg::effective_standard_sims(
             config.n_simulations,
             config.standard_sims,
@@ -239,9 +177,7 @@ impl SelfPlayRunner {
             return Err("SelfPlayRunner: n_simulations (or standard_sims) must be > 0".to_string());
         }
         // The Gumbel kind reaches the root's FULL legal set, so it spends up to
-        // `MAX_ROOT_CHILDREN` slots on the root instead of `MAX_CHILDREN_PER_NODE`, and its
-        // ceiling is correspondingly lower. The PUCT bound is unchanged: a PUCT root is an
-        // ordinary node and the original derivation is exact for it.
+        // `MAX_ROOT_CHILDREN` slots there and its ceiling is correspondingly lower.
         let (armed_ceiling, ceiling_name, ceiling_derivation) = match config.search_kind {
             mantis_search::SearchKind::Gumbel => (
                 mantis_search::MAX_ARMED_SIMS_GUMBEL,
@@ -254,10 +190,8 @@ impl SelfPlayRunner {
                 "MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)",
             ),
         };
-        // AUDIT-1 F-21: the pool bound, checked at BOOT rather than at the first move that
-        // crosses it. Every sims knob the search can be driven at is checked, not only the
-        // standard one, because a `fast_sims` or `n_sims_full` above the bound overflows the
-        // same pool.
+        // The pool bound, checked at BOOT rather than at the first move that crosses it, over
+        // EVERY sims knob the search can be driven at.
         for (name, sims) in [
             ("n_simulations", config.n_simulations),
             ("standard_sims", config.standard_sims),
@@ -280,17 +214,10 @@ impl SelfPlayRunner {
         if config.fast_prob > 0.0 && config.fast_sims == 0 {
             return Err("SelfPlayRunner: fast_sims must be > 0 when fast_prob > 0".to_string());
         }
-        // AUDIT-1 F-38. `sample_dirichlet` builds `Gamma::new(alpha, 1.0).expect(...)`, and
-        // the guards above it are `debug_assert!` — dead in the shipped `.so`. Only pydantic's
-        // `gt=0` protected a MINTED config; a hand-built runner spec (a test, a future
-        // non-YAML source, an arithmetic slip upstream) reached the expect and panicked mid
-        // self-play.
-        //
-        // NaN-SAFE AND CLIPPY-CLEAN. The obvious `x <= 0.0` is WRONG — it is FALSE for NaN, so
-        // a NaN alpha would pass the guard and blow up inside `Gamma::new` anyway. The obvious
-        // fix, `!(x > 0.0)`, is correct but trips `clippy::neg_cmp_op_on_partial_ord` (in
-        // `clippy::all`, hence gate 2b). `partial_cmp` says the same thing explicitly: NaN
-        // compares as `None`, which is not `Some(Greater)`, so it is refused.
+        // `sample_dirichlet` builds `Gamma::new(alpha, 1.0).expect(...)` behind `debug_assert!`
+        // guards dead in the shipped `.so`, so only pydantic's `gt=0` protected a MINTED config.
+        // NaN-SAFE AND CLIPPY-CLEAN: `x <= 0.0` is FALSE for NaN and `!(x > 0.0)` trips
+        // `clippy::neg_cmp_op_on_partial_ord`, while `partial_cmp` says it explicitly.
         if config.dirichlet_enabled
             && config.dirichlet_alpha.partial_cmp(&0.0) != Some(std::cmp::Ordering::Greater)
         {
@@ -309,11 +236,8 @@ impl SelfPlayRunner {
             ));
         }
 
-        // WP12-R Phase T boot guard, re-ruled by R255/ADJ-D34 (read EXISTING keys only,
-        // R120; armed VALUES are never set, R119). The slot capacity is DERIVED from the
-        // configured sims regime by the ONE authority `derived_visit_capacity` — the SAME fn
-        // the mint-time schema validator calls through the bridge, so an unsupported regime
-        // REDs at config validation and this call is the defense-in-depth line.
+        // Boot guard reading EXISTING keys only: capacity is DERIVED by the same authority the
+        // mint-time validator calls, so this is defense in depth.
         let visit_capacity = Some(
             crate::replay::hexg::derived_visit_capacity(
                 config.n_simulations,
@@ -333,9 +257,8 @@ impl SelfPlayRunner {
         // Bake the resolved budget so the workers read the effective value.
         config.standard_sims = effective_standard;
 
-        // The collector's saturation threshold is DERIVED from what this run can supply
-        // (ledger F-1): a worker blocks on its whole submitted batch, so `n_workers x
-        // leaf_batch_size` is a hard cap on queue depth and the threshold is clamped to it.
+        // The collector's saturation threshold is DERIVED from what this run can supply: a worker
+        // blocks on its whole submitted batch, so `n_workers x leaf_batch_size` caps queue depth.
         let max_in_flight = config.n_workers.saturating_mul(config.leaf_batch_size);
         let graph_queue = GraphQueue::with_contract_version_and_supply(
             spec.contract_version.unwrap_or(1),
@@ -377,11 +300,8 @@ impl SelfPlayRunner {
         })
     }
 
-    /// WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14): store the
-    /// typed defect message (first defect wins — the latch is write-once),
-    /// count the fire, THEN flip `running=false` (store-then-halt) so the
-    /// supervisor-facing drain can always read the reason for the halt. A
-    /// worker panic is NOT sufficient — `stop()` swallows join results.
+    /// Store the typed defect message (first wins — the latch is write-once), count the fire,
+    /// THEN flip `running=false`, so the drain can always read the reason for the halt.
     pub fn store_fatal_defect(&self, msg: String) {
         {
             let mut slot = self
@@ -396,9 +316,8 @@ impl SelfPlayRunner {
         self.running.store(false, Ordering::SeqCst);
     }
 
-    /// Read the stored fatal defect, if any — the bridge drain face
-    /// (`collect_graph_data`) raises this as a typed Python exception so the
-    /// pool drain loop dies with the variant name (LAW-14, R152 posture).
+    /// Read the stored fatal defect, if any — the bridge drain face raises it as a typed Python
+    /// exception so the pool drain loop dies with the variant name.
     #[must_use]
     pub fn fatal_defect(&self) -> Option<String> {
         self.fatal_defect
@@ -418,21 +337,16 @@ impl SelfPlayRunner {
         self.start_impl();
     }
 
-    /// Flip `running=false`, close both inference queues (waking blocked waiters
-    /// with `Err`), and join all worker threads (drain-shutdown, D12). An
-    /// in-progress game is DROPPED, never finalized as a draw.
+    /// Flip `running=false`, close both inference queues (waking blocked waiters with `Err`),
+    /// and join all worker threads. An in-progress game is DROPPED, never finalized as a draw.
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
         self.graph_queue.close();
         let mut handles = self.handles.lock().expect("runner handles lock poisoned");
         while let Some(handle) = handles.pop() {
-            // CHECKED, not discarded. `Err` here means the thread unwound all the way OUT
-            // of the spawn closure — which the normal path cannot do, because the closure
-            // wraps `run_worker_thread` in `catch_unwind` and counts the panic itself
-            // (`spawn.rs`). So this arm double-counts nothing; it is the escape hatch for a
-            // panic raised outside that `catch_unwind` (in the closure's own prologue, or a
-            // panic while panicking). If it ever fires, the count is still right and the
-            // alternative is the old behaviour: silence.
+            // CHECKED, not discarded. `Err` here means the thread unwound OUT of the spawn
+            // closure, which the normal path cannot do, so this double-counts nothing and is the
+            // escape hatch for a panic raised outside the guard.
             if handle.join().is_err() {
                 self.worker_panics.fetch_add(1, Ordering::SeqCst);
             }
@@ -444,8 +358,7 @@ impl SelfPlayRunner {
         self.running.load(Ordering::SeqCst)
     }
 
-    /// Drain and return all buffered game results since the last call (pure-Rust;
-    /// the frozen pymethod wrapper is dropped to WP7).
+    /// Drain and return all buffered game results since the last call.
     pub fn drain_game_results(&self) -> Vec<GameResultRow> {
         let mut rg = self
             .recent_game_results
@@ -454,24 +367,16 @@ impl SelfPlayRunner {
         rg.drain(..).collect()
     }
 
-    // ── WP7 SEAM (pure-additive, zero-behaviour) ────────────────────────────────
-    // Narrow pub read/drain faces the WP7 `mantis-bridge` producer pyclasses build
-    // over; the frozen `collect_data` / `collect_graph_data` / `#[getter]` /
-    // `bump_model_version` pymethods are dropped to the bridge (R6/LAW-17). None of
-    // these mutate self beyond the drain queues they own; existing behaviour is
-    // untouched.
+    // Narrow pub read/drain faces the bridge producer pyclasses build over. None of these mutate
+    // self beyond the drain queues they own.
 
-    /// Drain and return all buffered training rows since the last call — the
-    /// `collect_data` producer face (frozen pymethod dropped to WP7). Rows arrive in
-    /// FIFO push order. Mirrors [`Self::drain_game_results`].
+    /// Drain and return all buffered training rows since the last call, in FIFO push order.
     pub fn drain_training_rows(&self) -> Vec<WorkerResultRow> {
         let mut rows = self.results.lock().expect("results lock poisoned");
         rows.drain(..).collect()
     }
 
-    /// Drain and return all buffered graph training records since the last call —
-    /// the `collect_graph_data` producer face (frozen pymethod dropped to WP7).
-    /// FIFO push order. Mirrors [`Self::drain_game_results`].
+    /// Drain and return all buffered graph training records since the last call, FIFO.
     pub fn drain_graph_records(&self) -> Vec<GraphRecord> {
         let mut rows = self
             .graph_results
@@ -480,24 +385,20 @@ impl SelfPlayRunner {
         rows.drain(..).collect()
     }
 
-    /// WP7 NN seam — set the shared model-version snapshot workers read once per
-    /// move (dedup-pushed into the drain tuple `mv_min/mv_max/mv_distinct`). The
-    /// frozen `InferenceBatcher.bump_model_version` writes through here. `0` = no-NN.
+    /// Set the shared model-version snapshot workers read once per move and dedup-push into the
+    /// drain tuple. `0` = no-NN.
     pub fn set_model_version(&self, version: u64) {
         self.model_version.store(version, Ordering::SeqCst);
     }
 
-    /// Current NN model-version snapshot (`0` = no-NN) — the read side of
-    /// [`Self::set_model_version`] (frozen `InferenceBatcher.model_version` getter).
+    /// Current NN model-version snapshot (`0` = no-NN).
     #[must_use]
     pub fn model_version(&self) -> u64 {
         self.model_version.load(Ordering::SeqCst)
     }
 
-    /// Snapshot the 24 LAW-18 in-run counter atomics with one `Relaxed` load each.
-    /// Returns RAW cumulative counts (the `*_accum` fixed-point ×1e6 sums are NOT
-    /// divided here — the WP7 bridge derives the 4 means, DESIGN §c.6). See
-    /// [`RunnerStatsSnapshot`].
+    /// Snapshot the in-run counter atomics with one `Relaxed` load each, returning RAW
+    /// cumulative counts — the `*_accum` fixed-point sums are NOT divided here.
     #[must_use]
     pub fn stats_snapshot(&self) -> RunnerStatsSnapshot {
         RunnerStatsSnapshot {
@@ -535,9 +436,8 @@ impl SelfPlayRunner {
         self.spec.policy_stride()
     }
 
-    /// PRODUCER handle for the graph inference queue (mock producer in tests; the NN
-    /// producer face in prod). The queue is `Clone` (shares one `Arc` inner), so this hands
-    /// out a live handle that `pop_graph_batch` + `submit_graph_results`.
+    /// PRODUCER handle for the graph inference queue. The queue is `Clone` over one `Arc`
+    /// inner, so this hands out a live handle.
     #[must_use]
     pub fn graph_producer(&self) -> GraphQueue {
         self.graph_queue.clone()
@@ -550,11 +450,10 @@ impl Drop for SelfPlayRunner {
     }
 }
 
-/// WP7 SEAM round-trip gate — proves the pure-additive pub read/drain faces return
-/// exactly what the private queues / counter atomics hold. No workers are spawned
-/// (`new()` does not `start()`), so the private state is populated deterministically
-/// in-test and read back through the new pub API only. Uses distinct per-field
-/// values so a getter crosswired to the wrong atomic FAILS.
+/// Round-trip gate: the pub read/drain faces return exactly what the private queues and counter
+/// atomics hold. No workers are spawned, so private state is populated deterministically in-test
+/// and read back through the pub API only, with distinct per-field values so a crosswired getter
+/// FAILS.
 #[cfg(test)]
 mod seam_roundtrip {
     use std::sync::atomic::Ordering;
@@ -563,8 +462,7 @@ mod seam_roundtrip {
 
     use super::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig, WorkerResultRow};
 
-    /// Minimal valid runner: only the identity key is required by `new()`; the
-    /// default sim budget passes validation and no worker is started.
+    /// Minimal valid runner: only the identity key is required, and no worker is started.
     fn runner() -> SelfPlayRunner {
         SelfPlayRunner::new(SelfPlayRunnerConfig {
             encoding_name: Some("gnn_axis_v1".to_string()),
@@ -653,11 +551,9 @@ mod seam_roundtrip {
         assert!(r.drain_graph_records().is_empty());
     }
 
-    // ── worker-panic propagation (item 3) ────────────────────────────────────────────
-    //
-    // The defect these pin: a panicking worker was parked in its `JoinHandle`, `stop()`
-    // discarded the result, and `running` stayed true — so the pool reported healthy while
-    // producing nothing. Every test below injects a REAL panic; none simulate one.
+    // Worker-panic propagation. The defect these pin: a panicking worker was parked in its
+    // `JoinHandle`, `stop()` discarded the result, and `running` stayed true, so the pool
+    // reported healthy while producing nothing. Every test below injects a REAL panic.
 
     /// The live arm, driving the SAME `guard_worker` the spawn closure calls.
     #[test]
@@ -683,12 +579,10 @@ mod seam_roundtrip {
         );
     }
 
-    /// Mutation self-test (LAW-07): the arm must stay silent on a clean worker.
+    /// Mutation self-test: the arm stays silent on a clean worker.
     ///
-    /// Mechanism: `guard_worker` fires only on `catch_unwind` returning `Err`, so a body
-    /// that returns normally must leave both the counter and the flag untouched. Without
-    /// this, an arm that counted unconditionally would pass the test above while making
-    /// `worker_panics` meaningless — a counter that always reads non-zero reports nothing.
+    /// `guard_worker` fires only on `catch_unwind` returning `Err`. Without this, an arm that
+    /// counted unconditionally would pass the test above while making the counter meaningless.
     #[test]
     fn a_clean_worker_neither_counts_nor_halts() {
         use std::sync::atomic::{AtomicBool, AtomicU64};
@@ -709,11 +603,9 @@ mod seam_roundtrip {
         );
     }
 
-    /// The escape arm: `stop()` must CHECK the join result, not discard it.
-    ///
-    /// A handle that panicked outside `guard_worker` is pushed straight onto the runner's
-    /// handle list — the one state `stop()` reads — and `stop()` must come back with the
-    /// panic counted. Before the fix this was `let _ = handle.join()` and the count stayed 0.
+    /// The escape arm: `stop()` must CHECK the join result, not discard it. A handle that
+    /// panicked outside `guard_worker` is pushed straight onto the handle list `stop()` reads;
+    /// before the fix this was `let _ = handle.join()` and the count stayed 0.
     #[test]
     fn stop_counts_a_panic_that_escaped_the_guard() {
         let r = runner();
@@ -763,10 +655,9 @@ mod seam_roundtrip {
             "a fresh runner reports all-zero counters"
         );
 
-        // DISTINCT values, one per atomic, in struct-field order — a getter wired
-        // to the wrong atomic would read the wrong number and fail. The values are
-        // never reused across fields (the histogram occupies its own contiguous
-        // run), so an adjacent-field miswire cannot pass by coincidence.
+        // DISTINCT values, one per atomic, in struct-field order, never reused across fields
+        // (the histogram occupies its own contiguous run), so an adjacent-field miswire cannot
+        // pass by coincidence.
         r.games_completed.store(1, Ordering::Relaxed);
         r.positions_generated.store(2, Ordering::Relaxed);
         r.x_wins.store(3, Ordering::Relaxed);

@@ -1,10 +1,8 @@
-"""Opening-book authority (LAW-15 sha-pin; design §a.2 books.py).
+"""Opening-book authority: resolve a book id to openings, sha-verified at load.
 
-Loads `manifest.toml` (book id -> repo-packaged file + sha256), VERIFIES the sha at load
-(`BookError` on mismatch/unknown id), and hands back `paired_openings(book_id, n_pairs,
-seed)` — a seeded selection of openings from the book. Each selected opening is later
-played exactly twice (colors swapped) by `mantis.arena.match.play_paired_match` — the
-paired-game law lives there, not here.
+`manifest.toml` maps a book id to a repo-packaged file and its sha256, which is verified on
+every load. Each selected opening is later played exactly twice with colours swapped by
+`mantis.arena.match.play_paired_match`; the paired-game law lives there, not here.
 """
 from __future__ import annotations
 
@@ -85,19 +83,12 @@ def round_openings(
     round_index: int,
     books_dir: Path | str | None = None,
 ) -> list[Opening]:
-    """The openings for ONE eval round: a non-overlapping window over a seeded permutation.
+    """Return one eval round's openings: a non-overlapping window over a seeded permutation.
 
-    R345(b)(4). `paired_openings` draws with a fixed seed, so every round of a run played the
-    SAME openings — round 40's promotion look was the same games as round 1's. Correlated
-    looks make a promotion series far less informative than its game count suggests, and the
-    degradation flag then reads a series that is mostly one sample repeated.
-
-    THE SHAPE. `seed_base` permutes the whole book ONCE; round `r` takes the `n_pairs`-wide
-    window starting at `r * n_pairs`, modulo the book size. Consecutive rounds are therefore
-    DISJOINT by construction rather than by luck, which is the property a fixed seed cannot
-    have and a per-round random seed only has in expectation. Past `len(book) / n_pairs`
-    rounds the window wraps; a wrapped round is a fresh alignment of the same permutation, not
-    a replay of round 0, and the disjointness guarantee is stated for CONSECUTIVE rounds only.
+    `seed_base` permutes the whole book once; round `r` takes the `n_pairs`-wide window at
+    `r * n_pairs`, modulo the book size, so consecutive rounds are disjoint by construction
+    rather than by luck. Past `len(book) / n_pairs` rounds the window wraps into a fresh
+    alignment of the same permutation, and the disjointness holds for consecutive rounds only.
 
     Args:
         book_id: the book to draw from.
@@ -127,8 +118,8 @@ def round_openings(
     random.Random(seed_base).shuffle(order)
     take = min(n_pairs, total)
     start = (round_index * take) % total
-    # `% total` on each index rather than a slice: the window must stay `take` wide when it
-    # runs off the end, and a slice would silently return a short round instead.
+    # `% total` per index, not a slice: the window must stay `take` wide when it runs off
+    # the end, where a slice would silently return a short round.
     chosen = [raw_openings[order[(start + i) % total]] for i in range(take)]
     return [
         Opening(opening_id=str(o["id"]), moves=[tuple(m) for m in o["moves"]])

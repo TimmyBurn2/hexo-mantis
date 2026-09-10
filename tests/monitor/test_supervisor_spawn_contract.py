@@ -1,18 +1,11 @@
-"""F-816-19 (R285(h)) — the supervisor half of the parent-death contract: `spawn_child`.
+"""The supervisor half of the parent-death contract: `spawn_child`.
 
-`tests/monitor/test_supervisor.py` drives the supervisor LOOP through an injected `spawn_fn`
-and never touches the real one; it is also a frozen oracle. This file covers the real
-collaborator instead, and the four claims it must satisfy are one contract:
-
-  * the child's environment carries the supervisor's OWN pid — that stamp is the only thing
-    that tells a run it is supervised and may arm `PR_SET_PDEATHSIG`;
-  * `os.environ` in the supervisor is NOT mutated — a leaked stamp would name "some ancestor"
-    to every later child of this process, which is precisely the confusion the child's gate
-    refuses;
-  * argv still arrives VERBATIM — the module's documented, deliberate property, which the env
-    change must not have bought its way past;
-  * an off-main-thread spawn is REFUSED — `PR_SET_PDEATHSIG` fires on the death of the CREATING
-    THREAD, so a child spawned from a worker thread dies when that thread returns.
+`tests/monitor/test_supervisor.py` drives the supervisor LOOP through an injected `spawn_fn`;
+this file covers the real collaborator. Four claims, one contract: the child's environment
+carries the supervisor's OWN pid, the only stamp that tells a run it is supervised and may arm
+`PR_SET_PDEATHSIG`; `os.environ` in the supervisor is NOT mutated, or a leaked stamp would name
+"some ancestor" to every later child; argv still arrives VERBATIM; and an off-main-thread spawn
+is REFUSED, because `PR_SET_PDEATHSIG` fires on the death of the CREATING THREAD.
 """
 from __future__ import annotations
 
@@ -35,8 +28,7 @@ def _run_and_capture(script: str, argv_tail: list[str] | None = None) -> str:
     """Spawn `python -c <script>` through the PRODUCTION `spawn_child` and return its stdout.
 
     stdout is captured by redirecting the child's file descriptor rather than by passing
-    `stdout=PIPE`, because `spawn_child` takes argv and nothing else — reaching in to add a
-    kwarg would be testing a different function from the one that ships.
+    `stdout=PIPE`, because `spawn_child` takes argv and nothing else.
     """
     argv = [sys.executable, "-c", script, *(argv_tail or [])]
     read_fd, write_fd = os.pipe()
@@ -61,9 +53,8 @@ def _run_and_capture(script: str, argv_tail: list[str] | None = None) -> str:
 
 
 def test_spawn_child_stamps_its_own_pid_in_the_child_environment() -> None:
-    """The stamp is present in the child and equals THIS process's pid — not its parent's, not
-    a placeholder. The child's gate compares the stamp against its own `getppid()`, so any
-    other value would make every supervised run take the wrapper arm and never arm at all."""
+    """The stamp equals THIS process's pid, not its parent's: the child's gate compares it
+    against its own `getppid()`, so any other value never arms at all."""
     out = _run_and_capture(
         "import os,sys; sys.stdout.write(os.environ["
         f"{PARENT_DEATH_PPID_ENV!r}])"
@@ -74,10 +65,8 @@ def test_spawn_child_stamps_its_own_pid_in_the_child_environment() -> None:
 
 
 def test_spawn_child_does_not_mutate_the_supervisors_own_environment() -> None:
-    """The leak that a COPY exists to prevent. If `spawn_child` wrote into `os.environ`, every
-    later child of this process — in a test session, children that are not runs at all — would
-    inherit a stamp naming an ancestor rather than a parent, and a long-lived supervisor would
-    hand the same stale value to processes it did not spawn."""
+    """The leak a COPY exists to prevent: a stamp written into `os.environ` would name an
+    ancestor rather than a parent to every later child of this process."""
     before = dict(os.environ)
     _run_and_capture("pass")
     assert PARENT_DEATH_PPID_ENV not in os.environ, (
@@ -87,21 +76,17 @@ def test_spawn_child_does_not_mutate_the_supervisors_own_environment() -> None:
 
 
 def test_spawn_child_passes_argv_verbatim() -> None:
-    """The documented contract — "the child command is the verbatim argv after `--`" — survives
-    the env change. This is the row that would bite an injected `--parent-death-...` flag: a
-    flag would change the run's argv, which appears in provenance."""
+    """The documented "verbatim argv after `--`" contract survives the env change. An injected
+    `--parent-death-...` flag would change the run's argv, which appears in provenance."""
     tail = ["--config", "some/config.yaml", "--out-dir", "some/out"]
     out = _run_and_capture("import json,sys; sys.stdout.write(json.dumps(sys.argv[1:]))", tail)
     assert json.loads(out) == tail, f"argv was not passed verbatim: {out!r}"
 
 
 def test_spawn_child_refuses_to_launch_from_a_non_main_thread() -> None:
-    """The refusal, driven from a real thread. `PR_SET_PDEATHSIG` fires when the parent THREAD
-    dies, so a child spawned from a worker thread is SIGKILLed the moment that thread returns —
-    a premature kill of a healthy run, strictly worse than the orphan the arming prevents.
-
-    `RuntimeError` and not `assert`: `python -O` strips asserts, and this is a production
-    safety invariant rather than a test aid."""
+    """The refusal, driven from a real thread: a child spawned from a worker thread is SIGKILLed
+    the moment that thread returns, a premature kill strictly worse than the orphan arming
+    prevents. `RuntimeError` and not `assert`, because `python -O` strips asserts."""
     box: dict[str, Any] = {}
 
     def _attempt() -> None:
@@ -131,16 +116,15 @@ def test_spawn_child_refuses_to_launch_from_a_non_main_thread() -> None:
 
 
 def test_spawn_child_from_the_main_thread_is_allowed() -> None:
-    """THE POSITIVE CONTROL for the row above. Without it the refusal could be "always raise"
-    and the suite would stay green while the supervisor could no longer launch anything."""
+    """POSITIVE CONTROL for the row above: without it the refusal could be "always raise" and
+    the suite would stay green while the supervisor could launch nothing."""
     out = _run_and_capture("import sys; sys.stdout.write('ok')")
     assert out.strip() == "ok"
 
 
 def test_the_supervisor_binds_the_real_spawn_child_as_its_spawn_fn() -> None:
-    """The seam that makes every row above production-relevant: `main()` binds THIS function.
-    A mutant that stamps the environment in a private helper the supervisor does not use would
-    pass all five rows above and ship the defect unchanged."""
+    """The seam that makes every row above production-relevant: `main()` binds THIS function, so
+    a stamp in a private helper the supervisor does not use cannot pass."""
     import inspect
 
     from mantis.monitor import supervise
@@ -154,7 +138,6 @@ def test_the_supervisor_binds_the_real_spawn_child_as_its_spawn_fn() -> None:
 
 @pytest.mark.parametrize("argv", [[], [""]])
 def test_spawn_child_rejects_an_empty_command_the_same_way_it_always_did(argv) -> None:
-    """The env change must not have altered the failure shape of a bad argv: a missing or empty
-    program is still `Popen`'s own error, not a swallowed one."""
+    """A missing or empty program is still `Popen`'s own error, not a swallowed one."""
     with pytest.raises((IndexError, ValueError, OSError)):
         spawn_child(argv)

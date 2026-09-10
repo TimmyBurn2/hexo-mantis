@@ -1,31 +1,14 @@
-# >300 justify (R8): ONE finding (RED-TEAM-2 F-RT2-1) — the _bounded_join_timeout layer-2 guard driven on both paths that reach it (escalate_and_finalize, drain_pending); over half the file is the self-contained fixture copy the eval-suite house convention requires (no shared conftest), incl. the _RealisticFakeProcess reproducing CPython's join(inf) OverflowError.
-"""RED-TEAM-2 F-RT2-1 (BLOCKER) FIX, layer 2 — `_bounded_join_timeout` structural guard
-(mantis-migration/wp/WP11A/REDTEAM_2.md Finding F-RT2-1).
+# >300 justify (R8): ONE finding — the `_bounded_join_timeout` layer-2 guard driven on both
+# paths that reach it — and over half the file is the self-contained fixture copy the eval-suite
+# house convention requires, including the fake process that reproduces CPython's join(inf).
+"""Layer 2 of the non-finite `worker_kill_grace_sec` fix: `_bounded_join_timeout`.
 
-RED-TEAM-2 built a REAL `EvalPipeline` + a REAL OS subprocess and confirmed empirically:
-a schema-valid (pre-fix) `worker_kill_grace_sec=float("inf")` reaches `_escalate_and_
-finalize` (pipeline.py, invoked directly from the background poller's `_poll_loop` tick,
-entirely OUTSIDE `_finalize_round`'s F1 layer-2 catch-all) and calls a real
-`multiprocessing.Process.join(float("inf"))`, which raises an UNCAUGHT `OverflowError`
-deep inside `selectors.select()` — killing the poller thread silently, exactly F1's
-original failure mode, via a code path F1's own fix never covered.
-
-Layer 1 (config/schema.py, `tests/config/test_eval_schema_bounds.py`) makes a non-finite
-`worker_kill_grace_sec` unreachable through a config load. THIS suite proves layer 2
-(pipeline.py's `_bounded_join_timeout`, defense-in-depth): even if a non-finite value
-reaches the runtime path by some future bug that bypasses schema validation entirely
-(simulated here via `EvalConfig.model_copy(update=...)`, which — unlike normal
-construction — does NOT re-run field validators, the one supported way to hand-construct
-a schema-shaped-but-invalid config for exactly this kind of injection test), escalation
-still completes: a delivered `eval_broken` result, the poller thread alive, never a hang.
-
-Does NOT spawn a real OS subprocess (same rationale as the frozen `test_eval_broken.py`/
-`test_round_completion_error.py`): a `_RealisticFakeProcess` reproduces the ONE behavior
-under test — `multiprocessing.Process.join` raises `OverflowError` for a non-finite
-timeout (mirrors CPython's real `selectors.select()` -> `math.ceil(timeout * 1e3)` crash,
-confirmed by RED-TEAM-2 against a real subprocess) — while staying deterministic and
-instant everywhere else. This is a NEW file (frozen-oracle discipline unaffected; does not
-edit `tests/eval/test_eval_broken.py` or `tests/eval/test_round_completion_error.py`).
+A pre-fix `worker_kill_grace_sec=float("inf")` reached `_escalate_and_finalize` from the poller's
+tick — outside `_finalize_round`'s catch-all — and called `Process.join(inf)`, which raises an
+UNCAUGHT `OverflowError` inside `selectors.select()` and kills the poller thread silently. Layer
+1 makes such a value unreachable through a config load; this suite proves that one arriving by a
+bug that bypasses validation (simulated with `model_copy(update=...)`, which does not re-run
+field validators) still ends in a delivered `eval_broken` result with the poller alive.
 """
 from __future__ import annotations
 
@@ -52,9 +35,7 @@ from mantis.model import GnnArch, build_net
 _GSPEC = lookup("gnn_axis_v1")
 
 
-# ── shared fixtures (self-contained; house convention — see test_round_completion_error.py
-#    / test_eval_broken.py's own docstrings for why each oracle-write agent keeps a private
-#    copy rather than a shared conftest.py) ──────────────────────────────────────────────
+# Fixtures are a private copy rather than a shared conftest — the eval-suite house convention.
 def _tiny_model():
     import torch
 
@@ -91,12 +72,10 @@ def _eval_cfg(**overrides: Any) -> EvalConfig:
 
 
 def _cfg_with_bypassed_worker_kill_grace_sec(value: float) -> EvalConfig:
-    """The one supported way to construct a schema-shaped-but-schema-INVALID `EvalConfig`
-    for injection testing: `model_copy(update=...)` does not re-run field validators
-    (unlike normal construction/`model_validate`, which would reject a non-finite value at
-    the schema boundary — see `test_eval_schema_bounds.py`). This simulates "a future code
-    path constructs/mutates an EvalConfig without going through config-load validation",
-    exactly the residual-risk scenario layer 2 exists to cover."""
+    """The one supported way to build a schema-shaped but schema-INVALID `EvalConfig` for
+    injection testing: `model_copy(update=...)` does not re-run field validators. It simulates a
+    future code path that mutates an `EvalConfig` without going through config-load validation,
+    which is the residual risk layer 2 covers."""
     return _eval_cfg().model_copy(update={"worker_kill_grace_sec": value})
 
 
@@ -126,12 +105,8 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: "EvalConfig | None" = None, **
         max_plies=128,
         c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json", promotion=_promotion_hooks(tmp_path),
-        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in
-        # the parent and carries it to every `RoundSpec`, because the eval child is a
-        # SECOND allocator on the same card that no in-process bound can see. `None`
-        # is the GRID arm — these fixtures run `v6_live2_ls`, which has no fused graph
-        # forward to bound — and it is written out rather than omitted (the parameter
-        # is required for that reason).
+        # The pipeline resolves the fused-forward memory bound ONCE in the parent, because the
+        # eval child is a SECOND allocator no in-process bound can see; `None` is the GRID arm.
         fused_graph_caps=None,
         inference_batching=None,
     )
@@ -162,14 +137,11 @@ class FakeClock:
 
 
 class _RealisticFakeProcess:
-    """Unlike the frozen suites' `_FakeProcess` (whose `.join()` is an unconditional
-    no-op), THIS fake reproduces the one real-`multiprocessing.Process` behavior under
-    test: `.join(timeout)` raises `OverflowError` for a non-finite timeout — mirroring
-    CPython's real `selectors.select()` -> `math.ceil(timeout * 1e3)` crash that
-    RED-TEAM-2 confirmed empirically against a real OS subprocess. Every timeout it is
-    ever called with is recorded in `join_calls`, so a test can assert the value that
-    actually reached `.join()` was bounded BEFORE the call, not merely that no exception
-    happened to propagate."""
+    """Unlike the frozen suites' no-op `_FakeProcess`, this one reproduces the real
+    `multiprocessing.Process` behaviour under test: `.join(timeout)` raises `OverflowError` for a
+    non-finite timeout. Every timeout it is called with is recorded in `join_calls`, so a test
+    can assert the value that reached `.join()` was bounded BEFORE the call rather than that no
+    exception happened to propagate."""
 
     def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
         self._target = target
@@ -226,8 +198,7 @@ def fake_mp(monkeypatch):
 
 
 def _bounded(fn, *, timeout: float):
-    """Test-level hard watchdog (house convention): this test must itself never hang even
-    if the fix under test regresses."""
+    """Test-level hard watchdog: this test must never hang even if the fix regresses."""
     box: dict[str, Any] = {}
 
     def _run() -> None:
@@ -241,7 +212,6 @@ def _bounded(fn, *, timeout: float):
     return box.get("value")
 
 
-# ── unit-level: the helper itself, every non-finite/negative/huge-finite input ──────────
 @pytest.mark.parametrize(
     "raw,expected",
     [
@@ -263,9 +233,8 @@ def test_bounded_join_timeout_never_raises_and_stays_finite(raw: float, expected
     assert result == expected
 
 
-# ── integration: the REAL background poller's own tick invokes _escalate_and_finalize
-#    directly (RED-TEAM-2's exact code path -- entirely outside _finalize_round's F1
-#    layer-2 catch-all) with a non-finite worker_kill_grace_sec that bypassed schema ──────
+# Integration: the REAL poller's own tick invokes `_escalate_and_finalize` directly — the
+# reproduction path, entirely outside `_finalize_round`'s catch-all.
 def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp, tmp_path) -> None:
     sink = _SpySink()
     clock = FakeClock(0.0)
@@ -279,10 +248,8 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
         assert proc is not None
         assert proc.alive is True  # started, never told to die -> a genuine hang
 
-        # Push the fake clock far past round_timeout_sec (0.05s): the REAL background
-        # poller's next real-time tick (every _POLL_TICK_SEC=0.02s) will see
-        # `elapsed > round_timeout_sec` and call `_escalate_and_finalize` ON ITS OWN --
-        # RED-TEAM-2's exact reproduction path, not a hand-invoked method call.
+        # Push the fake clock past `round_timeout_sec`: the REAL poller's next tick sees the
+        # elapsed time and calls `_escalate_and_finalize` ON ITS OWN, rather than by hand.
         clock.advance(1000.0)
 
         def _wait_for_result():
@@ -296,7 +263,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
 
         result = _bounded(_wait_for_result, timeout=6.0)
 
-        # 1. escalation completed and delivered a result -- never a dead thread/hang.
+        # 1. escalation completed and delivered a result, never a dead thread.
         assert result is not None, (
             "escalation with a non-finite worker_kill_grace_sec must still deliver a "
             "result via the mailbox, never hang the poller forever"
@@ -304,10 +271,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
         assert result["eval_broken_reason"] is not None
         assert result.get("promoted") is False
 
-        # 2. the escalation actually ran (terminate -> join -> kill -> join), and every
-        #    timeout that reached the fake process's .join() was bounded BEFORE the call
-        #    -- never inf itself (proves the clamp happens ahead of the join, not that an
-        #    exception merely failed to propagate for some unrelated reason).
+        # 2. the escalation ran, and every timeout that reached `.join()` was bounded BEFORE it.
         assert proc.terminated is True
         assert proc.killed is True
         assert proc.join_calls, "escalate_and_finalize must join() the process at least once"
@@ -322,8 +286,7 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
         broken = sink.named("eval_broken")
         assert broken, "no eval_broken event emitted for the non-finite-grace escalation"
 
-        # 4. the poller THREAD itself is still alive -- the exact invariant F-RT2-1 found
-        #    broken (RED-TEAM-2: "poller thread confirmed dead... zero result delivered").
+        # The poller THREAD is still alive, the exact invariant the finding found broken.
         assert pipeline._poller.is_alive(), (  # noqa: SLF001 -- intentional internal check
             "the eval-pipeline-poller thread must survive a non-finite worker_kill_grace_sec"
         )
@@ -334,9 +297,8 @@ def test_escalate_and_finalize_survives_non_finite_worker_kill_grace_sec(fake_mp
         pipeline.stop()
 
 
-# ── the drain/teardown path shares the identical proc.join(max(worker_kill_grace_sec, 0.0))
-#    call shape (RED-TEAM-2 explicitly named `drain_or_kill`/`drain_pending()` as reachable
-#    by the same crash, "not independently re-verified... for time") -- verified here ──────
+# The drain/teardown path shares the identical `proc.join(...)` call shape and is reachable by
+# the same crash, so it is verified here too.
 def test_drain_pending_survives_non_finite_worker_kill_grace_sec(fake_mp, tmp_path) -> None:
     sink = _SpySink()
     bad_cfg = _cfg_with_bypassed_worker_kill_grace_sec(float("inf"))

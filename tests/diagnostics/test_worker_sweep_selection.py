@@ -1,19 +1,13 @@
-# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete). This file is
-# the knee rule's ONE oracle: the band, the smallest-within-band pick, the refusals, the exit
-# codes, the re-derivation from a written report, and (R330(d)) the per-rung noise term with its
-# planted break. A rule that is one function is tested in one place, so a row that moves the
-# pick and a row that refuses to pick are read against the same fixture and the same arithmetic.
-"""P7/P8 — the knee rule, its arithmetic, and the exit codes a sitting gates on.
+# >300 justify (R8): the knee rule's ONE oracle — the band, the pick, the refusals, the exit
+# codes, the re-derivation from a written report and the per-rung noise term. A row that moves
+# the pick and a row that refuses to pick must read the same fixture and the same arithmetic.
+"""The knee rule, its arithmetic, and the exit codes a sitting gates on.
 
-R309(f) fixes the selection rule before any number exists: *the smallest rung within 95 percent
-of the best PASSING rung's throughput*. Two words in that sentence carry the whole rule and each
-has its own row here — **smallest** (not fastest: the point of a knee is to stop paying for
-workers that buy nothing) and **PASSING** (a rung with a GROWING memory verdict is not in the
-set, however fast it was).
-
-The arithmetic is printed with its inputs, and `--select-only` re-derives a pick from a written
-report THROUGH THE SAME PURE FUNCTION. That is what makes the pick checkable by someone who was
-not at the box: the sitting record carries the derivation, not the answer.
+The rule is fixed before any number exists: the SMALLEST rung within 95 percent of the best
+PASSING rung's throughput — smallest, not fastest, because a knee is about not paying for
+workers that buy nothing, and passing, because a GROWING memory verdict is out however fast it
+was. `--select-only` re-derives a pick from a written report THROUGH THE SAME PURE FUNCTION, so
+a sitting record carries the derivation rather than the answer.
 """
 from __future__ import annotations
 
@@ -27,8 +21,7 @@ from mantis.diagnostics import worker_sweep as ws
 
 def _row(n_workers: int, value: float, verdict: str = ws.PLATEAU, *,
          rel_se: float | None = 0.0) -> dict:
-    """A rung row as `RungResult.as_dict` writes it. `rel_se` is the rung's OWN noise (R330(d));
-    0.0 is a perfectly quiet rung, `None` is a rung that could not state its noise."""
+    """A rung row as `RungResult.as_dict` writes it; `rel_se` is that rung's OWN noise."""
     def spread(v: float) -> dict:
         return {"min": v, "median": v, "max": v, "mean": v, "rel_se": rel_se, "n_rounds": 5}
     return {"n_workers": n_workers, "verdict": verdict, "moves_per_min": value,
@@ -39,7 +32,6 @@ def _row(n_workers: int, value: float, verdict: str = ws.PLATEAU, *,
             "rung_peak_bytes": 1024 ** 3, "rounds": []}
 
 
-# ══ P7 — SMALLEST within the band, not fastest ═══════════════════════════════════════════
 def test_the_knee_picks_the_smallest_rung_within_the_band_not_the_fastest() -> None:
     rows = [_row(2, 30.0), _row(4, 39.9), _row(8, 41.2), _row(12, 41.5)]
     selection = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
@@ -59,8 +51,7 @@ def test_a_rung_just_below_the_band_is_excluded() -> None:
 
 
 def test_a_rung_exactly_on_the_band_is_included() -> None:
-    """The rule says WITHIN 95 percent. A boundary that excluded the equality case would make
-    the printed threshold a number the rule does not actually use."""
+    """WITHIN 95 percent: excluding equality would make the printed threshold unused."""
     rows = [_row(2, 95.0), _row(4, 100.0)]
     selection = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
     assert selection["picked"] == 2
@@ -82,15 +73,9 @@ def test_no_passing_rung_yields_no_pick_and_says_why() -> None:
 
 
 def test_the_ranking_metric_is_PINNED_and_cannot_be_swapped_by_a_caller() -> None:
-    """Both figures are recorded for every rung; only the RANKING is single-valued — and it is
-    pinned in SOURCE, not in the plan.
-
-    THE DEFECT THIS CLOSES, measured: with `metric = "games_per_min"` and rounds shorter than a
-    game, every rung ranks at 0.000, the knee picks the SMALLEST rung at rc 0, and the ladder-stop
-    line reads "gains no longer persist" — while the moves column says the top rung is 3.7x
-    faster. One token in a plan file made the pick arbitrary with every check green. A
-    pre-registration with a measured basis (DESIGN amendment A1) and no enforcement is a
-    preference."""
+    """Only the RANKING metric is single-valued, and it is pinned in SOURCE: with `games_per_min`
+    and rounds shorter than a game, every rung ranked 0.000 and the knee picked the smallest rung
+    at rc 0 while the moves column said the top rung was 3.7x faster."""
     rows = [_row(2, 30.0), _row(4, 100.0)]
     assert ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")["picked"] == 4
     with pytest.raises(ValueError, match="pre-registered"):
@@ -98,11 +83,8 @@ def test_the_ranking_metric_is_PINNED_and_cannot_be_swapped_by_a_caller() -> Non
 
 
 def test_the_knee_percent_is_taken_from_SOURCE_in_both_modes() -> None:
-    """A report is a file, and a file can be edited between the drive that wrote it and the
-    reader that quotes it. `--select-only` used to re-derive the pick from the REPORT's own
-    `plan.knee_pct`: editing one integer printed `PICK = 2` (knee 60) or `PICK = 8` (knee 100)
-    at rc 0, in the tool's own arithmetic. That is the hole the plan loader closed, re-opened in
-    the mode a sitting record quotes."""
+    """A report is a file, and `--select-only` used to re-derive the pick from the REPORT's own
+    `knee_pct`: editing one integer moved the pick, at rc 0, in the tool's own arithmetic."""
     rows = [_row(2, 900.0), _row(4, 1400.0), _row(8, 1450.0)]
     assert ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")["picked"] == 4
     for edited in (60.0, 100.0, 94.9):
@@ -111,16 +93,14 @@ def test_the_knee_percent_is_taken_from_SOURCE_in_both_modes() -> None:
 
 
 def test_a_rung_row_that_smuggles_n_workers_1_is_refused_not_picked() -> None:
-    """A three-key hand-written dict used to yield `PICK = 1` — the one value R309(f) REJECTS —
-    at rc 0, printed with the ruling's own arithmetic."""
+    """A hand-written three-key dict used to yield the one pick value the rule REJECTS, at rc 0."""
     with pytest.raises(ValueError, match="REJECTS"):
         ws.select_knee([_row(1, 5.0)], knee_pct=95.0, metric="moves_per_min")
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_a_non_finite_ranking_value_is_refused(value: float) -> None:
-    """`json.loads` accepts `NaN` and `Infinity`. A NaN row used to vanish from the knee set with
-    no refusal; an inf row used to capture the pick."""
+    """`json.loads` accepts `NaN`/`Infinity`: a NaN row vanished from the set, an inf row won."""
     with pytest.raises(ValueError, match="NaN"):
         ws.select_knee([_row(2, 30.0), _row(4, value)], knee_pct=95.0, metric="moves_per_min")
 
@@ -131,23 +111,20 @@ def test_an_identically_zero_ranking_column_is_refused_not_picked_from() -> None
 
 
 def test_an_empty_report_says_so_instead_of_talking_about_memory() -> None:
-    """`rungs: []` used to print "no rung PASSED (a PLATEAU memory verdict is required)" — a
-    statement about MEMORY for a document that contains no rungs at all."""
+    """`rungs: []` used to print a statement about MEMORY for a document with no rungs at all."""
     selection = ws.select_knee([], knee_pct=95.0, metric="moves_per_min")
     assert selection["picked"] is None
     assert "NO RUNGS" in selection["reason"]
 
 
 def test_the_selection_block_names_the_rungs_that_did_not_pass() -> None:
-    """With an OOM at rung 8 and passes elsewhere, a reader of the QUOTED ARITHMETIC alone would
-    otherwise see `PICK = 2` with no mention of the OOM."""
+    """A reader of the quoted arithmetic alone would otherwise see `PICK = 2` and no OOM."""
     rows = [_row(2, 30.0), _row(4, 40.0, ws.GROWING), _row(8, 50.0, ws.OOM)]
     selection = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
     assert set(selection["notes"]) == {ws.GROWING, ws.OOM} - {ws.GROWING} | {ws.OOM}
     assert ws.OOM in selection["notes"]
 
 
-# ══ P8 — the exit codes ══════════════════════════════════════════════════════════════════
 def test_rc_is_zero_when_a_pick_was_made() -> None:
     rows = [_row(2, 30.0)]
     report = {"rungs": rows, "selection": ws.select_knee(rows, knee_pct=95.0,
@@ -163,15 +140,13 @@ def test_rc_is_one_when_rungs_were_measurable_and_none_passed() -> None:
 
 
 def test_rc_is_refused_when_nothing_was_measurable_at_all() -> None:
-    """A host with no CUDA counters cannot answer the question that was asked. `2` says that;
-    `1` would say the card failed, which is a different and false claim."""
+    """A host with no CUDA counters cannot answer the question; rc 1 would blame the card."""
     rows = [_row(2, 30.0, ws.REFUSED), _row(4, 40.0, ws.REFUSED)]
     report = {"rungs": rows, "selection": ws.select_knee(rows, knee_pct=95.0,
                                                          metric="moves_per_min")}
     assert ws.rc_for(report) == ws.RC_REFUSED == 2
 
 
-# ══ the arithmetic is printed, and it is re-derivable off-box ════════════════════════════
 def test_the_selection_screen_prints_every_input_the_rule_ran_on(capsys) -> None:
     rows = [_row(2, 30.0), _row(4, 39.9), _row(8, 41.2)]
     selection = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
@@ -214,8 +189,7 @@ def test_select_only_refuses_a_report_it_cannot_read(tmp_path: Path) -> None:
 
 
 def test_the_driver_refuses_to_default_either_of_its_two_inputs() -> None:
-    """A config this tool picked would measure a program nobody asked about; a plan it picked
-    would be a pre-registration nobody wrote."""
+    """A config this tool picked would measure a program nobody asked about."""
     assert ws.main([]) == ws.RC_REFUSED
     assert ws.main(["--config", "configs/run6.yaml"]) == ws.RC_REFUSED
     assert ws.main(["--plan", "tools/worker_sweep_plan.toml"]) == ws.RC_REFUSED
@@ -223,9 +197,8 @@ def test_the_driver_refuses_to_default_either_of_its_two_inputs() -> None:
 
 @pytest.mark.parametrize("verdict", [ws.RUNG_ERROR, ws.PRODUCER_DEAD])
 def test_a_ladder_of_unmeasurable_rungs_is_rc_2_not_rc_1(verdict: str) -> None:
-    """A rung that ERRORED or whose feeder DIED did not measure memory, so it is not evidence
-    that the card failed. rc 1 says "every measurable rung was GROWING or OOM"; the block's
-    Phase W posture branches on that distinction, and rc 1 would send a sitting to the wrong arm."""
+    """A rung that ERRORED or whose feeder DIED measured no memory, so it is not evidence that
+    the card failed; rc 1 claims every measurable rung was GROWING or OOM."""
     rows = [_row(2, 30.0, verdict), _row(4, 40.0, verdict)]
     report = {"rungs": rows,
               "selection": ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")}
@@ -234,9 +207,8 @@ def test_a_ladder_of_unmeasurable_rungs_is_rc_2_not_rc_1(verdict: str) -> None:
 
 
 def test_the_notes_print_on_the_NO_PICK_path_too(capsys) -> None:
-    """The line was added so a reader who quotes the arithmetic alone sees that the ladder had a
-    failing rung — and it sat BELOW `render_selection`'s early return, i.e. unreachable in
-    exactly the run where the reader most needs it (no pick, and the question is WHY)."""
+    """The notes must print on the NO-PICK path: the line sat BELOW `render_selection`'s early
+    return, unreachable in exactly the run where a reader most needs to know WHY."""
     rows = [_row(2, 30.0, ws.GROWING), _row(4, 40.0, ws.OOM)]
     selection = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
     assert selection["picked"] is None
@@ -246,14 +218,11 @@ def test_the_notes_print_on_the_NO_PICK_path_too(capsys) -> None:
     assert ws.OOM in text and "what the ladder DID return" in text
 
 
-# ══ R330(d) — PER-RUNG NOISE: each rung's own rel-SE, the MAX over the candidate set widens ══
 def test_the_widening_uses_the_MAX_rel_se_over_the_passing_set_not_the_best_rungs_or_a_scalar():
-    """THE PLANTED BREAK for R330(d). Rung 4 — the best — is perfectly quiet; rung 2 sits just
-    below the 95 % band and is noisy at 2 %. Under the RETIRED scalar floor taken at a quiet
-    reference rung (0.0), under the best rung's own noise (0.0), or under a MIN over the set, the
-    widening is 0, rung 2 stays out and the pick is 4. Under the max over the candidate set the
-    widening is `3 × 0.02 × 100 = 6`, the threshold falls from 95 to 89, rung 2 enters, and the
-    pick moves to 2. Each wrong reading leaves the pick at 4 and reds this row."""
+    """PLANTED BREAK. Rung 4 — the best — is quiet; rung 2 sits just below the 95 % band, noisy
+    at 2 %. A scalar floor, the best rung's own noise, or a MIN over the set all widen by 0 and
+    leave the pick at 4; the MAX over the candidate set widens `3 × 0.02 × 100 = 6`, the
+    threshold falls 95 → 89, and the pick moves to 2."""
     rows = [_row(2, 91.0, rel_se=0.02), _row(4, 100.0, rel_se=0.0)]
     sel = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
     assert sel["noise_rel_se_max"] == 0.02 and sel["noise_source_rung"] == 2
@@ -263,8 +232,7 @@ def test_the_widening_uses_the_MAX_rel_se_over_the_passing_set_not_the_best_rung
 
 
 def test_a_noisy_rung_that_did_not_pass_is_not_a_candidate_and_does_not_widen():
-    """The candidate set is the PASSING set: a GROWING rung with enormous noise is not a rung the
-    pick can be drawn from, so its noise widens nothing."""
+    """The candidate set is the PASSING set, so a GROWING rung's noise widens nothing."""
     rows = [_row(2, 91.0, rel_se=0.0), _row(4, 100.0, rel_se=0.0),
             _row(8, 120.0, ws.GROWING, rel_se=0.5)]
     sel = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
@@ -273,9 +241,8 @@ def test_a_noisy_rung_that_did_not_pass_is_not_a_candidate_and_does_not_widen():
 
 
 def test_a_rung_without_its_own_measured_rel_se_is_refused_never_defaulted():
-    """No scalar to pass, no default to fall to. A rung whose spread says `rel_se: None` (one
-    scored round) and a row with no spread block at all (a report written before the mechanism)
-    are both refused BY RUNG, with the metric named."""
+    """No scalar to pass and no default to fall to: a `rel_se: None` spread and a row with no
+    spread block at all are both refused BY RUNG, with the metric named."""
     with pytest.raises(ValueError, match=r"rung 2 carries no measured rel_se for 'moves_per_min'"):
         ws.select_knee([_row(2, 30.0, rel_se=None)], knee_pct=95.0, metric="moves_per_min")
     legacy = _row(4, 30.0)
@@ -291,8 +258,7 @@ def test_a_non_finite_negative_or_boolean_rel_se_is_refused(bad) -> None:
 
 
 def test_the_selection_block_carries_every_rungs_rel_se_so_the_widening_is_re_derivable():
-    """A reader of the block re-derives the widening from what it carries: every passing rung's
-    own rel-SE, which one was the max, and the adjustment it produced."""
+    """The block carries every passing rung's rel-SE, which was the max, and the adjustment."""
     rows = [_row(2, 30.0, rel_se=0.01), _row(4, 39.9, rel_se=0.03), _row(8, 41.2, rel_se=0.02)]
     sel = ws.select_knee(rows, knee_pct=95.0, metric="moves_per_min")
     assert sel["per_rung_rel_se"] == {"2": 0.01, "4": 0.03, "8": 0.02}
@@ -302,9 +268,8 @@ def test_the_selection_block_carries_every_rungs_rel_se_so_the_widening_is_re_de
 
 
 def test_rung_result_derives_rel_se_from_its_own_scored_rounds() -> None:
-    """The producer half: `RungResult.spread` states the rung's noise as sample-std / sqrt(n) /
-    mean over its SCORED rounds (warm-up excluded), `None` when a single round cannot, and
-    `select_knee` refuses that `None` rather than reading it as zero."""
+    """The producer half: `RungResult.spread` states the rung's noise over its SCORED rounds,
+    `None` when a single round cannot, and `select_knee` refuses that `None` as not-zero."""
     rates = [100, 110, 90, 105, 95]  # moves over a 60 s wall → moves_per_min == moves
     rounds = tuple(
         ws.RoundReading(index=i, warmup=(i == 0), wall_sec=60.0, games=1, moves=m, available=True,

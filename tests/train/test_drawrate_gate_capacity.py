@@ -1,33 +1,11 @@
-"""ADJ-D36 oracle — the draw-rate ring's capacity is the minted `consec`, derived, never
-a constant, so NO schema-legal `consec` is unfireable and the R251 cadence audit's
-published `earliest_fire_step` is deliverable by construction.
+"""Prove the draw-rate ring's capacity is the minted `consec`, derived rather than a constant.
 
-WHAT WENT WRONG. `step.py::_sample` trimmed the gate history to a literal
-`_GATE_HISTORY_DEPTH = 32` while `rules.py::check_draw_rate_collapse` refuses on
-`len(history) < consec`: any schema-legal `consec >= 33` (`ge=1`, no upper bound) was
-PERMANENTLY unfireable — armed in the config, absent in effect (the schema's own "fifth
-face") — while `Cadence.GATE_INTERVAL_CONSEC` computed a finite fire step for it and
-PUBLISHED that number as though the run could deliver it (gate 12 audited such a row
-GREEN). The fix derives the capacity from the ONE authority both sides already read:
-`train.draw_rate_abort.consec`. No literal, no new config key, no import-DAG edge.
+A literal history depth beside a rule that refuses on `len(history) < consec` made every `consec`
+above that depth permanently unfireable — armed in the config, absent in effect — while the
+cadence audit published a finite fire step for it.
 
-THE DRIVES BELOW STATE THE MUTATIONS THAT RED THEM:
-
-* a resurrected trim literal (any value: 32, or a "generous" 64) — the capacity pin
-  measures `len(ring) == consec` for consec 2 and 5 after 12 observations, and the
-  above-depth fire drive reds for any literal below its `consec=33`;
-* trim keyed to the WRONG spec field (`N_pool_min=10` here, deliberately != consec and
-  < the 12-observation drive) — the capacity pin reds on `len == 10`;
-* no trim at all (unbounded ring) — the capacity pin reds on `len == 12`;
-* trim on the SKIP path (a boundary that observes nothing must never touch the ring,
-  R92/BUG-1) — the blackout drive reds if the skip shrinks or resets the ring;
-* `>=` -> `>` on the rule's length gate — the fire drives red one observation late.
-
-The coordinator config comes from the production builder (`mantis.run.
-_step_coordinator_config`), and `_run_hard_abort_gates` is called DIRECTLY so one call is
-one gate boundary — same posture as `test_drawrate_gate_branch_flipset.py`, whose fakes
-are duplicated locally per R5 (no cross-test import). R7 / gate 6: nothing here writes a
-file.
+Killers: a resurrected trim literal of any value; a trim keyed to the wrong spec field; no trim at
+all; a trim on the SKIP path; `>=` -> `>` on the rule's length gate.
 """
 from __future__ import annotations
 
@@ -45,22 +23,18 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
-#: One above the DELETED `_GATE_HISTORY_DEPTH = 32` — the exact first value ADJ-D36 names
-#: as unfireable on the clipped code. A test INPUT, not an authority: the fix must make
-#: this value fireable without any shipped code knowing the number 32 ever existed.
+#: One above the deleted history-depth literal of 32 — the first value that was unfireable. A
+#: test INPUT, not an authority: no shipped code may know the number 32 ever existed.
 _ABOVE_OLD_DEPTH = 33
 
-#: `min_step=0` keeps the fire in reach of direct drives (the harness never advances
-#: `_train_step`); `N_pool_min=10` is deliberately != every `consec` used here AND below
-#: the 12-observation capacity drive, so a trim keyed to the wrong field is measurable.
+#: `min_step=0` keeps the fire in reach of direct drives; `N_pool_min=10` is deliberately
+#: unequal to every `consec` here and below the 12-observation drive, so a wrong-field trim shows.
 _SPEC = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
 
 
-# ── local fakes (R5: no cross-test import) ────────────────────────────────────────────
 class _Pool:
-    """The pool surface the draw-rate gate touches, and only that — counts are MUTABLE
-    (`set_counts`) so ONE coordinator can be driven through observation AND blackout
-    boundaries, which the blackout drive needs and a fixed-counts fake cannot do."""
+    """Serve the pool surface the draw-rate gate touches, with mutable counts so one
+    coordinator can be driven through observation and blackout boundaries alike."""
 
     games_completed = 0
 
@@ -118,15 +92,9 @@ def _coordinator(*, spec, pool):
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, config=config)
 
 
-# ── the fifth face, closed: an above-the-old-depth `consec` FIRES ─────────────────────
 def test_a_consec_above_the_old_depth_fires_at_the_consec_th_observation() -> None:
-    """`consec = 33` fires at exactly the 33rd observed boundary.
-
-    REDs on the clipped code (`del history[:-32]` caps `len(history)` at 32 forever, so
-    `len(history) >= 33` is unsatisfiable and the abort NEVER fires — the fifth face),
-    and reds on any resurrected literal below 33. The not-fired-through-32 half pins the
-    other direction: a change that fires EARLY (a widened tail, or length-gate drift) is
-    caught here too, not just the unfireable defect."""
+    """Prove a `consec` above the old depth fires at exactly its consec-th observation; the
+    not-fired-before half pins the other direction, so an early fire is caught too."""
     spec = dataclasses.replace(_SPEC, consec=_ABOVE_OLD_DEPTH)
     h = _coordinator(spec=spec, pool=_Pool((90, 100)))  # rate 0.9 >= threshold 0.4
     for boundary in range(1, _ABOVE_OLD_DEPTH):
@@ -141,14 +109,8 @@ def test_a_consec_above_the_old_depth_fires_at_the_consec_th_observation() -> No
 
 
 def test_the_ring_capacity_is_the_minted_consec_not_a_constant() -> None:
-    """After 12 healthy observations the ring holds EXACTLY `consec` entries — for
-    consec=2 AND consec=5, same drive.
-
-    The two-value drive is what makes this a DERIVATION pin rather than a size pin: any
-    constant capacity (32 resurrected, 64 "to be safe", or the wrong spec field —
-    `N_pool_min=10` sits between 5 and 12 on purpose) yields the same length for both
-    coordinators and reds at least one of the two assertions; no-trim-at-all yields 12
-    and reds both."""
+    """Prove the ring holds exactly `consec` entries after 12 observations, at two `consec`s: any
+    constant capacity yields the same length for both and reds at least one assertion."""
     for consec in (2, 5):
         h = _coordinator(spec=dataclasses.replace(_SPEC, consec=consec),
                          pool=_Pool((0, 100)))  # rate 0.0 < threshold: observe, never fire
@@ -162,16 +124,8 @@ def test_the_ring_capacity_is_the_minted_consec_not_a_constant() -> None:
 
 
 def test_a_skipped_boundary_neither_appends_nor_resets_above_the_old_depth() -> None:
-    """BUG-1's neither-advances-nor-resets contract, driven ABOVE the old depth.
-
-    20 observations, one below-`N_pool_min` blackout boundary, then 14 more observations:
-    `consec=34` fires at the 34th OBSERVATION, which is the 35th BOUNDARY. Reds if the
-    skip path touches the ring (trim-on-skip, reset-on-skip: the ring would shrink below
-    a satisfiable 34-tail, or the fire would need 34 fresh observations), and reds on the
-    clipped code, where 34 can never fire at all. Extends `test_gate_interval_decoupling.
-    py::test_p10_a_skipped_boundary_neither_advances_nor_resets_consec` past the deleted
-    depth, where the old code's behaviour DIVERGES from the contract instead of agreeing
-    with it."""
+    """Prove a skipped boundary neither appends to nor resets the ring, above the old depth:
+    `consec=34` fires at the 34th OBSERVATION, which is the 35th boundary."""
     spec = dataclasses.replace(_SPEC, consec=34)
     pool = _Pool((90, 100))
     h = _coordinator(spec=spec, pool=pool)
@@ -195,27 +149,19 @@ def test_a_skipped_boundary_neither_appends_nor_resets_above_the_old_depth() -> 
     )
 
 
-# ── the audit tie: the published earliest fire step is deliverable ────────────────────
 def test_the_published_earliest_fire_step_is_deliverable_above_the_old_depth() -> None:
-    """`Cadence.GATE_INTERVAL_CONSEC`'s published number, matched against a REAL fire at
-    a `consec` the old code could never satisfy — the ADJ-D36 false affirmative, killed.
+    """Match the cadence audit's published earliest fire step against a REAL fire.
 
-    At `gate_interval=1` a direct `_run_hard_abort_gates` call is one boundary, so the
-    member's `interval * max(consec, ceil(min_step/interval))` must equal the measured
-    fire boundary EXACTLY. On the clipped code this arithmetic answers 33.0 while the
-    machine never fires — the audit publishing a number the run structurally cannot
-    deliver is precisely what R251 exists to refuse, one knob over (LAW-07: the audit
-    input cites its live producer, and this drive is the citation)."""
+    At `gate_interval=1` one direct gate call is one boundary, so the published arithmetic must
+    equal the measured fire boundary exactly.
+    """
     spec = dataclasses.replace(_SPEC, consec=_ABOVE_OLD_DEPTH)
     h = _coordinator(spec=spec, pool=_Pool((90, 100)))
-    # The interval operand is READ OFF THE HARNESS CONFIG, never re-typed: this drive's
-    # whole point is that the published number and the machine share one authority, and a
-    # hand-copied interval would be that authority forked (the harness pins it to 1 so a
-    # direct `_run_hard_abort_gates` call is one boundary).
+    # Read off the harness config, never re-typed: a hand-copied interval would fork the one
+    # authority the published number and the machine are supposed to share.
     interval = h.config.gate_interval
-    # R265 / ADJ-D38: the interval is the row's SAMPLE-CLOCK PERIOD now, not operand 0 — the
-    # same value from the same harness config, passed where the clock supplies it in
-    # production (`SampleClock.GATE_BOUNDARY.period_steps`, off `monitor.gate_interval`).
+    # The interval is the row's sample-clock PERIOD, not an operand — the same place production
+    # supplies it from.
     published = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
         (spec.consec, spec.min_step), period_steps=interval)
     assert published == float(interval * _ABOVE_OLD_DEPTH), (

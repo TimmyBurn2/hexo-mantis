@@ -1,26 +1,11 @@
-// R8 justify: ONE suite-v2 section — "the search kind behind the seam" — and a section is
-// a unit. Its detector, its witnesses and its stated floor/envelope are the three halves of
-// a single claim, and the envelope's numbers are only meaningful beside the witness that
-// spends them.
-//! ⊕ SUITE V2 SECTION: the search kind.
-//!
-//! Suite v2's existing sections (`SEAM_V1_DESIGN.md` §3) are per-ARCH: perf floor, memory
-//! envelope, config partition. This is the same shape applied to the SEARCH KIND, which is
-//! the other thing behind the seam that a run's strength depends on and that nothing was
-//! making state its terms.
-//!
-//! RUST-SIDE, and the reason is where the object lives. The arch sections are Python because
-//! an arch is a Python object; a search kind is a Rust one, reachable from Python only
-//! through a config key whose own wire is pinned separately
-//! (`tests/config/test_every_key_has_consumer.py`, `tests/selfplay/test_pool_hparams.py`).
-//!
-//! - **DETECTOR** — the kind. Which search a tree runs is READABLE off the tree, and the
-//!   terms that follow from it move with it.
-//! - **WITNESS** — the parity vectors live in `mctx_parity.rs` and `mcts/parity_tests.rs`
-//!   (Mctx's own numbers). Here: a Gumbel root reaches the FULL legal set, and the
-//!   exported target puts mass on all of it and sums to 1.
-//! - **FLOOR / ENVELOPE** — the kind's pool terms, stated and derived rather than
-//!   transcribed.
+// R8 justify: ONE suite-v2 section — "the search kind behind the seam" — and a section is a
+// unit: detector, witnesses and stated floor/envelope are three halves of a single claim, and
+// the envelope's numbers are only meaningful beside the witness that spends them.
+//! SUITE V2 SECTION: the search kind — suite v2's per-ARCH shape applied to the other thing
+//! behind the seam that a run's strength depends on. RUST-SIDE because a search kind is a Rust
+//! object, reachable from Python only through a config key pinned separately. DETECTOR: the kind
+//! is readable off the tree and its terms follow it. WITNESS: a Gumbel root reaches the FULL
+//! legal set and its exported target sums to 1. FLOOR/ENVELOPE: derived, never transcribed.
 
 use mantis_core::Board;
 use mantis_search::{
@@ -28,19 +13,13 @@ use mantis_search::{
     MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
 };
 
-/// Board stride for a 19-window encoding with a pass slot — the shape every in-src MCTS
-/// fixture uses.
+/// Board stride for a 19-window encoding with a pass slot.
 const N_ACTIONS: usize = 19 * 19 + 1;
 
 /// A radius-8 board whose legal set clears the per-node cap, so the two kinds are
-/// DISTINGUISHABLE at the root.
-///
-/// GROWN UNTIL IT CLEARS THE CAP, not a stone list tuned to one. This was two adjacent
-/// stones, which put 232 moves in the legal set — comfortably over a 192-wide cap and under
-/// the 1024-wide one R347(c) minted, so the fixture stopped being able to tell the kinds
-/// apart the moment the constant moved. Stepping outward by one radius keeps every move
-/// legal from the stone before it and grows the union of balls monotonically, so the loop
-/// terminates against any cap the pool can serve.
+/// DISTINGUISHABLE at the root. GROWN UNTIL IT CLEARS THE CAP rather than tuned to one: two
+/// adjacent stones put 232 moves in the legal set, over a 192-wide cap but under the 1024-wide
+/// one, so the fixture stopped telling the kinds apart the moment the constant moved.
 fn wide_board() -> Board {
     let mut board = Board::new();
     board.set_legal_move_radius(8);
@@ -63,14 +42,9 @@ fn wide_board() -> Board {
     board
 }
 
-/// Expand the root once with a uniform policy and a stated leaf value.
-///
-/// THE SERIALISING LOCK THIS FILE USED TO HOLD IS GONE (R347). The omitted-prior counters
-/// were process-global, so cargo running this file's tests on threads of one process meant
-/// the omitted-mass witness measured its own expansion plus whichever sibling expanded
-/// inside its window — it once read "2 truncating expansions" for one truncating expansion,
-/// which is a wrong number rather than a flaky one. The counters are now per-`MCTSTree`, so
-/// the window belongs to the tree that opened it and no sibling can enter it.
+/// Expand the root once with a uniform policy and a stated leaf value; no serialising lock,
+/// because the omitted-prior counters are per-`MCTSTree` rather than process-global (as globals
+/// they once made the witness read "2 truncating expansions" for one).
 fn expand_root(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
     expand_root_unlocked(kind, value)
 }
@@ -79,8 +53,7 @@ fn expand_root(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
 fn expand_root_unlocked(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
     let board = wide_board();
     let mut tree = MCTSTree::new(1.5);
-    // Quiescence OFF so the backed-up value is the supplied one and the raw-value witness
-    // reads what it was handed rather than a corrected version of it.
+    // Quiescence OFF so the backed-up value is the supplied one rather than a corrected version.
     tree.configure_quiescence(false, 0.0);
     tree.configure_search(kind, 50.0, 0.1);
     tree.new_game(board.clone());
@@ -91,7 +64,7 @@ fn expand_root_unlocked(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
     (tree, board)
 }
 
-// ── DETECTOR ────────────────────────────────────────────────────────────────────
+// DETECTOR
 
 #[test]
 fn the_kind_is_readable_off_the_tree_and_carries_its_root_cap() {
@@ -119,8 +92,7 @@ fn the_kind_is_readable_off_the_tree_and_carries_its_root_cap() {
     assert_eq!(tree.root_children_cap(), MAX_CHILDREN_PER_NODE, "and back");
 }
 
-/// THE PUCT ARM IS A REAL ARM, not the absence of Gumbel. It truncates its root at the
-/// per-node cap, keeps no raw values, and pays for neither.
+/// THE PUCT ARM IS A REAL ARM: it truncates its root at the per-node cap and keeps no raw values.
 #[test]
 fn the_puct_kind_keeps_the_per_node_root_and_no_raw_values() {
     let (puct, _) = expand_root(SearchKind::Puct, 0.25);
@@ -137,10 +109,8 @@ fn the_config_spelling_round_trips_and_an_unknown_kind_is_refused() {
     for k in [SearchKind::Puct, SearchKind::Gumbel] {
         assert_eq!(SearchKind::from_config_str(k.as_config_str()), Some(k));
     }
-    // REFUSED, not defaulted. A kind that falls back to `puct` on a typo is the
-    // silent-fallback class LAW-11 closes — and the four keys this one replaces
-    // (`gumbel_mcts`, `gumbel_variant`, and a `completed_q_values` on each of two
-    // sections) must not parse either.
+    // REFUSED, not defaulted: a kind that falls back to `puct` on a typo is the silent-fallback
+    // class LAW-11 closes, and the four keys this one replaces must not parse either.
     for bad in [
         "",
         "PUCT",
@@ -171,7 +141,7 @@ fn the_kind_is_the_only_authority_over_the_target() {
     );
 }
 
-// ── WITNESS ─────────────────────────────────────────────────────────────────────
+// WITNESS
 
 #[test]
 fn the_gumbel_root_holds_the_full_legal_set_and_the_puct_root_does_not() {
@@ -218,13 +188,9 @@ fn the_gumbel_root_holds_the_full_legal_set_and_the_puct_root_does_not() {
         total_expansions, 1,
         "the truncating expansion was not counted at all"
     );
-    // AND THE DROPPED MASS IS ZERO HERE, WHICH IS A STRUCTURAL FACT AND NOT A GAP. This is
-    // the DENSE expand: its policy vector covers the 19-window's 361 cells and nothing else,
-    // so an off-window cell's sort prior is 0. Once the per-node cap exceeds 361 — R347(c)
-    // made it 1024 — every child the dense picker can drop is off-window and therefore
-    // zero-prior, so `mass_micros` cannot be positive on this arm at any board. The mass
-    // MECHANISM is witnessed where it can bite, at an explicit sub-window cap, in
-    // `mcts/tests.rs::omitted_prior_mass_is_the_tail_the_cap_dropped`.
+    // THE DROPPED MASS IS ZERO HERE STRUCTURALLY: this dense expand's policy covers the
+    // 19-window's 361 cells, so any child the picker can drop is off-window and zero-prior once
+    // the per-node cap exceeds 361. The mechanism is witnessed at a sub-window cap in `mcts`.
     assert_eq!(
         (mass_micros, omitted_expansions),
         (0, 0),
@@ -238,9 +204,8 @@ fn the_exported_target_covers_the_full_legal_set_and_sums_to_one() {
     let legal = wide_board().legal_moves().len();
     let (tree, _) = expand_root(SearchKind::Gumbel, 0.25);
 
-    // The LEGAL-SET exporter, not the dense one: at radius 8 many legal cells fall outside
-    // the 19-window, and the dense export drops `action >= n_actions` by construction. The
-    // ragged exporter routes them to `overflow`, which is why every graph run uses it.
+    // The LEGAL-SET exporter, not the dense one: at radius 8 many legal cells fall outside the
+    // 19-window, and the dense export drops `action >= n_actions` by construction.
     let target = tree.get_improved_policy_ls(N_ACTIONS, 50.0, 0.1);
     let support = target.dense.iter().filter(|&&m| m > 0.0).count() + target.overflow.len();
     assert_eq!(
@@ -272,7 +237,7 @@ fn only_the_gumbel_kind_keeps_a_raw_root_value() {
     );
 }
 
-// ── FLOOR / ENVELOPE ────────────────────────────────────────────────────────────
+// FLOOR / ENVELOPE
 
 #[test]
 fn the_kind_states_its_pool_envelope() {
@@ -282,9 +247,8 @@ fn the_kind_states_its_pool_envelope() {
         MAX_ARMED_SIMS_GUMBEL,
         (MAX_NODES - MAX_ROOT_CHILDREN) / (4 * MAX_CHILDREN_PER_NODE)
     );
-    // Compared through locals so clippy does not fold two consts into a literal truth: the
-    // assertion is about the RELATION surviving a change to either constant, which is
-    // exactly what a const-folded check would stop noticing.
+    // Compared through locals so clippy cannot fold two consts into a literal truth: the claim
+    // is that the RELATION survives a change to either constant.
     let (gumbel_ceiling, puct_ceiling) = (MAX_ARMED_SIMS_GUMBEL, MAX_ARMED_SIMS);
     assert!(
         gumbel_ceiling < puct_ceiling,
@@ -292,8 +256,8 @@ fn the_kind_states_its_pool_envelope() {
          MUST be the lower of the two"
     );
 
-    // The envelope's other term, stated rather than measured: the Gumbel kind allocates one
-    // f32 per pool slot for the raw values, and the PUCT kind allocates none.
+    // The envelope's other term: the Gumbel kind allocates one f32 per pool slot for the raw
+    // values, and the PUCT kind allocates none.
     assert_eq!(
         std::mem::size_of::<f32>() * MAX_NODES,
         4 * MAX_NODES,
@@ -303,9 +267,8 @@ fn the_kind_states_its_pool_envelope() {
 
 #[test]
 fn a_search_at_the_gumbel_ceiling_still_fits_the_pool() {
-    // The bound's PURPOSE, checked arithmetically rather than by running a full-ceiling
-    // search: the worst case is `4 * sims` expansions at the per-node cap, plus one root at
-    // the root cap, and it must fit MAX_NODES. `finish_expansion` panics if it does not.
+    // The bound's PURPOSE, checked arithmetically: the worst case is `4 * sims` expansions at
+    // the per-node cap plus one root at the root cap, and it must fit MAX_NODES.
     let worst_case = 4 * MAX_ARMED_SIMS_GUMBEL * MAX_CHILDREN_PER_NODE + MAX_ROOT_CHILDREN;
     assert!(
         worst_case <= MAX_NODES,
@@ -313,22 +276,14 @@ fn a_search_at_the_gumbel_ceiling_still_fits_the_pool() {
     );
 }
 
-/// The interior selector is WIRED, not merely present.
-///
-/// `mcts/parity_tests.rs` pins the interior score against Mctx's own `_prepare_argmax_input`,
-/// which proves the arithmetic and says nothing about whether the descent calls it. This
-/// drives the same tree under both kinds with the root pinned to one child — so the only
-/// thing that can differ is selection BELOW the root — and requires the two visit
-/// distributions to disagree.
+/// The interior selector is WIRED, not merely present: the parity tests pin its arithmetic and
+/// say nothing about whether the descent calls it, so this drives one tree under both kinds with
+/// the root pinned to one child and requires the visit distributions to differ.
 #[test]
 fn the_interior_selector_changes_where_the_visits_land() {
     fn drive(kind: SearchKind) -> Vec<u32> {
-        // A NARROW board, deliberately: this test needs the two selectors to COMPETE over
-        // children that get REVISITED, and a fixture wide enough to exercise the per-node cap
-        // gives the drive more children than it has simulations — at which point both kinds
-        // spend every sim on a fresh unvisited child in prior order and agree by exhaustion
-        // rather than by running the same selector. The cap is `wide_board`'s subject; this
-        // one's is the descent.
+        // A NARROW board deliberately: the selectors must compete over REVISITED children, and
+        // a board wide enough to hit the per-node cap makes both kinds agree by exhaustion.
         let mut board = Board::new();
         board.set_legal_move_radius(2);
         board
@@ -339,8 +294,8 @@ fn the_interior_selector_changes_where_the_visits_land() {
         tree.configure_quiescence(false, 0.0);
         tree.configure_search(kind, 50.0, 0.1);
         tree.new_game(board);
-        // A SKEWED policy: under a uniform one, PUCT and the improved-policy argmax can
-        // agree by symmetry and the comparison would pass on a dead wire.
+        // A SKEWED policy: under a uniform one the two selectors can agree by symmetry and the
+        // comparison would pass on a dead wire.
         let policy: Vec<f32> = (0..N_ACTIONS)
             .map(|i| (1.0 + (i % 7) as f32) / (4.0 * N_ACTIONS as f32))
             .collect();
@@ -358,8 +313,7 @@ fn the_interior_selector_changes_where_the_visits_land() {
             if boards.is_empty() {
                 break;
             }
-            // Values that vary per simulation, so completed-Q has something to complete
-            // with and the two selectors have a reason to disagree.
+            // Values that vary per simulation, so completed-Q has something to complete with.
             let value = 0.4 - 0.05 * (i % 5) as f32;
             tree.expand_and_backup(std::slice::from_ref(&policy), &[value]);
         }
@@ -387,16 +341,9 @@ fn the_interior_selector_changes_where_the_visits_land() {
          descent is still running PUCT, or this fixture cannot tell the two selectors apart."
     );
 }
-
-/// THE ROUND'S WIDTH IS THE HALVING PHASE'S, exactly — measured on the tree rather than
-/// inferred from a driven aggregate.
-///
-/// The first phase considers `m` candidates, so the first round is `m` descents wide; after
-/// those `m` candidates are visited once each the schedule's considered level advances and
-/// the next round is `m` wide again, and the widths only start halving when the level runs
-/// past what a candidate has. This pins the FIRST two rounds, which is where an
-/// off-by-one in the run-length read would show up, and the tail is covered by the driven
-/// mean in `mantis-selfplay/tests/gumbel_round_batching.rs`.
+/// The first phase considers `m` candidates, so the first two rounds are each `m` descents wide
+/// and the widths only halve once the considered level runs past what a candidate has, which is
+/// where an off-by-one in the run-length read would show up.
 #[test]
 fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
     const M: usize = 8;
@@ -420,8 +367,7 @@ fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
          narrower round is a run-length read that stopped early, and a wider one is reaching \
          candidates the schedule has not considered yet"
     );
-    // Every candidate is a DISTINCT root child: a round that repeated one would spend the
-    // phase on a single subtree.
+    // Every candidate is a DISTINCT root child, or a round spends the phase on one subtree.
     let mut sorted = first.clone();
     sorted.sort_unstable();
     sorted.dedup();
