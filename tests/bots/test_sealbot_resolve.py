@@ -3,7 +3,8 @@
 At HEAD `bots/resolve.py` refuses all three external kinds through an ENV-KEY channel
 (`resolve.py:35-39,61-71`), which DESIGN_A §2.2(2) deletes as argued (R125/R79): for
 `sealbot` the authority for where the engine lives is `vendor/pins.toml` + `make vendor`,
-and two authorities for one fact is R79's exact prohibition; for `kraken`/`strix` the key
+and two authorities for one fact is R79's exact prohibition; for the deleted `kraken`/`strix`
+kinds the key
 is a silent-arming surface with nothing behind it, since R139 rules both out for run5 with
 named grounds.
 
@@ -61,17 +62,10 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src"
 _BOTS_SRC = _SRC / "mantis" / "bots"
 
-#: DESIGN_A §2.2(3): R139's own words, per rung. Asserted as EXACT substrings — a
-#: paraphrase is a drift, and the phase's whole claim about kraken/strix is that a reader
-#: of the log can tell a ruled skip from a broken one.
-_R139_GROUNDS = {"kraken": "weights not cleanly accessible", "strix": "actively changing"}
-
 #: The three env keys DESIGN_A §2.2(2) deletes. Named here, in the ORACLE, because after
 #: the rewrite there is nowhere in `src/` left to read them from.
 _DEAD_ENV_KEYS = {
     "sealbot": "MANTIS_BOT_SEALBOT",
-    "kraken": "MANTIS_BOT_KRAKEN",
-    "strix": "MANTIS_BOT_STRIX",
 }
 
 #: The two commands a skip reason must name. Not host paths and not endpoints: `make
@@ -180,32 +174,6 @@ def test_sealbot_refusal_reason_names_exactly_its_own_missing_step(
     )
 
 
-# ── O-A2: R139's grounds, verbatim and per rung ─────────────────────────────────────────
-@pytest.mark.parametrize("kind", ["kraken", "strix"])
-@pytest.mark.parametrize("direction", ["carries_own_grounds", "lacks_the_other_rungs"])
-def test_operator_authorized_skip_carries_r139_grounds_per_rung(kind: str, direction: str) -> None:
-    """O-A2. `direction` splits the two halves so a mutation that paraphrases ONE rung's
-    grounds (M-A2) is attributable to that rung rather than to "the grounds test"."""
-    from mantis.bots.resolve import resolve_bot
-
-    other = "strix" if kind == "kraken" else "kraken"
-    with pytest.raises(RungUnresolvable) as exc:
-        resolve_bot(kind, depth=None, opponent_sims=128)
-    reason = exc.value.reason
-    if direction == "carries_own_grounds":
-        assert _R139_GROUNDS[kind] in reason, reason
-        assert "R139" in reason, reason
-        assert "operator-authorized" in reason, (
-            f"R143 calls these skips OPERATOR-AUTHORIZED, not a dispatcher shortfall; a "
-            f"reader of the log must be able to tell a ruled skip from a broken one: {reason}"
-        )
-    else:
-        assert _R139_GROUNDS[other] not in reason, (
-            f"{kind}'s skip reason carries {other}'s grounds — the grounds are PER RUNG "
-            f"(R139), and a shared string is a false diagnosis: {reason}"
-        )
-
-
 # ── R326(e): the depth-6 sealbot rung is EXCLUDED from the default battery ──────────────
 def test_the_excluded_sealbot_depth_refuses_as_an_operator_authorized_skip() -> None:
     """R326(e). The rung is minted in all seven configs and cannot finish inside
@@ -240,7 +208,9 @@ def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> N
     `sealbot_d5` is the rung that carries `wr_sealbot` — the gate's own sealbot signal — so an
     exclusion that caught the kind rather than the depth would silently disarm the eval gate's
     only resolvable opponent while looking like a narrow skip. Driven against the LIVE ladder
-    rather than a literal, so a re-minted ladder moves this row with it.
+    rather than a literal, so a re-minted ladder moves this row with it — and the ladder HAS
+    been re-minted since (R346(f) took the kraken/strix rungs and `sealbot_d6` with them), so
+    the assertion is that a survivor remains rather than that the exclusion is a proper subset.
 
     MUTATION THAT REDS IT: the guard keyed on `kind == "sealbot"` instead of on the depth."""
     import yaml
@@ -251,9 +221,11 @@ def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> N
     sealbot_depths = {r["depth"] for r in rungs["eval"]["ladder"]["rungs"]
                       if r["bot"] == "sealbot"}
     excluded = set(_R326_EXCLUDED_SEALBOT_DEPTHS)
-    assert excluded < sealbot_depths, (
-        f"the exclusion must be a PROPER subset of run5's sealbot depths {sorted(sealbot_depths)}; "
-        f"excluding {sorted(excluded)} leaves nothing behind and disarms wr_sealbot"
+    assert sealbot_depths, "run5 mints no sealbot rung; this row would assert nothing"
+    assert sealbot_depths - excluded, (
+        f"the exclusion {sorted(excluded)} covers every sealbot depth run5 mints "
+        f"{sorted(sealbot_depths)} — that disarms wr_sealbot, the gate's only resolvable "
+        "opponent signal"
     )
     survivor = min(sealbot_depths - excluded)
     assert survivor not in _R326_EXCLUDED_SEALBOT_DEPTHS, survivor
@@ -283,28 +255,17 @@ def test_the_exclusion_fires_BEFORE_the_extension_probe() -> None:
     assert "operator-authorized skip (R139)" in exc.value.reason, exc.value.reason
 
 
-def test_the_excluded_rungs_grounds_are_not_shared_with_kraken_or_strix() -> None:
-    """The same per-rung discipline R139 imposes on kraken and strix, extended to the third
-    ruled skip: a shared grounds string is a false diagnosis."""
-    from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
-
-    for grounds in _R326_EXCLUDED_SEALBOT_DEPTHS.values():
-        for kind, other in _R139_GROUNDS.items():
-            assert other not in grounds, f"the depth exclusion carries {kind}'s grounds"
-
-
 # ── O-A3: the env channel is GONE — behaviour and source, two observers ─────────────────
-@pytest.mark.parametrize("kind", ["sealbot", "kraken", "strix"])
+@pytest.mark.parametrize("kind", sorted(_DEAD_ENV_KEYS))
 def test_setting_the_deleted_env_key_changes_nothing(
     monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
     """O-A3 arm (a). Compares the outcome CLASS with the key deleted vs set to a value that
     looks like the old contract's payload.
 
-    Only the sealbot parametrization pins the vendor environment (`_no_vendor_root`), and
-    deliberately: kraken/strix must red HERE by ASSERTION on the two reasons differing —
-    the defect this arm exists to catch — not by an `ImportError` on a seam they do not
-    use. Under the shipped `resolve.py:63-71` the two reasons differ for all three kinds.
+    The sealbot parametrization pins the vendor environment (`_no_vendor_root`). It used to
+    run beside `kraken` and `strix`, which had no vendor seam; both bot kinds are deleted, so
+    the map is the parametrization and a kind that leaves the resolver leaves this row.
     """
     env_key = _DEAD_ENV_KEYS[kind]
     if kind == "sealbot":

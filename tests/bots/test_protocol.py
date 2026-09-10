@@ -5,7 +5,7 @@ RED-at-import until IMPL writes `mantis.bots.protocol` / `mantis.bots.random_bot
 before any port code exists.
 
 Rung-resolution census at HEAD (DESIGN.md census verdict): 0 of 6 ladder rungs resolve
-locally — sealbot/kraken/strix are WP12-R property. `resolve_bot` must raise
+locally — sealbot is WP12-R property. `resolve_bot` must raise
 `RungUnresolvable` for each, with a reason string that DISTINGUISHES "env key unset" from
 "env key set but no adapter installed" (dispatch: env keys / vendor pins only, no host
 path, no default endpoint — a set-but-unadapted env key is not a silent fallback to a
@@ -22,15 +22,13 @@ from mantis.bots import BotProtocol, RandomBot, RungUnresolvable, resolve_bot
 
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis" / "bots"
 
-_KNOWN_KINDS = ("random", "sealbot", "kraken", "strix")
+_KNOWN_KINDS = ("random", "sealbot")
 #: ⊕ WP12-R Phase A: these keys are DELETED from `src/` (DESIGN_A §2.2(2)). They survive
 #: HERE, in the oracle, as the names a refusal reason may never speak — which is the only
 #: thing left to say about them. The module docstring above describes the pre-Phase-A
 #: contract and is retained as provenance for what the rewritten row below replaced.
 _ENV_KEYS = {
     "sealbot": "MANTIS_BOT_SEALBOT",
-    "kraken": "MANTIS_BOT_KRAKEN",
-    "strix": "MANTIS_BOT_STRIX",
 }
 
 
@@ -74,7 +72,7 @@ def test_resolver_resolves_random_locally():
     assert move in [(0, 0), (1, 1)]
 
 
-@pytest.mark.parametrize("kind", ["sealbot", "kraken", "strix"])
+@pytest.mark.parametrize("kind", sorted(_ENV_KEYS))
 def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
     """⊕ WP12-R Phase A rewrite (PREREG_A §9, "Modified, not added").
 
@@ -87,9 +85,10 @@ def test_external_kinds_carry_a_reason_that_names_no_env_key(kind, monkeypatch):
 
     What survives, and what this row now pins, is the invariant BOTH contracts share: an
     external kind that cannot resolve says so with a `.rung` and a non-empty `.reason`, and
-    the reason names NO environment variable. The parametrization stays at 3 deliberately —
-    a rewrite that quietly dropped one would eat a test from Phase A's pre-registered band
-    and mask an under-delivery.
+    the reason names NO environment variable. `kraken` and `strix` were the other two
+    parametrized kinds and are DELETED bot kinds now, so the parametrization is derived from
+    `_ENV_KEYS` rather than typed — a kind that leaves the resolver leaves this row with it,
+    and one that arrives has to be added to the map to be excused.
 
     Not a duplicate of O-A1/O-A2 (`tests/bots/test_sealbot_resolve.py`): those assert WHICH
     command each refusal names and that kraken/strix carry R139's grounds per rung. This row

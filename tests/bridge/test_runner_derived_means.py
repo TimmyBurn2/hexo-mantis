@@ -29,20 +29,15 @@ ZERO_GUARDED_MEANS = [
     "mcts_mean_depth",
     "mcts_mean_root_concentration",
 ]
-#: Means that report `None` when `cluster_variance_sample_count` is 0 (R249).
-CLUSTER_MEANS = [
-    "cluster_value_std_mean",
-    "cluster_policy_disagreement_mean",
-]
-DERIVED_MEANS = ZERO_GUARDED_MEANS + CLUSTER_MEANS
+DERIVED_MEANS = list(ZERO_GUARDED_MEANS)
 
 
 def _fresh_runner():
-    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, encoding_name="v6")
+    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, encoding_name="gnn_axis_v1")
     return _engine.SelfPlayRunner(cfg)
 
 
-def test_four_derived_means_present_and_finite():
+def test_every_derived_mean_is_present_and_finite():
     runner = _fresh_runner()
     for name in DERIVED_MEANS:
         val = getattr(runner, name)
@@ -58,31 +53,11 @@ def test_mcts_means_keep_the_zero_guard_on_an_empty_runner():
         assert getattr(runner, name) == 0.0, f"{name} zero-guard changed unannounced"
 
 
-def test_cluster_means_read_none_not_zero_at_zero_samples():
-    """R249 across the REAL FFI boundary — the producer test for the fix.
-
-    A fresh runner has `cluster_variance_sample_count == 0`, and that is exactly the state
-    run5's graph arm never leaves: the variance atomics are unreachable there. The getters
-    must report `None` (no measurement), which is what lets the event builder drop the
-    fields instead of publishing the 0.0 that made `iteration_complete` lie for a whole run.
-
-    FALSIFYING MUTATION: restore `derived_mean_f64`'s zero-count `0.0` -> this test RED.
-    """
-    runner = _fresh_runner()
-    assert runner.cluster_variance_sample_count == 0
-    for name in CLUSTER_MEANS:
-        assert getattr(runner, name) is None, (
-            f"{name} on a zero-sample runner must be None, got "
-            f"{getattr(runner, name)!r} — a mean over zero samples is not a measurement"
-        )
-
-
 def test_raw_count_getters_present():
     """The raw atomic count getters the means derive from are plain loads and
     read 0 on a fresh runner."""
     runner = _fresh_runner()
     assert runner.mcts_quiescence_fires == 0
-    assert runner.cluster_variance_sample_count == 0
     assert runner.games_completed == 0
     assert runner.get_win_stats() == (0, 0, 0)
 

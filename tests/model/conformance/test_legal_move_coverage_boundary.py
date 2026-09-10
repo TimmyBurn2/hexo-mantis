@@ -1,11 +1,8 @@
-# >300 justify (R8): the two arms answer the same question about different producers, and each
-# arm's controls only mean anything beside the arm they control — the graph arm's real-path
-# control and the dense arm's engine-read coverage fact are the two places where a natural
-# workaround silently removes the second producer, and both must go red in the same file.
-"""T4 — the action space's legal-move coverage: exact on the graph arm, a derived BOUNDARY on
-the dense arm.
-
-TWO GENUINELY DIFFERENT ARMS, and the names say which is which.
+# >300 justify (R8): the arm and every control that shows it can refuse are ONE unit — the
+# real-path control, the length-preserving substitution and the radius refusal only mean
+# anything beside the arm they control, and a workaround that silently removes the second
+# producer has to go red in the same file as the arm it removed it from.
+"""T4 — the action space's legal-move coverage, exact on the graph arm.
 
 GRAPH ARM — TWO PRODUCERS, and they cannot collude. `mantis-graph` computes the legal set from
 STONES ALONE (`legal_moves_from_stones`, `lib.rs:393`, called at `:483` inside
@@ -31,28 +28,11 @@ THE SHARED RADIUS IS AN ASSERTION, NOT AN ASSUMPTION. The wire's radius comes fr
 under a mismatched encoding must produce a NAMED REFUSAL rather than a red set-comparison that
 a reader would take for a completeness bug.
 
-DENSE ARM — ONE PRODUCER AND A DERIVED BOUNDARY, which is why this module is named `_boundary`:
-a green means "the boundary is unchanged", never "coverage is correct". The tier says the
-engine's coverage boundary equals the arithmetic implied by the engine-RESOLVED window size and
-legal-move radius. A FIX to CNN-3 changes that arithmetic and REDS this tier, which is correct.
-
-THE BOUNDARY IS TWO-SIDED AND ASYMMETRIC, because the centre TRUNCATES. Coverage on an axis
-needs BOTH `(max - c) + R <= half` and `(c - min) + R <= half`, with `half = (S - 1) / 2` and
-`S`, `R` read off the CONSTRUCTED BOARD (`Board.cluster_window_size()`, `.legal_move_radius()`)
-— never from `spec.cluster_window_size`, which is the string `"none"` on `v6`, the encoding
-this arm covers. On an ODD span the two sides differ by one and WHICH SIDE IS FARTHER FLIPS
-with the sign of the bbox sum, so a single-sided floor half-span `k` is one cell too permissive;
-the control below shows `k` predicting coverage where the engine has none.
-
-THE COVERAGE FACT COMES FROM THE ENGINE, NOT FROM A PYTHON RE-IMPLEMENTATION. If the fact were
-also this tier's arithmetic, the gate would prove the tier self-consistent and nothing else —
-ZERO producers. It is read from `Board.to_flat` (`board.rs:359-361` → `window_flat_idx`,
-`core.rs:393-398`), whose off-window sentinel is `usize::MAX`.
-
-DENSE SCOPE, both halves required: the witness is constructed SINGLE-CLUSTER, because the
-boundary is derived for one cluster and one window; and EMPTY boards are excluded, because
-`moves.rs:109-115` emits a fixed region regardless of `R` and the ball geometry the boundary
-rests on does not apply.
+THE DENSE ARM IS GONE. It was one producer and a derived boundary — the engine's coverage
+boundary against the arithmetic implied by `Board.cluster_window_size()` and
+`.legal_move_radius()` — and the K-cluster window it rested on went with the grid path
+(R346(f)). What is left is the two-producer graph arm, which is the half that could never
+collude.
 """
 from __future__ import annotations
 
@@ -65,7 +45,6 @@ from mantis.selfplay.graph_collate import GraphWirePayload
 from _corpus import (
     ConformanceRefusal,
     build_board,
-    cluster_frame_centre,
     graph_wire_for,
     require_corpus_member,
     roster,
@@ -251,7 +230,10 @@ def test_the_arm_matrix_the_SPECS_declare_equals_the_one_the_ENGINE_admits(deriv
     derived("t4.arm_matrix.engine_admitted", sorted(admitted))
     derived("t4.arm_matrix.cardinality", require_arm_matrix_agreement(declared, admitted))
     assert any(arm == ARM_GRAPH for _, arm in declared), "no graph arm — the tier has no subject"
-    assert any(arm == ARM_DENSE for _, arm in declared), "no dense arm — the tier has no subject"
+    assert not any(arm == ARM_DENSE for _, arm in declared), (
+        "a registered encoding claims the DENSE arm, which R346(f) deleted — the engine would "
+        "have to refuse its own registry row for the matrix to still agree"
+    )
 
 
 class _ArmClaim:
@@ -313,28 +295,26 @@ def test_the_REAL_PATH_control_REDS_on_a_wrong_position():
 
 
 def test_a_MISMATCHED_radius_is_refused_by_name():
-    """PB-34. A grid encoding's Board against a graph spec must refuse, not produce a red set
-    comparison that reads as a completeness bug.
+    """PB-34. A Board built under one encoding, checked against a spec at a DIFFERENT radius,
+    must refuse — not produce a red set comparison that reads as a completeness bug.
 
-    THE PAIR IS SEARCHED FOR, NOT TAKEN AS "THE FIRST OF EACH", and the difference is not
-    cosmetic. `roster()` iterates the registry in an UNORDERED way — observed as
-    `v6w25, v6, gnn_axis_r8, v6_live2_ls, gnn_axis_v1` in one run and differently in another —
-    so "the first grid" and "the first graph" are whichever the iteration happened to yield.
-    While `gnn_axis_v1` (radius 6) was the only graph row, no ordering could collide with a
-    grid row, because none is at 6. R328(b) registered `gnn_axis_r8` at radius 8 and `v6w25` is
-    also at 8, so an ordering that yields that pair made this control fail its own precondition
-    — an ORDER-DEPENDENT red that passes when the file is run alone. Searching for a pair whose
-    radii differ asks for what the control actually needs and is order-independent.
+    THE PAIR IS SEARCHED FOR, NOT TAKEN AS "THE FIRST TWO", and the difference is not cosmetic.
+    `roster()` iterates the registry in an UNORDERED way, so "the first" and "the second" are
+    whichever the iteration happened to yield, and a pair that happens to share a radius makes
+    the control fail its own precondition — an ORDER-DEPENDENT red that passes when the file is
+    run alone. Searching for a pair whose radii differ asks for what the control needs and is
+    order-independent. The pair used to be one grid row and one graph row; since R346(f) both
+    members are graph rows, which is why the search is over the whole roster both ways.
     """
     pair = next(
-        ((grid, graph) for graph in roster() if graph.is_graph
-         for grid in roster() if not grid.is_graph
-         and build_board(grid.name, [(0, 0), (1, 0)]).legal_move_radius() != graph.graph_radius),
+        ((other, graph) for graph in roster() if graph.is_graph
+         for other in roster()
+         if build_board(other.name, [(0, 0), (1, 0)]).legal_move_radius() != graph.graph_radius),
         None,
     )
     if pair is None:
         pytest.fail(
-            "no grid/graph pair in the registry has differing radii, so a radius MISMATCH is "
+            "no pair in the registry has differing radii, so a radius MISMATCH is "
             "unconstructible and this control has no subject"
         )
     grid_spec, graph_spec = pair
@@ -361,273 +341,3 @@ def test_an_EMPTY_stone_bearing_graph_partition_is_refused():
     assert require_stone_bearing_partition(len(stone_bearing_graph_corpus()), spec.name) > 0
     with pytest.raises(EmptyCoveragePartition, match="EMPTY"):
         require_stone_bearing_partition(0, spec.name)
-
-
-# --------------------------------------------------------------------------------------- #
-# DENSE ARM — the two-sided derived boundary
-# --------------------------------------------------------------------------------------- #
-def require_inside_partition(count: int, enc: str) -> int:
-    """PB-37. If the strictly-inside partition is empty the positive half of the dense gate
-    asserts nothing and only the witness runs — a gate with nothing inside it."""
-    if count <= 0:
-        raise EmptyCoveragePartition(
-            f"{enc}: the strictly-inside partition is EMPTY, so the positive half of this gate "
-            "asserts nothing and only the witness would run."
-        )
-    return count
-
-
-def require_witness(outside: list[int], enc: str) -> int:
-    """PB-38. A witness that was never constructed is an assertion that never ran, so "no
-    witness" is a FAILURE with its own message rather than a quietly skipped clause."""
-    if not outside:
-        raise NoWitnessConstructed(
-            f"{enc}: no position outside the derived boundary was constructed, so the "
-            "boundary's other side was never asserted."
-        )
-    return outside[0]
-
-
-def require_uncovered_at_witness(holes: list[tuple[int, int]], enc: str, span: int) -> int:
-    """The witness's own refusal, behind a helper so a planted break can DRIVE it (R-O1).
-
-    It was an inline `assert` in the gate, which left PB-36 — the permissive coverage stand-in —
-    able to show only that the stand-in reports no holes. "And therefore the tier reds" was an
-    inference about code the break never executed. It executes now.
-    """
-    if not holes:
-        raise BoundaryNotWhereDerived(
-            f"{enc}: the first position outside the boundary (span={span}) covers every legal "
-            "move, so the boundary is not where the tier says it is — or the coverage fact came "
-            "from something more permissive than the engine's own to_flat."
-        )
-    return len(holes)
-
-
-def require_dense_partition(board: Board, ctx: str) -> tuple[int, int]:
-    """PB-40. Single-cluster and stone-bearing, verified FROM THE ENGINE; anything else is
-    refused rather than silently compared."""
-    require_corpus_member(board, ctx)
-    centres = board.get_cluster_views()[1]
-    if len(centres) != 1:
-        raise DensePartitionRefused(
-            f"{ctx}: the engine reports {len(centres)} centres. The boundary below is derived "
-            "for ONE cluster and ONE window; a multi-cluster position's coverage is a union "
-            "over windows and is not what this boundary states."
-        )
-    return cluster_frame_centre(board)
-
-
-def boundary_holds(board: Board, centre: tuple[int, int]) -> bool:
-    """The two-sided boundary, every term read off the engine, with no `k` shortcut."""
-    side = board.cluster_window_size()
-    half = (side - 1) // 2
-    radius = board.legal_move_radius()
-    stones = board.get_stones()
-    qs = [q for q, _, _ in stones]
-    rs = [r for _, r, _ in stones]
-    return (
-        (max(qs) - centre[0]) + radius <= half
-        and (centre[0] - min(qs)) + radius <= half
-        and (max(rs) - centre[1]) + radius <= half
-        and (centre[1] - min(rs)) + radius <= half
-    )
-
-
-def uncovered_legal_moves(board: Board) -> list[tuple[int, int]]:
-    """The coverage FACT, taken from the engine's own `to_flat`, never re-derived in Python."""
-    side = board.cluster_window_size()
-    return [(q, r) for q, r in board.legal_moves() if board.to_flat(q, r) >= side * side]
-
-
-def dense_line_position(span: int) -> list[tuple[int, int]]:
-    """A single compact cluster of a chosen bbox span — one stone per cell, so span is exact."""
-    return [(i, 0) for i in range(span + 1)]
-
-
-def dense_scan(enc: str) -> tuple[list[int], list[int]]:
-    """`(inside_spans, outside_spans)` for a growing single-cluster line, boundary derived."""
-    probe = Board.with_encoding_name(enc)
-    reach = probe.cluster_window_size() // 2 + probe.legal_move_radius() + 2
-    inside: list[int] = []
-    outside: list[int] = []
-    for span in range(1, reach):
-        board = build_board(enc, dense_line_position(span))
-        centre = require_dense_partition(board, f"{enc} span={span}")
-        (inside if boundary_holds(board, centre) else outside).append(span)
-    return inside, outside
-
-
-@pytest.mark.parametrize(
-    "spec", [s for s in roster() if not s.is_graph], ids=lambda s: s.name
-)
-def test_dense_coverage_holds_strictly_inside_the_derived_boundary(spec, derived):
-    inside, outside = dense_scan(spec.name)
-    derived(f"t4.dense.inside_spans.{spec.name}", inside)
-    derived(f"t4.dense.outside_spans.{spec.name}", outside)
-    require_inside_partition(len(inside), spec.name)
-    for span in inside:
-        board = build_board(spec.name, dense_line_position(span))
-        require_dense_partition(board, f"{spec.name} span={span}")
-        holes = uncovered_legal_moves(board)
-        if holes:
-            raise LegalMoveNotRepresentable(
-                f"{spec.name} span={span}: {len(holes)} legal moves fall in no window while the "
-                f"derived boundary says coverage holds; first={holes[0]}"
-            )
-    derived(f"t4.dense.inside_assertions.{spec.name}", len(inside))
-
-
-@pytest.mark.parametrize(
-    "spec", [s for s in roster() if not s.is_graph], ids=lambda s: s.name
-)
-def test_the_FIRST_position_outside_the_boundary_is_a_named_WITNESS(spec, derived):
-    """PB-38. "No witness constructed" is a FAILURE with its own message — a witness that was
-    never built is an assertion that never ran."""
-    _inside, outside = dense_scan(spec.name)
-    span = require_witness(outside, spec.name)
-    board = build_board(spec.name, dense_line_position(span))
-    require_dense_partition(board, f"{spec.name} witness span={span}")
-    holes = uncovered_legal_moves(board)
-    derived(f"t4.dense.witness_span.{spec.name}", span)
-    derived(f"t4.dense.witness_uncovered.{spec.name}", len(holes))
-    require_uncovered_at_witness(holes, spec.name, span)
-
-
-def test_an_EMPTY_inside_partition_is_refused():
-    """PB-37's break, through the same helper the dense gate calls."""
-    spec = next(s for s in roster() if not s.is_graph)
-    inside, _outside = dense_scan(spec.name)
-    assert require_inside_partition(len(inside), spec.name) > 0
-    with pytest.raises(EmptyCoveragePartition, match="strictly-inside"):
-        require_inside_partition(0, spec.name)
-
-
-def test_a_MISSING_witness_is_refused():
-    """PB-38's break: "no witness constructed" must be a named failure, not a silent pass."""
-    spec = next(s for s in roster() if not s.is_graph)
-    _inside, outside = dense_scan(spec.name)
-    assert require_witness(outside, spec.name) == outside[0]
-    with pytest.raises(NoWitnessConstructed, match="never asserted"):
-        require_witness([], spec.name)
-
-
-def test_the_boundary_is_a_function_of_the_ENGINE_reported_S_and_R():
-    """PB-41. A stand-in board reporting different geometry must MOVE the computed boundary; a
-    boundary computed from a transcribed `S` or `R` would not notice."""
-    spec = next(s for s in roster() if not s.is_graph)
-    real = build_board(spec.name, dense_line_position(8))
-    centre = cluster_frame_centre(real)
-
-    class ShrunkenGeometry:
-        def __init__(self, board):
-            self._board = board
-
-        def cluster_window_size(self):
-            return self._board.cluster_window_size() - 4
-
-        def legal_move_radius(self):
-            return self._board.legal_move_radius()
-
-        def get_stones(self):
-            return self._board.get_stones()
-
-    assert boundary_holds(real, centre)
-    assert not boundary_holds(ShrunkenGeometry(real), centre)
-
-
-def test_a_ONE_CELL_centre_shift_is_reported_in_BOTH_directions():
-    """PB-39. The boundary is two-sided and asymmetric on odd spans, so a break that only
-    shifts one way cannot distinguish the `ceil(span/2)` form from the discarded floor `k`."""
-    spec = next(s for s in roster() if not s.is_graph)
-    inside, _outside = dense_scan(spec.name)
-    span = inside[-1]
-    board = build_board(spec.name, dense_line_position(span))
-    centre = cluster_frame_centre(board)
-    assert boundary_holds(board, centre)
-    assert not boundary_holds(board, (centre[0] + 1, centre[1]))
-    assert not boundary_holds(board, (centre[0] - 1, centre[1]))
-
-
-def test_the_SINGLE_SIDED_half_span_form_is_one_cell_too_permissive():
-    """The `k` form the design discarded, shown wrong against the engine rather than argued
-    away: at the first outside-the-boundary span it predicts coverage the engine does not have."""
-    spec = next(s for s in roster() if not s.is_graph)
-    _inside, outside = dense_scan(spec.name)
-    span = outside[0]
-    board = build_board(spec.name, dense_line_position(span))
-    side = board.cluster_window_size()
-    half = (side - 1) // 2
-    radius = board.legal_move_radius()
-    single_sided_says_covered = (span // 2) + radius <= half
-    assert single_sided_says_covered, "this control needs an odd-span first-outside position"
-    assert uncovered_legal_moves(board), "the engine covers it after all"
-    assert not boundary_holds(board, cluster_frame_centre(board))
-
-
-def test_a_MULTI_CENTRE_or_STONELESS_position_is_refused_by_the_dense_partition():
-    """PB-40's break, both halves."""
-    spec = next(s for s in roster() if not s.is_graph)
-    probe = Board.with_encoding_name(spec.name)
-    separation = 2 * probe.cluster_threshold() + 2
-    two_blobs = build_board(
-        spec.name, [(0, 0), (1, 0), (separation, 0), (separation, 1)]
-    )
-    with pytest.raises(DensePartitionRefused, match="centres"):
-        require_dense_partition(two_blobs, "planted multi-centre")
-    from _corpus import DegenerateCorpusMember
-
-    with pytest.raises(DegenerateCorpusMember):
-        require_dense_partition(Board.with_encoding_name(spec.name), "planted stoneless")
-
-
-def test_a_PERMISSIVE_coverage_stand_in_REDS_the_tier():
-    """PB-36. If the coverage FACT were a Python copy of `window_flat_idx_at_geom` the gate
-    would prove the tier self-consistent and nothing else — zero producers."""
-    spec = next(s for s in roster() if not s.is_graph)
-    _inside, outside = dense_scan(spec.name)
-    board = build_board(spec.name, dense_line_position(outside[0]))
-    assert uncovered_legal_moves(board), "the engine reports full coverage at the witness"
-
-    class EverythingInWindow:
-        def __init__(self, board):
-            self._board = board
-
-        def cluster_window_size(self):
-            return self._board.cluster_window_size()
-
-        def legal_moves(self):
-            return self._board.legal_moves()
-
-        def to_flat(self, q, r):
-            del q, r
-            return 0
-
-    assert uncovered_legal_moves(EverythingInWindow(board)) == []
-    with pytest.raises(BoundaryNotWhereDerived, match="more permissive"):
-        require_uncovered_at_witness(
-            uncovered_legal_moves(EverythingInWindow(board)), spec.name, outside[0]
-        )
-
-
-# --------------------------------------------------------------------------------------- #
-# REPORT (`slow`)
-# --------------------------------------------------------------------------------------- #
-@pytest.mark.slow
-def test_report_the_uncovered_legal_move_distribution_per_grid_encoding(derived):
-    """The distribution of uncovered-legal-move counts per position, per registered grid
-    encoding. NO THRESHOLD. PLAN-E's prescribed `uncovered_forced_win` counter is an ENGINE
-    change on the self-play path and is out of scope; this report is the measurement that would
-    justify dispatching it, not the counter itself."""
-    distribution: dict[str, list[tuple[int, int]]] = {}
-    for spec in roster():
-        if spec.is_graph:
-            continue
-        rows: list[tuple[int, int]] = []
-        inside, outside = dense_scan(spec.name)
-        for span in inside + outside:
-            board = build_board(spec.name, dense_line_position(span))
-            rows.append((span, len(uncovered_legal_moves(board))))
-        distribution[spec.name] = rows
-    derived("t4.report.uncovered_by_span", distribution)
-    assert distribution

@@ -5,12 +5,12 @@ not collected. Every tier imports its board construction, its named refusals and
 frame readers from here so that a break planted against one tier exercises the same
 construction code the gate runs (R-O1, mechanism-not-proxy).
 
-NO TUNABLE LITERAL LIVES HERE (R1/R26). The window side `S`, the cluster threshold and the
-legal-move radius are read off a CONSTRUCTED board at the point of use —
-`Board.with_encoding_name(enc).cluster_window_size()` / `.cluster_threshold()` /
-`.legal_move_radius()` — never from `spec.cluster_window_size`, which is the string `"none"`
-on `v6` and `gnn_axis_v1` (`crates/mantis-encoding/src/registry.toml:57`, `:164`) and would
-force either a raise or a planted `19`.
+NO TUNABLE LITERAL LIVES HERE (R1/R26). The window side `S` and the legal-move radius are read
+off a CONSTRUCTED board at the point of use — `Board.with_encoding_name(enc).size` /
+`.legal_move_radius()` — never from `spec.cluster_window_size`, which is the string `"none"` on
+every registered row and would force either a raise or a planted `19`. The
+`cluster_window_size()` / `cluster_threshold()` readers this used to name went with the
+K-cluster window (R346(f)).
 
 THE BOARD FRAME IS NOT ON THE PYTHON SURFACE. `Board::window_center()`
 (`crates/mantis-core/src/board/state/core.rs:377`) has no `PyBoard` getter; the frame is
@@ -35,10 +35,9 @@ class ConformanceRefusal(AssertionError):
 
 
 class DegenerateCorpusMember(ConformanceRefusal):
-    """A corpus member is stoneless or centre-less.
+    """A corpus member is stoneless.
 
-    `get_cluster_views` pushes `(0, 0)` with no clusters (`cluster.rs:48-49`) and
-    `Board::window_center` returns `(0, 0)` with no stones (`core.rs:378-380`); either is a
+    `Board::window_center` returns `(0, 0)` with no stones (`core.rs:378-380`), a
     translation-invariant constant that DISAGREES with the signed rule, so such a member is a
     red-at-HEAD risk rather than a vacuity. It is refused at the point of use, by name.
     """
@@ -153,26 +152,18 @@ def sign_class(a: int, t: int) -> str:
 
 
 def require_corpus_member(board: Board, ctx: str) -> None:
-    """Every corpus member is stone-bearing AND centre-bearing, asserted at the point of use."""
+    """Every corpus member is stone-bearing, asserted at the point of use.
+
+    It used to be centre-bearing too — `get_cluster_views` pushed `(0, 0)` with no clusters —
+    and that reader went with the K-cluster window (R346(f)).
+    """
     if not board.get_stones():
         raise DegenerateCorpusMember(
             f"{ctx}: the position carries no stones. Board::window_center returns a constant "
             "(0, 0) when !has_stones (core.rs:378-380), which is translation-invariant and "
             "disagrees with the signed rule — refused rather than compared."
         )
-    if len(board.get_cluster_views()[1]) < 1:
-        raise DegenerateCorpusMember(
-            f"{ctx}: the position has no cluster centre. get_cluster_views pushes (0, 0) with "
-            "no clusters (cluster.rs:48-49) — refused rather than compared."
-        )
 
-
-def cluster_frame_centre(board: Board) -> tuple[int, int]:
-    """The dense CLUSTER frame origin: the engine's own first reported centre."""
-    centres = board.get_cluster_views()[1]
-    if not centres:
-        raise DegenerateCorpusMember("cluster frame: the engine reported no centre")
-    return (int(centres[0][0]), int(centres[0][1]))
 
 
 def board_frame_centre(board: Board) -> tuple[int, int]:
@@ -186,7 +177,11 @@ def board_frame_centre(board: Board) -> tuple[int, int]:
     stones = board.get_stones()
     if not stones:
         raise DegenerateCorpusMember("board frame: the position carries no stones")
-    side = board.cluster_window_size()
+    # `Board.size` is the window side: `window_flat_idx` indexes at the encoding's
+    # `trunk_size`, and every registered row mints `trunk_size == board_size`. The
+    # `cluster_window_size()` getter this used to read went with the K-cluster window
+    # (R346(f)), and it reported the same number on the encodings that had both.
+    side = board.size
     half = (side - 1) // 2
     q, r, _ = stones[0]
     flat = board.to_flat(q, r)

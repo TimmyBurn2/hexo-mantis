@@ -46,10 +46,11 @@ from mantis.eval.pipeline import emit_rung_skip_events
 
 _ROUND_ID = "r000001_100"
 
-#: DESIGN_A §2.7(4). `operator_authorized` is the kraken/strix skip R139 ruled; the other
-#: three are the three ways a sealbot rung can fail to resolve, and telling them apart is
-#: the entire point — "4 rungs skipped as ruled" versus "6 rungs skipped because the box is
-#: misconfigured", WHILE the run is going.
+#: DESIGN_A §2.7(4). `operator_authorized` is the skip R139 ruled — it covered the kraken and
+#: strix rungs until R346(f) deleted those bot kinds, and R326(e)'s excluded sealbot depth is
+#: what still reaches it; the other three are the three ways a sealbot rung can fail to
+#: resolve, and telling them apart is the entire point — "4 rungs skipped as ruled" versus
+#: "6 rungs skipped because the box is misconfigured", WHILE the run is going.
 _CLASSES = ("operator_authorized", "vendor_absent", "build_absent", "load_failed")
 
 
@@ -65,7 +66,7 @@ class _SpySink:
 
 
 def _reason(kind: str, *, monkeypatch: pytest.MonkeyPatch, root: Path | None,
-            loader_raises: bool) -> str:
+            loader_raises: bool, depth: int | None = None) -> str:
     """One REAL refusal reason, taken from the shipped resolver rather than transcribed.
 
     Deriving the reasons instead of hard-coding them is what makes this file two-sided: a
@@ -83,15 +84,21 @@ def _reason(kind: str, *, monkeypatch: pytest.MonkeyPatch, root: Path | None,
 
             patch.setattr(sealbot_mod, "load_sealbot_modules", _explode)
         with pytest.raises(RungUnresolvable) as exc:
-            resolve_bot(kind, depth=5 if kind == "sealbot" else None, opponent_sims=128)
+            if depth is None and kind == "sealbot":
+                depth = 5
+            resolve_bot(kind, depth=depth, opponent_sims=128)
     return exc.value.reason
 
 
 def _one_skip_per_class(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> list[dict[str, str]]:
     """Four skip entries, one per class, in `_CLASSES` order."""
+    from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
+
+    excluded = next(iter(_R326_EXCLUDED_SEALBOT_DEPTHS))
     return [
-        {"rung": "kraken_raw",
-         "reason": _reason("kraken", monkeypatch=monkeypatch, root=None, loader_raises=False)},
+        {"rung": f"sealbot_d{excluded}",
+         "reason": _reason("sealbot", monkeypatch=monkeypatch, root=None, loader_raises=False,
+                           depth=excluded)},
         {"rung": "sealbot_d5",
          "reason": _reason("sealbot", monkeypatch=monkeypatch, root=None, loader_raises=False)},
         {"rung": "sealbot_d6",

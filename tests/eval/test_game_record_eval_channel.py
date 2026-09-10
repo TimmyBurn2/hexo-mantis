@@ -16,6 +16,7 @@ from pathlib import Path
 
 import torch
 
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
@@ -24,8 +25,8 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 from mantis.monitor.game_record import iter_run_games
 
-#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
-#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+#: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
+#: radius >= 6 to replay, so the round's encoding has to cover that.
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -64,7 +65,9 @@ def _round_spec(tmp_path: Path, target: GameRecordTarget | None) -> RoundSpec:
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
         game_record=target,
-        ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=None,
+        ply_cap_adjudication=None, strength_floor=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
+                                            max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(inference_batch_size=64,
                                                  inference_max_wait_ms=10),
     )

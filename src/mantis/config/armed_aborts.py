@@ -1327,27 +1327,12 @@ MANIFEST: tuple[ArmedAbort, ...] = (
 #: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them
 #: is the tool's (SF-4).
 #:
-#: ADJ-13 N-1: `configs/run5.yaml`'s membership here is not decoration and is not free to
-#: move. Nothing pinned it, so moving run5 to `EXEMPT_CONFIGS` with a written reason and
-#: promoting an armed smoke config in its place kept gate 12 at **rc 0 with run5 disarmed** —
-#: the partition stayed a partition and every exemption still carried a reason, so every
-#: existing check was satisfied by the swap. The producer is
-#: `test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable`
-#: — the run the operator is about to mint is audited BY NAME, and
-#: exempting it is a red gate rather than a bookkeeping edit. (Recheck R-8: this citation
-#: named a test that does not exist — a LAW-07 producer citation that greps to nothing is
-#: LAW-07's own failure mode. Every citation in this pass was `grep`-verified.)
-#: F-P2B (R259 shakedown, MAIN-adopted fix-forward): `configs/shakedown_20260807.yaml` is a
-#: PRODUCTION config, not an exempt smoke — it ARMS both required rows (actor-lag bool true,
-#: draw-rate triple {0.25, 25000, 50, consec 3}) and soaks the eval/promotion machinery, so
-#: gate 12 must audit it BY NAME exactly as it audits run5. Declaring it EXEMPT would have
-#: spelled "armed production run" and "deliberately disarmed smoke" with the same observable,
-#: which is the confusion MF-7 exists to kill.
-PRODUCTION_CONFIGS: tuple[str, ...] = (
-    "configs/run5.yaml",
-    "configs/run6.yaml",
-    "configs/shakedown_20260807.yaml",
-)
+#: ADJ-13 N-1: membership here is not decoration and is not free to move — the run the
+#: operator is about to mint is audited BY NAME, and exempting it is a red gate rather than a
+#: bookkeeping edit. R346(f) pruned `configs/` to run6 plus ONE smoke, so `configs/run5.yaml`
+#: (a finished run) and `configs/shakedown_20260807.yaml` (its rehearsal) left the tree with
+#: their rows; the partition below is what keeps their absence from reading as an exemption.
+PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml",)
 
 #: The OTHER half of the same authority (MF-7). R59's "deliberate disarming remains legal for
 #: smoke configs" used to be expressed by ABSENCE from `PRODUCTION_CONFIGS` — which made
@@ -1395,21 +1380,6 @@ PRODUCTION_CONFIGS: tuple[str, ...] = (
 #: `(repo-relative path, why it is exempt)`. The reason is data, printed by the tool on the
 #: failure path, so an exemption cannot be a bare path nobody can justify later.
 EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
-    (
-        "configs/dev_example.yaml",
-        "developer template, never minted for a run; disarmed at `:200` by design (R59). "
-        "ADJ-13 N-3: this file is ALSO the mutation corpus's M1 row (the one real committed "
-        "config that demonstrates the audit going red), and exempting it moved gate 12's "
-        "red-capability on the real `configs/` tree onto `--config` — which had no producer "
-        "in that direction until F-5's. Both halves are now pinned: the declared-production "
-        "half by `test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set`'s "
-        "bare drive, the `--config` half by "
-        "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
-    ),
-    (
-        "configs/smoke_gnn.yaml",
-        "smoke config — bounded local drive, not a production run (R59).",
-    ),
     (
         "configs/smoke_preflight_armed.yaml",
         "armed preflight-rehearsal smoke config (WPTS Phase F, R103): NOT a production run, "

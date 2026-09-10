@@ -100,7 +100,7 @@ def test_a_resolvable_sealbot_rung_makes_wr_sealbot_a_float_with_no_producer_edi
 
     rungs = _run5_rungs()
     sealbot_names = [rung.name for rung in rungs if rung.bot == "sealbot"]
-    assert sealbot_names == ["sealbot_d5", "sealbot_d6"], sealbot_names
+    assert sealbot_names == ["sealbot_d5"], sealbot_names
 
     result = build_round_result(
         **_round_kwargs(rungs, {sealbot_names[0]: _rung_result(games=6, wr=0.75)})

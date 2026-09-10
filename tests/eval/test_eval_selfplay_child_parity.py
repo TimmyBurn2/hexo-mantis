@@ -608,23 +608,6 @@ def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
         DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)
 
 
-# ── ⊕ C-6 ────────────────────────────────────────────────────────────────────────────
-def test_infer_batch_ls_refuses_a_dense_spec() -> None:
-    """The no-drop graph decode has no grid analogue; a dense spec must die by name here
-    rather than an `AttributeError` two lines down. The refusal reads the BOUND SPEC, never
-    the live model object — which is why the model handed in below is an `Identity`."""
-    engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
-        fused_graph_caps=None,
-        inference_batching=None,
-        max_in_flight=0, )
-    try:
-        with pytest.raises(NotImplementedError):
-            engine.infer_batch_ls([Board.with_encoding_name("v6")])
-    finally:
-        engine.close()
-
-
 # ── ⊕ C-7 ────────────────────────────────────────────────────────────────────────────
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:
     """`build_candidate_player` matches CLOSED on `spec.representation`: an unregistered
@@ -638,12 +621,13 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
         def __getattr__(self, item):
             return getattr(self._base, item)
 
-    spec = _SpecWithRepresentation(lookup("v6"), "quantum")
+    spec = _SpecWithRepresentation(lookup("gnn_axis_v1"), "quantum")
     engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
-        fused_graph_caps=None,
-        inference_batching=None,
-        max_in_flight=0, )
+        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("gnn_axis_v1"),
+        fused_graph_caps=_CAPS,
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64,
+                                                 inference_max_wait_ms=10),
+        max_in_flight=8, )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
             worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)
@@ -653,9 +637,14 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
 
 # ── ⊕ C-10 ───────────────────────────────────────────────────────────────────────────
 def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) -> None:
-    """ONE refusal predicate with TWO entry points, asserted as a delegation rather than
-    duplicated: `infer_ls` is a one-line delegation to `infer_batch_ls`, so a future edit
-    cannot give the single-board door a different (or absent) guard."""
+    """ONE predicate with TWO entry points, asserted as a delegation rather than duplicated:
+    `infer_ls` is a one-line delegation to `infer_batch_ls`, so a future edit cannot give the
+    single-board door a different (or absent) guard.
+
+    The refusal half this row used to carry beside the delegation drove a DENSE spec through
+    both doors and compared the two `NotImplementedError` messages; R346(f) deleted the dense
+    arm and with it the refusal, so what remains — and what the row was always about — is that
+    the two doors are one code path."""
     engine, _spec = graph_engine
     calls = []
 
@@ -669,32 +658,35 @@ def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) 
     assert calls == [[board]], "infer_ls did not delegate to infer_batch_ls"
     assert result == ([0.0], [], 0.0, (0, 0)), "infer_ls did not project the batch result"
 
-    dense_engine = LocalInferenceEngine(
-        torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
-        fused_graph_caps=None,
-        inference_batching=None,
-        max_in_flight=0, )
-    try:
-        with pytest.raises(NotImplementedError) as single:
-            dense_engine.infer_ls(Board.with_encoding_name("v6"))
-        with pytest.raises(NotImplementedError) as batch:
-            dense_engine.infer_batch_ls([Board.with_encoding_name("v6")])
-        assert str(single.value) == str(batch.value), "two entry points, two messages"
-    finally:
-        dense_engine.close()
-
 
 # ── ⊕ᶜ C-8 (CONTROL — an unchanged predicate still fires; NOT an R72 flip) ────────────
 def test_no_drop_pooling_encoding_is_still_refused() -> None:
-    """R20 boundary: `v6_live2_ls` declares the no-drop grid pool and stays REFUSED. This
-    card wires the no-drop GRAPH decode and does not touch ADJ-WP12R-4's grid seam; the
-    refusal set `{"none", "scatter_max"}` is unchanged and both asserted substrings survive
-    the D-20 message re-point. The full-round form of this control is O-8
-    (`tests/eval/test_graph_round_encoding.py`, committed and NOT edited by this card); the
-    guard entrance is asserted here so the control costs no round."""
+    """R20 boundary: a spec declaring the no-drop pool stays REFUSED, and the refusal set
+    `{"none", "scatter_max"}` is unchanged. It used to be driven on `v6_live2_ls`, which
+    declared that pool; R346(f) deleted the grid rows and no registered encoding declares an
+    unimplemented pool any more, so the case is SYNTHESISED from a registered spec — the same
+    way the value-channel arm in `tests/eval/test_value_pool_guard.py` does. The full-round
+    form of this control is O-8 (`tests/eval/test_graph_round_encoding.py`); the guard entrance
+    is asserted here so the control costs no round."""
+    import dataclasses
+
+    base = lookup("gnn_axis_v1")
+    if dataclasses.is_dataclass(base):
+        spec = dataclasses.replace(base, policy_pool="legal_set_scatter_max")
+    else:
+        class _Shim:
+            def __init__(self, inner):
+                self._inner = inner
+                self.policy_pool = "legal_set_scatter_max"
+
+            def __getattr__(self, item):
+                return getattr(self._inner, item)
+
+        spec = _Shim(base)
+
     with pytest.raises(EvalDecodeUnsupportedError) as excinfo:
-        worker._assert_decode_implements_declared_pooling(lookup("v6_live2_ls"))
+        worker._assert_decode_implements_declared_pooling(spec)
     message = str(excinfo.value)
-    assert "v6_live2_ls" in message, message
+    assert "gnn_axis_v1" in message, message
     assert "legal_set_scatter_max" in message, message
     assert worker._DECODE_IMPLEMENTED_POLICY_POOLS == frozenset({"none", "scatter_max"})

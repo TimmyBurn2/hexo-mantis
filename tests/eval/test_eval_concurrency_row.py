@@ -35,6 +35,7 @@ from pydantic import ValidationError
 
 from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
@@ -43,8 +44,8 @@ from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import GnnArch, build_net
 
-#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
-#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
+#: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
+#: radius >= 6 to replay, so the round's encoding has to cover that.
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -139,7 +140,7 @@ class _Opening:
         from mantis._engine import Board
 
         self.opening_id = f"op{i}"
-        board = Board.with_encoding_name("v6_live2_ls")
+        board = Board.with_encoding_name(_ENC)
         moves: list[tuple[int, int]] = []
         for ply in range(4):
             legal = sorted(board.legal_moves())
@@ -160,9 +161,9 @@ def _play(*, with_factory: bool):
         cand, opp, [_Opening(i) for i in range(4)],
         regime_key=RegimeKey(
             bot="candidate", variant="test", model_sims=1, opponent_spec="fixed",
-            opening_book="test_book", deploy_matched=False, encoding="v6_live2_ls",
+            opening_book="test_book", deploy_matched=False, encoding=_ENC,
         ),
-        board_factory=lambda: Board.with_encoding_name("v6_live2_ls"),
+        board_factory=lambda: Board.with_encoding_name(_ENC),
         max_plies=DEFAULT_MAX_PLIES, record_sink=None, adjudicator=None,
         **({"player_factory": _pair, "concurrency": 1} if with_factory else {}),
     )
@@ -215,7 +216,8 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
         ladder_bootstrap_seed=1234,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
+                                            max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),
