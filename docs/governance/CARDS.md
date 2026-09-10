@@ -56,8 +56,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   five `mcts/` commits dated 2026-09-08/09, all of wave 1 among them. Until it is separated the
   bound must NOT be re-aimed — the docstring records that the three measurements were taken before
   the row existed precisely so the bound could not be lowered to make a red go away. Wave 2
-  proceeds with this ONE test deselected and the exclusion stated at each merge, on operator
-  direction; the separation belongs to AUDIT-3. **The consequence to hold on to: while this stands,
+  proceeds with the integration tier NOT RUN and the exclusion stated at each merge, on operator
+  direction; the separation belongs to AUDIT-3.
+  **CORRECTION, measured after this card was first written: OC-7 is not the whole of it.** The
+  tier with OC-7 deselected — 49 tests — ALSO failed to finish, hitting a 3 000 s cap on
+  `gumbel-3`. So the tier is not one bad test on an otherwise healthy suite; it is >50 min of
+  work at best, and CLAUDE.md's "the superset is ~35 min" is stale by a wide margin on this host.
+  What is NOT yet known: whether the remaining 49 are merely slow (49 real 14-worker boots would
+  explain it) or whether a second test is unbounded like OC-7. A `-v` per-test timing pass is the
+  next measurement and it is owed. **The consequence to hold on to: while this stands,
   no `make gates.exit` run in this repository can complete, so "local green is the gate" is
   answered by a gate that never finishes — the false-clean class, in the time dimension.**
 
