@@ -1,171 +1,204 @@
 # STATE — where mantis actually is
 
 Rewritten in place, never appended to. Every value below was read from the tree at the commit
-named under "Provenance", not copied from a register. Where the frozen register disagreed with
-the tree, the tree won and the disagreement is recorded in the last section.
+named under "Provenance", not copied from a register. Where a register disagreed with the tree,
+the tree won and the disagreement is recorded in the last section.
 
 ## Current phase
 
-**run6 is MINTED and HELD. It has never started.** R345 accepted AUDIT-2 as evidence and held
-run6 for REPAIR-A2, a seven-leg box packet with a planted break and a mutation self-test per leg.
-Seven of eight legs landed; **leg 5 (the MCTS root child cap) halted to the architect with
-numbers** and is what run6 is held on: the cap discards a mean 88% of the policy's prior mass on
-99.97% of expansions, the tree-memory delta is exactly zero (the pool is preallocated at
-MAX_NODES), and what a larger K costs is the armed-sims ceiling — which gates configs.
+**run6 is MINTED and HELD. It has never started.** CLEANUP WAVE 2 (R347) is complete: three
+agents merged, the grid/dense path is gone, the Gumbel row is sparse, and the comment rule is
+enforced by a ratchet. What run6 is still held on is unchanged in kind — it is now held on the
+**wave-3 re-mint**, not on a code defect.
 
-A second row is mint-blocking with no close recorded: **`F-816-24`** — `monitor/supervise.py`
-constructs a bare `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix
-packet was ordered at R291(b); no merge or close appears in the frozen record.
+**The config still mints `search.kind: puct` at 50 simulations.** R347(b) prereg'd the Gumbel
+regime — full 320 / m 16 at p = 0.25, fast 64 / m 16 at p = 0.75, mean 128 — and R346(h) puts the
+arming at the wave-3 re-mint, so the kind row and the sims regime are OWED, not armed. What R347
+did move is minted and verified: `selfplay.c_scale 1.0` (was 0.1), `selfplay.gumbel_m 16`,
+`train.fast_policy_weight 0.0`, `MAX_CHILDREN_PER_NODE 1024` in a `MAX_NODES 4_000_000` pool.
+A reader taking `puct`/`50` from this config as run6's search would be reading the pre-re-mint
+state correctly; a reader taking it as R347's intended regime would be wrong.
 
-Owed, named so it is not mistaken for done:
+**`F-816-24` remains mint-blocking with no close recorded** — `monitor/supervise.py` constructs a
+bare `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. Ordered fixed at
+R291(b); no merge or close appears in the record. Wave 2 did not touch it.
 
-- the leg-5 cap value — the thing the hold is on;
-- the `supervisor_kill_grace_sec: 600.0` reading. It was armed on the interpretation that
-  "only if the supervisor is used" describes when the value takes effect rather than
-  conditioning the change. A one-line re-mint if the operator reads it the other way.
+**`R341(b)` / `R319(d)` stays DISCHARGED AT G=8 ONLY (R343(a)).** run6 mints
+`eval.concurrency = 8`, so it is not a hold. It stays LIVE at lower concurrency: G=1 is 53.33
+s/game and G=4 is 13.99 s/game, both consuming the full 3600 s `round_timeout_sec` and returning
+`wr_sealbot: null`, against G=8 at 7.09 s/game. The row is discharged **by the armed value, not by
+the geometry becoming safe** — a session that lowers `eval.concurrency` walks back into a timeout,
+and a null is not a slow reading: witness (iii) fits an Elo slope over at least 5 rounds and
+cannot fit nulls.
 
-**`R341(b)` / `R319(d)` is DISCHARGED AT G=8 ONLY (R343(a)), and the scope is the load-bearing
-part.** run6 mints `eval.concurrency = 8`, so it is NOT a hold on run6. It stays LIVE at lower
-concurrency: measured, **G=1 is 53.33 s/game and G=4 is 13.99 s/game, and both consume the full
-3600 s `round_timeout_sec` and return `wr_sealbot: null`**, while G=8 is 7.09 s/game and completed
-a fully escalated 264-game round in 1872.8 s against the 2376 s bar with a real `wr_sealbot`; the
-4 h shakedown's steady wall held 900.6 s with no growth. The row is discharged **by the armed
-value, not by the geometry becoming safe** — a future session that lowers `eval.concurrency` to 4
-walks straight back into a timeout, and a null is not a slow reading: witness (iii) fits an Elo
-slope over at least 5 rounds and cannot fit nulls, so a geometry failure disarms one of run6's
-three success witnesses.
+Riding the run rather than holding it: **`F-816-37` is open and not root-caused**; its 1-in-1
+eval-path instrument with dump-on-fire is in the protected set.
 
-Riding the run rather than holding it: **`F-816-37` is open and not root-caused.** Every firing on
-record is on the host R341 condemned and R342 downgraded to suspect, and the work moved to a
-different box — so the halt is spent, the class is not. Its 1-in-1 eval-path instrument with
-dump-on-fire is in the protected set. See `docs/governance/CARDS.md`.
+## The one thing wave 2 could not clear
+
+**`CARD-OC7-OVERRUN` — BLOCKING the integration tier, and therefore `make gates.exit`.**
+`tests/train/test_clean_stop_save.py::test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint`
+exceeds its own stated 300 s ceiling without bound (killed at a 300 s cap; past 900 s uncapped),
+and the tier **with that test deselected** also failed to finish inside 3 000 s. Pre-existing on
+`dev` — it reproduces identically at `MAX_NODES` 1 M and 4 M, so wave 2 did not cause it. Its
+bound was fixed by a host-relative rule and measured at **240.2 s on 2026-08-01**; the measurement
+no longer holds on the same box. **Not separated: host drift versus a slowdown landing after that
+date.** Until it is, the bound must not be re-aimed — the test's own docstring records that the
+measurements were taken before the row existed precisely so the bound could not be lowered to make
+a red go away.
+
+**The consequence, stated plainly: no `make gates.exit` run in this repository can complete.**
+CLAUDE.md says remote CI is suspended and local green is the gate; while this stands, that gate is
+one that never finishes, which is the false-clean class in the time dimension. Wave 2 ran **17 of
+17 other gates green at every merge**, on operator direction, and claims nothing about the
+integration tier. Separating drift from regression belongs to AUDIT-3 and is the first thing
+wave 3 should do.
 
 ## Minted values — `configs/run6.yaml`, verified at HEAD
 
-The config carries 19 `# delta:` lines and all 19 are applied in the body.
+**127 leaf keys** (190 before wave 2: 40 deleted by ruling, 23 moved to schema defaults).
 
 | key | minted value |
 |---|---|
 | `run_id` / `seed` | `run6` / `20260718` |
-| `identity.encoding` | `gnn_axis_r8` |
-| `identity.representation` | `graph` |
-| `identity.arch_kind` | `GnnArchV2` |
+| `identity.encoding` / `representation` / `arch_kind` | `gnn_axis_r8` / `graph` / `GnnArchV2` |
 | `identity.warm_start.checkpoint` | `checkpoints/bc/run6_00006500_5191bd09.ckpt` |
 | `identity.warm_start.net_hash` | `2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65` |
-| `allocator_posture` | `expandable_segments` |
+| `search.kind` | `puct` — **OWED: R347(b) prereg's `gumbel`, armed at the wave-3 re-mint** |
+| `selfplay.mcts.n_simulations` | `50` — **OWED: 320 full / 64 fast at m 16, p 0.25 / 0.75** |
+| `selfplay.c_scale` (Mctx `value_scale`) | `1.0` — moved from `0.1` by R347(b) |
+| `selfplay.c_visit` (Mctx `maxvisit_init`) | `50.0` |
+| `selfplay.gumbel_m` | `16` — both arms, R347(b) |
+| `train.fast_policy_weight` | `0.0` — new key, R347(b); ablation, not a default |
 | `selfplay.n_workers` | `16` |
-| `selfplay.max_game_moves` | `256` |
-| `selfplay.mcts.n_simulations` | `50` (PUCT; 96 was refused on projection) |
-| `selfplay.gumbel_mcts` | `false` (`gumbel_m 16`, `gumbel_explore_moves 10`, `gumbel_variant legacy`) |
 | `selfplay.playout_cap` | disarmed — `fast_prob 0.0`, `full_search_prob 0.0` |
-| `train.checkpoint_interval` | `1000` |
-| `train.eval_interval` | `1000` |
-| `train.min_buf_size` | `4096` |
-| `train.batch_size` / `replay_capacity` | `256` / `100000` |
-| `train.microbatch_caps` | `max_edges 4500000`, `max_nodes 170000` |
-| `train.draw_rate_abort` | `threshold 0.25`, `min_step 25000`, `N_pool_min 50`, `consec 3` |
-| `train.amp_dtype` | `fp16` — INERT on this run; see the note below |
-| `inference.fused_graph_caps` | `max_fused_edges 1373143`, `max_fused_nodes 56645` |
-| `eval.gate.stride` | `3` |
-| `eval.gate` geometry | `screen_games 80`, `confirm_games 128`, `promotion_winrate 0.55`, `screen_confirm_lo 0.44`, `deploy_sims 150`, `min_distinct_per_pair 10`, `bootstrap_resamples 1000`, `seed_base 20260625`, book `book_v1_s20260625_p4` |
+| `train.batch_size` | `256` |
+| `train.eval_interval` / `checkpoint_interval` | `1000` / `1000` |
 | `eval.concurrency` | `8` |
-| `eval.strength_floor` | `probe_games 4`, `min_decisive_rate 0.25`, `min_winrate 0.0` |
-| `eval.random_floor_games` | `20` |
-| eval sims | `random 96`, `sealbot 128`, `kraken 128`, `strix 128` |
-| `monitor.gate_interval` | `1000` |
-| `monitor.supervisor_kill_grace_sec` | `600.0` |
+| `allocator_posture` | `expandable_segments` |
 
-**Radius is 8 on this lineage.** `crates/mantis-encoding/src/registry.toml` `[encodings.gnn_axis_r8]`
-sets `graph_radius = 8` and `legal_move_radius = 8`. `gnn_axis_v1` stays at radius 6 and is run5's
-identity, unmutated.
+**Search-engine constants, `crates/mantis-search` (R347(c)).** `MAX_NODES = 4_000_000`,
+`MAX_CHILDREN_PER_NODE = 1024`, `MAX_ROOT_CHILDREN = u16::MAX`. Both ceilings **re-derived, not
+transcribed**: `MAX_ARMED_SIMS = 976` and `MAX_ARMED_SIMS_GUMBEL = 960`, each ≥ the 320 the prereg
+regime needs. The ruling's own "976" reproduces exactly.
 
-**`train.amp_dtype: fp16` does not reach run6's forward.** `mantis.model.amp.amp_dtype_for`
-returns `torch.bfloat16` for the graph representation and ignores the declared value (LAW-06 pin);
-the declared key is live only for the grid representation. A reader taking `fp16` from this config
-as run6's autocast dtype would be wrong.
+**HEXG is at v2.** The graph row is stored SPARSE — m explicit `(action, target)` entries plus one
+tail mass α, bounded by the minted `gumbel_m`; a v1 file refuses **by name** rather than
+mis-parsing a probability out of a stone coordinate. The trainer rebuilds the tail from its own
+**detached** current prior renormalized over the unstored legal set.
 
-## Armed rows — `src/mantis/config/armed_aborts.py`, verified at HEAD
+**Radius is 8 on this lineage** — `crates/mantis-encoding/src/registry.toml`
+`[encodings.gnn_axis_r8]` sets `graph_radius = 8` and `legal_move_radius = 8`.
 
-Eight rows: six REQUIRED, two DEFERRED. **All six required rows are armed in `configs/run6.yaml`.**
-The dataclass enforces that a deferred row carries an owner and a source pin, and that a required
-row carries no owner.
+**The resolved complete config is now written to the run dir before the first collaborator** and
+re-validated from its own bytes, so a later default revision cannot rewrite what an old run used.
 
-| row | status | arming key | armed in run6 |
-|---|---|---|---|
-| `actor_lag` | REQUIRED | `monitor.actor_lag_abort_enabled` | yes — `true` |
-| `draw_rate_collapse` | REQUIRED | `train.draw_rate_abort.threshold` | yes — `0.25` |
-| `disk_space_exhausted` | REQUIRED | `monitor.disk_guard.fail_gb` (+ live producer probe) | yes — `5.0` |
-| `terminal_eval_broken` | REQUIRED | `train.terminal_eval_enabled` | yes — `true` |
-| `fused_graph_caps_calibrated` | REQUIRED | `inference.fused_graph_caps.max_fused_edges` | yes — `1373143` |
-| `allocator_posture_minted` | REQUIRED | `allocator_posture` | yes — `expandable_segments` |
-| `grad_norm_hard_abort` | DEFERRED | `train.hard_gn_threshold` under ceiling `monitor.alert_grad_norm_max` | no — `1e9` is above the ceiling, so the predicate is false |
-| `sealbot_wr_abort` | DEFERRED | `monitor.wr_hard_abort_enabled` | no — `false` |
+## Armed rows — `src/mantis/config/armed_aborts.py`
 
-Config partition holds: `PRODUCTION_CONFIGS` = run5, run6, shakedown_20260807; the other five
-`configs/` files are exempt. 3 + 5 = 8 = the file count.
+Gate 12 (armed-abort manifest audit) is GREEN at HEAD, which is the proof that every `required`
+row is armed in every production config. `PRODUCTION_CONFIGS` is now **run6 + the armed preflight
+smoke**; `configs/` holds **three** files, not the two R346(f) named — see the deviations below.
+
+**Two START pre-flight HALTs are new (R347(d))**, keyed on what the config declares rather than on
+sniffing the host: **rc 16** for a run dir that is not on a persistent volume, **rc 17** for a
+cuda-declaring config on a CPU torch (a real matmul, not `is_available()`).
 
 ## Protected set
 
-The eleven protected items are listed in `docs/governance/LAWS.md`. That list is the whole of what
-ruling-protected code means; nothing on it moves without a ruling that names it.
+Listed in `docs/governance/LAWS.md`. Proven after every deletion in wave 2, not once at the end:
+the 7 graph goldens are **byte-identical** across the whole wave (sha256 diff empty), and
+`served_sims_exact` passed 6/6 at every checkpoint with no arm's asserted value moving.
+
+**LAW-10 is DELETED** (R347(d)) — grid-era, no producer, gating nothing. LAWS.md carries a
+tombstone; the number is retired, not reused. **Seventeen laws stand.**
 
 ## Open cards
 
-`docs/governance/CARDS.md`.
+`docs/governance/CARDS.md`. Two opened by R347: `CARD-OC7-OVERRUN` (above) and
+`CARD-GATE17-LOCAL-COUPLING` (a tracked vacuity test binds its verdict to gate 17's *untracked*
+local supplement, so a tracked test's outcome depends on local state). Four R346 cards closed.
 
-## Where the frozen register disagreed with the tree
+**`CARD-CLAUDEMD-REPOINT` is discharged in fact** — gate 10 is green and `CLAUDE.md` no longer
+names the dissolved `docs/registers/`. It is owed a closing line in a ruling entry, since CARDS.md
+requires the closing reasoning to live there.
 
-The tree won every one of these. They are recorded so a reader of
-`docs/governance/archive/` knows which of its claims not to carry forward.
+## Deviations from R346(f), unratified
 
-- `eval.concurrency`: archive carries "= 1 IS THE RUN6 VALUE" and, in a live R336(d) row, "eval
-  concurrency has no config key at HEAD, run6 runs SERIAL, G=1". The key exists in the schema and
-  run6 mints `8`.
-- `eval.gate.stride`: R344's landing text says `1`. run6 mints `3` (R345(c) moved it).
-- `train.eval_interval` / `train.checkpoint_interval`: R343's body says `750` for both. Both are
-  `1000`. R343's foot annotation corrects this; the body text was never repaired, by design.
-- Run length: R341(e) and R343(f) are carried as LIVE at a 12 h block. R344 §0.5 superseded that
-  with a 25 001-step minimum, and the live rows were never annotated.
-- Mint size: the archive says run6 is minted at 15 deltas. It carries 19.
-- Radius: the archive's §2 LOCK still reads "R26/R238 — radius = 6, never 8" with no amendment on
-  the lock line itself. run6 is radius 8 by R328(b); §3 annotates the inversion, §2 does not.
-- `eval.random_floor_games`: the archive's R147 row says "every other committed config carries 4".
-  run6 carries `20`, so the claim is false of exactly one config.
-- R345 — the ruling that holds run6 — has NO row in the archive's §5 live-force section. Its rows
-  stop at R337. R345 exists there only in a header stamp and the curation log.
-- Leg count: two consecutive curation entries say "seven severable legs" and "seven of eight legs
-  landed".
-- Every `configs/run6.yaml` line citation in the archive is off by 3 or more; two of them give
-  different line numbers for the same key. Derive coordinates at point of use, never carry them.
-- Gate/test figures: the archive's last entry records `dev` at `7561169` with a 5 008-test default
-  tier. The floor file at HEAD reads `5081`, and `dev` has moved past that commit.
+Three, all reasoned in place rather than drifted. **A ruling corrects only by annotation, so these
+stand as deviations until the operator rules on them.**
 
-## Exit facts — R346 (CLEANUP ERA), 2026-09-09
+1. **`configs/` keeps THREE files, not "run6 and one smoke profile".** `dev_example.yaml` survives
+   because ADJ-13 N-3 makes it gate 12's only disarmed real-tree red-capability demonstration:
+   delete it and gate 12 can no longer go red on `configs/` at all. Grounds are written into
+   `EXEMPT_CONFIGS`.
+2. **`tools/mint_config.py` was NOT simplified.** Nothing in it became dead, and the
+   `--set` / `--mint-row` split earns its keep more after CONFIG-1, not less — overriding an
+   operational constant is now a minted row with a stamped header line.
+3. **R347(d)'s CUDA index pin is NOT discharged.** The gate half is armed (rc 17). The pyproject
+   pin is not: `[tool.uv.sources]` conditions on environment markers, which describe interpreter
+   and platform and never GPU presence, so "host-conditional" needs a *chosen mechanism* — an
+   extra, a sync-time env var, or a second lock — each of which changes what `uv sync` means, and
+   `uv sync` is CLAUDE.md's one bootstrap contract. That is a design decision, so the CPU pin and
+   its stated WP9 MKL/AVX512 parity grounds are untouched.
 
-- Governance moved to `docs/governance/`: `LAWS.md`, `STATE.md`, `RULINGS.md`, `CARDS.md`,
-  `falsified.md`. `docs/registers/` is dissolved.
-- The old register, the ACTIVE index and the pre-R346 `laws.md` are frozen under
-  `docs/governance/archive/` behind one README, with no tooling. `git mv` was used, so history
-  follows all four files.
-- Census, stamp, mirror and sync tooling: **nothing to delete.** None of it was ever in this
-  repository — it lived in the migration workspace. The only trace is a comment in
-  `tools/ci_gates/tier_census.py` naming two tools that do not exist here (carded).
-- Sitting records and `plan/`: never tracked here. Nothing moved, nothing is missing.
-- `falsified.md` de-duplication: no repeated entry existed, so no row was removed.
-- `RULINGS.md` carries 322 entries over 321 numbers, R23 to R345, plus 20 register annotations.
-  R227 and R228 have no entry, both on operator direction.
-- The CLEANUP ERA ruling is **R346**, derived as max + 1 from the archive's own census
-  (`R23-R345, 316 sections, 316 distinct numbers`) and confirmed by a whole-tree grep: `R346`
-  appeared nowhere before this branch.
-- Gate set: **unchanged.** No gate was added, renumbered or repurposed. Gate 17 in this repo is
-  `tools/ci_gates/rule7_gate.py` (rule-7 host content), not a governance gate, and it stays.
-- Gates run on this branch: 6 (artifact) green, 17 (rule 7) green, **10 (tracked refs) RED** on
-  five CLAUDE.md lines that still name `docs/registers/`. See CARDS.md — this is the one
-  blocking item and only the operator can clear it.
+## Exit facts — R347 (CLEANUP WAVE 2), 2026-09-11
+
+- Merge order held: GUMBEL-3 → DELETE-1/CONFIG-1 → COMMENT-1. Every merge `--no-ff`, gates run in
+  the MAIN checkout rather than trusted from a worktree.
+- **Tree: 448,148 → 388,478 tracked lines (−59,670), 995 → 872 files.** Measured across the whole
+  wave, `fc951dc` (the ratified wave-1 exit) to `24c9dab0`, by counting blobs at each ref rather
+  than by transcribing a figure. The intermediate points are `8fc3a94` 450,414 / 999 after
+  GUMBEL-3 (which ADDED 2,266 lines) and `b2e72de4` 417,321 / 870 after the deletion leg. `archive/grid-path` was tagged before the first deletion and is pushed.
+- **Collected tests: 5,096 → 4,530.** The fall is the grid-path suites; the rise back from 4,481
+  is the comment-lint producer suite. Gate 3c grew a *self-expiring sanctioned ratchet-down
+  record* so a ruling-ordered mass deletion must state its own decrease instead of the floor being
+  edited down silently; that record was spent and deleted in the same wave.
+- **Comment and docstring lines: 62,365 → 32,839 (−47.3%)**, banner lines 1,276 → 23 (−98.2%),
+  with **zero non-comment tokens changed** — proven by a net hash, and independently re-verified
+  by the coordinator over all 604 pre-existing `.py` files via AST comparison with docstrings
+  blanked. Held by gate 14's comment ratchet, wired as its FIRST arm so a pyright refusal (a host
+  condition, rc 2) cannot take the comment measures down with it. **No new gate number: still 17.**
+- **Two latent false-cleans closed by contact, not by search.** (1) Fifteen `RunnerStats` fields
+  whose engine getters left with the grid path — one, `gridls_zero_policy_rows`, was still riding
+  the LAW-18 `target_integrity` channel and would have published a permanent `0` as "measured,
+  none found". (2) A tail-mass test planted 1 row in 8 and sampled 8 **with replacement**, missing
+  its own subject (7/8)^8 ≈ 34% of the time; any other with-replacement assertion of that shape
+  has the same exposure.
+- **Gate 10 was scanning a dissolved directory.** It globbed `docs/registers/` under a *combined*
+  `MIN_GLOB_FILES = 5` that `docs/contracts/` met alone, so it reported green over a scope nobody
+  chose. Now per-directory floors plus a `DISSOLVED_PATHS` check; scan 15 → 18 files.
+- **Rule 7's local supplement now exists on BOTH machines** (R347(d)), git-ignored, 12 live terms,
+  and gate 17's operator-term arm runs. Adopting it found one real leak the tracked floor cannot
+  catch: a partially-redacted git email in the frozen archive, where an earlier pass had redacted
+  the `user@host` half and left the numeric account id beside it. Redacted in the established
+  `[REDACTED:<pattern>:<sha256(match)[:8]>]` format. **It is in pushed history and was not
+  rewritten** — the account is already named publicly in `LICENSE` and the remote URL, so a
+  history rewrite of 634 commits was judged not worth it. That is a decision, not an oversight.
+- **rustfmt: HEAD is not rustfmt-clean and this wave did not make it so.** 39 of the 84 touched
+  `.rs` files were rustfmt-dirty at HEAD; 22 are now. No file that was clean became dirty.
+  Formatting strictly improved; the rest was not COMMENT-1's to change under a
+  zero-non-comment-token constraint.
+- **Shell / TOML / YAML / Makefile comments are untouched** — ~1,190 lines. Shell heredocs make
+  whole-line `#` deletion unprovable, so that class was left alone rather than asserted. The
+  tree's longest narrative headers are now in `tools/ci_gates/*.sh`.
+- `CLAUDE.md` was amended to record the ONE sanctioned exception to R316(e)'s "applied on contact,
+  never as a cleanup pass" — R346(f) ordered a tree-wide pass, and the tension is now on the
+  record rather than resolved silently.
+- **PERF-3b did not run.** It is box-only and the coordinator has no box measurement leg; the
+  protocol is written and the numbers are OWED — games/h at the mean-128 regime against R347(b)'s
+  predicted 450–640, α distribution, KL witness reading, the checker-thread A/B, and eval s/game
+  at G=8. R347(b)'s "~2–2.5 days per 25k-step block" is a PREDICTION with no measurement behind it.
+- Two `wip:` commits (`3dd20b49`, `d20dcff2`) reached `dev`. One line, empty body, no trailers, so
+  conformant in form, but "wip" states no reason. Not squashed: interactive rebase is unavailable
+  in this environment and rewriting a 473-file branch to reword two subjects was judged the worse
+  risk. Recorded rather than hidden.
+- Every commit on the wave: one line, empty body, **zero trailers**, verified mechanically.
 
 ## Provenance
 
-Derived 2026-09-09 on branch `gov-1`, from `configs/run6.yaml`,
-`src/mantis/config/armed_aborts.py`, `src/mantis/config/schema/`, `src/mantis/model/amp.py`,
-`crates/mantis-encoding/src/registry.toml` and `tools/ci_gates/test_count_floor.txt`. Ruling
-texts: `docs/governance/RULINGS.md`; frozen sources: `docs/governance/archive/`.
+Derived 2026-09-11 on `dev` at `24c9dab0`, from `configs/run6.yaml`,
+`src/mantis/config/armed_aborts.py`, `src/mantis/config/schema/`,
+`crates/mantis-search/src/mcts/{node,mod}.rs`, `crates/mantis-selfplay/src/replay/hexg/`,
+`crates/mantis-encoding/src/registry.toml`, `docs/governance/LAWS.md` and
+`tools/ci_gates/test_count_floor.txt`. Gate readings are from the wave's own runs in the main
+checkout. Ruling texts: `docs/governance/RULINGS.md`.
