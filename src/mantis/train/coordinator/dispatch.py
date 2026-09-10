@@ -59,9 +59,14 @@ class GraphStepInputs:
     node_offsets: Any
     legal_offsets: Any
     policy_target: Any
+    explicit_mask: Any
+    tail_mass: Any
     outcomes: Any
     value_valid: Any
-    is_full_search: Any
+    #: R347(b) — the per-row POLICY weight, 1 on a full-search row and
+    #: `train.fast_policy_weight` on a fast-arm one. It replaced a plain `is_full_search`
+    #: mask and is named for what it is: the fast arm is weighted, not gated.
+    policy_row_weight: Any
     n_graphs: int
 
 
@@ -129,6 +134,7 @@ def run_declared_train_step(
     recent_buffer: Any | None,
     caps_provider: Callable[[], Any],
     sample_threads_provider: Callable[[], int],
+    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One straight self-play gradient update through the typed route for ``spec``.
 
@@ -155,13 +161,21 @@ def run_declared_train_step(
 
     Required and undefaulted, because a default would be a thread budget nobody derived,
     silently taking cores from the self-play workers on whatever box the run lands on.
+
+    ``fast_policy_weight_provider`` (R347(b)) rides the SAME shape for the SAME reason: it
+    resolves `train.fast_policy_weight`, and the four frozen grid coordinators carry no
+    `train` section, so the resolved VALUE evaluated here would raise on every grid step. It
+    is a PROVIDER rather than a read off `trainer`, because `trainer` is a declared seam
+    (`TrainerLike`) and reaching through it for a config leaf would widen that protocol to
+    carry a whole hyper-parameter object for one float.
     """
     representation = getattr(spec, "representation", None)
     if representation == "graph":
         return _graph_step(trainer, buffer, spec, batch_size=batch_size, augment=augment,
                            recency_weight=recency_weight, recent_buffer=recent_buffer,
                            caps_provider=caps_provider,
-                           sample_threads_provider=sample_threads_provider)
+                           sample_threads_provider=sample_threads_provider,
+                           fast_policy_weight_provider=fast_policy_weight_provider)
     if representation == "grid":
         return _grid_step(trainer, buffer, batch_size=batch_size, augment=augment,
                           recency_weight=recency_weight, recent_buffer=recent_buffer)
@@ -175,6 +189,7 @@ def _build_graph_parts(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
+    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, Any]:
     """One sampled graph batch, prepared for a step — the kwargs BOTH step routes take.
 
@@ -236,7 +251,7 @@ def _build_graph_parts(
         slice_graph_wire,
         slice_targets,
     )
-    from mantis.train.losses import graph_loss_denominators
+    from mantis.train.losses import graph_loss_denominators, graph_policy_row_weights
 
     # ONE read of each member, into a local. Not a style choice: `train.microbatch_caps` has
     # exactly one authority and `tests/train/test_graph_microbatch_authority.py` freezes the
@@ -256,6 +271,13 @@ def _build_graph_parts(
                              max_edges, max_nodes)
     device = trainer.device
     n_graphs = int(payload.n_graphs)
+    # R347(b) — ONE evaluation of the weight rule, over the WHOLE batch, so the per-part
+    # numerator and the whole-step denominator below cannot be computed from two different
+    # vectors. `hp` is the trainer's own resolved hyper-parameters: the schema is the sole
+    # default authority and nothing here supplies a fallback (R1).
+    policy_row_weight = graph_policy_row_weights(
+        np.asarray(targets.is_full_search), float(fast_policy_weight_provider())
+    )
 
     def _make(g0: int, g1: int):
         def _materialise():
@@ -293,12 +315,15 @@ def _build_graph_parts(
                 node_offsets=batch.node_offsets, legal_offsets=batch.legal_offsets,
                 policy_target=torch.from_numpy(
                     np.asarray(tsl.policy_target, dtype=np.float32)).to(device),
+                explicit_mask=torch.from_numpy(
+                    np.asarray(tsl.explicit_mask, dtype=np.uint8)).to(device),
+                tail_mass=torch.from_numpy(
+                    np.asarray(tsl.tail_mass, dtype=np.float32)).to(device),
                 outcomes=torch.from_numpy(
                     np.asarray(tsl.outcomes, dtype=np.float32)).to(device),
                 value_valid=torch.from_numpy(
                     np.asarray(tsl.value_valid, dtype=np.uint8)).to(device),
-                is_full_search=torch.from_numpy(
-                    np.asarray(tsl.is_full_search, dtype=np.uint8)).to(device),
+                policy_row_weight=policy_row_weight[g0:g1].clone().to(device),
                 n_graphs=g1 - g0,
             )
 
@@ -309,7 +334,7 @@ def _build_graph_parts(
     # the parts sum to the un-split loss exactly. They are NOT `1/M` and NOT `B_m/B`: neither
     # denominator is the graph count, and the two are different quantities from each other.
     policy_denominator, value_denominator = graph_loss_denominators(
-        np.asarray(targets.is_full_search), np.asarray(targets.value_valid), n_graphs)
+        policy_row_weight, np.asarray(targets.value_valid), n_graphs)
     return {
         "parts": tuple(_make(g0, g1) for g0, g1 in plan),
         "policy_denominator": policy_denominator,
@@ -326,12 +351,14 @@ def _graph_step(
     trainer: Any, buffer: Any, spec: Any, *,
     batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
     caps_provider: Callable[[], Any], sample_threads_provider: Callable[[], int],
+    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One gradient update from a freshly sampled graph batch."""
     return trainer.train_step_from_graph_batch(**_build_graph_parts(
         trainer, buffer, spec, batch_size=batch_size, augment=augment,
         recency_weight=recency_weight, recent_buffer=recent_buffer,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+        fast_policy_weight_provider=fast_policy_weight_provider,
     ))
 
 
@@ -366,6 +393,7 @@ def run_declared_eval_step(
     batch_size: int,
     caps_provider: Callable[[], Any],
     sample_threads_provider: Callable[[], int],
+    fast_policy_weight_provider: Callable[[], float],
 ) -> dict[str, float]:
     """One FORWARD-ONLY loss reading over `buffer`, through the declared graph route.
 
@@ -392,6 +420,7 @@ def run_declared_eval_step(
         trainer, buffer, spec, batch_size=batch_size, augment=False,
         recency_weight=0.0, recent_buffer=None,
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
+        fast_policy_weight_provider=fast_policy_weight_provider,
     ))
 
 

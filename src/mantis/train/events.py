@@ -169,6 +169,56 @@ UNCOVERED_FORCED_WIN_KEY = "uncovered_forced_win"
 #: One spelling authority, exactly as for the two keys above.
 SYMMETRY_DRAW_KEY = "symmetry_draws"
 
+#: The `trainer_step` key R347(a)'s per-row tail mass alpha travels under. One spelling
+#: authority, exactly as for the three keys above.
+GUMBEL_TAIL_MASS_KEY = "gumbel_tail_mass"
+
+
+def tail_mass_block(values: Any) -> dict[str, Any]:
+    """R347(a)/LAW-18 — the in-run reading of the sparse Gumbel row's tail mass alpha.
+
+    ALPHA IS THE PART OF THE TRAINING TARGET THE ROW DID NOT STORE. The trainer rebuilds it
+    from its own detached current prior, so the reconstruction is exact only to the extent
+    that prior still resembles the one that recorded the row — and alpha is how much of each
+    target rides on that. A run with alpha near 0 is training on stored targets; a run with
+    alpha near 1 is training almost entirely on its own prior, and nothing in the loss curve
+    says which. This is the line that does, from step 0.
+
+    Reported as the step's own DISTRIBUTION rather than a mean: the mean of a bimodal alpha
+    (early plies with a narrow legal set, late plies with a wide one) names neither mode.
+
+    Three arms, matching the shape the sibling blocks carry:
+      NO ROWS — the key is OMITTED. A step with no graph rows has no alpha, and a keyed
+        `None` would claim a producer that did not run.
+      PUCT ROWS — every alpha is 0.0 and the block says so truthfully; the arm stores no
+        tail, and a zero here is a MEASURED zero, not an absence (R249).
+      GUMBEL ROWS — the quantiles of the step's own alphas.
+
+    Args:
+        values: the step's per-row alphas, any sequence of floats (a numpy array, a list, or
+            a concatenation of per-micro-batch slices).
+
+    Returns:
+        `{GUMBEL_TAIL_MASS_KEY: {...}}`, or `{}` when there are no rows.
+    """
+    alphas = [float(v) for v in values]
+    if not alphas:
+        return {}
+    alphas.sort()
+    n = len(alphas)
+
+    def _at(q: float) -> float:
+        return alphas[min(n - 1, max(0, int(round((n - 1) * q))))]
+
+    return {GUMBEL_TAIL_MASS_KEY: {
+        "n_rows": n,
+        "mean": sum(alphas) / n,
+        "p50": _at(0.5),
+        "p90": _at(0.9),
+        "max": alphas[-1],
+        "rows_with_tail": sum(1 for a in alphas if a > 0.0),
+    }}
+
 
 def symmetry_draw_block(buffer: Any, *, graph_run: bool) -> dict[str, Any]:
     """R266/F-P1/N1 (fdc6f09/R245(c)) — the LAW-18 fire-rate log for the per-record

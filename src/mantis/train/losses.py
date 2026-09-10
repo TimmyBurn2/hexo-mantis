@@ -68,6 +68,43 @@ def compute_policy_loss(
     return torch.zeros(1, device=device, dtype=torch.float32).squeeze()
 
 
+def graph_policy_row_weights(
+    is_full_search: Any, fast_policy_weight: float
+) -> torch.Tensor:
+    """Per-row POLICY weight for a graph batch — R347(b)'s one authority.
+
+    A full-search row weighs 1 and a fast-arm row weighs `fast_policy_weight`, so the fast
+    arm trains VALUE always and POLICY at a declared weight instead of being gated out of
+    the policy loss entirely. At `fast_policy_weight == 0.0` the vector is the old binary
+    mask exactly, which is what keeps run6's numbers unchanged.
+
+    `is_full_search` is `Any` for `graph_loss_denominators`'s reason: the ONE production
+    caller holds the full target arrays as NUMPY at this point, pre-collate, before any
+    per-part tensor exists. `torch.as_tensor` is the coercion and it is a no-op on a tensor.
+
+    Args:
+        is_full_search: the batch's per-row full-search flags, `[B]`.
+        fast_policy_weight: `train.fast_policy_weight`, resolved by its own resolver.
+
+    Returns:
+        A flat float32 tensor `[B]` — the weight each row's policy term carries. Evaluated
+        ONCE per step and read by BOTH the numerator (`ragged_policy_ce`'s
+        `full_search_mask`) and the denominator (`graph_loss_denominators`), because two
+        evaluations of one rule is the duplicate-authority class that lets them disagree.
+
+    Raises:
+        ValueError: `fast_policy_weight` is negative or not finite — a negative policy
+            weight would train the fast arm AWAY from its own target.
+    """
+    if not math.isfinite(fast_policy_weight) or fast_policy_weight < 0.0:
+        raise ValueError(
+            f"fast_policy_weight must be finite and >= 0, got {fast_policy_weight!r} "
+            "(train.fast_policy_weight)"
+        )
+    ifs = torch.as_tensor(is_full_search).reshape(-1).to(torch.float32)
+    return ifs + fast_policy_weight * (1.0 - ifs)
+
+
 def graph_loss_denominators(
     is_full_search: Any,
     value_valid: Any,
@@ -122,6 +159,8 @@ def ragged_policy_ce(
     legal_offsets: torch.Tensor,
     full_search_mask: torch.Tensor | None = None,
     denominator: float | None = None,
+    explicit_mask: torch.Tensor | None = None,
+    tail_mass: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Ragged per-legal-node policy CE for the GNN graph branch — the no-drop replacement
     for the dense-362 `compute_policy_loss`. Per graph: log_softmax over its legal-node
@@ -138,7 +177,31 @@ def ragged_policy_ce(
     denominator so the parts sum to the un-split loss exactly (`graph_loss_denominators`).
     With `denominator=None` every statement below is HEAD's, unchanged, which is what keeps
     the DENSE path's behaviour bit-identical.
+
+    `explicit_mask` / `tail_mass` (R347(a)) reconstruct the SPARSE Gumbel row. The row stores
+    the m visited candidates' exact targets plus one scalar alpha; the remaining legal
+    actions all completed to the same value, so their share of the target is alpha times the
+    recording prior renormalized over them. The tail is rebuilt here from THIS model's
+    current prior, DETACHED, renormalized over the non-explicit nodes of each graph.
+
+    THE DETACH IS THE MECHANISM, NOT AN OPTIMISATION. The tail is a TARGET; built from a
+    live `probs` it would be a function of the parameters, and the CE gradient would pick up
+    a second term pushing the prior toward whatever it already is — a self-referential
+    objective on every unvisited action, which is most of the legal set. `probs.detach()` is
+    what makes the reconstruction a constant the loss is measured against.
+    Both arguments are supplied together or not at all; with neither, the target is the
+    stored one and nothing below changes.
+
+    Raises:
+        ValueError: exactly one of `explicit_mask` / `tail_mass` was supplied — a tail mass
+            with no support set has no set to spread over, and a support set with no tail
+            mass names a reconstruction nobody asked for.
     """
+    if (explicit_mask is None) != (tail_mass is None):
+        raise ValueError(
+            "ragged_policy_ce: explicit_mask and tail_mass are one argument in two parts "
+            "(R347(a)) — supply both or neither"
+        )
     policy_logits = policy_logits.to(torch.float32)
     device = policy_logits.device
     b = int(legal_offsets.shape[0]) - 1
@@ -146,11 +209,23 @@ def ragged_policy_ce(
         return torch.zeros((), device=device, dtype=torch.float32)
     probs = _segment_softmax(policy_logits, legal_offsets)
     logp = torch.log(probs.clamp(min=1e-12))
-    per_node = -(policy_target * logp)  # (Lg,)
     counts = legal_offsets[1:] - legal_offsets[:-1]
     seg = torch.repeat_interleave(
         torch.arange(b, device=device, dtype=torch.long), counts
     )
+    target = policy_target
+    if explicit_mask is not None and tail_mass is not None:
+        # DETACHED: the reconstructed tail is a target, not a term of the model.
+        tail_prior = probs.detach() * (
+            1.0 - explicit_mask.reshape(-1).to(probs.dtype)
+        )
+        tail_denom = torch.zeros(b, device=device, dtype=tail_prior.dtype)
+        tail_denom.scatter_add_(0, seg, tail_prior)
+        # A graph whose legal set is entirely explicit has an empty tail; the clamp keeps
+        # the divide finite and the numerator is zero there anyway, so it contributes 0.
+        scale = tail_mass.reshape(-1).to(tail_prior.dtype) / tail_denom.clamp_min(1e-12)
+        target = policy_target + tail_prior * scale[seg]
+    per_node = -(target * logp)  # (Lg,)
     per_graph = torch.zeros(b, device=device, dtype=per_node.dtype)
     per_graph.scatter_add_(0, seg, per_node)  # (B,)
     if full_search_mask is not None:
