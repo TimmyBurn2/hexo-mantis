@@ -42,7 +42,7 @@ def test_any_field_change_changes_key():
         {"opponent_spec": "sealbot:depth=6"},
         {"opening_book": "book_v2"},
         {"deploy_matched": False},
-        {"encoding": "v6_live2_ls"},
+        {"encoding": "gnn_axis_r8"},
     ]
     for overrides in field_overrides:
         changed = _key(**overrides)

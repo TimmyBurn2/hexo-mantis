@@ -66,33 +66,6 @@ def _real_graph_loss_info(tmp_path: Path) -> dict[str, float]:
     )
 
 
-def _real_dense_loss_info(full_train_hparams: Any) -> dict[str, float]:
-    """One real DENSE training step; its return dict. Mirrors the driver in
-    `tests/train/test_losses.py` (checkpoint_interval=0, so no schema validation is reached)."""
-    from mantis.train.trainer.core import Trainer
-
-    spec = lookup("v6_live2_ls")
-    arch = arch_from_spec_and_config(spec, {})
-    config = {
-        "schema_version": 1, "run_id": "run5", "seed": 7,
-        "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
-        "search": {"kind": "puct"},
-        "selfplay": {"legal_move_radius_schedule": None},
-        "train": {"amp_dtype": "fp16", "ema": {"enabled": False, "decay": 0.999, "update_every": 10}},
-    }
-    hp = full_train_hparams(fp16=False, lr_schedule="none", checkpoint_interval=0)
-    torch.manual_seed(11)
-    tr = Trainer(build_net(arch), config, arch=arch, train_hparams=hp, sink=None)
-
-    b, planes, hw = 3, int(spec.n_planes), int(spec.board_size)
-    n_actions = hw * hw + 1
-    states = np.zeros((b, planes, hw, hw), dtype=np.float32)
-    policies = np.full((b, n_actions), 1.0 / n_actions, dtype=np.float32)
-    outcomes = np.array([1.0, -1.0, 1.0], dtype=np.float32)
-    return tr.train_step_from_tensors(states, policies, outcomes)
-
-
 def _alerts(payload: dict[str, Any]) -> list[str]:
     """The 4 WARN rules over one payload, at the MINTED thresholds, through a spy sink."""
     fired: list[dict[str, Any]] = []
@@ -109,19 +82,15 @@ def _alerts(payload: dict[str, Any]) -> list[str]:
 
 # ── the premise, re-derived rather than assumed ────────────────────────────────────────
 
-def test_neither_real_trainer_tail_produces_policy_entropy(
-    tmp_path: Path, full_train_hparams: Any
-) -> None:
+def test_the_real_trainer_tail_produces_no_policy_entropy(tmp_path: Path) -> None:
     """F-01's premise. If this reds, a producer appeared and the builder should carry it —
-    the alert would then be measuring something, which it never has been."""
+    the alert would then be measuring something, which it never has been. The dense tail this
+    row used to check beside the graph one went with `train_step_from_tensors` (R346(f))."""
     graph = _real_graph_loss_info(tmp_path)
-    dense = _real_dense_loss_info(full_train_hparams)
     assert "policy_entropy" not in graph, sorted(graph)
-    assert "policy_entropy" not in dense, sorted(dense)
-    # and the keys they DO guarantee are the ones the builder may read without a default
+    # and the keys it DOES guarantee are the ones the builder may read without a default
     for key in GUARANTEED:
         assert key in graph, f"graph tail dropped {key}: {sorted(graph)}"
-        assert key in dense, f"dense tail dropped {key}: {sorted(dense)}"
 
 
 # ── the audit's PIN, on both arms ──────────────────────────────────────────────────────
@@ -131,16 +100,6 @@ def test_the_real_graph_tail_yields_absent_entropy_and_fires_no_alert(
 ) -> None:
     """THE PIN. Before the repair: `policy_entropy` 0.0 and `entropy_collapse` fired."""
     payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), None, _NullSink())
-    assert payload["policy_entropy"] is None
-    assert "entropy_collapse" not in _alerts(payload)
-
-
-def test_the_real_dense_tail_yields_absent_entropy_and_fires_no_alert(
-    full_train_hparams: Any
-) -> None:
-    payload = emit_training_step_event(
-        0, _real_dense_loss_info(full_train_hparams), None, _NullSink()
-    )
     assert payload["policy_entropy"] is None
     assert "entropy_collapse" not in _alerts(payload)
 

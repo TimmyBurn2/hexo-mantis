@@ -36,7 +36,7 @@ from mantis.arena.match import IllegalOpeningError, play_paired_match
 from mantis.arena.regime import RegimeKey
 
 _REPO = Path(__file__).resolve().parents[2]
-_ENCODING = "v6_live2_ls"
+_ENCODING = "gnn_axis_v1"
 
 #: Far outside any `legal_move_radius` ball reachable from an opening near the origin — the
 #: legal set is the union of radius-R balls around PLACED STONES, so distance from the stones

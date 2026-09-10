@@ -37,7 +37,7 @@ from mantis.arena.adjudicate import (
 from mantis.arena.match import play_paired_match
 from mantis.arena.regime import RegimeKey
 
-_ENCODING = "v6_live2_ls"
+_ENCODING = "gnn_axis_v1"
 
 #: A LOPSIDED, unfinished position, ten plies long. Player 1's stones are collinear and
 #: player -1's are scattered, so both criteria measure a non-zero margin — asserted below

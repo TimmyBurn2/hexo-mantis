@@ -42,7 +42,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.model.arch import CnnArch, GnnArch, GnnArchV2
+from mantis.model.arch import GnnArch, GnnArchV2
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, roster
@@ -334,44 +334,6 @@ def _gnn_envelope(hidden: int, arch_cls=GnnArch) -> dict[str, Callable[[Any], Me
     return {"trainer": trainer, "eval": evaluation, "serving": serving}
 
 
-def _cnn_arch(spec, filters: int) -> CnnArch:
-    return CnnArch(
-        board_size=spec.board_size, in_channels=spec.n_planes,
-        filters=filters, res_blocks=1, se_reduction_ratio=2,
-    )
-
-
-def _cnn_batch(spec) -> torch.Tensor:
-    """The production dense route, as `selfplay/inference_local.py::_forward_boards` builds it."""
-    from mantis._engine import Board
-    from mantis.env.game_state import GameState
-
-    board = Board.with_encoding_name(spec.name)
-    for i in range(4):
-        board.apply_move(i, 0)
-    tensor, _centers = GameState.from_board(board).to_tensor()
-    if tensor.shape[1] != spec.n_planes:
-        tensor = tensor[:, list(spec.kept_plane_indices)]
-    return torch.from_numpy(tensor).float()
-
-
-def _cnn_envelope(filters: int) -> dict[str, Callable[[Any], MemoryTerm]]:
-    def build(spec):
-        return build_net(_cnn_arch(spec, filters))
-
-    def serving(spec) -> MemoryTerm:
-        return _serving_term(build(spec).eval(), _cnn_batch(spec))
-
-    def evaluation(spec) -> MemoryTerm:
-        return _eval_term(lambda: build(spec).eval(), _cnn_batch(spec))
-
-    def trainer(spec) -> MemoryTerm:
-        sample = _cnn_batch(spec)
-        return _trainer_term(build(spec), lambda n: n.forward(sample)[1].float().sum())
-
-    return {"trainer": trainer, "eval": evaluation, "serving": serving}
-
-
 #: The declared widths the derivation control compares. Instrument parameters, not thresholds:
 #: nothing is asserted about either level, only that every term moves BETWEEN them.
 _NARROW, _WIDE = 8, 24
@@ -382,7 +344,6 @@ def registered_envelopes(narrow: bool = False) -> dict[str, MemoryEnvelope]:
     return {
         "GnnArch": MemoryEnvelope("GnnArch", _gnn_envelope(width)),
         "GnnArchV2": MemoryEnvelope("GnnArchV2", _gnn_envelope(width, GnnArchV2)),
-        "CnnArch": MemoryEnvelope("CnnArch", _cnn_envelope(width)),
     }
 
 

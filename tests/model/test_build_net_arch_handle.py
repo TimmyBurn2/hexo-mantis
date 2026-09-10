@@ -31,17 +31,18 @@ BREAKS `is` identity, while `.to(...)` preserves it. `is` is the correct asserti
 from __future__ import annotations
 
 from mantis.encoding import lookup
-from mantis.model import CnnArch, GnnArch, arch_from_spec_and_config, build_net
+from mantis.model import GnnArch, arch_from_spec_and_config, build_net
 
 
 def _archs():
-    """One CnnArch and one GnnArch, both built the way production builds them — through
+    """Every registered encoding's arch, built the way production builds them — through
     `arch_from_spec_and_config` off a REGISTERED encoding, never hand-constructed (LAW-11).
+    The `CnnArch` half this pair used to carry went with the grid rows (R346(f)).
     """
-    grid = arch_from_spec_and_config(lookup("v6"), {})
-    graph = arch_from_spec_and_config(lookup("gnn_axis_v1"), {})
-    assert isinstance(grid, CnnArch) and isinstance(graph, GnnArch)
-    return {"v6": grid, "gnn_axis_v1": graph}
+    archs = {name: arch_from_spec_and_config(lookup(name), {})
+             for name in ("gnn_axis_v1", "gnn_axis_r8")}
+    assert all(isinstance(a, GnnArch) for a in archs.values())
+    return archs
 
 
 def test_build_net_carries_the_declared_arch_dataclass_as_a_handle() -> None:

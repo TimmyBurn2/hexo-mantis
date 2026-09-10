@@ -296,13 +296,19 @@ def test_the_wheel_compat_default_for_a_missing_cluster_getter_is_absence() -> N
     assert rstats.cluster_policy_disagreement_mean is None
 
 
-# ═══ H-3 — the shipped type stubs must not claim the getters are non-optional ═══
-def test_both_engine_stubs_declare_the_cluster_means_optional() -> None:
-    """The two `_engine.pyi` twins are the ONLY type authority for the FFI getters — pyright
-    reads the stub, never the compiled module — and nothing else in the repo compares them or
-    checks either against the getter's real nullability.
+# ═══ H-3 — the shipped type stubs must not re-declare the retired cluster getters ═══
+def test_neither_engine_stub_declares_a_cluster_mean_getter() -> None:
+    """INVERTED by R346(f). The two `_engine.pyi` twins are the ONLY type authority for the FFI
+    getters — pyright reads the stub, never the compiled module — and this row used to pin that
+    both declared the cluster means `float | None` rather than `float`, because the getter
+    returned None at zero cluster-variance samples.
 
-    FALSIFYING MUTATION: revert either twin's two cluster getters to `-> float`.
+    The cluster-variance accumulators only ever ran on the dense arm's `*k >= 2` branch, so the
+    getters went with it and the engine exposes neither. What is pinned now is that a stub does
+    not RE-declare one: a typed getter with no compiled counterpart is a phantom the checker
+    would bless and every reader would trust.
+
+    FALSIFYING MUTATION: add either getter back to either twin.
     """
     twins = (REPO_ROOT / "src" / "mantis" / "_engine.pyi",
              REPO_ROOT / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi")
@@ -310,8 +316,8 @@ def test_both_engine_stubs_declare_the_cluster_means_optional() -> None:
     for twin in twins:
         text = twin.read_text(encoding="utf-8")
         for name in CLUSTER_MEANS:
-            assert f"def {name}(self) -> float | None: ..." in text, (
-                f"{twin.relative_to(REPO_ROOT)} must declare {name} as `float | None` "
-                f"(R249): the getter returns None at zero cluster-variance samples, and a "
-                f"stub saying `float` type-checks a consumer that crashes on the graph arm."
+            assert f"def {name}(" not in text, (
+                f"{twin.relative_to(REPO_ROOT)} declares {name}, which the compiled engine no "
+                f"longer exposes (R346(f)) — a stub with no counterpart type-checks a consumer "
+                f"that gets None at runtime."
             )

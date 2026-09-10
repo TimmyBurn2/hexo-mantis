@@ -15,9 +15,10 @@ Every test below DRIVES the failure — nothing is asserted from source text —
 asserts the value reaches its DESTINATION, because a counter only a test can see is the
 half-wired state LAW-07 forbids:
 
-  - IN-RUN (`replay.py`, `replay_v6w25.py` — reachable from `train/pretrain/dataset.py`)
-    → `REPLAY_COUNTERS` → the coordinator's `monitor_gates` event, key `data_loss_counters`,
-    on the ARMING cadence `monitor.gate_interval` (R242) — not `train.log_interval`. The
+  - IN-RUN: the three dense replayers and their `REPLAY_COUNTERS` registry are DELETED with
+    the grid path (R346(f)), and so is the `monitor_gates.data_loss_counters` key they fed —
+    a registry with no producer publishes an always-empty mapping that reads as "nothing was
+    lost" forever. What is left below is the OFFLINE half. The
     drives below call `_emit_monitor_gates` directly, so no cadence key is constructed here
     and the R242 split cannot silently re-point what these assert.
   - OFFLINE (`corpus_analysis`, `corpus_metrics`, `generate`, `human_seeding`,
@@ -40,11 +41,9 @@ from types import SimpleNamespace
 import mantis.data
 import mantis.data.loss_counters as lc
 from mantis.data.corpus_analysis import load_all_games
-from mantis.data.corpus_metrics import analyse_cluster_counts, analyse_opening_diversity
+from mantis.data.corpus_metrics import analyse_opening_diversity
 from mantis.data.generate import _play_one_game, load_cached_bot_games
 from mantis.data.human_seeding import _build_file_index
-from mantis.data.replay import replay_game_to_triples_ls, replay_game_to_triples_v6
-from mantis.data.replay_v6w25 import replay_game_to_triples_v6w25
 from mantis.data.sources.base import GameRecord
 from mantis.data.sources.human import HumanGameSource
 from mantis.monitor.best_effort import BestEffortCounters
@@ -54,11 +53,6 @@ _DATA_ROOT = Path(mantis.data.__file__).resolve().parent
 # A game whose third move replays the first cell — the engine raises `cell already
 # occupied`, which is the illegal-move truncation every replayer swallows.
 _ILLEGAL = [(0, 0), (1, 0), (0, 0), (2, 0)]
-# A game whose third move is far outside every cluster window — no representable dense
-# target, so the ply emits NO row. Legal, so it is a DROP and not an exception.
-_OFF_WINDOW = [(0, 0), (1, 0), (200, 200)]
-
-
 def _delta(counters: BestEffortCounters, label: str, fn: Callable[[], object]) -> int:
     """Counts added under ``label`` by running ``fn``. Delta, not absolute: the registries
     are process-global by design (they accumulate across a whole run)."""
@@ -70,114 +64,6 @@ def _delta(counters: BestEffortCounters, label: str, fn: Callable[[], object]) -
 def _write(path: Path, payload: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload), encoding="utf-8")
-
-
-# ══ IN-RUN producers — the pretrain-reachable replayers ═══════════════════════════════
-def test_v6_illegal_move_truncation_is_counted() -> None:
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.v6.illegal_move_truncated_game",
-                  lambda: replay_game_to_triples_v6(_ILLEGAL, 1)) == 1
-
-
-def test_v6_off_window_ply_drop_is_counted() -> None:
-    """The un-excepted half: a dropped ply is silent supervision loss, so it is counted."""
-    out = replay_game_to_triples_v6(_OFF_WINDOW, 1)
-    assert len(out[0]) == 2, "the off-window ply must still be DROPPED (behaviour unchanged)"
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.v6.off_window_ply_dropped",
-                  lambda: replay_game_to_triples_v6(_OFF_WINDOW, 1)) == 1
-
-
-def test_v6w25_arms_are_counted_under_their_own_labels() -> None:
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.v6w25.illegal_move_truncated_game",
-                  lambda: replay_game_to_triples_v6w25(_ILLEGAL, 1)) == 1
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.v6w25.off_window_ply_dropped",
-                  lambda: replay_game_to_triples_v6w25(_OFF_WINDOW, 1)) == 1
-
-
-def test_ls_arms_are_counted_under_their_own_labels() -> None:
-    def _ls(moves: list[tuple[int, int]]) -> Callable[[], object]:
-        return lambda: replay_game_to_triples_ls(
-            moves, 1, kept_plane_indices=[0, 8, 16, 17], policy_size=362, k_max=8)
-
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.ls.illegal_move_truncated_game",
-                  _ls(_ILLEGAL)) == 1
-    assert _delta(lc.REPLAY_COUNTERS, "data.replay.ls.off_window_ply_dropped",
-                  _ls(_OFF_WINDOW)) == 1
-
-
-def test_the_three_replayers_do_not_share_one_bucket() -> None:
-    """Distinct labels per site (item 8): one shared bucket cannot tell 'one corpus file is
-    corrupt' from 'every game is failing'."""
-    labels = {
-        "data.replay.v6.illegal_move_truncated_game",
-        "data.replay.v6w25.illegal_move_truncated_game",
-        "data.replay.ls.illegal_move_truncated_game",
-        "data.replay.v6.off_window_ply_dropped",
-        "data.replay.v6w25.off_window_ply_dropped",
-        "data.replay.ls.off_window_ply_dropped",
-    }
-    replay_game_to_triples_v6(_ILLEGAL, 1)
-    replay_game_to_triples_v6w25(_ILLEGAL, 1)
-    replay_game_to_triples_ls(_ILLEGAL, 1, kept_plane_indices=[0, 8, 16, 17],
-                              policy_size=362, k_max=8)
-    live = lc.REPLAY_COUNTERS.snapshot()
-    assert labels <= set(live), f"missing per-site labels: {sorted(labels - set(live))}"
-
-
-def test_the_two_registries_are_distinct_objects() -> None:
-    """The in-run readout must not be polluted by offline corpus-build losses — an operator
-    reading `data_loss_counters` mid-run would otherwise see numbers from a different
-    process's job mixed into the training-row loss."""
-    assert lc.REPLAY_COUNTERS is not lc.PIPELINE_COUNTERS
-
-
-# ══ IN-RUN consumer — the counter reaches the event sink ══════════════════════════════
-def test_monitor_gates_payload_reads_the_replay_counters_live(monkeypatch) -> None:
-    """The LAW-18 destination arm, and it must be a LIVE module-attribute read: the payload
-    reflects a registry swapped in AFTER import (a from-import of the snapshot would freeze)."""
-    from mantis.train.coordinator.step import StepCoordinator  # torch-heavy; imported here
-
-    fresh = BestEffortCounters()
-    fresh.increment("data.replay.v6.illegal_move_truncated_game")
-    fresh.increment("data.replay.v6.illegal_move_truncated_game")
-    fresh.increment("data.replay.ls.off_window_ply_dropped")
-    monkeypatch.setattr(lc, "REPLAY_COUNTERS", fresh)
-
-    emitted: list[dict] = []
-    sink = SimpleNamespace(emit=emitted.append)
-    fake_coord = SimpleNamespace(
-        _train_step=1, _gate_stats={}, _wr_history=[],
-        # AUDIT-1 F-14: the ring's length is published beside the rung it is a series
-        # OVER, so the stand-in carries both.
-        _wr_history_rung=None,
-        monitor_cfg=SimpleNamespace(wr_hard_abort_enabled=False),
-        _watchdog_counters=lambda: {},
-    )
-    StepCoordinator._emit_monitor_gates(fake_coord, SimpleNamespace(draw_rate_abort=None), sink)
-
-    assert emitted and emitted[0]["event"] == "monitor_gates"
-    assert emitted[0]["data_loss_counters"] == {
-        "data.replay.v6.illegal_move_truncated_game": 2,
-        "data.replay.ls.off_window_ply_dropped": 1,
-    }
-
-
-def test_a_healthy_replay_publishes_no_loss(monkeypatch) -> None:
-    """The discriminating negative: the sink key counts LOSSES, not replays."""
-    from mantis.train.coordinator.step import StepCoordinator
-
-    monkeypatch.setattr(lc, "REPLAY_COUNTERS", BestEffortCounters())
-    emitted: list[dict] = []
-    fake_coord = SimpleNamespace(
-        _train_step=1, _gate_stats={}, _wr_history=[],
-        # AUDIT-1 F-14: the ring's length is published beside the rung it is a series
-        # OVER, so the stand-in carries both.
-        _wr_history_rung=None,
-        monitor_cfg=SimpleNamespace(wr_hard_abort_enabled=False),
-        _watchdog_counters=lambda: {},
-    )
-    StepCoordinator._emit_monitor_gates(fake_coord, SimpleNamespace(draw_rate_abort=None),
-                                        SimpleNamespace(emit=emitted.append))
-    assert emitted[0]["data_loss_counters"] == {}
 
 
 # ══ OFFLINE producers ════════════════════════════════════════════════════════════════
@@ -228,12 +114,7 @@ def test_corpus_metrics_illegal_move_truncations_are_counted() -> None:
     assert _delta(
         lc.PIPELINE_COUNTERS,
         "data.corpus_metrics.opening_diversity_illegal_move_truncated_replay",
-        lambda: analyse_opening_diversity(records, encoding_name="v6"),
-    ) == 1
-    assert _delta(
-        lc.PIPELINE_COUNTERS,
-        "data.corpus_metrics.cluster_counts_illegal_move_truncated_replay",
-        lambda: analyse_cluster_counts(records, sample_size=4, encoding_name="v6"),
+        lambda: analyse_opening_diversity(records, encoding_name="gnn_axis_r8"),
     ) == 1
 
 
@@ -250,7 +131,7 @@ def test_generate_seeding_fallback_and_bot_move_error_are_counted(tmp_path: Path
     seed_label = "data.generate.human_seeding_failed_fallback_random"
     bot_label = "data.generate.bot_move_error_truncated_game"
     before = (lc.PIPELINE_COUNTERS.get(seed_label), lc.PIPELINE_COUNTERS.get(bot_label))
-    result = _play_one_game(_BotThatExplodes(), 0, encoding_name="v6", use_human_seeding=True,
+    result = _play_one_game(_BotThatExplodes(), 0, encoding_name="gnn_axis_r8", use_human_seeding=True,
                             human_corpus_dir=str(tmp_path))
     after = (lc.PIPELINE_COUNTERS.get(seed_label), lc.PIPELINE_COUNTERS.get(bot_label))
     assert (after[0] - before[0], after[1] - before[1]) == (1, 1)
@@ -275,7 +156,7 @@ def test_the_wrapper_covers_everything_the_old_try_covered(tmp_path: Path) -> No
     assert n == 1, "a non-comparable moveCount must be a COUNTED skip, not a raise"
 
     m = _delta(lc.PIPELINE_COUNTERS, "data.generate.bot_move_error_truncated_game",
-               lambda: _play_one_game(_BotWithBadMoveShape(), 0, encoding_name="v6"))
+               lambda: _play_one_game(_BotWithBadMoveShape(), 0, encoding_name="gnn_axis_r8"))
     assert m == 1, "a bot returning a non-pair must be a COUNTED skip, not a raise"
 
 

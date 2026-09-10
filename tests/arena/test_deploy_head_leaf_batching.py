@@ -40,7 +40,7 @@ from mantis._engine import Board
 from mantis.arena.deploy_head import DeployHeadPlayer
 
 _REPO = Path(__file__).resolve().parents[2]
-_ENCODING = "v6_live2_ls"
+_ENCODING = "gnn_axis_v1"
 _POLICY_LEN = 362
 
 

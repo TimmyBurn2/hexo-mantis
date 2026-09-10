@@ -85,6 +85,7 @@ import pytest
 import yaml
 
 import mantis.run as mantis_run
+from mantis._engine import HexgBuffer
 from mantis.config.armed_aborts import (
     DISK_SPACE_ABORT_RULE,
     MANIFEST,
@@ -105,6 +106,18 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
@@ -362,7 +375,7 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=_tiny_model(), bufs=None, config=config,
-        full_config={"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
@@ -457,8 +470,6 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
         )
 
     out_dir = tmp_path / "out"
-    from mantis._engine import HexgBuffer
-
     buffer = HexgBuffer(64, "gnn_axis_v1", 128)
     for i in range(8):
         buffer.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 0.6), (1, 1, 0.4)],

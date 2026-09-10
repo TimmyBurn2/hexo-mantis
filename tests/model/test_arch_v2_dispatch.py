@@ -20,7 +20,7 @@ import pytest
 import torch
 
 from mantis.model import GnnArch, GnnArchV2, GnnNet, GnnNetV2, build_net
-from mantis.model.arch import CnnArch, RepresentationMismatch
+from mantis.model.arch import RepresentationMismatch
 from mantis.train.checkpoints import _arch_from_dict, _arch_to_dict
 
 _V2 = GnnArchV2(in_dim=11, edge_dim=5, hidden=8, num_layers=2, policy_hidden=8, value_hidden=8)
@@ -81,7 +81,7 @@ def test_the_declared_arch_is_the_HANDLE_the_built_net_carries() -> None:
     )
 
 
-@pytest.mark.parametrize("arch", [_V1, _V2, CnnArch(board_size=19, in_channels=8)])
+@pytest.mark.parametrize("arch", [_V1, _V2])
 def test_every_arch_ROUND_TRIPS_through_the_checkpoint_serializer(arch) -> None:
     """LAW-12's core claim for the widened union: what goes in comes back as itself."""
     assert _arch_from_dict(_arch_to_dict(arch)) == arch
@@ -138,7 +138,7 @@ def test_a_LEGACY_dict_that_does_NOT_FIT_its_arch_is_refused() -> None:
 
 
 def test_a_stamp_with_NEITHER_discriminator_is_refused() -> None:
-    with pytest.raises(RepresentationMismatch, match="expected 'grid' or 'graph'"):
+    with pytest.raises(RepresentationMismatch, match="expected 'graph'"):
         _arch_from_dict({"representation": "hypergraph"})
 
 

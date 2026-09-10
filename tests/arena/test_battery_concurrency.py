@@ -30,7 +30,7 @@ from mantis._engine import Board
 from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
 
-_ENCODING = "v6_live2_ls"
+_ENCODING = "gnn_axis_v1"
 
 
 @dataclass(frozen=True)

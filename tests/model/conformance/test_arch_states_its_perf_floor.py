@@ -59,7 +59,7 @@ from typing import Any
 import pytest
 
 import mantis.model.build as build_module
-from mantis.model.arch import CnnArch, GnnArch, GnnArchV2
+from mantis.model.arch import GnnArch, GnnArchV2
 from mantis.model.build import build_net
 
 from _corpus import ConformanceRefusal, build_board, roster
@@ -320,54 +320,6 @@ def _gnn_probe_arms(spec, arch_cls=GnnArch):
     return floor_arm, served_arm
 
 
-def _cnn_probe_arms(spec):
-    """CnnArch: floor = the trunk+heads forward on a prepared plane stack; served = the same
-    forward reached from a constructed board through the plane assembly that feeds it.
-
-    The served arm is the PRODUCTION route, not a stand-in: `GameState.from_board(...)`,
-    `.to_tensor()`, then the spec's own `kept_plane_indices` slice — which is what
-    `selfplay/inference_local.py::_forward_boards` does, and the plane count comes off the bound
-    spec there for the same reason it does here.
-    """
-    import torch
-
-    from mantis._engine import Board
-    from mantis.env.game_state import GameState
-
-    net = build_net(
-        CnnArch(
-            board_size=spec.board_size, in_channels=spec.n_planes,
-            filters=8, res_blocks=1, se_reduction_ratio=2,
-        )
-    ).eval()
-
-    def board():
-        b = Board.with_encoding_name(spec.name)
-        for i in range(4):
-            b.apply_move(i, 0)
-        return b
-
-    def planes(b):
-        tensor, _centers = GameState.from_board(b).to_tensor()
-        if tensor.shape[1] != spec.n_planes:
-            tensor = tensor[:, list(spec.kept_plane_indices)]
-        return torch.from_numpy(tensor).float()
-
-    def run(x) -> None:
-        with torch.no_grad():
-            net.forward(x)
-
-    def floor_arm(_spec):
-        prepared = planes(board())
-        return (lambda: prepared), run
-
-    def served_arm(_spec):
-        constructed = board()
-        return (lambda: constructed), (lambda b: run(planes(b)))
-
-    return floor_arm, served_arm
-
-
 def registered_probes() -> dict[str, FloorProbe]:
     """The registry. Keyed by the arch CLASS NAME, which is what the dispatch census reports."""
     return {
@@ -380,11 +332,6 @@ def registered_probes() -> dict[str, FloorProbe]:
             arch_kind="GnnArchV2",
             floor_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2)[0](spec),
             served_arm=lambda spec: _gnn_probe_arms(spec, GnnArchV2)[1](spec),
-        ),
-        "CnnArch": FloorProbe(
-            arch_kind="CnnArch",
-            floor_arm=lambda spec: _cnn_probe_arms(spec)[0](spec),
-            served_arm=lambda spec: _cnn_probe_arms(spec)[1](spec),
         ),
     }
 
@@ -431,8 +378,7 @@ def test_the_dispatch_census_SEES_a_third_arch_branch(derived):
     refusal, which is exactly what happened when `GnnArchV2` stood here and then registered."""
     planted = (
         "def build_net(arch):\n"
-        "    if isinstance(arch, CnnArch):\n        return A()\n"
-        "    elif isinstance(arch, GnnArch):\n        return B()\n"
+        "    if isinstance(arch, GnnArch):\n        return B()\n"
         "    elif isinstance(arch, GnnArchNext):\n        return C()\n"
         "    raise RepresentationMismatch('no')\n"
     )
@@ -449,10 +395,10 @@ def test_the_dispatch_census_does_NOT_fire_on_isinstance_OUTSIDE_build_net():
     planted = (
         "def _validate(x):\n    if isinstance(x, SomethingElse):\n        return 1\n"
         "def build_net(arch):\n"
-        "    if isinstance(arch, CnnArch):\n        return A()\n"
+        "    if isinstance(arch, GnnArch):\n        return A()\n"
         "    raise RepresentationMismatch('no')\n"
     )
-    assert arch_kinds_dispatched(planted) == frozenset({"CnnArch"})
+    assert arch_kinds_dispatched(planted) == frozenset({"GnnArch"})
 
 
 def test_an_EMPTY_dispatch_census_is_REFUSED_rather_than_reported_clean():

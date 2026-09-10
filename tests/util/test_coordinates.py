@@ -1,7 +1,7 @@
 """Unit tests for mantis.util.coordinates — pure hex coord helpers.
 
 LOCKED #12 re-anchoring: `BOARD` (the window side / board_size) is derived from
-the v6 registry spec rather than baked as 19, and every hardcoded centre-offset
+the registry spec rather than baked as 19, and every hardcoded centre-offset
 (9) / out-of-window index (10) is expressed via `HALF = (BOARD-1)//2`. The
 known-triple and known-distance tables are pure axial relationships stated in
 terms of HALF/BOARD, so they re-anchor automatically.
@@ -18,7 +18,7 @@ from mantis.util.coordinates import (
     axial_distance,
 )
 
-BOARD: int = _lookup_encoding("v6").board_size   # 19 for v6 — registry-derived
+BOARD: int = _lookup_encoding("gnn_axis_r8").board_size   # 19 — registry-derived
 HALF: int = (BOARD - 1) // 2                      # 9
 
 

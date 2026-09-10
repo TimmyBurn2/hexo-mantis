@@ -50,26 +50,6 @@ added_by = "GUMBEL-3"
 # producers over PINNED inputs; the P-04/P-09 pins assert the ported new-side
 # producers reproduce these byte-for-byte.
 [[required]]
-path = "worker/aggregate_policy.bin"
-sha256 = "fc32b722e31364a91fb4d0e9a1bdcf096b8fc340bb612906bcc7cd18a280ebe1"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_to_local.bin"
-sha256 = "0b585bdc70f63d1c997d7eeea086b0cfdcc853af2c55b218a3abe6ba3d45698d"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_ls.bin"
-sha256 = "818e5cdb4ac03f4ffa81358aac547bc6559a38493e34509a170be7002781b192"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_to_local_ls.bin"
-sha256 = "d1c9bf03f4b16eacc3d0a0e69d908368c9dd5161415d87cb21118a8eb6e12d53"
-added_by = "WP6"
-
-[[required]]
 path = "worker/assemble_ls_from_gnn_probs.bin"
 sha256 = "6a8ce8e7b5e5265f1bfdd88e81c3903a9962c51390001935683cb9298f025147"
 added_by = "WP6"

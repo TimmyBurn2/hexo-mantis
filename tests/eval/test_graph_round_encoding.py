@@ -43,7 +43,7 @@ from mantis.encoding import all_specs, lookup
 from mantis.eval import worker
 from mantis.eval.rounds import GateSpec, RoundSpec, RungJob
 from mantis.eval.snapshot import write_model_snapshot
-from mantis.model import CnnArch, GnnArch, build_net
+from mantis.model import GnnArch, build_net
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 # The ONE opening book in the repo, and the probe's parameter set (PREREG §5) verbatim, so
@@ -62,16 +62,10 @@ def _net(enc_name: str, *, seed: int) -> torch.nn.Module:
     """
     spec = lookup(enc_name)
     torch.manual_seed(seed)
-    arch: CnnArch | GnnArch
-    if spec.representation == "graph":
-        arch = GnnArch(
-            in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
-            hidden=16, num_layers=1, policy_hidden=16, value_hidden=16,
-        )
-    else:
-        arch = CnnArch(
-            board_size=spec.board_size, in_channels=spec.n_planes, filters=8, res_blocks=1,
-        )
+    arch = GnnArch(
+        in_dim=spec.node_feat_dim, edge_dim=spec.edge_feat_dim,
+        hidden=16, num_layers=1, policy_hidden=16, value_hidden=16,
+    )
     net = build_net(arch)
     net.arch = arch
     net.eval()
@@ -219,96 +213,6 @@ def test_both_engines_bind_the_declared_graph_spec(
     assert all(is_graph for _name, is_graph in bound), f"graph dispatch not taken: {bound}"
 
 
-# ── ⊕ᶜ O-3 (R20-protected grid arm) ───────────────────────────────────────────────────
-def test_dense_v6_round_is_byte_stable_and_deterministic(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`v6` is an R20-protected grid encoding: this card must not move it.
-
-    NAMING CORRECTED (ADJ-WP12R-18, under R148). This docstring previously called `v6`
-    "the operator-locked dense control arm". R148 rules that the dense control arm IS
-    `v6_live2_ls`, consistent with R117 — so the TITLE was wrong here, at four sites in
-    this file, which were the only four occurrences of the phrase in the repo. What the
-    test actually pins is unchanged and remains correct: `v6` round determinism and
-    byte-stability under R20, which protects `representation="grid"` as a CLASS and names
-    no encoding. A naming defect (R73 name-truth), never a behaviour defect — the
-    assertions below are byte-identical to the shipped ones.
-
-    The committed assertion is the platform-independent property — two runs of the SAME
-    spec in the same process return equal result dicts, and both rounds bind `v6` down the
-    dense arm. A hard-coded golden sha would pin the repo to one BLAS/torch build; the
-    this-box sha (`4d8d6321…`, identical at HEAD and under the fix) is corroborating
-    evidence in PREREG §3, reproducible from the preserved probe, not the gate.
-    """
-    bound = _recorded_bindings(monkeypatch)
-    _openings_at("v6", monkeypatch)
-    spec = _round_spec(tmp_path, "v6", rung_games=2, floor_games=2)
-
-    first = worker.run_round(spec)
-    second = worker.run_round(spec)
-
-    # KeyError, not a defaulted pop: the worker's own contract says the key is always there.
-    first.pop("worker_pid")
-    second.pop("worker_pid")
-    assert first == second, "the R20-protected v6 grid round is not deterministic in-process"
-    assert bound == [("v6", False)] * 4, f"the dense round did not bind v6 dense: {bound}"
-
-
-# ── ⊕ O-9 ─────────────────────────────────────────────────────────────────────────────
-@pytest.mark.parametrize("enc_name", ["v6", "v6w25"])
-def test_declared_grid_encoding_is_bound_and_decodes(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, enc_name: str
-) -> None:
-    """Both grid encodings this decode supports must bind THEMSELVES, not `v6`.
-
-    The asymmetry is the point. `[v6]` is GREEN at HEAD (the fix is a no-op there by
-    construction); `[v6w25]` is RED at HEAD *while completing the round* — it binds `v6`,
-    so a 362-wide policy is decoded for a 626-action board and every action index >= 361 is
-    discarded. A regression that re-broke non-`v6` grid decoding while leaving `v6` and the
-    graph arm green would pass every other oracle in this file.
-    """
-    bound = _recorded_bindings(monkeypatch)
-    _openings_at(enc_name, monkeypatch)
-
-    result = worker.run_round(_round_spec(tmp_path, enc_name))
-
-    assert result["gate"]["n_screen"] == 2
-    assert {name for name, _is_graph in bound} == {enc_name}
-    assert not any(is_graph for _name, is_graph in bound), f"grid spec took graph arm: {bound}"
-
-
-# ── ⊕ O-8 (the §c.7 guard) ────────────────────────────────────────────────────────────
-def test_no_drop_pooling_encoding_is_refused_with_a_named_error(tmp_path: Path) -> None:
-    """A declared no-drop pooling this decode cannot honour is REFUSED, by name.
-
-    `v6_live2_ls` declares `policy_pool="legal_set_scatter_max"` — the no-drop legal-set
-    pool — while the eval decode entrance (`DeployHeadPlayer` -> `engine.infer` ->
-    `infer_batch`) scatter-MAXes and drops off-window cells. Threading the spec without a
-    guard would turn HEAD's loud crash into a silent, plausible, wrongly-pooled eval
-    result; the guard makes it a named refusal instead.
-
-    The catch is on `RuntimeError` — `EvalDecodeUnsupportedError`'s own base — and the
-    exact type is asserted afterwards, deliberately: at HEAD the error class does not exist
-    yet, and naming it in the `raises` line would make this oracle fail on an ImportError
-    instead of on the pre-registered mechanism. This form fails at HEAD *showing* the
-    pre-registered `RuntimeError: Given groups=1, weight of size [8, 4, 3, 3], expected
-    input[2, 8, 19, 19] to have 4 channels, but got 8 channels`, and `type(...) is` is
-    strictly tighter than `pytest.raises` on the class (no subclass may satisfy it).
-    """
-    spec = _round_spec(tmp_path, "v6_live2_ls")
-
-    with pytest.raises(RuntimeError) as excinfo:
-        worker.run_round(spec)
-
-    message = str(excinfo.value)
-    assert "v6_live2_ls" in message, message
-    assert "legal_set_scatter_max" in message, message
-
-    from mantis.eval.errors import EvalDecodeUnsupportedError
-
-    assert type(excinfo.value) is EvalDecodeUnsupportedError
-
-
 # ── ⊕ O-8b ────────────────────────────────────────────────────────────────────────────
 def test_the_decode_capability_set_is_closed_over_the_registry() -> None:
     """The guard's REACH over the live registry, pinned to a literal written here.
@@ -328,5 +232,9 @@ def test_the_decode_capability_set_is_closed_over_the_registry() -> None:
             return True
         return False
 
-    assert {spec.name for spec in all_specs() if _guard_fires(spec)} == {"v6_live2_ls"}
+    # EMPTY since R346(f): the three grid rows carried the unimplemented pools, and every
+    # registered row now declares `policy_pool="none"`. Frozen as a literal all the same —
+    # a future row declaring an unimplemented pool reds this, and so does any widening of
+    # the capability set below.
+    assert {spec.name for spec in all_specs() if _guard_fires(spec)} == set()
     assert worker._DECODE_IMPLEMENTED_POLICY_POOLS == frozenset({"none", "scatter_max"})

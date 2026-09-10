@@ -389,9 +389,9 @@ is silently disabled.
 - **`monitor_gates.watchdog_best_effort` is `None` when no watchdog is wired (AUDIT-1
   F-28/C05).** It returned `{}` for both "armed and nothing has failed" and "there is no fire
   path to ask", so the healthiest run and the one with no watchdog published the same block.
-  Its sibling `data_loss_counters` is deliberately UNCHANGED: `REPLAY_COUNTERS` is a
-  module-level registry that always exists and is always counting, so `{}` from it is a true
-  "nothing was lost" rather than an absence.
+  Its sibling `data_loss_counters` is DELETED (R346(f)): its only producers were the dense
+  replayers, so what the key would publish now is an always-empty mapping reading as a true
+  "nothing was lost" forever — the phantom-input class LAW-07 refuses.
 - **A rung result's `status` is the parent's, and it is the status the rung was PLAYED under
   (AUDIT-1 F-28/B02).** The worker child has no `LadderState` and used to stamp
   `"status": "active"` on every rung, so a SATURATED rung's off-cadence calibration games were

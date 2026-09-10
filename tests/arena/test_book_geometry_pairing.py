@@ -39,11 +39,10 @@ _CONFIGS = _REPO / "configs"
 #: row must then be removed rather than quietly outliving its reason (the reverse-check shape
 #: gate 13 uses on its "deliberately absent" section).
 #:
-#: `sustained_kcluster.yaml` is a legacy dense/k-cluster config on no run6 path. Re-minting it
-#: — onto a radius >= 6 encoding, or onto a book minted at radius 5 the repo does not yet ship
-#: — is a mint act and the operator's (R1: configs are minted, never hand-varied), so it is
-#: recorded here rather than repaired in passing.
-_KNOWN_UNPLAYABLE_PAIRINGS = {"sustained_kcluster.yaml"}
+#: EMPTY since R346(f). Its one member was `sustained_kcluster.yaml`, a legacy dense/k-cluster
+#: config on no run6 path whose radius-5 encoding could not replay `book_v1_s20260625_p4`; the
+#: config went with the grid rows, and the gap closed by deletion rather than by a re-mint.
+_KNOWN_UNPLAYABLE_PAIRINGS: set[str] = set()
 
 
 def _hex_distance(a: tuple[int, int], b: tuple[int, int]) -> int:

@@ -73,13 +73,14 @@ def test_kind_from_spec_closed_match() -> None:
     assert BufferKind.from_spec(_GRAPH_SPEC) is BufferKind.GRAPH
 
 
-@pytest.mark.parametrize("rep", ["dense", "GRAPH", "", None, "hex", "canvas"])
+@pytest.mark.parametrize("rep", ["grid", "dense", "GRAPH", "", None, "hex", "canvas"])
 def test_kind_from_spec_unknown_representation_raises(rep) -> None:
     """LAW-11: an unknown/absent representation is an ERROR, never a silent default.
-    `"dense"` and the mis-cased `"GRAPH"` are in the list on purpose — near-misses must not be
-    coerced. `"grid"` is NOT: `hparams.is_graph_representation` still answers it (with False),
-    so `from_spec` would hand back GRAPH for it — a live dense-by-default arm this file cannot
-    close from the test side."""
+
+    `"grid"` leads the list and is the sharpest member: it is the one value that USED to be
+    answered, and answering it now would hand a graph buffer back for a dense declaration —
+    the inverted dense-by-default arm. `"dense"` and the mis-cased `"GRAPH"` are near-misses,
+    which must not be coerced either."""
     with pytest.raises(RepresentationMismatch):
         BufferKind.from_spec(_FakeSpec(representation=rep))
 
