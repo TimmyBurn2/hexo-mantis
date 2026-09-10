@@ -158,6 +158,12 @@ stand as deviations until the operator rules on them.**
   by the coordinator over all 604 pre-existing `.py` files via AST comparison with docstrings
   blanked. Held by gate 14's comment ratchet, wired as its FIRST arm so a pyright refusal (a host
   condition, rc 2) cannot take the comment measures down with it. **No new gate number: still 17.**
+- **The two deferred characterization tests were RUN at wave exit on merged `dev` and PASS** —
+  `r153_characterize_exported_target_dropped_mass` 894.91 s and
+  `r153_leg2_run5_exposure_through_production_expand` 561.55 s. They are 86% of the cargo gate,
+  so they were deferred from each leg's pass and run once here; they were never `#[ignore]`d and
+  the deferral is a schedule, not an exemption. Rust has no `slow`-tier equivalent to pytest's,
+  which is why this had to be done by hand.
 - **Two latent false-cleans closed by contact, not by search.** (1) Fifteen `RunnerStats` fields
   whose engine getters left with the grid path — one, `gridls_zero_policy_rows`, was still riding
   the LAW-18 `target_integrity` channel and would have published a permanent `0` as "measured,
