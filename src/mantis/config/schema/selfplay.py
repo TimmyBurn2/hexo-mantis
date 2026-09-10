@@ -130,9 +130,13 @@ class SelfplayConfig(StrictModel):
     c_scale: float = Field(gt=0)
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
-    results_queue_cap: int = Field(ge=1)
+    # OPERATIONAL CONSTANT (R347/CONFIG-1): a queue's back-pressure bound.
+    results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)
-    log_investigation_metrics: bool
+    # OPERATIONAL CONSTANT (R347/CONFIG-1): a diagnostic verbosity switch. It gates only
+    # what is WRITTEN, never what is played, which is what makes it operational rather than
+    # the silently-disabled-opponent class R1 exists for.
+    log_investigation_metrics: bool = True
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
 

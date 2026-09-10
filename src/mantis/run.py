@@ -90,7 +90,7 @@ from mantis.config.armed_aborts import (
     audit_arming_live,
     exit_code_for_abort,
 )
-from mantis.config.emit import resolve_config
+from mantis.config.emit import resolve_config, write_resolved_config
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.allocator_posture import (
@@ -346,7 +346,9 @@ def _seam(name: str) -> Iterator[None]:
     the eval-pipeline wall reaching the process boundary unnamed. Seamed now, and this list
     is the claim:
 
-    - builder: `init_trainer`, `_select_buffer`, `WorkerPool` (3);
+    - builder: `resolved_config record`, `init_trainer`, `_select_buffer`, `WorkerPool` (4 —
+      the record is FIRST, so the run's own account of what it was configured with exists
+      before any collaborator can wedge, R347/CONFIG-1);
     - composer: `_resolve_monitor_cfg`, `build_run_safety`, `run_boot_identity emit`,
       `resolved_config emit`, `ActorSync`, `_step_coordinator_config`, `build_eval_pipeline`,
       `pool.start`, `watchdog.start`, `DiskGuard`, `StepCoordinator` (11).
@@ -591,6 +593,11 @@ def build_run_collaborators(
     checkpoint_dir = out_dir / "checkpoints"
     log_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    # R347/CONFIG-1: the run records its COMPLETE resolved config, including every leaf the
+    # shipped file left to a schema default, BEFORE anything can wedge. Persistence-fatal by
+    # LAW-14 — a run whose own record cannot be written is a run nobody can reconstruct.
+    with _seam("resolved_config record"):
+        write_resolved_config(config, out_dir)
 
     device = torch.device(config.train.device)
     # RECAL-PREP / R308(g)(i): the allocator-posture assertion, BEFORE the first CUDA

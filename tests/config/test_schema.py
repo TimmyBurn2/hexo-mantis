@@ -20,6 +20,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
+    OPERATIONAL_DEFAULT_KEYS,
     SCHEMA_VERSION,
     DiskGuardConfig,
     DrainCapsConfig,
@@ -395,6 +396,30 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # same objects, so an absent row and a minted `1` produce the same round rather than merely
     # a legal one. A FIFTH optional leaf anywhere is still a red.
     exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
+    # THE FIFTH CLASS IS A REGISTRY, not a row (R347 / CONFIG-1): an OPERATIONAL CONSTANT —
+    # a watchdog deadline, a poll interval, a join bound, a disk threshold, a queue cap, a
+    # diagnostic switch — carries a schema default and leaves the YAML. `OPERATIONAL_DEFAULT_KEYS`
+    # is the ONE authority, declared with per-row grounds beside the schema it describes, and
+    # read off here for the same reason `ARCH_SCOPED_KEYS` is: a default on anything NOT in a
+    # registry is still a red, and a registered key that is still required is a stale
+    # declaration, which the both-ways assertion below catches.
+    #
+    # This is R1's second clause, not an exception to R1. What R1 forbids is a `dict.get(key,
+    # fallback)` at a call site — a SECOND authority the config cannot override. The schema
+    # field is the first and only one, and every arming key stays required: `gate_interval`,
+    # the actor-lag pair, `supervisor_kill_grace_sec` and the WR/axis warn family are all
+    # absent from the registry, deliberately, because that is where R1's
+    # silently-disabled-opponent reason actually bites.
+    operational = {key for key, _grounds in OPERATIONAL_DEFAULT_KEYS}
+    assert operational, "the operational registry is empty; this exemption should go"
+    assert not (operational & exempt), (
+        "a key is in BOTH registries — arch-scoped and operational are different rules "
+        f"(a scoped block is REFUSED off its arch; a default is inherited): {operational & exempt}"
+    )
+    assert all(grounds.strip() for _key, grounds in OPERATIONAL_DEFAULT_KEYS), (
+        "an operational exemption with no written grounds is a default nobody can justify later"
+    )
+    exempt |= operational
     seen: set[str] = set()
     for model, path in SCHEMA_CENSUS.items():
         for name, field in model.model_fields.items():
@@ -402,16 +427,19 @@ def test_o16_all_fields_required_no_code_side_defaults():
             if key in exempt:
                 seen.add(key)
                 assert not field.is_required(), (
-                    f"{model.__name__}.{name} (config key `{key}`) is arch-scoped, so it must "
-                    "be omittable — a required arch-scoped block forces every arch to mint it"
+                    f"{model.__name__}.{name} (config key `{key}`) is registered as "
+                    "arch-scoped or operational, so it must be omittable — a required "
+                    "arch-scoped block forces every arch to mint it, and a required "
+                    "operational key is a declaration nobody honoured"
                 )
                 continue
             assert field.is_required(), (
-                f"{model.__name__}.{name} (config key `{key}`) has a code-side default; "
-                "R1 puts a default in the schema field or nowhere"
+                f"{model.__name__}.{name} (config key `{key}`) has a code-side default and is "
+                "in neither registry; R1 puts a default in the schema field or nowhere, and a "
+                "registry row with written grounds is what says the key earned one"
             )
     assert seen == exempt, (
-        f"ARCH_SCOPED_KEYS names {sorted(exempt - seen)} which the census never reached — an "
+        f"a registry names {sorted(exempt - seen)} which the census never reached — an "
         "exemption for a key nobody walks is an exemption nobody can see go stale"
     )
 

@@ -14,7 +14,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.schema import ARCH_SCOPED_KEYS, TrainConfig
+from mantis.config.schema import ARCH_SCOPED_KEYS, TrainConfig, operational_default_fields
 
 # Zero-behavior-change mint values (DESIGN_P2.md §1.1/§2): every value is the CURRENT
 # `TrainHParams` dataclass default, carried over verbatim.
@@ -154,7 +154,9 @@ def test_valid_payload_constructs_clean():
 _ARCH_SCOPED_TRAIN_FIELDS = frozenset(
     key.field for key in ARCH_SCOPED_KEYS if key.section == "train"
 )
-REQUIRED_FIELD_NAMES = [f for f in FIELD_NAMES if f not in _ARCH_SCOPED_TRAIN_FIELDS]
+_OPERATIONAL_TRAIN_FIELDS = operational_default_fields("train")
+REQUIRED_FIELD_NAMES = [f for f in FIELD_NAMES
+                        if f not in _ARCH_SCOPED_TRAIN_FIELDS | _OPERATIONAL_TRAIN_FIELDS]
 
 
 @pytest.mark.parametrize("field", REQUIRED_FIELD_NAMES)
@@ -163,6 +165,18 @@ def test_missing_field_rejected(field: str):
     del payload[field]
     with pytest.raises(ValidationError, match=field):
         TrainConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize("field", sorted(_OPERATIONAL_TRAIN_FIELDS))
+def test_an_operational_field_is_OMITTABLE_and_lands_on_its_declared_default(field: str):
+    """R347/CONFIG-1's other side: an operational constant left the YAML, so omitting it must
+    be legal AND must land on the schema's own value — "no error" alone would be satisfied by
+    a default of anything at all."""
+    payload = _payload()
+    del payload[field]
+    cfg = TrainConfig.model_validate(payload)
+    assert getattr(cfg, field) == TrainConfig.model_fields[field].get_default(
+        call_default_factory=True), f"train.{field} did not land on its schema default"
 
 
 @pytest.mark.parametrize("field", sorted(_ARCH_SCOPED_TRAIN_FIELDS))
@@ -209,6 +223,13 @@ def test_no_field_has_a_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
     # suite's T9 section, against a real minted file rather than a payload built here.
     exempt = {key.field for key in ARCH_SCOPED_KEYS if key.section == "train"}
     assert exempt, "no train key is arch-scoped, so this exemption is unused and should go"
+    # THE SECOND EXEMPT FAMILY, also read off a registry rather than typed here (R347 /
+    # CONFIG-1): an OPERATIONAL CONSTANT carries a schema default and leaves the YAML. It is a
+    # different exemption from the arch-scoped one and is kept separate on purpose — an
+    # arch-scoped block is REFUSED on the wrong arch, while an operational default is simply
+    # inherited, so collapsing the two would lose which rule a given key answers to.
+    operational = operational_default_fields("train")
+    assert not (exempt & operational), "a key cannot be both arch-scoped and operational"
     for name, field in TrainConfig.model_fields.items():
         if name in exempt:
             assert not field.is_required(), (
@@ -216,7 +237,15 @@ def test_no_field_has_a_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
                 "arch-scoped block would force every arch to mint it, which is the defect"
             )
             continue
-        assert field.is_required(), f"TrainConfig.{name} has a code-side default"
+        if name in operational:
+            assert not field.is_required(), (
+                f"TrainConfig.{name} is declared in OPERATIONAL_DEFAULT_KEYS but is still "
+                "required — the declaration is stale"
+            )
+            continue
+        assert field.is_required(), (
+            f"TrainConfig.{name} has a code-side default and is declared in neither registry"
+        )
 
 
 

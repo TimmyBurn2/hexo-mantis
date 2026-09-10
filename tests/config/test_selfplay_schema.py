@@ -18,7 +18,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.schema import ARCH_SCOPED_KEYS, InferenceConfig, SelfplayConfig
+from mantis.config.schema import (
+    ARCH_SCOPED_KEYS,
+    InferenceConfig,
+    SelfplayConfig,
+    operational_default_fields,
+)
 from mantis.config.schema.selfplay import MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL
 
 
@@ -84,7 +89,8 @@ def test_selfplay_valid_payload_constructs_clean():
     assert cfg.playout_cap.fast_sims == 50
 
 
-@pytest.mark.parametrize("field", SELFPLAY_FIELDS)
+@pytest.mark.parametrize("field",
+                         sorted(set(SELFPLAY_FIELDS) - operational_default_fields("selfplay")))
 def test_selfplay_missing_field_rejected(field: str):
     payload = _selfplay()
     del payload[field]
@@ -111,9 +117,31 @@ def test_selfplay_bound_violation_rejected(field: str, bad_value: object):
         SelfplayConfig.model_validate(_selfplay(**{field: bad_value}))
 
 
-def test_selfplay_has_no_pydantic_level_default():
+def test_selfplay_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
+    """R1 with R347/CONFIG-1's partition, checked BOTH ways: an undeclared default is a red,
+    and a key the registry declares that is still required is a stale exemption."""
+    declared = operational_default_fields("selfplay")
     for name, field in SelfplayConfig.model_fields.items():
-        assert field.is_required(), f"SelfplayConfig.{name} has a code-side default"
+        if name in declared:
+            assert not field.is_required(), (
+                f"SelfplayConfig.{name} is declared in OPERATIONAL_DEFAULT_KEYS but is still "
+                "required — the declaration is stale"
+            )
+            continue
+        assert field.is_required(), (
+            f"SelfplayConfig.{name} has a code-side default and is not declared operational"
+        )
+
+
+@pytest.mark.parametrize("field", sorted(operational_default_fields("selfplay")))
+def test_an_omitted_selfplay_operational_key_lands_on_its_declared_default(field: str):
+    """Omitting a declared operational key is LEGAL and lands on the schema's own value —
+    asserted, because "no error" alone would be satisfied by a default of anything."""
+    payload = _selfplay()
+    del payload[field]
+    cfg = SelfplayConfig.model_validate(payload)
+    assert getattr(cfg, field) == SelfplayConfig.model_fields[field].get_default(
+        call_default_factory=True), f"selfplay.{field} did not land on its schema default"
 
 
 def test_selfplay_has_no_legal_move_radius_field():

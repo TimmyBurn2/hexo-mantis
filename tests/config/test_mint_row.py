@@ -6,6 +6,15 @@ configs ONLY as a minted row at run6's mint. `--set` refuses a key the template 
 so before `--mint-row` the tool could not write the one class of row a mint exists for, and the
 run6 mint act had no mechanism. The tests below pin the capability AND the two refusals that
 keep it from becoming "create any key you like".
+
+R347/CONFIG-1 MADE THIS FLAG THE MAIN ROAD rather than a two-key special case. The operational
+constants now carry schema defaults and leave the template, so overriding one is a minted row —
+which is the point: the override stays a deliberate act with a stamped header line, exactly as
+R323(b) wanted for the identity rows. Two of those constants are BLOCKS (`monitor.drain`,
+`monitor.disk_guard`), and a block is minted WHOLE, because `--mint-row` adds a leaf to an
+existing block and does not build one. That is a property worth a row of its own rather than a
+limitation to work around: a half-minted block whose other leaves came silently from the schema
+is exactly the "which authority set this?" question R1 exists to make unaskable.
 """
 import subprocess
 import sys
@@ -90,3 +99,35 @@ def test_a_minted_row_and_a_delta_compose_in_one_act(tmp_path: Path) -> None:
     cfg = load_config(out)
     assert (cfg.identity.encoding, cfg.identity.arch_kind) == ("gnn_axis_r8", "GnnArchV2")
     assert _run(str(DIFF), "--from-header", str(out)).returncode == 0
+
+
+def test_a_defaulted_BLOCK_is_minted_WHOLE_and_its_old_slot_is_the_schemas(tmp_path: Path) -> None:
+    """R347/CONFIG-1. `monitor.drain` left the template with a schema default, so a run that
+    wants a different cap mints the block — all four leaves, one row — and the header's OLD
+    slot is what the schema resolves the template to, not a guess and not `null`.
+
+    The leaf-level attempt is refused by `_resolve_new_parent` and is asserted here beside the
+    working form, so the two are read together: the refusal is the reason the whole-block mint
+    is the shape, not an obstacle it routes around.
+    """
+    leaf = _mint(tmp_path / "leaf.yaml", "--mint-row",
+                 "monitor.drain.terminal_eval_hard_cap_sec=7200.0")
+    assert leaf.returncode == 2, leaf.stdout + leaf.stderr
+    assert "does not build the block" in (leaf.stdout + leaf.stderr)
+
+    out = tmp_path / "block.yaml"
+    proc = _mint(out, "--mint-row",
+                 "monitor.drain={final_eval_drain_timeout_sec: 900.0, "
+                 "eval_final_drain_safety_factor: 3.0, "
+                 "eval_final_drain_hard_cap_sec: 14400.0, "
+                 "terminal_eval_hard_cap_sec: 7200.0}")
+    assert proc.returncode == 0, proc.stderr
+    caps = load_config(out).monitor.drain
+    assert caps.terminal_eval_hard_cap_sec == 7200.0
+    assert caps.final_eval_drain_timeout_sec == 900.0
+    header = "\n".join(ln for ln in out.read_text(encoding="utf-8").splitlines()
+                        if ln.startswith("# delta:"))
+    assert "terminal_eval_hard_cap_sec: 14400.0} ->" in header, (
+        "the old slot must be the SCHEMA's resolution of the omitted block, or "
+        f"`config_diff --from-header` disagrees with the file. got {header}"
+    )

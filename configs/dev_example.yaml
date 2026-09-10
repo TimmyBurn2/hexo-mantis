@@ -18,8 +18,6 @@ eval:
   sealbot_model_sims: 128
   random_floor_games: 4
   worker_device: cuda
-  round_timeout_sec: 3600.0
-  worker_kill_grace_sec: 10.0
   ply_cap_adjudication: null
   strength_floor: null
   gate:
@@ -87,7 +85,6 @@ train:
   hard_gn_threshold: 1000000000.0
   hard_gn_min_steps: 3
   terminal_eval_enabled: true
-  selfplay_stall_timeout_sec: 1800.0
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution
   draw_reward: -0.5
@@ -101,9 +98,7 @@ selfplay:
   c_scale: 1.0
   gumbel_m: 16
   gumbel_explore_moves: 10
-  results_queue_cap: 10000
   random_opening_plies: 0
-  log_investigation_metrics: true
   mcts:
     n_simulations: 50
     c_puct: 1.5
@@ -145,26 +140,6 @@ monitor:
   wr_early_death_min_step: 15000
   axis_warn: 0.45
   axis_alert: 0.5
-  heartbeat_deadline_train_step_sec: 1800.0
-  heartbeat_deadline_inference_dispatch_sec: 1800.0
-  heartbeat_deadline_selfplay_drain_sec: 1800.0
-  heartbeat_deadline_eval_round_sec: 1800.0
-  heartbeat_poll_interval_sec: 5.0
-  heartbeat_file_interval_sec: 15.0
-  heartbeat_close_out_deadline_sec: 14400.0
-  heartbeat_fire_effect_timeout_sec: 30.0
   actor_lag_threshold_steps: 100
   actor_lag_abort_enabled: false
-  supervisor_stale_after_sec: 900.0
-  supervisor_poll_interval_sec: 30.0
   supervisor_kill_grace_sec: 30.0
-  supervisor_max_relaunches: 5
-  drain:
-    final_eval_drain_timeout_sec: 900.0
-    eval_final_drain_safety_factor: 3.0
-    eval_final_drain_hard_cap_sec: 14400.0
-    terminal_eval_hard_cap_sec: 14400.0
-  disk_guard:
-    interval_sec: 60.0
-    warn_gb: 10.0
-    fail_gb: 5.0

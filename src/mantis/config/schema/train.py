@@ -496,7 +496,9 @@ class TrainConfig(StrictModel):
     # ARM-LOG STILL EMITS — a disarmed watchdog that logs as armed. The schema cannot express
     # that posture; `watchdog.py` keeps the arm for direct constructions, and this is the
     # `actor_sync_cadence_steps` idiom applied to the guard LAW-16 names.
-    selfplay_stall_timeout_sec: float = Field(gt=0, allow_inf_nan=False)
+    # OPERATIONAL CONSTANT (R347/CONFIG-1): a watchdog's wall-clock budget, not a training
+    # quantity. Every other field in this block stays required.
+    selfplay_stall_timeout_sec: float = Field(default=1800.0, gt=0, allow_inf_nan=False)
 
     # loss selection + targets
     #

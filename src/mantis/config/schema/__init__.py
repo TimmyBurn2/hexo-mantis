@@ -8,6 +8,7 @@ the cap while re-exporting the full pre-split public surface so every existing
 from mantis.config.schema.core import (
     _EVAL_TIMEOUT_CEILING_SEC,
     ARCH_SCOPED_KEYS,
+    OPERATIONAL_DEFAULT_KEYS,
     SCHEMA_VERSION,
     ArchScopedKey,
     EvalConfig,
@@ -20,6 +21,7 @@ from mantis.config.schema.core import (
     StrengthFloorConfig,
     StrictModel,
     WarmStartConfig,
+    operational_default_fields,
 )
 from mantis.config.schema.leaves import leaf_paths, nested_block
 from mantis.config.schema.monitor import (
@@ -38,6 +40,7 @@ from mantis.config.schema.train import EmaConfig, TrainConfig
 
 __all__ = [
     "ARCH_SCOPED_KEYS",
+    "OPERATIONAL_DEFAULT_KEYS",
     "SCHEMA_VERSION",
     "ArchScopedKey",
     "DiskGuardConfig",
@@ -62,5 +65,6 @@ __all__ = [
     "WarmStartConfig",
     "leaf_paths",
     "nested_block",
+    "operational_default_fields",
     "_EVAL_TIMEOUT_CEILING_SEC",
 ]
