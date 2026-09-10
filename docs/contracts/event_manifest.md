@@ -110,6 +110,16 @@ producers is a phantom-armed abort chain waiting to happen).
 | `actor_lag_negative` | same check — a negative lag is a wiring bug reported loudly once, never a fire | `tests/train/test_actor_lag_watchdog.py::test_negative_lag_reports_wiring_bug_event_once` |
 | `actor_lag_sample` | same check — the HEALTHY-path reading, emitted before either fire arm; payload `{event, seq, learner_step, actor_ckpt_step, lag_steps, threshold_steps}`, the SAME `detail` dict the fire path uses, so a sample can never disagree with the reading that fires. Gated on the interval already in the object (`file_interval_sec`), so one config fact never enters the ctor twice under two names. Before it, a healthy run published NOTHING about the lag reading and no observer could tell a live reading from a frozen 0 (LAW-18: a lever under test logs its own fire rate in-run) | `tests/train/test_actor_lag_sample_emission.py::test_a_healthy_poll_emits_an_actor_lag_sample_carrying_the_live_reading` |
 
+### INSTRUMENT rows — no consuming rule, and therefore no `producer_manifest.yaml` entry
+
+The manifest YAML holds gate/monitor INPUTS: a row there names something a rule branches on.
+An instrument that nothing branches on is documented here and stays out of the YAML, because
+a manifest row for a reading with no consumer is the phantom-input shape in reverse.
+
+| event key | producer | producer test |
+|---|---|---|
+| `trainer_step.gumbel_tail_mass` | `train.events.tail_mass_block`, fed by `Trainer.train_step_from_graph_batch` from the step's own rows — R347(a)'s per-row tail mass alpha, the part of each training target the SPARSE Gumbel row did not store and the trainer rebuilt from its own detached prior. Reported as the step's DISTRIBUTION (`n_rows`, `mean`, `p50`, `p90`, `max`, `rows_with_tail`) because the mean of a bimodal alpha names neither mode. OMITTED on a step with no graph rows; a PUCT step reports a measured zero, which is a reading and not an absence (R249) | `tests/train/test_sparse_gumbel_row_target.py::test_the_real_graph_trainer_step_publishes_the_tail_mass_reading` |
+
 The `heartbeat_watchdog_armed` payload additionally gains one key, `actor_lag`: either
 `{armed: bool, threshold_steps: int}` or the string `"absent"` when no spec was injected —
 a disabled or unwired lag check is loud at arm time, never silent

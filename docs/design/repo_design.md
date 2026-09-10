@@ -182,7 +182,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
 | 5 | run config schema | v13 | pydantic models, extra=forbid; schema_version key in every file. The version here is the CONTRACT DOC's own table, whose last row is the authority — it read v8 while `docs/contracts/run_config_schema.md` had reached v13, and gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
-| 6 | replay persist | HEXB v9 / HEXG v1 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
+| 6 | replay persist | HEXB v9 / HEXG v2 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 (SKELETON) | PLANNED: a vendored OpenAPI 3.1 spec + a BKE-notation round-trip suite. NEITHER EXISTS: the contract file carries two `TODO`s and there are zero `openapi`/`bke` tokens under `src/`, `tests/` or `vendor/`. Recorded as planned rather than deleted — it is a real intention — but it is not a shipped seam (AUDIT-1 F-52) |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
@@ -1078,3 +1078,48 @@ commit that moves them, rather than as drift.
    halves. The ROOT defect — validating a HISTORICAL RECORD against today's schema — is not
    fixed here: it moves §6's *"schema-validated on write AND read"* and retires T-CK-04,
    which is a checkpoint-contract change (contract #4, LAW-12) belonging to a ruling.
+
+---
+
+### AMENDMENT — the SPARSE Gumbel row, and the two constants it unblocked
+
+**GUMBEL-3, wave 2 (R347).** This moves contract #6's HEXG version, closes the STANDING
+BLOCKER the GUMBEL-2 amendment recorded above, and moves two search-pool constants. Under R9
+that lands as an amendment in the commit that moves them, rather than as drift.
+
+1. **The HEXG record is v2, and a v1 file is REFUSED by name.** The record gained one field,
+   the per-row tail mass α, written after `weight` — so every byte of a v1 record from that
+   offset on means something else under the v2 reader, and the payload is self-consistent
+   under both readings. Only the version field can see that, so the version check is the
+   mechanism and not a formality. There is no in-place upgrade: a v1 ring is REGENERATED.
+   Contract #6 moves HEXG v1 → v2; the frozen v1 byte-golden is KEPT as the refusal fixture.
+
+2. **The blocker of §5 above is CLOSED.** `search.kind: gumbel` on the GRAPH representation
+   is no longer refused. The refusal stood on the row having to carry the exported target's
+   support, and R347(a) rules that it does not: under Sequential Halving only the
+   `selfplay.gumbel_m` sampled candidates are ever visited, so the completed-Q target is
+   EXACT on those m entries and, on every unvisited legal action, is the recording prior
+   times ONE scalar — every unvisited child completes to the same mixed value. The row
+   therefore stores m explicit `(action, target)` entries plus α, the trainer rebuilds the
+   tail as `α × its own DETACHED current prior renormalized over the remaining legal set`,
+   and the visit-slot bound is the MINTED `gumbel_m` rather than anything derived. The ring
+   cost the blocker named is inverted: the row SHRINKS. What replaces the refusal is an m past
+   `HEXG_GUMBEL_M_MAX`, refused at MINT and at BOOT by the same one authority.
+
+3. **A THIRD refusal is added on that arm, and it is new.** The tail carries no per-cell
+   shape, so a lever that injects target mass by cell after the export would put mass in the
+   tail that the prior cannot reproduce. `selfplay.forced_win_policy_enabled` and
+   `selfplay.solver_enabled` are therefore refused at BOOT alongside a graph Gumbel run.
+   Both are `false` in every committed config, so nothing armed moves.
+
+4. **`MAX_CHILDREN_PER_NODE` 192 → 1024 and `MAX_NODES` 1M → 4M (R347(c)).** No structure
+   moves and no crate changes; what moves is the armed-sims ceiling the schema bounds every
+   sims knob against, and the pre-allocated per-worker pool. Both ceilings are DERIVED from
+   the two constants and are re-derived automatically; the numbers they now take are printed
+   by `crates/mantis-selfplay/tests/audit1_named_errors.rs` rather than transcribed anywhere.
+
+5. **The omitted-prior counters are PER-SEARCH.** They were process-global statics, so a
+   bracketed measurement around one search admitted every other search in the process — a
+   wrong number rather than a flaky one, and the conformance suite held a serialising mutex
+   to work around it. The counters now live on `MCTSTree`; the process-wide totals stay, fed
+   from the same one call site, because the bridge publishes them as the run-wide aggregate.
