@@ -403,16 +403,11 @@ impl PyInferenceBatcher {
     }
 
     #[getter]
-    pub fn feature_len_py(&self) -> usize {
-        self.feature_len
-    }
-
-    #[getter]
     pub fn policy_len_py(&self) -> usize {
         self.policy_len
     }
 
-    /// Wire `representation` ("grid" | "graph").
+    /// Wire `representation` ("graph").
     #[getter]
     pub fn representation_py(&self) -> &'static str {
         self.representation

@@ -4,10 +4,11 @@
 //! drawn arm decides the sim budget; the row it records carries a BOOLEAN that downstream
 //! reads as "this row was searched at the full budget" (the policy-loss gate, and the seam a
 //! later ruling would use to discard fast-arm rows entirely). Nothing connected the two: the
-//! recorded flag is an OR of the draw with the forced-win hook and the solver hook, so a
-//! census of the flag alone cannot say whether the draw fired or a hook did, and the draw
-//! itself had no counter. This file adds the counter (LAW-18: a lever under test logs its
-//! own fire rate in-run) and measures the two against each other.
+//! recorded flag WAS an OR of the draw with the forced-win hook and the solver hook, so a
+//! census of the flag alone could not say whether the draw fired or a hook did, and the draw
+//! itself had no counter. Both hooks went with the dense path (R346(f)); the counter this
+//! file added (LAW-18: a lever under test logs its own fire rate in-run) stays, because
+//! "the recorded flag is the arm that was drawn" is the claim, not "no hook interfered".
 //!
 //! WHY BOTH KINDS. PCR is drawn in `play_one_move` BEFORE the search kind is dispatched, so
 //! it is meant to be kind-independent — and "meant to be" is what a witness is for.
@@ -96,13 +97,12 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
-        // The lever: a per-move draw between two DIFFERENT budgets. Both hooks that could
-        // otherwise set the recorded flag are OFF, so the flag can only come from the draw.
+        // The lever: a per-move draw between two DIFFERENT budgets. The two hooks that
+        // could otherwise set the recorded flag (the O1 forced-win and the solver
+        // injectors) were deleted at R346(f), so the flag can only come from the draw.
         full_search_prob: 0.5,
         n_sims_quick: N_SIMS_QUICK,
         n_sims_full: N_SIMS_FULL,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })
@@ -190,8 +190,8 @@ fn assert_pcr(kind: SearchKind) {
         d.pcr_quick
     );
 
-    // (2) THE RECORD MATCHES THE DRAW. Both hooks that could set the flag independently are
-    // off, so every full-flagged row must have a full DRAW behind it, and likewise for
+    // (2) THE RECORD MATCHES THE DRAW. No hook can set the flag independently any more, so
+    // every full-flagged row must have a full DRAW behind it, and likewise for
     // quick. The relation is `<=` and not `==` for the reason the header states: the
     // counters lead the rows by the moves of one unfinished game.
     assert!(

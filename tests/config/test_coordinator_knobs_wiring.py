@@ -90,13 +90,9 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "batch_size": 41,
     "augment": True,
     "recency_weight": 0.43,
-    "mixing_initial_w": 0.47,
-    "mixing_min_w": 0.13,
-    "mixing_decay_steps": 53.0,
     "hard_gn_threshold": 0.59,
     "hard_gn_min_steps": 61,
     "terminal_eval_enabled": False,
-    "bot_batch_share": 0.19,
     "selfplay_stall_timeout_sec": 67.0,
 }
 
@@ -272,7 +268,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
                # of 0.0 — `_mixing_floor_is_below_its_start` rejects a floor above the start,
                # by design. Both drives (baseline and mutated) therefore share a raised start,
                # so the comparison stays one-key-at-a-time.
-               "mixing_initial_w": 1.0, **train_over},
+               **train_over},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **(monitor_over or {})},
         # WPMAIN/R120+R123: `eval_enabled` and `run_id` are CONFIG facts now — `compose_run`
         # has no parameter for either, so the drive's posture is declared where the config is.

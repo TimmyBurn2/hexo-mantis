@@ -95,8 +95,6 @@ fn drive(kind: SearchKind, want_records: usize) -> (u64, u64, u64) {
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })

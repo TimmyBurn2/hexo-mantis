@@ -462,12 +462,11 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # boundary, and 0 keeps both quiet.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=4.0, max_train_burst=4,
-        batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
-        mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,
+        batch_size=4, augment=False, recency_weight=0.0, hard_gn_threshold=1e9,
         hard_gn_min_steps=10_000, stop_step=4, draw_rate_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
-        terminal_eval_enabled=False, bot_batch_share=0.0,
+        terminal_eval_enabled=False,
         selfplay_stall_timeout_sec=1800.0,
     )
     base.update(over)

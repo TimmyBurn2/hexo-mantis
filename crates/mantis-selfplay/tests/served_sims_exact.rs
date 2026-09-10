@@ -116,8 +116,6 @@ fn drive_graph(
         random_opening_plies: 0,
         dirichlet_enabled: true,
         search_kind: SearchKind::Puct,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(encoding.to_string()),
         ..Default::default()
     })
@@ -188,8 +186,6 @@ fn drive_kind(
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })

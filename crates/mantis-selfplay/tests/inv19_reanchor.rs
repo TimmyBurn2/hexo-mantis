@@ -45,9 +45,6 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         quiescence_enabled: false,
         quiescence_blend_2: 0.625,
         temp_min: 0.0625,
-        zoi_enabled: true,
-        zoi_lookback: 24,
-        zoi_margin: 9,
         c_visit: 37.5,
         c_scale: 1.25,
         search_kind: SearchKind::Gumbel,
@@ -62,17 +59,6 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         n_sims_full: 100,
         random_opening_plies: 3,
         encoding_name: Some("gnn_axis_r8".to_string()),
-        inference_pool_size: Some(4096),
-        forced_win_policy_enabled: true,
-        forced_win_policy_depth: 5,
-        forced_win_policy_weight: 2.5,
-        solver_enabled: true,
-        solver_depth: 11,
-        solver_node_budget: 7777,
-        solver_neighbor_dist: 4,
-        solver_visit_weight: 0.9,
-        seed_fraction: 0.33,
-        seed_corpus: Some(vec![vec![(1, 2), (3, 4)]]),
     }
 }
 
@@ -103,9 +89,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         quiescence_enabled,
         quiescence_blend_2,
         temp_min,
-        zoi_enabled,
-        zoi_lookback,
-        zoi_margin,
         c_visit,
         c_scale,
         search_kind,
@@ -120,17 +103,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         n_sims_full,
         random_opening_plies,
         encoding_name,
-        inference_pool_size,
-        forced_win_policy_enabled,
-        forced_win_policy_depth,
-        forced_win_policy_weight,
-        solver_enabled,
-        solver_depth,
-        solver_node_budget,
-        solver_neighbor_dist,
-        solver_visit_weight,
-        seed_fraction,
-        seed_corpus,
     } = cfg;
 
     assert_eq!(n_workers, 7);
@@ -148,9 +120,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert!(!quiescence_enabled);
     assert!(feq(quiescence_blend_2, 0.625));
     assert!(feq(temp_min, 0.0625));
-    assert!(zoi_enabled);
-    assert_eq!(zoi_lookback, 24);
-    assert_eq!(zoi_margin, 9);
     assert!(feq(c_visit, 37.5));
     assert!(feq(c_scale, 1.25));
     assert_eq!(search_kind, SearchKind::Gumbel);
@@ -165,17 +134,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(n_sims_full, 100);
     assert_eq!(random_opening_plies, 3);
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
-    assert_eq!(inference_pool_size, Some(4096));
-    assert!(forced_win_policy_enabled);
-    assert_eq!(forced_win_policy_depth, 5);
-    assert!(feq(forced_win_policy_weight, 2.5));
-    assert!(solver_enabled);
-    assert_eq!(solver_depth, 11);
-    assert_eq!(solver_node_budget, 7777);
-    assert_eq!(solver_neighbor_dist, 4);
-    assert!(feq(solver_visit_weight, 0.9));
-    assert!(feq(seed_fraction, 0.33));
-    assert_eq!(seed_corpus, Some(vec![vec![(1, 2), (3, 4)]]));
 }
 
 /// Test 2 — `SelfPlayRunner::new(config)` accepts the distinct-sentinel config and

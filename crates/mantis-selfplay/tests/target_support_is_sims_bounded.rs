@@ -105,8 +105,6 @@ fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
         random_opening_plies: 0,
         dirichlet_enabled: true,
         search_kind: kind,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(encoding.to_string()),
         ..Default::default()
     })
