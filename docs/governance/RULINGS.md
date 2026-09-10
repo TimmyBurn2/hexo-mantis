@@ -1,4 +1,4 @@
-# RULINGS — R23 to R346
+# RULINGS — R23 to R347
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R345. The next ruling is R347.
+- Numbering continues from R346. The next ruling is R348.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,69 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R347 — CLEANUP WAVE 2: the sparse Gumbel row, and the ten open items ruled
+Decision: verbatim below. This entry breaks the <= 10-line convention for R346's reason and on
+the same authority: the wave-2 packet made its own §1 the canonical home and directed that it be
+copied verbatim here, so condensing it would destroy the authority it was given. The convention
+holds for every entry that is not itself directed to be verbatim.
+
+> R347 — (a) HEXG BLOCKER, ruled: Gumbel rows are stored SPARSE. Under
+> sequential halving only the m sampled candidates are ever visited; the
+> completed-Q target is exact on those m entries and, on every unvisited
+> legal action, equals the recording prior rescaled by one scalar. The row
+> stores the m explicit (action, target) entries plus the tail mass α; the
+> trainer forms the tail as α × its own DETACHED current prior renormalized
+> over the remaining legal set. Visit-slot bound = m_max = 16, minted;
+> overrun is impossible by construction and a row claiming more than m
+> explicit entries is REFUSED at insert. Deviation from Mctx's exact
+> target is the tail's shape (current prior vs recording prior) and is
+> WITNESSED once: on a driven r8 game with both forms stored, KL(exact ‖
+> reconstructed) per row is logged; the bar is a median < 0.01 nats and
+> α logged per row from step 0 (LAW-18's target-vs-prior line rides on it).
+> Ring inflation: none; the row shrinks.
+> (b) value_scale = 1.0 (App. F, every board-game implementation; 0.1 was
+> Atari and the architect's — ledger). m = 16 on both arms. Fast-arm rows
+> train VALUE always and POLICY at weight `train.fast_policy_weight`,
+> default 0.0 for run6 (three independent engines discard; Gumbel's low-N
+> guarantee makes it an ablation, not a default). Both arms run Gumbel —
+> one kind per run. Predicted throughput at mean 128: ~450–640 games/h
+> serving-bound; steps/game unchanged at 1.0, so the sampled-rows-per-
+> generated-row ratio (4.57) is unchanged and the block's wall clock is
+> ~2–2.5 days. This is the search's price; the block-end frontier says
+> whether it bought strength.
+> (c) K = 1024 interior with MAX_NODES 4M (ceiling 976 ≥ 320); host memory
+> +~2.5 GB across 16 workers, a mint term. The W3 witness is AMENDED to
+> "leaves per round trip ≥ the schedule's own mean at (N, m)" — the ≥ 4
+> was arithmetic the architect did not do. The non-materializing root
+> stays a card; the materializing root is proven correct and cheap.
+> (d) LAW-10 (threat probe before promotion) is DELETED — grid-era, no
+> producer, gating nothing. `workspace_is_volume = false` is a START
+> pre-flight HALT: the run dir sits on a persistent volume, or every
+> bundle and shard rsyncs off-box hash-verified within one checkpoint
+> interval, proven before START. CUDA packaging: the CUDA torch index is
+> pinned in pyproject so `uv sync` cannot revert; a gate asserts the
+> installed torch is +cu on the box. rule7_local_terms.txt is created
+> from the operator's forward and gate 17's arm runs.
+> (e) PERF: verify_edge_geometry leaves the server's critical path — it
+> runs on a checker thread after the batch is served, halting with the
+> artifact on failure (detect-and-halt is the F-816-37 semantics already
+> ruled; prevention was never the claim). Expected ×1.2 on the server
+> cycle; measured before granted. The single-threaded server (2.39×
+> ceiling) and the forward (1.72×) are CARDED with a RESEARCH question:
+> a Rust-owned serving loop vs. CUDA-graph bucketing for ragged GNN
+> batches. inference.compile_inference is deleted with the grid path.
+> Concurrency 8 is the knee; the ruling that G stays 8 is confirmed by
+> a third measurement.
+> ROUTE: GUMBEL-3; DELETE-1 → CONFIG-1 → COMMENT-1; PERF-3b; STATE.md.
+
+Grounds: operator direction, forwarding the wave-2 packet. (a) closes the HEXG blocker that held
+the Gumbel target format; (b)-(c) move prereg rows on evidence named in place; (d) retires a law
+with no producer and converts two operational risks into pre-flight halts; (e) takes the one
+serving lever whose cost is measurable and cards the two that are not.
+Status: standing.
+
+---
 
 ### R346 — the CLEANUP ERA
 Decision: verbatim below. This entry breaks the <= 10-line convention deliberately: the packet
