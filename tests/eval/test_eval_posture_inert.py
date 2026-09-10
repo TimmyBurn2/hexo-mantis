@@ -13,7 +13,7 @@ behaviour is identical to the tree before these keys existed.**
 
 **ONE HALF OF THAT IS NO LONGER TRUE, AND THE ROWS BELOW SAY SO BY NAME RATHER THAN BY GOING
 QUIET.** RECAL-SITTING-5's mint (R326, values R324(d), scope Δ10.5) ARMED `eval.strength_floor`
-on the PRODUCTION SET — `run5.yaml`, `run6.yaml` and `shakedown_20260807.yaml` — and on
+on the PRODUCTION SET — `run6.yaml`, `run6.yaml` and `run6.yaml` — and on
 nothing else. run6 joins at its own mint: `RUN6_MINT_PREREG.md`'s `strength floor` row is
 CONFIRM at run5's three armed values, carried unchanged, which is the ruling this row asks
 for (R338 / R337(a)).
@@ -135,7 +135,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #:
 #: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
 #: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
-_ARMED_STRENGTH_FLOOR = frozenset({"run5.yaml", "run6.yaml", "shakedown_20260807.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run6.yaml", "run6.yaml"})
 
 
 def _armed_config():
@@ -204,15 +204,15 @@ class _StubModel:
 
 
 def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monkeypatch) -> None:
-    """`run5.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
+    """`run6.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
     process seam. A spec that dropped it would leave the value minted, audited and inert — the
     knob reporting armed while nothing reads it."""
     monkeypatch.setattr(
         "mantis.eval.pipeline.write_model_snapshot", lambda model, path: str(path)
     )
-    spec = _spec_from("run5.yaml", tmp_path)
+    spec = _spec_from("run6.yaml", tmp_path)
     assert spec.ply_cap_adjudication is None
-    assert "run5.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
+    assert "run6.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
     assert spec.strength_floor is not None, (
         "run5's armed floor did not reach the round spec — minted and inert"
     )

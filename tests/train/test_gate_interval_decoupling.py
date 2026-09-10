@@ -13,7 +13,7 @@
 THE DEFECT, as measured. `coordinator/step.py::_run_log_interval` early-returned unless
 `self._train_step % cfg.log_interval == 0`, and BOTH the live hard-abort gates
 (`_run_hard_abort_gates`, whose `draw_rate_collapse` row gate 12 audits ARMED on
-`configs/run5.yaml`) and the LAW-18 `monitor_gates` summary sat downstream of that guard. At
+`configs/run6.yaml`) and the LAW-18 `monitor_gates` summary sat downstream of that guard. At
 run5's minted `train.log_interval: 1000` that means: no draw-rate observation could be taken,
 and no `monitor_gates` event could exist, before training step 1000. Armed machinery with a
 blind first kilometre — and the instrument that would have made the deadness readable was
@@ -430,7 +430,7 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     and therefore that this bundle changed no cadence. Deleting it instead of re-pointing it
     would erase the only in-repo evidence for that claim.
 
-    F-P2B (R259 shakedown): the seventh committed config, `shakedown_20260807.yaml`, mints
+    F-P2B (R259 shakedown): the seventh committed config, `run6.yaml`, mints
     BOTH knobs to 100 — the equal-mint held only because MAIN ratified the ninth delta
     `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
     first mint carried gate_interval alone and this very assertion refused it. The count

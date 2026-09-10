@@ -156,7 +156,7 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
         )
 
 
-@pytest.mark.parametrize("argv", [[], ["--config", "configs/run5.yaml"], ["--out-dir", "/tmp/x"]])
+@pytest.mark.parametrize("argv", [[], ["--config", "configs/run6.yaml"], ["--out-dir", "/tmp/x"]])
 def test_omitting_a_launcher_input_is_a_usage_error_not_a_default(argv, capsys) -> None:
     """O-B2, behavioural half. Each omission is rc 2 (argparse's own), never a boot.
 
@@ -213,7 +213,7 @@ def test_a_clean_run_exits_zero(monkeypatch, tmp_path) -> None:
 
     MUTATION THAT REDS IT: return a nonzero rc unconditionally, or read a different field."""
     monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: _handles(None))
-    rc = mantis_run.main(["--config", str(_CONFIGS / "run5.yaml"), "--out-dir", str(tmp_path)])
+    rc = mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
     assert rc == 0, f"a run with no fired abort exits 0; got {rc}"
 
 
@@ -229,7 +229,7 @@ def test_a_fired_abort_exits_with_the_code_the_manifest_authors(monkeypatch, tmp
     silent manifest drift is loud rather than self-consistent (R92's pre-registered code)."""
     monkeypatch.setattr(mantis_run, "launch_run",
                         lambda **_kw: _handles("draw_rate_collapse"))
-    rc = mantis_run.main(["--config", str(_CONFIGS / "run5.yaml"), "--out-dir", str(tmp_path)])
+    rc = mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
     assert rc == exit_code_for_abort("draw_rate_collapse") == 46, (
         f"a fired draw_rate_collapse exits 46, resolved from the manifest row; got {rc}"
     )
@@ -252,7 +252,7 @@ def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invente
         "above is testing nothing)"
     )
     with pytest.raises(UnregisteredAbortExitError) as exc_info:
-        mantis_run.main(["--config", str(_CONFIGS / "run5.yaml"), "--out-dir", str(tmp_path)])
+        mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
     assert "grad_norm_hard_abort" in str(exc_info.value), (
         f"the refusal must name the rule that fired; got {str(exc_info.value)!r}"
     )

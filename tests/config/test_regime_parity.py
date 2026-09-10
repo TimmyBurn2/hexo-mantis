@@ -1,6 +1,6 @@
 """O9–O11 — regime-parity per LAW knob (repo_design §8).
 
-Each asserts *suite default == production default* over production_config() (configs/run5.yaml):
+Each asserts *suite default == production default* over production_config() (configs/run6.yaml):
 the suite expectation is DERIVED from the shipped config, never a hardcoded regime knob
 (CONTEXT bug-class #5). Three §8 knobs remain here: sims (O9), amp=bf16 (O10), encoding
 (O11). O12 (radius schedule) is RETIRED (WPSC Phase 2 SC-A2 forced-fallout: DESIGN_P2.md §5

@@ -42,7 +42,7 @@ from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run5.yaml"
+RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 
 #: Well past the old `WR_HISTORY_DEPTH = 5` — the exact region ADJ-D38 names as armed in the
 #: config and permanently unfireable in effect before the ring fix. A test INPUT.

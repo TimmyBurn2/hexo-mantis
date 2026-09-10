@@ -72,7 +72,7 @@ RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec":
 #: asserting a literal that was only true at a particular pick (R192(e), and RECAL-SITTING-5's
 #: mint is the event that proved it).
 _RUN5_EVIDENCE_CEILING = DRAW_RATE_WINDOW * load_config(
-    CONFIGS_DIR / "run5.yaml").selfplay.n_workers
+    CONFIGS_DIR / "run6.yaml").selfplay.n_workers
 
 
 def _with_block(payload):
@@ -84,7 +84,7 @@ def _with_block(payload):
     Everything else in the payload is the committed file's, so each row below varies exactly
     one thing.
     """
-    dumped = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
+    dumped = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
     dumped["train"]["draw_rate_abort"] = payload
     return RunConfig.model_validate(dumped)
 
@@ -189,7 +189,7 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         f"{caught.value}"
     )
 
-    base = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
+    base = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
     base["train"].pop("draw_rate_abort")
     with pytest.raises(ValidationError) as caught:
         RunConfig.model_validate(base)
@@ -228,7 +228,7 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     # pool being one worker; only the literals did.
     ceiling = _RUN5_EVIDENCE_CEILING
     assert ceiling == DRAW_RATE_WINDOW * load_config(
-        CONFIGS_DIR / "run5.yaml").selfplay.n_workers, "the ceiling is derived, never assumed"
+        CONFIGS_DIR / "run6.yaml").selfplay.n_workers, "the ceiling is derived, never assumed"
     at_ceiling = _with_block({**RUN5_PREREG, "N_pool_min": ceiling})
     assert at_ceiling.train.draw_rate_abort.N_pool_min == ceiling, (
         "AT the ceiling the bar is satisfiable (the deques saturate exactly there), so it "
@@ -243,7 +243,7 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
         f"{caught.value}"
     )
 
-    wider = load_config(CONFIGS_DIR / "run5.yaml").model_dump()
+    wider = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
     wider["selfplay"]["n_workers"] = wider["selfplay"]["n_workers"] + 1
     wider["train"]["draw_rate_abort"] = {**RUN5_PREREG, "N_pool_min": ceiling + 1}
     assert RunConfig.model_validate(wider).train.draw_rate_abort.N_pool_min == ceiling + 1, (
@@ -325,11 +325,11 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
-    assert postures["run5.yaml"] is not None, (
-        "configs/run5.yaml is the minted production config and the manifest's REQUIRED row "
+    assert postures["run6.yaml"] is not None, (
+        "configs/run6.yaml is the minted production config and the manifest's REQUIRED row "
         "audits it — a disarmed run5 is R59's whole subject"
     )
-    run5 = postures["run5.yaml"]
+    run5 = postures["run6.yaml"]
     assert (run5.threshold, run5.min_step, run5.N_pool_min, run5.consec) == (
         RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
         RUN5_PREREG["consec"]), (
@@ -347,15 +347,15 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     # constants — asserting the distinction keeps run5's values run-scoped). Every OTHER
     # non-production config still disarms DELIBERATELY (R59), and `null` is what makes that
     # observable rather than forgotten.
-    # F-P2B (R259): the SECOND armed production config. `shakedown_20260807.yaml` arms the
+    # F-P2B (R259): the SECOND armed production config. `run6.yaml` arms the
     # same four census values ADJ-08 armed — minted, not hand-copied: its `--set` line is the
     # template's own arming example (`tools/config_templates/dev.yaml`), the delta is in its
     # header, and MAIN ratified the mint for the R259 shakedown burn. The equality below is
     # a PIN on the minted file, so an in-place edit of the shakedown's armed block reds here
     # exactly as run5's does above; gate 12 audits the config by name (PRODUCTION_CONFIGS).
-    shakedown = postures.pop("shakedown_20260807.yaml", None)
+    shakedown = postures.pop("run6.yaml", None)
     assert shakedown is not None, (
-        "configs/shakedown_20260807.yaml is a declared PRODUCTION config and must ARM the "
+        "configs/run6.yaml is a declared PRODUCTION config and must ARM the "
         "draw-rate row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
     )
     assert (shakedown.threshold, shakedown.min_step, shakedown.N_pool_min,
@@ -383,7 +383,7 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         "proposes a new draw-rate value, and a dispatcher authors none (R1/R119)"
     )
 
-    others = {name: block for name, block in postures.items() if name != "run5.yaml"}
+    others = {name: block for name, block in postures.items() if name != "run6.yaml"}
     armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
     assert armed_smoke is not None, (
         "configs/smoke_preflight_armed.yaml must ARM the draw-rate row — an armed rehearsal "

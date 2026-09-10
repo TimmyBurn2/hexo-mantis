@@ -5,7 +5,7 @@ DEVIATION FROM PREREG PATH (logged in ORACLE_NOTES_P2.md): PREREG names this sui
 as the existing `tests/config/test_regime_parity.py`. ORACLE-WRITE's writable surface is
 NEW files only — this is therefore a new file, not an edit; IMPL retires the old file's
 O12 content at port time. Reuses the `production_config` fixture already defined in
-`tests/config/conftest.py` (loads `configs/run5.yaml`) — no import needed, pytest
+`tests/config/conftest.py` (loads `configs/run6.yaml`) — no import needed, pytest
 auto-discovers sibling-directory conftest fixtures.
 
 O9 (sims)/O10 (amp=bf16)/O11 (encoding) are UNCHANGED by Phase 2 — GREEN today, and must

@@ -238,7 +238,7 @@ def _fake_run_safety(**_kwargs):
     )
 
 
-def _bounded(factory, *, block, name: str = "smoke_gnn.yaml", steps: int = _DRIVE_STEPS):
+def _bounded(factory, *, block, name: str = "smoke_preflight_armed.yaml", steps: int = _DRIVE_STEPS):
     """A REAL minted config, bounded so a `compose_run` drive terminates, carrying `block`.
 
     The three step-clock knobs are co-overridden together because the reachability validator
@@ -252,7 +252,7 @@ def _bounded(factory, *, block, name: str = "smoke_gnn.yaml", steps: int = _DRIV
                           # WPTS/TD-1: the compose drive runs the real graph route.
                           "batch_size": 8},
                    monitor={"actor_lag_threshold_steps": steps - 1,
-                            # WPAX ADJ-18 (operator-authorized R43 event). `smoke_gnn.yaml`
+                            # WPAX ADJ-18 (operator-authorized R43 event). `smoke_preflight_armed.yaml`
                             # ships actor-lag DISARMED by R59's deliberate smoke allowance, so
                             # once Phase D flips draw-rate to `required` the audit correctly
                             # reports BOTH required rows disarmed and the `== ["draw_rate_
@@ -443,7 +443,7 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
 
     Each key is therefore observed AT ITS OWN DESTINATION: `threshold` and `min_step` at
     `check_draw_rate_collapse(...)`, and `N_pool_min` at the OBSERVATION BOUNDARY it decides.
-    The expected values are read off `configs/run5.yaml` through the resolver — never written
+    The expected values are read off `configs/run6.yaml` through the resolver — never written
     as literals here — so a delta that threads a constant into any one of the three fails.
 
     WPMINT Phase DS (R92) RE-POINTS the third key's arm, and to a stronger observation. The
@@ -455,7 +455,7 @@ def test_all_THREE_block_keys_reach_their_runtime_destination(monkeypatch) -> No
     `N_pool_min` there is one. A delta that threaded a different number would move that
     boundary; a delta that threaded none could not produce it at all.
     """
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     spec = resolve_draw_rate_abort(cfg.train)
     seen: list[dict] = []
 

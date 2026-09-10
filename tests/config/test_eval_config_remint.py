@@ -8,9 +8,9 @@ RED-at-import: NONE of the fields below (`eval.gate`, `eval.ladder`, `eval.krake
 tools/config_templates/{dev,grid}.yaml) also lacks them. `mantis.config.loader.load_config`
 and `mantis.config.schema.RunConfig` ALREADY EXIST and import fine — every test here is
 RED-BY-ASSERTION (a `pydantic.ValidationError` on load, or an equality/membership assertion
-that is false today), never a collection-time ModuleNotFoundError. `configs/run5.yaml` is
+that is false today), never a collection-time ModuleNotFoundError. `configs/run6.yaml` is
 the run3-PARITY config (its ladder is asserted verbatim against the six STATE §5 rungs
-elsewhere in this WP — design §b); `dev_example.yaml` / `smoke_gnn.yaml` /
+elsewhere in this WP — design §b); `dev_example.yaml` / `smoke_preflight_armed.yaml` /
 `smoke_radius_curriculum.yaml` / `sustained_kcluster.yaml` are the dev/smoke templates
 (adjudication A-2: parity mints `random_floor_games=0`, dev/smoke mint `4`).
 """
@@ -29,10 +29,10 @@ _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS_DIR = _REPO / "configs"
 _TEMPLATES_DIR = _REPO / "tools" / "config_templates"
 
-_PARITY_CONFIG = _CONFIGS_DIR / "run5.yaml"
+_PARITY_CONFIG = _CONFIGS_DIR / "run6.yaml"
 _DEV_SMOKE_CONFIGS = (
     _CONFIGS_DIR / "dev_example.yaml",
-    _CONFIGS_DIR / "smoke_gnn.yaml",
+    _CONFIGS_DIR / "smoke_preflight_armed.yaml",
     _CONFIGS_DIR / "smoke_radius_curriculum.yaml",
     _CONFIGS_DIR / "sustained_kcluster.yaml",
 )
@@ -98,7 +98,7 @@ def test_all_configs_and_templates_carry_the_new_eval_block_and_validate() -> No
 
 def test_run3_parity_values_pinned() -> None:
     """96/128 sims verbatim + the full run3-parity gate recipe, pinned against
-    `configs/run5.yaml` — including seed_base=20260625 (run3's ACTUAL gate default,
+    `configs/run6.yaml` — including seed_base=20260625 (run3's ACTUAL gate default,
     deploy_strength_eval.py:272 — adjudication A-3; NOT 42, the legacy evaluator's default,
     eval/defaults.py:31)."""
     cfg = load_config(_PARITY_CONFIG)
@@ -133,7 +133,7 @@ def test_screen_confirm_hi_key_is_rejected_everywhere() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """`configs/run5.yaml`'s ladder must equal the six STATE §5 rungs, in order, verbatim
+    """`configs/run6.yaml`'s ladder must equal the six STATE §5 rungs, in order, verbatim
     (@128/@256 are DISTINCT rungs); 0.75/0.65/3 must appear ONLY as field VALUES, never as
     source-code literals under src/mantis/eval (rule 4 — schema fields, not literals)."""
     cfg = load_config(_PARITY_CONFIG)

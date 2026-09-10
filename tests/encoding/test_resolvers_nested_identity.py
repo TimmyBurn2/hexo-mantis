@@ -11,7 +11,7 @@ split is the defect: duplicated authority for a schema fact, which is what R1 fo
 
 The census-reproducing repro, at HEAD:
 
-    resolve_pool_encoding(load_config("configs/run5.yaml").model_dump(), arch=None)
+    resolve_pool_encoding(load_config("configs/run6.yaml").model_dump(), arch=None)
     -> MissingEncodingError: config has no 'encoding' key ... (LAW-11, R28)
 
 and it is why mode PREFLIGHT could not run a burst at all (parent rc 33, child rc 1).

@@ -49,7 +49,7 @@ _REPO = Path(__file__).resolve().parents[2]
 #: A committed GRAPH config — the representation the sweep exists for. Read through the real
 #: loader, never hand-built: a stub config would let this file pass while the production path
 #: read a key that is not there.
-_CONFIG = _REPO / "configs" / "smoke_gnn.yaml"
+_CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
 
 def _net_fingerprint(model: object) -> str:

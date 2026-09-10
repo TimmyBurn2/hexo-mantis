@@ -126,7 +126,7 @@ def test_non_marker_lines_are_skipped_but_do_not_make_the_reader_pass_vacuously(
 # ══ P9 — the census over the human screen ════════════════════════════════════════════════
 def _report(plan: ws.SweepPlan, result: ws.RungResult, *, counters: bool) -> dict:
     prov = {
-        "tool": ws.TOOL, "produced_by": "run5@abc1234", "config_name": "run5.yaml",
+        "tool": ws.TOOL, "produced_by": "run5@abc1234", "config_name": "run6.yaml",
         "config_sha256": "deadbeef", "git_commit": "abc1234", "git_dirty": False,
         "run_id": "run5", "encoding": "gnn_axis_v1", "representation": "graph",
         "device": "cpu", "torch_version": "2.11.0+cpu", "torch_cuda_version": None,

@@ -17,7 +17,7 @@ from mantis.train.pretrain.cli import _build_arg_parser  # noqa: PLC2701
 
 
 def _args(**kw):
-    base = ["--config", "configs/run5.yaml"]
+    base = ["--config", "configs/run6.yaml"]
     for k, v in kw.items():
         base += [f"--{k.replace('_', '-')}", str(v)]
     return _build_arg_parser().parse_args(base)

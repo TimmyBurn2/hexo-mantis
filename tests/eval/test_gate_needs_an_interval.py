@@ -7,7 +7,7 @@ the guard — and a bootstrap over a single sample is not an interval: every res
 same value, the "CI" collapses onto the point estimate, and a single distinct WIN re-centres
 to +0.5 > 0. A candidate could be promoted to `best` on one game.
 
-WHY THE SCHEMA FLOOR IS NOT WHAT MOVED. `configs/run5.yaml` and `shakedown_20260807.yaml` mint
+WHY THE SCHEMA FLOOR IS NOT WHAT MOVED. `configs/run6.yaml` and `run6.yaml` mint
 10; `configs/smoke_preflight_armed.yaml` deliberately mints 1 (`# delta:
 eval.gate.min_distinct_per_pair: 10 -> 1`) so the preflight smoke boots fast. Raising `ge=1`
 would refuse a config that exists to be cheap. The refusal belongs to the STATISTIC: below two

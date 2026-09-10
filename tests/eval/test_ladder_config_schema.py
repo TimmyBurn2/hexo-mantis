@@ -39,7 +39,7 @@ from mantis.config.loader import load_config
 from mantis.config.schema import SCHEMA_VERSION, RunConfig
 
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 
 _LADDER_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
@@ -243,9 +243,9 @@ def test_rung_order_is_preserved() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """configs/run5.yaml's ladder must equal the STATE §5 rungs in order once re-minted;
+    """configs/run6.yaml's ladder must equal the STATE §5 rungs in order once re-minted;
     0.75/0.65/3 must appear ONLY as VALUES of the named schema fields, never as bare code
-    literals in src/mantis/eval (rule 4). Today configs/run5.yaml has no `eval.ladder` key at
+    literals in src/mantis/eval (rule 4). Today configs/run6.yaml has no `eval.ladder` key at
     all (read at HEAD — no `ladder`/`gate` block), so loading it under the extended schema
     below fails with a named ValidationError; that IS the correct RED state (the re-mint is an
     IMPL-stage task, not ORACLE-WRITE's)."""

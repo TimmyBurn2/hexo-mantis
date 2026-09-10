@@ -17,4 +17,4 @@ def minimal_config() -> dict[str, Any]:
     """The shipped graph example config, as a plain mapping."""
     from mantis.config.loader import load_config
 
-    return load_config(_REPO / "configs" / "smoke_gnn.yaml").model_dump()
+    return load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()

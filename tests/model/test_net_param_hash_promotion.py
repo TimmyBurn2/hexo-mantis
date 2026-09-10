@@ -23,9 +23,9 @@ _REPO = Path(__file__).resolve().parents[2]
 
 #: A committed GRAPH config, read through the real loader — the same one the R81 determinism
 #: oracle uses, so both tests denominate the same net.
-_CONFIG = _REPO / "configs" / "smoke_gnn.yaml"
+_CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
-#: Measured on the PRE-MOVE `worker_sweep._net_param_hash` at `configs/smoke_gnn.yaml`
+#: Measured on the PRE-MOVE `worker_sweep._net_param_hash` at `configs/smoke_preflight_armed.yaml`
 #: (`seed: 20260719`), twice, before the promotion landed.
 _GOLDEN_PRE_MOVE = "1ab0f3cb5cd76a39bb95c4648ce1966242b5fb4bfa2294dfc1901b9509682787"
 

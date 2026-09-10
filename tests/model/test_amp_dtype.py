@@ -8,7 +8,7 @@ graph->bf16 code pin is the LAW-06 protection (F-11: fp16 GINE sum-aggregation o
 65504 -> NaN); no declared config value may flip graph off bf16.
 
 RED-TEAM amp probe: `test_graph_is_bf16_unconditionally` feeds the EXACT value
-`configs/run5.yaml`/`configs/smoke_gnn.yaml` mint today on a graph run
+`configs/run6.yaml`/`configs/smoke_preflight_armed.yaml` mint today on a graph run
 (`declared_amp_dtype="fp16"`) and proves the merged single authority still resolves bf16.
 """
 from __future__ import annotations

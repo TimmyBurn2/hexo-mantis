@@ -560,7 +560,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     Its subject — the absent-monitor-section fallback to a bare `MonitorConfig()` — ceased to
     exist when S-1's gate landed, and a bare `MonitorConfig()` carries
     `actor_lag_abort_enabled=False`, so that fallback silently DISARMED the hard abort
-    `configs/run5.yaml` ships armed (ADJ-07). It was deleted rather than inverted: the
+    `configs/run6.yaml` ships armed (ADJ-07). It was deleted rather than inverted: the
     inversion lives in `tests/test_run_strict_composition.py` as an eight-shape corpus, and
     an inverted copy here would be a second authority for one fact (LAW-03).
     """

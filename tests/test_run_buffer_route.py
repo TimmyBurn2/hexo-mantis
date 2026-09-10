@@ -80,7 +80,7 @@ def test_a_graph_config_selects_the_graph_buffer(smoke_run_config) -> None:
     file), which is what the tree already MEASURED about O-9's instrument."""
     from mantis._engine import HexgBuffer
 
-    config = smoke_run_config("smoke_gnn.yaml")
+    config = smoke_run_config("smoke_preflight_armed.yaml")
     buffer = _select_buffer(config, _CAPACITY)
     assert isinstance(buffer, HexgBuffer), (
         f"a graph run gets the graph buffer, off the DECLARATION and nothing else; got "
@@ -190,7 +190,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity (the old 128, or a new
     constant) instead of calling the derivation."""
     pcr = smoke_run_config(
-        "run5.yaml",
+        "run6.yaml",
         selfplay={
             "playout_cap": {
                 "full_search_prob": 0.10,
@@ -201,7 +201,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     )
     assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
 
-    minted = smoke_run_config("run5.yaml")
+    minted = smoke_run_config("run6.yaml")
     assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
     assert _derived(pcr) != _derived(minted), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "
@@ -241,7 +241,7 @@ def test_the_graph_arm_seeds_its_sampler_from_config_seed(smoke_run_config) -> N
     survive the line moving to a caller that forgets it; this asserts the BEHAVIOUR at the
     one construction site.
     """
-    config = smoke_run_config("smoke_gnn.yaml")
+    config = smoke_run_config("smoke_preflight_armed.yaml")
 
     first = _select_buffer(config, _CAPACITY)
     _fill_graph_ring(first)
@@ -264,8 +264,8 @@ def test_a_different_config_seed_moves_the_graph_draw(smoke_run_config) -> None:
     this arm shows the draw is a function OF `config.seed`.
 
     MUTATION THAT REDS IT: seed from a literal instead of `config.seed`."""
-    config = smoke_run_config("smoke_gnn.yaml")
-    other = smoke_run_config("smoke_gnn.yaml", seed=config.seed + 1)
+    config = smoke_run_config("smoke_preflight_armed.yaml")
+    other = smoke_run_config("smoke_preflight_armed.yaml", seed=config.seed + 1)
 
     baseline = _select_buffer(config, _CAPACITY)
     _fill_graph_ring(baseline)

@@ -154,7 +154,7 @@ def _minted(smoke_run_config, **disk_guard) -> RunConfig:
     `smoke_run_config` is the root conftest's factory (R5: no cross-test import exists or is
     wanted — the fixture IS the shared surface). Overrides are re-validated, so a value this
     file writes is a value the loader would accept."""
-    return smoke_run_config("smoke_gnn.yaml", monitor={"disk_guard": dict(disk_guard)})
+    return smoke_run_config("smoke_preflight_armed.yaml", monitor={"disk_guard": dict(disk_guard)})
 
 
 @pytest.mark.parametrize(("field", "value"), [

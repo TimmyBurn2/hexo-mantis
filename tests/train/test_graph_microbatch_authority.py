@@ -13,7 +13,7 @@
 The defect each row is the ONLY witness to:
 
 - **OF2-8** — a minted block with no live consumer on the route its OWN config declares
-  (R1/LAW-08). `configs/run5.yaml` through the real loader, representation read FROM the
+  (R1/LAW-08). `configs/run6.yaml` through the real loader, representation read FROM the
   config, the caps overridden IN MEMORY ONLY to bind, and the step driven by the real
   dispatcher over a real `HexgBuffer`.
 - **OF2-9 leg 1** — a SECOND reader of the caps appearing. Two authorities agree right up
@@ -74,7 +74,7 @@ _CAP_NAMES = frozenset({"microbatch_caps", "max_edges", "max_nodes"})
 
 # ═══ OF2-8 — LAW-08 on run5's OWN route ══════════════════════════════════════════════════
 def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path) -> None:
-    """OF2-8 — the card's reason to exist. `configs/run5.yaml` is loaded by the REAL loader,
+    """OF2-8 — the card's reason to exist. `configs/run6.yaml` is loaded by the REAL loader,
     its representation is read FROM the config rather than asserted by this test, its caps go
     through the REAL resolver behind the REAL `StepCoordinator._microbatch_caps` thunk, and
     the step runs through the REAL `run_declared_train_step`.
@@ -83,12 +83,12 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
     test can build — that is the point of the sizing pass, not a defect — so binding them here
     is what makes the consumer LIVE rather than merely present. The FILE is not touched: a
     test that edited a minted config to make itself pass would be tuning to green (R61)."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     assert cfg.identity.representation == "graph", (
         "run5 no longer declares the graph representation — this row's premise is gone")
     full_config = cfg.model_dump()
     assert "microbatch_caps" in full_config["train"], (
-        "configs/run5.yaml carries no train.microbatch_caps block")
+        "configs/run6.yaml carries no train.microbatch_caps block")
 
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
@@ -122,7 +122,7 @@ def test_of2_8_run5s_caps_are_typed_and_inside_the_schema_range(tmp_path) -> Non
     it does not make. It asserts type and the schema's own `ge=1` range and NOTHING about the
     numbers — the numbers are the operator's (R119/R193(c)). The property its old name implied
     is the ARMING, and that now has its own row below, expressed value-agnostically."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     caps = resolve_microbatch_caps(cfg.model_dump())
     assert isinstance(caps.max_edges, int) and caps.max_edges >= 1
     assert isinstance(caps.max_nodes, int) and caps.max_nodes >= 1
@@ -221,10 +221,10 @@ _CENSUS_BATCH_SIZE = 256
 
 #: F-P2B (R259, review finding 1): BOTH production configs, so the arming/sizing witness
 #: covers the config actually being launched. The transfer is legitimate and guarded:
-#: `shakedown_20260807.yaml` mints run5's caps at run5's `batch_size: 256` on the graph arm,
+#: `run6.yaml` mints run5's caps at run5's `batch_size: 256` on the graph arm,
 #: so the censused (E, N) describe its batch verbatim — and the `_CENSUS_BATCH_SIZE`
 #: staleness guard inside the test re-derives that premise per config rather than assuming it.
-_PRODUCTION_CAPPED = ("run5.yaml", "shakedown_20260807.yaml")
+_PRODUCTION_CAPPED = ("run6.yaml", "run6.yaml")
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
@@ -499,7 +499,7 @@ def test_of2_9_leg2_no_tail_statement_lives_inside_the_accumulation_loop() -> No
 
 
 # ═══ OF2-14 — the five smoke configs do not bind ═════════════════════════════════════════
-_NON_RUN5 = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml")
+_NON_RUN5 = ("dev_example.yaml", "smoke_preflight_armed.yaml", "smoke_preflight_armed.yaml")
 
 
 @pytest.mark.parametrize("name", _NON_RUN5)
@@ -537,7 +537,7 @@ def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory
     divergence ADJ-13 F-1 was: a subdirectory/`.yml` shape both gates make legal would
     slip out of this sweep silently while staying invisible to nobody else (N4, F-P2B/N4).
 
-    F-P2B (R259): `shakedown_20260807.yaml` joins run5 on the EXCLUDED side, on run5's own
+    F-P2B (R259): `run6.yaml` joins run5 on the EXCLUDED side, on run5's own
     grounds — it mints run5's CARD-RUN5-GPU-OOM caps (4500000/170000) at run5's batch_size
     256, and those caps exist BECAUSE they bind on the production GPU. Putting it through
     the "caps do not bind" sweep would assert the opposite of the caps' purpose.
@@ -546,4 +546,4 @@ def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory
     the strongest instance of it — its `train.microbatch_caps` are fitted at the box against a
     measured partition, so they bind by construction."""
     live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
-    assert live == sorted((*_NON_RUN5, "run5.yaml", "run6.yaml", "shakedown_20260807.yaml"))
+    assert live == sorted((*_NON_RUN5, "run6.yaml", "run6.yaml", "run6.yaml"))

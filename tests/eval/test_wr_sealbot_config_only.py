@@ -19,7 +19,7 @@ The defect each row is the ONLY witness to:
   hazard.
 - **O-A8 arm 2** — the selection ORDER against the ladder as MINTED. The existing producer
   test (`test_wr_sealbot_handshake.py`) pins the rule on a synthetic three-rung ladder; this
-  row pins it on `configs/run5.yaml`'s own rung sequence, which is the object A-1's
+  row pins it on `configs/run6.yaml`'s own rung sequence, which is the object A-1's
   "config-only" claim is actually about. Neither subsumes the other and neither is rewritten.
 - **O-A8d — RETIRED by R332(b), which LIFTED the R118/A-1 freeze on the producer.** The row
   was a working-tree `git diff --stat` over `src/mantis/eval/rounds.py`, firing on any
@@ -42,7 +42,7 @@ from typing import Any
 from mantis.eval.rounds import build_round_result
 
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 
 
 def _run5_rungs() -> list[Any]:
@@ -116,7 +116,7 @@ def test_a_resolvable_sealbot_rung_makes_wr_sealbot_a_float_with_no_producer_edi
 def test_wr_sealbot_selects_the_first_sealbot_rung_of_run5s_minted_ladder() -> None:
     """O-A8 arm 2. Ladder ORDER is read from the minted config, never transcribed: a re-mint
     that reordered the rungs would change which depth `wr_sealbot` means, and every monitor
-    threshold reading it (`configs/run5.yaml:211-218`) would silently re-aim."""
+    threshold reading it (`configs/run6.yaml:211-218`) would silently re-aim."""
     rungs = _run5_rungs()
     rung_results = {
         "kraken_raw": _rung_result(games=8, wr=0.50),

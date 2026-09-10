@@ -247,7 +247,7 @@ def test_o16_every_committed_config_validates():
 
 
 def test_o16_schema_round_trip():
-    cfg = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
     again = RunConfig.model_validate(cfg.model_dump())
     assert again == cfg
 

@@ -26,7 +26,7 @@ list someone maintains:
 THE VERDICTS THIS PRODUCED, and each is asserted below rather than recorded here:
 
   * `HexTacToeNet` (the dense lineage) — **KEPT, SURFACED, consumers NAMED.** No PRODUCTION
-    config selects it (`run5.yaml` and `shakedown_20260807.yaml` are both graph), so the first
+    config selects it (`run6.yaml` and `run6.yaml` are both graph), so the first
     half of the archive test passes — and the second half FAILS: `build_net` dispatches to it
     from the `CnnArch` branch, `mantis/train/pretrain/cli.py` requires it by `isinstance` on the
     BC-pretrain path, and two SHIPPED configs select it. Load-bearing, so it is surfaced with

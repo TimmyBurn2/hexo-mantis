@@ -51,7 +51,7 @@ def test_build_net_carries_the_declared_arch_dataclass_as_a_handle() -> None:
     Identity, not equality: an implementation that stores a copy, a `replace()`, or a
     re-derived arch would satisfy equality while creating exactly the second arch authority
     repo_design §3 exists to forbid. Both arms are driven because a one-armed fix (grid
-    only, or graph only) is the shape that leaves `configs/run5.yaml` — a `graph` run —
+    only, or graph only) is the shape that leaves `configs/run6.yaml` — a `graph` run —
     dying at `eval/snapshot.py:48` after a green test suite.
     """
     for name, arch in _archs().items():

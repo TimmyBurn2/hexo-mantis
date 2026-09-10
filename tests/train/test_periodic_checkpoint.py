@@ -18,7 +18,7 @@
 At `5a519e6` `train.checkpoint_interval` has exactly one reader in `src/`
 (`trainer/core.py:487`, inside `_train_on_batch`) and `train_step_from_graph_batch`
 (`core.py:493-545`) contains no interval read and no `save_checkpoint` call at all. So on
-run5's DECLARED representation (`configs/run5.yaml` `identity.representation: graph`) the
+run5's DECLARED representation (`configs/run6.yaml` `identity.representation: graph`) the
 minted knob has no consumer: a graph run cannot checkpoint on a cadence at any value.
 R173 cards the fix as ONE resolver — `Trainer._maybe_periodic_checkpoint` — that both step
 tails call, and orders the two mutation arms these oracles are: *interval N → checkpoints at
@@ -329,7 +329,7 @@ def test_run5_config_produces_a_periodic_checkpoint_on_its_declared_route(
     `TrainHParams.from_config`, the spec through THE resolver, the step through the REAL
     dispatcher. The interval is overridden IN MEMORY ONLY; `configs/` is read-only to this
     card (R119) and R165 reserves the re-mint to the operator."""
-    d = load_config(_REPO / "configs" / "run5.yaml").model_dump()
+    d = load_config(_REPO / "configs" / "run6.yaml").model_dump()
     d["train"]["checkpoint_interval"] = 2
     hp = TrainHParams.from_config(d)
     spec = resolve_step_spec(d)

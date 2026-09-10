@@ -217,7 +217,7 @@ def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> N
 
     from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
 
-    rungs = yaml.safe_load((_REPO / "configs" / "run5.yaml").read_text(encoding="utf-8"))
+    rungs = yaml.safe_load((_REPO / "configs" / "run6.yaml").read_text(encoding="utf-8"))
     sealbot_depths = {r["depth"] for r in rungs["eval"]["ladder"]["rungs"]
                       if r["bot"] == "sealbot"}
     excluded = set(_R326_EXCLUDED_SEALBOT_DEPTHS)

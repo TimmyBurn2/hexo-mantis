@@ -226,12 +226,12 @@ sha256 = "613ce0dc684e130085cf452988ce5e93c982d65f160970796e23bbafac74a5ce"
 added_by = "WPMAIN"
 
 [[required]]
-path = "wpmain/config_baseline_b482243/run5.yaml"
+path = "wpmain/config_baseline_b482243/run6.yaml"
 sha256 = "6416ed8b947ec5685cf067d8ed9b1fa3970358eff2c0308b9a478e5f8ad8ef37"
 added_by = "WPMAIN"
 
 [[required]]
-path = "wpmain/config_baseline_b482243/smoke_gnn.yaml"
+path = "wpmain/config_baseline_b482243/smoke_preflight_armed.yaml"
 sha256 = "8fdd18e2b5c26511f0aeab1b494d65c363d8f2bef77d051db0b42a72b455b40f"
 added_by = "WPMAIN"
 

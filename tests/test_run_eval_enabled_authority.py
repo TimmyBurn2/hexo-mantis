@@ -161,7 +161,7 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
         best_model=None, best_model_step=None, best_model_path=None, representation="graph"))
 
     config = smoke_run_config(
-        "smoke_gnn.yaml", eval_enabled=eval_enabled,
+        "smoke_preflight_armed.yaml", eval_enabled=eval_enabled,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS, "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
     )
@@ -268,8 +268,8 @@ def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
         )
 
 
-@pytest.mark.parametrize("name", ["dev_example.yaml", "run5.yaml", "shakedown_20260807.yaml",
-                                  "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
+@pytest.mark.parametrize("name", ["dev_example.yaml", "run6.yaml", "run6.yaml",
+                                  "smoke_preflight_armed.yaml", "smoke_preflight_armed.yaml",
                                   "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml"])
 def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_config) -> None:
     """O-E1's R1-completeness arm — every minted config carries the key EXPLICITLY.
@@ -278,7 +278,7 @@ def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_co
     `MINTED_CONFIGS`, which lists five: it omits `smoke_preflight_armed.yaml`. That gap is
     pre-existing and is recorded, not fixed here (F-12) — but an oracle that inherited it
     would leave the one config the preflight actually boots uncovered.
-    `shakedown_20260807.yaml` joins at F-P2B (R259): the armed-abort manifest's terminal-eval
+    `run6.yaml` joins at F-P2B (R259): the armed-abort manifest's terminal-eval
     residual leans on every committed config minting the key True, production configs first.
 
     MUTATION THAT REDS IT: re-mint five of six. The schema makes that a load-time failure,

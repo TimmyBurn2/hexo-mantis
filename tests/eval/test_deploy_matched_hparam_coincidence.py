@@ -2,7 +2,7 @@
 
 Census sites D-15 and D-23 found thirteen hyper-parameters on the LAW-15 deploy-matched
 eval path that are code-side literals rather than threaded config (R1 forbids code-side
-defaults). They were measured EQUAL to `configs/run5.yaml` — but equal *by coincidence of
+defaults). They were measured EQUAL to `configs/run6.yaml` — but equal *by coincidence of
 defaults, not by threading*. Nothing detects the day they stop being equal.
 
 This file is the detector. It does not thread the config (that is a design decision the
@@ -25,7 +25,7 @@ import pytest
 import yaml
 
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 _MCTS_RS = _REPO / "crates" / "mantis-bridge" / "src" / "mcts.rs"
 _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 

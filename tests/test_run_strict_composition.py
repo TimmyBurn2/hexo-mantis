@@ -7,7 +7,7 @@ this file rides on them, exactly as `tests/test_run_composition.py` rides on `ma
 
 What this file exists to stop, in one sentence: `compose_run` currently duck-types its own
 config — `getattr(config, "monitor", None) -> MonitorConfig()` silently DISARMS the
-actor-lag hard abort that `configs/run5.yaml` now ships armed (ADJ-07), and five sibling
+actor-lag hard abort that `configs/run6.yaml` now ships armed (ADJ-07), and five sibling
 arms of the same idiom silently substitute a smoke cadence, a `None` eval section, the
 literal encoding `"unknown"` (which `train/anchor.py` stamps, unvalidated, into a promoted
 anchor and its `.provenance.json` sidecar — a permanent LAW-12 defect) and an empty
@@ -255,7 +255,7 @@ def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
-def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STEPS,
+def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,
              eval_enabled: bool = False):
     """A real minted config, bounded so a drive terminates. The three step-clock knobs are
     co-overridden together because the reachability validator spans them: overriding
@@ -323,7 +323,7 @@ def test_an_unvalidated_config_is_ONE_named_error_before_any_subsystem_exists(
     """INVERSION. `tests/test_run_composition.py` used to assert the OPPOSITE of this — that
     a config with no `.monitor` section gets a bare `MonitorConfig()`. That test passed only
     because the defect existed: the bare default carries `actor_lag_abort_enabled=False`,
-    so the fallback silently reverts the arming `configs/run5.yaml` ships (ADJ-07). The
+    so the fallback silently reverts the arming `configs/run6.yaml` ships (ADJ-07). The
     inversion IS the LAW-07 mutation pair.
 
     Eight shapes, ONE error type, one `match=` — so no shape is another's twin, which is
@@ -652,7 +652,7 @@ def test_the_axis_is_the_whole_minted_set_and_is_not_empty():
     silently omit a newly minted config — but a glob that returns nothing would silently
     delete the axis instead, and a parametrized test with zero params is a green no-op."""
     assert len(_MINTED) >= 5, f"the minted-config axis collapsed to {_MINTED}"
-    assert "run5.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
+    assert "run6.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
 
 
 @pytest.mark.parametrize("name", _MINTED)
@@ -707,14 +707,14 @@ def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
     filing. It is an INSTANCE ("this config's value"); Phase P's armed-abort manifest is the
     RULE ("which aborts a production config must arm"), and DESIGN_P must reconcile them.
     """
-    assert load_config(_CONFIGS_DIR / "run5.yaml").monitor.actor_lag_abort_enabled is True, (
+    assert load_config(_CONFIGS_DIR / "run6.yaml").monitor.actor_lag_abort_enabled is True, (
         "R59: the minted PRODUCTION config's actor-lag hard abort ships ARMED. Phase S "
         "re-mints run5; a dropped `--set monitor.actor_lag_abort_enabled=true` reverts "
         "Phase F (0ef05ff) with gate 7 and header-truthfulness both green."
     )
 
 
-@pytest.mark.parametrize("name", ("smoke_gnn.yaml", "smoke_radius_curriculum.yaml"))
+@pytest.mark.parametrize("name", ("smoke_preflight_armed.yaml", "smoke_radius_curriculum.yaml"))
 def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, name: str
 ):
@@ -740,7 +740,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
         config=cfg, trainer=trainer, pool=pool,
         # WPTS/TD-1: per-representation buffer — the graph arm samples a REAL HexgBuffer,
         # the grid arm drives the dispatcher's dense sampler on the fake.
-        buffer=mk_graph_buffer(n_records=32) if name == "smoke_gnn.yaml" else _Buffer(),
+        buffer=mk_graph_buffer(n_records=32) if name == "smoke_preflight_armed.yaml" else _Buffer(),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 

@@ -79,11 +79,11 @@ _CONFIGS = _REPO / "configs"
 _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps.py"
 
 #: The two configs whose value is the OPERATOR'S, minted at the box sitting from the
-#: calibration tool's output (R119). `shakedown_20260807.yaml` joins run5 on run5's own
+#: calibration tool's output (R119). `run6.yaml` joins run5 on run5's own
 #: grounds: it is a box-class config that already mints run5's `microbatch_caps`, and it is
 #: already excluded beside run5 from the train-side non-binding sweep (F-P2B/R259).
-_PRODUCTION = ("run5.yaml", "run6.yaml", "shakedown_20260807.yaml")
-_NON_PRODUCTION = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
+_PRODUCTION = ("run6.yaml", "run6.yaml", "run6.yaml")
+_NON_PRODUCTION = ("dev_example.yaml", "smoke_preflight_armed.yaml", "smoke_preflight_armed.yaml",
                    "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
 
@@ -336,7 +336,7 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
     to source its own precondition from the config. Nulling the dump is the stronger form: it
     tests the REFUSAL, not the current mint state, so the row keeps its meaning across every
     future re-mint instead of silently becoming a test of nothing."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     assert cfg.identity.representation == "graph", (
         "run5 no longer declares the graph representation — this row's premise is gone")
     dump = cfg.model_dump()
@@ -357,7 +357,7 @@ def test_fg5_05b_the_minted_production_config_DOES_build_its_graph_server() -> N
     config is still uncalibrated". This row is what makes the pair complete.
 
     MUTATION THAT REDS IT: re-minting run5 back to the `null` placeholder."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     server = InferenceServer(
         torch.nn.Linear(1, 1), torch.device("cpu"), cfg.model_dump(),
         batcher=_DummyBatcher(), encoding_spec=lookup(cfg.identity.encoding),

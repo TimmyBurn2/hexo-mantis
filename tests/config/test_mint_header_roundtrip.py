@@ -81,7 +81,7 @@ _UNRENDERABLE_DOCS = ("!!omap [{a: 1}]", "!!pairs [{a: 1}]")
 #: The one place a stringified-`None` header still lives, closed and named: a byte-frozen
 #: snapshot of `b482243` under a FROZEN manifest, which is a record, not a mintable config.
 _BASELINE_KNOWN_BAD = {
-    ("run5.yaml", "train.draw_rate_abort"),
+    ("run6.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
 }

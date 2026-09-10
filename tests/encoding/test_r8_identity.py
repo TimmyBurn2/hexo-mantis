@@ -1,6 +1,6 @@
 """R328(b)(c) — the run6 graph identity `gnn_axis_r8`, and the marker branch it forced open.
 
-WHY A NEW REGISTRY ROW AND NOT AN EDIT TO `gnn_axis_v1`. `configs/run5.yaml` names
+WHY A NEW REGISTRY ROW AND NOT AN EDIT TO `gnn_axis_v1`. `configs/run6.yaml` names
 `gnn_axis_v1`, and R26 holds run5's radius registry-derived at 6 — so mutating that row would
 move run5's radius to 8 while typing no `8` into any run5 file, and nothing could detect it:
 `CheckpointMetadata` stamps `encoding_name` and NOT the geometry. This suite pins the

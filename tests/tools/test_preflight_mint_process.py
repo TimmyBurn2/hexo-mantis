@@ -106,14 +106,14 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 
 #: run5's own constants, read from the file rather than restated (§14 item 17 / ADJ-12).
-RUN5 = REPO_ROOT / "configs" / "run5.yaml"
+RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 _N = 101
-#: WPAX Phase D: the burst floor for `configs/run5.yaml` MOVED. run5 now arms the draw-rate
+#: WPAX Phase D: the burst floor for `configs/run6.yaml` MOVED. run5 now arms the draw-rate
 #: abort at `min_step: 25000`, and the same cross-field rule that binds
 #: `monitor.actor_lag_threshold_steps` inside the run binds this floor too — so a burst the
 #: run5 step floor never reaches is refused at rc 11, exactly as a burst below the lag
 #: threshold is. `_N` stays 101 for every drive that is about the a/b assertion arithmetic;
-#: the drives that push a REAL `configs/run5.yaml` through `_apply_burst_override` use this.
+#: the drives that push a REAL `configs/run6.yaml` through `_apply_burst_override` use this.
 #: (Measured, not assumed: `max(100, 1, 25000) + 1`.)
 _RUN5_BURST = 25001
 
@@ -153,7 +153,7 @@ def _cuda_is_available() -> bool:
     return bool(torch.cuda.is_available())
 
 
-#: Declared once. `configs/run5.yaml` mints `train.device: cuda` (R126: the device is a CONFIG
+#: Declared once. `configs/run6.yaml` mints `train.device: cuda` (R126: the device is a CONFIG
 #: FACT and the `--device` flag is DEAD), so what a real run5 boot DOES is a property of the
 #: host, not of the tool. Both halves are pinned rather than one being left to chance: on a
 #: non-CUDA box `test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer` is the
@@ -268,7 +268,7 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     The three real-boot drives below exist to measure the TOOL's boot mechanics — where the
     child terminates, what the report then claims, and that a spawned boot is reported as a
     boot. Until R126 they got there by passing the tool `--device cpu` against
-    `configs/run5.yaml`. That flag is dead by ruling, precisely because a cpu preflight
+    `configs/run6.yaml`. That flag is dead by ruling, precisely because a cpu preflight
     against a cuda-minted run5 false-cleared the GPU memory wall (CARD-RUN5-GPU-OOM), so the
     drives re-point onto a config that says cpu ITSELF.
 
@@ -866,7 +866,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
 
     TWO LIVE ARMS, and the branch is the CONFIG'S OWN STATE — not the host's and not a marker
     (F-R309-1; frozen-edit grant R310(a), re-pinned in the same act). The R309(e) grant launched
-    the child in run5's minted posture, which is right and which `configs/run5.yaml` cannot
+    the child in run5's minted posture, which is right and which `configs/run6.yaml` cannot
     satisfy: it carries the R119 `null` PLACEHOLDER, and `resolve_allocator_posture` refuses
     that BEFORE any environment is consulted, so NO environment makes the minted arm reachable.
     A row left red-by-design at HEAD converts a correct refusal into a standing CI outage, so
@@ -888,7 +888,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     for however long the box sitting took.
 
     VERIFIED UNDER BOTH MINTED TOKENS on a CPU host — PASS at `default`, PASS at
-    `expandable_segments`, `configs/run5.yaml` restored byte-identical after each probe — so the
+    `expandable_segments`, `configs/run6.yaml` restored byte-identical after each probe — so the
     minted arm is MEASURED and not merely written (R309(e)'s obligation, and R310(f)'s rule that
     a granted diff is a measured one).
     """
@@ -1078,7 +1078,7 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
     """MF-7 (i), the escape REVIEW-impl DEMONSTRATED at rc 0.
 
     A production config that is simply not listed in `PRODUCTION_CONFIGS` was never audited:
-    `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run5.yaml > configs/run6.yaml`
+    `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run6.yaml > configs/run6.yaml`
     then `--audit-only` returned **0**, with the one required abort disarmed on a config
     sitting in `configs/`. Nothing pinned `configs/*.yaml ⊆ PRODUCTION_CONFIGS ∪ EXEMPT`, and
     R59's "smoke configs may legally be disarmed" was expressed by ABSENCE — which made
@@ -1260,7 +1260,7 @@ def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
     boundaries fall three orders of magnitude past the end of the run was indistinguishable
     from run5 itself.
 
-    Driven through the mini-tree rig rather than by editing `configs/run5.yaml`: the shipped
+    Driven through the mini-tree rig rather than by editing `configs/run6.yaml`: the shipped
     config is never touched, and the tool is the byte-identical shipped file reading a scratch
     root as its own `REPO_ROOT`.
     """
@@ -1653,7 +1653,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
     from mantis.config.resolve.drain import DrainCapsSpec
 
-    _run_tool("--audit-only", "--config", "configs/run5.yaml",
+    _run_tool("--audit-only", "--config", "configs/run6.yaml",
               "--out-dir", str(tmp_path / "coord"))
     report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text())
     block = report["coordinator"]
@@ -1662,7 +1662,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
         "the census measured its absence"
     )
 
-    config = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    config = load_config(REPO_ROOT / "configs" / "run6.yaml")
     assert set(block["knobs"]) == {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)}
     assert set(block["drain_caps"]) == {f.name for f in dataclasses.fields(DrainCapsSpec)}
     assert block["knobs"] == json.loads(json.dumps(
@@ -1676,7 +1676,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
         "run5's armed terms, as the run will really see them — the four travel together"
     )
 
-    _run_tool("--audit-only", "--config", "configs/smoke_gnn.yaml",
+    _run_tool("--audit-only", "--config", "configs/smoke_preflight_armed.yaml",
               "--out-dir", str(tmp_path / "smoke"))
     other = json.loads(
         sorted((tmp_path / "smoke").glob("preflight_*.json"))[0].read_text())["coordinator"]
@@ -2755,7 +2755,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     F-2 was censused over `os.path.abspath` call SITES; the class it declared is *a path-identity
     comparison whose two sides normalise differently*, and set membership is one. `_audit_paths`
     unioned `_resolve_production_configs()` (a plain `REPO_ROOT / rel`) with `named` (arriving
-    `.resolve()`d from `_resolve_config_path`), so under a symlinked `configs/run5.yaml` the set
+    `.resolve()`d from `_resolve_config_path`), so under a symlinked `configs/run6.yaml` the set
     held two SPELLINGS of one config: audited twice, published twice in `audited_configs`.
 
     Fail-safe in direction, which is why it survived — and exactly why it needs a producer: a
@@ -2766,13 +2766,13 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     root = _mini_tree(tmp_path)
     real = tmp_path / "elsewhere"
     real.mkdir()
-    target = real / "run5.yaml"
-    target.write_text((root / "configs" / "run5.yaml").read_text())
-    (root / "configs" / "run5.yaml").unlink()
-    (root / "configs" / "run5.yaml").symlink_to(target)
+    target = real / "run6.yaml"
+    target.write_text((root / "configs" / "run6.yaml").read_text())
+    (root / "configs" / "run6.yaml").unlink()
+    (root / "configs" / "run6.yaml").symlink_to(target)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    named = TOOL._resolve_config_path(str(root / "configs" / "run5.yaml"))
+    named = TOOL._resolve_config_path(str(root / "configs" / "run6.yaml"))
     paths = TOOL._audit_paths(named)
     assert len(paths) == len(set(paths)) == len(PRODUCTION_CONFIGS), (
         "one config reached by two spellings must be ONE entry — a set of paths that "
@@ -2782,7 +2782,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     # the declaration at point of use — the subject stays "two spellings collapse onto one",
     # and the other production members ride along un-symlinked.
     others = sorted((root / rel).resolve() for rel in PRODUCTION_CONFIGS
-                    if rel != "configs/run5.yaml")
+                    if rel != "configs/run6.yaml")
     assert paths == sorted([target, *others]), (
         f"…and both spellings must collapse onto the target; got {paths}"
     )
@@ -3093,7 +3093,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
     very run did not attempt.
     """
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
@@ -3183,7 +3183,7 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
         f"fallback is a constant. got {TOOL._report_name(named)!r}"
     )
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
@@ -3394,7 +3394,7 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     tuples partition the tree, every exemption carries a reason — and structure is preserved
     by moving the mint subject from one side to the other.**
 
-    Nothing anywhere pinned `configs/run5.yaml ∈ PRODUCTION_CONFIGS`. Moving it to
+    Nothing anywhere pinned `configs/run6.yaml ∈ PRODUCTION_CONFIGS`. Moving it to
     `EXEMPT_CONFIGS` with a written reason and promoting an armed smoke config in its place
     keeps the partition exact, keeps every reason non-blank, and yields **gate 12 rc 0 with
     run5 disarmed** — the run the operator is about to mint, unaudited, with every existing
@@ -3406,22 +3406,22 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     are now pinned, so neither is the sole witness.
     """
     exempt = {rel for rel, _reason in EXEMPT_CONFIGS}
-    assert "configs/run5.yaml" in PRODUCTION_CONFIGS, (
+    assert "configs/run6.yaml" in PRODUCTION_CONFIGS, (
         "the config the operator is about to mint must be bound BY NAME — absence from this "
         f"tuple is not a red gate, it is silence. got {PRODUCTION_CONFIGS}"
     )
-    assert "configs/run5.yaml" not in exempt
+    assert "configs/run6.yaml" not in exempt
     # F-P2B (R259): the SAME by-name pin for the second production config — N-1's escape is
     # not specific to run5, and the shakedown config is the run actually being launched.
-    assert "configs/shakedown_20260807.yaml" in PRODUCTION_CONFIGS, (
+    assert "configs/run6.yaml" in PRODUCTION_CONFIGS, (
         "the armed shakedown config must be bound BY NAME for the same reason run5 is — "
         f"exempting it is a red test, never a bookkeeping edit. got {PRODUCTION_CONFIGS}"
     )
-    assert "configs/shakedown_20260807.yaml" not in exempt
+    assert "configs/run6.yaml" not in exempt
 
     # …and the escape the pin exists to refuse, driven.
     root = _mini_tree(tmp_path)
-    production = root / "configs" / "run5.yaml"
+    production = root / "configs" / "run6.yaml"
     production.write_text(production.read_text().replace("actor_lag_abort_enabled: true",
                                                          "actor_lag_abort_enabled: false"))
     bare = _mini_audit(root)
@@ -3433,7 +3433,7 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
 
     # The swap, exactly as an unwitting editor would write it: run5 moves to EXEMPT with a
     # written reason, and an ARMED smoke config takes its place on the production side.
-    smoke = root / "configs" / "smoke_gnn.yaml"
+    smoke = root / "configs" / "smoke_preflight_armed.yaml"
     # WPAX Phase D: "an ARMED smoke config" now means armed on BOTH required rows — the
     # draw-rate row joined the manifest, and a smoke config ships it `null` (R59). Arming it
     # here keeps the ESCAPE this test demonstrates intact: if the promoted config were
@@ -3474,11 +3474,11 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     # shakedown config) stays declared exactly as shipped, so the partition stays exact for
     # the same reason it did when run5 was the sole member.
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS",
-                        ("configs/smoke_gnn.yaml",
-                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run5.yaml"]))
+                        ("configs/smoke_preflight_armed.yaml",
+                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run6.yaml"]))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],
-                         ("configs/run5.yaml", "moved with a written reason")))
+                        (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_preflight_armed.yaml"],
+                         ("configs/run6.yaml", "moved with a written reason")))
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     assert TOOL._config_declaration_drift() == ([], [], []), (
         "the swap keeps the partition EXACT — which is why no structural check catches it"
@@ -3610,8 +3610,8 @@ def test_a_config_in_BOTH_tuples_fails_the_gate(monkeypatch, tmp_path) -> None:
     root = _mini_tree(tmp_path)
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*EXEMPT_CONFIGS, ("configs/run5.yaml", "excused as well as audited")))
-    assert TOOL._config_declaration_drift()[2] == ["configs/run5.yaml"], (
+                        (*EXEMPT_CONFIGS, ("configs/run6.yaml", "excused as well as audited")))
+    assert TOOL._config_declaration_drift()[2] == ["configs/run6.yaml"], (
         "a config in both tuples must be reported as OVERLAPPING"
     )
     with pytest.raises(TOOL.PreflightManifestError) as caught:
@@ -3692,7 +3692,7 @@ def test_both_arms_of_the_config_path_resolver_are_live(monkeypatch, tmp_path) -
     assert TOOL._resolve_config_path("local.yaml") == local.resolve(), (
         "the cwd-relative arm: a config beside the operator, which REPO_ROOT cannot find"
     )
-    assert TOOL._resolve_config_path("configs/run5.yaml") == RUN5.resolve(), (
+    assert TOOL._resolve_config_path("configs/run6.yaml") == RUN5.resolve(), (
         "the REPO_ROOT fallback arm: a repo-relative path from a foreign cwd, which the "
         "cwd-relative arm cannot find"
     )
@@ -3875,7 +3875,7 @@ def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_e
     and the stub child is a real process that writes a real JSONL segment through the real
     filename convention. `_run_preflight` itself is unmodified and unaware: it does its own
     `_resolve_config_path`, `_load`, `_audit_manifest_and_configs` and
-    `_apply_burst_override` on the shipping `configs/run5.yaml`.
+    `_apply_burst_override` on the shipping `configs/run6.yaml`.
 
     The assertion is the BICONDITIONAL, not the sentence alone: the parenthetical and
     `report["events"]["segments"]` are two views of one scan, so a mutation that changes what
@@ -4239,7 +4239,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
     publish `tier: sync_lag` for a run that never started.
     """
     out_dir = tmp_path / "refused"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST - 1),
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_RUN5_BURST - 1),
                        "--out-dir", str(out_dir), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
@@ -4273,7 +4273,7 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
 
     RE-POINTED by R130 onto the minted CPU twin of run5. The tier arithmetic is UNCHANGED by
     the move and that is checkable rather than asserted: the twin differs from
-    `configs/run5.yaml` in exactly `run_id` and `train.device` (`_mint_run5_cpu_twin`), and
+    `configs/run6.yaml` in exactly `run_id` and `train.device` (`_mint_run5_cpu_twin`), and
     none of the three floor rows below is either of those — `_RUN5_BURST` is still run5's own
     floor, carried through the twin's identical `train.draw_rate_abort` block.
     """
@@ -4340,7 +4340,7 @@ def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path) 
         f"{(healthy.stdout + healthy.stderr)[-2000:]}"
     )
 
-    run5_copy = root / "configs" / "run5.yaml"
+    run5_copy = root / "configs" / "run6.yaml"
     document = yaml.safe_load(run5_copy.read_text(encoding="utf-8"))
     assert document["train"]["terminal_eval_enabled"] is True, (
         "premise: run5 mints the terminal eval ON, which is what makes the row REQUIRED "

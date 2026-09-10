@@ -31,7 +31,7 @@ def test_a_REMINTED_sims_value_passes_the_relation_that_a_literal_would_have_red
     smoke_run_config,
 ):
     """Arm 1 — the audit's pin. A config that mints a DIFFERENT value is not a test failure."""
-    remint = smoke_run_config("run5.yaml", eval={"random_model_sims": 97,
+    remint = smoke_run_config("run6.yaml", eval={"random_model_sims": 97,
                                                  "sealbot_model_sims": 131})
     assert remint.eval.random_model_sims == 97
     for rung, value in (("random", remint.eval.random_model_sims),
@@ -67,7 +67,7 @@ def test_the_registry_owned_quantities_are_read_from_the_registry(smoke_run_conf
         spec = lookup(name)
         assert _engine.Board.with_encoding_name(name).size == spec.board_size, name
         assert _engine.RegistrySpec.from_registry(name).policy_stride == spec.policy_logit_count
-    cfg = smoke_run_config("run5.yaml")
+    cfg = smoke_run_config("run6.yaml")
     assert cfg.identity.encoding in {s.name for s in all_specs()}
 
 

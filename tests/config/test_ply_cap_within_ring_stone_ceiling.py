@@ -55,20 +55,20 @@ def test_the_ceiling_is_read_from_the_engine_and_is_not_typed_in_the_schema() ->
 def test_a_cap_at_the_ceiling_validates(smoke_run_config) -> None:
     """The BOUNDARY, on the admitting side. A relation that refused its own ceiling would
     silently cost one ply and nothing would say so."""
-    config = smoke_run_config("run5.yaml", selfplay={"max_game_moves": max_stones()})
+    config = smoke_run_config("run6.yaml", selfplay={"max_game_moves": max_stones()})
     assert config.selfplay.max_game_moves == max_stones()
 
 
 def test_a_cap_one_past_the_ceiling_REDS_AT_MINT(smoke_run_config) -> None:
     """The mutation pin, and the boundary on the refusing side."""
     with pytest.raises(ValidationError, match="exceeds the HEXG ring"):
-        smoke_run_config("run5.yaml", selfplay={"max_game_moves": max_stones() + 1})
+        smoke_run_config("run6.yaml", selfplay={"max_game_moves": max_stones() + 1})
 
 
 def test_the_refusal_names_both_operands_and_the_way_out(smoke_run_config) -> None:
     """A refusal that names neither number sends the reader to the wrong knob."""
     with pytest.raises(ValidationError) as excinfo:
-        smoke_run_config("run5.yaml", selfplay={"max_game_moves": 4096})
+        smoke_run_config("run6.yaml", selfplay={"max_game_moves": 4096})
     message = str(excinfo.value)
     assert "4096" in message and str(max_stones()) in message, (
         f"the refusal must name the configured cap AND the ceiling: {message!r}"

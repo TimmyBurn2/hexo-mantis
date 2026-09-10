@@ -367,10 +367,10 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "if it can disagree with the manifest the manifest has stopped being the authority"
     )
 
-    cfg = load_config(CONFIGS_DIR / "run5.yaml")
+    cfg = load_config(CONFIGS_DIR / "run6.yaml")
     audit = audit_arming(cfg)
     assert list(audit.disarmed) == [], (
-        "configs/run5.yaml arms every REQUIRED row (actor-lag since R59, draw-rate at R82's "
+        "configs/run6.yaml arms every REQUIRED row (actor-lag since R59, draw-rate at R82's "
         f"0.25); got {[r.name for r in audit.disarmed]}"
     )
     assert ROW_NAME in [r.name for r in audit.required], (
@@ -402,7 +402,7 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "of a schema field"
     )
 
-    disarmed_cfg = smoke_run_config("run5.yaml", train={"draw_rate_abort": None})
+    disarmed_cfg = smoke_run_config("run6.yaml", train={"draw_rate_abort": None})
     assert [r.name for r in audit_arming(disarmed_cfg).disarmed] == [ROW_NAME], (
         "run5 with the block explicitly disarmed must name THIS row and only this row — "
         "`Mechanism.CONFIG_THRESHOLD_GT_ZERO.is_armed(None)` is False through its "

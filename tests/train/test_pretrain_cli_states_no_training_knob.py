@@ -1,7 +1,7 @@
 """F-816-25 / R296(b) — the pretrain CLI states no `train.*` value; the minted config does.
 
 THE DEFECT, MEASURED BEFORE THE FIX. `_build_arg_parser` carried code-side literal defaults for
-five values `TrainConfig` also mints, three of them DIVERGENT at `configs/run5.yaml`:
+five values `TrainConfig` also mints, three of them DIVERGENT at `configs/run6.yaml`:
 
     --lr             0.002   vs  train.lr                  0.001    (2x)
     --batch-size     512     vs  train.batch_size          256      (2x)
@@ -139,7 +139,7 @@ def test_the_run5_divergences_the_row_measured_are_now_GONE() -> None:
     than as the absence of a flag — the difference between "the surface changed" and "the run
     would now use the minted number". The `--aux-weight` divergence it also measured went with
     `train.aux_opp_reply_weight` (R346(f)): the shadow and the key it shadowed are both gone."""
-    terms = training_terms(load_config(_REPO / "configs" / "run5.yaml").train)
+    terms = training_terms(load_config(_REPO / "configs" / "run6.yaml").train)
     assert terms["lr"] == pytest.approx(0.001)          # was 0.002 on the parser
     assert terms["batch_size"] == 256                    # was 512
     assert terms["pretrain_eta_min"] == pytest.approx(0.0005)    # was 1e-5, the sixth shadow

@@ -34,7 +34,7 @@ import pytest
 from mantis.config.loader import discover_configs, load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run5.yaml"
+RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 
 #: The corpus is the COMPLEMENT of an enumeration, plus the enumeration, so a row cannot pass by
 #: knowing the answer for `.yaml` alone. Every name is planted as a byte-for-byte copy of a real,

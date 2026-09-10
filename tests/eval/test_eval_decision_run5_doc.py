@@ -17,7 +17,7 @@ The defect each group is the ONLY witness to:
 - **O-A16 (6 rows)** — a decision that states a number the config does not. The comparison
   direction is DOC-AGAINST-CONFIG, deliberately: a re-mint then REDS the doc rather than
   silently agreeing with it, which is the correct direction for a drift gate (gate 13's own
-  discipline). Every expected value is DERIVED — from `configs/run5.yaml`, from the book
+  discipline). Every expected value is DERIVED — from `configs/run6.yaml`, from the book
   manifest, from the live `_R139_SKIP_GROUNDS` mapping — and never transcribed into this
   file, because a transcribed list makes the oracle agree with the doc for the same reason
   the doc is wrong. MUTATION (M-A12): state `promotion_winrate` as 0.60.
@@ -50,7 +50,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _DOC = _REPO / "docs" / "contracts" / "eval_decision_run5.md"
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 _BOOKS = _REPO / "src" / "mantis" / "arena" / "books" / "manifest.toml"
 
 #: DESIGN_A §3.4 rule 1: the two clauses never share a paragraph, a table or a bullet list.
@@ -170,7 +170,7 @@ def test_decision_gate_knob_matches_the_minted_config(knob: str) -> None:
     value = _run5()["eval"]["gate"][knob]
     disagreeing = _lines_disagreeing(doc, knob, value)
     assert disagreeing == [], (
-        f"the decision states {knob} disagreeing with configs/run5.yaml ({value!r}):\n"
+        f"the decision states {knob} disagreeing with configs/run6.yaml ({value!r}):\n"
         + "\n".join(disagreeing)
     )
 

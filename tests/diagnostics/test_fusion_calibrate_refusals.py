@@ -12,7 +12,7 @@ contain any. What it pins is the three behaviours that are fully determined OFF 
 1. **A non-CUDA host REFUSES and emits NO cap** (design §9.3). The failure mode this prevents
    is the worst one in the packet: a calibration that "succeeds" on CPU produces a number with
    no producing mechanism, and R69 strikes a number without one. A CPU-derived cap minted into
-   `configs/run5.yaml` would be exactly the guessed value R119 exists to forbid, wearing the
+   `configs/run6.yaml` would be exactly the guessed value R119 exists to forbid, wearing the
    tool's authority.
 2. **`--shapes-only` reports the device-free half with NULLS, never extrapolations** — the
    unproduced-field convention (`docs/contracts/event_manifest.md`) applied to a report, plus
@@ -35,7 +35,7 @@ from pathlib import Path
 import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIG = _REPO / "configs" / "smoke_gnn.yaml"
+_CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 _MODULE = "mantis.diagnostics.fusion_calibrate"
 #: Any budget at all — the rows below are about the REFUSALS, and none of them reaches a fit.
 _BUDGET = "9431000000"

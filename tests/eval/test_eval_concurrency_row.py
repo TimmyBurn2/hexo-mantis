@@ -49,7 +49,7 @@ from mantis.model import GnnArch, build_net
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
-_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run5.yaml"
+_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run6.yaml"
 
 
 # ── 1. the schema row ──────────────────────────────────────────────────────────────────
@@ -74,7 +74,7 @@ def test_an_absent_row_and_a_minted_one_are_the_SAME_config() -> None:
     """
     raw = _raw()
     assert "concurrency" not in raw["eval"], (
-        "run5.yaml has grown the key — this test's premise is that it is absent there"
+        "run6.yaml has grown the key — this test's premise is that it is absent there"
     )
     minted = copy.deepcopy(raw)
     minted["eval"]["concurrency"] = 1

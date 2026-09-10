@@ -159,9 +159,9 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
         "monitor.actor_lag_abort_enabled", "train.draw_rate_abort.threshold"
     ], "each disarmed row must carry its dotted arming surface, so the report can name it"
 
-    armed = audit_arming(load_config(REPO_ROOT / "configs" / "run5.yaml"))
+    armed = audit_arming(load_config(REPO_ROOT / "configs" / "run6.yaml"))
     assert list(armed.disarmed) == [], (
-        "configs/run5.yaml arms the actor-lag abort at `:203` (the R59 flip) — mode AUDIT "
+        "configs/run6.yaml arms the actor-lag abort at `:203` (the R59 flip) — mode AUDIT "
         f"must be GREEN on it today; got {[row.name for row in armed.disarmed]}"
     )
     assert [row.name for row in armed.required] == [row.name for row in _required()], (
@@ -175,7 +175,7 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
     oracle are needed to kill it: the two configs swap verdicts when — and only when — the
     VALUE swaps. Driven through the blessed `load_config → model_dump → model_validate`
     factory (`tests/conftest.py:67-81`), so both payloads are schema-valid."""
-    run5_disarmed = smoke_run_config("run5.yaml", monitor={"actor_lag_abort_enabled": False})
+    run5_disarmed = smoke_run_config("run6.yaml", monitor={"actor_lag_abort_enabled": False})
     assert [row.name for row in audit_arming(run5_disarmed).disarmed] == ["actor_lag"], (
         "run5 with the arming flipped OFF must fail the audit — the audit reads the "
         "validated config object, never the path it came from"
@@ -278,7 +278,7 @@ def test_the_manifest_is_not_vacuous() -> None:
         )
     assert all(isinstance(row, ArmedAbort) for row in MANIFEST)
 
-    run5 = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    run5 = load_config(REPO_ROOT / "configs" / "run6.yaml")
     for row in _required():
         assert _dotted(run5, row.config_path) is not None, (
             f"required row {row.name!r} names {row.config_path!r}, which does not resolve "
@@ -576,18 +576,18 @@ def test_the_grad_norm_row_reads_its_ceiling_off_the_real_config(smoke_run_confi
         )
 
     manifest = (_required(row),)
-    shipped = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    shipped = load_config(REPO_ROOT / "configs" / "run6.yaml")
     assert [r.name for r in audit_arming(shipped, manifest=manifest).disarmed] == [row.name], (
         "as shipped (threshold 1e9 against alert_grad_norm_max 10.0) the gate is DISARMED — "
         "that is the finding the row exists to publish"
     )
 
-    reachable = smoke_run_config("run5.yaml", train={"hard_gn_threshold": 5.0})
+    reachable = smoke_run_config("run6.yaml", train={"hard_gn_threshold": 5.0})
     assert list(audit_arming(reachable, manifest=manifest).disarmed) == [], (
         "a threshold at or below the warn line ARMS the row — the audit must read the CONFIG "
         "through both paths, not a constant"
     )
-    raised = smoke_run_config("run5.yaml", monitor={"alert_grad_norm_max": 1e10})
+    raised = smoke_run_config("run6.yaml", monitor={"alert_grad_norm_max": 1e10})
     assert list(audit_arming(raised, manifest=manifest).disarmed) == [], (
         "and raising the CEILING alone must arm the SAME shipped threshold — the second "
         "operand really is resolved from `ceiling_path` and is not a literal"

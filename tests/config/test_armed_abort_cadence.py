@@ -63,7 +63,7 @@ from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RUN5 = REPO_ROOT / "configs" / "run5.yaml"
+RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 
 
 @pytest.fixture(scope="module")
@@ -130,7 +130,7 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
     2000-step run with `total_steps: 1000000` blessed a cadence of 999 999". R251's bound
     re-creates that anchor choice, and re-pointing `RUN_LENGTH_PATH` at the scheduler horizon
     is INVISIBLE on the whole production set: every config currently in `PRODUCTION_CONFIGS`
-    (run5, and `shakedown_20260807.yaml` since F-P2B) is one where the two keys agree (both
+    (run5, and `run6.yaml` since F-P2B) is one where the two keys agree (both
     1000000). Every short config is where the substitution bites — and a short run is exactly
     the regime a large interval bites hardest in, since ADJ-D22's own reproducer was
     `stop_step=40`.
@@ -138,7 +138,7 @@ def test_the_bound_follows_the_RUN_LENGTH_authority_never_the_scheduler_horizon(
     Driven rather than asserted by name: this survives a legitimate rename of the key, and it
     fails the moment the bound starts reading a number that is not the run's length.
     """
-    short = load_config(REPO_ROOT / "configs" / "smoke_gnn.yaml")
+    short = load_config(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")
     assert short.train.total_steps != short.train.max_train_steps, (
         "this pin needs a config on which the RUN LENGTH and the LR-scheduler horizon DIFFER, "
         f"or it proves nothing; both read {short.train.max_train_steps}"

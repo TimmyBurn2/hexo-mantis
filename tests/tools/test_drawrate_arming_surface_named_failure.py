@@ -4,7 +4,7 @@ row, not an unnamed rc 1 (DESIGN_D §5.4, §5.5; RED-TEAM_P's F-4, fixed to its 
 RED-at-import until IMPL lands `ArmingSurfaceMissingError`.
 
 **F-4, reproduced at HEAD (DESIGN_D §0, re-driven this stage).** Flip the shipped
-`draw_rate_collapse` row to REQUIRED and audit a real `configs/run5.yaml` and `_dotted`
+`draw_rate_collapse` row to REQUIRED and audit a real `configs/run6.yaml` and `_dotted`
 raises `AttributeError: 'TrainConfig' object has no attribute 'step_coordinator'`, which
 `main`'s bare `except Exception` collapses into **rc 1 `PreflightInternalError`** — the one
 outcome `preflight_mint.py:79` ("every outcome NAMED") and `:1270` ("the tool's own failure
@@ -24,7 +24,7 @@ raises `AttributeError: 'NoneType' object has no attribute 'threshold'` on
 rather than report "disarmed". A `None` met mid-walk must therefore short-circuit to `None`
 while a MISSING attribute still raises. The residual is disclosed by the last arm: a typo
 *after* a legitimately-`None` segment reports "disarmed" rather than raising. It is caught
-where it gates — `PRODUCTION_CONFIGS` includes `"configs/run5.yaml"` and run5 is ARMED, so
+where it gates — `PRODUCTION_CONFIGS` includes `"configs/run6.yaml"` and run5 is ARMED, so
 the walk reaches the leaf and the typo raises.
 
 Everything below drives `audit_arming`, the walker's only consumer, rather than `_dotted`
@@ -83,7 +83,7 @@ def _retyped(name: str, config_path: str) -> tuple[ArmedAbort, ...]:
 
 
 def _run5() -> RunConfig:
-    return load_config(REPO_ROOT / "configs" / "run5.yaml")
+    return load_config(REPO_ROOT / "configs" / "run6.yaml")
 
 
 def _disarmed_run5() -> RunConfig:
@@ -167,7 +167,7 @@ def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> Non
         "THE DISCLOSED RESIDUAL (§5.5), pinned so it is not rediscovered as a bug: a typo "
         "AFTER a legitimately-None segment reports 'disarmed' rather than raising, because "
         "the walk short-circuits before it can reach the bad segment. It is caught where it "
-        "gates — PRODUCTION_CONFIGS includes 'configs/run5.yaml' and run5 is ARMED, so the "
+        "gates — PRODUCTION_CONFIGS includes 'configs/run6.yaml' and run5 is ARMED, so the "
         "walk reaches the leaf and the typo raises (the arm above)"
     )
 

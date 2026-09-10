@@ -11,7 +11,7 @@
 This WP adds three items to the schema — `eval_enabled` (R120), the `monitor.disk_guard`
 family (R122) and `train.device` (R126) — and re-mints all six configs by replaying each
 one's header-recorded template + deltas. A replay is a REGENERATION: it can silently move any
-value the template owns. `configs/run5.yaml` carries the three pre-registered armed values
+value the template owns. `configs/run6.yaml` carries the three pre-registered armed values
 `0.25 / 25000 / 50` (`train.draw_rate_abort`), and R119's HARD STOP is verbatim: **any change
 to run5's armed values** is mint-prereg-only. This file is that stop's instrument.
 
@@ -31,7 +31,7 @@ Two independent instruments, because they see different mutations:
 
 WHY THERE IS A DELETION AT ALL, AND WHY THE BASELINE WAS NOT RE-CUT (WP12-R, R178(a) as
 assigned by R183(a)). R178(a) DELETES `train.buffer_save_interval` — a key minted into
-`run5.yaml` whose only consumer chain ended in `_try_save_buffer`, which WP12-R Phase CS
+`run6.yaml` whose only consumer chain ended in `_try_save_buffer`, which WP12-R Phase CS
 (F-CS-2) measured production-dead on every leg. The re-mint that rides that deletion is the
 first NON-insertion this file has ever seen, and closing it had exactly two shapes:
 
@@ -81,7 +81,7 @@ _REPO = Path(__file__).resolve().parents[2]
 _LIVE = _REPO / "configs"
 _BASELINE = _REPO / "tests" / "fixtures" / "wpmain" / "config_baseline_b482243"
 
-_CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
+_CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml", "smoke_preflight_armed.yaml",
             "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
 
 #: Configs minted AFTER the b482243 baseline was cut — `(name, template)` rows, named here,
@@ -104,7 +104,7 @@ _CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml", "smoke_preflight_
 #: the membership test asserts each declared row's own `# template:` header line matches the
 #: declared template AND that some baselined config carries the same line (derived from the
 #: baseline files at point of use, never transcribed).
-_POST_BASELINE_MINTS = (("shakedown_20260807.yaml", "dev"), ("run6.yaml", "dev"))
+_POST_BASELINE_MINTS = (("run6.yaml", "dev"), ("run6.yaml", "dev"))
 
 #: Exactly what this WP's re-mint may add — one key, one family of three leaves, one key.
 _ADDED_LEAVES = {
@@ -170,7 +170,7 @@ _ADDED_LEAVES = {
     # two production configs carry `{max_fused_edges: null, max_fused_nodes: null}`, which is
     # a mapping with two null members, not a null block. That difference is deliberate — a
     # null BLOCK would be an off state, and the off state for this bound is unrepresentable.
-    # `run5.yaml` and `shakedown_20260807.yaml` additionally gain ONE `# delta:` HEADER line
+    # `run6.yaml` and `run6.yaml` additionally gain ONE `# delta:` HEADER line
     # each, which is an insertion too. No VALUE is pinned here: the production pair is the
     # operator's measurement at the box (R119), and `tests/config/
     # test_fused_graph_caps_authority.py` is where the `null` placeholder and the derived
@@ -202,7 +202,7 @@ _ADDED_LEAVES = {
 #: untouched and still closed at one element each.
 #:
 #: NO MINTED ROW IS TOUCHED, and that is a precondition rather than a remark: the two grid
-#: configs are not in `PRODUCTION_CONFIGS` (`run5.yaml` + `shakedown_20260807.yaml`, both
+#: configs are not in `PRODUCTION_CONFIGS` (`run6.yaml` + `run6.yaml`, both
 #: GRAPH), no armed value moves, and the four values that stop being written are the
 #: templates' own NON-BINDING-BY-CONSTRUCTION numbers — never a sized cap. R322(d) makes a
 #: repair that would touch a minted row a HALT; this one does not reach one.
@@ -224,7 +224,7 @@ _ARCH_SCOPED_ADDED_LEAVES: dict[str, frozenset[str]] = {
 #: because no armed-abort row exists for `strength_floor`, so a disarmed one reds no audit).
 #: DERIVED from the schema rather than typed, so a fourth term added to `StrengthFloorConfig`
 #: cannot leave a stale three-element list behind.
-_ARMED_STRENGTH_FLOOR_CONFIGS = frozenset({"run5.yaml", "shakedown_20260807.yaml"})
+_ARMED_STRENGTH_FLOOR_CONFIGS = frozenset({"run6.yaml", "run6.yaml"})
 _STRENGTH_FLOOR_LEAVES = frozenset(
     f"eval.strength_floor.{field}" for field in StrengthFloorConfig.model_fields
 )
@@ -298,7 +298,7 @@ _REMOVED_LINES = [
 #: edit — the same sentence `_REMOVED_LEAVES` carries.
 #:
 #: **THE WIDENING, RULED: R326(c), 2026-08-31, enacted by the operator's forwarding of the
-#: RECAL-SITTING-5 launcher.** The 2026-08-27 grant named `run5.yaml` alone; R316(f) then ruled
+#: RECAL-SITTING-5 launcher.** The 2026-08-27 grant named `run6.yaml` alone; R316(f) then ruled
 #: that the same measurement-derived pick mints into ALL SEVEN configs — *"the corrected block
 #: mints shakedown's `n_workers` to the Phase W pick with the other six configs"* — which
 #: post-dates the grant and collides with it. R326(c) resolves the collision the way this file
@@ -341,8 +341,8 @@ _MOVED_LEAVES = {(name, _MOVED_LEAF_KEY)
 #: neither can a hand-edit. Reach beyond that is held by `test_mint_header_roundtrip.py`,
 #: which pins every live header slot to canonical form AND to the config body's own value.
 _REHEADERED_DELTAS = {
-    ("run5.yaml", "monitor.actor_lag_abort_enabled"),
-    ("run5.yaml", "train.draw_rate_abort"),
+    ("run6.yaml", "monitor.actor_lag_abort_enabled"),
+    ("run6.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "monitor.actor_lag_abort_enabled"),
     ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
@@ -452,7 +452,7 @@ def _replace_is_reheaders_plus_insertions(name: str, old: list[str], new: list[s
     requiring the two blocks to be the same length. `difflib` merges an insertion that touches
     a `replace` op INTO that op, so a config that both gains a header line and carries a ruled
     re-render on an adjacent line arrives as one `2 -> 3 replace` that the length-equal form
-    cannot decompose. WP12-R F2 is the first such case: `run5.yaml` gains ONE
+    cannot decompose. WP12-R F2 is the first such case: `run6.yaml` gains ONE
     `# delta: train.microbatch_caps: ...` line beside the two R187 re-renders.
 
     Nothing that the length-equal form rejects passes here. EVERY old line must still find a
@@ -563,7 +563,7 @@ def test_the_remint_diff_is_insert_only_apart_from_the_one_ruled_deletion(name: 
     """O-E2, textual half — nothing is rewritten, including the minted header, and the ONLY
     thing deleted is R178(a)'s named line.
 
-    The header records `minted-by`, `template` and every delta (`configs/run5.yaml:1-7`); it
+    The header records `minted-by`, `template` and every delta (`configs/run6.yaml:1-7`); it
     is the provenance a mint record is reconstructed from. A value map cannot see a lost
     header line, a reordered section, or a rewritten comment.
 
@@ -689,7 +689,7 @@ def test_a_second_moved_leaf_still_reds() -> None:
     or a predicate that matched on shape rather than on name) are both closed here.
 
     The `_is_ruled_move` arms are driven against the LIVE tree rather than against a fixture,
-    so they stay true of whatever `configs/run5.yaml` currently holds: before the mint the
+    so they stay true of whatever `configs/run6.yaml` currently holds: before the mint the
     baseline and live values agree and every arm is False for want of a difference; after it
     the ruled pair is the one that passes. Neither state can make an UNNAMED key pass."""
     assert {path for _c, path in _MOVED_LEAVES} == {"selfplay.n_workers"}, (
@@ -714,7 +714,7 @@ def test_a_second_moved_leaf_still_reds() -> None:
     )
     # An UNNAMED key of exactly the tolerated SHAPE must still fail — the predicate matches on
     # the ruled name, never on "looks like a scalar that changed".
-    assert not _is_ruled_move("run5.yaml", "  batch_size: 256", "  batch_size: 128"), (
+    assert not _is_ruled_move("run6.yaml", "  batch_size: 256", "  batch_size: 128"), (
         "a body line of the tolerated shape on a key nobody named must not pass"
     )
     # An UNNAMED key in a config the grant DOES cover must still fail — the replacement for
@@ -737,10 +737,10 @@ def test_a_second_moved_leaf_still_reds() -> None:
     assert unnamed not in {path for _c, path in _MOVED_LEAVES}, (
         f"{unnamed} must be OUTSIDE the ruled set for this to be a control at all"
     )
-    unnamed_base = _baseline_leaves("run5.yaml")[unnamed]
-    unnamed_live = _live_leaves("run5.yaml")[unnamed]
+    unnamed_base = _baseline_leaves("run6.yaml")[unnamed]
+    unnamed_live = _live_leaves("run6.yaml")[unnamed]
     leaf = unnamed.rsplit(".", 1)[-1]
-    assert not _is_ruled_move("run5.yaml", f"  {leaf}: {unnamed_base}",
+    assert not _is_ruled_move("run6.yaml", f"  {leaf}: {unnamed_base}",
                               f"  {leaf}: {unnamed_live}"), (
         "an UNNAMED key carrying its own baseline and live values must be refused BY NAME — "
         "every other arm here is refused by the value conjunct first, so this is the only one "
@@ -749,13 +749,13 @@ def test_a_second_moved_leaf_still_reds() -> None:
     # A line that disagrees with the body it claims to describe must still fail, whichever
     # side disagrees — this is the conjunct that makes the predicate DERIVED rather than a
     # pattern match, and it is the one a hand-edited config would trip.
-    live_workers = _live_leaves("run5.yaml")["selfplay.n_workers"]
-    base_workers = _baseline_leaves("run5.yaml")["selfplay.n_workers"]
-    assert not _is_ruled_move("run5.yaml", f"  n_workers: {base_workers}",
+    live_workers = _live_leaves("run6.yaml")["selfplay.n_workers"]
+    base_workers = _baseline_leaves("run6.yaml")["selfplay.n_workers"]
+    assert not _is_ruled_move("run6.yaml", f"  n_workers: {base_workers}",
                               f"  n_workers: {int(live_workers) + 1}"), (
         "a NEW slot that does not equal the live config's own value must not pass"
     )
-    assert not _is_ruled_move("run5.yaml", f"  n_workers: {int(base_workers) + 1}",
+    assert not _is_ruled_move("run6.yaml", f"  n_workers: {int(base_workers) + 1}",
                               f"  n_workers: {live_workers}"), (
         "an OLD slot that does not equal the baseline config's own value must not pass"
     )
@@ -774,25 +774,25 @@ def test_the_block_level_replace_rule_still_rejects_a_rewrite() -> None:
     ruled_new = "# delta: monitor.actor_lag_abort_enabled: false -> true"
     added = "# delta: train.microbatch_caps: {max_edges: 1} -> {max_edges: 2}"
     # the real case: one ruled re-header plus one inserted line
-    assert _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [added, ruled_new])
-    assert _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [ruled_new, added])
+    assert _replace_is_reheaders_plus_insertions("run6.yaml", [ruled_old], [added, ruled_new])
+    assert _replace_is_reheaders_plus_insertions("run6.yaml", [ruled_old], [ruled_new, added])
     # a DROPPED old line is still a failure, however many new lines surround it
-    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [added])
+    assert not _replace_is_reheaders_plus_insertions("run6.yaml", [ruled_old], [added])
     # a MOVED value inside a ruled key is still a failure — `_is_ruled_reheader` re-derives
     # the baseline slot through the OLD renderer and a moved value cannot reproduce it
     moved = "# delta: monitor.actor_lag_abort_enabled: false -> false"
-    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [ruled_old], [moved])
+    assert not _replace_is_reheaders_plus_insertions("run6.yaml", [ruled_old], [moved])
     # a re-render on a key nobody named is still a failure
     unnamed_old = "# delta: train.batch_size: 8 -> 256"
     unnamed_new = "# delta: train.batch_size: 8 -> 257"
-    assert not _replace_is_reheaders_plus_insertions("run5.yaml", [unnamed_old], [unnamed_new])
+    assert not _replace_is_reheaders_plus_insertions("run6.yaml", [unnamed_old], [unnamed_new])
     # order is still enforced: two old lines cannot match one new line, and a swap fails
     other_old = "# delta: train.draw_rate_abort: None -> {'threshold': 0.25, 'min_step': 25000, 'N_pool_min': 50, 'consec': 3}"
     other_new = "# delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}"
     assert _replace_is_reheaders_plus_insertions(
-        "run5.yaml", [ruled_old, other_old], [added, ruled_new, other_new])
+        "run6.yaml", [ruled_old, other_old], [added, ruled_new, other_new])
     assert not _replace_is_reheaders_plus_insertions(
-        "run5.yaml", [ruled_old, other_old], [other_new, ruled_new])
+        "run6.yaml", [ruled_old, other_old], [other_new, ruled_new])
 
 
 def test_the_permitted_reheader_is_exactly_five_named_delta_lines() -> None:
@@ -807,29 +807,29 @@ def test_the_permitted_reheader_is_exactly_five_named_delta_lines() -> None:
     getting a ruling; or the predicate loosening to "any `# delta:` line may be replaced" —
     the fabricated pair below must stay rejected even though its key IS named."""
     assert _REHEADERED_DELTAS == {
-        ("run5.yaml", "monitor.actor_lag_abort_enabled"),
-        ("run5.yaml", "train.draw_rate_abort"),
+        ("run6.yaml", "monitor.actor_lag_abort_enabled"),
+        ("run6.yaml", "train.draw_rate_abort"),
         ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
         ("smoke_preflight_armed.yaml", "monitor.actor_lag_abort_enabled"),
         ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
     }, "the ruled re-render set is R187's and is closed at five delta lines"
     assert _is_ruled_reheader(
-        "run5.yaml",
+        "run6.yaml",
         "# delta: monitor.actor_lag_abort_enabled: False -> True",
         "# delta: monitor.actor_lag_abort_enabled: false -> true",
     ), "premise: the predicate accepts the ruled re-render it exists for"
     assert not _is_ruled_reheader(
-        "run5.yaml",
+        "run6.yaml",
         "# delta: monitor.actor_lag_abort_enabled: False -> True",
         "# delta: monitor.actor_lag_abort_enabled: false -> false",
     ), "a re-render that changed the VALUE is not a re-render"
     assert not _is_ruled_reheader(
-        "run5.yaml",
+        "run6.yaml",
         "# delta: seed: 20260716 -> 20260718",
         "# delta: seed: 20260716 -> 20260719",
     ), "a delta key nobody ruled may not be rewritten at all"
     assert not _is_ruled_reheader(
-        "run5.yaml", "  buffer_save_interval: 0", "  buffer_save_interval: 1"
+        "run6.yaml", "  buffer_save_interval: 0", "  buffer_save_interval: 1"
     ), "the allowance is for header delta lines, never body lines"
 
 
@@ -902,12 +902,12 @@ def test_run5s_armed_draw_rate_values_survive_the_remint_byte_identical() -> Non
     MUTATION THAT REDS IT: any of the three. This is the one assertion in the WP that is not
     about correctness but about authority: these numbers were pre-registered at mint prereg
     (R82/R85/R92) and no work package may move them."""
-    leaves = _live_leaves("run5.yaml")
+    leaves = _live_leaves("run6.yaml")
     for path, value in _RUN5_ARMED.items():
         assert leaves[path] == value, (
             f"run5 {path} is {leaves[path]!r}, not the pre-registered {value!r} — HARD STOP"
         )
-    text = (_LIVE / "run5.yaml").read_text(encoding="utf-8")
+    text = (_LIVE / "run6.yaml").read_text(encoding="utf-8")
     for line in ("    threshold: 0.25", "    min_step: 25000", "    N_pool_min: 50"):
         assert line in text, f"run5's armed line {line!r} is not byte-identical after re-mint"
     assert ("# delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, "

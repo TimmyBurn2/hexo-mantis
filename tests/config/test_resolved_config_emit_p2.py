@@ -32,7 +32,7 @@ _SEVEN_SCHEMA_LEAVES = {
 
 
 def _run5_payload() -> dict:
-    return resolve_config(load_config(REPO_ROOT / "configs" / "run5.yaml")).to_event_payload()
+    return resolve_config(load_config(REPO_ROOT / "configs" / "run6.yaml")).to_event_payload()
 
 
 def test_payload_key_set_is_seven_leaves_plus_derived_amp_dtype():
@@ -71,7 +71,7 @@ def test_payload_pins_production_values_unchanged_by_radius_removal():
     no provenance line. The one provenance pin for those numbers, with its grounds, is
     `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
     """
-    cfg = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
     knobs = _run5_payload()["knobs"]
     assert knobs["schema_version"]["value"] == cfg.schema_version
     assert knobs["identity.encoding"]["value"] == cfg.identity.encoding

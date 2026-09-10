@@ -7,7 +7,7 @@ RED-at-import until IMPL lands `mantis.run.build_run_collaborators` and the
 What this file exists to stop, and why the architect ruled it mint-critical:
 
 At `b482243` the run device is a CLI-only input on both callers — `--device`, required, no
-default, any torch device string. So `preflight_mint.py --config configs/run5.yaml --device
+default, any torch device string. So `preflight_mint.py --config configs/run6.yaml --device
 cpu` preflights a CUDA-minted run on the CPU. That is not a hypothetical: it is exactly the
 wall the WPBOX burst hit (CARD-RUN5-GPU-OOM, a 16 GiB GPU OOM in GNN inference), and a
 cpu-flagged preflight FALSE-CLEARS it. R126 grounds (a) names the corollary: an instrument
@@ -57,7 +57,7 @@ _CONFIGS = _REPO / "configs"
 _DEVICE_VOCABULARY = ("cpu", "cuda")
 
 
-def _dump(name: str = "smoke_gnn.yaml") -> dict:
+def _dump(name: str = "smoke_preflight_armed.yaml") -> dict:
     return load_config(_CONFIGS / name).model_dump()
 
 
@@ -223,7 +223,7 @@ def test_the_configs_device_reaches_the_real_trainer_and_the_real_pool(
     passes the literal ban (e.g. threading `eval.worker_device` — the ADJACENT fact R126
     explicitly rules a DIFFERENT fact, so transcribing one into the other is the proxy
     inference the ruling refuses)."""
-    config = smoke_run_config("smoke_gnn.yaml", train={"device": "cpu"})
+    config = smoke_run_config("smoke_preflight_armed.yaml", train={"device": "cpu"})
     collab = build_run_collaborators(config=config, out_dir=tmp_path)
     assert collab.trainer.device == torch.device("cpu"), (
         f"the trainer must sit on the config's declared device; got {collab.trainer.device}"
@@ -247,7 +247,7 @@ def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(tmp_path, smoke_ru
     MUTATION THAT REDS IT: any fallback that coerces an unavailable device to `cpu`
     (`torch.device("cuda" if torch.cuda.is_available() else "cpu")` — the single most
     commonly written line in this class). It is invisible to every other oracle here."""
-    config = smoke_run_config("smoke_gnn.yaml", train={"device": "cuda"})
+    config = smoke_run_config("smoke_preflight_armed.yaml", train={"device": "cuda"})
     if torch.cuda.is_available():
         collab = build_run_collaborators(config=config, out_dir=tmp_path)
         assert collab.trainer.device.type == "cuda" and collab.pool.device.type == "cuda"

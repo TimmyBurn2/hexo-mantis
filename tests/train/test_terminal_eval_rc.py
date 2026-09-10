@@ -404,10 +404,10 @@ class _Drive:
 
 def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     """A REAL minted config, bounded, written to disk so `main --config` reads it back
-    through the ONE loader (no fixture object is smuggled past the CLI). `smoke_gnn.yaml`
+    through the ONE loader (no fixture object is smuggled past the CLI). `smoke_preflight_armed.yaml`
     already mints `eval_enabled: true` and `train.terminal_eval_enabled: true` — the two
     conditions the rc needs — so nothing here has to invent them."""
-    base = load_config(_CONFIGS / "smoke_gnn.yaml").model_dump()
+    base = load_config(_CONFIGS / "smoke_preflight_armed.yaml").model_dump()
     train = dict(base["train"])
     train.update({"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                   "batch_size": 8, "log_interval": 1})

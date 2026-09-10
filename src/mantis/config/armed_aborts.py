@@ -1381,6 +1381,17 @@ PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml",)
 #: failure path, so an exemption cannot be a bare path nobody can justify later.
 EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
     (
+        "configs/dev_example.yaml",
+        "developer template, never minted for a run; DISARMED by design (R59). R346(f) pruned "
+        "configs/ to run6 plus one smoke and this file was cut with the rest — it is BACK, and "
+        "the ground is LAW-07: ADJ-13 N-3 makes it the mutation corpus's M1 row, the one real "
+        "committed config that demonstrates gate 12 going RED on the real `configs/` tree. "
+        "With run5, the shakedown and the plain smoke gone it is the only disarmed config "
+        "left, so deleting it would leave the gate with no red-capability demonstration on "
+        "the tree it audits. Pinned by "
+        "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
+    ),
+    (
         "configs/smoke_preflight_armed.yaml",
         "armed preflight-rehearsal smoke config (WPTS Phase F, R103): NOT a production run, "
         "but unlike the R59 smokes it ARMS both required rows at burst-scale guard values so "

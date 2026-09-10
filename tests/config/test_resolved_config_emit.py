@@ -29,7 +29,7 @@ _EIGHT_SCHEMA_LEAVES = {
 
 
 def _run5() -> ResolvedConfig:
-    return resolve_config(load_config(REPO_ROOT / "configs" / "run5.yaml"))
+    return resolve_config(load_config(REPO_ROOT / "configs" / "run6.yaml"))
 
 
 # ── O6 emit ────────────────────────────────────────────────────────────────
@@ -48,7 +48,7 @@ def test_payload_pins_production_values():
     provenance pin for 96/128 with its grounds is
     `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`.
     """
-    cfg = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
     knobs = _run5().to_event_payload()["knobs"]
     assert knobs["schema_version"]["value"] == cfg.schema_version
     assert knobs["identity.encoding"]["value"] == cfg.identity.encoding
@@ -71,7 +71,7 @@ def test_encoding_source_remap_variant_to_file():
 
 
 def test_one_knob_mutation_reflected_in_payload():
-    cfg = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    cfg = load_config(REPO_ROOT / "configs" / "run6.yaml")
     mutated = cfg.model_copy(update={"seed": cfg.seed + 1})
     assert resolve_config(mutated).to_event_payload()["knobs"]["seed"]["value"] == cfg.seed + 1
 

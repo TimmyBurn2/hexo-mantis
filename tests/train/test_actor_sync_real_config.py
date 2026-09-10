@@ -40,7 +40,7 @@ _STOP_STEP = 6
 def _frozen_payload():
     """Reuse the frozen schema oracle's payload builder, by PATH (R5: `tests` is not a
     package and no `sys.path` mutation is permitted; reading a frozen file is not editing
-    it, R43). Built from the payload rather than from `configs/run5.yaml` so this test
+    it, R43). Built from the payload rather than from `configs/run6.yaml` so this test
     pins the RESOLVER's behaviour and not one shipped config's current values."""
     path = Path(__file__).resolve().parents[1] / "config" / "test_actor_sync_schema.py"
     spec = importlib.util.spec_from_file_location("_frozen_schema_for_fa", path)

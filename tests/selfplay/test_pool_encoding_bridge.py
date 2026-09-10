@@ -4,7 +4,7 @@ mutation self-test that proves this suite detects the census'd defect (LAW-07).
 The subject is the exact call `WorkerPool.__init__` makes (`selfplay/pool.py:97`) on the
 exact input a real boot hands it: `RunConfig.model_dump()`. TD-4 was measured at HEAD
 (`ca237d2`) as parent rc 33 / child rc 1 in mode PREFLIGHT, ~1.4 s in, with a real Trainer
-already built — the wall that made `preflight_mint.py --config configs/run5.yaml` unable to
+already built — the wall that made `preflight_mint.py --config configs/run6.yaml` unable to
 run a burst at all.
 
 The mutation self-test re-introduces the defect at the one line that carried it (the
@@ -26,7 +26,7 @@ from mantis.selfplay.hparams import resolve_pool_encoding
 def _run5_dump() -> dict[str, Any]:
     """The real production config, through the real loader — no hand-built stand-in.
     R64 posture: the oracle resolves what run5 resolves."""
-    return load_config("configs/run5.yaml").model_dump()
+    return load_config("configs/run6.yaml").model_dump()
 
 
 # ── the seam TD-4 named ─────────────────────────────────────────────────────────────────

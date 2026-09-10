@@ -31,7 +31,7 @@ _PCR_600_75 = {
 def test_the_600_75_prereg_shape_validates_clean(smoke_run_config) -> None:
     """The SIMS-REGIME prereg row (R160/R163/R165) must be mintable: 600/75 on the
     graph arm validates — the exact shape ADJ-D34 measured as un-bootable."""
-    config = smoke_run_config("run5.yaml", selfplay=_PCR_600_75)
+    config = smoke_run_config("run6.yaml", selfplay=_PCR_600_75)
     assert config.selfplay.playout_cap.n_sims_full == 600
 
 
@@ -58,7 +58,7 @@ def test_a_regime_over_the_record_format_ceiling_reds_at_mint(smoke_run_config) 
     mint-time error."""
     with pytest.raises(ValidationError, match="65535"):
         smoke_run_config(
-            "run5.yaml",
+            "run6.yaml",
             selfplay={
                 "playout_cap": {
                     "full_search_prob": 0.10,
@@ -76,7 +76,7 @@ def test_the_sims_axis_is_bounded_EARLIER_by_the_node_pool(smoke_run_config) -> 
     are correct and a config hitting either is unmintable; what changed is which one names it."""
     with pytest.raises(ValidationError) as excinfo:
         smoke_run_config(
-            "run5.yaml",
+            "run6.yaml",
             selfplay={
                 "playout_cap": {
                     "full_search_prob": 0.10,
@@ -93,7 +93,7 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
     names the sims-regime keys the capacity is derived from."""
     with pytest.raises(ValidationError, match="leaf_batch_size"):
         smoke_run_config(
-            "run5.yaml",
+            "run6.yaml",
             selfplay={
                 "playout_cap": {
                     "full_search_prob": 0.10,
@@ -128,8 +128,8 @@ def test_the_relation_is_graph_scoped(smoke_run_config) -> None:
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
     """Gate-7 invariant, asserted here so a future re-mint cannot regress it
     silently: all shipped graph configs pass the derivation (their regimes are
-    50-sims/leaf-8 → capacity 57). `shakedown_20260807.yaml` joins at F-P2B (R259) —
+    50-sims/leaf-8 → capacity 57). `run6.yaml` joins at F-P2B (R259) —
     same regime as run5, and it is the config the R255 relation actually gates next."""
-    for name in ("run5.yaml", "shakedown_20260807.yaml", "smoke_gnn.yaml", "dev_example.yaml"):
+    for name in ("run6.yaml", "run6.yaml", "smoke_preflight_armed.yaml", "dev_example.yaml"):
         config = smoke_run_config(name)
         assert config.identity.representation == "graph"
