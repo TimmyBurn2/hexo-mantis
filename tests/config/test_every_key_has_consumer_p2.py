@@ -50,8 +50,6 @@ CONSUMER_REGISTRY: dict[str, str] = {
                                     "stamp must equal this, else WarmStartIdentityError (R332(d))",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.sealbot_model_sims": "resolve_eval_model_sims (sealbot rungs) + sims regime-parity (O9) + emit",
-    "eval.kraken_model_sims": "resolve_eval_model_sims (kraken rungs)",
-    "eval.strix_model_sims": "resolve_eval_model_sims (strix rungs)",
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",
     "eval.round_timeout_sec": "pipeline.py mid-round subprocess join bound",

@@ -26,8 +26,8 @@ def resolve_amp_dtype(representation: str) -> str:
         ValueError: the representation is not one this project knows — an unknown
             representation must never resolve a dtype by falling through.
     """
-    if representation in ("graph", "grid"):
+    if representation == "graph":
         return AMP_DTYPE
     raise ValueError(
-        f"unknown representation {representation!r}; expected 'grid' or 'graph'"
+        f"unknown representation {representation!r}; expected 'graph'"
     )

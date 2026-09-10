@@ -301,7 +301,10 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     tree where every config is disarmed, and "run5 is armed" is satisfied by a tree of one.
     """
     configs = discover_configs(CONFIGS_DIR)
-    assert len(configs) >= 5, (
+    # R346(f) pruned `configs/` from eight files to three (run6, the armed smoke and the
+    # disarmed dev template). The floor moves WITH the ruling and not below it: three is what
+    # the tree ships, so a fourth deletion still reds here.
+    assert len(configs) >= 3, (
         f"the vacuity floor: {len(configs)} config(s) discovered. With none, every assertion "
         "below is true by having nothing to say (`silent_encoding_gate.py:70`'s "
         "MIN_SCANNED_FILES applied to the config set)"
@@ -325,65 +328,35 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
-    assert postures["run6.yaml"] is not None, (
-        "configs/run6.yaml is the minted production config and the manifest's REQUIRED row "
-        "audits it — a disarmed run5 is R59's whole subject"
+    # The ONE armed production config. R346(f) pruned `configs/` to three files, so the three
+    # armed-production rows this block used to check (run5, the R259 shakedown and run6) are
+    # now one: run6, which CARRIES run5's four pre-registered constants rather than
+    # re-authoring them — `RUN6_MINT_PREREG.md` proposes no draw-rate row, and F-WS-4's
+    # `N_pool_min` DOES NOT MOVE is the same fact from the other side. The pin is on the
+    # MINTED file, so an in-place edit of run6's armed block reds here; gate 12 audits it by
+    # name (PRODUCTION_CONFIGS).
+    run6 = postures.pop("run6.yaml", None)
+    assert run6 is not None, (
+        "configs/run6.yaml is the ONE declared PRODUCTION config and must ARM the draw-rate "
+        "row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
     )
-    run5 = postures["run6.yaml"]
-    assert (run5.threshold, run5.min_step, run5.N_pool_min, run5.consec) == (
+    assert (run6.threshold, run6.min_step, run6.N_pool_min, run6.consec) == (
         RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
         RUN5_PREREG["consec"]), (
-        f"run5's four values are RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's "
-        f"threshold, R85's min_step, R92's evidence bar and R92's consec (authored at "
-        f"WPMINT Phase K-B, value unchanged), "
-        f"'the only place they may change'. Got {run5}, expected {RUN5_PREREG}. Changing one "
-        "in place is R1's hand-varied config; it is re-minted with a recorded delta or not "
-        "at all"
+        f"run6 CARRIES the four pre-registered constants unchanged; got {run6}. They are "
+        f"RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's threshold, R85's "
+        f"min_step, R92's evidence bar and R92's consec — and a dispatcher authors none "
+        "(R1/R119). Changing one in place is R1's hand-varied config; it is re-minted with a "
+        "recorded delta or not at all"
     )
 
     # WPTS Phase F re-point (R90a; the subject deliberately changed by R103): exactly ONE
     # non-production config is ARMED — `smoke_preflight_armed.yaml`, the preflight-rehearsal
     # target R103 granted, at its own minted burst-scale guard values (NOT run5's prereg
-    # constants — asserting the distinction keeps run5's values run-scoped). Every OTHER
+    # constants — asserting the distinction keeps those run-scoped). Every OTHER
     # non-production config still disarms DELIBERATELY (R59), and `null` is what makes that
     # observable rather than forgotten.
-    # F-P2B (R259): the SECOND armed production config. `run6.yaml` arms the
-    # same four census values ADJ-08 armed — minted, not hand-copied: its `--set` line is the
-    # template's own arming example (`tools/config_templates/dev.yaml`), the delta is in its
-    # header, and MAIN ratified the mint for the R259 shakedown burn. The equality below is
-    # a PIN on the minted file, so an in-place edit of the shakedown's armed block reds here
-    # exactly as run5's does above; gate 12 audits the config by name (PRODUCTION_CONFIGS).
-    shakedown = postures.pop("run6.yaml", None)
-    assert shakedown is not None, (
-        "configs/run6.yaml is a declared PRODUCTION config and must ARM the "
-        "draw-rate row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
-    )
-    assert (shakedown.threshold, shakedown.min_step, shakedown.N_pool_min,
-            shakedown.consec) == (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
-        RUN5_PREREG["consec"]), (
-        f"the shakedown mints the ADJ-08 armed census values verbatim (recorded header "
-        f"delta, R259/F-P2B); got {shakedown}. Changing one in place is R1's hand-varied "
-        "config; it is re-minted with a recorded delta or not at all"
-    )
-    # R338 / the run6 mint: the THIRD armed production config. Its four values are run5's
-    # pre-registered constants CARRIED, not re-authored — `RUN6_MINT_PREREG.md` proposes no
-    # draw-rate row, and F-WS-4's `N_pool_min` DOES NOT MOVE is the same fact from the other
-    # side. The pin is on the minted file, so an in-place edit of run6's armed block reds here
-    # exactly as run5's and the shakedown's do; gate 12 audits it by name.
-    run6 = postures.pop("run6.yaml", None)
-    assert run6 is not None, (
-        "configs/run6.yaml is a declared PRODUCTION config and must ARM the draw-rate row — "
-        "a disarmed production config is rc 30 at gate 12 (R59/R61)"
-    )
-    assert (run6.threshold, run6.min_step, run6.N_pool_min, run6.consec) == (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
-        RUN5_PREREG["consec"]), (
-        f"run6 CARRIES the four pre-registered constants unchanged; got {run6}. No prereg row "
-        "proposes a new draw-rate value, and a dispatcher authors none (R1/R119)"
-    )
-
-    others = {name: block for name, block in postures.items() if name != "run6.yaml"}
+    others = dict(postures)
     armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
     assert armed_smoke is not None, (
         "configs/smoke_preflight_armed.yaml must ARM the draw-rate row — an armed rehearsal "

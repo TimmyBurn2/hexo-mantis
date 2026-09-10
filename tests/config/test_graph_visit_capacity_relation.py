@@ -105,25 +105,22 @@ def test_the_refusal_names_the_governing_config_keys(smoke_run_config) -> None:
         )
 
 
-def test_the_relation_is_graph_scoped(smoke_run_config) -> None:
-    """Dense-362 records carry no HEXG visit slot: the SAME wild regime on a grid
-    config validates clean (the relation attaches to the record format, not to
-    the sims keys per se — R250's absence principle, mint-side)."""
-    config = smoke_run_config(
-        "sustained_kcluster.yaml",
-        selfplay={
-            "playout_cap": {
-                "full_search_prob": 0.10,
-                "n_sims_quick": 75,
-                "n_sims_full": 600,
-            },
-            # The same wild LEAF BATCH, on the axis the node-pool bound does not cover
-            # (see `_LEAF_BATCH_OVER_THE_CEILING` above for why the sims axis moved).
-            "leaf_batch_size": _LEAF_BATCH_OVER_THE_CEILING,
-        },
-    )
-    assert config.identity.representation == "grid"
+def test_the_relation_has_no_grid_arm_left_to_be_scoped_against() -> None:
+    """The scoping half of this relation is RETIRED with the grid path (R346(f)).
 
+    It asserted that the SAME wild sims regime validates clean on a grid config, because
+    dense-362 records carry no HEXG visit slot — R250's absence principle, mint-side. There is
+    no grid config and no grid encoding to build one from, so what is pinned instead is that
+    the registry cannot supply one: the relation is unconditional now, and a future row that
+    re-introduced a non-graph representation would red HERE rather than silently re-opening
+    an unscoped arm."""
+    from mantis.encoding import all_specs
+
+    reps = {str(spec.representation) for spec in all_specs()}
+    assert reps == {"graph"}, (
+        f"a non-graph representation is registered again ({sorted(reps)}); the visit-capacity "
+        "relation was SCOPED to graph and that scoping was deleted with the grid path"
+    )
 
 def test_every_minted_graph_config_satisfies_the_relation(smoke_run_config) -> None:
     """Gate-7 invariant, asserted here so a future re-mint cannot regress it

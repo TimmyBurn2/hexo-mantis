@@ -78,11 +78,21 @@ def test_every_arch_kind_keyed_dict_in_src_is_the_whole_vocabulary() -> None:
 def test_the_census_can_actually_SEE_a_table(tmp_path: Path) -> None:
     """LAW-07 mutation self-test. A census that reaches no dict literal would pass vacuously
     forever, which is exactly how F-16 survived: the round-trip test could not see the second
-    table, so nothing red. Drive the finder over a planted incomplete literal."""
+    table, so nothing red. Drive the finder over a planted literal that DISAGREES with the
+    vocabulary.
+
+    THE PLANT IS A SUPERSET, not a subset, and the file's own earlier note said why this day
+    would come: while the vocabulary had three kinds a two-key plant was incomplete, and
+    R346(f) took `CnnArch` and left exactly two, so any table naming both is complete. What the
+    census actually checks is `set(keys) != set(ARCH_KINDS)` — DISAGREEMENT in either
+    direction — so a table naming both real kinds plus one this build does not have is the
+    plant that still exercises it.
+    """
     planted = tmp_path / "mut.py"
     kinds = sorted(ARCH_KINDS)
+    entries = ", ".join(f'"{kind}": 1' for kind in kinds)
     planted.write_text(
-        f'_TABLE = {{"{kinds[0]}": 1, "{kinds[1]}": 2}}\n', encoding="utf-8",
+        f'_TABLE = {{{entries}, "GnnArchFromTheFuture": 9}}\n', encoding="utf-8",
     )
     tree = ast.parse(planted.read_text(encoding="utf-8"))
     dicts = [n for n in ast.walk(tree) if isinstance(n, ast.Dict)]
@@ -90,8 +100,8 @@ def test_the_census_can_actually_SEE_a_table(tmp_path: Path) -> None:
     keys = _dict_key_strings(dicts[0])
     assert len(set(keys) & set(ARCH_KINDS)) >= _MIN_KEYS_TO_JUDGE, "the finder's own predicate"
     assert set(keys) != set(ARCH_KINDS), (
-        "the planted table must be INCOMPLETE for this self-test to mean anything — if the "
-        "vocabulary ever shrinks to two kinds, widen the plant"
+        "the planted table must DISAGREE with the vocabulary for this self-test to mean "
+        "anything"
     )
 
 

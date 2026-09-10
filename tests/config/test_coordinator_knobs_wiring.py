@@ -189,6 +189,18 @@ class _Trainer:
     def save_checkpoint(self, loss_info) -> None: ...
 
 
+def _real_graph_ring(n_records: int = 8, capacity: int = 64):
+    """A real `HexgBuffer` behind the recording fake — see `_Buffer.sample_graph_batch`."""
+    from mantis._engine import HexgBuffer
+
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i,
+                               True, 1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
 class _Buffer:
     def __init__(self, size: int = 1000, capacity: int = 100_000) -> None:
         self.size = size
@@ -196,7 +208,9 @@ class _Buffer:
         self.resizes: list[int] = []
         self.saves: list[str] = []
         self.augment_seen: list[bool] = []
+        self.recent_frac_seen: list[float] = []
         self.sampled: list[int] = []
+        self._real = _real_graph_ring()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -205,13 +219,19 @@ class _Buffer:
     def save_to_path(self, p) -> None:
         self.saves.append(str(p))
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        """The grid route's sampler (WPTS dispatcher). Rows are opaque to the fake trainer,
-        so sentinels suffice; what matters is that the DISPATCHER asked, with the
-        config-authored augment."""
+    def sample_graph_batch(self, n: int, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        """The graph route's sampler, RECORDED and then delegated to a real `HexgBuffer`.
+
+        The dispatcher refuses a shapeless fake by design (`RepresentationRouteError`), and
+        everything downstream of the sampler — the wire payload, the microbatch plan, the
+        collate — needs real bytes. So the fake records WHAT THE DISPATCHER ASKED FOR (which
+        is the whole subject of these citations) and hands back a real ring's answer."""
         self.sampled.append(int(n))
         self.augment_seen.append(bool(augment))
-        return (None,) * 9
+        self.recent_frac_seen.append(float(recent_frac))
+        return self._real.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class _Sink:
@@ -441,7 +461,16 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity
         # (LAW-11) — an identity-less full_config now raises MissingEncodingError, so the
         # unit drives declare the grid identity their `_Buffer` fake serves.
-        full_config={"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}},
+        full_config={
+            "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+            # The graph route resolves its microbatch caps and its fast-policy weight from
+            # the run's own `train` section; a `train`-less full_config is a NAMED refusal
+            # (LAW-11), so the unit drives declare the block their route needs.
+            "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+                      "fast_policy_weight": 0.0},
+            "search": {"kind": "puct"},
+            "selfplay": {"n_workers": 1},
+        },
         train_cfg={}, mixing_cfg=mixing_cfg or {}, sink=sink, bot_buffer=bot,
         monitor_cfg=MonitorConfig(),
     )
@@ -459,42 +488,6 @@ def _drive(h, *, steps=4, games=5):
         h.pool.games_completed += games
         outcomes.append(h.coord.step())
     return outcomes
-
-
-def _mixed_batch_calls(monkeypatch, h, *, steps=2):
-    """Drive the MIXED training path and capture every `assemble_mixed_batch` call.
-
-    That path — not `trainer.train_step` — is where `batch_size`, `recency_weight`, the three
-    `mixing_*` knobs and `bot_batch_share` are read, so it is where their citations have to be
-    demonstrated. It needs a pretrained buffer, which `compose_run` does not build today
-    (`pretrained_buffer=None`), so the drive is a direct `StepCoordinator` — the production
-    consumer, reached the only way a caller can reach it.
-    """
-    import mantis.train.batch_assembly as batch_assembly
-
-    seen: list[dict] = []
-
-    def _spy(pretrained_buffer, buffer, recent_buffer, n_pre, n_self, batch_size,
-             batch_size_cfg, recency_weight, bufs, train_step, *, augment=False,
-             bot_buffer=None, n_bot=0):
-        seen.append({"n_pre": n_pre, "n_self": n_self, "batch_size": batch_size,
-                     "recency_weight": recency_weight, "augment": augment, "n_bot": n_bot,
-                     "train_step": train_step})
-        return SimpleNamespace(
-            states=None, policies=None, outcomes=None, chain_planes=None, ownership=None,
-            winning_line=None, is_full_search=None, n_recent_actual=0,
-            position_indices=None, value_target_valid=None,
-        )
-
-    monkeypatch.setattr(batch_assembly, "assemble_mixed_batch", _spy)
-    _drive(h, steps=steps)
-    # `train_step` 0 is dropped: `exp(-0/decay) == 1` for EVERY horizon, so the first call
-    # cannot distinguish a decay knob from any other. The schedule is only observable once
-    # the run has taken a step, which is what the knob describes.
-    seen = [call for call in seen if call["train_step"] > 0]
-    assert seen, "the mixed-batch path was never reached — the drive witnesses nothing"
-    return seen
-
 
 def test_eval_interval_decides_when_a_promotion_round_is_kicked() -> None:
     """`train.eval_interval` -> `step.py::_maybe_kick_eval`. Both sides of the boundary,
@@ -610,85 +603,54 @@ def test_training_steps_per_game_and_max_train_burst_set_the_step_budget() -> No
     )
 
 
-def test_batch_size_is_the_batch_the_assembler_is_asked_for(monkeypatch) -> None:
-    """`train.batch_size` -> `step.py::_run_training_step`. THE finding this key closes: the
-    line read `train_cfg.get("batch_size", full_config.get("batch_size", 256))`, both lookups
-    missed on the production path, and the run's real batch size was the literal 256 while
-    `StepCoordinatorConfig.batch_size` sat beside it unread (WPMINT K-A). The minted value is
-    256 for that reason; the drive below uses 41 so a surviving literal is visible."""
-    h = _coordinator(pretrained=_Buffer(size=500), batch_size=41)
-    calls = _mixed_batch_calls(monkeypatch, h, steps=3)
-    assert {call["batch_size"] for call in calls} == {41}, (
-        f"the assembler must be asked for the CONFIGURED batch; got {calls}"
+def test_batch_size_is_the_batch_the_sampler_is_asked_for() -> None:
+    """`train.batch_size` -> `step.py::_run_training_step` -> the route's sampler. THE finding
+    this key closes: the line read `train_cfg.get("batch_size", full_config.get("batch_size",
+    256))`, both lookups missed on the production path, and the run's real batch size was the
+    literal 256 while `StepCoordinatorConfig.batch_size` sat beside it unread (WPMINT K-A).
+    The minted value is 256 for that reason; the drive below uses 41 so a surviving literal is
+    visible.
+
+    The MIXED arm this used to drive went with the dense path (R346(f)) — `assemble_mixed_batch`
+    and the `mixing_*` / `bot_batch_share` knobs it read are deleted — so the citation is now
+    demonstrated where the graph route actually reads it."""
+    h = _coordinator(batch_size=41)
+    _drive(h, steps=3, games=1)
+    assert set(h.buffer.sampled) == {41}, (
+        f"the sampler must be asked for the CONFIGURED batch; got {h.buffer.sampled}"
     )
-    assert 256 not in {call["batch_size"] for call in calls}, (
+    assert 256 not in set(h.buffer.sampled), (
         "the `256` literal must be gone, not merely shadowed"
     )
 
 
-def test_augment_reaches_both_training_paths(monkeypatch) -> None:
-    """`train.augment` -> the dispatcher's sampler (`sample_batch_with_pos(augment=)`) on the
-    plain path (WPTS/TD-1: augment is a SAMPLING knob and travels to the buffer draw, not to
-    the trainer) and `assemble_mixed_batch(augment=)` on the mixed one. Both, because the
-    knob is read twice and a wire that fixed one would leave the other on a code-side
-    False."""
+def test_augment_reaches_the_training_path() -> None:
+    """`train.augment` -> the dispatcher's sampler (`sample_graph_batch(augment=)`): augment is
+    a SAMPLING knob and travels to the buffer draw, not to the trainer (WPTS/TD-1). The second
+    read this test used to check — `assemble_mixed_batch(augment=)` — went with the dense mixed
+    arm (R346(f)), so there is ONE reader left and this is it."""
     plain = _coordinator(augment=True)
     _drive(plain, steps=2, games=1)
     assert plain.buffer.augment_seen and all(plain.buffer.augment_seen)
 
-    mixed = _coordinator(pretrained=_Buffer(size=500), augment=True)
-    assert all(call["augment"] for call in _mixed_batch_calls(monkeypatch, mixed, steps=3))
-
-
-def test_recency_weight_reaches_the_assemblers_recency_window(monkeypatch) -> None:
-    """`train.recency_weight` -> `assemble_mixed_batch`'s recency weighting."""
-    h = _coordinator(pretrained=_Buffer(size=500), recency_weight=0.43)
-    assert {call["recency_weight"]
-            for call in _mixed_batch_calls(monkeypatch, h, steps=3)} == {0.43}
-
-
-def test_the_three_mixing_knobs_decide_the_pretrained_share_of_each_batch(monkeypatch) -> None:
-    """The `mixing_*` trio -> `_compute_pretrained_weight` -> `n_pre`, the number of batch
-    slots drawn from the pretrained corpus. Observed as `n_pre`, not as the weight, because
-    `w_pre` is an intermediate and the batch composition is what the registry cites.
-
-    Three drives, one per knob, over the same batch size: the floor alone, a decayed start
-    above it, and a decay horizon long enough to keep the start intact. If any one of the
-    three reached nothing, two of these would collapse onto the same `n_pre`.
-    """
-    floor_only = _coordinator(pretrained=_Buffer(size=500), batch_size=100,
-                              mixing_initial_w=0.0, mixing_min_w=0.5, mixing_decay_steps=1.0)
-    assert {call["n_pre"]
-            for call in _mixed_batch_calls(monkeypatch, floor_only, steps=3)} == {50}, (
-        "with initial_w 0 the floor is the whole schedule: 50 of 100 slots"
-    )
-
-    fast_decay = _coordinator(pretrained=_Buffer(size=500), batch_size=100,
-                              mixing_initial_w=1.0, mixing_min_w=0.1, mixing_decay_steps=1e-9)
-    assert {call["n_pre"]
-            for call in _mixed_batch_calls(monkeypatch, fast_decay, steps=3)} == {10}, (
-        "a decay horizon far below one step drives w_pre to the floor immediately"
-    )
-
-    slow_decay = _coordinator(pretrained=_Buffer(size=500), batch_size=100,
-                              mixing_initial_w=1.0, mixing_min_w=0.1, mixing_decay_steps=1e9)
-    assert {call["n_pre"]
-            for call in _mixed_batch_calls(monkeypatch, slow_decay, steps=3)} == {100}, (
-        "the SAME initial and floor with a long horizon must keep the start — that is "
-        "mixing_decay_steps deciding, and it is the arm the other two cannot fake"
+    off = _coordinator(augment=False)
+    _drive(off, steps=2, games=1)
+    assert off.buffer.augment_seen and not any(off.buffer.augment_seen), (
+        "the discriminating negative: a knob that reaches the sampler as True whatever the "
+        "config says is not wired, it is hardcoded"
     )
 
 
-def test_bot_batch_share_allocates_batch_slots_from_the_bot_corpus(monkeypatch) -> None:
-    """`train.bot_batch_share` -> `n_bot = round(share * batch_size)`."""
-    h = _coordinator(pretrained=_Buffer(size=500), bot=_Buffer(size=500), batch_size=100,
-                     bot_batch_share=0.25)
-    assert {call["n_bot"] for call in _mixed_batch_calls(monkeypatch, h, steps=3)} == {25}
-
-    none = _coordinator(pretrained=_Buffer(size=500), bot=_Buffer(size=500), batch_size=100,
-                        bot_batch_share=0.0)
-    assert {call["n_bot"]
-            for call in _mixed_batch_calls(monkeypatch, none, steps=3)} == {0}
+def test_recency_weight_reaches_the_samplers_recency_window() -> None:
+    """`train.recency_weight` -> `sample_graph_batch(recent_frac=)`. The dense assembler's
+    recency window it used to name is deleted with the mixed arm (R346(f)); the graph sampler
+    takes the same fraction as `recent_frac` and that is the one live reader."""
+    h = _coordinator(recency_weight=0.43)
+    _drive(h, steps=2, games=1)
+    assert set(h.buffer.recent_frac_seen) == {0.43}, (
+        f"the sampler must be handed the CONFIGURED recency fraction; got "
+        f"{h.buffer.recent_frac_seen}"
+    )
 
 
 def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:

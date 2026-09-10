@@ -231,8 +231,6 @@ _OUT_OF_DOMAIN_CASES = [
     (("random_model_sims",), 0, "eval.random_model_sims"),
     (("random_model_sims",), -5, "eval.random_model_sims"),
     (("sealbot_model_sims",), 0, "eval.sealbot_model_sims"),
-    (("kraken_model_sims",), 0, "eval.kraken_model_sims"),
-    (("strix_model_sims",), 0, "eval.strix_model_sims"),
     (("random_floor_games",), -1, "eval.random_floor_games"),
     (("round_timeout_sec",), 0.0, "eval.round_timeout_sec"),
     (("round_timeout_sec",), -1.0, "eval.round_timeout_sec"),
@@ -293,8 +291,6 @@ def test_out_of_domain_value_raises_named_validation_error(
 _IN_DOMAIN_BOUNDARY_CASES = [
     (("random_model_sims",), 1),
     (("sealbot_model_sims",), 1),
-    (("kraken_model_sims",), 1),
-    (("strix_model_sims",), 1),
     (("random_floor_games",), 0),
     (("round_timeout_sec",), 0.001),
     (("worker_kill_grace_sec",), 0.0),

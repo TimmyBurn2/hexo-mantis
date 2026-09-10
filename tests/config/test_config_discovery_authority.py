@@ -191,7 +191,7 @@ def test_the_loader_accepts_a_config_at_ANY_shape(tmp_path) -> None:
     for name in ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.yamlx", ".yaml"):
         path = tmp_path / name
         path.write_text(RUN5.read_text())
-        assert load_config(path).run_id == "run5", f"{name} must load — R75 declined the refusal"
+        assert load_config(path).run_id == "run6", f"{name} must load — R75 declined the refusal"
 
     for dead in ("CONFIG_SUFFIXES", "ConfigSuffixError", "is_config_path"):
         assert not hasattr(loader, dead), (

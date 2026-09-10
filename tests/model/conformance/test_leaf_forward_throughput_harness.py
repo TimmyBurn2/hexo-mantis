@@ -542,14 +542,9 @@ def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
 _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
     {
         ("test_leaf_forward_throughput_harness.py", "test_leaf_forward_throughput_ladder"),
-        (
-            "test_legal_move_coverage_boundary.py",
-            "test_report_the_uncovered_legal_move_distribution_per_grid_encoding",
-        ),
-        (
-            "test_construction_path_determinism_centroid_branch.py",
-            "test_report_construction_path_disagreement_over_the_spread_partition",
-        ),
+        # `test_legal_move_coverage_boundary.py`'s uncovered-legal-move report and
+        # `test_construction_path_determinism_centroid_branch.py` (the whole module) went with
+        # the K-cluster window at R346(f); both were dense-arm measurements.
         (
             "test_window_frame_midpoint_translation_boundary.py",
             "test_report_the_graph_node_feature_translation_residual",

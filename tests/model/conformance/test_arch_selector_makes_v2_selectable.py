@@ -231,10 +231,25 @@ def test_an_UNKNOWN_kind_is_REFUSED_and_not_resolved_to_the_nearest_fit():
 
 
 def test_a_kind_the_REPRESENTATION_does_not_admit_is_REFUSED():
-    """PB-T10b. The pairing rule with teeth: a grid arch on a graph encoding builds nothing."""
+    """PB-T10b. The pairing rule with teeth: a kind the representation does not admit builds
+    nothing.
+
+    IT USED TO NAME `CnnArch`, the grid arch on a graph encoding, and R346(f) deleted it — so
+    the kind is now unknown to the build rather than known-and-not-admitted, and the two
+    refusals have different messages. The pairing rule is driven instead by adding a kind to
+    `ARCH_KINDS` that `ARCH_KINDS_BY_REPRESENTATION` does not list for `graph`, which is the
+    exact shape a new arch arrives in before its pairing row is written.
+    """
+    import mantis.model.arch as arch_mod
+
     spec = lookup("gnn_axis_v1")
-    with pytest.raises(UnknownArchKind, match="not admitted by representation"):
-        select_arch(spec, {}, arch_kind="CnnArch")
+    added = "ArchForAnotherRepresentation"
+    arch_mod.ARCH_KINDS[added] = arch_mod.GnnArch
+    try:
+        with pytest.raises(UnknownArchKind, match="not admitted by representation"):
+            select_arch(spec, {}, arch_kind=added)
+    finally:
+        del arch_mod.ARCH_KINDS[added]
 
 
 def test_select_arch_takes_NO_default_kind():
@@ -432,15 +447,17 @@ def test_a_row_naming_a_kind_the_representation_does_not_admit_is_refused_at_con
 ):
     """The schema cannot import the vocabulary (a config↔model cycle, gate 9), so the refusal
     lives in `select_arch` and fires at the first net built — before anything trains or serves.
-    A GRID config naming a graph kind is refused by name, never resolved to the nearest fit."""
-    raw, _base = _config_source("grid")
+    A config naming a kind its representation does not admit is refused by name, never resolved
+    to the nearest fit.
+
+    THE NOT-ADMITTED HALF HAS NO CONFIG-LEVEL SUBJECT SINCE R346(f): with one representation
+    registered, every kind in the vocabulary is admitted by it, and `_config_source("grid")`
+    has no shipped base to copy. What a config CAN still name is a kind this build does not
+    have at all, which is the half below and the one an operator actually mistypes.
+    """
+    raw, _base = _graph_config_source()
     raw["run_id"] = "r330e-row-refused"
-    raw["identity"]["arch_kind"] = "GnnArchV2"
     path = tmp_path / "bad_row.yaml"
-    path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
-    config = load_config(path)  # schema-valid: the refusal is downstream, and this pins where
-    with pytest.raises(UnknownArchKind, match="not admitted by representation='grid'"):
-        arch_from_spec_and_config(lookup(config.identity.encoding), config.model_dump())
     raw["identity"]["arch_kind"] = "NoSuchArch"
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     config = load_config(path)

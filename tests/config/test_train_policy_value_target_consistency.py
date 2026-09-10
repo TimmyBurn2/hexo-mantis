@@ -162,25 +162,20 @@ def test_the_raw_target_under_gumbel_is_refused():
     """The reverse, and it is the one the deleted booleans could never express cleanly: a
     Gumbel search exports the completed-Q improved policy, and scoring it as a visit
     distribution applies the wrong loss to every row."""
-    # A GRAPH config under `gumbel` is refused EARLIER, by the record-format density check
-    # (see below), so the pairing rule is exercised on the GRID lineage where no HEXG visit
-    # slot exists to constrain the target's support.
+    # R346(f) deleted the GRID lineage this used to be exercised on. The pairing rule is
+    # exercised on the graph identity now, which R347(a) made legal under `gumbel`: the sparse
+    # row carries the tail mass, so the record-format refusal that used to fire first is gone
+    # and the target rule is reached.
     payload = _payload(search_kind="gumbel")
-    payload["identity"] = {"encoding": "v6", "representation": "grid"}
-    payload["inference"].pop("fused_graph_caps", None)
-    payload["train"].pop("microbatch_caps", None)
     with pytest.raises(ValidationError, match="policy_target"):
         RunConfig.model_validate(payload)
 
 
-def test_the_gumbel_kind_and_the_completed_target_agree_on_grid():
+def test_the_gumbel_kind_and_the_completed_target_agree():
     payload = _payload(
         search_kind="gumbel",
         train_over={"policy_target": "completed_improved_policy"},
     )
-    payload["identity"] = {"encoding": "v6", "representation": "grid"}
-    payload["inference"].pop("fused_graph_caps", None)
-    payload["train"].pop("microbatch_caps", None)
     cfg = RunConfig.model_validate(payload)
     assert cfg.search.kind == "gumbel"
     assert cfg.train.policy_target == "completed_improved_policy"

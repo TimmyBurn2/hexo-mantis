@@ -175,8 +175,6 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
                           "arch; absent until the run6 mint writes it (R323(b))",
     "train.augment": "symmetry augmentation is a data-pipeline posture; both representations "
                      "have an augmentation path and run5 mints it false on the graph one",
-    "selfplay.solver_node_budget": "SEARCH nodes, not graph nodes — the tactical solver's "
-                                   "budget, which has no representation in it at all",
     "monitor.alert_loss_increase_window": "a TIME window over training steps, not a board "
                                           "window; the K-cluster window is a different word",
 }
@@ -220,6 +218,22 @@ def other_arch(arch: str) -> str:
     return next(rep for rep in REPRESENTATIONS if rep != arch)
 
 
+def foreign_dump(arch: str) -> dict:
+    """A config mapping that DECLARES the arch `arch` does not have, for the READ PATHS.
+
+    R346(f) left one registered representation, so no shipped file selects a foreign arch and
+    `config_for` cannot answer for one. The read paths take a plain mapping and dispatch on
+    `identity.representation`, so a foreign declaration is still constructible — and the block
+    is CARRIED, which is what makes the probe a test of the arch refusal rather than of absence.
+
+    The SCHEMA half has no such construction and is not faked: see
+    `test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why`.
+    """
+    dump = load_config(config_for(arch)).model_dump()
+    dump["identity"]["representation"] = other_arch(arch)
+    return dump
+
+
 def leaf_present(config_dump: dict, path: str) -> bool:
     node: Any = config_dump
     for part in path.split("."):
@@ -248,16 +262,19 @@ def observed_red_rows() -> frozenset[tuple[str, str]]:
         )
     rows: set[tuple[str, str]] = set()
     for leaf in leaves:
-        foreign = load_config(config_for(other_arch(leaf.arch)))
-        dump = foreign.model_dump()
+        # SCHEMA_REQUIRES IS NOT PROBED HERE ANY MORE. It asked whether a real minted config of
+        # the OTHER representation carries the leaf, and R346(f) left one representation, so
+        # there is no such file and no synthetic stands in for one — a hand-built "foreign
+        # config" would be probing this file's own construction. The class's absence is
+        # asserted, with its reason, by
+        # `test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why`.
+        dump = foreign_dump(leaf.arch)
         if declared_representation(dump) is None:
             raise ProbeWentVacuous(
                 f"the foreign config for {leaf.path} declares no readable "
                 "identity.representation, so the read path's arch refusal cannot fire and a "
                 "green result would mean nothing"
             )
-        if leaf_present(dump, leaf.path):
-            rows.add((leaf.path, SCHEMA_REQUIRES))
         try:
             leaf.read_path(dump)
         except Exception:  # noqa: BLE001 — any refusal at all is the green outcome here
@@ -419,16 +436,15 @@ def test_the_probes_are_still_EXECUTING_and_not_merely_empty(derived):
     While red rows were declared, the ratchet could not pass vacuously: an empty observation
     would have failed the shrink direction. With the declaration empty, "no red rows" and "the
     probe never ran" produce the identical result, so the probe's own subject is asserted
-    here — leaves exist, both red classes are named, and each leaf's foreign config is a real
-    minted file that declares a representation for the arch refusal to bite on.
+    here — leaves exist, both red classes are named, and each leaf's foreign declaration really
+    reads as foreign for the arch refusal to bite on.
     """
     leaves = arch_scoped_leaves()
     derived("t9.arch_scoped_leaf_count", len(leaves))
     assert leaves, "no arch-scoped leaf: the ratchet above is empty for free"
     assert len(RED_CLASSES) == 2, "a red class went missing; the ratchet covers one direction"
     for leaf in leaves:
-        foreign = load_config(config_for(other_arch(leaf.arch))).model_dump()
-        assert declared_representation(foreign) == other_arch(leaf.arch)
+        assert declared_representation(foreign_dump(leaf.arch)) == other_arch(leaf.arch)
 
 
 def test_a_NEW_red_row_is_refused():
@@ -467,25 +483,6 @@ def test_an_EMPTY_probe_subject_is_refused_rather_than_reported_GREEN(monkeypatc
         observed_red_rows()
 
 
-# --------------------------------------------------------------------------------------- #
-# The repair itself — each half executed against a real minted file
-# --------------------------------------------------------------------------------------- #
-@pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
-                                                       for k in ARCH_SCOPED_KEYS])
-def test_the_SCHEMA_refuses_the_block_on_a_foreign_arch(key, derived):
-    """Red class 1's repair, executed POSITIVELY: it is not enough that the shipped grid config
-    omits the block — the schema must REFUSE one that carries it, or the row is green only for
-    as long as nobody re-adds it."""
-    foreign = load_config(config_for(other_arch(key.arch))).model_dump()
-    foreign[key.section][key.field] = {member: 1 for member in ("max_edges", "max_nodes",
-                                                                "max_fused_edges",
-                                                                "max_fused_nodes")
-                                       if member in _members_of(key)}
-    with pytest.raises(ValidationError, match="ARCH-SCOPED"):
-        RunConfig.model_validate(foreign)
-    derived(f"t9.schema_refuses.{key.section}.{key.field}", other_arch(key.arch))
-
-
 @pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
                                                        for k in ARCH_SCOPED_KEYS])
 def test_the_SCHEMA_still_REQUIRES_the_block_on_its_own_arch(key):
@@ -499,30 +496,43 @@ def test_the_SCHEMA_still_REQUIRES_the_block_on_its_own_arch(key):
 
 @pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
                                                        for k in ARCH_SCOPED_KEYS])
-def test_an_EXPLICIT_null_is_CARRYING_the_key_and_is_refused_too(key):
-    """The distinction the repair reads off `model_fields_set` rather than off the value.
-
-    `inference.fused_graph_caps`' MEMBERS use `null` as the R119 placeholder ("minted but
-    uncalibrated"), so a value test would let a grid config satisfy the arch rule by minting a
-    placeholder. Absence of the BLOCK and a null BLOCK are different facts and both are refused
-    on a foreign arch."""
-    foreign = load_config(config_for(other_arch(key.arch))).model_dump()
-    foreign[key.section][key.field] = None
-    with pytest.raises(ValidationError, match="ARCH-SCOPED"):
-        RunConfig.model_validate(foreign)
-
-
-@pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
-                                                       for k in ARCH_SCOPED_KEYS])
 def test_the_READ_PATH_refuses_by_ARCH_and_not_merely_by_ABSENCE(key, derived):
-    """Red class 2's repair, executed POSITIVELY. The resolver is handed a foreign config that
-    DOES carry the block, so an absence-only refusal would answer here."""
-    foreign = load_config(config_for(other_arch(key.arch))).model_dump()
+    """Red class 2's repair, executed POSITIVELY. The resolver is handed a foreign-declaring
+    config that DOES carry the block, so an absence-only refusal would answer here."""
+    foreign = foreign_dump(key.arch)
     foreign[key.section][key.field] = {"max_edges": 1, "max_nodes": 1,
                                        "max_fused_edges": 1, "max_fused_nodes": 1}
     with pytest.raises(ArchScopedKeyOutsideItsArchError, match="ARCH-SCOPED"):
         READ_PATHS[(key.section, key.field)](foreign)
     derived(f"t9.read_path_refuses.{key.section}.{key.field}", other_arch(key.arch))
+
+
+def test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why(derived):
+    """Red class 1 has NO CONSTRUCTIBLE INPUT since R346(f), and that is asserted rather than
+    quietly dropped.
+
+    The schema's arch rule (`RunConfig._arch_scoped_keys_are_present_iff_their_arch`) refuses a
+    block carried on a foreign arch. Reaching it needs a config that DECLARES a foreign
+    representation — and `identity.representation` is now a one-member `Literal`, with the
+    identity-consistency validator refusing a value that disagrees with the encoding's registry
+    row BEFORE the arch rule runs. So the refusal cannot fire, and the rows that drove it are
+    deleted rather than faked.
+
+    This row reds the day a second representation is registered, which is exactly when the
+    schema half needs its positive tests written back.
+    """
+    dump = load_config(config_for("graph")).model_dump()
+    dump["identity"]["representation"] = other_arch("graph")
+    with pytest.raises(ValidationError) as excinfo:
+        RunConfig.model_validate(dump)
+    message = str(excinfo.value)
+    derived("t9.schema_foreign_arch_unreachable", other_arch("graph"))
+    assert "ARCH-SCOPED" not in message, (
+        "the schema's arch-scoped refusal fired on a foreign representation — a second "
+        "representation is registered and red class 1 has a subject again; restore the "
+        "SCHEMA_REQUIRES probe and its positive rows"
+    )
+    assert "disagrees with the registry representation" in message, message
 
 
 def test_the_arch_guard_REFUSES_a_key_the_partition_does_not_place():
@@ -555,12 +565,3 @@ def test_the_read_path_ANSWERS_for_its_OWN_arch(key, derived):
         f"{key.section}.{key.field}: the read path does not answer for its OWN arch, so this "
         "key is not arch-scoped — it is broken, which is a different row"
     )
-
-
-def _members_of(key) -> tuple[str, ...]:
-    """The block's leaf member names, off the live model."""
-    section = RunConfig.model_fields[key.section].annotation
-    field = section.model_fields[key.field]  # type: ignore[union-attr]
-    block = next(a for a in getattr(field.annotation, "__args__", (field.annotation,))
-                 if isinstance(a, type) and issubclass(a, BaseModel))
-    return tuple(block.model_fields)

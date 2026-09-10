@@ -187,6 +187,9 @@ GRAVES: dict[str, str] = {
                "downstream bot its docstring claimed does not exist in src/mantis/bots/",
     "ValueHead": "TRANSITIVE — reachable only from HeXONet, so it is buried with it and is "
                  "not claimed as an independent finding",
+    "HexTacToeNet": "R346(f) deleted the GRID/DENSE representation, and this was its net. It "
+                    "was SURFACED rather than archived while `build.py` still dispatched to "
+                    "it and a shipped config still selected it; the ruling took both.",
 }
 
 
@@ -235,43 +238,6 @@ def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
         assert kind in ARCH_KINDS, f"{name} selects {kind}, which is not a known kind"
     assert set(nets_selected()) == set(selected), (
         "a shipped config selects an arch kind `build_net` has no branch for"
-    )
-
-
-def test_the_dense_lineage_is_KEPT_and_its_consumers_are_NAMED(derived):
-    """`HexTacToeNet`: the archive test's FIRST half passes and its SECOND half fails.
-
-    This is the row R322(d)'s conjunction exists for. No PRODUCTION config selects the dense
-    arch — both `PRODUCTION_CONFIGS` rows are graph — so a policy keyed on production selection
-    alone would archive it. It has non-test consumers, so it is SURFACED instead, and this test
-    names them by deriving them.
-    """
-    classes = net_classes()
-    assert "HexTacToeNet" in classes, "the dense arch is gone; that is a ruling, not a refactor"
-    production = {Path(rel).name for rel in PRODUCTION_CONFIGS}
-    selected = selections()
-    nets = nets_selected()
-    production_selects = {nets[name] for name in production if name in nets}
-    derived("t11.production_configs", sorted(production))
-    derived("t11.production_selects", sorted(production_selects))
-    assert "HexTacToeNet" not in production_selects, (
-        "a production config now selects the dense arch; that is a run-posture change and not "
-        "something this section may discover after the fact"
-    )
-    consumers = consumers_of("HexTacToeNet", classes["HexTacToeNet"],
-                             (REPO / "src", REPO / "tools"))
-    shipped_selects = sorted(n for n, net in nets.items() if net == "HexTacToeNet")
-    derived("t11.HexTacToeNet.consumers", list(consumers))
-    derived("t11.HexTacToeNet.shipped_configs_selecting_it", shipped_selects)
-    assert consumers, (
-        "HexTacToeNet has NO non-test consumer and no production config selects it, which is "
-        "R322(d)'s archive test satisfied in full — that is a verdict for a ruling to take, "
-        "not for this test to keep asserting the opposite of"
-    )
-    assert "src/mantis/model/build.py" in consumers
-    assert shipped_selects, (
-        "no shipped config selects the dense arch any more; the surfacing above rests on "
-        "consumers alone and the claim in this section's docstring has gone stale"
     )
 
 

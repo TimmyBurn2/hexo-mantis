@@ -49,7 +49,7 @@ def test_o10_amp_is_bf16_on_graph_unchanged(production_config):
 
 
 def test_o11_encoding_regime_parity_unchanged(production_config):
-    assert production_config.identity.encoding == "gnn_axis_v1"
+    assert production_config.identity.encoding == "gnn_axis_r8"
     assert production_config.identity.representation == "graph"
 
 
