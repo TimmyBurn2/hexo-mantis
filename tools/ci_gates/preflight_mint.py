@@ -262,6 +262,7 @@ from mantis.config.armed_aborts import (
 )
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.config.schema import RunConfig
+from mantis.diagnostics.workspace_durability import WorkspaceNotDurableError, assert_durable
 
 #: SF-4: every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
@@ -337,6 +338,8 @@ PreflightResumedTrainerError = _parent_half.PreflightResumedTrainerError
 PreflightOutDirInsideRepoError = _parent_half.PreflightOutDirInsideRepoError
 PreflightConfigIdentityError = _parent_half.PreflightConfigIdentityError
 PreflightOutDirReusedError = _parent_half.PreflightOutDirReusedError
+PreflightWorkspaceNotDurableError = _parent_half.PreflightWorkspaceNotDurableError
+PreflightCudaBuildError = _parent_half.PreflightCudaBuildError
 PreflightArmingAuditError = _parent_half.PreflightArmingAuditError
 PreflightManifestError = _parent_half.PreflightManifestError
 PreflightTreeDefectError = _parent_half.PreflightTreeDefectError
@@ -1257,6 +1260,43 @@ def _run_child(args, report: dict) -> dict:
     return child
 
 
+def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
+    """R347(d)'s two START pre-flight HALTs, both decided before the boot.
+
+    Args:
+        booted: the config the child will run.
+        out_dir: the run directory the child will write into.
+        report: the preflight report; each halt records its own evidence block.
+
+    Raises:
+        PreflightWorkspaceNotDurableError: the run directory would not survive the machine.
+        PreflightCudaBuildError: the config declares a cuda device and the installed torch is
+            not a CUDA build that computes correctly.
+    """
+    try:
+        report["workspace"] = assert_durable(out_dir)
+    except WorkspaceNotDurableError as exc:
+        raise PreflightWorkspaceNotDurableError(str(exc)) from exc
+    devices = {booted.train.device, booted.eval.worker_device}
+    if "cuda" not in devices:
+        report["cuda_build"] = {"verdict": "not_run", "reason": f"no cuda device declared: "
+                                f"train.device={booted.train.device!r}, "
+                                f"eval.worker_device={booted.eval.worker_device!r}"}
+        return
+    # Imported here and not at module scope: AUDIT mode is the per-commit CI gate and must not
+    # pay torch's import to audit YAML.
+    from mantis.diagnostics.cuda_build_guard import CudaBuildRefusal, check
+
+    try:
+        report["cuda_build"] = check()
+    except CudaBuildRefusal as exc:
+        raise PreflightCudaBuildError(
+            f"{booted.run_id} declares train.device={booted.train.device!r} and "
+            f"eval.worker_device={booted.eval.worker_device!r}, and the installed torch "
+            f"cannot compute on a GPU: {exc}"
+        ) from exc
+
+
 def _run_preflight(args, report: dict, out_dir: Path) -> None:
     path = _resolve_config_path(args.config)
     config = _load(path)
@@ -1287,6 +1327,7 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
             f"{booted.run_id!r} (first: {stale[0].name}): a same-run_id reuse would read a "
             "previous burst's events as this run's evidence. Use a fresh out-dir"
         )
+    _assert_start_halts(booted, out_dir, report)
     child = _run_child(args, report)
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
                         if log_dir.is_dir() else ([], []))
