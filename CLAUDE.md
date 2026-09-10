@@ -104,7 +104,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   docstrings. NO file-top banner comments and NO narrative comment blocks — a needed comment
   states its non-obvious fact in ONE line. CARVE-OUT: load-bearing in-source markers are
   mechanism, not commentary, and STAY — pinned bands, planted-break markers, armed-value
-  provenance, licence-required attribution. Applied ON CONTACT, never as a cleanup pass.
+  provenance, licence-required attribution. Applied ON CONTACT, never as a cleanup pass — with
+  the ONE exception R346(f) itself ordered, the wave-2 tree-wide pass, whose result is now held
+  by gate 14's ratchet rather than by memory.
 - **Rust.** No `unwrap()`/`expect()` on production paths — fail-loud means a NAMED error type
   that propagates, never a panic (R2/LAW-13 is about what crosses the FFI; this is about not
   reaching for the panic in the first place). `expect()` is fine in tests and in startup
@@ -189,9 +191,15 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     leaf-count must equal the live one. Every check is derived from `RunConfig` itself, never a
     transcribed key list; the "deliberately absent" section is checked in REVERSE.
 14. Curated lint/type gate (tools/ci_gates/lint_gate.sh; `make lint`) — the pyproject ruff
-    select + pyright (basic, src+tools) held at ZERO. A rule is adopted only with a named
-    in-repo defect class AND a clean baseline (R98); exclusions are enumerated with grounds
-    in pyproject.toml; the trigger self-tests every run.
+    select + pyright (basic, src+tools) held at ZERO, plus the R346(f) COMMENT RATCHET
+    (tools/ci_gates/comment_lint.py against tools/ci_gates/comment_length_floor.txt). A rule is
+    adopted only with a named in-repo defect class AND a clean baseline (R98); exclusions are
+    enumerated with grounds in pyproject.toml; the trigger self-tests every run. The ratchet is
+    a DIRECTION, not a cap: over-long comment runs, banner lines and multi-line docstrings may
+    fall and may never rise, and the floor itself may only be lowered — because a hard 2-line
+    cap would either red on the invariants R346(f) explicitly permits or need an exemption list
+    nobody maintains. The comment lint runs FIRST so a pyright refusal (rc 2, a host condition)
+    cannot take the comment measures down with it.
 15. R8 justification headers (tools/ci_gates/r8_header_gate.py) — every `.py`/`.rs` file over
     300 lines under src/, tools/, crates/, tests/ carries a justification, and NO justification
     states a line count. The second half is the load-bearing one: 47 headers stated a tally,
