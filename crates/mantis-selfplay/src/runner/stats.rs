@@ -1,16 +1,13 @@
 //! `WorkerStats` — per-worker accumulator bundle (WP6 D1/D13, LAW-18), ported
 //! verbatim from the frozen `worker_loop/stats.rs`.
 //!
-//! 23 `Arc<AtomicU*>` fire-rate / health accumulators cloned once per worker
-//! spawn (cheap `Arc::clone`-per-field) and destructured at
-//! `game::run_worker_thread` entry. The solver counters are incremented ONLY
-//! under the `solver_enabled` / seeded branches, so an OFF (default) run leaves
-//! the bench-gated hot path byte-identical.
+//! `Arc<AtomicU*>` fire-rate / health accumulators cloned once per worker spawn (cheap
+//! `Arc::clone`-per-field) and destructured at `game::run_worker_thread` entry. The solver,
+//! seeded-corpus and K-cluster counters went with their levers (R346(f)).
 
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::Arc;
 
-use super::record::K_CLUSTER_HISTOGRAM_BUCKETS;
 
 #[derive(Clone)]
 pub(crate) struct WorkerStats {
@@ -31,8 +28,8 @@ pub(crate) struct WorkerStats {
     pub(crate) max_sims_per_search: Arc<AtomicU64>,
     /// LAW-18 — playout-cap randomization's own fire rate, counted where the ARM IS DRAWN.
     /// The recorded row's `is_full_search` flag is the only other place the arm is visible,
-    /// and it is an OR with the forced-win and solver hooks, so a flag census alone cannot
-    /// say whether the draw fired or a hook did. These two count the DRAW.
+    /// and with the forced-win and solver hooks deleted the draw is now the only writer.
+    /// These two count the DRAW.
     pub(crate) pcr_full_moves: Arc<AtomicU64>,
     pub(crate) pcr_quick_moves: Arc<AtomicU64>,
     /// LAW-18 — the Gumbel halving round's WIDTH: leaves issued per inference round trip,
@@ -40,27 +37,6 @@ pub(crate) struct WorkerStats {
     /// cannot be told from one that has silently gone back to a leaf per round trip.
     pub(crate) gumbel_round_leaves: Arc<AtomicU64>,
     pub(crate) gumbel_rounds: Arc<AtomicU64>,
-    pub(crate) cluster_value_std_accum: Arc<AtomicU64>,
-    pub(crate) cluster_policy_disagreement_accum: Arc<AtomicU64>,
-    pub(crate) cluster_variance_samples: Arc<AtomicU64>,
-    // D-WS3V3 in-run solver fire-rate counters (cumulative since `start()`).
-    pub(crate) solver_moves_eligible: Arc<AtomicU64>,
-    pub(crate) solver_win_proven: Arc<AtomicU64>,
-    pub(crate) solver_injected: Arc<AtomicU64>,
-    pub(crate) solver_injected_offwindow: Arc<AtomicU64>,
-    pub(crate) solver_budget_exhausted: Arc<AtomicU64>,
-    pub(crate) solver_moves_eligible_seeded: Arc<AtomicU64>,
-    pub(crate) solver_injected_seeded: Arc<AtomicU64>,
-    pub(crate) seeded_games_started: Arc<AtomicU64>,
     // WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6).
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
-    pub(crate) gridls_zero_policy_rows: Arc<AtomicU64>,
-    /// R256/ADJ-D37: proven forced wins swallowed by the LS coverage gate while
-    /// the injecting lever was armed (both the O1 arm and the solver hook).
-    pub(crate) uncovered_forced_win: Arc<AtomicU64>,
-    /// Item 10(b) / R250: the in-run K histogram, one bucket per cluster-view
-    /// count at the DENSE record path. Written only by `record::record_position`,
-    /// which the graph arm never calls — so on a graph run every bucket stays 0
-    /// and the emitter omits the field rather than publishing that zero.
-    pub(crate) k_cluster_histogram: Arc<[AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS]>,
 }

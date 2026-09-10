@@ -9,7 +9,6 @@
 //! (The predecessor's tensor-encoder sub-file lives in the encoding crate,
 //! not here — this crate carries no encode kernels.)
 
-mod cluster;
 mod core;
 
 pub use self::core::{

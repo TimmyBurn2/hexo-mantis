@@ -32,27 +32,26 @@ pub enum PolicyPool {
 
 /// Input representation discriminant. `Grid` = the dense CNN plane encodings;
 /// `Graph` = the axis-graph / GNN encodings. The TOML key `representation` is
-/// REQUIRED (absent → parse error, LAW-11 — never a grid/dense default). The
-/// grid-only cross-field invariants (`policy_logit_count==bs²+pass`,
-/// `len(plane_layout)==n_planes`, kept-plane relationships, trunk==board) are
-/// gated on `Grid`; graph encodings carry the `node_feat_dim`/`win_length`/…
-/// fields and their own invariants instead.
+/// REQUIRED (absent → parse error, LAW-11 — never a default). The enum stays a CLOSED type
+/// with one member rather than disappearing: it is what makes an absent or unknown
+/// representation a parse error instead of a fall-through, on both sides of the FFI.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Representation {
-    Grid,
     Graph,
 }
 
 impl Representation {
-    /// Parse the TOML value string. The identity key is spelled `"grid"` (the
-    /// dense CNN encodings) or `"graph"` (the axis-graph encodings).
+    /// Parse the TOML value string. `"grid"` is REFUSED BY NAME, not merely unknown: the dense
+    /// path was deleted by R346(f), and a stale row must say so rather than resolve to graph.
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
-            "grid" => Ok(Representation::Grid),
             "graph" => Ok(Representation::Graph),
-            other => Err(format!(
-                "representation must be one of [grid,graph]; got {other:?}"
-            )),
+            "grid" => Err(
+                "representation=\"grid\" was DELETED with the dense path (R346(f)); \
+                 `archive/grid-path` carries the three grid rows"
+                    .to_string(),
+            ),
+            other => Err(format!("representation must be \"graph\"; got {other:?}")),
         }
     }
 
@@ -60,7 +59,6 @@ impl Representation {
     #[must_use]
     pub fn as_str(&self) -> &'static str {
         match self {
-            Representation::Grid => "grid",
             Representation::Graph => "graph",
         }
     }

@@ -12,12 +12,10 @@
 use std::sync::atomic::Ordering;
 use std::thread;
 
-use crate::replay::sym::{sym_tables_for, SymTables};
 
 use super::atomics::WorkerAtomics;
 use super::params::{
-    self, ExplorationFlags, ForcedWinPolicy, MoveConstraintFlags, SearchFlags, SeedCorpus,
-    SolverInLoop, WorkerChannels, WorkerParams,
+    self, ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams,
 };
 use super::stats::WorkerStats;
 use super::{game, SelfPlayRunner};
@@ -85,7 +83,6 @@ impl SelfPlayRunner {
         // shared `rotate_axial` primitive (`replay/sym.rs`), not these scatters. The
         // binding is kept unconditional because it is spec-keyed, cheap (shared static),
         // and the dense arms of the same worker loop do read it.
-        let sym_tables_static: &'static SymTables = sym_tables_for(self.spec);
 
         // D2: resolve the per-worker geometry ONCE via the closed-match resolver
         // (`Copy`, ~32 B; copied into each spawned worker).
@@ -100,7 +97,6 @@ impl SelfPlayRunner {
             let atomics = atomics_proto.clone();
             let channels = channels_proto.clone();
             let params = params_proto.clone();
-            let sym_tables = sym_tables_static;
             // The two lifecycle Arcs the panic arm needs. Captured directly rather than
             // through the runner because the worker closure is `'static` and the runner is
             // borrowed here.
@@ -109,7 +105,7 @@ impl SelfPlayRunner {
             let handle = thread::spawn(move || {
                 guard_worker(&worker_panics, &running, || {
                     game::run_worker_thread(
-                        worker_id, stats, atomics, channels, params, sym_tables, geometry,
+                        worker_id, stats, atomics, channels, params, geometry,
                     );
                 });
             });
@@ -139,21 +135,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: self.pcr_quick_moves.clone(),
             gumbel_round_leaves: self.gumbel_round_leaves.clone(),
             gumbel_rounds: self.gumbel_rounds.clone(),
-            cluster_value_std_accum: self.cluster_value_std_accum.clone(),
-            cluster_policy_disagreement_accum: self.cluster_policy_disagreement_accum.clone(),
-            cluster_variance_samples: self.cluster_variance_samples.clone(),
-            solver_moves_eligible: self.solver_moves_eligible.clone(),
-            solver_win_proven: self.solver_win_proven.clone(),
-            solver_injected: self.solver_injected.clone(),
-            solver_injected_offwindow: self.solver_injected_offwindow.clone(),
-            solver_budget_exhausted: self.solver_budget_exhausted.clone(),
-            solver_moves_eligible_seeded: self.solver_moves_eligible_seeded.clone(),
-            solver_injected_seeded: self.solver_injected_seeded.clone(),
-            seeded_games_started: self.seeded_games_started.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
-            uncovered_forced_win: self.uncovered_forced_win.clone(),
-            gridls_zero_policy_rows: self.gridls_zero_policy_rows.clone(),
-            k_cluster_histogram: self.k_cluster_histogram.clone(),
         };
         let atomics_proto = WorkerAtomics {
             running: self.running.clone(),
@@ -164,7 +146,6 @@ impl SelfPlayRunner {
             graph_game_seq: self.graph_game_seq.clone(),
         };
         let channels_proto = WorkerChannels {
-            dense_queue: self.dense_queue.clone(),
             graph_queue: self.graph_queue.clone(),
             results_queue: self.results.clone(),
             recent_game_results: self.recent_game_results.clone(),
@@ -183,8 +164,6 @@ impl SelfPlayRunner {
             temp_min: c.temp_min,
             draw_reward: c.draw_reward,
             ply_cap_value: c.ply_cap_value,
-            zoi_lookback: c.zoi_lookback,
-            zoi_margin: c.zoi_margin,
             c_visit: c.c_visit,
             c_scale: c.c_scale,
             gumbel_m: c.gumbel_m,
@@ -204,27 +183,6 @@ impl SelfPlayRunner {
             },
             exploration_flags: ExplorationFlags {
                 dirichlet_enabled: c.dirichlet_enabled,
-                selfplay_rotation_enabled: c.selfplay_rotation_enabled,
-            },
-            // D7: `zoi_enabled` only — the radius-jitter sibling is killed.
-            move_constraint_flags: MoveConstraintFlags {
-                zoi_enabled: c.zoi_enabled,
-            },
-            forced_win_policy: ForcedWinPolicy {
-                enabled: c.forced_win_policy_enabled,
-                depth: c.forced_win_policy_depth,
-                weight: c.forced_win_policy_weight,
-            },
-            solver_in_loop: SolverInLoop {
-                enabled: c.solver_enabled,
-                depth: c.solver_depth,
-                node_budget: c.solver_node_budget,
-                neighbor_dist: c.solver_neighbor_dist,
-                visit_weight: c.solver_visit_weight,
-            },
-            seed_corpus: SeedCorpus {
-                corpus: self.seed_corpus.clone(),
-                seed_fraction: c.seed_fraction,
             },
         };
         (stats_proto, atomics_proto, channels_proto, params_proto)

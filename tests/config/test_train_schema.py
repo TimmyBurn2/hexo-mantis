@@ -32,8 +32,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "lr": 1e-3,
     "weight_decay": 1e-4,
     "grad_clip": 1.0,
-    "fp16": True,
-    "amp_dtype": "fp16",
     # WPMAIN / R126: `train.device` is the run device, a CONFIG FACT with a CLOSED
     # vocabulary and no code-side default (the retired `--device` flag on both callers).
     "device": "cpu",
@@ -41,7 +39,6 @@ VALID_TRAIN_PAYLOAD: dict = {
     "total_steps": 1_000_000,
     "scheduler_t_max": None,
     "eta_min": 5e-4,
-    "min_lr": None,
     "checkpoint_interval": 0,
     "actor_sync_cadence_steps": 1,
     "max_train_steps": 1_000_000,
@@ -70,27 +67,14 @@ VALID_TRAIN_PAYLOAD: dict = {
     "microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
     "augment": False,
     "recency_weight": 0.0,
-    "mixing_initial_w": 0.0,
-    "mixing_min_w": 0.0,
-    "mixing_decay_steps": 1.0,
     "hard_gn_threshold": 1e9,
     "hard_gn_min_steps": 3,
     "terminal_eval_enabled": True,
-    "bot_batch_share": 0.0,
     "selfplay_stall_timeout_sec": 1800.0,
     "value_target": "pure_outcome_z",
     "policy_target": "raw_visit_distribution",
     "draw_reward": -0.5,
     "ply_cap_value": -0.5,
-    "policy_prune_frac": 0.0,
-    "entropy_reg_weight": 0.0,
-    "aux_opp_reply_weight": 0.0,
-    "uncertainty_weight": 0.0,
-    "ownership_weight": 0.0,
-    "threat_weight": 0.0,
-    "aux_chain_weight": 0.0,
-    "ply_index_weight": 0.0,
-    "threat_pos_weight": 1.0,
     "fast_policy_weight": 0.0,
     # AUDIT-1 F-06 / R332(d): `train.ema` is a REQUIRED block. `enabled: false` is what every
     # committed config mints — the posture stated, not inherited from a code-side default.
@@ -110,17 +94,7 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("total_steps", 0),
     ("scheduler_t_max", 0),
     ("eta_min", -1e-9),
-    ("min_lr", -1e-9),
     ("checkpoint_interval", -1),
-    ("policy_prune_frac", -0.01),
-    ("policy_prune_frac", 1.0),
-    ("aux_opp_reply_weight", -0.1),
-    ("uncertainty_weight", -0.1),
-    ("ownership_weight", -0.1),
-    ("threat_weight", -0.1),
-    ("aux_chain_weight", -0.1),
-    ("ply_index_weight", -0.1),
-    ("threat_pos_weight", 0.0),
     ("fast_policy_weight", -0.1),
     # WPMINT Phase K-B — one violation per knob whose bound makes a real defect
     # inexpressible, named at the value that defect is actually written as.
@@ -147,19 +121,14 @@ BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("recency_weight", -0.1),
     ("recency_weight", 1.1),            # the sampler clamps, so above 1 is a difference the
                                         # config can express and the run cannot have
-    ("mixing_initial_w", 1.5),
-    ("mixing_min_w", -0.1),
-    ("mixing_decay_steps", 0.0),        # a divisor: ZeroDivisionError on the first mixed step
     ("hard_gn_threshold", 0.0),         # fires on every finite step
     ("hard_gn_threshold", float("inf")),  # accepted, reads ARMED, can never be met
     ("hard_gn_min_steps", 0),           # fires on the FIRST breach — not "sustained"
-    ("bot_batch_share", 1.5),
     ("selfplay_stall_timeout_sec", 0.0),   # LAW-16's always-armed guard, silently disarmed
     ("selfplay_stall_timeout_sec", -1.0),
 ]
 
 LITERAL_VIOLATIONS: list[tuple[str, object]] = [
-    ("amp_dtype", "fp8"),
     ("lr_schedule", "step"),
     ("value_target", "raw_z"),
     ("policy_target", "completed_q"),
@@ -251,9 +220,8 @@ def test_no_field_has_a_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
 
 
 
-def test_scheduler_t_max_and_min_lr_none_is_a_real_value_not_a_missing_key():
-    # `None` satisfies the `int | None` / `float | None` union — but the KEY itself is
-    # still required (DESIGN_P2.md §2: "no terminal default; None is a real value here").
-    cfg = TrainConfig.model_validate(_payload(scheduler_t_max=None, min_lr=None))
+def test_scheduler_t_max_none_is_a_real_value_not_a_missing_key():
+    # `None` satisfies the `int | None` union — but the KEY itself is still required
+    # (DESIGN_P2.md §2: "no terminal default; None is a real value here").
+    cfg = TrainConfig.model_validate(_payload(scheduler_t_max=None))
     assert cfg.scheduler_t_max is None
-    assert cfg.min_lr is None

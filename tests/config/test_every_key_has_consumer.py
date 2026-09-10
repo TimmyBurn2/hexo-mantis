@@ -122,25 +122,14 @@ CONSUMER_REGISTRY = {
     "train.lr": "TrainHParams.from_config -> optimizer ctor (trainer/core.py)",
     "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
     "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
-    "train.fp16": "TrainHParams.from_config -> Trainer fp16/scaler gate",
     "train.device":
         "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
         " on both callers)",
-    # AUDIT-1 F-47: this citation named `cuda_warmup`, a symbol with ZERO references anywhere
-    # (deleted with the rest of `subsystems.py`'s model-build half). A registry string naming a
-    # DEAD site satisfies the bijection just as well as one naming a live reader, so the entry
-    # was evidence of nothing. `InferenceServer.__init__` is the read site that exists:
-    # `self._amp_dtype = amp_dtype_for(_representation, config["train"]["amp_dtype"])`.
-    "train.amp_dtype": (
-        "resolve_amp_dtype (R30b single authority) -> amp_dtype_for -> "
-        "Trainer.__init__ / InferenceServer.__init__ autocast dtype"
-    ),
     "train.lr_schedule": "TrainHParams.from_config -> Trainer._build_scheduler",
     "train.total_steps": "TrainHParams.from_config -> Trainer._build_scheduler T_max fallback",
     "train.scheduler_t_max": "TrainHParams.from_config -> Trainer._build_scheduler T_max",
     "train.eta_min": "TrainHParams.from_config -> Trainer._build_scheduler eta_min",
-    "train.min_lr": "TrainHParams.from_config -> Trainer._build_scheduler eta_min fallback",
     "train.checkpoint_interval": "TrainHParams.from_config ->"
                                 " Trainer._maybe_periodic_checkpoint, the ONE periodic-save gate,"
                                 " called by BOTH the dense and the graph step tail (R173)",
@@ -216,15 +205,6 @@ CONSUMER_REGISTRY = {
     "train.recency_weight":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
         " -> assemble_mixed_batch recency window weighting",
-    "train.mixing_initial_w":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(initial_w=) (mixed batch + axis payload)",
-    "train.mixing_min_w":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(min_w=)",
-    "train.mixing_decay_steps":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(decay_steps=)",
     "train.hard_gn_threshold":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
         " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
@@ -234,9 +214,6 @@ CONSUMER_REGISTRY = {
     "train.terminal_eval_enabled":
         "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
         " run_terminal_eval close-out gate",
-    "train.bot_batch_share":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _run_training_step n_bot batch slots",
     "train.selfplay_stall_timeout_sec":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
@@ -248,15 +225,6 @@ CONSUMER_REGISTRY = {
     ),
     "train.draw_reward": "SelfPlayHParams.from_config cross-section read (SC-A2)",
     "train.ply_cap_value": "SelfPlayHParams.from_config cross-section read (SC-A2)",
-    "train.policy_prune_frac": "TrainHParams.from_config -> _prune_policy_targets",
-    "train.entropy_reg_weight": "TrainHParams.from_config -> entropy bonus weight (R37)",
-    "train.aux_opp_reply_weight": "TrainHParams.from_config -> aux opp-reply loss weight",
-    "train.uncertainty_weight": "TrainHParams.from_config -> uncertainty loss weight",
-    "train.ownership_weight": "TrainHParams.from_config -> ownership loss weight",
-    "train.threat_weight": "TrainHParams.from_config -> threat loss weight",
-    "train.aux_chain_weight": "TrainHParams.from_config -> chain loss weight",
-    "train.ply_index_weight": "TrainHParams.from_config -> ply-index loss weight",
-    "train.threat_pos_weight": "TrainHParams.from_config -> threat pos_weight tensor",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> run_declared_train_step fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure): every SelfplayConfig/MctsConfig/
     # PlayoutCapConfig/InferenceConfig leaf's live consumer is SelfPlayHParams.from_config /
@@ -265,7 +233,6 @@ CONSUMER_REGISTRY = {
     "selfplay.n_workers": "SelfPlayHParams.from_config -> WorkerPool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
-    "selfplay.inference_pool_size": "SelfPlayHParams.from_config -> runner inference_pool_size",
     "selfplay.c_visit": "SelfPlayHParams.from_config -> runner c_visit",
     "selfplay.c_scale": "SelfPlayHParams.from_config -> runner c_scale",
     "search.kind": (
@@ -283,19 +250,7 @@ CONSUMER_REGISTRY = {
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
-    "selfplay.rotation_enabled": "SelfPlayHParams.from_config -> runner selfplay_rotation_enabled",
-    "selfplay.forced_win_policy_enabled": "SelfPlayHParams.from_config -> runner.forced_win_policy_enabled",
-    "selfplay.forced_win_policy_depth": "SelfPlayHParams.from_config -> runner.forced_win_policy_depth",
-    "selfplay.forced_win_policy_weight": "SelfPlayHParams.from_config -> runner.forced_win_policy_weight",
-    "selfplay.solver_enabled": "SelfPlayHParams.from_config -> runner.solver_enabled",
-    "selfplay.solver_depth": "SelfPlayHParams.from_config -> runner.solver_depth",
-    "selfplay.solver_node_budget": "SelfPlayHParams.from_config -> runner.solver_node_budget",
-    "selfplay.solver_neighbor_dist": "SelfPlayHParams.from_config -> runner.solver_neighbor_dist",
-    "selfplay.solver_visit_weight": "SelfPlayHParams.from_config -> runner.solver_visit_weight",
-    "selfplay.seed_fraction": "SelfPlayHParams.from_config -> runner.seed_fraction",
-    "selfplay.seed_corpus_path": "SelfPlayHParams.from_config -> _load_seed_corpus",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.from_config -> pool investigation logging",
-    "selfplay.instrumentation_enabled": "SelfPlayHParams.from_config -> pool instrumentation gate",
     "selfplay.mcts.n_simulations": "SelfPlayHParams.from_config -> runner n_simulations",
     "selfplay.mcts.c_puct": "SelfPlayHParams.from_config -> runner c_puct",
     "selfplay.mcts.fpu_reduction": "SelfPlayHParams.from_config -> runner fpu_reduction",
@@ -310,21 +265,12 @@ CONSUMER_REGISTRY = {
     "selfplay.playout_cap.full_search_prob": "SelfPlayHParams.from_config -> runner full_search_prob",
     "selfplay.playout_cap.n_sims_quick": "SelfPlayHParams.from_config -> runner n_sims_quick",
     "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.from_config -> runner n_sims_full",
-    "selfplay.playout_cap.zoi_enabled": "SelfPlayHParams.from_config -> runner zoi_enabled",
-    "selfplay.playout_cap.zoi_lookback": "SelfPlayHParams.from_config -> runner zoi_lookback",
-    "selfplay.playout_cap.zoi_margin": "SelfPlayHParams.from_config -> runner zoi_margin",
     "selfplay.playout_cap.temperature_threshold_compound_moves": (
         "SelfPlayHParams.from_config -> runner temp_threshold_compound_moves"
     ),
     "selfplay.playout_cap.temp_min": "SelfPlayHParams.from_config -> runner temp_min",
     "inference.inference_batch_size": "InferenceHParams.from_config -> inference_server batch size",
     "inference.inference_max_wait_ms": "InferenceHParams.from_config -> inference_server max wait",
-    "inference.trace_inference": "InferenceHParams.from_config -> inference_server tracing gate",
-    "inference.compile_inference": "InferenceHParams.from_config -> inference_server compile gate",
-    "inference.compile_inference_mode": "InferenceHParams.from_config -> inference_server compile mode",
-    "inference.compile_inference_dynamic": "InferenceHParams.from_config -> inference_server compile dynamic",
-    "inference.perf_timing": "InferenceHParams.from_config -> perf timing diagnostics",
-    "inference.perf_sync_cuda": "InferenceHParams.from_config -> perf CUDA-sync diagnostics",
     # F-816-10 (R276(f)): the GRAPH inference forward's memory bound. GRAPH-ROUTE-SCOPED,
     # and the rows say so: the resolver is called from the graph branch of
     # `InferenceServer.__init__` alone, so a grid run structurally cannot reach either key.

@@ -99,17 +99,14 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.lr": "TrainHParams.lr -> core.py:190 AdamW ctor; resume-owned (orchestrator.py:29)",
     "train.weight_decay": "TrainHParams.weight_decay -> core.py:189 AdamW ctor",
     "train.grad_clip": "TrainHParams.grad_clip -> core.py:409,476 fp16_backward_step max_grad_norm",
-    "train.fp16": "TrainHParams.fp16 -> core.py:176-183 CUDA-only scaler/autocast gate",
     "train.device":
         "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"
         " on both callers)",
-    "train.amp_dtype": "TrainConfig.amp_dtype -> grid-path AMP dtype (schema now, model/amp.py wiring SC-B3, R30b)",
     "train.lr_schedule": "TrainHParams.lr_schedule -> core.py:222-235 _build_scheduler",
     "train.total_steps": "TrainHParams.total_steps -> core.py:227 _build_scheduler T_max fallback",
     "train.scheduler_t_max": "TrainHParams.scheduler_t_max -> core.py:227 _build_scheduler T_max",
     "train.eta_min": "TrainHParams.eta_min -> core.py:230 _build_scheduler eta_min",
-    "train.min_lr": "TrainHParams.min_lr -> core.py:230 _build_scheduler eta_min fallback",
     "train.checkpoint_interval": "TrainHParams.checkpoint_interval ->"
                                 " Trainer._maybe_periodic_checkpoint (THE one reader; both the dense"
                                 " and the graph step tail call it — R173/CARD-CS2)",
@@ -181,15 +178,6 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.recency_weight":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py _run_training_step"
         " -> assemble_mixed_batch recency window weighting",
-    "train.mixing_initial_w":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(initial_w=) (mixed batch + axis payload)",
-    "train.mixing_min_w":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(min_w=)",
-    "train.mixing_decay_steps":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _compute_pretrained_weight(decay_steps=)",
     "train.hard_gn_threshold":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py D3"
         " grad_norm_hard_abort comparison (+ armed_aborts DEFERRED row, WPMINT K-B)",
@@ -199,9 +187,6 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.terminal_eval_enabled":
         "resolve_coordinator_knobs -> _step_coordinator_config -> coordinator/drain.py"
         " run_terminal_eval close-out gate",
-    "train.bot_batch_share":
-        "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
-        " _run_training_step n_bot batch slots",
     "train.selfplay_stall_timeout_sec":
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
@@ -209,21 +194,11 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.policy_target": "TrainHParams -> the CE-vs-KL loss switch; RunConfig cross-section validator vs search.kind",
     "train.draw_reward": "SelfPlayHParams.from_config reads config['train']['draw_reward'] (cross-section)",
     "train.ply_cap_value": "SelfPlayHParams.from_config reads config['train']['ply_cap_value'] (cross-section)",
-    "train.policy_prune_frac": "TrainHParams.policy_prune_frac -> core.py:305 _prune_policy_targets gate",
-    "train.entropy_reg_weight": "TrainHParams.entropy_reg_weight -> core.py:289,362-365 / losses.py:285-286",
-    "train.aux_opp_reply_weight": "TrainHParams.aux_opp_reply_weight -> core.py:283,313-314,320,334,358-361",
-    "train.uncertainty_weight": "TrainHParams.uncertainty_weight -> core.py:284,314,321,336,366-369",
-    "train.ownership_weight": "TrainHParams.ownership_weight -> core.py:285,315,338,371-374",
-    "train.threat_weight": "TrainHParams.threat_weight -> core.py:286,316,340,375-379",
-    "train.aux_chain_weight": "TrainHParams.aux_chain_weight -> core.py:287,322,380-385",
-    "train.ply_index_weight": "TrainHParams.ply_index_weight -> core.py:288,323,343-344,386-389",
-    "train.threat_pos_weight": "TrainHParams.threat_pos_weight -> core.py:211-214 _threat_pos_weight tensor",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> _build_graph_parts fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # ── selfplay.* scalars (SC-A2; SelfPlayHParams read sites, DESIGN_P2.md §1.2) ────────
     "selfplay.n_workers": "SelfPlayHParams.n_workers -> pool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.leaf_batch_size -> runner leaf_batch_size ctor kwarg",
     "selfplay.max_game_moves": "SelfPlayHParams.max_moves_per_game -> runner max_moves_per_game ctor kwarg",
-    "selfplay.inference_pool_size": "SelfPlayHParams.inference_pool_size -> runner inference_pool_size ctor kwarg",
     "selfplay.c_visit": "SelfPlayHParams.c_visit -> runner c_visit ctor kwarg",
     "selfplay.c_scale": "SelfPlayHParams.c_scale -> runner c_scale ctor kwarg",
     "search.kind": "resolve_search_kind -> SelfPlayHParams.search_kind -> cfg attr -> MCTSTree::configure_search; and -> RoundSpec -> DeployHeadPlayer",
@@ -231,19 +206,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.gumbel_explore_moves -> runner ctor kwarg (R23)",
     "selfplay.results_queue_cap": "SelfPlayHParams.results_queue_cap -> runner results_queue_cap ctor kwarg",
     "selfplay.random_opening_plies": "SelfPlayHParams.random_opening_plies -> runner ctor kwarg",
-    "selfplay.rotation_enabled": "SelfPlayHParams.rotation_enabled -> runner selfplay_rotation_enabled ctor kwarg",
-    "selfplay.forced_win_policy_enabled": "SelfPlayHParams.forced_win_policy_enabled -> runner post-ctor attr",
-    "selfplay.forced_win_policy_depth": "SelfPlayHParams.forced_win_policy_depth -> runner post-ctor attr",
-    "selfplay.forced_win_policy_weight": "SelfPlayHParams.forced_win_policy_weight -> runner post-ctor attr",
-    "selfplay.solver_enabled": "SelfPlayHParams.solver_enabled -> runner post-ctor attr",
-    "selfplay.solver_depth": "SelfPlayHParams.solver_depth -> runner post-ctor attr",
-    "selfplay.solver_node_budget": "SelfPlayHParams.solver_node_budget -> runner post-ctor attr",
-    "selfplay.solver_neighbor_dist": "SelfPlayHParams.solver_neighbor_dist -> runner post-ctor attr",
-    "selfplay.solver_visit_weight": "SelfPlayHParams.solver_visit_weight -> runner post-ctor attr",
-    "selfplay.seed_fraction": "SelfPlayHParams.seed_fraction -> runner post-ctor attr + _load_seed_corpus gate",
-    "selfplay.seed_corpus_path": "SelfPlayHParams.seed_corpus_path -> _load_seed_corpus path arg",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.log_investigation_metrics -> investigation-metrics gate",
-    "selfplay.instrumentation_enabled": "SelfPlayHParams.instrumentation_enabled -> instrumentation gate",
     # ── selfplay.mcts.* (8) ───────────────────────────────────────────────────────────────
     "selfplay.mcts.n_simulations": "SelfPlayHParams.n_simulations -> runner n_simulations ctor kwarg",
     "selfplay.mcts.c_puct": "SelfPlayHParams.c_puct -> runner c_puct ctor kwarg",
@@ -260,20 +223,11 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.playout_cap.full_search_prob": "SelfPlayHParams.full_search_prob -> runner ctor kwarg; mutual-exclusion",
     "selfplay.playout_cap.n_sims_quick": "SelfPlayHParams.n_sims_quick -> runner n_sims_quick ctor kwarg",
     "selfplay.playout_cap.n_sims_full": "SelfPlayHParams.n_sims_full -> runner n_sims_full ctor kwarg",
-    "selfplay.playout_cap.zoi_enabled": "SelfPlayHParams.zoi_enabled -> runner zoi_enabled ctor kwarg",
-    "selfplay.playout_cap.zoi_lookback": "SelfPlayHParams.zoi_lookback -> runner zoi_lookback ctor kwarg",
-    "selfplay.playout_cap.zoi_margin": "SelfPlayHParams.zoi_margin -> runner zoi_margin ctor kwarg",
     "selfplay.playout_cap.temperature_threshold_compound_moves": "SelfPlayHParams.temp_threshold_compound_moves -> runner ctor kwarg",
     "selfplay.playout_cap.temp_min": "SelfPlayHParams.temp_min -> runner temp_min ctor kwarg",
     # ── inference.* (8; InferenceHParams read sites) ─────────────────────────────────────
     "inference.inference_batch_size": "InferenceHParams.inference_batch_size -> inference_server.py:74 ctor",
     "inference.inference_max_wait_ms": "InferenceHParams.inference_max_wait_ms -> inference_server.py:74 ctor",
-    "inference.trace_inference": "InferenceHParams.trace_inference -> inference_server.py:74 ctor",
-    "inference.compile_inference": "InferenceHParams.compile_inference -> inference_server.py:74 ctor",
-    "inference.compile_inference_mode": "InferenceHParams.compile_inference_mode -> inference_server.py:74 ctor",
-    "inference.compile_inference_dynamic": "InferenceHParams.compile_inference_dynamic -> inference_server.py:74 ctor",
-    "inference.perf_timing": "InferenceHParams.perf_timing -> inference_server.py:74 ctor (diagnostics ns)",
-    "inference.perf_sync_cuda": "InferenceHParams.perf_sync_cuda -> inference_server.py:74 ctor (diagnostics ns)",
     # F-816-10 (R276(f)): the GRAPH inference forward's memory bound — this copy states
     # the chain independently of its twin (two independently-maintained registries by
     # design). Route-scoped: the resolve happens inside the graph branch of the ctor.

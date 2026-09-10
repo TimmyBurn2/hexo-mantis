@@ -65,7 +65,6 @@ def _print_summary_table(results: dict, label: str) -> None:
     wr = results["win_rates"]
     me = results["move_entropy"]
     od = results["opening_diversity"]
-    cc = results["cluster_counts"]
 
     table.add_row("Games", str(results["game_count"]), "")
     table.add_row("Positions", str(results["total_positions"]), "")
@@ -86,9 +85,6 @@ def _print_summary_table(results: dict, label: str) -> None:
                   f"{od.get('unique_at_move_3', 0)} / {od.get('unique_at_move_5', 0)} / "
                   f"{od.get('unique_at_move_10', 0)} / {od.get('unique_at_move_20', 0)}", "")
 
-    table.add_row("Median K (clusters)", str(cc["median_cluster_count"]), "")
-    table.add_row("Frac K > 2", f"{cc['frac_k_gt2']:.1%}", "")
-    table.add_row("Max K", str(cc["max_cluster_count"]), "")
 
     pc = results.get("ply_coverage", {})
     if pc:

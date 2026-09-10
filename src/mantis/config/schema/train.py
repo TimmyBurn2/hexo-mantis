@@ -283,31 +283,13 @@ class TrainConfig(StrictModel):
     """Training hyperparameters (R-TRAINCONFIG-SCHEMA). Every field REQUIRED — no terminal
     default anywhere in this class; the minted value in each `configs/*.yaml` is the sole
     default authority (R1).
-
-    `entropy_reg_weight` (R37.1/.3): a positive coefficient on a subtracted entropy bonus
-    (`trainer/core.py` `_train_on_batch` / `losses.py`) — larger = more exploration
-    pressure. The historical `-0.005` was a sign-leak from the loss formula and never
-    existed in this tree (ADJ-01). Deliberately carries NO `Field(ge=0)` bound: the floor
-    is enforced solely by `_entropy_sign` below so the NAMED sign-law error (not a bare
-    pydantic bound message) is always what a negative value raises (a `Field(ge=0)` would
-    fire first and make the named message unreachable).
-
-    The graph-run dense-only-weights ban (`trainer/core.py`) is UNTOUCHED (R37.4/LAW-07):
-    it stays the single train-step-time authority in `train_step_from_graph_batch`; this
-    schema only bounds the sign, never duplicates the representation-aware ban (it has no
-    `representation` to check against).
     """
 
     # optimizer / schedule
     lr: float = Field(gt=0)
     weight_decay: float = Field(ge=0)
     grad_clip: float = Field(gt=0)
-    fp16: bool
-    amp_dtype: Literal["fp16", "bf16"]  # grid-path only; graph is bf16-pinned regardless (R30b)
-    # WPMAIN / R126 — the run DEVICE is a CONFIG FACT, and it sits here beside the two keys
-    # whose semantics are device-coupled (`fp16` is CUDA-only, forced off elsewhere on CPU;
-    # `amp_dtype` feeds the autocast the runtime device selects).
-    #
+    # WPMAIN / R126 — the run DEVICE is a CONFIG FACT.
     # It was a CLI-only input on BOTH callers (`--device`, required, any torch device
     # string), which meant `preflight_mint.py --config configs/run5.yaml --device cpu`
     # preflighted a CUDA-minted run on the CPU. That is not hypothetical: it is how the
@@ -329,7 +311,6 @@ class TrainConfig(StrictModel):
     total_steps: int = Field(ge=1)
     scheduler_t_max: int | None = Field(default=..., ge=1)  # no terminal default; None is real
     eta_min: float = Field(ge=0)
-    min_lr: float | None = Field(default=..., ge=0)
     checkpoint_interval: int = Field(ge=0)
     # WP-UNFREEZE K1: continuous actor-sync cadence in coordinator training steps.
     # `ge=1` means NO disabled value exists — the schema cannot express "don't sync"
@@ -360,8 +341,8 @@ class TrainConfig(StrictModel):
     # that happens to disable (R79(1)); a block is ARMED on exactly those terms. There is
     # no boolean enable beside it, because the value already gates its own check and a
     # boolean would be a second authority over one fact (R79/R1/LAW-08).
-    # `default=...` is this class's own no-terminal-default idiom (see `scheduler_t_max` /
-    # `min_lr` above): absence is an error naming the key (R1/LAW-11).
+    # `default=...` is this class's own no-terminal-default idiom (see `scheduler_t_max`
+    # above): absence is an error naming the key (R1/LAW-11).
     # Consumed by mantis.config.resolve.draw_rate.resolve_draw_rate_abort ->
     # compose_run -> StepCoordinatorConfig.draw_rate_abort.
     draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
@@ -481,16 +462,6 @@ class TrainConfig(StrictModel):
     # silently makes every value identical to 1, so the config could express a difference the
     # run cannot have.
     recency_weight: float = Field(ge=0, le=1)
-    # `mixing_initial_w` / `mixing_min_w` / `mixing_decay_steps` — the pretrained-corpus
-    # mixing schedule, `w_pre = max(min_w, initial_w * exp(-step / decay_steps))`
-    # (`train/mixing.py`). The two weights are FRACTIONS OF A BATCH (`n_pre = ceil(w_pre *
-    # (batch_size - n_bot))`), so `ge=0, le=1` is the quantity's own range, not policy;
-    # `decay_steps` is a DIVISOR, so `gt=0` — at `0` the schedule raises ZeroDivisionError on
-    # the first mixed step, which is a crash the schema can make unreachable.
-    # `_mixing_floor_is_below_its_start` below closes the ordering.
-    mixing_initial_w: float = Field(ge=0, le=1)
-    mixing_min_w: float = Field(ge=0, le=1)
-    mixing_decay_steps: float = Field(gt=0)
     # `hard_gn_threshold` / `hard_gn_min_steps` — the `grad_norm_hard_abort` gate
     # (`coordinator/step.py` D3): fire when `grad_norm > threshold` for `min_steps`
     # consecutive training steps. `gt=0` because a threshold of 0 fires on every finite step,
@@ -518,13 +489,6 @@ class TrainConfig(StrictModel):
     # `getattr(cfg, "terminal_eval_enabled", True)` fallback. K-A retired the `getattr`; this
     # key retires the dataclass default, leaving one.
     terminal_eval_enabled: bool
-    # `bot_batch_share` — the fraction of each training batch drawn from the bot corpus
-    # (`n_bot = round(this * batch_size)`). `ge=0, le=1` is that fraction's range.
-    # DISCLOSED: its sibling `bot_corpus_path` is one of the six DEAD fields deleted by this
-    # phase — nothing in `src/` ever read a path to populate a bot buffer — so a non-zero
-    # share here allocates batch slots from a `bot_buffer` that only an injecting caller can
-    # supply. `0.0` is the shipped value and the only one the composition root can honour.
-    bot_batch_share: float = Field(ge=0, le=1)
     # `selfplay_stall_timeout_sec` — the self-play stall watchdog's wall-clock budget
     # (2026-07-11 run2 eval-boundary wedge; `train/lifecycle/watchdog.py`). `gt=0` and
     # `allow_inf_nan=False` because LAW-16 says the stall watchdog is ALWAYS ARMED, while
@@ -544,20 +508,6 @@ class TrainConfig(StrictModel):
     policy_target: Literal["raw_visit_distribution", "completed_improved_policy"]
     draw_reward: float
     ply_cap_value: float
-    policy_prune_frac: float = Field(ge=0, lt=1)
-
-    # entropy (R37) — see class docstring: NO Field(ge=0), _entropy_sign is the sole gate.
-    entropy_reg_weight: float
-
-    # aux/loss weights (mirrors the graph-forbidden dense-only weight names — values only,
-    # never the ban itself; see the class docstring)
-    aux_opp_reply_weight: float = Field(ge=0)
-    uncertainty_weight: float = Field(ge=0)
-    ownership_weight: float = Field(ge=0)
-    threat_weight: float = Field(ge=0)
-    aux_chain_weight: float = Field(ge=0)
-    ply_index_weight: float = Field(ge=0)
-    threat_pos_weight: float = Field(gt=0)
     #: R347(b) — the POLICY weight a fast-arm (`is_full_search == 0`) row carries. Value is
     #: always supervised on those rows; the policy was gated off them entirely, and this is
     #: the declared weight that replaces the gate. `0.0` reproduces the gate exactly, which
@@ -571,38 +521,6 @@ class TrainConfig(StrictModel):
     #: the rule is evaluated — the same provider shape `train.microbatch_caps` carries, and
     #: for the same reason: a grid `full_config` has no `train` section at all.
     fast_policy_weight: float = Field(ge=0)
-
-    @model_validator(mode="after")
-    def _entropy_sign(self) -> "TrainConfig":
-        if self.entropy_reg_weight < 0.0:
-            raise ValueError(
-                "train.entropy_reg_weight must be >= 0: it is a positive coefficient on a "
-                "subtracted entropy bonus (trainer/core.py _train_on_batch / losses.py) — "
-                "larger = more exploration pressure. A negative value would flip it into a "
-                "policy-sharpening penalty, not a smaller bonus."
-            )
-        return self
-
-    @model_validator(mode="after")
-    def _mixing_floor_is_below_its_start(self) -> "TrainConfig":
-        """`mixing_min_w > mixing_initial_w` is a schedule that never decays (WPMINT K-B).
-
-        `w_pre = max(min_w, initial_w * exp(-step / decay_steps))`. With the floor above the
-        start the `max` takes `min_w` at EVERY step, so `mixing_initial_w` and
-        `mixing_decay_steps` both stop having any effect while still reading as the schedule's
-        terms — three keys, one of which silently dominates the other two. Derived entirely
-        from the arithmetic in `train/mixing.py`; no number is invented, and equality is legal
-        (a flat schedule is a real posture, and it is what the shipped `0.0 / 0.0` is).
-        """
-        if self.mixing_min_w > self.mixing_initial_w:
-            raise ValueError(
-                f"train.mixing_min_w ({self.mixing_min_w}) is above train.mixing_initial_w "
-                f"({self.mixing_initial_w}): w_pre = max(min_w, initial_w * exp(-step/"
-                "decay_steps)), so the floor would win at every step and both "
-                "train.mixing_initial_w and train.mixing_decay_steps would decide nothing "
-                "while still reading as the schedule's terms"
-            )
-        return self
 
     @model_validator(mode="after")
     def _stages_are_strictly_increasing(self) -> "TrainConfig":

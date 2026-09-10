@@ -32,7 +32,6 @@ from mantis.config.resolve.search import resolve_search_kind
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
     SelfPlayHParams,
-    _load_seed_corpus,
     build_runner_config,
     is_graph_representation,
     resolve_pool_encoding,
@@ -145,12 +144,10 @@ class WorkerPool:
         # `self.replay_buffer`, so the guard cannot be bypassed.
         self.replay_buffer = ReplayFacade(spec, replay_buffer)
 
-        seed_prefixes = _load_seed_corpus(hp.seed_corpus_path, hp.seed_fraction)
         sp_config, dims = build_runner_config(
             hp,
             spec_dims=resolved,
             encoding_name=resolved.encoding_name,
-            seed_prefixes=seed_prefixes,
         )
         self._runner = SelfPlayRunner(sp_config)
         self._inference_server = InferenceServer(
@@ -214,7 +211,6 @@ class WorkerPool:
         self._pol_len = dims.pol_len
 
         self._log_investigation_metrics = hp.log_investigation_metrics
-        self._instrumentation_enabled = hp.instrumentation_enabled
         self._instrumentation = PoolInstrumentation(
             log_investigation_metrics=hp.log_investigation_metrics,
             # AUDIT-1 F-42. The n_components bound is per-ENCODING (8 on v6w25, 5 on
@@ -312,10 +308,6 @@ class WorkerPool:
     def recent_move_histories(self) -> list[list[tuple[int, int]]]:
         """Snapshot of the last ≤100 self-play move histories (thread-safe copy)."""
         return self._instrumentation.recent_move_histories(self._lock)
-
-    @property
-    def instrumentation_enabled(self) -> bool:
-        return self._instrumentation_enabled
 
     def runner_stats(self) -> RunnerStats:
         """Read-only snapshot of the Rust runner's counters / scalars."""

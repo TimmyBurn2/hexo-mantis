@@ -2,24 +2,44 @@
 
 graph->bf16 is a pinned code constant (LAW-06 / F-11: fp16 GINE overflow -> NaN); the token
 is a STRING, never a torch.dtype (config -> encoding, util only; the model maps token->dtype).
+The declared-value argument went with `train.amp_dtype` (R346(f)) — the resolver takes the
+representation alone, so there is no longer a config spelling that could disagree with LAW-06.
 """
+import re
 import subprocess
 import sys
+from pathlib import Path
+
+import pytest
 
 from mantis.config.resolve.amp import resolve_amp_dtype
 
+_AMP_MODULE = (
+    Path(__file__).resolve().parents[2] / "src" / "mantis" / "config" / "resolve" / "amp.py"
+)
+
 
 def test_graph_is_bf16_pinned_law06():
-    assert resolve_amp_dtype("graph", "bf16") == "bf16"
+    assert resolve_amp_dtype("graph") == "bf16"
 
 
-def test_grid_is_fp16_historical():
-    assert resolve_amp_dtype("grid", "fp16") == "fp16"
+def test_unknown_representation_raises():
+    with pytest.raises(ValueError):
+        resolve_amp_dtype("bogus_representation")
 
 
 def test_returns_string_token_never_torch_dtype():
-    assert isinstance(resolve_amp_dtype("graph", "bf16"), str)
-    assert isinstance(resolve_amp_dtype("grid", "fp16"), str)
+    assert isinstance(resolve_amp_dtype("graph"), str)
+
+
+def test_dag_purity_amp_module_imports_no_torch() -> None:
+    """DAG-purity regression: `mantis.config` must not pull torch (the module's own
+    docstring/design constraint) — a narrower, single-module source-scan than the
+    whole-package subprocess guard `test_o4b_...` below already owns."""
+    text = _AMP_MODULE.read_text(encoding="utf-8")
+    assert not re.search(r"^\s*(import torch|from torch)", text, re.M), (
+        "config/resolve/amp.py must not import torch"
+    )
 
 
 def test_o4b_importing_config_package_never_pulls_torch():

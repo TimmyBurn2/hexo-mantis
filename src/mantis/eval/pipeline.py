@@ -429,7 +429,6 @@ class EvalPipeline:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         leaf_batch_size: int,
-        amp_dtype: str,
         max_plies: int,
         c_visit: float,
         c_scale: float,
@@ -481,11 +480,6 @@ class EvalPipeline:
         #: `selfplay.leaf_batch_size`, and a default here would be a search regime nobody
         #: minted standing in for the one the net was trained under.
         self._leaf_batch_size = int(leaf_batch_size)
-        #: The run's declared `train.amp_dtype`, resolved ONCE in the parent and carried to
-        #: every round's `RoundSpec`. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1
-        #: F-31): the child's dense forward autocast with no dtype at all, and a default here
-        #: would put a dtype nobody declared back on the deploy-matched bar.
-        self._amp_dtype = str(amp_dtype)
         #: The run's `selfplay.max_game_moves`, resolved ONCE in the parent and carried to every
         #: round. NOT defaulted, for `leaf_batch_size`' reason (AUDIT-1 F-15): a default here is
         #: the `DEFAULT_MAX_PLIES = 128` module constant put back, and the ply cap is half of
@@ -875,7 +869,6 @@ class EvalPipeline:
             # AUDIT-1 F-31, same seam and same reason: the child's DENSE autocast had no
             # `dtype=` at all, so it ran at torch's device default while the run declared
             # otherwise — on the path LAW-15 reads the promotion bar off.
-            amp_dtype=self._amp_dtype,
             # AUDIT-1 F-15, same seam and same reason: the eval arena capped at a module
             # constant while the run declared `selfplay.max_game_moves`.
             max_plies=self._max_plies,
@@ -1409,7 +1402,6 @@ def build_eval_pipeline(
     fused_graph_caps: FusedGraphCapsSpec | None,
     inference_batching: InferenceBatchingSpec | None,
     leaf_batch_size: int,
-    amp_dtype: str,
     max_plies: int,
     c_visit: float,
     c_scale: float,
@@ -1433,7 +1425,7 @@ def build_eval_pipeline(
     return EvalPipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
-        leaf_batch_size=leaf_batch_size, amp_dtype=amp_dtype, max_plies=max_plies,
+        leaf_batch_size=leaf_batch_size, max_plies=max_plies,
         c_visit=c_visit, c_scale=c_scale,
         search_kind=search_kind, gumbel_m=gumbel_m,
         leaf_build_threads=leaf_build_threads,

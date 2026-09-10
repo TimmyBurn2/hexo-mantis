@@ -23,7 +23,6 @@ pub mod finalize;
 pub mod game;
 pub mod params;
 pub mod record;
-pub mod rotate;
 pub mod search_drive;
 pub mod spawn;
 pub mod stats;
@@ -37,7 +36,7 @@ use std::thread::JoinHandle;
 
 use mantis_encoding::{all_specs, lookup, RegistrySpec};
 
-use crate::queues::{DenseQueue, GraphQueue};
+use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
 
 /// Per-row training tuple produced by self-play workers (frozen `mod.rs:44`).
@@ -59,19 +58,9 @@ pub type WorkerResultRow = (
 /// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]
 /// (frozen `mod.rs:54`). Field order: `(plies, winner_code, move_history,
 /// worker_id, terminal_reason, model_version_min, model_version_max,
-/// model_version_distinct, seeded, solver_fires)`.
-pub type GameResultRow = (
-    usize,
-    u8,
-    Vec<(i32, i32)>,
-    usize,
-    u8,
-    u64,
-    u64,
-    u32,
-    u8,
-    u32,
-);
+/// model_version_distinct)`. The `seeded` / `solver_fires` slots went with the
+/// seed-corpus and solver levers (R346(f)).
+pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32);
 
 /// Flat snapshot of the runner's LAW-18 in-run counter atomics, each read once
 /// via a single `Relaxed` load (the WP7-owed READ side of the write-only fire
@@ -112,37 +101,9 @@ pub struct RunnerStatsSnapshot {
     /// on a PUCT run, which issues no rounds — a reader publishes the ABSENCE, never a 0/0.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
-    // `cluster_value_std_accum` / `cluster_policy_disagreement_accum` are ×1e6;
-    // `cluster_variance_samples` is the shared divisor count for both means.
-    pub cluster_value_std_accum: u64,
-    pub cluster_policy_disagreement_accum: u64,
-    pub cluster_variance_samples: u64,
-    // ── D-WS3V3 in-run solver fire-rate counters ──
-    pub solver_moves_eligible: u64,
-    pub solver_win_proven: u64,
-    pub solver_injected: u64,
-    pub solver_injected_offwindow: u64,
-    pub solver_budget_exhausted: u64,
-    pub solver_moves_eligible_seeded: u64,
-    pub solver_injected_seeded: u64,
-    pub seeded_games_started: u64,
     // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ──
     /// Moves whose exported policy target carried off-window (overflow) mass.
     pub export_offwindow_mass_moves: u64,
-    /// §3.5 zero-row fills, counted per recorded grid-ls cluster row.
-    pub gridls_zero_policy_rows: u64,
-    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
-    /// the injecting lever (O1 forced-win or solver visit weight) was armed.
-    /// LS-path mechanism (`legal_set` targets); the emitter publishes it on the
-    /// GRAPH arm only and OMITS it elsewhere (R250 absence, R256 mapping).
-    pub uncovered_forced_win: u64,
-    /// Item 10(b) / R250 — the in-run K histogram, DENSE record path only.
-    /// Bucket `i` in `0..8` counts recorded positions with exactly `i + 1`
-    /// cluster views; the last bucket guards every K outside `1..=8`
-    /// (`record::k_cluster_bucket`). All-zero on a graph run, where nothing
-    /// calls `record_position` — the emitter OMITS the field there rather than
-    /// publishing that zero as a distribution (R250).
-    pub k_cluster_histogram: [u64; record::K_CLUSTER_HISTOGRAM_BUCKETS],
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
     pub target_integrity_defects: u64,
     /// R275(b) SEAM conjunct — leaf inferences that FAILED on an open queue and
@@ -165,15 +126,13 @@ pub struct SelfPlayRunner {
     /// at `new()`, LAW-11).
     spec: &'static RegistrySpec,
     /// Runner config (with `standard_sims` already resolved to the effective
-    /// budget; `seed_corpus` moved out to the `Arc` below).
+    /// budget).
     config: SelfPlayRunnerConfig,
     /// HEXG visit-slot capacity, DERIVED once at composition from the sims
     /// regime (`replay::hexg::derived_visit_capacity`, R255/ADJ-D34). `None` on
     /// grid runs — dense-362 records carry no visit slot; never a default.
     visit_capacity: Option<usize>,
 
-    // ── inference queues (owned; producer handles exposed) ──
-    dense_queue: DenseQueue,
     graph_queue: GraphQueue,
 
     // ── shared result queues ──
@@ -199,9 +158,6 @@ pub struct SelfPlayRunner {
     /// Defaults to 0 (no-NN); WP7 wires the real setter when the NN producer lands.
     model_version: Arc<AtomicU64>,
 
-    /// Ctor-validated seed corpus (shared read-only across workers).
-    seed_corpus: Arc<Vec<Vec<(i32, i32)>>>,
-
     // ── win / throughput accumulators ──
     games_completed: Arc<AtomicUsize>,
     positions_generated: Arc<AtomicUsize>,
@@ -220,26 +176,10 @@ pub struct SelfPlayRunner {
     pcr_quick_moves: Arc<AtomicU64>,
     gumbel_round_leaves: Arc<AtomicU64>,
     gumbel_rounds: Arc<AtomicU64>,
-    cluster_value_std_accum: Arc<AtomicU64>,
-    cluster_policy_disagreement_accum: Arc<AtomicU64>,
-    cluster_variance_samples: Arc<AtomicU64>,
 
-    // ── D-WS3V3 in-run solver fire-rate counters (LAW-18) ──
-    solver_moves_eligible: Arc<AtomicU64>,
-    solver_win_proven: Arc<AtomicU64>,
-    solver_injected: Arc<AtomicU64>,
-    solver_injected_offwindow: Arc<AtomicU64>,
-    solver_budget_exhausted: Arc<AtomicU64>,
-    solver_moves_eligible_seeded: Arc<AtomicU64>,
-    solver_injected_seeded: Arc<AtomicU64>,
-    seeded_games_started: Arc<AtomicU64>,
 
     // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
     export_offwindow_mass_moves: Arc<AtomicU64>,
-    uncovered_forced_win: Arc<AtomicU64>,
-    gridls_zero_policy_rows: Arc<AtomicU64>,
-    /// Item 10(b) — the K histogram's live atomics (see the snapshot field).
-    k_cluster_histogram: Arc<[AtomicU64; record::K_CLUSTER_HISTOGRAM_BUCKETS]>,
     target_integrity_defects: Arc<AtomicU64>,
     /// R275(b) SEAM conjunct fire count (see the snapshot field).
     inference_failures_total: Arc<AtomicU64>,
@@ -370,22 +310,13 @@ impl SelfPlayRunner {
             ));
         }
 
-        // ── WP12-R Phase T boot guard, re-ruled by R255/ADJ-D34 (read EXISTING
-        // keys only, R120; armed VALUES are never set, R119). Scoped to GRAPH
-        // encodings: the bound being enforced is the graph record's visit slot
-        // (`replay/hexg`); dense-362 records carry no such slot, and refusing a
-        // grid config would be a behavior change no ruling ordered (PREREG_T
-        // A-6 — grid exemption resolved HERE, grounds recorded in IMPL notes).
-        //
-        // The slot capacity is DERIVED from the configured sims regime by the
-        // ONE authority `derived_visit_capacity` — the SAME fn the mint-time
-        // schema validator calls through the bridge, so an unsupported regime
-        // (format ceiling; completed-Q below the child cap) REDs at config
-        // validation and this call is the defense-in-depth line for un-minted
-        // constructions. No literal, no default (the old MAX_VISITS = 128
-        // tunable on this armed path is deleted).
-        let visit_capacity = if spec.is_graph() {
-            let cap = crate::replay::hexg::derived_visit_capacity(
+        // WP12-R Phase T boot guard, re-ruled by R255/ADJ-D34 (read EXISTING keys only,
+        // R120; armed VALUES are never set, R119). The slot capacity is DERIVED from the
+        // configured sims regime by the ONE authority `derived_visit_capacity` — the SAME fn
+        // the mint-time schema validator calls through the bridge, so an unsupported regime
+        // REDs at config validation and this call is the defense-in-depth line.
+        let visit_capacity = Some(
+            crate::replay::hexg::derived_visit_capacity(
                 config.n_simulations,
                 config.standard_sims,
                 config.fast_prob,
@@ -397,50 +328,12 @@ impl SelfPlayRunner {
                 config.gumbel_m,
                 config.search_kind.as_config_str(),
             )
-            .map_err(|e| format!("SelfPlayRunner: {e}"))?;
-            // R347(a) — the sparse row's tail is the RECORDING PRIOR times one scalar, and
-            // that identity is what the trainer's reconstruction rests on. Both target
-            // injectors write mass by cell AFTER the export, so either can land on a cell
-            // outside the visited-candidate set and give the tail a shape the prior does not
-            // have. Refused here, by name, rather than recorded as a row whose tail is
-            // quietly wrong.
-            if config.search_kind.stores_sparse_rows()
-                && (config.forced_win_policy_enabled || config.solver_enabled)
-            {
-                return Err(format!(
-                    "SelfPlayRunner: representation==graph with search.kind=gumbel stores the \
-                     SPARSE row of R347(a), whose tail mass alpha carries no per-cell shape — \
-                     the trainer rebuilds it from its own prior. \
-                     selfplay.forced_win_policy_enabled={} and selfplay.solver_enabled={} \
-                     inject target mass by cell after the export, so a cell outside the \
-                     search's visited-candidate set would land in the tail and be rebuilt as \
-                     the prior instead of as what was injected. Disarm both on this arm, or \
-                     run search.kind=puct (keys: search.kind, identity.representation, \
-                     selfplay.forced_win_policy_enabled, selfplay.solver_enabled)",
-                    config.forced_win_policy_enabled, config.solver_enabled
-                ));
-            }
-            Some(cap)
-        } else {
-            None
-        };
-
-        // Move the seed corpus into the shared `Arc`. STAGE R2 dry-replay
-        // validates every prefix ONCE here (needs the R2 spec→Board resolution in
-        // `game::init_per_game_board`); the ctor-validated corpus lets the R2
-        // replay hook trust it (a runtime failure there = debug_assert).
-        let seed_corpus_vec = config.seed_corpus.take().unwrap_or_default();
+            .map_err(|e| format!("SelfPlayRunner: {e}"))?,
+        );
 
         // Bake the resolved budget so the workers read the effective value.
         config.standard_sims = effective_standard;
 
-        // Own both disjoint inference queues (D4). The dense queue's feature width
-        // is the spec's state stride; the graph queue is a graph-spec's live seam
-        // (idle for grid). The NN + pyo3 producer face defer to WP7. The graph queue
-        // carries the spec's `graph_contract_version` (validate guarantees `Some(1)`
-        // for a graph spec; grid specs are `None` → 1) for the batch-level die-loud
-        // handshake in `submit_graph_and_wait` (frozen `inference_bridge.rs:425`).
-        let dense_queue = DenseQueue::new(spec.state_stride());
         // The collector's saturation threshold is DERIVED from what this run can supply
         // (ledger F-1): a worker blocks on its whole submitted batch, so `n_workers x
         // leaf_batch_size` is a hard cap on queue depth and the threshold is clamped to it.
@@ -454,7 +347,6 @@ impl SelfPlayRunner {
             spec,
             config,
             visit_capacity,
-            dense_queue,
             graph_queue,
             results: Arc::new(Mutex::new(VecDeque::new())),
             graph_results: Arc::new(Mutex::new(VecDeque::new())),
@@ -463,7 +355,6 @@ impl SelfPlayRunner {
             handles: Arc::new(Mutex::new(Vec::new())),
             worker_panics: Arc::new(AtomicU64::new(0)),
             model_version: Arc::new(AtomicU64::new(0)),
-            seed_corpus: Arc::new(seed_corpus_vec),
             games_completed: Arc::new(AtomicUsize::new(0)),
             positions_generated: Arc::new(AtomicUsize::new(0)),
             x_wins: Arc::new(AtomicU64::new(0)),
@@ -479,21 +370,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: Arc::new(AtomicU64::new(0)),
             gumbel_round_leaves: Arc::new(AtomicU64::new(0)),
             gumbel_rounds: Arc::new(AtomicU64::new(0)),
-            cluster_value_std_accum: Arc::new(AtomicU64::new(0)),
-            cluster_policy_disagreement_accum: Arc::new(AtomicU64::new(0)),
-            cluster_variance_samples: Arc::new(AtomicU64::new(0)),
-            solver_moves_eligible: Arc::new(AtomicU64::new(0)),
-            solver_win_proven: Arc::new(AtomicU64::new(0)),
-            solver_injected: Arc::new(AtomicU64::new(0)),
-            solver_injected_offwindow: Arc::new(AtomicU64::new(0)),
-            solver_budget_exhausted: Arc::new(AtomicU64::new(0)),
-            solver_moves_eligible_seeded: Arc::new(AtomicU64::new(0)),
-            solver_injected_seeded: Arc::new(AtomicU64::new(0)),
-            seeded_games_started: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
-            uncovered_forced_win: Arc::new(AtomicU64::new(0)),
-            gridls_zero_policy_rows: Arc::new(AtomicU64::new(0)),
-            k_cluster_histogram: Arc::new(std::array::from_fn(|_| AtomicU64::new(0))),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             inference_failures_total: Arc::new(AtomicU64::new(0)),
             graph_game_seq: Arc::new(AtomicU64::new(0)),
@@ -547,7 +424,6 @@ impl SelfPlayRunner {
     /// in-progress game is DROPPED, never finalized as a draw.
     pub fn stop(&self) {
         self.running.store(false, Ordering::SeqCst);
-        self.dense_queue.close();
         self.graph_queue.close();
         let mut handles = self.handles.lock().expect("runner handles lock poisoned");
         while let Some(handle) = handles.pop() {
@@ -641,25 +517,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: self.pcr_quick_moves.load(Ordering::Relaxed),
             gumbel_round_leaves: self.gumbel_round_leaves.load(Ordering::Relaxed),
             gumbel_rounds: self.gumbel_rounds.load(Ordering::Relaxed),
-            cluster_value_std_accum: self.cluster_value_std_accum.load(Ordering::Relaxed),
-            cluster_policy_disagreement_accum: self
-                .cluster_policy_disagreement_accum
-                .load(Ordering::Relaxed),
-            cluster_variance_samples: self.cluster_variance_samples.load(Ordering::Relaxed),
-            solver_moves_eligible: self.solver_moves_eligible.load(Ordering::Relaxed),
-            solver_win_proven: self.solver_win_proven.load(Ordering::Relaxed),
-            solver_injected: self.solver_injected.load(Ordering::Relaxed),
-            solver_injected_offwindow: self.solver_injected_offwindow.load(Ordering::Relaxed),
-            solver_budget_exhausted: self.solver_budget_exhausted.load(Ordering::Relaxed),
-            solver_moves_eligible_seeded: self.solver_moves_eligible_seeded.load(Ordering::Relaxed),
-            solver_injected_seeded: self.solver_injected_seeded.load(Ordering::Relaxed),
-            seeded_games_started: self.seeded_games_started.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
-            uncovered_forced_win: self.uncovered_forced_win.load(Ordering::Relaxed),
-            gridls_zero_policy_rows: self.gridls_zero_policy_rows.load(Ordering::Relaxed),
-            k_cluster_histogram: std::array::from_fn(|i| {
-                self.k_cluster_histogram[i].load(Ordering::Relaxed)
-            }),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
             inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
             worker_panics: self.worker_panics.load(Ordering::Relaxed),
@@ -678,21 +536,9 @@ impl SelfPlayRunner {
         self.spec.policy_stride()
     }
 
-    /// PRODUCER handle for both inference queues (mock producer in tests; WP7 NN
-    /// producer face in prod). The queues are `Clone` (share one `Arc` inner), so
-    /// this hands out live handles that `pop_batch` + `submit_results`.
-    #[must_use]
-    pub fn producer_handles(&self) -> (DenseQueue, GraphQueue) {
-        (self.dense_queue.clone(), self.graph_queue.clone())
-    }
-
-    /// PRODUCER handle for the dense inference queue alone.
-    #[must_use]
-    pub fn dense_producer(&self) -> DenseQueue {
-        self.dense_queue.clone()
-    }
-
-    /// PRODUCER handle for the graph inference queue alone.
+    /// PRODUCER handle for the graph inference queue (mock producer in tests; the NN
+    /// producer face in prod). The queue is `Clone` (shares one `Arc` inner), so this hands
+    /// out a live handle that `pop_graph_batch` + `submit_graph_results`.
     #[must_use]
     pub fn graph_producer(&self) -> GraphQueue {
         self.graph_queue.clone()
@@ -937,29 +783,10 @@ mod seam_roundtrip {
         r.pcr_quick_moves.store(38, Ordering::Relaxed);
         r.gumbel_round_leaves.store(39, Ordering::Relaxed);
         r.gumbel_rounds.store(40, Ordering::Relaxed);
-        r.cluster_value_std_accum.store(11, Ordering::Relaxed);
-        r.cluster_policy_disagreement_accum
-            .store(12, Ordering::Relaxed);
-        r.cluster_variance_samples.store(13, Ordering::Relaxed);
-        r.solver_moves_eligible.store(14, Ordering::Relaxed);
-        r.solver_win_proven.store(15, Ordering::Relaxed);
-        r.solver_injected.store(16, Ordering::Relaxed);
-        r.solver_injected_offwindow.store(17, Ordering::Relaxed);
-        r.solver_budget_exhausted.store(18, Ordering::Relaxed);
-        r.solver_moves_eligible_seeded.store(19, Ordering::Relaxed);
-        r.solver_injected_seeded.store(20, Ordering::Relaxed);
-        r.seeded_games_started.store(21, Ordering::Relaxed);
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
-        r.uncovered_forced_win.store(35, Ordering::Relaxed);
-        r.gridls_zero_policy_rows.store(23, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
         r.inference_failures_total.store(36, Ordering::Relaxed);
-        // Item 10(b): DISTINCT per bucket (26..=34) — an array read back with a
-        // transposed or constant index would pass an all-equal seeding.
-        for (i, slot) in r.k_cluster_histogram.iter().enumerate() {
-            slot.store(26 + i as u64, Ordering::Relaxed);
-        }
 
         let expected = RunnerStatsSnapshot {
             games_completed: 1,
@@ -977,21 +804,7 @@ mod seam_roundtrip {
             pcr_quick_moves: 38,
             gumbel_round_leaves: 39,
             gumbel_rounds: 40,
-            cluster_value_std_accum: 11,
-            cluster_policy_disagreement_accum: 12,
-            cluster_variance_samples: 13,
-            solver_moves_eligible: 14,
-            solver_win_proven: 15,
-            solver_injected: 16,
-            solver_injected_offwindow: 17,
-            solver_budget_exhausted: 18,
-            solver_moves_eligible_seeded: 19,
-            solver_injected_seeded: 20,
-            seeded_games_started: 21,
             export_offwindow_mass_moves: 22,
-            uncovered_forced_win: 35,
-            gridls_zero_policy_rows: 23,
-            k_cluster_histogram: std::array::from_fn(|i| 26 + i as u64),
             target_integrity_defects: 24,
             inference_failures_total: 36,
             worker_panics: 25,

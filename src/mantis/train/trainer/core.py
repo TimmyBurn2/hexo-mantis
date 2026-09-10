@@ -37,7 +37,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -62,28 +61,11 @@ from mantis.train.emit import emit_via
 from mantis.train.events import tail_mass_block
 from mantis.train.losses import (
     backward_accumulate,
-    chain_loss_with_fire_rate,
     clip_and_step,
-    compute_aux_loss,
-    compute_kl_policy_loss,
-    compute_ply_index_loss,
-    compute_policy_loss,
-    compute_total_loss,
-    compute_uncertainty_loss,
-    compute_value_loss,
-    fp16_backward_step,
     ragged_policy_ce,
 )
 
 _LOG = logging.getLogger(__name__)
-
-# Graph configs must zero every aux/entropy weight — GnnNet ships policy + dist65 value only
-# (no ownership/threat/chain/opp-reply/uncertainty/ply-index heads, no entropy regularizer).
-GRAPH_FORBIDDEN_NONZERO_WEIGHTS: tuple[str, ...] = (
-    "aux_opp_reply_weight", "uncertainty_weight", "ownership_weight",
-    "threat_weight", "aux_chain_weight", "ply_index_weight", "entropy_reg_weight",
-)
-
 
 def build_param_groups(model: nn.Module, weight_decay: float) -> list[dict[str, Any]]:
     """Split params for AdamW weight decay: 2D+ weights decay, 1D params / biases don't
@@ -118,22 +100,11 @@ class TrainHParams:
     lr: float
     weight_decay: float
     grad_clip: float
-    fp16: bool
     lr_schedule: str
     total_steps: int
     scheduler_t_max: int | None
     eta_min: float
-    min_lr: float | None
     checkpoint_interval: int
-    policy_prune_frac: float
-    entropy_reg_weight: float
-    aux_opp_reply_weight: float
-    uncertainty_weight: float
-    ownership_weight: float
-    threat_weight: float
-    aux_chain_weight: float
-    ply_index_weight: float
-    threat_pos_weight: float
     value_target: str
     policy_target: str
     draw_reward: float
@@ -234,17 +205,14 @@ class Trainer:
         # TrainHParams.from_config's own no-fallback read (Phase 2 precedent).
         # AUDIT-1 F-35: attribute access, no default (LAW-11 — no dense-by-default).
         representation = self.arch.representation
-        self.amp_dtype = amp_dtype_for(representation, config["train"]["amp_dtype"])
+        self.amp_dtype = amp_dtype_for(representation)
 
-        # fp16 is CUDA-only (matches old: disabled on CPU); bf16 needs no scaler.
-        fp16_requested = bool(self.hp.fp16)
-        if fp16_requested and self.device.type != "cuda":
-            fp16_requested = False
-        self.fp16 = fp16_requested
-        self._scaler_enabled = self.fp16 and self.amp_dtype == torch.float16
-        # autocast is enabled on the fp16 grid path (CUDA) AND on the bf16 graph path (LAW-06,
-        # incl. CPU — the graph regime is bf16-pinned, not fp16-gated).
-        self._autocast_enabled = self._scaler_enabled or (self.amp_dtype == torch.bfloat16)
+        # bf16 needs no GradScaler; with `train.fp16` deleted there is no path that does. The
+        # scaler OBJECT stays: `save_checkpoint` writes its state, and dropping it would move
+        # the resume bundle's shape (protected set).
+        self.fp16 = False
+        self._scaler_enabled = False
+        self._autocast_enabled = self.amp_dtype == torch.bfloat16
 
         self.checkpoint_dir = Path(checkpoint_dir)
         self.checkpoint_dir.mkdir(parents=True, exist_ok=True)
@@ -292,11 +260,6 @@ class Trainer:
         self.loaded_from_full_checkpoint = False
         self.ckpt_had_value_fc2_bins = False
 
-        _pos_w = float(self.hp.threat_pos_weight)
-        self._threat_pos_weight: torch.Tensor | None = (
-            torch.tensor(_pos_w, dtype=torch.float32, device=self.device) if _pos_w != 1.0 else None
-        )
-
     # ── construction helpers ────────────────────────────────────────────────────────────
     @staticmethod
     def _derive_arch(config: Any) -> ModelArch:
@@ -311,249 +274,12 @@ class Trainer:
             t_max = self.hp.scheduler_t_max if self.hp.scheduler_t_max is not None else self.hp.total_steps
             if t_max is None:
                 raise ValueError("lr_schedule: cosine requires total_steps / scheduler_t_max.")
-            min_lr = self.hp.eta_min if self.hp.eta_min is not None else self.hp.min_lr
-            if min_lr is None:
-                raise ValueError("lr_schedule: cosine requires eta_min / min_lr.")
             return CosineAnnealingLR(self.optimizer, T_max=max(1, int(t_max)),
-                                     eta_min=float(min_lr), last_epoch=-1)
+                                     eta_min=float(self.hp.eta_min), last_epoch=-1)
         raise ValueError(f"Unsupported lr_schedule: {schedule}")
 
     def _base_model(self) -> nn.Module:
         return getattr(self.model, "_orig_mod", self.model)
-
-    # ── dense (CNN) training step ─────────────────────────────────────────────────────────
-    def train_step_from_tensors(
-        self,
-        states: np.ndarray,
-        policies: np.ndarray,
-        outcomes: np.ndarray,
-        chain_planes: Any | None = None,
-        ownership_targets: Any | None = None,
-        threat_targets: Any | None = None,
-        is_full_search: Any | None = None,
-        n_pretrain: int = 0,
-        n_recent: int = 0,
-        position_indices: Any | None = None,
-        value_target_valid: Any | None = None,
-    ) -> dict[str, float]:
-        """One gradient update from pre-built numpy arrays (dense grid path)."""
-        return self._train_on_batch(
-            states, policies, outcomes,
-            chain_planes=chain_planes, ownership_targets=ownership_targets,
-            threat_targets=threat_targets, is_full_search=is_full_search,
-            n_pretrain=n_pretrain, n_recent=n_recent,
-            position_indices=position_indices, value_target_valid=value_target_valid,
-        )
-
-    def _train_on_batch(
-        self,
-        states: np.ndarray,
-        policies: np.ndarray,
-        outcomes: np.ndarray,
-        chain_planes: Any | None = None,
-        ownership_targets: Any | None = None,
-        threat_targets: Any | None = None,
-        is_full_search: Any | None = None,
-        n_pretrain: int = 0,
-        n_recent: int = 0,
-        position_indices: Any | None = None,
-        value_target_valid: Any | None = None,
-    ) -> dict[str, float]:
-        """Core dense step: forward, loss, backward, optimizer step (behaviour-exact; the
-        KILLED per-class-temperature + track_b branches are SEVERED)."""
-        from mantis.train.aux_decode import decode_ownership, decode_winning_line, mask_aux_rows
-
-        hp = self.hp
-        aux_weight = float(hp.aux_opp_reply_weight)
-        uncertainty_weight = float(hp.uncertainty_weight)
-        ownership_weight = float(hp.ownership_weight)
-        threat_weight = float(hp.threat_weight)
-        chain_weight = float(hp.aux_chain_weight)
-        ply_index_weight = float(hp.ply_index_weight)
-        entropy_weight = float(hp.entropy_reg_weight)
-
-        states_t = torch.from_numpy(states).to(self.device)
-        if not self.fp16:
-            states_t = states_t.float()
-        policies_t = torch.from_numpy(policies).to(self.device)
-        outcomes_t = torch.from_numpy(outcomes).to(self.device)
-        full_search_mask_t: torch.Tensor | None = None
-        if is_full_search is not None:
-            full_search_mask_t = torch.from_numpy(
-                np.asarray(is_full_search, dtype=np.uint8)).to(self.device).bool()
-        value_mask_t: torch.Tensor | None = None
-        if value_target_valid is not None:
-            value_mask_t = torch.from_numpy(
-                np.asarray(value_target_valid, dtype=np.uint8)).to(self.device).bool()
-
-        prune_frac = float(hp.policy_prune_frac)
-        if prune_frac > 0.0:
-            policies_t = _prune_policy_targets(policies_t, prune_frac)
-
-        self.optimizer.zero_grad()
-
-        batch_n = int(states.shape[0])
-        assert 0 <= n_pretrain <= batch_n, f"n_pretrain={n_pretrain} out of [0, {batch_n}]"
-        use_ownership = ownership_weight > 0.0 and ownership_targets is not None
-        use_threat = threat_weight > 0.0 and threat_targets is not None
-        # The redundant `is not None` restates the use_* definitions above so the
-        # None-exclusion is visible to the type checker.
-        own_t = (decode_ownership(ownership_targets, self.device)
-                 if use_ownership and ownership_targets is not None else None)
-        thr_t = (decode_winning_line(threat_targets, self.device)
-                 if use_threat and threat_targets is not None else None)
-
-        with autocast(device_type=self.device.type, dtype=self.amp_dtype,
-                      enabled=self._autocast_enabled):
-            use_aux = aux_weight > 0.0
-            use_uncertainty = uncertainty_weight > 0.0
-            use_chain = chain_weight > 0.0
-            use_ply_index = ply_index_weight > 0.0 and position_indices is not None
-
-            fwd = self.model(states_t, aux=use_aux, uncertainty=use_uncertainty,
-                             ownership=use_ownership, threat=use_threat,
-                             chain=use_chain, ply_index=use_ply_index)
-            log_policy, value, value_aux = fwd[0], fwd[1], fwd[2]
-            base = self._base_model()
-            is_dist65 = getattr(base, "value_head_type", "scalar") == "dist65"
-            v_logit = (torch.atanh(value.detach().clamp(-0.999999, 0.999999))
-                       if is_dist65 else value_aux)
-            _idx = 3
-            opp_reply = fwd[_idx] if use_aux else None
-            _idx += 1 if use_aux else 0
-            sigma2 = fwd[_idx] if use_uncertainty else None
-            _idx += 1 if use_uncertainty else 0
-            own_pred = fwd[_idx] if use_ownership else None
-            _idx += 1 if use_ownership else 0
-            thr_pred = fwd[_idx] if use_threat else None
-            _idx += 1 if use_threat else 0
-            chain_pred = fwd[_idx] if use_chain else None
-            _idx += 1 if use_chain else 0
-            ply_pred = fwd[_idx] if use_ply_index else None
-
-            policy_valid = policies_t.sum(dim=1) > 1e-6
-            # The completed-Q target is a DISTRIBUTION over the legal set, so its loss is
-            # a KL against the full target; the raw visit distribution is scored by the
-            # cross-entropy form. `policy_target` is the one authority (it is pinned to
-            # `search.kind` at mint and carried on the checkpoint stamp), so there is no
-            # second boolean that can disagree with the rows the ring holds.
-            if hp.policy_target == "completed_improved_policy":
-                policy_loss = compute_kl_policy_loss(log_policy, policies_t, policy_valid,
-                                                     self.device, full_search_mask=full_search_mask_t)
-            else:
-                policy_loss = compute_policy_loss(log_policy, policies_t, policy_valid,
-                                                  self.device, full_search_mask=full_search_mask_t)
-            if is_dist65:
-                value_loss = _binned_value_loss(value_aux, outcomes_t, value_mask=value_mask_t)
-            else:
-                value_loss = compute_value_loss(value_aux, outcomes_t, value_mask=value_mask_t)
-
-            opp_reply_loss = None
-            if use_aux:
-                # `aux=True` forward contract: fwd carries the opp_reply head output.
-                assert opp_reply is not None
-                opp_reply_loss = compute_aux_loss(opp_reply, policies_t, policy_valid,
-                                                  self.device,
-                                                  full_search_mask=full_search_mask_t)
-            entropy_bonus = None
-            if entropy_weight > 0.0:
-                p_fp32 = torch.exp(log_policy.float())
-                entropy_bonus = torch.special.entr(p_fp32).sum(dim=-1).mean()
-            unc_loss = None
-            if use_uncertainty:
-                # `uncertainty=True` forward contract: fwd carries the sigma2 head output.
-                assert sigma2 is not None
-                unc_loss = compute_uncertainty_loss(sigma2, outcomes_t, value.detach())
-            aux_skip_full_pretrain = n_pretrain >= batch_n
-            own_loss = None
-            if use_ownership and own_pred is not None and own_t is not None and not aux_skip_full_pretrain:
-                own_pred_m, own_t_m = mask_aux_rows(own_pred, own_t, n_pretrain)
-                own_loss = nn.functional.mse_loss(own_pred_m.squeeze(1), own_t_m)
-            thr_loss = None
-            if use_threat and thr_pred is not None and thr_t is not None and not aux_skip_full_pretrain:
-                thr_pred_m, thr_t_m = mask_aux_rows(thr_pred, thr_t, n_pretrain)
-                thr_loss = nn.functional.binary_cross_entropy_with_logits(
-                    thr_pred_m.squeeze(1), thr_t_m, pos_weight=self._threat_pos_weight)
-            # Q13-aux chain loss WITH the in-run fire-rate self-report (O-CHAIN, LAW-07/18).
-            chain_loss = None
-            if chain_pred is not None and chain_planes is not None:
-                chain_target = torch.from_numpy(np.asarray(chain_planes)).to(self.device).float()
-                chain_loss = chain_loss_with_fire_rate(
-                    chain_pred, chain_target, chain_weight, sink=self._sink, step=self.step + 1)
-            ply_index_loss = None
-            if use_ply_index and ply_pred is not None and position_indices is not None:
-                pos_idx_t = torch.from_numpy(np.asarray(position_indices)).to(self.device)
-                ply_index_loss = compute_ply_index_loss(ply_pred, pos_idx_t)
-
-            loss = compute_total_loss(
-                policy_loss, value_loss, opp_reply_loss, aux_weight,
-                entropy_bonus, entropy_weight, unc_loss, uncertainty_weight,
-                own_loss, ownership_weight, thr_loss, threat_weight,
-                chain_loss, chain_weight, ply_index_loss, ply_index_weight,
-            )
-
-        if not torch.isfinite(loss):
-            self.optimizer.zero_grad()
-            if (self.fp16 and self.scaler.is_enabled()
-                    and getattr(self.scaler, "_scale", None) is not None):
-                decayed = float(self.scaler.get_scale() * self.scaler.get_backoff_factor())
-                self.scaler.update(new_scale=decayed)
-            return {"loss": float("nan"), "policy_loss": float("nan"),
-                    "value_loss": float("nan"), "grad_norm": float("nan"),
-                    "lr": self.optimizer.param_groups[0]["lr"], "value_accuracy": float("nan")}
-
-        grad_norm = fp16_backward_step(loss, self.optimizer, self.scaler, self.model,
-                                       self._scaler_enabled, max_grad_norm=float(hp.grad_clip))
-        # R345(b)(1) on the dense tail. `clip_and_step` refuses the optimizer step on a
-        # non-finite gradient; the clock must be refused with it, or the run reports a step
-        # whose update it declined to make. The scheduler and EMA guards were already written
-        # as `math.isfinite(grad_norm)` — this makes the condition they were testing for
-        # actually true, rather than a hedge applied after the weights had gone.
-        stepped = math.isfinite(grad_norm)
-        if stepped:
-            self.step += 1
-            if self.scheduler is not None:
-                self.scheduler.step()
-            if self.ema_model is not None and self.step % self.ema_update_every == 0:
-                self.ema_model.update_parameters(self._base_model())
-        else:
-            self.nonfinite_grad_steps += 1
-            self.skipped_steps += 1
-            _LOG.warning("skipped_step step=%s reason=nonfinite_gradient n_skipped=%s "
-                         "grad_norm=%s", self.step, self.skipped_steps, grad_norm)
-            emit_via(self._sink, {
-                "event": "trainer_step_skipped", "step": self.step,
-                "reason": "nonfinite_gradient", "representation": "grid",
-                "skipped_steps": self.skipped_steps,
-                "nonfinite_grad_steps": self.nonfinite_grad_steps,
-            })
-
-        with torch.no_grad():
-            pred_win = (v_logit.squeeze(1) > 0).float()
-            value_accuracy = (pred_win == (outcomes_t > 0).float()).float().mean().item()
-        lr = self.optimizer.param_groups[0]["lr"]
-
-        result: dict[str, float] = {
-            "loss": loss.item(), "policy_loss": policy_loss.item(),
-            "value_loss": value_loss.item(), "grad_norm": grad_norm,
-            "value_accuracy": value_accuracy, "lr": lr,
-        }
-        if chain_loss is not None:
-            result["chain_loss"] = chain_loss.item()
-        # `trainer_step`, NOT `training_step`: the coordinator's `log_interval`-gated
-        # narration owns the `training_step` literal (train/events.py, the manifest's one
-        # documented shape). This is the trainer's OWN per-step diagnostic row — delivered
-        # in production since F-R-P2B-2's sink threading — and one literal = one shape, so
-        # it emits under its own name (F-P4 review blocker: a second, non-conforming,
-        # ungated producer of the canonical literal at ~log_interval:1 volume).
-        # A refused step emitted `trainer_step_skipped` above and emits nothing here: the
-        # step counter did not move, so a `trainer_step` row would name a step twice and
-        # `_maybe_periodic_checkpoint` would re-cross a cadence boundary it already crossed.
-        if stepped:
-            emit_via(self._sink, {"event": "trainer_step", "step": self.step,
-                                  "representation": "grid", **result})
-            self._maybe_periodic_checkpoint(result)
-        return result
 
     # ── graph (GNN) training step — the numeric core, bench + injected-buffer driver ──────
     def eval_step_from_graph_batch(
@@ -683,12 +409,6 @@ class Trainer:
         a dict without the key would silently feed `grad_norm_hard_abort` a `0.0` that always
         passes its threshold.
         """
-        for key in GRAPH_FORBIDDEN_NONZERO_WEIGHTS:
-            if float(getattr(self.hp, key, 0.0)) != 0.0:
-                raise ValueError(
-                    f"train_step_from_graph_batch: {key} is nonzero on a graph run — GnnNet "
-                    "ships policy + dist65 value only (no aux heads / entropy). Zero every "
-                    "GRAPH_FORBIDDEN_NONZERO_WEIGHTS key (standing §6.3).")
         if len(parts) == 0:
             raise GraphEmptyBatchError(
                 "train_step_from_graph_batch: zero micro-batches — the sampled batch holds no "
@@ -955,14 +675,3 @@ def _resolve_spec(config: Any):
     stamp-source check, T-CK-30) — unchanged, and now by the same route every other caller
     takes rather than by a private bridge only this module had."""
     return resolve_from_config(dict(config) if isinstance(config, dict) else {})
-
-
-def _prune_policy_targets(pi: torch.Tensor, threshold_frac: float) -> torch.Tensor:
-    """Zero policy-target entries at/below `threshold_frac · max(row)`, renormalize
-    (behaviour-exact with the old `prune_policy_targets`; sharpens MCTS visit targets)."""
-    if threshold_frac <= 0.0:
-        return pi
-    max_vals = pi.max(dim=-1, keepdim=True).values
-    mask = pi > (threshold_frac * max_vals)
-    pruned = pi * mask
-    return pruned / pruned.sum(dim=-1, keepdim=True).clamp(min=1e-8)

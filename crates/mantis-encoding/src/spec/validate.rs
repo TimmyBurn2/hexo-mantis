@@ -184,79 +184,9 @@ impl RegistrySpec {
         }
 
         // ── representation-gated invariants ──────────────────────────────────
-        // Grid-only invariants (plane/kept-index/policy-formula) are gated on
-        // Grid; the axis-graph geometry invariants are gated on Graph. The
-        // multi-window / legal_move_radius / k_max / n_chain_planes checks above
-        // stay universal (a graph is single-window, so it passes them unchanged).
+        // The axis-graph geometry invariants are gated on Graph. The multi-window /
+        // legal_move_radius / k_max / n_chain_planes checks above stay universal.
         match self.representation {
-            Representation::Grid => {
-                if self.plane_layout.len() != self.n_planes {
-                    errs.push(format!(
-                        "len(plane_layout)={} != n_planes={}",
-                        self.plane_layout.len(),
-                        self.n_planes
-                    ));
-                }
-                if self.policy_logit_count != expected_logits {
-                    errs.push(format!(
-                        "policy_logit_count={} != board_size²+(pass_slot?1:0)={} \
-                         (board_size={}, has_pass_slot={})",
-                        self.policy_logit_count,
-                        expected_logits,
-                        self.board_size,
-                        self.has_pass_slot
-                    ));
-                }
-                // len(kept_plane_indices) == n_planes
-                if self.kept_plane_indices.len() != self.n_planes {
-                    errs.push(format!(
-                        "len(kept_plane_indices)={} != n_planes={}",
-                        self.kept_plane_indices.len(),
-                        self.n_planes
-                    ));
-                }
-                // n_source_planes >= n_planes
-                if self.n_source_planes < self.n_planes {
-                    errs.push(format!(
-                        "n_source_planes={} < n_planes={} (kept set must be a subset of source)",
-                        self.n_source_planes, self.n_planes
-                    ));
-                }
-                // no duplicates in kept_plane_indices
-                {
-                    let mut seen_idx: BTreeSet<usize> = BTreeSet::new();
-                    for &idx in self.kept_plane_indices {
-                        if !seen_idx.insert(idx) {
-                            errs.push(format!("kept_plane_indices: duplicate index {idx}"));
-                        }
-                    }
-                }
-                // max(kept_plane_indices) < n_source_planes
-                if let Some(&max_idx) = self.kept_plane_indices.iter().max() {
-                    if max_idx >= self.n_source_planes {
-                        errs.push(format!(
-                            "kept_plane_indices: max index {} >= n_source_planes={}",
-                            max_idx, self.n_source_planes
-                        ));
-                    }
-                }
-                // A grid encoding must not carry graph-only fields.
-                for (present, key) in [
-                    (self.node_feat_dim.is_some(), "node_feat_dim"),
-                    (self.edge_feat_dim.is_some(), "edge_feat_dim"),
-                    (self.win_length.is_some(), "win_length"),
-                    (self.graph_radius.is_some(), "graph_radius"),
-                    (self.win_axes.is_some(), "win_axes"),
-                    (self.contract_version.is_some(), "contract_version"),
-                    (self.builder_impl_required.is_some(), "builder_impl_required"),
-                ] {
-                    if present {
-                        errs.push(format!(
-                            "representation=grid must not set graph-only key {key:?}"
-                        ));
-                    }
-                }
-            }
             Representation::Graph => {
                 // action space UNCHANGED (identical 19×19+pass board).
                 if self.policy_logit_count != expected_logits {

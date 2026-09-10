@@ -31,7 +31,6 @@ from mantis.config.schema import ARCH_SCOPED_KEYS, RunConfig
 from mantis.encoding import lookup
 from mantis.model import (
     ARCH_KINDS,
-    CnnArch,
     GnnArch,
     ModelArch,
     RepresentationMismatch,
@@ -174,10 +173,10 @@ _ARCH_KINDS = ARCH_KINDS
 
 #: What a stamp written BEFORE the discriminator existed resolves to, by representation. Sound
 #: because it is a fact about history rather than a default: at the time those stamps were
-#: written `GnnArch` and `CnnArch` were the only members of the union, so a legacy graph stamp
+#: written `GnnArch` was the only graph member of the union, so a legacy graph stamp
 #: IS a V1 stamp. A legacy dict whose fields do not fit its target raises rather than being
 #: coerced — LAW-11's no-silent-fallback, applied to the loader.
-_LEGACY_BY_REPRESENTATION: dict[str, type] = {"grid": CnnArch, "graph": GnnArch}
+_LEGACY_BY_REPRESENTATION: dict[str, type] = {"graph": GnnArch}
 
 #: The NON-BINDING placeholder pair for each arch-scoped block, for the synthetic config
 #: `strip_and_restamp` writes (R322(d)). A separate table rather than inline literals so the
@@ -209,7 +208,7 @@ def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
 
     Raises:
         RepresentationMismatch: the dict names an unknown `arch_kind`; or it carries no
-            `arch_kind` and its `representation` is neither 'grid' nor 'graph'; or a legacy
+            `arch_kind` and its `representation` is not 'graph'; or a legacy
             dict does not fit the arch its representation names.
     """
     d = dict(d)
@@ -228,12 +227,8 @@ def _arch_from_dict(d: Mapping[str, Any]) -> ModelArch:
         if cls is None:
             raise RepresentationMismatch(
                 f"serialized arch has representation={rep!r} and no {_ARCH_KIND_KEY} — "
-                "expected 'grid' or 'graph'."
+                "expected 'graph'."
             )
-    if cls is CnnArch:
-        ic = d.get("input_channels")
-        if ic is not None:
-            d["input_channels"] = tuple(int(x) for x in ic)
     try:
         return cls(**d)
     except TypeError as exc:
@@ -255,7 +250,7 @@ def stamped_arch_kind(metadata: Mapping[str, Any] | None, *, representation: str
 
     Raises:
         RepresentationMismatch: the stamp names an `arch_kind` this build does not know, or the
-            representation is neither 'grid' nor 'graph'.
+            representation is not 'graph'.
     """
     arch = metadata.get("arch") if isinstance(metadata, Mapping) else None
     kind = arch.get(_ARCH_KIND_KEY) if isinstance(arch, Mapping) else None
@@ -270,7 +265,7 @@ def stamped_arch_kind(metadata: Mapping[str, Any] | None, *, representation: str
     cls = _LEGACY_BY_REPRESENTATION.get(str(representation))
     if cls is None:
         raise RepresentationMismatch(
-            f"representation={representation!r} — expected 'grid' or 'graph'; a stamp with no "
+            f"representation={representation!r} — expected 'graph'; a stamp with no "
             f"{_ARCH_KIND_KEY} resolves only through the legacy-by-representation rule."
         )
     return cls.__name__
@@ -894,8 +889,7 @@ def strip_and_restamp(
         # pre-existing seed=0/run_id=<caller> placeholders above (zero-behavior-change mint
         # values, DESIGN_P2.md §1.1/§1.2).
         "train": {
-            "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True,
-            "amp_dtype": "fp16",
+            "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
             # R332(d) / AUDIT-1 F-06: `train.ema` is a REQUIRED block. `enabled: false` is the
             # same zero-behaviour placeholder posture as `seed: 0` and `eval_enabled: true`
             # above — a stripped artifact boots no run, so no EMA shadow is ever built from
@@ -909,7 +903,7 @@ def strip_and_restamp(
             # is created here.
             "device": "cpu",
             "lr_schedule": "cosine", "total_steps": 1_000_000,
-            "scheduler_t_max": None, "eta_min": 5e-4, "min_lr": None,
+            "scheduler_t_max": None, "eta_min": 5e-4,
             "checkpoint_interval": 0, "actor_sync_cadence_steps": 1,
             "max_train_steps": 1_000_000,  # WPAX S-4: required run-length key
             # WPAX Phase D (R65/R80): required key, no code-side default. `None` is the
@@ -929,15 +923,11 @@ def strip_and_restamp(
             # correct while the schema required the block on every arch and is a REFUSAL now
             # that it does not: this payload's representation is `new_spec`'s, so a strip to
             # a GRID encoding would have written a graph-only cap into a grid config.)
-            "augment": False, "recency_weight": 0.0, "mixing_initial_w": 0.0,
-            "mixing_min_w": 0.0, "mixing_decay_steps": 1.0, "hard_gn_threshold": 1e9,
-            "hard_gn_min_steps": 3, "terminal_eval_enabled": True, "bot_batch_share": 0.0,
+            "augment": False, "recency_weight": 0.0, "hard_gn_threshold": 1e9,
+            "hard_gn_min_steps": 3, "terminal_eval_enabled": True,
             "selfplay_stall_timeout_sec": 1800.0,
             "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-            "draw_reward": -0.5, "ply_cap_value": -0.5, "policy_prune_frac": 0.0,
-            "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0,
-            "uncertainty_weight": 0.0, "ownership_weight": 0.0, "threat_weight": 0.0,
-            "aux_chain_weight": 0.0, "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+            "draw_reward": -0.5, "ply_cap_value": -0.5,
             "fast_policy_weight": 0.0,
         },
         # WPSC Phase 2 SC-A2: `selfplay:` gains mcts:/playout_cap: sub-blocks + many new
@@ -947,27 +937,19 @@ def strip_and_restamp(
         # section. Placeholder values, same posture as the eval block above.
         "selfplay": {
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-            "inference_pool_size": None, "c_visit": 50.0,
-            "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-            "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-            "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-            "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-            "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-            "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-            "instrumentation_enabled": False,
+            "c_visit": 50.0, "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
+            "results_queue_cap": 10_000, "random_opening_plies": 0,
+            "log_investigation_metrics": True,
             "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
                      "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                      "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25,
                      "dirichlet_enabled": True},
             "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
                             "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                            "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
                             "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
         },
         "inference": {
-            "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-            "compile_inference": False, "compile_inference_mode": "default",
-            "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+            "inference_batch_size": 64, "inference_max_wait_ms": 10,
             # (`inference.fused_graph_caps` is ARCH-SCOPED and is spliced in below, on the
             # graph route only — R322(d), for `train.microbatch_caps`' reason.)
         },

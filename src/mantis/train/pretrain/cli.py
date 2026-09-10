@@ -32,10 +32,6 @@ import argparse
 import logging
 from pathlib import Path
 
-import numpy as np
-import torch
-import torch.optim as optim
-
 from mantis.config import TrainConfig, load_config
 from mantis.encoding import all_specs as _all_specs
 from mantis.encoding import lookup as _lookup_encoding
@@ -43,16 +39,7 @@ from mantis.encoding import resolve_corpus_path as _resolve_corpus_path
 from mantis.encoding import resolve_from_checkpoint as _resolve_encoding_from_ckpt
 from mantis.encoding.registry import EncodingRegistryError as _EncodingRegistryError
 from mantis.encoding.resolvers import MissingEncodingError
-from mantis.model import HexTacToeNet, arch_from_spec_and_config, build_net, compile_model
 from mantis.monitor.logging_setup import configure_logging
-from mantis.train.emit import NullEventSink
-from mantis.train.pretrain.dataset import (
-    AugmentedBootstrapDataset,
-    make_augmented_collate,
-)
-from mantis.train.pretrain.freeze import _apply_finetune_freeze
-from mantis.train.pretrain.trainer import BootstrapTrainer
-from mantis.train.pretrain.validate import validate
 from mantis.util.device import best_device
 
 _LOG = logging.getLogger(__name__)
@@ -148,16 +135,7 @@ def training_terms(train_cfg: TrainConfig) -> dict[str, float | int | bool | str
         "lr": float(train_cfg.lr),
         "weight_decay": float(train_cfg.weight_decay),
         "batch_size": int(train_cfg.batch_size),
-        "aux_opp_reply_weight": float(train_cfg.aux_opp_reply_weight),
-        "aux_chain_weight": float(train_cfg.aux_chain_weight),
         "pretrain_eta_min": float(train_cfg.eta_min),
-        # AUDIT-1 F-30, and it is the SAME defect this function was written to fix, on two
-        # more keys. `BootstrapTrainer` read `config.get("fp16", True)` — a code-side default
-        # on a key the schema REQUIRES — and autocast at a LITERAL `torch.float16`, so BC
-        # pretrain ran at hard-fp16 on grid and fp32 on graph (no autocast at all) while the
-        # trainer it warm-starts runs `amp_dtype_for`. Both now come off the minted config.
-        "fp16": bool(train_cfg.fp16),
-        "amp_dtype": str(train_cfg.amp_dtype),
     }
 
 
@@ -226,10 +204,7 @@ def pretrain(argv: list[str] | None = None) -> None:
     _LOG.info("pretrain_device device=%s encoding=%s", device, encoding)
 
     # The GRAPH arm is a REROUTE, not a second pipeline: it hands a loaded `.hexg` ring to the
-    # SAME declared train-step seam the self-play loop uses (R325(c)). Everything below this
-    # branch — the NPZ reader, the augmented dense collate, `BootstrapTrainer` — is the dense
-    # arm and stays dense. `--no-compile` has no subject here: production does not compile the
-    # graph net, so this route does not either.
+    # SAME declared train-step seam the self-play loop uses (R325(c)).
     if getattr(spec, "representation", None) == "graph":
         from mantis.train.pretrain.graph_route import GraphPretrainError, run_graph_pretrain
 
@@ -289,129 +264,11 @@ def pretrain(argv: list[str] | None = None) -> None:
             raise SystemExit(str(e)) from e
         _LOG.info("pretrain_complete route=graph checkpoint=%s", written)
         return
-
-    # ── Corpus (mmap'd NPZ; the raw-JSON fallback is KILLED — 0 config consumers) ──
-    npz_path = Path(args.corpus_npz) if args.corpus_npz is not None else Path(_resolve_corpus_path(spec))
-    if not npz_path.exists():
-        raise SystemExit(
-            f"corpus NPZ not found: {npz_path}. Build it (export the corpus NPZ for encoding "
-            f"{encoding!r}) or pass --corpus-npz. The legacy raw-JSON corpus fallback is removed "
-            "(0 config consumers)."
-        )
-    data = np.load(npz_path, mmap_mode="r")
-    states, policies, outcomes, weights = (
-        data["states"], data["policies"], data["outcomes"], data["weights"],
+    raise SystemExit(
+        f"pretrain CLI: encoding {encoding!r} declares representation "
+        f"{getattr(spec, 'representation', None)!r}; the only pretrain route is the graph "
+        "reroute (the dense NPZ pipeline went with the grid path, R346(f))."
     )
-    if len(outcomes) == 0:
-        raise SystemExit(f"empty corpus at {npz_path}.")
-    _LOG.info("dataset_built n_positions=%d", int(len(outcomes)))
-
-    dataset = AugmentedBootstrapDataset(states, policies, outcomes)
-    sampler = torch.utils.data.WeightedRandomSampler(
-        # torch stub gap: WeightedRandomSampler is annotated Sequence[float] but is
-        # documented to take (and internally as_tensor()s) a Tensor.
-        weights=torch.from_numpy(np.asarray(weights)).double(),  # pyright: ignore[reportArgumentType]
-        num_samples=len(dataset),
-        replacement=True,
-    )
-    loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=int(config["batch_size"]),
-        sampler=sampler,
-        num_workers=0,
-        pin_memory=(device.type == "cuda"),
-        collate_fn=make_augmented_collate(augment=True, encoding=encoding),
-    )
-
-    # ── Model — the WP9 construction authority ──
-    arch = arch_from_spec_and_config(spec, config)
-    model = build_net(arch)
-    if not isinstance(model, HexTacToeNet):
-        # The bootstrap-pretrain pipeline is dense-only (dense corpus NPZ, dense collate,
-        # HexTacToeNet trainer); a graph encoding has no pretrain path through this CLI.
-        raise SystemExit(
-            f"pretrain CLI: encoding {encoding!r} built a {type(model).__name__} — the "
-            "bootstrap-pretrain pipeline is dense-only (no graph corpus route)."
-        )
-    if device.type == "cuda" and not args.no_compile:
-        model = compile_model(model, mode="default")
-
-    checkpoint_dir = Path(args.checkpoint_dir)
-    step_budget = args.steps
-    total_pretrain_steps = step_budget if step_budget is not None else args.epochs * len(loader)
-    config["pretrain_total_steps"] = total_pretrain_steps
-    if args.eta_min is not None:
-        config["pretrain_eta_min"] = float(args.eta_min)  # an EXPLICIT operator override
-
-    trainer = BootstrapTrainer(
-        model, config, device, checkpoint_dir, arch=arch, sink=NullEventSink(),
-    )
-
-    if args.resume:
-        _resume_into(trainer, args, total_pretrain_steps)
-
-    if args.freeze_trunk_entry or args.unfreeze_blocks is not None:
-        unfreeze_set: set | None = None
-        if args.unfreeze_blocks is not None:
-            unfreeze_set = {int(s) for s in args.unfreeze_blocks.split(",") if s.strip()}
-        report = _apply_finetune_freeze(
-            getattr(trainer.model, "_orig_mod", trainer.model),
-            freeze_trunk_entry=args.freeze_trunk_entry,
-            unfreeze_blocks=unfreeze_set,
-        )
-        _LOG.info("finetune_freeze_applied %s", report)
-
-    trainer.step = -total_pretrain_steps
-    start_step = trainer.step
-    chain_weight = float(config["aux_chain_weight"])
-    for epoch in range(1, args.epochs + 1):
-        metrics = trainer.train_epoch(
-            loader,
-            label_smoothing=(DEFAULT_LABEL_SMOOTHING if args.label_smoothing is None
-                             else float(args.label_smoothing)),
-            aux_weight=float(config["aux_opp_reply_weight"]),
-            chain_weight=chain_weight,
-            step_budget=step_budget,
-            start_step=start_step,
-        )
-        _LOG.info("epoch_complete epoch=%d %s", epoch, {k: round(v, 4) for k, v in metrics.items()})
-        if step_budget is not None and (trainer.step - start_step) >= step_budget:
-            break
-
-    inf_out = Path(args.inference_out) if args.inference_out else None
-    ckpt_path = trainer.save_checkpoint(inf_out=inf_out)
-    _LOG.info("pretrain_checkpoint path=%s", str(ckpt_path))
-    validate(ckpt_path, device)
-
-
-def _resume_into(trainer: BootstrapTrainer, args: argparse.Namespace, total_steps: int) -> None:
-    """Resume model/optimizer/scaler from a full pretrain checkpoint; restart the cosine schedule
-    across the new window at the requested peak LR (weights-only source → optimizer/scaler reset)."""
-    resume_path = Path(args.resume)
-    resume_ckpt = torch.load(resume_path, map_location=trainer.device, weights_only=True)
-    base = getattr(trainer.model, "_orig_mod", trainer.model)
-    weights_only_src = isinstance(resume_ckpt, dict) and "model_state" not in resume_ckpt
-    if weights_only_src:
-        base.load_state_dict(resume_ckpt)
-    else:
-        base.load_state_dict(resume_ckpt["model_state"])
-        trainer.optimizer.load_state_dict(resume_ckpt["optimizer_state"])
-        if resume_ckpt.get("scaler_state") is not None:
-            trainer.scaler.load_state_dict(resume_ckpt["scaler_state"])
-    new_peak = float(args.lr_peak) if args.lr_peak is not None else float(trainer.config["lr"])
-    new_eta_min = (
-        float(args.eta_min) if args.eta_min is not None
-        else float(trainer.config["pretrain_eta_min"])
-    )
-    for g in trainer.optimizer.param_groups:
-        g["lr"] = new_peak
-        g["initial_lr"] = new_peak
-    trainer.scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        trainer.optimizer, T_max=max(1, total_steps), eta_min=new_eta_min,
-    )
-    _LOG.info("resume_complete new_peak_lr=%s cosine_t_max=%s weights_only=%s",
-              new_peak, total_steps, weights_only_src)
-
 
 if __name__ == "__main__":
     pretrain()

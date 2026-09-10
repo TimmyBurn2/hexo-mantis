@@ -513,7 +513,6 @@ def _play_gate_block(
         max_in_flight=spec.leaf_batch_size,
         # AUDIT-1 F-31: the declared autocast dtype, threaded on the spec for the same reason
         # as the three above — the dense decode had none at all.
-        amp_dtype=spec.amp_dtype,
         # NIGHTRUN-1 E1, same seam and same reason as the three above: the child has no
         # `RunConfig` to derive a host reservation from, and a serial leaf build is 95 % of
         # this path's measured cost.
@@ -773,7 +772,6 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         inference_batching=spec.inference_batching,
         max_in_flight=spec.leaf_batch_size,
         # AUDIT-1 F-31 — see the gate block's site for the reason.
-        amp_dtype=spec.amp_dtype,
         # NIGHTRUN-1 E1 — see the gate block's site for the reason.
         leaf_build_threads=spec.leaf_build_threads,
         # R339(c) — see the gate block's site. Both of the round's engines are armed: the

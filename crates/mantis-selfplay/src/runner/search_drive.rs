@@ -27,61 +27,23 @@ use rand::prelude::IndexedRandom;
 use rand::rngs::ThreadRng;
 use rand::RngExt;
 
-use mantis_core::board::hex_distance;
 use mantis_core::Board;
-use mantis_encoding::{encode_state_to_buffer_channels, RegistrySpec};
+use mantis_encoding::RegistrySpec;
 use mantis_search::{
-    compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
-    Outcome, SearchKind, TacticalConfig, TacticalSolver,
+    compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState, SearchKind,
 };
 
-use crate::queues::{build_leaf_graph, DenseQueue, GraphQueue};
+use crate::queues::{build_leaf_graph, GraphQueue};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
-/// K-cluster value aggregation: the value head takes the WORST cluster view (min).
-///
-/// CARD-MINPIN (WPSC Phase 4): lifted verbatim from the frozen inline loop so the
-/// min/max asymmetry — value pools min while policy pools best-scoring
-/// (`records::aggregate_policy*`) — has ONE named, pinned home. This asymmetry is a
-/// flagged defect preserved pending the matched-FLOP dense arm (falsified.md F-04
-/// scope note; registry.toml `value_pool = "min"` comments). Bit-for-bit parity with
-/// the old loop is pinned by `tests/min_value_aggregation_pin.rs`. `pub` solely so
-/// the pin can reach it.
-///
-/// # Panics
-/// Panics on an empty slice — a cluster with zero leaf values is unrepresentable
-/// upstream (every expanded leaf contributes exactly one value per cluster view).
-pub fn aggregate_cluster_values_min(leaf_values: &[f32]) -> f32 {
-    let mut min_v = leaf_values[0];
-    for &v in leaf_values {
-        if v < min_v {
-            min_v = v;
-        }
-    }
-    min_v
-}
-use crate::replay::sym::SymTables;
+use super::record::record_position_graph_dispatch;
 
-use super::record::{
-    record_position, record_position_graph_dispatch, RecordTuple, K_CLUSTER_HISTOGRAM_BUCKETS,
-};
-use super::rotate::{rotate_policy_inplace, rotate_state_inplace};
-
-// ── Copy arg-bundles (frozen `inner.rs:63-183`) ─────────────────────────────
-
-/// NN queue handles + per-game symmetry context. Replaces the frozen single
-/// `InferenceBatcher` with the two disjoint queues (D4) + the `is_graph` hoist
-/// bool (set FROM the geometry match, not `spec.is_graph()`) + the resolved spec
-/// (graph-build geometry). `Copy` — passed by value.
+/// Graph queue handle + per-game symmetry context + the resolved spec (graph-build
+/// geometry). `Copy` — passed by value.
 #[derive(Clone, Copy)]
 pub(crate) struct InferContext<'a> {
-    pub(crate) dense_queue: &'a DenseQueue,
     pub(crate) graph_queue: &'a GraphQueue,
-    pub(crate) sym_tables: &'static SymTables,
-    pub(crate) sym_idx: usize,
-    pub(crate) inv_idx: usize,
-    pub(crate) is_graph: bool,
     pub(crate) spec: &'static RegistrySpec,
     /// Runner-owned model-version snapshot source (frozen `inner.rs:1214` =
     /// `batcher.current_model_version()`). Read once per move and dedup-pushed into
@@ -92,22 +54,9 @@ pub(crate) struct InferContext<'a> {
     pub(crate) running: &'a AtomicBool,
 }
 
-/// I2 cluster-variance accumulator triplet (frozen `:82`).
-#[derive(Clone, Copy)]
-pub(crate) struct ClusterVarianceAtomics<'a> {
-    pub(crate) value_std_accum: &'a AtomicU64,
-    pub(crate) policy_disagreement_accum: &'a AtomicU64,
-    pub(crate) variance_samples: &'a AtomicU64,
-}
-
 /// Per-move MCTS accumulators + `positions_generated` (frozen `:94`).
-/// WP12-R Phase T adds the two LAW-18 target-integrity counters (DESIGN_T §3.6,
-/// the solver_counters pattern): `export_offwindow_mass_moves` fires once per
-/// move whose exported target carries overflow mass; `gridls_zero_policy_rows`
-/// fires per recorded grid-ls cluster row filled with the §3.5 zero-row sentinel.
-/// Item 10(b) adds `k_cluster_histogram`, the DENSE record path's K distribution
-/// (R250: structurally unreachable on the graph arm — `record_position` is the
-/// only writer and the graph branch below never calls it).
+/// `export_offwindow_mass_moves` fires once per move whose exported target carries
+/// overflow mass (LAW-18, DESIGN_T §3.6).
 #[derive(Clone, Copy)]
 pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_depth_accum: &'a AtomicU64,
@@ -116,9 +65,7 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
     /// R335(c) — `fetch_max`ed with each search's served-leaf count.
     pub(crate) max_sims_per_search: &'a AtomicU64,
-    /// LAW-18 — the playout-cap arm as DRAWN, counted at the draw itself. The recorded
-    /// row's `is_full_search` is an OR with the forced-win and solver hooks, so a census of
-    /// the flag alone cannot say whether the draw fired or a hook did; these two can.
+    /// LAW-18 — the playout-cap arm as DRAWN, counted at the draw itself.
     pub(crate) pcr_full_moves: &'a AtomicU64,
     pub(crate) pcr_quick_moves: &'a AtomicU64,
     /// LAW-18 — the Gumbel round's width (see [`GumbelRoundCounters`]). Zero on a PUCT run,
@@ -127,14 +74,6 @@ pub(crate) struct MoveAccumulators<'a> {
     pub(crate) gumbel_rounds: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
-    pub(crate) gridls_zero_policy_rows: &'a AtomicU64,
-    pub(crate) k_cluster_histogram: &'a [AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS],
-    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
-    /// the injecting lever was armed (`apply_forced_win_one_hot_ls_counted`, both
-    /// the O1 arm and the solver hook). LS-path mechanism: ticks wherever
-    /// `legal_set` targets are built; the EMITTER publishes it on the graph arm
-    /// only (R256 — see `events.uncovered_forced_win_block`).
-    pub(crate) uncovered_forced_win: &'a AtomicU64,
 }
 
 /// WP12-R Phase T fatal-defect latch handle (DESIGN_T §3.4; LAW-14). Store the
@@ -180,22 +119,10 @@ impl FatalDefectLatch<'_> {
 }
 
 /// D-WS3V3 in-run solver fire-rate counter refs (frozen `:110`). Incremented ONLY
-/// under the `solver_enabled` / seeded branches, so an OFF run is byte-identical.
-#[derive(Clone, Copy)]
-pub(crate) struct SolverCounters<'a> {
-    pub(crate) moves_eligible: &'a AtomicU64,
-    pub(crate) win_proven: &'a AtomicU64,
-    pub(crate) injected: &'a AtomicU64,
-    pub(crate) injected_offwindow: &'a AtomicU64,
-    pub(crate) budget_exhausted: &'a AtomicU64,
-    pub(crate) moves_eligible_seeded: &'a AtomicU64,
-    pub(crate) injected_seeded: &'a AtomicU64,
-    pub(crate) seeded_games_started: &'a AtomicU64,
-}
 
 /// Per-move scalar context (frozen `:141`). `Copy` — mirrors the flat
 /// `WorkerParams` layout plus the per-game dynamics (`game_sims`, `is_fast_game`,
-/// `sym_idx`, `game_start_ply`, `seeded`).
+/// `game_start_ply`).
 #[derive(Clone, Copy)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct MovePlayContext {
@@ -204,8 +131,6 @@ pub(crate) struct MovePlayContext {
     pub(crate) visit_capacity: Option<usize>,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
-    pub(crate) zoi_lookback: usize,
-    pub(crate) zoi_margin: i32,
     pub(crate) c_visit: f32,
     pub(crate) c_scale: f32,
     pub(crate) gumbel_m: usize,
@@ -217,31 +142,18 @@ pub(crate) struct MovePlayContext {
     pub(crate) n_sims_full: usize,
     pub(crate) game_sims: usize,
     pub(crate) is_fast_game: bool,
-    pub(crate) sym_idx: usize,
     /// THE search authority: the root mechanism, the interior selector and the exported
     /// target's semantics all read this one field.
     pub(crate) search_kind: SearchKind,
     pub(crate) dirichlet_enabled: bool,
-    pub(crate) zoi_enabled: bool,
-    pub(crate) forced_win_enabled: bool,
-    pub(crate) forced_win_depth: u8,
-    pub(crate) forced_win_weight: f32,
-    pub(crate) solver_enabled: bool,
-    pub(crate) solver_depth: u32,
-    pub(crate) solver_node_budget: u64,
-    pub(crate) solver_neighbor_dist: i32,
-    pub(crate) solver_visit_weight: f32,
-    /// D-WS3V3: absolute ply the organic play begins at (0 organic; == seed
-    /// prefix_len for a seeded game). Gates Gumbel exploration RELATIVE to start.
+    /// Absolute ply the organic play begins at. Gates Gumbel exploration RELATIVE to start.
     pub(crate) game_start_ply: usize,
-    pub(crate) seeded: bool,
 }
 
-/// Per-move policy — either the dense scatter_max vector (byte-identical dense
-/// path) or the ragged legal-set policy (frozen `:713`).
+/// Per-move policy — the ragged legal-set policy (frozen `:713`). The dense scatter_max
+/// vector went with the grid path (R346(f)).
 #[derive(Clone)]
 pub(crate) enum MovePolicy {
-    Dense(Vec<f32>),
     Ls(LegalSetPolicy),
 }
 
@@ -250,7 +162,6 @@ impl MovePolicy {
     /// (the ragged variant uses the `1/n` no-coverage floor).
     fn sample(&self, legal: &[(i32, i32)], board: &Board, trunk: i32) -> Option<(i32, i32)> {
         match self {
-            MovePolicy::Dense(p) => records::sample_policy(p, legal, board, trunk),
             MovePolicy::Ls(ls) => {
                 let floor = 1.0 / legal.len().max(1) as f32;
                 records::sample_policy_ls(ls, legal, board, trunk, floor)
@@ -412,192 +323,6 @@ fn select_for(
 /// an OPEN queue. An empty leaf set is `Ok(0)` — that is search exhaustion, not a
 /// failure — and so is any failure arm reached with the queue already closed (the
 /// drain-shutdown path).
-#[inline]
-#[allow(clippy::too_many_arguments)]
-fn infer_and_expand(
-    tree: &mut MCTSTree,
-    selection: LeafSelection<'_>,
-    kept_planes: &'static [usize],
-    n_cells: usize,
-    policy_stride: usize,
-    has_pass_slot: bool,
-    agg_trunk_sz: i32,
-    legal_set: bool,
-    infer: InferContext,
-    variance: ClusterVarianceAtomics,
-) -> Result<usize, InferenceSeamFailure> {
-    // Graph-seam dispatch hoisted at the worker boundary (NOT per-sim). The graph
-    // fn is `#[cold]`/`#[inline(never)]` so it never bloats the inlined dense path.
-    if infer.is_graph {
-        return infer_and_expand_graph(tree, selection, agg_trunk_sz, infer);
-    }
-
-    // AUDIT-1 F-02: a tree/board desync is a NAMED run-fatal seam failure, not a panic that
-    // `guard_worker` converts into `running = false` with no reason latched. It routes through
-    // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
-    // it and `store_fatal_defect` names it.
-    let leaves = select_for(tree, selection)
-        .map_err(|desync| InferenceSeamFailure::new("dense", "selection", desync.to_string()))?;
-    if leaves.is_empty() {
-        return Ok(0);
-    }
-
-    let mut all_batch_features: Vec<Vec<f32>> = Vec::new();
-    let mut leaf_metadata: Vec<(usize, Vec<(i32, i32)>)> = Vec::with_capacity(leaves.len());
-
-    for leaf in &leaves {
-        let (views, centers) = leaf.get_cluster_views();
-        let k = views.len();
-        leaf_metadata.push((k, centers));
-        for view in views {
-            // No feature-buffer pool (WP7 owns pooling); allocate the state-stride
-            // buffer directly. Width == kept_planes.len() * n_cells == state_stride.
-            let mut buffer = vec![0.0f32; kept_planes.len() * n_cells];
-            encode_state_to_buffer_channels(leaf, &view, &mut buffer, kept_planes, n_cells);
-            // §130: forward-scatter the input planes to the rotated frame.
-            if infer.sym_idx != 0 {
-                rotate_state_inplace(&mut buffer, infer.sym_idx, infer.sym_tables);
-            }
-            all_batch_features.push(buffer);
-        }
-    }
-    if all_batch_features.is_empty() {
-        return Ok(0);
-    }
-
-    let total_clusters: usize = leaf_metadata.iter().map(|(k, _)| *k).sum();
-
-    let (all_policies, all_values) =
-        match infer.dense_queue.submit_batch_and_wait(all_batch_features) {
-            Ok(results) => {
-                let mut ps = Vec::with_capacity(results.len());
-                let mut vs = Vec::with_capacity(results.len());
-                for (mut p, v) in results {
-                    // §130: inverse-scatter the policy back to canonical frame.
-                    if infer.sym_idx != 0 {
-                        rotate_policy_inplace(&mut p, infer.inv_idx, infer.sym_tables, n_cells);
-                    }
-                    ps.push(p);
-                    vs.push(v);
-                }
-                (ps, vs)
-            }
-            // R275(b): was "dense skip-on-Err (reason NOT consumed, D6): skip the
-            // batch". The frozen dense surface collapses the waiter's reason to `()`
-            // before it ever reaches here, so the arm and stage are all this leg can
-            // name — which is precisely why it must be loud rather than silent.
-            Err(()) => {
-                return seam_or_shutdown(
-                    infer.running,
-                    "dense",
-                    "submit_batch_and_wait",
-                    "the dense queue surface collapses the waiter reason to `()` (D6); \
-                 causes are a producer-submitted inference failure or a feature-length \
-                 mismatch",
-                )
-            }
-        };
-
-    if all_policies.len() < total_clusters {
-        return seam_or_shutdown(
-            infer.running,
-            "dense",
-            "result-count",
-            format!(
-                "inference returned {} policies for {total_clusters} cluster requests",
-                all_policies.len()
-            ),
-        );
-    }
-
-    // One arm allocates, the other is an empty `Vec::new()` — one policy_pool per run.
-    let mut aggregated_policies: Vec<Vec<f32>> = if legal_set {
-        Vec::new()
-    } else {
-        Vec::with_capacity(leaves.len())
-    };
-    let mut aggregated_policies_ls: Vec<LegalSetPolicy> = if legal_set {
-        Vec::with_capacity(leaves.len())
-    } else {
-        Vec::new()
-    };
-    let mut aggregated_values = Vec::with_capacity(leaves.len());
-    let mut curr = 0;
-
-    for (i, (k, centers)) in leaf_metadata.iter().enumerate() {
-        let leaf_policies = &all_policies[curr..curr + *k];
-        let leaf_values = &all_values[curr..curr + *k];
-        curr += *k;
-
-        // I2 investigation metric: per-cluster value/policy variance (Q2/Q27).
-        if *k >= 2 {
-            let mean_v: f32 = leaf_values.iter().sum::<f32>() / *k as f32;
-            let var_v: f32 = leaf_values
-                .iter()
-                .map(|&v| (v - mean_v).powi(2))
-                .sum::<f32>()
-                / *k as f32;
-            let std_v = var_v.sqrt();
-            let mut top1 = Vec::with_capacity(*k);
-            for p in leaf_policies {
-                let mut bi = 0usize;
-                let mut bv = p[0];
-                for (ii, &pv) in p.iter().enumerate() {
-                    if pv > bv {
-                        bi = ii;
-                        bv = pv;
-                    }
-                }
-                top1.push(bi);
-            }
-            let mut max_c = 1usize;
-            for &a in &top1 {
-                let c = top1.iter().filter(|&&x| x == a).count();
-                if c > max_c {
-                    max_c = c;
-                }
-            }
-            let disagree = 1.0f32 - (max_c as f32 / *k as f32);
-            variance
-                .value_std_accum
-                .fetch_add((std_v * 1_000_000.0) as u64, Ordering::Relaxed);
-            variance
-                .policy_disagreement_accum
-                .fetch_add((disagree * 1_000_000.0) as u64, Ordering::Relaxed);
-            variance.variance_samples.fetch_add(1, Ordering::Relaxed);
-        }
-
-        aggregated_values.push(aggregate_cluster_values_min(leaf_values));
-        if legal_set {
-            aggregated_policies_ls.push(records::aggregate_policy_ls(
-                policy_stride,
-                has_pass_slot,
-                agg_trunk_sz,
-                &leaves[i],
-                centers,
-                leaf_policies,
-            ));
-        } else {
-            aggregated_policies.push(records::aggregate_policy(
-                policy_stride,
-                has_pass_slot,
-                agg_trunk_sz,
-                &leaves[i],
-                centers,
-                leaf_policies,
-            ));
-        }
-    }
-
-    let n = leaves.len();
-    if legal_set {
-        tree.expand_and_backup_ls(&aggregated_policies_ls, &aggregated_values);
-    } else {
-        tree.expand_and_backup(&aggregated_policies, &aggregated_values);
-    }
-    Ok(n)
-}
-
 /// GNN counterpart of `infer_and_expand` (frozen `inner.rs:893`). Builds ONE axis
 /// graph per evaluated leaf (F-19 build-once-per-leaf: no reuse, no patching),
 /// submits the whole batch through the parallel graph queue in ONE
@@ -759,29 +484,17 @@ fn run_mcts_search(
     c_scale: f32,
     running: &AtomicBool,
     rng: &mut ThreadRng,
-    kept_planes: &'static [usize],
-    n_cells: usize,
-    policy_stride: usize,
-    has_pass_slot: bool,
     agg_trunk_sz: i32,
-    legal_set: bool,
     infer: InferContext,
-    variance: ClusterVarianceAtomics,
     rounds: GumbelRoundCounters,
 ) -> McTSSearchResult {
     // Both kinds open the same way: ONE leaf, which is the root itself, evaluated and
     // backed up. It is charged against the budget on both arms.
-    let root_sims = match infer_and_expand(
+    let root_sims = match infer_and_expand_graph(
         tree,
         LeafSelection::Batch(1),
-        kept_planes,
-        n_cells,
-        policy_stride,
-        has_pass_slot,
         agg_trunk_sz,
-        legal_set,
         infer,
-        variance,
     ) {
         Ok(n) => n,
         Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -826,17 +539,11 @@ fn run_mcts_search(
                 }
                 let _ = tree.set_forced_root_child(None);
 
-                let n = match infer_and_expand(
+                let n = match infer_and_expand_graph(
                     tree,
                     LeafSelection::Round(&round),
-                    kept_planes,
-                    n_cells,
-                    policy_stride,
-                    has_pass_slot,
                     agg_trunk_sz,
-                    legal_set,
                     infer,
-                    variance,
                 ) {
                     Ok(n) => n,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -878,17 +585,11 @@ fn run_mcts_search(
                 // ledger's served-sims line disagree with the config and every "fixed nodes"
                 // claim unstatable.
                 let batch = leaf_batch_size.min(move_sims - sims_done);
-                let n = match infer_and_expand(
+                let n = match infer_and_expand_graph(
                     tree,
                     LeafSelection::Batch(batch),
-                    kept_planes,
-                    n_cells,
-                    policy_stride,
-                    has_pass_slot,
                     agg_trunk_sz,
-                    legal_set,
                     infer,
-                    variance,
                 ) {
                     Ok(n) => n,
                     Err(e) => return McTSSearchResult::InferenceFailed(e),
@@ -906,33 +607,24 @@ fn run_mcts_search(
 // ── Per-move dispatcher (warm/HOT path) ─────────────────────────────────────
 
 /// Orchestrates one full move: playout-cap selection, MCTS search, per-move stat
-/// accumulation, target-policy build (temperature → completed-Q → O1 → solver),
-/// ZOI-filtered sampling, position recording (BEFORE apply), and apply-move.
+/// accumulation, target-policy build (temperature -> completed-Q), sampling, position
+/// recording (BEFORE apply), and apply-move.
 /// Frozen `inner.rs:1099`.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
 pub(crate) fn play_one_move(
     tree: &mut MCTSTree,
     board: &mut Board,
-    records_vec: &mut Vec<RecordTuple>,
     graph_records_vec: &mut Vec<GraphRecord>,
     move_history: &mut Vec<(i32, i32)>,
     version_seen: &mut Vec<u64>,
     rng: &mut ThreadRng,
     running: &AtomicBool,
     ctx: MovePlayContext,
-    kept_planes: &'static [usize],
-    n_cells: usize,
     policy_stride: usize,
-    has_pass_slot: bool,
     agg_trunk_sz: i32,
-    legal_set: bool,
-    is_graph: bool,
     infer: InferContext,
-    variance: ClusterVarianceAtomics,
     accumulators: MoveAccumulators,
-    solver_counters: SolverCounters,
-    solver_fires: &mut u32,
     fatal_latch: FatalDefectLatch,
 ) -> MoveOutcome {
     // Move-level playout cap (orthogonal to game-level fast_prob).
@@ -971,14 +663,8 @@ pub(crate) fn play_one_move(
         ctx.c_scale,
         running,
         rng,
-        kept_planes,
-        n_cells,
-        policy_stride,
-        has_pass_slot,
         agg_trunk_sz,
-        legal_set,
         infer,
-        variance,
         GumbelRoundCounters {
             round_leaves: accumulators.gumbel_round_leaves,
             rounds: accumulators.gumbel_rounds,
@@ -1024,11 +710,7 @@ pub(crate) fn play_one_move(
     } else {
         compute_move_temperature(compound_move, ctx.temp_threshold, ctx.temp_min)
     };
-    let policy = if legal_set {
-        MovePolicy::Ls(tree.get_policy_ls(temperature, policy_stride))
-    } else {
-        MovePolicy::Dense(tree.get_policy(temperature, policy_stride))
-    };
+    let policy = MovePolicy::Ls(tree.get_policy_ls(temperature, policy_stride));
 
     // Accumulate MCTS health stats once per search (not in the inner sim loop).
     {
@@ -1059,70 +741,22 @@ pub(crate) fn play_one_move(
 
     // The training target's semantics are the search kind's own answer — there is no
     // second flag that can disagree with the search that produced the tree.
-    let mut target_policy = if ctx.search_kind.completed_q_target() {
-        if legal_set {
-            MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.c_visit, ctx.c_scale))
-        } else {
-            MovePolicy::Dense(tree.get_improved_policy(policy_stride, ctx.c_visit, ctx.c_scale))
-        }
+    let target_policy = if ctx.search_kind.completed_q_target() {
+        MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.c_visit, ctx.c_scale))
     } else {
         policy.clone()
     };
 
-    // O1: forced-win → (near-)one-hot POLICY target (fires once per move at target
-    // extraction, NOT in the per-sim hot path).
-    let forced_win_fired = ctx.forced_win_enabled
-        && match board.forced_win_move(ctx.forced_win_depth) {
-            Some((wq, wr)) => match &mut target_policy {
-                MovePolicy::Dense(t) => {
-                    let action = board.window_flat_idx(wq, wr);
-                    if action < policy_stride {
-                        records::apply_forced_win_one_hot(t, action, ctx.forced_win_weight);
-                        true
-                    } else {
-                        false
-                    }
-                }
-                // Coverage-gated: a covered win one-hots; an uncovered win is a no-op
-                // COUNTED by the R256 instrument (the one counted helper, shared with
-                // the solver hook so mechanism and instrument cannot drift).
-                MovePolicy::Ls(ls) => records::apply_forced_win_one_hot_ls_counted(
-                    board,
-                    ls,
-                    (wq, wr),
-                    ctx.forced_win_weight,
-                    agg_trunk_sz,
-                    accumulators.uncovered_forced_win,
-                ),
-            },
-            None => false,
-        };
-
-    // D-WS3 L1: native solver-in-loop SOFT visit-injection (default-OFF =
-    // byte-identical hot path).
-    let solver_fired = run_solver_hook(
-        board,
-        &mut target_policy,
-        &ctx,
-        legal_set,
-        policy_stride,
-        agg_trunk_sz,
-        solver_counters,
-        solver_fires,
-        accumulators.uncovered_forced_win,
-    );
-
-    let record_full_search = move_is_full_search || forced_win_fired || solver_fired;
+    let record_full_search = move_is_full_search;
 
     // LAW-18 (DESIGN_T §3.6): count a move whose exported target carries
     // off-window (overflow) mass — the restored-mass fire-rate; pre-Phase-T
     // this population was being truncated by the coverage gate.
-    if let MovePolicy::Ls(ls) = &target_policy {
-        if ls.overflow.values().any(|&p| p > 0.0) {
-            accumulators
-                .export_offwindow_mass_moves
-                .fetch_add(1, Ordering::Relaxed);
-        }
+    let MovePolicy::Ls(ls) = &target_policy;
+    if ls.overflow.values().any(|&p| p > 0.0) {
+        accumulators
+            .export_offwindow_mass_moves
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     // ── Sample and apply move (ZOI-filtered legal set) ──
@@ -1139,8 +773,8 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     };
 
-    // ── Record position (BEFORE apply_move; hoisted is_graph branch) ──
-    if is_graph {
+    // ── Record position (BEFORE apply_move) ──
+    {
         let visit_capacity = ctx.visit_capacity.expect(
             "graph record dispatch requires the derived visit capacity — composed in \
              SelfPlayRunner::new's graph arm (R255)",
@@ -1173,24 +807,6 @@ pub(crate) fn play_one_move(
             fatal_latch.store(err.to_string());
             return MoveOutcome::Break;
         }
-    } else {
-        record_position(
-            board,
-            kept_planes,
-            n_cells,
-            agg_trunk_sz,
-            ctx.is_fast_game,
-            ctx.search_kind.completed_q_target(),
-            policy_stride,
-            has_pass_slot,
-            &target_policy,
-            ctx.sym_idx,
-            infer.sym_tables,
-            record_full_search,
-            records_vec,
-            accumulators.gridls_zero_policy_rows,
-            accumulators.k_cluster_histogram,
-        );
     }
 
     if board.apply_move(move_idx.0, move_idx.1).is_err() {
@@ -1203,117 +819,6 @@ pub(crate) fn play_one_move(
     MoveOutcome::Played
 }
 
-/// D-WS3 L1 solver hook (frozen `inner.rs:1291`). The net-free `mantis_search`
-/// tactical solver proves the side-to-move's forced win and SOFT-injects visit
-/// mass onto the proving move's first stone (`line[0]`) into the POLICY target.
-/// `solver_enabled=false` (default) short-circuits before any solver work. Fires
-/// once per move at target extraction, never in the per-sim hot path.
-#[allow(clippy::too_many_arguments)]
-fn run_solver_hook(
-    board: &Board,
-    target_policy: &mut MovePolicy,
-    ctx: &MovePlayContext,
-    legal_set: bool,
-    policy_stride: usize,
-    agg_trunk_sz: i32,
-    solver_counters: SolverCounters,
-    solver_fires: &mut u32,
-    uncovered_forced_win: &AtomicU64,
-) -> bool {
-    if !ctx.solver_enabled {
-        return false;
-    }
-    // Every move reaching here is "eligible" (the solver runs on every move).
-    solver_counters
-        .moves_eligible
-        .fetch_add(1, Ordering::Relaxed);
-    if ctx.seeded {
-        solver_counters
-            .moves_eligible_seeded
-            .fetch_add(1, Ordering::Relaxed);
-    }
-    let cfg = TacticalConfig {
-        cand_cap: 40,
-        // legal_set (multi-window): None surfaces off-window forced wins (the
-        // coverage gate gives them a ragged slot). DENSE (single-window): keep the
-        // single-window guard so the solver only spends budget on the expressible
-        // action space.
-        window_half: if legal_set {
-            None
-        } else {
-            Some((agg_trunk_sz - 1) / 2)
-        },
-        // Quiet-move widening; < 0 → None (threat-only).
-        neighbor_dist: if ctx.solver_neighbor_dist < 0 {
-            None
-        } else {
-            Some(ctx.solver_neighbor_dist)
-        },
-    };
-    let proof = TacticalSolver::new(cfg).prove(board, ctx.solver_depth, ctx.solver_node_budget);
-    if proof.budget_exhausted {
-        solver_counters
-            .budget_exhausted
-            .fetch_add(1, Ordering::Relaxed);
-    }
-    if proof.result != Outcome::Win {
-        return false;
-    }
-    solver_counters.win_proven.fetch_add(1, Ordering::Relaxed);
-    let Some(&(wq, wr)) = proof.line.first() else {
-        return false;
-    };
-    // (injected, off_window) — off_window is only reachable on the LS path.
-    let (injected, off_window) = match target_policy {
-        MovePolicy::Dense(t) => {
-            let action = board.window_flat_idx(wq, wr);
-            if action < policy_stride {
-                records::apply_forced_win_one_hot(t, action, ctx.solver_visit_weight);
-                (true, false)
-            } else {
-                (false, false)
-            }
-        }
-        // Coverage-gated (the SAME counted helper as the O1 LS path — R256).
-        MovePolicy::Ls(ls) => {
-            let did = records::apply_forced_win_one_hot_ls_counted(
-                board,
-                ls,
-                (wq, wr),
-                ctx.solver_visit_weight,
-                agg_trunk_sz,
-                uncovered_forced_win,
-            );
-            // Off-window = injected into the ragged OVERFLOW target: the win maps
-            // outside the dense global window (>= policy_stride).
-            let (bcq, bcr) = board.window_center();
-            let half = (agg_trunk_sz - 1) / 2;
-            let off = did
-                && Board::window_flat_idx_at_geom(wq, wr, bcq, bcr, agg_trunk_sz, half)
-                    >= policy_stride;
-            (did, off)
-        }
-    };
-    if injected {
-        solver_counters.injected.fetch_add(1, Ordering::Relaxed);
-        if ctx.seeded {
-            solver_counters
-                .injected_seeded
-                .fetch_add(1, Ordering::Relaxed);
-        }
-        if off_window {
-            solver_counters
-                .injected_offwindow
-                .fetch_add(1, Ordering::Relaxed);
-        }
-        *solver_fires += 1;
-    }
-    injected
-}
-
-/// D-WS3V3 Gumbel-explore gate on ply RELATIVE to game start (frozen
-/// `inner.rs:1426`). `game_start_ply == 0` (organic) is byte-identical to the
-/// absolute-ply test; a seeded game explores for `explore_moves` moves AFTER its
 /// deep start.
 #[inline]
 fn relative_explore_gate(ply: usize, game_start_ply: usize, explore_moves: usize) -> bool {
@@ -1326,7 +831,7 @@ fn relative_explore_gate(ply: usize, game_start_ply: usize, explore_moves: usize
 #[allow(clippy::too_many_arguments)]
 fn select_move(
     board: &Board,
-    move_history: &[(i32, i32)],
+    _move_history: &[(i32, i32)],
     policy: &MovePolicy,
     gumbel_state: Option<MctxRootState>,
     ctx: MovePlayContext,
@@ -1339,30 +844,10 @@ fn select_move(
         return None;
     }
 
-    // ZOI filtering: restrict move sampling to cells near recent moves.
-    let legal = if ctx.zoi_enabled && move_history.len() >= 3 {
-        let filtered: Vec<_> = full_legal
-            .iter()
-            .filter(|(q, r)| {
-                move_history
-                    .iter()
-                    .rev()
-                    .take(ctx.zoi_lookback)
-                    .any(|(q0, r0)| hex_distance(*q, *r, *q0, *r0) <= ctx.zoi_margin)
-            })
-            .copied()
-            .collect();
-        if filtered.len() < 3 {
-            full_legal
-        } else {
-            filtered
-        }
-    } else {
-        full_legal
-    };
+    let legal = full_legal;
 
-    // Move selection: Gumbel winner or visit-count sampling. D-WS3V3 gates the
-    // exploration on ply RELATIVE to game start.
+    // Move selection: Gumbel winner or visit-count sampling, gated on ply RELATIVE to
+    // game start.
     //
     // `gumbel_explore_moves` IS item 7's switch, and no new key is needed for it:
     // the paper's action selection is the Sequential-Halving winner and the

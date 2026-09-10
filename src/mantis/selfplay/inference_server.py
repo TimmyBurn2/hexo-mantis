@@ -309,12 +309,7 @@ class InferenceServer(threading.Thread):
             self._weights_lock = threading.Lock()
             self._forward_count = 0
             self._total_requests = 0
-            # Inert grid-path attributes so shared accessors don't raise.
-            self._trace_inference = False
             self._traced_model: Any = None
-            self._compile_inference = False
-            self._compile_mode: str | None = None
-            self._compile_dynamic = False
             self._h2d_staging: torch.Tensor | None = None
         else:
             # H2D staging tensors size to the TRUNK window (the spatial dim the model
@@ -337,8 +332,6 @@ class InferenceServer(threading.Thread):
             self._forward_count = 0
             self._total_requests = 0
 
-            self._setup_inference_path(hp, board_size)
-
             # Pinned host staging buffer for async H2D. Enables a DMA-engine copy on CUDA
             # (`non_blocking=True`); no-op on CPU.
             if self.device.type == "cuda":
@@ -350,97 +343,13 @@ class InferenceServer(threading.Thread):
             else:
                 self._h2d_staging = None
 
-        # Perf-investigation probes.
-        self._perf_timing = hp.perf_timing
-        self._perf_sync_cuda = hp.perf_sync_cuda
-        if self._perf_sync_cuda and torch.cuda.is_available():
-            _LOG.warning(
-                "perf_sync_cuda_enabled_serialising_stream context=%s impact=%s remedy=%s",
-                "inference_server",
-                "expect_30_50_pct_throughput_drop",
-                "unset_diagnostics.perf_sync_cuda_in_production_config",
-            )
-
         # Autocast dtype — representation-aware. The graph loop is pinned to bf16
         # UNCONDITIONALLY (LAW-06): fp16 GINE sum-aggregation overflows on
         # production-scale graphs. The dense path reads the `train.amp_dtype` knob and must
         # match the trainer's choice for weight-sync consistency. R30b: hard key access, no
         # fallback — config["train"]["amp_dtype"] is a required schema field.
         _representation = "graph" if self._is_graph else "grid"
-        self._amp_dtype = amp_dtype_for(_representation, config["train"]["amp_dtype"])
-
-    def _setup_inference_path(self, hp: InferenceHParams, board_size: int) -> None:
-        """Configure the trace OR compile path for the inference model.
-
-        Mutually exclusive: `trace_inference` and `compile_inference` cannot both be
-        enabled. Sets `_trace_inference`, `_traced_model`, `_compile_inference`,
-        `_compile_mode`, `_compile_dynamic`; may replace `self.model` with a
-        `torch.compile` wrapper. Called once at `__init__` — the run loop reads the
-        resolved attributes, so there is no per-batch overhead from this helper.
-        """
-        if self._shape is None:
-            # Grid-only helper: __init__ calls it exclusively from the dense arm, after
-            # `_shape` is assigned; the graph arm never routes here.
-            raise RuntimeError(
-                "InferenceServer._setup_inference_path: no (C, H, W) shape — the dense "
-                "setup was entered for a graph encoding."
-            )
-        # TorchScript trace of the eval forward: collapses ~100 `nn.Module` `_call_impl`
-        # invocations per forward into one ScriptModule whose parameters SHARE storage
-        # with `model`, so `load_state_dict_safe`'s in-place mutation keeps flowing into
-        # the traced graph without re-tracing.
-        self._trace_inference = hp.trace_inference
-        self._traced_model: Any = None
-        if self._trace_inference:
-            try:
-                self.model.requires_grad_(False)
-                with torch.inference_mode():
-                    _example = torch.zeros(
-                        self._batch_size, *self._shape, device=self.device,
-                    )
-                    self._traced_model = torch.jit.trace(
-                        self.model, _example, strict=False,
-                    )
-                _LOG.info(
-                    "inference_trace_compiled context=%s batch_size=%s board_size=%s",
-                    "inference_server", self._batch_size, board_size,
-                )
-            except Exception as exc:  # noqa: BLE001 — degrade to the untraced module, logged
-                _LOG.warning(
-                    "inference_trace_failed_falling_back context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-                self._traced_model = None
-
-        # `torch.compile` knob. Mutually exclusive with trace — both attack the same
-        # bottleneck (Python dispatch / kernel-launch overhead) and stacking them does not
-        # compose. Mode `default` is thread-safe from any caller; `reduce-overhead`
-        # requires the dispatcher thread's TLS to own the cudagraph_trees context.
-        self._compile_inference = hp.compile_inference
-        self._compile_mode = hp.compile_inference_mode
-        self._compile_dynamic = hp.compile_inference_dynamic
-        if self._compile_inference and self._trace_inference:
-            raise ValueError(
-                "compile_inference and trace_inference are mutually exclusive; "
-                "set one to false in the selfplay config."
-            )
-        if self._compile_inference:
-            try:
-                self.model = torch.compile(
-                    self.model,
-                    mode=self._compile_mode,
-                    dynamic=self._compile_dynamic,
-                )
-                _LOG.info(
-                    "inference_compile_enabled context=%s mode=%s dynamic=%s",
-                    "inference_server", self._compile_mode, self._compile_dynamic,
-                )
-            except Exception as exc:  # noqa: BLE001 — degrade to eager, logged
-                _LOG.warning(
-                    "inference_compile_failed_falling_back context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-                self._compile_inference = False
+        self._amp_dtype = amp_dtype_for(_representation)
 
     @property
     def batcher(self) -> InferenceBatcher:
@@ -708,65 +617,6 @@ class InferenceServer(threading.Thread):
         }
 
     # ── Thread body ─────────────────────────────────────────────────────────────
-    def _padding_active(self) -> bool:
-        """The compile + `reduce-overhead` path replays a captured CUDA graph, which
-        requires a fixed input shape: each batch is padded up to ``self._batch_size`` and
-        outputs are sliced back to the actual request count."""
-        return (
-            self._compile_inference
-            and self._compile_mode == "reduce-overhead"
-            and self._h2d_staging is not None
-        )
-
-    def _warmup_compile_path(self) -> None:
-        """CUDA-graph TLS warmup for compile + `reduce-overhead`.
-
-        The cudagraph_trees state lives in C++ dynamic TLS — the first forward must run on
-        THIS dispatcher thread so the captured graph binds here, not to the thread that
-        built the wrapper. The warmup tensor is padded to the production batch size so the
-        graph is captured for the steady-state shape. Failures degrade to
-        fall-back-on-first-batch behaviour. No-op for non-CUDA or non-`reduce-overhead`.
-        """
-        if (
-            self._compile_inference
-            and self._compile_mode == "reduce-overhead"
-            and self.device.type == "cuda"
-        ):
-            if self._shape is None:
-                # `_compile_inference` is pinned False on the graph arm of __init__, and
-                # the dense arm always sets `_shape` — a None here is a wiring break.
-                raise RuntimeError(
-                    "InferenceServer._warmup_compile_path: compile warmup requires the "
-                    "dense (C, H, W) shape; graph mode never enables compile_inference."
-                )
-            try:
-                with self._weights_lock:
-                    with torch.inference_mode():
-                        with torch.autocast(
-                            device_type=self.device.type,
-                            dtype=self._amp_dtype,
-                        ):
-                            if self._h2d_staging is not None:
-                                self._h2d_staging.zero_()
-                                warmup_tensor = self._h2d_staging.to(
-                                    self.device, non_blocking=True,
-                                )
-                            else:
-                                warmup_tensor = torch.zeros(
-                                    self._batch_size, *self._shape, device=self.device,
-                                )
-                            _ = self.model(warmup_tensor)
-                torch.cuda.synchronize()
-                _LOG.info(
-                    "inference_compile_warmup_dispatcher context=%s batch_size=%s mode=%s",
-                    "inference_server", self._batch_size, self._compile_mode,
-                )
-            except Exception as exc:  # noqa: BLE001 — warmup is best-effort, logged
-                _LOG.warning(
-                    "inference_compile_warmup_failed context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-
     def _run_graph_loop(self) -> None:
         """Ragged axis-graph inference loop, MEMORY-BOUNDED (F-816-10, verdict V-A).
 
@@ -1023,8 +873,8 @@ class InferenceServer(threading.Thread):
                 "InferenceServer.run: dense loop entered with no (C, H, W) shape — "
                 "grid/graph construction invariant broken."
             )
-        _perf = self._perf_timing
-        _sync = self._perf_sync_cuda and self.device.type == "cuda"
+        _perf = False
+        _sync = False
 
         # Log which CUDA stream this thread is on, once at thread start: if it matches the
         # trainer stream (both default), there is no overlap.
@@ -1045,8 +895,6 @@ class InferenceServer(threading.Thread):
                     "cuda_stream_audit_failed context=%s error=%s",
                     "inference_server", exc,
                 )
-
-        self._warmup_compile_path()
 
         try:
             while not self._stop_event.is_set():
@@ -1090,7 +938,7 @@ class InferenceServer(threading.Thread):
                             )
                         batch_np = batch
                         n = len(request_ids)
-                        _pad = self._padding_active()
+                        _pad = False
                         if self._h2d_staging is not None:
                             assert n <= self._batch_size, (
                                 f"inference batch size {n} exceeds staging capacity "

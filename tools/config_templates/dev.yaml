@@ -116,14 +116,11 @@ train:
   lr: 0.001
   weight_decay: 0.0001
   grad_clip: 1.0
-  fp16: true
-  amp_dtype: fp16
   device: cuda
   lr_schedule: cosine
   total_steps: 1000000
   scheduler_t_max: null
   eta_min: 0.0005
-  min_lr: null
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
   ema:
@@ -185,9 +182,6 @@ train:
     max_nodes: 4000000
   augment: false
   recency_weight: 0.0
-  mixing_initial_w: 0.0
-  mixing_min_w: 0.0
-  mixing_decay_steps: 1.0
   # The `grad_norm_hard_abort` gate. 1e9 is the shipped value and it is effectively OFF — no
   # finite gradient norm reaches it. That is now VISIBLE rather than silent: WPMINT Phase K-B
   # registered the gate as a DEFERRED armed-abort row (`src/mantis/config/armed_aborts.py`),
@@ -199,7 +193,6 @@ train:
   # A fraction of each batch drawn from the bot corpus. Its sibling `bot_corpus_path` was one
   # of the six DEAD fields deleted at Phase K-B, so only an injecting caller can supply a bot
   # buffer — 0.0 is the only value the composition root can honour.
-  bot_batch_share: 0.0
   # The self-play stall watchdog's budget (LAW-16 says it is ALWAYS armed, so `gt=0`: the
   # schema cannot express the `<= 0` off switch `watchdog.py` still honours for direct
   # constructions).
@@ -208,40 +201,18 @@ train:
   policy_target: raw_visit_distribution
   draw_reward: -0.5
   ply_cap_value: -0.5
-  policy_prune_frac: 0.0
-  entropy_reg_weight: 0.0
-  aux_opp_reply_weight: 0.0
-  uncertainty_weight: 0.0
-  ownership_weight: 0.0
-  threat_weight: 0.0
-  aux_chain_weight: 0.0
-  ply_index_weight: 0.0
-  threat_pos_weight: 1.0
   fast_policy_weight: 0.0
 selfplay:
   n_workers: 1
   leaf_batch_size: 8
   max_game_moves: 128
-  inference_pool_size: null
   c_visit: 50.0
   c_scale: 1.0
   gumbel_m: 16
   gumbel_explore_moves: 10
   results_queue_cap: 10000
   random_opening_plies: 0
-  rotation_enabled: true
-  forced_win_policy_enabled: false
-  forced_win_policy_depth: 2
-  forced_win_policy_weight: 1.0
-  solver_enabled: false
-  solver_depth: 16
-  solver_node_budget: 50000
-  solver_neighbor_dist: 2
-  solver_visit_weight: 0.3
-  seed_fraction: 0.0
-  seed_corpus_path: null
   log_investigation_metrics: true
-  instrumentation_enabled: false
   mcts:
     n_simulations: 50
     c_puct: 1.5
@@ -263,20 +234,11 @@ selfplay:
     full_search_prob: 0.0
     n_sims_quick: 0
     n_sims_full: 0
-    zoi_enabled: false
-    zoi_lookback: 16
-    zoi_margin: 5
     temperature_threshold_compound_moves: 0
     temp_min: 0.5
 inference:
   inference_batch_size: 64
   inference_max_wait_ms: 10
-  trace_inference: true
-  compile_inference: false
-  compile_inference_mode: default
-  compile_inference_dynamic: true
-  perf_timing: false
-  perf_sync_cuda: false
   # `fused_graph_caps` — the GRAPH inference forward's memory bound (F-816-10, R276(f)).
   # `inference_batch_size` above bounds the number of GRAPHS in one fused pop and bounds
   # neither quantity that drives memory: E and N are SUMS over the fused graphs, and the

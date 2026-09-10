@@ -29,8 +29,8 @@ from mantis.config.schema import PlayoutCapConfig
 
 BASE: dict = {
     "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": False, "zoi_lookback": 16,
-    "zoi_margin": 5, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+    "n_sims_quick": 0, "n_sims_full": 0,
+    "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 
 

@@ -27,7 +27,7 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
 use numpy::{
-    IntoPyArray, PyArray1, PyArray2, PyArrayMethods, PyReadonlyArray1, PyReadonlyArray2,
+    IntoPyArray, PyArray1, PyReadonlyArray1,
     PyUntypedArrayMethods,
 };
 use pyo3::exceptions::PyValueError;
@@ -38,7 +38,7 @@ use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::queues::{
-    build_leaf_graph, build_leaf_graphs_batch, DenseQueue, GraphQueue, GraphWire,
+    build_leaf_graph, build_leaf_graphs_batch, GraphQueue, GraphWire,
     GraphWireArrays,
     WireAlreadyConsumed as WireConsumedGuard,
 };
@@ -185,12 +185,11 @@ fn decrement_pending(counter: &AtomicUsize, by: usize) {
     }
 }
 
-/// Rust-owned blocking inference batcher exposed to Python — the fused-model NN
-/// face over the WP6 dense + graph queues.
+/// Rust-owned blocking inference batcher exposed to Python — the fused-model NN face over the
+/// WP6 graph queue.
 #[pyclass(name = "InferenceBatcher", module = "mantis._engine")]
 #[derive(Clone)]
 pub struct PyInferenceBatcher {
-    dense: DenseQueue,
     graph: GraphQueue,
     feature_len: usize,
     policy_len: usize,
@@ -207,9 +206,7 @@ pub struct PyInferenceBatcher {
     /// via the `lock_recoveries` getter so a run can alert on it instead of discovering it in
     /// a post-mortem (LAW-18).
     lock_recoveries: Arc<AtomicUsize>,
-    completed_mock_games: Arc<AtomicUsize>,
     completed_graph_games: Arc<AtomicUsize>,
-    dense_pending: Arc<AtomicUsize>,
     graph_pending: Arc<AtomicUsize>,
 }
 
@@ -219,7 +216,6 @@ impl PyInferenceBatcher {
     /// in one place.
     #[allow(clippy::too_many_arguments)]
     fn from_parts(
-        dense: DenseQueue,
         graph: GraphQueue,
         feature_len: usize,
         policy_len: usize,
@@ -232,7 +228,6 @@ impl PyInferenceBatcher {
         model_version: ModelVersionSrc,
     ) -> Self {
         PyInferenceBatcher {
-            dense,
             graph,
             feature_len,
             policy_len,
@@ -245,9 +240,7 @@ impl PyInferenceBatcher {
             model_version,
             in_flight_graphs: Arc::new(Mutex::new(HashMap::new())),
             lock_recoveries: Arc::new(AtomicUsize::new(0)),
-            completed_mock_games: Arc::new(AtomicUsize::new(0)),
             completed_graph_games: Arc::new(AtomicUsize::new(0)),
-            dense_pending: Arc::new(AtomicUsize::new(0)),
             graph_pending: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -258,14 +251,12 @@ impl PyInferenceBatcher {
     /// runner resolved it at construction).
     pub(crate) fn from_runner(
         spec: &'static RegistrySpec,
-        dense: DenseQueue,
         graph: GraphQueue,
         runner: Arc<SelfPlayRunner>,
     ) -> Self {
         let is_graph = spec.is_graph();
         let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
         Self::from_parts(
-            dense,
             graph,
             spec.state_stride(),
             spec.policy_stride(),
@@ -368,12 +359,11 @@ impl PyInferenceBatcher {
                 ));
             }
         };
-        let representation = spec_static.map_or("grid", |s| s.representation.as_str());
+        let representation = spec_static.map_or("graph", |s| s.representation.as_str());
         let is_graph = spec_static.is_some_and(|s| s.is_graph());
         let (win_length, radius, trunk_size, contract_version) =
             spec_static.map_or((0, 0, 0, 1), graph_params);
         Ok(Self::from_parts(
-            DenseQueue::new(feature_len),
             GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
             feature_len,
             policy_len,
@@ -385,133 +375,6 @@ impl PyInferenceBatcher {
             contract_version,
             ModelVersionSrc::Own(Arc::new(AtomicU64::new(0))),
         ))
-    }
-
-    // ── dense path ──────────────────────────────────────────────────────────
-
-    /// Spawn N mock inference requests on native threads (test utility). Each
-    /// submits a zero feature vector and blocks; increments `completed_mock_games`
-    /// on a successful reply.
-    pub fn spawn_mock_games(&self, n_games: usize) {
-        let feature_len = self.feature_len;
-        for _ in 0..n_games {
-            let dense = self.dense.clone();
-            let completed = self.completed_mock_games.clone();
-            let pending = self.dense_pending.clone();
-            std::thread::spawn(move || {
-                pending.fetch_add(1, Ordering::SeqCst);
-                if dense
-                    .submit_batch_and_wait(vec![vec![0.0f32; feature_len]])
-                    .is_ok()
-                {
-                    completed.fetch_add(1, Ordering::SeqCst);
-                }
-            });
-        }
-    }
-
-    /// How many times the in-flight-graph lock was found poisoned and recovered.
-    ///
-    /// STAYS ZERO in a healthy run. Non-zero is a real defect report: a panic occurred under
-    /// the guard, the seam recovered and kept serving, and the in-flight map may be missing an
-    /// entry. Surfaced so a run can alert on it (LAW-18) rather than have it show up as
-    /// unexplained missing-id skips much later.
-    #[getter]
-    pub fn lock_recoveries(&self) -> usize {
-        self.lock_recoveries.load(Ordering::SeqCst)
-    }
-
-    /// Number of completed mock games (test assertions).
-    pub fn completed_mock_games(&self) -> usize {
-        self.completed_mock_games.load(Ordering::SeqCst)
-    }
-
-    /// Whether at least one mock inference request is currently pending.
-    pub fn has_pending_requests(&self) -> bool {
-        self.dense_pending.load(Ordering::SeqCst) > 0
-    }
-
-    /// Block until at least one request is available or the timeout expires.
-    /// Returns `(request_ids, fused (N, feature_len) float32)`; empty on timeout.
-    /// Releases the GIL around the blocking pop (frozen behaviour).
-    #[pyo3(signature = (batch_size, max_wait_ms = 10))]
-    pub fn next_inference_batch<'py>(
-        &self,
-        py: Python<'py>,
-        batch_size: usize,
-        max_wait_ms: u64,
-    ) -> PyResult<(Vec<u64>, Bound<'py, PyArray2<f32>>)> {
-        if batch_size == 0 {
-            return Err(PyValueError::new_err("batch_size must be > 0"));
-        }
-        let pulled = py.detach(|| self.dense.pop_batch(batch_size, max_wait_ms));
-        decrement_pending(&self.dense_pending, pulled.len());
-        if pulled.is_empty() {
-            // Explicit 0×feature_len tensor for timeout/no-work polls (frozen: an
-            // empty from_vec2 can raise and deadlock blocked submitters).
-            let arr = PyArray2::<f32>::zeros(py, [0, self.feature_len], false);
-            return Ok((Vec::new(), arr));
-        }
-        let n = pulled.len();
-        let mut ids = Vec::with_capacity(n);
-        let mut flat = Vec::with_capacity(n * self.feature_len);
-        for (id, features) in pulled {
-            ids.push(id);
-            flat.extend_from_slice(&features);
-        }
-        let arr = flat.into_pyarray(py).reshape([n, self.feature_len])?;
-        Ok((ids, arr))
-    }
-
-    /// Submit inference outputs and wake the corresponding waiting requests
-    /// (§P74 single-Arc share of the whole policy buffer + per-id ranges).
-    pub fn submit_inference_results(
-        &self,
-        request_ids: Vec<u64>,
-        policies: PyReadonlyArray2<f32>,
-        values: PyReadonlyArray1<f32>,
-    ) -> PyResult<()> {
-        let n = request_ids.len();
-        if policies.shape()[0] != n || values.len() != n {
-            return Err(PyValueError::new_err(format!(
-                "length mismatch ids/policies/values: {}/{}/{}",
-                n,
-                policies.shape()[0],
-                values.len()
-            )));
-        }
-        if policies.shape()[1] != self.policy_len {
-            return Err(PyValueError::new_err(format!(
-                "policy length mismatch: expected {}, got {}",
-                self.policy_len,
-                policies.shape()[1]
-            )));
-        }
-        let policies_slice = policies.as_slice()?;
-        let values_slice = values.as_slice()?;
-        let shared: Arc<Vec<f32>> = Arc::new(policies_slice.to_vec());
-        let ranges: Vec<std::ops::Range<usize>> = (0..n)
-            .map(|i| i * self.policy_len..(i + 1) * self.policy_len)
-            .collect();
-        self.dense
-            .submit_results(&request_ids, &shared, &ranges, values_slice);
-        Ok(())
-    }
-
-    /// Signal failure for a batch of dense requests.
-    pub fn submit_inference_failure(
-        &self,
-        request_ids: Vec<u64>,
-        error_msg: String,
-    ) -> PyResult<()> {
-        self.dense.submit_failure(&request_ids, &error_msg);
-        Ok(())
-    }
-
-    /// Close both queues and wake all blocked waiters.
-    pub fn close(&self) {
-        self.dense.close();
-        self.graph.close();
     }
 
     // ── model version ─────────────────────────────────────────────────────────
@@ -529,7 +392,7 @@ impl PyInferenceBatcher {
 
     #[getter]
     pub fn feature_len_py(&self) -> usize {
-        self.dense.feature_len()
+        self.feature_len
     }
 
     #[getter]

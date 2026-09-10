@@ -30,25 +30,20 @@ VALID_MCTS: dict = {
 }
 VALID_PLAYOUT_CAP: dict = {
     "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": False, "zoi_lookback": 16,
-    "zoi_margin": 5, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+    "n_sims_quick": 0, "n_sims_full": 0,
+    "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-    "inference_pool_size": None, "c_visit": 50.0,
+    "c_visit": 50.0,
     "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-    "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-    "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-    "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-    "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-    "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-    "instrumentation_enabled": False, "mcts": dict(VALID_MCTS),
+    "results_queue_cap": 10_000, "random_opening_plies": 0,
+    "log_investigation_metrics": True,
+    "mcts": dict(VALID_MCTS),
     "playout_cap": dict(VALID_PLAYOUT_CAP),
 }
 VALID_INFERENCE: dict = {
-    "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-    "compile_inference": False, "compile_inference_mode": "default",
-    "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+    "inference_batch_size": 64, "inference_max_wait_ms": 10,
     # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
     # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
     # exercises a split; the R119 `null` placeholder is pinned by
@@ -61,14 +56,11 @@ INFERENCE_FIELDS = sorted(VALID_INFERENCE)
 
 SELFPLAY_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("n_workers", 0), ("leaf_batch_size", 0), ("max_game_moves", 0),
-    ("inference_pool_size", 0), ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
+    ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
     ("gumbel_explore_moves", -1), ("results_queue_cap", 0), ("random_opening_plies", -1),
-    ("forced_win_policy_depth", 0), ("forced_win_policy_weight", -0.1),
-    ("solver_depth", 0), ("solver_node_budget", 0), ("solver_neighbor_dist", -1),
-    ("solver_visit_weight", 1.1), ("seed_fraction", 1.1),
 ]
 INFERENCE_BOUND_VIOLATIONS: list[tuple[str, object]] = [
-    ("inference_batch_size", 0), ("inference_max_wait_ms", -1), ("compile_inference_mode", ""),
+    ("inference_batch_size", 0), ("inference_max_wait_ms", -1),
 ]
 
 

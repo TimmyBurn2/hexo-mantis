@@ -73,7 +73,6 @@ pub struct SelfPlayRunnerConfig {
     pub n_sims_quick: usize,
     pub n_sims_full: usize,
     pub random_opening_plies: u32,
-    pub selfplay_rotation_enabled: bool,
     /// Registry-form encoding name (e.g. `"v6"`, `"gnn_axis_v1"`). Resolved to a
     /// `&'static RegistrySpec` at `SelfPlayRunner::new` via
     /// `mantis_encoding::lookup`. `None` = **error** (LAW-11 — absent identity
@@ -141,7 +140,6 @@ impl Default for SelfPlayRunnerConfig {
             n_sims_quick: 0,
             n_sims_full: 0,
             random_opening_plies: 0,
-            selfplay_rotation_enabled: false,
             encoding_name: None,
             inference_pool_size: None,
             // O1 forced-win one-hot POLICY target — OFF by default.

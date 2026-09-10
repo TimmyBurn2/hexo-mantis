@@ -1138,7 +1138,6 @@ def compose_run(
                     # AUDIT-1 F-31: the run's declared autocast dtype, resolved ONCE here
                     # and carried to every round — the eval child has no RunConfig, and
                     # its dense forward had no dtype at all.
-                    amp_dtype=config.train.amp_dtype,
                     # AUDIT-1 F-15: the eval arena's ply cap is the RUN's, not a module
                     # constant. `DEFAULT_MAX_PLIES = 128` was a copy of a copy of this key.
                     max_plies=config.selfplay.max_game_moves,

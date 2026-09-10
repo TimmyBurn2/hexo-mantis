@@ -303,7 +303,6 @@ def _arm_engine(arm: ArmSpec, *, cfg: Any, dump: dict[str, Any], spec: Any,
         max_in_flight=cfg.selfplay.leaf_batch_size,
         # AUDIT-1 F-31: the declared autocast dtype, from the config this witness already
         # holds. `amp_dtype_for` resolves it (LAW-06); this site names no dtype.
-        amp_dtype=cfg.train.amp_dtype,
         # R339(c): 1-in-1. THIS DRIVER IS WHERE `F-816-37` FIRED — the STEP 4c acceptance
         # witness died on it after 14 min 50 s — so it is the last place the class should be
         # sampled at 1-in-64. The dump rides only when the caller named an output location:

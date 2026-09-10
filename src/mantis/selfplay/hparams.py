@@ -25,7 +25,6 @@ nothing left to resolve — `from_config` reads `pc["temperature_threshold_compo
 """
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -33,52 +32,6 @@ from mantis._engine import SelfPlayRunnerConfig
 from mantis.config.resolve.search import resolve_search_kind
 from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
-
-
-# ---------------------------------------------------------------------------
-# Seed corpus
-# ---------------------------------------------------------------------------
-def _load_seed_corpus(
-    path: str | None, seed_fraction: float
-) -> list[list[tuple[int, int]]] | None:
-    """Parse the seed-corpus JSONL into move prefixes for the Rust runner.
-
-    One JSON object per line; only ``seed_moves`` (a list of ``[q, r]`` pairs) is consumed
-    here. Returns a list of ``(q, r)`` tuple-prefixes, or ``None`` when no path is
-    configured.
-
-    Loud ``ValueError`` on a malformed/empty corpus when ``seed_fraction > 0`` — a seeded
-    run with no usable prefixes is a silent no-op the operator must catch. A path with
-    ``seed_fraction == 0`` is parsed for validation but never fires.
-    """
-    if path is None:
-        if seed_fraction > 0.0:
-            raise ValueError(
-                "selfplay.seed_fraction > 0 requires selfplay.seed_corpus_path — "
-                "no corpus to seed from."
-            )
-        return None
-    prefixes: list[list[tuple[int, int]]] = []
-    try:
-        with open(path) as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                obj = json.loads(line)
-                moves = obj["seed_moves"]
-                prefixes.append([(int(q), int(r)) for q, r in moves])
-    except (OSError, KeyError, ValueError, TypeError) as exc:
-        raise ValueError(
-            f"selfplay.seed_corpus_path {path!r} is malformed (expected JSONL with a "
-            f"'seed_moves' list-of-[q,r] per line): {exc}"
-        ) from exc
-    if seed_fraction > 0.0 and not prefixes:
-        raise ValueError(
-            f"selfplay.seed_corpus_path {path!r} yielded ZERO prefixes but "
-            f"seed_fraction={seed_fraction} > 0 — seeding would be a silent no-op."
-        )
-    return prefixes
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +124,6 @@ class SelfPlayHParams:
     n_workers: int = 1
     leaf_batch_size: int = 8
     max_moves_per_game: int = 128
-    inference_pool_size: int | None = None
     #: `search.kind`, REQUIRED with no default (R1/LAW-11): it selects the root mechanism,
     #: the interior selector AND the exported target's semantics, and a code-side default
     #: here would let a config that never declared its search regime still boot one.
@@ -182,17 +134,6 @@ class SelfPlayHParams:
     gumbel_explore_moves: int = 10
     results_queue_cap: int = 10_000
     random_opening_plies: int = 0
-    rotation_enabled: bool = True
-    forced_win_policy_enabled: bool = False
-    forced_win_policy_depth: int = 2
-    forced_win_policy_weight: float = 1.0
-    solver_enabled: bool = False
-    solver_depth: int = 16
-    solver_node_budget: int = 50_000
-    solver_neighbor_dist: int = 2
-    solver_visit_weight: float = 0.3
-    seed_fraction: float = 0.0
-    seed_corpus_path: str | None = None
     # mcts ns
     n_simulations: int = 50
     c_puct: float = 1.5
@@ -209,9 +150,6 @@ class SelfPlayHParams:
     full_search_prob: float = 0.0
     n_sims_quick: int = 0
     n_sims_full: int = 0
-    zoi_enabled: bool = False
-    zoi_lookback: int = 16
-    zoi_margin: int = 5
     # Runner ctor kwarg spelling differs from the schema field name
     # (`PlayoutCapConfig.temperature_threshold_compound_moves`); `from_config` reads the
     # schema field directly (no resolver shim — retired, R-SELFPLAYCONFIG-SCHEMA closure).
@@ -222,7 +160,6 @@ class SelfPlayHParams:
     ply_cap_value: float = -0.5
     # monitoring / instrumentation ns
     log_investigation_metrics: bool = True
-    instrumentation_enabled: bool = False
 
     @property
     def effective_sims_per_move(self) -> int:
@@ -259,9 +196,6 @@ class SelfPlayHParams:
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
             leaf_batch_size=int(sp["leaf_batch_size"]),
             max_moves_per_game=int(sp["max_game_moves"]),
-            inference_pool_size=(
-                int(sp["inference_pool_size"]) if sp["inference_pool_size"] is not None else None
-            ),
             # THE ONE SELECTOR (R1/LAW-15). `mantis.run` hands the SAME function's answer
             # to `build_eval_pipeline`, so the deploy-matched bar and the workers cannot
             # be reading two call sites that happen to agree.
@@ -272,17 +206,6 @@ class SelfPlayHParams:
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
             random_opening_plies=int(sp["random_opening_plies"]),
-            rotation_enabled=bool(sp["rotation_enabled"]),
-            forced_win_policy_enabled=bool(sp["forced_win_policy_enabled"]),
-            forced_win_policy_depth=int(sp["forced_win_policy_depth"]),
-            forced_win_policy_weight=float(sp["forced_win_policy_weight"]),
-            solver_enabled=bool(sp["solver_enabled"]),
-            solver_depth=int(sp["solver_depth"]),
-            solver_node_budget=int(sp["solver_node_budget"]),
-            solver_neighbor_dist=int(sp["solver_neighbor_dist"]),
-            solver_visit_weight=float(sp["solver_visit_weight"]),
-            seed_fraction=float(sp["seed_fraction"]),
-            seed_corpus_path=sp["seed_corpus_path"],
             n_simulations=int(mcts_cfg["n_simulations"]),
             c_puct=float(mcts_cfg["c_puct"]),
             fpu_reduction=float(mcts_cfg["fpu_reduction"]),
@@ -297,9 +220,6 @@ class SelfPlayHParams:
             full_search_prob=float(pc["full_search_prob"]),
             n_sims_quick=int(pc["n_sims_quick"]),
             n_sims_full=int(pc["n_sims_full"]),
-            zoi_enabled=bool(pc["zoi_enabled"]),
-            zoi_lookback=int(pc["zoi_lookback"]),
-            zoi_margin=int(pc["zoi_margin"]),
             temp_threshold_compound_moves=int(pc["temperature_threshold_compound_moves"]),
             temp_min=float(pc["temp_min"]),
             # Cross-section read (DESIGN_P2.md §2 note): draw_reward/ply_cap_value are part
@@ -307,7 +227,6 @@ class SelfPlayHParams:
             draw_value=float(train["draw_reward"]),
             ply_cap_value=float(train["ply_cap_value"]),
             log_investigation_metrics=bool(sp["log_investigation_metrics"]),
-            instrumentation_enabled=bool(sp["instrumentation_enabled"]),
         )
         if hp.effective_sims_per_move <= 0:
             raise ValueError(
@@ -326,13 +245,7 @@ class InferenceHParams:
 
     inference_batch_size: int = 64
     inference_max_wait_ms: int = 10
-    trace_inference: bool = True
-    compile_inference: bool = False
-    compile_inference_mode: str = "default"
-    compile_inference_dynamic: bool = True
     # diagnostics ns
-    perf_timing: bool = False
-    perf_sync_cuda: bool = False
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> InferenceHParams:
@@ -343,12 +256,6 @@ class InferenceHParams:
         return cls(
             inference_batch_size=int(inf["inference_batch_size"]),
             inference_max_wait_ms=int(inf["inference_max_wait_ms"]),
-            trace_inference=bool(inf["trace_inference"]),
-            compile_inference=bool(inf["compile_inference"]),
-            compile_inference_mode=str(inf["compile_inference_mode"]),
-            compile_inference_dynamic=bool(inf["compile_inference_dynamic"]),
-            perf_timing=bool(inf["perf_timing"]),
-            perf_sync_cuda=bool(inf["perf_sync_cuda"]),
         )
 
 
@@ -374,7 +281,6 @@ def build_runner_config(
     *,
     spec_dims: ResolvedPoolEncoding,
     encoding_name: str,
-    seed_prefixes: list[list[tuple[int, int]]] | None,
 ) -> tuple[SelfPlayRunnerConfig, PoolDims]:
     """Assemble the Rust `SelfPlayRunnerConfig` and the dense pool dims.
 
@@ -415,9 +321,6 @@ def build_runner_config(
         quiescence_enabled=hp.quiescence_enabled,
         quiescence_blend_2=hp.quiescence_blend_2,
         temp_min=hp.temp_min,
-        zoi_enabled=hp.zoi_enabled,
-        zoi_lookback=hp.zoi_lookback,
-        zoi_margin=hp.zoi_margin,
         c_visit=hp.c_visit,
         c_scale=hp.c_scale,
         gumbel_m=hp.gumbel_m,
@@ -430,30 +333,12 @@ def build_runner_config(
         n_sims_quick=hp.n_sims_quick,
         n_sims_full=hp.n_sims_full,
         random_opening_plies=hp.random_opening_plies,
-        selfplay_rotation_enabled=hp.rotation_enabled,
         encoding_name=encoding_name,
-        inference_pool_size=hp.inference_pool_size,
     )
     # The search kind. Same posture as the knobs below — a config attribute, not a ctor
     # kwarg. The Rust setter REFUSES an unknown kind rather than defaulting, so a typo
     # reaches the operator as a boot error instead of a silently PUCT search.
     cfg.search_kind = hp.search_kind
-    # Forced-win → one-hot POLICY target. Set as config attributes rather than ctor kwargs
-    # so the positional Rust ctor surface stays untouched. Default OFF.
-    cfg.forced_win_policy_enabled = hp.forced_win_policy_enabled
-    cfg.forced_win_policy_depth = hp.forced_win_policy_depth
-    cfg.forced_win_policy_weight = hp.forced_win_policy_weight
-    # Solver-in-loop SOFT visit-injection (visit_weight < 1.0 = SOFT, NOT one-hot).
-    cfg.solver_enabled = hp.solver_enabled
-    cfg.solver_depth = hp.solver_depth
-    cfg.solver_node_budget = hp.solver_node_budget
-    cfg.solver_neighbor_dist = hp.solver_neighbor_dist
-    cfg.solver_visit_weight = hp.solver_visit_weight
-    # Trap-corpus START-POSITION seeding: the JSONL corpus is parsed Python-side into move
-    # prefixes; Rust dry-replays every prefix once at runner construction.
-    cfg.seed_fraction = hp.seed_fraction
-    if seed_prefixes is not None:
-        cfg.seed_corpus = seed_prefixes
     return cfg, dims
 
 

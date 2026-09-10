@@ -11,11 +11,9 @@
 //! DAG severed spec resolution from core), so this wrapper HOLDS the encoding
 //! binding itself (`Option<&'static RegistrySpec>`): `with_encoding_name` sets it
 //! via `mantis_encoding::lookup`; `to_tensor` routes through it +
-//! `mantis_encoding::to_planes`; `size` and the radius/cluster guards read it.
 //! `Board` is `Send + !Sync` (deliberately no `unsafe impl Sync`) — the bridge
 //! brings single-thread Python ownership via `#[pyclass(unsendable)]` (LOCKED #3).
 
-use numpy::{IntoPyArray, PyArray1, PyArray3, PyArrayMethods};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -26,7 +24,6 @@ use mantis_encoding::RegistrySpec;
 /// Return tuple of `get_cluster_views`: a list of `(2, S, S)` view arrays
 /// (current-player + opponent stones) paired with the axial (q, r) centre
 /// of each cluster window.
-type ClusterViewsOut = (Vec<Py<PyArray3<f32>>>, Vec<(i32, i32)>);
 
 /// Map a Python player id (1 = P1, -1 = P2) to the Rust `Player` enum.
 /// Used by the forcing-move primitive bindings. `ValueError` on any other value.
@@ -292,92 +289,6 @@ impl PyBoard {
     ///     ValueError: the board carries no encoding (`Board.new()`) — no v6 default
     ///         (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
     ///
-    /// AUDIT-1 F-38. This was `panic!`, reaching Python as a `PanicException` and convertible
-    /// at all only because the profile sets `panic = "unwind"` (R2/LAW-13) — a guarantee
-    /// about the worst case, not a design. The refusal itself is correct and unchanged; only
-    /// its face is. Four sites in this tree construct encoding-less boards, so the arm is
-    /// reachable even though no live Python caller reaches it today.
-    pub fn to_tensor<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
-        let spec = self.encoding.ok_or_else(|| {
-            PyValueError::new_err(
-                "Board.to_tensor called on an encoding-less Board (Board.new()); \
-                 construct via Board.with_encoding_name(...) first — no v6 default \
-                 (R28, LAW-11)",
-            )
-        })?;
-        Ok(mantis_encoding::to_planes(&self.inner, spec).into_pyarray(py))
-    }
-
-    /// Returns a tuple of (list of NumPy arrays, list of (q, r) centers) for each cluster.
-    ///
-    /// Each NumPy array has shape `(2, S, S)` where `S = self.cluster_window_size`
-    /// (default 19 = v6 wire format; v6w25 callers `set_cluster_window_size(25)`).
-    /// Plane 0 = current player's stones, plane 1 = opponent's stones. Arrays are
-    /// created via zero-copy transfer from Rust allocations.
-    pub fn get_cluster_views(&self, py: Python<'_>) -> PyResult<ClusterViewsOut> {
-        let window_size = self.inner.cluster_window_size();
-        let (views, centers) = self.inner.get_cluster_views();
-        let py_views: PyResult<Vec<_>> = views
-            .into_iter()
-            .map(|v| {
-                // Transfer Vec ownership to NumPy (zero-copy), then reshape.
-                PyArray1::from_vec(py, v)
-                    .reshape([2_usize, window_size, window_size])
-                    .map(pyo3::Bound::unbind)
-            })
-            .collect();
-        Ok((py_views?, centers))
-    }
-
-    /// Set the cluster connectivity threshold (default 5). Used by v6w25 corpus
-    /// generation to widen cluster reach to 8. Affects only `get_clusters()` /
-    /// `get_cluster_views()`; legal-move expansion is independent.
-    ///
-    /// Raises `ValueError` when the board was constructed via
-    /// `Board.with_encoding_name` (encoding bound). Use registry entry instead.
-    pub fn set_cluster_threshold(&mut self, threshold: i32) -> PyResult<()> {
-        if self.encoding.is_some() {
-            return Err(PyValueError::new_err(
-                "set_cluster_threshold after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction",
-            ));
-        }
-        self.inner.set_cluster_threshold(threshold);
-        Ok(())
-    }
-
-    /// Current cluster threshold (default 5).
-    pub fn cluster_threshold(&self) -> i32 {
-        self.inner.cluster_threshold()
-    }
-
-    /// Set the cluster window side length (default 19). Used by v6w25 corpus
-    /// generation to produce 25×25 cluster windows. Caller must use an odd value
-    /// >= 7. Returns ValueError on bad input.
-    ///
-    /// Raises `ValueError` when the board was constructed via
-    /// `Board.with_encoding_name` (encoding bound). Use registry entry instead.
-    pub fn set_cluster_window_size(&mut self, size: usize) -> PyResult<()> {
-        if self.encoding.is_some() {
-            return Err(PyValueError::new_err(
-                "set_cluster_window_size after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction",
-            ));
-        }
-        if size < 7 || size.is_multiple_of(2) {
-            return Err(PyValueError::new_err(format!(
-                "cluster_window_size must be odd and >= 7; got {size}"
-            )));
-        }
-        self.inner.set_cluster_window_size(size);
-        Ok(())
-    }
-
-    /// Current cluster window side length (default 19).
-    pub fn cluster_window_size(&self) -> usize {
-        self.inner.cluster_window_size()
-    }
-
     /// Window-relative flat index for axial (q, r).
     /// Used by selfplay workers to convert legal-move coords to policy indices.
     pub fn to_flat(&self, q: i32, r: i32) -> usize {

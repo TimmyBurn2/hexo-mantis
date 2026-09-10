@@ -20,32 +20,14 @@
 
 use std::sync::Arc;
 
-use numpy::{IntoPyArray, PyArray1, PyArray2, PyArrayMethods};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use mantis_encoding::RegistrySpec;
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::config::SelfPlayRunnerConfig;
 use mantis_selfplay::runner::{GameResultRow, RunnerStatsSnapshot, SelfPlayRunner};
 
 use crate::inference::PyInferenceBatcher;
-
-/// Return tuple of `collect_data` — ten numpy arrays bound to the GIL lifetime:
-/// `(feat, chain, policy, value, plies, ownership, winning_line, is_full_search,
-/// position_index, value_valid)`.
-type CollectDataOut<'py> = (
-    Bound<'py, PyArray2<f32>>,
-    Bound<'py, PyArray2<f32>>,
-    Bound<'py, PyArray2<f32>>,
-    Bound<'py, PyArray1<f32>>,
-    Bound<'py, PyArray1<u64>>,
-    Bound<'py, PyArray2<u8>>,
-    Bound<'py, PyArray2<u8>>,
-    Bound<'py, PyArray1<u8>>,
-    Bound<'py, PyArray1<u16>>,
-    Bound<'py, PyArray1<u8>>,
-);
 
 /// Per-row tuple returned by `collect_graph_data`: the first NINE fields are
 /// `HexgBuffer.push_graph_position`'s positional signature verbatim, and the tenth is the
@@ -93,17 +75,6 @@ fn derived_mean_f64(accum: u64, count: u64) -> Option<f32> {
 /// class of telemetry defect: permanent, silent, and invisible in aggregate, because the
 /// two series simply trade places for the whole run. `mantis-selfplay`'s
 /// `stats_snapshot_reads_back_each_private_atomic` applies exactly this discipline to the
-/// atomic→snapshot half; this is the missing other half.
-fn cluster_means(s: &RunnerStatsSnapshot) -> (Option<f32>, Option<f32>) {
-    (
-        derived_mean_f64(s.cluster_value_std_accum, s.cluster_variance_samples),
-        derived_mean_f64(
-            s.cluster_policy_disagreement_accum,
-            s.cluster_variance_samples,
-        ),
-    )
-}
-
 /// Derived fixed-point mean in f32 arithmetic (frozen
 /// `mcts_mean_root_concentration` — NOTE: f32, not f64, per DESIGN §c.6 / O19).
 fn derived_mean_f32(accum: u64, count: u64) -> f32 {
@@ -169,7 +140,6 @@ impl PySelfPlayRunnerConfig {
         n_sims_quick = 0,
         n_sims_full = 0,
         random_opening_plies = 0,
-        selfplay_rotation_enabled = false,
         encoding_name = None,
         inference_pool_size = None
     ))]
@@ -204,7 +174,6 @@ impl PySelfPlayRunnerConfig {
         n_sims_quick: usize,
         n_sims_full: usize,
         random_opening_plies: u32,
-        selfplay_rotation_enabled: bool,
         encoding_name: Option<String>,
         inference_pool_size: Option<usize>,
     ) -> Self {
@@ -242,7 +211,6 @@ impl PySelfPlayRunnerConfig {
                 n_sims_quick,
                 n_sims_full,
                 random_opening_plies,
-                selfplay_rotation_enabled,
                 encoding_name,
                 inference_pool_size,
                 ..Default::default()
@@ -278,91 +246,8 @@ impl PySelfPlayRunnerConfig {
         Ok(())
     }
 
-    // ── O1 forced-win one-hot POLICY target knobs (get/set) ────────────────────
-    #[getter]
-    pub fn forced_win_policy_enabled(&self) -> bool {
-        self.inner.forced_win_policy_enabled
-    }
-    #[setter]
-    pub fn set_forced_win_policy_enabled(&mut self, v: bool) {
-        self.inner.forced_win_policy_enabled = v;
-    }
-    #[getter]
-    pub fn forced_win_policy_depth(&self) -> u8 {
-        self.inner.forced_win_policy_depth
-    }
-    #[setter]
-    pub fn set_forced_win_policy_depth(&mut self, v: u8) {
-        self.inner.forced_win_policy_depth = v;
-    }
-    #[getter]
-    pub fn forced_win_policy_weight(&self) -> f32 {
-        self.inner.forced_win_policy_weight
-    }
-    #[setter]
-    pub fn set_forced_win_policy_weight(&mut self, v: f32) {
-        self.inner.forced_win_policy_weight = v;
-    }
 
-    // ── D-WS3 L1 solver-in-loop knobs (get/set) ────────────────────────────────
-    #[getter]
-    pub fn solver_enabled(&self) -> bool {
-        self.inner.solver_enabled
-    }
-    #[setter]
-    pub fn set_solver_enabled(&mut self, v: bool) {
-        self.inner.solver_enabled = v;
-    }
-    #[getter]
-    pub fn solver_depth(&self) -> u32 {
-        self.inner.solver_depth
-    }
-    #[setter]
-    pub fn set_solver_depth(&mut self, v: u32) {
-        self.inner.solver_depth = v;
-    }
-    #[getter]
-    pub fn solver_node_budget(&self) -> u64 {
-        self.inner.solver_node_budget
-    }
-    #[setter]
-    pub fn set_solver_node_budget(&mut self, v: u64) {
-        self.inner.solver_node_budget = v;
-    }
-    #[getter]
-    pub fn solver_neighbor_dist(&self) -> i32 {
-        self.inner.solver_neighbor_dist
-    }
-    #[setter]
-    pub fn set_solver_neighbor_dist(&mut self, v: i32) {
-        self.inner.solver_neighbor_dist = v;
-    }
-    #[getter]
-    pub fn solver_visit_weight(&self) -> f32 {
-        self.inner.solver_visit_weight
-    }
-    #[setter]
-    pub fn set_solver_visit_weight(&mut self, v: f32) {
-        self.inner.solver_visit_weight = v;
-    }
 
-    // ── D-WS3V3 start-position seeding knobs (get/set) ─────────────────────────
-    #[getter]
-    pub fn seed_fraction(&self) -> f32 {
-        self.inner.seed_fraction
-    }
-    #[setter]
-    pub fn set_seed_fraction(&mut self, v: f32) {
-        self.inner.seed_fraction = v;
-    }
-    #[getter]
-    pub fn seed_corpus(&self) -> Option<Vec<Vec<(i32, i32)>>> {
-        self.inner.seed_corpus.clone()
-    }
-    #[setter]
-    pub fn set_seed_corpus(&mut self, v: Option<Vec<Vec<(i32, i32)>>>) {
-        self.inner.seed_corpus = v;
-    }
 }
 
 /// The ONE supervisor-facing wording for a latched run-fatal self-play defect.
@@ -384,7 +269,6 @@ fn fatal_defect_message(msg: &str) -> String {
 #[pyclass(name = "SelfPlayRunner", module = "mantis._engine")]
 pub struct PySelfPlayRunner {
     inner: Arc<SelfPlayRunner>,
-    spec: &'static RegistrySpec,
     batcher: PyInferenceBatcher,
 }
 
@@ -406,15 +290,10 @@ impl PySelfPlayRunner {
         let inner = Arc::new(runner);
         let batcher = PyInferenceBatcher::from_runner(
             spec,
-            inner.dense_producer(),
             inner.graph_producer(),
             inner.clone(),
         );
-        Ok(PySelfPlayRunner {
-            inner,
-            spec,
-            batcher,
-        })
+        Ok(PySelfPlayRunner { inner, batcher })
     }
 
     /// Spawn `n_workers` self-play threads (idempotent).
@@ -431,74 +310,6 @@ impl PySelfPlayRunner {
         self.inner.is_running()
     }
 
-    /// Drain all buffered training rows and marshal them into the 10-numpy-array
-    /// `collect_data` tuple (shapes spec-derived). N = 0 → zero-row arrays.
-    ///
-    /// R275(b): raises the runner's stored fatal defect, the same as
-    /// `collect_graph_data`. Phase T scoped the latch to the graph record
-    /// constructor, so the dense drain face had nothing to raise and needed no
-    /// leg. The SEAM conjunct fires on BOTH `infer_and_expand` arms, so a dense
-    /// run can now latch — and without this leg it would latch, halt, and report
-    /// nothing to Python but a runner that quietly stopped producing, which is
-    /// the exact silence LAW-14 forbids.
-    ///
-    /// # Errors
-    /// `RuntimeError` when the runner's fatal-defect latch is set.
-    pub fn collect_data<'py>(&self, py: Python<'py>) -> PyResult<CollectDataOut<'py>> {
-        if let Some(msg) = self.inner.fatal_defect() {
-            return Err(pyo3::exceptions::PyRuntimeError::new_err(
-                fatal_defect_message(&msg),
-            ));
-        }
-        let feat_len = self.spec.state_stride();
-        let n_cells = self.spec.n_cells();
-        let chain_len = 6 * n_cells;
-        let pol_len = self.spec.policy_stride();
-
-        let rows = self.inner.drain_training_rows();
-        let n = rows.len();
-
-        let mut flat_feats = Vec::with_capacity(n * feat_len);
-        let mut flat_chain = Vec::with_capacity(n * chain_len);
-        let mut flat_pols = Vec::with_capacity(n * pol_len);
-        let mut vals = Vec::with_capacity(n);
-        let mut plies_out = Vec::with_capacity(n);
-        let mut flat_own = Vec::with_capacity(n * n_cells);
-        let mut flat_wl = Vec::with_capacity(n * n_cells);
-        let mut is_full_search = Vec::with_capacity(n);
-        let mut position_index = Vec::with_capacity(n);
-        let mut value_valid_v = Vec::with_capacity(n);
-
-        for (feat, chain, pol, outcome, plies, aux_u8, full_search, ply_index, value_valid) in rows
-        {
-            flat_feats.extend_from_slice(&feat);
-            flat_chain.extend_from_slice(&chain);
-            flat_pols.extend_from_slice(&pol);
-            vals.push(outcome);
-            plies_out.push(plies as u64);
-            // Split combined aux: first n_cells = ownership, last n_cells = winning_line.
-            flat_own.extend_from_slice(&aux_u8[..n_cells]);
-            flat_wl.extend_from_slice(&aux_u8[n_cells..]);
-            is_full_search.push(u8::from(full_search));
-            position_index.push(ply_index);
-            value_valid_v.push(value_valid);
-        }
-
-        let feats_np = flat_feats.into_pyarray(py).reshape([n, feat_len])?;
-        let chain_np = flat_chain.into_pyarray(py).reshape([n, chain_len])?;
-        let pols_np = flat_pols.into_pyarray(py).reshape([n, pol_len])?;
-        let vals_np = vals.into_pyarray(py);
-        let plies_np = plies_out.into_pyarray(py);
-        let own_np = flat_own.into_pyarray(py).reshape([n, n_cells])?;
-        let wl_np = flat_wl.into_pyarray(py).reshape([n, n_cells])?;
-        let ifs_np = is_full_search.into_pyarray(py);
-        let pidx_np = position_index.into_pyarray(py);
-        let vv_np = value_valid_v.into_pyarray(py);
-
-        Ok((
-            feats_np, chain_np, pols_np, vals_np, plies_np, own_np, wl_np, ifs_np, pidx_np, vv_np,
-        ))
-    }
 
     /// Drain all buffered graph-position records as a list of 9-tuples (field
     /// order = `HexgBuffer.push_graph_position`; no numpy — the records are
@@ -548,15 +359,7 @@ impl PySelfPlayRunner {
         self.batcher.clone()
     }
 
-    /// Spec-derived state (feature) stride.
-    pub fn feature_len(&self) -> usize {
-        self.inner.feature_len()
-    }
 
-    /// Spec-derived policy stride.
-    pub fn policy_len(&self) -> usize {
-        self.inner.policy_len()
-    }
 
     // ── win / throughput counters (RAW atomics via the snapshot) ───────────────
     #[getter]
@@ -622,77 +425,12 @@ impl PySelfPlayRunner {
     pub fn max_sims_per_search(&self) -> u64 {
         self.snapshot().max_sims_per_search
     }
-    /// Mean per-cluster value spread, or `None` when nothing was measured (R249).
-    ///
-    /// `None` reaches Python as `None` and the event builder DROPS the field. The
-    /// zero-count case is not hypothetical: the whole graph arm sits in it permanently,
-    /// and the dense arm sits in it until the first leaf with `k >= 2`.
-    #[getter]
-    pub fn cluster_value_std_mean(&self) -> Option<f32> {
-        cluster_means(&self.snapshot()).0
-    }
-    /// Mean per-cluster top-1 policy disagreement, or `None` when nothing was measured
-    /// (R249 — same producer and same zero-count semantics as the value spread above).
-    #[getter]
-    pub fn cluster_policy_disagreement_mean(&self) -> Option<f32> {
-        cluster_means(&self.snapshot()).1
-    }
-    /// The sample count the two means are derived from — a RAW atomic, truthful at 0,
-    /// and the field that lets a reader see WHY the means are missing.
-    #[getter]
-    pub fn cluster_variance_sample_count(&self) -> u64 {
-        self.snapshot().cluster_variance_samples
-    }
 
-    // ── D-WS3V3 solver fire-rate counters (RAW atomics) ────────────────────────
-    #[getter]
-    pub fn solver_moves_eligible(&self) -> u64 {
-        self.snapshot().solver_moves_eligible
-    }
-    #[getter]
-    pub fn solver_win_proven(&self) -> u64 {
-        self.snapshot().solver_win_proven
-    }
-    #[getter]
-    pub fn solver_injected(&self) -> u64 {
-        self.snapshot().solver_injected
-    }
-    #[getter]
-    pub fn solver_injected_offwindow(&self) -> u64 {
-        self.snapshot().solver_injected_offwindow
-    }
-    #[getter]
-    pub fn solver_budget_exhausted(&self) -> u64 {
-        self.snapshot().solver_budget_exhausted
-    }
-    #[getter]
-    pub fn solver_moves_eligible_seeded(&self) -> u64 {
-        self.snapshot().solver_moves_eligible_seeded
-    }
-    #[getter]
-    pub fn solver_injected_seeded(&self) -> u64 {
-        self.snapshot().solver_injected_seeded
-    }
-    #[getter]
-    pub fn seeded_games_started(&self) -> u64 {
-        self.snapshot().seeded_games_started
-    }
 
     // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ────────
     #[getter]
     pub fn export_offwindow_mass_moves(&self) -> u64 {
         self.snapshot().export_offwindow_mass_moves
-    }
-    #[getter]
-    pub fn gridls_zero_policy_rows(&self) -> u64 {
-        self.snapshot().gridls_zero_policy_rows
-    }
-    /// R256/ADJ-D37 — proven forced wins swallowed by the LS coverage gate while
-    /// the injecting lever was armed. LS-path mechanism; the Python emitter
-    /// publishes it on the GRAPH arm only and omits it elsewhere (R250/R256).
-    #[getter]
-    pub fn uncovered_forced_win(&self) -> u64 {
-        self.snapshot().uncovered_forced_win
     }
     /// Fatal-defect latch fire count — must read 0 in a healthy run (the latch
     /// message itself surfaces through `collect_graph_data`'s typed raise).
@@ -715,23 +453,6 @@ impl PySelfPlayRunner {
         self.snapshot().inference_failures_total
     }
 
-    /// Item 10(b) / R250 — the in-run K histogram from the DENSE record path.
-    ///
-    /// Bucket `i` in `0..len-1` counts recorded positions that expanded into
-    /// exactly `i + 1` cluster views; the LAST bucket guards every K outside that
-    /// range. Handed over as a raw list so the Python side derives its own labels
-    /// from the length instead of transcribing a bucket count that would then
-    /// have to be re-edited (R192(e), derive-or-delete).
-    ///
-    /// ALL-ZERO on a graph run, and that zero is not publishable: nothing on the
-    /// graph arm calls `record_position`, so there is no producer to report a
-    /// distribution for. The event builder OMITS the field there (R250) — the
-    /// same absence discipline the cluster-variance block got at R249, keyed on
-    /// the same `is_graph_run` authority.
-    #[getter]
-    pub fn k_cluster_histogram(&self) -> Vec<u64> {
-        self.snapshot().k_cluster_histogram.to_vec()
-    }
 
     /// Worker threads that died by panic — must read 0 in a healthy run.
     ///

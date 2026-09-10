@@ -31,7 +31,6 @@ torch-free environments.
 from __future__ import annotations
 
 import logging
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -176,9 +175,6 @@ def run_declared_train_step(
                            caps_provider=caps_provider,
                            sample_threads_provider=sample_threads_provider,
                            fast_policy_weight_provider=fast_policy_weight_provider)
-    if representation == "grid":
-        return _grid_step(trainer, buffer, batch_size=batch_size, augment=augment,
-                          recency_weight=recency_weight, recent_buffer=recent_buffer)
     raise RepresentationRouteError(
         f"declared representation {representation!r} selects no training-step route — an "
         "absent or unknown representation is an ERROR, never a dense default (LAW-11)"
@@ -422,53 +418,3 @@ def run_declared_eval_step(
         caps_provider=caps_provider, sample_threads_provider=sample_threads_provider,
         fast_policy_weight_provider=fast_policy_weight_provider,
     ))
-
-
-def _grid_step(
-    trainer: Any, buffer: Any, *,
-    batch_size: int, augment: bool, recency_weight: float, recent_buffer: Any | None,
-) -> dict[str, float]:
-    """grid: the old-side `train_step` dense body, ported verbatim — recency mix
-    (recent draw + aux reshape + zero ply-fill + uniform remainder) when a recent buffer is
-    live and weighted, else one uniform `sample_batch_with_pos` draw."""
-    sampler = getattr(buffer, "sample_batch_with_pos", None)
-    if sampler is None:
-        raise RepresentationRouteError(
-            f"declared representation 'grid' but the injected buffer "
-            f"({type(buffer).__name__}) has no sample_batch_with_pos — the route and the "
-            "buffer disagree; build the buffer from the declared identity"
-        )
-    import numpy as np
-
-    n_recent = 0
-    if recent_buffer is not None and recent_buffer.size > 0 and recency_weight > 0.0:
-        n_recent = max(1, int(round(batch_size * recency_weight)))
-        n_uniform = batch_size - n_recent
-        s_r, c_r, p_r, o_r, own_r, wl_r, ifs_r, vv_r = recent_buffer.sample(n_recent)
-        # RecentBuffer stores aux flat (n, s*s); reshape to (n, s, s) (old-side WHY note).
-        _bs = int(math.isqrt(own_r.shape[1]))
-        own_r = own_r.reshape(-1, _bs, _bs)
-        wl_r = wl_r.reshape(-1, _bs, _bs)
-        # Recent rows lack a ply index; zero-fill (§S181-AUDIT Wave 4 4B-impl-3).
-        pos_r = np.zeros(len(s_r), dtype=np.uint16)
-        s_u, c_u, p_u, o_u, own_u, wl_u, ifs_u, pos_u, vv_u = sampler(max(1, n_uniform), augment)
-        states = np.concatenate([s_r, s_u], axis=0)
-        chain_planes = np.concatenate([c_r, c_u], axis=0)
-        policies = np.concatenate([p_r, p_u], axis=0)
-        outcomes = np.concatenate([o_r, o_u], axis=0)
-        ownership = np.concatenate([own_r, own_u], axis=0)
-        winning_line = np.concatenate([wl_r, wl_u], axis=0)
-        is_full_search = np.concatenate([ifs_r, ifs_u], axis=0)
-        position_indices = np.concatenate([pos_r, pos_u], axis=0)
-        value_target_valid = np.concatenate([vv_r, vv_u], axis=0)
-    else:
-        (states, chain_planes, policies, outcomes, ownership, winning_line,
-         is_full_search, position_indices, value_target_valid) = sampler(batch_size, augment)
-
-    return trainer.train_step_from_tensors(
-        states, policies, outcomes,
-        chain_planes=chain_planes, ownership_targets=ownership,
-        threat_targets=winning_line, is_full_search=is_full_search,
-        n_pretrain=0, n_recent=n_recent,
-        position_indices=position_indices, value_target_valid=value_target_valid,
-    )

@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import contextlib
 import math
-import random
 from collections import Counter, defaultdict
 from collections.abc import Iterator
 from pathlib import Path
@@ -31,7 +30,6 @@ from mantis._engine import Board
 from mantis.data._log import get_logger
 from mantis.data.loss_counters import PIPELINE_COUNTERS, log_pipeline_losses
 from mantis.data.sources.base import GameRecord
-from mantis.env.game_state import GameState
 from mantis.monitor.best_effort import best_effort
 
 try:
@@ -82,7 +80,6 @@ def _progress_ctx() -> Iterator[Any]:
 ELO_BANDS = [(0, 800), (800, 1000), (1000, 1200), (1200, 1400), (1400, 9999)]
 ELO_LABELS = ["<800", "800-1000", "1000-1200", "1200-1400", "1400+"]
 
-CLUSTER_SAMPLE_SIZE = 500  # per source when stratified
 
 # Source labels
 SOURCE_HUMAN = "human"
@@ -389,90 +386,6 @@ def analyse_opening_diversity(
         plt.close(fig)
 
     return result
-
-
-# ---------------------------------------------------------------------------
-# Analysis (e): Cluster count distribution
-# ---------------------------------------------------------------------------
-
-def analyse_cluster_counts(records: list[GameRecord],
-                           sample_size: int = CLUSTER_SAMPLE_SIZE,
-                           label: str = "all", *, encoding_name: str) -> dict:
-    """Sample positions and measure cluster count (K) via GameState.to_tensor()."""
-    all_positions: list[tuple[int, int]] = []
-    for gi, r in enumerate(records):
-        for pi in range(len(r.moves)):
-            all_positions.append((gi, pi))
-
-    rng = random.Random(42)
-    actual_sample = min(sample_size, len(all_positions))
-    sampled = rng.sample(all_positions, actual_sample)
-
-    by_game: dict[int, list[int]] = defaultdict(list)
-    for gi, pi in sampled:
-        by_game[gi].append(pi)
-    for v in by_game.values():
-        v.sort()
-
-    cluster_counts: list[int] = []
-
-    with _progress_ctx() as progress:
-        task = progress.add_task(f"Cluster counts ({label})", total=actual_sample)
-        for gi, plies in by_game.items():
-            r = records[gi]
-            # AUDIT-1 F-34: identity-BOUND. `Board()` clusters at the engine's DEFAULT
-            # threshold 5, so cluster counts on a `v6w25` corpus — whose registry threshold is
-            # 8 — were computed under a rule that corpus never played by.
-            board = Board.with_encoding_name(encoding_name)
-            state = GameState.from_board(board)
-            max_ply = max(plies)
-            ply_set = set(plies)
-
-            for ply_idx, (q, r_coord) in enumerate(r.moves):
-                if ply_idx in ply_set:
-                    _, centers = state.to_tensor()
-                    cluster_counts.append(len(centers))
-                    progress.advance(task)
-                if ply_idx >= max_ply:
-                    break
-                ok, next_state = best_effort(
-                    "data.corpus_metrics.cluster_counts_illegal_move_truncated_replay",
-                    lambda s=state, b=board, mq=q, mr=r_coord: s.apply_move(b, mq, mr),
-                    counters=PIPELINE_COUNTERS,
-                )
-                if not ok or next_state is None:
-                    break  # engine raised on an illegal move; stop replaying this game
-                state = next_state
-
-    cc_arr = np.array(cluster_counts) if cluster_counts else np.array([1])
-    median_k = int(np.median(cc_arr))
-    frac_k_gt2 = float(np.mean(cc_arr > 2))
-
-    if plt is not None:
-        fig, ax = plt.subplots(figsize=(8, 5))
-        max_k = int(cc_arr.max())
-        bins = np.arange(0.5, max_k + 1.5, 1)
-        ax.hist(cc_arr, bins=bins, edgecolor="black", alpha=0.75, color="#C44E52")  # type: ignore
-        ax.set_xlabel("Cluster count (K)")
-        ax.set_ylabel("Number of sampled positions")
-        ax.set_title(f"Cluster Count Distribution ({SOURCE_LABELS.get(label, label)}, "
-                     f"n={actual_sample}, median={median_k})")
-        ax.set_xticks(range(1, max_k + 1))
-        fig.tight_layout()
-        fig.savefig(REPORT_DIR / f"cluster_count_distribution_{label}.png", dpi=150)
-        plt.close(fig)
-
-    unique, counts = np.unique(cc_arr, return_counts=True)
-    dist = {int(k): int(c) for k, c in zip(unique, counts, strict=False)}
-
-    return {
-        "median_cluster_count": median_k,
-        "mean_cluster_count": round(float(np.mean(cc_arr)), 2),
-        "max_cluster_count": int(cc_arr.max()),
-        "frac_k_gt2": round(frac_k_gt2, 4),
-        "distribution": dist,
-        "sample_size": actual_sample,
-    }
 
 
 # ---------------------------------------------------------------------------
@@ -809,7 +722,7 @@ def analyse_elo_stratified(records: list[GameRecord]) -> dict:
 # ---------------------------------------------------------------------------
 
 def run_analysis(records: list[GameRecord], label: str = "all",
-                 cluster_sample: int = CLUSTER_SAMPLE_SIZE, *, encoding_name: str) -> dict:
+                 *, encoding_name: str) -> dict:
     """Run all five analyses on a set of records.
 
     `encoding_name` is REQUIRED and threaded to the two analyses that build a `Board`
@@ -832,11 +745,6 @@ def run_analysis(records: list[GameRecord], label: str = "all",
     log.info("opening_diversity_done", label=label, **{
         k: v for k, v in diversity_stats.items() if not k.startswith("first_move")})
 
-    cluster_stats = analyse_cluster_counts(
-        records, cluster_sample, label, encoding_name=encoding_name)
-    log.info("cluster_counts_done", label=label,
-             median=cluster_stats["median_cluster_count"])
-
     ply_stats = analyse_ply_coverage(records, label)
     log.info("ply_coverage_done", label=label,
              late_game_fraction=ply_stats["late_game_fraction"],
@@ -851,6 +759,5 @@ def run_analysis(records: list[GameRecord], label: str = "all",
         "win_rates": win_stats,
         "move_entropy": entropy_stats,
         "opening_diversity": diversity_stats,
-        "cluster_counts": cluster_stats,
         "ply_coverage": ply_stats,
     }

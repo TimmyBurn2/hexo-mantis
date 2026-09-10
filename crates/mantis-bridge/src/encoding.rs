@@ -286,10 +286,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(all_specs, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha_hex, m)?)?;
-    m.add("MY_STONE_PLANE", mantis_encoding::MY_STONE_PLANE)?;
-    m.add("OPP_STONE_PLANE", mantis_encoding::OPP_STONE_PLANE)?;
-    m.add("MOVES_REMAINING_PLANE", mantis_encoding::MOVES_REMAINING_PLANE)?;
-    m.add("PLY_PARITY_PLANE", mantis_encoding::PLY_PARITY_PLANE)?;
     m.add("HEX_AXES", mantis_core::board::HEX_AXES)?;
     m.add("WIN_LENGTH", mantis_core::board::WIN_LENGTH)?;
     m.add("DEFAULT_CLUSTER_THRESHOLD", mantis_core::board::DEFAULT_CLUSTER_THRESHOLD)?;

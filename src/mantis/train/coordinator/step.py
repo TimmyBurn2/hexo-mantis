@@ -66,7 +66,6 @@ from mantis.train.coordinator.config import (
     pooled_draw_rate,
 )
 from mantis.train.coordinator.dispatch import (
-    RepresentationRouteError,
     resolve_step_spec,
     run_declared_train_step,
 )
@@ -79,7 +78,7 @@ from mantis.train.events import (
     symmetry_draw_block,
 )
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
-from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
+from mantis.train.mixing import _steps_budget
 
 #: How many COMPLETE resume bundles the run keeps (R345(b)(3)). Two, not one: pruning to one
 #: means the moment a new bundle's manifest commits, the only other resume point is already
@@ -984,9 +983,6 @@ class StepCoordinator:
         """
         sink = self._sink if self._sink is not None else NullEventSink()
         w_pre = 0.0
-        if self.pretrained_buffer is not None:
-            w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
-                                               cfg.mixing_min_w, cfg.mixing_decay_steps)
         rstats_report, rstats = self._target_integrity_report()
         emit_iteration_complete_event(
             self._train_step, w_pre, self._games_played, self._last_iter_games,
@@ -1459,41 +1455,6 @@ class StepCoordinator:
         # dict lookups are deleted rather than kept as a fallback: a fallback is the second
         # authority, and `train_cfg` is the legacy flat-hparams path this root does not use.
         batch_size = cfg.batch_size
-        if (self.pretrained_buffer is not None and self.pretrained_buffer.size > 0
-                and self.buffer.size > 0):
-            # WPTS Phase T (CENSUS_C C-2b): the mixed feed is DENSE-ONLY by construction
-            # (`sample_batch_with_pos`, `buffer.encoding`, (N,C,H,W) shapes). Entering it
-            # under a graph declaration must die at the ROUTE with a named error, not
-            # mid-assembly on an AttributeError. No graph-mixed route exists — none is
-            # carded and none has a producer.
-            spec = self._step_spec()
-            if spec.representation != "grid":
-                raise RepresentationRouteError(
-                    f"the mixed (corpus + selfplay) arm is a dense-only feed; declared "
-                    f"representation {spec.representation!r} has no mixed-batch route"
-                )
-            from mantis.train.batch_assembly import assemble_mixed_batch  # lazy (heavy deps)
-
-            w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
-                                               cfg.mixing_min_w, cfg.mixing_decay_steps)
-            n_bot = (round(cfg.bot_batch_share * batch_size)
-                     if (self.bot_buffer is not None and self.bot_buffer.size > 0) else 0)
-            n_pre = max(1, int(math.ceil(w_pre * (batch_size - n_bot))))
-            n_self = batch_size - n_pre - n_bot
-            batch = assemble_mixed_batch(
-                self.pretrained_buffer, self.buffer, self.recent_buffer,
-                n_pre, n_self, batch_size, self.batch_size_cfg, cfg.recency_weight,
-                self.bufs, self._train_step, augment=cfg.augment,
-                bot_buffer=self.bot_buffer, n_bot=n_bot,
-            )
-            return self.trainer.train_step_from_tensors(
-                batch.states, batch.policies, batch.outcomes,
-                chain_planes=batch.chain_planes, ownership_targets=batch.ownership,
-                threat_targets=batch.winning_line, is_full_search=batch.is_full_search,
-                n_pretrain=n_pre + n_bot, n_recent=batch.n_recent_actual,
-                position_indices=batch.position_indices,
-                value_target_valid=batch.value_target_valid,
-            )
         # Straight self-play step (WPTS Phase T / TD-1 / R102): the DECLARED dispatcher
         # routes off the resolved representation to the trainer's TYPED entry points
         # (`train_step_from_graph_batch` / `train_step_from_tensors`). `train_step` is dead.
