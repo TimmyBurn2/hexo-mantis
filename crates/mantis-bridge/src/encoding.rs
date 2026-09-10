@@ -286,13 +286,12 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(all_specs, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha, m)?)?;
     m.add_function(wrap_pyfunction!(registry_sha_hex, m)?)?;
-    m.add("MY_STONE_PLANE", mantis_encoding::MY_STONE_PLANE)?;
-    m.add("OPP_STONE_PLANE", mantis_encoding::OPP_STONE_PLANE)?;
-    m.add("MOVES_REMAINING_PLANE", mantis_encoding::MOVES_REMAINING_PLANE)?;
-    m.add("PLY_PARITY_PLANE", mantis_encoding::PLY_PARITY_PLANE)?;
     m.add("HEX_AXES", mantis_core::board::HEX_AXES)?;
     m.add("WIN_LENGTH", mantis_core::board::WIN_LENGTH)?;
-    m.add("DEFAULT_CLUSTER_THRESHOLD", mantis_core::board::DEFAULT_CLUSTER_THRESHOLD)?;
+    m.add(
+        "DEFAULT_CLUSTER_THRESHOLD",
+        mantis_core::board::DEFAULT_CLUSTER_THRESHOLD,
+    )?;
     Ok(())
 }
 
@@ -314,11 +313,12 @@ mod tests {
             v
         };
         assert_eq!(via_fn, registered_names());
-        // Pin the pruned 5-entry set (registry.toml authority; gnn_axis_r8 = R328(b)).
+        // Pin the registered set by NAME (registry.toml authority; gnn_axis_r8 = R328(b)).
+        // The three grid rows went with the dense path (R346(f)).
         assert_eq!(
             via_fn,
-            vec!["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"],
-            "all_specs must expose exactly the 5 registered encodings"
+            vec!["gnn_axis_r8", "gnn_axis_v1"],
+            "all_specs must expose exactly the registered encodings"
         );
     }
 
@@ -333,10 +333,10 @@ mod tests {
 
     #[test]
     fn from_static_round_trips_derived_accessors() {
-        let spec = mantis_encoding::lookup("v6").expect("v6 registered");
+        let spec = mantis_encoding::lookup("gnn_axis_v1").expect("gnn_axis_v1 registered");
         let py = PyRegistrySpec::from_static(spec);
-        assert_eq!(py.name(), "v6");
-        assert_eq!(py.board_size(), 19);
+        assert_eq!(py.name(), "gnn_axis_v1");
+        assert_eq!(py.board_size(), spec.board_size);
         assert_eq!(py.policy_stride(), spec.policy_stride());
         assert_eq!(py.n_cells(), spec.n_cells());
         assert_eq!(py.state_stride(), spec.state_stride());

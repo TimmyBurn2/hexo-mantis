@@ -123,10 +123,10 @@ def test_the_sanctioned_weights_strip_still_recovers_it(pre_branch_checkpoint, t
     out.mkdir()
     stripped = strip_and_restamp(
         pre_branch_checkpoint,
-        new_encoding="v6_live2_ls",
+        new_encoding="gnn_axis_v1",
         run_id="recovered",
         checkpoint_dir=out,
-        declared_encoding="v6_live2_ls",
+        declared_encoding="gnn_axis_v1",
     )
     ck = load_checkpoint(stripped)
     assert ck.kind == "weights"

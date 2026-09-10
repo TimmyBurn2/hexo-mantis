@@ -2,17 +2,16 @@
 //! (`tests/fixtures/board/board_replay_golden_v1.json`, schema
 //! `board-golden-v1`) against this crate's Board and asserts EVERY recorded
 //! field matches — moves, zobrist u128, legal-set sha256 digests, turn
-//! structure, check_win, window_center, periodic full legal sets, sorted
-//! cluster centers, sorted threat anchors, winning/threat move surfaces,
-//! forced-win probes, and terminal outcome.
+//! structure, check_win, window_center, periodic full legal sets, winning/threat
+//! move surfaces, forced-win probes, and terminal outcome.
+//!
+//! The fixture also records `cluster_centers` and `threat_anchors` columns. They are NOT
+//! replayed: `get_cluster_views` / `get_threat_anchors` went with the dense path (R346(f)),
+//! so there is no producer to compare against. The columns stay in the capture rather than
+//! being regenerated away.
 //!
 //! A second test proves the checker BITES: flipping one move of game 0 must
 //! produce loud zobrist + legal-digest divergences naming game/ply.
-//!
-//! Fixture provenance note: the cluster-center field inherits HashMap
-//! iteration order in the massive-cluster dedup path; the capture records the
-//! toolchain, and a cluster-center-only mismatch after a toolchain change is
-//! fixture-regeneration territory, not a port defect.
 
 #![cfg_attr(miri, allow(dead_code))]
 
@@ -69,10 +68,6 @@ struct PlyRec {
     window_center: (i32, i32),
     #[serde(default)]
     legal_moves: Option<Vec<(i32, i32)>>,
-    #[serde(default)]
-    cluster_centers: Option<Vec<(i32, i32)>>,
-    #[serde(default)]
-    threat_anchors: Option<Vec<(i32, i32)>>,
     #[serde(default)]
     winning_moves_p1: Option<Vec<(i32, i32)>>,
     #[serde(default)]
@@ -172,16 +167,6 @@ fn verify(golden: &Golden) -> Vec<String> {
             cmp(&mut div, g, rec.ply, "window_center", &board.window_center(), &rec.window_center);
             if let Some(want) = &rec.legal_moves {
                 cmp(&mut div, g, rec.ply, "legal_moves", &legal, want);
-            }
-            if let Some(want) = &rec.cluster_centers {
-                let (_views, mut centers) = board.get_cluster_views();
-                centers.sort_unstable();
-                cmp(&mut div, g, rec.ply, "cluster_centers", &centers, want);
-            }
-            if let Some(want) = &rec.threat_anchors {
-                let mut anchors = board.get_threat_anchors();
-                anchors.sort_unstable();
-                cmp(&mut div, g, rec.ply, "threat_anchors", &anchors, want);
             }
             if let Some(want) = &rec.winning_moves_p1 {
                 cmp(&mut div, g, rec.ply, "winning_moves_p1", &board.winning_moves(Player::One), want);

@@ -388,21 +388,26 @@ def test_the_builder_calls_the_real_trainer_and_pool_constructors_and_binds_them
         )
 
 
-def test_the_buffer_selector_routes_graph_and_grid_to_the_real_engine_buffers() -> None:
-    """O-A3, half 2. `_select_buffer` must name both real engine buffers and read the
-    DECLARED representation.
+def test_the_buffer_selector_routes_the_declared_representation_to_a_real_engine_buffer() -> None:
+    """O-A3, half 2. `_select_buffer` must name the real engine buffer and read the DECLARED
+    representation.
 
-    MUTATION THAT REDS IT: collapse the two arms into one (`return ReplayBuffer(...)`) — the
-    dense-by-default defect LAW-11 bans, and the mutation that survived O-9's token census.
-    The behavioural producer is O-F1; this is its structural half, and it is the one that
-    also sees a route deleted from a still-token-bearing file."""
+    IT USED TO NAME TWO. The `ReplayBuffer` arm went with the dense path (R346(f)), so the
+    mutation this row was written for — collapsing two arms into `return ReplayBuffer(...)`,
+    the dense-by-default defect LAW-11 bans — has no second arm to collapse. What survives and
+    still matters is the THIRD arm: an absent or unknown representation RAISES rather than
+    falling through to the one buffer that is left. The behavioural producer is O-F1; this is
+    its structural half."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     selector = _func(tree, "_select_buffer")
     called = {_called_name(node) for node in ast.walk(selector) if isinstance(node, ast.Call)}
-    for buffer_class in ("HexgBuffer", "ReplayBuffer"):
-        assert buffer_class in called, (
-            f"_select_buffer must construct {buffer_class} on its own arm; got {sorted(called)}"
-        )
+    assert "HexgBuffer" in called, (
+        f"_select_buffer must construct HexgBuffer on its own arm; got {sorted(called)}"
+    )
+    assert "ReplayBuffer" not in called, (
+        "_select_buffer names ReplayBuffer, which R346(f) deleted from the engine — a dense "
+        f"arm cannot be re-added without the buffer it returns; got {sorted(called)}"
+    )
     attributes = {node.attr for node in ast.walk(selector) if isinstance(node, ast.Attribute)}
     assert {"representation", "encoding"} <= attributes, (
         "the selection reads `config.identity.representation` and passes "

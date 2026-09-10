@@ -30,7 +30,7 @@ import pytest
 import torch
 
 from mantis.monitor.config import MonitorConfig
-from mantis._engine import HexgBuffer, ReplayBuffer
+from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import GnnArch, build_net
@@ -47,8 +47,6 @@ from mantis.train.trainer.core import Trainer
 
 GRAPH_ENCODING = "gnn_axis_v1"
 _GSPEC = lookup(GRAPH_ENCODING)
-GRID_ENCODING = "v6_live2_ls"
-_DSPEC = lookup(GRID_ENCODING)
 
 
 # ── builders ─────────────────────────────────────────────────────────────────────────────
@@ -64,12 +62,11 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # boundary, and 0 keeps both quiet.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=1.0, max_train_burst=1,
-        batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
-        mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,
+        batch_size=4, augment=False, recency_weight=0.0, hard_gn_threshold=1e9,
         hard_gn_min_steps=10_000, stop_step=None, draw_rate_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
-        terminal_eval_enabled=False, bot_batch_share=0.0,
+        terminal_eval_enabled=False,
         selfplay_stall_timeout_sec=1800.0,
     )
     base.update(over)
@@ -89,33 +86,11 @@ def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     return hb
 
 
-def _dense_buffer(n_records: int = 8, capacity: int = 64) -> ReplayBuffer:
-    rb = ReplayBuffer(capacity, GRID_ENCODING)
-    s = int(_DSPEC.board_size)
-    n_cells = s * s
-    for i in range(n_records):
-        state = np.zeros((int(_DSPEC.n_planes), s, s), dtype=np.float16)
-        state[0, 0, i % s] = 1.0
-        chain = np.zeros((6, s, s), dtype=np.float16)
-        policy = np.zeros(int(_DSPEC.policy_stride), dtype=np.float32)
-        policy[i % n_cells] = 1.0
-        own = np.zeros(n_cells, dtype=np.uint8)
-        wl = np.zeros(n_cells, dtype=np.uint8)
-        rb.push(state, chain, policy, 1.0 if i % 2 == 0 else -1.0, own, wl)
-    return rb
-
-
 def _tiny_graph_trainer(tmp_path, mk_config) -> Trainer:
     torch.manual_seed(20260729)
     arch = GnnArch(in_dim=_GSPEC.node_feat_dim, edge_dim=_GSPEC.edge_feat_dim, hidden=16,
                    num_layers=1, policy_hidden=16, value_hidden=16)
     return Trainer(build_net(arch), mk_config(GRAPH_ENCODING, "graph"), arch=arch,
-                   checkpoint_dir=tmp_path / "ckpt", device=torch.device("cpu"))
-
-
-def _tiny_dense_trainer(tmp_path, mk_config, tiny_arch) -> Trainer:
-    torch.manual_seed(20260729)
-    return Trainer(build_net(tiny_arch), mk_config(), arch=tiny_arch,
                    checkpoint_dir=tmp_path / "ckpt", device=torch.device("cpu"))
 
 
@@ -243,105 +218,6 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
 
-def test_graph_spec_over_a_dense_buffer_raises_named_error() -> None:
-    """Declaration↔object mismatch is a NAMED wiring error (the BufferKindMismatch posture),
-    never a silent fall-through to the dense arm."""
-    rec = _RecordingTypedTrainer()
-    with pytest.raises(RepresentationRouteError, match="graph"):
-        run_declared_train_step(rec, _dense_buffer(), _GSPEC,
-                                batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert rec.tensor_calls == [] and rec.graph_calls == []
-
-
-def test_grid_spec_over_a_graph_buffer_raises_named_error() -> None:
-    rec = _RecordingTypedTrainer()
-    with pytest.raises(RepresentationRouteError, match="grid"):
-        run_declared_train_step(rec, _graph_buffer(), _DSPEC,
-                                batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert rec.tensor_calls == [] and rec.graph_calls == []
-
-
-# ── O-T3: the grid route ─────────────────────────────────────────────────────────────────
-def test_grid_train_step_end_to_end_from_coordinator(tmp_path, mk_config, tiny_arch) -> None:
-    trainer = _tiny_dense_trainer(tmp_path, mk_config, tiny_arch)
-    coord = _coordinator(trainer, _dense_buffer(), mk_config())
-    out = coord.step()
-    assert out.steps_run >= 1
-    assert trainer.step >= 1
-    assert coord._last_loss_info is not None and "loss" in coord._last_loss_info
-
-
-def test_grid_recency_mix_contract_matches_old_side() -> None:
-    """Old-side `train_step` dense-arm parity: n_recent = max(1, round(bs*rw)); recent aux
-    rows reshape from flat (n, s*s) to (n, s, s); recent ply-index rows are ZERO-filled
-    (§S181-AUDIT 4B-impl-3); the remainder is one uniform `sample_batch_with_pos` draw."""
-    s = 5
-    n_cells = s * s
-
-    class _RecentBuf:
-        size = 4
-
-        def sample(self, n: int):
-            st = np.zeros((n, 3, s, s), dtype=np.float16)
-            ch = np.zeros((n, 6, s, s), dtype=np.float16)
-            po = np.zeros((n, n_cells + 1), dtype=np.float32)
-            oc = np.ones(n, dtype=np.float32)
-            own = np.zeros((n, n_cells), dtype=np.uint8)
-            wl = np.zeros((n, n_cells), dtype=np.uint8)
-            ifs = np.ones(n, dtype=bool)
-            vv = np.ones(n, dtype=np.uint8)
-            return st, ch, po, oc, own, wl, ifs, vv
-
-    class _DenseBuf:
-        size = 32
-        sampled: list[tuple[int, bool]] = []
-
-        def sample_batch_with_pos(self, n: int, augment: bool):
-            self.sampled.append((n, augment))
-            st = np.zeros((n, 3, s, s), dtype=np.float16)
-            ch = np.zeros((n, 6, s, s), dtype=np.float16)
-            po = np.zeros((n, n_cells + 1), dtype=np.float32)
-            oc = -np.ones(n, dtype=np.float32)
-            own = np.zeros((n, s, s), dtype=np.uint8)
-            wl = np.zeros((n, s, s), dtype=np.uint8)
-            ifs = np.ones(n, dtype=bool)
-            pos = np.arange(n, dtype=np.uint16)
-            vv = np.ones(n, dtype=np.uint8)
-            return st, ch, po, oc, own, wl, ifs, pos, vv
-
-    rec = _RecordingTypedTrainer()
-    run_declared_train_step(rec, _DenseBuf(), _DSPEC,
-                            batch_size=8, augment=False, recency_weight=0.25,
-                            recent_buffer=_RecentBuf(),
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert len(rec.tensor_calls) == 1
-    call = rec.tensor_calls[0]
-    assert call["n"] == 8, "recent + uniform rows must concatenate to the full batch"
-    assert call["n_recent"] == 2, "n_recent = max(1, round(8 * 0.25))"
-    assert call["n_pretrain"] == 0
-    assert _DenseBuf.sampled == [(6, False)], "uniform remainder = batch_size - n_recent"
-    pos = np.asarray(call["position_indices"])
-    assert pos.shape == (8,) and (pos[:2] == 0).all(), "recent rows carry ZERO ply-index"
-
-
-# ── O-T4: the mixed arm's dense-only feed is typed (CENSUS_C C-2b) ───────────────────────
-def test_mixed_arm_with_graph_spec_raises_at_the_route(tmp_path, mk_config) -> None:
-    class _Pretrained:
-        size = 4
-
-    rec = _RecordingTypedTrainer()
-    coord = _coordinator(rec, _graph_buffer(), mk_config(GRAPH_ENCODING, "graph"),
-                         pretrained_buffer=_Pretrained())
-    with pytest.raises(RepresentationRouteError, match="mixed"):
-        coord._run_training_step(coord.config)
-    assert rec.tensor_calls == [] and rec.graph_calls == []
-
-
 # ── O-T5: closed match (LAW-11 posture) ──────────────────────────────────────────────────
 def test_unknown_representation_raises_named_error() -> None:
     class _AlienSpec:
@@ -446,20 +322,13 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
 
 
 # ── O-T8 (WP12-R F2): the caps provider reaches the GRAPH arm and ONLY the graph arm ──────
-def test_the_grid_route_never_invokes_the_caps_provider() -> None:
-    """The route assertion the F2 keyword buys. `_grid_step` is not GIVEN the provider, so a
-    grid run structurally cannot read `train.microbatch_caps` — and four FROZEN files build a
-    `StepCoordinator` whose `full_config` has no `train` key at all. A provider that raises on
-    call turns "the grid arm does not read the caps" into a drive rather than a claim."""
-    def _explode() -> MicrobatchCapsSpec:
-        raise AssertionError("the grid arm invoked caps_provider")
-
+def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
+    """The F2 keyword's contract: the caps are a PROVIDER, called by the graph arm and called
+    once. It was a provider rather than a value because the four frozen grid coordinators
+    carried no `train` section and Python evaluates every argument before the call; the grid
+    route is gone (R346(f)), and what survives is the once-per-step read the census in
+    `test_graph_microbatch_authority.py` freezes."""
     rec = _RecordingTypedTrainer()
-    run_declared_train_step(rec, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None, caps_provider=_explode, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert len(rec.tensor_calls) == 1
-
     invoked: list[int] = []
 
     def _counting() -> MicrobatchCapsSpec:
@@ -473,28 +342,15 @@ def test_the_grid_route_never_invokes_the_caps_provider() -> None:
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
 
 
-def test_the_grid_route_never_invokes_the_sample_threads_provider() -> None:
+def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() -> None:
     """PERF-TRANCHE-1 B1's provider rides the caps provider's contract, and this is why.
 
-    `resolve_sample_threads` reads `full_config["selfplay"]`, and the four FROZEN grid
-    coordinators build a `full_config` that has no such section. The first cut of B1 passed
-    the RESOLVED VALUE here; Python evaluates every argument before the call, so it resolved
-    on BOTH representations and raised `MissingSampleThreadsInputError` on every grid step.
-    The laziness is what keeps a graph-only input off the grid route, and this row is the
-    only witness to it — nothing else in the suite calls the dispatcher on a grid spec with a
-    thread budget that would refuse to be derived.
+    `resolve_sample_threads` reads `full_config["selfplay"]`. The first cut of B1 passed the
+    RESOLVED VALUE here, which Python evaluates before the call; the provider shape is what
+    keeps the derivation at the one place that needs it, and once per step is what the ring
+    rebuild's width is read at.
     """
-    def _explode() -> int:
-        raise AssertionError("the grid arm invoked sample_threads_provider")
-
     rec = _RecordingTypedTrainer()
-    run_declared_train_step(rec, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None,
-                            caps_provider=_NON_BINDING_CAPS,
-                            sample_threads_provider=_explode,
-                            fast_policy_weight_provider=lambda: 0.0)
-    assert len(rec.tensor_calls) == 1
-
     invoked: list[int] = []
 
     def _counting() -> int:

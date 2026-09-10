@@ -277,7 +277,7 @@ def test_the_round_budget_the_resit_measured_against_is_a_LIVE_config_fact() -> 
     from mantis.config.loader import load_config
 
     repo = Path(__file__).resolve().parents[2]
-    timeout = load_config(repo / "configs" / "run5.yaml").eval.round_timeout_sec
+    timeout = load_config(repo / "configs" / "run6.yaml").eval.round_timeout_sec
     assert timeout == 3600.0, (
         "the re-sit measured a ~62-minute round against a 3600 s budget; if run5's bound has "
         f"moved, F-RESIT-14's arithmetic needs re-deriving rather than re-quoting. Got {timeout}"

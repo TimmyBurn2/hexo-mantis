@@ -113,10 +113,10 @@ def _synthetic_records() -> list[GameRecord]:
 
 def test_run_analysis_key_sets() -> None:
     recs = _synthetic_records()
-    res = cm.run_analysis(recs, "test", cluster_sample=20, encoding_name="v6")
+    res = cm.run_analysis(recs, "test", encoding_name="gnn_axis_r8")
     assert set(res) == {
         "game_count", "total_positions", "game_lengths", "win_rates",
-        "move_entropy", "opening_diversity", "cluster_counts", "ply_coverage",
+        "move_entropy", "opening_diversity", "ply_coverage",
     }
     assert set(res["game_lengths"]) == {
         "median", "mean", "std", "min", "max", "p10_threshold", "p90",
@@ -131,14 +131,6 @@ def test_run_analysis_key_sets() -> None:
     }
     assert {"unique_at_move_3", "unique_at_move_10", "dupe_rate_first_10",
             "first_move_entropy"} <= set(res["opening_diversity"])
-    assert set(res["cluster_counts"]) == {
-        "median_cluster_count", "mean_cluster_count", "max_cluster_count",
-        "frac_k_gt2", "distribution", "sample_size",
-    }
-    assert set(res["ply_coverage"]) == {
-        "total_positions", "late_game_positions", "late_game_fraction",
-        "late_game_flag", "ply_histogram",
-    }
 
 
 def test_quality_scores_and_elo_stratified() -> None:

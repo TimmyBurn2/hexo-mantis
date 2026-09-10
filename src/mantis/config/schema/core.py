@@ -109,6 +109,89 @@ ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
 )
 
 
+#: THE OPERATIONAL-CONSTANT HALF OF THE SCHEMA PARTITION (R347 / CONFIG-1) — the ONE authority
+#: for which keys carry a schema default and therefore leave the YAML.
+#:
+#: THE CRITERION, stated once so every row can be checked against it: a key defaults when it
+#: names how the PROCESS is operated — a watchdog deadline, a poll interval, a join bound, a
+#: disk threshold, a queue cap, a diagnostic switch — and no run has ever decided it
+#: differently. It stays REQUIRED when a run really chooses it. That is why `gate_interval`,
+#: the actor-lag pair, `supervisor_kill_grace_sec` and the whole WR/axis warn family are NOT
+#: here: those are ARMING, and R1's silently-disabled-opponent reason bites hardest exactly
+#: there.
+#:
+#: THIS IS R1, NOT AN EXCEPTION TO IT. R1's own words are "NO code-side defaults — a default
+#: lives only in the schema field". A default here is that sentence's second clause; what R1
+#: forbids is the `dict.get(key, fallback)` at a call site, which is a SECOND authority. A run
+#: that wants another value mints the row (`mint_config.py --mint-row`) — the same act, and
+#: visible in the config's stamped header — so nothing becomes hand-varied.
+#:
+#: DECLARED, not derived, for `ARCH_SCOPED_KEYS`' reason: "operational" is a judgment about
+#: what a key MEANS, and a census that read the answer off `is_required()` would be satisfied
+#: by any default anyone adds, which is the exact event it exists to catch.
+OPERATIONAL_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
+    ("eval.round_timeout_sec", "a round's wall-clock bound — how long the eval process may "
+                               "run, not what the round measures"),
+    ("eval.worker_kill_grace_sec", "the grace a killed eval worker gets before SIGKILL"),
+    ("train.selfplay_stall_timeout_sec", "the stall watchdog's wall-clock budget; LAW-16 "
+                                         "keeps it always armed, so only its length is here"),
+    ("selfplay.results_queue_cap", "the results queue's back-pressure bound"),
+    ("selfplay.log_investigation_metrics", "a diagnostic verbosity switch: it gates what is "
+                                           "WRITTEN, never what is played"),
+    ("monitor.heartbeat_deadline_train_step_sec", "watchdog deadline"),
+    ("monitor.heartbeat_deadline_inference_dispatch_sec", "watchdog deadline"),
+    ("monitor.heartbeat_deadline_selfplay_drain_sec", "watchdog deadline"),
+    ("monitor.heartbeat_deadline_eval_round_sec", "watchdog deadline"),
+    ("monitor.heartbeat_poll_interval_sec", "watchdog poll cadence"),
+    ("monitor.heartbeat_file_interval_sec", "heartbeat-file write cadence"),
+    ("monitor.heartbeat_close_out_deadline_sec", "close-out deadline"),
+    ("monitor.heartbeat_fire_effect_timeout_sec", "how long a fired watchdog waits for its "
+                                                  "own effect before escalating"),
+    ("monitor.supervisor_stale_after_sec", "supervisor staleness bound"),
+    ("monitor.supervisor_poll_interval_sec", "supervisor poll cadence"),
+    ("monitor.supervisor_max_relaunches", "supervisor relaunch ceiling"),
+    ("monitor.drain", "the four drain/terminal-eval caps are subprocess-join bounds; the "
+                      "BLOCK defaults so a config that names none of them omits it whole"),
+    ("monitor.drain.final_eval_drain_timeout_sec", "subprocess-join bound"),
+    ("monitor.drain.eval_final_drain_safety_factor", "subprocess-join bound"),
+    ("monitor.drain.eval_final_drain_hard_cap_sec", "subprocess-join bound"),
+    ("monitor.drain.terminal_eval_hard_cap_sec", "subprocess-join bound"),
+    ("monitor.disk_guard", "the three disk thresholds; the BLOCK defaults for `drain`'s "
+                           "reason"),
+    ("monitor.disk_guard.interval_sec", "disk-guard poll cadence"),
+    ("monitor.disk_guard.warn_gb", "disk-guard warn threshold"),
+    ("monitor.disk_guard.fail_gb", "disk-guard fail threshold"),
+)
+
+
+def operational_default_fields(prefix: str) -> frozenset[str]:
+    """The immediate field names under `prefix` that carry an operational schema default.
+
+    Args:
+        prefix: a dotted section path (`"monitor"`, `"monitor.drain"`), or `""` for the root.
+
+    Returns:
+        The field names, without the prefix — the shape a per-model census compares against
+        `model.model_fields`.
+
+    Raises:
+        ValueError: `prefix` names no row at all, which means a census is filtering on a
+            section that has moved and would silently exempt nothing.
+    """
+    head = f"{prefix}." if prefix else ""
+    names = frozenset(
+        key[len(head):] for key, _grounds in OPERATIONAL_DEFAULT_KEYS
+        if key.startswith(head) and "." not in key[len(head):]
+    )
+    if not names:
+        raise ValueError(
+            f"operational_default_fields({prefix!r}) matched no row of "
+            "OPERATIONAL_DEFAULT_KEYS: a census filtering on a section that has moved exempts "
+            "nothing and passes forever"
+        )
+    return names
+
+
 class WarmStartConfig(StrictModel):
     """The BC warm-start SOURCE: which checkpoint a fresh run's representation+policy weights
     come from, and which net that checkpoint is (R332(d), AUDIT-1 F-19).
@@ -183,8 +266,8 @@ class IdentityConfig(StrictModel):
 class LadderRung(StrictModel):
     """One opponent-ladder rung (design §c.1). `bot` is the resolver kind (closed set,
     WP11-A); `depth` is sealbot's fixed-depth bar (LAW-15), `opponent_sims` the
-    kraken/strix opponent-side sims — exactly one of the two is meaningful per `bot`, both
-    travel as `None` where inapplicable rather than a sentinel int (R1: no code default).
+    opponent-side sims — exactly one of the two is meaningful per `bot`, and both travel as
+    `None` where inapplicable rather than as a sentinel int (R1: no code default).
 
     RED-TEAM F2 (MAJOR): a fixed-depth bar of 0 or negative, an opponent-sims count of 0 or
     negative, or a rung that can never play a single game (`games_max < 1`) are each
@@ -193,7 +276,7 @@ class LadderRung(StrictModel):
     """
 
     name: str = Field(min_length=1)
-    bot: Literal["sealbot", "kraken", "strix", "random"]
+    bot: Literal["sealbot", "random"]
     variant: str = Field(min_length=1)
     depth: int | None = Field(ge=1)
     opponent_sims: int | None = Field(ge=1)
@@ -413,12 +496,16 @@ class EvalConfig(StrictModel):
 
     random_model_sims: int = Field(ge=1)
     sealbot_model_sims: int = Field(ge=1)
-    kraken_model_sims: int = Field(ge=1)
-    strix_model_sims: int = Field(ge=1)
     random_floor_games: int = Field(ge=0)
     worker_device: Literal["cuda", "cpu"]
-    round_timeout_sec: float = Field(gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
-    worker_kill_grace_sec: float = Field(ge=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
+    # OPERATIONAL CONSTANTS (R347/CONFIG-1): a round's wall-clock bound and the grace a
+    # killed worker gets are how the eval PROCESS is operated, not what the round measures —
+    # every committed config has minted the same pair. The games, sims and bars beside them
+    # stay required, because those are what a run decides.
+    round_timeout_sec: float = Field(
+        default=3600.0, gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
+    worker_kill_grace_sec: float = Field(
+        default=10.0, ge=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)
     #: `default=...` is this schema's own no-terminal-default idiom (the shape
     #: `train.scheduler_t_max` / `train.draw_rate_abort` already carry): the key is REQUIRED
     #: and an absent one is an error naming it, while `None` is a real, explicit posture the

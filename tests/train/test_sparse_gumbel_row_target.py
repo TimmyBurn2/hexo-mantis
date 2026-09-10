@@ -234,6 +234,12 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
         buf.push_graph_position(stones, policy, 1, 30, 2 + i, True,
                                 1.0 if i % 2 == 0 else -1.0, True, 10 + i, -1, tail)
 
+    # SEEDED, and the row this fixes is why. The ring samples WITH REPLACEMENT, so 8 draws
+    # over 8 rows miss the single planted row about a third of the time — the assertion below
+    # was a coin toss, and it lost one on a full-tier run. `H.SEED` is the harness's own seed
+    # and draws the planted row; a re-seed that stopped drawing it reds here, which is the
+    # right place for that to be noticed.
+    buf.seed_sampler(H.SEED)
     replay = H.ReplayWireBuffer(buf, 8)
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)

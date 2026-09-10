@@ -264,7 +264,7 @@ def test_main_reads_both_run_inputs_off_the_arguments_it_parsed() -> None:
             out_dir=os.environ.get("MANTIS_OUT_DIR", args.out_dir),
         )
 
-    `MANTIS_CONFIG=/tmp/other.yaml python -m mantis.run --config configs/run5.yaml …` then
+    `MANTIS_CONFIG=/tmp/other.yaml python -m mantis.run --config configs/run6.yaml …` then
     boots a config nobody typed — and `run.py`'s own claim that "no invocation can point
     either caller somewhere else" is false one layer below the layer C-5 just closed. The
     preflight CHILD is defended against exactly this (`PreflightConfigIdentityError`, the F-B1

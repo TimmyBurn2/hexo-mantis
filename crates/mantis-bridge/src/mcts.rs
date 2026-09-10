@@ -24,7 +24,6 @@ use pyo3::prelude::*;
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
 use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, SearchKind};
-use mantis_selfplay::records;
 
 use crate::board::PyBoard;
 
@@ -277,143 +276,18 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Legal-set (multi-window no-drop) counterpart of `expand_and_backup`.
-    /// Productionizes the off-window decoding fix: the deploy Gumbel-SH head
-    /// expands children over the FULL legal set (off-global-window cells COVERED
-    /// by a cluster get a child), the action space the net already trains under
-    /// in self-play.
-    ///
-    /// Mirrors the self-play worker aggregation EXACTLY: for each pending leaf,
-    /// slice its `K` RAW per-cluster prob vectors + values, **recompute the
-    /// cluster centers in Rust** via `get_cluster_views()` (the self-play
-    /// center-order contract — never trust a Python-supplied order), **min-pool
-    /// the values** (parity with selfplay `min_v`), build the ragged
-    /// `LegalSetPolicy` via `records::aggregate_policy_ls`, then expand+backup via
-    /// the inner `expand_and_backup_ls`.
+    /// Graph counterpart of `expand_and_backup`: the deploy Gumbel-SH head expands children
+    /// over the FULL legal set — the action space the net already trains under in self-play.
     ///
     /// Args:
-    ///     policies: FLAT list of per-cluster prob vectors (one per cluster, each
-    ///               length `policy_stride`, = exp(log_policy); NO scatter-max, NO
-    ///               drop, NO min-pool — Rust pools). Total len == sum(leaf_k).
-    ///     values:   FLAT list of per-cluster scalar values, same leaf-major order.
-    ///     leaf_k:   `K` (cluster count) per leaf; order aligned with the boards
-    ///               returned by the preceding `select_leaves` (== pending order).
-    ///     policy_stride:  action-space size (= encoding `policy_logit_count`).
-    ///     has_pass_slot:  whether the last slot is the (dead) pass slot.
-    ///     trunk_sz:       cluster window side length; cross-checked against each
-    ///                     leaf board's `cluster_window_size()`.
-    #[pyo3(signature = (policies, values, leaf_k, policy_stride, has_pass_slot, trunk_sz))]
-    #[allow(clippy::too_many_arguments)] // ported Python-facing signature (8 params)
-    pub fn expand_and_backup_ls(
-        &mut self,
-        py: Python<'_>,
-        policies: Vec<Vec<f32>>,
-        values: Vec<f32>,
-        leaf_k: Vec<usize>,
-        policy_stride: usize,
-        has_pass_slot: bool,
-        trunk_sz: i32,
-    ) -> PyResult<()> {
-        // K alignment: the flat per-cluster policy/value counts must equal sum(K).
-        let total_k: usize = leaf_k.iter().sum();
-        if total_k != policies.len() || total_k != values.len() {
-            return Err(PyValueError::new_err(format!(
-                "expand_and_backup_ls: K misalignment sum(leaf_k)={total_k} \
-                 policies={} values={}",
-                policies.len(),
-                values.len()
-            )));
-        }
-        if self.pending_boards.len() != leaf_k.len() {
-            return Err(PyValueError::new_err(format!(
-                "expand_and_backup_ls: pending leaves {} != leaf_k {}",
-                self.pending_boards.len(),
-                leaf_k.len()
-            )));
-        }
-
-        // Build the ragged ls priors + min-pooled values from an IMMUTABLE read of
-        // the bridge-held pending boards (centers RECOMPUTED in Rust — the
-        // self-play center-order contract).
-        let mut ls_vec: Vec<LegalSetPolicy> = Vec::with_capacity(leaf_k.len());
-        let mut min_vals: Vec<f32> = Vec::with_capacity(leaf_k.len());
-        {
-            let mut curr = 0usize;
-            for (i, board) in self.pending_boards.iter().enumerate() {
-                let k = leaf_k[i];
-                let (_views, centers) = board.get_cluster_views();
-                if centers.len() != k {
-                    return Err(PyValueError::new_err(format!(
-                        "expand_and_backup_ls leaf {i}: Rust K={} != Python leaf_k={k} \
-                         (get_cluster_views center-order contract violated)",
-                        centers.len()
-                    )));
-                }
-                if board.cluster_window_size() as i32 != trunk_sz {
-                    return Err(PyValueError::new_err(format!(
-                        "expand_and_backup_ls leaf {i}: trunk_sz={trunk_sz} != \
-                         board.cluster_window_size()={}",
-                        board.cluster_window_size()
-                    )));
-                }
-                let leaf_policies = &policies[curr..curr + k];
-                let leaf_values = &values[curr..curr + k];
-                // min-pool values (selfplay parity: worst window = leaf value).
-                let mut min_v = leaf_values[0];
-                for &v in leaf_values {
-                    if v < min_v {
-                        min_v = v;
-                    }
-                }
-                ls_vec.push(records::aggregate_policy_ls(
-                    policy_stride,
-                    has_pass_slot,
-                    trunk_sz,
-                    board,
-                    &centers,
-                    leaf_policies,
-                ));
-                min_vals.push(min_v);
-                curr += k;
-            }
-        }
-
-        py.detach(|| self.inner.expand_and_backup_ls(&ls_vec, &min_vals));
-        Ok(())
-    }
-
-    /// GRAPH legal-set counterpart of `expand_and_backup` (WP12-R Phase
-    /// EVALDECODE, operator ruling R138: eval consumes what the shared producer
-    /// already returns, and SELF-PLAY SEMANTICS IS THE AUTHORITY).
-    ///
-    /// This adds NO search logic. It rebuilds the `LegalSetPolicy` the producer
-    /// (`assemble_ls_from_gnn_probs`, via `submit_graphs_and_wait_ls`) already
-    /// assembled — dense half plus the ragged off-window overflow — and calls the
-    /// SAME `expand_and_backup_ls_at` self-play calls (`search_drive.rs:421`). At
-    /// HEAD the eval leg kept only the dense half and expanded through the dense
-    /// rule, so 53.2% of legal moves could not become children at all; the two
-    /// halves of that fix are inseparable, because the ls path floors an
-    /// uncovered coord at `1/min(n_legal,192)` where the dense path scores it 0.
-    ///
-    /// The overflow half is rebuilt into a MAP, never scanned in wire order: it
-    /// crosses the FFI as a `Vec` materialised from `FxHashMap` iteration, so its
-    /// order is an artifact (D-22, pinned by the P-1d oracle).
-    ///
-    /// Args:
-    ///     policies:  dense half per pending leaf, each of length `policy_stride`.
-    ///     overflows: ragged off-window half per pending leaf, `((q,r), prob)`.
-    ///     values:    scalar value per pending leaf.
-    ///     centers:   the BUILDER's window centre per pending leaf, as returned by
-    ///                `InferenceBatcher.submit_graphs_and_wait_ls`. Cross-checked
-    ///                against each pending board's own `window_center()`.
+    ///     policies: per-leaf dense prob vectors (each `policy_stride` long).
+    ///     overflows: per-leaf off-window `((q, r), p)` entries the dense half cannot carry.
+    ///     values:   per-leaf scalar values.
+    ///     centers:  the BUILDER's own `(cq, cr)` window centre per leaf, threaded from the
+    ///               Python decode rather than recomputed here — the builder is the one
+    ///               authority for the frame the policy was decoded in.
     ///     policy_stride: action-space size (= encoding `policy_logit_count`).
-    ///     trunk_sz:      window side length; cross-checked against each leaf
-    ///                    board's `cluster_window_size()`.
-    ///
-    /// Every guard below is ALWAYS-ON, not a `debug_assert`: the inner
-    /// `expand_and_backup_ls_at` takes the MIN of every input length and silently
-    /// expands fewer leaves, and the frame invariant it carries is a stripped
-    /// `debug_assert_eq!` inert in the release `.so` production actually runs.
+    ///     trunk_sz: window side length used to frame the dense half.
     #[pyo3(signature = (policies, overflows, values, centers, policy_stride, trunk_sz))]
     #[allow(clippy::too_many_arguments)] // Python-facing signature (7 params incl. py)
     #[allow(clippy::type_complexity)]
@@ -447,8 +321,8 @@ impl PyMCTSTree {
 
         let mut ls_vec: Vec<LegalSetPolicy> = Vec::with_capacity(n_pending);
         for (i, board) in self.pending_boards.iter().enumerate() {
-            // C-4: a dense half of the wrong width is the v6w25 class of silent
-            // wrong-width decode, and it must be loud on the graph seam too.
+            // C-4: a dense half of the wrong width is a silent wrong-width decode, and it
+            // must be loud on the graph seam.
             if policies[i].len() != policy_stride {
                 return Err(PyValueError::new_err(format!(
                     "expand_and_backup_ls_graph leaf {i}: dense half has {} slots != \

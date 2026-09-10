@@ -2,7 +2,7 @@
 
 Census sites D-15 and D-23 found thirteen hyper-parameters on the LAW-15 deploy-matched
 eval path that are code-side literals rather than threaded config (R1 forbids code-side
-defaults). They were measured EQUAL to `configs/run5.yaml` — but equal *by coincidence of
+defaults). They were measured EQUAL to `configs/run6.yaml` — but equal *by coincidence of
 defaults, not by threading*. Nothing detects the day they stop being equal.
 
 This file is the detector. It does not thread the config (that is a design decision the
@@ -25,7 +25,7 @@ import pytest
 import yaml
 
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 _MCTS_RS = _REPO / "crates" / "mantis-bridge" / "src" / "mcts.rs"
 _INFERENCE_PY = _REPO / "src" / "mantis" / "selfplay" / "inference_local.py"
 
@@ -52,14 +52,16 @@ def _pyo3_mctstree_defaults() -> dict[str, Any]:
 
 
 def _inline_inference_dict() -> ast.Dict:
-    """The `{"inference": {...}, "train": {...}}` dict node that
-    `LocalInferenceEngine.__init__` hands to the graph `InferenceServer`."""
+    """The `{"inference": {...}}` dict node that `LocalInferenceEngine.__init__` hands to the
+    graph `InferenceServer`. It carried a `train` section until R346(f) deleted
+    `train.amp_dtype` — `test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype` is
+    what keeps that section from coming back."""
     tree = ast.parse(_INFERENCE_PY.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Dict):
             continue
         keys = [k.value for k in node.keys if isinstance(k, ast.Constant)]
-        if "inference" in keys and "train" in keys:
+        if "inference" in keys:
             return node
     pytest.fail("could not locate the inline inference dict literal")
 
@@ -88,14 +90,6 @@ def _split_literal_and_threaded(section: str) -> tuple[dict[str, Any], set[str]]
                 threaded.add(k.value)
         return literals, threaded
     pytest.fail(f"the inline dict has no {section!r} section")
-
-
-def _inline_inference_literal() -> dict[str, dict[str, Any]]:
-    """The CONSTANT entries of both sections, keyed as before."""
-    return {
-        "inference": _split_literal_and_threaded("inference")[0],
-        "train": _split_literal_and_threaded("train")[0],
-    }
 
 
 # ── D-15: the deploy head's MCTS hyper-parameters ────────────────────────────────────
@@ -129,10 +123,12 @@ def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) ->
 
 
 # ── D-23: the eval engine's InferenceServer hyper-parameters ─────────────────────────
-_INFERENCE_KEYS = [
-    "trace_inference", "compile_inference", "compile_inference_mode",
-    "compile_inference_dynamic", "perf_timing", "perf_sync_cuda",
-]
+#: The six mirrored `inference.*` knobs D-23 was written to police (`trace_inference`,
+#: `compile_inference`, `compile_inference_mode`, `compile_inference_dynamic`, `perf_timing`,
+#: `perf_sync_cuda`) went with the dense path (R346(f)), so the coincidence they could drift
+#: into no longer has two sides. What run5 still declares is covered by the two sets below,
+#: and the coverage row is what keeps a NEW literal from appearing unwatched.
+_INFERENCE_KEYS: list[str] = []
 
 #: Keys run5 declares that the inline literal DELIBERATELY does not mirror, each with the
 #: ruling that says so. A CLOSED set of one: a second unmirrored key still reds the coverage
@@ -166,17 +162,6 @@ _DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps"}
 #: `mantis.config.resolve.inference_batching` and carried across the process seam on
 #: `RoundSpec`, exactly as `fused_graph_caps` is.
 _THREADED_NOT_LITERAL = {"inference_batch_size", "inference_max_wait_ms"}
-
-
-@pytest.mark.parametrize("key", _INFERENCE_KEYS)
-def test_inline_inference_literal_equals_run5(key: str) -> None:
-    literal = _inline_inference_literal()["inference"][key]
-    configured = _run5()["inference"][key]
-    assert literal == configured, (
-        f"inference_local.py's inline literal {key}={literal!r} no longer equals run5's "
-        f"inference.{key}={configured!r}. The eval engine builds its graph InferenceServer "
-        f"from that literal, not from the config — see ADJ-WP12R-8 (census site D-23)."
-    )
 
 
 def test_the_literal_covers_every_key_run5_declares() -> None:
@@ -214,37 +199,36 @@ def test_the_literal_covers_every_key_run5_declares() -> None:
         )
 
 
-def test_the_amp_dtype_LITERAL_IS_GONE_and_the_declared_value_is_threaded() -> None:
-    """THE SHARP HALF — and the shape of this row CHANGED at AUDIT-1 F-31, which is worth
-    saying rather than quietly rewriting.
+def test_the_train_SECTION_IS_GONE_and_law06_still_pins_the_dtype() -> None:
+    """THE SHARP HALF — and the shape of this row CHANGED twice, which is worth saying rather
+    than quietly rewriting.
 
     IT USED TO ASSERT A DISAGREEMENT. `inference_local.py`'s inline server dict wrote
-    `train.amp_dtype = "bf16"` as a LITERAL while run5 DECLARES `fp16`; the two differed, and
+    `train.amp_dtype = "bf16"` as a LITERAL while run5 DECLARED `fp16`; the two differed, and
     the difference was inert only because `amp_dtype_for` pins the graph path to bfloat16
-    regardless (LAW-06). This test asserted both facts so that a relaxed pin would make the
-    divergence visible — a good instrument for a defect that was being lived with.
+    regardless (LAW-06). AUDIT-1 F-31 threaded the value, so there was no disagreement left to
+    watch, and R346(f) then deleted `train.amp_dtype` outright — with one representation there
+    is no second spelling of the question for a literal to answer differently.
 
-    F-31 REMOVED THE DEFECT, so the instrument changes with it: the literal is THREADED now
-    (`"amp_dtype": amp_dtype`, from the caller's declared value), and there is no disagreement
-    left to watch. What is pinned instead is that the literal does not come BACK, and that
-    LAW-06's pin — which is why the old divergence was survivable — still holds.
+    What is pinned now is that the `train` section does not come BACK into the inline dict, and
+    that LAW-06's pin — which is why the old divergence was survivable — still holds.
     """
     import torch
 
     from mantis.model.amp import amp_dtype_for
 
-    literals, threaded = _split_literal_and_threaded("train")
-    assert "amp_dtype" not in literals, (
-        "`train.amp_dtype` is a LITERAL in inference_local.py's inline server dict again. "
-        "That is a second dtype authority on the one construction path with no config to be "
-        "the first, and it is what AUDIT-1 F-31 removed."
+    outer = _inline_inference_dict()
+    sections = [k.value for k in outer.keys if isinstance(k, ast.Constant)]
+    assert "train" not in sections, (
+        "the inline server dict in inference_local.py grew a `train` section again. The only "
+        "thing it ever carried was `amp_dtype`, which R346(f) deleted; a re-added section is a "
+        "second dtype authority on the one construction path with no config to be the first."
     )
-    assert "amp_dtype" in threaded, (
-        "`train.amp_dtype` is neither a literal nor threaded in the inline dict — the key "
-        "vanished. The server hard-reads it (R30b, no fallback), so a missing key is a boot "
-        "failure on the graph eval path, not a simplification."
+    assert "amp_dtype" not in _run5()["train"], (
+        "`train.amp_dtype` is back in run5. LAW-06 pins the graph autocast dtype in code; a "
+        "config row for it is the second authority this deletion removed."
     )
-    assert amp_dtype_for("graph", _run5()["train"]["amp_dtype"]) is torch.bfloat16, (
+    assert amp_dtype_for("graph") is torch.bfloat16, (
         "LAW-06's graph pin is what made the OLD literal-vs-declared divergence inert. The "
         "divergence is gone, but the pin is still what the graph path's dtype rests on."
     )

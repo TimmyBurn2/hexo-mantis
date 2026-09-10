@@ -90,7 +90,7 @@ def test_every_registered_pattern_has_a_firing_case() -> None:
         "host: 0.0.0.0",                         # unspecified address
         "torch 2.11.0+cu128, rustc 1.97.1",      # version strings are not IPv4
         "sha256 = '431ccf2846615fa6ac06d073af008dcee6969a4286139aea4cebe316ddf5b740'",
-        "see docs/registers/laws.md for LAW-07",
+        "see docs/governance/LAWS.md for LAW-07",
     ],
 )
 def test_no_false_positive(line: str) -> None:

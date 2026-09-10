@@ -298,17 +298,11 @@ def _sweep(encoding: str, max_moves: int, counts: tuple[int, ...],
 def _measure_point(
     net: Any, spec: Any, device: Any, encoding: str, max_moves: int,
     point: SweepPoint, stones: int, spread: int, repeats: int, corpus: Any = None,
-    *, amp_dtype: str,
 ) -> dict[str, Any]:
     """Run the PRODUCTION forward `repeats` times at this point; report the MEDIAN peak delta.
 
     Median and not a single shot: one allocation retry or one cache state makes a single
     reading unrepeatable, and a cap fitted to a single shot is fitted to noise.
-
-    Args:
-        amp_dtype: the run's declared `train.amp_dtype`, threaded from the config and resolved
-            through `amp_dtype_for` — the ONE dtype authority (LAW-06). Keyword-only and with
-            no default: a default here would be the second authority AUDIT-1 F-31 is about.
     """
     import torch
 
@@ -348,7 +342,7 @@ def _measure_point(
         # production forward then runs under.
         with torch.inference_mode(), torch.autocast(
             device_type="cuda",
-            dtype=amp_dtype_for(str(spec.representation), amp_dtype),
+            dtype=amp_dtype_for(str(spec.representation)),
             enabled=True,
         ):
             policy_logits, value, _bins = net.forward_batch(
@@ -772,7 +766,6 @@ def run(argv: list[str] | None = None) -> int:
                 # of `amp_dtype_for` ignores it (LAW-06 pins graph to bf16), but threading it
                 # is what keeps this call site from being a second dtype authority the day a
                 # grid calibration exists.
-                amp_dtype=config.train.amp_dtype,
             ))
         except torch.cuda.OutOfMemoryError as exc:
             # RECORDED, NEVER RETRIED, and never estimated. A sweep whose largest point does

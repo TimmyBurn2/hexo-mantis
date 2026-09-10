@@ -7,7 +7,7 @@
 # `cargo clippy --workspace --all-targets --locked -- -D clippy::all` existed ONLY in
 # `.github/workflows/ci.yml`. So every "full local gate set" since the suspension excluded
 # `-D clippy::all` — including `incompatible_msrv`, the guard on the 1.87 floor — and never
-# compiled the seven bench targets standing behind `tools/bench_floors.toml`'s 28 floors.
+# compiled the bench targets standing behind `tools/bench_floors.toml`'s floors.
 # CLAUDE.md's own rule is "nothing lives only in workflow YAML".
 #
 # THE WITNESS, measured 2026-09-03 with `clippy::len_zero` planted in
@@ -109,7 +109,7 @@ run_gate() {
 run_gate "gate 2a: cargo test workspace" \
     cargo test --workspace --locked
 # `--all-targets` is the load-bearing flag: without it the seven non-smoke bench targets are
-# never compiled by ANY local command, and the 28 floors in tools/bench_floors.toml stand
+# never compiled by ANY local command, and the floors in tools/bench_floors.toml stand
 # behind code nothing builds.
 run_gate "gate 2b: clippy (-D clippy::all, --all-targets)" \
     cargo clippy --workspace --all-targets --locked -- -D clippy::all

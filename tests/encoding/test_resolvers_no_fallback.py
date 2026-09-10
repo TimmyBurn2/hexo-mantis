@@ -41,14 +41,14 @@ def test_resolve_from_config_mapping_without_version_raises() -> None:
 
 
 def test_normalize_encoding_name_explicit_v6_unaffected() -> None:
-    assert normalize_encoding_name("v6") == "v6"
+    assert normalize_encoding_name("gnn_axis_v1") == "gnn_axis_v1"
 
 
 def test_resolve_from_config_explicit_string_form_unaffected() -> None:
-    spec = resolve_from_config({"encoding": "v6"})
-    assert spec.name == "v6"
+    spec = resolve_from_config({"encoding": "gnn_axis_v1"})
+    assert spec.name == "gnn_axis_v1"
 
 
 def test_resolve_from_config_explicit_mapping_form_unaffected() -> None:
-    spec = resolve_from_config({"encoding": {"version": "v6"}})
-    assert spec.name == "v6"
+    spec = resolve_from_config({"encoding": {"version": "gnn_axis_v1"}})
+    assert spec.name == "gnn_axis_v1"

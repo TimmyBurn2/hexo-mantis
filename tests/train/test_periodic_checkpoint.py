@@ -18,7 +18,7 @@
 At `5a519e6` `train.checkpoint_interval` has exactly one reader in `src/`
 (`trainer/core.py:487`, inside `_train_on_batch`) and `train_step_from_graph_batch`
 (`core.py:493-545`) contains no interval read and no `save_checkpoint` call at all. So on
-run5's DECLARED representation (`configs/run5.yaml` `identity.representation: graph`) the
+run5's DECLARED representation (`configs/run6.yaml` `identity.representation: graph`) the
 minted knob has no consumer: a graph run cannot checkpoint on a cadence at any value.
 R173 cards the fix as ONE resolver — `Trainer._maybe_periodic_checkpoint` — that both step
 tails call, and orders the two mutation arms these oracles are: *interval N → checkpoints at
@@ -79,7 +79,7 @@ import pytest
 import torch
 
 from mantis.monitor.config import MonitorConfig
-from mantis._engine import HexgBuffer, ReplayBuffer
+from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
@@ -97,11 +97,8 @@ _CORE = _SRC / "mantis" / "train" / "trainer" / "core.py"
 
 GRAPH_ENCODING = "gnn_axis_v1"
 _GSPEC = lookup(GRAPH_ENCODING)
-GRID_ENCODING = "v6_live2_ls"
-_DSPEC = lookup(GRID_ENCODING)
 
 #: The two step-function tails the ONE resolver converges.
-_DENSE_STEP = "_train_on_batch"
 _GRAPH_STEP = "train_step_from_graph_batch"
 _RESOLVER = "_maybe_periodic_checkpoint"
 _EVENT = "periodic_checkpoint_save"
@@ -205,22 +202,6 @@ def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     return hb
 
 
-def _dense_buffer(n_records: int = 8, capacity: int = 64) -> ReplayBuffer:
-    rb = ReplayBuffer(capacity, GRID_ENCODING)
-    s = int(_DSPEC.board_size)
-    n_cells = s * s
-    for i in range(n_records):
-        state = np.zeros((int(_DSPEC.n_planes), s, s), dtype=np.float16)
-        state[0, 0, i % s] = 1.0
-        chain = np.zeros((6, s, s), dtype=np.float16)
-        policy = np.zeros(int(_DSPEC.policy_stride), dtype=np.float32)
-        policy[i % n_cells] = 1.0
-        own = np.zeros(n_cells, dtype=np.uint8)
-        wl = np.zeros(n_cells, dtype=np.uint8)
-        rb.push(state, chain, policy, 1.0 if i % 2 == 0 else -1.0, own, wl)
-    return rb
-
-
 def _graph_arch() -> GnnArch:
     return GnnArch(in_dim=_GSPEC.node_feat_dim, edge_dim=_GSPEC.edge_feat_dim, hidden=16,
                    num_layers=1, policy_hidden=16, value_hidden=16)
@@ -242,15 +223,6 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     buffer = _graph_buffer()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
-                                recency_weight=0.0, recent_buffer=None,
-                                caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0)
-
-
-def _drive_dense(trainer: Trainer, n_steps: int) -> None:
-    buffer = _dense_buffer()
-    for _ in range(n_steps):
-        run_declared_train_step(trainer, buffer, _DSPEC, batch_size=4, augment=False,
                                 recency_weight=0.0, recent_buffer=None,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
@@ -303,22 +275,6 @@ def test_zero_interval_writes_nothing_and_the_final_save_is_not_periodic(
         "`save_checkpoint` would make every leg's write look periodic in the stream")
 
 
-# ── OP-3 ⊕ — the dense convergence: the same N/2N property through the grid route ────────
-def test_dense_periodic_checkpoints_land_at_n_and_2n(tmp_path, mk_config, full_train_hparams,
-                                                     tiny_arch, spy_sink) -> None:
-    torch.manual_seed(20260803)
-    trainer = Trainer(build_net(tiny_arch), mk_config(), arch=tiny_arch,
-                      checkpoint_dir=tmp_path, device=torch.device("cpu"),
-                      train_hparams=full_train_hparams(checkpoint_interval=2), sink=spy_sink)
-    _drive_dense(trainer, 4)
-    residents = sorted(tmp_path.glob("*.ckpt"))
-
-    assert trainer.step == 4, "premise: four real gradient updates ran"          # 1
-    assert len(residents) == 2, f"N=2 over 4 dense steps writes exactly 2, got {residents}"  # 2
-    assert set(_steps_of(residents)) == {2, 4}                                   # 3
-    assert [e["representation"] for e in spy_sink.named(_EVENT)] == ["grid", "grid"]  # 4
-
-
 # ── OP-4 ⊕ — the ONE-AUTHORITY census (`ast.parse` over src/mantis/, no import, no grep) ─
 def test_exactly_one_checkpoint_interval_authority_in_src() -> None:
     """R173's most explicit prohibition — *no second interval authority* — is a property of
@@ -350,17 +306,14 @@ def test_exactly_one_checkpoint_interval_authority_in_src() -> None:
     # 2
     assert _interval_read_census() == _EXPECTED_READS, (
         "a `train.checkpoint_interval` read moved, appeared, or was duplicated")
-    dense, graph = _the_core_function(_DENSE_STEP), _the_core_function(_GRAPH_STEP)
-    dense_saves = _calls_in(dense, "self", "save_checkpoint")
+    graph = _the_core_function(_GRAPH_STEP)
     graph_saves = _calls_in(graph, "self", "save_checkpoint")
-    dense_calls = _calls_in(dense, "self", _RESOLVER)
     graph_calls = _calls_in(graph, "self", _RESOLVER)
     # 3
-    assert (dense_saves, graph_saves) == (0, 0), (
-        "neither step body may hold its own save trigger — both go through the resolver")
+    assert graph_saves == 0, (
+        "the step body may not hold its own save trigger — it goes through the resolver")
     # 4
-    assert (dense_calls, graph_calls) == (1, 1), (
-        "each step tail calls the ONE resolver exactly once")
+    assert graph_calls == 1, "the step tail calls the ONE resolver exactly once"
     # 5
     assert _calls_in(resolvers[0], "self", "save_checkpoint") == 1, (
         "the resolver writes through `Trainer.save_checkpoint` — the SAME entry legs 2 and 3 "
@@ -376,7 +329,7 @@ def test_run5_config_produces_a_periodic_checkpoint_on_its_declared_route(
     `TrainHParams.from_config`, the spec through THE resolver, the step through the REAL
     dispatcher. The interval is overridden IN MEMORY ONLY; `configs/` is read-only to this
     card (R119) and R165 reserves the re-mint to the operator."""
-    d = load_config(_REPO / "configs" / "run5.yaml").model_dump()
+    d = load_config(_REPO / "configs" / "run6.yaml").model_dump()
     d["train"]["checkpoint_interval"] = 2
     hp = TrainHParams.from_config(d)
     spec = resolve_step_spec(d)
@@ -462,12 +415,11 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
         # boundary, and 0 keeps both quiet.
         eval_interval=0, log_interval=0, gate_interval=0, min_buf_size=1,
         capacity=64, buffer_schedule=(), training_steps_per_game=4.0, max_train_burst=4,
-        batch_size=4, augment=False, recency_weight=0.0, mixing_initial_w=0.0,
-        mixing_min_w=0.0, mixing_decay_steps=1.0, hard_gn_threshold=1e9,
+        batch_size=4, augment=False, recency_weight=0.0, hard_gn_threshold=1e9,
         hard_gn_min_steps=10_000, stop_step=4, draw_rate_abort=None,
         final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
-        terminal_eval_enabled=False, bot_batch_share=0.0,
+        terminal_eval_enabled=False,
         selfplay_stall_timeout_sec=1800.0,
     )
     base.update(over)

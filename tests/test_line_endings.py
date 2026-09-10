@@ -17,9 +17,9 @@ Two independent pins here, because they fail for different reasons:
   it replaces ("sha256 mismatch") sent the reader toward re-minting the manifest, which is the trap:
   the manifest is right, the checkout is wrong, and a re-mint breaks Linux CI.
 
-Deliberately NOT "assert no fixture contains b'\\r\\n'": 3 of the 65 fixtures legitimately do
-(`small_cnn_scalar.pt`, `small_cnn_aux_chain.pt`, `b6_hotpath.npz` - chance byte pairs inside
-pickled/compressed streams). That rule would red on correct files. The comparison below is against
+Deliberately NOT "assert no fixture contains b'\\r\\n'": some manifest-pinned fixtures
+legitimately do (`b6_hotpath.npz` - chance byte pairs inside pickled/compressed streams).
+That rule would red on correct files. The comparison below is against
 git's own stored blob, so it fires only when the working tree differs from the repository *by line
 endings alone*, and stays silent on ordinary content edits.
 
@@ -146,7 +146,9 @@ def test_gitattributes_marks_every_byte_significant_path() -> None:
     rather than silently inheriting the text default.
     """
     paths = byte_significant_paths()
-    assert len(paths) >= 60, (
+    # A FLOOR against a broken derivation, not a tally of the manifest: it moves DOWN only when
+    # fixture rows are deleted, and R346(f) took the dense encode/replay/augment banks.
+    assert len(paths) >= 40, (
         f"census collapsed to {len(paths)} paths: the derivation is broken and this pin "
         "would be vacuous"
     )

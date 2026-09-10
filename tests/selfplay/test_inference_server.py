@@ -1,15 +1,14 @@
 """Suite F — the ONE inference server (`mantis.selfplay.inference_server`).
 
->300 justify: one server, two loops, one seam. The dense-loop assertions (F-01..F-05),
-the representation dispatch (F-08/F-09), the graph-loop failure + heartbeat + collate
-call-site pins (F-10/F-11/F-15) and the wire/seam obligations (F-13/F-14) all bind the
-SAME class; splitting them by loop would put the dispatch pin in one file and the two
-things it dispatches to in others, and the shared fakes would have to be duplicated.
+>300 justify: one server, one loop, one seam. The representation dispatch (F-08/F-09), the
+graph-loop failure + heartbeat + collate call-site pins (F-10/F-11/F-15) and the wire/seam
+obligations (F-13/F-14) all bind the SAME class and share the fakes; splitting them would
+duplicate the fakes and separate the dispatch pin from the thing it dispatches to.
 
 IMPL-written (non-⊕) per DESIGN §b: ports of the old server suites, rewritten
-public-surface against `build_net`-built nets. GPU-only paths (compile
-`reduce-overhead` + CUDA-graph warmup, pinned-staging H2D) keep loud skips on CPU — a
-PASS state for this WP (DESIGN §f-R11), recorded for the cutover battery.
+public-surface against `build_net`-built nets. The dense-loop assertions (F-01..F-05), the
+TorchScript-trace and compile paths, and the dense halves of F-08/F-09/F-11 went with the
+grid path (R346(f)) — `run()` now delegates to `_run_graph_loop` and there is no second arm.
 
 F-15 is the sharpest pin in the file. `gnn_axis_v1` is the ONLY registered graph
 encoding and it happens to be exactly trunk 19 / win 6 / node-feat 11 / edge-feat 5, so a
@@ -35,20 +34,14 @@ import torch
 import mantis.selfplay.graph_collate as collate_mod
 from mantis._engine import InferenceBatcher
 from mantis.encoding import lookup
-from mantis.model import CnnArch, RepresentationMismatch, amp_dtype_for, build_net
+from mantis.model import RepresentationMismatch, amp_dtype_for
 from mantis.selfplay.graph_collate import (
     GraphBatch,
     GraphWirePayload,
     graph_wire_from_rust,
 )
 from mantis.selfplay.inference_server import InferenceServer
-
-_GRID_SPEC = lookup("v6")
 _GRAPH_SPEC = lookup("gnn_axis_v1")
-
-BOARD_CHANNELS = _GRID_SPEC.n_planes  # spec-derived, never a literal
-BOARD_SIZE = _GRID_SPEC.trunk_size
-N_ACTIONS = _GRID_SPEC.policy_logit_count
 
 _NO_CUDA = not torch.cuda.is_available()
 _GPU_ONLY = pytest.mark.skipif(
@@ -67,42 +60,11 @@ def device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def _make_cnn(device: torch.device, seed: int = 0) -> torch.nn.Module:
-    torch.manual_seed(seed)
-    net = build_net(
-        CnnArch(
-            board_size=BOARD_SIZE,
-            in_channels=BOARD_CHANNELS,
-            filters=64,
-            res_blocks=2,
-        )
-    ).to(device)
-    net.eval()
-    return net
-
-
-@pytest.fixture(scope="module")
-def model(device: torch.device) -> torch.nn.Module:
-    return _make_cnn(device)
-
-
-def _random_state() -> np.ndarray:
-    return np.random.randn(BOARD_CHANNELS, BOARD_SIZE, BOARD_SIZE).astype(np.float16)
-
-
 def _cfg(**over: Any) -> dict[str, Any]:
-    # WPSC Phase 2 SC-A2 reshape: `InferenceHParams.from_config` now reads `config
-    # ["inference"]` (a nested schema-shaped section), not `config["selfplay"]`/a flat dict.
-    # WPSC Phase 3 SC-B2: `resolve_from_config` no longer defaults an absent 'encoding'
-    # key to v6 (R28) — this fixture's model is v6-grid-derived (BOARD_CHANNELS/BOARD_SIZE
-    # above), so the encoding is now explicit rather than relying on the retired fallback.
-    # WPSC Phase 3 SC-B3: `InferenceServer.__init__` now hard-reads `config["train"]
-    # ["amp_dtype"]` unconditionally (R30b, no fallback) — every config needs a `train`
-    # section; amp-focused tests below override it explicitly.
+    # `InferenceHParams.from_config` reads `config["inference"]`, and `resolve_from_config`
+    # requires an explicit `encoding` key (R28, no default).
     base = {
-        "inference_batch_size": 8, "inference_max_wait_ms": 20.0, "trace_inference": True,
-        "compile_inference": False, "compile_inference_mode": "default",
-        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
         # F-816-10 (R276(f)): the GRAPH arm resolves `inference.fused_graph_caps`
         # EAGERLY at construction, so every graph-route site built from this base needs
         # it. The pair is the template's NON-BINDING-BY-CONSTRUCTION value — nothing in
@@ -111,13 +73,7 @@ def _cfg(**over: Any) -> dict[str, Any]:
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
-    return {"inference": base, "encoding": "v6", "train": {"amp_dtype": "fp16"}}
-
-
-def _make_server(
-    model: torch.nn.Module, device: torch.device, batch_size: int = 8, **kw: Any
-) -> InferenceServer:
-    return InferenceServer(model, device, _cfg(inference_batch_size=batch_size, **kw))
+    return {"inference": base, "encoding": "gnn_axis_v1"}
 
 
 @dataclass
@@ -159,43 +115,6 @@ class _FakeGraphBatcher:
         self.results.append((list(ids), probs, offsets, values))
 
     def submit_graph_inference_failure(self, ids, error_msg: str) -> None:
-        self.failures.append((list(ids), error_msg))
-
-    def bump_model_version(self) -> int:
-        self.model_version += 1
-        return self.model_version
-
-    def close(self) -> None:
-        self.closed += 1
-
-
-class _FakeDenseBatcher:
-    """Drives the dense `run()` loop for exactly `n_batches` iterations, then stops it."""
-
-    def __init__(self, feature_len: int, n_batches: int = 1, n_requests: int = 2) -> None:
-        self._left = n_batches
-        self._ids = list(range(1, n_requests + 1))
-        self._batch = np.ascontiguousarray(
-            np.zeros((n_requests, feature_len), dtype=np.float32)
-        )
-        self.server: InferenceServer | None = None
-        self.results: list[tuple] = []
-        self.failures: list[tuple[list[int], str]] = []
-        self.closed = 0
-        self.model_version = 0
-
-    def next_inference_batch(self, batch_size: int, max_wait_ms: int):
-        if self._left <= 0:
-            assert self.server is not None
-            self.server._stop_event.set()
-            return [], self._batch
-        self._left -= 1
-        return list(self._ids), self._batch
-
-    def submit_inference_results(self, ids, policies, values) -> None:
-        self.results.append((list(ids), policies, values))
-
-    def submit_inference_failure(self, ids, error_msg: str) -> None:
         self.failures.append((list(ids), error_msg))
 
     def bump_model_version(self) -> int:
@@ -309,374 +228,6 @@ def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int 
     )
 
 
-# ══ F-01 — dense submit_and_wait correctness ═════════════════════════════════════
-def test_policy_shape_and_sums_to_one(model, device) -> None:
-    server = _make_server(model, device, batch_size=4)
-    server.start()
-    try:
-        policy, _value = server.infer(_random_state())
-        assert policy.shape == (N_ACTIONS,)
-        assert abs(policy.sum() - 1.0) < 1e-4
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-def test_value_in_range(model, device) -> None:
-    server = _make_server(model, device, batch_size=4)
-    server.start()
-    try:
-        _policy, value = server.infer(_random_state())
-        assert -1.0 <= value <= 1.0
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-def test_policy_is_finite(model, device) -> None:
-    server = _make_server(model, device, batch_size=4)
-    server.start()
-    try:
-        policy, value = server.infer(_random_state())
-        assert np.all(np.isfinite(policy))
-        assert math.isfinite(value)
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-# ══ F-02 — concurrency + request accounting ══════════════════════════════════════
-def test_all_results_valid_under_concurrency(model, device) -> None:
-    n_requests = 24
-    server = _make_server(model, device, batch_size=8)
-    server.start()
-
-    errors: list[str] = []
-    lock = threading.Lock()
-
-    def worker() -> None:
-        policy, value = server.infer(_random_state())
-        if policy.shape != (N_ACTIONS,):
-            with lock:
-                errors.append(f"bad policy shape: {policy.shape}")
-        if not np.all(np.isfinite(policy)):
-            with lock:
-                errors.append("policy has non-finite values")
-        if not (-1.0 <= value <= 1.0):
-            with lock:
-                errors.append(f"value out of range: {value}")
-
-    threads = [threading.Thread(target=worker) for _ in range(n_requests)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join(timeout=20.0)
-
-    server.stop()
-    server.join(timeout=2.0)
-    assert errors == []
-
-
-def test_total_requests_counted_correctly(model, device) -> None:
-    n_requests = 10
-    server = _make_server(model, device, batch_size=4)
-    server.start()
-    for _ in range(n_requests):
-        server.infer(_random_state())
-    server.stop()
-    server.join(timeout=2.0)
-    assert server.total_requests == n_requests
-
-
-# ══ F-03 — TorchScript trace path ════════════════════════════════════════════════
-def _trace_server(
-    model: torch.nn.Module, device: torch.device, *, trace: bool, batch_size: int = 4
-) -> InferenceServer:
-    return InferenceServer(
-        model, device,
-        _cfg(inference_batch_size=batch_size, trace_inference=trace),
-    )
-
-
-def test_traced_matches_untraced(model, device) -> None:
-    np.random.seed(0)
-    states = [_random_state() for _ in range(6)]
-
-    s_off = _trace_server(model, device, trace=False)
-    s_off.start()
-    try:
-        ref = [s_off.infer(s) for s in states]
-    finally:
-        s_off.stop()
-        s_off.join(timeout=2.0)
-
-    s_on = _trace_server(model, device, trace=True)
-    assert s_on._traced_model is not None, "trace did not compile on the test model"
-    s_on.start()
-    try:
-        traced = [s_on.infer(s) for s in states]
-    finally:
-        s_on.stop()
-        s_on.join(timeout=2.0)
-
-    for i, ((p_ref, v_ref), (p_tr, v_tr)) in enumerate(zip(ref, traced, strict=True)):
-        assert p_tr.shape == p_ref.shape, f"state {i}: policy shape mismatch"
-        max_p = float(np.abs(p_tr - p_ref).max())
-        assert max_p < 5e-3, f"state {i}: policy diverged max={max_p}"
-        assert abs(v_tr - v_ref) < 5e-3, f"state {i}: value diverged"
-
-
-def test_traced_follows_weight_swap(device) -> None:
-    net = _make_cnn(device, seed=11)
-    server = _trace_server(net, device, trace=True)
-    assert server._traced_model is not None
-    server.start()
-    try:
-        np.random.seed(123)
-        state = _random_state()
-        p_before, v_before = server.infer(state)
-
-        new_sd = {
-            k: torch.randn_like(v) if v.dtype.is_floating_point else v
-            for k, v in net.state_dict().items()
-        }
-        server.load_state_dict_safe(new_sd)
-
-        p_after, v_after = server.infer(state)
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-    diff_p = float(np.abs(p_after - p_before).max())
-    diff_v = abs(v_after - v_before)
-    assert diff_p > 1e-3, "traced model did not pick up the weight swap"
-    assert diff_v > 1e-3 or diff_p > 1e-2
-
-
-def test_trace_disabled_via_config(model, device) -> None:
-    server = _trace_server(model, device, trace=False)
-    assert server._trace_inference is False
-    assert server._traced_model is None
-    server.start()
-    try:
-        policy, _ = server.infer(_random_state())
-        assert policy.shape == (N_ACTIONS,)
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-# ══ F-04 — compile / trace mutex + the GPU-only compile arm ══════════════════════
-def test_compile_and_trace_mutex(model, device) -> None:
-    with pytest.raises(ValueError, match="mutually exclusive"):
-        InferenceServer(
-            model, device,
-            _cfg(trace_inference=True, compile_inference=True),
-        )
-
-
-@_GPU_ONLY
-def test_compile_inference_weight_swap_propagates(device) -> None:
-    """`torch.compile` wraps the model in an `OptimizedModule`; `load_state_dict_safe`
-    must unwrap `_orig_mod` so the swap lands on the underlying parameters."""
-    net = _make_cnn(device, seed=7)
-    server = InferenceServer(
-        net, device,
-        _cfg(
-            inference_batch_size=4,
-            trace_inference=False,
-            compile_inference=True,
-            compile_inference_mode="default",
-            compile_inference_dynamic=True,
-        ),
-    )
-    assert server._compile_inference is True, "compile failed at init — test is meaningless"
-    server.start()
-    try:
-        np.random.seed(7)
-        state = _random_state()
-        p_before, v_before = server.infer(state)
-        new_sd = {
-            k: torch.randn_like(v) if v.dtype.is_floating_point else v
-            for k, v in net.state_dict().items()
-        }
-        server.load_state_dict_safe(new_sd)
-        p_after, v_after = server.infer(state)
-    finally:
-        server.stop()
-        server.join(timeout=5.0)
-    assert float(np.abs(p_after - p_before).max()) > 1e-3 or abs(v_after - v_before) > 1e-3
-
-
-@_GPU_ONLY
-def test_compile_reduce_overhead_padding_and_warmup(device) -> None:
-    """CUDA-graph replay requires a fixed input shape: `_padding_active` arms only when
-    compile + `reduce-overhead` + pinned staging all hold, and `_warmup_compile_path`
-    captures the graph on the dispatcher thread."""
-    net = _make_cnn(device, seed=3)
-    server = InferenceServer(
-        net, device,
-        _cfg(
-            inference_batch_size=4,
-            trace_inference=False,
-            compile_inference=True,
-            compile_inference_mode="reduce-overhead",
-        ),
-    )
-    assert server._h2d_staging is not None, "pinned staging must exist on CUDA"
-    assert server._padding_active() is True
-    server._warmup_compile_path()
-    server.stop()
-
-
-def test_padding_is_inert_without_compile(model, device) -> None:
-    """The CPU-observable half of the padding contract: with compile off, the padded
-    CUDA-graph path is never armed regardless of device."""
-    server = _make_server(model, device, batch_size=4)
-    assert server._compile_inference is False
-    assert server._padding_active() is False
-
-
-@pytest.mark.skipif(not _NO_CUDA, reason="CPU-only assertion about the staging buffer")
-def test_pinned_staging_absent_on_cpu(model, device) -> None:
-    server = _make_server(model, device, batch_size=4)
-    assert server._h2d_staging is None
-
-
-# ══ F-05 — failure handling releases waiters ═════════════════════════════════════
-def test_batch_prep_error_unblocks_workers(device) -> None:
-    """A batch-prep error must translate into a raised error for the caller, never a hang
-    (the prep runs INSIDE the guarded region)."""
-
-    class IdentityNet(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.dummy = torch.nn.Parameter(torch.zeros(1))
-
-        def forward(self, x):
-            n = x.shape[0]
-            pol = torch.ones(n, N_ACTIONS, device=x.device) / N_ACTIONS
-            val = torch.zeros(n, 1, device=x.device)
-            return pol.log(), val, val
-
-    net = IdentityNet().to(device)
-    net.eval()
-    server = InferenceServer(net, device, _cfg(inference_batch_size=4))
-    server.start()
-    try:
-        state = _random_state()
-        done = threading.Event()
-        error_caught: list[str] = []
-
-        def _call() -> None:
-            try:
-                server.infer(state)
-            except Exception as exc:  # noqa: BLE001 — recorded for the assertion
-                error_caught.append(str(exc))
-            finally:
-                done.set()
-
-        import mantis.selfplay.inference_server as server_mod
-
-        with mock.patch.object(
-            server_mod.np, "ascontiguousarray", side_effect=ValueError("bad array")
-        ):
-            t = threading.Thread(target=_call, daemon=True)
-            t.start()
-            hung = not done.wait(5.0)
-
-        t.join(timeout=2.0)
-        assert not hung, "server.infer() hung — the caller was not unblocked"
-        assert len(error_caught) == 1, f"expected one error, got {error_caught}"
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-def test_infer_returns_on_model_forward_exception(device) -> None:
-    class FailingNet(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.dummy = torch.nn.Parameter(torch.zeros(1))
-
-        def forward(self, x: torch.Tensor):
-            raise RuntimeError("boom")
-
-    net = FailingNet().to(device)
-    net.eval()
-    server = InferenceServer(net, device, _cfg(inference_batch_size=4))
-    server.start()
-    try:
-        state = _random_state()
-        done = threading.Event()
-        error_caught: list[str] = []
-
-        def _call() -> None:
-            try:
-                server.infer(state)
-            except ValueError as exc:
-                error_caught.append(str(exc))
-            finally:
-                done.set()
-
-        t = threading.Thread(target=_call, daemon=True)
-        t.start()
-        assert done.wait(5.0), "server.infer() hung waiting for results"
-        assert len(error_caught) == 1
-        assert "Model inference failed: boom" in error_caught[0]
-    finally:
-        server.stop()
-        server.join(timeout=2.0)
-
-
-def test_dense_loop_forward_failure_submits_failure_to_waiters(device) -> None:
-    """The dispatcher arm of the same contract: a forward exception inside the LOOP is
-    reported through `submit_inference_failure` with the pinned message prefix, and the
-    loop keeps serving."""
-
-    class FailingNet(torch.nn.Module):
-        def __init__(self) -> None:
-            super().__init__()
-            self.dummy = torch.nn.Parameter(torch.zeros(1))
-
-        def forward(self, x: torch.Tensor):
-            raise RuntimeError("boom")
-
-    feature_len = BOARD_CHANNELS * BOARD_SIZE * BOARD_SIZE
-    batcher = _FakeDenseBatcher(feature_len, n_batches=1)
-    net = FailingNet().to(device)
-    net.eval()
-    server = InferenceServer(
-        net, device, _cfg(inference_batch_size=4, trace_inference=False),
-        batcher=batcher, encoding_spec=_GRID_SPEC,
-    )
-    batcher.server = server
-    server.run()
-
-    assert batcher.results == []
-    assert len(batcher.failures) == 1
-    ids, msg = batcher.failures[0]
-    assert ids == [1, 2]
-    assert msg.startswith("Model inference failed: ")
-    assert "boom" in msg
-    assert batcher.closed == 1
-
-
-# ══ F-08 — representation dispatch ═══════════════════════════════════════════════
-def test_representation_dispatch_arms(device, model) -> None:
-    grid = InferenceServer(model, device, _cfg(), encoding_spec=_GRID_SPEC)
-    assert grid._is_graph is False
-    assert grid._shape == (BOARD_CHANNELS, BOARD_SIZE, BOARD_SIZE)
-    grid.stop()
-
-    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
-    graph = _graph_server(device, batcher)
-    assert graph._is_graph is True
-    assert graph._shape is None
-    assert graph._feature_len == 0
-    graph.stop()
-
-
 def test_run_dispatches_to_the_graph_loop_for_a_graph_spec(device) -> None:
     batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
     server = _graph_server(device, batcher)
@@ -686,7 +237,7 @@ def test_run_dispatches_to_the_graph_loop_for_a_graph_spec(device) -> None:
     assert called == ["graph"], "a graph spec must route to the graph loop, not the dense one"
 
 
-def test_unknown_representation_raises_at_construction(device, model) -> None:
+def test_unknown_representation_raises_at_construction(device) -> None:
     """AM-1 / LAW-11: there is no dense-by-default arm. A spec whose representation is
     unknown must raise, not quietly take the grid path."""
 
@@ -699,76 +250,32 @@ def test_unknown_representation_raises_at_construction(device, model) -> None:
         name: str = "bad"
 
     with pytest.raises((RepresentationMismatch, TypeError)):
-        InferenceServer(model, device, _cfg(), encoding_spec=_BadSpec())
+        InferenceServer(_FiniteGraphNet(), device, _cfg(), encoding_spec=_BadSpec())
 
 
-def test_non_spec_encoding_spec_type_rejected(device, model) -> None:
+def test_non_spec_encoding_spec_type_rejected(device) -> None:
     with pytest.raises(TypeError, match="unrecognised encoding_spec type"):
-        InferenceServer(model, device, _cfg(), encoding_spec={"representation": "grid"})
-
-
-def test_grid_batcher_rejects_graph_methods() -> None:
-    b = InferenceBatcher(
-        feature_len=BOARD_CHANNELS * BOARD_SIZE * BOARD_SIZE, policy_len=N_ACTIONS
-    )
-    try:
-        with pytest.raises(ValueError, match="RepresentationMismatch"):
-            b.next_graph_batch(4, 5)
-        with pytest.raises(ValueError, match="RepresentationMismatch"):
-            b.spawn_mock_graph_games(1)
-    finally:
-        b.close()
+        InferenceServer(_FiniteGraphNet(), device, _cfg(),
+                        encoding_spec={"representation": "graph"})
 
 
 # ══ F-09 — LAW-06 autocast-dtype wiring ══════════════════════════════════════════
 def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
-    """LAW-06: bf16 on the graph path is pinned in CODE, so no DECLARED config value can
-    flip it back to fp16 (fp16 GINE sum-aggregation overflows on production-scale graphs).
-    WPSC Phase 3 SC-B3: `train.amp_dtype` is now a REQUIRED schema field (R1, no code
-    default) — a config can no longer omit it, even for a graph run that ignores its
-    value; the two remaining cases (fp16/bf16 declared) still prove the graph branch
-    ignores whatever is declared."""
-    for amp_knob in ("fp16", "bf16"):
-        cfg = _cfg()
-        cfg["train"] = {"amp_dtype": amp_knob}
-        batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
-        server = InferenceServer(
-            _FiniteGraphNet(), device, cfg,
-            batcher=batcher, encoding_spec=_GRAPH_SPEC,
-        )
-        assert server._amp_dtype is torch.bfloat16, f"amp_dtype={amp_knob!r} flipped graph"
-        assert server._amp_dtype is amp_dtype_for("graph", amp_knob)
-        server.stop()
-
-
-@pytest.mark.parametrize(
-    ("knob", "expected"), [("fp16", torch.float16), ("bf16", torch.bfloat16)]
-)
-def test_dense_amp_dtype_follows_the_knob(device, model, knob, expected) -> None:
+    """LAW-06: bf16 on the graph path is pinned in CODE (fp16 GINE sum-aggregation overflows
+    on production-scale graphs). R346(f) deleted `train.amp_dtype`, so there is no longer a
+    declared value that could disagree — the pin is now that the server resolves bf16 from
+    the representation alone, with nothing in the config to consult."""
     cfg = _cfg()
-    cfg["train"] = {"amp_dtype": knob}
-    server = InferenceServer(model, device, cfg, encoding_spec=_GRID_SPEC)
-    assert server._amp_dtype is expected
-    assert server._amp_dtype is amp_dtype_for("grid", knob)
-    server.stop()
-
-
-def test_dense_amp_dtype_requires_explicit_knob(device, model) -> None:
-    """WPSC Phase 3 SC-B3 (R30b/R1): the grid branch's old implicit 'fp16' default is
-    retired — omitting `train.amp_dtype` is now a hard KeyError, not a silent fallback."""
-    cfg = _cfg()
-    cfg["train"] = {}
-    with pytest.raises(KeyError):
-        InferenceServer(model, device, cfg, encoding_spec=_GRID_SPEC)
-
-
-def test_dense_amp_dtype_matches_fixture_declared_value(device, model) -> None:
-    # WPSC Phase 3 SC-B3: NOT a code-level default (R1 retires that) — `_cfg()`'s own
-    # baseline `train.amp_dtype` happens to be "fp16"; this is a fixture-shape pin, not a
-    # production fallback claim (see `test_dense_amp_dtype_requires_explicit_knob` above
-    # for the actual no-fallback proof).
-    server = InferenceServer(model, device, _cfg(), encoding_spec=_GRID_SPEC)
-    assert server._amp_dtype is torch.float16
+    assert "amp_dtype" not in cfg.get("train", {}), (
+        "a config row for the autocast dtype is the second authority LAW-06 refuses"
+    )
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
+    server = InferenceServer(
+        _FiniteGraphNet(), device, cfg,
+        batcher=batcher, encoding_spec=_GRAPH_SPEC,
+    )
+    assert server._amp_dtype is torch.bfloat16
+    assert server._amp_dtype is amp_dtype_for("graph")
     server.stop()
 
 
@@ -841,34 +348,6 @@ def test_graph_loop_default_heartbeat_none_emits_nothing(device, monkeypatch) ->
     assert len(batcher.results) == 2
 
 
-def test_dense_loop_emits_one_heartbeat_per_batch(device, model) -> None:
-    beats: list[str] = []
-    feature_len = BOARD_CHANNELS * BOARD_SIZE * BOARD_SIZE
-    batcher = _FakeDenseBatcher(feature_len, n_batches=2)
-    server = InferenceServer(
-        model, device, _cfg(inference_batch_size=4, trace_inference=False),
-        batcher=batcher, encoding_spec=_GRID_SPEC, heartbeat=beats.append,
-    )
-    batcher.server = server
-    server.run()
-
-    assert len(batcher.results) == 2
-    assert beats == ["inference_dispatch"] * 2
-
-
-def test_dense_loop_default_heartbeat_none_emits_nothing(device, model) -> None:
-    feature_len = BOARD_CHANNELS * BOARD_SIZE * BOARD_SIZE
-    batcher = _FakeDenseBatcher(feature_len, n_batches=2)
-    server = InferenceServer(
-        model, device, _cfg(inference_batch_size=4, trace_inference=False),
-        batcher=batcher, encoding_spec=_GRID_SPEC,
-    )
-    batcher.server = server
-    assert server._heartbeat is None
-    server.run()
-    assert len(batcher.results) == 2
-
-
 def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
     """Emission sits after a SUCCESSFUL submit, so a failing batch does not beat — the
     watchdog's liveness signal must track dispatch, not loop spins."""
@@ -887,9 +366,10 @@ def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
 
 # ══ F-12 — model_version bump attribution ════════════════════════════════════════
 def test_load_state_dict_safe_bumps_model_version(device) -> None:
-    net = _make_cnn(device, seed=5)
+    net = _FiniteGraphNet()
+    batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
     server = InferenceServer(
-        net, device, _cfg(trace_inference=False), encoding_spec=_GRID_SPEC
+        net, device, _cfg(), batcher=batcher, encoding_spec=_GRAPH_SPEC
     )
     try:
         before = server.batcher.model_version

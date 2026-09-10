@@ -72,6 +72,8 @@ subject is the last stage, from the snapshot to the stream.
 """
 from __future__ import annotations
 
+from mantis._engine import HexgBuffer
+
 import dataclasses
 import inspect
 from types import SimpleNamespace
@@ -88,6 +90,30 @@ from mantis.train.events import emit_iteration_complete_event, emit_training_ste
 from mantis.train.lifecycle.signals import ShutdownState
 from pathlib import Path
 
+def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
+    so each file that needs one builds it)."""
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
+
 _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG = load_config(_REPO / "configs" / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
@@ -98,18 +124,24 @@ _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
 #: two equal), so these drives keep exactly the cadence they had before R242's split.
 _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
-#: The three Phase-T counters, in the order `IMPL_NOTES_T §3.6` names them, plus the
-#: denominator the rate is taken over. Transcribed rather than derived from the payload under
-#: test: an oracle that read its own expectation off the subject would be satisfied by any
-#: consistent renaming (R81).
-_COUNTERS = ("export_offwindow_mass_moves", "gridls_zero_policy_rows",
-             "target_integrity_defects")
+#: The counters carried in the `target_integrity` block, plus the denominator the rate is
+#: taken over. Transcribed rather than derived from the payload under test: an oracle that
+#: read its own expectation off the subject would be satisfied by any consistent renaming
+#: (R81).
+#:
+#: `gridls_zero_policy_rows` was the second Phase-T counter and LEFT with R346(f) — it counted
+#: zero-row fills per recorded CLUSTER row and the engine getter is gone. R275(b)'s
+#: `inference_failures_total` takes its place in this set, which is not a substitution of
+#: convenience: it already rides this same block, and the three-distinct-values crosswire
+#: proof below needs three live counters to be a proof at all.
+_COUNTERS = ("export_offwindow_mass_moves", "target_integrity_defects",
+             "inference_failures_total")
 _DENOMINATOR = "positions_delta"
 _SLOTS = ("total", "delta", "per_position")
 _PAYLOAD_KEY = "target_integrity"
 
 
-def _stats(*, positions: int, export_offwindow: int, gridls_zero: int, defects: int) -> RunnerStats:
+def _stats(*, positions: int, export_offwindow: int, seam: int, defects: int) -> RunnerStats:
     """A REAL `RunnerStats` snapshot with the four load-bearing numbers supplied EXPLICITLY.
 
     Every parameter is required and none has a default: the three counters and their
@@ -120,10 +152,9 @@ def _stats(*, positions: int, export_offwindow: int, gridls_zero: int, defects: 
     return RunnerStats(
         games_completed=0, positions_generated=positions, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
-        mcts_mean_root_concentration=0.1, cluster_value_std_mean=0.0,
-        cluster_policy_disagreement_mean=0.0, cluster_variance_sample_count=0,
-        export_offwindow_mass_moves=export_offwindow, gridls_zero_policy_rows=gridls_zero,
-        target_integrity_defects=defects,
+        mcts_mean_root_concentration=0.1,
+        export_offwindow_mass_moves=export_offwindow,
+        target_integrity_defects=defects, inference_failures_total=seam,
     )
 
 
@@ -198,6 +229,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
+        self._hexg = _filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -205,8 +237,13 @@ class _Buffer:
     def save_to_path(self, path: Any) -> None:
         return None
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        return (None,) * 9
+    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
+        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # hand-built payload would be a second wire format for the collate to disagree with.
+        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class _SpySink:
@@ -246,7 +283,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
     )
     for snapshot in snapshots:
@@ -281,8 +318,8 @@ def test_iteration_complete_carries_the_target_integrity_fire_rates() -> None:
     stays green (the producer symbol still resolves), which is why those two rows exist
     separately."""
     payload = _drive(
-        _stats(positions=1200, export_offwindow=17, gridls_zero=3, defects=0),
-        _stats(positions=2400, export_offwindow=41, gridls_zero=9, defects=0),
+        _stats(positions=1200, export_offwindow=17, seam=3, defects=0),
+        _stats(positions=2400, export_offwindow=41, seam=9, defects=0),
     )[-1]
 
     block = _integrity(payload)
@@ -317,8 +354,8 @@ def test_the_offwindow_witness_advance_is_readable_within_one_log_interval() -> 
     reuse the snapshot — `total` freezes, `delta` stalls at 0, and O-24 (the idle case) stays
     green throughout, which is exactly why this row rigs an ADVANCE."""
     first, second = _drive(
-        _stats(positions=1000, export_offwindow=100, gridls_zero=0, defects=0),
-        _stats(positions=2000, export_offwindow=175, gridls_zero=0, defects=0),
+        _stats(positions=1000, export_offwindow=100, seam=0, defects=0),
+        _stats(positions=2000, export_offwindow=175, seam=0, defects=0),
     )
 
     witness = _integrity(second)["export_offwindow_mass_moves"]
@@ -351,17 +388,17 @@ def test_the_delta_is_the_interval_change_and_the_total_is_cumulative() -> None:
     MUTATION THAT REDS IT (M-O22): publish `total` in the `delta` slot. O-20 stays green (the
     key and all three slots are still there), which is why this row is separate from it."""
     payloads = _drive(
-        _stats(positions=500, export_offwindow=10, gridls_zero=200, defects=0),
-        _stats(positions=1500, export_offwindow=10, gridls_zero=260, defects=0),
+        _stats(positions=500, export_offwindow=10, seam=200, defects=0),
+        _stats(positions=1500, export_offwindow=10, seam=260, defects=0),
     )
     block = _integrity(payloads[-1])
 
-    assert block["gridls_zero_policy_rows"]["total"] == 260, (
-        f"total is the cumulative counter; got {block['gridls_zero_policy_rows']['total']!r}"
+    assert block["inference_failures_total"]["total"] == 260, (
+        f"total is the cumulative counter; got {block['inference_failures_total']['total']!r}"
     )
-    assert block["gridls_zero_policy_rows"]["delta"] == 60, (
+    assert block["inference_failures_total"]["delta"] == 60, (
         "delta is t2 − t1 over the interval, not the total again; got "
-        f"{block['gridls_zero_policy_rows']['delta']!r}"
+        f"{block['inference_failures_total']['delta']!r}"
     )
     assert block[_DENOMINATOR] == 1000, (
         f"…and the denominator is the interval's own recorded positions; got "
@@ -385,8 +422,8 @@ def test_per_position_is_None_when_no_position_was_recorded() -> None:
     MUTATION THAT REDS IT (M-O23): `per_position = delta / max(1, positions_delta)` — the
     tempting divide-by-zero guard, which fabricates exactly the reading this row forbids."""
     payloads = _drive(
-        _stats(positions=800, export_offwindow=5, gridls_zero=5, defects=0),
-        _stats(positions=800, export_offwindow=9, gridls_zero=5, defects=0),
+        _stats(positions=800, export_offwindow=5, seam=5, defects=0),
+        _stats(positions=800, export_offwindow=9, seam=5, defects=0),
     )
     block = _integrity(payloads[-1])
 
@@ -420,8 +457,8 @@ def test_an_idle_lever_stays_visible_at_zero() -> None:
 
     MUTATION THAT REDS IT (M-O24): omit counters whose `total == 0`."""
     payloads = _drive(
-        _stats(positions=1000, export_offwindow=0, gridls_zero=0, defects=0),
-        _stats(positions=3000, export_offwindow=0, gridls_zero=0, defects=0),
+        _stats(positions=1000, export_offwindow=0, seam=0, defects=0),
+        _stats(positions=3000, export_offwindow=0, seam=0, defects=0),
     )
     block = _integrity(payloads[-1])
 
@@ -451,17 +488,17 @@ def test_the_three_counters_do_not_crosswire() -> None:
     lever) and O-24 (nothing is omitted). Only distinct values can see it, and the values
     are chosen distinct-in-both-total-and-delta so a swap cannot alias.
 
-    MUTATION THAT REDS IT (M-O25): swap `gridls_zero_policy_rows` and
+    MUTATION THAT REDS IT (M-O25): swap `inference_failures_total` and
     `target_integrity_defects` in the report builder."""
     payloads = _drive(
-        _stats(positions=1000, export_offwindow=11, gridls_zero=22, defects=33),
-        _stats(positions=2000, export_offwindow=111, gridls_zero=222, defects=333),
+        _stats(positions=1000, export_offwindow=11, seam=22, defects=33),
+        _stats(positions=2000, export_offwindow=111, seam=222, defects=333),
     )
     block = _integrity(payloads[-1])
 
-    expected_total = {"export_offwindow_mass_moves": 111, "gridls_zero_policy_rows": 222,
+    expected_total = {"export_offwindow_mass_moves": 111, "inference_failures_total": 222,
                       "target_integrity_defects": 333}
-    expected_delta = {"export_offwindow_mass_moves": 100, "gridls_zero_policy_rows": 200,
+    expected_delta = {"export_offwindow_mass_moves": 100, "inference_failures_total": 200,
                       "target_integrity_defects": 300}
     observed_total = {name: block[name]["total"] for name in _COUNTERS}
     observed_delta = {name: block[name]["delta"] for name in _COUNTERS}
@@ -534,8 +571,8 @@ def test_a_counter_decrease_is_emitted_as_measured_and_never_clamped() -> None:
     MUTATION THAT REDS IT (M-O28): `delta = max(0, t2 - t1)`. Every other row here stays
     green, because no other row ever drives a decrease."""
     payloads = _drive(
-        _stats(positions=1000, export_offwindow=100, gridls_zero=0, defects=0),
-        _stats(positions=2000, export_offwindow=40, gridls_zero=0, defects=0),
+        _stats(positions=1000, export_offwindow=100, seam=0, defects=0),
+        _stats(positions=2000, export_offwindow=40, seam=0, defects=0),
     )
     block = _integrity(payloads[-1])
     witness = block["export_offwindow_mass_moves"]

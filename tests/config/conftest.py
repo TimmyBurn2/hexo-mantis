@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def production_config(smoke_run_config):
-    """The live production run config (configs/run5.yaml), schema-validated.
+    """The live production run config (configs/run6.yaml), schema-validated.
 
     WPAX Phase S §2.2: re-expressed as a delegation to the root conftest's factory, so ONE
     loader call, ONE merge rule and ONE `model_validate` sit behind both fixture names
@@ -23,4 +23,4 @@ def production_config(smoke_run_config):
     the bare module name `conftest` resolves to THIS file, not the root one (R5 bars the
     `sys.path` write that would fix that).
     """
-    return smoke_run_config("run5.yaml")
+    return smoke_run_config("run6.yaml")

@@ -19,11 +19,6 @@ sha256 = "71b356f3420b12fc6c106d053085bf2e7e8e1a126398451bf690e330cb93a18c"
 added_by = "WP2"
 
 [[required]]
-path = "encode_parity/manifest.tsv"
-sha256 = "6135df7495485fdcd9e19d824913c56198898442796e2e572426834a988c33fd"
-added_by = "WP3"
-
-[[required]]
 path = "search_golden/completed_q/golden_bits.txt"
 # Re-minted WP12-R Phase T (R159 grant, DESIGN_T §2): S2_OFFWINDOW row now carries the
 # previously-dropped uncovered cell under the no-drop law — one line moved, capture-diff
@@ -35,11 +30,6 @@ added_by = "WP4"
 path = "search_golden/temperature/temperature_parity_golden.csv"
 sha256 = "20103593d33093ce3ce9161742c6223e41406225fe57d9bff86e86c1ae7b6f72"
 added_by = "WP4"
-
-[[required]]
-path = "replay/hexb_v9_golden.hexb"
-sha256 = "b15c729f14db42e25a7b4bc74331b55838b0dd1a60ec978c00b006e0ddd37602"
-added_by = "WP5"
 
 # KEPT as the REFUSAL fixture, not as a loadable ring: R347(a)'s v2 format inserted the
 # per-record tail mass, so this file's records are a different byte layout and
@@ -59,26 +49,6 @@ added_by = "GUMBEL-3"
 # stamped shas of the FROZEN hexo_rl (rev 750b599) PUB pyo3-free record/finalize
 # producers over PINNED inputs; the P-04/P-09 pins assert the ported new-side
 # producers reproduce these byte-for-byte.
-[[required]]
-path = "worker/aggregate_policy.bin"
-sha256 = "fc32b722e31364a91fb4d0e9a1bdcf096b8fc340bb612906bcc7cd18a280ebe1"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_to_local.bin"
-sha256 = "0b585bdc70f63d1c997d7eeea086b0cfdcc853af2c55b218a3abe6ba3d45698d"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_ls.bin"
-sha256 = "818e5cdb4ac03f4ffa81358aac547bc6559a38493e34509a170be7002781b192"
-added_by = "WP6"
-
-[[required]]
-path = "worker/aggregate_policy_to_local_ls.bin"
-sha256 = "d1c9bf03f4b16eacc3d0a0e69d908368c9dd5161415d87cb21118a8eb6e12d53"
-added_by = "WP6"
-
 [[required]]
 path = "worker/assemble_ls_from_gnn_probs.bin"
 sha256 = "6a8ce8e7b5e5265f1bfdd88e81c3903a9962c51390001935683cb9298f025147"
@@ -100,7 +70,14 @@ added_by = "WP6"
 # NEW-generated small-net forward drift goldens (O_bench A-committed). COPIED byte-for-
 # byte from wp/WP9/oldside/ except forward/*.pt (new-generated regression references).
 # probe_set_v1.jsonl (2.39 MB) is the sole gate-6 large-file exception (operator
-# allowlist; §f). The data half appends its replay/augment/q13 rows after this.
+# allowlist; §f). The WP9 data half's replay / augment / q13 rows went with the dense
+# path (R346(f)) — the fixtures they read had no consumer left.
+# CORRECTED IN PLACE (R311(c)): the O2 value-health bank — decoded_v.npz, metrics.json,
+# probe_set_v1.jsonl, negatives_v1.jsonl — has NO reader at HEAD. Its only consumer was
+# tests/model/test_value_health.py, deleted with the dense arm it measured. The rows are KEPT
+# because the probe positions are representation-agnostic and a graph value-health harness
+# would re-point at them; that is a decision to revisit, not a fact to leave unstated, so it is
+# written here rather than inferred from four sha256 lines nobody reads.
 [[required]]
 path = "value_probes/dist65_golden.json"
 sha256 = "352f37d604a13cb15ab91e7a3d01102223ebdc12b06edadb1e8bf91215c5556b"
@@ -127,21 +104,6 @@ sha256 = "8faa6af74a7640f869cc3b1c4cb058b62660a052c5381e8ab7ad740a38cafef3"
 added_by = "WP9"
 
 [[required]]
-path = "value_probes/forward/small_cnn_scalar.pt"
-sha256 = "f7063c68bc36a0dfc242f7929cb0b79e866dfccc29e16948075a198e9433a2cf"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/forward/small_cnn_dist65.pt"
-sha256 = "8823d5ef83f832e23b4ef0559fc4fce3d1262418e0a937c82cc35776fa442d32"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/forward/small_cnn_aux_chain.pt"
-sha256 = "84815cf319ac72b265cfded2c8c543d999885d652e611bcbbe3023b3f44a9019"
-added_by = "WP9"
-
-[[required]]
 path = "value_probes/forward/small_gnn.pt"
 sha256 = "9f20be5dce9a257e042686f9e1caac25534ab38698f2a097fe8c97904b7c0e71"
 added_by = "WP9"
@@ -152,75 +114,10 @@ sha256 = "d4639ded1173a88296c53805bd8b172f9558d62a0b1af28226cde48ee3105b25"
 added_by = "WP9"
 
 [[required]]
-path = "value_probes/statedict_keys/v6.txt"
-sha256 = "fe90b5a99dca67faca3dd14cb4e88fdedd6a4f77fef0d3a66ef78276666d1e84"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/statedict_keys/v6w25.txt"
-sha256 = "fe90b5a99dca67faca3dd14cb4e88fdedd6a4f77fef0d3a66ef78276666d1e84"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/statedict_keys/v6_live2_ls.txt"
-sha256 = "404978554f73b0a4ca4ab4e3d393497381d564910e2fae5683175cf2c580f7cd"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/statedict_keys/v6_live2_ls_scalar.txt"
-sha256 = "fe90b5a99dca67faca3dd14cb4e88fdedd6a4f77fef0d3a66ef78276666d1e84"
-added_by = "WP9"
-
-[[required]]
 path = "value_probes/statedict_keys/gnn_axis_v1.txt"
 sha256 = "ed215f8588ba474d92806a10dcacb36a8c8648b5817cce6640fd18efbed2f97a"
 added_by = "WP9"
 
-[[required]]
-path = "value_probes/anchor_keys/v6_live2.txt"
-sha256 = "fe90b5a99dca67faca3dd14cb4e88fdedd6a4f77fef0d3a66ef78276666d1e84"
-added_by = "WP9"
-
-# WP9 (data half) — committed corpus oracle fixtures under tests/fixtures/value_probes/.
-# Per-encoding replay byte-parity references (O4b, COPIED from the frozen old-side
-# capture: game g3 — the two-region K>1 / off-window-skip discriminator), the 12-fold
-# policy-scatter LUTs (O4c, COPIED), and the Q13 augment sha256 hash-manifest (O5, one row
-# per game×encoding×sym — generated by hashing the frozen old-side q13 arrays). All
-# gate-6-clean (<1 MB).
-[[required]]
-path = "value_probes/replay/v6.npz"
-sha256 = "49fcfb1f950dc3b8ca2456244d3507d82f6286350e127dee0975ff9cda9b4645"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/replay/v6w25.npz"
-sha256 = "27833b11553096f8f67187a4ddc0fe6354dd07701506cc14bfa6520add21eca8"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/replay/v6_live2_ls.npz"
-sha256 = "df17f7513052a0aeec5b204b509e72283d7cd044e26c1f7f9b0cc6cd2cad7b33"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/augment/scatters_bs19.npz"
-sha256 = "33a6914be3c5d7499e49a2b63549013c9510534dca03c2194bfe5acfba8241ca"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/augment/scatters_bs25.npz"
-sha256 = "3eeda4d1fd214b0c2587701b545242c5d00ee8dafc79c74972620b1c9d9cb058"
-added_by = "WP9"
-
-[[required]]
-path = "value_probes/q13_manifest.tsv"
-sha256 = "8c87492642ce4d7e2df13ef710cfcf2661c41a4a6042e5184e8854130ce89af5"
-added_by = "WP9"
-
-# WP10 (train) — committed legacy-read + resume behavior goldens under tests/fixtures/train/.
-# DERIVED from the dispatcher old-side captures (wp/WP10/oldside/*): key-sets + metadata scalars
-# only (NEVER the multi-MB tensor blobs). Gate the Suite-A legacy-read (T-CK-31/32/33) and the
-# resume/scheduler/F1/E0/lr goldens (T-CK-15..20). Both gate-6-clean (<1 MB).
 [[required]]
 path = "train/legacy_payload_shapes.json"
 sha256 = "10554dc9d6649064916cd977f5c35b4991ee3651c14d6d29e1ad31d311fa3e19"
@@ -316,7 +213,7 @@ path = "selfplay/pool/runner_config_goldens.json"
 # cannot read it. The precedent is this file's own history — both the selfplay-schema landing
 # and GUMBEL-REPAIR-1 amended it the same way. `full_config` carries `gumbel`, the NON-shipped
 # kind, so the golden proves the wire carries the VALUE rather than that a default coincided.
-sha256 = "59d0f89a5c0c1e86d90b6ab9c788a04e3657df71b41bfb7b9bff3dd31bf7f349"
+sha256 = "573de10c62ab153a6f3baa78ec0027df51a33eefdd2a89c20cfbbbe97c38194a"
 added_by = "WP-SP"
 
 [[required]]
@@ -329,36 +226,6 @@ added_by = "WP-SP"
 # these, so the R120/R122/R126 re-mint can be proved ADDITIVE: only the new keys appear, no
 # existing value moves, and run5's armed 0.25 / 25000 / 50 survive byte-identical (R119's
 # HARD STOP — mint-prereg-only).
-[[required]]
-path = "wpmain/config_baseline_b482243/dev_example.yaml"
-sha256 = "613ce0dc684e130085cf452988ce5e93c982d65f160970796e23bbafac74a5ce"
-added_by = "WPMAIN"
-
-[[required]]
-path = "wpmain/config_baseline_b482243/run5.yaml"
-sha256 = "6416ed8b947ec5685cf067d8ed9b1fa3970358eff2c0308b9a478e5f8ad8ef37"
-added_by = "WPMAIN"
-
-[[required]]
-path = "wpmain/config_baseline_b482243/smoke_gnn.yaml"
-sha256 = "8fdd18e2b5c26511f0aeab1b494d65c363d8f2bef77d051db0b42a72b455b40f"
-added_by = "WPMAIN"
-
-[[required]]
-path = "wpmain/config_baseline_b482243/smoke_preflight_armed.yaml"
-sha256 = "4bbabda57e271c3a2c3b5b2493872c79c8c0448fe9854b8fd2d8c40455c6a63e"
-added_by = "WPMAIN"
-
-[[required]]
-path = "wpmain/config_baseline_b482243/smoke_radius_curriculum.yaml"
-sha256 = "3cae31437d337d25565918e5a207b7d29d999ed05724e9f4400fbd87a8e03a1f"
-added_by = "WPMAIN"
-
-[[required]]
-path = "wpmain/config_baseline_b482243/sustained_kcluster.yaml"
-sha256 = "2b526558e3020b190d07b49ba362c0887e47e68baedd2625d1d791cbd4e03bed"
-added_by = "WPMAIN"
-
 # WP12-R Phase EVALDECODE (operator ruling R138) — the ONE pair of files both sides of the
 # FFI bind to. `child_parity_v1.json` is P-1's cross-FFI child-set golden (2 positions, with
 # priors); `dispersed_r6_v1.json` is P-2's radius-6 >361-legal regression bank (4 positions).

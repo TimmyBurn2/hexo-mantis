@@ -20,7 +20,6 @@ Three things were wrong with that recovery, and all three are closed engine-side
 """
 from __future__ import annotations
 
-import inspect
 
 import pytest
 
@@ -53,27 +52,12 @@ def test_a_forced_root_child_outside_the_range_raises_ValueError_not_a_panic() -
 def test_a_short_expand_batch_is_refused_by_name(monkeypatch: pytest.MonkeyPatch) -> None:
     """AUDIT-1 F-22. The inner call took `n = min(pending, policies, values)` and DROPPED the
     rest, so a short batch from the inference side expanded the leading leaves and silently
-    skipped the others — on `selfplay/worker.py` and on `arena/deploy_head.py`, the
+    skipped the others — on the self-play worker and on `arena/deploy_head.py`, the
     deploy-strength path. The graph sibling already carried C-1..C-4 guards for exactly this."""
     tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)
-    board = _engine.Board.with_encoding_name("v6")
+    board = _engine.Board.with_encoding_name("gnn_axis_v1")
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     assert len(leaves) == 1
     with pytest.raises(ValueError, match="select_leaves returned"):
         tree.expand_and_backup([], [])
-
-
-def test_the_worker_no_longer_matches_a_panics_message_text() -> None:
-    """The recovery arm is DELETED, not merely bypassed. A string match on an exception's
-    message is a contract nothing enforces — and this one covered one arm of two."""
-    import mantis.selfplay.worker as worker
-
-    source = inspect.getsource(worker)
-    assert "cell already occupied" not in source, (
-        "the panic-text match is back; the desync is a named error now and the recovery it "
-        "performed (a silent tree reset) exported a search that did not happen"
-    )
-    assert "except BaseException" not in source, (
-        "a BaseException handler around the search loop swallows KeyboardInterrupt too"
-    )

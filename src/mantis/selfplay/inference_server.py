@@ -309,12 +309,7 @@ class InferenceServer(threading.Thread):
             self._weights_lock = threading.Lock()
             self._forward_count = 0
             self._total_requests = 0
-            # Inert grid-path attributes so shared accessors don't raise.
-            self._trace_inference = False
             self._traced_model: Any = None
-            self._compile_inference = False
-            self._compile_mode: str | None = None
-            self._compile_dynamic = False
             self._h2d_staging: torch.Tensor | None = None
         else:
             # H2D staging tensors size to the TRUNK window (the spatial dim the model
@@ -337,8 +332,6 @@ class InferenceServer(threading.Thread):
             self._forward_count = 0
             self._total_requests = 0
 
-            self._setup_inference_path(hp, board_size)
-
             # Pinned host staging buffer for async H2D. Enables a DMA-engine copy on CUDA
             # (`non_blocking=True`); no-op on CPU.
             if self.device.type == "cuda":
@@ -350,97 +343,13 @@ class InferenceServer(threading.Thread):
             else:
                 self._h2d_staging = None
 
-        # Perf-investigation probes.
-        self._perf_timing = hp.perf_timing
-        self._perf_sync_cuda = hp.perf_sync_cuda
-        if self._perf_sync_cuda and torch.cuda.is_available():
-            _LOG.warning(
-                "perf_sync_cuda_enabled_serialising_stream context=%s impact=%s remedy=%s",
-                "inference_server",
-                "expect_30_50_pct_throughput_drop",
-                "unset_diagnostics.perf_sync_cuda_in_production_config",
-            )
-
         # Autocast dtype — representation-aware. The graph loop is pinned to bf16
         # UNCONDITIONALLY (LAW-06): fp16 GINE sum-aggregation overflows on
         # production-scale graphs. The dense path reads the `train.amp_dtype` knob and must
         # match the trainer's choice for weight-sync consistency. R30b: hard key access, no
         # fallback — config["train"]["amp_dtype"] is a required schema field.
         _representation = "graph" if self._is_graph else "grid"
-        self._amp_dtype = amp_dtype_for(_representation, config["train"]["amp_dtype"])
-
-    def _setup_inference_path(self, hp: InferenceHParams, board_size: int) -> None:
-        """Configure the trace OR compile path for the inference model.
-
-        Mutually exclusive: `trace_inference` and `compile_inference` cannot both be
-        enabled. Sets `_trace_inference`, `_traced_model`, `_compile_inference`,
-        `_compile_mode`, `_compile_dynamic`; may replace `self.model` with a
-        `torch.compile` wrapper. Called once at `__init__` — the run loop reads the
-        resolved attributes, so there is no per-batch overhead from this helper.
-        """
-        if self._shape is None:
-            # Grid-only helper: __init__ calls it exclusively from the dense arm, after
-            # `_shape` is assigned; the graph arm never routes here.
-            raise RuntimeError(
-                "InferenceServer._setup_inference_path: no (C, H, W) shape — the dense "
-                "setup was entered for a graph encoding."
-            )
-        # TorchScript trace of the eval forward: collapses ~100 `nn.Module` `_call_impl`
-        # invocations per forward into one ScriptModule whose parameters SHARE storage
-        # with `model`, so `load_state_dict_safe`'s in-place mutation keeps flowing into
-        # the traced graph without re-tracing.
-        self._trace_inference = hp.trace_inference
-        self._traced_model: Any = None
-        if self._trace_inference:
-            try:
-                self.model.requires_grad_(False)
-                with torch.inference_mode():
-                    _example = torch.zeros(
-                        self._batch_size, *self._shape, device=self.device,
-                    )
-                    self._traced_model = torch.jit.trace(
-                        self.model, _example, strict=False,
-                    )
-                _LOG.info(
-                    "inference_trace_compiled context=%s batch_size=%s board_size=%s",
-                    "inference_server", self._batch_size, board_size,
-                )
-            except Exception as exc:  # noqa: BLE001 — degrade to the untraced module, logged
-                _LOG.warning(
-                    "inference_trace_failed_falling_back context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-                self._traced_model = None
-
-        # `torch.compile` knob. Mutually exclusive with trace — both attack the same
-        # bottleneck (Python dispatch / kernel-launch overhead) and stacking them does not
-        # compose. Mode `default` is thread-safe from any caller; `reduce-overhead`
-        # requires the dispatcher thread's TLS to own the cudagraph_trees context.
-        self._compile_inference = hp.compile_inference
-        self._compile_mode = hp.compile_inference_mode
-        self._compile_dynamic = hp.compile_inference_dynamic
-        if self._compile_inference and self._trace_inference:
-            raise ValueError(
-                "compile_inference and trace_inference are mutually exclusive; "
-                "set one to false in the selfplay config."
-            )
-        if self._compile_inference:
-            try:
-                self.model = torch.compile(
-                    self.model,
-                    mode=self._compile_mode,
-                    dynamic=self._compile_dynamic,
-                )
-                _LOG.info(
-                    "inference_compile_enabled context=%s mode=%s dynamic=%s",
-                    "inference_server", self._compile_mode, self._compile_dynamic,
-                )
-            except Exception as exc:  # noqa: BLE001 — degrade to eager, logged
-                _LOG.warning(
-                    "inference_compile_failed_falling_back context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-                self._compile_inference = False
+        self._amp_dtype = amp_dtype_for(_representation)
 
     @property
     def batcher(self) -> InferenceBatcher:
@@ -708,65 +617,6 @@ class InferenceServer(threading.Thread):
         }
 
     # ── Thread body ─────────────────────────────────────────────────────────────
-    def _padding_active(self) -> bool:
-        """The compile + `reduce-overhead` path replays a captured CUDA graph, which
-        requires a fixed input shape: each batch is padded up to ``self._batch_size`` and
-        outputs are sliced back to the actual request count."""
-        return (
-            self._compile_inference
-            and self._compile_mode == "reduce-overhead"
-            and self._h2d_staging is not None
-        )
-
-    def _warmup_compile_path(self) -> None:
-        """CUDA-graph TLS warmup for compile + `reduce-overhead`.
-
-        The cudagraph_trees state lives in C++ dynamic TLS — the first forward must run on
-        THIS dispatcher thread so the captured graph binds here, not to the thread that
-        built the wrapper. The warmup tensor is padded to the production batch size so the
-        graph is captured for the steady-state shape. Failures degrade to
-        fall-back-on-first-batch behaviour. No-op for non-CUDA or non-`reduce-overhead`.
-        """
-        if (
-            self._compile_inference
-            and self._compile_mode == "reduce-overhead"
-            and self.device.type == "cuda"
-        ):
-            if self._shape is None:
-                # `_compile_inference` is pinned False on the graph arm of __init__, and
-                # the dense arm always sets `_shape` — a None here is a wiring break.
-                raise RuntimeError(
-                    "InferenceServer._warmup_compile_path: compile warmup requires the "
-                    "dense (C, H, W) shape; graph mode never enables compile_inference."
-                )
-            try:
-                with self._weights_lock:
-                    with torch.inference_mode():
-                        with torch.autocast(
-                            device_type=self.device.type,
-                            dtype=self._amp_dtype,
-                        ):
-                            if self._h2d_staging is not None:
-                                self._h2d_staging.zero_()
-                                warmup_tensor = self._h2d_staging.to(
-                                    self.device, non_blocking=True,
-                                )
-                            else:
-                                warmup_tensor = torch.zeros(
-                                    self._batch_size, *self._shape, device=self.device,
-                                )
-                            _ = self.model(warmup_tensor)
-                torch.cuda.synchronize()
-                _LOG.info(
-                    "inference_compile_warmup_dispatcher context=%s batch_size=%s mode=%s",
-                    "inference_server", self._batch_size, self._compile_mode,
-                )
-            except Exception as exc:  # noqa: BLE001 — warmup is best-effort, logged
-                _LOG.warning(
-                    "inference_compile_warmup_failed context=%s error=%s",
-                    "inference_server", str(exc)[:200],
-                )
-
     def _run_graph_loop(self) -> None:
         """Ragged axis-graph inference loop, MEMORY-BOUNDED (F-816-10, verdict V-A).
 
@@ -1013,222 +863,8 @@ class InferenceServer(threading.Thread):
             self._batcher.close()
 
     def run(self) -> None:
-        if self._is_graph:
-            self._run_graph_loop()
-            return
-        # Dense loop from here down; the dense arm of __init__ always sets `_shape`.
-        shape = self._shape
-        if shape is None:
-            raise RuntimeError(
-                "InferenceServer.run: dense loop entered with no (C, H, W) shape — "
-                "grid/graph construction invariant broken."
-            )
-        _perf = self._perf_timing
-        _sync = self._perf_sync_cuda and self.device.type == "cuda"
-
-        # Log which CUDA stream this thread is on, once at thread start: if it matches the
-        # trainer stream (both default), there is no overlap.
-        if self.device.type == "cuda":
-            try:
-                current_stream = torch.cuda.current_stream(self.device)
-                default_stream = torch.cuda.default_stream(self.device)
-                _LOG.info(
-                    "cuda_stream_audit context=%s current_stream_ptr=%s "
-                    "default_stream_ptr=%s on_default_stream=%s",
-                    "inference_server",
-                    int(current_stream.cuda_stream),
-                    int(default_stream.cuda_stream),
-                    current_stream.cuda_stream == default_stream.cuda_stream,
-                )
-            except Exception as exc:  # noqa: BLE001 — audit only, logged
-                _LOG.warning(
-                    "cuda_stream_audit_failed context=%s error=%s",
-                    "inference_server", exc,
-                )
-
-        self._warmup_compile_path()
-
-        try:
-            while not self._stop_event.is_set():
-                try:
-                    _t_fetch_start = time.perf_counter() if _perf else 0.0
-                    request_ids, batch = self._batcher.next_inference_batch(
-                        self._batch_size,
-                        self._max_wait_ms,
-                    )
-                    if not request_ids:
-                        continue
-                    if not self._first_enqueued_emitted:
-                        self._first_enqueued_emitted = True
-                        if self._sink is not None:
-                            self._sink.emit({
-                                "event": "first_inference_enqueued",
-                                "batch_size": len(request_ids),
-                                "representation": "dense",
-                            })
-                    _t_fetched = time.perf_counter() if _perf else 0.0
-                    # Bound here so the `_perf` log block below is never reading an
-                    # unbound name; the real values are assigned only under `_perf`.
-                    _t_h2d_done = _t_forward_done = _t_d2h_done = 0.0
-
-                    self._total_requests += len(request_ids)
-
-                    try:
-                        # The Rust contract on the bound supplier guarantees `batch` is
-                        # already a float32 C-contiguous numpy array, so no defensive
-                        # `ascontiguousarray` copy runs here (it cost an unconditional
-                        # per-batch memcpy). A debug-only assert holds the contract and
-                        # disappears under `python -O`.
-                        if __debug__:
-                            assert batch.dtype == np.float32, (
-                                f"InferenceBatcher.next_inference_batch returned "
-                                f"dtype={batch.dtype}; the contract guarantees float32"
-                            )
-                            assert batch.flags["C_CONTIGUOUS"], (
-                                f"InferenceBatcher.next_inference_batch returned "
-                                f"flags={batch.flags}; the contract guarantees C-contiguous"
-                            )
-                        batch_np = batch
-                        n = len(request_ids)
-                        _pad = self._padding_active()
-                        if self._h2d_staging is not None:
-                            assert n <= self._batch_size, (
-                                f"inference batch size {n} exceeds staging capacity "
-                                f"{self._batch_size} — config divergence between "
-                                f"InferenceBatcher and InferenceServer"
-                            )
-                            # Staged async H2D: CPU→pinned copy, then DMA to GPU. The
-                            # previous batch's H2D is already complete by this point
-                            # (prior forward + .cpu() synced the default stream), so
-                            # reusing the staging buffer is safe.
-                            self._h2d_staging[:n].copy_(
-                                torch.from_numpy(batch_np).view(n, *shape)
-                            )
-                            if _pad:
-                                # Zero padding for the CUDA graph's fixed shape. Padded
-                                # rows are discarded post-forward via host[:n] slicing.
-                                if n < self._batch_size:
-                                    self._h2d_staging[n:].zero_()
-                                tensor = self._h2d_staging.to(
-                                    self.device, non_blocking=True,
-                                )
-                            else:
-                                tensor = self._h2d_staging[:n].to(
-                                    self.device, non_blocking=True,
-                                )
-                        else:
-                            tensor = (
-                                torch.from_numpy(batch_np)
-                                .to(self.device)
-                                .reshape(n, *shape)
-                            )
-                        if _perf:
-                            if _sync:
-                                torch.cuda.synchronize()
-                            _t_h2d_done = time.perf_counter()
-                        if self._forward_count == 0:
-                            assert not self.model.training, (
-                                "InferenceServer model entered hot loop in train() mode; "
-                                "eval() should be set at __init__ and re-applied in "
-                                "load_state_dict_safe"
-                            )
-                        # Use the traced graph when available (it shares parameter storage
-                        # with self.model, so weight swaps propagate without re-tracing).
-                        fwd_model = (
-                            self._traced_model
-                            if self._traced_model is not None
-                            else self.model
-                        )
-                        with self._weights_lock:
-                            with torch.inference_mode():
-                                # autocast on CUDA only; CPU autocast accepts bfloat16
-                                # only, so it is disabled entirely on CPU.
-                                with torch.autocast(
-                                    device_type=self.device.type,
-                                    dtype=self._amp_dtype,
-                                    enabled=self.device.type == "cuda",
-                                ):
-                                    log_policy, value, _v_logit = fwd_model(tensor)
-                        if _perf:
-                            if _sync:
-                                torch.cuda.synchronize()
-                            _t_forward_done = time.perf_counter()
-
-                        # .float() forces float32 regardless of the autocast dtype.
-                        # Re-normalize after exp() to correct rounding drift.
-                        probs = log_policy.float().exp()
-                        probs = probs / probs.sum(dim=-1, keepdim=True)
-                        # Merged D2H: one async copy instead of two. Layout is
-                        # [fwd_n, policy_len + 1] — the last column carries the squeezed
-                        # scalar value; splitting on the host is L2-cache cheap.
-                        v = value.squeeze(-1).float().unsqueeze(-1)
-                        host = torch.cat([probs, v], dim=-1).cpu().numpy()
-                        # host is (n, …) under the variable-shape path and (batch_size, …)
-                        # under the padded path; slice to the request count either way so
-                        # padded-zero rows never reach Rust.
-                        policies = np.ascontiguousarray(host[:n, :self._policy_len])
-                        values = np.ascontiguousarray(host[:n, self._policy_len])
-                        if _perf:
-                            _t_d2h_done = time.perf_counter()
-
-                        self._batcher.submit_inference_results(
-                            request_ids,
-                            policies,
-                            values,
-                        )
-                        if _perf:
-                            # submit_us closes the 2nd (return) FFI crossing so the 5
-                            # buckets sum to the full fetch→submit cycle; the fetch
-                            # crossing already lives inside fetch_wait_us.
-                            _t_submit_done = time.perf_counter()
-                            _LOG.info(
-                                "inference_batch_timing batch_n=%s fetch_wait_us=%s "
-                                "h2d_us=%s forward_us=%s d2h_scatter_us=%s submit_us=%s "
-                                "sync_cuda=%s forward_count=%s",
-                                len(request_ids),
-                                (_t_fetched - _t_fetch_start) * 1e6,
-                                (_t_h2d_done - _t_fetched) * 1e6,
-                                (_t_forward_done - _t_h2d_done) * 1e6,
-                                (_t_d2h_done - _t_forward_done) * 1e6,
-                                (_t_submit_done - _t_d2h_done) * 1e6,
-                                _sync,
-                                self._forward_count + 1,
-                            )
-                    except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
-                        # Explicitly signal failure to Rust waiters rather than returning
-                        # dummy data or failing silently. Message format is stable for
-                        # downstream tests / log parsers.
-                        error_msg = f"Model inference failed: {exc}"
-                        # Surface the type + traceback even when str(exc) is empty.
-                        _LOG.error(
-                            "inference_forward_failed context=%s error_type=%s error=%s "
-                            "tb=%s",
-                            "inference_server", type(exc).__name__,
-                            str(exc)[:300] or repr(exc)[:300],
-                            traceback.format_exc()[:1500],
-                        )
-                        self._batcher.submit_inference_failure(request_ids, error_msg)
-                        # Do not raise — the server can recover for the next batch.
-                        continue
-
-                    self._forward_count += 1
-                    if not self._first_served_emitted:
-                        self._first_served_emitted = True
-                        if self._sink is not None:
-                            self._sink.emit({
-                                "event": "first_inference_served",
-                                "batch_size": len(request_ids),
-                                "representation": "dense",
-                            })
-                    if self._heartbeat is not None:
-                        self._heartbeat(_HEARTBEAT_SOURCE)
-                except Exception as exc:  # noqa: BLE001 — loop keeps serving next batch
-                    _LOG.exception("inference_server_loop_error error=%s", exc)
-                    if self._stop_event.is_set():
-                        break
-        finally:
-            # Release blocked Rust waiters even if this thread exits unexpectedly.
-            self._batcher.close()
+        """Serve inference until `stop()`. One loop: the ragged axis-graph one."""
+        self._run_graph_loop()
 
 
 __all__ = ["InferenceServer"]

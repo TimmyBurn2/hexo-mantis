@@ -2,11 +2,11 @@
 
 THE DEFECT. R311(b) suspended remote CI and made LOCAL GREEN the gate. There was no local
 runner. `make test` runs the default tier plus `cargo test --workspace --locked`, which does
-NOT compile `[[bench]]` targets; `make bench` compiles exactly one of the eight. And
+NOT compile `[[bench]]` targets; `make bench` compiles exactly one of them. And
 `cargo clippy --workspace --all-targets --locked -- -D clippy::all` appeared ONLY in
 `.github/workflows/ci.yml`. So every "full local gate set" since the suspension excluded
 `-D clippy::all` — including `incompatible_msrv`, the guard on the `rust-version = "1.87"`
-floor — and never compiled the seven bench targets standing behind the 28 floors in
+floor — and never compiled the bench targets standing behind the floors in
 `tools/bench_floors.toml`. CLAUDE.md's own rule: "nothing lives only in workflow YAML".
 
 WHAT THESE ROWS ARE. Not a second copy of what each gate checks — they assert the SET. The
@@ -84,13 +84,15 @@ def test_clippy_is_reachable_from_a_make_target_not_only_from_the_workflow() -> 
 
 
 def test_the_all_targets_flag_is_what_compiles_the_bench_targets() -> None:
-    """The mechanism, named against the tree: eight `[[bench]]` targets exist, `make bench`
-    builds ONE, and `cargo test` builds none of them."""
+    """The mechanism, named against the tree: several `[[bench]]` targets exist, `make bench`
+    builds ONE, and `cargo test` builds none of them. The count is DERIVED and bounded from
+    below rather than transcribed (R192(e)) — R346(f) deleted two bench targets with the dense
+    path, and a stated tally would now be evidence of nothing."""
     benches = set()
     for manifest in sorted((REPO_ROOT / "crates").glob("*/Cargo.toml")):
         text = manifest.read_text(encoding="utf-8")
         benches |= set(re.findall(r'\[\[bench\]\]\s*\nname\s*=\s*"([^"]+)"', text))
-    assert len(benches) >= 8, sorted(benches)
+    assert len(benches) >= 6, sorted(benches)
 
     makefile = MAKEFILE.read_text(encoding="utf-8")
     bench_recipe = makefile.split("\nbench:", 1)[1].split("\n\n", 1)[0]

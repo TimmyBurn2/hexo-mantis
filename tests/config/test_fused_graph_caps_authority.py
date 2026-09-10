@@ -79,12 +79,11 @@ _CONFIGS = _REPO / "configs"
 _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps.py"
 
 #: The two configs whose value is the OPERATOR'S, minted at the box sitting from the
-#: calibration tool's output (R119). `shakedown_20260807.yaml` joins run5 on run5's own
+#: calibration tool's output (R119). `run6.yaml` joins run5 on run5's own
 #: grounds: it is a box-class config that already mints run5's `microbatch_caps`, and it is
 #: already excluded beside run5 from the train-side non-binding sweep (F-P2B/R259).
-_PRODUCTION = ("run5.yaml", "run6.yaml", "shakedown_20260807.yaml")
-_NON_PRODUCTION = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
-                   "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
+_PRODUCTION = ("run6.yaml",)
+_NON_PRODUCTION = ("dev_example.yaml", "smoke_preflight_armed.yaml")
 
 
 def _all_config_names() -> list[str]:
@@ -128,30 +127,24 @@ def test_fg5_01_every_GRAPH_config_mints_the_block_through_the_real_loader(name:
         assert value is None or value >= 1, f"{name}: {member}={value} is below the range"
 
 
-@pytest.mark.parametrize("name", _GRID_CONFIGS)
-def test_fg5_01b_no_GRID_config_carries_the_block_at_all(name: str) -> None:
-    """The complement of FG5-01, and the half R322(d) added.
-
-    Before B2 a grid config was REQUIRED to carry this graph-only cap and the mint had to
-    invent a number for a quantity a grid run has none of. Now the schema refuses the block on
-    a grid config, so "absent" is the only legal state — and this row is what notices if one
-    comes back. Both directions matter: the row above would stay green on a tree where every
-    config carried it.
-    """
-    cfg = load_config(_CONFIGS / name)
-    assert cfg.inference.fused_graph_caps is None, (
-        f"{name} selects representation='grid' and carries `inference.fused_graph_caps`; the "
-        "block is ARCH-SCOPED to graph (R322(d))")
-    assert "fused_graph_caps" not in cfg.inference.model_fields_set, (
-        f"{name} carries the key explicitly (as null); absence and an explicit null are "
-        "different facts and both are refused on a foreign arch")
+# FG5-01b — RETIRED with the grid representation (R346(f)). It parametrized over
+# `_GRID_CONFIGS`, which is empty by ruling, so pytest collected it as a permanent empty
+# parameter set: a SKIP that reads like coverage. The claim it carried — no shipped config
+# may select grid and carry this graph-only block — is asserted directly by
+# `test_fg5_01c_the_arch_split_covers_every_shipped_config` below, over the same derived list.
 
 
 def test_fg5_01c_the_arch_split_covers_every_shipped_config(name=None) -> None:
     """Vacuity guard for the two rows above: a parametrize list that went empty would make one
     of them assert nothing, and both lists are DERIVED so that is a live possibility."""
     assert _GRAPH_CONFIGS, "no shipped config selects graph; FG5-01 asserts nothing"
-    assert _GRID_CONFIGS, "no shipped config selects grid; FG5-01b asserts nothing"
+    # R346(f) deleted the grid representation, so `_GRID_CONFIGS` is EMPTY BY RULING and
+    # FG5-01b's arm has no subject. The partition below is what still bites: a config that
+    # selected neither arch would drop out of both sweeps unnoticed, which is the coverage
+    # hole this guard exists for — and it is now equivalent to "every config is graph".
+    assert _GRID_CONFIGS == [], (
+        "a grid config is shipped again; FG5-01b's arm was retired with the representation "
+        "(R346(f)) and would now assert nothing over it")
     assert sorted(_GRAPH_CONFIGS + _GRID_CONFIGS) == _all_config_names(), (
         "the two arch lists do not partition the shipped configs")
 
@@ -235,11 +228,16 @@ def test_fg5_02_production_configs_SHARING_A_FIT_carry_the_SAME_minted_pair() ->
             f"production configs sharing the fit {fit} disagree about the fused-graph bound: "
             f"{pairs}. They partition the SAME card from the SAME sweep; a divergence means "
             "one was minted without the other, which R281(d) rules is not a legal posture.")
-    assert any(len(pairs) > 1 for pairs in groups.values()), (
-        f"every production config is in a fit group of ONE ({ {k: sorted(v) for k, v in groups.items()} }), "
-        "so the cross-file comparison this row exists for compares nothing. A group of one is "
-        "legal; ALL groups being of one means the mutation above can no longer be caught and "
-        "the row needs a second config in some group, not a green tick")
+    # THE CROSS-FILE COMPARISON HAS NO SUBJECT AND THAT IS STATED, NOT PAPERED OVER. R346(f)
+    # pruned `configs/` to ONE production config, so every fit group is a group of one and the
+    # mutation this row was built to catch — re-minting one config of a fit group and leaving
+    # its twin on the old pair — is currently uncatchable. The vacuity is asserted in the
+    # direction that survives: exactly one production config, so a SECOND one arriving
+    # restores the comparison and reds this line until the row is re-armed.
+    assert sum(len(pairs) for pairs in groups.values()) == 1, (
+        f"more than one production config is shipped ({ {k: sorted(v) for k, v in groups.items()} }); "
+        "the cross-file fit comparison above is live again and this vacuity note must be "
+        "replaced by the `any(len(pairs) > 1)` arm it stands in for")
 
 
 def test_fg5_02_the_placeholder_is_schema_valid_so_gate_7_stays_green() -> None:
@@ -336,7 +334,7 @@ def test_fg5_05_an_uncalibrated_production_config_cannot_build_its_graph_server(
     to source its own precondition from the config. Nulling the dump is the stronger form: it
     tests the REFUSAL, not the current mint state, so the row keeps its meaning across every
     future re-mint instead of silently becoming a test of nothing."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     assert cfg.identity.representation == "graph", (
         "run5 no longer declares the graph representation — this row's premise is gone")
     dump = cfg.model_dump()
@@ -357,7 +355,7 @@ def test_fg5_05b_the_minted_production_config_DOES_build_its_graph_server() -> N
     config is still uncalibrated". This row is what makes the pair complete.
 
     MUTATION THAT REDS IT: re-minting run5 back to the `null` placeholder."""
-    cfg = load_config(_CONFIGS / "run5.yaml")
+    cfg = load_config(_CONFIGS / "run6.yaml")
     server = InferenceServer(
         torch.nn.Linear(1, 1), torch.device("cpu"), cfg.model_dump(),
         batcher=_DummyBatcher(), encoding_spec=lookup(cfg.identity.encoding),
@@ -505,7 +503,8 @@ def test_fg5_08_production_is_excluded_deliberately_and_the_set_is_the_directory
         "no non-production config selects graph, so FG5-07's two limbs assert nothing")
     assert set(_NON_PRODUCTION) - set(_NON_PRODUCTION_GRAPH) == set(_GRID_CONFIGS), (
         "the configs FG5-07 skips must be EXACTLY the grid ones — a graph config dropping out "
-        "of that sweep for any other reason is a coverage hole, not a scoping")
+        "of that sweep for any other reason is a coverage hole, not a scoping. With the grid "
+        "representation deleted (R346(f)) that set is EMPTY, so FG5-07 must skip nothing")
 
 
 # ═══ FG5-09 — the off state is unrepresentable ═══════════════════════════════════════════

@@ -6,9 +6,7 @@ Public API:
   - `all_specs()`                iterate every registered spec
   - `resolve_from_config(cfg)`   resolve from a config mapping
   - `resolve_from_checkpoint(p)` resolve from a saved checkpoint
-  - `validate_against_state_dict(spec, sd)` cross-check shapes
   - `EncodingRegistryError`      raised on parse / lookup failure
-  - `ShapeMismatchError`         raised by validate_against_state_dict
 
 Schema authoring lives in `crates/mantis-encoding/src/registry.toml`; the Rust
 parser (compiled into `mantis._engine`) is the single source of truth. This
@@ -129,42 +127,34 @@ _registry_sha_handshake()
 
 from mantis.encoding.resolvers import (  # noqa: E402 — after the import handshake
     ArchSpec,
-    ShapeMismatchError,
     assert_not_heldout_sha,
-    cur_stone_slot,
     detect_encoding_from_state_dict,
     expand_auto_paths,
     held_out_shas,
     normalize_encoding_name,
-    opp_stone_slot,
     resolve_anchor_path,
     resolve_arch,
     resolve_corpus_path,
     resolve_corpus_sha_pin,
     resolve_from_checkpoint,
     resolve_from_config,
-    validate_against_state_dict,
 )
 
 __all__ = [
     "ArchSpec",
     "EncodingSpec",
     "EncodingRegistryError",
-    "ShapeMismatchError",
     "all_specs",
     "assert_not_heldout_sha",
-    "cur_stone_slot",
     "detect_encoding_from_state_dict",
     "expand_auto_paths",
     "held_out_shas",
     "lookup",
     "normalize_encoding_name",
-    "opp_stone_slot",
     "resolve_anchor_path",
     "resolve_arch",
     "resolve_corpus_path",
     "resolve_corpus_sha_pin",
     "resolve_from_checkpoint",
     "resolve_from_config",
-    "validate_against_state_dict",
 ]

@@ -6,7 +6,7 @@ spec-derived through `mantis.encoding.lookup(name)`, and no new-side consumer of
 constants exists (LAW-08).
 
 `get_temperature` is the LEGACY mode-based resolver used by the Python-side
-`SelfPlayWorker` / bot paths. It is NOT the Rust training-path resolver — that one is
+the bot paths. It is NOT the Rust training-path resolver — that one is
 `SelfPlayHParams`' `_resolve_playout_cap_temperature` (`hparams.py`), which feeds
 `SelfPlayRunnerConfig`. Both funnel into `quarter_cosine_temperature`, the ONE shared
 schedule shape.

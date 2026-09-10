@@ -1,8 +1,10 @@
-"""Frozen WP9 replay / Q13 input games (committed test data).
+"""Frozen input games (committed test data).
 
-Verbatim (id, moves, winner) for the 4 games the O4b replay-parity and O5 Q13-parity
-oracles reuse. Sourced once from the dispatcher frozen-input set; embedded as code so the
-committed tests are self-contained (the full old-side capture is not in this repo).
+Verbatim (id, moves, winner) for four games. They were the O4b replay-parity and O5
+Q13-parity inputs; those oracles went with the dense replayers (R346(f)) and what still
+reads this file is the corpus sources/metrics smoke, which needs real replayable move lists
+and does not care where they came from. Embedded as code so the committed tests are
+self-contained.
 """
 from __future__ import annotations
 

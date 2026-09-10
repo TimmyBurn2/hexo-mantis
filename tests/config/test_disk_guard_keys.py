@@ -49,7 +49,11 @@ from pydantic import ValidationError
 
 from mantis.config.resolve.disk_guard import DiskGuardSpec, resolve_disk_guard  # RED anchor
 from mantis.config.resolve.monitor import resolve_monitor_config
-from mantis.config.schema import DiskGuardConfig, RunConfig  # RED anchor: DiskGuardConfig
+from mantis.config.schema import (  # RED anchor: DiskGuardConfig
+    DiskGuardConfig,
+    RunConfig,
+    operational_default_fields,
+)
 from mantis.train.lifecycle.disk_guard import DiskGuard
 
 _GB = 1_000_000_000  # decimal GB — the divisor `disk_guard.py` calibrates against
@@ -98,14 +102,20 @@ def test_disk_guard_valid_payload_constructs_clean() -> None:
 
 
 @pytest.mark.parametrize("field", _FIELDS)
-def test_disk_guard_missing_field_rejected(field: str) -> None:
-    """O-D4, arm 1 — R1 completeness: a missing key is an ERROR naming the key, never a
-    code-side stand-in. MUTATION THAT REDS IT: give the field a default, which is precisely
-    the shape (`.get(name, 60.0)`) this whole family replaces."""
+def test_an_omitted_disk_guard_key_lands_on_its_declared_default(field: str) -> None:
+    """O-D4 arm 1, INVERTED by R347/CONFIG-1. It used to assert that a missing key is an ERROR
+    naming the key; all three thresholds are now declared operational constants, so a missing
+    key is legal and the claim moves to the VALUE — which is the half that actually protects
+    R122. The shape R122 forbade was `.get(name, 60.0)` at a CALL SITE: a second authority
+    that no config could override. A schema field is the first authority, and the assertion
+    below is what proves the resolved config really carries it."""
     payload = _payload()
     del payload[field]
-    with pytest.raises(ValidationError, match=field):
-        DiskGuardConfig.model_validate(payload)
+    cfg = DiskGuardConfig.model_validate(payload)
+    assert getattr(cfg, field) == DiskGuardConfig.model_fields[field].get_default(
+        call_default_factory=True), (
+        f"monitor.disk_guard.{field} did not land on its schema default"
+    )
 
 
 def test_disk_guard_extra_key_rejected() -> None:
@@ -127,8 +137,22 @@ def test_disk_guard_has_no_pydantic_level_default() -> None:
     defaults". IMPL additionally extends the shared `test_o16` tuple (MISS-9, an R50 row);
     this assertion stands whether or not that edit lands, on purpose — one census that can
     be forgotten is one census."""
+    # R347/CONFIG-1 INVERTED this arm rather than deleting it. All three thresholds are
+    # operational constants — a poll cadence and two disk levels — so they now carry schema
+    # defaults and leave the YAML, and what MISS-9's guard becomes is the equality: every
+    # field of this block is DECLARED in `OPERATIONAL_DEFAULT_KEYS`, so a fourth leaf added
+    # without a registry row is still the red R122 asked for. The "not literals, not
+    # `dict.get` defaults" half of R122 is untouched — a `dict.get` at a call site is a SECOND
+    # authority, which is what R1 forbids; a schema field is the first one.
+    assert set(DiskGuardConfig.model_fields) == operational_default_fields(
+        "monitor.disk_guard"), (
+        "a DiskGuardConfig field is not declared in OPERATIONAL_DEFAULT_KEYS (or a declared "
+        "one is gone) — the registry and the block must say the same thing"
+    )
     for name, field in DiskGuardConfig.model_fields.items():
-        assert field.is_required(), f"DiskGuardConfig.{name} has a code-side default"
+        assert not field.is_required(), (
+            f"DiskGuardConfig.{name} is declared operational but is still required"
+        )
 
 
 def test_a_fail_threshold_at_or_above_the_warn_threshold_is_refused() -> None:
@@ -154,7 +178,7 @@ def _minted(smoke_run_config, **disk_guard) -> RunConfig:
     `smoke_run_config` is the root conftest's factory (R5: no cross-test import exists or is
     wanted — the fixture IS the shared surface). Overrides are re-validated, so a value this
     file writes is a value the loader would accept."""
-    return smoke_run_config("smoke_gnn.yaml", monitor={"disk_guard": dict(disk_guard)})
+    return smoke_run_config("smoke_preflight_armed.yaml", monitor={"disk_guard": dict(disk_guard)})
 
 
 @pytest.mark.parametrize(("field", "value"), [

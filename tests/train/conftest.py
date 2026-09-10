@@ -1,7 +1,7 @@
 """Shared fixtures for the WP10 ⊕⊕ conformance suites (tests/train/).
 
 >300 justify: one shared fixture module for one directory's suites — the spies, the tiny-net
-+ optim/scaler/sched builders, the full `v6_live2_ls` net, and the `RunConfig`/`TrainHParams`
++ optim/scaler/sched builders, the full `gnn_axis_v1` net, and the `RunConfig`/`TrainHParams`
 block factories (`train`/`selfplay`/`inference`/`monitor`) all have to stay co-located so
 every `tests/train/` suite draws its config shape from ONE place; splitting them would let
 two copies of a block factory drift apart. WPSC Phase 2 SC-A1/SC-A2's `train:`/`selfplay:`
@@ -30,15 +30,14 @@ import torch
 from mantis.config.loader import load_config
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
-from mantis.model import CnnArch, arch_from_spec_and_config, build_net
+from mantis.model import GnnArch, arch_from_spec_and_config, build_net
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
 TRAIN_FIXTURES = FIXTURES / "train"
-ANCHOR_KEYS_FILE = FIXTURES / "value_probes" / "anchor_keys" / "v6_live2.txt"
+ANCHOR_KEYS_FILE = FIXTURES / "value_probes" / "statedict_keys" / "gnn_axis_v1.txt"
 
-# Encoding used for the grid checkpoint tests: v6_live2_ls (grid, 19, 4 planes) is the O3b
-# PASS anchor lineage and a registered encoding.
-GRID_ENCODING = "v6_live2_ls"
+# The ONE registered representation since R346(f) deleted the grid path.
+GRAPH_ENCODING = "gnn_axis_v1"
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 
 
@@ -82,18 +81,20 @@ def fake_clock() -> FakeClock:
 
 
 # ── tiny nets + optim/scaler/scheduler (real torch objects) ──────────────────────────────
-def make_tiny_arch() -> CnnArch:
-    """The DESIGN §b tiny net: build_net(CnnArch(filters=16, res_blocks=1, ...))."""
-    return CnnArch(board_size=19, in_channels=4, filters=16, res_blocks=1)
+def make_tiny_arch() -> GnnArch:
+    """The DESIGN §b tiny net, graph form: the registered wire dims at toy widths."""
+    spec = lookup(GRAPH_ENCODING)
+    return GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=16, num_layers=1, policy_hidden=16, value_hidden=16)
 
 
 @pytest.fixture
-def tiny_arch() -> CnnArch:
+def tiny_arch() -> GnnArch:
     return make_tiny_arch()
 
 
 @pytest.fixture
-def tiny_net(tiny_arch: CnnArch) -> torch.nn.Module:
+def tiny_net(tiny_arch: GnnArch) -> torch.nn.Module:
     return build_net(tiny_arch)
 
 
@@ -121,25 +122,24 @@ def optim_scaler_sched(tiny_net: torch.nn.Module):
     return make_optim_scaler_sched(tiny_net)
 
 
-# ── full v6_live2_ls net (registry arch) — the strict-load target for legacy / O3b tests ──
+# ── full gnn_axis_v1 net (registry arch) — the strict-load target for legacy / O3b tests ──
 # The bare O3b anchor and the legacy read path resolve arch from the encoding → the FULL
-# registry arch (filters=128, res_blocks=12), NOT a tiny net. Built once per session.
+# registry arch (the incumbent widths), NOT a tiny net. Built once per session.
 @pytest.fixture(scope="session")
-def full_ls_net() -> torch.nn.Module:
-    return build_net(arch_from_spec_and_config(lookup(GRID_ENCODING), {}))
+def full_graph_net() -> torch.nn.Module:
+    return build_net(arch_from_spec_and_config(lookup(GRAPH_ENCODING), {}))
 
 
 @pytest.fixture
-def full_ls_state(full_ls_net: torch.nn.Module) -> dict[str, torch.Tensor]:
-    """A fresh shallow copy of the full v6_live2_ls state dict (147 keys, O3b-clean)."""
-    return dict(full_ls_net.state_dict())
+def full_graph_state(full_graph_net: torch.nn.Module) -> dict[str, torch.Tensor]:
+    """A fresh shallow copy of the full gnn_axis_v1 state dict (O3b-clean)."""
+    return dict(full_graph_net.state_dict())
 
 
 # WP11-A schema extension: eval.gate/eval.ladder are now required fields (design §c.1).
 def _make_eval_block() -> dict[str, Any]:
     return {
-        "random_model_sims": 96, "sealbot_model_sims": 128, "kraken_model_sims": 128,
-        "strix_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "random_model_sims": 96, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
@@ -180,20 +180,15 @@ def _make_train_block(**over: Any) -> dict[str, Any]:
 def _make_selfplay_block(**over: Any) -> dict[str, Any]:
     base = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "c_visit": 50.0,
+        "c_visit": 50.0,
         "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-        "instrumentation_enabled": False,
+        "results_queue_cap": 10_000, "random_opening_plies": 0,
+        "log_investigation_metrics": True,
         "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
         "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
                         "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
     base.update(over)
@@ -202,9 +197,7 @@ def _make_selfplay_block(**over: Any) -> dict[str, Any]:
 
 def _make_inference_block(**over: Any) -> dict[str, Any]:
     base = {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-        "compile_inference": False, "compile_inference_mode": "default",
-        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
         # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
         # exercises a split; the R119 `null` placeholder is pinned by
@@ -249,15 +242,13 @@ def _make_monitor_block(**over: Any) -> dict[str, Any]:
 
 
 # ── schema-valid / invalid config snapshots (validated against config-schema v1 on write) ─
-def make_run_config(encoding: str = GRID_ENCODING, representation: str = "grid",
+def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph",
                     run_id: str = "run5") -> dict[str, Any]:
     """A complete, schema-v1-valid RunConfig dict (the envelope `config` snapshot).
 
     ARCH-SCOPED BLOCKS ARE DROPPED FOR THE REPRESENTATION THAT DOES NOT HAVE THEM (R322(d)).
-    The factory's default is `grid`, and its `train` block is derived from a GRAPH config's
-    dump, so before B2 it produced a grid config carrying two graph-only cap blocks — exactly
-    the shape `RunConfig` now refuses. Driven from `ARCH_SCOPED_KEYS` rather than by deleting
-    two names, so a third scoped block needs no edit here.
+    Driven from `ARCH_SCOPED_KEYS` rather than by deleting names, so a third scoped block
+    needs no edit here.
     """
     config = {
         "schema_version": 1,
@@ -290,12 +281,9 @@ def make_full_train_hparams(**over: Any):
     from mantis.train.trainer.core import TrainHParams
 
     base = dict(
-        lr=1e-3, weight_decay=1e-4, grad_clip=1.0, fp16=True, lr_schedule="cosine",
-        total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4, min_lr=None,
-        checkpoint_interval=0, policy_prune_frac=0.0,
-        entropy_reg_weight=0.0, aux_opp_reply_weight=0.0, uncertainty_weight=0.0,
-        ownership_weight=0.0, threat_weight=0.0, aux_chain_weight=0.0, ply_index_weight=0.0,
-        threat_pos_weight=1.0, value_target="pure_outcome_z",
+        lr=1e-3, weight_decay=1e-4, grad_clip=1.0, lr_schedule="cosine",
+        total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
+        checkpoint_interval=0, value_target="pure_outcome_z",
         policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
     )
     base.update(over)
@@ -321,7 +309,7 @@ def invalid_config() -> dict[str, Any]:
 
 
 # ── metadata_kwargs (the stamp inputs to save_checkpoint; encoding_name REQUIRED) ─────────
-def make_metadata_kwargs(arch: CnnArch, *, encoding_name: str = GRID_ENCODING,
+def make_metadata_kwargs(arch: GnnArch, *, encoding_name: str = GRAPH_ENCODING,
                          run_id: str = "runa", corpus_sha256: str | None = None
                          ) -> dict[str, Any]:
     """The metadata stamp inputs. `created_utc`/`commit_sha` are stamped ONCE by
@@ -333,7 +321,7 @@ def make_metadata_kwargs(arch: CnnArch, *, encoding_name: str = GRID_ENCODING,
 
 
 @pytest.fixture
-def metadata_kwargs(tiny_arch: CnnArch) -> dict[str, Any]:
+def metadata_kwargs(tiny_arch: GnnArch) -> dict[str, Any]:
     return make_metadata_kwargs(tiny_arch)
 
 

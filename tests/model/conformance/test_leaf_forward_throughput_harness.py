@@ -35,7 +35,7 @@ first self-test asserts a RELATION BETWEEN TWO MEASUREMENTS TAKEN IN THE SAME PR
 host-independent and is not a µs/leaf figure) and the second COUNTS CALLS. The fixed sleep the
 differential uses is an instrument parameter, not a threshold on any subject.
 
-THE GRAVES THIS TIER IS NOT RE-DIGGING (read at HEAD, `docs/registers/falsified.md`): F-21, a
+THE GRAVES THIS TIER IS NOT RE-DIGGING (read at HEAD, `docs/governance/falsified.md`): F-21, a
 sibling-project CUDA-kernel borrow, falsified and red-teamed, whose stated fallback order is
 torch.compile → smaller net → quantized eval; F-17/F-18/F-19, bench-falsified legal-move-set
 perf ideas, with F-19's build-once-per-leaf corollary as standing doctrine; F-01, static probes
@@ -542,14 +542,9 @@ def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
 _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
     {
         ("test_leaf_forward_throughput_harness.py", "test_leaf_forward_throughput_ladder"),
-        (
-            "test_legal_move_coverage_boundary.py",
-            "test_report_the_uncovered_legal_move_distribution_per_grid_encoding",
-        ),
-        (
-            "test_construction_path_determinism_centroid_branch.py",
-            "test_report_construction_path_disagreement_over_the_spread_partition",
-        ),
+        # `test_legal_move_coverage_boundary.py`'s uncovered-legal-move report and
+        # `test_construction_path_determinism_centroid_branch.py` (the whole module) went with
+        # the K-cluster window at R346(f); both were dense-arm measurements.
         (
             "test_window_frame_midpoint_translation_boundary.py",
             "test_report_the_graph_node_feature_translation_residual",

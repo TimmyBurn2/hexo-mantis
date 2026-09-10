@@ -1,10 +1,11 @@
 //! R344(a) — the replay rings' sampler is reproducible from a declared seed.
 //!
-//! Both rings seed their `StdRng` from OS entropy at construction, so two launches of the
+//! The HEXG ring seeds its `StdRng` from OS entropy at construction, so two launches of the
 //! same config never drew the same batch sequence and no Python-side `seed_everything` could
 //! reach the field. `seed_sampler` is the one way to declare a stream. What it does NOT buy
 //! is stop/resume continuity — `CARD-RING-SAMPLER-SEED` records why that is refused rather
 //! than deferred — so the tests below assert run-to-run reproducibility and nothing wider.
+//! The dense ring carried the identical contract and its arm went with it at R346(f).
 //!
 //! THE CONTROL IS THE POINT. Asserting "same seed, same indices" alone would pass on a ring
 //! whose sampler ignored the seed entirely and happened to be deterministic. Each arm
@@ -13,8 +14,6 @@
 //! still entropy-seeded and this method is not decorative.
 
 use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer};
-use mantis_selfplay::replay::push_config::PushSingleConfig;
-use mantis_selfplay::replay::ReplayBuffer;
 
 const CAP: usize = 256;
 const VISIT_CAP: usize = 128;
@@ -84,61 +83,5 @@ fn two_unseeded_graph_rings_disagree_so_construction_is_still_entropy_seeded() {
         graph_draw(&mut a, None),
         graph_draw(&mut b, None),
         "two freshly-constructed rings agreed on a {BATCH}-wide draw"
-    );
-}
-
-#[test]
-fn the_dense_ring_carries_the_same_contract() {
-    // Read through the PUBLIC `sample_batch_core` rather than the crate-private index draw:
-    // widening a production surface so a test can see it is how a test starts constraining
-    // the thing it was meant to observe. Every record carries a UNIQUE outcome, so the
-    // returned `outcomes` vector IS the draw sequence, one f32 per slot.
-    let mut buf = ReplayBuffer::new(CAP, "v6").expect("dense ring constructs");
-    let spec = buf.encoding;
-    let state = vec![0u16; spec.state_stride()];
-    let chain = vec![0u16; spec.chain_stride()];
-    let mut policy = vec![0.0f32; spec.policy_stride()];
-    policy[0] = 1.0; // a real distribution: a zero policy row is a refusable target
-    let ownership = vec![1u8; spec.aux_stride()];
-    let winning_line = vec![0u8; spec.aux_stride()];
-    let state_f16: Vec<half::f16> = state.iter().map(|b| half::f16::from_bits(*b)).collect();
-    let chain_f16: Vec<half::f16> = chain.iter().map(|b| half::f16::from_bits(*b)).collect();
-    for i in 0..N_RECORDS {
-        buf.push_impl(PushSingleConfig {
-            state: &state_f16,
-            chain_planes: &chain_f16,
-            policy: &policy,
-            outcome: -1.0 + 2.0 * (i as f32) / (N_RECORDS as f32 - 1.0),
-            ownership: &ownership,
-            winning_line: &winning_line,
-            game_id: (10 + i) as i64,
-            game_length: 40,
-            is_full_search: true,
-            position_index: (i % 50) as u16,
-            value_target_valid: true,
-        })
-        .expect("dense push");
-    }
-
-    buf.seed_sampler(0xD1CE_0000_0000_0001);
-    let first = buf
-        .sample_batch_core(BATCH, false)
-        .expect("sample")
-        .outcomes;
-    buf.seed_sampler(0xD1CE_0000_0000_0001);
-    let again = buf
-        .sample_batch_core(BATCH, false)
-        .expect("sample")
-        .outcomes;
-    assert_eq!(first, again, "same seed, same dense draw");
-
-    buf.seed_sampler(0xD1CE_0000_0000_0002);
-    let other = buf
-        .sample_batch_core(BATCH, false)
-        .expect("sample")
-        .outcomes;
-    assert_ne!(
-        first, other,
-        "a different seed must produce a different dense draw"
     );
 }

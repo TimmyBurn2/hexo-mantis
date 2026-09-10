@@ -66,13 +66,13 @@ def _spec(tmp_path: Path, enc_name: str) -> RoundSpec:
         )
     ]
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         round_index=0, round_id=f"guard_order_{enc_name}", step=1,
         candidate_snapshot=str(tmp_path / "candidate.pt"),
         best_snapshot=str(tmp_path / "best.pt"), best_step=None,
         encoding=enc_name, worker_device="cpu", gate=gate, rung_jobs=rung_jobs,
         random_floor_games=0, random_model_sims=2, sealbot_model_sims=2,
-        kraken_model_sims=2, strix_model_sims=2, seed_base=_SEED,
+        seed_base=_SEED,
         round_timeout_sec=600.0, result_path=str(tmp_path / "result.json"),
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
@@ -106,12 +106,17 @@ def test_the_refusal_happens_before_any_snapshot_is_loaded(
     non-empty — both assertions fail. GREEN as shipped.
     """
     reached = _explode_on_load(monkeypatch)
+    # NO REGISTERED ENCODING declares an unimplemented pool since R346(f) took the grid rows,
+    # so the refusable input is made by NARROWING the capability constant rather than by
+    # naming an encoding. The guard, the spec and the ordering under test are all the real
+    # ones; only the set of pools the decode claims to implement is moved.
+    monkeypatch.setattr(worker, "_DECODE_IMPLEMENTED_POLICY_POOLS", frozenset())
 
     with pytest.raises(EvalDecodeUnsupportedError) as excinfo:
-        worker.run_round(_spec(tmp_path, "v6_live2_ls"))
+        worker.run_round(_spec(tmp_path, "gnn_axis_v1"))
 
     assert type(excinfo.value) is EvalDecodeUnsupportedError
-    assert "legal_set_scatter_max" in str(excinfo.value)
+    assert "policy_pool" in str(excinfo.value)
     assert reached == [], (
         f"the guard refused only AFTER loading {reached}: a round whose encoding this "
         f"decode cannot honour must cost zero checkpoint deserialisations, on the "
@@ -122,13 +127,14 @@ def test_the_refusal_happens_before_any_snapshot_is_loaded(
 def test_an_admitted_encoding_does_reach_the_loader(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Control: the SAME recorder is reached for `v6`, so the arm above is not vacuous.
+    """Control: the SAME recorder is reached for an ADMITTED encoding, so the arm above is
+    not vacuous.
 
     Without this, "the loader was never called" would also be satisfied by a `run_round`
     that could not reach the loader at all, or by a patch that never took effect.
     """
     reached = _explode_on_load(monkeypatch)
-    spec = _spec(tmp_path, "v6")
+    spec = _spec(tmp_path, "gnn_axis_v1")
 
     with pytest.raises(_LoaderReached):
         worker.run_round(spec)

@@ -37,18 +37,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import numpy as np
 import torch
 
 # Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
-from torch.amp.autocast_mode import autocast
-
 from mantis._engine import Board
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.encoding import EncodingSpec
-from mantis.env.game_state import GameState
-from mantis.model.amp import amp_dtype_for
 from mantis.selfplay.hparams import is_graph_representation
 
 
@@ -111,7 +106,6 @@ class LocalInferenceEngine:
         fused_graph_caps: FusedGraphCapsSpec | None,
         inference_batching: InferenceBatchingSpec | None,
         max_in_flight: int,
-        amp_dtype: str,
         collate_check_period: int | None = None,
         collate_dump: tuple[str, Callable[[], dict[str, Any]]] | None = None,
         leaf_build_threads: int = 1,
@@ -126,12 +120,6 @@ class LocalInferenceEngine:
         # value-identical on every reachable input — and a genuine model/spec
         # disagreement now fails loudly instead of silently decoding down the other arm.
         self._is_graph = is_graph_representation(self.encoding_spec)
-        # AUDIT-1 F-31. The DENSE decodes below autocast, and carried no `dtype=` at all — so
-        # they ran at torch's device default while `train.amp_dtype` said something else, on
-        # the path LAW-15 reads the promotion bar off. Resolved ONCE here through the one
-        # authority (`amp_dtype_for`, LAW-06) and applied at both call sites. REQUIRED and
-        # keyword-only, with no default: a default is the second authority this row removes.
-        self._amp_dtype = amp_dtype_for(str(self.encoding_spec.representation), amp_dtype)
         # NIGHTRUN-1 E1. `1` is the SERIAL path and the exact-parity control — the same
         # identity default `HexgBuffer.sample_graph_batch`'s `n_threads` carries, and for the
         # same reason: this layer must not invent a host reservation. The EVAL round derives
@@ -139,7 +127,7 @@ class LocalInferenceEngine:
         # keeps the serial width, because each worker is already one of `n_workers` threads
         # and widening one worker's build takes threads from the others.
         self._leaf_build_threads = max(1, int(leaf_build_threads))
-        # R339(c). DEFAULTED, unlike `leaf_batch_size` and `amp_dtype` two lines up, and the
+        # R339(c). DEFAULTED, unlike `leaf_batch_size` one line up, and the
         # difference is worth stating because those two carry the opposite rule. A wrong value
         # on THOSE axes silently changes what the run measures; the worst a defaulted value
         # does HERE is run the check at the rate every path already ran it at. `None` names
@@ -181,18 +169,7 @@ class LocalInferenceEngine:
                     # `fused_graph_caps` note below makes, on the batching geometry.
                     "inference_batch_size": inference_batching.inference_batch_size,
                     "inference_max_wait_ms": inference_batching.inference_max_wait_ms,
-                    "trace_inference": True, "compile_inference": False,
-                    "compile_inference_mode": "default", "compile_inference_dynamic": True,
-                    "perf_timing": False, "perf_sync_cuda": False,
-                # WPSC Phase 3 SC-B3: InferenceServer hard-reads config["train"]
-                # ["amp_dtype"] unconditionally (R30b, no fallback) — inert here (this
-                # branch is always graph, LAW-06 bf16-pinned regardless of the value).
-                # THREADED, for the same reason the two knobs above are: the server hard-reads
-                # this key (R30b, no fallback), and a literal here is a second dtype authority
-                # on the one construction path with no config to be the first (AUDIT-1 F-31).
-                # Inert in EFFECT on this branch — it is always graph, LAW-06 bf16-pinned —
-                # and threading it is what keeps it inert by CONSTRUCTION rather than by luck.
-                }, "train": {"amp_dtype": amp_dtype}},
+                }},
                 batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
                 # F-816-10 D-1: THREADED, never hardcoded. This dict literal has no
                 # `fused_graph_caps` key and must not grow one — a cap written here would be a
@@ -250,87 +227,7 @@ class LocalInferenceEngine:
         if not boards:
             return [], []
 
-        if self._is_graph:
-            return self._infer_batch_graph(boards)
-
-        spec = self.encoding_spec
-        board_size = spec.board_size
-        n_actions = spec.policy_logit_count
-        half = (board_size - 1) // 2
-
-        all_tensors = []
-        board_info: list[tuple[int, list[tuple[int, int]]]] = []
-
-        for board in boards:
-            state = GameState.from_board(board)
-            tensor, centers = state.to_tensor()
-            if tensor.shape[1] != spec.n_planes:
-                # Slice the full wire tensor to THIS encoding's kept planes. The plane
-                # count comes from the bound spec, never from a module attribute: a
-                # module-level constant here would be pinned to one encoding and would
-                # feed the wrong plane count into any other.
-                tensor = tensor[:, list(spec.kept_plane_indices)]
-            all_tensors.append(torch.from_numpy(tensor))
-            board_info.append((len(centers), centers))
-
-        # Single batched forward pass over all clusters from all boards.
-        batch_tensor = torch.cat(all_tensors, dim=0).to(self.device)
-
-        self.model.eval()
-        with autocast(
-            device_type=self.device.type,
-            # AUDIT-1 F-31. This carried NO `dtype=`, so the DENSE eval/arena forward ran at
-            # torch's device default regardless of the run's declared `train.amp_dtype` — on
-            # the one path LAW-15 reads a deploy-matched promotion bar off. `amp_dtype_for` is
-            # the ONE authority (LAW-06); the value is threaded from the round spec, never
-            # named here.
-            dtype=self._amp_dtype,
-            enabled=(self.device.type in ("cuda", "mps")),
-        ):
-            log_policy, value, _v_logit = self.model(batch_tensor.float())
-
-        policies_np = log_policy.exp().cpu().float().numpy()  # (TotalK, n_actions)
-        values_np = value.squeeze(-1).cpu().float().numpy()  # (TotalK,)
-
-        results_p: list[list[float]] = []
-        results_v: list[float] = []
-
-        cursor = 0
-        for i, board in enumerate(boards):
-            k, centers = board_info[i]
-            board_policies = policies_np[cursor:cursor + k]
-            board_values = values_np[cursor:cursor + k]
-            cursor += k
-
-            # Min-pool over clusters: treat the worst window as the board value.
-            v = float(board_values.min())
-
-            # Map each legal move to the highest probability across all windows.
-            global_policy = np.zeros(n_actions, dtype=np.float64)
-            for q, r in board.legal_moves():
-                mcts_idx = board.to_flat(q, r)
-                if mcts_idx >= n_actions - 1:
-                    continue
-                max_prob = 0.0
-                for k_idx, (cq, cr) in enumerate(centers):
-                    wq = q - cq + half
-                    wr = r - cr + half
-                    if 0 <= wq < board_size and 0 <= wr < board_size:
-                        local_idx = wq * board_size + wr
-                        if board_policies[k_idx, local_idx] > max_prob:
-                            max_prob = board_policies[k_idx, local_idx]
-                global_policy[mcts_idx] = max_prob
-
-            total = global_policy.sum()
-            if total > 1e-9:
-                global_policy /= total
-            else:
-                global_policy.fill(1.0 / n_actions)
-
-            results_p.append(global_policy.tolist())
-            results_v.append(v)
-
-        return results_p, results_v
+        return self._infer_batch_graph(boards)
 
     def _infer_batch_graph(
         self, boards: list[Board]
@@ -350,7 +247,7 @@ class LocalInferenceEngine:
         continue`). This is the existing `infer_batch` contract, not a new approximation.
 
         NO PRODUCTION CONSUMER REACHES THIS METHOD (ADJ-WP12R-12, RED-TEAM F-RT-7).
-        Production callers of `infer_batch`/`infer` reach it through `SelfPlayWorker`, which
+        Production callers of `infer_batch`/`infer` reach it through the eval deploy head, which
         refuses a graph encoding outright, and the eval worker's graph
         arm goes through `infer_batch_ls` instead. The method is retained, not deleted,
         because `tests/selfplay/test_selfplay_census.py:114` pins it as a censused site and
@@ -422,21 +319,7 @@ class LocalInferenceEngine:
             values:   scalar value per board.
             centers:  the builder's `(cq, cr)` window centre per board.
 
-        Raises:
-            NotImplementedError: the bound spec is grid-representation. There is no grid
-                analogue of this decode — the grid no-drop decode is
-                `infer_batch_per_cluster`, whose per-cluster overflow the Rust
-                `expand_and_backup_ls` aggregates instead. Die loud here rather than an
-                `AttributeError` two lines down.
         """
-        if not self._is_graph:
-            raise NotImplementedError(
-                "infer_batch_ls: the graph legal-set/no-drop decode has no grid analogue "
-                f"— encoding {self.encoding_spec.name!r} declares "
-                f"representation={self.encoding_spec.representation!r}. The grid no-drop "
-                "decode is infer_batch_per_cluster (aggregated by the Rust "
-                "expand_and_backup_ls); the dropping grid decode is infer_batch."
-            )
         if not boards:
             return [], [], [], []
 
@@ -457,78 +340,3 @@ class LocalInferenceEngine:
         values = [float(v) for _dense, _overflow, v, _center in results]
         centers = [(int(c[0]), int(c[1])) for _dense, _overflow, _value, c in results]
         return dense, overflow, values, centers
-
-    @torch.inference_mode()
-    def infer_batch_per_cluster(
-        self, boards: list[Board]
-    ) -> tuple[list[list[float]], list[float], list[int]]:
-        """RAW per-cluster policy/value vectors for the Rust legal-set expand path.
-
-        Unlike `infer_batch` (which scatter-max collapses K clusters into ONE dense global
-        vector AND DROPS off-window moves where `mcts_idx >= n_actions-1`), this returns
-        the per-cluster outputs RAW — NO scatter-max, NO drop, NO min-pool. The Rust
-        legal-set expand does the aggregation and value min-pool so the deploy head pools
-        BYTE-IDENTICALLY to the self-play worker, retaining off-window cells covered by
-        some cluster.
-
-        Center order: `GameState.from_board` reads the board's cluster views and the Rust
-        expand RECOMPUTES centers from the same call on the pending board — so the
-        per-cluster rows align by construction.
-
-        Returns:
-            policies: FLAT list of per-cluster prob vectors (length
-                      `spec.policy_logit_count` each), leaf-major then cluster order.
-            values:   FLAT list of per-cluster scalar values, same order.
-            leaf_k:   K (cluster count) per board, aligned with `boards`.
-
-        Raises:
-            NotImplementedError: the model is graph-representation. THIS per-cluster decode
-                has no graph analogue (the graph net is whole-board, no K-cluster); the
-                graph no-drop decode is `infer_batch_ls`. Die loud here instead of an
-                `AttributeError` two lines down.
-        """
-        if not boards:
-            return [], [], []
-        if self._is_graph:
-            raise NotImplementedError(
-                "infer_batch_per_cluster: this RAW per-cluster decode has no graph "
-                "analogue — the graph net is whole-board (no K-cluster). The graph "
-                "legal-set/no-drop decode is infer_batch_ls."
-            )
-
-        spec = self.encoding_spec
-
-        all_tensors = []
-        leaf_k: list[int] = []
-        for board in boards:
-            state = GameState.from_board(board)
-            tensor, centers = state.to_tensor()
-            if tensor.shape[1] != spec.n_planes:
-                tensor = tensor[:, list(spec.kept_plane_indices)]
-            all_tensors.append(torch.from_numpy(tensor))
-            leaf_k.append(len(centers))
-
-        batch_tensor = torch.cat(all_tensors, dim=0).to(self.device)
-
-        self.model.eval()
-        with autocast(
-            device_type=self.device.type,
-            # AUDIT-1 F-31. This carried NO `dtype=`, so the DENSE eval/arena forward ran at
-            # torch's device default regardless of the run's declared `train.amp_dtype` — on
-            # the one path LAW-15 reads a deploy-matched promotion bar off. `amp_dtype_for` is
-            # the ONE authority (LAW-06); the value is threaded from the round spec, never
-            # named here.
-            dtype=self._amp_dtype,
-            enabled=(self.device.type in ("cuda", "mps")),
-        ):
-            log_policy, value, _v_logit = self.model(batch_tensor.float())
-
-        policies_np = log_policy.exp().cpu().float().numpy()  # (TotalK, n_actions)
-        values_np = value.squeeze(-1).cpu().float().numpy()  # (TotalK,)
-
-        policies = [policies_np[i].tolist() for i in range(policies_np.shape[0])]
-        values = [float(v) for v in values_np]
-        return policies, values, leaf_k
-
-
-__all__ = ["LocalInferenceEngine"]

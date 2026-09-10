@@ -63,7 +63,7 @@ from mantis.train.lifecycle.heartbeat_watchdog import (
     MonitorSample,
 )
 
-_PRODUCTION = "configs/run5.yaml"
+_PRODUCTION = "configs/run6.yaml"
 
 
 class _Sink:

@@ -21,8 +21,8 @@ VALID_MCTS: dict = {
 }
 VALID_PLAYOUT_CAP: dict = {
     "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": False, "zoi_lookback": 16,
-    "zoi_margin": 5, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+    "n_sims_quick": 0, "n_sims_full": 0,
+    "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 MCTS_FIELDS = sorted(VALID_MCTS)
 PLAYOUT_CAP_FIELDS = sorted(VALID_PLAYOUT_CAP)
@@ -35,7 +35,7 @@ MCTS_BOUND_VIOLATIONS: list[tuple[str, object]] = [
 PLAYOUT_CAP_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("fast_sims", 0), ("fast_prob", 1.1), ("fast_prob", -0.1), ("standard_sims", -1),
     ("full_search_prob", 1.1), ("n_sims_quick", -1), ("n_sims_full", -1),
-    ("zoi_lookback", -1), ("zoi_margin", -1), ("temperature_threshold_compound_moves", -1),
+    ("temperature_threshold_compound_moves", -1),
     ("temp_min", -0.1),
 ]
 

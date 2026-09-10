@@ -1,9 +1,9 @@
 """R330(e) — a config-less call site resolves an ARTIFACT's arch from its STAMP, never from a
 config table, and there is ONE function that answers: `stamped_arch_kind`.
 
-THE DEFECT THIS CLOSES, and the planted break that shows the row bites. Before R330(e) the three
-call sites that hold no run config — `load_legacy_weights` (a v1 envelope's embedded config),
-`strip_and_restamp` (passes `{}`) and `pretrain.validate` (passes `{}`) — all called
+THE DEFECT THIS CLOSES, and the planted break that shows the row bites. Before R330(e) the
+call sites that hold no run config — `load_legacy_weights` (a v1 envelope's embedded config)
+and `strip_and_restamp` (passes `{}`) — both called
 `arch_from_spec_and_config`, i.e. resolved the INCUMBENT for the representation. For a V2-stamped
 source, `strip_and_restamp` therefore rebuilt `GnnArch` and re-stamped the stripped artifact as
 V1 — V2's weights under V1's provenance, the class LAW-12 exists for. The strip test below reds
@@ -19,7 +19,7 @@ import torch
 
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
-from mantis.model import CnnArch, GnnArch, GnnArchV2, RepresentationMismatch, build_net, select_arch
+from mantis.model import GnnArch, GnnArchV2, RepresentationMismatch, build_net
 from mantis.train.checkpoints import (
     CheckpointStampError,
     load_checkpoint,
@@ -28,7 +28,6 @@ from mantis.train.checkpoints import (
     stamped_arch_kind,
     strip_and_restamp,
 )
-from mantis.train.pretrain.validate import validate
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS = REPO_ROOT / "configs"
@@ -55,14 +54,14 @@ def test_a_v2_stamp_names_its_kind_and_a_pre_discriminator_stamp_is_the_incumben
     assert stamped_arch_kind({"arch": {"arch_kind": "GnnArch"}}, representation="graph") == "GnnArch"
     # a v2 stamp from before B1's discriminator, a v1 envelope, a bare anchor: no arch_kind
     assert stamped_arch_kind({"arch": {"representation": "graph"}}, representation="graph") == "GnnArch"
-    assert stamped_arch_kind({"encoding_name": "v6_live2_ls"}, representation="grid") == "CnnArch"
-    assert stamped_arch_kind(None, representation="grid") == "CnnArch"
+    assert stamped_arch_kind({"encoding_name": "gnn_axis_v1"}, representation="graph") == "GnnArch"
+    assert stamped_arch_kind(None, representation="graph") == "GnnArch"
 
 
 def test_an_unknown_stamped_kind_or_representation_is_refused_not_nearest_fitted():
     with pytest.raises(RepresentationMismatch, match="does not know"):
         stamped_arch_kind({"arch": {"arch_kind": "GnnArchV9"}}, representation="graph")
-    with pytest.raises(RepresentationMismatch, match="expected 'grid' or 'graph'"):
+    with pytest.raises(RepresentationMismatch, match="expected 'graph'"):
         stamped_arch_kind({}, representation="dense")
 
 
@@ -116,22 +115,3 @@ def test_a_legacy_envelope_whose_embedded_row_contradicts_its_stamp_is_refused(t
     config["identity"]["arch_kind"] = "GnnArchV2"
     with pytest.raises(CheckpointStampError, match="identity.arch_kind='GnnArchV2'"):
         load_legacy_weights(_legacy_envelope(tmp_path, config))
-
-
-# ── pretrain.validate: the third config-less site ─────────────────────────────────────────
-def _pretrain_payload(tmp_path: Path, metadata: dict) -> Path:
-    spec = lookup("v6_live2_ls")
-    cfg = {"encoding": "v6_live2_ls", "filters": 8, "res_blocks": 1}
-    arch = select_arch(spec, cfg, arch_kind="CnnArch")
-    assert isinstance(arch, CnnArch)
-    net = build_net(arch)
-    path = tmp_path / "pretrain_00000010.pt"
-    torch.save({"step": -10, "model_state": net.state_dict(), "config": cfg, "metadata": metadata}, path)
-    return path
-
-
-def test_the_pretrain_validator_reads_the_artifacts_stamp(tmp_path):
-    validate(_pretrain_payload(tmp_path, {"encoding_name": "v6_live2_ls"}), torch.device("cpu"))
-    with pytest.raises(RepresentationMismatch, match="does not know"):
-        validate(_pretrain_payload(tmp_path, {"encoding_name": "v6_live2_ls",
-                                              "arch": {"arch_kind": "Bogus"}}), torch.device("cpu"))

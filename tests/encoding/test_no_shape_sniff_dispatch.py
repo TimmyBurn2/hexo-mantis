@@ -125,5 +125,5 @@ def test_a_stamped_checkpoint_still_resolves(tmp_path: Path) -> None:
     from mantis.encoding import resolve_from_checkpoint
 
     path = tmp_path / "stamped.pt"
-    torch.save({"model_state": {}, "metadata": {"encoding_name": "v6_live2_ls"}}, path)
-    assert resolve_from_checkpoint(path).name == "v6_live2_ls"
+    torch.save({"model_state": {}, "metadata": {"encoding_name": "gnn_axis_r8"}}, path)
+    assert resolve_from_checkpoint(path).name == "gnn_axis_r8"

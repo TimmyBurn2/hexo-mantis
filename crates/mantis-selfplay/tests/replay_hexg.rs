@@ -23,7 +23,6 @@ use mantis_selfplay::replay::hexg::{
 /// constructed with it EXPLICITLY — a test geometry choice, not a shipped tunable).
 const VISIT_CAP: usize = 128;
 use mantis_selfplay::replay::sym::rotate_axial;
-use mantis_selfplay::replay::ReplayBuffer;
 
 const ENC: &str = "gnn_axis_v1";
 
@@ -395,30 +394,25 @@ fn load_rejects_dense_hexb_magic() {
     let _ = std::fs::remove_file(path);
 }
 
-#[test]
-fn dense_loader_rejects_hexg_file() {
-    let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
-    buf.push_record_impl(&sample_record(), 0).unwrap();
-    let path = unique_path("hexg_into_dense");
-    buf.save_to_path_impl(path.to_str().unwrap()).unwrap();
+// O-16's other direction (a HEXG file offered to the dense HEXB loader) went with that
+// loader at R346(f). The HEXB magic pin above is what remains of the pair, and it is the
+// half that still guards a live reader.
 
-    let mut dense = ReplayBuffer::new(4, "v6")
-        .expect("ReplayBuffer::new: a registered encoding and a storable capacity");
-    let err = dense.load_from_path(path.to_str().unwrap()).unwrap_err();
-    assert!(
-        err.contains("magic") || err.contains("Invalid") || err.contains("invalid"),
-        "HEXG → dense HEXB load must reject on magic: {err}"
-    );
-    let _ = std::fs::remove_file(path);
-}
-
-// ── O-23: grid encoding refused at construction ──────────────────────────────────
+// ── O-23: a grid encoding name is refused at construction ────────────────────────
 
 #[test]
 fn grid_encoding_rejected_at_construction() {
+    // Before R346(f) `"v6"` was a REGISTERED grid row and this asserted that HexgBuffer
+    // refused it by representation. The row is deleted, so the refusal now comes from the
+    // registry — which is the stronger of the two, and the assertion on the message is what
+    // keeps this from passing as a bare typo check: a resurrected grid row would have to get
+    // past the registry's own `representation="grid"` refusal first.
+    let err = HexgBuffer::new(4, "v6", 128)
+        .err()
+        .expect("a grid encoding name must be refused");
     assert!(
-        HexgBuffer::new(4, "v6", 128).is_err(),
-        "a grid encoding must be refused"
+        err.contains("v6") && err.contains("gnn_axis_v1"),
+        "the refusal must name the offered encoding and the registered set: {err}"
     );
 }
 

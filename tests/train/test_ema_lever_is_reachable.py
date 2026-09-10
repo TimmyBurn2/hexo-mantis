@@ -34,7 +34,11 @@ _CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
 
 def test_there_are_configs_to_check() -> None:
     """Vacuity guard — an empty glob would make every row below pass on nothing."""
-    assert len(_CONFIGS) >= 5, f"only {len(_CONFIGS)} config(s) found"
+    assert len(_CONFIGS) >= 3, (
+        f"only {len(_CONFIGS)} config(s) found — R346(f) left run6, the armed smoke profile "
+        "and dev_example, so three is the floor and an empty glob is still the defect this "
+        "row exists for"
+    )
 
 
 @pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: p.name)
@@ -99,7 +103,7 @@ def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
     from mantis.model import build_net, select_arch
     from mantis.train.ema import build_ema_model
 
-    arch = select_arch(lookup("v6_live2_ls"), {}, arch_kind="CnnArch")
+    arch = select_arch(lookup("gnn_axis_v1"), {}, arch_kind="GnnArch")
     net = build_net(arch)
     enabled, decay, _every = resolve_ema_config(
         {"train": {"ema": {"enabled": True, "decay": 0.5, "update_every": 1}}},

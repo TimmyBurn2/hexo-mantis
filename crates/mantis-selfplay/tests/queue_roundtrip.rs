@@ -1,15 +1,17 @@
-//! R8-justify: the P-07/P-08 queue round-trip pair (dense + graph) and the disjoint-pool invariant that binds them share one mock-producer scaffold; the graph leg's D6 reason-travels arms are the bulk of the overage.
-//! P-07 / P-08 — mock-game queue round-trips (dense + graph), pyo3-free.
+//! R8-justify: the P-08 graph queue round-trip and its Q-FIND-1 batch-submit arms share one
+//! mock-producer scaffold; the D6 reason-travels arms are the bulk of the overage.
+//! P-08 — mock-game graph queue round-trip, pyo3-free.
 //!
 //! A MOCK producer (D16 surrogate stand-in; the NN + numpy face is WP7) pops the
 //! queue and submits deterministic results; the blocking consumer receives them.
 //! Covers: submit → mock pop → submit results → consumer receives; single-read
-//! (a second submit for the same id is a no-op); over-batch (an extra unknown id
-//! is tolerantly dropped) and underflow (closed queue ⇒ `Err`); the DENSE
-//! skip-on-Err path (reason NOT required, D6); and — for GRAPH — the D6
-//! reason-travels guarantee (inference failure, `fail_remaining`, AND the
-//! build-side reason now travels) with no orphaned waiter, plus the disjoint-pool
-//! invariant (the graph batcher never touches the dense queue).
+//! (a second submit for the same id is a no-op); closed-queue underflow (`Err`);
+//! and the D6 reason-travels guarantee (inference failure, `fail_remaining`, AND
+//! the build-side reason travels) with no orphaned waiter.
+//!
+//! P-07's dense half — and the cross-queue disjointness arm that paired the two pools —
+//! went with `DenseQueue` at R346(f). One pool remains, so there is nothing to be
+//! disjoint from.
 //!
 //! The Q-FIND-1 batch-submit arms ride the SAME mock producer: one
 //! `submit_graphs_and_wait` puts a whole leaf batch in flight, so a single pop
@@ -17,18 +19,13 @@
 //! order survives an out-of-order producer, and neither a rejected graph nor a
 //! mid-batch producer failure can orphan a waiter.
 
-use std::ops::Range;
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
 use fxhash::FxHashMap;
 use mantis_graph::BUILDER_IMPL_NATIVE;
 use mantis_search::LegalSetPolicy;
-use mantis_selfplay::queues::{build_leaf_graph, DenseQueue, GraphQueue};
-
-const FEAT: usize = 8;
-const POLICY_LEN: usize = 4;
+use mantis_selfplay::queues::{build_leaf_graph, GraphQueue};
 
 // ── mock producer helpers ────────────────────────────────────────────────────
 
@@ -36,18 +33,6 @@ const POLICY_LEN: usize = 4;
 // the timeout) until at least one request is enqueued — the drain waits for the
 // consumer to enqueue rather than racing ahead of it. (batch-size 1 ⇒ threshold 0
 // ⇒ non-blocking spin, which would race the consumer's enqueue.)
-
-/// Collect exactly `expected` dense requests, blocking for each item.
-fn drain_dense(q: &DenseQueue, expected: usize) -> Vec<(u64, Vec<f32>)> {
-    let mut got = Vec::new();
-    for _ in 0..400 {
-        got.append(&mut q.pop_batch(2, 50));
-        if got.len() >= expected {
-            break;
-        }
-    }
-    got
-}
 
 fn drain_graph(q: &GraphQueue, expected: usize) -> Vec<(u64, mantis_graph::AxisGraph)> {
     let mut got = Vec::new();
@@ -58,112 +43,6 @@ fn drain_graph(q: &GraphQueue, expected: usize) -> Vec<(u64, mantis_graph::AxisG
         }
     }
     got
-}
-
-/// Deterministic mock dense policy for a request id: `[id, id+1, id+2, id+3]`.
-fn mock_policy(id: u64) -> Vec<f32> {
-    (0..POLICY_LEN).map(|k| id as f32 + k as f32).collect()
-}
-fn mock_value(id: u64) -> f32 {
-    id as f32 * 0.5
-}
-
-// ── P-07 dense round-trip ─────────────────────────────────────────────────────
-
-#[test]
-fn dense_round_trip_two_requests() {
-    let q = DenseQueue::new(FEAT);
-    let qc = q.clone();
-    let feats = vec![vec![1.0f32; FEAT], vec![2.0f32; FEAT]];
-    let handle = thread::spawn(move || qc.submit_batch_and_wait(feats));
-
-    let popped = drain_dense(&q, 2);
-    assert_eq!(popped.len(), 2, "producer popped both requests");
-
-    // mock inference: one shared Arc buffer + per-id ranges (§P74 share).
-    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
-    let mut flat = Vec::new();
-    for &id in &ids {
-        flat.extend(mock_policy(id));
-    }
-    let arc = Arc::new(flat);
-    let ranges: Vec<Range<usize>> = (0..ids.len())
-        .map(|i| i * POLICY_LEN..(i + 1) * POLICY_LEN)
-        .collect();
-    let values: Vec<f32> = ids.iter().map(|&id| mock_value(id)).collect();
-    q.submit_results(&ids, &arc, &ranges, &values);
-
-    let out = handle.join().unwrap().expect("dense round-trip ok");
-    assert_eq!(out.len(), 2);
-    // key each output back to its id via policy[0] (== id) — robust to ordering.
-    for (policy, value) in out {
-        let id = policy[0] as u64;
-        assert_eq!(policy, mock_policy(id), "policy for id {id}");
-        assert!((value - mock_value(id)).abs() < 1e-6, "value for id {id}");
-    }
-
-    // Single-read: a second submit for the same ids is a no-op (waiters removed) —
-    // no panic, nothing to deliver.
-    q.submit_results(&ids, &arc, &ranges, &values);
-}
-
-#[test]
-fn dense_over_batch_drops_unknown_id() {
-    let q = DenseQueue::new(FEAT);
-    let qc = q.clone();
-    let handle = thread::spawn(move || qc.submit_batch_and_wait(vec![vec![3.0f32; FEAT]]));
-    let popped = drain_dense(&q, 1);
-    assert_eq!(popped.len(), 1);
-    let real = popped[0].0;
-
-    // Over-batch: submit results for the real id PLUS an unknown id 9999.
-    let ids = vec![real, 9999u64];
-    let mut flat = Vec::new();
-    flat.extend(mock_policy(real));
-    flat.extend(mock_policy(9999));
-    let arc = Arc::new(flat);
-    let ranges = vec![0..POLICY_LEN, POLICY_LEN..2 * POLICY_LEN];
-    let values = vec![mock_value(real), mock_value(9999)];
-    q.submit_results(&ids, &arc, &ranges, &values); // 9999 has no waiter ⇒ dropped
-
-    let out = handle.join().unwrap().expect("real request resolved");
-    assert_eq!(out.len(), 1);
-    assert_eq!(out[0].0, mock_policy(real));
-}
-
-#[test]
-fn dense_underflow_and_length_mismatch_are_loud() {
-    let q = DenseQueue::new(FEAT);
-    // length-mismatch ⇒ Err(()).
-    assert!(q.submit_batch_and_wait(vec![vec![0.0f32; FEAT + 1]]).is_err());
-    // close ⇒ underflow: submit returns Err, and pop of the closed empty queue is empty.
-    q.close();
-    assert!(q.is_closed());
-    assert!(q.submit_batch_and_wait(vec![vec![0.0f32; FEAT]]).is_err());
-    assert!(q.pop_batch(64, 10).is_empty(), "pop of closed empty queue is empty");
-}
-
-#[test]
-fn dense_close_wakes_blocked_waiter() {
-    let q = DenseQueue::new(FEAT);
-    let qc = q.clone();
-    let handle = thread::spawn(move || qc.submit_batch_and_wait(vec![vec![0.0f32; FEAT]]));
-    // ensure the request is enqueued (waiter blocked) before closing.
-    let _ = drain_dense(&q, 1);
-    q.close();
-    assert!(handle.join().unwrap().is_err(), "closed-while-waiting ⇒ Err(())");
-}
-
-#[test]
-fn dense_submit_failure_makes_consumer_skip() {
-    // D6: the dense reason is NOT consumed — the consumer just gets Err(()).
-    let q = DenseQueue::new(FEAT);
-    let qc = q.clone();
-    let handle = thread::spawn(move || qc.submit_batch_and_wait(vec![vec![5.0f32; FEAT]]));
-    let popped = drain_dense(&q, 1);
-    let ids: Vec<u64> = popped.iter().map(|(id, _)| *id).collect();
-    q.submit_failure(&ids, "mock inference boom");
-    assert!(handle.join().unwrap().is_err(), "submit-Err ⇒ worker skips batch");
 }
 
 // ── P-08 graph round-trip + reason-travels ────────────────────────────────────
@@ -554,18 +433,7 @@ fn a_mid_batch_producer_failure_wakes_every_waiter_with_the_reason() {
     }
 }
 
-// ── cross-queue disjointness + F-19 build-once structural note ────────────────
-
-#[test]
-fn graph_and_dense_queues_are_disjoint() {
-    // Closing the graph queue must NOT close the dense queue (old :1415 — the
-    // graph batcher never touches the dense pool).
-    let dense = DenseQueue::new(FEAT);
-    let graph = GraphQueue::new();
-    graph.close();
-    assert!(graph.is_closed());
-    assert!(!dense.is_closed(), "dense pool untouched by the graph batcher");
-}
+// ── F-19 build-once structural note ───────────────────────────────────────────
 
 #[test]
 fn build_leaf_graph_is_one_native_build_per_leaf() {

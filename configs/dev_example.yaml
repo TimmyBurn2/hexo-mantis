@@ -16,12 +16,8 @@ search:
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128
-  kraken_model_sims: 128
-  strix_model_sims: 128
   random_floor_games: 4
   worker_device: cuda
-  round_timeout_sec: 3600.0
-  worker_kill_grace_sec: 10.0
   ply_cap_adjudication: null
   strength_floor: null
   gate:
@@ -45,46 +41,6 @@ eval:
       opening_book: book_v1_s20260625_p4
       deploy_matched: true
       games_max: 32
-    - name: kraken_raw
-      bot: kraken
-      variant: raw
-      depth: null
-      opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: sealbot_d6
-      bot: sealbot
-      variant: d6
-      depth: 6
-      opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: kraken_mcts200
-      bot: kraken
-      variant: mcts200
-      depth: null
-      opponent_sims: 200
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: strix_128
-      bot: strix
-      variant: s128
-      depth: null
-      opponent_sims: 128
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: strix_256
-      bot: strix
-      variant: s256
-      depth: null
-      opponent_sims: 256
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
     round_games: 64
     min_games_per_active_rung: 4
     graduation_wr_lower_ci: 0.75
@@ -100,14 +56,11 @@ train:
   lr: 0.001
   weight_decay: 0.0001
   grad_clip: 1.0
-  fp16: true
-  amp_dtype: fp16
   device: cuda
   lr_schedule: cosine
   total_steps: 1000000
   scheduler_t_max: null
   eta_min: 0.0005
-  min_lr: null
   checkpoint_interval: 0
   actor_sync_cadence_steps: 1
   ema:
@@ -129,52 +82,23 @@ train:
     max_nodes: 4000000
   augment: false
   recency_weight: 0.0
-  mixing_initial_w: 0.0
-  mixing_min_w: 0.0
-  mixing_decay_steps: 1.0
   hard_gn_threshold: 1000000000.0
   hard_gn_min_steps: 3
   terminal_eval_enabled: true
-  bot_batch_share: 0.0
-  selfplay_stall_timeout_sec: 1800.0
   value_target: pure_outcome_z
   policy_target: raw_visit_distribution
   draw_reward: -0.5
   ply_cap_value: -0.5
-  policy_prune_frac: 0.0
-  entropy_reg_weight: 0.0
-  aux_opp_reply_weight: 0.0
-  uncertainty_weight: 0.0
-  ownership_weight: 0.0
-  threat_weight: 0.0
-  aux_chain_weight: 0.0
-  ply_index_weight: 0.0
-  threat_pos_weight: 1.0
   fast_policy_weight: 0.0
 selfplay:
   n_workers: 14
   leaf_batch_size: 8
   max_game_moves: 128
-  inference_pool_size: null
   c_visit: 50.0
   c_scale: 1.0
   gumbel_m: 16
   gumbel_explore_moves: 10
-  results_queue_cap: 10000
   random_opening_plies: 0
-  rotation_enabled: true
-  forced_win_policy_enabled: false
-  forced_win_policy_depth: 2
-  forced_win_policy_weight: 1.0
-  solver_enabled: false
-  solver_depth: 16
-  solver_node_budget: 50000
-  solver_neighbor_dist: 2
-  solver_visit_weight: 0.3
-  seed_fraction: 0.0
-  seed_corpus_path: null
-  log_investigation_metrics: true
-  instrumentation_enabled: false
   mcts:
     n_simulations: 50
     c_puct: 1.5
@@ -191,20 +115,11 @@ selfplay:
     full_search_prob: 0.0
     n_sims_quick: 0
     n_sims_full: 0
-    zoi_enabled: false
-    zoi_lookback: 16
-    zoi_margin: 5
     temperature_threshold_compound_moves: 0
     temp_min: 0.5
 inference:
   inference_batch_size: 64
   inference_max_wait_ms: 10
-  trace_inference: true
-  compile_inference: false
-  compile_inference_mode: default
-  compile_inference_dynamic: true
-  perf_timing: false
-  perf_sync_cuda: false
   fused_graph_caps:
     max_fused_edges: 57149441
     max_fused_nodes: 1785921
@@ -225,26 +140,6 @@ monitor:
   wr_early_death_min_step: 15000
   axis_warn: 0.45
   axis_alert: 0.5
-  heartbeat_deadline_train_step_sec: 1800.0
-  heartbeat_deadline_inference_dispatch_sec: 1800.0
-  heartbeat_deadline_selfplay_drain_sec: 1800.0
-  heartbeat_deadline_eval_round_sec: 1800.0
-  heartbeat_poll_interval_sec: 5.0
-  heartbeat_file_interval_sec: 15.0
-  heartbeat_close_out_deadline_sec: 14400.0
-  heartbeat_fire_effect_timeout_sec: 30.0
   actor_lag_threshold_steps: 100
   actor_lag_abort_enabled: false
-  supervisor_stale_after_sec: 900.0
-  supervisor_poll_interval_sec: 30.0
   supervisor_kill_grace_sec: 30.0
-  supervisor_max_relaunches: 5
-  drain:
-    final_eval_drain_timeout_sec: 900.0
-    eval_final_drain_safety_factor: 3.0
-    eval_final_drain_hard_cap_sec: 14400.0
-    terminal_eval_hard_cap_sec: 14400.0
-  disk_guard:
-    interval_sec: 60.0
-    warn_gb: 10.0
-    fail_gb: 5.0

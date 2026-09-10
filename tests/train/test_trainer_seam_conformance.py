@@ -89,10 +89,11 @@ def trainer_accesses(source: str) -> set[str]:
 # Sentinels are the anti-self-satisfying arm (LAW-07): an empty or shrunken access set
 # means the scanner lost the seam, and that must red, not pass.
 SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, ...]], ...] = (
-    (step_mod, ("trainer",), (TrainerLike,),
-     ("train_step_from_tensors", "save_checkpoint", "step")),
+    # `train_step_from_tensors` was a sentinel on both rows until R346(f) deleted the dense
+    # step; `step.py` reaches the dispatcher and no longer names any typed entry point itself.
+    (step_mod, ("trainer",), (TrainerLike,), ("save_checkpoint", "step")),
     (dispatch_mod, ("trainer",), (TrainerLike,),
-     ("train_step_from_graph_batch", "train_step_from_tensors", "device")),
+     ("train_step_from_graph_batch", "device")),
     (loop_mod, ("trainer",), (TrainerLike,), ("save_checkpoint",)),
     (step_mod, ("pool",), (WorkerPoolLike,),
      ("games_completed", "check_producer_health", "pooled_draw_counts")),
@@ -101,9 +102,11 @@ SEAM_MATRIX: tuple[tuple[object, tuple[str, ...], tuple[type, ...], tuple[str, .
      ("drain_pending", "apply_gate_decision", "run_evaluation")),
     (step_mod, ("buffer", "pretrained_buffer", "bot_buffer"), (ReplayBufferLike,),
      ("resize", "save_to_path", "size")),
+    # `sample_batch_with_pos` and the dispatcher's `recent_buffer` reads went with the dense
+    # route (R346(f)): the graph arm flows recency in-engine through `recent_frac`, so the only
+    # `recent_buffer` access left in `dispatch` is the refusal that names it.
     (dispatch_mod, ("buffer",), (ReplayBufferLike, GraphRouteBufferLike, GridRouteBufferLike),
-     ("sample_graph_batch", "sample_batch_with_pos")),
-    (dispatch_mod, ("recent_buffer",), (RecentBufferLike,), ("sample", "size")),
+     ("sample_graph_batch",)),
     (persist_mod, ("buffer",), (ReplayBufferLike,), ("save_to_path",)),
     (persist_mod, ("recent_buffer",), (RecentBufferLike,), ("save_to_path", "size")),
     (step_mod, ("_clock",), (ClockLike,), ("now", "sleep")),
@@ -178,14 +181,14 @@ def test_declaration_removal_reds_the_gate() -> None:
     a protocol narrowed under live call sites cannot pass silently. One arm per widened
     family (trainer / eval / telemetry / recent-buffer)."""
     assert not _row_accesses(step_mod, ("trainer",)) <= (
-        declared_members(TrainerLike) - {"train_step_from_tensors"})
+        declared_members(TrainerLike) - {"save_checkpoint"})
     assert not _row_accesses(step_mod, ("eval_pipeline",)) <= (
         declared_members(EvalPipelineLike) - {"poll_completed"})
     assert not _row_accesses(drain_mod, ("eval_pipeline", "pipeline")) <= (
         declared_members(EvalPipelineLike) - {"drain_pending"})
     assert not _row_accesses(events_mod, ("pool",)) <= (
         declared_members(PoolTelemetryLike) - {"recent_move_histories"})
-    assert not _row_accesses(dispatch_mod, ("recent_buffer",)) <= (
+    assert not _row_accesses(persist_mod, ("recent_buffer",)) <= (
         declared_members(RecentBufferLike) - {"size"})
 
 

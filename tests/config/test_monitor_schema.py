@@ -16,7 +16,11 @@ import pytest
 from pydantic import ValidationError
 
 from mantis.config.resolve import resolve_monitor_config
-from mantis.config.schema import DrainCapsConfig, MonitorSchemaConfig
+from mantis.config.schema import (
+    DrainCapsConfig,
+    MonitorSchemaConfig,
+    operational_default_fields,
+)
 from mantis.monitor.config import MonitorConfig
 
 # Every value = the CURRENT `monitor.config.MonitorConfig` dataclass default, minted
@@ -76,6 +80,9 @@ def _monitor(**over: object) -> dict:
     return out
 
 
+_MONITOR_DEFAULTED = operational_default_fields("monitor")
+
+
 def _drain(**over: object) -> dict:
     out = dict(VALID_DRAIN)
     out.update(over)
@@ -89,7 +96,7 @@ def test_monitor_valid_payload_constructs_clean():
     assert cfg.drain.final_eval_drain_timeout_sec == 900.0
 
 
-@pytest.mark.parametrize("field", MONITOR_FIELDS)
+@pytest.mark.parametrize("field", sorted(set(MONITOR_FIELDS) - _MONITOR_DEFAULTED))
 def test_monitor_missing_field_rejected(field: str):
     payload = _monitor()
     del payload[field]
@@ -97,14 +104,45 @@ def test_monitor_missing_field_rejected(field: str):
         MonitorSchemaConfig.model_validate(payload)
 
 
+@pytest.mark.parametrize("field", sorted(_MONITOR_DEFAULTED))
+def test_an_operational_field_is_OMITTABLE_and_falls_to_its_declared_default(field: str):
+    """The other side of the row above, and the reason the exemption is not a hole.
+
+    R347/CONFIG-1 moved the operational constants out of the YAML, so omitting one must be
+    LEGAL — but it must also land on the value the registry says it lands on. Asserting only
+    "no error" would be satisfied by a default of anything at all, which is how a silent
+    behaviour change would travel."""
+    payload = _monitor()
+    del payload[field]
+    cfg = MonitorSchemaConfig.model_validate(payload)
+    assert getattr(cfg, field) == MonitorSchemaConfig.model_fields[field].get_default(
+        call_default_factory=True), (
+        f"monitor.{field} is omittable but did not land on its schema default"
+    )
+
+
 def test_monitor_extra_key_rejected():
     with pytest.raises(ValidationError, match="bogus_monitor_knob"):
         MonitorSchemaConfig.model_validate(_monitor(bogus_monitor_knob=1))
 
 
-def test_monitor_has_no_pydantic_level_default():
+def test_monitor_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
+    """R1 with R347/CONFIG-1's partition: a default is legal ONLY where the schema's own
+    registry declares the key operational, and the check runs BOTH ways so neither half can
+    drift — an undeclared default is a red, and a declared key that is still required is a
+    stale exemption nobody can see go stale."""
     for name, field in MonitorSchemaConfig.model_fields.items():
-        assert field.is_required(), f"MonitorSchemaConfig.{name} has a code-side default"
+        if name in _MONITOR_DEFAULTED:
+            assert not field.is_required(), (
+                f"MonitorSchemaConfig.{name} is declared operational in "
+                "OPERATIONAL_DEFAULT_KEYS but is still required — the declaration is stale"
+            )
+            continue
+        assert field.is_required(), (
+            f"MonitorSchemaConfig.{name} has a code-side default and is not declared in "
+            "OPERATIONAL_DEFAULT_KEYS; R1 puts a default in the schema field or nowhere, and "
+            "the registry is what says which keys earned one"
+        )
 
 
 def test_monitor_gate_interval_is_required_and_at_least_one():
@@ -140,11 +178,14 @@ def test_drain_caps_valid_payload_constructs_clean():
 
 
 @pytest.mark.parametrize("field", DRAIN_FIELDS)
-def test_drain_caps_missing_field_rejected(field: str):
+def test_an_omitted_drain_cap_lands_on_its_declared_default(field: str):
+    """All four caps are declared operational (R347/CONFIG-1), so omitting one is legal — and
+    the VALUE is asserted, because "no error" alone would be satisfied by any default."""
     payload = _drain()
     del payload[field]
-    with pytest.raises(ValidationError, match=field):
-        DrainCapsConfig.model_validate(payload)
+    cfg = DrainCapsConfig.model_validate(payload)
+    assert getattr(cfg, field) == DrainCapsConfig.model_fields[field].get_default(
+        call_default_factory=True), f"monitor.drain.{field} did not land on its schema default"
 
 
 def test_drain_caps_extra_key_rejected():
@@ -160,9 +201,15 @@ def test_drain_caps_zero_or_negative_rejected(field: str):
         DrainCapsConfig.model_validate(_drain(**{field: 0.0}))
 
 
-def test_drain_caps_has_no_pydantic_level_default():
+def test_every_drain_cap_is_a_declared_operational_default():
+    """All four are subprocess-join bounds, so all four are declared — and the equality is
+    asserted rather than the membership, because a fifth cap added without a registry row
+    would pass a one-way check."""
+    assert set(DrainCapsConfig.model_fields) == operational_default_fields("monitor.drain")
     for name, field in DrainCapsConfig.model_fields.items():
-        assert field.is_required(), f"DrainCapsConfig.{name} has a code-side default"
+        assert not field.is_required(), (
+            f"DrainCapsConfig.{name} is declared operational but is still required"
+        )
 
 
 # ── resolve_monitor_config round-trip (LAW-07 mutation self-test) ─────────────────────

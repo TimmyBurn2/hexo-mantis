@@ -1,13 +1,13 @@
 """F-816-25 / R296(b) — the pretrain CLI states no `train.*` value; the minted config does.
 
 THE DEFECT, MEASURED BEFORE THE FIX. `_build_arg_parser` carried code-side literal defaults for
-five values `TrainConfig` also mints, three of them DIVERGENT at `configs/run5.yaml`:
+five values `TrainConfig` also mints, three of them DIVERGENT at `configs/run6.yaml`:
 
     --lr             0.002   vs  train.lr                  0.001    (2x)
     --batch-size     512     vs  train.batch_size          256      (2x)
-    --aux-weight     0.15    vs  train.aux_opp_reply_weight 0.0     (a head the config DISABLES)
+    --aux-weight     0.15    vs  train.aux_opp_reply_weight 0.0     (both DELETED by R346(f))
     --weight-decay   0.0001  vs  train.weight_decay        0.0001   (agreed)
-    --aux-chain-weight 0.0   vs  train.aux_chain_weight    0.0      (agreed)
+    --aux-chain-weight 0.0   vs  train.aux_chain_weight    0.0      (both DELETED by R346(f))
 
 **A SIXTH SHADOW AND FIVE MORE FALLBACKS, found by reading past the parser.** The row as filed
 counted the argparse surface only. `_resume_into` carried `1e-5` for `eta_min` against
@@ -45,7 +45,6 @@ from mantis.train.pretrain.cli import (
 
 _REPO = Path(__file__).resolve().parents[2]
 _CLI = _REPO / "src" / "mantis" / "train" / "pretrain" / "cli.py"
-_TRAINER = _REPO / "src" / "mantis" / "train" / "pretrain" / "trainer.py"
 _CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
 
 #: The flag spellings the six keys had. Kept as the historical record of what was deleted —
@@ -132,19 +131,17 @@ def test_training_terms_reproduces_the_YAML_own_numbers(path: Path) -> None:
     assert terms["lr"] == pytest.approx(float(raw["lr"]))
     assert terms["weight_decay"] == pytest.approx(float(raw["weight_decay"]))
     assert terms["batch_size"] == int(raw["batch_size"])
-    assert terms["aux_opp_reply_weight"] == pytest.approx(float(raw["aux_opp_reply_weight"]))
-    assert terms["aux_chain_weight"] == pytest.approx(float(raw["aux_chain_weight"]))
     assert terms["pretrain_eta_min"] == pytest.approx(float(raw["eta_min"]))
 
 
 def test_the_run5_divergences_the_row_measured_are_now_GONE() -> None:
-    """The three numbers F-816-25 actually measured, asserted as VALUES rather than as the
-    absence of a flag — the difference between "the surface changed" and "the run would now
-    use the minted number"."""
-    terms = training_terms(load_config(_REPO / "configs" / "run5.yaml").train)
+    """The numbers F-816-25 actually measured that still have a key, asserted as VALUES rather
+    than as the absence of a flag — the difference between "the surface changed" and "the run
+    would now use the minted number". The `--aux-weight` divergence it also measured went with
+    `train.aux_opp_reply_weight` (R346(f)): the shadow and the key it shadowed are both gone."""
+    terms = training_terms(load_config(_REPO / "configs" / "run6.yaml").train)
     assert terms["lr"] == pytest.approx(0.001)          # was 0.002 on the parser
     assert terms["batch_size"] == 256                    # was 512
-    assert terms["aux_opp_reply_weight"] == pytest.approx(0.0)   # was 0.15
     assert terms["pretrain_eta_min"] == pytest.approx(0.0005)    # was 1e-5, the sixth shadow
 
 
@@ -171,36 +168,6 @@ def test_training_terms_is_the_ONLY_place_the_CLI_reads_these_off_a_config() -> 
     assert stray == [], f"train_cfg read outside training_terms: {stray}"
 
 
-# ── 4. the trainer no longer substitutes a number for a missing one ─────────────────────
-
-@pytest.mark.parametrize("key", ["lr", "weight_decay", "pretrain_total_steps", "pretrain_eta_min"])
-def test_the_trainer_reads_its_terms_by_SUBSCRIPT_not_by_get_with_a_default(key: str) -> None:
-    """The half a flag deletion cannot reach. `BootstrapTrainer` carried
-    `config.get("lr", 0.002)` and three siblings, so a config-only CLI whose dict lost a key
-    would have been silently topped up with the very literal the fix removed.
-
-    Asserted on the AST rather than by constructing a trainer, because constructing one needs
-    a torch model and a device and this claim is about the source, not about a run.
-    """
-    tree = ast.parse(_TRAINER.read_text(encoding="utf-8"))
-    offenders = [
-        f"line {node.lineno}"
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "get"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "config"
-        and len(node.args) == 2
-        and isinstance(node.args[0], ast.Constant)
-        and node.args[0].value == key
-    ]
-    assert offenders == [], (
-        f"BootstrapTrainer still defaults {key!r} at {offenders}. A `.get` fallback is a "
-        f"code-side default (R1) and re-opens F-816-25 one layer below the CLI."
-    )
-
-
 # ── 5. LAW-07: the guards are shown able to fire ───────────────────────────────────────
 
 def test_the_parser_guard_FIRES_against_a_parser_that_carries_a_shadow() -> None:
@@ -209,24 +176,6 @@ def test_the_parser_guard_FIRES_against_a_parser_that_carries_a_shadow() -> None
     p.add_argument("--lr", type=float, default=0.002)
     dests = {a.dest for a in p._actions}
     assert [k for k in SHADOWED_TRAIN_KEYS if k in dests and k != "eta_min"] == ["lr"]
-
-
-def test_the_trainer_guard_FIRES_against_a_live_two_arg_get() -> None:
-    """Drive the AST predicate against source that DOES carry the pattern, so a green run
-    means "the pattern is absent", never "the matcher stopped matching"."""
-    tree = ast.parse('lr = float(config.get("lr", 0.002))\n')
-    hits = [
-        node for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr == "get"
-        and isinstance(node.func.value, ast.Name)
-        and node.func.value.id == "config"
-        and len(node.args) == 2
-        and isinstance(node.args[0], ast.Constant)
-        and node.args[0].value == "lr"
-    ]
-    assert len(hits) == 1
 
 
 def test_the_stray_reader_guard_FIRES_against_a_second_reader() -> None:

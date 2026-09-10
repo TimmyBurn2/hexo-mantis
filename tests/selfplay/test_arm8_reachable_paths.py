@@ -2,7 +2,7 @@
 
 WP12-R Phase B threads the round's DECLARED encoding through `mantis.eval.worker` — the
 last production construction site that relied on the default — and Phase C deletes the
-`encoding_spec if ... else lookup("v6")` ternary outright, making `encoding_spec` a
+`encoding_spec if ... else lookup(<a constant>)` ternary outright, making `encoding_spec` a
 REQUIRED keyword-only parameter. Absent is then UNCONSTRUCTIBLE rather than defaulted,
 which is what LAW-11 asks for.
 
@@ -12,8 +12,9 @@ With the arm closed it becomes the REOPEN GUARD: no default may come back, no co
 site may omit the spec, and the one mismatch that is still constructible must still fail
 loud. (R56's escalation trigger has no subject after this card — ADJ-WP12R-3.)
 
-⊕ WP12-R oracles O-4, O-5, O-6 (PREREG §1). O-4 and O-5 are RED at HEAD by
-pre-registration; O-6 is GREEN at HEAD and its assertion is byte-identical after IMPL.
+⊕ WP12-R oracles O-4 and O-5 (PREREG §1), RED at HEAD by pre-registration. O-6 — the one
+still-constructible mismatch, a graph net bound to a DENSE spec — has no subject since
+R346(f) deleted the dense arm: there is no second representation to bind the wrong one of.
 """
 from __future__ import annotations
 
@@ -72,13 +73,15 @@ def test_no_construction_site_omits_the_spec():
 
 
 def test_the_selfplay_path_threads_its_spec_explicitly():
-    """Both production consumers — the high-volume actor AND the eval worker — thread it.
+    """The eval worker — the seam WP12-R exists to close — threads it.
 
-    Named rather than merely counted: these are the two seams a regression would silently
-    re-point at a constant, and the eval one is the seam WP12-R exists to close.
+    Named rather than merely counted: this is the seam a regression would silently re-point
+    at a constant. The self-play worker was the other named consumer; it went with the dense
+    path (R346(f)), and `test_no_construction_site_omits_the_spec` above is what covers any
+    site that replaces it.
     """
     threaded = {rel for rel, _line, t in _construction_sites() if t}
-    assert {"selfplay/worker.py", "eval/worker.py"} <= threaded
+    assert {"eval/worker.py"} <= threaded
 
 
 def test_there_is_no_default_encoding_spec():
@@ -99,43 +102,6 @@ def test_there_is_no_default_encoding_spec():
 
     with pytest.raises(TypeError):
         LocalInferenceEngine(torch.nn.Identity(), torch.device("cpu"))
-
-
-def test_a_graph_model_bound_to_a_dense_spec_fails_loud_not_silent():
-    """⊕ O-6. The one mismatch that is still constructible must still RAISE.
-
-    A graph-built net handed a DENSE spec explicitly must fail loud. Silently running the
-    dense arm over a graph model is plausible output from the wrong pipeline — the exact
-    class this file exists to rule out — and after Phase C an explicit bind is the only
-    way to reach it, so this is where the property is pinned.
-    """
-    torch = pytest.importorskip("torch")
-    from mantis.model import arch_from_spec_and_config, build_net
-
-    graph_spec = lookup("gnn_axis_v1")
-    graph_net = build_net(arch_from_spec_and_config(graph_spec, {}))
-
-    # The dense spec is stated, not inherited from a default: there is no default.
-    engine = LocalInferenceEngine(graph_net, torch.device("cpu"),
-                                  encoding_spec=lookup("v6"), fused_graph_caps=None,
- inference_batching=None, max_in_flight=0, amp_dtype="bf16")
-    try:
-        # It is bound to a dense spec, so it takes the dense arm despite a graph net.
-        assert engine.encoding_spec.name == "v6"
-        assert engine._is_graph is False
-
-        # The specific loudness, asserted rather than a bare `Exception`: the dense arm
-        # calls `model(...)`, and `GnnNet` implements `forward_batch` but NOT `forward`.
-        #
-        # That mechanism is INCIDENTAL and this assertion is deliberately tight because of
-        # it: if `GnnNet` ever gains a `forward`, this mismatch stops raising and starts
-        # returning dense-shaped output from a graph net — silent, plausible and wrong.
-        # R138 forbids adding one; this test is that prohibition's in-tree guard, not a
-        # test to relax.
-        with pytest.raises(NotImplementedError, match="forward"):
-            engine.infer_batch([_a_board()])
-    finally:
-        engine.close()
 
 
 def _a_board():

@@ -36,7 +36,6 @@ from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.pool_hooks import batch_fill_pct, inference_batch_timing
 from mantis.train.events import emit_iteration_complete_event
 
-_GRID_SPEC = lookup("v6")
 _GRAPH_SPEC = lookup("gnn_axis_v1")
 
 
@@ -48,9 +47,6 @@ def device() -> torch.device:
 def _cfg(**over: Any) -> dict[str, Any]:
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
-        "trace_inference": False, "compile_inference": False,
-        "compile_inference_mode": "default", "compile_inference_dynamic": True,
-        "perf_timing": False, "perf_sync_cuda": False,
         # F-816-10: the graph arm resolves the fused-forward memory bound at
         # construction. NON-BINDING here on purpose — the rows in this file are
         # about the WAIT and OCCUPANCY instruments, which are measured at the POP
@@ -59,7 +55,7 @@ def _cfg(**over: Any) -> dict[str, Any]:
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
-    return {"inference": base, "encoding": "v6", "train": {"amp_dtype": "fp16"}}
+    return {"inference": base, "encoding": "gnn_axis_v1"}
 
 
 def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
@@ -126,39 +122,6 @@ class _FakeGraphBatcher:
         self.closed += 1
 
 
-class _FakeDenseBatcher:
-    """Drives the dense `run()` loop for `n_batches` iterations, then stops it."""
-
-    def __init__(self, feature_len: int, n_batches: int = 2, n_requests: int = 2) -> None:
-        self._left = n_batches
-        self._ids = list(range(1, n_requests + 1))
-        self._batch = np.ascontiguousarray(
-            np.zeros((n_requests, feature_len), dtype=np.float32)
-        )
-        self.server: InferenceServer | None = None
-        self.closed = 0
-
-    def next_inference_batch(self, batch_size: int, max_wait_ms: float):
-        if self._left <= 0:
-            assert self.server is not None
-            self.server._stop_event.set()
-            return [], self._batch
-        self._left -= 1
-        return list(self._ids), self._batch
-
-    def submit_inference_results(self, ids, policies, values) -> None:
-        return None
-
-    def submit_inference_failure(self, ids, error_msg: str) -> None:
-        return None
-
-    def bump_model_version(self) -> int:
-        return 1
-
-    def close(self) -> None:
-        self.closed += 1
-
-
 class _FiniteGraphNet(torch.nn.Module):
     """Stub graph net: finite per-legal-node logits + per-graph values."""
 
@@ -174,19 +137,6 @@ class _FiniteGraphNet(torch.nn.Module):
             torch.zeros(b, 1, dtype=torch.float32),
             torch.zeros(b, 65, dtype=torch.float32),
         )
-
-
-class _DenseStubNet(torch.nn.Module):
-    """Stub CNN-shaped net: uniform log-policy + zero value, whatever the input."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.dummy = torch.nn.Parameter(torch.zeros(1))
-
-    def forward(self, x):
-        n = int(x.shape[0])
-        pol = torch.zeros(n, _GRID_SPEC.policy_logit_count, dtype=torch.float32)
-        return pol, torch.zeros(n, 1, dtype=torch.float32), torch.zeros(n, 1)
 
 
 def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch:
@@ -295,30 +245,6 @@ def test_an_occupancy_histogram_separates_always_one_from_a_mixed_load(
     assert flat_occ["min"] == 1 and flat_occ["max"] == 1
     assert flat_occ["histogram"] == {"1": 3}
     assert flat_occ["histogram"] != occ["histogram"]
-
-
-def test_a_grid_run_reports_no_producer_rather_than_a_fabricated_zero(device) -> None:
-    """Q3-03 — the dense loop is NOT instrumented, and says so.
-
-    Every derived reading is `None` on a grid run, after real dense forwards. A constant
-    `0` in the ONE channel would read as a real measurement ("the queue never waits") —
-    the F-10 class in miniature (docs/contracts/event_manifest.md)."""
-    feature_len = _GRID_SPEC.n_planes * _GRID_SPEC.trunk_size * _GRID_SPEC.trunk_size
-    batcher = _FakeDenseBatcher(feature_len, n_batches=2)
-    server = InferenceServer(
-        _DenseStubNet(), device, _cfg(inference_batch_size=4),
-        batcher=batcher, encoding_spec=_GRID_SPEC,
-    )
-    batcher.server = server
-    server.run()
-
-    snap = server.batch_timing_snapshot()
-    assert server.forward_count == 2, "the dense loop must actually have run"
-    assert snap["representation"] == "grid"
-    assert snap["queue_wait"] is None
-    assert snap["collate"] is None
-    assert snap["occupancy"] is None
-    assert snap["empty_polls"] is None
 
 
 def test_the_instrument_is_defined_before_the_first_forward(device, monkeypatch) -> None:

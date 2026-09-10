@@ -1,15 +1,15 @@
 """O6 — bf16-graph LAW-06 regime-parity + single amp authority (R30b).
 
-WPSC Phase 3 SC-B3 REWRITE (DESIGN_P3.md §4.3/§4.4; ported from the staged
-`tests/model/test_amp_dtype_p3.py` oracle, ORACLE_NOTES_P3.md row 7): new 2-arg
-`amp_dtype_for(representation, declared_amp_dtype)` signature — the OLD 1-arg-dict
-`amp_dtype_for(representation, config_dict)` shape is retired. The unconditional
-graph->bf16 code pin is the LAW-06 protection (F-11: fp16 GINE sum-aggregation overflows
-65504 -> NaN); no declared config value may flip graph off bf16.
+The signature has narrowed twice. WPSC Phase 3 SC-B3 replaced the 1-arg-dict
+`amp_dtype_for(representation, config_dict)` with an explicit
+`amp_dtype_for(representation, declared_amp_dtype)`; R346(f) then deleted `train.amp_dtype`
+outright, so there is no declared value left and the signature is
+`amp_dtype_for(representation)`.
 
-RED-TEAM amp probe: `test_graph_is_bf16_unconditionally` feeds the EXACT value
-`configs/run5.yaml`/`configs/smoke_gnn.yaml` mint today on a graph run
-(`declared_amp_dtype="fp16"`) and proves the merged single authority still resolves bf16.
+The unconditional graph->bf16 code pin is the LAW-06 protection (F-11: fp16 GINE
+sum-aggregation overflows 65504 -> NaN). It used to have to survive a declared value that
+disagreed; now there is no second spelling of the question, and what is pinned is that the
+answer comes off the representation alone and that an unknown representation is an ERROR.
 """
 from __future__ import annotations
 
@@ -19,16 +19,10 @@ import torch
 from mantis.model.amp import amp_dtype_for
 
 
-@pytest.mark.parametrize("declared_amp_dtype", ["fp16", "bf16"])
-def test_graph_is_bf16_unconditionally(declared_amp_dtype: str) -> None:
-    assert amp_dtype_for("graph", declared_amp_dtype) is torch.bfloat16
+def test_graph_is_bf16_unconditionally() -> None:
+    assert amp_dtype_for("graph") is torch.bfloat16
 
 
-def test_grid_regime_parity() -> None:
-    assert amp_dtype_for("grid", "fp16") is torch.float16
-    assert amp_dtype_for("grid", "bf16") is torch.bfloat16
-
-
-def test_grid_invalid_amp_dtype_raises() -> None:
+def test_an_unknown_representation_raises() -> None:
     with pytest.raises(ValueError):
-        amp_dtype_for("grid", "garbage")
+        amp_dtype_for("hexcanvas")

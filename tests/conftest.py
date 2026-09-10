@@ -87,8 +87,7 @@ def seeded_libs() -> list[str]:
 # `RunConfig.model_validate` — a test cannot construct a config the loader would reject.
 # Imports are lazy so the root conftest stays scaffold-independent (same reason as _reseed).
 CONFIGS_DIR = Path(__file__).resolve().parents[1] / "configs"
-MINTED_CONFIGS = ("dev_example.yaml", "run5.yaml", "smoke_gnn.yaml",
-                  "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
+MINTED_CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
 
 
 def _deep_merge(base: dict, over: dict) -> dict:
@@ -102,7 +101,7 @@ def _deep_merge(base: dict, over: dict) -> dict:
     return out
 
 
-def make_run_config_from_minted(name: str = "smoke_gnn.yaml", **section_overrides):
+def make_run_config_from_minted(name: str = "dev_example.yaml", **section_overrides):
     """A REAL RunConfig, derived from a MINTED config through the ONE loader.
 
     `name` is the axis: any of `MINTED_CONFIGS`. Overrides are per-section dicts and are

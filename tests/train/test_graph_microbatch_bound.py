@@ -377,7 +377,7 @@ _MIN_NODE_FRACTION = 0.95
 def _run5_caps() -> MicrobatchCapsSpec:
     """run5's OWN minted caps, through the real loader and the real resolver — DERIVED, never
     transcribed, so the operator's mint act moves this leg with it and pins nothing."""
-    return resolve_microbatch_caps(load_config(_CONFIGS / "run5.yaml").model_dump())
+    return resolve_microbatch_caps(load_config(_CONFIGS / "run6.yaml").model_dump())
 
 
 def _cap_regime_batch(caps: MicrobatchCapsSpec):
@@ -445,7 +445,7 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
     disclosed AS a re-size; a second is a design failure).
 
     WHAT IS REAL HERE: run5's OWN minted caps (through the real loader and resolver), run5's
-    OWN arch (`hidden=128, num_layers=4`, resolved from `configs/run5.yaml`), the real
+    OWN arch (`hidden=128, num_layers=4`, resolved from `configs/run6.yaml`), the real
     dispatcher, the real partition, the real collate and a `(E, N)` that sits just under both
     minted members. The measurement is the DELTA across the step
     (`reset_peak_memory_stats` -> `max_memory_allocated`), not an absolute reading.
@@ -462,7 +462,7 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
     ec, nc = H.per_graph_counts(replay.wire)
     e_total, n_total = int(ec.sum()), int(nc.sum())
 
-    run5_cfg = load_config(_CONFIGS / "run5.yaml").model_dump()
+    run5_cfg = load_config(_CONFIGS / "run6.yaml").model_dump()
     arch = arch_from_spec_and_config(H.GSPEC, run5_cfg)
     torch.manual_seed(H.SEED)
     trainer = Trainer(build_net(arch), H.graph_config(), arch=arch,
@@ -556,7 +556,7 @@ def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> Non
     caps = _run5_caps()
     single, n_single = _cap_regime_batch(caps)
     doubled = H.ReplayWireBuffer(H.uniform_graph_buffer(2 * n_single + 8), 2 * n_single)
-    run5_cfg = load_config(_CONFIGS / "run5.yaml").model_dump()
+    run5_cfg = load_config(_CONFIGS / "run6.yaml").model_dump()
     arch = arch_from_spec_and_config(H.GSPEC, run5_cfg)
 
     def _peak(replay, batch_size: int, tag: str) -> int:

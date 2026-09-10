@@ -4,6 +4,12 @@
 # discipline (one change = one commit = one IQR-gated bench vs these floors) plus
 # tests/tools/test_bench_floors.py (schema/provenance/liveness validation).
 # Provenance carries interpreter/numpy/rustc/CPU-model ONLY (R112 — no host identifiers).
+#
+# R346(f) DELETED five rows with the benches that produced them: the four `encode_bench`
+# dense-encode floors and the one `replay_sample_bench` HEXB sample floor. The benches are
+# gone, so those floors had no subject — a floor for a bench that cannot run is a number
+# nothing can ever be measured against. No surviving floor moved: the rustc/CPU attestation
+# above still holds for every row that remains, so this is a deletion and not a re-baseline.
 
 [provenance]
 interpreter = "Python 3.11.15 (main, Jun  2 2026, 22:26:03) [Clang 22.1.3 ]"
@@ -160,35 +166,6 @@ low_s = 2.738000e-01
 mid_s = 2.738300e-01
 high_s = 2.738700e-01
 
-# ── encode_bench ──
-[floor.encode_bench_encode_state_to_buffer_v6]
-bench = "encode_bench"
-case = "encode_state_to_buffer/v6"
-low_s = 3.735300e-08
-mid_s = 3.738400e-08
-high_s = 3.741900e-08
-
-[floor.encode_bench_encode_state_to_buffer_channels_v6_live2_ls]
-bench = "encode_bench"
-case = "encode_state_to_buffer_channels/v6_live2_ls"
-low_s = 4.890700e-08
-mid_s = 4.895600e-08
-high_s = 4.900600e-08
-
-[floor.encode_bench_encode_state_to_buffer_channels_v6w25]
-bench = "encode_bench"
-case = "encode_state_to_buffer_channels/v6w25"
-low_s = 1.183500e-07
-mid_s = 1.183700e-07
-high_s = 1.184000e-07
-
-[floor.encode_bench_encode_chain_planes_v6w25]
-bench = "encode_bench"
-case = "encode_chain_planes/v6w25"
-low_s = 1.128500e-05
-mid_s = 1.130700e-05
-high_s = 1.133200e-05
-
 # ── graph_build_bench ──
 [floor.graph_build_bench_graph_build_gnn_axis_v1_leafcorpus]
 bench = "graph_build_bench"
@@ -196,14 +173,6 @@ case = "graph_build_gnn_axis_v1_leafcorpus"
 low_s = 6.824000e-02
 mid_s = 6.825400e-02
 high_s = 6.826900e-02
-
-# ── replay_sample_bench ──
-[floor.replay_sample_bench_dense_sample_core_v6_b512_aug]
-bench = "replay_sample_bench"
-case = "dense_sample_core_v6_b512_aug"
-low_s = 1.938300e-03
-mid_s = 1.943400e-03
-high_s = 1.948000e-03
 
 # ── smoke_bench ──
 [floor.smoke_bench_apply_move_plus_check_win_20_stones]

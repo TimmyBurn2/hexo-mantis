@@ -33,8 +33,8 @@ from mantis.encoding.audit import (
     CorpusEntry,
     Severity,
 )
-from mantis.encoding.compat import infer_encoding_from_state_dict
 from mantis.encoding.registry import _load as _load_registry
+from mantis.encoding.resolvers import detect_encoding_from_state_dict
 from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
 # Deliberately-unstamped dead checkpoint directories. These prefixes are
@@ -183,8 +183,9 @@ def _section_checkpoints(
 
         sd = _extract_state_dict(obj) or {}
         try:
-            inferred = infer_encoding_from_state_dict(sd, str(p))
-        except EncodingRegistryError:
+            _spec = detect_encoding_from_state_dict(sd, str(p), strict=True)
+            inferred = "?" if _spec is None else _spec.name
+        except (EncodingRegistryError, ValueError):
             inferred = "?"
 
         if declared != "-" and inferred not in ("-", "?"):

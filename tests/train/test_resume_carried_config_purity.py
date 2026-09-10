@@ -58,9 +58,8 @@ from mantis.train.trainer.core import Trainer
 
 
 def _resume_cfg(mk_config, *, checkpoint_interval: int = 25) -> dict:
-    """A complete schema-valid nested config: fp16 off (CPU rig), periodic cadence armed."""
+    """A complete schema-valid nested config with the periodic cadence armed."""
     cfg = mk_config()
-    cfg["train"]["fp16"] = False
     cfg["train"]["checkpoint_interval"] = checkpoint_interval
     return cfg
 

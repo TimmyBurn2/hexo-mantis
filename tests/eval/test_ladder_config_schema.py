@@ -3,8 +3,7 @@
 already exist and import cleanly today (this is a SCHEMA EXTENSION, not a new module), so every
 test here fails today by `pydantic.ValidationError` (missing/extra key) rather than
 ModuleNotFoundError — the schema simply does not have `eval.gate` / `eval.ladder` /
-`eval.kraken_model_sims` / `eval.strix_model_sims` / `eval.random_floor_games` /
-`eval.worker_device` / `eval.round_timeout_sec` / `eval.worker_kill_grace_sec` yet.
+`eval.random_floor_games` / `eval.worker_device` / `eval.round_timeout_sec` / `eval.worker_kill_grace_sec` yet.
 
 Byte-frozen through IMPL: fields transcribed verbatim from DESIGN.md §c.1 (rung
 name/bot/variant/depth/opponent_sims/opening_book/deploy_matched/games_max; gate
@@ -13,8 +12,8 @@ opening_book/bootstrap_resamples/min_distinct_per_pair/seed_base — NO screen_c
 MUST-FIX 1; ladder rungs/round_games/min_games_per_active_rung/graduation_wr_lower_ci/
 graduation_consec_rounds/activation_wr_lower_ci/calibration_every_k_rounds/calibration_games/
 bootstrap_resamples/bootstrap_ci_level/bt_prior_games/bootstrap_seed). Minted ladder order is
-STATE §5 verbatim: sealbot_d5 -> kraken_raw -> sealbot_d6 -> kraken_mcts200 -> strix_128 ->
-strix_256 (each opening_book=book_v1_s20260625_p4, deploy_matched=true, games_max=32).
+STATE §5 verbatim, less the kraken/strix rungs whose bot kinds were deleted with the reference
+adapters (each opening_book=book_v1_s20260625_p4, deploy_matched=true, games_max=32).
 
 Note (documented, not a defect): `test_temperature_key_anywhere_in_eval_is_rejected` (all 3
 parametrized cases) and `test_rung_names_unique_and_bot_kind_known` /
@@ -40,26 +39,14 @@ from mantis.config.loader import load_config
 from mantis.config.schema import SCHEMA_VERSION, RunConfig
 
 _REPO = Path(__file__).resolve().parents[2]
-_RUN5 = _REPO / "configs" / "run5.yaml"
+_RUN5 = _REPO / "configs" / "run6.yaml"
 
 _LADDER_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
      "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_raw", "bot": "kraken", "variant": "raw", "depth": None,
-     "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
     {"name": "sealbot_d6", "bot": "sealbot", "variant": "d6", "depth": 6,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_mcts200", "bot": "kraken", "variant": "mcts200", "depth": None,
-     "opponent_sims": 200, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_128", "bot": "strix", "variant": "s128", "depth": None,
-     "opponent_sims": 128, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_256", "bot": "strix", "variant": "s256", "depth": None,
-     "opponent_sims": 256, "opening_book": "book_v1_s20260625_p4",
      "deploy_matched": True, "games_max": 32},
 ]
 
@@ -101,29 +88,22 @@ def _train_block() -> dict:
 def _selfplay_block() -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "c_visit": 50.0,
+        "c_visit": 50.0,
         "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-        "instrumentation_enabled": False,
+        "results_queue_cap": 10_000, "random_opening_plies": 0,
+        "log_investigation_metrics": True,
         "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
         "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
                         "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
 
 
 def _inference_block() -> dict:
     return {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-        "compile_inference": False, "compile_inference_mode": "default",
-        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
         # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
         # exercises a split; the R119 `null` placeholder is pinned by
@@ -162,8 +142,7 @@ def _monitor_block() -> dict:
 
 def _payload(**eval_overrides) -> dict:
     eval_block = dict(
-        random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-        strix_model_sims=128, random_floor_games=0, worker_device="cuda",
+        random_model_sims=96, sealbot_model_sims=128, random_floor_games=0, worker_device="cuda",
         round_timeout_sec=3600.0, worker_kill_grace_sec=10.0,
         ply_cap_adjudication=None, strength_floor=None,
         gate=_gate(), ladder=_ladder(),
@@ -192,7 +171,7 @@ def test_valid_payload_with_full_ladder_and_gate_validates() -> None:
     """Sanity anchor: the fully-populated payload above must itself validate once the schema
     extension lands (proves the fixture payload is not itself malformed)."""
     cfg = RunConfig.model_validate(_payload())
-    assert len(cfg.eval.ladder.rungs) == 6
+    assert len(cfg.eval.ladder.rungs) == len(_LADDER_RUNGS)
     assert cfg.eval.gate.promotion_winrate == 0.55
 
 
@@ -264,16 +243,16 @@ def test_rung_order_is_preserved() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """configs/run5.yaml's ladder must equal the six STATE §5 rungs in order once re-minted;
+    """configs/run6.yaml's ladder must equal the STATE §5 rungs in order once re-minted;
     0.75/0.65/3 must appear ONLY as VALUES of the named schema fields, never as bare code
-    literals in src/mantis/eval (rule 4). Today configs/run5.yaml has no `eval.ladder` key at
+    literals in src/mantis/eval (rule 4). Today configs/run6.yaml has no `eval.ladder` key at
     all (read at HEAD — no `ladder`/`gate` block), so loading it under the extended schema
     below fails with a named ValidationError; that IS the correct RED state (the re-mint is an
     IMPL-stage task, not ORACLE-WRITE's)."""
     assert _RUN5.is_file(), f"expected {_RUN5} to exist at HEAD"
 
     # Once re-minted (IMPL work), this is the shape that must hold — expressed here so the
-    # assertion exists BEFORE the port (byte-frozen): the six rungs in STATE §5 order, and the
+    # assertion exists BEFORE the port (byte-frozen): the rungs in STATE §5 order, and the
     # literals 0.75 / 0.65 never appear as bare numbers in src/mantis/eval source (they must be
     # the VALUES the schema fields resolve to, not inline code constants).
     eval_src_dir = _REPO / "src" / "mantis" / "eval"

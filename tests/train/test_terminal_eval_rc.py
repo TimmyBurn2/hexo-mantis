@@ -85,6 +85,7 @@ import pytest
 import yaml
 
 import mantis.run as mantis_run
+from mantis._engine import HexgBuffer
 from mantis.config.armed_aborts import (
     DISK_SPACE_ABORT_RULE,
     MANIFEST,
@@ -94,9 +95,10 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung, RunConfig
+from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
-from mantis.model import CnnArch, GnnArch, build_net
+from mantis.model import GnnArch, build_net
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import RunCollaborators, _step_coordinator_config
@@ -104,6 +106,30 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
+
+def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
+    so each file that needs one builds it)."""
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -246,6 +272,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
+        self._hexg = _filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -253,8 +280,13 @@ class _Buffer:
     def save_to_path(self, path: Any) -> None:
         return None
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        return (None,) * 9
+    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
+        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # hand-built payload would be a second wire format for the collate to disagree with.
+        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class _SpySink:
@@ -343,7 +375,7 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=_tiny_model(), bufs=None, config=config,
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
@@ -372,20 +404,26 @@ class _Drive:
 
 def _write_config(tmp_path: Path, **train_overrides: Any) -> Path:
     """A REAL minted config, bounded, written to disk so `main --config` reads it back
-    through the ONE loader (no fixture object is smuggled past the CLI). `smoke_gnn.yaml`
+    through the ONE loader (no fixture object is smuggled past the CLI). `smoke_preflight_armed.yaml`
     already mints `eval_enabled: true` and `train.terminal_eval_enabled: true` — the two
     conditions the rc needs — so nothing here has to invent them."""
-    base = load_config(_CONFIGS / "smoke_gnn.yaml").model_dump()
+    base = load_config(_CONFIGS / "smoke_preflight_armed.yaml").model_dump()
     train = dict(base["train"])
     train.update({"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                   "batch_size": 8, "log_interval": 1})
+    # The armed draw-rate floor is rescaled with the run for the same reason the lag threshold
+    # and the gate interval are below: this drive is 3 steps long and the base config's minted
+    # floor is 10, which the cross-field validator rightly refuses as an abort that can never
+    # fire. R346(f) left one smoke profile and it is an ARMED one.
+    if train["draw_rate_abort"] is not None:
+        train["draw_rate_abort"] = {**train["draw_rate_abort"], "min_step": 1}
     train.update(train_overrides)
     base["train"] = train
     monitor = dict(base["monitor"])
     # R242 (ADJ-D12): the ARMING cadence is `monitor.gate_interval` now, not
     # `train.log_interval`. This drive sets `log_interval: 1` above so the draw-rate abort can
     # take an observation on every step of a 3-step burst; that is an ARMING requirement, so
-    # it is the gate knob that has to carry it. Left at smoke_gnn's minted 1000 the gate would
+    # it is the gate knob that has to carry it. Left at the config's own minted interval the gate would
     # never run and O-09 arm (b) would measure a run that stopped for a different reason.
     monitor.update({"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                     "gate_interval": 1,
@@ -438,8 +476,6 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
         )
 
     out_dir = tmp_path / "out"
-    from mantis._engine import HexgBuffer
-
     buffer = HexgBuffer(64, "gnn_axis_v1", 128)
     for i in range(8):
         buffer.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 0.6), (1, 1, 0.4)],
@@ -490,7 +526,9 @@ def _await_signal(state: ShutdownState) -> None:
 
 # ══ the REAL EvalPipeline rig (O-32 only: the round id is the pipeline's own) ══════════
 def _tiny_model():
-    arch = CnnArch(board_size=5, in_channels=4, filters=8, res_blocks=1)
+    spec = lookup("gnn_axis_v1")
+    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     return net
@@ -545,16 +583,14 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                           activation_wr_lower_ci=0.65, calibration_every_k_rounds=4,
                           calibration_games=8, bootstrap_resamples=1000,
                           bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234)
-    eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-                          strix_model_sims=128, random_floor_games=4, worker_device="cpu",
+    eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
                           round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
                           ply_cap_adjudication=None, strength_floor=None, gate=gate,
                           ladder=ladder)
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16",
-        max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         eval_cfg=eval_cfg,
         coordinator_cfg_caps=DrainCaps(final_eval_drain_timeout_sec=0.05,
                                        eval_final_drain_safety_factor=1.0,

@@ -143,7 +143,7 @@ def test_ap01_a_config_missing_the_key_fails_to_load(tmp_path):
     """
     import yaml
 
-    raw = yaml.safe_load((CONFIGS_DIR / "run5.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load((CONFIGS_DIR / "run6.yaml").read_text(encoding="utf-8"))
     del raw["allocator_posture"]
     victim = tmp_path / "no_posture.yaml"
     victim.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")

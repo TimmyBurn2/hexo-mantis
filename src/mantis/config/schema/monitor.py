@@ -14,6 +14,16 @@ from pydantic import Field, model_validator
 
 from mantis.config.schema._base import StrictModel
 
+#: R347/CONFIG-1 — the OPERATIONAL CONSTANTS in this module carry schema defaults and leave the
+#: YAML. The criterion is stated once here and applied field by field below: a key defaults when
+#: it names how the PROCESS is operated — a watchdog deadline, a poll interval, a join bound, a
+#: disk threshold — and no run has ever decided it differently. It stays REQUIRED when a run
+#: really chooses it, which is why `gate_interval`, the actor-lag pair, `supervisor_kill_grace_sec`
+#: and the whole WR/axis/warn family below are untouched: those are ARMING, and R1's
+#: no-silent-opponent reason bites hardest exactly there. A default here is R1-legal by R1's own
+#: words — "a default lives only in the schema field" — and a run that wants another value mints
+#: the row (`mint_config.py --mint-row`), which is the same act, visible in the header.
+
 
 class DiskGuardConfig(StrictModel):
     """The `mantis.train.lifecycle.disk_guard.DiskGuard` thresholds, minted (WPMAIN, R122).
@@ -35,9 +45,9 @@ class DiskGuardConfig(StrictModel):
     implementation edit.
     """
 
-    interval_sec: float = Field(gt=0)
-    warn_gb: float = Field(gt=0)
-    fail_gb: float = Field(gt=0)
+    interval_sec: float = Field(default=60.0, gt=0)
+    warn_gb: float = Field(default=10.0, gt=0)
+    fail_gb: float = Field(default=5.0, gt=0)
 
     @model_validator(mode="after")
     def _fail_threshold_below_warn_threshold(self) -> DiskGuardConfig:
@@ -64,10 +74,10 @@ class DrainCapsConfig(StrictModel):
     `subprocess.join(0)` is not a real bound — so every field is `Field(gt=0)`.
     """
 
-    final_eval_drain_timeout_sec: float = Field(gt=0)
-    eval_final_drain_safety_factor: float = Field(gt=0)
-    eval_final_drain_hard_cap_sec: float = Field(gt=0)
-    terminal_eval_hard_cap_sec: float = Field(gt=0)
+    final_eval_drain_timeout_sec: float = Field(default=900.0, gt=0)
+    eval_final_drain_safety_factor: float = Field(default=3.0, gt=0)
+    eval_final_drain_hard_cap_sec: float = Field(default=14400.0, gt=0)
+    terminal_eval_hard_cap_sec: float = Field(default=14400.0, gt=0)
 
 
 class MonitorSchemaConfig(StrictModel):
@@ -128,14 +138,14 @@ class MonitorSchemaConfig(StrictModel):
     # ── independent heartbeat watchdog (train/lifecycle/heartbeat_watchdog.py) ─────────
     # `deadline <= 0` disables that source's fire (monitor/config.py's own contract) — a
     # bound of `ge=0`, not `gt=0`, preserves the ability to mint the disabled sentinel.
-    heartbeat_deadline_train_step_sec: float = Field(ge=0)
-    heartbeat_deadline_inference_dispatch_sec: float = Field(ge=0)
-    heartbeat_deadline_selfplay_drain_sec: float = Field(ge=0)
-    heartbeat_deadline_eval_round_sec: float = Field(ge=0)
-    heartbeat_poll_interval_sec: float = Field(ge=0)
-    heartbeat_file_interval_sec: float = Field(ge=0)
-    heartbeat_close_out_deadline_sec: float = Field(ge=0)
-    heartbeat_fire_effect_timeout_sec: float = Field(ge=0)
+    heartbeat_deadline_train_step_sec: float = Field(default=1800.0, ge=0)
+    heartbeat_deadline_inference_dispatch_sec: float = Field(default=1800.0, ge=0)
+    heartbeat_deadline_selfplay_drain_sec: float = Field(default=1800.0, ge=0)
+    heartbeat_deadline_eval_round_sec: float = Field(default=1800.0, ge=0)
+    heartbeat_poll_interval_sec: float = Field(default=5.0, ge=0)
+    heartbeat_file_interval_sec: float = Field(default=15.0, ge=0)
+    heartbeat_close_out_deadline_sec: float = Field(default=14400.0, ge=0)
+    heartbeat_fire_effect_timeout_sec: float = Field(default=30.0, ge=0)
 
     # ── actor-lag invariant (WP-UNFREEZE K2/K3; watchdog family) ──────────────────────
     # `ge=1`, no zero-disable sentinel — disablement is the arming flag's job, one
@@ -144,16 +154,18 @@ class MonitorSchemaConfig(StrictModel):
     actor_lag_abort_enabled: bool
 
     # ── out-of-process supervisor flag defaults (monitor/supervise.py) ────────────────
-    supervisor_stale_after_sec: float = Field(ge=0)
-    supervisor_poll_interval_sec: float = Field(ge=0)
+    supervisor_stale_after_sec: float = Field(default=900.0, ge=0)
+    supervisor_poll_interval_sec: float = Field(default=30.0, ge=0)
+    # NO default: the kill grace is the one supervisor knob a run decides — run6 mints 600 s
+    # against the template's 30 s because its close-out really takes that long.
     supervisor_kill_grace_sec: float = Field(ge=0)
-    supervisor_max_relaunches: int = Field(ge=0)
+    supervisor_max_relaunches: int = Field(default=5, ge=0)
 
     # ── drain/terminal-eval hard caps (DESIGN_P2.md §4.3; schema-only, see DrainCapsConfig) ──
-    drain: DrainCapsConfig
+    drain: DrainCapsConfig = DrainCapsConfig()
 
     # ── disk guard (WPMAIN/R122; schema-only, see DiskGuardConfig) ────────────────────
     # Read by `mantis.config.resolve.disk_guard.resolve_disk_guard` and threaded into
     # `DiskGuard(...)` by `mantis.run.compose_run` — NOT part of the 1:1 `MonitorConfig`
     # copy, exactly like `drain`, and dropped by name in `resolve_monitor_config`.
-    disk_guard: DiskGuardConfig
+    disk_guard: DiskGuardConfig = DiskGuardConfig()

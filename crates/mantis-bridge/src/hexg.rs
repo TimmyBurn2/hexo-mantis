@@ -468,10 +468,21 @@ mod tests {
 
     #[test]
     fn grid_encoding_is_loud_error() {
-        assert!(
-            PyHexgBuffer::new(8, "v6", 128).is_err(),
-            "HexgBuffer rejects a grid encoding"
-        );
+        // `"v6"` was a REGISTERED grid row before R346(f) and this pinned the
+        // representation refusal. The row is deleted, so the refusal now comes from the
+        // registry — and the message assertion is what stops this reading as a bare typo
+        // check: a resurrected grid row must clear `representation="grid"` first.
+        let err = PyHexgBuffer::new(8, "v6", 128)
+            .err()
+            .expect("HexgBuffer rejects a grid encoding");
+        Python::initialize();
+        Python::attach(|py| {
+            let msg = err.value(py).to_string();
+            assert!(
+                msg.contains("v6") && msg.contains("gnn_axis_v1"),
+                "the refusal must name the offered encoding and the registered set: {msg}"
+            );
+        });
     }
 
     #[test]

@@ -52,7 +52,7 @@ def _head(kind: str, **over):
 
 
 def _board():
-    return Board.with_encoding_name("v6_live2_ls")
+    return Board.with_encoding_name("gnn_axis_v1")
 
 
 @pytest.mark.parametrize("kind", ["puct", "gumbel"])

@@ -7,20 +7,14 @@ and deterministic — THIS suite's whole point is to prove the real out-of-proce
 actually runs a real headless round on CPU: no `multiprocessing.get_context` patch here.
 `worker_device="cpu"`.
 
-FIX-PASS amendment (design-gap G-1..G-3, dispatcher ruling option (b)): the original tiny
-`CnnArch(board_size=5, in_channels=4)` net was NOT a registered encoding and its tensors
-never matched what the engine actually feeds a net through this path — `mantis.eval.worker`
-runs inference via `LocalInferenceEngine` bound to the encoding the ROUND DECLARED (WP12-R
-Phase B threads `RoundSpec.encoding`; before it, the engine bound `"v6"` unconditionally),
-and this fixture declares `encoding="v6"`, so the wire tensor it decodes is the registered
-`"v6"` encoding's shape either way (`board_size=19,
-n_planes=8` — verified directly against `crates/mantis-encoding/src/registry.toml`, and
-empirically: a `board_size=5, in_channels=4` net dies with `RuntimeError: ... expected
-input[2, 8, 19, 19] to have 4 channels`). This fixture now builds `encoding="v6"`
-end-to-end (board, snapshot tag, RegimeKey stamps) and a REAL-ARCH net at v6's true dims
-(`board_size=19, in_channels=8`), minimal width/depth (`filters=8, res_blocks=1`) for
-speed — registry-true, so `Board.with_encoding_name` tensors match the net exactly, no
-accidental shape coincidence.
+FIX-PASS amendment (design-gap G-1..G-3, dispatcher ruling option (b)): a hand-sized net was
+NOT a registered encoding and its tensors never matched what the engine actually feeds a net
+through this path — `mantis.eval.worker` runs inference via `LocalInferenceEngine` bound to
+the encoding the ROUND DECLARED (WP12-R Phase B threads `RoundSpec.encoding`), so the wire it
+decodes carries the declared encoding's geometry whatever the net was built at. This fixture
+builds `_ENC` end-to-end (board, snapshot tag, RegimeKey stamps) and a REAL-ARCH net whose
+node/edge dims are READ OFF that encoding's spec, minimal width/depth for speed —
+registry-true, so the wire and the net match exactly, no accidental shape coincidence.
 
 Second dispatcher-ruled amendment (required by Part 4's revert of the first-round
 dormant-rung top-up, deviation #3): `LadderState.initial()` marks ONLY rung INDEX 0 active;
@@ -62,7 +56,7 @@ from mantis.config.schema import (
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.encoding import lookup
-from mantis.model import CnnArch, build_net
+from mantis.model import GnnArch, build_net
 
 pytestmark = pytest.mark.integration
 
@@ -71,7 +65,7 @@ pytestmark = pytest.mark.integration
 #: `book_v1_s20260625_p4`, which is minted against `gnn_axis_v1` and 292 of whose 512 openings
 #: need radius >= 6 (tests/arena/test_book_geometry_pairing.py). Under `v6` the round dies in
 #: the eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
-_ENC = "v6w25"
+_ENC = "gnn_axis_v1"
 
 
 def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
@@ -89,8 +83,8 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
     # runs while still exercising the REAL worker/arena/BT path end to end.
     torch.manual_seed(weight_seed)
     spec = lookup(_ENC)
-    arch = CnnArch(board_size=spec.board_size, in_channels=spec.n_planes,
-                   filters=8, res_blocks=1)
+    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     return net
@@ -121,8 +115,7 @@ def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
         bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     return EvalConfig(
-        random_model_sims=4, sealbot_model_sims=4, kraken_model_sims=4,
-        strix_model_sims=4, random_floor_games=2, worker_device="cpu",
+        random_model_sims=4, sealbot_model_sims=4, random_floor_games=2, worker_device="cpu",
         round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
         ply_cap_adjudication=(
             PlyCapAdjudicationConfig(criterion="longest_run_margin", min_margin=1)
@@ -149,7 +142,7 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
     spool_dir = tmp_path / "spool"
     spool_dir.mkdir(exist_ok=True)
     return build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         eval_cfg=_eval_cfg(adjudicate=adjudicate),
         coordinator_cfg_caps=DrainCaps(
             final_eval_drain_timeout_sec=600.0,

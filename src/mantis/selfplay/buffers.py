@@ -1,12 +1,9 @@
-"""Dispatch-only veneer over the engine replay buffers (HEXB dense / HEXG graph).
+"""Dispatch-only veneer over the engine HEXG graph replay buffer.
 
-The facade exists for ONE reason: the mislabel class. Old-side the pool held a raw
-`ReplayBuffer` / `HexgBuffer` and chose the push arm from the encoding spec; nothing
-cross-checked that the buffer handed in actually matched the representation the pool
-dispatched on, so a graph payload could be pushed into a dense buffer (or vice versa)
-and only surface later as corrupt training data. `ReplayFacade` resolves the kind ONCE
-from `spec.representation` (closed match, LAW-11) and cross-checks the raw handle, so a
-mislabel dies at construction with a named error.
+The facade resolves the kind ONCE from `spec.representation` (closed match, LAW-11), so a
+config that names no graph representation dies at construction rather than downstream. The
+cross-kind mislabel guard it was built for went with the grid path (R346(f)): with one
+storage kind there is no other buffer to hand in by mistake.
 
 It is a veneer and nothing more:
 
@@ -18,9 +15,8 @@ It is a veneer and nothing more:
     are entirely the engine's (WP5/WP7). The byte-level cross-magic rejection on
     `load_from_path` is the engine's crate gate; the facade only re-asserts it at the seam
     by letting the engine error propagate unswallowed.
-  * zero new metrics — `outcome_in_range_count` is a plain passthrough. It exists on the
-    dense buffer and NOT on the graph buffer, which is old-side truth: the caller's
-    missing-attribute fallback (a NaN `draw_target_fraction` on the graph path) must stay
+  * zero new metrics — `outcome_in_range_count` is a plain passthrough, absent on the graph
+    buffer; the caller's missing-attribute fallback (a NaN `draw_target_fraction`) must stay
     reachable, so the absence is propagated, never papered over.
 """
 from __future__ import annotations
@@ -28,7 +24,7 @@ from __future__ import annotations
 import enum
 from typing import Any
 
-from mantis._engine import HexgBuffer, ReplayBuffer
+from mantis._engine import HexgBuffer
 from mantis.selfplay.hparams import is_graph_representation
 
 
@@ -42,9 +38,9 @@ class BufferKindMismatch(TypeError):
 
 
 class BufferKind(enum.Enum):
-    """The two replay-storage kinds. Closed set — there is no third arm and no default."""
+    """The replay-storage kind. Closed set — there is no second arm and no default. The
+    HEXB dense kind went with the grid path (R346(f))."""
 
-    GRID = "grid"  # engine `ReplayBuffer` (HEXB)
     GRAPH = "graph"  # engine `HexgBuffer` (HEXG)
 
     @classmethod
@@ -56,17 +52,14 @@ class BufferKind(enum.Enum):
         `spec.representation` raises `RepresentationMismatch` (LAW-11 — no
         dense-by-default arm anywhere).
         """
-        return cls.GRAPH if is_graph_representation(spec) else cls.GRID
+        is_graph_representation(spec)
+        return cls.GRAPH
 
 
-# The engine class that must NOT appear under each kind. Checked by exclusion rather
-# than by allowlist so the facade stays duck-typed for the recording/stub buffers the
-# drain oracles push into, while the real mislabel (HEXG under grid, HEXB under graph)
-# still dies loudly.
-_WRONG_RAW_FOR: dict[BufferKind, type] = {
-    BufferKind.GRID: HexgBuffer,
-    BufferKind.GRAPH: ReplayBuffer,
-}
+#: The engine class the graph kind is backed by. Kept as a NAME rather than an isinstance
+#: gate: the facade stays duck-typed for the recording/stub buffers the drain oracles push
+#: into, and with one kind left there is no cross-kind mislabel to exclude.
+_RAW_FOR: dict[BufferKind, type] = {BufferKind.GRAPH: HexgBuffer}
 
 
 class ReplayFacade:
@@ -79,62 +72,14 @@ class ReplayFacade:
     """
 
     def __init__(self, spec: Any, raw: Any) -> None:
-        kind = BufferKind.from_spec(spec)
-        wrong = _WRONG_RAW_FOR[kind]
-        if isinstance(raw, wrong):
-            raise BufferKindMismatch(
-                f"replay buffer is a {type(raw).__name__} but the resolved encoding "
-                f"representation is {kind.value!r}; a "
-                f"{'graph' if kind is BufferKind.GRID else 'dense'} buffer cannot back "
-                f"the {kind.value} self-play write path. Build the buffer from the same "
-                "encoding the pool resolves."
-            )
-        self.kind = kind
+        self.kind = BufferKind.from_spec(spec)
         self.raw = raw
 
     def __repr__(self) -> str:
         return f"ReplayFacade(kind={self.kind.value!r}, raw={type(self.raw).__name__})"
 
-    def _require(self, kind: BufferKind, method: str) -> None:
-        if self.kind is not kind:
-            raise BufferKindMismatch(
-                f"{method} is the {kind.value} write path but this facade wraps a "
-                f"{self.kind.value} buffer ({type(self.raw).__name__}). The push arm and "
-                "the resolved representation disagree."
-            )
-
-    # ── push arms (the only two write paths) ────────────────────────────────────
-    def push_dense_many(
-        self,
-        states: Any,
-        chain_planes: Any,
-        policies: Any,
-        outcomes: Any,
-        ownership: Any,
-        winning_line: Any,
-        game_lengths: Any,
-        is_full_search: Any,
-        position_indices: Any = None,
-        value_target_valid: Any = None,
-    ) -> None:
-        """Forward one bulk dense push. Argument objects travel unchanged."""
-        self._require(BufferKind.GRID, "push_dense_many")
-        self.raw.push_many(
-            states,
-            chain_planes,
-            policies,
-            outcomes,
-            ownership,
-            winning_line,
-            game_lengths,
-            is_full_search,
-            position_indices,
-            value_target_valid=value_target_valid,
-        )
-
     def push_graph_position(self, *record: Any, game_id: int = -1) -> None:
         """Forward one graph row. The record tuple travels verbatim and is not inspected."""
-        self._require(BufferKind.GRAPH, "push_graph_position")
         self.raw.push_graph_position(*record, game_id=game_id)
 
     # ── passthrough surface ─────────────────────────────────────────────────────

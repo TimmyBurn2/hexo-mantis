@@ -1,12 +1,14 @@
 """Pretrain encoding resolution never defaults (R45, LAW-11/LAW-05).
 
-Two arms lived here. `validate._config_encoding` silently resolved a checkpoint config
-with no encoding to "v6"; `cli._resolve_encoding_name` silently pretrained a v6 model when
-neither `--encoding` nor `--resume` was passed. The second was found by running gate 11
-before landing it, and is the sixth arm of this class (ADJ-03) — it is on a TRAINING path,
-so it is the more consequential of the two.
+Two arms lived here. `validate._config_encoding` silently resolved a checkpoint config with
+no encoding to a dense default; `cli._resolve_encoding_name` silently pretrained a dense
+model when neither `--encoding` nor `--resume` was passed. The second was found by running
+gate 11 before landing it, and is the sixth arm of this class (ADJ-03) — it is on a TRAINING
+path, so it is the more consequential of the two.
 
-RED at `973822d`: both functions returned "v6" instead of raising.
+`validate.py` went with the dense pretrain path (R346(f)), and it was a veneer over THE one
+resolver — so its arm is pinned here on `resolve_from_config` itself, which is what it always
+delegated to and what any replacement veneer would have to call.
 """
 from __future__ import annotations
 
@@ -19,11 +21,17 @@ from mantis.encoding.resolvers import (
     EncodingDeclarationConflictError,
     EncodingRegistryError,
     MissingEncodingError,
+    resolve_from_config,
 )
 from mantis.train.pretrain.cli import _resolve_encoding_name
-from mantis.train.pretrain.validate import _config_encoding
 
-# ── validate._config_encoding ────────────────────────────────────────────────────────
+
+def _config_encoding(config: dict) -> str:
+    """What the deleted `validate._config_encoding` veneer did: the ONE resolver, by name."""
+    return resolve_from_config(config).name
+
+
+# ── the ONE resolver, on the shapes a checkpoint config arrives in ──────────────────
 
 
 def test_checkpoint_config_with_no_encoding_at_all_raises():
@@ -54,13 +62,14 @@ def test_checkpoint_config_with_identity_but_non_string_encoding_raises():
 @pytest.mark.parametrize(
     ("cfg", "expected"),
     [
-        ({"identity": {"encoding": "v6w25"}}, "v6w25"),
+        ({"identity": {"encoding": "gnn_axis_r8"}}, "gnn_axis_r8"),
         ({"encoding": "gnn_axis_v1"}, "gnn_axis_v1"),
-        ({"encoding": {"version": "v6_live2_ls"}}, "v6_live2_ls"),
+        ({"encoding": {"version": "gnn_axis_r8"}}, "gnn_axis_r8"),
         # AGREEING dual-shape resolves (WPTS Phase P re-point, R104: the old row here
         # pinned "identity wins over a conflicting flat key" — the precedence R104 rejects;
         # the conflict raise is pinned below).
-        ({"identity": {"encoding": "v6w25"}, "encoding": "v6w25"}, "v6w25"),
+        ({"identity": {"encoding": "gnn_axis_v1"}, "encoding": "gnn_axis_v1"},
+         "gnn_axis_v1"),
     ],
 )
 def test_explicit_encodings_still_resolve(cfg, expected):
@@ -73,7 +82,8 @@ def test_conflicting_dual_shape_is_corrupt_input_and_raises():
     disagree is corrupt; the veneer surfaces the one authority's named error rather than
     silently preferring either shape."""
     with pytest.raises(EncodingDeclarationConflictError):
-        _config_encoding({"identity": {"encoding": "v6w25"}, "encoding": "v6"})
+        _config_encoding({"identity": {"encoding": "gnn_axis_r8"},
+                          "encoding": "gnn_axis_v1"})
 
 
 # ── cli._resolve_encoding_name (ADJ-03, the sixth arm) ───────────────────────────────

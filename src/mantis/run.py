@@ -90,7 +90,7 @@ from mantis.config.armed_aborts import (
     audit_arming_live,
     exit_code_for_abort,
 )
-from mantis.config.emit import resolve_config
+from mantis.config.emit import resolve_config, write_resolved_config
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.allocator_posture import (
@@ -346,7 +346,9 @@ def _seam(name: str) -> Iterator[None]:
     the eval-pipeline wall reaching the process boundary unnamed. Seamed now, and this list
     is the claim:
 
-    - builder: `init_trainer`, `_select_buffer`, `WorkerPool` (3);
+    - builder: `resolved_config record`, `init_trainer`, `_select_buffer`, `WorkerPool` (4 —
+      the record is FIRST, so the run's own account of what it was configured with exists
+      before any collaborator can wedge, R347/CONFIG-1);
     - composer: `_resolve_monitor_cfg`, `build_run_safety`, `run_boot_identity emit`,
       `resolved_config emit`, `ActorSync`, `_step_coordinator_config`, `build_eval_pipeline`,
       `pool.start`, `watchdog.start`, `DiskGuard`, `StepCoordinator` (11).
@@ -476,15 +478,9 @@ def _select_buffer(config: Any, capacity: int) -> Any:
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
         buffer.seed_sampler(config.seed)
         return buffer
-    if representation == "grid":
-        from mantis._engine import ReplayBuffer
-
-        buffer = ReplayBuffer(capacity, config.identity.encoding)
-        buffer.seed_sampler(config.seed)
-        return buffer
     raise RepresentationRouteError(
         f"identity.representation {representation!r} selects no buffer — an absent or "
-        "unknown representation is an ERROR, never a dense default (LAW-11)"
+        "unknown representation is an ERROR, never a default (LAW-11)"
     )
 
 
@@ -597,6 +593,11 @@ def build_run_collaborators(
     checkpoint_dir = out_dir / "checkpoints"
     log_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
+    # R347/CONFIG-1: the run records its COMPLETE resolved config, including every leaf the
+    # shipped file left to a schema default, BEFORE anything can wedge. Persistence-fatal by
+    # LAW-14 — a run whose own record cannot be written is a run nobody can reconstruct.
+    with _seam("resolved_config record"):
+        write_resolved_config(config, out_dir)
 
     device = torch.device(config.train.device)
     # RECAL-PREP / R308(g)(i): the allocator-posture assertion, BEFORE the first CUDA
@@ -709,9 +710,6 @@ def _step_coordinator_config(
         batch_size=knobs.batch_size,
         augment=knobs.augment,
         recency_weight=knobs.recency_weight,
-        mixing_initial_w=knobs.mixing_initial_w,
-        mixing_min_w=knobs.mixing_min_w,
-        mixing_decay_steps=knobs.mixing_decay_steps,
         hard_gn_threshold=knobs.hard_gn_threshold,
         hard_gn_min_steps=knobs.hard_gn_min_steps,
         stop_step=stop_step,
@@ -721,7 +719,6 @@ def _step_coordinator_config(
         eval_final_drain_hard_cap_sec=drain_caps.eval_final_drain_hard_cap_sec,
         terminal_eval_hard_cap_sec=drain_caps.terminal_eval_hard_cap_sec,
         terminal_eval_enabled=knobs.terminal_eval_enabled,
-        bot_batch_share=knobs.bot_batch_share,
         selfplay_stall_timeout_sec=knobs.selfplay_stall_timeout_sec,
     )
 
@@ -1138,7 +1135,6 @@ def compose_run(
                     # AUDIT-1 F-31: the run's declared autocast dtype, resolved ONCE here
                     # and carried to every round — the eval child has no RunConfig, and
                     # its dense forward had no dtype at all.
-                    amp_dtype=config.train.amp_dtype,
                     # AUDIT-1 F-15: the eval arena's ply cap is the RUN's, not a module
                     # constant. `DEFAULT_MAX_PLIES = 128` was a copy of a copy of this key.
                     max_plies=config.selfplay.max_game_moves,

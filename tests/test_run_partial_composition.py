@@ -251,7 +251,7 @@ def _bounded(smoke_run_config, **over):
     monitor.update(over.pop("monitor", {}))
     over.setdefault("eval_enabled", False)
     return smoke_run_config(
-        "smoke_gnn.yaml",
+        "dev_example.yaml",
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                "batch_size": 8},
         monitor=monitor, **over,

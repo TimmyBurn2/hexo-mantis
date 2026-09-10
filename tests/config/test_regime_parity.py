@@ -1,6 +1,6 @@
 """O9–O11 — regime-parity per LAW knob (repo_design §8).
 
-Each asserts *suite default == production default* over production_config() (configs/run5.yaml):
+Each asserts *suite default == production default* over production_config() (configs/run6.yaml):
 the suite expectation is DERIVED from the shipped config, never a hardcoded regime knob
 (CONTEXT bug-class #5). Three §8 knobs remain here: sims (O9), amp=bf16 (O10), encoding
 (O11). O12 (radius schedule) is RETIRED (WPSC Phase 2 SC-A2 forced-fallout: DESIGN_P2.md §5
@@ -57,13 +57,11 @@ def test_o9_sims_regime_parity(production_config):
 
 def test_o10_amp_is_bf16_on_graph(production_config):
     assert production_config.identity.representation == "graph"
-    assert resolve_amp_dtype(
-        production_config.identity.representation, production_config.train.amp_dtype
-    ) == "bf16"
+    assert resolve_amp_dtype(production_config.identity.representation) == "bf16"
 
 
 def test_o11_encoding_regime_parity(production_config):
-    assert production_config.identity.encoding == "gnn_axis_v1"
+    assert production_config.identity.encoding == "gnn_axis_r8"
     assert production_config.identity.representation == "graph"
 
 

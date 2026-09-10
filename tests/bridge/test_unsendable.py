@@ -29,7 +29,7 @@ def _access_on_new_thread(fn):
 
 
 def test_board_rejects_cross_thread_access(panic_exception):
-    board = _engine.Board.with_encoding_name("v6")
+    board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
     assert _access_on_new_thread(lambda: board.apply_move(1, 0)) == panic_exception.__name__
     # Same-thread use is unaffected.
@@ -46,8 +46,6 @@ def test_mctstree_rejects_cross_thread_access(panic_exception):
 
 def test_send_safe_classes_cross_thread_ok():
     """The send-safe pyclasses (Arc/atomic-backed) are usable off-thread."""
-    rb = _engine.ReplayBuffer(8, "v6")
-    assert _access_on_new_thread(lambda: rb.size) == "ok"
     hb = _engine.HexgBuffer(8, "gnn_axis_v1", 128)
     assert _access_on_new_thread(lambda: hb.size) == "ok"
     ts = _engine.TacticalSolver()

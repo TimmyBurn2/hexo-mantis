@@ -59,9 +59,6 @@ class PlayoutCapConfig(StrictModel):
     full_search_prob: float = Field(ge=0, le=1)
     n_sims_quick: int = Field(ge=0, le=MAX_ARMED_SIMS)
     n_sims_full: int = Field(ge=0, le=MAX_ARMED_SIMS)
-    zoi_enabled: bool
-    zoi_lookback: int = Field(ge=0)
-    zoi_margin: int = Field(ge=0)
     # The schema field IS the config key — retires hparams.py's
     # `_resolve_playout_cap_temperature` key/field-spelling shim by construction.
     temperature_threshold_compound_moves: int = Field(ge=0)
@@ -129,26 +126,17 @@ class SelfplayConfig(StrictModel):
     n_workers: int = Field(ge=1)
     leaf_batch_size: int = Field(ge=1)
     max_game_moves: int = Field(ge=1)
-    inference_pool_size: int | None = Field(ge=1)
     c_visit: float = Field(gt=0)
     c_scale: float = Field(gt=0)
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
-    results_queue_cap: int = Field(ge=1)
+    # OPERATIONAL CONSTANT (R347/CONFIG-1): a queue's back-pressure bound.
+    results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)
-    rotation_enabled: bool
-    forced_win_policy_enabled: bool
-    forced_win_policy_depth: int = Field(ge=1)
-    forced_win_policy_weight: float = Field(ge=0)
-    solver_enabled: bool
-    solver_depth: int = Field(ge=1)
-    solver_node_budget: int = Field(ge=1)
-    solver_neighbor_dist: int = Field(ge=0)
-    solver_visit_weight: float = Field(ge=0, le=1)
-    seed_fraction: float = Field(ge=0, le=1)
-    seed_corpus_path: str | None
-    log_investigation_metrics: bool
-    instrumentation_enabled: bool
+    # OPERATIONAL CONSTANT (R347/CONFIG-1): a diagnostic verbosity switch. It gates only
+    # what is WRITTEN, never what is played, which is what makes it operational rather than
+    # the silently-disabled-opponent class R1 exists for.
+    log_investigation_metrics: bool = True
     mcts: MctsConfig
     playout_cap: PlayoutCapConfig
 
@@ -228,12 +216,6 @@ class InferenceConfig(StrictModel):
 
     inference_batch_size: int = Field(ge=1)
     inference_max_wait_ms: int = Field(ge=0)
-    trace_inference: bool
-    compile_inference: bool
-    compile_inference_mode: str = Field(min_length=1)
-    compile_inference_dynamic: bool
-    perf_timing: bool
-    perf_sync_cuda: bool
     # ARCH-SCOPED (R322(d)): `None` is the ABSENCE of the key, never a value — see
     # `TrainConfig.microbatch_caps` for the shape and `RunConfig` for the enforcement.
     # It does NOT collide with the R119 `null` PLACEHOLDER, which lives on the two

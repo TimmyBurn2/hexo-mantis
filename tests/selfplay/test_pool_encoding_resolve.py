@@ -8,7 +8,12 @@ rows live in the same `wp/WPSP/oldside/` bank and may be promoted alongside them
 
 Q3 ruling this pins: the resolver is ALREADY the kept-plane authority, so `n_kept_planes` and
 `kept_plane_indices` must come from the bound spec — the old module-level `KEPT_PLANE_INDICES`
-const (v6-only, and a live hazard on a 10-channel spec) is not ported.
+const (dense-only, and a live hazard on a 10-channel spec) is not ported.
+
+R346(f) deleted the three grid rows the capture covers, so what is comparable against the
+old-side bank is `gnn_axis_v1` alone. The capture file keeps the grid entries — it is a record
+of what was measured, not a claim about what is registered — and this file reads only the rows
+whose encoding still resolves.
 """
 from __future__ import annotations
 
@@ -20,13 +25,13 @@ from mantis.selfplay.hparams import resolve_pool_encoding
 # diverged: R328(b) registered `gnn_axis_r8`, which post-dates the capture and therefore has no
 # golden to be compared against. This tuple is a property of the FIXTURE, so it does not grow
 # when the registry does; `tests/bridge/test_surface.py` is where the live set is pinned.
-REGISTERED = ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1")
+REGISTERED = ("gnn_axis_v1",)
 
 
 @pytest.mark.parametrize("name", REGISTERED)
 def test_resolve_encoding_per_registered_name(encoding_resolve_golden, name):
     """D-01 — PASS iff `resolve_pool_encoding({"encoding": name})` reproduces the captured
-    old-side tuple for all four registered encodings: encoding_name, board_size, trunk_size,
+    old-side tuple for every registered encoding: encoding_name, board_size, trunk_size,
     n_kept_planes, plus the bound spec's representation / policy_logit_count /
     node_feat_dim / edge_feat_dim / kept_plane_indices. FAIL on ANY field = the pool would
     size its feature and policy buffers from a different spec than the one the encoder used —
@@ -57,7 +62,7 @@ def test_resolve_encoding_per_registered_name(encoding_resolve_golden, name):
 
 def test_resolved_kept_planes_match_indices_length(encoding_resolve_golden):
     """D-01 (consistency arm) — PASS iff `n_kept_planes` equals `len(kept_plane_indices)` for
-    every registered encoding, as the capture shows (v6/v6w25 8, v6_live2_ls 4, graph 0).
+    every registered encoding, as the capture shows (graph 0).
     FAIL = the plane COUNT and the plane INDEX LIST come from different places, which is how
     a 4-plane spec ends up slicing 8 planes out of a checkpoint."""
     for name in REGISTERED:

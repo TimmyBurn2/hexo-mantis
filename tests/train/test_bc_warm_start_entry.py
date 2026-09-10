@@ -138,11 +138,18 @@ def test_an_absent_checkpoint_is_a_named_refusal(tmp_path: Path) -> None:
 
 
 def test_the_transfer_is_graph_only_and_says_so(tmp_path: Path) -> None:
+    """No REGISTERED encoding declares a non-graph representation since R346(f), so the refusal
+    is driven from a spec-shaped stub — the same way the LAW-11 arms elsewhere reach a
+    representation the registry cannot mint."""
+    class _NonGraphSpec:
+        name = "not_a_graph"
+        representation = "hexcanvas"
+
     arch = _arch()
     source, source_hash = _write_source(tmp_path, arch)
     with pytest.raises(ValueError, match="graph-only"):
         apply_bc_warm_start(
-            build_net(arch), BcWarmStart(source, source_hash), spec=lookup("v6_live2_ls"),
+            build_net(arch), BcWarmStart(source, source_hash), spec=_NonGraphSpec(),
         )
 
 
@@ -206,8 +213,7 @@ def test_a_cpu_smoke_plays_one_legal_game_from_the_warm_started_net(tmp_path: Pa
         net, torch.device("cpu"), encoding_spec=spec,
         fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(inference_batch_size=8, inference_max_wait_ms=10),
-        max_in_flight=4, amp_dtype="bf16",
-    )
+        max_in_flight=4, )
     try:
         def _player() -> Any:
             # `n_sims` deliberately small: this is a liveness smoke on the default tier, not a

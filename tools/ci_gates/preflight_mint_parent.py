@@ -176,6 +176,20 @@ class PreflightOutDirReusedError(PreflightError):
     rc = 15
 
 
+class PreflightWorkspaceNotDurableError(PreflightError):
+    """R347(d): the run directory is on a filesystem a reboot erases. A START HALT, before
+    the boot — the failure it guards costs a whole run and looks exactly like silence."""
+    rc = 16
+
+
+class PreflightCudaBuildError(PreflightError):
+    """R347(d): the config declares a cuda device and the installed torch cannot compute on a
+    GPU. Conditioned on what the RUN declares, never on sniffing the host: this box runs a
+    `+cpu` wheel deliberately for the WP9 forward-parity regime, so host presence of a card
+    proves nothing about which torch a run needs."""
+    rc = 17
+
+
 class PreflightArmingAuditError(PreflightError):
     rc = 30
 

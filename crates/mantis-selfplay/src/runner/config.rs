@@ -54,9 +54,6 @@ pub struct SelfPlayRunnerConfig {
     pub quiescence_enabled: bool,
     pub quiescence_blend_2: f32,
     pub temp_min: f32,
-    pub zoi_enabled: bool,
-    pub zoi_lookback: usize,
-    pub zoi_margin: i32,
     pub c_visit: f32,
     pub c_scale: f32,
     /// Which search the workers run (`search.kind`). THE one key: it selects the root
@@ -73,32 +70,12 @@ pub struct SelfPlayRunnerConfig {
     pub n_sims_quick: usize,
     pub n_sims_full: usize,
     pub random_opening_plies: u32,
-    pub selfplay_rotation_enabled: bool,
     /// Registry-form encoding name (e.g. `"v6"`, `"gnn_axis_v1"`). Resolved to a
     /// `&'static RegistrySpec` at `SelfPlayRunner::new` via
     /// `mantis_encoding::lookup`. `None` = **error** (LAW-11 — absent identity
     /// key is never a grid/dense default; the frozen `None → v6` fallback is
     /// killed, D2).
     pub encoding_name: Option<String>,
-    /// Inference-pool sizing hint — consumed by the WP7 producer face (the NN
-    /// pool); the pure-Rust queues do not size a pool.
-    pub inference_pool_size: Option<usize>,
-    /// O1 forced-win → one-hot POLICY target knobs (default OFF).
-    pub forced_win_policy_enabled: bool,
-    pub forced_win_policy_depth: u8,
-    pub forced_win_policy_weight: f32,
-    /// D-WS3 L1 solver-in-loop SOFT visit-injection knobs (default OFF —
-    /// `solver_enabled=false` makes the per-move hook a no-op).
-    pub solver_enabled: bool,
-    pub solver_depth: u32,
-    pub solver_node_budget: u64,
-    pub solver_neighbor_dist: i32,
-    pub solver_visit_weight: f32,
-    /// D-WS3V3 trap-corpus START-POSITION seeding (default OFF / empty).
-    pub seed_fraction: f32,
-    /// Move-prefix corpus (list-of-list-of-`(q, r)`). `None` / empty = no
-    /// seeding. Dry-replay validated once at `SelfPlayRunner::new`.
-    pub seed_corpus: Option<Vec<Vec<(i32, i32)>>>,
 }
 
 /// **TEST-SCAFFOLDING ONLY** (see the module doc). NOT a config default-authority
@@ -125,9 +102,6 @@ impl Default for SelfPlayRunnerConfig {
             quiescence_blend_2: 0.3,
             // D-TEMPDECAY C1: anti-colony constant floor (was 0.05).
             temp_min: 0.5,
-            zoi_enabled: false,
-            zoi_lookback: 16,
-            zoi_margin: 5,
             c_visit: 50.0,
             c_scale: 1.0,
             search_kind: SearchKind::Puct,
@@ -141,22 +115,7 @@ impl Default for SelfPlayRunnerConfig {
             n_sims_quick: 0,
             n_sims_full: 0,
             random_opening_plies: 0,
-            selfplay_rotation_enabled: false,
             encoding_name: None,
-            inference_pool_size: None,
-            // O1 forced-win one-hot POLICY target — OFF by default.
-            forced_win_policy_enabled: false,
-            forced_win_policy_depth: 2,
-            forced_win_policy_weight: 1.0,
-            // D-WS3 L1 solver-in-loop — OFF by default (byte-identical self-play).
-            solver_enabled: false,
-            solver_depth: 16,
-            solver_node_budget: 50_000,
-            solver_neighbor_dist: 2,
-            solver_visit_weight: 0.3,
-            // D-WS3V3 start-position seeding — OFF by default.
-            seed_fraction: 0.0,
-            seed_corpus: None,
         }
     }
 }

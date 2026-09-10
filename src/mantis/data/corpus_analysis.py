@@ -217,7 +217,7 @@ def main() -> None:
 
     # Always run combined analysis
     combined_results = run_analysis(
-        records, "all", cluster_sample=500, encoding_name=args.encoding)
+        records, "all", encoding_name=args.encoding)
     _print_summary_table(combined_results, "Combined")
 
     # Print win rate by Elo band for combined
@@ -256,7 +256,7 @@ def main() -> None:
             if console is not None:
                 console.rule(f"[bold cyan]{SOURCE_LABELS.get(src, src)}")
             result = run_analysis(
-                src_records, src, cluster_sample=500, encoding_name=args.encoding)
+                src_records, src, encoding_name=args.encoding)
             strata_results[src] = result
             _print_summary_table(result, src)
 

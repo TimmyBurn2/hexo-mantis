@@ -42,7 +42,6 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
-import mantis.data.loss_counters as _data_loss
 import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
 import mantis.train.buffer_persist as _buffer_persist
 import mantis.train.bundle as _bundle
@@ -66,7 +65,6 @@ from mantis.train.coordinator.config import (
     pooled_draw_rate,
 )
 from mantis.train.coordinator.dispatch import (
-    RepresentationRouteError,
     resolve_step_spec,
     run_declared_train_step,
 )
@@ -75,11 +73,9 @@ from mantis.train.events import (
     emit_axis_distribution,
     emit_iteration_complete_event,
     emit_training_step_event,
-    is_graph_run,
-    symmetry_draw_block,
 )
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
-from mantis.train.mixing import _compute_pretrained_weight, _steps_budget
+from mantis.train.mixing import _steps_budget
 
 #: How many COMPLETE resume bundles the run keeps (R345(b)(3)). Two, not one: pruning to one
 #: means the moment a new bundle's manifest commits, the only other resume point is already
@@ -124,8 +120,8 @@ GATE_NAMES: tuple[str, ...] = (
 )
 
 #: The WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
-#: `IMPL_NOTES_T §3.6` names them, and the RECORDED-POSITION counter their fire rate is
-#: taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
+#: `IMPL_NOTES_T §3.6` names them, minus the one R346(f) took, and the RECORDED-POSITION
+#: counter their fire rate is taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
 #: once per `iteration_complete`, so nothing here opens a second reader of the pool.
 #:
 #: `inference_failures_total` joins them at R275(b) and is NOT a fourth Phase-T counter:
@@ -135,9 +131,11 @@ GATE_NAMES: tuple[str, ...] = (
 #: `target_integrity_defects` at 0 was killed at the seam BEFORE any target was built; the
 #: reverse ordering says the seam held and the exporter caught something else. Splitting
 #: them across two blocks would make that read a join across events.
+#: `gridls_zero_policy_rows` LEFT with R346(f): it counted zero-policy rows on the dense
+#: grid/LS record path, whose engine getter is gone, so it would have published a permanent 0
+#: reading as "measured, none found" — the phantom input LAW-07 refuses.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
-    "export_offwindow_mass_moves", "gridls_zero_policy_rows", "target_integrity_defects",
-    "inference_failures_total",
+    "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
 )
 _POSITIONS_COUNTER = "positions_generated"
 
@@ -947,20 +945,12 @@ class StepCoordinator:
         `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated,
         and after R242 it is one of the three things that still are — narration is all
         `log_interval` decides now."""
-        # R266/F-P1/N1: `self.buffer` is the ONE buffer instance present on both the
-        # straight-self-play and the mixed dense arms (`pretrained_buffer`/`bot_buffer` are
-        # mixing-cfg-optional); `symmetry_draw_block` itself no-ops on the graph arm, where
-        # the mechanism has no subject.
-        symmetry_draws = symmetry_draw_block(
-            self.buffer, graph_run=is_graph_run(self.full_config)
-        )
         payload = emit_training_step_event(
             self._train_step, loss_info,
             # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
             # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
             # as a real measurement ("quiescence never fires") — a miniature F-10.
             None, sink,
-            symmetry_draws=symmetry_draws,
         )
         return payload
 
@@ -984,9 +974,6 @@ class StepCoordinator:
         """
         sink = self._sink if self._sink is not None else NullEventSink()
         w_pre = 0.0
-        if self.pretrained_buffer is not None:
-            w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
-                                               cfg.mixing_min_w, cfg.mixing_decay_steps)
         rstats_report, rstats = self._target_integrity_report()
         emit_iteration_complete_event(
             self._train_step, w_pre, self._games_played, self._last_iter_games,
@@ -1263,14 +1250,6 @@ class StepCoordinator:
             # swallows are counted and read HERE, live — a module-attribute read, never a
             # from-import of the int (the subsystems.py counter-binding rule).
             "buffer_save_errors_total": int(_buffer_persist.buffer_save_errors_total),
-            # Item 8 (LAW-14/LAW-18): `data/**`'s skip/truncate arms are counted, and the
-            # IN-RUN half of them — the pretrain-reachable replayers, which drop training
-            # rows off-window and truncate a game at the first illegal move — is READ here
-            # while the run is alive. Without it a corpus that silently loses every game
-            # after ply 3 and a healthy one produce identical event streams. Module-attribute
-            # read (never a from-import of the snapshot) for the same reason as the line above.
-            # Cadence is this method's own: `monitor.gate_interval` (R242), not `log_interval`.
-            "data_loss_counters": dict(_data_loss.REPLAY_COUNTERS.snapshot()),
         })
 
     def _watchdog_counters(self) -> dict[str, int] | None:
@@ -1459,41 +1438,6 @@ class StepCoordinator:
         # dict lookups are deleted rather than kept as a fallback: a fallback is the second
         # authority, and `train_cfg` is the legacy flat-hparams path this root does not use.
         batch_size = cfg.batch_size
-        if (self.pretrained_buffer is not None and self.pretrained_buffer.size > 0
-                and self.buffer.size > 0):
-            # WPTS Phase T (CENSUS_C C-2b): the mixed feed is DENSE-ONLY by construction
-            # (`sample_batch_with_pos`, `buffer.encoding`, (N,C,H,W) shapes). Entering it
-            # under a graph declaration must die at the ROUTE with a named error, not
-            # mid-assembly on an AttributeError. No graph-mixed route exists — none is
-            # carded and none has a producer.
-            spec = self._step_spec()
-            if spec.representation != "grid":
-                raise RepresentationRouteError(
-                    f"the mixed (corpus + selfplay) arm is a dense-only feed; declared "
-                    f"representation {spec.representation!r} has no mixed-batch route"
-                )
-            from mantis.train.batch_assembly import assemble_mixed_batch  # lazy (heavy deps)
-
-            w_pre = _compute_pretrained_weight(self._train_step, cfg.mixing_initial_w,
-                                               cfg.mixing_min_w, cfg.mixing_decay_steps)
-            n_bot = (round(cfg.bot_batch_share * batch_size)
-                     if (self.bot_buffer is not None and self.bot_buffer.size > 0) else 0)
-            n_pre = max(1, int(math.ceil(w_pre * (batch_size - n_bot))))
-            n_self = batch_size - n_pre - n_bot
-            batch = assemble_mixed_batch(
-                self.pretrained_buffer, self.buffer, self.recent_buffer,
-                n_pre, n_self, batch_size, self.batch_size_cfg, cfg.recency_weight,
-                self.bufs, self._train_step, augment=cfg.augment,
-                bot_buffer=self.bot_buffer, n_bot=n_bot,
-            )
-            return self.trainer.train_step_from_tensors(
-                batch.states, batch.policies, batch.outcomes,
-                chain_planes=batch.chain_planes, ownership_targets=batch.ownership,
-                threat_targets=batch.winning_line, is_full_search=batch.is_full_search,
-                n_pretrain=n_pre + n_bot, n_recent=batch.n_recent_actual,
-                position_indices=batch.position_indices,
-                value_target_valid=batch.value_target_valid,
-            )
         # Straight self-play step (WPTS Phase T / TD-1 / R102): the DECLARED dispatcher
         # routes off the resolved representation to the trainer's TYPED entry points
         # (`train_step_from_graph_batch` / `train_step_from_tensors`). `train_step` is dead.

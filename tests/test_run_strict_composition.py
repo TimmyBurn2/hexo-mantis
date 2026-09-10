@@ -7,7 +7,7 @@ this file rides on them, exactly as `tests/test_run_composition.py` rides on `ma
 
 What this file exists to stop, in one sentence: `compose_run` currently duck-types its own
 config — `getattr(config, "monitor", None) -> MonitorConfig()` silently DISARMS the
-actor-lag hard abort that `configs/run5.yaml` now ships armed (ADJ-07), and five sibling
+actor-lag hard abort that `configs/run6.yaml` now ships armed (ADJ-07), and five sibling
 arms of the same idiom silently substitute a smoke cadence, a `None` eval section, the
 literal encoding `"unknown"` (which `train/anchor.py` stamps, unvalidated, into a promoted
 anchor and its `.provenance.json` sidecar — a permanent LAW-12 defect) and an empty
@@ -255,19 +255,23 @@ def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
-def _bounded(name: str = "smoke_gnn.yaml", factory=None, steps: int = _DRIVE_STEPS,
+def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,
              eval_enabled: bool = False):
     """A real minted config, bounded so a drive terminates. The three step-clock knobs are
     co-overridden together because the reachability validator spans them: overriding
     `max_train_steps` alone leaves the config's own minted threshold of 100 above the new
     ceiling and the config stops loading (DESIGN_S §6.6 MF-3).
 
+    `train.draw_rate_abort` is disarmed for the same reason and by the same validator: an ARMED
+    `min_step` above the new ceiling is a floor the bounded run never reaches, which the schema
+    refuses by name. The drives below are about composition, not about the abort.
+
     WPMAIN/R120: `eval_enabled` is a CONFIG fact and `compose_run` has no parameter for it,
     so each drive declares its posture here; every drive's semantics are byte-preserved."""
     return factory(name,
                    train={"actor_sync_cadence_steps": 1, "max_train_steps": steps,
                           # WPTS/TD-1: graph drives run the real route; 256 batch is drag.
-                          "batch_size": 8},
+                          "batch_size": 8, "draw_rate_abort": None},
                    monitor={"actor_lag_threshold_steps": steps - 1},
                    eval_enabled=eval_enabled)
 
@@ -323,7 +327,7 @@ def test_an_unvalidated_config_is_ONE_named_error_before_any_subsystem_exists(
     """INVERSION. `tests/test_run_composition.py` used to assert the OPPOSITE of this — that
     a config with no `.monitor` section gets a bare `MonitorConfig()`. That test passed only
     because the defect existed: the bare default carries `actor_lag_abort_enabled=False`,
-    so the fallback silently reverts the arming `configs/run5.yaml` ships (ADJ-07). The
+    so the fallback silently reverts the arming `configs/run6.yaml` ships (ADJ-07). The
     inversion IS the LAW-07 mutation pair.
 
     Eight shapes, ONE error type, one `match=` — so no shape is another's twin, which is
@@ -651,8 +655,8 @@ def test_the_axis_is_the_whole_minted_set_and_is_not_empty():
     """Vacancy guard for every parametrized oracle below. `_MINTED` is globbed, so it cannot
     silently omit a newly minted config — but a glob that returns nothing would silently
     delete the axis instead, and a parametrized test with zero params is a green no-op."""
-    assert len(_MINTED) >= 5, f"the minted-config axis collapsed to {_MINTED}"
-    assert "run5.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
+    assert len(_MINTED) >= 3, f"the minted-config axis collapsed to {_MINTED}"
+    assert "run6.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
 
 
 @pytest.mark.parametrize("name", _MINTED)
@@ -707,20 +711,23 @@ def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
     filing. It is an INSTANCE ("this config's value"); Phase P's armed-abort manifest is the
     RULE ("which aborts a production config must arm"), and DESIGN_P must reconcile them.
     """
-    assert load_config(_CONFIGS_DIR / "run5.yaml").monitor.actor_lag_abort_enabled is True, (
+    assert load_config(_CONFIGS_DIR / "run6.yaml").monitor.actor_lag_abort_enabled is True, (
         "R59: the minted PRODUCTION config's actor-lag hard abort ships ARMED. Phase S "
         "re-mints run5; a dropped `--set monitor.actor_lag_abort_enabled=true` reverts "
         "Phase F (0ef05ff) with gate 7 and header-truthfulness both green."
     )
 
 
-@pytest.mark.parametrize("name", ("smoke_gnn.yaml", "smoke_radius_curriculum.yaml"))
-def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
+@pytest.mark.parametrize("name", ("smoke_preflight_armed.yaml",))
+def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representation(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, name: str
 ):
-    """Point 2 — the bounded drive, on BOTH representations (`gnn_axis_v1` / graph from the
-    `dev` template, `v6w25` / grid from the `grid` template). This is the behavioural half of
-    the axis: point 1 proves five configs resolve, this proves two of them DRIVE.
+    """Point 2 — the bounded drive on a REAL minted config. It used to run "on BOTH
+    representations", one config from each template; R346(f) left one representation and cut
+    the committed set to three, of which `smoke_preflight_armed.yaml` is the only CPU one — a
+    drive on a `device: cuda` config does not terminate on a CPU box. This is the behavioural
+    half of the axis: point 1 proves every minted config RESOLVES, this proves one of them
+    DRIVES.
 
     No `_default_step_coordinator_config` monkeypatch: the production builder runs, because
     S-4 makes the config author `stop_step`. That retires the C-6 harness patch for every
@@ -738,9 +745,9 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool,
-        # WPTS/TD-1: per-representation buffer — the graph arm samples a REAL HexgBuffer,
-        # the grid arm drives the dispatcher's dense sampler on the fake.
-        buffer=mk_graph_buffer(n_records=32) if name == "smoke_gnn.yaml" else _Buffer(),
+        # WPTS/TD-1: the declared route samples a REAL HexgBuffer — the typed dispatcher
+        # refuses a shapeless fake at the route, by design.
+        buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 

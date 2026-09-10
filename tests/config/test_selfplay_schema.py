@@ -18,7 +18,12 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from mantis.config.schema import ARCH_SCOPED_KEYS, InferenceConfig, SelfplayConfig
+from mantis.config.schema import (
+    ARCH_SCOPED_KEYS,
+    InferenceConfig,
+    SelfplayConfig,
+    operational_default_fields,
+)
 from mantis.config.schema.selfplay import MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL
 
 
@@ -30,25 +35,20 @@ VALID_MCTS: dict = {
 }
 VALID_PLAYOUT_CAP: dict = {
     "fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0, "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": False, "zoi_lookback": 16,
-    "zoi_margin": 5, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+    "n_sims_quick": 0, "n_sims_full": 0,
+    "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-    "inference_pool_size": None, "c_visit": 50.0,
+    "c_visit": 50.0,
     "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-    "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-    "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-    "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-    "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-    "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-    "instrumentation_enabled": False, "mcts": dict(VALID_MCTS),
+    "results_queue_cap": 10_000, "random_opening_plies": 0,
+    "log_investigation_metrics": True,
+    "mcts": dict(VALID_MCTS),
     "playout_cap": dict(VALID_PLAYOUT_CAP),
 }
 VALID_INFERENCE: dict = {
-    "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-    "compile_inference": False, "compile_inference_mode": "default",
-    "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+    "inference_batch_size": 64, "inference_max_wait_ms": 10,
     # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
     # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
     # exercises a split; the R119 `null` placeholder is pinned by
@@ -61,14 +61,11 @@ INFERENCE_FIELDS = sorted(VALID_INFERENCE)
 
 SELFPLAY_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("n_workers", 0), ("leaf_batch_size", 0), ("max_game_moves", 0),
-    ("inference_pool_size", 0), ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
+    ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
     ("gumbel_explore_moves", -1), ("results_queue_cap", 0), ("random_opening_plies", -1),
-    ("forced_win_policy_depth", 0), ("forced_win_policy_weight", -0.1),
-    ("solver_depth", 0), ("solver_node_budget", 0), ("solver_neighbor_dist", -1),
-    ("solver_visit_weight", 1.1), ("seed_fraction", 1.1),
 ]
 INFERENCE_BOUND_VIOLATIONS: list[tuple[str, object]] = [
-    ("inference_batch_size", 0), ("inference_max_wait_ms", -1), ("compile_inference_mode", ""),
+    ("inference_batch_size", 0), ("inference_max_wait_ms", -1),
 ]
 
 
@@ -92,7 +89,8 @@ def test_selfplay_valid_payload_constructs_clean():
     assert cfg.playout_cap.fast_sims == 50
 
 
-@pytest.mark.parametrize("field", SELFPLAY_FIELDS)
+@pytest.mark.parametrize("field",
+                         sorted(set(SELFPLAY_FIELDS) - operational_default_fields("selfplay")))
 def test_selfplay_missing_field_rejected(field: str):
     payload = _selfplay()
     del payload[field]
@@ -119,9 +117,31 @@ def test_selfplay_bound_violation_rejected(field: str, bad_value: object):
         SelfplayConfig.model_validate(_selfplay(**{field: bad_value}))
 
 
-def test_selfplay_has_no_pydantic_level_default():
+def test_selfplay_has_no_pydantic_level_default_EXCEPT_the_declared_operational_ones():
+    """R1 with R347/CONFIG-1's partition, checked BOTH ways: an undeclared default is a red,
+    and a key the registry declares that is still required is a stale exemption."""
+    declared = operational_default_fields("selfplay")
     for name, field in SelfplayConfig.model_fields.items():
-        assert field.is_required(), f"SelfplayConfig.{name} has a code-side default"
+        if name in declared:
+            assert not field.is_required(), (
+                f"SelfplayConfig.{name} is declared in OPERATIONAL_DEFAULT_KEYS but is still "
+                "required — the declaration is stale"
+            )
+            continue
+        assert field.is_required(), (
+            f"SelfplayConfig.{name} has a code-side default and is not declared operational"
+        )
+
+
+@pytest.mark.parametrize("field", sorted(operational_default_fields("selfplay")))
+def test_an_omitted_selfplay_operational_key_lands_on_its_declared_default(field: str):
+    """Omitting a declared operational key is LEGAL and lands on the schema's own value —
+    asserted, because "no error" alone would be satisfied by a default of anything."""
+    payload = _selfplay()
+    del payload[field]
+    cfg = SelfplayConfig.model_validate(payload)
+    assert getattr(cfg, field) == SelfplayConfig.model_fields[field].get_default(
+        call_default_factory=True), f"selfplay.{field} did not land on its schema default"
 
 
 def test_selfplay_has_no_legal_move_radius_field():

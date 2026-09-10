@@ -36,21 +36,13 @@ def test_unknown_opponent_and_none_value_raise_pre_existing_green(opponent: str)
         resolve_eval_model_sims(opponent, None)
 
 
-@pytest.mark.parametrize("opponent", ["kraken", "strix"])
-def test_kraken_and_strix_are_known_opponents_after_wiring(opponent: str) -> None:
-    """RED today: `_KNOWN_OPPONENTS` at HEAD is `("random", "sealbot")` only — kraken/strix
-    wrongly raise "unknown eval opponent" until IMPL extends the tuple (design §a.4:
-    `_KNOWN_OPPONENTS -> ("random","sealbot","kraken","strix")`, nsims.py:11)."""
-    assert resolve_eval_model_sims(opponent, 128) == 128
-
-
 def test_unknown_opponent_still_raises_after_extension() -> None:
     with pytest.raises(ValueError):
         resolve_eval_model_sims("nnue", 96)
 
 
 def test_none_value_still_raises_for_every_known_opponent() -> None:
-    for opponent in ("random", "sealbot", "kraken", "strix"):
+    for opponent in ("random", "sealbot"):
         with pytest.raises(ValueError):
             resolve_eval_model_sims(opponent, None)
 
@@ -121,26 +113,6 @@ def test_sealbot_rung_model_sims_route_through_resolve_eval_model_sims(monkeypat
     )
 
 
-@pytest.mark.parametrize("kind", ["kraken", "strix"])
-def test_opponent_rung_model_sims_route_through_resolver(monkeypatch, kind: str) -> None:
-    import mantis.config.resolve.nsims as nsims_mod
-    from mantis.bots.resolve import resolve_bot
-
-    calls: list[tuple[str, int | None]] = []
-    real = nsims_mod.resolve_eval_model_sims
-
-    def spy(opponent: str, cfg_value: int | None) -> int:
-        calls.append((opponent, cfg_value))
-        return real(opponent, cfg_value)
-
-    monkeypatch.setattr(nsims_mod, "resolve_eval_model_sims", spy)
-    with pytest.raises(RungUnresolvable):
-        resolve_bot(kind, depth=None, opponent_sims=128)
-    assert (kind, 128) in calls, (
-        f"resolve_bot({kind!r}, ...) must route model_sims through resolve_eval_model_sims"
-    )
-
-
 def test_random_floor_routes_through_resolver(monkeypatch) -> None:
     """The random floor (RandomBot) has no model_sims of its own (it is not a search bot), but
     the resolver contract is still the ONE authority named opponent -> sims for every
@@ -183,11 +155,11 @@ def test_random_floor_routes_through_resolver(monkeypatch) -> None:
 # routing call would instantly turn two consumer-registry citations into the precise
 # falsehood R93 exists to catch, and `test_every_key_has_consumer.py` would stay GREEN —
 # that a LAW-08 bijection test cannot see this is the whole reason R93 demands mutation over
-# grep. MUTATION (M-A4): hoist the raise above `:52-53`; the kraken and strix cells RED, and
-# random/sealbot stay GREEN `[reached, invisible]` — which is why the row is parametrized and
-# asserts PER KIND. A single aggregated "the spy was called" assertion would be green under
-# M-A4 and the row would be unfalsifiable.
-@pytest.mark.parametrize("kind", ["random", "sealbot", "kraken", "strix"])
+# grep. The row stays parametrized and asserts PER KIND: a single aggregated "the spy was
+# called" assertion would be green under a mutation that broke one kind's routing, and the row
+# would be unfalsifiable. The kraken/strix cells that were its sharpest members went with the
+# bot kinds themselves (R346(f)).
+@pytest.mark.parametrize("kind", ["random", "sealbot"])
 def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     monkeypatch, kind: str
 ) -> None:
@@ -205,11 +177,10 @@ def test_every_bot_kind_routes_its_sims_through_the_resolver_after_the_rewrite(
     try:
         resolve_bot(kind, depth=5 if kind == "sealbot" else None, opponent_sims=128)
     except RungUnresolvable:
-        pass  # the refusal is the EXPECTED outcome for kraken/strix and for sealbot in CI;
-        # the routing must already have happened by the time it fires (SR-3 / DESIGN §2.2(4))
+        pass  # the refusal is the EXPECTED outcome for sealbot in CI; the routing must
+        # already have happened by the time it fires (SR-3 / DESIGN §2.2(4))
 
     assert (kind, 128) in calls, (
-        f"resolve_bot({kind!r}, ...) did not reach resolve_eval_model_sims. For kraken/strix "
-        f"that makes test_every_key_has_consumer.py:52-53 a FALSE citation (R93/LAW-08); the "
-        f"routing must execute BEFORE the refusal, exactly as it does at HEAD. calls={calls}"
+        f"resolve_bot({kind!r}, ...) did not reach resolve_eval_model_sims. The routing must "
+        f"execute BEFORE the refusal, exactly as it does at HEAD. calls={calls}"
     )

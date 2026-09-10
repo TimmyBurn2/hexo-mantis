@@ -51,8 +51,7 @@ def _rstats() -> RunnerStats:
     return RunnerStats(
         games_completed=0, positions_generated=0, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
-        mcts_mean_root_concentration=0.1, cluster_value_std_mean=None,
-        cluster_policy_disagreement_mean=None, cluster_variance_sample_count=0,
+        mcts_mean_root_concentration=0.1,
     )
 
 

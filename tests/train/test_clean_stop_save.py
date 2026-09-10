@@ -69,6 +69,8 @@ killed `torch.save`, the pattern `tests/monitor/test_persist_fatal.py` and
 """
 from __future__ import annotations
 
+from mantis._engine import HexgBuffer
+
 import dataclasses
 from datetime import datetime
 from pathlib import Path
@@ -91,6 +93,30 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.heartbeat_watchdog import HeartbeatWatchdog
 from mantis.train.lifecycle.signals import ShutdownState
 from mantis.train.loop import run_training_loop
+
+def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
+    so each file that needs one builds it)."""
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
 
 _REPO = Path(__file__).resolve().parents[2]
 _MINTED = load_config(_REPO / "configs" / "dev_example.yaml")
@@ -223,6 +249,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
+        self._hexg = _filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -230,8 +257,13 @@ class _Buffer:
     def save_to_path(self, p) -> None:
         return None
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        return (None,) * 9
+    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
+        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # hand-built payload would be a second wire format for the collate to disagree with.
+        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class _Sink:
@@ -269,7 +301,7 @@ def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: _Pool | 
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None,
         config=config,
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, shutdown=shutdown, sink=sink)

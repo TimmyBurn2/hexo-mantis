@@ -15,14 +15,15 @@ import torch
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 import pytest
 
-from mantis.model import ARCH_KINDS, CnnArch, GnnArch, GnnArchV2, build_net
+from mantis.model import ARCH_KINDS, GnnArch, GnnArchV2, build_net
 
 #: The payload contract: exactly what `load_model_snapshot` consumes, nothing else.
 _EXPECTED_KEYS = {"state_dict", "arch"}
 
 
 def _net():
-    arch = CnnArch(board_size=19, in_channels=8, filters=8, res_blocks=1)
+    arch = GnnArch(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
+                   value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     net.eval()
@@ -50,10 +51,10 @@ def test_no_key_is_written_through_a_silent_getattr_fallback(tmp_path: Path) -> 
     plain = _net()
     tagged = _net()
     # The exact attribute the deleted `getattr(model, "encoding", None)` line read. The
-    # arch half needs no counterpart: `CnnArch` is a FROZEN dataclass, so
+    # arch half needs no counterpart: `GnnArch` is a FROZEN dataclass, so
     # `getattr(arch, "representation", None)` could only ever return the declared field or
     # None — it was unconditionally unread either way, which is the defect.
-    tagged.encoding = "v6"
+    tagged.encoding = "gnn_axis_v1"
 
     a, b = tmp_path / "plain.pt", tmp_path / "tagged.pt"
     write_model_snapshot(plain, a)
@@ -83,7 +84,6 @@ def test_roundtrip_still_rebuilds_the_identical_net(tmp_path: Path) -> None:
 
 # ── R330(e): the snapshot speaks the ONE arch-kind vocabulary ────────────────────────────
 _TINY = {
-    CnnArch: dict(board_size=19, in_channels=4, filters=8, res_blocks=1),
     GnnArch: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8, value_hidden=8),
     GnnArchV2: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
                     value_hidden=8),

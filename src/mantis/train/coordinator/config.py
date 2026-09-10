@@ -67,21 +67,18 @@ class TrainerLike(Protocol):
 class ReplayBufferLike(Protocol):
     size: int
     capacity: int
-    # R266/F-P1/N1 (LAW-18): the R245(c) compact/spread symmetry-draw counters,
-    # read by `mantis.train.events.symmetry_draw_block` via `getattr(buffer, …, None)`
-    # (a defensive wheel-compat probe for an engine build predating the getters, the
-    # k_cluster_histogram/uncovered_forced_win posture) — declared here as plain `int`
-    # because the concrete `ReplayBuffer` this protocol describes always carries them.
-    compact_draws: int
-    spread_draws: int
+    # The R245(c) compact/spread symmetry-draw counters stood here and LEFT with R346(f):
+    # their reader (`symmetry_draw_block`), their producer (the window-preserving symmetry
+    # gate) and the dense `ReplayBuffer` that carried them are all deleted, so a
+    # `runtime_checkable` protocol still demanding them would refuse every live ring.
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
     #: R345(b)(6) — the last sampled batch's rows-per-game and age quantiles. Declared on the
     #: SHARED protocol rather than the graph route key because it is a fact about a ring, not
-    #: about which sampler it carries; the dense ring simply does not implement it yet, and
-    #: `_batch_composition` probes with `getattr` and publishes nothing when it is absent —
-    #: which is why the absence is a gap and not a route mismatch.
+    #: about which sampler it carries. The second ring that made "shared" mean something is
+    #: deleted (R346(f)); the placement is kept because the reason still holds and moving it
+    #: would say a ring's batch composition is a property of its sampler, which it is not.
     def last_batch_composition(self) -> dict[str, int]: ...
 
 
@@ -286,9 +283,7 @@ class StepCoordinatorConfig:
     attribute read on a live instance across the whole test tier). They are deleted rather
     than authored because a config key with no live consumer is an R1/LAW-08 violation, so
     typing them into the schema would have created the defect the card exists to close
-    (adjudication call K-a). `bot_batch_share` survives and is authored — it is read, at
     `step.py::_run_training_step` — even though its sibling path knob is gone; that asymmetry
-    is disclosed on `train.bot_batch_share` itself.
 
     `draw_rate_consec` is gone too, in the other direction: it MOVED, into
     `train.draw_rate_abort.consec` and thence onto `DrawRateAbortLike.consec`, because a term
@@ -331,9 +326,6 @@ class StepCoordinatorConfig:
     batch_size: int
     augment: bool
     recency_weight: float
-    mixing_initial_w: float
-    mixing_min_w: float
-    mixing_decay_steps: float
     hard_gn_threshold: float
     hard_gn_min_steps: int
     stop_step: int | None
@@ -364,9 +356,6 @@ class StepCoordinatorConfig:
     # arm-log. `train.selfplay_stall_timeout_sec`'s `gt=0` is what makes that posture
     # unwritable; the watchdog keeps its arm for direct constructions.
     terminal_eval_enabled: bool
-    # §178 bot-corpus batch slot (a mixing knob — NOT the killed refresh hook). Its sibling
-    # `bot_corpus_path` was one of the six DEAD fields deleted by this phase.
-    bot_batch_share: float
     # Self-play stall watchdog (2026-07-11 run2 eval-boundary wedge).
     selfplay_stall_timeout_sec: float
 

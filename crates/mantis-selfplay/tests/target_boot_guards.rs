@@ -254,22 +254,9 @@ fn a_gumbel_m_past_the_minted_bound_is_refused() {
     );
 }
 
-/// A GRID encoding is outside this guard entirely — dense records carry no HEXG visit slot.
-#[test]
-fn the_gumbel_kind_on_grid_is_untouched() {
-    let cfg = SelfPlayRunnerConfig {
-        encoding_name: Some("v6".to_string()),
-        search_kind: SearchKind::Gumbel,
-        n_simulations: 50,
-        leaf_batch_size: 8,
-        standard_sims: 0,
-        ..Default::default()
-    };
-    assert!(
-        SelfPlayRunner::new(cfg).is_ok(),
-        "a GRID encoding under the gumbel kind is outside this guard"
-    );
-}
+// The GRID arm's "outside this guard entirely" row went with the grid rows themselves
+// (R346(f)): there is no registered encoding left that this guard does not apply to, so the
+// control it provided is now structural rather than testable.
 
 /// The BOOT surface agrees with the mint surface — a graph runner under `gumbel` composes
 /// its ring at the minted m, and one past the bound does not boot.
@@ -296,34 +283,10 @@ fn boot_composes_the_gumbel_graph_ring_at_the_minted_m() {
     assert!(err.contains("gumbel_m"), "{err}");
 }
 
-/// R347(a) — the tail's SHAPE is the recording prior, and the two target injectors write
-/// mass by cell after the export, so they cannot be armed on the arm that stores a tail.
-#[test]
-fn boot_refuses_a_target_injector_on_the_sparse_row_arm() {
-    for (forced, solver) in [(true, false), (false, true), (true, true)] {
-        let cfg = SelfPlayRunnerConfig {
-            search_kind: SearchKind::Gumbel,
-            forced_win_policy_enabled: forced,
-            solver_enabled: solver,
-            ..graph_cfg()
-        };
-        let err = SelfPlayRunner::new(cfg)
-            .err()
-            .expect("an injector armed on the sparse-row arm must not boot");
-        assert!(
-            err.contains("forced_win_policy_enabled") && err.contains("solver_enabled"),
-            "the refusal must name both keys so a reader knows which to disarm: {err}"
-        );
-    }
-    // The control: DISARMED injectors leave the arm alone.
-    let cfg = SelfPlayRunnerConfig {
-        search_kind: SearchKind::Gumbel,
-        forced_win_policy_enabled: false,
-        solver_enabled: false,
-        ..graph_cfg()
-    };
-    assert!(SelfPlayRunner::new(cfg).is_ok());
-}
+// R347(a)'s injector guard — "the two target injectors cannot be armed on the arm that
+// stores a tail" — has no subject after R346(f): the O1 forced-win and solver injectors and
+// their config keys are deleted, so nothing can be armed on the sparse-row arm.
+
 
 /// An unknown kind is REFUSED here too, not defaulted — the mint surface and the runner
 /// surface must agree about what a kind name means.

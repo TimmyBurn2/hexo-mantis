@@ -1,7 +1,7 @@
 //! R8-justify: one integration test per golden × (positive pin + LAW-07
-//! mutation) for 7 goldens keeps the P-04 pin auditable as a single unit.
+//! mutation) keeps the P-04 pin auditable as a single unit.
 //!
-//! P-04 record byte pin (WP6, `_v1`) — the 7 pyo3-free record/finalize
+//! P-04 record byte pin (WP6, `_v1`) — the pyo3-free record/finalize
 //! producers reproduce the dispatcher-frozen goldens byte-for-byte over the
 //! pinned splitmix64 inputs (CAPTURE_LOG §B/§C, mtime-before-IMPL). Written
 //! FIRST-discipline: this pin asserts the ported producers reproduce the frozen
@@ -15,13 +15,18 @@
 //! old-side (embedded-numpy wall), so this pin covers the load-bearing
 //! record-byte math directly; the multi-graph fuse INPUT (g8) is the P-09
 //! wire-stage oracle, not this file.
+//!
+//! R346(f): g1–g4 pinned the four DENSE cluster-aggregation producers
+//! (`aggregate_policy{,_to_local}{,_ls}`), which went with the grid path. Their goldens
+//! under `tests/fixtures/worker/` are now orphaned and no producer can regenerate them.
+//! g5–g7 — the graph assemble, the graph record and the outcome finalizer — are what
+//! remains, and each keeps its positive pin and its LAW-07 mutation arm.
 
 use fxhash::FxHashMap;
 use mantis_core::{Board, Player};
 use mantis_graph::{build_axis_graph, BuildParams, StoneList};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::records::{
-    aggregate_policy, aggregate_policy_ls, aggregate_policy_to_local, aggregate_policy_to_local_ls,
     assemble_ls_from_gnn_probs, finalize_graph_outcome, record_position_graph,
 };
 
@@ -58,17 +63,6 @@ fn compact_board() -> Board {
     b.apply_move(0, 0).unwrap();
     b.apply_move(2, 0).unwrap();
     b.apply_move(0, 2).unwrap();
-    b
-}
-
-/// Spread board: walking-line `apply_move` of q ∈ {0,4,…,32}, r=0 (each hop
-/// hex-distance 4 ≤ radius 5). Result: `window_center = (16,0)`, `legal = 434`,
-/// 230 off-window cells.
-fn spread_board() -> Board {
-    let mut b = Board::new();
-    for q in [0i32, 4, 8, 12, 16, 20, 24, 28, 32] {
-        b.apply_move(q, 0).unwrap();
-    }
     b
 }
 
@@ -148,93 +142,6 @@ fn read_golden(name: &str) -> Vec<u8> {
 
 // ── Reconstructions (canonical pinned inputs → producer → serialized bytes) ──
 // The `mut_*` closures flip ONE load-bearing input element for the LAW-07 self-test.
-
-/// g1 `aggregate_policy`: compact board, 1 centre = window_center,
-/// cluster_policies = [fill_stream(SEED, 362)].
-fn produce_g1(mutate: bool) -> Vec<u8> {
-    let board = compact_board();
-    let centers = [board.window_center()];
-    let mut cp0 = fill_stream(WORKER_GOLDEN_SEED, N_ACTIONS);
-    if mutate {
-        // Bump the local slot read for legal[0] under the single centre.
-        let (cq, cr) = centers[0];
-        let (q, r) = board.legal_moves()[0];
-        let local_idx = (q - cq + HALF) as usize * TRUNK as usize + (r - cr + HALF) as usize;
-        cp0[local_idx] += 1.0;
-    }
-    let out = aggregate_policy(N_ACTIONS, true, TRUNK, &board, &centers, &[cp0]);
-    ser_vec_f32(&out)
-}
-
-/// g2 `aggregate_policy_to_local`: compact board, centre = window_center,
-/// global = fill_stream(SEED^0x01, 362), legal = board.legal_moves().
-fn produce_g2(mutate: bool) -> Vec<u8> {
-    let board = compact_board();
-    let center = board.window_center();
-    let legal = board.legal_moves();
-    let mut global = fill_stream(WORKER_GOLDEN_SEED ^ 0x01, N_ACTIONS);
-    if mutate {
-        let (bcq, bcr) = board.window_center();
-        let (q, r) = legal[0];
-        let idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, TRUNK, HALF);
-        global[idx] += 1.0;
-    }
-    let out = aggregate_policy_to_local(N_ACTIONS, true, TRUNK, &board, &center, &global, &legal);
-    ser_vec_f32(&out)
-}
-
-/// g3 `aggregate_policy_ls`: spread board, centres [(4,0),(28,0)],
-/// cluster_policies = [fill_stream(SEED^0x10,362), fill_stream(SEED^0x11,362)].
-fn g3_ls(mutate: bool) -> (Board, LegalSetPolicy) {
-    let board = spread_board();
-    let centers = [(4, 0), (28, 0)];
-    let mut cp0 = fill_stream(WORKER_GOLDEN_SEED ^ 0x10, N_ACTIONS);
-    let cp1 = fill_stream(WORKER_GOLDEN_SEED ^ 0x11, N_ACTIONS);
-    if mutate {
-        // Bump the slot read for legal[0] under centre 0 (an in-window write).
-        let (cq, cr) = centers[0];
-        let (q, r) = board.legal_moves()[0];
-        let local_idx = (q - cq + HALF) as usize * TRUNK as usize + (r - cr + HALF) as usize;
-        if local_idx < cp0.len() {
-            cp0[local_idx] += 1.0;
-        }
-    }
-    let ls = aggregate_policy_ls(N_ACTIONS, true, TRUNK, &board, &centers, &[cp0, cp1]);
-    (board, ls)
-}
-
-fn produce_g3(mutate: bool) -> Vec<u8> {
-    ser_ls(&g3_ls(mutate).1)
-}
-
-/// g4 `aggregate_policy_to_local_ls`: spread board, project g3's ls into centre
-/// (28,0), legal = board.legal_moves().
-fn produce_g4(mutate: bool) -> Vec<u8> {
-    let (board, mut ls) = g3_ls(false);
-    let legal = board.legal_moves();
-    if mutate {
-        // Flip the ls value the projection into centre (28,0) actually READS —
-        // the first legal cell inside centre-(28,0)'s local window (a far-cluster
-        // cell near legal[0] is not projected, so bumping it would be inert).
-        let (cq, cr) = (28i32, 0i32);
-        let (bcq, bcr) = board.window_center();
-        for &(q, r) in &legal {
-            let wq = q - cq + HALF;
-            let wr = r - cr + HALF;
-            if (0..TRUNK).contains(&wq) && (0..TRUNK).contains(&wr) {
-                let mcts_idx = Board::window_flat_idx_at_geom(q, r, bcq, bcr, TRUNK, HALF);
-                if mcts_idx < ls.dense.len() {
-                    ls.dense[mcts_idx] += 1.0;
-                } else {
-                    *ls.overflow.entry((q, r)).or_insert(0.0) += 1.0;
-                }
-                break;
-            }
-        }
-    }
-    let out = aggregate_policy_to_local_ls(N_ACTIONS, true, TRUNK, &board, &(28, 0), &ls, &legal);
-    ser_vec_f32(&out)
-}
 
 /// g5 `assemble_ls_from_gnn_probs`: build_axis_graph on two far clusters (q∈[0,5)
 /// P1, q∈[30,35) P2; win_length 6/radius 6/trunk 19); legal_probs =
@@ -412,29 +319,7 @@ fn produce_g7(mutate: bool) -> Vec<u8> {
     ser_finalize(&out)
 }
 
-// ── The 7 record byte pins (positive: ported producer == frozen golden) ─────
-#[test]
-fn pin_g1_aggregate_policy() {
-    assert_eq!(produce_g1(false), read_golden("aggregate_policy.bin"));
-}
-#[test]
-fn pin_g2_aggregate_policy_to_local() {
-    assert_eq!(
-        produce_g2(false),
-        read_golden("aggregate_policy_to_local.bin")
-    );
-}
-#[test]
-fn pin_g3_aggregate_policy_ls() {
-    assert_eq!(produce_g3(false), read_golden("aggregate_policy_ls.bin"));
-}
-#[test]
-fn pin_g4_aggregate_policy_to_local_ls() {
-    assert_eq!(
-        produce_g4(false),
-        read_golden("aggregate_policy_to_local_ls.bin")
-    );
-}
+// ── The record byte pins (positive: ported producer == frozen golden) ──────
 #[test]
 fn pin_g5_assemble_ls_from_gnn_probs() {
     assert_eq!(
@@ -464,28 +349,6 @@ fn pin_g7_finalize_graph_outcome() {
 }
 
 // ── LAW-07 mutation self-tests (flip ONE input element ⇒ diverge from golden) ─
-#[test]
-fn mut_g1_diverges() {
-    assert_ne!(produce_g1(true), read_golden("aggregate_policy.bin"));
-}
-#[test]
-fn mut_g2_diverges() {
-    assert_ne!(
-        produce_g2(true),
-        read_golden("aggregate_policy_to_local.bin")
-    );
-}
-#[test]
-fn mut_g3_diverges() {
-    assert_ne!(produce_g3(true), read_golden("aggregate_policy_ls.bin"));
-}
-#[test]
-fn mut_g4_diverges() {
-    assert_ne!(
-        produce_g4(true),
-        read_golden("aggregate_policy_to_local_ls.bin")
-    );
-}
 #[test]
 fn mut_g5_diverges() {
     assert_ne!(

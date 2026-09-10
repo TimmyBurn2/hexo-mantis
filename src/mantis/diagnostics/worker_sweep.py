@@ -70,7 +70,7 @@ must not be read as it.
 
 **WHERE THE GAME COUNT COMES FROM, AND WHY IT IS NOT AN EVENT.** `runner_stats(pool)` reads the
 Rust runner's own counters. The event stream is NOT usable here and the register says why:
-`docs/registers/falsified.md` **F-43** — `game_complete` is emitted but DROPPED in production
+`docs/governance/falsified.md` **F-43** — `game_complete` is emitted but DROPPED in production
 (the pool is built with `sink=None`) and `iteration_complete.games_total` is gated by
 `log_interval`, so neither is a games signal. A sweep that counted games off events would count
 zero on a healthy drive. The register was read before this instrument was designed and no other
@@ -896,9 +896,6 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
             gumbel_m=sp.gumbel_m, search_kind=config.search.kind,
         )
         return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
-    from mantis._engine import ReplayBuffer
-
-    return ReplayBuffer(capacity, config.identity.encoding)
 
 
 def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:

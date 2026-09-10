@@ -17,6 +17,17 @@ write the one kind of row it was told to write. --mint-row sets a key the templa
 it is a separate flag rather than a relaxation of --set so a typo'd EXISTING key still fails
 loudly instead of being silently created.
 
+R347/CONFIG-1 MADE IT THE MAIN ROAD rather than a two-key special case, and the flag SPLIT
+earns its keep more, not less, because of it: the operational constants (watchdog deadlines,
+poll intervals, join bounds, disk thresholds — `OPERATIONAL_DEFAULT_KEYS`) now carry schema
+defaults and left the templates, so overriding one is a minted row with a stamped header line,
+which is exactly the deliberate-and-visible property R323(b) wanted. Two of them are BLOCKS
+(`monitor.drain`, `monitor.disk_guard`); a block is minted WHOLE, since --mint-row adds a leaf
+to an existing block and refuses to build one — a half-minted block whose other leaves came
+silently from the schema is the "which authority set this?" question R1 exists to make
+unaskable. Nothing here was simplified by that leg: both flags are load-bearing and no branch
+became dead.
+
 Its old value is DERIVED, never assumed to be null: the template is validated through
 `RunConfig` and the leaf is read out of the resulting dump, so the stamped `# delta:` line
 states the value the schema actually resolved the template to. That is what keeps

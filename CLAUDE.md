@@ -14,7 +14,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   mantis-encoding in the DAG; `make check.wasm` targets it (and mantis-encoding if it
   becomes wasm-targeted).
 - crates/mantis-encoding — crates/mantis-encoding/src/registry.toml (THE encoding registry,
-  single source of truth) + spec + validators + dense encode kernels. Cite that path WHOLE,
+  single source of truth) + spec + validators. Cite that path WHOLE,
   `src/` segment included: this line used to say a bare `registry.toml`, and a landed
   ruling was twice mis-cited from it to a crate-root path that does not exist (R309(b),
   ANNOTATION 7 — which carries the full account, and names the wrong string so this file
@@ -83,7 +83,6 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - LAW-07 producer-test — every gate/monitor input cites a live producer + mutation self-test.
 - LAW-08 live-consumer — every config key / registered encoding has a live consumer.
 - LAW-09 bench discipline — prereg hotspots, one change = one commit = one IQR-gated bench.
-- LAW-10 threat-probe criterion — C1–C3 gate checkpoints; anchor-matched baselines.
 - LAW-11 identity-keys — no dense-by-default; absent encoding/representation = error.
 - LAW-12 checkpoint-stamp — stamps immutable; one loader; weights-only strip is the one path.
 - LAW-13 FFI/build — panic="unwind" across FFI; no target-cpu in committed config.

@@ -23,19 +23,14 @@ import pytest
 
 from mantis import _engine
 
-# The full 22-method Python-facing InferenceBatcher surface (DESIGN §a.1 table, widened
-# by WP12-R Phase EVALDECODE); 21 named methods/getters + __init__ = 22.
+# The Python-facing InferenceBatcher surface (DESIGN §a.1 table, widened by WP12-R Phase
+# EVALDECODE, narrowed by R346(f) when the six dense-queue methods and `feature_len_py` went
+# with the dense wire). A LIST, not a count: `test_the_declared_inference_surface_equals_the_
+# live_class` compares it to `dir()` both ways, which is what a count could never do.
 INFERENCE_METHODS = [
-    "spawn_mock_games",
-    "completed_mock_games",
-    "has_pending_requests",
-    "next_inference_batch",
-    "submit_inference_results",
-    "submit_inference_failure",
     "close",
     "bump_model_version",
     "model_version",
-    "feature_len_py",
     "policy_len_py",
     "representation_py",
     "has_pending_graph_requests",
@@ -54,7 +49,7 @@ INFERENCE_METHODS = [
 def test_mctstree_ctor_compose_and_policy_round_trip():
     tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)  # new_full + configure_quiescence
     assert tree.quiescence_fire_count == 0
-    board = _engine.Board.with_encoding_name("v6")
+    board = _engine.Board.with_encoding_name("gnn_axis_v1")
     board.apply_move(0, 0)
     tree.new_game(board)
     leaves = tree.select_leaves(4)
@@ -81,7 +76,7 @@ def test_mctstree_forced_root_child_round_trip():
     with pytest.raises(ValueError, match="not a child of the root"):
         tree.forced_root_child = 3
 
-    board = _engine.Board.with_encoding_name("v6")
+    board = _engine.Board.with_encoding_name("gnn_axis_v1")
     tree.new_game(board)
     leaves = tree.select_leaves(1)
     tree.expand_and_backup([[1.0 / 362] * 362 for _ in leaves], [0.0] * len(leaves))
@@ -190,38 +185,13 @@ def test_the_declared_inference_surface_equals_the_live_class():
 
 
 def test_inference_batcher_getters_spec_derived():
-    spec = _engine.RegistrySpec.from_registry("v6")
+    spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
     ib = _engine.InferenceBatcher(encoding_spec=spec)
-    assert ib.feature_len_py == spec.state_stride
     assert ib.policy_len_py == spec.policy_stride
-    assert ib.representation_py == "grid"
+    assert ib.representation_py == "graph"
     assert ib.model_version == 0
     assert ib.bump_model_version() == 1
     assert ib.model_version == 1
-    ib.close()
-
-
-def test_inference_batcher_dense_mock_round_trip():
-    """spawn_mock_games -> next_inference_batch -> submit_inference_results -> completion."""
-    spec = _engine.RegistrySpec.from_registry("v6")
-    ib = _engine.InferenceBatcher(encoding_spec=spec)
-    policy_len = ib.policy_len_py
-    n_games = 3
-    ib.spawn_mock_games(n_games)
-    rounds = 0
-    while ib.completed_mock_games() < n_games and rounds < 500:
-        rounds += 1
-        ids, feats = ib.next_inference_batch(8, 50)
-        ids = list(ids)
-        feats = np.asarray(feats)
-        assert feats.shape[1] == spec.state_stride
-        if not ids:
-            continue
-        pol = np.zeros((len(ids), policy_len), dtype=np.float32)
-        pol[:, 0] = 1.0
-        val = np.zeros((len(ids),), dtype=np.float32)
-        ib.submit_inference_results(ids, pol, val)
-    assert ib.completed_mock_games() == n_games, f"dense mock games stalled after {rounds} rounds"
     ib.close()
 
 

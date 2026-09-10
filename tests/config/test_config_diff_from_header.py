@@ -128,7 +128,7 @@ def test_every_committed_config_header_is_truthful():
 
 def test_committed_config_body_lie_would_be_caught(tmp_path):
     # A real mutation (not tautological): flip a run5 body key NOT listed in its header -> exit 1.
-    src = (REPO_ROOT / "configs" / "run5.yaml").read_text()
+    src = (REPO_ROOT / "configs" / "run6.yaml").read_text()
     assert "random_model_sims: 96" in src  # not in run5's header (only run_id + seed are)
     lie = tmp_path / "run5_lie.yaml"
     lie.write_text(src.replace("random_model_sims: 96", "random_model_sims: 64"))

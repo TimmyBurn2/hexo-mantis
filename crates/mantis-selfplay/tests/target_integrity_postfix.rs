@@ -1,6 +1,6 @@
 // R8 >300 justify: the POST-FIX-ONLY oracle bank (DEG x4, S2a, S2b record-level x3, QA,
-// O4b latch, CTR gridls producer) shares one construction harness and one feature gate;
-// scattering it would scatter the gate IMPL must wire and the freeze audit.
+// O4b latch) shares one construction harness and one feature gate; scattering it would
+// scatter the gate IMPL must wire and the freeze audit.
 //! ⊕ WP12-R Phase T (TARGET INTEGRITY) — the POST-FIX-ONLY Rust oracle bank.
 //! Written at T-2 ORACLE-WRITE, byte-frozen through IMPL.
 //!
@@ -15,8 +15,9 @@
 //!     `SelfPlayRunner::fatal_defect() -> Option<String>` (store-then-running=false;
 //!     the bridge's `collect_graph_data`/drain face raises from this read — §3.4);
 //!   * `RunnerStatsSnapshot` LAW-18 counters: `export_offwindow_mass_moves`,
-//!     `gridls_zero_policy_rows`, `target_integrity_defects` (§3.6; the third name is
-//!     fixed HERE — the design left it unnamed; recorded in ORACLE_NOTES_T.md).
+//!     `target_integrity_defects` (§3.6; the second name is fixed HERE — the design left
+//!     it unnamed; recorded in ORACLE_NOTES_T.md). The §3.5 `gridls_zero_policy_rows`
+//!     counter and its CTR producer leg went with the dense recorder at R346(f).
 //!
 //! IMPL wires the gate by declaring `phase_t_postfix = []` as a DEFAULT feature of
 //! mantis-selfplay in the fix commit, so `cargo test --workspace --locked` runs this
@@ -24,19 +25,12 @@
 //! `unexpected_cfgs` warning naming this exact feature, and ORACLE_NOTES_T.md lists
 //! every gated test with pre-fix status "not-compiled-gated".
 //!
-//! Killers (PREREG_T §3): DEG — M-C; S2a — M-J; S2b record-level — M-D; O4b — M-N;
-//! CTR — M-H (per-counter sub-runs).
+//! Killers (PREREG_T §3): DEG — M-C; S2a — M-J; S2b record-level — M-D; O4b — M-N.
 #![cfg(feature = "phase_t_postfix")]
-
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
-use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
 
 use mantis_core::board::Board;
 use mantis_core::{Cell, Player};
 use mantis_search::{LegalSetPolicy, MCTSTree};
-use mantis_selfplay::queues::DenseQueue;
 use mantis_selfplay::records::{record_position_graph, TargetIntegrityError};
 use mantis_selfplay::replay::hexg::HexgBuffer;
 
@@ -46,7 +40,7 @@ use mantis_selfplay::replay::hexg::HexgBuffer;
 const MAX_VISITS: usize = 128;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-const NA: usize = 362; // gnn_axis_v1 / v6 policy stride (19*19+1)
+const NA: usize = 362; // gnn_axis_v1 policy stride (19*19+1)
 const TRUNK: i32 = 19;
 
 /// Three well-separated stones → a wide legal set (>= 140 cells) with a bbox-midpoint
@@ -392,7 +386,7 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
         quiescence_enabled: false,
         dirichlet_enabled: false,
         random_opening_plies: 50,
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some("gnn_axis_v1".to_string()),
         ..Default::default()
     })
     .expect("runner constructs");
@@ -434,132 +428,4 @@ fn o4b_latch_stores_the_named_variant_and_halts_the_runner() {
         "latch fire-count == 1"
     );
     runner.stop();
-}
-
-// ── CTR(gridls): the §3.5 zero-row counter has a live producer (LAW-07) ──────────────
-
-const MOCK_NN_SEED: u64 = 0x4D4F_434B_4E4E_0007;
-
-fn splitmix64_step(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
-fn spawn_dense_producer(
-    queue: DenseQueue,
-    stride: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_batch(2, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-        let mut flat: Vec<f32> = Vec::new();
-        let mut ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(batch.len());
-        let mut values: Vec<f32> = Vec::with_capacity(batch.len());
-        for (id, feats) in &batch {
-            let mut s = MOCK_NN_SEED ^ *id;
-            for &x in feats {
-                s ^= u64::from(f32::to_bits(x));
-                splitmix64_step(&mut s);
-            }
-            let start = flat.len();
-            for _ in 0..stride {
-                let step = splitmix64_step(&mut s);
-                flat.push((step >> 40) as f32 / 16_777_216.0_f32);
-            }
-            ranges.push(start..flat.len());
-            values.push(0.0);
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        let arc = Arc::new(flat);
-        queue.submit_results(&ids, &arc, &ranges, &values);
-    })
-}
-
-#[test]
-fn ctr_gridls_zero_policy_rows_fires_on_a_dispersed_ls_run() {
-    // v6_live2_ls (the R148 control arm): a 40-ply line-dispersed seed prefix gives
-    // multi-cluster boards whose far windows see zero visit mass at 8 sims — the §3.5
-    // zero-row fill fires on recorded cluster rows and the LAW-18 counter must count it.
-    let spec = mantis_encoding::lookup_or_panic("v6_live2_ls");
-    let geom = mantis_core::board::BoardGeometry {
-        legal_move_radius: spec.legal_move_radius as i32,
-        cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
-        cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
-    };
-    let mut b = Board::with_geometry(geom);
-    let mut prefix = Vec::new();
-    for _ in 0..40 {
-        let legal = b.legal_moves();
-        if legal.is_empty() {
-            break;
-        }
-        let (cq, cr) = b.window_center();
-        let &(q, r) = legal
-            .iter()
-            .max_by_key(|&&(q, r): &&(i32, i32)| {
-                let (dq, dr) = (q - cq, r - cr);
-                dq.abs().max(dr.abs()).max((dq + dr).abs())
-            })
-            .unwrap();
-        if b.apply_move(q, r).is_err() {
-            break;
-        }
-        prefix.push((q, r));
-    }
-
-    let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
-        n_workers: 1,
-        max_moves_per_game: 46,
-        n_simulations: 8,
-        leaf_batch_size: 4,
-        standard_sims: 0,
-        dirichlet_enabled: false,
-        quiescence_enabled: false,
-        encoding_name: Some("v6_live2_ls".to_string()),
-        seed_fraction: 1.0,
-        seed_corpus: Some(vec![prefix]),
-        ..Default::default()
-    })
-    .expect("v6_live2_ls runner constructs");
-    assert_eq!(
-        runner.stats_snapshot().gridls_zero_policy_rows,
-        0,
-        "the counter must be VISIBLE at 0 before any position records (LAW-18 idle posture)"
-    );
-    let served = Arc::new(AtomicUsize::new(0));
-    let producer =
-        spawn_dense_producer(runner.dense_producer(), runner.policy_len(), served.clone());
-
-    runner.start();
-    let deadline = Instant::now() + Duration::from_secs(300);
-    let mut fired = 0u64;
-    while Instant::now() < deadline {
-        let snap = runner.stats_snapshot();
-        fired = snap.gridls_zero_policy_rows;
-        if fired >= 1 && snap.positions_generated >= 3 {
-            break;
-        }
-        thread::sleep(Duration::from_millis(10));
-    }
-    runner.stop();
-    producer.join().expect("producer exits");
-    assert!(
-        served.load(Ordering::Relaxed) > 0,
-        "no inference served — vacuous drive"
-    );
-    assert!(
-        fired >= 1,
-        "gridls_zero_policy_rows never fired across the dispersed drive — the §3.5 \
-         zero-row producer is not wired to its LAW-18 counter (M-H kills this)"
-    );
 }

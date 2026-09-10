@@ -316,7 +316,7 @@ def _minted_config() -> Any:
     from mantis.config import load_config
     from mantis.config.schema import RunConfig
 
-    base = load_config(str(REPO_ROOT / "configs" / "smoke_gnn.yaml")).model_dump()
+    base = load_config(str(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")).model_dump()
     base["allocator_posture"] = "default"
     return RunConfig.model_validate(base)
 

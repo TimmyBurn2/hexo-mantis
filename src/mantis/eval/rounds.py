@@ -154,8 +154,6 @@ class RoundSpec:
     random_floor_games: int
     random_model_sims: int
     sealbot_model_sims: int
-    kraken_model_sims: int
-    strix_model_sims: int
     seed_base: int
     round_timeout_sec: float
     result_path: str
@@ -205,14 +203,6 @@ class RoundSpec:
     #: silently restore the k=1 train/deploy mismatch this field exists to close. A plain int,
     #: so it round-trips through `asdict`/`from_dict` with no rehydration entry.
     leaf_batch_size: int
-    #: The run's declared `train.amp_dtype`, carried across the process seam for
-    #: `fused_graph_caps`' reason (AUDIT-1 F-31). The eval child's `LocalInferenceEngine` has no
-    #: `RunConfig` to resolve against, and its DENSE decodes carried no `dtype=` on their
-    #: autocast at all — so the deploy-matched forward ran at torch's device default while the
-    #: run declared something else, on the one path LAW-15 reads a promotion bar off. Resolved
-    #: through `amp_dtype_for` (the ONE authority, LAW-06) inside the engine; threaded, never
-    #: named at the construction site.
-    amp_dtype: str
     #: The run's `selfplay.max_game_moves`, carried across the process seam for `amp_dtype`'s
     #: reason (AUDIT-1 F-15). `arena/match.py::DEFAULT_MAX_PLIES = 128` defaulted every eval
     #: game, and its own comment said it "mirrors the production self-play default" — a copy of

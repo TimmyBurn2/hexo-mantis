@@ -16,11 +16,52 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+import yaml
 
 from mantis.config.resolve.amp import resolve_amp_dtype
 from mantis.config.resolve.encoding import reconcile_encoding
 from mantis.config.schema import RunConfig
+from mantis.util.yaml_io import parse_config_yaml
+
+#: The run directory's COMPLETE resolved-config record (R347 / CONFIG-1).
+RESOLVED_CONFIG_FILENAME = "resolved_config.yaml"
+
+
+def write_resolved_config(config: RunConfig, out_dir: str | Path) -> Path:
+    """Write the run's COMPLETE resolved config into its own run directory.
+
+    R347/CONFIG-1'S OTHER HALF, and the thing that makes the YAML shrink safe. Once the
+    operational constants carry schema defaults, the shipped file no longer STATES every value
+    the run used — so the run itself has to. This writes the post-validation `model_dump()`,
+    which carries every leaf including the ones no config mentioned, into the run directory
+    beside `logs/` and `checkpoints/`. A schema default that moves later therefore cannot
+    rewrite what an old run is recorded as having used.
+
+    STRICT, and proven on the BYTES rather than on the object: the file is read back and
+    re-validated through `RunConfig`, so a document that would not load is a boot failure here
+    rather than an unreadable record discovered months later. `RunConfig`'s serializer drops
+    the arch-scoped blocks this arch does not have, which is what makes the round trip hold.
+
+    Args:
+        config: the validated run config.
+        out_dir: the run directory.
+
+    Returns:
+        The path written.
+
+    Raises:
+        OSError: the record could not be written or read back — persistence-fatal (LAW-14).
+        ValidationError: the written document does not re-validate, which means the record is
+            not a config and the run must not proceed believing it wrote one.
+    """
+    path = Path(out_dir) / RESOLVED_CONFIG_FILENAME
+    path.write_text(yaml.safe_dump(config.model_dump(), sort_keys=False), encoding="utf-8")
+    RunConfig.model_validate(parse_config_yaml(path))
+    return path
+
 
 # Resolver-vocab source → thin WP8 emit vocab. A declared config value is a "file" source; the
 # encoding resolver reports "variant"/"checkpoint" — remap so provenance speaks the emit vocab.
@@ -77,7 +118,7 @@ def resolve_config(cfg: RunConfig) -> ResolvedConfig:
         "eval.random_model_sims": ResolvedKnob(cfg.eval.random_model_sims, "file"),
         "eval.sealbot_model_sims": ResolvedKnob(cfg.eval.sealbot_model_sims, "file"),
         "amp_dtype": ResolvedKnob(
-            resolve_amp_dtype(cfg.identity.representation, cfg.train.amp_dtype), "derived"
+            resolve_amp_dtype(cfg.identity.representation), "derived"
         ),
     }
     return ResolvedConfig(knobs)

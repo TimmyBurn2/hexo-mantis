@@ -1,27 +1,24 @@
-//! R8 justify: one census over one registry, and its rows are meaningful only against each
-//! other — the exact-N count, the name set, the deliberately-absent set, the per-field
-//! authorities and the malformed-fragment refusals all read the SAME `valid_grid_body`
-//! fixture, so a split would leave one file asserting a shape another file's fixture no
-//! longer builds.
-//! O-4..O-10, O-13 — registry census (pruned set), per-field pins,
-//! wire_signature families, spec-derived strides, unknown-key / missing-key /
-//! missing-representation parse errors, validator collect-all, n_chain_planes
-//! TOML-field authority, registry_sha() export, and the mechanical-delta pins.
+//! O-4..O-10, O-13 — registry census (pruned set), per-field pins on the two graph rows, and
+//! the derived field-diff that keeps `gnn_axis_r8` a one-knob edit of `gnn_axis_v1`.
+//!
+//! The three grid rows (`v6`, `v6w25`, `v6_live2_ls`) went with the dense path (R346(f)); they
+//! are pinned here as ABSENT so a resurrected row fails the census rather than the encoder.
 
-#[allow(dead_code)]
-mod common;
+use mantis_encoding::{all_specs, lookup, PolicyPool, Representation, ValuePool};
 
-use std::path::PathBuf;
-
-use mantis_encoding::{
-    all_specs, lookup, parse_encoding_toml, registry_sha, registry_sha_hex, PolicyPool,
-    Representation, ValuePool, MOVES_REMAINING_PLANE, MY_STONE_PLANE, OPP_STONE_PLANE,
-    PLY_PARITY_PLANE,
-};
-
-const REGISTERED: [&str; 5] = ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"];
-const ABSENT: [&str; 8] = [
-    "v6_live2", "v8", "v8_canvas_realness", "v7full", "v7", "v7e30", "v7mw", "v6tp",
+const REGISTERED: [&str; 2] = ["gnn_axis_v1", "gnn_axis_r8"];
+const ABSENT: [&str; 11] = [
+    "v6",
+    "v6w25",
+    "v6_live2_ls",
+    "v6_live2",
+    "v8",
+    "v8_canvas_realness",
+    "v7full",
+    "v7",
+    "v7e30",
+    "v7mw",
+    "v6tp",
 ];
 
 // ── O-4: census exact-N + names + ARCH/KILL absence ──────────────────────────
@@ -34,86 +31,42 @@ fn census_exact_n_and_names() {
     );
     let mut names: Vec<&str> = all_specs().map(|s| s.name).collect();
     names.sort_unstable();
-    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1", "v6", "v6_live2_ls", "v6w25"]);
+    assert_eq!(names, ["gnn_axis_r8", "gnn_axis_v1"]);
     for n in REGISTERED {
         assert!(lookup(n).is_some(), "{n} must be registered");
     }
     for n in ABSENT {
-        assert!(lookup(n).is_none(), "{n} must be ABSENT (ARCH/KILL)");
+        assert!(
+            lookup(n).is_none(),
+            "{n} must be ABSENT (ARCH/KILL/R346(f))"
+        );
     }
+}
+
+/// `representation` is the identity key (LAW-11) and `"grid"` is refused BY NAME rather than
+/// falling through as unknown, so a stale row says what happened to it.
+#[test]
+fn representation_parse_refuses_grid_by_name() {
+    assert_eq!(Representation::parse("graph"), Ok(Representation::Graph));
+    let err = Representation::parse("grid").expect_err("grid must be refused, never defaulted");
+    assert!(
+        err.contains("grid") && err.contains("R346(f)"),
+        "the refusal must name the deleted representation and the ruling; got {err:?}"
+    );
+    assert!(
+        Representation::parse("dense").is_err(),
+        "an unknown representation is an error, never a default (LAW-11)"
+    );
 }
 
 // ── O-5: per-field pins ──────────────────────────────────────────────────────
 #[test]
-fn per_field_pins_v6() {
-    let s = lookup("v6").unwrap();
-    assert_eq!(s.representation, Representation::Grid);
-    assert_eq!(s.board_size, 19);
-    assert_eq!(s.trunk_size, 19);
-    assert_eq!(s.cluster_window_size, None);
-    assert_eq!(s.cluster_threshold, None);
-    assert_eq!(s.legal_move_radius, 5);
-    assert_eq!(s.n_planes, 8);
-    assert_eq!(s.plane_layout.len(), 8);
-    assert_eq!(s.policy_logit_count, 362);
-    assert!(s.has_pass_slot);
-    assert!(!s.is_multi_window);
-    assert_eq!(s.value_pool, ValuePool::None);
-    assert_eq!(s.policy_pool, PolicyPool::None);
-    assert_eq!(s.sym_table_id, "size_19");
-    assert_eq!(s.kept_plane_indices, &[0, 1, 2, 3, 8, 9, 10, 11]);
-    assert_eq!(s.n_source_planes, 18);
-    assert_eq!(s.k_max, 1);
-    assert_eq!(s.n_chain_planes, 6);
-    assert_eq!(s.schema_version, 3, "schema_version PRESERVED (no bump)");
-    assert!(!s.is_graph());
-}
-
-#[test]
-fn per_field_pins_v6w25() {
-    let s = lookup("v6w25").unwrap();
-    assert_eq!(s.representation, Representation::Grid);
-    assert_eq!(s.board_size, 25);
-    assert_eq!(s.trunk_size, 25);
-    assert_eq!(s.cluster_window_size, Some(25));
-    assert_eq!(s.cluster_threshold, Some(8));
-    assert_eq!(s.n_planes, 8);
-    assert_eq!(s.policy_logit_count, 626);
-    assert!(s.is_multi_window);
-    assert_eq!(s.value_pool, ValuePool::Min);
-    assert_eq!(s.policy_pool, PolicyPool::ScatterMax);
-    assert_eq!(s.sym_table_id, "size_25");
-    assert_eq!(s.kept_plane_indices, &[0, 1, 2, 3, 8, 9, 10, 11]);
-    assert_eq!(s.k_max, 8);
-    assert_eq!(s.n_chain_planes, 6);
-    assert_eq!(s.schema_version, 3);
-}
-
-#[test]
-fn per_field_pins_v6_live2_ls() {
-    let s = lookup("v6_live2_ls").unwrap();
-    assert_eq!(s.representation, Representation::Grid);
-    assert_eq!(s.board_size, 19);
-    assert_eq!(s.cluster_window_size, Some(19));
-    assert_eq!(s.cluster_threshold, Some(5));
-    assert_eq!(s.n_planes, 4);
-    assert_eq!(s.policy_logit_count, 362);
-    assert!(s.is_multi_window);
-    assert_eq!(s.value_pool, ValuePool::Min);
-    assert_eq!(s.policy_pool, PolicyPool::LegalSetScatterMax);
-    assert_eq!(s.sym_table_id, "size_19");
-    assert_eq!(s.kept_plane_indices, &[0, 8, 16, 17]);
-    assert_eq!(s.k_max, 8);
-    assert_eq!(s.n_chain_planes, 6);
-    assert_eq!(s.schema_version, 3);
-}
-
-#[test]
 fn per_field_pins_gnn_axis_v1() {
-    let s = lookup("gnn_axis_v1").unwrap();
+    let s = lookup("gnn_axis_v1").expect("gnn_axis_v1 is a registered row");
     assert_eq!(s.representation, Representation::Graph);
     assert!(s.is_graph());
     assert_eq!(s.board_size, 19);
+    assert_eq!(s.trunk_size, 19);
     assert_eq!(s.n_planes, 0);
     assert!(s.plane_layout.is_empty());
     assert!(s.kept_plane_indices.is_empty());
@@ -121,6 +74,12 @@ fn per_field_pins_gnn_axis_v1() {
     assert_eq!(s.policy_logit_count, 362);
     assert!(s.has_pass_slot);
     assert!(!s.is_multi_window);
+    assert_eq!(s.cluster_window_size, None);
+    assert_eq!(s.cluster_threshold, None);
+    assert_eq!(s.value_pool, ValuePool::None);
+    assert_eq!(s.policy_pool, PolicyPool::None);
+    assert_eq!(s.sym_table_id, "size_19");
+    assert_eq!(s.k_max, 1);
     assert_eq!(s.node_feat_dim, Some(11));
     assert_eq!(s.edge_feat_dim, Some(5));
     assert_eq!(s.win_length, Some(6));
@@ -129,7 +88,10 @@ fn per_field_pins_gnn_axis_v1() {
     assert_eq!(s.contract_version, Some(1));
     assert_eq!(s.builder_impl_required, Some(1));
     assert_eq!(s.n_chain_planes, 6);
-    assert_eq!(s.schema_version, 4, "graph entry schema_version = 4 (preserved)");
+    assert_eq!(
+        s.schema_version, 4,
+        "graph entry schema_version = 4 (preserved)"
+    );
     assert_eq!(s.legal_move_radius, 6);
 }
 
@@ -139,10 +101,11 @@ fn per_field_pins_gnn_axis_v1() {
 /// mint runs on.
 #[test]
 fn per_field_pins_gnn_axis_r8() {
-    let s = lookup("gnn_axis_r8").unwrap();
+    let s = lookup("gnn_axis_r8").expect("gnn_axis_r8 is a registered row");
     assert_eq!(s.representation, Representation::Graph);
     assert!(s.is_graph());
     assert_eq!(s.board_size, 19);
+    assert_eq!(s.trunk_size, 19);
     assert_eq!(s.n_planes, 0);
     assert!(s.plane_layout.is_empty());
     assert!(s.kept_plane_indices.is_empty());
@@ -150,15 +113,28 @@ fn per_field_pins_gnn_axis_r8() {
     assert_eq!(s.policy_logit_count, 362);
     assert!(s.has_pass_slot);
     assert!(!s.is_multi_window);
+    assert_eq!(s.cluster_window_size, None);
+    assert_eq!(s.cluster_threshold, None);
+    assert_eq!(s.value_pool, ValuePool::None);
+    assert_eq!(s.policy_pool, PolicyPool::None);
+    assert_eq!(s.sym_table_id, "size_19");
+    assert_eq!(s.k_max, 1);
     assert_eq!(s.node_feat_dim, Some(11));
     assert_eq!(s.edge_feat_dim, Some(5));
     assert_eq!(s.win_length, Some(6));
-    assert_eq!(s.graph_radius, Some(8), "the row exists to be radius 8 (R328)");
+    assert_eq!(
+        s.graph_radius,
+        Some(8),
+        "the row exists to be radius 8 (R328)"
+    );
     assert_eq!(s.win_axes, Some(3));
     assert_eq!(s.contract_version, Some(1));
     assert_eq!(s.builder_impl_required, Some(1));
     assert_eq!(s.n_chain_planes, 6);
-    assert_eq!(s.schema_version, 4, "graph entry schema_version = 4 (preserved)");
+    assert_eq!(
+        s.schema_version, 4,
+        "graph entry schema_version = 4 (preserved)"
+    );
     assert_eq!(
         s.legal_move_radius, 8,
         "the R328 identity: legal_move_radius and graph_radius are ONE number on a graph row, \
@@ -178,12 +154,26 @@ fn per_field_pins_gnn_axis_r8() {
 /// as the drift it would have caught.
 #[test]
 fn the_two_graph_rows_differ_in_exactly_the_radius_pair() {
-    let v1 = format!("{:#?}", lookup("gnn_axis_v1").unwrap());
-    let r8 = format!("{:#?}", lookup("gnn_axis_r8").unwrap());
+    let v1 = format!(
+        "{:#?}",
+        lookup("gnn_axis_v1").expect("gnn_axis_v1 is registered")
+    );
+    let r8 = format!(
+        "{:#?}",
+        lookup("gnn_axis_r8").expect("gnn_axis_r8 is registered")
+    );
     let (a, b): (Vec<&str>, Vec<&str>) = (v1.lines().collect(), r8.lines().collect());
-    assert_eq!(a.len(), b.len(), "the two dumps have different shapes, so no field-wise diff \
-                                  is possible:\n{v1}\n---\n{r8}");
-    assert!(a.len() > 15, "the Debug dump collapsed to {} lines; this test would be vacuous", a.len());
+    assert_eq!(
+        a.len(),
+        b.len(),
+        "the two dumps have different shapes, so no field-wise diff \
+         is possible:\n{v1}\n---\n{r8}"
+    );
+    assert!(
+        a.len() > 15,
+        "the Debug dump collapsed to {} lines; this test would be vacuous",
+        a.len()
+    );
 
     // `{:#?}` breaks an `Option<usize>` over three lines, so a differing line is often the
     // INNER value rather than the field name. Carry the most recent `field:` line seen so a

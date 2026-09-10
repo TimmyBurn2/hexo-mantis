@@ -40,7 +40,9 @@ from mantis.diagnostics.acceptance_witness import (
 )
 from mantis.encoding import lookup
 from mantis.eval.worker import build_candidate_player
-from mantis.model import CnnArch, build_net
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from mantis.model import GnnArch, build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
@@ -60,7 +62,7 @@ _WIN_LINE: list[tuple[int, int]] = [
     (8, 4), (10, 4), # plies 9,10 -> player -1
     (5, 0),          # ply 11     -> player  1, and the six is complete
 ]
-_ENCODING = "v6"
+_ENCODING = "gnn_axis_v1"
 _AXES = ((1, 0), (0, 1), (1, -1))
 
 
@@ -89,22 +91,24 @@ def _parity_longest_run(moves: list[tuple[int, int]], player: int) -> int:
     return best
 
 
-def _tiny_arch() -> CnnArch:
-    # Registry-true "v6" dims (board_size=19, n_planes=8), minimal width/depth for speed —
-    # the same fixture shape `tests/eval/test_round_end_to_end.py` uses.
-    return CnnArch(board_size=19, in_channels=8, filters=8, res_blocks=1)
+def _tiny_arch() -> GnnArch:
+    # Registry-true `_ENCODING` dims, minimal width/depth for speed — the same fixture shape
+    # `tests/eval/test_round_end_to_end.py` uses.
+    spec = lookup(_ENCODING)
+    return GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
 
 
 def _derived_opening() -> Opening:
     """A four-ply opening DERIVED at `_ENCODING`'s own geometry, not drawn from the book.
 
-    `book_v1_s20260625_p4` is minted against `gnn_axis_v1` (radius 6) and 292 of its 512
-    openings need radius >= 6 to replay, while `_ENCODING` here is radius-5 `v6` — a pairing
-    R345(b)(2)'s legality boundary refuses, and one the seeded draw at `seed=7` happened to
-    land on. The encoding is NOT incidental in this suite (`_tiny_arch` is sized from v6's
-    19x19 geometry), so the opening moves rather than the encoding. What the suite reads —
-    the seat, the run lengths, the decisive count — is unaffected by WHICH legal opening the
-    second game starts from; that it is legal is the part that was never true.
+    `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
+    radius >= 6 to replay; a draw that lands on one at an encoding whose radius is smaller is
+    a pairing R345(b)(2)'s legality boundary refuses, and the seeded draw at `seed=7` happened
+    to land on exactly that. Deriving the opening from `_ENCODING`'s OWN board keeps the pairing
+    legal whatever the encoding's radius is. What the suite reads — the seat, the run lengths,
+    the decisive count — is unaffected by WHICH legal opening the second game starts from; that
+    it is legal is the part that was never true.
     """
     board = Board.with_encoding_name(_ENCODING)
     moves: list[tuple[int, int]] = []
@@ -113,7 +117,7 @@ def _derived_opening() -> Opening:
         move = legal[(7 + ply * 3) % len(legal)]
         board.apply_move(*move)
         moves.append(move)
-    return Opening(opening_id="derived-r5", moves=moves)
+    return Opening(opening_id="derived-at-encoding-radius", moves=moves)
 
 
 def _readout(seed: int) -> dict:
@@ -122,8 +126,11 @@ def _readout(seed: int) -> dict:
     device = torch.device("cpu")
     engine = LocalInferenceEngine(
         seeded_net(_tiny_arch(), seed=seed).to(device).eval(), device, encoding_spec=spec,
-        fused_graph_caps=None, inference_batching=None, max_in_flight=1, amp_dtype="bf16",
-    )
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
+                                           max_fused_nodes=1785921),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64,
+                                                inference_max_wait_ms=10),
+        max_in_flight=8, )
     try:
         openings = [
             Opening(opening_id="planted-win", moves=list(_WIN_LINE)),

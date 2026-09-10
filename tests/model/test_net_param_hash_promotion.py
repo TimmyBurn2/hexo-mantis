@@ -6,6 +6,9 @@ could shift the digest, every comparison spanning the move would read DIVERGED f
 that has nothing to do with the nets. The literal below was measured on the PRE-MOVE
 implementation at `worker_sweep._net_param_hash` and committed in the same act as the move,
 so the pin is a before/after measurement rather than a transcription of the new behaviour.
+
+The config it was measured at has since been deleted (R346(f)); see `_GOLDEN_SEED` below for
+how the measured net is rebuilt without re-measuring the golden.
 """
 from __future__ import annotations
 
@@ -23,16 +26,27 @@ _REPO = Path(__file__).resolve().parents[2]
 
 #: A committed GRAPH config, read through the real loader — the same one the R81 determinism
 #: oracle uses, so both tests denominate the same net.
-_CONFIG = _REPO / "configs" / "smoke_gnn.yaml"
+_CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
-#: Measured on the PRE-MOVE `worker_sweep._net_param_hash` at `configs/smoke_gnn.yaml`
-#: (`seed: 20260719`), twice, before the promotion landed.
+#: THE SEED THE MEASUREMENT WAS TAKEN AT, restated because the file it was taken from is gone.
+#: `build_sweep_net` seeds from `config.seed` and then builds `build_net(arch)`, so the digest is
+#: a function of the seed and the arch alone. The pre-move measurement was taken at
+#: `configs/smoke_gnn.yaml`, which minted `seed: 20260719` on the same `gnn_axis_v1` identity;
+#: R346(f) deleted that file, and `smoke_preflight_armed.yaml` carries the identical identity at
+#: a different seed. Overriding the seed IN MEMORY rebuilds the net the golden denominates —
+#: verified: the literal below reproduces exactly. Re-measuring at the new file's own seed would
+#: have replaced a before/after measurement with a transcription of current behaviour, which is
+#: the one thing this file's docstring says the pin must not become.
+_GOLDEN_SEED = 20260719
+
+#: Measured on the PRE-MOVE `worker_sweep._net_param_hash`, twice, before the promotion landed.
 _GOLDEN_PRE_MOVE = "1ab0f3cb5cd76a39bb95c4648ce1966242b5fb4bfa2294dfc1901b9509682787"
 
 
 def _built_net() -> torch.nn.Module:
-    config = load_config(_CONFIG)
-    raw = config.model_dump()
+    raw = load_config(_CONFIG).model_dump()
+    raw["seed"] = _GOLDEN_SEED
+    config = load_config(_CONFIG).__class__.model_validate(raw)
     resolved = resolve_pool_encoding(raw, arch=None)
     arch = arch_from_spec_and_config(resolved.registry_spec, raw)
     return ws.build_sweep_net(config, arch, torch.device("cpu"))

@@ -37,13 +37,12 @@ def test_any_field_change_changes_key():
     base = _key()
     base_canonical = base.canonical()
     field_overrides = [
-        {"bot": "kraken"},
         {"variant": "d6"},
         {"model_sims": 128},
         {"opponent_spec": "sealbot:depth=6"},
         {"opening_book": "book_v2"},
         {"deploy_matched": False},
-        {"encoding": "v6_live2_ls"},
+        {"encoding": "gnn_axis_r8"},
     ]
     for overrides in field_overrides:
         changed = _key(**overrides)

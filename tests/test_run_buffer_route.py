@@ -80,28 +80,15 @@ def test_a_graph_config_selects_the_graph_buffer(smoke_run_config) -> None:
     file), which is what the tree already MEASURED about O-9's instrument."""
     from mantis._engine import HexgBuffer
 
-    config = smoke_run_config("smoke_gnn.yaml")
+    config = smoke_run_config("smoke_preflight_armed.yaml")
     buffer = _select_buffer(config, _CAPACITY)
     assert isinstance(buffer, HexgBuffer), (
         f"a graph run gets the graph buffer, off the DECLARATION and nothing else; got "
         f"{type(buffer).__name__}"
     )
-
-
-def test_a_grid_config_selects_the_dense_buffer(smoke_run_config) -> None:
-    """O-F1, arm 2. The other declared route, driven from a MINTED grid config
-    (`smoke_radius_curriculum.yaml`) rather than a hand-built one — the axis is varied, not
-    re-pinned.
-
-    MUTATION THAT REDS IT: route both representations to `HexgBuffer` (the inverse of arm
-    1's mutation, and equally invisible to a token census)."""
-    from mantis._engine import ReplayBuffer
-
-    config = smoke_run_config("smoke_radius_curriculum.yaml")
-    buffer = _select_buffer(config, _CAPACITY)
-    assert isinstance(buffer, ReplayBuffer), (
-        f"a grid run gets the dense buffer; got {type(buffer).__name__}"
-    )
+    # ARM 2 — the dense route and its seeding twin — went with `ReplayBuffer` (R346(f)). The
+    # routing claim that survives is the one below: an unknown representation is a NAMED error
+    # and never falls through to the one surviving arm.
 
 
 @pytest.mark.parametrize("representation", ["", "dense", "GRAPH", None])
@@ -190,7 +177,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity (the old 128, or a new
     constant) instead of calling the derivation."""
     pcr = smoke_run_config(
-        "run5.yaml",
+        "run6.yaml",
         selfplay={
             "playout_cap": {
                 "full_search_prob": 0.10,
@@ -201,7 +188,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     )
     assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
 
-    minted = smoke_run_config("run5.yaml")
+    minted = smoke_run_config("run6.yaml")
     assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
     assert _derived(pcr) != _derived(minted), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "
@@ -241,7 +228,7 @@ def test_the_graph_arm_seeds_its_sampler_from_config_seed(smoke_run_config) -> N
     survive the line moving to a caller that forgets it; this asserts the BEHAVIOUR at the
     one construction site.
     """
-    config = smoke_run_config("smoke_gnn.yaml")
+    config = smoke_run_config("smoke_preflight_armed.yaml")
 
     first = _select_buffer(config, _CAPACITY)
     _fill_graph_ring(first)
@@ -264,8 +251,8 @@ def test_a_different_config_seed_moves_the_graph_draw(smoke_run_config) -> None:
     this arm shows the draw is a function OF `config.seed`.
 
     MUTATION THAT REDS IT: seed from a literal instead of `config.seed`."""
-    config = smoke_run_config("smoke_gnn.yaml")
-    other = smoke_run_config("smoke_gnn.yaml", seed=config.seed + 1)
+    config = smoke_run_config("smoke_preflight_armed.yaml")
+    other = smoke_run_config("smoke_preflight_armed.yaml", seed=config.seed + 1)
 
     baseline = _select_buffer(config, _CAPACITY)
     _fill_graph_ring(baseline)
@@ -275,48 +262,3 @@ def test_a_different_config_seed_moves_the_graph_draw(smoke_run_config) -> None:
     assert list(baseline.sample_graph_batch(24)[1].outcomes) != list(
         moved.sample_graph_batch(24)[1].outcomes
     ), "changing config.seed did not change the batch stream"
-
-
-def _fill_dense_ring(buffer, encoding: str, n_records: int = 32) -> None:
-    """Dense twin of `_fill_graph_ring`: unique `outcome` per record, geometry from the
-    registry spec rather than from literals (the same authority the buffer itself was
-    built through)."""
-    import numpy as np
-
-    from mantis._engine import RegistrySpec
-
-    spec = RegistrySpec.from_registry(encoding)
-    size = spec.board_size
-    state = np.zeros((8, size, size), dtype=np.float16)
-    chain = np.zeros((6, size, size), dtype=np.float16)
-    policy = np.zeros(spec.policy_stride, dtype=np.float32)
-    policy[0] = 1.0
-    ownership = np.ones(spec.n_cells, dtype=np.uint8)
-    winning_line = np.zeros(spec.n_cells, dtype=np.uint8)
-    for i in range(n_records):
-        buffer.push(state, chain, policy, -1.0 + 2.0 * i / (n_records - 1),
-                    ownership, winning_line, 10 + i)
-
-
-def test_the_dense_arm_seeds_its_sampler_too(smoke_run_config) -> None:
-    """R344(a), arm 3. The grid route carries the same contract — asserted rather than
-    assumed, because the two arms are two `return`s and a repair applied to only one of them
-    is a shape this file already has precedent for (arms 1 and 2 above each pin one route
-    because routing them both to one buffer type was the measured defect).
-
-    `sample_batch`'s element 3 is `outcomes` (`SampleBatch`'s field order: states, chain,
-    policies, outcomes, …), so it is the same draw transcript the graph arms read.
-
-    MUTATION THAT REDS IT: delete the seeding line from the grid arm only."""
-    config = smoke_run_config("smoke_radius_curriculum.yaml")
-    encoding = config.identity.encoding
-
-    first = _select_buffer(config, _CAPACITY)
-    _fill_dense_ring(first, encoding)
-    second = _select_buffer(config, _CAPACITY)
-    _fill_dense_ring(second, encoding)
-
-    assert list(first.sample_batch(24, False)[3]) == list(second.sample_batch(24, False)[3]), (
-        "two dense rings built from one config drew different batches — the grid arm is not "
-        "seeding its sampler"
-    )

@@ -17,14 +17,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mantis._engine import MOVES_REMAINING_PLANE as _ENGINE_MOVES_REMAINING_PLANE
-from mantis._engine import MY_STONE_PLANE as _ENGINE_MY_STONE_PLANE
-from mantis._engine import OPP_STONE_PLANE as _ENGINE_OPP_STONE_PLANE
-from mantis._engine import PLY_PARITY_PLANE as _ENGINE_PLY_PARITY_PLANE
 from mantis._engine import RegistrySpec as EncodingSpec
-from mantis.encoding._probes import FIRST_CONV_KEYS as _FIRST_CONV_KEYS
 from mantis.encoding._probes import GNN_GRAPH_MARKER_KEY as _GNN_GRAPH_MARKER_KEY
-from mantis.encoding._probes import POLICY_FC_KEYS as _POLICY_FC_KEYS
 from mantis.encoding.registry import (
     EncodingRegistryError,
     all_specs,
@@ -175,17 +169,15 @@ def _check_scattered_keys(cfg: Mapping[str, Any], spec: EncodingSpec) -> None:
 # ---------------------------------------------------------------------------
 
 _CORPUS_PATHS: dict[str, str] = {
-    "v6":          "data/bootstrap_corpus.npz",
-    "v6_live2_ls": "data/bootstrap_corpus_v6_live2_ls.npz",
-    "v6w25":       "data/bootstrap_corpus_v6w25.npz",
     "gnn_axis_v1": "data/gnn_corpus_v1.hexg",
-    "gnn_axis_r8":  "data/gnn_corpus_r8.hexg",
+    "gnn_axis_r8": "data/gnn_corpus_r8.hexg",
 }
 
 _CORPUS_SHA_PINS: dict[str, str] = {
     # Launch-pinned sha256 — a corpus with a pin must be byte-identical across
-    # hosts. Absence of an encoding here means "no launch pin enforced".
-    "v6_live2_ls": "3813edc2fb10a7c5ab976a0293e38cbba0fd6b84e5295630f339ca421b345c97",
+    # hosts. Absence of an encoding here means "no launch pin enforced". The one pin this
+    # carried was on a dense corpus and went with the grid path (R346(f)); the dict stays
+    # because the mechanism does, and an EMPTY pin set is a truthful "none enforced".
 }
 
 
@@ -275,11 +267,9 @@ def _assert_no_registry_overlap() -> None:
 _assert_no_registry_overlap()
 
 
-_ANCHOR_PATHS: dict[str, str] = {
-    "v6":          "checkpoints/bootstrap_model_v6.pt",
-    "v6_live2_ls": "checkpoints/bootstrap_model_v6_live2.pt",
-    "v6w25":       "checkpoints/bootstrap_model_v6w25.pt",
-}
+# The three dense bootstrap anchors went with the grid path (R346(f)); the graph lineage
+# warm-starts from `identity.warm_start`, which is a minted config row and not a path table.
+_ANCHOR_PATHS: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------
@@ -287,32 +277,6 @@ _ANCHOR_PATHS: dict[str, str] = {
 # arch facts consumers used to hardcode (plane count, kept-index list, stone
 # slots, policy width). Every field is computed from `lookup(name)`.
 #
-# Source-plane semantics fixed by the v6 wire format:
-#   0       → current-player stone, t0          (always kept-slot 0)
-#   8       → opponent stone, t0
-#   1,2,3   → current-player history t-1..t-3
-#   9,10,11 → opponent history t-1..t-3
-#   16,17   → turn-phase scalars (moves_remaining / ply_parity)
-# ---------------------------------------------------------------------------
-
-# AUDIT-1 F-42. READ from the engine, not typed beside it: these four are
-# `mantis_encoding::encode::{MY_STONE_PLANE, OPP_STONE_PLANE, MOVES_REMAINING_PLANE,
-# PLY_PARITY_PLANE}`, which the Rust encode kernels index the wire format by. Python used to
-# pin Python and Rust to pin a literal, with nothing pinning across the FFI, while the SAME
-# indices appear again in `v6_live2_ls.kept_plane_indices = [0, 8, 16, 17]`.
-_CUR_STONE_SRC_PLANE: int = _ENGINE_MY_STONE_PLANE
-_OPP_STONE_SRC_PLANE: int = _ENGINE_OPP_STONE_PLANE
-_MOVES_REMAINING_SRC_PLANE: int = _ENGINE_MOVES_REMAINING_PLANE
-_PLY_PARITY_SRC_PLANE: int = _ENGINE_PLY_PARITY_PLANE
-_HISTORY_SRC_PLANES = frozenset({1, 2, 3, 9, 10, 11})
-_TURN_PHASE_SRC_PLANES = frozenset({_MOVES_REMAINING_SRC_PLANE, _PLY_PARITY_SRC_PLANE})
-
-
-def _kept_slot_of(kept: list[int], src_plane: int) -> int:
-    """Position of ``src_plane`` within the encoding's kept-plane order."""
-    return kept.index(src_plane)
-
-
 @dataclass(frozen=True)
 class ArchSpec:
     """Registry-derived architecture facts for a single encoding.
@@ -322,14 +286,8 @@ class ArchSpec:
     """
 
     name: str
-    in_channels: int               # = spec.n_planes (model trunk in_channels)
-    kept_indices: tuple[int, ...]  # = spec.kept_plane_indices (source→wire slice)
-    cur_stone_slot: int            # kept-slot of source plane 0 (always 0)
-    opp_stone_slot: int            # kept-slot of source plane 8
-    k_max: int                     # = spec.k_max (multi-window cluster cap)
+    k_max: int                     # = spec.k_max
     policy_logit_count: int        # = spec.policy_logit_count
-    history_planes: tuple[int, ...]     # kept-slots of source {1,2,3,9,10,11}
-    turn_phase_planes: tuple[int, ...]  # kept-slots of source {16,17}
 
 
 def resolve_arch(name: Any) -> ArchSpec:
@@ -339,31 +297,11 @@ def resolve_arch(name: Any) -> ArchSpec:
     hardcode a plane count or kept-index list — call this by name.
     """
     spec = lookup(normalize_encoding_name(name))
-    kept = list(spec.kept_plane_indices)
-    history = tuple(i for i, src in enumerate(kept) if src in _HISTORY_SRC_PLANES)
-    turn_phase = tuple(i for i, src in enumerate(kept) if src in _TURN_PHASE_SRC_PLANES)
     return ArchSpec(
         name=spec.name,
-        in_channels=spec.n_planes,
-        kept_indices=tuple(kept),
-        cur_stone_slot=_kept_slot_of(kept, _CUR_STONE_SRC_PLANE),
-        opp_stone_slot=_kept_slot_of(kept, _OPP_STONE_SRC_PLANE),
         k_max=spec.k_max,
         policy_logit_count=spec.policy_logit_count,
-        history_planes=history,
-        turn_phase_planes=turn_phase,
     )
-
-
-def cur_stone_slot(spec: Any) -> int:
-    """Slice index of the current-player t0 stone plane (source plane 0)."""
-    return _kept_slot_of(list(spec.kept_plane_indices), _CUR_STONE_SRC_PLANE)
-
-
-def opp_stone_slot(spec: Any) -> int:
-    """Slice index of the opponent t0 stone plane (source plane 8) within the
-    encoding's kept-plane order. Derived from the registry, never hardcoded."""
-    return _kept_slot_of(list(spec.kept_plane_indices), _OPP_STONE_SRC_PLANE)
 
 
 def resolve_corpus_path(spec: Any) -> Path:
@@ -515,11 +453,6 @@ def resolve_from_config(cfg: Mapping[str, Any] | None) -> EncodingSpec:
     return spec
 
 
-def _grid_specs() -> list[EncodingSpec]:
-    """Registered GRID-representation specs (graph encodings excluded)."""
-    return [s for s in all_specs() if s.representation != "graph"]
-
-
 def _graph_specs() -> list[EncodingSpec]:
     """Registered GRAPH-representation specs. Derived, so pruning back to one re-arms
     the marker branch without an edit."""
@@ -527,8 +460,8 @@ def _graph_specs() -> list[EncodingSpec]:
 
 
 #: REPORT-ONLY, and the restriction is the whole of AUDIT-1 F-20's second half. The function
-#: below dispatches on an ARCH-STRUCTURAL key and then on conv/policy-fc widths, so a V3 graph
-#: arch that renames its trunk entry reads as GRID. `checkpoints.load_legacy_weights` — the
+#: below dispatches on an ARCH-STRUCTURAL key, so a V3 graph arch that renames its trunk entry
+#: resolves nothing. `checkpoints.load_legacy_weights` — the
 #: loader for exactly these artifacts — REFUSES to shape-sniff and says so in its docstring;
 #: two postures on one question is the duplicate-authority class, and the loader's is the one
 #: that governs. NOTHING ON A DISPATCH PATH MAY CALL THIS: the encoding a run uses comes from a
@@ -582,52 +515,13 @@ def detect_encoding_from_state_dict(
             )
         return graph[0]
 
-    # 3. Deterministic shape fallback (grid).
-    inp_w = state.get("trunk.input_conv.conv.weight")
-    if inp_w is None:
-        inp_w = state.get("trunk.input_conv.weight")
-    if inp_w is None or getattr(inp_w, "dim", lambda: 0)() != 4:
-        if strict:
-            raise ValueError(
-                f"checkpoint {ckpt_label} has no trunk.input_conv(.conv)?.weight; "
-                "cannot detect encoding"
-            )
-        return None
-    in_ch = int(inp_w.shape[1])
-    n_actions: int | None = None
-    for k in ("policy_fc.weight", "cluster_pool.policy_mlp.2.weight"):
-        w = state.get(k)
-        if w is not None and getattr(w, "dim", lambda: 0)() == 2:
-            n_actions = int(w.shape[0])
-            break
-
-    candidates = [
-        s
-        for s in _grid_specs()
-        if s.n_planes == in_ch
-        and (n_actions is None or s.policy_logit_count == n_actions)
-    ]
-    if len(candidates) == 1:
-        return candidates[0]
-    if not candidates:
-        if strict:
-            raise ValueError(
-                f"checkpoint {ckpt_label}: unsupported in_channels={in_ch} "
-                f"(n_actions={n_actions}); no registered grid encoding matches"
-            )
-        return None
-    # Ambiguous: shape alone does not disambiguate (e.g. in_ch=8 with no
-    # n_actions probe matches multiple encodings). No filename tiebreak (KILL).
     if strict:
-        names = sorted(s.name for s in candidates)
         raise ValueError(
-            f"checkpoint {ckpt_label}: shape (in_channels={in_ch}, "
-            f"n_actions={n_actions}) is ambiguous across {names}; stamp "
-            f"metadata['encoding_name'] explicitly"
+            f"checkpoint {ckpt_label} carries neither an encoding stamp nor the graph marker "
+            "key; the dense shape fallback went with the grid path (R346(f)). Stamp the "
+            "checkpoint or pass the encoding explicitly (LAW-11)."
         )
     return None
-
-
 def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
     """Return an `EncodingSpec` for a saved checkpoint — from its STAMP, never its shape.
 
@@ -676,39 +570,3 @@ def resolve_from_checkpoint(path: str | Path) -> EncodingSpec:
         "(AUDIT-1 F-20). An artifact's encoding is its STAMP's. Pass the encoding explicitly, "
         "or re-stamp the artifact."
     )
-
-
-def validate_against_state_dict(
-    spec: EncodingSpec, state_dict: Mapping[str, Any]
-) -> None:
-    """Cross-check spec.policy_logit_count + spec.n_planes against a state-dict.
-
-    Probes common key names for the policy fc and first conv. Silently no-ops
-    for keys that don't appear. Raises `ShapeMismatchError` on disagreement.
-    """
-    pfc = None
-    for k in _POLICY_FC_KEYS:
-        if k in state_dict:
-            pfc = state_dict[k]
-            break
-    if pfc is not None:
-        out_features = int(pfc.shape[0])
-        if out_features != spec.policy_logit_count:
-            raise ShapeMismatchError(
-                f"policy_fc out_features {out_features} != "
-                f"spec.policy_logit_count {spec.policy_logit_count} "
-                f"for encoding {spec.name!r}"
-            )
-
-    conv = None
-    for k in _FIRST_CONV_KEYS:
-        if k in state_dict:
-            conv = state_dict[k]
-            break
-    if conv is not None:
-        in_channels = int(conv.shape[1])
-        if in_channels != spec.n_planes:
-            raise ShapeMismatchError(
-                f"first conv in_channels {in_channels} != "
-                f"spec.n_planes {spec.n_planes} for encoding {spec.name!r}"
-            )

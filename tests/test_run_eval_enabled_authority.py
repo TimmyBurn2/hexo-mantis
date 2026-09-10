@@ -40,6 +40,7 @@ from mantis.config.schema import RunConfig
 from mantis.run import compose_run
 
 _REPO = Path(__file__).resolve().parents[1]
+_CONFIGS_DIR = _REPO / "configs"
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _TOOL_PY = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
 
@@ -160,8 +161,11 @@ def _drive(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request, *,
     monkeypatch.setattr(anchor, "resolve_anchor", lambda **_kw: SimpleNamespace(
         best_model=None, best_model_step=None, best_model_path=None, representation="graph"))
 
+    # `dev_example.yaml`, not the armed smoke: this drive bounds `max_train_steps` at
+    # `_DRIVE_STEPS`, and an ARMED `train.draw_rate_abort.min_step` above that is refused by
+    # the schema's own reachability validator. The subject here is `eval_enabled` alone.
     config = smoke_run_config(
-        "smoke_gnn.yaml", eval_enabled=eval_enabled,
+        "dev_example.yaml", eval_enabled=eval_enabled,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS, "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1},
     )
@@ -268,23 +272,25 @@ def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
         )
 
 
-@pytest.mark.parametrize("name", ["dev_example.yaml", "run5.yaml", "shakedown_20260807.yaml",
-                                  "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
-                                  "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml"])
+@pytest.mark.parametrize("name", sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")))
 def test_every_minted_config_declares_the_key_explicitly(name: str, smoke_run_config) -> None:
     """O-E1's R1-completeness arm — every minted config carries the key EXPLICITLY.
 
-    The seven are enumerated here rather than read from `tests/conftest.py:52-53`'s
-    `MINTED_CONFIGS`, which lists five: it omits `smoke_preflight_armed.yaml`. That gap is
-    pre-existing and is recorded, not fixed here (F-12) — but an oracle that inherited it
-    would leave the one config the preflight actually boots uncovered.
-    `shakedown_20260807.yaml` joins at F-P2B (R259): the armed-abort manifest's terminal-eval
-    residual leans on every committed config minting the key True, production configs first.
+    The axis USED to be an enumeration here, written out because `tests/conftest.py`'s
+    `MINTED_CONFIGS` omitted the one config the preflight actually boots. R346(f) cut the
+    committed set to three and the enumeration outlived two of its members, so the axis is
+    globbed off `configs/` — which cannot omit a newly minted file and cannot outlive a
+    deleted one. The vacuity guard is the row below.
 
-    MUTATION THAT REDS IT: re-mint five of six. The schema makes that a load-time failure,
-    which is the point: this arm is what turns "the key is required" into "and every shipped
-    config has it", including run5, whose value R120 fixes at True."""
+    MUTATION THAT REDS IT: re-mint any one of them without the key. The schema makes that a
+    load-time failure, which is the point: this arm is what turns "the key is required" into
+    "and every shipped config has it"."""
     assert smoke_run_config(name).eval_enabled is True, (
         f"{name} must declare eval_enabled explicitly; today's effective posture is the "
         "code default True everywhere, so True is a zero-behaviour mint (§6)"
     )
+
+
+def test_the_minted_axis_is_not_empty() -> None:
+    """Vacuity guard for the glob above: an axis of zero params is a green no-op."""
+    assert sorted(p.name for p in _CONFIGS_DIR.glob("*.yaml")), "configs/ globbed to nothing"

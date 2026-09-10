@@ -1,16 +1,16 @@
 """⊕ WP11-A — eval schema extension + config remint (CI gate 7 adjunct; O15 registry).
 
-RED-at-import: NONE of the fields below (`eval.gate`, `eval.ladder`, `eval.kraken_model_sims`,
-`eval.strix_model_sims`, `eval.random_floor_games`, `eval.worker_device`,
+RED-at-import: NONE of the fields below (`eval.gate`, `eval.ladder`,
+`eval.random_floor_games`, `eval.worker_device`,
 `eval.round_timeout_sec`, `eval.worker_kill_grace_sec`) exist on today's `EvalConfig`
 (src/mantis/config/schema.py, already read — today's EvalConfig has exactly
 `random_model_sims` + `sealbot_model_sims`). Every config file at HEAD (configs/*.yaml,
 tools/config_templates/{dev,grid}.yaml) also lacks them. `mantis.config.loader.load_config`
 and `mantis.config.schema.RunConfig` ALREADY EXIST and import fine — every test here is
 RED-BY-ASSERTION (a `pydantic.ValidationError` on load, or an equality/membership assertion
-that is false today), never a collection-time ModuleNotFoundError. `configs/run5.yaml` is
+that is false today), never a collection-time ModuleNotFoundError. `configs/run6.yaml` is
 the run3-PARITY config (its ladder is asserted verbatim against the six STATE §5 rungs
-elsewhere in this WP — design §b); `dev_example.yaml` / `smoke_gnn.yaml` /
+elsewhere in this WP — design §b); `dev_example.yaml` / `smoke_preflight_armed.yaml` /
 `smoke_radius_curriculum.yaml` / `sustained_kcluster.yaml` are the dev/smoke templates
 (adjudication A-2: parity mints `random_floor_games=0`, dev/smoke mint `4`).
 """
@@ -29,13 +29,8 @@ _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS_DIR = _REPO / "configs"
 _TEMPLATES_DIR = _REPO / "tools" / "config_templates"
 
-_PARITY_CONFIG = _CONFIGS_DIR / "run5.yaml"
-_DEV_SMOKE_CONFIGS = (
-    _CONFIGS_DIR / "dev_example.yaml",
-    _CONFIGS_DIR / "smoke_gnn.yaml",
-    _CONFIGS_DIR / "smoke_radius_curriculum.yaml",
-    _CONFIGS_DIR / "sustained_kcluster.yaml",
-)
+_PARITY_CONFIG = _CONFIGS_DIR / "run6.yaml"
+_DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 
 # The run3-parity gate recipe (deploy_strength_eval.py:249-274, round_robin.py:168; adjudication
 # A-3 for seed_base). NO screen_confirm_hi key (MUST-FIX 1 — inert in run3, non-ported).
@@ -45,25 +40,12 @@ _PARITY_GATE = {
     "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625,
 }
 
-# The six STATE §5 rungs (design §c.1 "Minted ladder" — verbatim, order binding).
+# The minted ladder (design §c.1 — verbatim, order binding). R346(f) deleted five of the six
+# rungs: four belonged to two bot kinds that could never resolve, and the fifth was a second
+# sealbot depth R326(e) excluded from the battery on arithmetic.
 _PARITY_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_raw", "bot": "kraken", "variant": "raw", "depth": None,
-     "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "sealbot_d6", "bot": "sealbot", "variant": "d6", "depth": 6,
-     "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_mcts200", "bot": "kraken", "variant": "mcts200", "depth": None,
-     "opponent_sims": 200, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_128", "bot": "strix", "variant": "s128", "depth": None,
-     "opponent_sims": 128, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_256", "bot": "strix", "variant": "s256", "depth": None,
-     "opponent_sims": 256, "opening_book": "book_v1_s20260625_p4",
      "deploy_matched": True, "games_max": 32},
 ]
 
@@ -110,7 +92,7 @@ def test_all_configs_and_templates_carry_the_new_eval_block_and_validate() -> No
 
 def test_run3_parity_values_pinned() -> None:
     """96/128 sims verbatim + the full run3-parity gate recipe, pinned against
-    `configs/run5.yaml` — including seed_base=20260625 (run3's ACTUAL gate default,
+    `configs/run6.yaml` — including seed_base=20260625 (run3's ACTUAL gate default,
     deploy_strength_eval.py:272 — adjudication A-3; NOT 42, the legacy evaluator's default,
     eval/defaults.py:31)."""
     cfg = load_config(_PARITY_CONFIG)
@@ -145,13 +127,13 @@ def test_screen_confirm_hi_key_is_rejected_everywhere() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """`configs/run5.yaml`'s ladder must equal the six STATE §5 rungs, in order, verbatim
-    (@128/@256 are DISTINCT rungs); 0.75/0.65/3 must appear ONLY as field VALUES, never as
-    source-code literals under src/mantis/eval (rule 4 — schema fields, not literals)."""
+    """`configs/run6.yaml`'s ladder must equal the minted rungs, in order, verbatim;
+    0.75/0.65/3 must appear ONLY as field VALUES, never as source-code literals under
+    src/mantis/eval (rule 4 — schema fields, not literals)."""
     cfg = load_config(_PARITY_CONFIG)
     ladder = cfg.eval.ladder
     assert [r.name for r in ladder.rungs] == [r["name"] for r in _PARITY_RUNGS], (
-        "rung order must match STATE §5 verbatim"
+        "rung order must match the minted ladder verbatim"
     )
     for got, want in zip(ladder.rungs, _PARITY_RUNGS):
         assert got.bot == want["bot"]
@@ -174,9 +156,11 @@ def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> No
     """Adjudication A-2: the run3-parity config mints `random_floor_games=0` (run3 disabled
     random); dev/smoke templates mint a small non-zero n (4) so the headless end-to-end
     round exercises a REAL bot and the resolver key has a live EXERCISED consumer."""
+    # R346(f) deleted the run3-parity config with the rest of the prune; run6 is the one
+    # production config left and it mints the OPERATOR-OWED 20 (R147/R272(d)), not run3's 0.
     parity_cfg = load_config(_PARITY_CONFIG)
-    assert parity_cfg.eval.random_floor_games == 0, (
-        "the run3-parity config must mint random_floor_games=0 (random was disabled in run3)"
+    assert parity_cfg.eval.random_floor_games == 20, (
+        "run6 mints the operator-owed random_floor_games=20 (R147/R272(d))"
     )
     for path in _DEV_SMOKE_CONFIGS:
         if not path.exists():
@@ -190,8 +174,6 @@ def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> No
 # The NEW leaf keys this WP's schema extension must introduce (forward-looking pin: asserted
 # against the FUTURE schema's leaf-set, which has since landed).
 _NEW_LEAF_CONSUMERS = {
-    "eval.kraken_model_sims": "resolve_eval_model_sims (kraken rungs)",
-    "eval.strix_model_sims": "resolve_eval_model_sims (strix rungs)",
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",
     "eval.round_timeout_sec": "pipeline.py mid-round subprocess join bound",

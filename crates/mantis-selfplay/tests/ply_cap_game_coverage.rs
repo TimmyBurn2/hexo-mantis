@@ -141,8 +141,6 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         dirichlet_alpha: PROD_DIRICHLET_ALPHA,
         dirichlet_epsilon: PROD_DIRICHLET_EPSILON,
         search_kind: SearchKind::Puct,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         random_opening_plies: RANDOM_OPENING_PLIES,
         encoding_name: Some("gnn_axis_v1".to_string()),
         ..Default::default()

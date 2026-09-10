@@ -50,10 +50,12 @@ def test_the_target_set_is_derived_from_the_live_registry() -> None:
                 )
 
 
-@pytest.mark.parametrize("value", [6, 11, 362, 626, 3])
+@pytest.mark.parametrize("value", [6, 11, 362, 3])
 def test_the_graph_era_values_are_scanned_at_all(value: int) -> None:
-    """The four the frozen list could not see, named. `6` is graph_radius AND win_length AND
-    n_chain_planes; `11` is node_feat_dim; `362`/`626` are policy widths; `3` is win_axes."""
+    """The graph-era values the frozen list could not see, named. `6` is graph_radius AND
+    win_length AND n_chain_planes; `11` is node_feat_dim; `362` is the policy width; `3` is
+    win_axes. `626` was v6w25's policy width and left the target set with its registry row
+    (R346(f)) — the set is DERIVED, so it followed without an edit here."""
     assert str(value) in H._HARDCODE_TARGETS, f"{value} is not in the scanned set"
 
 

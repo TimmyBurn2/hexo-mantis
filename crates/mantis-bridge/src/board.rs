@@ -11,22 +11,15 @@
 //! DAG severed spec resolution from core), so this wrapper HOLDS the encoding
 //! binding itself (`Option<&'static RegistrySpec>`): `with_encoding_name` sets it
 //! via `mantis_encoding::lookup`; `to_tensor` routes through it +
-//! `mantis_encoding::to_planes`; `size` and the radius/cluster guards read it.
 //! `Board` is `Send + !Sync` (deliberately no `unsafe impl Sync`) — the bridge
 //! brings single-thread Python ownership via `#[pyclass(unsendable)]` (LOCKED #3).
 
-use numpy::{IntoPyArray, PyArray1, PyArray3, PyArrayMethods};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_core::board::{BOARD_SIZE, DEFAULT_CLUSTER_THRESHOLD, HALF};
 use mantis_core::{Board as RustBoard, BoardGeometry, Cell, Player};
 use mantis_encoding::RegistrySpec;
-
-/// Return tuple of `get_cluster_views`: a list of `(2, S, S)` view arrays
-/// (current-player + opponent stones) paired with the axial (q, r) centre
-/// of each cluster window.
-type ClusterViewsOut = (Vec<Py<PyArray3<f32>>>, Vec<(i32, i32)>);
 
 /// Map a Python player id (1 = P1, -1 = P2) to the Rust `Player` enum.
 /// Used by the forcing-move primitive bindings. `ValueError` on any other value.
@@ -274,120 +267,15 @@ impl PyBoard {
     /// Encode the board as a flat list of floats for the 18 tensor planes
     /// (shape conceptually [18, board_size, board_size] where board_size comes
     /// from the bound encoding — default v6 wire geometry, 19 → flat 18×361=6498).
-    ///   plane 0: current player's stones
-    ///   plane 8: opponent's stones
-    ///   plane 16: moves_remaining == 2 ? 1.0 : 0.0
-    ///   plane 17: ply % 2
-    ///   (chain-length planes moved to the replay-buffer aux sub-buffer.)
-    ///
-    /// Panics for multi-window encodings (v6w25 etc.) — with `panic = "unwind"`
-    /// that panic crosses the FFI as a catchable `PanicException`; use
-    /// `get_cluster_views()` for those encodings.
-    ///
-    /// Zero-copy return via `IntoPyArray`: the returned array is a NumPy view
-    /// over the Vec the encode kernel just allocated. Python callers spell:
-    ///   `board.to_tensor().reshape(18, board.size, board.size)`.
-    ///
-    /// Raises:
-    ///     ValueError: the board carries no encoding (`Board.new()`) — no v6 default
-    ///         (R28, LAW-11); construct via `Board.with_encoding_name(...)` first.
-    ///
-    /// AUDIT-1 F-38. This was `panic!`, reaching Python as a `PanicException` and convertible
-    /// at all only because the profile sets `panic = "unwind"` (R2/LAW-13) — a guarantee
-    /// about the worst case, not a design. The refusal itself is correct and unchanged; only
-    /// its face is. Four sites in this tree construct encoding-less boards, so the arm is
-    /// reachable even though no live Python caller reaches it today.
-    pub fn to_tensor<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyArray1<f32>>> {
-        let spec = self.encoding.ok_or_else(|| {
-            PyValueError::new_err(
-                "Board.to_tensor called on an encoding-less Board (Board.new()); \
-                 construct via Board.with_encoding_name(...) first — no v6 default \
-                 (R28, LAW-11)",
-            )
-        })?;
-        Ok(mantis_encoding::to_planes(&self.inner, spec).into_pyarray(py))
-    }
-
-    /// Returns a tuple of (list of NumPy arrays, list of (q, r) centers) for each cluster.
-    ///
-    /// Each NumPy array has shape `(2, S, S)` where `S = self.cluster_window_size`
-    /// (default 19 = v6 wire format; v6w25 callers `set_cluster_window_size(25)`).
-    /// Plane 0 = current player's stones, plane 1 = opponent's stones. Arrays are
-    /// created via zero-copy transfer from Rust allocations.
-    pub fn get_cluster_views(&self, py: Python<'_>) -> PyResult<ClusterViewsOut> {
-        let window_size = self.inner.cluster_window_size();
-        let (views, centers) = self.inner.get_cluster_views();
-        let py_views: PyResult<Vec<_>> = views
-            .into_iter()
-            .map(|v| {
-                // Transfer Vec ownership to NumPy (zero-copy), then reshape.
-                PyArray1::from_vec(py, v)
-                    .reshape([2_usize, window_size, window_size])
-                    .map(pyo3::Bound::unbind)
-            })
-            .collect();
-        Ok((py_views?, centers))
-    }
-
-    /// Set the cluster connectivity threshold (default 5). Used by v6w25 corpus
-    /// generation to widen cluster reach to 8. Affects only `get_clusters()` /
-    /// `get_cluster_views()`; legal-move expansion is independent.
-    ///
-    /// Raises `ValueError` when the board was constructed via
-    /// `Board.with_encoding_name` (encoding bound). Use registry entry instead.
-    pub fn set_cluster_threshold(&mut self, threshold: i32) -> PyResult<()> {
-        if self.encoding.is_some() {
-            return Err(PyValueError::new_err(
-                "set_cluster_threshold after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction",
-            ));
-        }
-        self.inner.set_cluster_threshold(threshold);
-        Ok(())
-    }
-
-    /// Current cluster threshold (default 5).
-    pub fn cluster_threshold(&self) -> i32 {
-        self.inner.cluster_threshold()
-    }
-
-    /// Set the cluster window side length (default 19). Used by v6w25 corpus
-    /// generation to produce 25×25 cluster windows. Caller must use an odd value
-    /// >= 7. Returns ValueError on bad input.
-    ///
-    /// Raises `ValueError` when the board was constructed via
-    /// `Board.with_encoding_name` (encoding bound). Use registry entry instead.
-    pub fn set_cluster_window_size(&mut self, size: usize) -> PyResult<()> {
-        if self.encoding.is_some() {
-            return Err(PyValueError::new_err(
-                "set_cluster_window_size after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction",
-            ));
-        }
-        if size < 7 || size.is_multiple_of(2) {
-            return Err(PyValueError::new_err(format!(
-                "cluster_window_size must be odd and >= 7; got {size}"
-            )));
-        }
-        self.inner.set_cluster_window_size(size);
-        Ok(())
-    }
-
-    /// Current cluster window side length (default 19).
-    pub fn cluster_window_size(&self) -> usize {
-        self.inner.cluster_window_size()
-    }
-
     /// Window-relative flat index for axial (q, r).
     /// Used by selfplay workers to convert legal-move coords to policy indices.
     pub fn to_flat(&self, q: i32, r: i32) -> usize {
         self.inner.window_flat_idx(q, r)
     }
 
-    /// Board size (cells per axis). Default 19 (v6 wire format); honors the
-    /// encoding bound at construction via `with_encoding_name` (e.g. 25 for
-    /// v6w25). A raw geometry default on a deliberately encoding-less board —
-    /// NOT the identity-resolution path (that hard-errors on an unknown name).
+    /// Board size (cells per axis). Default 19; honors the encoding bound at construction
+    /// via `with_encoding_name`. A raw geometry default on a deliberately encoding-less
+    /// board — NOT the identity-resolution path (that hard-errors on an unknown name).
     #[getter]
     pub fn size(&self) -> usize {
         self.encoding.map_or(BOARD_SIZE, |s| s.board_size)
@@ -833,7 +721,7 @@ mod tests {
         assert_eq!(
             b.size(),
             BOARD_SIZE,
-            "encoding-less board size defaults to v6 geometry"
+            "encoding-less board size falls back to the raw geometry default"
         );
         assert_eq!(b.current_player(), 1);
         assert_eq!(b.moves_remaining(), 1);
@@ -842,12 +730,41 @@ mod tests {
 
     #[test]
     fn with_encoding_name_binds_geometry_and_size() {
-        let b = PyBoard::with_encoding_name("v6").expect("v6 registered");
-        assert_eq!(b.size(), 19);
-        assert!(b.encoding.is_some());
-        let w25 = PyBoard::with_encoding_name("v6w25").expect("v6w25 registered");
-        assert_eq!(w25.size(), 25, "bound v6w25 board size = 25");
-        assert_eq!(w25.cluster_window_size(), 25);
+        // Both registered rows share the 19-cell action space and differ only in radius
+        // (R328(b)), so the RADIUS is what proves the spec's geometry reached the Board.
+        // Read from the registry rather than transcribed, so a moved row reds here.
+        for name in ["gnn_axis_v1", "gnn_axis_r8"] {
+            let spec = mantis_encoding::lookup_or_panic(name);
+            let b = PyBoard::with_encoding_name(name).expect("a registered encoding");
+            assert!(b.encoding.is_some());
+            assert_eq!(b.size(), spec.board_size, "{name}: bound board size");
+            assert_eq!(
+                b.legal_move_radius(),
+                spec.legal_move_radius as i32,
+                "{name}: the spec's radius must drive the bound Board"
+            );
+        }
+        assert_ne!(
+            PyBoard::with_encoding_name("gnn_axis_v1")
+                .expect("registered")
+                .legal_move_radius(),
+            PyBoard::with_encoding_name("gnn_axis_r8")
+                .expect("registered")
+                .legal_move_radius(),
+            "the two rows exist to differ in radius; if they stop, this test is vacuous"
+        );
+    }
+
+    #[test]
+    fn a_deleted_grid_encoding_name_is_refused() {
+        // R346(f): the three grid rows are gone from the registry, so binding one is the
+        // unknown-encoding error rather than a silent fall-through to graph geometry.
+        for name in ["v6", "v6w25", "v6_live2_ls"] {
+            assert!(
+                PyBoard::with_encoding_name(name).is_err(),
+                "{name} was deleted with the dense path and must not resolve"
+            );
+        }
     }
 
     #[test]
@@ -856,20 +773,16 @@ mod tests {
     }
 
     #[test]
-    fn radius_and_cluster_guards_fire_when_bound() {
-        let mut b = PyBoard::with_encoding_name("v6").unwrap();
+    fn radius_guard_fires_when_bound() {
+        // The two cluster setters this also drove went with the dense path (R346(f)); the
+        // radius override is the guard that remains, and the encoding-bound board refuses it.
+        let mut b = PyBoard::with_encoding_name("gnn_axis_v1").expect("registered");
         assert!(b.set_legal_move_radius(4).is_err());
-        assert!(b.set_cluster_threshold(8).is_err());
-        assert!(b.set_cluster_window_size(25).is_err());
-    }
-
-    #[test]
-    fn set_cluster_window_size_bounds_on_encoding_less() {
-        let mut b = PyBoard::new();
-        assert!(b.set_cluster_window_size(6).is_err(), "even rejected");
-        assert!(b.set_cluster_window_size(5).is_err(), "< 7 rejected");
-        assert!(b.set_cluster_window_size(25).is_ok());
-        assert_eq!(b.cluster_window_size(), 25);
+        let mut free = PyBoard::new();
+        assert!(
+            free.set_legal_move_radius(4).is_ok(),
+            "the guard is about the BINDING, not the value — an unbound board still accepts it"
+        );
     }
 
     #[test]
@@ -887,9 +800,14 @@ mod tests {
 
     #[test]
     fn clone_preserves_encoding_binding() {
-        let b = PyBoard::with_encoding_name("v6w25").unwrap();
+        let b = PyBoard::with_encoding_name("gnn_axis_r8").expect("registered");
         let c = b.clone();
-        assert_eq!(c.size(), 25);
+        assert_eq!(c.size(), b.size());
+        assert_eq!(
+            c.legal_move_radius(),
+            8,
+            "the r8 row's radius survives the clone"
+        );
         assert!(c.encoding.is_some());
     }
 

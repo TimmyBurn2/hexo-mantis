@@ -86,38 +86,25 @@ def test_helper_parity_shim_vs_engine(name: str) -> None:
     assert tuple(py.kept_plane_indices) == tuple(rs.kept_plane_indices)
 
 
-# ── 3. Unified detector — grid shape fallback ───────────────────────────────
+# ── 3. Unified detector — the grid shape fallback is RETIRED (R346(f)) ──────
 
 
-def test_detect_v6_by_shape() -> None:
-    spec = detect_encoding_from_state_dict(_grid_state(8, 362), "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6"
+def test_the_grid_shape_fallback_is_gone_and_an_unstamped_grid_shape_refuses() -> None:
+    """The shape fallback resolved a DENSE state dict by `(in_channels, n_actions)`. Both the
+    encodings it discriminated between and the arch that produced those keys are deleted, so
+    the branch is gone: a state dict carrying neither a stamp nor the graph marker now REFUSES
+    under `strict` and answers `None` otherwise, whatever its conv widths say.
 
-
-def test_detect_v6w25_by_n_actions() -> None:
-    spec = detect_encoding_from_state_dict(_grid_state(8, 626), "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6w25"
-
-
-def test_detect_v6_live2_ls_by_shape() -> None:
-    spec = detect_encoding_from_state_dict(_grid_state(4, 362), "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6_live2_ls"
-
-
-def test_detect_partial_conv_wrapped_key() -> None:
-    state = _grid_state(8, 362)
-    state["trunk.input_conv.conv.weight"] = state.pop("trunk.input_conv.weight")
-    spec = detect_encoding_from_state_dict(state, "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6"
-
-
-def test_detect_pma_policy_mlp_key_when_policy_fc_absent() -> None:
-    state = {
+    This is the inverse of the rows it replaces. They asserted that a shape RESOLVED; this
+    asserts that it no longer can — which is what stops a future reader re-deriving an
+    encoding from bytes that no longer determine one (LAW-11)."""
+    dense_shaped = {
         "trunk.input_conv.weight": _FakeTensor(64, 8, 3, 3),
-        "cluster_pool.policy_mlp.2.weight": _FakeTensor(626, 64),
+        "policy_fc.weight": _FakeTensor(362, 64),
     }
-    spec = detect_encoding_from_state_dict(state, "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6w25"
+    assert detect_encoding_from_state_dict(dense_shaped, "model.pt", strict=False) is None
+    with pytest.raises(ValueError, match="neither an encoding stamp nor the graph marker"):
+        detect_encoding_from_state_dict(dense_shaped, "model.pt", strict=True)
 
 
 # ── 3b. Marker/stamp beats shape (and filename is NOT a signal — the KILL) ───
@@ -155,50 +142,32 @@ def test_detect_graph_marker_resolves_when_unique(monkeypatch) -> None:
     assert spec.representation == "graph"
 
 
-def test_detect_stamp_beats_shape() -> None:
-    # An embedded encoding_name stamp wins over the grid shape (which says v6).
-    state = _grid_state(8, 362)
-    state["metadata"] = {"encoding_name": "v6w25"}
+def test_detect_stamp_beats_the_graph_marker() -> None:
+    """A stamp wins over every other signal. The shape it used to out-rank is retired
+    (R346(f)); the marker is what is left to out-rank, and the stamp names WHICH graph row
+    the marker cannot."""
+    state = _gnn_state()
+    state["metadata"] = {"encoding_name": "gnn_axis_r8"}
     spec = detect_encoding_from_state_dict(state, "model.pt", strict=False)
-    assert spec is not None and spec.name == "v6w25"
+    assert spec is not None and spec.name == "gnn_axis_r8"
 
 
 def test_detect_filename_is_not_a_signal() -> None:
-    """The filename says v6w25 but the shape (8, 362) is unambiguously v6 — the
-    KILL means the filename NEVER overrides the marker/shape resolution."""
-    spec = detect_encoding_from_state_dict(_grid_state(8, 362), "model_v6w25.pt", strict=False)
-    assert spec is not None and spec.name == "v6"
+    """The filename says gnn_axis_r8; the STAMP says gnn_axis_v1 — the KILL means the
+    filename NEVER overrides the stamp/marker resolution."""
+    state = _gnn_state()
+    state["metadata"] = {"encoding_name": "gnn_axis_v1"}
+    spec = detect_encoding_from_state_dict(state, "model_gnn_axis_r8.pt", strict=False)
+    assert spec is not None and spec.name == "gnn_axis_v1"
 
 
-# ── 3c. Deterministic fallback — ambiguity/miss strict-raises ────────────────
+# ── 3c. The miss arms — strict raises, lenient answers None ──────────────────
 
 
-def test_detect_lenient_no_conv_returns_none() -> None:
+def test_detect_lenient_no_marker_returns_none() -> None:
     assert detect_encoding_from_state_dict({}, "model.pt", strict=False) is None
 
 
-def test_detect_strict_no_conv_raises() -> None:
+def test_detect_strict_no_marker_raises() -> None:
     with pytest.raises(ValueError):
         detect_encoding_from_state_dict({}, "model.pt", strict=True)
-
-
-def test_detect_strict_unsupported_in_ch_raises() -> None:
-    with pytest.raises(ValueError, match="in_channels"):
-        detect_encoding_from_state_dict(_grid_state(99, 100), "model.pt", strict=True)
-
-
-def test_detect_lenient_unsupported_in_ch_returns_none() -> None:
-    assert detect_encoding_from_state_dict(_grid_state(99, 100), "model.pt", strict=False) is None
-
-
-def test_detect_strict_ambiguous_shape_raises() -> None:
-    """in_ch=8 with no n_actions probe matches BOTH v6 and v6w25 — with no
-    filename tiebreak (the KILL), strict must RAISE on the ambiguity."""
-    state = {"trunk.input_conv.weight": _FakeTensor(64, 8, 3, 3)}
-    with pytest.raises(ValueError, match="ambiguous"):
-        detect_encoding_from_state_dict(state, "model.pt", strict=True)
-
-
-def test_detect_lenient_ambiguous_shape_returns_none() -> None:
-    state = {"trunk.input_conv.weight": _FakeTensor(64, 8, 3, 3)}
-    assert detect_encoding_from_state_dict(state, "model.pt", strict=False) is None

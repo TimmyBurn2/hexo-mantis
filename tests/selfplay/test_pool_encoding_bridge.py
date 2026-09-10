@@ -4,7 +4,7 @@ mutation self-test that proves this suite detects the census'd defect (LAW-07).
 The subject is the exact call `WorkerPool.__init__` makes (`selfplay/pool.py:97`) on the
 exact input a real boot hands it: `RunConfig.model_dump()`. TD-4 was measured at HEAD
 (`ca237d2`) as parent rc 33 / child rc 1 in mode PREFLIGHT, ~1.4 s in, with a real Trainer
-already built — the wall that made `preflight_mint.py --config configs/run5.yaml` unable to
+already built — the wall that made `preflight_mint.py --config configs/run6.yaml` unable to
 run a burst at all.
 
 The mutation self-test re-introduces the defect at the one line that carried it (the
@@ -18,6 +18,7 @@ from typing import Any, Mapping
 import pytest
 
 from mantis.config import load_config
+from mantis.encoding import all_specs
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.hparams import resolve_pool_encoding
@@ -26,7 +27,7 @@ from mantis.selfplay.hparams import resolve_pool_encoding
 def _run5_dump() -> dict[str, Any]:
     """The real production config, through the real loader — no hand-built stand-in.
     R64 posture: the oracle resolves what run5 resolves."""
-    return load_config("configs/run5.yaml").model_dump()
+    return load_config("configs/run6.yaml").model_dump()
 
 
 # ── the seam TD-4 named ─────────────────────────────────────────────────────────────────
@@ -35,7 +36,10 @@ def _run5_dump() -> dict[str, Any]:
 def test_pool_resolves_encoding_from_a_real_run_config_dump() -> None:
     """THE TD-4 oracle. RED at HEAD with `MissingEncodingError`."""
     resolved = resolve_pool_encoding(_run5_dump(), arch=None)
-    assert resolved.encoding_name == "gnn_axis_v1"
+    # Against the REGISTRY, not a literal: the identity moved from `gnn_axis_v1` to
+    # `gnn_axis_r8` at run6's mint, and this row's claim is that the pool resolves a REAL
+    # registered encoding — the row below is the one that says WHICH.
+    assert resolved.encoding_name in {spec.name for spec in all_specs()}
     assert resolved.registry_spec.representation == "graph"
     assert resolved.board_size > 0
     assert resolved.trunk_size > 0
@@ -90,7 +94,7 @@ def test_mutation_leaves_the_flat_shape_untouched(monkeypatch: pytest.MonkeyPatc
     """No unrelated casualty (R86 'alone'): the mutation is confined to the nested shape.
     A legacy flat config resolves identically before and after it, so the oracle above is
     detecting the bridge specifically and not a broken resolver in general."""
-    flat = {"encoding": "v6", "selfplay": {}, "mcts": {}}
+    flat = {"encoding": "gnn_axis_v1", "selfplay": {}, "mcts": {}}
     before = resolve_pool_encoding(flat, arch=None).encoding_name
     monkeypatch.setattr(hparams_mod, "resolve_from_config", _flat_only_resolve)
-    assert resolve_pool_encoding(flat, arch=None).encoding_name == before == "v6"
+    assert resolve_pool_encoding(flat, arch=None).encoding_name == before == "gnn_axis_v1"

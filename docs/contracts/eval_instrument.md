@@ -13,8 +13,24 @@ deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair boo
 ## Who asserts what where
 
 This section is the DURABLE instrument: what each term means, and which module is the single
-authority for it. The run-specific choices — which rungs, which numbers, which honesty
-clauses — live once in `docs/contracts/eval_decision_run5.md` and are not restated here.
+authority for it. The run-specific choices — which rungs, which numbers — live in the minted
+config and are read from it, never restated here.
+
+The run5 decision document carried that run's choices and is DELETED with its config
+(R346(f)): a decision document whose subject config is not in the tree
+has nothing to be checked against, and its drift gate derived every expectation from that
+file. The tag `archive/grid-path` carries both. Two of its properties were NOT run-specific
+and are folded in here, because a reader of any ladder reading needs them:
+
+- **The Bradley-Terry fit is only as wide as the opponent set.** With one bot family on the
+  ladder, however many games are recorded, ONE opponent lineage is all the information in the
+  fit. That is a property of the instrument, not a defect to work around, and it is stated
+  because a reader who does not know it will over-read every ladder-shaped field in a run.
+  `configs/run6.yaml` mints ONE rung. RUNG-2 is the carded work that widens it.
+- **eff_n on a deterministic rung is bounded by the openings, not by the game count.** A
+  fixed-depth opponent facing a deterministic argmax head produces ONE trajectory per opening,
+  which is why LAW-04 counts trajectory-hash-distinct games and why the opening book is
+  sha-pinned rather than merely named.
 
 - **Deploy-matched** means both sides of a comparison are built by the SAME player
   constructor at the SAME simulation count. `mantis.eval.worker` builds the candidate and the
@@ -104,5 +120,4 @@ row says so and names what does run.
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_sealbot_resolve.py`, `tests/bots/test_protocol.py` | yes |
 | each skip-reason class counts itself in-run, on a closed set | `tests/eval/test_rung_skip_class_counter.py` | yes |
 | the external win-rate field populates with no producer change | `tests/eval/test_wr_sealbot_handshake.py`, `tests/eval/test_wr_sealbot_config_only.py` | yes |
-| the decision document agrees with the minted config | `tests/eval/test_eval_decision_run5_doc.py` | yes |
 | the REAL vendored engine agrees on the rules, holds its depth receipt, and is deterministic | `tests/bots/test_sealbot_vendored.py` | **no** — Tier 2, `@pytest.mark.integration`; skips with a named reason and a named box counterpart, and a skip is reported as `not_run`, never as coverage |

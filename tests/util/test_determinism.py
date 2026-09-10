@@ -20,23 +20,31 @@ import random
 import numpy as np
 import torch
 
-from mantis.model import CnnArch, build_net
+from mantis.model import GnnArch, build_net
 from mantis.util.determinism import seed_everything
 
 
-def _tiny_arch() -> CnnArch:
-    return CnnArch(board_size=9, in_channels=4, filters=8, res_blocks=1)
+def _tiny_arch() -> GnnArch:
+    return GnnArch(in_dim=11, edge_dim=5, hidden=8, num_layers=2,
+                   policy_hidden=8, value_hidden=8)
 
 
 def _boot_first_layer_and_forward(seed: int) -> tuple[torch.Tensor, torch.Tensor]:
     """seed_everything(seed) -> build a tiny net -> one forward pass on a seeded-random
-    synthetic batch. Returns (first_conv_weight, forward_output) for bit-identity checks."""
+    synthetic graph. Returns (first_weight, forward_output) for bit-identity checks.
+
+    A three-node path graph with both edge directions: the smallest input that exercises the
+    GINE message pass rather than only the node projection."""
     seed_everything(seed)
     net = build_net(_tiny_arch())
     first_weight = next(net.parameters()).detach().clone()
-    x = torch.from_numpy(np.random.randn(2, 4, 9, 9).astype(np.float32))
+    x = torch.from_numpy(np.random.randn(3, 11).astype(np.float32))
+    edge_index = torch.tensor([[0, 1, 1, 2], [1, 0, 2, 1]], dtype=torch.long)
+    edge_attr = torch.from_numpy(np.random.randn(4, 5).astype(np.float32))
+    legal_index = torch.tensor([0, 1, 2], dtype=torch.long)
+    stone_mask = torch.tensor([True, False, True], dtype=torch.bool)
     with torch.no_grad():
-        out = net(x)
+        out = net.forward_batch(x, edge_index, edge_attr, legal_index, stone_mask)
     logits = out[0] if isinstance(out, (tuple, list)) else out
     return first_weight, logits.detach().clone()
 

@@ -35,19 +35,12 @@ use mantis_encoding::RegistrySpec;
 use mantis_search::{MCTSTree, SearchKind, VIRTUAL_LOSS_PENALTY};
 
 use crate::replay::hexg::GraphRecord;
-use crate::replay::sym::{draw_window_preserving_sym, SymTables};
 
 use super::atomics::WorkerAtomics;
-use super::finalize::{finalize_game, finalize_game_graph};
-use super::params::{
-    ExplorationFlags, ForcedWinPolicy, MoveConstraintFlags, SearchFlags, SeedCorpus, SolverInLoop,
-    WorkerChannels, WorkerGeometry, WorkerParams,
-};
-use super::record::RecordTuple;
-use super::rotate::inv_sym_idx;
+use super::finalize::finalize_game_graph;
+use super::params::{ExplorationFlags, SearchFlags, WorkerChannels, WorkerGeometry, WorkerParams};
 use super::search_drive::{
-    play_one_move, ClusterVarianceAtomics, FatalDefectLatch, InferContext, MoveAccumulators,
-    MoveOutcome, MovePlayContext, SolverCounters,
+    play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
 use super::{GameResultRow, WorkerResultRow};
@@ -58,11 +51,9 @@ use super::{GameResultRow, WorkerResultRow};
 struct PerGameInitCtx {
     max_moves: usize,
     random_opening_plies: u32,
-    selfplay_rotation_enabled: bool,
     fast_prob: f32,
     fast_sims: usize,
     standard_sims: usize,
-    n_cells: usize,
     draw_reward: f32,
     /// §178: terminal-via-ply-cap outcome (distinct from `draw_reward`).
     ply_cap_value: f32,
@@ -80,8 +71,6 @@ struct WorkerMoveCfg {
     visit_capacity: Option<usize>,
     temp_threshold: usize,
     temp_min: f32,
-    zoi_lookback: usize,
-    zoi_margin: i32,
     c_visit: f32,
     c_scale: f32,
     gumbel_m: usize,
@@ -93,33 +82,17 @@ struct WorkerMoveCfg {
     n_sims_full: usize,
     search_kind: SearchKind,
     dirichlet_enabled: bool,
-    zoi_enabled: bool,
-    forced_win_enabled: bool,
-    forced_win_depth: u8,
-    forced_win_weight: f32,
-    solver_enabled: bool,
-    solver_depth: u32,
-    solver_node_budget: u64,
-    solver_neighbor_dist: i32,
-    solver_visit_weight: f32,
 }
 
 /// Per-game state outputs from `init_per_game_board` (frozen `inner.rs:593`).
 struct PerGameInit {
     board: Board,
-    records_vec: Vec<RecordTuple>,
     /// Per-game graph-record accumulator — `Vec::new()` (no alloc) for grid games;
     /// only grows on the `is_graph` record branch.
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
-    sym_idx: usize,
-    inv_idx: usize,
     is_fast_game: bool,
     game_sims: usize,
-    /// D-WS3V3 seeding outputs — `seeded` = replayed a corpus prefix; `prefix_len`
-    /// = plies removed from the organic budget + the relative Gumbel-explore start.
-    seeded: bool,
-    prefix_len: usize,
 }
 
 /// Per-worker thread entry (frozen `inner.rs:275`). Owns its `MCTSTree`, RNG and
@@ -131,19 +104,13 @@ pub(crate) fn run_worker_thread(
     atomics: WorkerAtomics,
     channels: WorkerChannels,
     params: WorkerParams,
-    sym_tables_static: &'static SymTables,
     geometry: WorkerGeometry,
 ) {
     // Destructure geometry into local scalars so the per-sim hot path sees cheap
     // integers, never a `&RegistrySpec` field access (D2).
     let WorkerGeometry {
-        n_cells,
-        kept_planes,
         policy_stride,
         agg_trunk_sz,
-        has_pass_slot,
-        legal_set,
-        is_graph,
     } = geometry;
     let WorkerStats {
         games_completed,
@@ -161,21 +128,7 @@ pub(crate) fn run_worker_thread(
         pcr_quick_moves,
         gumbel_round_leaves,
         gumbel_rounds,
-        cluster_value_std_accum,
-        cluster_policy_disagreement_accum,
-        cluster_variance_samples,
-        solver_moves_eligible,
-        solver_win_proven,
-        solver_injected,
-        solver_injected_offwindow,
-        solver_budget_exhausted,
-        solver_moves_eligible_seeded,
-        solver_injected_seeded,
-        seeded_games_started,
         export_offwindow_mass_moves,
-        gridls_zero_policy_rows,
-        uncovered_forced_win,
-        k_cluster_histogram,
     } = stats;
     let WorkerAtomics {
         running,
@@ -186,7 +139,6 @@ pub(crate) fn run_worker_thread(
         graph_game_seq,
     } = atomics;
     let WorkerChannels {
-        dense_queue,
         graph_queue,
         results_queue,
         recent_game_results,
@@ -205,8 +157,6 @@ pub(crate) fn run_worker_thread(
         temp_min,
         draw_reward,
         ply_cap_value,
-        zoi_lookback,
-        zoi_margin,
         c_visit,
         c_scale,
         gumbel_m,
@@ -225,31 +175,8 @@ pub(crate) fn run_worker_thread(
                 quiescence_enabled,
                 search_kind,
             },
-        exploration_flags:
-            ExplorationFlags {
-                dirichlet_enabled,
-                selfplay_rotation_enabled,
-            },
-        // D7: `zoi_enabled` only — the radius-jitter sibling is killed.
-        move_constraint_flags: MoveConstraintFlags { zoi_enabled },
-        forced_win_policy:
-            ForcedWinPolicy {
-                enabled: forced_win_policy_enabled,
-                depth: forced_win_policy_depth,
-                weight: forced_win_policy_weight,
-            },
-        solver_in_loop:
-            SolverInLoop {
-                enabled: solver_enabled,
-                depth: solver_depth,
-                node_budget: solver_node_budget,
-                neighbor_dist: solver_neighbor_dist,
-                visit_weight: solver_visit_weight,
-            },
-        seed_corpus,
+        exploration_flags: ExplorationFlags { dirichlet_enabled },
     } = params;
-
-    let sym_tables = sym_tables_static;
 
     let mut tree = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
     // Configure quiescence once per worker (the amended setter; D10 — NO
@@ -275,12 +202,6 @@ pub(crate) fn run_worker_thread(
             .cluster_window_size
             .unwrap_or(registry_spec.board_size),
     };
-
-    let variance_atomics = ClusterVarianceAtomics {
-        value_std_accum: &cluster_value_std_accum,
-        policy_disagreement_accum: &cluster_policy_disagreement_accum,
-        variance_samples: &cluster_variance_samples,
-    };
     let move_accumulators = MoveAccumulators {
         mcts_depth_accum: &mcts_depth_accum,
         mcts_conc_accum: &mcts_conc_accum,
@@ -293,9 +214,6 @@ pub(crate) fn run_worker_thread(
         gumbel_rounds: &gumbel_rounds,
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
-        gridls_zero_policy_rows: &gridls_zero_policy_rows,
-        k_cluster_histogram: &k_cluster_histogram,
-        uncovered_forced_win: &uncovered_forced_win,
     };
     // WP12-R Phase T fatal-defect latch (DESIGN_T §3.4; LAW-14).
     let fatal_latch = FatalDefectLatch {
@@ -304,24 +222,12 @@ pub(crate) fn run_worker_thread(
         inference_failures: &inference_failures_total,
         running: &running,
     };
-    let solver_counters = SolverCounters {
-        moves_eligible: &solver_moves_eligible,
-        win_proven: &solver_win_proven,
-        injected: &solver_injected,
-        injected_offwindow: &solver_injected_offwindow,
-        budget_exhausted: &solver_budget_exhausted,
-        moves_eligible_seeded: &solver_moves_eligible_seeded,
-        injected_seeded: &solver_injected_seeded,
-        seeded_games_started: &seeded_games_started,
-    };
     let init_ctx = PerGameInitCtx {
         max_moves,
         random_opening_plies,
-        selfplay_rotation_enabled,
         fast_prob,
         fast_sims,
         standard_sims,
-        n_cells,
         draw_reward,
         ply_cap_value,
         results_queue_cap,
@@ -332,8 +238,6 @@ pub(crate) fn run_worker_thread(
         visit_capacity,
         temp_threshold,
         temp_min,
-        zoi_lookback,
-        zoi_margin,
         c_visit,
         c_scale,
         gumbel_m,
@@ -345,15 +249,6 @@ pub(crate) fn run_worker_thread(
         n_sims_full,
         search_kind,
         dirichlet_enabled,
-        zoi_enabled,
-        forced_win_enabled: forced_win_policy_enabled,
-        forced_win_depth: forced_win_policy_depth,
-        forced_win_weight: forced_win_policy_weight,
-        solver_enabled,
-        solver_depth,
-        solver_node_budget,
-        solver_neighbor_dist,
-        solver_visit_weight,
     };
     // R345(b)(6) adds `graph_game_seq` as the sixth member: the game-id source travels with
     // the other finalize counters rather than as a seventh parameter, which is the shape the
@@ -381,24 +276,15 @@ pub(crate) fn run_worker_thread(
             &mut version_seen,
             &running,
             &model_version,
-            &dense_queue,
             &graph_queue,
-            sym_tables,
             registry_spec,
             board_geometry,
             init_ctx,
-            kept_planes,
             policy_stride,
-            has_pass_slot,
             agg_trunk_sz,
-            legal_set,
-            is_graph,
             move_cfg,
-            variance_atomics,
             move_accumulators,
-            solver_counters,
             fatal_latch,
-            &seed_corpus,
             &results_queue,
             &graph_results_queue,
             &recent_game_results,
@@ -417,25 +303,16 @@ fn run_one_game(
     version_seen: &mut Vec<u64>,
     running: &AtomicBool,
     model_version: &AtomicU64,
-    dense_queue: &crate::queues::DenseQueue,
     graph_queue: &crate::queues::GraphQueue,
-    sym_tables: &'static SymTables,
     registry_spec: &'static RegistrySpec,
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,
-    kept_planes: &'static [usize],
     policy_stride: usize,
-    has_pass_slot: bool,
     agg_trunk_sz: i32,
-    legal_set: bool,
-    is_graph: bool,
     move_cfg: WorkerMoveCfg,
-    variance_atomics: ClusterVarianceAtomics,
     move_accumulators: MoveAccumulators,
-    solver_counters: SolverCounters,
     fatal_latch: FatalDefectLatch,
-    seed: &SeedCorpus,
-    results_queue: &Mutex<VecDeque<WorkerResultRow>>,
+    _results_queue: &Mutex<VecDeque<WorkerResultRow>>,
     graph_results_queue: &Mutex<VecDeque<GraphRecord>>,
     recent_game_results: &Mutex<VecDeque<GameResultRow>>,
     finalize_counters: (
@@ -452,8 +329,6 @@ fn run_one_game(
         visit_capacity,
         temp_threshold,
         temp_min,
-        zoi_lookback,
-        zoi_margin,
         c_visit,
         c_scale,
         gumbel_m,
@@ -465,55 +340,28 @@ fn run_one_game(
         n_sims_full,
         search_kind,
         dirichlet_enabled,
-        zoi_enabled,
-        forced_win_enabled,
-        forced_win_depth,
-        forced_win_weight,
-        solver_enabled,
-        solver_depth,
-        solver_node_budget,
-        solver_neighbor_dist,
-        solver_visit_weight,
     } = move_cfg;
 
     let PerGameInit {
         mut board,
-        mut records_vec,
         mut graph_records,
         mut move_history,
-        sym_idx,
-        inv_idx,
         is_fast_game,
         game_sims,
-        seeded,
-        prefix_len,
-    } = init_per_game_board(board_geometry, init_ctx, rng, version_seen, seed);
-
-    // D-WS3V3: count a seeded game once at start.
-    if seeded {
-        solver_counters
-            .seeded_games_started
-            .fetch_add(1, Ordering::Relaxed);
-    }
+    } = init_per_game_board(board_geometry, init_ctx, rng, version_seen);
 
     let infer = InferContext {
-        dense_queue,
         graph_queue,
-        sym_tables,
-        sym_idx,
-        inv_idx,
-        is_graph,
         spec: registry_spec,
         model_version,
         running,
     };
     let play_ctx = MovePlayContext {
+        game_start_ply: 0,
         leaf_batch_size,
         visit_capacity,
         temp_threshold,
         temp_min,
-        zoi_lookback,
-        zoi_margin,
         c_visit,
         c_scale,
         gumbel_m,
@@ -525,29 +373,11 @@ fn run_one_game(
         n_sims_full,
         game_sims,
         is_fast_game,
-        sym_idx,
         search_kind,
         dirichlet_enabled,
-        zoi_enabled,
-        forced_win_enabled,
-        forced_win_depth,
-        forced_win_weight,
-        solver_enabled,
-        solver_depth,
-        solver_node_budget,
-        solver_neighbor_dist,
-        solver_visit_weight,
-        game_start_ply: prefix_len,
-        seeded,
     };
 
-    // D-WS3V3: a seeded game starts `prefix_len` plies in; cap the organic budget.
-    let mut solver_fires: u32 = 0;
-    let move_iters = if seeded {
-        init_ctx.max_moves.saturating_sub(prefix_len).max(20)
-    } else {
-        init_ctx.max_moves
-    };
+    let move_iters = init_ctx.max_moves;
     for _ in 0..move_iters {
         if !running.load(Ordering::Relaxed) || board.check_win() || board.legal_move_count() == 0 {
             break;
@@ -555,7 +385,7 @@ fn run_one_game(
 
         // §115 random-opening plies: skip MCTS + recording for the first
         // `random_opening_plies` plies (skipped entirely for a seeded game).
-        if !seeded && board.ply.index() < init_ctx.random_opening_plies {
+        if board.ply.index() < init_ctx.random_opening_plies {
             let legal = board.legal_moves();
             if legal.is_empty() {
                 break;
@@ -571,25 +401,16 @@ fn run_one_game(
         match play_one_move(
             tree,
             &mut board,
-            &mut records_vec,
             &mut graph_records,
             &mut move_history,
             version_seen,
             rng,
             running,
             play_ctx,
-            kept_planes,
-            init_ctx.n_cells,
             policy_stride,
-            has_pass_slot,
             agg_trunk_sz,
-            legal_set,
-            is_graph,
             infer,
-            variance_atomics,
             move_accumulators,
-            solver_counters,
-            &mut solver_fires,
             fatal_latch,
         ) {
             MoveOutcome::Played | MoveOutcome::Continue => {}
@@ -606,55 +427,25 @@ fn run_one_game(
 
     let (games_completed, x_wins, o_wins, draws, positions_dropped, graph_game_seq) =
         finalize_counters;
-    // ONE hoisted branch: grid runs `finalize_game`; `finalize_game_graph` is the
-    // sibling with no dense caller.
-    if is_graph {
-        finalize_game_graph(
-            &board,
-            init_ctx.max_moves,
-            graph_records,
-            move_history,
-            version_seen,
-            init_ctx.draw_reward,
-            init_ctx.ply_cap_value,
-            init_ctx.results_queue_cap,
-            init_ctx.worker_id,
-            seeded,
-            solver_fires,
-            graph_results_queue,
-            recent_game_results,
-            games_completed,
-            x_wins,
-            o_wins,
-            draws,
-            positions_dropped,
-            graph_game_seq,
-        );
-    } else {
-        finalize_game(
-            &board,
-            init_ctx.max_moves,
-            records_vec,
-            move_history,
-            version_seen,
-            sym_idx,
-            sym_tables,
-            init_ctx.n_cells,
-            init_ctx.draw_reward,
-            init_ctx.ply_cap_value,
-            init_ctx.results_queue_cap,
-            init_ctx.worker_id,
-            seeded,
-            solver_fires,
-            results_queue,
-            recent_game_results,
-            games_completed,
-            x_wins,
-            o_wins,
-            draws,
-            positions_dropped,
-        );
-    }
+    finalize_game_graph(
+        &board,
+        init_ctx.max_moves,
+        graph_records,
+        move_history,
+        version_seen,
+        init_ctx.draw_reward,
+        init_ctx.ply_cap_value,
+        init_ctx.results_queue_cap,
+        init_ctx.worker_id,
+        graph_results_queue,
+        recent_game_results,
+        games_completed,
+        x_wins,
+        o_wins,
+        draws,
+        positions_dropped,
+        graph_game_seq,
+    );
 }
 
 /// Per-game board + state initializer (frozen `inner.rs:618`). Builds the board
@@ -667,70 +458,14 @@ fn init_per_game_board(
     init_ctx: PerGameInitCtx,
     rng: &mut ThreadRng,
     version_seen: &mut Vec<u64>,
-    seed: &SeedCorpus,
 ) -> PerGameInit {
     // Spec is ALWAYS resolved (absent = error at `new()`, LAW-11) → build with the
     // spec-derived geometry. NO `Board::new()` fallback (D2).
-    let mut board = Board::with_geometry(board_geometry);
-    let records_vec = Vec::with_capacity(init_ctx.max_moves);
-    let mut move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
+    let board = Board::with_geometry(board_geometry);
+    let move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
     version_seen.clear();
 
-    // D7: `legal_move_radius_jitter` is KILLED — the one behavioural block
-    // (`inner.rs:652-656`) is NEVER authored (dead for every registry spec).
-
-    // D-WS3V3 start-position seeding — the rng is drawn ONLY when the corpus is
-    // non-empty AND `seed_fraction > 0`, so the DEFAULT path leaves the rng stream
-    // (and every downstream draw) byte-identical.
-    let (seeded, prefix_len) = if !seed.corpus.is_empty()
-        && seed.seed_fraction > 0.0
-        && rng.random::<f32>() < seed.seed_fraction
-    {
-        let prefix = seed
-            .corpus
-            .choose(rng)
-            .expect("corpus non-empty checked above");
-        let mut ok = true;
-        for &(q, r) in prefix {
-            if board.apply_move(q, r).is_err() {
-                debug_assert!(
-                    false,
-                    "seed prefix replay failed at ({q},{r}) — corpus is ctor-validated"
-                );
-                ok = false;
-                break;
-            }
-            move_history.push((q, r));
-        }
-        if ok {
-            (true, prefix.len())
-        } else {
-            (false, move_history.len())
-        }
-    } else {
-        (false, 0)
-    };
-
-    // §130: sample the per-game rotation. R245 — the recorded frame is DENSE and
-    // window-clamped, so the draw is restricted to the window-preserving subgroup;
-    // the other eight D6 elements delete every cell that leaves the window while
-    // leaving the targets untouched (see `replay::sym::WINDOW_PRESERVING_SYMS`).
-    //
-    // Why this site keeps the FLAT restricted draw while the replay sample sites use
-    // the per-record gate (`sym::draw_record_sym`, R245(c)): this sym is drawn BEFORE
-    // the first stone is played and then rides the search input/inverse scatters
-    // (`search_drive.rs`) and finalize for the whole game. Its subject is the entire
-    // future game, whose compactness is unknowable here — there is no record yet to
-    // certify. So this IS the per-record gate, evaluated at the only moment it can be:
-    // with the subject uncertifiable the gate's answer is SPREAD, and the
-    // always-lossless subgroup is the only draw that honours "no clipped copy is ever
-    // trained (or searched)".
-    let sym_idx: usize = if init_ctx.selfplay_rotation_enabled {
-        draw_window_preserving_sym(rng)
-    } else {
-        0
-    };
-    let inv_idx = inv_sym_idx(sym_idx);
+    // D7: `legal_move_radius_jitter` is KILLED (dead for every registry spec).
 
     // KataGo-style playout cap randomisation.
     let is_fast_game = init_ctx.fast_prob > 0.0 && rng.random::<f32>() < init_ctx.fast_prob;
@@ -742,14 +477,9 @@ fn init_per_game_board(
 
     PerGameInit {
         board,
-        records_vec,
         graph_records: Vec::new(),
         move_history,
-        sym_idx,
-        inv_idx,
         is_fast_game,
         game_sims,
-        seeded,
-        prefix_len,
     }
 }

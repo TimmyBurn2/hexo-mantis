@@ -91,10 +91,10 @@ class _StopAfterPosture(Exception):
 
 
 def _null_posture_twin(tmp_path: Path) -> Path:
-    """`configs/run5.yaml` with its posture returned to the R119 `null` placeholder.
+    """`configs/run6.yaml` with its posture returned to the R119 `null` placeholder.
 
     WHY A TWIN AND NOT THE COMMITTED FILE. These rows used to point straight at
-    `configs/run5.yaml`, on the stated premise that *"every config on this tree carries the
+    `configs/run6.yaml`, on the stated premise that *"every config on this tree carries the
     R119 `null` placeholder"*. RECAL-SITTING-5's mint (R326) made that premise FALSE — all
     seven now mint a measured posture — so the rows would have gone quietly green against a
     config that no longer exercises the refusal at all. **The property is the refusal, not the
@@ -103,7 +103,7 @@ def _null_posture_twin(tmp_path: Path) -> Path:
     """
     import yaml
 
-    raw = yaml.safe_load(Path("configs/run5.yaml").read_text(encoding="utf-8"))
+    raw = yaml.safe_load(Path("configs/run6.yaml").read_text(encoding="utf-8"))
     assert raw["train"]["device"] == "cuda", "the refusal is cuda-side; the twin must stay cuda"
     raw["allocator_posture"] = None
     out = tmp_path / "run5_null_posture.yaml"
@@ -143,7 +143,7 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     A twin-based refusal row proves the refusal fires on a null. It does NOT prove the
     committed tree has stopped tripping it — and a repair that only moved the subject could
     hide a config still carrying the placeholder. This asserts the complement directly:
-    `configs/run5.yaml` AS MINTED gets past the posture check and reaches pool construction.
+    `configs/run6.yaml` AS MINTED gets past the posture check and reaches pool construction.
 
     AND IT CARRIES THE MINT'S SECOND CONSEQUENCE, which is the one that will surprise people:
     a minted posture is a CONTRACT ON THE LAUNCH ENVIRONMENT. With `expandable_segments` minted,
@@ -172,7 +172,7 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     monkeypatch.setattr(ws, "walk_ladder", record)
     sink = io.StringIO()
     with pytest.raises(_StopAfterPosture):
-        ws.run_sweep(config_path=Path("configs/run5.yaml"), plan_path=_PLAN, out=sink)
+        ws.run_sweep(config_path=Path("configs/run6.yaml"), plan_path=_PLAN, out=sink)
     assert reached, "run5's minted posture must reach the ladder, not refuse before it"
 
 
@@ -712,7 +712,7 @@ def test_an_unwritable_out_is_refused_BEFORE_the_ladder_not_after_it(
     unwritable = tmp_path / "nodir" / "x" / "report.json"
     monkeypatch.setattr(ws.Path, "mkdir",
                         lambda *_a, **_k: (_ for _ in ()).throw(OSError("read-only")))
-    assert ws.main(["--config", "configs/run5.yaml", "--plan", str(_PLAN),
+    assert ws.main(["--config", "configs/run6.yaml", "--plan", str(_PLAN),
                     "--out", str(unwritable)]) == ws.RC_REFUSED
 
 
@@ -802,7 +802,7 @@ def test_the_report_carries_the_card_total_every_peak_is_measured_against(
     it never touched the report. That is the overclaiming class this file's own module docstring
     cites."""
     prov = {
-        "tool": ws.TOOL, "produced_by": "run5@abc", "config_name": "run5.yaml",
+        "tool": ws.TOOL, "produced_by": "run5@abc", "config_name": "run6.yaml",
         "config_sha256": "d" * 64, "git_commit": "abc1234", "git_dirty": False,
         "device": "cuda", "torch_version": "2.11", "gpu_name": "X",
         "card_total_bytes": 16 * 1024 ** 3, "declared_allocator_posture": "default",

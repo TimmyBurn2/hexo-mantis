@@ -1,7 +1,7 @@
 //! P-05 — drain-shutdown: a runner stopped mid-game must NOT push false-draw rows
 //! (RE-ANCHOR of `test_drain_shutdown_no_false_draws.rs`, LOCKED DECISION 12).
 //!
-//! On `stop()`: `running` flips false, BOTH inference queues close (waking blocked
+//! On `stop()`: `running` flips false, the inference queue closes (waking blocked
 //! waiters with `Err`), workers join. An IN-PROGRESS game hits the §P22
 //! short-circuit (`game.rs`: `if !running { return; }` after the move loop) and is
 //! DROPPED before finalize — it is NEVER recorded as an organic draw. A false draw
@@ -10,7 +10,7 @@
 //!
 //! Two drives:
 //!   1. FULL MCTS with a MOCK inference producer thread (D16 / CAPTURE_LOG C-10):
-//!      workers block in `submit_batch_and_wait`; `stop()` closes the queue, wakes
+//!      workers block in `submit_graph_and_wait`; `stop()` closes the queue, wakes
 //!      them with `Err`, the worker skips the batch, the move loop sees
 //!      `running=false` and breaks, §P22 drops the game. Exercises the realistic
 //!      "shutdown with inference in flight" path.
@@ -20,15 +20,18 @@
 //! Plus the LAW-07 bite proof: the false-draw checker MUST flag an injected
 //! `terminal_reason == 3` tuple (a checker that passes it is a test failure).
 
-use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::DenseQueue;
+use mantis_selfplay::queues::GraphQueue;
+use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+
+const ENCODING: &str = "gnn_axis_r8";
 
 // ── the false-draw checker (the thing under test; the bite proof feeds it) ──────
 /// `terminal_reason` is field 4 of `GameResultRow`; `3` = organic draw. A leaked
@@ -48,60 +51,72 @@ fn splitmix64_step(s: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// Deterministic policy+value from the request features (C-10): fold each feature
-/// scalar into the splitmix stream, then emit `policy_stride` logits in `[0,1)` and
-/// a value in `[-1,1]`. The exact values are irrelevant to the shutdown invariant —
-/// only that the producer keeps the search fed so workers are genuinely mid-game.
-fn mock_dense_infer(features: &[f32], policy_stride: usize, seed: u64) -> (Vec<f32>, f32) {
+/// Deterministic policy+value from the leaf's legal coords (C-10, re-anchored to the graph
+/// seam): fold each coord into the splitmix stream, then emit one weight per legal node,
+/// NORMALIZED (the segmented-softmax invariant `assemble_ls_from_gnn_probs` checks), and a
+/// value in `[-1,1]`. The exact values are irrelevant to the shutdown invariant — only that
+/// the producer keeps the search fed so workers are genuinely mid-game.
+fn mock_graph_infer(coords: &[(i32, i32)], seed: u64) -> (Vec<f32>, f32) {
     let mut s = seed;
-    for &x in features {
-        s ^= u64::from(f32::to_bits(x));
+    for &(q, r) in coords {
+        s ^= (q as u32) as u64 | ((r as u32) as u64) << 32;
         splitmix64_step(&mut s);
     }
-    let mut policy = Vec::with_capacity(policy_stride);
-    for _ in 0..policy_stride {
+    let mut raw = Vec::with_capacity(coords.len());
+    for _ in 0..coords.len() {
         let step = splitmix64_step(&mut s);
-        policy.push((step >> 40) as f32 / 16_777_216.0_f32);
+        // Strictly positive so the normalization below can never divide by zero.
+        raw.push((step >> 40) as f32 / 16_777_216.0_f32 + 1.0e-3);
     }
+    let total: f32 = raw.iter().sum();
+    let probs: Vec<f32> = raw.iter().map(|p| p / total).collect();
     let vstep = splitmix64_step(&mut s);
     let value = ((vstep % 2_000_001) as i64 - 1_000_000) as f32 / 1_000_000.0_f32;
-    (policy, value)
+    (probs, value)
 }
 
-/// Spawn a mock producer that pops the dense queue and submits C-10 results until
+/// Spawn a mock producer that pops the graph queue and submits C-10 results until
 /// the queue is closed (by `stop()`). A small `max` gives a saturation threshold of
 /// 1, so the pop returns as soon as a request is present (low latency, no spin).
 ///
 /// `served` counts the inference requests actually served — a strictly-positive
 /// value proves a worker was genuinely mid-MCTS-search (a leaf batch in flight), the
 /// "worker mid-game" signal that de-vacuums the drain-shutdown oracle below.
-fn spawn_dense_producer(
-    queue: DenseQueue,
-    policy_stride: usize,
+fn spawn_graph_producer(
+    queue: GraphQueue,
+    n_actions: usize,
     served: Arc<AtomicUsize>,
 ) -> JoinHandle<()> {
     thread::spawn(move || loop {
-        let batch = queue.pop_batch(2, 5);
+        let batch = queue.pop_graph_batch(2, 5);
         if batch.is_empty() {
             if queue.is_closed() {
                 break;
             }
             continue;
         }
-        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-        let mut flat: Vec<f32> = Vec::new();
-        let mut ranges: Vec<Range<usize>> = Vec::with_capacity(batch.len());
-        let mut values: Vec<f32> = Vec::with_capacity(batch.len());
-        for (id, feats) in &batch {
-            let (policy, value) = mock_dense_infer(feats, policy_stride, MOCK_NN_SEED ^ *id);
-            let start = flat.len();
-            flat.extend_from_slice(&policy);
-            ranges.push(start..flat.len());
-            values.push(value);
+        let mut ids = Vec::with_capacity(batch.len());
+        let mut results = Vec::with_capacity(batch.len());
+        for (id, g) in batch {
+            let coords: Vec<(i32, i32)> = g
+                .legal_node_gather
+                .iter()
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
+                .collect();
+            let (probs, value) = mock_graph_infer(&coords, MOCK_NN_SEED ^ id);
+            ids.push(id);
+            results.push(
+                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
+                    .map(|ls| (ls, value)),
+            );
         }
         served.fetch_add(ids.len(), Ordering::Relaxed);
-        let arc = Arc::new(flat);
-        queue.submit_results(&ids, &arc, &ranges, &values);
+        queue.submit_graph_results(&ids, results);
     })
 }
 
@@ -119,13 +134,13 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
         dirichlet_enabled: false,
         quiescence_enabled: false,
         random_opening_plies: 0,
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     };
-    let runner = SelfPlayRunner::new(cfg).expect("v6 MCTS runner must construct");
-    let policy_stride = runner.policy_len();
+    let runner = SelfPlayRunner::new(cfg).expect("the graph MCTS runner must construct");
+    let n_actions = lookup_or_panic(ENCODING).policy_logit_count;
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_dense_producer(runner.dense_producer(), policy_stride, served.clone());
+    let producer = spawn_graph_producer(runner.graph_producer(), n_actions, served.clone());
 
     runner.start();
     assert!(runner.is_running(), "runner is running after start()");
@@ -180,7 +195,7 @@ fn random_only_runner(max_moves: usize) -> SelfPlayRunner {
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,
         random_opening_plies: max_moves as u32, // == max_moves → never MCTS
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })
     .expect("random-only runner must construct")
@@ -233,7 +248,7 @@ fn false_draw_checker_bites_on_injected_reason_3() {
     // A synthetic in-progress finalize would push winner=None, plies < max_moves →
     // terminal_reason == 3. If the checker passed this, the drain-shutdown oracle
     // would be vacuous.
-    let injected: GameResultRow = (17, 0, Vec::new(), 0, 3, 0, 0, 0, 0, 0);
+    let injected: GameResultRow = (17, 0, Vec::new(), 0, 3, 0, 0, 0);
     assert!(
         has_false_draw(&[injected]),
         "the false-draw checker MUST flag an injected terminal_reason==3 tuple",
@@ -241,8 +256,8 @@ fn false_draw_checker_bites_on_injected_reason_3() {
     // And a clean set (only ply-cap reason 2 + a six-in-a-row win reason 0) is NOT
     // flagged — the checker is specific to the false-draw signature.
     let clean: Vec<GameResultRow> = vec![
-        (10, 0, Vec::new(), 0, 2, 0, 0, 0, 0, 0), // ply-cap
-        (11, 1, Vec::new(), 1, 0, 0, 0, 0, 0, 0), // six-in-a-row win
+        (10, 0, Vec::new(), 0, 2, 0, 0, 0), // ply-cap
+        (11, 1, Vec::new(), 1, 0, 0, 0, 0), // six-in-a-row win
     ];
     assert!(
         !has_false_draw(&clean),

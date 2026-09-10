@@ -35,25 +35,29 @@ from pydantic import ValidationError
 
 from mantis.arena.match import DEFAULT_MAX_PLIES, play_paired_match
 from mantis.arena.regime import RegimeKey
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
-from mantis.model import CnnArch, build_net
+from mantis.model import GnnArch, build_net
 
-#: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
-#: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
-_ENC = "v6w25"
+#: `book_v1_s20260625_p4` is minted against `gnn_axis_v1` and 292 of its 512 openings need
+#: radius >= 6 to replay, so the round's encoding has to cover that.
+_ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
-_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run5.yaml"
+_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "run6.yaml"
+#: run6 MINTS the row now — R339(b) said the value is picked on the box, and it was — so the
+#: absent-row parity arm needs a file that still omits it. The smoke profile is that file.
+_UNMINTED_CONFIG = _CONFIG.with_name("smoke_preflight_armed.yaml")
 
 
 # ── 1. the schema row ──────────────────────────────────────────────────────────────────
-def _raw() -> dict[str, Any]:
-    return yaml.safe_load(_CONFIG.read_text(encoding="utf-8"))
+def _raw(source: Path | None = None) -> dict[str, Any]:
+    return yaml.safe_load((source or _CONFIG).read_text(encoding="utf-8"))
 
 
 def test_the_row_name_is_the_key_path_the_schema_actually_carries() -> None:
@@ -67,13 +71,16 @@ def test_the_row_name_is_the_key_path_the_schema_actually_carries() -> None:
 def test_an_absent_row_and_a_minted_one_are_the_SAME_config() -> None:
     """The parity witness at the config layer: byte-identical dumps, not merely both valid.
 
-    Every committed config omits the key today, so this is the state run6 inherits; a default
-    that produced a DIFFERENT config from the minted `1` would make the row's arrival a silent
-    behaviour change on every config that never mentions it.
+    Every config that does not mint the row inherits the default, and a default that produced
+    a DIFFERENT config from the minted `1` would make the row's arrival a silent behaviour
+    change on every file that never mentions it. run6 has since minted its own value, so the
+    subject here is the config that has not — the arm is about the DEFAULT, and a file
+    carrying an armed 8 cannot witness it.
     """
-    raw = _raw()
+    raw = _raw(_UNMINTED_CONFIG)
     assert "concurrency" not in raw["eval"], (
-        "run5.yaml has grown the key — this test's premise is that it is absent there"
+        f"{_UNMINTED_CONFIG.name} has grown the key — this row's premise is that some "
+        "committed config still omits it, so the default has a live subject"
     )
     minted = copy.deepcopy(raw)
     minted["eval"]["concurrency"] = 1
@@ -139,7 +146,7 @@ class _Opening:
         from mantis._engine import Board
 
         self.opening_id = f"op{i}"
-        board = Board.with_encoding_name("v6_live2_ls")
+        board = Board.with_encoding_name(_ENC)
         moves: list[tuple[int, int]] = []
         for ply in range(4):
             legal = sorted(board.legal_moves())
@@ -160,9 +167,9 @@ def _play(*, with_factory: bool):
         cand, opp, [_Opening(i) for i in range(4)],
         regime_key=RegimeKey(
             bot="candidate", variant="test", model_sims=1, opponent_spec="fixed",
-            opening_book="test_book", deploy_matched=False, encoding="v6_live2_ls",
+            opening_book="test_book", deploy_matched=False, encoding=_ENC,
         ),
-        board_factory=lambda: Board.with_encoding_name("v6_live2_ls"),
+        board_factory=lambda: Board.with_encoding_name(_ENC),
         max_plies=DEFAULT_MAX_PLIES, record_sink=None, adjudicator=None,
         **({"player_factory": _pair, "concurrency": 1} if with_factory else {}),
     )
@@ -185,7 +192,8 @@ def test_passing_the_factory_at_G1_changes_nothing() -> None:
 def _net(seed: int):
     spec = lookup(_ENC)
     torch.manual_seed(seed)
-    arch = CnnArch(board_size=spec.board_size, in_channels=spec.n_planes, filters=8, res_blocks=1)
+    arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     net.eval()
@@ -202,20 +210,20 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
         bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
     )
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=32,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=32,
         leaf_build_threads=1, concurrency=concurrency,
         round_index=0, round_id="concurrency_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=2,
-        random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,
-        seed_base=_SEED, round_timeout_sec=600.0,
+        random_model_sims=2, sealbot_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"),
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
-        fused_graph_caps=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
+                                            max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),

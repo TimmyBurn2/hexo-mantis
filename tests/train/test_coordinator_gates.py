@@ -34,6 +34,8 @@ catch. Added post-review (F-3/F-4): the non-degenerate cadence rows (`log_interv
 """
 from __future__ import annotations
 
+from mantis._engine import HexgBuffer
+
 import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
@@ -49,6 +51,30 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+
+def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
+    so each file that needs one builds it)."""
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
 
 #: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11), so a
 #: harness reads them from a MINTED config rather than restating them — the same rule the
@@ -142,6 +168,7 @@ class FakeBuffer:
     def __init__(self, size: int = 1000, capacity: int = 100_000) -> None:
         self.size = size
         self.capacity = capacity
+        self._hexg = _filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -149,9 +176,13 @@ class FakeBuffer:
     def save_to_path(self, p) -> None:
         return None
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        # The grid route's sampler (WPTS dispatcher); rows are opaque to FakeTrainer.
-        return (None,) * 9
+    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
+        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # hand-built payload would be a second wire format for the collate to disagree with.
+        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class FakeEvalPipeline:
@@ -245,7 +276,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity — these
         # unit drives declare the grid identity FakeBuffer's sampler serves.
         config=config or _make_config(),
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={},
         sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or MonitorConfig(),
     )

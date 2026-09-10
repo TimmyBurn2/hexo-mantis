@@ -31,10 +31,19 @@
 //! `get_policy_ls` normalises by the total visit count over ALL children (`v / total`), so a
 //! no-drop export sums to exactly 1.0. Any deficit IS the dropped mass. Re-deriving a
 //! "correct" target here would just add a second thing that can be wrong.
+//!
+//! ## What R346(f) removed from this instrument
+//!
+//! The original file ALSO attributed each drop to the K-cluster coverage gate, recomputing
+//! `is_covered` over `Board::get_cluster_views`' centres. That producer went with the dense
+//! path, and `get_policy_ls` is coverage-free, so there is no gate left for a drop to be
+//! attributable to. The mass law below is unchanged and is now the whole verdict; the two
+//! grid arms are replaced by the second graph row (`gnn_axis_r8`), which reaches a wider
+//! legal set than `gnn_axis_v1` and so probes the same >361 regime harder.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{is_covered, MCTSTree};
+use mantis_search::MCTSTree;
 
 const N_SIMS: usize = 150; // run5's deploy_sims
 const LEAF_BATCH: usize = 8;
@@ -47,9 +56,6 @@ struct Row {
     n_children: usize,
     n_legal: usize,
     dropped_mass: f64,
-    dropped_children: usize,
-    /// Every dropped child was an off-window cell failing `is_covered` — §4 criterion 2.
-    all_drops_attributable: bool,
 }
 
 fn geometry_for(enc: &str) -> (BoardGeometry, usize) {
@@ -91,7 +97,6 @@ fn measure(board: &Board, n_actions: usize, ply: u32) -> Option<Row> {
     if !root.is_expanded() {
         return None;
     }
-    let first = root.first_child as usize;
     let n_ch = root.n_children as usize;
     if n_ch == 0 {
         return None;
@@ -110,44 +115,11 @@ fn measure(board: &Board, n_actions: usize, ply: u32) -> Option<Row> {
          the PREREG §2 invariant does not hold and the instrument is wrong"
     );
 
-    // Attribution (§4 criterion 2): recompute, per child, whether it is off-window AND
-    // uncovered — i.e. exactly the cells `get_policy_ls`'s gate discards.
-    let (_views, centers) = board.get_cluster_views();
-    let trunk_sz = board.cluster_window_size() as i32;
-    let half = (trunk_sz - 1) / 2;
-    let total_visits: u32 = (first..first + n_ch).map(|i| tree.pool[i].n_visits).sum();
-
-    let mut dropped_children = 0usize;
-    let mut unattributed = 0usize;
-    for i in first..first + n_ch {
-        if tree.pool[i].n_visits == 0 || total_visits == 0 {
-            continue;
-        }
-        let val = tree.pool[i].action_idx;
-        let q = (val >> 16) as i32 - 32768;
-        let r = (val & 0xFFFF) as i32 - 32768;
-        let in_window = board.window_flat_idx(q, r) < n_actions;
-        if in_window {
-            continue;
-        }
-        if is_covered(q, r, &centers, trunk_sz, half) {
-            continue; // lands in overflow — retained
-        }
-        dropped_children += 1;
-        let _ = &mut unattributed;
-    }
-
-    // A drop with no uncovered off-window child would be unattributable (§4: reported as a
-    // separate finding, never folded into this verdict).
-    let all_drops_attributable = dropped_mass <= TOL || dropped_children > 0;
-
     Some(Row {
         ply,
         n_children: n_ch,
         n_legal: board.legal_moves().len(),
         dropped_mass,
-        dropped_children,
-        all_drops_attributable,
     })
 }
 
@@ -224,8 +196,8 @@ fn report(enc: &str, rows: &[Row]) -> (usize, f64, f64, usize) {
     println!("  max n_legal reached: {max_legal}  (PREREG abort 1 needs >361)");
     for r in rows.iter().filter(|r| r.dropped_mass > TOL).take(12) {
         println!(
-            "    ply {:>3}  n_legal {:>5}  n_children {:>4}  dropped {:.6}  dropped_children {}",
-            r.ply, r.n_legal, r.n_children, r.dropped_mass, r.dropped_children
+            "    ply {:>3}  n_legal {:>5}  n_children {:>4}  dropped {:.6}",
+            r.ply, r.n_legal, r.n_children, r.dropped_mass
         );
     }
     (affected, median, max, max_legal)
@@ -233,13 +205,12 @@ fn report(enc: &str, rows: &[Row]) -> (usize, f64, f64, usize) {
 
 #[test]
 fn r153_characterize_exported_target_dropped_mass() {
-    // PRIMARY: run5's own encoding. SECONDARY: the class boundary (R71) — the ruled dense
-    // control arm and the multi-window grid row.
-    let encodings = ["gnn_axis_v1", "v6_live2_ls", "v6w25"];
+    // PRIMARY: run5's own encoding. SECONDARY: run6's identity row at the wider radius —
+    // the surviving registered set after R346(f).
+    let encodings = ["gnn_axis_v1", "gnn_axis_r8"];
     let seeds = [20_260_731_u64, 8_675_309, 42]; // 3 distinct games (LAW-04)
 
     let mut any_drop = false;
-    let mut any_unattributed = false;
     let mut total_positions = 0usize;
 
     for enc in encodings {
@@ -268,9 +239,6 @@ fn r153_characterize_exported_target_dropped_mass() {
                 r.ply, r.n_legal, r.n_children, r.dropped_mass
             );
         }
-        if rows.iter().any(|r| !r.all_drops_attributable) {
-            any_unattributed = true;
-        }
         // PREREG §6 abort 1: the sample MUST reach the >361-legal regime.
         assert!(
             max_legal > 361 || tail_max_legal > 361,
@@ -287,7 +255,6 @@ fn r153_characterize_exported_target_dropped_mass() {
     assert!(total_positions > 0, "the instrument measured nothing — sample is empty");
     println!(
         "\n=== R153 VERDICT INPUTS ===\n  any position with dropped_mass > {TOL}: {any_drop}\
-         \n  any UNATTRIBUTED drop (not is_covered): {any_unattributed}\
          \n  total positions measured: {total_positions}"
     );
 

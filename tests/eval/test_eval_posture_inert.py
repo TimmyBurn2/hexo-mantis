@@ -13,7 +13,7 @@ behaviour is identical to the tree before these keys existed.**
 
 **ONE HALF OF THAT IS NO LONGER TRUE, AND THE ROWS BELOW SAY SO BY NAME RATHER THAN BY GOING
 QUIET.** RECAL-SITTING-5's mint (R326, values R324(d), scope Δ10.5) ARMED `eval.strength_floor`
-on the PRODUCTION SET — `run5.yaml`, `run6.yaml` and `shakedown_20260807.yaml` — and on
+on the PRODUCTION SET — `run6.yaml`, `run6.yaml` and `run6.yaml` — and on
 nothing else. run6 joins at its own mint: `RUN6_MINT_PREREG.md`'s `strength floor` row is
 CONFIRM at run5's three armed values, carried unchanged, which is the ruling this row asks
 for (R338 / R337(a)).
@@ -131,11 +131,13 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #: The configs a RULING has armed `eval.strength_floor` on. CLOSED, NAMED, and widened only by
 #: a mint act with a ruling behind it — R326 / the RECAL-SITTING-5 forwarding §0.3, values
 #: R324(d) (`probe_games 4`, `min_decisive_rate 0.25`, `min_winrate 0.0`), scope Δ10.5 (the
-#: production pair only, because no armed-abort row exists for `strength_floor`).
+#: production configs only, because no armed-abort row exists for `strength_floor`). R346(f)
+#: left one of those, so the "pair" is now a single name — a NARROWING by deletion, which is
+#: the one way this set may shrink without a new ruling.
 #:
 #: NOT derived from the files. A predicate over `configs/` would make every row below vacuous
 #: on exactly the event this suite exists to catch: an arming that arrived without a ruling.
-_ARMED_STRENGTH_FLOOR = frozenset({"run5.yaml", "run6.yaml", "shakedown_20260807.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml"})
 
 
 def _armed_config():
@@ -174,7 +176,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
 
     cfg = load_config(_CONFIG_DIR / config_name)
     pipeline = EvalPipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1,
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
@@ -204,15 +206,15 @@ class _StubModel:
 
 
 def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monkeypatch) -> None:
-    """`run5.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
+    """`run6.yaml` is in the ruled armed set, so its round spec must CARRY the floor across the
     process seam. A spec that dropped it would leave the value minted, audited and inert — the
     knob reporting armed while nothing reads it."""
     monkeypatch.setattr(
         "mantis.eval.pipeline.write_model_snapshot", lambda model, path: str(path)
     )
-    spec = _spec_from("run5.yaml", tmp_path)
+    spec = _spec_from("run6.yaml", tmp_path)
     assert spec.ply_cap_adjudication is None
-    assert "run5.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
+    assert "run6.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
     assert spec.strength_floor is not None, (
         "run5's armed floor did not reach the round spec — minted and inert"
     )
@@ -235,7 +237,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
                       bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
                       run_gate=False),
         rung_jobs=[], random_floor_games=0, random_model_sims=1, sealbot_model_sims=1,
-        kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
+        seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         game_record=None,
@@ -245,7 +247,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # round-trips. Its own round-trip (both arms) is pinned by
     # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
-                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
                          fused_graph_caps=None,
                          inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
@@ -253,7 +255,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back == disarmed
 
     armed = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),
@@ -273,7 +275,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # stderr nobody is reading — which is the exact failure `_REHYDRATED_SPEC_FIELDS`' own
     # docstring says the table exists to prevent, so it is pinned rather than assumed.
     targeted = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         leaf_build_threads=1, concurrency=1,
         **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
         ply_cap_adjudication=None, strength_floor=None,

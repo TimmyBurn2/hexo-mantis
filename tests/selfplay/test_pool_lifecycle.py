@@ -27,9 +27,9 @@ import numpy as np
 import pytest
 import torch
 
-from mantis._engine import HexgBuffer, ReplayBuffer
+from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
-from mantis.model import CnnArch, GnnArch, build_net
+from mantis.model import GnnArch, build_net
 from mantis.selfplay import pool as pool_mod
 from mantis.selfplay.buffers import BufferKind
 from mantis.selfplay.pool import WorkerPool
@@ -43,47 +43,28 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     # `selfplay` (its historical target — no call site in this file uses it today).
     selfplay: dict[str, Any] = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "c_visit": 50.0,
+        "c_visit": 50.0,
         "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-        "instrumentation_enabled": False,
+        "results_queue_cap": 10_000, "random_opening_plies": 0,
+        "log_investigation_metrics": True,
         "mcts": {"n_simulations": 8, "c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
         "playout_cap": {"fast_sims": 8, "fast_prob": 0.0, "standard_sims": 0,
                         "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
     selfplay.update(over)
     inference = {
-        "inference_batch_size": 4, "trace_inference": False, "inference_max_wait_ms": 10,
-        "compile_inference": False, "compile_inference_mode": "default",
-        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        "inference_batch_size": 4, "inference_max_wait_ms": 10,
             # F-816-10 (R276(f)): the graph arm resolves the fused-forward memory bound at
         # construction. NON-BINDING BY CONSTRUCTION here — this fixture is about wiring, and
         # a cap that bound would make it exercise a split with nothing asserting the M.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
-    # WPSC Phase 3 SC-B3: InferenceServer (via WorkerPool) now hard-reads
-    # config["train"]["amp_dtype"] unconditionally (R30b, no fallback).
-    train = {"draw_reward": -0.5, "ply_cap_value": -0.5, "amp_dtype": "fp16"}
+    train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
     return {"encoding": encoding, "search": {"kind": "puct"}, "selfplay": selfplay,
             "inference": inference, "train": train}
-
-
-def _grid_pool(encoding: str = "v6", **kw: Any) -> WorkerPool:
-    spec = lookup(encoding)
-    arch = CnnArch(board_size=spec.trunk_size, in_channels=spec.n_planes,
-                   filters=8, res_blocks=1)
-    return WorkerPool(
-        build_net(arch), _cfg(encoding), torch.device("cpu"),
-        ReplayBuffer(capacity=256, encoding=encoding), arch=arch, **kw,
-    )
 
 
 def _graph_pool(**kw: Any) -> WorkerPool:
@@ -198,7 +179,7 @@ def test_producer_death_is_re_raised_with_its_cause(monkeypatch) -> None:
     on a buffer that has stopped growing while loss, throughput per step, and every eval
     number stay plausible for hours. FAIL = exactly that silence. The cause must survive
     because 'the feeder died' without the traceback is not actionable."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     boom = ZeroDivisionError("scripted drain failure")
 
     def _explode(_pool):
@@ -222,7 +203,7 @@ def test_healthy_and_cleanly_stopped_pools_do_not_raise(monkeypatch) -> None:
 
     FAIL = every orderly shutdown aborts the run, which is how a fail-fast guard gets
     disabled by whoever is on call that night."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     pool.check_producer_health()
 
     monkeypatch.setattr(pool_mod, "run_stats_loop", lambda _pool: None)
@@ -238,7 +219,7 @@ def test_stats_loop_guard_does_not_let_the_thread_die_silently(monkeypatch, capl
     A daemon thread that raises prints to stderr at best and vanishes at worst; the log
     line plus the flag are the two independent traces that make the death discoverable
     from a run's own artefacts."""
-    pool = _grid_pool()
+    pool = _graph_pool()
 
     def _explode(_pool):
         raise RuntimeError("scripted")
@@ -260,7 +241,7 @@ def test_start_is_idempotent_while_running() -> None:
 
     FAIL = two feeder threads draining the same Rust queue, which double-counts pushes and
     interleaves two `system_stats` cadences."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     runner, server = _stub_collaborators(pool)
 
     pool.start()
@@ -284,7 +265,7 @@ def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
     The bounded join matters: an unbounded one turns a wedged inference thread into a
     hung shutdown, and the run never writes its final checkpoint."""
     recorder = _StubRecorder()
-    pool = _grid_pool(recorder=recorder)
+    pool = _graph_pool(recorder=recorder)
     runner, server = _stub_collaborators(pool)
 
     pool.start()
@@ -301,7 +282,7 @@ def test_stopped_feeder_thread_actually_exits() -> None:
     """H-03 (liveness arm) — PASS iff the feeder thread is no longer alive after `stop()`.
     Asserting only that `join` was called would pass on a loop that ignores its stop
     event."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     _stub_collaborators(pool)
 
     pool.start()
@@ -318,7 +299,7 @@ def test_sync_inference_weights_forwards_to_the_server() -> None:
     This is the promotion path's landing point: a pool that accepts the call and drops it
     keeps serving the OLD weights while every promotion log line says the new ones are
     live — the run then evaluates a model it is not actually playing."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     _, server = _stub_collaborators(pool)
     state = {"layer.weight": torch.zeros(1)}
     pool.sync_inference_weights(state)
@@ -333,12 +314,12 @@ def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
     The concrete recorder is a display-surface concern that does not exist in this tree, so
     the default has to be a working no-op rather than a missing attribute."""
     recorder = _StubRecorder(path="replays/games_0001.jsonl")
-    pool = _grid_pool(recorder=recorder)
+    pool = _graph_pool(recorder=recorder)
     pool.update_checkpoint_step(42)
     assert recorder.steps == [42]
     assert pool.latest_replay_path() == "replays/games_0001.jsonl"
 
-    default_pool = _grid_pool()
+    default_pool = _graph_pool()
     default_pool.update_checkpoint_step(7)
     assert default_pool.latest_replay_path() is None
 
@@ -361,33 +342,11 @@ def test_batch_fill_pct_math(forward_count, total_requests, batch_size, expected
     The metric drives a throughput panel; an unclamped value above 100 or a
     ZeroDivisionError on the first read both make the panel useless at exactly the moment
     someone is looking at it."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     pool._inference_server = _StubServer(forward_count=forward_count,
                                          total_requests=total_requests,
                                          batch_size=batch_size)
     assert pool.batch_fill_pct == pytest.approx(expected)
-
-
-# ═══ D-16 — the pool's representation dispatch ═══════════════════════════════════
-def test_grid_pool_takes_the_dense_arm() -> None:
-    """D-16 (grid arm) — PASS iff a grid pool resolves to the dense branch, wraps a GRID
-    facade, derives non-zero dense dims, and — when the drain runs — calls `collect_data`
-    and never `collect_graph_data`."""
-    pool = _grid_pool()
-    runner, _ = _stub_collaborators(pool)
-
-    assert pool._is_graph is False
-    assert pool.replay_buffer.kind is BufferKind.GRID
-    assert pool._feat_len > 0 and pool._chain_len > 0
-
-    pool.start()
-    time.sleep(0.25)
-    pool.stop()
-
-    assert "collect_data" in runner.calls
-    assert "collect_graph_data" not in runner.calls, (
-        "a grid pool must never reach the graph collect path"
-    )
 
 
 def test_graph_pool_takes_the_graph_arm() -> None:
@@ -425,7 +384,7 @@ def test_worker_pool_produces_positions_threaded_smoke() -> None:
     Every other row in this file stubs one collaborator or the other. This is the only one
     that proves the assembled thing runs: inference server, Rust workers, feeder thread and
     replay buffer, all live at once."""
-    pool = _grid_pool()
+    pool = _graph_pool()
     pool.start()
     try:
         deadline = time.monotonic() + _INTEGRATION_TIMEOUT_S
@@ -439,51 +398,6 @@ def test_worker_pool_produces_positions_threaded_smoke() -> None:
     assert pool.self_play_positions_pushed == pool.positions_pushed
     assert pool.replay_buffer.size > 0
     pool.check_producer_health()
-
-
-@pytest.mark.integration
-@pytest.mark.parametrize("encoding,trunk,feat,chain,policy",
-                         [("v6", 19, 2888, 2166, 362), ("v6w25", 25, 5000, 3750, 626)])
-def test_encoding_aware_pool_wires_trunk_derived_dims(
-        encoding, trunk, feat, chain, policy) -> None:
-    """H-10 — PASS iff constructing a pool for each grid encoding wires the dims that
-    encoding implies — trunk size, feature length, chain length, policy length — and the
-    pool then runs against the real runner without a producer failure.
-
-    These dims are what the drain reshapes every row with. Wiring the default encoding's
-    numbers for a wider board reshapes correctly-sized data into the wrong geometry, which
-    trains fine and learns nothing."""
-    pool = _grid_pool(encoding)
-    assert (pool._trunk_size, pool._feat_len, pool._chain_len, pool._pol_len) == (
-        trunk, feat, chain, policy)
-    assert pool.encoding_spec.name == encoding
-
-    pool.start()
-    try:
-        time.sleep(0.5)
-        pool.check_producer_health()
-    finally:
-        pool.stop()
-    pool.check_producer_health()
-
-
-@pytest.mark.integration
-def test_pool_encoding_wired_no_warn(recwarn) -> None:
-    """H-11 — PASS iff constructing and running a pool for a non-default encoding emits NO
-    warning at the pool layer.
-
-    A warning here would mean some component fell back to a default it was not given — the
-    exact silent-substitution class this package's construction path exists to prevent.
-    Runner internals stay gated by their own crate tests; this row is pool-level only."""
-    pool = _grid_pool("v6w25")
-    pool.start()
-    try:
-        time.sleep(0.3)
-    finally:
-        pool.stop()
-
-    unexpected = [str(w.message) for w in recwarn.list]
-    assert not unexpected, f"pool construction/run warned: {unexpected}"
 
 
 @pytest.mark.integration
@@ -509,6 +423,6 @@ def test_pool_threads_are_not_leaked_by_construction() -> None:
     would leave a live thread behind every time a pool is built and discarded — including
     once per test in this file."""
     before = threading.active_count()
-    pool = _grid_pool()
+    pool = _graph_pool()
     assert threading.active_count() == before, "construction must not start a thread"
     assert pool._stats_thread is None

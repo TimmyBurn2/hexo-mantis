@@ -13,7 +13,7 @@
 THE DEFECT, as measured. `coordinator/step.py::_run_log_interval` early-returned unless
 `self._train_step % cfg.log_interval == 0`, and BOTH the live hard-abort gates
 (`_run_hard_abort_gates`, whose `draw_rate_collapse` row gate 12 audits ARMED on
-`configs/run5.yaml`) and the LAW-18 `monitor_gates` summary sat downstream of that guard. At
+`configs/run6.yaml`) and the LAW-18 `monitor_gates` summary sat downstream of that guard. At
 run5's minted `train.log_interval: 1000` that means: no draw-rate observation could be taken,
 and no `monitor_gates` event could exist, before training step 1000. Armed machinery with a
 blind first kilometre — and the instrument that would have made the deadness readable was
@@ -45,6 +45,8 @@ P10 a SKIPPED boundary neither advances nor RESETS `consec` — the true cadence
 """
 from __future__ import annotations
 
+from mantis._engine import HexgBuffer
+
 import dataclasses
 import inspect
 from pathlib import Path
@@ -64,6 +66,30 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+
+def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
+    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
+    so each file that needs one builds it)."""
+    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
+    for i in range(n_records):
+        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
+        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
+                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
+    return hb
+
+
+
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
+#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
+#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
+#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+_GRAPH_FULL_CONFIG: dict = {
+    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
+    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+              "fast_policy_weight": 0.0},
+    "selfplay": {"n_workers": 1},
+}
+
 
 _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG_PATH = _REPO / "configs" / "dev_example.yaml"
@@ -144,6 +170,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
+        self._hexg = _filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -151,8 +178,13 @@ class _Buffer:
     def save_to_path(self, p) -> None:
         return None
 
-    def sample_batch_with_pos(self, n: int, augment: bool):
-        return (None,) * 9
+    def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
+                           n_threads: int = 1):
+        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
+        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
+        # hand-built payload would be a second wire format for the collate to disagree with.
+        return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
+                                             n_threads=n_threads)
 
 
 class _Sink:
@@ -190,7 +222,7 @@ def _coordinator(*, config: StepCoordinatorConfig, pool: _Pool | None = None):
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None, config=config,
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, sink=sink,
@@ -398,19 +430,22 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     and therefore that this bundle changed no cadence. Deleting it instead of re-pointing it
     would erase the only in-repo evidence for that claim.
 
-    F-P2B (R259 shakedown): the seventh committed config, `shakedown_20260807.yaml`, mints
+    F-P2B (R259 shakedown): the seventh committed config, `run6.yaml`, mints
     BOTH knobs to 100 — the equal-mint held only because MAIN ratified the ninth delta
     `train.log_interval 1000 -> 100` alongside `monitor.gate_interval 1000 -> 100`; the
     first mint carried gate_interval alone and this very assertion refused it. The count
-    below ratchets 6 -> 7 so an eighth config cannot slip past the equality sweep unseen —
+    below ratchets 6 -> 7 so a further config cannot slip past the equality sweep unseen —
     and 7 -> 8 at run6's mint (R338), which mints NEITHER knob: `RUN6_MINT_PREREG.md` proposes
-    no cadence row, so run6 carries the dev template's equal pair and the sweep still bites —
-    enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7
-    and 12 consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape
-    (legal per ADJ-13 F-1) could escape (N4, F-P2B/N4).
+    no cadence row, so run6 carries the dev template's equal pair and the sweep still bites.
+    R346(f) cut `configs/` to run6, one smoke profile and dev_example, so the count is 3 — a
+    DOWN-ratchet against a deletion, which keeps the "cannot slip past unseen" property in
+    both directions.
+    Enumeration is `discover_configs` (R71/R75), the ONE discovery authority both gates 7 and 12
+    consume, not a second flat `*.yaml` glob that a subdirectory/`.yml` shape (legal per
+    ADJ-13 F-1) could escape (N4, F-P2B/N4).
     """
     configs = discover_configs(_REPO / "configs")
-    assert len(configs) == 8, f"expected the eight committed configs, found {configs}"
+    assert len(configs) == 3, f"expected the three committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
         assert cfg.monitor.gate_interval == cfg.train.log_interval, (

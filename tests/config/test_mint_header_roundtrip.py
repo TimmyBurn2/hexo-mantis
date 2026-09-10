@@ -81,7 +81,7 @@ _UNRENDERABLE_DOCS = ("!!omap [{a: 1}]", "!!pairs [{a: 1}]")
 #: The one place a stringified-`None` header still lives, closed and named: a byte-frozen
 #: snapshot of `b482243` under a FROZEN manifest, which is a record, not a mintable config.
 _BASELINE_KNOWN_BAD = {
-    ("run5.yaml", "train.draw_rate_abort"),
+    ("run6.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "eval.ladder.rungs"),
 }
@@ -306,25 +306,21 @@ def test_every_committed_header_delta_agrees_with_the_config_body() -> None:
     )
 
 
-def test_the_frozen_wpmain_baselines_carry_exactly_the_known_historical_bad_headers() -> None:
-    """The baselines are swept too (R187 says every config AND the fixture baselines), but they
-    are a byte-frozen snapshot of `b482243` under the FROZEN `tests/fixtures/manifest.toml`:
-    re-minting them would falsify a record and red the manifest oracle. So they are PINNED, not
-    skipped -- the known-bad set is closed at three named deltas.
+def test_the_frozen_wpmain_baseline_set_is_gone_and_stays_gone() -> None:
+    """The `b482243` baselines are DELETED (R346(f)) and this row is their tombstone.
 
-    MUTATION THAT REDS IT: a fourth bad header appearing in the baselines (someone re-cutting
-    them from a broken minter), or one of the three quietly disappearing (someone hand-fixing a
-    frozen record). Both are things a skip would not see.
+    They were a byte-frozen snapshot of eight configs at the commit WPMAIN branched from,
+    swept here for three known-historical stringified-`None` deltas. R346(f) pruned `configs/`
+    to three files and deleted thirty-eight keys, so the snapshot is a record of a tree that
+    no longer exists and the instrument that read it — `test_minted_config_remint.py` — is
+    retired with it: that file's own §1 argues that re-cutting the baseline against a later
+    tree makes its directory name false and turns every assertion vacuous.
+
+    MUTATION THAT REDS IT: re-adding a baseline directory without also re-arming the remint
+    instrument, which would leave a frozen snapshot nothing reads.
     """
-    baselines = sorted(BASELINE.glob("*.yaml"))
-    assert baselines, f"no baseline configs under {BASELINE}"
-    found = {
-        (path.name, key)
-        for path in baselines
-        for key, old, new in _header_deltas(path)
-        if _stringified_none(yaml.safe_load(old)) or _stringified_none(yaml.safe_load(new))
-    }
-    assert found == _BASELINE_KNOWN_BAD, (
-        "the frozen baselines' stringified-None set is closed and historical; got "
-        f"{sorted(found)} against {sorted(_BASELINE_KNOWN_BAD)}"
+    assert not BASELINE.exists(), (
+        f"{BASELINE} is back. It is a byte-frozen snapshot whose only reader was the retired "
+        "remint instrument; a baseline nobody diffs is a golden that cannot go stale loudly. "
+        "Re-arm the instrument in the same commit or delete the directory again."
     )

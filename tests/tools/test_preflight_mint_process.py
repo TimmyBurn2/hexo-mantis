@@ -105,15 +105,33 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 #: own directory, so every rig that relocates the tool must carry the sibling with it.
 PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 
+
+@pytest.fixture(autouse=True)
+def _durable_workspace(monkeypatch, tmp_path):
+    """R347(d)'s START workspace HALT reads the KERNEL's mount table, and these drives write
+    into pytest's `tmp_path`. On a host whose `/tmp` is `tmpfs` every drive would halt at
+    rc 16 before reaching the thing it tests; on a host whose `/tmp` is not, the same drives
+    would pass. That is a host dependency in the harness, not a property of the tool, so the
+    mount table is SYNTHETIC here and declares `tmp_path`'s tree durable.
+
+    The halt itself is driven for real by `tests/tools/test_preflight_start_halts.py`, which
+    supplies its own synthetic table in the other direction. Nothing here weakens it.
+    """
+    from mantis.diagnostics import workspace_durability
+
+    mounts = tmp_path / "_mounts"
+    mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} xfs rw 0 0\n", encoding="utf-8")
+    monkeypatch.setattr(workspace_durability, "MOUNTS", mounts)
+
 #: run5's own constants, read from the file rather than restated (§14 item 17 / ADJ-12).
-RUN5 = REPO_ROOT / "configs" / "run5.yaml"
+RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 _N = 101
-#: WPAX Phase D: the burst floor for `configs/run5.yaml` MOVED. run5 now arms the draw-rate
+#: WPAX Phase D: the burst floor for `configs/run6.yaml` MOVED. run5 now arms the draw-rate
 #: abort at `min_step: 25000`, and the same cross-field rule that binds
 #: `monitor.actor_lag_threshold_steps` inside the run binds this floor too — so a burst the
 #: run5 step floor never reaches is refused at rc 11, exactly as a burst below the lag
 #: threshold is. `_N` stays 101 for every drive that is about the a/b assertion arithmetic;
-#: the drives that push a REAL `configs/run5.yaml` through `_apply_burst_override` use this.
+#: the drives that push a REAL `configs/run6.yaml` through `_apply_burst_override` use this.
 #: (Measured, not assumed: `max(100, 1, 25000) + 1`.)
 _RUN5_BURST = 25001
 
@@ -153,7 +171,7 @@ def _cuda_is_available() -> bool:
     return bool(torch.cuda.is_available())
 
 
-#: Declared once. `configs/run5.yaml` mints `train.device: cuda` (R126: the device is a CONFIG
+#: Declared once. `configs/run6.yaml` mints `train.device: cuda` (R126: the device is a CONFIG
 #: FACT and the `--device` flag is DEAD), so what a real run5 boot DOES is a property of the
 #: host, not of the tool. Both halves are pinned rather than one being left to chance: on a
 #: non-CUDA box `test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer` is the
@@ -167,6 +185,16 @@ _CUDA_BOX = _cuda_is_available()
 # delta set obsoletes it: the header's new slot is ALREADY that token, round-trip-checked by
 # `mint_config._render_value` at stamp time, so re-rendering from the loaded value is a second
 # authority for a string the minter already wrote. Zero call sites when it went.
+
+
+#: The leaves a CPU twin of run6 is ALLOWED to differ in, and nothing else. The two device
+#: leaves are R126's config-fact rule; the three warm-start leaves are R7's — run6's declared
+#: BC checkpoint lives under `checkpoints/`, which is never tracked, so the twin carries no
+#: warm start at all and the block collapses from two leaves to one null.
+FORCED_TWIN_LEAVES: frozenset[str] = frozenset({
+    "run_id", "train.device", "eval.worker_device",
+    "identity.warm_start", "identity.warm_start.checkpoint", "identity.warm_start.net_hash",
+})
 
 
 def _flat_leaves(config) -> dict[str, object]:
@@ -268,14 +296,23 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     The three real-boot drives below exist to measure the TOOL's boot mechanics — where the
     child terminates, what the report then claims, and that a spawned boot is reported as a
     boot. Until R126 they got there by passing the tool `--device cpu` against
-    `configs/run5.yaml`. That flag is dead by ruling, precisely because a cpu preflight
+    `configs/run6.yaml`. That flag is dead by ruling, precisely because a cpu preflight
     against a cuda-minted run5 false-cleared the GPU memory wall (CARD-RUN5-GPU-OOM), so the
     drives re-point onto a config that says cpu ITSELF.
 
-    Minted by `tools/mint_config.py` from the same `dev` template run5 is minted from,
-    replaying run5's own header deltas — every one of them, DERIVED from the stamped header by
-    `_run5_header_deltas` rather than restated here (run5's armed values are carried, never
-    copied) — plus exactly two more: `run_id` and `train.device: cuda -> cpu`.
+    Minted by `tools/mint_config.py` from the same `dev` template run6 is minted from,
+    replaying run6's own header deltas — every one of them, DERIVED from the stamped header by
+    `_run5_header_deltas` rather than restated here (run6's armed values are carried, never
+    copied) — plus `run_id`, plus the two device leaves, MINUS the warm start.
+
+    THE THREE FORCED DEPARTURES, each with its own reason rather than one blanket excuse.
+    `train.device` and `eval.worker_device` both go to cpu because R126 made the device a
+    config fact: a twin that says cpu for training and cuda for eval is not a CPU twin, it is
+    a config that still demands a GPU at the eval seam, and the R347(d) START guard is right
+    to refuse it. `identity.warm_start` is DROPPED — run6 declares a BC checkpoint under
+    `checkpoints/`, which R7 keeps out of the tree forever, so no drive in this repository can
+    supply the file and every real boot of a faithful twin dies at `init_trainer`. That is a
+    property of the artifact policy, not of the boot mechanics these rows measure.
 
     The prose above used to say "read off the loaded config" while the code restated the delta
     KEY LIST and read only the values; the R326 mint added three deltas the list did not carry
@@ -297,15 +334,32 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     # mint that adds a delta needs no edit here. `run_id` and `train.device` follow the replay
     # and win by application order, which is exactly the two-leaf difference asserted below.
     deltas = [
-        *_run5_header_deltas(),
+        # The warm start is replayed by nobody: its checkpoint is an untracked artifact (R7).
+        *(d for d in _run5_header_deltas() if not d.startswith("identity.warm_start=")),
         "run_id=run5_cpu_boot",
         "train.device=cpu",
+        "eval.worker_device=cpu",
         *(extra_deltas or ()),
     ]
+    # `--set` REFUSES a key the template omits; `--mint-row` is the flag for those, and the
+    # run6 mint writes two (`identity.arch_kind`, `identity.warm_start`) plus
+    # `eval.concurrency`. Which flag a delta needs is DERIVED from the template's own leaves,
+    # so a future minted row picks the right one without an edit here.
+    def _raw_leaves(node, prefix=""):
+        out = []
+        for key, value in (node or {}).items():
+            path = f"{prefix}{key}"
+            out.extend(_raw_leaves(value, f"{path}.") if isinstance(value, dict) else [path])
+        return out
+
+    template_leaves = _raw_leaves(yaml.safe_load(
+        (REPO_ROOT / "tools" / "config_templates" / "dev.yaml").read_text(encoding="utf-8")))
     argv = [sys.executable, str(REPO_ROOT / "tools" / "mint_config.py"),
             "--template", "dev", "--out", str(dest)]
     for delta in deltas:
-        argv += ["--set", delta]
+        key = delta.split("=", 1)[0]
+        in_template = any(leaf == key or leaf.startswith(key + ".") for leaf in template_leaves)
+        argv += ["--set" if in_template else "--mint-row", delta]
     minted = subprocess.run(argv, cwd=str(REPO_ROOT), capture_output=True, text=True, timeout=300)
     assert minted.returncode == 0, (
         "the twin must be MINTED, not hand-varied (R130/R103); mint_config exited "
@@ -313,17 +367,18 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     )
     twin = load_config(dest)
     base, other = _flat_leaves(run5), _flat_leaves(twin)
-    assert base.keys() == other.keys(), "same template, same key set"
-    differing = {key for key in base if base[key] != other[key]}
+    absent = object()
+    keys = base.keys() | other.keys()
+    differing = {key for key in keys if base.get(key, absent) != other.get(key, absent)}
     if extra_deltas:
         # A NAMED variant (`_mint_run5_cpu_bootable_twin`) states its own extra leaves; the
-        # two-leaf guarantee below is what makes the UNNAMED twin evidence about run5, so it
-        # binds that twin alone rather than being relaxed for both.
+        # bounded-difference guarantee below is what makes the UNNAMED twin evidence about
+        # run6, so it binds that twin alone rather than being relaxed for both.
         return dest
-    assert differing == {"run_id", "train.device"}, (
-        "the twin must be run5 WITH THE DEVICE THIS BOX HAS and nothing else — anything more "
-        "and these drives stop being evidence about run5's own boot. Differing leaves: "
-        f"{sorted(differing)}"
+    assert differing == FORCED_TWIN_LEAVES, (
+        "the twin must be run6 with the device this box has, minus a warm start no checkout "
+        "can hold, and NOTHING else — anything more and these drives stop being evidence "
+        f"about run6's own boot. Differing leaves: {sorted(differing)}"
     )
     assert twin.train.device == "cpu" and run5.train.device == "cuda", (
         f"got twin device {twin.train.device!r} against run5 {run5.train.device!r}"
@@ -866,7 +921,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
 
     TWO LIVE ARMS, and the branch is the CONFIG'S OWN STATE — not the host's and not a marker
     (F-R309-1; frozen-edit grant R310(a), re-pinned in the same act). The R309(e) grant launched
-    the child in run5's minted posture, which is right and which `configs/run5.yaml` cannot
+    the child in run5's minted posture, which is right and which `configs/run6.yaml` cannot
     satisfy: it carries the R119 `null` PLACEHOLDER, and `resolve_allocator_posture` refuses
     that BEFORE any environment is consulted, so NO environment makes the minted arm reachable.
     A row left red-by-design at HEAD converts a correct refusal into a standing CI outage, so
@@ -888,7 +943,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     for however long the box sitting took.
 
     VERIFIED UNDER BOTH MINTED TOKENS on a CPU host — PASS at `default`, PASS at
-    `expandable_segments`, `configs/run5.yaml` restored byte-identical after each probe — so the
+    `expandable_segments`, `configs/run6.yaml` restored byte-identical after each probe — so the
     minted arm is MEASURED and not merely written (R309(e)'s obligation, and R310(f)'s rule that
     a granted diff is a measured one).
     """
@@ -1078,7 +1133,7 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
     """MF-7 (i), the escape REVIEW-impl DEMONSTRATED at rc 0.
 
     A production config that is simply not listed in `PRODUCTION_CONFIGS` was never audited:
-    `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run5.yaml > configs/run6.yaml`
+    `sed 's/actor_lag_abort_enabled: true/…: false/' configs/run6.yaml > configs/run6.yaml`
     then `--audit-only` returned **0**, with the one required abort disarmed on a config
     sitting in `configs/`. Nothing pinned `configs/*.yaml ⊆ PRODUCTION_CONFIGS ∪ EXEMPT`, and
     R59's "smoke configs may legally be disarmed" was expressed by ABSENCE — which made
@@ -1260,7 +1315,7 @@ def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
     boundaries fall three orders of magnitude past the end of the run was indistinguishable
     from run5 itself.
 
-    Driven through the mini-tree rig rather than by editing `configs/run5.yaml`: the shipped
+    Driven through the mini-tree rig rather than by editing `configs/run6.yaml`: the shipped
     config is never touched, and the tool is the byte-identical shipped file reading a scratch
     root as its own `REPO_ROOT`.
     """
@@ -1653,7 +1708,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     from mantis.config.resolve.coordinator import CoordinatorKnobsSpec, resolve_coordinator_knobs
     from mantis.config.resolve.drain import DrainCapsSpec
 
-    _run_tool("--audit-only", "--config", "configs/run5.yaml",
+    _run_tool("--audit-only", "--config", "configs/run6.yaml",
               "--out-dir", str(tmp_path / "coord"))
     report = json.loads(sorted((tmp_path / "coord").glob("preflight_*.json"))[0].read_text())
     block = report["coordinator"]
@@ -1662,7 +1717,7 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
         "the census measured its absence"
     )
 
-    config = load_config(REPO_ROOT / "configs" / "run5.yaml")
+    config = load_config(REPO_ROOT / "configs" / "run6.yaml")
     assert set(block["knobs"]) == {f.name for f in dataclasses.fields(CoordinatorKnobsSpec)}
     assert set(block["drain_caps"]) == {f.name for f in dataclasses.fields(DrainCapsSpec)}
     assert block["knobs"] == json.loads(json.dumps(
@@ -1673,18 +1728,28 @@ def test_the_report_publishes_the_RESOLVED_coordinator_config(tmp_path) -> None:
     assert block["stop_step"] == int(config.train.max_train_steps)
     assert block["draw_rate_abort"] == {"threshold": 0.25, "min_step": 25000,
                                         "N_pool_min": 50, "consec": 3}, (
-        "run5's armed terms, as the run will really see them — the four travel together"
+        "run6's armed terms, as the run will really see them — the four travel together"
     )
 
-    _run_tool("--audit-only", "--config", "configs/smoke_gnn.yaml",
+    # The two comparison arms need two DIFFERENT properties and no config left in the tree
+    # carries both: the smoke profile is the only one whose run length differs from run6's,
+    # and `dev_example` is the only DISARMED config (R346(f) took the other five with it).
+    _run_tool("--audit-only", "--config", "configs/smoke_preflight_armed.yaml",
               "--out-dir", str(tmp_path / "smoke"))
     other = json.loads(
         sorted((tmp_path / "smoke").glob("preflight_*.json"))[0].read_text())["coordinator"]
-    assert other["stop_step"] == 2000 != block["stop_step"], (
+    smoke_stop = int(load_config(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")
+                     .train.max_train_steps)
+    assert other["stop_step"] == smoke_stop != block["stop_step"], (
         "the block must MOVE with the config it was resolved from; a constant would report "
         f"the same run length for both, got {other['stop_step']} and {block['stop_step']}"
     )
-    assert other["draw_rate_abort"] is None, (
+
+    _run_tool("--audit-only", "--config", "configs/dev_example.yaml",
+              "--out-dir", str(tmp_path / "disarmed"))
+    disarmed = json.loads(
+        sorted((tmp_path / "disarmed").glob("preflight_*.json"))[0].read_text())["coordinator"]
+    assert disarmed["draw_rate_abort"] is None, (
         "a DISARMED config must publish an explicit `null`, not an omitted key: absence would "
         "be indistinguishable from a block the tool forgot to fill"
     )
@@ -1812,7 +1877,10 @@ def test_an_unknown_representation_raises_and_is_never_a_dense_default() -> None
     from mantis.run import _select_buffer
     from mantis.train.coordinator.dispatch import RepresentationRouteError
 
-    for representation in ("hexagonal", "", "dense", "GRAPH", "none"):
+    # `grid` joined this list when R346(f) deleted the dense arm: the representation that
+    # used to select a buffer must now be refused BY NAME like any other unknown, or its
+    # deletion left a silent default behind.
+    for representation in ("hexagonal", "", "dense", "grid", "GRAPH", "none"):
         with pytest.raises(RepresentationRouteError) as caught:
             _select_buffer(_identity(representation), 8)
         assert "LAW-11" in str(caught.value) and repr(representation) in str(caught.value), (
@@ -1821,20 +1889,24 @@ def test_an_unknown_representation_raises_and_is_never_a_dense_default() -> None
         )
 
 
-def test_the_two_declared_representations_select_their_own_real_buffer() -> None:
+def test_the_ONE_declared_representation_selects_its_own_real_buffer() -> None:
     """The inverse arm — a selector that only ever raises is as useless as one that never
-    does. These are the REAL `mantis._engine` buffers, selected off the declared
-    representation and never sniffed off a live module."""
-    from mantis._engine import HexgBuffer, ReplayBuffer
+    does. This is the REAL `mantis._engine` buffer, selected off the declared representation
+    and never sniffed off a live module.
+
+    ONE arm where there were two: R346(f) deleted the dense `ReplayBuffer` with the grid path,
+    so the pair comparison that used to carry this row is gone and the refusal arm above is
+    what keeps the selector from becoming unconditional. Both halves still exist — this row
+    proves it returns a real buffer, that row proves it refuses everything else — which is the
+    property the pair was for.
+    """
+    from mantis._engine import HexgBuffer
     from mantis.run import _select_buffer
 
     graph = _select_buffer(_identity("graph"), 8)
-    grid = _select_buffer(_identity("grid", encoding="v6"), 8)
-    assert isinstance(graph, HexgBuffer) and isinstance(grid, ReplayBuffer), (
-        f"graph -> HexgBuffer, grid -> ReplayBuffer; got {type(graph)} / {type(grid)}"
-    )
+    assert isinstance(graph, HexgBuffer), f"graph -> HexgBuffer; got {type(graph)}"
     assert load_config(RUN5).identity.representation == "graph", (
-        "run5 is the graph arm, so the graph branch is the one the mint actually takes — "
+        "run6 is the graph arm, so the graph branch is the one the mint actually takes — "
         "pinned here so a config change that flips it is visible"
     )
 
@@ -2471,7 +2543,7 @@ def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITE
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     relposix = planted.relative_to(root).as_posix()
 
-    assert load_config(planted).run_id == "run5", (
+    assert load_config(planted).run_id == "run6", (
         f"{rel} must still LOAD — R75 declined the accept-set narrowing, so the protection has "
         "to come from the audit seeing it, not from the loader refusing it"
     )
@@ -2755,7 +2827,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     F-2 was censused over `os.path.abspath` call SITES; the class it declared is *a path-identity
     comparison whose two sides normalise differently*, and set membership is one. `_audit_paths`
     unioned `_resolve_production_configs()` (a plain `REPO_ROOT / rel`) with `named` (arriving
-    `.resolve()`d from `_resolve_config_path`), so under a symlinked `configs/run5.yaml` the set
+    `.resolve()`d from `_resolve_config_path`), so under a symlinked `configs/run6.yaml` the set
     held two SPELLINGS of one config: audited twice, published twice in `audited_configs`.
 
     Fail-safe in direction, which is why it survived — and exactly why it needs a producer: a
@@ -2766,13 +2838,13 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     root = _mini_tree(tmp_path)
     real = tmp_path / "elsewhere"
     real.mkdir()
-    target = real / "run5.yaml"
-    target.write_text((root / "configs" / "run5.yaml").read_text())
-    (root / "configs" / "run5.yaml").unlink()
-    (root / "configs" / "run5.yaml").symlink_to(target)
+    target = real / "run6.yaml"
+    target.write_text((root / "configs" / "run6.yaml").read_text())
+    (root / "configs" / "run6.yaml").unlink()
+    (root / "configs" / "run6.yaml").symlink_to(target)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    named = TOOL._resolve_config_path(str(root / "configs" / "run5.yaml"))
+    named = TOOL._resolve_config_path(str(root / "configs" / "run6.yaml"))
     paths = TOOL._audit_paths(named)
     assert len(paths) == len(set(paths)) == len(PRODUCTION_CONFIGS), (
         "one config reached by two spellings must be ONE entry — a set of paths that "
@@ -2782,7 +2854,7 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     # the declaration at point of use — the subject stays "two spellings collapse onto one",
     # and the other production members ride along un-symlinked.
     others = sorted((root / rel).resolve() for rel in PRODUCTION_CONFIGS
-                    if rel != "configs/run5.yaml")
+                    if rel != "configs/run6.yaml")
     assert paths == sorted([target, *others]), (
         f"…and both spellings must collapse onto the target; got {paths}"
     )
@@ -3093,7 +3165,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
     very run did not attempt.
     """
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
@@ -3177,19 +3249,19 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
         f"{TOOL._report_name(report)!r}"
     )
     named = TOOL._new_report("audit")
-    named["config"] = {"run_id": "run5"}
-    assert TOOL._report_name(named).startswith("preflight_run5_"), (
+    named["config"] = {"run_id": "run6"}
+    assert TOOL._report_name(named).startswith("preflight_run6_"), (
         "…and when the config block IS populated the run_id must come from it, or the "
         f"fallback is a constant. got {TOOL._report_name(named)!r}"
     )
     out = tmp_path / "out"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", "5",
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
                        "--out-dir", str(out), "--timeout-sec", "60")
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
-        "preflight_run5_"), (
+        "preflight_run6_"), (
         "the rc-11 route populates `config` before `_apply_burst_override` raises, so the "
-        f"real artefact is run5-named; got {sorted(path.name for path in out.glob('*.json'))}"
+        f"real artefact is run6-named; got {sorted(path.name for path in out.glob('*.json'))}"
     )
 
 
@@ -3394,34 +3466,36 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     tuples partition the tree, every exemption carries a reason — and structure is preserved
     by moving the mint subject from one side to the other.**
 
-    Nothing anywhere pinned `configs/run5.yaml ∈ PRODUCTION_CONFIGS`. Moving it to
-    `EXEMPT_CONFIGS` with a written reason and promoting an armed smoke config in its place
-    keeps the partition exact, keeps every reason non-blank, and yields **gate 12 rc 0 with
-    run5 disarmed** — the run the operator is about to mint, unaudited, with every existing
-    assertion satisfied. The second half below drives exactly that swap so the literal pin
-    above is a measurement rather than a restatement.
+    Nothing anywhere pinned `configs/run6.yaml ∈ PRODUCTION_CONFIGS`. Moving it to
+    `EXEMPT_CONFIGS` with a written reason and promoting a disarmed-then-armed config in its
+    place keeps the partition exact, keeps every reason non-blank, and yields **gate 12 rc 0
+    with run6 disarmed** — the run the operator is about to mint, unaudited, with every
+    existing assertion satisfied. The second half below drives exactly that swap so the
+    literal pin above is a measurement rather than a restatement.
 
-    N-3's half: with `configs/dev_example.yaml` now EXEMPT, gate 12's ability to go red on the
-    REAL `configs/` tree rests on run5's membership here — the `--config` route is F-5's. Both
+    N-3's half: with `configs/dev_example.yaml` EXEMPT, gate 12's ability to go red on the
+    REAL `configs/` tree rests on run6's membership here — the `--config` route is F-5's. Both
     are now pinned, so neither is the sole witness.
+
+    R346(f) left ONE production config where there were two, so F-P2B's second by-name pin has
+    no subject any more and is replaced by the count: a tuple that grows back needs its new
+    member pinned here, and a tuple that empties is the silence N-1 is about.
     """
     exempt = {rel for rel, _reason in EXEMPT_CONFIGS}
-    assert "configs/run5.yaml" in PRODUCTION_CONFIGS, (
+    assert "configs/run6.yaml" in PRODUCTION_CONFIGS, (
         "the config the operator is about to mint must be bound BY NAME — absence from this "
         f"tuple is not a red gate, it is silence. got {PRODUCTION_CONFIGS}"
     )
-    assert "configs/run5.yaml" not in exempt
-    # F-P2B (R259): the SAME by-name pin for the second production config — N-1's escape is
-    # not specific to run5, and the shakedown config is the run actually being launched.
-    assert "configs/shakedown_20260807.yaml" in PRODUCTION_CONFIGS, (
-        "the armed shakedown config must be bound BY NAME for the same reason run5 is — "
-        f"exempting it is a red test, never a bookkeeping edit. got {PRODUCTION_CONFIGS}"
+    assert "configs/run6.yaml" not in exempt
+    assert PRODUCTION_CONFIGS == ("configs/run6.yaml",), (
+        "R346(f) took run5 and the shakedown config, so run6 is the whole production side. A "
+        "member added without a by-name pin of its own is F-P2B's escape reopened, and an "
+        f"empty tuple is N-1's silence. got {PRODUCTION_CONFIGS}"
     )
-    assert "configs/shakedown_20260807.yaml" not in exempt
 
     # …and the escape the pin exists to refuse, driven.
     root = _mini_tree(tmp_path)
-    production = root / "configs" / "run5.yaml"
+    production = root / "configs" / "run6.yaml"
     production.write_text(production.read_text().replace("actor_lag_abort_enabled: true",
                                                          "actor_lag_abort_enabled: false"))
     bare = _mini_audit(root)
@@ -3431,54 +3505,44 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
         f"{(bare.stdout + bare.stderr)[-2000:]}"
     )
 
-    # The swap, exactly as an unwitting editor would write it: run5 moves to EXEMPT with a
-    # written reason, and an ARMED smoke config takes its place on the production side.
-    smoke = root / "configs" / "smoke_gnn.yaml"
-    # WPAX Phase D: "an ARMED smoke config" now means armed on BOTH required rows — the
-    # draw-rate row joined the manifest, and a smoke config ships it `null` (R59). Arming it
-    # here keeps the ESCAPE this test demonstrates intact: if the promoted config were
-    # disarmed on either row the swap would fail the audit for its OWN reason and the escape
-    # would look closed by something other than the by-name pin. `min_step` is 1 because this
-    # config's `max_train_steps` is 2000 and the twin cross-validator binds it inside the run.
-    #
-    # R251 / ADJ-D22 adds a SECOND way to be disarmed and this fixture was already caught by
-    # it, which is worth stating rather than patching silently: `min_step: 1` satisfies the
-    # cross-field validator, but at the smoke config's minted `gate_interval: 1000` the third
-    # consecutive observation lands at step 3000 — PAST the whole 2000-step run — so the
-    # promoted config armed an abort that could never fire. The interval is rescaled here for
-    # the same reason `min_step` was: the swap must be legal in every sense, or the escape
-    # this test demonstrates is closed by the fixture rather than by the by-name pin.
-    #
-    # The interval rewrite is NEWLINE-ANCHORED and its occurrence count is asserted, the shape
-    # `test_an_interval_that_outruns_the_run_REDS_the_real_gate` uses: an unanchored
-    # `"gate_interval: 1000"` is a PREFIX of `gate_interval: 10000`, so a future re-scale of
-    # this smoke config would be silently corrupted to 1000 and the fixture would go on
-    # looking deliberate.
-    smoke_text = smoke.read_text()
+    # The swap, exactly as an unwitting editor would write it: run6 moves to EXEMPT with a
+    # written reason, and a config armed on both required rows takes its place.
+    smoke = root / "configs" / "dev_example.yaml"
+    # Armed on BOTH required rows, because a promoted config disarmed on either would fail the
+    # audit for its OWN reason and the escape would look closed by something other than the
+    # by-name pin. R251/ADJ-D22's second way to be disarmed is satisfied by arithmetic here
+    # rather than by a rescale: `min_step: 1` with `consec: 3` at this config's minted
+    # `gate_interval: 1000` reaches its third observation at step 3000, inside a 1,000,000-step
+    # run. The count assertion keeps that arithmetic honest — a re-mint that shortens the run
+    # or lengthens the interval must come back through this line.
+    smoke_text = smoke.read_text(encoding="utf-8")
     assert smoke_text.count("gate_interval: 1000\n") == 1, (
-        "the fixture rescales exactly one interval key; if the smoke config's gate_interval "
-        f"spelling moved, this rewrite is no longer the one the swap needs. got "
+        "the fixture reads exactly one interval key; if the promoted config's gate_interval "
+        f"spelling moved, the arming below is no longer the one the swap needs. got "
         f"{smoke_text.count('gate_interval: 1000')} loose match(es)"
+    )
+    promoted_length = load_config(smoke).train.max_train_steps
+    assert 1 + 3 * 1000 < promoted_length, (
+        "…and the armed abort must be able to FIRE inside the promoted run, or the swap is "
+        f"refused for R251's reason instead of passing to expose the escape. got "
+        f"{promoted_length}"
     )
     smoke.write_text(smoke_text
                      .replace("actor_lag_abort_enabled: false",
                               "actor_lag_abort_enabled: true")
-                     .replace("gate_interval: 1000\n", "gate_interval: 100\n")
                      .replace("draw_rate_abort: null",
                               "draw_rate_abort:\n"
                               "    threshold: 0.25\n"
                               "    min_step: 1\n"
                               "    N_pool_min: 50\n"
-                              "    consec: 3"))
-    # F-P2B: the editor's swap touches run5 ONLY — every other production member (the
-    # shakedown config) stays declared exactly as shipped, so the partition stays exact for
-    # the same reason it did when run5 was the sole member.
+                              "    consec: 3"), encoding="utf-8")
     monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS",
-                        ("configs/smoke_gnn.yaml",
-                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run5.yaml"]))
+                        ("configs/dev_example.yaml",
+                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run6.yaml"]))
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*[row for row in EXEMPT_CONFIGS if row[0] != "configs/smoke_gnn.yaml"],
-                         ("configs/run5.yaml", "moved with a written reason")))
+                        (*[row for row in EXEMPT_CONFIGS
+                           if row[0] != "configs/dev_example.yaml"],
+                         ("configs/run6.yaml", "moved with a written reason")))
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     assert TOOL._config_declaration_drift() == ([], [], []), (
         "the swap keeps the partition EXACT — which is why no structural check catches it"
@@ -3487,7 +3551,7 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
         "…and every exemption still carries a written reason, so that check does not catch "
         "it either"
     )
-    TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))  # green, run5 disarmed on disk
+    TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))  # green, run6 disarmed on disk
     assert "actor_lag_abort_enabled: false" in production.read_text(), (
         "THE ESCAPE: assertion (c) just passed while the config the operator is minting sits "
         "on disk with its hard abort off. The only thing standing between that state and this "
@@ -3610,8 +3674,8 @@ def test_a_config_in_BOTH_tuples_fails_the_gate(monkeypatch, tmp_path) -> None:
     root = _mini_tree(tmp_path)
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*EXEMPT_CONFIGS, ("configs/run5.yaml", "excused as well as audited")))
-    assert TOOL._config_declaration_drift()[2] == ["configs/run5.yaml"], (
+                        (*EXEMPT_CONFIGS, ("configs/run6.yaml", "excused as well as audited")))
+    assert TOOL._config_declaration_drift()[2] == ["configs/run6.yaml"], (
         "a config in both tuples must be reported as OVERLAPPING"
     )
     with pytest.raises(TOOL.PreflightManifestError) as caught:
@@ -3692,7 +3756,7 @@ def test_both_arms_of_the_config_path_resolver_are_live(monkeypatch, tmp_path) -
     assert TOOL._resolve_config_path("local.yaml") == local.resolve(), (
         "the cwd-relative arm: a config beside the operator, which REPO_ROOT cannot find"
     )
-    assert TOOL._resolve_config_path("configs/run5.yaml") == RUN5.resolve(), (
+    assert TOOL._resolve_config_path("configs/run6.yaml") == RUN5.resolve(), (
         "the REPO_ROOT fallback arm: a repo-relative path from a foreign cwd, which the "
         "cwd-relative arm cannot find"
     )
@@ -3834,7 +3898,7 @@ def test_the_watchdog_reason_is_DERIVED_from_what_the_run_actually_READ(
 _SCAN_CHILD = (
     "import json, sys\n"
     "from pathlib import Path\n"
-    "out, mode = Path(sys.argv[1]), sys.argv[2]\n"
+    "out, mode, run_id = Path(sys.argv[1]), sys.argv[2], sys.argv[3]\n"
     "if mode != 'nologs':\n"
     "    logs = out / 'logs'\n"
     "    logs.mkdir(parents=True, exist_ok=True)\n"
@@ -3842,8 +3906,8 @@ _SCAN_CHILD = (
     "              'code': 42}] if mode == 'fired' else [])\n"
     "    rows.append({'event': 'actor_lag_sample', 'learner_step': 1,\n"
     "                 'actor_ckpt_step': 0, 'lag_steps': 1})\n"
-    "    (logs / 'events_run5_seg0000.jsonl').write_text(\n"
-    "        ''.join(json.dumps(row) + chr(10) for row in rows))\n"
+    "    (logs / ('events_' + run_id + '_seg0000.jsonl')).write_text(\n"
+    "        ''.join(json.dumps(row) + chr(10) for row in rows), encoding='utf-8')\n"
     "raise SystemExit(42)\n"
 )
 
@@ -3875,7 +3939,12 @@ def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_e
     and the stub child is a real process that writes a real JSONL segment through the real
     filename convention. `_run_preflight` itself is unmodified and unaware: it does its own
     `_resolve_config_path`, `_load`, `_audit_manifest_and_configs` and
-    `_apply_burst_override` on the shipping `configs/run5.yaml`.
+    `_apply_burst_override` on the target. That target is the MINTED CPU TWIN and not the
+    shipping `configs/run6.yaml`: R347(d)'s START guard refuses a cuda-declaring config on a
+    cpu torch BEFORE `_run_child`, and this row's subject is what happens AFTER the child, so
+    it gets past the guard on the guard's own terms rather than by being exempted from it.
+    The stub child is told the twin's `run_id`, because `_read_segment` scopes its scan to
+    the booted run and a segment named for some other run is invisible to it.
 
     The assertion is the BICONDITIONAL, not the sentence alone: the parenthetical and
     `report["events"]["segments"]` are two views of one scan, so a mutation that changes what
@@ -3889,10 +3958,13 @@ def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_e
     forced to `True` also fails: `fired[-1]` becomes the trailing row, which has no `reason`.
     """
     out_dir = tmp_path / "out"
+    target = _mint_run5_cpu_twin(tmp_path)
+    run_id = load_config(target).run_id
     monkeypatch.setattr(TOOL, "_child_argv",
-                        lambda args: [sys.executable, "-c", _SCAN_CHILD, str(out_dir), mode])
+                        lambda args: [sys.executable, "-c", _SCAN_CHILD, str(out_dir), mode,
+                                      run_id])
     report = TOOL._new_report("preflight")
-    args = SimpleNamespace(config=str(RUN5), burst_steps=_RUN5_BURST, out_dir=str(out_dir),
+    args = SimpleNamespace(config=str(target), burst_steps=_RUN5_BURST, out_dir=str(out_dir),
                            timeout_sec=120.0, device="cpu")
     with pytest.raises(TOOL.PreflightWatchdogFiredError) as caught:
         TOOL._run_preflight(args, report, out_dir)
@@ -4239,7 +4311,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
     publish `tier: sync_lag` for a run that never started.
     """
     out_dir = tmp_path / "refused"
-    result = _run_tool("--config", "configs/run5.yaml", "--burst-steps", str(_RUN5_BURST - 1),
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_RUN5_BURST - 1),
                        "--out-dir", str(out_dir), "--timeout-sec", "60")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
@@ -4273,7 +4345,7 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
 
     RE-POINTED by R130 onto the minted CPU twin of run5. The tier arithmetic is UNCHANGED by
     the move and that is checkable rather than asserted: the twin differs from
-    `configs/run5.yaml` in exactly `run_id` and `train.device` (`_mint_run5_cpu_twin`), and
+    `configs/run6.yaml` in exactly `run_id` and `train.device` (`_mint_run5_cpu_twin`), and
     none of the three floor rows below is either of those — `_RUN5_BURST` is still run5's own
     floor, carried through the twin's identical `train.draw_rate_abort` block.
     """
@@ -4340,7 +4412,7 @@ def test_a_production_config_with_the_terminal_eval_off_fails_gate_12(tmp_path) 
         f"{(healthy.stdout + healthy.stderr)[-2000:]}"
     )
 
-    run5_copy = root / "configs" / "run5.yaml"
+    run5_copy = root / "configs" / "run6.yaml"
     document = yaml.safe_load(run5_copy.read_text(encoding="utf-8"))
     assert document["train"]["terminal_eval_enabled"] is True, (
         "premise: run5 mints the terminal eval ON, which is what makes the row REQUIRED "

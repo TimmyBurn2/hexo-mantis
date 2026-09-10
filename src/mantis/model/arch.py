@@ -7,7 +7,7 @@
 """Declared model-arch dataclasses + the spec/config → arch adapter.
 
 Arch metadata travels on these frozen dataclasses (repo_design §3): a caller
-retains the declared `CnnArch`/`GnnArch` and hands it to `build_net`; nobody
+retains the declared `GnnArch` and hands it to `build_net`; nobody
 infers arch by reading attributes off a live `nn.Module` (that sniff — the old
 `model_representation` — is DELETED and grep-gate-banned; see `tests/model/
 test_arch_ban.py`).
@@ -29,7 +29,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
 
-Representation = Literal["grid", "graph"]
+Representation = Literal["graph"]
 
 
 class RepresentationMismatch(ValueError):
@@ -43,22 +43,6 @@ class RepresentationMismatch(ValueError):
 
     def __init__(self, msg: str) -> None:
         super().__init__(f"RepresentationMismatch: {msg}")
-
-
-@dataclass(frozen=True)
-class CnnArch:
-    """Declared grid (CNN) architecture. `build_net` constructs `HexTacToeNet`
-    from this; the fields reproduce the old kwargs ctor byte-for-byte."""
-
-    board_size: int
-    in_channels: int
-    filters: int = 128
-    res_blocks: int = 12
-    se_reduction_ratio: int = 4
-    value_head_type: Literal["scalar", "dist65"] = "scalar"
-    n_value_bins: int = 65
-    input_channels: tuple[int, ...] | None = None
-    representation: Literal["grid"] = "grid"   # closed tag
 
 
 @dataclass(frozen=True)
@@ -106,7 +90,7 @@ class GnnArchV2:
     representation: Literal["graph"] = "graph"
 
 
-ModelArch = CnnArch | GnnArch | GnnArchV2
+ModelArch = GnnArch | GnnArchV2
 
 
 class UnknownArchKind(ValueError):
@@ -126,7 +110,7 @@ class UnknownArchKind(ValueError):
 #: owner. `checkpoints` imports this — the import direction the repo DAG requires anyway,
 #: since `mantis.model` may not import `mantis.train`.
 ARCH_KINDS: dict[str, type] = {
-    "CnnArch": CnnArch,
+
     "GnnArch": GnnArch,
     "GnnArchV2": GnnArchV2,
 }
@@ -135,7 +119,6 @@ ARCH_KINDS: dict[str, type] = {
 #: missing half of encoder/arch identity, stated for the arch side. `graph` admits TWO kinds
 #: since GnnNetV2 landed, which is exactly why a selector has to exist.
 ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
-    "grid": ("CnnArch",),
     "graph": ("GnnArch", "GnnArchV2"),
 }
 
@@ -159,7 +142,7 @@ ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
 #: it: it is the statement "this config predates the row", and what such a config has always
 #: built is the incumbent, pinned against the real minted files by
 #: `tests/model/conformance/test_arch_selector_makes_v2_selectable.py`.
-INCUMBENT_ARCH_KIND: dict[str, str] = {"grid": "CnnArch", "graph": "GnnArch"}
+INCUMBENT_ARCH_KIND: dict[str, str] = {"graph": "GnnArch"}
 
 #: THE ONE CONFIG ROW that names an arch kind — dotted, as `RunConfig` spells it. Read by
 #: `declared_arch_kind` and nowhere else, so the row has exactly one reader to change.
@@ -178,16 +161,6 @@ def declared_arch_kind(config: Mapping[str, Any]) -> str | None:
     if not isinstance(identity, Mapping):
         return None
     return identity.get("arch_kind")
-
-# Grid hparam config keys → CnnArch field names (config override wins; absent →
-# the dataclass field default, which is the sole default authority — R1).
-_GRID_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
-    ("filters", "filters"),
-    ("res_blocks", "res_blocks"),
-    ("se_reduction_ratio", "se_reduction_ratio"),
-    ("value_head_type", "value_head_type"),
-    ("n_value_bins", "n_value_bins"),
-)
 
 # Graph hparam config keys → GnnArch field names.
 _GRAPH_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
@@ -283,19 +256,6 @@ def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> Mode
             f"{sorted(admitted)}. The pairing rule is `ARCH_KINDS_BY_REPRESENTATION` and it is "
             "closed: an arch and an encoding that disagree do not silently build."
         )
-    if rep == "grid":
-        kw: dict[str, Any] = {}
-        for cfg_key, field in _GRID_CONFIG_KEYS:
-            if cfg_key in config and config[cfg_key] is not None:
-                kw[field] = config[cfg_key]
-        ic = config.get("input_channels")
-        if ic is not None:
-            kw["input_channels"] = tuple(int(c) for c in ic)
-        return CnnArch(
-            board_size=int(spec.board_size),
-            in_channels=int(spec.n_planes),
-            **kw,
-        )
     if rep == "graph":  # noqa: RET503 — the closed set is exhausted by the guards above
         node_feat_dim = getattr(spec, "node_feat_dim", None)
         edge_feat_dim = getattr(spec, "edge_feat_dim", None)
@@ -310,7 +270,7 @@ def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> Mode
                 f"representation='graph' (encoding {getattr(spec, 'name', '?')!r}) "
                 f"only ships a dist65 value head; got value_head_type={declared_vht!r}."
             )
-        kw = {}
+        kw: dict[str, Any] = {}
         for cfg_key, field in _GRAPH_CONFIG_KEYS:
             if cfg_key in config and config[cfg_key] is not None:
                 kw[field] = config[cfg_key]
@@ -320,5 +280,5 @@ def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> Mode
         return cls(in_dim=int(node_feat_dim), edge_dim=int(edge_feat_dim), **kw)
     raise RepresentationMismatch(
         f"spec.representation={rep!r} for encoding "
-        f"{getattr(spec, 'name', '?')!r} — expected 'grid' or 'graph'."
+        f"{getattr(spec, 'name', '?')!r} — expected 'graph'."
     )

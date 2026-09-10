@@ -23,7 +23,7 @@ from dataclasses import dataclass
 import pytest
 
 from mantis.encoding import EncodingRegistryError, all_specs, lookup
-from mantis.model import CnnArch, GnnArch, RepresentationMismatch
+from mantis.model import GnnArch, RepresentationMismatch
 from mantis.selfplay.hparams import is_graph_representation, resolve_pool_encoding
 
 # The v8 family: KILLed, and its guard died with the registry entry (DESIGN §e).
@@ -55,45 +55,11 @@ def test_unregistered_encoding_loud(name: str) -> None:
 
     message = str(exc.value)
     assert name in message, "the rejected name must appear in the error"
-    for registered in ("v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"):
+    for registered in (spec.name for spec in all_specs()):
         assert registered in message, (
             f"the error must name the registered set (missing {registered!r}) — an "
             "operator reading it should not have to grep the registry"
         )
-
-
-# ── D-03 / D-04 — the arch ↔ encoding canvas cross-check ─────────────────────────
-@pytest.mark.parametrize(
-    "encoding,arch_board,expected_spec_board",
-    [("v6", 25, 19), ("v6w25", 19, 25)],
-)
-def test_arch_board_size_mismatch_raises(
-    encoding: str, arch_board: int, expected_spec_board: int
-) -> None:
-    """D-03 — PASS iff a `CnnArch` whose declared board size disagrees with the resolved
-    encoding raises `ValueError` citing BOTH numbers, before any Rust runner exists.
-    FAIL = a mis-paired checkpoint and config route planes through wrong-shaped buffers
-    and produce silently-wrong training data instead of a crash."""
-    arch = CnnArch(board_size=arch_board, in_channels=8, filters=16, res_blocks=1)
-    with pytest.raises(ValueError) as exc:
-        resolve_pool_encoding({"encoding": encoding}, arch=arch)
-
-    message = str(exc.value)
-    assert str(arch_board) in message and str(expected_spec_board) in message, (
-        f"both sizes must be in the message, got: {message}"
-    )
-    assert encoding in message
-
-
-@pytest.mark.parametrize("encoding,arch_board", [("v6", 19), ("v6w25", 25)])
-def test_arch_board_size_match_passes(encoding: str, arch_board: int) -> None:
-    """D-04 — PASS iff a matching declared board size resolves cleanly to the captured
-    canvas geometry. FAIL = the cross-check rejects a correct pairing (which would make
-    the guard unusable and invite its removal)."""
-    arch = CnnArch(board_size=arch_board, in_channels=8, filters=16, res_blocks=1)
-    resolved = resolve_pool_encoding({"encoding": encoding}, arch=arch)
-    assert resolved.board_size == arch_board
-    assert resolved.encoding_name == encoding
 
 
 def test_graph_arch_has_no_board_size_and_passes_vacuously() -> None:
@@ -114,25 +80,20 @@ def test_graph_arch_has_no_board_size_and_passes_vacuously() -> None:
 
 # ── D-05 — the grid/graph classification covers the registry EXACTLY ─────────────
 def test_every_registered_encoding_classified() -> None:
-    """D-05 — PASS iff every spec in the registry classifies into exactly one of the two
-    arms, and both arms are non-empty. FAIL = a registered encoding the pool can neither
-    dispatch to the dense path nor the graph path — i.e. a spec that would reach a
-    default arm. There is no default arm, so this is the test that keeps the closed set
-    honest as the registry grows."""
+    """D-05 — PASS iff every spec in the registry classifies onto the graph arm, and the arm
+    is non-empty. FAIL = a registered encoding the pool cannot dispatch — i.e. a spec that
+    would reach a default arm. There is no default arm, so this is the test that keeps the
+    closed set honest as the registry grows. The dense arm it used to partition against went
+    with the grid path (R346(f)); what survives is that no spec falls through."""
     specs = list(all_specs())
     assert specs, "the registry must not be empty"
 
-    graph, grid = [], []
-    for spec in specs:
-        (graph if is_graph_representation(spec) else grid).append(spec.name)
+    graph = [spec.name for spec in specs if is_graph_representation(spec)]
 
-    assert len(graph) + len(grid) == len(specs), "a spec was classified twice or not at all"
-    assert grid, "no grid encoding classified — the dense arm would be dead"
-    assert graph, "no graph encoding classified — the graph arm would be dead"
-    assert not set(graph) & set(grid)
+    assert len(graph) == len(specs), "a spec did not classify onto the graph arm"
 
 
-@pytest.mark.parametrize("name", ["v6", "v6w25", "v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8"])
+@pytest.mark.parametrize("name", [spec.name for spec in all_specs()])
 def test_pool_resolve_classification_matches_the_spec_representation(name: str) -> None:
     """D-05 (agreement arm) — PASS iff the pool's classification agrees with the spec's
     own `representation` field for every registered encoding. FAIL = the pool dispatches

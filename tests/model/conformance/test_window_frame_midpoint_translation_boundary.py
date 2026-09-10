@@ -94,7 +94,6 @@ import pytest
 from _corpus import (
     CLASS_EVEN,
     FRAME_DENSE_BOARD,
-    FRAME_DENSE_CLUSTER,
     FRAME_GRAPH,
     SIGN_CLASSES,
     UNIT_AXIAL,
@@ -103,7 +102,6 @@ from _corpus import (
     bbox_sums,
     board_frame_centre,
     build_board,
-    cluster_frame_centre,
     graph_frame_centre,
     graph_wire_for,
     require_corpus_member,
@@ -160,7 +158,9 @@ def frames_for(spec) -> tuple[str, ...]:
     reduces three frames to two is invisible; the derived matrix below is what makes it neither
     invisible nor red.
     """
-    dense = (FRAME_DENSE_CLUSTER, FRAME_DENSE_BOARD)
+    # The CLUSTER frame went with the K-cluster window (R346(f)); the BOARD frame
+    # (`Board::window_center`) survives and is what the graph frame is compared against.
+    dense = (FRAME_DENSE_BOARD,)
     return dense + (FRAME_GRAPH,) if spec.is_graph else dense
 
 
@@ -171,8 +171,6 @@ def derived_frame_matrix(specs) -> frozenset[tuple[str, str]]:
 def read_frame(enc: str, frame: str, board) -> tuple[int, int]:
     """One frame's origin, read off the engine. Refuses a degenerate member at the point of use."""
     require_corpus_member(board, f"{enc}/{frame}")
-    if frame == FRAME_DENSE_CLUSTER:
-        return cluster_frame_centre(board)
     if frame == FRAME_DENSE_BOARD:
         return board_frame_centre(board)
     if frame == FRAME_GRAPH:
@@ -207,22 +205,22 @@ def require_every_declared_frame_executed(specs, executed: frozenset) -> int:
     assertion silently stops running. That is a comparison whose two sides come from one
     source — the failure class this suite exists to refuse, arriving inside it.
 
-    This side does not call `frames_for`. It states the claim where it is asserted: the two
-    dense frames exist for every registered encoding, and the graph frame exists exactly for
-    the encodings whose spec says `is_graph` (`HexgBuffer::new` refuses a grid encoding by
-    construction, `crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`).
+    This side does not call `frames_for`. It states the claim where it is asserted: the board
+    frame exists for every registered encoding, and the graph frame exists exactly for the
+    encodings whose spec says `is_graph` (`HexgBuffer::new` refuses a grid encoding by
+    construction, `crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`). The CLUSTER frame
+    was the third and went with the K-cluster window (R346(f)).
     """
     missing: list[tuple[str, str]] = []
     for spec in specs:
-        for frame in (FRAME_DENSE_CLUSTER, FRAME_DENSE_BOARD):
-            if (spec.name, frame) not in executed:
-                missing.append((spec.name, frame))
+        if (spec.name, FRAME_DENSE_BOARD) not in executed:
+            missing.append((spec.name, FRAME_DENSE_BOARD))
         if spec.is_graph and (spec.name, FRAME_GRAPH) not in executed:
             missing.append((spec.name, FRAME_GRAPH))
     if missing:
         raise FrameMatrixMismatch(
             f"frames declared by the specs but never executed: {sorted(missing)}. Every "
-            "registered encoding carries both dense frames and every is_graph encoding carries "
+            "registered encoding carries the board frame and every is_graph encoding carries "
             "the graph frame; a frame that no assertion reached is reported by pytest as PASSED."
         )
     return len(executed)
@@ -346,14 +344,14 @@ def test_the_comparator_distinguishes_floor_from_truncation_in_BOTH_directions()
 
 
 def test_a_STONELESS_member_is_refused_rather_than_compared():
-    """PB-2. `Board::window_center` returns a constant (0, 0) with no stones and
-    `get_cluster_views` pushes (0, 0) with no clusters — both translation-invariant, both
-    disagreeing with the predicate. The exclusion is deliberate and named, not incidental."""
+    """PB-2. `Board::window_center` returns a constant (0, 0) with no stones —
+    translation-invariant, and disagreeing with the predicate. The exclusion is deliberate and
+    named, not incidental."""
     spec = roster()[0]
     from mantis._engine import Board
 
     with pytest.raises(DegenerateCorpusMember):
-        read_frame(spec.name, FRAME_DENSE_CLUSTER, Board.with_encoding_name(spec.name))
+        read_frame(spec.name, FRAME_DENSE_BOARD, Board.with_encoding_name(spec.name))
 
 
 def test_an_EMPTY_sign_class_is_refused():
@@ -583,10 +581,9 @@ def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[t
 #: below, which the old matcher could not see at all — that is the check that distinguishes a
 #: renderer change from a tree change, and it was made before re-pinning.
 _THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, str, int], ...] = (
-    # dense, cluster frame — the small-cluster centroid branch AND the massive-cluster
-    # no-anchor fallback, one q-midpoint and one r-midpoint each: TWO of each in this file.
-    ("mantis-core/src/board/state/cluster.rs", "( min_q + max_q ) / 2", 2),
-    ("mantis-core/src/board/state/cluster.rs", "( min_r + max_r ) / 2", 2),
+    # The two `cluster.rs` rows — the small-cluster centroid branch and the massive-cluster
+    # no-anchor fallback, one q-midpoint and one r-midpoint each — went with the file when
+    # R346(f) deleted the K-cluster window.
     # NOT A WINDOW ORIGIN — `hex_distance`'s axial halving. It is in the pin because the census
     # counts midpoint CONSTRUCTIONS and cannot tell an origin from an unrelated halving; that
     # judgement is this prose column, which the assertion does not read. It was invisible to

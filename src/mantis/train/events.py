@@ -84,93 +84,8 @@ class PoolTelemetryLike(Protocol):
 # warn-log behaviour for a duck-typed probe a caller may still inject.
 EARLY_GAME_ENTROPY_WARN_THRESHOLD: float = 4.5
 
-#: The two derived means R249 drops at zero samples (ADJ-D32). Named FIRST so the wider
-#: tuples below are built from this one — the field names have a single authority here.
-_CLUSTER_DERIVED_MEAN_KEYS = ("cluster_value_std_mean", "cluster_policy_disagreement_mean")
-# ADJ-D32 / R250: the three fields whose PRODUCER is the dense search arm's per-leaf
-# cluster-variance accumulation. On a graph representation the accumulators are never
-# reached at all — `search_drive.rs` returns into `infer_and_expand_graph` before any
-# variance code runs, and the `ClusterVarianceAtomics` are not even a parameter of that
-# function — so on that arm these keys have NO producer and are ABSENT, not None. The
-# sample COUNT joins the two means here but is NOT one of them: it is a raw counter,
-# truthful at 0, and it is what tells a reader the means are missing because nothing was
-# measured rather than because the field was renamed.
-_CLUSTER_PRODUCER_KEYS = (*_CLUSTER_DERIVED_MEAN_KEYS, "cluster_variance_sample_count")
-# CONFRES S2: PUCT-descent-specific cluster stats — always-keyed (value under PUCT, None under
-# Gumbel) so the iteration_complete schema is regime-STABLE. `mcts_root_concentration` leads
-# the tuple and is NOT a cluster field: it is accumulated once per search in `play_one_move`,
-# path-independently, so it survives the R250 graph drop.
-_REGIME_GATED_CLUSTER_STAT_KEYS = ("mcts_root_concentration", *_CLUSTER_PRODUCER_KEYS)
-
-
-def is_graph_run(config: Mapping[str, Any]) -> bool:
-    """Whether the run's DECLARED representation is `graph` (R250's absence condition).
-
-    Reads `identity.representation` off the config the builder already holds — the
-    operator's declaration, which `IdentityConfig` cross-checks against the encoding's
-    registry representation at load time, so it cannot disagree with the spec the engine
-    resolved. No new config key, no resolver call: a builder that raised
-    `MissingEncodingError` mid-emit would take the run down over a telemetry field.
-
-    A config that declares nothing reads as non-graph — the arm where these fields DO have
-    a producer, so an undeclared config gets the zero-count rules of R249 rather than
-    silent absence, and absence never hides a live instrument.
-    """
-    identity = config.get("identity")
-    representation = identity.get("representation") if isinstance(identity, Mapping) else None
-    return representation == "graph"
-
-
-def regime_gated_cluster_stats(
-    rstats: Any, puct_regime: bool, *, graph_run: bool
-) -> dict[str, Any]:
-    """The PUCT-descent-specific cluster stats: value under PUCT, `None` under Gumbel
-    (CONFRES S2, schema-stable), MINUS the fields that have nothing to report.
-
-    Two subtractions, both of them the ADJ-D32 fix:
-
-      R250 `graph_run` — the three `_CLUSTER_PRODUCER_KEYS` are omitted ENTIRELY. Their
-           producer does not exist on the graph arm, and a keyed `None` there would still
-           be read as "measured, empty" by anything that JSON-decodes the stream. This
-           subtraction is about the ARM, so it applies whatever the snapshot happens to
-           read — a graph run reporting cluster numbers is an anomaly to fix at the
-           source, not to launder into the event channel.
-      R249 zero samples — a derived mean arrives as `None` from the bridge getter when
-           `cluster_variance_sample_count` is 0, and a `None` mean is DROPPED rather than
-           published. Per field, so a live reading beside a missing one still publishes.
-           The count itself stays: it is the evidence for the drop.
-    """
-    if graph_run:
-        # `mcts_root_concentration` is live on the graph path and keeps the S2 regime gate.
-        return {"mcts_root_concentration":
-                rstats.mcts_mean_root_concentration if puct_regime else None}
-    if not puct_regime:
-        return {k: None for k in _REGIME_GATED_CLUSTER_STAT_KEYS}
-    stats: dict[str, Any] = {
-        "mcts_root_concentration": rstats.mcts_mean_root_concentration,
-        "cluster_variance_sample_count": rstats.cluster_variance_sample_count,
-    }
-    for key in _CLUSTER_DERIVED_MEAN_KEYS:
-        value = getattr(rstats, key)
-        if value is not None:
-            stats[key] = value
-    return stats
-
-
-#: The `iteration_complete` key the K histogram travels under (item 10(b)). Named once so
-#: the emitter, the absence rule and the tests share ONE authority for the spelling.
-K_CLUSTER_HISTOGRAM_KEY = "k_cluster_histogram"
-
-#: The `iteration_complete` key the R256 forced-win-drop counter travels under. One
-#: spelling authority, exactly as for the K histogram above.
-UNCOVERED_FORCED_WIN_KEY = "uncovered_forced_win"
-
-#: The `training_step` key the R266 compact/spread symmetry-draw counter travels under.
-#: One spelling authority, exactly as for the two keys above.
-SYMMETRY_DRAW_KEY = "symmetry_draws"
-
 #: The `trainer_step` key R347(a)'s per-row tail mass alpha travels under. One spelling
-#: authority, exactly as for the three keys above.
+#: authority for the key.
 GUMBEL_TAIL_MASS_KEY = "gumbel_tail_mass"
 
 
@@ -220,134 +135,24 @@ def tail_mass_block(values: Any) -> dict[str, Any]:
     }}
 
 
-def symmetry_draw_block(buffer: Any, *, graph_run: bool) -> dict[str, Any]:
-    """R266/F-P1/N1 (fdc6f09/R245(c)) — the LAW-18 fire-rate log for the per-record
-    compact/spread symmetry gate: `ReplayBuffer::sample_batch_core` /
-    `sample_batch_with_pos_core` draws the FULL 12-element D6 group for a record that is
-    window-lossless under every element, and restricts to `sym::WINDOW_PRESERVING_SYMS`
-    (4 elements) for one that is not — a silent restriction otherwise, with no in-run
-    reading of how often each arm actually fires.
+def regime_gated_cluster_stats(rstats: Any, puct_regime: bool) -> dict[str, Any]:
+    """The PUCT-descent-specific root-concentration stat: a value under PUCT, `None` under
+    Gumbel (CONFRES S2, so the `iteration_complete` schema is regime-STABLE).
 
-    DENSE-ONLY mechanism, the K-histogram's gate (item 10(b)) NOT inverted: the graph arm
-    has no window (`sym.rs::WINDOW_PRESERVING_SYMS`'s own doc — "restricting it would
-    discard 8/12 of the graph arm's augmentation for no correctness gain"), so it keeps
-    the full group UNCONDITIONALLY and this counter has no subject there. Keyed on the
-    SAME `is_graph_run` authority as the other `graph_run`-gated blocks so two
-    subtractions on the same grounds cannot disagree about the arm.
+    The three cluster-variance fields it also carried are DELETED with the dense search arm
+    that produced them (R346(f)): `mcts_root_concentration` is accumulated once per search in
+    `play_one_move`, path-independently, which is why it is the one that survives.
 
-    Producer: `ReplayBuffer.compact_draws` / `.spread_draws` (the bridge getters over the
-    Rust atomics `sample.rs::record_symmetry_draw` ticks — the ONE call site both sample
-    cores route through). Ticked ONLY on an `augment=True` draw: an unaugmented draw never
-    consults the `compact` flag at all (`sym_idx` is unconditionally 0), so counting it
-    would fabricate a reading for a draw that never exercised the lever.
+    Args:
+        rstats: the runner-stats snapshot.
+        puct_regime: whether the run's search kind is PUCT.
 
-    Three arms:
-      GRAPH run — the key is OMITTED (the mechanism does not exist on this arm; a keyed
-        `None` or a `{..: 0}` would both read as "measured" to a stream consumer).
-      NO PRODUCER — keyed `None` (an engine build predating the getters; the
-        event_manifest unproduced-field convention).
-      DENSE run — cumulative `{"compact", "spread", "compact_fraction"}`: the two raw
-        counts (truthful at 0 — the R249 distinction) and the fraction compact, `None`
-        when neither arm has fired yet (a rate over zero samples is not a measurement,
-        R249/b349ec4).
+    Returns:
+        The one-key block.
     """
-    if graph_run:
-        return {}
-    compact = getattr(buffer, "compact_draws", None)
-    if compact is None:
-        return {SYMMETRY_DRAW_KEY: None}
-    spread = int(buffer.spread_draws)
-    compact = int(compact)
-    total = compact + spread
-    return {SYMMETRY_DRAW_KEY: {
-        "compact": compact, "spread": spread,
-        "compact_fraction": (compact / total) if total else None,
-    }}
-
-
-def uncovered_forced_win_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
-    """R256/ADJ-D37 — the LAW-18 fire-rate log for the forced-win coverage clip.
-
-    The mechanism (`records::apply_forced_win_one_hot_ls_counted`, serving both the O1
-    forced-win arm and the solver hook) refuses a PROVEN win when the K-cluster WINDOW
-    criterion says its cell is uncovered — a pure target loss nothing witnessed until this
-    counter. R250 first ruled the instrument onto the dense path by description; measurement
-    inverted the premise (the LS mechanism is TRUE on graph, FALSE on the shipped dense
-    grids), and R256 re-derived the mapping from code: the instrument attaches to the
-    mechanism's measured live path, so this block is the K histogram's gate INVERTED —
-    present on GRAPH, ABSENT on dense — keyed on the same `is_graph_run` authority so two
-    subtractions on the same grounds cannot disagree about the arm.
-
-    Disclosed, not hidden: `v6_live2_ls` is itself an LS encoding, so its Rust counter can
-    tick while this emission stays graph-scoped — that is R256's explicit landing ("
-    uncovered_forced_win lands on the graph path"), and the dense-LS stream gap is a
-    recorded adjudication-queue disclosure, not an oversight in this gate.
-
-    Three arms, mirroring 10(b):
-      DENSE run — the key is OMITTED (publishing here is the exact D37 arm-(i) trap: a
-        `{total: 0}` reading zero on arms whose drops a different mechanism owns).
-      NO PRODUCER — keyed `None` (an engine build predating the getter; the
-        event_manifest unproduced-field convention).
-      GRAPH run — cumulative `{"total", "per_position"}`: the raw count (truthful at 0 —
-        the R249 distinction; only a DERIVED rate over zero samples is fabrication) and
-        the rate over the snapshot's own cumulative `positions_generated`, `None` when no
-        position has been recorded yet.
-    """
-    if not graph_run:
-        return {}
-    total = getattr(rstats, UNCOVERED_FORCED_WIN_KEY, None)
-    if total is None:
-        return {UNCOVERED_FORCED_WIN_KEY: None}
-    positions = getattr(rstats, "positions_generated", None)
-    rate = None if not positions else total / positions
-    return {UNCOVERED_FORCED_WIN_KEY: {"total": total, "per_position": rate}}
-
-
-def k_cluster_histogram_block(rstats: Any, *, graph_run: bool) -> dict[str, Any]:
-    """The in-run K distribution — the LAW-18 fire-rate log for the K-cluster lever.
-
-    K (how many cluster views a recorded position expands into) is known ONLY at the dense
-    record path (`crates/mantis-selfplay/src/runner/record.rs::record_position`), and until
-    now a live run could not read it at all: an operator could see K_avg after the fact and
-    still not tell "K is 1 on every position, the multi-window lever is dead" from "K is
-    spread and the lever is doing work". A mean cannot separate those; the distribution can.
-
-    THREE arms, and the middle one is the point:
-
-      GRAPH run — the key is ABSENT, the same R250 subtraction the cluster block gets and
-        keyed on the same `is_graph_run` authority. `record_position_graph_dispatch` does
-        not take the histogram as a parameter at all, so the buckets on that arm are zero
-        for want of a producer, not because K was never 1..=8. Publishing those zeros would
-        state a distribution nothing measured — and a histogram of zeros is a far more
-        confident-looking fabrication than a scalar zero, because it has SHAPE.
-      NO PRODUCER — `None` (an engine build predating the getter). The event_manifest
-        unproduced-field convention governs: keyed, `None`, never a fabricated zero.
-      DENSE run with a producer — the bucket counts, labelled by the K each one counts.
-
-    The labels are DERIVED from the vector's own length (R192(e)): buckets `0..n-1` are
-    `K == i + 1` and the last is the guard for every K outside that range. Nothing here
-    restates the bucket count, so widening `K_CLUSTER_HISTOGRAM_BUCKETS` in Rust relabels
-    this payload correctly with no Python edit — and cannot leave a stale `">8"` behind.
-
-    Cumulative since pool start, like every other counter on this event. No separate
-    denominator is published because none is needed: the buckets SUM to the number of dense
-    `record_position` calls, so the distribution is self-normalising (LAW-03 — the unit is
-    RECORDED POSITIONS, not games and not plies).
-    """
-    if graph_run:
-        return {}
-    buckets = getattr(rstats, K_CLUSTER_HISTOGRAM_KEY, None)
-    if buckets is None:
-        return {K_CLUSTER_HISTOGRAM_KEY: None}
-    counts = list(buckets)
-    if not counts:
-        # A producer that reported NO buckets. Distinct from `None` (no producer) and
-        # published as the empty mapping rather than laundered into either — and, more to
-        # the point, a builder that raised here would take the run down over a telemetry
-        # field, which is exactly what `is_graph_run` refuses to risk one function up.
-        return {K_CLUSTER_HISTOGRAM_KEY: {}}
-    labels = [str(i + 1) for i in range(len(counts) - 1)] + [f">{len(counts) - 1}"]
-    return {K_CLUSTER_HISTOGRAM_KEY: dict(zip(labels, counts, strict=True))}
+    return {
+        "mcts_root_concentration": rstats.mcts_mean_root_concentration if puct_regime else None
+    }
 
 
 def emit_axis_distribution(
@@ -456,7 +261,6 @@ def emit_training_step_event(
     early_game_probe: Any | None = None,
     trainer_model: Any | None = None,
     solver_deltas: dict[str, Any] | None = None,
-    symmetry_draws: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Build + emit the `training_step` event (WP13-A §c.4) and RETURN its payload.
 
@@ -466,10 +270,6 @@ def emit_training_step_event(
     actually emitted, so a rule can never fire on a shape the event stream does not carry
     (LAW-07 — the alert and its producer are the same object). Stays `log_interval`-gated
     at the coordinator call site (R210: "training_step alerting stays gated").
-
-    `symmetry_draws` (R266/F-P1/N1) — the caller's pre-built `symmetry_draw_block(...)`,
-    keyed in exactly like `solver_deltas` and unrelated to it (a SEPARATE debt, its own
-    parameter rather than an overload of a legacy, byte-frozen-elsewhere one).
     """
     policy_entropy = measured(loss_info, "policy_entropy")
     value_accuracy = measured(loss_info, "value_accuracy")
@@ -524,8 +324,6 @@ def emit_training_step_event(
         training_step_event.update(probe_metrics)
     if solver_deltas:
         training_step_event.update(solver_deltas)
-    if symmetry_draws:
-        training_step_event.update(symmetry_draws)
     emit_via(sink, training_step_event)
     return training_step_event
 
@@ -615,23 +413,7 @@ def emit_iteration_complete_event(
         # boundary's readings (`StepCoordinator._target_integrity_report`).
         "target_integrity": dict(target_integrity),
     }
-    # ADJ-D32 (R249 + R250), item 10(b) and R256: the representation-gated blocks below
-    # are the only parts of this payload whose keys can be absent. `config` is the
-    # coordinator's `full_config` — the same declaration the engine's encoding was
-    # resolved from — so the graph/dense question is answered from the run's own identity,
-    # never from a reading that has no producer behind it. ONE `is_graph_run` call feeds
-    # every such block, deliberately: instruments subtracted on the same R250 grounds must
-    # not be able to disagree about which arm the run is on.
-    _graph_run = is_graph_run(config)
-    iteration_complete_event.update(
-        regime_gated_cluster_stats(rstats, _puct_regime, graph_run=_graph_run)
-    )
-    iteration_complete_event.update(
-        k_cluster_histogram_block(rstats, graph_run=_graph_run)
-    )
-    iteration_complete_event.update(
-        uncovered_forced_win_block(rstats, graph_run=_graph_run)
-    )
+    iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
     emit_via(sink, iteration_complete_event)
 
 

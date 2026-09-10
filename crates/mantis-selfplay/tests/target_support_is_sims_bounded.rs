@@ -36,8 +36,9 @@
 //! sampled candidates' exact entries plus one tail mass, so its width is the minted
 //! `selfplay.gumbel_m` and NOT the sims regime. The two row kinds therefore have two
 //! bounds, each derived by the same one authority from the kind the run declared, and this
-//! file measures the PUCT one. The grid path records fixed-width dense rows and has no
-//! variable-length visit vec at all, so the row-kind question does not arise there.
+//! file measures the PUCT one. (The grid path used to sit outside the question entirely —
+//! it recorded fixed-width dense rows with no variable-length visit vec — and went with the
+//! dense recorder at R346(f), so both bounds now describe the only path there is.)
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -105,8 +106,6 @@ fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
         random_opening_plies: 0,
         dirichlet_enabled: true,
         search_kind: kind,
-        solver_enabled: false,
-        forced_win_policy_enabled: false,
         encoding_name: Some(encoding.to_string()),
         ..Default::default()
     })

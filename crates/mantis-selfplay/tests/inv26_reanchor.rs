@@ -12,9 +12,10 @@
 //! reliance on the unseeded worker RNG avoiding a lucky win.
 //!
 //! The drain tuple exposes `terminal_reason` but NOT the per-row `outcome`, so the
-//! §178 VALUE branch (`outcome == ply_cap_value`) is pinned by the focused
-//! `finalize_game` unit test IN-SRC (`runner/finalize.rs`, mod
-//! `inv26_finalize_outcome_tests`) — the branch this drain-tuple oracle cannot see.
+//! §178 VALUE branch (`outcome == ply_cap_value`) is not visible here. Its in-src pin was
+//! `runner/finalize.rs`'s `inv26_finalize_outcome_tests`, which went with `finalize_game`
+//! at R346(f); `finalize_game_graph` is the surviving finalizer and
+//! `worker_output_pin.rs`'s g7 arm drives its outcome table.
 
 use std::time::{Duration, Instant};
 
@@ -35,7 +36,7 @@ fn random_only_runner(max_moves: usize, draw_reward: f32, ply_cap_value: f32) ->
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,
         random_opening_plies: max_moves as u32, // == max_moves → never MCTS
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some("gnn_axis_r8".to_string()),
         ..Default::default()
     })
     .expect("random-only runner must construct")

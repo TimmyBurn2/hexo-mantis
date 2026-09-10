@@ -35,18 +35,19 @@ from mantis.arena.match import GameRecord
 from mantis.arena.regime import RegimeKey
 from mantis.config.resolve.eval_posture import StrengthFloorSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.encoding import lookup
 from mantis.eval import worker
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT
 from mantis.eval.rounds import GateSpec, RoundSpec
 from mantis.eval.snapshot import write_model_snapshot
-from mantis.model import CnnArch, build_net
+from mantis.model import GnnArch, build_net
 
 #: The grid encoding and the one shipped book — a real registry row and a real book, so the
 #: round this file drives is the production round shape and not a fixture-only one.
 #: A DENSE encoding at radius 8, not radius-5 `v6`: `book_v1_s20260625_p4` is minted
 #: against `gnn_axis_v1` and 292 of its 512 openings need radius >= 6 to replay.
-_ENC = "v6w25"
+_ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
 
@@ -60,8 +61,9 @@ def _net(*, seed: int) -> torch.nn.Module:
     """
     spec = lookup(_ENC)
     torch.manual_seed(seed)
-    arch = CnnArch(
-        board_size=spec.board_size, in_channels=spec.n_planes, filters=8, res_blocks=1
+    arch = GnnArch(
+        in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
+        hidden=8, num_layers=1, policy_hidden=8, value_hidden=8,
     )
     net = build_net(arch)
     net.arch = arch
@@ -87,19 +89,19 @@ def _round_spec(tmp_path: Path, floor: StrengthFloorSpec | None) -> RoundSpec:
         bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
     )
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         round_index=0, round_id="floor_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=0,
-        random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,
-        seed_base=_SEED, round_timeout_sec=600.0,
+        random_model_sims=2, sealbot_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"),
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=floor,
-        fused_graph_caps=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441,
+                                            max_fused_nodes=1785921),
         inference_batching=InferenceBatchingSpec(
             inference_batch_size=64, inference_max_wait_ms=10
         ),
