@@ -14,7 +14,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   mantis-encoding in the DAG; `make check.wasm` targets it (and mantis-encoding if it
   becomes wasm-targeted).
 - crates/mantis-encoding — crates/mantis-encoding/src/registry.toml (THE encoding registry,
-  single source of truth) + spec + validators + dense encode kernels. Cite that path WHOLE,
+  single source of truth) + spec + validators. Cite that path WHOLE,
   `src/` segment included: this line used to say a bare `registry.toml`, and a landed
   ruling was twice mis-cited from it to a crate-root path that does not exist (R309(b),
   ANNOTATION 7 — which carries the full account, and names the wrong string so this file

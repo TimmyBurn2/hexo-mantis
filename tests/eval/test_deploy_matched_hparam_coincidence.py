@@ -225,7 +225,7 @@ def test_the_amp_dtype_LITERAL_IS_GONE_and_the_declared_value_is_threaded() -> N
     divergence visible — a good instrument for a defect that was being lived with.
 
     F-31 REMOVED THE DEFECT, so the instrument changes with it: the literal is THREADED now
-    (`"amp_dtype": amp_dtype`, from the caller's declared value), and there is no disagreement
+    (`from the caller's declared value), and there is no disagreement
     left to watch. What is pinned instead is that the literal does not come BACK, and that
     LAW-06's pin — which is why the old divergence was survivable — still holds.
     """

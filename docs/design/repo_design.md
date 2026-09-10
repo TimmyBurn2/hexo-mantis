@@ -31,7 +31,7 @@ hexo-mantis/
 ├── crates/
 │   ├── mantis-core/            # board, hex geometry, rules, Ply/Turn vocabulary types
 │   ├── mantis-graph/           # dep-free axis-graph builder; native + wasm32 targets
-│   ├── mantis-encoding/        # registry.toml + spec + validators + dense encode kernels
+│   ├── mantis-encoding/        # registry.toml + spec + validators
 │   ├── mantis-search/          # MCTS (PUCT + Gumbel), completed-Q, tactics solver
 │   ├── mantis-selfplay/        # runner, worker loop, inference queues, replay buffers
 │   └── mantis-bridge/          # ALL PyO3; maturin; builds mantis._engine (abi3 release)
@@ -148,7 +148,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 ## 3. Representation extensibility (the registry-kind axis)
 
 - `crates/mantis-encoding/src/registry.toml` is the single source of truth for encoding and
-  shape. Every entry carries `representation` (required, no default): `"grid" | "graph"`
+  shape. Every entry carries `representation` (required, no default): `"graph"`
   today; the set is extensible. Unknown TOML keys are a parse ERROR; missing required
   keys are a parse error; the validator collects ALL errors before reporting.
 - Rust: representation is a closed enum on `RegistrySpec`; dense-only or graph-only code
@@ -157,7 +157,7 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   parser). Model/buffer/batcher construction dispatches through ONE authority per layer
   (`model.build.build_net(arch)`, buffer facade, batcher ctor). Reading arch attributes off
   live `nn.Module` instances is banned — arch metadata travels on declared dataclasses
-  (`model.arch.CnnArch` / `model.arch.GnnArch` / `model.arch.GnnArchV2`), which
+  (`model.arch.GnnArch` / `model.arch.GnnArchV2`), which
   `build_net` consumes — and its dispatch ORDER is load-bearing, `GnnArchV2` first,
   because `GnnArchV2` is a subclass of `GnnArch`; a live-module
   representation sniff (the former `model_representation`) is DELETED and grep-gate-banned
@@ -167,7 +167,8 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
   *carrying* the declared dataclass instance itself as a handle is the convention, not a
   breach of it — `build_net` attaches `net.arch = arch` and `eval/snapshot.py` reads it back,
   which is the arch travelling with the model exactly as this section prescribes.
-- No dense-by-default anywhere: an absent representation is an error, never `"grid"`.
+- No dense-by-default anywhere: an absent representation is an error, and `"grid"` is
+  refused BY NAME (R346(f)), never resolved to the one remaining variant.
 - The compiled module exposes `registry_sha()` (sha256 of the embedded TOML).
   `mantis.encoding` hashes the on-disk TOML at import in dev/test and hard-errors on
   mismatch — a stale extension cannot silently serve a stale registry.
@@ -178,11 +179,11 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | # | contract | ver | one-line summary |
 |---|---|---|---|
 | 1 | registry | v1 | TOML schema + validator invariants + audit CLI exit codes (0/1/2) |
-| 2 | dense wire | v1 | fixed `[n, feature_len]` f32 batches; strides spec-derived; shape-checked both sides |
+| 2 | dense wire | RETIRED | deleted with the grid path (R346(f)); `archive/grid-path` carries it |
 | 3 | graph wire (ragged) | v1 | block-diagonal GraphWire; the structural assertions and named errors are ENUMERATED in the contract, not counted here (AUDIT-1 F-52); single-read `take()`; −1 off-window sentinel travels; NO fixed-width fallback |
 | 4 | checkpoint envelope | v2 | see §6 |
 | 5 | run config schema | v13 | pydantic models, extra=forbid; schema_version key in every file. The version here is the CONTRACT DOC's own table, whose last row is the authority — it read v8 while `docs/contracts/run_config_schema.md` had reached v13, and gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
-| 6 | replay persist | HEXB v9 / HEXG v2 | magics, versioned headers, wire-signature cross-load law, loud cross-format rejection |
+| 6 | replay persist | HEXG v2 | magic, versioned header, slot-geometry guard, two-pass atomic load |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
 | 8 | community bot API | bot-api v1 (SKELETON) | PLANNED: a vendored OpenAPI 3.1 spec + a BKE-notation round-trip suite. NEITHER EXISTS: the contract file carries two `TODO`s and there are zero `openapi`/`bke` tokens under `src/`, `tests/` or `vendor/`. Recorded as planned rather than deleted — it is a real intention — but it is not a shipped seam (AUDIT-1 F-52) |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
@@ -1123,3 +1124,57 @@ that lands as an amendment in the commit that moves them, rather than as drift.
    wrong number rather than a flaky one, and the conformance suite held a serialising mutex
    to work around it. The counters now live on `MCTSTree`; the process-wide totals stay, fed
    from the same one call site, because the bridge publishes them as the run-wide aggregate.
+
+---
+
+### AMENDMENT — the GRID/DENSE representation is DELETED (R346(f))
+
+R346(f) deletes the grid/dense path and every parked, unmeasured lever that hung off it. The
+tag `archive/grid-path` is the recoverable record; nothing below is reconstructible from this
+document and nothing needs to be.
+
+1. **The registry loses three rows.** `v6`, `v6w25` and `v6_live2_ls` are gone;
+   `crates/mantis-encoding/src/registry.toml` registers `gnn_axis_v1` and `gnn_axis_r8`, both
+   `representation = "graph"`. §3's "`"grid" | "graph"` today; the set is extensible" now reads
+   `"graph"`, and the axis it names is unchanged: the key stays REQUIRED with no default, and
+   `Representation::parse` REFUSES `"grid"` BY NAME rather than treating it as merely unknown —
+   a stale row says what happened instead of falling through to the one remaining variant.
+   The enum stays a closed type with one member for exactly that reason (LAW-11).
+
+2. **The crates lose their dense halves.** `mantis-encoding` loses `encode/` (the dense plane
+   kernels and the four plane-index constants). `mantis-selfplay` loses `queues::dense`, the
+   HEXB ring (`replay::{storage,push,push_config,sample,persist}` and the `ReplayBuffer` type),
+   `runner::rotate`, the dense recorder and its K histogram, `finalize_game`, the dense
+   aggregators in `records.rs`, and the `SymTables` scatter machinery — `replay::sym` keeps
+   `rotate_axial` / `N_SYMS`, which are the GRAPH D6 primitives. `mantis-core` loses
+   `board/state/cluster.rs`. `mantis-bridge` loses the `ReplayBuffer` pyclass, the dense
+   `InferenceBatcher` methods, `collect_data`, `apply_symmetries_batch`, `Board.to_tensor`,
+   `Board.get_cluster_views` and `MCTSTree.expand_and_backup_ls`. §1's crate lines drop the
+   "dense encode kernels" clause.
+
+3. **The Python package loses its dense modules.** `model/cnn.py`, `model/cnn_heads.py`,
+   `data/replay.py`, `data/replay_v6w25.py`, `data/augment.py`, `encoding/compat.py`,
+   `train/recency_buffer.py`, `train/aux_decode.py`, `train/batch_assembly.py`,
+   `train/pretrain/{dataset,trainer,freeze,validate}.py`. `model.arch.CnnArch` is deleted, so
+   §3's arch triple becomes a pair (`GnnArch` / `GnnArchV2`) and `ModelArch` is their union.
+   `env/game_state.py` survives as identity + history: `to_tensor()` and the 18-plane source
+   layout went with the encode kernels.
+
+4. **Contract #2 (dense wire) is RETIRED** and contract #6 becomes `HEXG v2` alone; both
+   contract docs are amended in place. The cross-format magic law it carried has no second
+   format to reject.
+
+5. **Parked levers die with their keys.** solver-in-loop, forced-win one-hot injection, ZOI
+   move filtering, trap-corpus seeding, the pretrained-corpus mixing schedule, the bot-batch
+   share, every aux/entropy loss weight, the dense record rotation and the inference
+   trace/compile/perf fields. `crates/mantis-search/src/tactics/` — the bounded minimax prover
+   itself — is KEPT: falsified.md F-38 and F-39 were MEASURED with it and F-38's verdict names
+   search-in-the-loop as the earned lever, so deleting it would delete the instrument those
+   rows were measured with. What died is its self-play visit-injection hook, which was never
+   armed and never measured.
+
+6. **The ladder keeps one rung.** `kraken` and `strix` are deleted from `LadderRung.bot`, from
+   `resolve_bot`'s known set and from `_KNOWN_OPPONENTS`, and `eval.kraken_model_sims` /
+   `eval.strix_model_sims` go with them (their only consumer was the route to a permanent
+   refusal). `sealbot_d5` is the minted rung; the adapter seam — `bots/protocol.py`,
+   `resolve_bot`, `SKIP_REASON_MARKERS` — is untouched, so a new rung is a row plus a factory.
