@@ -146,6 +146,12 @@ fn every_ply_of_a_driven_r8_game_exports_a_target_over_the_full_legal_set() {
             );
         }
 
+        println!(
+            "ply {ply}: legal {} support {support} dense {dense_mass:.6} overflow \
+             {overflow_mass:.6} total {total:.6}",
+            legal.len()
+        );
+
         // Play the search's own answer, so the game walks the line the search chose.
         let mv = *legal
             .first()
@@ -154,6 +160,11 @@ fn every_ply_of_a_driven_r8_game_exports_a_target_over_the_full_legal_set() {
         plies_measured += 1;
     }
 
+    println!(
+        "r8 target mass: {plies_measured} plies, widest legal {widest_legal}, plies with \
+         off-window overflow {plies_with_overflow}, per-node cap {}",
+        mantis_search::MAX_CHILDREN_PER_NODE
+    );
     assert_eq!(
         plies_measured, PLIES,
         "the game ended before the measured span — {plies_measured} of {PLIES} plies"
@@ -192,6 +203,10 @@ fn the_root_materializes_every_legal_child_today() {
     let board = r8_board();
     let legal = board.legal_moves().len();
     let tree = search(&board, &policy, 7);
+    println!(
+        "root children {} against legal {legal}",
+        tree.root_n_children()
+    );
     assert_eq!(
         tree.root_n_children(),
         legal,

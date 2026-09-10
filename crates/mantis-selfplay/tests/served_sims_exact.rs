@@ -263,6 +263,10 @@ fn drive_dense(
 
 fn assert_exact_graph(encoding: &str, n_simulations: usize, ply_cap: usize, want_records: usize) {
     let (served, records, max_sims) = drive_graph(encoding, n_simulations, ply_cap, want_records);
+    println!(
+        "{encoding} @ {n_simulations}: served {served} leaves over {records} searches, widest \
+         search {max_sims}"
+    );
 
     // (1) THE PROPERTY, exactly: no search served more than its budget, and at least one
     // search spent the whole of it (so a runner that silently searched less would also red).
@@ -319,7 +323,8 @@ fn r8_at_six_hundred_sims_serves_exactly_six_hundred_per_search() {
 #[test]
 fn both_kinds_serve_exactly_sixty_four() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (_served, _rows, max_sims) = drive_dense(kind, 64, 3, 4);
+        let (served, rows, max_sims) = drive_dense(kind, 64, 3, 4);
+        println!("{kind:?} @ 64: served {served} over {rows} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 64,
             "{kind:?} @ 64: the widest search served {max_sims} leaves. The root's own \
@@ -333,7 +338,8 @@ fn both_kinds_serve_exactly_sixty_four() {
 #[test]
 fn both_kinds_serve_exactly_three_hundred_and_twenty() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (_served, _rows, max_sims) = drive_dense(kind, 320, 2, 2);
+        let (served, rows, max_sims) = drive_dense(kind, 320, 2, 2);
+        println!("{kind:?} @ 320: served {served} over {rows} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 320,
             "{kind:?} @ 320: the widest search served {max_sims} leaves against the full \

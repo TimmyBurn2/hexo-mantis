@@ -142,7 +142,12 @@ fn drive(kind: SearchKind, want_rows: usize) -> Drive {
 }
 
 fn assert_pcr(kind: SearchKind) {
-    let d = drive(kind, 8);
+    // WHY 48 AND NOT 8. Assertions (1) and (3) below need BOTH arms to appear, and the arm
+    // is a fair coin: at 8 rows the chance that one arm never fires is ~2^-8 per side, and
+    // this file was observed red at `full=1 quick=8` before the sample was widened. 48 puts
+    // that tail under 2^-48 without making the drive slow — the arms are drawn per move, so
+    // the cost is a few more four-ply games.
+    let d = drive(kind, 48);
     // Printed, not merely asserted: the QUANTITIES are what a re-mint reads, and a witness
     // that only says "consistent" cannot be quoted (LAW-01, measurement mandatory).
     println!(
