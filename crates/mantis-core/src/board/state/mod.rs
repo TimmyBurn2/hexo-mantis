@@ -12,7 +12,6 @@
 mod core;
 
 pub use self::core::{
-    Board, BoardGeometry, Cell, MoveDiff, Player,
-    BOARD_SIZE, HALF, HEX_AXES, TOTAL_CELLS,
-    hex_distance,
+    hex_distance, Board, BoardGeometry, Cell, MoveDiff, Player, BOARD_SIZE, HALF, HEX_AXES,
+    TOTAL_CELLS,
 };

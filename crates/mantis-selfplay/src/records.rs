@@ -495,9 +495,6 @@ pub(crate) fn sample_policy_ls(
     Some(legal_moves[legal_moves.len() - 1])
 }
 
-
-
-
 #[cfg(test)]
 mod gnn_assemble_tests {
     //! WP-3 step 4 — `assemble_ls_from_gnn_probs` on REAL axis-graph fixtures.

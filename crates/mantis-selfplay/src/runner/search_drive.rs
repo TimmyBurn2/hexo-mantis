@@ -30,7 +30,8 @@ use rand::RngExt;
 use mantis_core::Board;
 use mantis_encoding::RegistrySpec;
 use mantis_search::{
-    compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState, SearchKind,
+    compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
+    SearchKind,
 };
 
 use crate::queues::{build_leaf_graph, GraphQueue};
@@ -335,8 +336,9 @@ fn select_for(
 /// named [`InferenceSeamFailure`], NOT the pre-fix silent `return 0`. This is the
 /// exact leg F-816-9 died on — the graph waiter's `Err(reason)` travelled back
 /// verbatim (D6) and was then discarded.
-#[cold]
-#[inline(never)]
+// `#[cold]`/`#[inline(never)]` are DELETED with the dense arm they were paired against: they
+// told LLVM to lay this out as the unlikely branch and optimize it for size, and it is now the
+// only inference path there is.
 fn infer_and_expand_graph(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
@@ -490,12 +492,8 @@ fn run_mcts_search(
 ) -> McTSSearchResult {
     // Both kinds open the same way: ONE leaf, which is the root itself, evaluated and
     // backed up. It is charged against the budget on both arms.
-    let root_sims = match infer_and_expand_graph(
-        tree,
-        LeafSelection::Batch(1),
-        agg_trunk_sz,
-        infer,
-    ) {
+    let root_sims = match infer_and_expand_graph(tree, LeafSelection::Batch(1), agg_trunk_sz, infer)
+    {
         Ok(n) => n,
         Err(e) => return McTSSearchResult::InferenceFailed(e),
     };

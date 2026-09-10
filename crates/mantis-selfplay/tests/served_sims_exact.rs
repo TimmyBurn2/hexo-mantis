@@ -1,7 +1,7 @@
 // R8 justify: one claim — "a search serves the budget its config states, under BOTH search
 // kinds" — measured through real `SelfPlayRunner` drives. The two kinds share the counting
-// producers that ARE the measurement; split them and the numbers stop being comparable,
-// which is the whole point of reading the same property on both arms.
+// producer that IS the measurement; split it and the numbers stop being comparable, which is
+// the whole point of reading the same property on both arms.
 //! ⊕ a search serves EXACTLY `n_simulations` leaves, never more and never fewer.
 //!
 //! THE FINDING THIS EXISTS FOR. `PERF_TRANCHE2_RESULTS.md` §7/§20 measured **53.46 served
@@ -22,13 +22,15 @@
 //! while the served node count disagrees with the number the config carries, and every g/h
 //! derived from `n_simulations` alone is wrong by the same factor.
 //!
-//! WHY THE GUMBEL ARM DRIVES A **GRID** ENCODING AND THE PUCT ARM DRIVES A GRAPH ONE. The
-//! claim under test is about the SEARCH — how many leaves a budget serves — and the dense
-//! recorder is the one both kinds share, so driving it holds the recorder fixed while the
-//! kind varies. (This paragraph used to say the graph path was REFUSED under `gumbel` by
-//! `replay::hexg::derived_visit_capacity`, and that refusal is gone: R347(a) gave the graph
-//! arm a SPARSE row bounded by the minted `selfplay.gumbel_m`. The arm choice here survives
-//! it, because it was never about which paths boot.)
+//! WHICH ENCODING EACH ARM DRIVES. Every arm now drives a GRAPH encoding, because after
+//! R346(f) there is exactly one representation and one recorder left. The four budget arms
+//! (50 / 600) hold the KIND fixed at `puct` and vary the radius, `gnn_axis_v1` against
+//! `gnn_axis_r8`, so a served-sims claim is not read off one geometry; the two run6-regime
+//! arms (64 / 320) hold the ENCODING fixed at `gnn_axis_r8` and vary the kind, so the
+//! comparison between `puct` and `gumbel` is a comparison of searches and of nothing else.
+//! That second half is what the arrangement was always for — this file used to hold the
+//! recorder fixed by driving the GRID encoding under both kinds, and holding one graph row
+//! fixed is the same control with the only representation that still exists.
 //!
 //! WHAT IS MEASURED. The mock producers count every leaf they serve. With `n_workers: 1` and
 //! `random_opening_plies: 0` exactly one search is in flight at a time.
@@ -45,7 +47,6 @@
 //! PUCT arms red — at HEAD before the fix they read 56 served against 50 at
 //! `leaf_batch_size 8`. Stop charging the root and every arm reads N−1 or N+1.
 
-use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
@@ -53,7 +54,7 @@ use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::{DenseQueue, GraphQueue};
+use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -95,38 +96,6 @@ fn spawn_counting_producer(
         }
         served.fetch_add(ids.len(), Ordering::Relaxed);
         queue.submit_graph_results(&ids, results);
-    })
-}
-
-/// The DENSE counterpart. A uniform policy and a fixed value: the served COUNT is the
-/// subject, and a policy that varied would only make the tree shape harder to reason about.
-fn spawn_counting_dense_producer(
-    queue: DenseQueue,
-    policy_stride: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_batch(1, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-        let mut flat: Vec<f32> = Vec::new();
-        let mut ranges: Vec<Range<usize>> = Vec::with_capacity(batch.len());
-        let mut values: Vec<f32> = Vec::with_capacity(batch.len());
-        let uniform = 1.0f32 / policy_stride as f32;
-        for _ in &batch {
-            let start = flat.len();
-            flat.extend(std::iter::repeat_n(uniform, policy_stride));
-            ranges.push(start..flat.len());
-            values.push(0.0);
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        let arc = Arc::new(flat);
-        queue.submit_results(&ids, &arc, &ranges, &values);
     })
 }
 
@@ -197,14 +166,17 @@ fn drive_graph(
     )
 }
 
-/// Drive one worker on the DENSE path under `kind`, returning
-/// `(served_leaves, training_rows, max_sims_per_search)`.
-fn drive_dense(
+/// Drive one worker under `kind` at the run6 identity row, returning
+/// `(served_leaves, records, max_sims_per_search)`. The ENCODING is held fixed here so the
+/// only thing that varies between the two calls is the search kind.
+fn drive_kind(
     kind: SearchKind,
     n_simulations: usize,
     ply_cap: usize,
-    want_rows: usize,
+    want_records: usize,
 ) -> (usize, usize, u64) {
+    const ENCODING: &str = "gnn_axis_r8";
+    let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: ply_cap,
@@ -218,22 +190,24 @@ fn drive_dense(
         quiescence_enabled: false,
         solver_enabled: false,
         forced_win_policy_enabled: false,
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
 
-    let policy_stride = runner.policy_len();
     let served = Arc::new(AtomicUsize::new(0));
-    let producer =
-        spawn_counting_dense_producer(runner.dense_producer(), policy_stride, served.clone());
+    let producer = spawn_counting_producer(
+        runner.graph_producer(),
+        spec.policy_logit_count,
+        served.clone(),
+    );
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
-    let mut rows = Vec::new();
+    let mut records = Vec::new();
     while Instant::now() < deadline {
-        rows.extend(runner.drain_training_rows());
-        if rows.len() >= want_rows || runner.fatal_defect().is_some() {
+        records.extend(runner.drain_graph_records());
+        if records.len() >= want_records || runner.fatal_defect().is_some() {
             break;
         }
         thread::sleep(Duration::from_millis(5));
@@ -242,21 +216,21 @@ fn drive_dense(
     let snap = runner.stats_snapshot();
     runner.stop();
     producer.join().expect("producer exits");
-    rows.extend(runner.drain_training_rows());
+    records.extend(runner.drain_graph_records());
 
     assert!(
         defect.is_none(),
         "{kind:?} @ {n_simulations} latched a fatal defect: {defect:?}"
     );
     assert!(
-        rows.len() >= want_rows,
+        records.len() >= want_records,
         "{kind:?} @ {n_simulations}: only {} searched plies inside the budget — a drive that \
          records nothing cannot speak about served sims at all",
-        rows.len()
+        records.len()
     );
     (
         served.load(Ordering::Relaxed),
-        rows.len(),
+        records.len(),
         snap.max_sims_per_search,
     )
 }
@@ -323,8 +297,8 @@ fn r8_at_six_hundred_sims_serves_exactly_six_hundred_per_search() {
 #[test]
 fn both_kinds_serve_exactly_sixty_four() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (served, rows, max_sims) = drive_dense(kind, 64, 3, 4);
-        println!("{kind:?} @ 64: served {served} over {rows} searches, widest {max_sims}");
+        let (served, records, max_sims) = drive_kind(kind, 64, 3, 4);
+        println!("{kind:?} @ 64: served {served} over {records} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 64,
             "{kind:?} @ 64: the widest search served {max_sims} leaves. The root's own \
@@ -338,8 +312,8 @@ fn both_kinds_serve_exactly_sixty_four() {
 #[test]
 fn both_kinds_serve_exactly_three_hundred_and_twenty() {
     for kind in [SearchKind::Puct, SearchKind::Gumbel] {
-        let (served, rows, max_sims) = drive_dense(kind, 320, 2, 2);
-        println!("{kind:?} @ 320: served {served} over {rows} searches, widest {max_sims}");
+        let (served, records, max_sims) = drive_kind(kind, 320, 2, 2);
+        println!("{kind:?} @ 320: served {served} over {records} searches, widest {max_sims}");
         assert_eq!(
             max_sims, 320,
             "{kind:?} @ 320: the widest search served {max_sims} leaves against the full \

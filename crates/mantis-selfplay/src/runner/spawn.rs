@@ -12,11 +12,8 @@
 use std::sync::atomic::Ordering;
 use std::thread;
 
-
 use super::atomics::WorkerAtomics;
-use super::params::{
-    self, ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams,
-};
+use super::params::{self, ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams};
 use super::stats::WorkerStats;
 use super::{game, SelfPlayRunner};
 
@@ -104,9 +101,7 @@ impl SelfPlayRunner {
             let running = self.running.clone();
             let handle = thread::spawn(move || {
                 guard_worker(&worker_panics, &running, || {
-                    game::run_worker_thread(
-                        worker_id, stats, atomics, channels, params, geometry,
-                    );
+                    game::run_worker_thread(worker_id, stats, atomics, channels, params, geometry);
                 });
             });
             handles.push(handle);

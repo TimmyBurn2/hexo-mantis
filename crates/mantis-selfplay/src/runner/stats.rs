@@ -8,7 +8,6 @@
 use std::sync::atomic::{AtomicU64, AtomicUsize};
 use std::sync::Arc;
 
-
 #[derive(Clone)]
 pub(crate) struct WorkerStats {
     pub(crate) games_completed: Arc<AtomicUsize>,

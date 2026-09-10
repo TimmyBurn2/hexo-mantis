@@ -17,8 +17,7 @@ use super::search_drive::MovePolicy;
 /// WP12-R Phase T (DESIGN_T §3.3/§3.4): forwards `record_position_graph`'s
 /// typed [`TargetIntegrityError`] to the caller, which latches it run-fatal
 /// (LAW-14) — the record that would carry a degenerate target cannot be built.
-#[cold]
-#[inline(never)]
+// `#[cold]`/`#[inline(never)]` are DELETED with the dense recorder they were paired against.
 pub(crate) fn record_position_graph_dispatch(
     board: &Board,
     target_policy: &MovePolicy,

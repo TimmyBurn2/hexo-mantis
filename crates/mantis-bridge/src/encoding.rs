@@ -288,7 +288,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(registry_sha_hex, m)?)?;
     m.add("HEX_AXES", mantis_core::board::HEX_AXES)?;
     m.add("WIN_LENGTH", mantis_core::board::WIN_LENGTH)?;
-    m.add("DEFAULT_CLUSTER_THRESHOLD", mantis_core::board::DEFAULT_CLUSTER_THRESHOLD)?;
+    m.add(
+        "DEFAULT_CLUSTER_THRESHOLD",
+        mantis_core::board::DEFAULT_CLUSTER_THRESHOLD,
+    )?;
     Ok(())
 }
 

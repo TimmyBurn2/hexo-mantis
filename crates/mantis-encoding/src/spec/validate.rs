@@ -39,8 +39,7 @@ impl RegistrySpec {
         // Action space = board_size² + (pass?1:0). Load-bearing for BOTH
         // representations (a graph plays the identical 19×19+pass board — the
         // policy_logit_count STAYS 362).
-        let expected_logits =
-            self.board_size * self.board_size + usize::from(self.has_pass_slot);
+        let expected_logits = self.board_size * self.board_size + usize::from(self.has_pass_slot);
 
         let cw_some = self.cluster_window_size.is_some();
         let ct_some = self.cluster_threshold.is_some();
@@ -200,8 +199,18 @@ impl RegistrySpec {
                     errs.push("representation=graph requires has_pass_slot=true".to_string());
                 }
                 // node/edge/axis dims single-sourced against the builder schema.
-                require_graph_eq(&mut errs, "node_feat_dim", self.node_feat_dim, NODE_FEAT_DIM);
-                require_graph_eq(&mut errs, "edge_feat_dim", self.edge_feat_dim, EDGE_FEAT_DIM);
+                require_graph_eq(
+                    &mut errs,
+                    "node_feat_dim",
+                    self.node_feat_dim,
+                    NODE_FEAT_DIM,
+                );
+                require_graph_eq(
+                    &mut errs,
+                    "edge_feat_dim",
+                    self.edge_feat_dim,
+                    EDGE_FEAT_DIM,
+                );
                 require_graph_eq(&mut errs, "win_axes", self.win_axes, WIN_AXES.len());
                 // AUDIT-1 F-42. `win_length` is the GAME'S rule, not a free registry number:
                 // `mantis_core::board::WIN_LENGTH` owns it and five copies read it. The check
@@ -245,7 +254,10 @@ impl RegistrySpec {
                 }
                 // no dense planes (whole-board graph).
                 if self.n_planes != 0 {
-                    errs.push(format!("representation=graph requires n_planes=0; got {}", self.n_planes));
+                    errs.push(format!(
+                        "representation=graph requires n_planes=0; got {}",
+                        self.n_planes
+                    ));
                 }
                 if !self.plane_layout.is_empty() {
                     errs.push(format!(

@@ -177,7 +177,6 @@ pub struct SelfPlayRunner {
     gumbel_round_leaves: Arc<AtomicU64>,
     gumbel_rounds: Arc<AtomicU64>,
 
-
     // ── WP12-R Phase T target-integrity surfaces (LAW-18 / LAW-14) ──
     export_offwindow_mass_moves: Arc<AtomicU64>,
     target_integrity_defects: Arc<AtomicU64>,

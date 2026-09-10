@@ -3,8 +3,7 @@
 already exist and import cleanly today (this is a SCHEMA EXTENSION, not a new module), so every
 test here fails today by `pydantic.ValidationError` (missing/extra key) rather than
 ModuleNotFoundError — the schema simply does not have `eval.gate` / `eval.ladder` /
-`eval.kraken_model_sims` / `eval.strix_model_sims` / `eval.random_floor_games` /
-`eval.worker_device` / `eval.round_timeout_sec` / `eval.worker_kill_grace_sec` yet.
+`eval.random_floor_games` / `eval.worker_device` / `eval.round_timeout_sec` / `eval.worker_kill_grace_sec` yet.
 
 Byte-frozen through IMPL: fields transcribed verbatim from DESIGN.md §c.1 (rung
 name/bot/variant/depth/opponent_sims/opening_book/deploy_matched/games_max; gate
@@ -13,8 +12,8 @@ opening_book/bootstrap_resamples/min_distinct_per_pair/seed_base — NO screen_c
 MUST-FIX 1; ladder rungs/round_games/min_games_per_active_rung/graduation_wr_lower_ci/
 graduation_consec_rounds/activation_wr_lower_ci/calibration_every_k_rounds/calibration_games/
 bootstrap_resamples/bootstrap_ci_level/bt_prior_games/bootstrap_seed). Minted ladder order is
-STATE §5 verbatim: sealbot_d5 -> kraken_raw -> sealbot_d6 -> kraken_mcts200 -> strix_128 ->
-strix_256 (each opening_book=book_v1_s20260625_p4, deploy_matched=true, games_max=32).
+STATE §5 verbatim, less the kraken/strix rungs whose bot kinds were deleted with the reference
+adapters (each opening_book=book_v1_s20260625_p4, deploy_matched=true, games_max=32).
 
 Note (documented, not a defect): `test_temperature_key_anywhere_in_eval_is_rejected` (all 3
 parametrized cases) and `test_rung_names_unique_and_bot_kind_known` /
@@ -172,7 +171,7 @@ def test_valid_payload_with_full_ladder_and_gate_validates() -> None:
     """Sanity anchor: the fully-populated payload above must itself validate once the schema
     extension lands (proves the fixture payload is not itself malformed)."""
     cfg = RunConfig.model_validate(_payload())
-    assert len(cfg.eval.ladder.rungs) == 6
+    assert len(cfg.eval.ladder.rungs) == len(_LADDER_RUNGS)
     assert cfg.eval.gate.promotion_winrate == 0.55
 
 
@@ -244,7 +243,7 @@ def test_rung_order_is_preserved() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """configs/run5.yaml's ladder must equal the six STATE §5 rungs in order once re-minted;
+    """configs/run5.yaml's ladder must equal the STATE §5 rungs in order once re-minted;
     0.75/0.65/3 must appear ONLY as VALUES of the named schema fields, never as bare code
     literals in src/mantis/eval (rule 4). Today configs/run5.yaml has no `eval.ladder` key at
     all (read at HEAD — no `ladder`/`gate` block), so loading it under the extended schema
@@ -253,7 +252,7 @@ def test_minted_configs_carry_the_ladder_verbatim() -> None:
     assert _RUN5.is_file(), f"expected {_RUN5} to exist at HEAD"
 
     # Once re-minted (IMPL work), this is the shape that must hold — expressed here so the
-    # assertion exists BEFORE the port (byte-frozen): the six rungs in STATE §5 order, and the
+    # assertion exists BEFORE the port (byte-frozen): the rungs in STATE §5 order, and the
     # literals 0.75 / 0.65 never appear as bare numbers in src/mantis/eval source (they must be
     # the VALUES the schema fields resolve to, not inline code constants).
     eval_src_dir = _REPO / "src" / "mantis" / "eval"

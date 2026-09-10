@@ -38,13 +38,9 @@ use crate::replay::hexg::GraphRecord;
 
 use super::atomics::WorkerAtomics;
 use super::finalize::finalize_game_graph;
-use super::params::{
-    ExplorationFlags, SearchFlags,
-    WorkerChannels, WorkerGeometry, WorkerParams,
-};
+use super::params::{ExplorationFlags, SearchFlags, WorkerChannels, WorkerGeometry, WorkerParams};
 use super::search_drive::{
-    play_one_move, FatalDefectLatch, InferContext, MoveAccumulators,
-    MoveOutcome, MovePlayContext,
+    play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
 use super::{GameResultRow, WorkerResultRow};
@@ -179,10 +175,7 @@ pub(crate) fn run_worker_thread(
                 quiescence_enabled,
                 search_kind,
             },
-        exploration_flags:
-            ExplorationFlags {
-                dirichlet_enabled,
-            },
+        exploration_flags: ExplorationFlags { dirichlet_enabled },
     } = params;
 
     let mut tree = MCTSTree::new_full(c_puct, VIRTUAL_LOSS_PENALTY, fpu_reduction);
@@ -202,12 +195,12 @@ pub(crate) fn run_worker_thread(
     // `Board::with_registry_spec` mapping — the None board arm is KILLED, D2).
     let board_geometry = BoardGeometry {
         legal_move_radius: registry_spec.legal_move_radius as i32,
-        cluster_threshold: registry_spec.cluster_threshold.unwrap_or(
-            DEFAULT_CLUSTER_THRESHOLD as usize,
-        ) as i32,
-        cluster_window_size: registry_spec.cluster_window_size.unwrap_or(
-            registry_spec.board_size,
-        ),
+        cluster_threshold: registry_spec
+            .cluster_threshold
+            .unwrap_or(DEFAULT_CLUSTER_THRESHOLD as usize) as i32,
+        cluster_window_size: registry_spec
+            .cluster_window_size
+            .unwrap_or(registry_spec.board_size),
     };
     let move_accumulators = MoveAccumulators {
         mcts_depth_accum: &mcts_depth_accum,

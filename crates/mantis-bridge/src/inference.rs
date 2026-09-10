@@ -26,10 +26,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use numpy::{
-    IntoPyArray, PyArray1, PyReadonlyArray1,
-    PyUntypedArrayMethods,
-};
+use numpy::{IntoPyArray, PyArray1, PyReadonlyArray1, PyUntypedArrayMethods};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
@@ -38,8 +35,7 @@ use mantis_encoding::RegistrySpec;
 use mantis_graph::{AxisGraph, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 use mantis_selfplay::queues::{
-    build_leaf_graph, build_leaf_graphs_batch, GraphQueue, GraphWire,
-    GraphWireArrays,
+    build_leaf_graph, build_leaf_graphs_batch, GraphQueue, GraphWire, GraphWireArrays,
     WireAlreadyConsumed as WireConsumedGuard,
 };
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
@@ -710,8 +706,11 @@ impl PyInferenceBatcher {
         n_threads: usize,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
         self.require_graph()?;
-        let (win_length, radius, trunk_size) =
-            (self.graph_win_length, self.graph_radius, self.graph_trunk_size);
+        let (win_length, radius, trunk_size) = (
+            self.graph_win_length,
+            self.graph_radius,
+            self.graph_trunk_size,
+        );
         let graphs = py
             .detach(|| {
                 build_leaf_graphs_batch(&positions, win_length, radius, trunk_size, n_threads)
@@ -1067,8 +1066,14 @@ mod tests {
         // already in the derived form; this one was not, so an r8 row could enter the
         // registry and the Rust-side pin of run6's identity geometry would still assert 6.
         let spec = gnn_spec();
-        assert_eq!(b.graph_win_length as usize, spec.win_length.expect("graph row states win_length"));
-        assert_eq!(b.graph_radius as usize, spec.graph_radius.expect("graph row states graph_radius"));
+        assert_eq!(
+            b.graph_win_length as usize,
+            spec.win_length.expect("graph row states win_length")
+        );
+        assert_eq!(
+            b.graph_radius as usize,
+            spec.graph_radius.expect("graph row states graph_radius")
+        );
         assert_eq!(b.graph_trunk_size as usize, spec.trunk_size);
         assert_eq!(b.graph_contract_version, 1);
     }

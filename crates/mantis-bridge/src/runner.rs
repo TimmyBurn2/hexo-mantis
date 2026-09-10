@@ -245,9 +245,6 @@ impl PySelfPlayRunnerConfig {
         self.inner.search_kind = parsed;
         Ok(())
     }
-
-
-
 }
 
 /// The ONE supervisor-facing wording for a latched run-fatal self-play defect.
@@ -288,11 +285,7 @@ impl PySelfPlayRunner {
             .and_then(mantis_encoding::lookup)
             .expect("SelfPlayRunner::new validated the encoding_name resolves");
         let inner = Arc::new(runner);
-        let batcher = PyInferenceBatcher::from_runner(
-            spec,
-            inner.graph_producer(),
-            inner.clone(),
-        );
+        let batcher = PyInferenceBatcher::from_runner(spec, inner.graph_producer(), inner.clone());
         Ok(PySelfPlayRunner { inner, batcher })
     }
 
@@ -309,7 +302,6 @@ impl PySelfPlayRunner {
     pub fn is_running(&self) -> bool {
         self.inner.is_running()
     }
-
 
     /// Drain all buffered graph-position records as a list of 9-tuples (field
     /// order = `HexgBuffer.push_graph_position`; no numpy — the records are
@@ -358,8 +350,6 @@ impl PySelfPlayRunner {
     pub fn batcher(&self) -> PyInferenceBatcher {
         self.batcher.clone()
     }
-
-
 
     // ── win / throughput counters (RAW atomics via the snapshot) ───────────────
     #[getter]
@@ -426,7 +416,6 @@ impl PySelfPlayRunner {
         self.snapshot().max_sims_per_search
     }
 
-
     // ── WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6) ────────
     #[getter]
     pub fn export_offwindow_mass_moves(&self) -> u64 {
@@ -452,7 +441,6 @@ impl PySelfPlayRunner {
     pub fn inference_failures_total(&self) -> u64 {
         self.snapshot().inference_failures_total
     }
-
 
     /// Worker threads that died by panic — must read 0 in a healthy run.
     ///

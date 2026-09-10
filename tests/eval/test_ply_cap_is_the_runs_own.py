@@ -42,7 +42,7 @@ class _FirstLegalBot:
 def _board_factory() -> Any:
     from mantis._engine import Board
 
-    return Board.with_encoding_name("v6_live2_ls")
+    return Board.with_encoding_name("gnn_axis_v1")
 
 
 @pytest.mark.parametrize("cap", [7, 37, 64])
