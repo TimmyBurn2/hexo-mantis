@@ -22,6 +22,7 @@ observable.
 from __future__ import annotations
 
 import importlib.util
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -163,8 +164,35 @@ def test_the_glob_scope_has_a_floor(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     for name in TRACKED.SCOPE:
         (tmp_path / name).write_text("x\n", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
-    with pytest.raises(FileNotFoundError, match="glob scope yielded"):
+    with pytest.raises(FileNotFoundError, match="yielded 0 file"):
         TRACKED._scope_files()
+
+
+def test_one_full_glob_dir_cannot_carry_an_empty_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """THE PIN (R346(e) defect). Under a single combined floor, `docs/registers/` contributed
+    zero for a whole era while `docs/contracts/` met the bar alone, and the gate reported green
+    over a scope nobody chose. The floor is per-directory so that cannot recur."""
+    for name in TRACKED.SCOPE:
+        (tmp_path / name).write_text("x\n", encoding="utf-8")
+    full, empty = list(TRACKED.GLOB_SCOPE)
+    for i in range(sum(TRACKED.GLOB_SCOPE.values()) + 1):
+        (tmp_path / full).mkdir(parents=True, exist_ok=True)
+        (tmp_path / full / f"d{i}.md").write_text("x\n", encoding="utf-8")
+    (tmp_path / empty).mkdir(parents=True, exist_ok=True)
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(FileNotFoundError, match=re.escape(empty)):
+        TRACKED._scope_files()
+
+
+def test_a_dissolved_path_that_comes_back_refuses_its_own_whitelist() -> None:
+    """A dissolved-path entry records a removal; once the path is tracked again the same entry
+    would hide live references, so the gate refuses rather than passing them."""
+    assert TRACKED.DISSOLVED_PATHS, "the whitelist is the mechanism under test"
+    revived = next(iter(TRACKED.DISSOLVED_PATHS)) + "back.md"
+    with pytest.raises(FileNotFoundError, match="tracked again"):
+        TRACKED._check_dissolved({revived})
 
 
 def test_the_real_scope_clears_the_floor_and_is_reported() -> None:
@@ -172,6 +200,16 @@ def test_the_real_scope_clears_the_floor_and_is_reported() -> None:
                           capture_output=True, text=True, cwd=REPO_ROOT)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "gate 10: scanning" in proc.stdout, proc.stdout
+
+
+def test_the_governance_docs_are_actually_in_the_scan_scope() -> None:
+    """CARD-GATE10-SCOPE: the five governance docs were outside the gate that exists to catch
+    exactly their failure mode. Scope membership is asserted, not assumed from a glob string."""
+    scanned = {str(p) for p in TRACKED._scope_files()}
+    assert "docs/governance/LAWS.md" in scanned, sorted(scanned)
+    assert "docs/governance/CARDS.md" in scanned, sorted(scanned)
+    assert "docs/governance/STATE.md" in scanned, sorted(scanned)
+    assert not (scanned & set(TRACKED.SCAN_EXEMPT)), "an exempt file reached the scan"
 
 
 # ── gate 13: the unknown root ─────────────────────────────────────────────────────────
