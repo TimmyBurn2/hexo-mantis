@@ -10,9 +10,17 @@
 //! bank green). This test is RED under a swallow at that glue and GREEN at the fix tree; see
 //! the R43 edit note below for WHICH store site it now drives and what that costs.
 //!
-//! Drive: a 1-worker gnn runner at sims=1 / leaf_batch=1 on a dispersed seed prefix whose
-//! first searched root holds >128 children. The single sim is consumed by the root
-//! expansion and every child carries 0 visits.
+//! Drive: a 1-worker gnn runner at sims=1 / leaf_batch=1. The single sim is consumed by the
+//! root expansion and every child carries 0 visits.
+//!
+//! R346(f) EDIT, DISCLOSED. The drive used to plant a DISPERSED 8-ply prefix through
+//! `seed_fraction` / `seed_corpus` so the first searched root provably held >128 children,
+//! and asserted that width as a construction precondition. Those two config keys went with
+//! the seed-corpus lever, and the runner has no start-position seeding left, so the width
+//! is now whatever `random_opening_plies` produces and is no longer asserted. The refusal
+//! under test does NOT depend on it — `refuse_zero_visit_export` fires on any zero-visit
+//! search — but the file no longer drives the byte-identical pre-fix construction, and the
+//! R43 note below should be read with that in mind.
 //!
 //! ── R43 EDIT, F-816-9 Phase C (R275(b)). DISCLOSED, NOT QUIET ────────────────────────
 //! This drive USED to end at `record_position_graph`'s `VisitSlotsExceeded`: the zero-visit
@@ -47,46 +55,10 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
 use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
-
-fn gnn_geometry() -> BoardGeometry {
-    let spec = lookup_or_panic("gnn_axis_v1");
-    BoardGeometry {
-        legal_move_radius: spec.legal_move_radius as i32,
-        cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
-        cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
-    }
-}
-
-/// The r153 dispersal rule (farthest from the window centre), as a move prefix —
-/// byte-equal construction to target_wire_carry's.
-fn dispersed_prefix(n_plies: usize) -> Vec<(i32, i32)> {
-    let mut board = Board::with_geometry(gnn_geometry());
-    let mut moves = Vec::new();
-    for _ in 0..n_plies {
-        let legal = board.legal_moves();
-        if legal.is_empty() {
-            break;
-        }
-        let (cq, cr) = board.window_center();
-        let &(q, r) = legal
-            .iter()
-            .max_by_key(|&&(q, r): &&(i32, i32)| {
-                let (dq, dr) = (q - cq, r - cr);
-                dq.abs().max(dr.abs()).max((dq + dr).abs())
-            })
-            .unwrap();
-        if board.apply_move(q, r).is_err() {
-            break;
-        }
-        moves.push((q, r));
-    }
-    moves
-}
 
 /// Mock graph producer: uniform probs over each request's legal nodes through the
 /// PRODUCTION `assemble_ls_from_gnn_probs` (the target_wire_carry harness pattern).
@@ -124,27 +96,10 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
     let spec = lookup_or_panic("gnn_axis_v1");
     let n_actions = spec.policy_logit_count;
 
-    // Precondition (asserted, not assumed): the first searched root must hold the wide
-    // child set the pre-fix construction depended on (see the R43 note in the header).
-    let prefix = dispersed_prefix(8);
-    assert_eq!(prefix.len(), 8, "dispersal prefix must build 8 plies");
-    let mut probe = Board::with_geometry(gnn_geometry());
-    for &(q, r) in &prefix {
-        probe.apply_move(q, r).expect("prefix replays");
-    }
-    let n_legal = probe.legal_moves().len();
-    assert!(
-        n_legal > 160,
-        "construction: post-prefix legal set must exceed the child regime this drive was \
-         built around, so the drive stays byte-comparable to its pre-fix form \
-         (got n_legal {n_legal})"
-    );
-
     // sims=1 + batch=1: the single sim is the root expansion → all children 0 visits →
     // `refuse_zero_visit_export` raises `ZeroVisitSearch` before any exporter runs. The
-    // WIDE root is retained deliberately even though the refusal no longer depends on it:
-    // this is byte-for-byte the pre-fix construction, so the file still drives the exact
-    // regime F-816-9 died in and the change in outcome is attributable to the fix alone.
+    // 8 random opening plies stand in for the deleted dispersed seed prefix: they widen the
+    // first searched root without asserting a width the refusal does not depend on.
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: 20,
@@ -153,10 +108,8 @@ fn latch_carries_the_variant_name_from_the_production_store_site_to_the_drain_fa
         standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
-        random_opening_plies: 0,
+        random_opening_plies: 8,
         encoding_name: Some("gnn_axis_v1".to_string()),
-        seed_fraction: 1.0,
-        seed_corpus: Some(vec![prefix]),
         ..Default::default()
     })
     .expect("gnn runner must construct");

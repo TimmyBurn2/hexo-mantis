@@ -99,7 +99,7 @@ def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
     from mantis.model import build_net, select_arch
     from mantis.train.ema import build_ema_model
 
-    arch = select_arch(lookup("v6_live2_ls"), {}, arch_kind="CnnArch")
+    arch = select_arch(lookup("gnn_axis_v1"), {}, arch_kind="GnnArch")
     net = build_net(arch)
     enabled, decay, _every = resolve_ema_config(
         {"train": {"ema": {"enabled": True, "decay": 0.5, "update_every": 1}}},

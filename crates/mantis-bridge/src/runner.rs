@@ -517,9 +517,6 @@ mod tests {
             true,
             0.3,
             0.5,
-            false,
-            16,
-            5,
             50.0,
             1.0,
             16,
@@ -533,17 +530,15 @@ mod tests {
             0,
             0,
             Some("gnn_axis_v1".to_string()),
-            None,
         );
         let rust = cfg.to_rust();
         assert_eq!(rust.n_workers, 2);
         assert_eq!(rust.max_moves_per_game, 64);
         assert_eq!(rust.encoding_name.as_deref(), Some("gnn_axis_v1"));
-        // O1/solver/seed knobs come from Default.
-        assert!(!rust.forced_win_policy_enabled);
-        assert_eq!(rust.forced_win_policy_depth, 2);
-        assert!(!rust.solver_enabled);
-        assert!((rust.solver_visit_weight - 0.3).abs() < 1e-6);
+        // The knobs the ctor does NOT carry still come from Default; the O1/solver/seed
+        // family that this used to read back went with the levers at R346(f).
+        assert_eq!(rust.gumbel_m, 16);
+        assert!(rust.dirichlet_enabled);
     }
 
     #[test]
@@ -568,8 +563,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5, 50.0,
-            1.0, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None, None,
+            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, 50.0, 1.0, 16, 10,
+            0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

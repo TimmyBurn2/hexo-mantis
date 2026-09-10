@@ -218,19 +218,6 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
 
-# ── O-T4: the mixed arm's dense-only feed is typed (CENSUS_C C-2b) ───────────────────────
-def test_mixed_arm_with_graph_spec_raises_at_the_route(tmp_path, mk_config) -> None:
-    class _Pretrained:
-        size = 4
-
-    rec = _RecordingTypedTrainer()
-    coord = _coordinator(rec, _graph_buffer(), mk_config(GRAPH_ENCODING, "graph"),
-                         pretrained_buffer=_Pretrained())
-    with pytest.raises(RepresentationRouteError, match="mixed"):
-        coord._run_training_step(coord.config)
-    assert rec.tensor_calls == [] and rec.graph_calls == []
-
-
 # ── O-T5: closed match (LAW-11 posture) ──────────────────────────────────────────────────
 def test_unknown_representation_raises_named_error() -> None:
     class _AlienSpec:

@@ -119,8 +119,6 @@ impl FatalDefectLatch<'_> {
     }
 }
 
-/// D-WS3V3 in-run solver fire-rate counter refs (frozen `:110`). Incremented ONLY
-
 /// Per-move scalar context (frozen `:141`). `Copy` — mirrors the flat
 /// `WorkerParams` layout plus the per-game dynamics (`game_sims`, `is_fast_game`,
 /// `game_start_ply`).

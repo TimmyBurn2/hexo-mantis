@@ -29,11 +29,11 @@ from pathlib import Path
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.config.loader import load_config
 from mantis.encoding import lookup
-from mantis.model import CnnArch, build_net
+from mantis.model import build_net
 from mantis.train.checkpoints import resume_trainer, save_checkpoint
 from mantis.train.trainer.core import Trainer
 
-ENCODING = "v6_live2_ls"
+ENCODING = "gnn_axis_v1"
 
 _LADDER_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
@@ -66,17 +66,17 @@ def _eval_block() -> dict:
 #: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
 #: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
 #: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to this
-#: file's census except for `fp16`/`lr_schedule`, which this file pins itself below.
+#: file's census except for `lr_schedule`, which this file pins itself below.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
 
-#: Every config this file builds is a GRID config, and it says so once. The block builders read
+#: Every config this file builds is a GRAPH config, and it says so once. The block builders read
 #: it so the arch-scoped blocks are dropped AT SOURCE (R322(d)) — which matters here beyond
 #: validity: these oracles compare an OVERRIDE block against the BAKED one, so a block builder
 #: that emitted a key the assembled config had stripped would make the two differ and the
 #: comparison would be measuring this file's own inconsistency.
-_REPRESENTATION = "grid"
+_REPRESENTATION = "graph"
 
 
 def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
@@ -88,40 +88,33 @@ def _drop_foreign_arch_keys(section: str, block: dict) -> dict:
 
 
 def _train_block(*, lr: float = 1e-3) -> dict:
-    # This file's own deltas: `fp16=False` (CPU) and `lr_schedule="none"` — the resume
-    # oracles below compare optimizer/LR state across a save→load, and a live schedule
-    # would move the number they compare.
+    # This file's own delta: `lr_schedule="none"` — the resume oracles below compare
+    # optimizer/LR state across a save→load, and a live schedule would move the number they
+    # compare.
     return _drop_foreign_arch_keys(
-        "train", dict(_MINTED_TRAIN, lr=lr, fp16=False, lr_schedule="none")
+        "train", dict(_MINTED_TRAIN, lr=lr, lr_schedule="none")
     )
 
 
 def _selfplay_block() -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "inference_pool_size": None, "c_visit": 50.0,
+        "c_visit": 50.0,
         "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
-        "results_queue_cap": 10_000, "random_opening_plies": 0, "rotation_enabled": True,
-        "forced_win_policy_enabled": False, "forced_win_policy_depth": 2,
-        "forced_win_policy_weight": 1.0, "solver_enabled": False, "solver_depth": 16,
-        "solver_node_budget": 50_000, "solver_neighbor_dist": 2, "solver_visit_weight": 0.3,
-        "seed_fraction": 0.0, "seed_corpus_path": None, "log_investigation_metrics": True,
-        "instrumentation_enabled": False,
+        "results_queue_cap": 10_000, "random_opening_plies": 0,
+        "log_investigation_metrics": True,
         "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,
                  "quiescence_enabled": True, "quiescence_blend_2": 0.3,
                  "dirichlet_alpha": 0.3, "dirichlet_epsilon": 0.25, "dirichlet_enabled": True},
         "playout_cap": {"fast_sims": 50, "fast_prob": 0.0, "standard_sims": 0,
                         "full_search_prob": 0.0, "n_sims_quick": 0, "n_sims_full": 0,
-                        "zoi_enabled": False, "zoi_lookback": 16, "zoi_margin": 5,
                         "temperature_threshold_compound_moves": 0, "temp_min": 0.5},
     }
 
 
 def _inference_block() -> dict:
     return _drop_foreign_arch_keys("inference", {
-        "inference_batch_size": 64, "inference_max_wait_ms": 10, "trace_inference": True,
-        "compile_inference": False, "compile_inference_mode": "default",
-        "compile_inference_dynamic": True, "perf_timing": False, "perf_sync_cuda": False,
+        "inference_batch_size": 64, "inference_max_wait_ms": 10,
         # `fused_graph_caps` is ARCH-SCOPED to graph (R322(d)) and every config here is GRID,
         # so it is stripped by the helper above rather than minted and ignored. Left in the
         # literal so the strip is visible at the site it applies to.
@@ -163,7 +156,7 @@ def _full_config(*, lr: float = 1e-3) -> dict:
         # placeholder — refused at boot on a cuda process, valued only by the
         # re-calibration sitting under R282(b).
         "allocator_posture": None,
-        "identity": {"encoding": ENCODING, "representation": "grid"},
+        "identity": {"encoding": ENCODING, "representation": "graph"},
         "eval": _eval_block(),
         "train": _train_block(lr=lr),
         "search": {"kind": "puct"},

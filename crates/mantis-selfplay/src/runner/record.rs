@@ -27,9 +27,7 @@ pub(crate) fn record_position_graph_dispatch(
     visit_capacity: usize,
     explicit_support: Option<&fxhash::FxHashSet<(i32, i32)>>,
 ) -> Result<(), TargetIntegrityError> {
-    let ls = match target_policy {
-        MovePolicy::Ls(ls) => ls,
-    };
+    let MovePolicy::Ls(ls) = target_policy;
     let current_player = board.current_player as i8;
     let moves_remaining = board.moves_remaining;
     let ply_index = board.ply.index() as u16;

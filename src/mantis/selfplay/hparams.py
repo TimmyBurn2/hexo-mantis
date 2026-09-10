@@ -59,19 +59,33 @@ def is_graph_representation(spec: Any) -> bool:
     """Closed match on ``spec.representation`` — no dense-by-default arm (LAW-11 / AM-1).
 
     The frozen original defaulted an absent attribute to the DENSE kind, so an unknown or
-    absent representation silently routed down the dense path. Every registry spec carries
-    a required ``representation``, so on all reachable inputs this is byte-identical; the
-    raising arm covers only inputs unreachable today (AM-1).
+    absent representation silently routed down the dense path. `"grid"` is now REFUSED BY
+    NAME rather than answered `False`: R346(f) deleted the dense path, so a spec still
+    declaring it would otherwise be handed a graph buffer by a caller that only asks "is
+    this graph?" — the dense-by-default class inverted (LAW-11 / AM-1).
+
+    Args:
+        spec: an encoding spec, or anything carrying a ``representation`` attribute.
+
+    Returns:
+        `True` — the one representation this project has.
+
+    Raises:
+        RepresentationMismatch: the representation is absent, `"grid"`, or unknown.
     """
     rep = getattr(spec, "representation", None)
     if rep == "graph":
         return True
     if rep == "grid":
-        return False
+        raise RepresentationMismatch(
+            f"representation 'grid' on encoding spec {getattr(spec, 'name', spec)!r} — the "
+            "dense path was DELETED (R346(f)) and `archive/grid-path` carries it. Answering "
+            "this False would route the caller to a graph buffer under a dense declaration."
+        )
     raise RepresentationMismatch(
         f"unknown representation {rep!r} on encoding spec "
         f"{getattr(spec, 'name', spec)!r} — self-play dispatches on a closed "
-        "two-element set (dense grid / axis graph) and has no dense default."
+        "one-element set (axis graph) and has no default."
     )
 
 

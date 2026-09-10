@@ -138,11 +138,18 @@ def test_an_absent_checkpoint_is_a_named_refusal(tmp_path: Path) -> None:
 
 
 def test_the_transfer_is_graph_only_and_says_so(tmp_path: Path) -> None:
+    """No REGISTERED encoding declares a non-graph representation since R346(f), so the refusal
+    is driven from a spec-shaped stub — the same way the LAW-11 arms elsewhere reach a
+    representation the registry cannot mint."""
+    class _NonGraphSpec:
+        name = "not_a_graph"
+        representation = "hexcanvas"
+
     arch = _arch()
     source, source_hash = _write_source(tmp_path, arch)
     with pytest.raises(ValueError, match="graph-only"):
         apply_bc_warm_start(
-            build_net(arch), BcWarmStart(source, source_hash), spec=lookup("v6_live2_ls"),
+            build_net(arch), BcWarmStart(source, source_hash), spec=_NonGraphSpec(),
         )
 
 

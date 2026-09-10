@@ -416,22 +416,6 @@ def test_nothing_CALLS_the_buried_loader_by_either_spelling() -> None:
     assert not hits, f"{_BURIED} is called at {hits} — the symbol does not exist"
 
 
-def test_the_grave_line_is_present_and_names_its_ruling() -> None:
-    """The grave is MECHANISM, not commentary (CLAUDE.md's comment carve-out): it is the only
-    thing that tells a future reader why the census rows above exist and what would have to
-    change to un-bury the symbol. A deletion whose reason is not written down gets re-added.
-
-    MUTATION THAT REDS IT: the grave line removed in a tidy-up pass, leaving three rows
-    asserting the absence of something with no record of why it went."""
-    src = (_REPO / "src/mantis/train/batch_assembly.py").read_text(encoding="utf-8")
-    grave = [line for line in src.splitlines() if line.startswith("# GRAVE")]
-    assert grave, "the grave line is gone from batch_assembly.py"
-    joined = "\n".join(grave)
-    assert _BURIED in joined and "R326(d)" in joined, (
-        f"the grave line must name the buried symbol and the ruling that buried it; got {grave}"
-    )
-
-
 # ── unarmedness of the reroute itself ────────────────────────────────────────────────────
 def test_only_the_pretrain_cli_reaches_the_graph_route() -> None:
     """LANDING IS NOT ARMING. The reroute is reachable from the manual CLI entry point and

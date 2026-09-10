@@ -57,7 +57,7 @@ The defect each row is the ONLY witness to:
 - **OF2-7** — a silent drop or truncation of an out-of-domain graph (R114's clause), and a
   half-executed step.
 - **OF2-11** — a partition depending on host state.
-- **OF2-13** — the `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` ban, which has **NO behavioural producer
+- **OF2-13** — RETIRED with R346(f): the `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` ban had **NO producer
   at HEAD**: `tests/config/test_train_entropy.py:73-81` only asserts the string is absent from
   the schema module, a duplication guard (R4/LAW-07).
 - **OF2-15** — the route-scoped resolution. (a) is a REGRESSION pin against the fix's own
@@ -91,14 +91,13 @@ import torch
 
 import _microbatch_harness as H
 from mantis.monitor.config import MonitorConfig
-from mantis._engine import ReplayBuffer
 from mantis.config.resolve.microbatch import (
     MicrobatchCapsSpec,
     MissingMicrobatchCapsError,
     resolve_microbatch_caps,
 )
 from mantis.encoding import lookup
-from mantis.model import CnnArch, build_net
+from mantis.model import build_net
 from mantis.model.dist65 import binned_value_loss
 from mantis.selfplay.graph_collate import collate_graph_batch, graph_wire_from_rust
 from mantis.selfplay.graph_wire_split import (
@@ -113,15 +112,6 @@ from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.losses import graph_loss_denominators, ragged_policy_ce
 from mantis.train.trainer.core import Trainer
-
-GRID_ENCODING = "v6_live2_ls"
-_DSPEC = lookup(GRID_ENCODING)
-
-#: The exact train-less `full_config` five FROZEN files construct (`test_clean_stop_save.py:254`,
-#: `test_eval_result_routing.py:198`, `test_terminal_eval_rc.py:330`,
-#: `test_target_counter_events.py:242`). Copied as a LITERAL, not imported: it is the shape
-#: OF2-15 is about, and a shared constant could be edited to make the row pass.
-_TRAINLESS_GRID = {"identity": {"encoding": GRID_ENCODING, "representation": "grid"}}
 _TRAINLESS_GRAPH = {"identity": {"encoding": H.GRAPH_ENCODING, "representation": "graph"}}
 
 
@@ -705,48 +695,6 @@ def test_of2_6_graph_trainer_step_event_carries_the_counter_and_its_caps(tmp_pat
     assert (ev["caps_max_edges"], ev["caps_max_nodes"]) == caps
 
 
-def test_of2_6_the_dense_event_carries_none_of_the_five_keys(tmp_path) -> None:
-    """OF2-6 second limb — the five keys are GRAPH-ROUTE ONLY. Asserted as an ABSENCE, which
-    a "keys present" oracle would not see (MB-12)."""
-    sink = H.SpySink()
-    torch.manual_seed(H.SEED)
-    arch = CnnArch(board_size=int(_DSPEC.board_size), in_channels=int(_DSPEC.n_planes),
-                   filters=8, res_blocks=1)
-    trainer = Trainer(build_net(arch), H.minted_config("sustained_kcluster.yaml"),
-                      arch=arch, checkpoint_dir=tmp_path / "dense", device=torch.device("cpu"),
-                      train_hparams=H.graph_hparams(), sink=sink)
-    run_declared_train_step(trainer, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
-                            caps_provider=_never_called_provider)
-    ev = sink.named("trainer_step")[0]
-    assert ev["representation"] == "grid"
-    for key in ("microbatches", "edges", "nodes", "caps_max_edges", "caps_max_nodes"):
-        assert key not in ev, f"the DENSE trainer_step event carries {key!r} (MB-12)"
-
-
-def _never_called_provider() -> MicrobatchCapsSpec:
-    raise AssertionError(
-        "the grid arm invoked caps_provider — the caps are graph-route only and the grid "
-        "route must not be able to reach them (DESIGN_DFIX §3.11.1, F2-ABORT-5)")
-
-
-def _dense_buffer(n_records: int = 8, capacity: int = 64) -> ReplayBuffer:
-    rb = ReplayBuffer(capacity, GRID_ENCODING)
-    s = int(_DSPEC.board_size)
-    n_cells = s * s
-    for i in range(n_records):
-        state = np.zeros((int(_DSPEC.n_planes), s, s), dtype=np.float16)
-        state[0, 0, i % s] = 1.0
-        chain = np.zeros((6, s, s), dtype=np.float16)
-        policy = np.zeros(int(_DSPEC.policy_stride), dtype=np.float32)
-        policy[i % n_cells] = 1.0
-        own = np.zeros(n_cells, dtype=np.uint8)
-        wl = np.zeros(n_cells, dtype=np.uint8)
-        rb.push(state, chain, policy, 1.0 if i % 2 == 0 else -1.0, own, wl)
-    return rb
-
-
 # ═══ OF2-7 — the out-of-domain graph ═════════════════════════════════════════════════════
 @pytest.mark.parametrize("member", ["max_edges", "max_nodes"])
 def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_path,
@@ -826,31 +774,6 @@ def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, c
     assert outcome  # the row's content is the RECORD; there is nothing here to gate
 
 
-# ═══ OF2-13 — the armed graph-weights refusal ════════════════════════════════════════════
-def test_of2_13_a_nonzero_forbidden_weight_raises_before_any_state_moves(tmp_path) -> None:
-    """OF2-13 — the FIRST behavioural producer the `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` ban has
-    ever had (R4/LAW-07). At HEAD the only test naming the ban is
-    `tests/config/test_train_entropy.py:73-81`, which asserts the string is ABSENT from the
-    schema module — a duplication guard, not a producer. Deleting the loop (MB-23) reds
-    nothing anywhere in the repository at HEAD."""
-    buf = H.uniform_graph_buffer(8)
-    replay = H.ReplayWireBuffer(buf, 4)
-    caps = H.non_binding_caps(replay.wire)
-    sink = H.SpySink()
-    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, ownership_weight=0.5)
-    spy = H.OptimizerSpy(trainer.optimizer)
-    before = trainer.step
-    with pytest.raises(ValueError, match="ownership_weight"):
-        run_declared_train_step(
-            trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
-            recent_buffer=None, sample_threads_provider=lambda: 1,
-                            fast_policy_weight_provider=lambda: 0.0,
-            caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
-    assert trainer.step == before
-    assert spy.zero_grads == 0 and spy.steps == 0
-    assert sink.named("trainer_step") == []
-
-
 # ═══ OF2-15 — the ROUTE-SCOPED resolution ════════════════════════════════════════════════
 def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinator:
     """A real `StepCoordinator` over the given `full_config`. The collaborators this row does
@@ -865,66 +788,6 @@ def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinato
         eval_model=None, bufs=None,
         config=SimpleNamespace(selfplay_stall_timeout_sec=1800.0),
         full_config=full_config)
-
-
-def test_of2_15a_a_grid_step_over_a_trainless_config_never_resolves_the_caps(tmp_path,
-                                                                            monkeypatch) -> None:
-    """OF2-15(a) — the REGRESSION pin against this fix's own earlier shape.
-
-    Five FROZEN files build a `StepCoordinator` whose `full_config` carries no `train` key,
-    and at least `test_clean_stop_save.py` provably runs real steps through that call. An
-    eager `caps=self._microbatch_caps()` at `coordinator/step.py:930` — Python evaluates every
-    argument before the call — would resolve `full_config["train"]` on BOTH representations
-    and raise `KeyError: 'train'` there (MB-26). The provider is passed UNCALLED and only the
-    graph arm invokes it, so the grid route cannot read the caps: a property of the call
-    graph, checkable from two signatures.
-
-    GREEN at HEAD and green after — declared, so it is not claimed as more than it is."""
-    calls: list[Any] = []
-    real = resolve_microbatch_caps
-
-    def _spy(cfg: Any):
-        calls.append(cfg)
-        return real(cfg)
-
-    monkeypatch.setattr("mantis.config.resolve.microbatch.resolve_microbatch_caps", _spy)
-    monkeypatch.setattr("mantis.train.coordinator.step.resolve_microbatch_caps", _spy,
-                        raising=False)
-    torch.manual_seed(H.SEED)
-    arch = CnnArch(board_size=int(_DSPEC.board_size), in_channels=int(_DSPEC.n_planes),
-                   filters=8, res_blocks=1)
-    trainer = Trainer(build_net(arch), H.minted_config("sustained_kcluster.yaml"),
-                      arch=arch, checkpoint_dir=tmp_path / "dense", device=torch.device("cpu"),
-                      train_hparams=H.graph_hparams())
-    coord = _coordinator(dict(_TRAINLESS_GRID), trainer, _dense_buffer())
-    cfg = SimpleNamespace(batch_size=4, augment=False, recency_weight=0.0)
-    info = coord._run_training_step(cfg)         # a REAL grid training step
-    assert "loss" in info and trainer.step == 1
-    assert calls == [], (
-        "a grid training step resolved train.microbatch_caps — the caps are graph-route only "
-        "and five frozen coordinators carry no `train` key (MB-26, F2-ABORT-5)")
-
-
-def test_of2_15a_the_grid_arm_does_not_take_the_provider_at_all() -> None:
-    """OF2-15(a), structural half — "the grid arm cannot read the caps" is a CALL-GRAPH
-    property, not a convention a future edit can break silently. Two signatures say so."""
-    graph_params = inspect.signature(dispatch_mod._graph_step).parameters
-    grid_params = inspect.signature(dispatch_mod._grid_step).parameters
-    assert "caps_provider" in graph_params
-    assert "caps_provider" not in grid_params, (
-        "_grid_step accepts caps_provider — under the design the grid arm is not GIVEN the "
-        "provider, so a grid run structurally cannot reach the caps (DESIGN_DFIX §3.11.1)")
-    # PERF-TRANCHE-1 B1's thread budget rides the same call-graph property, and for the same
-    # reason: `resolve_sample_threads` reads `full_config["selfplay"]`, which a trainless
-    # grid coordinator does not have.
-    assert "sample_threads_provider" in graph_params
-    assert "sample_threads_provider" not in grid_params, (
-        "_grid_step accepts sample_threads_provider — the grid arm has no rebuild to widen "
-        "and no `selfplay` section to derive a budget from")
-    top = inspect.signature(run_declared_train_step).parameters["caps_provider"]
-    assert top.default is inspect.Parameter.empty, (
-        "caps_provider has a default — a default is a code-side default for a config-derived "
-        "value and a caller that forgot it would silently get an UNCAPPED step (R1)")
 
 
 def test_of2_15b_a_graph_route_without_the_block_raises_by_name() -> None:

@@ -109,9 +109,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
 #: The `train.*` leaves this CLI is NOT allowed to have an opinion about (F-816-25, R296(b)).
 #: Named as data rather than spelled out in the reader below so the oracle can assert the SET,
 #: not a hand-listed copy of it that would stay green while a seventh shadow was added.
-SHADOWED_TRAIN_KEYS: tuple[str, ...] = (
-    "lr", "weight_decay", "batch_size", "aux_opp_reply_weight", "aux_chain_weight", "eta_min",
-)
+SHADOWED_TRAIN_KEYS: tuple[str, ...] = ("lr", "weight_decay", "batch_size", "eta_min")
 
 
 def training_terms(train_cfg: TrainConfig) -> dict[str, float | int | bool | str]:

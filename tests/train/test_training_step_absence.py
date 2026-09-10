@@ -75,7 +75,7 @@ def _real_dense_loss_info(full_train_hparams: Any) -> dict[str, float]:
     arch = arch_from_spec_and_config(spec, {})
     config = {
         "schema_version": 1, "run_id": "run5", "seed": 7,
-        "identity": {"encoding": "v6_live2_ls", "representation": "grid"},
+        "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": {"random_model_sims": 1, "sealbot_model_sims": 1},
         "search": {"kind": "puct"},
         "selfplay": {"legal_move_radius_schedule": None},

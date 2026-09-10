@@ -981,14 +981,11 @@ mod tests {
             0,
         )
         .expect("graph batcher constructs");
-        // READ THROUGH THE PRIVATE FIELD, not the getter. The `#[getter] lock_recoveries`
-        // that surfaced this counter to Python was deleted alongside the dense batcher
-        // methods at R346(f), while `lock_or_recover` still increments it — so the LAW-18
-        // in-run observable for a poisoned GRAPH lock currently has no FFI surface. This
-        // in-crate read keeps the recovery mechanism under test; restoring the getter is a
-        // production change and is reported rather than made here.
-        let recoveries = || b.lock_recoveries.load(Ordering::SeqCst);
-        assert_eq!(recoveries(), 0, "a fresh batcher has recovered nothing");
+        assert_eq!(
+            b.lock_recoveries(),
+            0,
+            "a fresh batcher has recovered nothing"
+        );
 
         poison(&b.in_flight_graphs);
 
@@ -996,12 +993,12 @@ mod tests {
         b.fail_remaining_graph_ids(&[1, 2, 3], "post-poison call");
 
         assert!(
-            recoveries() >= 1,
-            "the seam recovered but did not COUNT — a silent swallow is what LAW-18 forbids"
+            b.lock_recoveries() >= 1,
+            "the seam recovered but did not REPORT — a silent swallow is what LAW-18 forbids"
         );
         // And it is still usable afterwards, not wedged.
         b.fail_remaining_graph_ids(&[4], "second post-poison call");
-        assert!(recoveries() >= 2);
+        assert!(b.lock_recoveries() >= 2);
     }
 
     /// The mutation self-test for the recovery arm (LAW-07): if `lock_or_recover` ever stops
@@ -1047,16 +1044,18 @@ mod tests {
 
     #[test]
     fn explicit_lens_without_spec_construct() {
-        let b = PyInferenceBatcher::new(None, Some(2888), Some(362), None, 0)
+        // Two DISTINCT widths, neither of them any registered row's, so a crosswire between
+        // the two slots cannot read as a plausible spec derivation.
+        let b = PyInferenceBatcher::new(None, Some(777), Some(362), None, 0)
             .expect("explicit lens construct");
-        assert_eq!(b.feature_len, 2888);
+        assert_eq!(b.feature_len, 777);
         assert_eq!(b.policy_len, 362);
     }
 
     #[test]
     fn no_spec_no_lens_errors() {
         assert!(PyInferenceBatcher::new(None, None, None, None, 0).is_err());
-        assert!(PyInferenceBatcher::new(None, Some(2888), None, None, 0).is_err());
+        assert!(PyInferenceBatcher::new(None, Some(777), None, None, 0).is_err());
     }
 
     #[test]

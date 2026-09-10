@@ -441,7 +441,7 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
         # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity
         # (LAW-11) — an identity-less full_config now raises MissingEncodingError, so the
         # unit drives declare the grid identity their `_Buffer` fake serves.
-        full_config={"identity": {"encoding": "v6_live2_ls", "representation": "grid"}},
+        full_config={"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}},
         train_cfg={}, mixing_cfg=mixing_cfg or {}, sink=sink, bot_buffer=bot,
         monitor_cfg=MonitorConfig(),
     )

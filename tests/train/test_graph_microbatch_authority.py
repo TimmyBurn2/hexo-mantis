@@ -5,10 +5,9 @@
 # The four rows are ONE claim — "the cap block has
 # exactly ONE authority, on exactly ONE route, and moves nothing else" — and three of them are
 # structural censuses over the same parsed `src/` tree. Splitting them would separate the
-# one-authority census from the single-tail census it shares a parse with, and would put
-# OF2-12's dense-invariance golden in a file with no other statement about what F2 must NOT
-# move. Executable content is a minority: the rest is the per-row LAW-07 rationale.
-"""⊕ WP12-R dispatch 6 phase F2 — one authority, one route, and the dense path untouched
+# one-authority census from the single-tail census it shares a parse with.
+# Executable content is a minority: the rest is the per-row LAW-07 rationale.
+"""⊕ WP12-R dispatch 6 phase F2 — one authority on one route
 (DESIGN_DFIX §5.2, PREREG_DFIX §4).
 
 The defect each row is the ONLY witness to:
@@ -26,14 +25,15 @@ The defect each row is the ONLY witness to:
   rows catch that only at the M they happen to run; the AST catches it at any M (MB-25). The
   same leg pins the SINGLE TAIL, which is what makes `grad_norm`'s presence in the returned
   dict a structural property rather than a fact about one code path.
-- **OF2-12** — the `fp16_backward_step` decomposition moving the DENSE update. The golden is
-  captured BEFORE the `losses.py` edit, so it is a true before/after (MB-18).
+- **OF2-12** — RETIRED with R346(f): its subject was the `fp16_backward_step` decomposition
+  moving the DENSE update, and the dense update is deleted. Its before/after golden went with
+  it — there is no path left for it to be a before/after of.
 - **OF2-14** — DESIGN_DFIX §7.4's "non-binding by construction" silently becoming false, with
   CI exercising a split by accident and no count changing to say so (MB-24).
 
 **What is real and what is not.** OF2-8 and OF2-14 take their CONFIG, keys, identity, resolver
 and route from `configs/*.yaml` — the network is small; the wiring is production's. OF2-9 is
-pure `ast` over the shipped source. OF2-12 substitutes the ARCH and nothing else.
+pure `ast` over the shipped source.
 """
 from __future__ import annotations
 
@@ -58,7 +58,6 @@ from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.encoding import lookup
-from mantis.model import CnnArch, build_net
 from mantis.selfplay.graph_wire_split import plan_microbatches
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.coordinator.step import StepCoordinator
@@ -67,10 +66,6 @@ from mantis.train.trainer.core import Trainer
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 _CONFIGS = _REPO / "configs"
-_GOLDEN = _REPO / "tests" / "fixtures" / "wp12r_dfix" / "dense_backward_golden.json"
-
-GRID_ENCODING = "v6_live2_ls"
-_DSPEC = lookup(GRID_ENCODING)
 
 #: The three names a reader of this block must mention. Frozen with NO line numbers, so the
 #: census cannot go stale against an unrelated edit.
@@ -503,116 +498,11 @@ def test_of2_9_leg2_no_tail_statement_lives_inside_the_accumulation_loop() -> No
                 "times per training step (MB-8)")
 
 
-# ═══ OF2-12 — the dense path does not move ═══════════════════════════════════════════════
-def _fixed_dense_batch(n: int = 4):
-    """A DETERMINISTIC dense batch in `train_step_from_tensors`' own argument order.
-
-    Constructed, not sampled: `ReplayBuffer.sample_batch_with_pos` draws through the Rust RNG,
-    which `torch.manual_seed` does not reach — measured, two same-process runs disagreed — so
-    a sampled batch cannot carry a bit-identity golden."""
-    rng = np.random.default_rng(H.SEED)
-    s = int(_DSPEC.board_size)
-    n_cells = s * s
-    states = rng.standard_normal((n, int(_DSPEC.n_planes), s, s)).astype(np.float16)
-    chain = rng.standard_normal((n, 6, s, s)).astype(np.float16)
-    policies = np.zeros((n, int(_DSPEC.policy_stride)), dtype=np.float32)
-    for i in range(n):
-        policies[i, (i * 7) % n_cells] = 1.0
-    outcomes = np.array([1.0 if i % 2 == 0 else -1.0 for i in range(n)], dtype=np.float32)
-    own = np.zeros((n, s, s), dtype=np.uint8)
-    wl = np.zeros((n, s, s), dtype=np.uint8)
-    ifs = np.ones(n, dtype=np.uint8)
-    pos = np.arange(n, dtype=np.uint16)
-    vv = np.ones(n, dtype=np.uint8)
-    return states, chain, policies, outcomes, own, wl, ifs, pos, vv
-
-
-def _dense_step_digests(tmp_path) -> tuple[dict[str, str], str]:
-    torch.set_num_threads(1)
-    torch.manual_seed(H.SEED)
-    arch = CnnArch(board_size=int(_DSPEC.board_size), in_channels=int(_DSPEC.n_planes),
-                   filters=8, res_blocks=1)
-    net = build_net(arch)
-    trainer = Trainer(net,
-                      {"identity": {"encoding": GRID_ENCODING, "representation": "grid"},
-                       "train": {"amp_dtype": "fp16",
-                                 "ema": {"enabled": False, "decay": 0.999,
-                                         "update_every": 10}}},
-                      arch=arch, checkpoint_dir=tmp_path / "ckpt",
-                      device=torch.device("cpu"), train_hparams=H.graph_hparams())
-    states, chain, policies, outcomes, own, wl, ifs, pos, vv = _fixed_dense_batch()
-    trainer.train_step_from_tensors(
-        states, policies, outcomes, chain_planes=chain, ownership_targets=own,
-        threat_targets=wl, is_full_search=ifs, n_pretrain=0, n_recent=0,
-        position_indices=pos, value_target_valid=vv)
-    params = {name: p.detach().cpu().numpy().tobytes() for name, p in net.named_parameters()}
-    per = {k: hashlib.sha256(v).hexdigest() for k, v in params.items()}
-    whole = hashlib.sha256()
-    for k in sorted(params):
-        whole.update(k.encode())
-        whole.update(params[k])
-    return per, whole.hexdigest()
-
-
-def test_of2_12_the_dense_step_is_bit_identical_to_the_pre_edit_golden(tmp_path) -> None:
-    """OF2-12 — the dense path is not this phase's to move. `fp16_backward_step` is
-    DECOMPOSED into `backward_accumulate` + `clip_and_step` and REDEFINED as their
-    composition: the same five statements in the same order on the same objects. MB-18
-    (recomposed with the clip before the backward) reds this bit-exactly.
-
-    The golden is a BIT-IDENTITY golden — sha256 over each post-step parameter tensor's raw
-    BYTES, so dtype and shape are covered too, and per-tensor digests localise a difference.
-    It was captured at the FAMILY-A TIP, before the `losses.py` edit; family A touches only
-    `gine.py`, which the dense CNN path does not use (`build_net` routes `CnnArch` to
-    `HexTacToeNet`), so the golden is identical at `982da03` and at the capture commit. The
-    capture commit is recorded in the golden itself.
-
-    DISCLOSED: a bit-identity golden is environment-bound. The golden carries the torch
-    version and platform it was taken on, and this row LOUD-SKIPS (grounds printed) rather
-    than firing a false HALT when the running environment differs — a red on a different BLAS
-    would say nothing about the decomposition. `torch.set_num_threads(1)` on both sides
-    removes the one intra-environment source this rig controls."""
-    golden = json.loads(_GOLDEN.read_text(encoding="utf-8"))
-    here = (torch.__version__, f"{sys.platform}/{platform.machine()}")
-    there = (golden["torch"], golden["platform"])
-    if here != there:
-        pytest.skip(
-            f"OF2-12 golden was captured on {there} and this environment is {here}; a "
-            "bit-identity comparison across BLAS/torch builds tests the environment, not the "
-            f"decomposition. Golden capture commit: {golden['capture_commit']}.")
-    per, whole = _dense_step_digests(tmp_path)
-    if whole != golden["whole_sha256"]:
-        moved = [k for k, v in per.items() if golden["per_tensor_sha256"].get(k) != v]
-        raise AssertionError(
-            f"the dense post-step parameters moved: {len(moved)} of {len(per)} tensors "
-            f"differ ({moved[:5]}...). The `fp16_backward_step` decomposition must execute "
-            f"the same five statements in the same order. Golden capture commit "
-            f"{golden['capture_commit']}.")
-    assert set(per) == set(golden["per_tensor_sha256"])
-
-
 # ═══ OF2-14 — the five smoke configs do not bind ═════════════════════════════════════════
-_NON_RUN5 = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml",
-             "smoke_radius_curriculum.yaml", "sustained_kcluster.yaml")
+_NON_RUN5 = ("dev_example.yaml", "smoke_gnn.yaml", "smoke_preflight_armed.yaml")
 
 
-def _names_by_arch(arch: str) -> list[str]:
-    """The configs in `_NON_RUN5` that SELECT `arch`, read off each file through the one loader.
-
-    R322(d) scoped `train.microbatch_caps` to `representation="graph"`, so the non-binding sweep
-    below is a GRAPH sweep: on a grid config the block is not merely unread, it is ABSENT and
-    its read path REFUSES. Derived rather than re-listed, so `_NON_RUN5` stays the one place the
-    run5/non-run5 split is stated and the premise row below still checks the whole directory.
-    """
-    return [n for n in _NON_RUN5
-            if load_config(_CONFIGS / n).identity.representation == arch]
-
-
-_NON_RUN5_GRAPH = _names_by_arch("graph")
-_NON_RUN5_GRID = _names_by_arch("grid")
-
-
-@pytest.mark.parametrize("name", _NON_RUN5_GRAPH)
+@pytest.mark.parametrize("name", _NON_RUN5)
 def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     """OF2-14 — DESIGN_DFIX §7.4 claims the five non-run5 configs are "non-binding by
     construction". Rev-1 asserted that and tested nothing; this row is its producer.
@@ -622,12 +512,8 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     deliberate and its M is asserted. The probe batch is built at the config's OWN
     `train.batch_size`.
 
-    THE TWO GRID CONFIGS ARE NOT IN THIS SWEEP ANY MORE (R322(d)). They used to be, with the
-    check labelled an UPPER BOUND on a route those configs never take — an honest label on a row
-    that was checking an invented number. The block is now ARCH-SCOPED and absent from them
-    entirely, so there is nothing left to bound; the row below asserts that absence and the
-    read path's refusal directly. Scoping this sweep is the repair arriving, not coverage being
-    dropped."""
+    The two grid configs that used to sit beside these are DELETED with the grid path
+    (R346(f)), so `_NON_RUN5` is the graph sweep outright and needs no arch split."""
     cfg = load_config(_CONFIGS / name)
     caps = resolve_microbatch_caps(cfg.model_dump())
     batch_size = int(cfg.train.batch_size)
@@ -642,34 +528,6 @@ def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
         f"batch_size={batch_size} batch into {len(parts)} micro-batches (E={int(ec.sum())}, "
         f"N={int(nc.sum())}) — CI would be exercising a split by accident (MB-24)")
     assert cfg.identity.representation == "graph"   # the sweep's own premise, executed
-
-
-@pytest.mark.parametrize("name", _NON_RUN5_GRID)
-def test_of2_14b_no_GRID_config_carries_the_caps_and_the_read_path_REFUSES(name: str) -> None:
-    """The complement of OF2-14, and the half R322(d) added.
-
-    Before B2 a grid config was REQUIRED to carry a cap counted in EDGES and NODES, and the mint
-    had to invent a number for a quantity a grid run has none of. Now the schema refuses the
-    block on a grid config and the resolver refuses a grid config BY NAME — the second is what
-    keeps the first from being green only for as long as nobody re-adds the block by hand.
-    """
-    cfg = load_config(_CONFIGS / name)
-    assert cfg.train.microbatch_caps is None, (
-        f"{name} selects representation='grid' and carries `train.microbatch_caps`")
-    assert "microbatch_caps" not in cfg.train.model_fields_set, (
-        f"{name} carries the key explicitly (as null); absence and an explicit null are "
-        "different facts and both are refused on a foreign arch")
-    with pytest.raises(ArchScopedKeyOutsideItsArchError, match="ARCH-SCOPED"):
-        resolve_microbatch_caps(cfg.model_dump())
-
-
-def test_of2_14c_the_arch_split_covers_the_whole_non_run5_set() -> None:
-    """Vacuity guard for the two rows above: a parametrize list that went empty would make one
-    of them assert nothing, and both lists are DERIVED so that is a live possibility."""
-    assert _NON_RUN5_GRAPH, "no non-run5 config selects graph; OF2-14 asserts nothing"
-    assert _NON_RUN5_GRID, "no non-run5 config selects grid; OF2-14b asserts nothing"
-    assert sorted(_NON_RUN5_GRAPH + _NON_RUN5_GRID) == sorted(_NON_RUN5), (
-        "the two arch lists do not partition `_NON_RUN5`")
 
 
 def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory() -> None:

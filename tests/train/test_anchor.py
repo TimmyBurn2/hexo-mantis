@@ -33,7 +33,7 @@ from mantis.train.anchor import (
 )
 
 _ANCHOR_SRC = Path(anchor_mod.__file__).read_text(encoding="utf-8")
-_ENC = "v6_live2_ls"
+_ENC = "gnn_axis_v1"
 _CPU = torch.device("cpu")
 _OPTIONAL_PREFIXES = anchor_mod._OPTIONAL_HEAD_PREFIXES
 
@@ -51,7 +51,7 @@ def test_save_best_model_atomic_roundtrip_and_bak_rotation(tmp_path: Path) -> No
     assert path.exists()
     assert not path.with_suffix(path.suffix + ".bak").exists()  # first save → no bak yet
     reloaded = torch.load(path, map_location="cpu", weights_only=True)
-    assert isinstance(reloaded, dict) and "trunk.input_conv.weight" in reloaded
+    assert isinstance(reloaded, dict) and "representation.input_proj.weight" in reloaded
 
     save_best_model_atomic(net, path)  # second save rotates the prior → .bak
     assert path.with_suffix(path.suffix + ".bak").exists()
@@ -259,7 +259,7 @@ def test_load_best_model_resilient_loads_valid_anchor(tmp_path: Path) -> None:
     model, source_path, _step, representation = ref
     assert isinstance(model, torch.nn.Module)
     assert source_path == path
-    assert representation == "grid"  # declared, off the arch — not a module sniff
+    assert representation == "graph"  # declared, off the arch — not a module sniff
 
 
 def test_load_best_model_resilient_recovers_from_bak(tmp_path: Path) -> None:
@@ -307,7 +307,7 @@ def test_anchor_state_carries_declared_representation(tmp_path: Path) -> None:
     assert ref is not None
     model, source_path, step, representation = ref
     state = AnchorState(model, step, source_path, representation)
-    assert state.representation == "grid"  # discriminant read off the arch
+    assert state.representation == "graph"  # discriminant read off the arch
 
 
 # ══ (B) corruption guard — the RED-TEAM #1 preserved landing guard ═════════════════════
@@ -318,28 +318,15 @@ def _core_and_optional_keys() -> "tuple[list[str], list[str]]":
     return core, optional
 
 
-def test_B_subset_anchor_missing_only_aux_heads_loads_clean(tmp_path: Path) -> None:
-    """A legitimate SUBSET/min-max baseline anchor — the aux training-only heads absent, every
-    CORE (trunk/policy/value) tensor present — loads clean (build_net emits a SUPERSET, so
-    strict=True would spuriously reject; the (B) guard admits an optional-only subset)."""
-    core, optional = _core_and_optional_keys()
-    assert optional, "the full net must carry aux heads for this test to mean anything"
-    full = _full_net().state_dict()
-    subset = {k: v for k, v in full.items() if not k.startswith(_OPTIONAL_PREFIXES)}
-    path = tmp_path / "subset_anchor.pt"
-    torch.save(subset, path)  # bare state_dict (the T-CK-32 shape)
-
-    ref = load_best_model_resilient(
-        path, declared_encoding=_ENC, device=_CPU, bootstrap_candidates=(),
-    )
-    assert ref is not None  # clean load — no false reject on a legitimate subset
-
-
 def test_B_missing_core_key_raises_not_silent_random_head(tmp_path: Path) -> None:
-    """A checkpoint missing a REQUIRED CORE tensor (policy_fc.weight) RAISES — never a silent
-    random-head load (the old E1-C1 / F-12 hazard the eval-loader landing-guard existed to kill)."""
+    """A checkpoint missing a REQUIRED CORE tensor RAISES — never a silent random-head load
+    (the old E1-C1 / F-12 hazard the eval-loader landing-guard existed to kill).
+
+    The optional-subset twin this row used to sit beside is GONE: `_OPTIONAL_HEAD_PREFIXES`
+    names the dense aux heads, and the graph net carries none of them, so a "missing only the
+    aux heads" anchor is not a state that exists any more."""
     full = _full_net().state_dict()
-    core_key = "policy_fc.weight"
+    core_key = "policy_head.mlp.0.weight"
     assert core_key in full and not core_key.startswith(_OPTIONAL_PREFIXES)
     corrupt = {k: v for k, v in full.items() if k != core_key}
     path = tmp_path / "core_missing_anchor.pt"

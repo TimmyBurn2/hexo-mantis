@@ -681,8 +681,6 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
 fn test_wp6_driver_setters_roundtrip() {
     // WP6 Stage A: the two narrow public setters exposed for the (separate-crate)
     // selfplay worker-loop driver. In-crate test reads the pub(crate) fields directly.
-    let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.0);
-
     // AUDIT-1 F-02: the setter validates against the ROOT's child range, so this round-trip
     // needs a root that HAS children — a bare tree owns none and index 3 belongs to nothing.
     let mut tree = setup_expanded_root();

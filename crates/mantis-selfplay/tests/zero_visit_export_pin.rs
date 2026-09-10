@@ -49,7 +49,7 @@ use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use mantis_core::board::{Board, BoardGeometry};
+use mantis_core::board::Board;
 use mantis_core::{Cell, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
@@ -59,15 +59,6 @@ use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 const NA: usize = 362; // gnn_axis_v1 policy stride (19*19 + 1)
 const TRUNK: i32 = 19;
-
-fn gnn_geometry() -> BoardGeometry {
-    let spec = lookup_or_panic("gnn_axis_v1");
-    BoardGeometry {
-        legal_move_radius: spec.legal_move_radius as i32,
-        cluster_threshold: spec.cluster_threshold.unwrap_or(5) as i32,
-        cluster_window_size: spec.cluster_window_size.unwrap_or(spec.board_size),
-    }
-}
 
 /// Three well-separated stones → a wide legal set (the frozen bank's `wide_board`).
 fn wide_board() -> Board {
@@ -182,32 +173,6 @@ fn an_unexpanded_root_is_refused_with_zero_children() {
 
 // ── PIN INDEPENDENCE: the end-to-end drive, with every inference HEALTHY ─────────────
 
-/// Dispersal prefix (the r153 rule — farthest from the window centre), byte-equal to the
-/// construction `target_latch_propagation` / `target_wire_carry` use.
-fn dispersed_prefix(n_plies: usize) -> Vec<(i32, i32)> {
-    let mut board = Board::with_geometry(gnn_geometry());
-    let mut moves = Vec::new();
-    for _ in 0..n_plies {
-        let legal = board.legal_moves();
-        if legal.is_empty() {
-            break;
-        }
-        let (cq, cr) = board.window_center();
-        let &(q, r) = legal
-            .iter()
-            .max_by_key(|&&(q, r): &&(i32, i32)| {
-                let (dq, dr) = (q - cq, r - cr);
-                dq.abs().max(dr.abs()).max((dq + dr).abs())
-            })
-            .unwrap();
-        if board.apply_move(q, r).is_err() {
-            break;
-        }
-        moves.push((q, r));
-    }
-    moves
-}
-
 fn spawn_healthy_graph_producer(
     queue: GraphQueue,
     n_actions: usize,
@@ -246,10 +211,13 @@ fn spawn_healthy_graph_producer(
 fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     let spec = lookup_or_panic("gnn_axis_v1");
     let n_actions = spec.policy_logit_count;
-    let prefix = dispersed_prefix(8);
 
     // sims=1 + batch=1: the single sim is the root expansion, every child carries 0 visits,
     // and EVERY inference succeeds. Nothing at the seam is wrong — which is the point.
+    // The 8 random opening plies stand in for the dispersed seed prefix this drive used to
+    // plant through `seed_fraction` / `seed_corpus`; those keys went with the seed-corpus
+    // lever at R346(f) and the runner has no start-position seeding left. The refusal does
+    // not depend on the position, so what is lost is the realism of the root, not the pin.
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: 20,
@@ -258,10 +226,8 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         standard_sims: 0,
         dirichlet_enabled: false,
         quiescence_enabled: false,
-        random_opening_plies: 0,
+        random_opening_plies: 8,
         encoding_name: Some("gnn_axis_v1".to_string()),
-        seed_fraction: 1.0,
-        seed_corpus: Some(vec![prefix]),
         ..Default::default()
     })
     .expect("gnn runner constructs");
