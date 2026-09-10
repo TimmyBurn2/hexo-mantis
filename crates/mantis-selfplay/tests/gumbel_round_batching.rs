@@ -9,17 +9,24 @@
 //! counts and the same move, only N times slower. So the width is counted in-run (LAW-18) and
 //! this file reads the counter.
 //!
-//! THE DENSE PATH, for `served_sims_exact.rs`'s reason: `search.kind: gumbel` on the GRAPH
-//! path is refused at boot by `replay::hexg::derived_visit_capacity`.
+//! THE DENSE PATH, for `served_sims_exact.rs`'s reason: this file drives the arm whose
+//! counters it reads, and the dense recorder is the one both kinds share. (The graph path is
+//! no longer refused under this kind — R347(a) gave it the sparse row — but the counter this
+//! file reads is the search's, not the recorder's, so the arm is a drive choice.)
 //!
-//! THE MEASURED MEAN AT 320/16 IS 3.71, NOT 4, AND THE GAP IS ARITHMETIC RATHER THAN A
-//! SHORTFALL. The schedule's round-width profile is discontinuous at its budget: a schedule
-//! built for 320 simulations means 4.267 leaves per round trip, and one built for 319 means
-//! 3.709. The Gumbel search gets 319 because the ROOT'S OWN EVALUATION IS CHARGED against
-//! `n_simulations` — the same clause that makes "N means N leaves" true. The two numbers
-//! cannot both be had at `n_simulations: 320`. The floor asserted below is therefore derived
-//! from the schedule itself rather than transcribed from a target, and the thing it has to
-//! separate is batching from no batching: un-batched is 1.0.
+//! THE DRIVEN MEAN AT 320/16 IS NOT 4, AND THE GAP IS ARITHMETIC RATHER THAN A SHORTFALL.
+//! The schedule's round-width profile is DISCONTINUOUS at its budget: the schedule built for
+//! `N_SIMS` simulations and the one built for `N_SIMS - 1` do not have the same mean, and
+//! the Gumbel search gets `N_SIMS - 1` because the ROOT'S OWN EVALUATION IS CHARGED against
+//! `n_simulations` — the same clause that makes "N means N leaves" true. Both numbers are
+//! DERIVED below by `schedule_mean` and printed; neither is transcribed here, because a
+//! transcribed pair goes stale the first time either constant moves (R192(e)).
+//!
+//! R347(c) AMENDED THE CRITERION to "leaves per round trip >= the schedule's own mean at
+//! (N, m)". The two-sided 20 % band it replaces is gone. `(N, m)` is read as the budget the
+//! SEARCH gets — `N_SIMS - 1`, m — because that is the schedule the driver actually walks;
+//! read as `N_SIMS` it would be a floor no charged-root search can clear, which is the
+//! arithmetic the amendment itself says was not done.
 
 use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -165,36 +172,46 @@ fn a_gumbel_round_is_one_round_trip_and_its_width_is_the_halving_phase() {
          wider than the candidate set it is drawn from"
     );
 
-    // THE BAND is the schedule's own mean at the budget the SEARCH gets, which is
-    // `N_SIMS - 1` because the root's own evaluation is charged. The driven mean tracks it
-    // rather than equalling it, in BOTH directions and for stated reasons: a round is
-    // truncated by the remaining budget and an overlapping descent is skipped (pulling it
-    // down), while a search cut short at `stop()` loses the schedule's NARROW tail rounds
-    // (pushing it up). A 20 % band is what those two residuals fit in at this drive's size.
+    // THE CRITERION (R347(c)): at or above the schedule's own mean at the budget the SEARCH
+    // gets, which is `N_SIMS - 1` because the root's own evaluation is charged. One-sided,
+    // and the side is the one that carries the claim: a driver issuing NARROWER rounds than
+    // the schedule's phases is not batching them, while a driver issuing WIDER ones is
+    // bounded already by the structural ceiling asserted above. The upward residual the old
+    // two-sided band existed to admit — a search cut short at `stop()` loses the schedule's
+    // narrow tail rounds — is therefore no longer a reason to hold an upper edge here.
     let expected = schedule_mean(GUMBEL_M, N_SIMS - 1);
+    println!(
+        "criterion: driven {mean:.3} >= schedule mean {expected:.3} at ({}, {GUMBEL_M}); \
+         the schedule at ({N_SIMS}, {GUMBEL_M}) means {:.3}",
+        N_SIMS - 1,
+        schedule_mean(GUMBEL_M, N_SIMS)
+    );
     assert!(
-        mean >= expected * 0.8 && mean <= expected * 1.2,
+        mean >= expected,
         "measured {mean:.3} leaves per round trip against the schedule's own {expected:.3} \
-         at a budget of {} — outside the residual band, so the rounds being issued are not \
-         the schedule's phases",
+         at a budget of {} — below the schedule's own mean, so the rounds being issued are \
+         not the schedule's phases",
         N_SIMS - 1
     );
 
-    // AND THE THING THE BAND EXISTS TO SEPARATE, stated on its own so a future widening of
-    // the band cannot swallow it: un-batched, every round trip carries exactly one leaf.
+    // AND THE THING THE CRITERION EXISTS TO SEPARATE, stated on its own so a future
+    // loosening cannot swallow it: un-batched, every round trip carries exactly one leaf.
     assert!(
         mean > 1.0,
         "measured {mean:.3} leaves per round trip: the Gumbel arm is issuing ONE leaf per \
          round trip, which is the pre-batching behaviour"
     );
 
-    // The ruling's target for this regime is 4; the schedule delivers 4.267 at a budget of
-    // 320 and 3.709 at 319, and the search gets 319 because the root is charged. Asserted so
-    // the discrepancy is a recorded fact rather than a silent shortfall.
+    // THE DISCONTINUITY ITSELF, asserted as a relation and not against a transcribed pair:
+    // the schedule's mean at `N_SIMS` is STRICTLY GREATER than at `N_SIMS - 1`, which is why
+    // the criterion above has to name which of the two budgets it means. R346(b)'s "4" was
+    // the first of those numbers read as though the search got it; the search gets the
+    // second, because the root is charged.
     assert!(
-        schedule_mean(GUMBEL_M, N_SIMS) > 4.0 && expected < 4.0,
-        "the 320-vs-319 discontinuity this file documents no longer holds: schedule mean is \
-         {:.3} at {N_SIMS} and {expected:.3} at {}",
+        schedule_mean(GUMBEL_M, N_SIMS) > expected,
+        "the {N_SIMS}-vs-{}-discontinuity this file documents no longer holds: schedule mean \
+         is {:.3} at {N_SIMS} and {expected:.3} at {}",
+        N_SIMS - 1,
         schedule_mean(GUMBEL_M, N_SIMS),
         N_SIMS - 1
     );
