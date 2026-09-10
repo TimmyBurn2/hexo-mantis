@@ -34,8 +34,9 @@ pub(super) struct CqChild {
 pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
     let mut masses: Vec<f32> = children.iter().map(|ch| ch.prior).collect();
     // WP12-R Phase T: the normalizer accumulates in f64 (cast once to f32).
-    // A sequential f32 sum drifts ~2e-6 relative at the 192-child cap, so the
-    // zero-visit fallback shipped a "distribution" missing unity by more than
+    // A sequential f32 sum drifts ~2e-6 relative over a 192-term sum (measured when
+    // MAX_CHILDREN_PER_NODE was 192; the drift grows with the term count, and R347(c) raised
+    // that cap), so the zero-visit fallback shipped a "distribution" missing unity by more than
     // the target-integrity oracles tolerate. Bit-identical on every committed
     // golden fixture (S1/S2_RED3 all-unvisited verified byte-equal); the
     // divisions below stay f32 — no formula change, accumulation only.

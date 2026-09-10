@@ -31,6 +31,7 @@ pub mod seq_halving;
 
 pub use backup::{
     omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
+    OmittedPriorStats,
 };
 pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
@@ -44,18 +45,19 @@ pub use selection::{ForcedChildOutOfRange, SelectionDesync};
 /// `window_flat_idx` for determinism). Fewer-than-K positions take a fast
 /// path with no sort.
 ///
-/// Bound: pool nodes consumed per search ≈ n_simulations × leaf_batch × K.
-/// At n_sims=400, leaf_batch=8, K=192 → ~614k slots, fits MAX_NODES=1M with
-/// headroom for transposition-table re-expansions and root re-rooting.
+/// Bound: what K costs is the armed-sims ceiling, and `MAX_ARMED_SIMS` below derives it
+/// from this constant and `MAX_NODES` rather than restating a worked example that goes
+/// stale the moment either moves.
 ///
-/// Captures wide-board exploration during early training (legal_moves can
-/// balloon past 1k cells once the board has 100+ stones spread out). Can drop
-/// to 128 post-training-stabilisation if threat-probe shows no regression.
+/// R347(c) raised it from 192 with `MAX_NODES` raised alongside. The interior legal set at
+/// radius 8 is measured at a median of 355 and a maximum of 8142, so a 192-wide cap
+/// truncated the prior at nearly every interior node past the opening; the omitted-prior
+/// telemetry is what says how often the cap still binds.
 ///
 /// Subtree-reuse interaction: K is per-node, not per-tree. Children are
 /// stable identity across re-roots since the chosen top-K set is determined
 /// by local policy + flat_idx, both invariant under root rotation.
-pub const MAX_CHILDREN_PER_NODE: usize = 192;
+pub const MAX_CHILDREN_PER_NODE: usize = 1024;
 
 /// The largest armed sim budget the node pool can serve, DERIVED from the pool's own two
 /// constants (AUDIT-1 F-21).
@@ -63,8 +65,8 @@ pub const MAX_CHILDREN_PER_NODE: usize = 192;
 /// `finish_expansion` panics when `next_free + n_ch > pool.len()`, and `select_leaves`
 /// expands TT-hit leaves WITHOUT counting them against `n` — bounded only by
 /// `max_attempts = 4n`. So the worst case for one move is `4 × sims` expansions, each adding
-/// up to `MAX_CHILDREN_PER_NODE` children, and the pool overflows from `n_simulations` alone
-/// at roughly 1302. The schema declares `n_simulations: Field(ge=1)` with NO ceiling, and
+/// up to `MAX_CHILDREN_PER_NODE` children, so the pool overflows from `n_simulations` alone
+/// past this bound. The schema declares `n_simulations: Field(ge=1)` with NO ceiling, and
 /// `SelfPlayRunner::new` checked only `effective_standard == 0`, so a config could arm a
 /// budget that halts the run at the first move that crosses the bound.
 ///
@@ -146,6 +148,18 @@ pub struct MCTSTree {
     /// Atomic (not Cell) because the FFI layer wraps MCTSTree in a Send+Sync
     /// handle in the bridge crate; Cell is `!Sync` and would break that bound.
     pub quiescence_fire_count: AtomicU64,
+    /// R347 — THIS SEARCH's omitted-prior counters, `(mass_micros, expansions_that_omitted,
+    /// total_expansions)`.
+    ///
+    /// PER-SEARCH, and that is the whole point: the same three quantities live in
+    /// process-wide statics for the run-wide aggregate the bridge publishes, and a test or a
+    /// caller that brackets a measurement around ONE search used to read those statics — so
+    /// any other search running concurrently in the same process landed inside the bracket.
+    /// `take_omitted_prior` below is the bracket that cannot be contaminated.
+    ///
+    /// `AtomicU64` for the reason `quiescence_fire_count` carries: the bridge wraps the tree
+    /// in a Send+Sync handle, and a `Cell` is `!Sync`.
+    pub omitted_prior: OmittedPriorStats,
     /// Which search this tree runs. Set once per worker (`configure_search`), never
     /// per search.
     pub(crate) kind: SearchKind,
@@ -204,6 +218,7 @@ impl MCTSTree {
             quiescence_blend_2: 0.3,
             forced_root_child: None,
             quiescence_fire_count: AtomicU64::new(0),
+            omitted_prior: OmittedPriorStats::default(),
             kind: SearchKind::Puct,
             raw_values: Vec::new(),
             q_c_visit: 50.0,
@@ -226,6 +241,7 @@ impl MCTSTree {
         self.depth_accum = 0;
         self.sim_count = 0;
         self.quiescence_fire_count.store(0, Ordering::Relaxed);
+        self.omitted_prior.reset();
         self.forced_root_child = None;
         if let Some(root) = self.raw_values.first_mut() {
             *root = 0.0;
@@ -305,6 +321,22 @@ impl MCTSTree {
             SearchKind::Puct => Vec::new(),
             SearchKind::Gumbel => vec![0.0; MAX_NODES],
         };
+    }
+
+    /// Read-and-reset THIS tree's omitted-prior counters — the per-search measurement
+    /// bracket (R347). Returns `(omitted_mass_micros, expansions_that_omitted,
+    /// total_expansions)`.
+    ///
+    /// The process-wide totals are NOT reset by this: they are the run-wide aggregate the
+    /// bridge face publishes, and a per-search read must not silently zero a run's telemetry.
+    pub fn take_omitted_prior(&self) -> (u64, u64, u64) {
+        self.omitted_prior.take()
+    }
+
+    /// The same three counters without resetting them.
+    #[must_use]
+    pub fn omitted_prior_stats(&self) -> (u64, u64, u64) {
+        self.omitted_prior.read()
     }
 
     /// Children the ROOT may expand under this tree's kind.

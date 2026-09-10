@@ -24,7 +24,7 @@
 //! already correct, and the fixture is minted FROM it. That is stated plainly rather than
 //! sold as independence: `expected_children` is a self-play-authored golden. What the
 //! mutations must show is SENSITIVITY, and M6' (a sum-preserving `legal_probs` swap ACROSS
-//! the 192-child cap boundary, applied in the SHARED producer) shows it — both legs stay
+//! the per-node cap boundary, applied in the SHARED producer) shows it — both legs stay
 //! valid, both reach the comparison, and both disagree with the frozen constant.
 //!
 //! Killing mutation: **M6'**. M5 (`expand_and_backup_ls_at` -> `expand_and_backup_ls`) is

@@ -83,14 +83,32 @@ _P2_FIXTURE = _FIXTURES / "dispersed_r6_v1.json"
 #: `policy_logit_count` is 362 and `Board.to_flat` returns a sentinel above the window, so
 #: `to_flat(q, r) >= 361` is exactly "off-window" — the same test the Rust leg applies.
 _OFF_WINDOW_FLAT = 361
-#: `MAX_CHILDREN_PER_NODE` (`crates/mantis-search/src/mcts/mod.rs:47`). Read here as a
-#: literal ON PURPOSE: P-3c asserts that Python owns no second authority for it.
-_EXPECTED_CHILDREN = 192
+#: `MAX_CHILDREN_PER_NODE`, read here as a literal ON PURPOSE: P-3c parses the Rust source
+#: for the constant and asserts that Python owns no second authority for it. Raised from 192
+#: with the constant itself (R347(c)).
+_CHILD_CAP = 1024
+
+
+def _expected_children(board: Board) -> int:
+    """How many root children a position must produce: `min(n_legal, K)`.
+
+    A LITERAL was correct while every fixture position sat above the cap, and R347(c)
+    raised the cap past two of them — so a fixture whose legal set is 364 wide now takes
+    ALL of it and a bare `_CHILD_CAP` would assert a count no position can reach. The
+    relation is what the oracle always meant; the literal was that relation collapsed at
+    a cap that has since moved.
+    """
+    return min(len(board.legal_moves()), _CHILD_CAP)
 #: DESIGN §b.3 P-1c. Measured at mint over up to 1294 terms: the largest cross-language
 #: disagreement between the torch-f32 softmax and the Rust-f32 softmax is 7.3e-10.
 _PRIOR_TOL = 1e-5
 #: DESIGN §b.3 P-2 / PREREG §2 gate 6: the two fixtures together, enforced not asserted.
-_FIXTURE_BYTE_BUDGET = 65536
+#: RE-DERIVED at R347(c), not loosened: a position's frozen child set is `min(n_legal, K)`
+#: coords, so raising the per-node cap from 192 to 1024 widens every capped position's row
+#: by the same factor and the fixtures grew with it. The budget's job is R7 hygiene — keep a
+#: committed fixture small enough to read — and it still holds them two orders of magnitude
+#: under R7's own ceiling.
+_FIXTURE_BYTE_BUDGET = 131072
 
 
 # ── fixture access ───────────────────────────────────────────────────────────────────
@@ -401,15 +419,16 @@ def test_every_off_window_legal_coord_is_in_overflow(graph_engine) -> None:
 
 # ── ⊕ P-3a ───────────────────────────────────────────────────────────────────────────
 def test_head_children_are_drawn_from_the_full_legal_set(graph_engine) -> None:
-    """Oracle (iii), tree form: the head's candidates are the top-192 of the FULL legal set
-    by true prior, not the top-192 of a 361-cell window. The 192 cap survives and is SHARED
-    with self-play (P-3c), so the residual asymmetry is symmetric. Killing mutation: M2 —
+    """Oracle (iii), tree form: the head's candidates are the top-K of the FULL legal set by
+    true prior, not the top-K of a 361-cell window. The cap survives and is SHARED with
+    self-play (P-3c), so the residual asymmetry is symmetric. Killing mutation: M2 —
     M1 leaves this GREEN, measured, and that is the prediction."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
         board = _board(pos)
         children = [coord for coord, _prior in _eval_children(engine, spec, board)]
-        assert len(children) == _EXPECTED_CHILDREN, f"{pos['id']}: {len(children)} children"
+        assert len(children) == _expected_children(board), (
+            f"{pos['id']}: {len(children)} children")
         assert any(board.to_flat(q, r) >= _OFF_WINDOW_FLAT for q, r in children), (
             f"{pos['id']}: every root child is inside the 361-cell window"
         )
@@ -423,8 +442,9 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     head cannot answer off-window at all. Under R147 the RandomBot floor is ARMED for run5,
     so this oracle's subject is a production rung (`_play_random_floor` reaches the same
     `DeployHeadPlayer`); the armed VALUE is mint-prereg and is set nowhere here. At HEAD
-    this is structurally impossible: `select_argmax_child` iterates
-    `get_root_children_info()` only, and none of those is off-window. Killing mutation: M2.
+    this is structurally impossible: `_drive_puct` answers with `MCTSTree.get_top_visits(1)`,
+    which ranks the ROOT'S OWN CHILDREN, and none of those is off-window. Killing mutation:
+    M2.
     """
     engine, spec = graph_engine
     pos = _positions(_load(_P2_FIXTURE))[3]
@@ -453,7 +473,7 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
 
 # ── ⊕ P-3c ───────────────────────────────────────────────────────────────────────────
 def test_there_is_exactly_one_child_cap_authority() -> None:
-    """The 192 cap has ONE definition and Python owns no second one.
+    """The per-node child cap has ONE definition and Python owns no second one.
 
     The `^pub const` anchor is load-bearing: it stops the `pub` re-export at
     `mantis-search/src/lib.rs:21` and the uses in `tests/pool_overflow.rs` / `mcts/tests.rs`
@@ -494,7 +514,8 @@ def test_expand_ls_graph_arity_conjuncts_are_enforced(graph_engine, short_arg) -
     fewer leaves, so the bridge guard must be always-on."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
-    assert len(_eval_children(engine, spec, board)) == _EXPECTED_CHILDREN, "clean-call control"
+    assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
+        "clean-call control")
 
     tree = MCTSTree()
     tree.new_game(board)
@@ -516,7 +537,8 @@ def test_expand_ls_graph_refuses_a_centre_the_board_disagrees_with(graph_engine)
     cross-checks it — a pairing/drift tripwire, expected always-equal. Mutation M3."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
-    assert len(_eval_children(engine, spec, board)) == _EXPECTED_CHILDREN, "clean-call control"
+    assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
+        "clean-call control")
 
     tree = MCTSTree()
     tree.new_game(board)
@@ -536,7 +558,8 @@ def test_expand_ls_graph_refuses_a_trunk_the_board_disagrees_with(graph_engine) 
     run5 (measured), so this guard is a drift tripwire. Mutation M4."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
-    assert len(_eval_children(engine, spec, board)) == _EXPECTED_CHILDREN, "clean-call control"
+    assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
+        "clean-call control")
 
     tree = MCTSTree()
     tree.new_game(board)
@@ -554,7 +577,8 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
     wrong-width decode Phase B killed on the grid seam; it must be loud here too."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
-    assert len(_eval_children(engine, spec, board)) == _EXPECTED_CHILDREN, "clean-call control"
+    assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
+        "clean-call control")
 
     tree = MCTSTree()
     tree.new_game(board)
