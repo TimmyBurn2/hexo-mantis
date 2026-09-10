@@ -72,6 +72,12 @@ added_by = "WP6"
 # probe_set_v1.jsonl (2.39 MB) is the sole gate-6 large-file exception (operator
 # allowlist; §f). The WP9 data half's replay / augment / q13 rows went with the dense
 # path (R346(f)) — the fixtures they read had no consumer left.
+# CORRECTED IN PLACE (R311(c)): the O2 value-health bank — decoded_v.npz, metrics.json,
+# probe_set_v1.jsonl, negatives_v1.jsonl — has NO reader at HEAD. Its only consumer was
+# tests/model/test_value_health.py, deleted with the dense arm it measured. The rows are KEPT
+# because the probe positions are representation-agnostic and a graph value-health harness
+# would re-point at them; that is a decision to revisit, not a fact to leave unstated, so it is
+# written here rather than inferred from four sha256 lines nobody reads.
 [[required]]
 path = "value_probes/dist65_golden.json"
 sha256 = "352f37d604a13cb15ab91e7a3d01102223ebdc12b06edadb1e8bf91215c5556b"
