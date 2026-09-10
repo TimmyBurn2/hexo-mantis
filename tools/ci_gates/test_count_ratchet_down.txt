@@ -1,4 +1,0 @@
-# The ONE sanctioned ratchet-down record. `<from> -> <to>  <grounds>`, exactly one line, and
-# it is DELETED in the commit after it lands — the next run's ref floor is <to>, so a record
-# left behind stops matching and gate 3c reds on it by name.
-5114 -> 4481  R346(f)/R347(d): the grid/dense representation, the parked unmeasured levers, the five rung rows and the kraken/strix resolvers were deleted by ruling, and their suites went with their subjects. No surviving behaviour lost a witness.
