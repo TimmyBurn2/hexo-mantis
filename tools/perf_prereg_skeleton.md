@@ -77,7 +77,7 @@ the measured result at or below which the line of work STOPS, no retry, no re-sc
 5. **A single-run regression with no code mechanism on the touched path requires fresh-bench
    triangulation before any verdict** (LAW-09) — do not accept a lone bad run as evidence,
    and do not accept a lone good one either.
-6. Bench floors: `tools/bench_floors.toml` carries 28 floors attested against rustc 1.97.1
+6. Bench floors: `tools/bench_floors.toml` carries its floors attested against rustc 1.97.1
    (`rust-toolchain.toml`). **Changing the toolchain invalidates all 28** — a bump is a
    perf-host event, not a local one.
 

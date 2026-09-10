@@ -1178,3 +1178,23 @@ document and nothing needs to be.
    `eval.strix_model_sims` go with them (their only consumer was the route to a permanent
    refusal). `sealbot_d5` is the minted rung; the adapter seam — `bots/protocol.py`,
    `resolve_bot`, `SKIP_REASON_MARKERS` — is untouched, so a new rung is a row plus a factory.
+
+7. **`configs/` keeps three files, not two, and the third is stated.** `run6.yaml` and
+   `smoke_preflight_armed.yaml` are what R346(f) names; `dev_example.yaml` is KEPT on LAW-07
+   grounds and its `EXEMPT_CONFIGS` row says so — ADJ-13 N-3 makes it gate 12's M1 mutation
+   row, the only real committed config that demonstrates the audit going RED on the real
+   `configs/` tree, and with run5, the shakedown and the plain smoke gone it is the only
+   DISARMED config left. All three are re-minted from `tools/config_templates/dev.yaml`, so
+   their `# delta:` headers replay. `configs/run5.yaml` left the tree with
+   `docs/contracts/eval_decision_run5.md`, whose drift gate derived every expectation from it;
+   the two durable properties of that document — a one-lineage Bradley-Terry fit, and eff_n
+   bounded by the openings on a deterministic rung — are folded into contract #9.
+
+8. **Two instruments are retired rather than widened, and both say so in place.**
+   `tests/config/test_minted_config_remint.py` diffed the live configs against a byte-frozen
+   `b482243` baseline and tolerated exactly one ruled deletion; a mass deletion is not that
+   shape, and the file's own §1 argues that re-cutting the baseline makes its directory name
+   false and turns every assertion vacuous. It and its fixture are deleted, and
+   `test_mint_header_roundtrip.py` carries the tombstone. `tools/bench_floors.toml` loses five
+   floors with the two benches that produced them; no surviving floor moved, so the rustc/CPU
+   attestation still holds and this is a deletion rather than a re-baseline.

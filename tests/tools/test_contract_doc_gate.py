@@ -197,8 +197,10 @@ def test_emptying_the_cross_field_table_cannot_silently_retire_the_arm(tmp_path,
 
 
 def test_a_dead_model_name_in_the_second_cell_reds_the_gate(tmp_path, doc_text):
-    doc = _mutate(tmp_path, doc_text, "| `_entropy_sign` | `TrainConfig` |",
-                  "| `_entropy_sign` | `RetiredTrainConfig` |", 1)
+    # The anchor is a LIVE cross-field row; `_entropy_sign` was the previous one and went
+    # with `train.entropy_reg_weight` (R346(f)).
+    doc = _mutate(tmp_path, doc_text, "| `_stages_are_strictly_increasing` | `TrainConfig` |",
+                  "| `_stages_are_strictly_increasing` | `RetiredTrainConfig` |", 1)
     res = _run(doc)
     assert res.returncode == 1
     assert "RetiredTrainConfig" in res.stdout

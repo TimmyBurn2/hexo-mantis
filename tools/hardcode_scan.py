@@ -34,8 +34,8 @@ def _registry_targets() -> tuple[str, ...]:
 
     THE DEFECT. This was a frozen dense-era literal list — `19`, `25`, `361`, `5`, `8` — so the
     graph-era values were never scanned at all: `6` (graph_radius, win_length, n_chain_planes),
-    `11` (node_feat_dim), `362`/`626` (policy_logit_count), `16`/`17`/`18` (plane indices and
-    n_source_planes), `3` (win_axes). The one copy-detector in the repo could not see the
+    `11` (node_feat_dim), `362` (policy_logit_count), `3` (win_axes). The one copy-detector in
+    the repo could not see the
     numbers the graph seam is built from, while `8` had quietly acquired a second meaning
     (`graph_radius`) that the list still read as a plane count.
 
@@ -48,7 +48,7 @@ def _registry_targets() -> tuple[str, ...]:
     try:
         from mantis.encoding import all_specs
     except ImportError:  # the scanner runs without the extension in some contexts
-        return ("19", "25", "361", "5", "8", "6", "11", "362", "626", "16", "17", "18", "3")
+        return ("19", "8", "6", "11", "362", "3")
     for spec in all_specs():
         for field in (
             "board_size", "trunk_size", "n_planes", "policy_logit_count", "n_source_planes",

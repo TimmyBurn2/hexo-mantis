@@ -172,10 +172,9 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
   they are NOT filled agent-side; it is load-bearing because it discharges R56/R133/R138. R267 has
   no section at all — the only record is a STATE digest line, deliberately not reconstructed
   because a digest line is not the ruling. A:1367, A:3732.
-- **run5 prereg values — OPERATOR-OWED, BLOCKING until valued.** R137 leg (b)
-  `checkpoint_interval`, and R147 `eval.random_floor_games`, which `configs/run5.yaml` still mints
-  at `0`. Both are armed values, therefore mint-prereg only — no dispatcher may touch them, and the
-  config staying untouched is correct behaviour on the record. run6 is unaffected: it mints `20`.
+- **run5 prereg values — SPENT.** R137 leg (b) `checkpoint_interval` and R147
+  `eval.random_floor_games` were owed against run5's config, which minted them at `0`. R346(f)
+  pruned that config out of the tree, so the rows have no subject; run6 mints `1000` and `20`.
 - **R226 / R229 / R243 — prereg rows owed:** two flagged at dispatch 8C, three 8B findings.
 - **R245(c) — the LAW-18 augmentation-group counter is OWED.** The per-record losslessness gate
   landed; the in-run fire-rate counter beside it did not.

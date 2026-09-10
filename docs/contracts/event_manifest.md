@@ -139,8 +139,9 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `train.draw_rate_abort` block — `threshold` / `min_step` / `N_pool_min` / `consec`, one
   block and one resolver — is the sole authority, and `null` is the EXPLICIT off posture
   (R79: arming is a property of the resolved value; there is no boolean beside it).
-  `configs/run5.yaml` arms it at `0.25 / 25000 / 50 / 3` (R82/R85/R92, pre-registered at mint
-  prereg); the four non-production configs carry `null` (R59). **WPMINT Phase K-B (R78/R80,
+  `configs/run6.yaml` arms it at `0.25 / 25000 / 50 / 3` (R82/R85/R92, carried from run5's
+  mint prereg); the armed smoke carries its own burst-scale values and the dev template
+  carries `null` (R59). **WPMINT Phase K-B (R78/R80,
   call K-b) authored the FOURTH term**: `consec` was the coordinator's own code-side default
   `draw_rate_consec = 3` and is now `train.draw_rate_abort.consec`, inside the block because a
   term of a DISARMED abort is not a fact. Its value is unchanged, so nothing an observer reads
