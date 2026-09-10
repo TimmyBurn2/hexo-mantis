@@ -56,6 +56,20 @@ pub const MAX_STONES: usize = 256;
 /// no literal — the old `MAX_VISITS = 128` tunable is deleted).
 pub const HEXG_VISIT_COUNT_CEILING: usize = u16::MAX as usize;
 
+/// R347(a) — the MINTED visit-slot bound for a `search.kind: gumbel` graph row.
+///
+/// Under Sequential Halving only the m sampled candidates are ever visited, so the
+/// completed-Q target is EXACT on those m entries and, on every UNVISITED legal action,
+/// equals the recording prior times one scalar (every unvisited child completes to the same
+/// `v_mix`, so its improved-policy mass is `prior * exp(c) / Z`). The row therefore stores the
+/// m explicit `(action, target)` entries plus the tail mass α, and its slot count is m rather
+/// than the legal-set size.
+///
+/// MINTED, not derived: no arithmetic over the sims regime produces it. It is the ceiling on
+/// `selfplay.gumbel_m` that the graph record format will store, and a config asking for more
+/// is a mint-time error rather than a truncation at record time.
+pub const HEXG_GUMBEL_M_MAX: usize = 16;
+
 /// Structural ceiling on the record COUNT a buffer may be asked for (AUDIT-1 F-38).
 ///
 /// DERIVED, never tuned: the widest per-record allocation this buffer makes is
@@ -100,19 +114,23 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
 /// construction, and so are the two F-816-9 pins that sit downstream of it
 /// (`records::refuse_zero_visit_export` and `search_drive::InferenceSeamFailure`).
 ///
+/// UNDER `search.kind: gumbel` THE ANSWER IS NOT THIS FORMULA (R347(a)). That kind stores a
+/// SPARSE row — the m sampled candidates' exact completed-Q entries plus the tail mass α — so
+/// its slot count is the minted `gumbel_m`, bounded by [`HEXG_GUMBEL_M_MAX`], and the sims
+/// regime does not enter. The two kinds are resolved in ONE function so that a caller cannot
+/// reach a second authority for either.
+///
 /// # Errors
 /// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`] — no slot sizing
 ///   can honor the regime; the schema twin makes this a MINT-time error, and
 ///   the boot-side call is defense-in-depth for un-minted constructions;
 /// * `search_kind` is not a kind this build knows;
-/// * `search.kind: gumbel` on the graph path, at ANY capacity — that kind's root reaches
-///   the full legal set, so the exported target's support IS the legal set, which no sims
-///   regime bounds.
+/// * `search.kind: gumbel` with `gumbel_m` outside `1..=`[`HEXG_GUMBEL_M_MAX`] — the sparse
+///   row's slot count IS m, and m past the minted bound is a mint-time error.
 ///
-/// THE CHECK IS A DENSITY CHECK, NOT A VISIT CHECK. The sims regime bounds how many visits
-/// a row RECORDS; it says nothing about how many cells the exported distribution puts mass
-/// on. Under `puct` the exported target is the visit distribution and the two coincide;
-/// under `gumbel` they do not, and the second is unbounded by the config.
+/// THE PUCT CHECK IS A DENSITY CHECK, NOT A VISIT CHECK. The sims regime bounds how many
+/// visits a row RECORDS; it says nothing about how many cells the exported distribution puts
+/// mass on. Under `puct` the exported target is the visit distribution and the two coincide.
 #[allow(clippy::too_many_arguments)]
 pub fn derived_visit_capacity(
     n_simulations: usize,
@@ -123,8 +141,32 @@ pub fn derived_visit_capacity(
     n_sims_quick: usize,
     n_sims_full: usize,
     leaf_batch_size: usize,
+    gumbel_m: usize,
     search_kind: &str,
 ) -> Result<usize, String> {
+    // Parsed FIRST: under Gumbel the sims regime is not the subject at all, so deriving a
+    // capacity from it and then discarding it would be arithmetic a reader has to un-read.
+    let kind = mantis_search::SearchKind::from_config_str(search_kind).ok_or_else(|| {
+        format!(
+            "search.kind = {search_kind:?} is not a known search kind \
+             (expected \"puct\" or \"gumbel\")"
+        )
+    })?;
+    if kind == mantis_search::SearchKind::Gumbel {
+        if gumbel_m == 0 || gumbel_m > HEXG_GUMBEL_M_MAX {
+            return Err(format!(
+                "representation==graph with search.kind=gumbel stores a SPARSE row whose slot \
+                 count IS selfplay.gumbel_m, and {gumbel_m} is outside the minted range \
+                 1..={HEXG_GUMBEL_M_MAX} (R347(a)). Under Sequential Halving only the m \
+                 sampled candidates are ever visited, so the completed-Q target is exact on \
+                 those m entries and every unvisited legal action carries the recording prior \
+                 times one scalar — which the row stores as the single tail mass α rather than \
+                 as a slot per legal cell (keys: search.kind, selfplay.gumbel_m, \
+                 identity.representation)"
+            ));
+        }
+        return Ok(gumbel_m);
+    }
     let effective_standard = effective_standard_sims(n_simulations, standard_sims);
     let mut max_armed = effective_standard;
     if fast_prob > 0.0 {
@@ -145,38 +187,14 @@ pub fn derived_visit_capacity(
              selfplay.leaf_batch_size)"
         ));
     }
-    // The bound is the exported target's SUPPORT, and which support that is depends on the
-    // search kind. The kind is parsed here rather than passed as a derived boolean so the
-    // two enforcement surfaces cannot drift onto second formulas — the same reason this
-    // whole function has two callers and no second copy.
-    let kind = mantis_search::SearchKind::from_config_str(search_kind).ok_or_else(|| {
-        format!(
-            "search.kind = {search_kind:?} is not a known search kind \
-             (expected \"puct\" or \"gumbel\")"
-        )
-    })?;
-    if kind == mantis_search::SearchKind::Gumbel {
-        return Err(format!(
-            "representation==graph with search.kind=gumbel is refused at ANY derived \
-             capacity ({capacity} here): that kind's root reaches its FULL legal set and \
-             exports the completed-Q improved policy over it, so the target's support is \
-             the legal set itself, which the config bounds nowhere. THE LEGAL SET IS NOT A \
-             CONSTANT — it is the union of radius-r balls around every stone minus the \
-             occupied cells and GROWS with the stone count, measured at radius 8 to a \
-             MEDIAN of 355 and a MAXIMUM of 8142 — so no sims regime can derive a slot \
-             count that covers it. A run wanting this kind on the graph path needs a MINTED \
-             visit-slot bound, not a derived one, and the ring cost is its subject: at 8 \
-             bytes a slot, 8192 slots is ~65 KB per row against today's ~252 B \
-             (keys: search.kind, identity.representation)"
-        ));
-    }
     Ok(capacity)
 }
 
 /// HEXG on-disk magic — "HEXG" little-endian (distinct from HEXB `0x48455842`).
 pub const HEXG_MAGIC: u32 = 0x4845_5847;
-/// HEXG on-disk version. v1.
-pub const HEXG_VERSION: u32 = 1;
+/// HEXG on-disk version. v2 — the sparse Gumbel row (R347(a)) added the per-record tail
+/// mass α, so a v1 file is a DIFFERENT record shape and is refused by name, never re-parsed.
+pub const HEXG_VERSION: u32 = 2;
 
 /// Weight-bucket boundaries mirror `ReplayBuffer::weight_bucket`.
 #[inline]
@@ -197,8 +215,17 @@ pub(crate) fn weight_bucket(w_bits: u16) -> usize {
 pub struct GraphRecord {
     /// Sorted (order irrelevant — the builder re-sorts) stone list `(q, r, ±1)`.
     pub stones: Vec<(i16, i16, i8)>,
-    /// Sparse coord-keyed visit target `(q, r, prob)` over legal moves.
+    /// Sparse coord-keyed visit target `(q, r, prob)` over legal moves. Under
+    /// `search.kind: gumbel` these are the m EXPLICIT entries only (R347(a)); the rest of
+    /// the distribution is [`GraphRecord::tail_mass`].
     pub visits: Vec<(i16, i16, f32)>,
+    /// R347(a) — the tail mass α: the target mass on every legal action NOT in `visits`.
+    ///
+    /// `0.0` under `search.kind: puct`, whose exported target has no unstored support. Under
+    /// `gumbel` the tail's SHAPE is the recording prior renormalized over the unstored legal
+    /// set, and the trainer rebuilds it as α times its own DETACHED current prior over that
+    /// set — so the row stores the scalar and not the shape.
+    pub tail_mass: f32,
     /// Side to move (+1 / −1).
     pub current_player: i8,
     /// Moves remaining this turn (0..=255).
@@ -250,6 +277,7 @@ pub struct HexgBuffer {
     pub visit_qr: Vec<i16>,       // flat [cap * visit_capacity * 2]
     pub visit_probs: Vec<f32>,    // flat [cap * visit_capacity]
     pub n_visits: Vec<u16>,       // [cap]
+    pub tail_mass: Vec<f32>,      // [cap]; R347(a) α
     pub current_player: Vec<i8>,  // [cap]
     pub moves_remaining: Vec<u8>, // [cap]
     pub ply_index: Vec<u16>,      // [cap]
@@ -358,6 +386,7 @@ impl HexgBuffer {
             visit_qr: vec![0i16; capacity * visit_capacity * 2],
             visit_probs: vec![0.0f32; capacity * visit_capacity],
             n_visits: vec![0u16; capacity],
+            tail_mass: vec![0.0f32; capacity],
             current_player: vec![1i8; capacity],
             moves_remaining: vec![2u8; capacity],
             ply_index: vec![0u16; capacity],
@@ -433,7 +462,13 @@ impl HexgBuffer {
 /// WP7); `target_argmax_cells` is a pure method.
 ///
 /// * `policy_target` — flat `[Lg]` per-legal-node CE target (graphs concatenated,
-///   in `legal_node_gather` order); each graph's segment sums to ~1.
+///   in `legal_node_gather` order). Each graph's segment sums to ~1 MINUS its `tail_mass`;
+///   under `puct` the tail is 0 and the segment sums to ~1 as before.
+/// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry for that legal
+///   node. Its complement per graph is the "remaining legal set" the tail is spread over,
+///   and it is emitted rather than inferred from `policy_target > 0` so an explicit entry
+///   that underflows to zero cannot be silently reclassified as tail.
+/// * `tail_mass` — `[B]` per-row α (R347(a)).
 /// * `outcomes` / `value_valid` — `[B]` value target + draw-mask.
 /// * `is_full_search` — `[B]` policy-loss gate.
 /// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the
@@ -442,6 +477,8 @@ impl HexgBuffer {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphTargets {
     pub policy_target: Vec<f32>,
+    pub explicit_mask: Vec<u8>,
+    pub tail_mass: Vec<f32>,
     pub outcomes: Vec<f32>,
     pub value_valid: Vec<u8>,
     pub is_full_search: Vec<u8>,

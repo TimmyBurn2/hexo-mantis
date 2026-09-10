@@ -247,6 +247,7 @@ def pretrain(argv: list[str] | None = None) -> None:
         monitor = None
         if args.heldout_hexg is not None:
             from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+            from mantis.config.resolve.fast_policy_weight import resolve_fast_policy_weight
             from mantis.config.resolve.microbatch import resolve_microbatch_caps
             from mantis.config.resolve.sample_threads import resolve_sample_threads
             from mantis.train.pretrain.graph_route import load_ring
@@ -267,6 +268,7 @@ def pretrain(argv: list[str] | None = None) -> None:
                 eval_every=args.eval_every, patience=args.patience, min_delta=args.min_delta,
                 caps_provider=lambda: resolve_microbatch_caps(_full),
                 sample_threads_provider=lambda: resolve_sample_threads(_full),
+                fast_policy_weight_provider=lambda: resolve_fast_policy_weight(_full),
             )
         try:
             written = run_graph_pretrain(

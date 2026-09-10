@@ -103,7 +103,7 @@ class GraphEmptyBatchError(ValueError):
 
 @dataclass(frozen=True)
 class GraphTargetSlice:
-    """One micro-batch's slice of the four target arrays plus the argmax-cell sequence.
+    """One micro-batch's slice of the target arrays plus the argmax-cell sequence.
 
     `target_argmax_cells` is here and not left to the caller because `collate_graph_batch`
     LENGTH-CHECKS it against the part's own `B` (`graph_collate.py:586-590`,
@@ -112,6 +112,8 @@ class GraphTargetSlice:
     """
 
     policy_target: np.ndarray
+    explicit_mask: np.ndarray
+    tail_mass: np.ndarray
     outcomes: np.ndarray
     value_valid: np.ndarray
     is_full_search: np.ndarray
@@ -265,17 +267,19 @@ def slice_graph_wire(payload: GraphWirePayload, g0: int, g1: int) -> GraphWirePa
 
 
 def slice_targets(targets: Any, legal_offsets: Any, g0: int, g1: int) -> GraphTargetSlice:
-    """Slice the four target arrays and the argmax-cell sequence for graphs `[g0, g1)`.
+    """Slice the target arrays and the argmax-cell sequence for graphs `[g0, g1)`.
 
-    `policy_target` is flat PER LEGAL NODE, so its bounds come from the wire's own
-    `legal_offsets` (a first-class payload field, `graph_collate.py:153`) — derivable
-    pre-collate without touching torch. The other three are per-graph.
+    `policy_target` and `explicit_mask` are flat PER LEGAL NODE, so their bounds come from
+    the wire's own `legal_offsets` (a first-class payload field) — derivable pre-collate
+    without touching torch. The rest, `tail_mass` included, are per-graph.
     """
     lo = np.asarray(legal_offsets, dtype=np.int64)
     l0, l1 = int(lo[g0]), int(lo[g1])
     cells: Sequence[Any] = targets.target_argmax_cells
     return GraphTargetSlice(
         policy_target=np.asarray(targets.policy_target)[l0:l1],
+        explicit_mask=np.asarray(targets.explicit_mask)[l0:l1],
+        tail_mass=np.asarray(targets.tail_mass)[g0:g1],
         outcomes=np.asarray(targets.outcomes)[g0:g1],
         value_valid=np.asarray(targets.value_valid)[g0:g1],
         is_full_search=np.asarray(targets.is_full_search)[g0:g1],

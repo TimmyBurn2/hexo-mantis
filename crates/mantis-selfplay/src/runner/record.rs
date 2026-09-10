@@ -121,11 +121,23 @@ pub(crate) fn record_position(
         } else {
             match target_policy {
                 MovePolicy::Dense(t) => records::aggregate_policy_to_local(
-                    policy_stride, has_pass_slot, agg_trunk_sz, board, center, t, &record_legal_moves,
+                    policy_stride,
+                    has_pass_slot,
+                    agg_trunk_sz,
+                    board,
+                    center,
+                    t,
+                    &record_legal_moves,
                 ),
                 MovePolicy::Ls(ls) => {
                     let row = records::aggregate_policy_to_local_ls(
-                        policy_stride, has_pass_slot, agg_trunk_sz, board, center, ls, &record_legal_moves,
+                        policy_stride,
+                        has_pass_slot,
+                        agg_trunk_sz,
+                        board,
+                        center,
+                        ls,
+                        &record_legal_moves,
                     );
                     // LAW-18 (DESIGN_T §3.6): count each §3.5 zero-row fill —
                     // a cluster window that saw zero visit mass records the
@@ -168,6 +180,9 @@ pub(crate) fn record_position(
 /// structurally unreachable — an always-on `unreachable!()` is the correct
 /// die-loud response.
 ///
+/// `explicit_support` is R347(a)'s sparse-row support — the search's visited candidates on
+/// the Gumbel arm, `None` on the PUCT arm, whose target has no unstored mass.
+///
 /// # Errors
 /// WP12-R Phase T (DESIGN_T §3.3/§3.4): forwards `record_position_graph`'s
 /// typed [`TargetIntegrityError`] to the caller, which latches it run-fatal
@@ -181,6 +196,7 @@ pub(crate) fn record_position_graph_dispatch(
     move_is_full_search: bool,
     graph_records_vec: &mut Vec<GraphRecord>,
     visit_capacity: usize,
+    explicit_support: Option<&fxhash::FxHashSet<(i32, i32)>>,
 ) -> Result<(), TargetIntegrityError> {
     let ls = match target_policy {
         MovePolicy::Ls(ls) => ls,
@@ -201,11 +217,11 @@ pub(crate) fn record_position_graph_dispatch(
         ply_index,
         move_is_full_search,
         visit_capacity,
+        explicit_support,
     )?;
     graph_records_vec.push(rec);
     Ok(())
 }
-
 
 #[cfg(test)]
 mod k_histogram_tests {
@@ -216,10 +232,10 @@ mod k_histogram_tests {
     use crate::replay::hexg::GraphRecord;
     use crate::replay::sym::sym_tables_for;
     use crate::runner::search_drive::MovePolicy;
+    use fxhash::FxHashMap;
     use mantis_core::Board;
     use mantis_encoding::{all_specs, lookup_or_panic, RegistrySpec};
     use mantis_search::LegalSetPolicy;
-    use fxhash::FxHashMap;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     type Hist = [AtomicU64; K_CLUSTER_HISTOGRAM_BUCKETS];
@@ -239,7 +255,8 @@ mod k_histogram_tests {
         let mut b = Board::new();
         for g in 0..groups {
             let base = g as i32 * 40;
-            b.apply_move(base, base).expect("group stone must be placeable");
+            b.apply_move(base, base)
+                .expect("group stone must be placeable");
         }
         b
     }
@@ -273,12 +290,29 @@ mod k_histogram_tests {
     #[test]
     fn k_cluster_bucket_gives_every_real_k_its_own_slot_and_guards_both_ends() {
         for k in 1..K_CLUSTER_HISTOGRAM_BUCKETS {
-            assert_eq!(k_cluster_bucket(k), k - 1, "K={k} must own bucket {}", k - 1);
+            assert_eq!(
+                k_cluster_bucket(k),
+                k - 1,
+                "K={k} must own bucket {}",
+                k - 1
+            );
         }
         let guard = K_CLUSTER_HISTOGRAM_BUCKETS - 1;
-        assert_eq!(k_cluster_bucket(0), guard, "K=0 records NO row and is not a K=1 position");
-        assert_eq!(k_cluster_bucket(K_CLUSTER_HISTOGRAM_BUCKETS), guard, "K past k_max guards");
-        assert_eq!(k_cluster_bucket(usize::MAX), guard, "no K may index out of the array");
+        assert_eq!(
+            k_cluster_bucket(0),
+            guard,
+            "K=0 records NO row and is not a K=1 position"
+        );
+        assert_eq!(
+            k_cluster_bucket(K_CLUSTER_HISTOGRAM_BUCKETS),
+            guard,
+            "K past k_max guards"
+        );
+        assert_eq!(
+            k_cluster_bucket(usize::MAX),
+            guard,
+            "no K may index out of the array"
+        );
     }
 
     /// The 8 real buckets are only honest while no registered encoding declares a
@@ -314,7 +348,10 @@ mod k_histogram_tests {
         for groups in [1usize, 2, 3] {
             let board = board_with_groups(groups);
             let k = board.get_cluster_views().1.len();
-            assert_eq!(k, groups, "premise: {groups} separated groups must give K={groups}");
+            assert_eq!(
+                k, groups,
+                "premise: {groups} separated groups must give K={groups}"
+            );
 
             let hist = fresh_hist();
             drive_dense(&board, spec, &hist);
@@ -332,7 +369,11 @@ mod k_histogram_tests {
             // Cumulative, not set-once: a second call at the same K adds a second count.
             drive_dense(&board, spec, &hist);
             expected[k_cluster_bucket(k)] = 2;
-            assert_eq!(read(&hist), expected, "the histogram must accumulate across calls");
+            assert_eq!(
+                read(&hist),
+                expected,
+                "the histogram must accumulate across calls"
+            );
         }
     }
 
@@ -356,17 +397,27 @@ mod k_histogram_tests {
         let mut dense = vec![0.0f32; 362];
         for (cell, mass) in [(legal[0], 0.6f32), (legal[1], 0.4)] {
             let idx = Board::window_flat_idx_at_geom(cell.0, cell.1, bcq, bcr, 19, 9);
-            assert!(idx < 362, "premise: the chosen legal cell must be in-window");
+            assert!(
+                idx < 362,
+                "premise: the chosen legal cell must be in-window"
+            );
             dense[idx] = mass;
         }
-        let ls = MovePolicy::Ls(LegalSetPolicy { dense, overflow: FxHashMap::default() });
+        let ls = MovePolicy::Ls(LegalSetPolicy {
+            dense,
+            overflow: FxHashMap::default(),
+        });
 
         let hist = fresh_hist();
         let mut graph_records: Vec<GraphRecord> = Vec::new();
-        record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128)
+        record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128, None)
             .expect("a full-mass target must record");
 
-        assert_eq!(graph_records.len(), 1, "premise: the graph path really recorded a position");
+        assert_eq!(
+            graph_records.len(),
+            1,
+            "premise: the graph path really recorded a position"
+        );
         assert_eq!(
             read(&hist),
             vec![0u64; K_CLUSTER_HISTOGRAM_BUCKETS],
@@ -404,7 +455,7 @@ mod k_histogram_tests {
             overflow: FxHashMap::default(),
         });
         let mut graph_records: Vec<GraphRecord> = Vec::new();
-        let err = record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128)
+        let err = record_position_graph_dispatch(&b, &ls, 19, true, &mut graph_records, 128, None)
             .expect_err("a Σ=0.5 target must not be constructible");
         assert!(
             format!("{err}").starts_with("MassNotUnity"),

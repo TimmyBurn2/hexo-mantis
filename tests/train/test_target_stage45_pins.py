@@ -82,7 +82,8 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
     rec = _RecordingTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC, batch_size=3, augment=False,
                             recency_weight=0.0, recent_buffer=None,
-                            caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1)
+                            caps_provider=lambda: _S4_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.calls) == 1 and len(sampled) == 1
     # G-DFIX-1 (WP12-R F2): after the micro-batch split the trainer receives a PARTITION, not
     # a `policy_target` kwarg. The pin is UNCHANGED in what it claims and STRICTLY STRONGER in
@@ -107,7 +108,7 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
     # at the consumer): each legal_offsets segment of the sampled batch sums to ~1.
     ifs = np.asarray(sampled[0].is_full_search)
     assert ifs.shape[0] == 3
-    assert sum(p.is_full_search.shape[0] for p in parts) == 3, (
+    assert sum(p.policy_row_weight.shape[0] for p in parts) == 3, (
         "the split dropped or duplicated a per-graph target"
     )
 

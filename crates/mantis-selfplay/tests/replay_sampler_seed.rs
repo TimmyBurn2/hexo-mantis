@@ -31,6 +31,7 @@ fn filled_graph_ring() -> HexgBuffer {
         let rec = GraphRecord {
             stones,
             visits: vec![(-1i16, 0i16, 0.6f32), (n_stones, 0, 0.4)],
+            tail_mass: 0.0,
             current_player: if i % 2 == 0 { 1 } else { -1 },
             moves_remaining: 2,
             ply_index: (i % 50) as u16,

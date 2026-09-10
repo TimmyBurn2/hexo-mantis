@@ -27,7 +27,7 @@ const LOW_LOGIT: f32 = -1e9;
 /// divide truncated to int; this uses integer division, which agrees for every
 /// value representable here (both operands are small positive integers) and does
 /// not depend on binary64 rounding.
-// `num_simulations` is bounded by `MAX_ARMED_SIMS` (~1302) at runner construction, so
+// `num_simulations` is bounded by `MAX_ARMED_SIMS` at runner construction, so
 // the index never approaches `u32::MAX`.
 #[allow(clippy::cast_possible_truncation)]
 #[must_use]

@@ -129,8 +129,16 @@ fn mcts_drive_with_mock_producer_stop_midgame_no_false_draws() {
 
     runner.start();
     assert!(runner.is_running(), "runner is running after start()");
-    // Let workers get well into games (inference in flight) before shutdown.
-    thread::sleep(Duration::from_millis(80));
+    // WAIT FOR THE CONDITION, do not sleep a guessed interval. The state this oracle needs is
+    // "a worker is mid-MCTS-search with a leaf batch in flight", and the fixed 80 ms this used
+    // to sleep stopped reaching it when R347(c) raised `MAX_NODES` to 4M: every worker now
+    // allocates and zeroes its own node pool before its first search, so the window closed on
+    // the boot rather than on a search. Polling the SERVED counter asks for the state itself,
+    // which no boot cost can invalidate; the deadline is a liveness bound, not a tuning knob.
+    let deadline = Instant::now() + Duration::from_secs(30);
+    while served.load(Ordering::Relaxed) == 0 && Instant::now() < deadline {
+        thread::sleep(Duration::from_millis(5));
+    }
     runner.stop(); // flips running, closes queues (wakes waiters), joins workers
 
     producer

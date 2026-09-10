@@ -40,10 +40,10 @@ def test_the_600_75_prereg_shape_validates_clean(smoke_run_config) -> None:
 #: AUDIT-1 F-21 CHANGED WHICH AXIS THIS ROW CAN USE, and the interaction is worth stating.
 #: The mutation used to be `n_sims_full: 70_000`. That value is now refused EARLIER, by a
 #: different and TIGHTER ceiling: `MctsConfig`/`PlayoutCapConfig` bound every sims knob at
-#: `MAX_ARMED_SIMS` (1302 = `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS node
+#: `MAX_ARMED_SIMS` (= `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS node
 #: pool overflows from `n_simulations` alone above that and `finish_expansion` panics. So on
-#: the SIMS axis the pool bound now subsumes the record-format one — at 1302 sims the derived
-#: capacity is 1309, nowhere near 65535.
+#: the SIMS axis the pool bound now subsumes the record-format one — at the pool ceiling the
+#: derived capacity is still nowhere near 65535.
 #:
 #: The record-format relation is NOT subsumed: `leaf_batch_size` is the other term the
 #: capacity is derived from and it carries no such bound, so the ceiling stays reachable and

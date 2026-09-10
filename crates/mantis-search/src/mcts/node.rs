@@ -1,10 +1,15 @@
 //! Node, TTEntry, and pool constants for the MCTS tree.
 
-use std::sync::Arc;
 use crate::legal_set::LegalSetPolicy;
+use std::sync::Arc;
 
-/// Pre-allocated pool size per worker. 1 M nodes ~ 32 MB; 24 workers = 768 MB total.
-pub const MAX_NODES: usize = 1_000_000;
+/// Pre-allocated pool size per worker (R347(c)).
+///
+/// The per-worker footprint is `size_of::<Node>()` times this, plus an `f32` vector of the
+/// same length under `SearchKind::Gumbel` (`MCTSTree::raw_values`); the host term is that
+/// times the worker count. Stated as the product and not as a byte tally: a transcribed
+/// tally goes stale the first time `Node` gains a field.
+pub const MAX_NODES: usize = 4_000_000;
 
 /// Virtual-loss penalty applied per unresolved selection.
 pub const VIRTUAL_LOSS_PENALTY: f32 = 1.0;

@@ -10,9 +10,10 @@ The root cause is NOT the mutation's edit site. It is the frozen bank's PARAMETE
 oracles that reach the adapter through the production entrance (P-1b
 `test_deploy_head_entrance_reaches_the_same_children`, P-3b
 `test_head_plays_an_off_window_move_against_random_bot`) run `n_sims=1`. After a single
-expansion every root child has `visits=0, q=0`, so `select_argmax_child`'s
-`sigma = (c_visit + max_n_all) * c_scale * clamp(q, -1, 1)` is identically 0 and the move
-collapses to `argmax log(max(prior, 1e-8))`. **At n_sims=1 the value channel is provably inert**
+expansion every root child has `visits=0, q=0`, so PUCT's own Q term is identically 0 and
+the single leaf the head evaluates is `argmax prior` — `Q + c_puct * P * sqrt(N) / (1 + n)`
+with every Q at 0 is the prior. `_drive_puct` then answers with `get_top_visits(1)`, whose
+only visited child is that one, so the move collapses to `argmax prior`. **At n_sims=1 the value channel is provably inert**
 — measured here as `test_the_value_channel_is_inert_at_one_simulation`, which is the frozen
 bank's blindness pinned rather than described.
 
@@ -61,9 +62,9 @@ _FIXTURE = (
 #:     4/4 positions; n_sims=32 yields 2-4), so these flips have margin rather than sitting
 #:     on a knife-edge;
 #:   * it is in the same MECHANISM regime as production — the tree branches, values back up
-#:     through more than one level, and the completed-Q sigma term actually competes with
-#:     `log(prior)` in `select_argmax_child`. That mechanism is what F-RT-1 showed is absent
-#:     at n_sims=1, and it is fully engaged by 32;
+#:     through more than one level, and the backed-up Q term actually competes with the
+#:     prior term in PUCT selection. That mechanism is what F-RT-1 showed is absent at
+#:     n_sims=1, and it is fully engaged by 32;
 #:   * M-RT1 reds both flips at EVERY n_sims >= 2 (measured), so 150 buys no additional
 #:     discriminating power against the defect this file exists to catch;
 #:   * cost, measured on this box: ~3.0 s here vs ~13.5 s at n_sims=150 for the same work.
@@ -72,7 +73,9 @@ _FIXTURE = (
 #: not here.
 _SIMS = 32
 
-#: `select_argmax_child` reduces to `argmax log(prior)` when every child has `visits=0, q=0`.
+#: The head's move reduces to `argmax prior` when every child has `visits=0, q=0`: PUCT's Q
+#: term is 0, so the single leaf goes to the highest-prior child and `get_top_visits(1)`
+#: returns the only child with a visit.
 _INERT_SIMS = 1
 
 
@@ -191,11 +194,12 @@ def test_flipping_the_value_head_moves_the_heads_choice(value_visible_engines) -
     """The value channel must be LOAD-BEARING on the move actually played, not merely
     present in the tree.
 
-    The two engines share a byte-identical policy head, so every prior — and hence the
-    `log(max(prior, 1e-8))` term of `select_argmax_child` — is identical between them. Only
-    the sign of the value head differs. A changed move is therefore attributable to the
-    value channel and to nothing else. Under M-RT1 both engines see all-zero values, both
-    collapse to `argmax log(prior)`, and the moves agree at every position.
+    The two engines share a byte-identical policy head, so every prior — and hence PUCT's
+    prior term, which is what `DeployHeadPlayer._drive_puct` descends on — is identical
+    between them. Only the sign of the value head differs. A changed move is therefore
+    attributable to the value channel and to nothing else. Under M-RT1 both engines see
+    all-zero values, both collapse to `argmax prior`, and the moves agree at every
+    position.
     """
     positive, negative, spec = value_visible_engines
     agreed = []
@@ -221,8 +225,9 @@ def test_the_value_channel_is_inert_at_one_simulation(value_visible_engines) -> 
     at exactly this parameterization, which is why a value-channel defect survives them.
 
     Pinned so that a future author cannot add a value oracle at `n_sims=1` and believe the
-    channel is covered: if `select_argmax_child` ever grows a value-sensitive term that is
-    live at one simulation, this test fails and the analysis above must be revisited.
+    channel is covered: if the head's PUCT drive (`DeployHeadPlayer._drive_puct` ->
+    `MCTSTree.get_top_visits`) ever grows a value-sensitive term that is live at one
+    simulation, this test fails and the analysis above must be revisited.
     """
     positive, negative, spec = value_visible_engines
     for pos in _positions():

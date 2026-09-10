@@ -41,8 +41,13 @@ use crate::inference::{lock_or_recover, PyGraphWire, SeamFailure};
 fn refuse_non_distribution_row(
     visits: &[(i16, i16, f32)],
     ply_index: u16,
+    tail_mass: f32,
 ) -> Result<(), TargetIntegrityError> {
-    let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum();
+    // R347(a) — the row's distribution is its explicit entries PLUS the tail mass alpha, so
+    // the unity check is over the sum of both. A sparse row whose explicit entries sum to
+    // 1 - alpha is a distribution; judging it on the explicit half alone would refuse every
+    // Gumbel row this constructor exists to admit.
+    let sum: f64 = visits.iter().map(|&(_, _, p)| f64::from(p)).sum::<f64>() + f64::from(tail_mass);
     if !sum.is_finite() {
         return Err(TargetIntegrityError::MassNotUnity {
             sum,
@@ -124,7 +129,7 @@ impl PyHexgBuffer {
     /// `ValueError` per the above; per-entry NaN/negative/over-cap refusals
     /// surface from `push_record_impl` unchanged.
     #[allow(clippy::too_many_arguments)]
-    #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1))]
+    #[pyo3(signature = (stones, visits, current_player, moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length, game_id = -1, tail_mass = 0.0))]
     pub fn push_graph_position(
         &self,
         py: Python<'_>,
@@ -138,12 +143,14 @@ impl PyHexgBuffer {
         value_valid: bool,
         game_length: u16,
         game_id: i64,
+        tail_mass: f32,
     ) -> PyResult<()> {
-        refuse_non_distribution_row(&visits, ply_index)
+        refuse_non_distribution_row(&visits, ply_index, tail_mass)
             .map_err(|e| PyValueError::new_err(e.to_string()))?;
         let rec = GraphRecord {
             stones,
             visits,
+            tail_mass,
             current_player,
             moves_remaining,
             ply_index,
@@ -348,15 +355,15 @@ impl PyHexgBuffer {
 /// R255/ADJ-D34 — the mint-side twin of the boot guard's capacity derivation.
 ///
 /// Delegates VERBATIM to `mantis_selfplay::replay::hexg::derived_visit_capacity`
-/// (one formula, two surfaces): returns the derived HEXG visit-slot capacity
-/// `max(armed effective sim budgets) + leaf_batch_size − 1`, and raises `ValueError` for a
-/// regime the record format cannot honor (the u16 count ceiling; `search.kind: gumbel`,
-/// whose exported target's support is the legal set and is bounded nowhere). Live
-/// consumers: the `RunConfig` schema validator (mint-time refusal) and `mantis.run`'s
-/// buffer composition.
+/// (one formula, two surfaces): under `search.kind: puct` the derived HEXG visit-slot
+/// capacity `max(armed effective sim budgets) + leaf_batch_size − 1`; under
+/// `search.kind: gumbel` the MINTED `gumbel_m` of R347(a)'s sparse row. Raises `ValueError`
+/// for a regime the record format cannot honor (the u16 count ceiling; a `gumbel_m` past the
+/// minted bound). Live consumers: the `RunConfig` schema validator (mint-time refusal) and
+/// `mantis.run`'s buffer composition.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
-#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, search_kind))]
+#[pyo3(signature = (n_simulations, standard_sims, fast_prob, fast_sims, full_search_prob, n_sims_quick, n_sims_full, leaf_batch_size, gumbel_m, search_kind))]
 pub fn derived_hexg_visit_capacity(
     n_simulations: usize,
     standard_sims: usize,
@@ -366,6 +373,7 @@ pub fn derived_hexg_visit_capacity(
     n_sims_quick: usize,
     n_sims_full: usize,
     leaf_batch_size: usize,
+    gumbel_m: usize,
     search_kind: &str,
 ) -> PyResult<usize> {
     derived_visit_capacity_impl(
@@ -377,6 +385,7 @@ pub fn derived_hexg_visit_capacity(
         n_sims_quick,
         n_sims_full,
         leaf_batch_size,
+        gumbel_m,
         search_kind,
     )
     .map_err(PyValueError::new_err)
@@ -395,6 +404,17 @@ impl PyGraphTargets {
     #[getter]
     fn policy_target<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
         PyArray1::from_slice(py, &self.inner.policy_target)
+    }
+    /// R347(a) — flat `[Lg]`, 1 where the row stored an EXPLICIT entry for that legal node.
+    /// Its per-graph complement is the remaining legal set the tail mass spreads over.
+    #[getter]
+    fn explicit_mask<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<u8>> {
+        PyArray1::from_slice(py, &self.inner.explicit_mask)
+    }
+    /// R347(a) — `[B]` per-row tail mass alpha.
+    #[getter]
+    fn tail_mass<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
+        PyArray1::from_slice(py, &self.inner.tail_mass)
     }
     #[getter]
     fn outcomes<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f32>> {
@@ -485,7 +505,7 @@ mod tests {
         // so a contending caller waits GIL-free instead of hitting a borrow refusal.
         Python::initialize();
         let targets = Python::attach(|py| {
-            b.push_graph_position(py, stones, visits, 1, 2, 0, true, 1.0, true, 4, -1)
+            b.push_graph_position(py, stones, visits, 1, 2, 0, true, 1.0, true, 4, -1, 0.0)
                 .expect("push ok");
             assert_eq!(b.size(py), 1);
             // `n_threads = 1` is the serial path, which is what a one-record ring wants.
@@ -504,7 +524,7 @@ mod tests {
 
     fn push_row(py: Python<'_>, b: &PyHexgBuffer, visits: Vec<(i16, i16, f32)>) -> PyResult<()> {
         let stones = vec![(0i16, 0i16, 1i8), (1, 0, -1), (0, 1, 1)];
-        b.push_graph_position(py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1)
+        b.push_graph_position(py, stones, visits, 1, 2, 3, true, 0.0, true, 4, -1, 0.0)
     }
 
     #[test]

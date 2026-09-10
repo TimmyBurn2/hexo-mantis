@@ -40,6 +40,7 @@ def _drive(trainer: Any, replay: Any) -> None:
     run_declared_train_step(
         trainer, replay, H.GSPEC, batch_size=4, augment=False, recency_weight=0.0,
         recent_buffer=None, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0,
         caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 
 

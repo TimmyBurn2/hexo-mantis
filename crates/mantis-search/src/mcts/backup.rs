@@ -12,7 +12,23 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// Output of `pick_topk_children`: `(chosen, sort_used)` where `chosen` is a
 /// vector of `((q, r), prior)` entries and `sort_used` flags whether the
 /// slow sort path ran (vs the fast no-sort path).
-pub(crate) type TopKChildren = (Vec<((i32, i32), f32)>, bool);
+/// One expansion's Top-K pick: the children, whether the cap truncated, and the PRIOR MASS
+/// the truncation dropped.
+///
+/// The dropped mass is RETURNED rather than recorded into a static (R347). It used to go
+/// straight into process-global atomics, which made the measurement window shared by every
+/// search in the process: under a parallel `cargo test` any other test that expanded a node
+/// landed inside another test's bracket, and the witness then read a wrong number rather than
+/// a flaky one. A returned value has one owner — the tree whose expansion produced it.
+pub(crate) struct TopKPick {
+    pub children: Vec<((i32, i32), f32)>,
+    /// Read by the pickers' own oracles only; production asks the counters instead, because
+    /// a truncation that dropped only zero-prior children costs nothing and this bool cannot
+    /// say so.
+    #[allow(dead_code)]
+    pub truncated: bool,
+    pub dropped_prior_mass: f32,
+}
 
 /// Process-wide counter of pool-overflow events.
 ///
@@ -74,14 +90,25 @@ pub fn take_omitted_prior_stats() -> (u64, u64, u64) {
     )
 }
 
-/// Accumulate one expansion's dropped prior. `dropped` is the tail the cap truncated away.
+/// Fixed-point encoding of a prior mass, shared by the per-tree and process-wide counters so
+/// the two cannot drift onto different scales.
 #[inline]
-fn record_omitted_prior(dropped_mass: f32) {
+#[must_use]
+pub(crate) fn mass_micros(mass: f32) -> u64 {
+    (f64::from(mass) * 1e6) as u64
+}
+
+/// Accumulate one expansion's dropped prior into the PROCESS-WIDE totals.
+///
+/// Called from `MCTSTree::record_omitted_prior`, never from the pickers: the per-search
+/// counters are the primary and this is the run-wide aggregate the bridge face publishes, so
+/// one call site feeds both and an expansion cannot be counted in one and missed in the other.
+#[inline]
+fn record_omitted_prior_global(dropped_mass: f32) {
     TOTAL_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
     if dropped_mass > 0.0 {
         OMITTED_PRIOR_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
-        OMITTED_PRIOR_MASS_MICROS
-            .fetch_add((f64::from(dropped_mass) * 1e6) as u64, Ordering::Relaxed);
+        OMITTED_PRIOR_MASS_MICROS.fetch_add(mass_micros(dropped_mass), Ordering::Relaxed);
     }
 }
 
@@ -123,7 +150,7 @@ pub(crate) fn pick_topk_children(
     trunk_sz: i32,
     half: i32,
     cap: usize,
-) -> TopKChildren {
+) -> TopKPick {
     let n_legal = legal_moves.len();
     let n_ch = n_legal.min(cap);
 
@@ -136,7 +163,7 @@ pub(crate) fn pick_topk_children(
     // hash order, so the capacity-reserve perturbed search behaviour.
     // The sort is O(K log K), K <= MAX_CHILDREN_PER_NODE — negligible beside
     // the per-leaf NN forward that dominates expansion cost.
-    let mut all: Vec<((i32, i32), f32, usize)> = legal_moves
+    let mut all: Vec<((i32, i32), f32, usize, u32)> = legal_moves
         .iter()
         .map(|&(q, r)| {
             let flat = Board::window_flat_idx_at_geom(q, r, cq, cr, trunk_sz, half);
@@ -145,7 +172,16 @@ pub(crate) fn pick_topk_children(
             } else {
                 0.0
             };
-            ((q, r), sort_prior, flat)
+            // The packed (q, r) key is the FINAL tie-break, and it exists because `flat` is
+            // `usize::MAX` for EVERY off-window cell — so on ties between two off-window
+            // cells the `flat` comparison is equal and `sort_unstable` leaves their order
+            // unspecified, which is the FxHashSet-iteration-order leak this function's doc
+            // says it closed. It never mattered while the cap sat below the window's cell
+            // count, because a zero-prior off-window child was always truncated away; R347(c)
+            // raised the cap past it. In-window cells have unique `flat`, so this changes no
+            // order that was already total.
+            let key = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
+            ((q, r), sort_prior, flat, key)
         })
         .collect();
 
@@ -153,17 +189,17 @@ pub(crate) fn pick_topk_children(
         b.1.partial_cmp(&a.1)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.2.cmp(&b.2))
+            .then(a.3.cmp(&b.3))
     });
-    let dropped_mass: f32 = all
+    let dropped_prior_mass: f32 = all
         .iter()
         .skip(cap)
-        .map(|&(_, sort_prior, _)| sort_prior)
+        .map(|&(_, sort_prior, _, _)| sort_prior)
         .sum();
-    record_omitted_prior(dropped_mass);
     all.truncate(cap);
 
     let mut chosen: Vec<((i32, i32), f32)> = Vec::with_capacity(all.len());
-    for ((q, r), _sort_prior, flat) in all {
+    for ((q, r), _sort_prior, flat, _key) in all {
         let prior = if flat < policy.len() {
             policy[flat]
         } else {
@@ -172,7 +208,11 @@ pub(crate) fn pick_topk_children(
         chosen.push(((q, r), prior));
     }
 
-    (chosen, n_legal > cap)
+    TopKPick {
+        children: chosen,
+        truncated: n_legal > cap,
+        dropped_prior_mass,
+    }
 }
 
 /// Legal-set counterpart of `pick_topk_children`: reads each child's prior from
@@ -192,7 +232,7 @@ pub(crate) fn pick_topk_children_ls(
     trunk_sz: i32,
     half: i32,
     cap: usize,
-) -> TopKChildren {
+) -> TopKPick {
     let n_legal = legal_moves.len();
     let n_ch = n_legal.min(cap);
     let floor = 1.0 / n_ch as f32;
@@ -212,18 +252,77 @@ pub(crate) fn pick_topk_children_ls(
             .unwrap_or(std::cmp::Ordering::Equal)
             .then(a.2.cmp(&b.2))
     });
-    let dropped_mass: f32 = all.iter().skip(cap).map(|&(_, prior, _)| prior).sum();
-    record_omitted_prior(dropped_mass);
+    let dropped_prior_mass: f32 = all.iter().skip(cap).map(|&(_, prior, _)| prior).sum();
     all.truncate(cap);
 
     let chosen: Vec<((i32, i32), f32)> = all
         .into_iter()
         .map(|((q, r), prior, _)| ((q, r), prior))
         .collect();
-    (chosen, n_legal > cap)
+    TopKPick {
+        children: chosen,
+        truncated: n_legal > cap,
+        dropped_prior_mass,
+    }
+}
+
+/// R347 — the per-search omitted-prior counters, one set per `MCTSTree`.
+///
+/// Fixed-point mass (x 1e6) for the reason the process-wide statics carry it: there is no
+/// atomic f32, and a float sum across threads would not be reproducible anyway.
+#[derive(Debug, Default)]
+pub struct OmittedPriorStats {
+    mass_micros: AtomicU64,
+    omitting_expansions: AtomicU64,
+    total_expansions: AtomicU64,
+}
+
+impl OmittedPriorStats {
+    /// `(omitted_mass_micros, expansions_that_omitted, total_expansions)`, without reset.
+    #[must_use]
+    pub fn read(&self) -> (u64, u64, u64) {
+        (
+            self.mass_micros.load(Ordering::Relaxed),
+            self.omitting_expansions.load(Ordering::Relaxed),
+            self.total_expansions.load(Ordering::Relaxed),
+        )
+    }
+
+    /// Read-and-reset all three — the measurement bracket.
+    pub fn take(&self) -> (u64, u64, u64) {
+        (
+            self.mass_micros.swap(0, Ordering::Relaxed),
+            self.omitting_expansions.swap(0, Ordering::Relaxed),
+            self.total_expansions.swap(0, Ordering::Relaxed),
+        )
+    }
+
+    /// Zero all three, for a lifecycle boundary that is not a measurement.
+    pub fn reset(&self) {
+        self.mass_micros.store(0, Ordering::Relaxed);
+        self.omitting_expansions.store(0, Ordering::Relaxed);
+        self.total_expansions.store(0, Ordering::Relaxed);
+    }
+
+    fn record(&self, dropped_mass: f32) {
+        self.total_expansions.fetch_add(1, Ordering::Relaxed);
+        if dropped_mass > 0.0 {
+            self.omitting_expansions.fetch_add(1, Ordering::Relaxed);
+            self.mass_micros
+                .fetch_add(mass_micros(dropped_mass), Ordering::Relaxed);
+        }
+    }
 }
 
 impl MCTSTree {
+    /// Count one expansion's dropped prior into BOTH this search's counters and the
+    /// process-wide totals — one call site, so an expansion cannot be in one and not the
+    /// other.
+    pub(crate) fn record_omitted_prior(&self, dropped_mass: f32) {
+        self.omitted_prior.record(dropped_mass);
+        record_omitted_prior_global(dropped_mass);
+    }
+
     /// Apply quiescence correction to a NN value at a non-terminal leaf.
     ///
     /// Game theorem: each turn places 2 stones, so the opponent can block at most 2
@@ -382,9 +481,9 @@ impl MCTSTree {
         // legal set under Mctx); every other node keeps the per-node cap. `leaf_idx == 0`
         // IS the root by the pool's own convention — slot 0 is never reallocated.
         let cap = self.expansion_cap(leaf_idx);
-        let (chosen, _sort_used) =
-            pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap);
-        self.finish_expansion(leaf_idx, board, chosen, value);
+        let pick = pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap);
+        self.record_omitted_prior(pick.dropped_prior_mass);
+        self.finish_expansion(leaf_idx, board, pick.children, value);
     }
 
     /// Shared tail of `expand_and_backup_single`[`_ls`]: materialise the chosen
@@ -530,9 +629,9 @@ impl MCTSTree {
         }
         let half = (trunk_sz - 1) / 2;
         let cap = self.expansion_cap(leaf_idx);
-        let (chosen, _sort_used) =
-            pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap);
-        self.finish_expansion(leaf_idx, board, chosen, value);
+        let pick = pick_topk_children_ls(legal_moves, cq, cr, ls, trunk_sz, half, cap);
+        self.record_omitted_prior(pick.dropped_prior_mass);
+        self.finish_expansion(leaf_idx, board, pick.children, value);
     }
 
     /// Expand all pending leaves and backup values to the root.
@@ -696,9 +795,9 @@ mod ls_prior_tests {
         overflow.insert((28, 0), 0.5);
         let ls = LegalSetPolicy { dense, overflow };
 
-        let (chosen, truncated) =
-            pick_topk_children_ls(&legal, 0, 0, &ls, 19, 9, MAX_CHILDREN_PER_NODE);
-        assert!(!truncated);
+        let pick = pick_topk_children_ls(&legal, 0, 0, &ls, 19, 9, MAX_CHILDREN_PER_NODE);
+        let chosen = pick.children;
+        assert!(!pick.truncated);
         assert_eq!(chosen.len(), 3);
         // sorted by prior desc: (28,0)=0.5 (overflow), (1,0)=0.3, (0,0)=0.2 (dense)
         assert_eq!(

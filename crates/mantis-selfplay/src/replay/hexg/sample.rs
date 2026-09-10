@@ -242,6 +242,8 @@ impl HexgBuffer {
 
         let mut graphs = Vec::with_capacity(batch_size);
         let mut policy_target: Vec<f32> = Vec::new();
+        let mut explicit_mask: Vec<u8> = Vec::new();
+        let mut tail_mass: Vec<f32> = Vec::with_capacity(batch_size);
         let mut outcomes: Vec<f32> = Vec::with_capacity(batch_size);
         let mut value_valid: Vec<u8> = Vec::with_capacity(batch_size);
         let mut is_full_search: Vec<u8> = Vec::with_capacity(batch_size);
@@ -254,6 +256,8 @@ impl HexgBuffer {
         // own legal counts, so a permutation here would silently mis-pair every target.
         for out in per_item {
             policy_target.extend_from_slice(&out.policy_target);
+            explicit_mask.extend_from_slice(&out.explicit_mask);
+            tail_mass.push(out.tail_mass);
             argmax_q.push(out.argmax_q);
             argmax_r.push(out.argmax_r);
             argmax_valid.push(out.argmax_valid);
@@ -267,6 +271,8 @@ impl HexgBuffer {
             graphs,
             GraphTargets {
                 policy_target,
+                explicit_mask,
+                tail_mass,
                 outcomes,
                 value_valid,
                 is_full_search,
@@ -282,6 +288,8 @@ impl HexgBuffer {
 struct SampleOut {
     graph: AxisGraph,
     policy_target: Vec<f32>,
+    explicit_mask: Vec<u8>,
+    tail_mass: f32,
     argmax_q: i32,
     argmax_r: i32,
     argmax_valid: u8,
@@ -358,6 +366,7 @@ fn build_and_align_one(
     let (rec, game_id, sym) = (&item.0, item.1, item.2);
     let ply_idx = rec.ply_index;
     let mut policy_target: Vec<f32> = Vec::new();
+    let mut explicit_mask: Vec<u8> = Vec::new();
 
     // Rotate stones by the element (axial lattice automorphism).
     let mut stones: Vec<(i32, i32, i8)> = Vec::with_capacity(rec.stones.len());
@@ -392,9 +401,13 @@ fn build_and_align_one(
     for &row in &g.legal_node_gather {
         let cq = g.node_coords[row as usize * 2];
         let cr = g.node_coords[row as usize * 2 + 1];
-        let prob = vmap.get(&(cq, cr)).copied().unwrap_or(0.0);
+        // The mask is membership in the STORED map, not `prob > 0`: an explicit entry that
+        // underflowed would otherwise be reclassified as tail and get the prior's shape.
+        let stored = vmap.get(&(cq, cr)).copied();
+        let prob = stored.unwrap_or(0.0);
         aligned_mass += prob;
         policy_target.push(prob);
+        explicit_mask.push(u8::from(stored.is_some()));
         if prob > best_prob {
             best_prob = prob;
             best_coord = Some((cq, cr));
@@ -416,6 +429,8 @@ fn build_and_align_one(
     Ok(SampleOut {
         graph: g,
         policy_target,
+        explicit_mask,
+        tail_mass: rec.tail_mass,
         argmax_q,
         argmax_r,
         argmax_valid,

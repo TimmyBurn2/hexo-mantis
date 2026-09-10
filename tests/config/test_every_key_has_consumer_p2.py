@@ -218,6 +218,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.aux_chain_weight": "TrainHParams.aux_chain_weight -> core.py:287,322,380-385",
     "train.ply_index_weight": "TrainHParams.ply_index_weight -> core.py:288,323,343-344,386-389",
     "train.threat_pos_weight": "TrainHParams.threat_pos_weight -> core.py:211-214 _threat_pos_weight tensor",
+    "train.fast_policy_weight": "resolve_fast_policy_weight -> _build_graph_parts fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # ── selfplay.* scalars (SC-A2; SelfPlayHParams read sites, DESIGN_P2.md §1.2) ────────
     "selfplay.n_workers": "SelfPlayHParams.n_workers -> pool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.leaf_batch_size -> runner leaf_batch_size ctor kwarg",

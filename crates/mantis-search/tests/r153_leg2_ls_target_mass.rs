@@ -23,7 +23,7 @@
 //! `legal_set = true` for `LegalSetScatterMax` AND for graph specs, so for `gnn_axis_v1` and
 //! `v6_live2_ls` leg 1 measured a path production never takes. Under the dense expand
 //! off-window cells get `sort_prior = 0.0` (`backup.rs:97`) and are truncated by the
-//! 192-child cap, so they never become children — a zero there is structural, not a
+//! per-node child cap, so they never become children — a zero there is structural, not a
 //! clearance. R155 makes that mechanical: a measurement clears an encoding ONLY when driven
 //! through that encoding's production expand.
 //!

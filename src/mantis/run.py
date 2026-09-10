@@ -470,6 +470,7 @@ def _select_buffer(config: Any, capacity: int) -> Any:
             n_sims_quick=pc.n_sims_quick,
             n_sims_full=pc.n_sims_full,
             leaf_batch_size=sp.leaf_batch_size,
+            gumbel_m=sp.gumbel_m,
             search_kind=config.search.kind,
         )
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)

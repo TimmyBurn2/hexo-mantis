@@ -1,6 +1,6 @@
 # Contract: replay persist
 
-- version: HEXB v9 / HEXG v1
+- version: HEXB v9 / HEXG v2
 - owner: crate mantis-selfplay (replay)
 - status: v1 — filled by the replay subsystem port (WP5)
 
@@ -12,8 +12,12 @@ field-order contract:
 - **grid ring → HEXB v9** (dense CNN encodings). Magic `0x48455842` ("HEXB"),
   write-version 9, versioned header, per-row layout below, wire-signature
   cross-load law.
-- **graph ring → HEXG v1** (axis-graph GNN encodings). Magic `0x48455847`
-  ("HEXG"), version strict 1, slot-geometry guard, two-pass atomic load.
+- **graph ring → HEXG v2** (axis-graph GNN encodings). Magic `0x48455847`
+  ("HEXG"), version strict 2, slot-geometry guard, two-pass atomic load. v2 (R347(a))
+  added the per-record tail mass alpha of the SPARSE Gumbel row, written after `weight`;
+  a v1 file is REFUSED BY NAME and never re-parsed, because from that offset on its bytes
+  are self-consistent under both readings and only the version field can tell them apart.
+  There is no in-place upgrade — a v1 ring is regenerated.
 
 The two magics are DISJOINT — a file of one format handed to the other loader
 LOUD-rejects on the magic check (both directions). Representation is a closed
@@ -35,8 +39,10 @@ three are `grid`, the last is `graph`.
 | HEXB per-row layout: state(n_planes×n_cells u16) · chain(n_chain_planes×n_cells u16) · policy(policy_logit_count f32) · outcome f32 · game_id i64 · weight u16 · ownership(n_cells u8) · winning_line(n_cells u8) · is_full_search u8 · [v8+] position_index u16 · [v9] value_target_valid u8 | `replay/persist/load.rs` entry-byte math + `replay/persist/mod.rs` `save_to_path` | O-1, O-12, O-34 |
 | all widths/strides are spec-derived (`state_stride()`/`chain_stride()`/`aux_stride()`/`policy_stride()`/`n_planes`/`n_cells()`) — no code-side v6 constant | `replay/*` (every stride read from `RegistrySpec`) | O-6, O-13 (positive width pins) |
 | wire-signature cross-load: file & buffer must share `(n_planes, board_size, policy_logit_count, has_pass_slot, sym_table_id)` — the NAME may differ | `replay/persist/load.rs` (compares `wire_signature()`, not the name string) | O-8 (reject leg), O-9 (accept-on-name-mismatch leg), O-10 (unknown-name reject), O-11 (n_planes header guard) |
-| grid ring = HEXB v9; graph ring = HEXG v1; magics DISJOINT → cross-format load LOUD-rejects both ways | `replay/persist/*` + `replay/hexg/persist.rs` magic checks | O-16, O-22 |
-| HEXG magic `0x48455847`, version strict 1, slot-geometry guard: `MAX_STONES=256` fixed; the header's `max_visits` is the buffer's DERIVED `visit_capacity` (R255/ADJ-D34 — derived from the sims regime at composition, reject on mismatch: a file written under a different regime is a different record geometry); two-pass atomic load (parse-then-commit); game_id rebase past loaded max (`saturating_add`) | `replay/hexg/persist.rs` | O-20, O-21, O-22, O-26, O-29, `persist_roundtrips_a_non_default_capacity_and_rejects_mismatch` |
+| grid ring = HEXB v9; graph ring = HEXG v2; magics DISJOINT → cross-format load LOUD-rejects both ways | `replay/persist/*` + `replay/hexg/persist.rs` magic checks | O-16, O-22 |
+| HEXG magic `0x48455847`, version strict 2, slot-geometry guard: `MAX_STONES=256` fixed; the header's `max_visits` is the buffer's COMPOSED `visit_capacity` (R255/ADJ-D34 under `search.kind: puct`, derived from the sims regime; R347(a) under `gumbel`, the minted `gumbel_m` — reject on mismatch either way: a file written under a different regime is a different record geometry); two-pass atomic load (parse-then-commit); game_id rebase past loaded max (`saturating_add`) | `replay/hexg/persist.rs` | O-20, O-21, O-22, O-26, O-29, `persist_roundtrips_a_non_default_capacity_and_rejects_mismatch` |
+| HEXG v1 is REFUSED by name and leaves the buffer byte-identical (the two-pass load's atomicity, exercised on a real format break) | `replay/hexg/persist.rs` version check | `the_v1_byte_golden_is_refused_by_name_and_leaves_the_buffer_untouched` |
+| HEXG carries the R347(a) sparse row: per-record `tail_mass` alpha, refused at insert unless it is a probability, and an over-m explicit-entry count refused at insert before any slot is touched | `replay/hexg/{push.rs,persist.rs}` | `a_sparse_row_over_the_minted_m_is_refused_at_insert`, `a_tail_mass_that_is_not_a_probability_is_refused_at_insert` |
 | HEXG record round-trips byte-identically (`record_at` inverts `push_record_impl`); over-cap push LOUD; push-time validation (finite/non-negative visit prob, finite outcome, ±1 stone player) | `replay/hexg/{push.rs,mod.rs}` | O-17, O-18, O-19, O-28 |
 | HEXG rebuild-at-sample: per sampled record, D6-rotate stones + visit keys, rebuild via `build_axis_graph` (stamps `builder_impl = 1`), align to legal nodes, mass-drop guard | `replay/hexg/sample.rs` | O-24, O-25, O-27, O-30 |
 | f16 stored as raw u16 bits; no f16→f32→f16 on the data path (NaN/subnormal/−0/max-normal survive) | `replay/{push.rs, sample.rs, persist/*}` | O-34 |

@@ -59,6 +59,7 @@ from mantis.model import (
 from mantis.selfplay.graph_wire_split import GraphEmptyBatchError
 from mantis.train import checkpoints
 from mantis.train.emit import emit_via
+from mantis.train.events import tail_mass_block
 from mantis.train.losses import (
     backward_accumulate,
     chain_loss_with_fire_rate,
@@ -624,7 +625,9 @@ class Trainer:
                             inputs.stone_mask, node_offsets=inputs.node_offsets)
                         policy_loss = ragged_policy_ce(
                             policy_logits, inputs.policy_target, inputs.legal_offsets,
-                            full_search_mask=inputs.is_full_search,
+                            full_search_mask=inputs.policy_row_weight,
+                            explicit_mask=inputs.explicit_mask,
+                            tail_mass=inputs.tail_mass,
                             denominator=policy_denominator)
                         value_loss = _binned_value_loss(
                             bin_logits, inputs.outcomes, value_mask=inputs.value_valid,
@@ -698,8 +701,14 @@ class Trainer:
         policy_total = 0.0
         value_total = 0.0
         contributing = 0
+        # R347(a)/LAW-18 — every row's tail mass alpha, from step 0. Collected across the
+        # micro-batch split so the reading is the STEP's distribution and not one part's.
+        tail_alphas: list[float] = []
         for make in parts:
             inputs = make()
+            tail_alphas.extend(
+                float(v) for v in inputs.tail_mass.detach().reshape(-1).tolist()
+            )
             with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                           enabled=self._autocast_enabled):
                 # nn.Module.__getattr__ types dynamic attrs as Tensor | Module;
@@ -717,7 +726,9 @@ class Trainer:
                         "it does not own.")
                 policy_loss = ragged_policy_ce(policy_logits, inputs.policy_target,
                                                inputs.legal_offsets,
-                                               full_search_mask=inputs.is_full_search,
+                                               full_search_mask=inputs.policy_row_weight,
+                                               explicit_mask=inputs.explicit_mask,
+                                               tail_mass=inputs.tail_mass,
                                                denominator=policy_denominator)
                 value_loss = _binned_value_loss(bin_logits, inputs.outcomes,
                                                 value_mask=inputs.value_valid,
@@ -822,7 +833,10 @@ class Trainer:
                                   # step event rather than its own, because it is a property
                                   # OF this step's batch and a second event at the same
                                   # cadence is a second thing to keep in sync.
-                                  **(batch_composition or {})})
+                                  **(batch_composition or {}),
+                                  # R347(a): the same reasoning for the tail mass — a
+                                  # property of this step's rows.
+                                  **tail_mass_block(tail_alphas)})
             self._maybe_periodic_checkpoint(result)
         return result
 

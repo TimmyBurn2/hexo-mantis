@@ -915,20 +915,26 @@ fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
     // and at radius 8 that is true on essentially every ply — measured 3009 of 3010
     // expansions on a driven game — so the flag carries no information. This pins the
     // quantity that does: the summed PRIOR of the children the cap threw away.
-    use super::backup::{pick_topk_children, take_omitted_prior_stats};
+    use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
+
+    // The cap is the picker's own PARAMETER, and a LOCAL value is what this fixture uses:
+    // the window holds 361 cells, so a fixture sized off `MAX_CHILDREN_PER_NODE` stops
+    // being constructible the moment that constant is raised past the window. The mechanism
+    // under test is the cap, not the production value of it.
+    const CAP: usize = 64;
 
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     'fill: for q in -HALF..=HALF {
         for r in -HALF..=HALF {
             cells.insert((q, r));
-            if cells.len() == MAX_CHILDREN_PER_NODE + 8 {
+            if cells.len() == CAP + 8 {
                 break 'fill;
             }
         }
     }
-    assert_eq!(cells.len(), MAX_CHILDREN_PER_NODE + 8);
+    assert_eq!(cells.len(), CAP + 8);
 
     // A UNIFORM policy over the whole window: every kept child and every dropped child holds
     // the same prior, so the dropped mass is exactly `8 * p` and is hand-checkable.
@@ -936,34 +942,45 @@ fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
     let p = 1.0f32 / n_actions as f32;
     let policy = vec![p; n_actions];
 
-    take_omitted_prior_stats();
-    let (chosen, truncated) = pick_topk_children(
-        &cells,
-        0,
-        0,
-        &policy,
-        BOARD_SIZE as i32,
-        HALF,
-        MAX_CHILDREN_PER_NODE,
-    );
-    let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
+    let pick = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF, CAP);
 
     assert!(
-        truncated,
+        pick.truncated,
         "the fixture must exceed the cap for this to measure anything"
     );
-    assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE);
+    assert_eq!(pick.children.len(), CAP);
+    let expected = 8.0 * p;
+    println!(
+        "dropped prior mass {} against the 8 uniform children's {expected}",
+        pick.dropped_prior_mass
+    );
+    assert!(
+        (pick.dropped_prior_mass - expected).abs() <= 1e-6,
+        "dropped mass {} != the 8 uniform children's {expected}",
+        pick.dropped_prior_mass
+    );
+
+    // The counter half, on a TREE — the quantity above is what a search accumulates, and the
+    // bracket is the tree's own, so a second search in this process cannot enter it.
+    let tree = MCTSTree::new(1.5);
+    let _ = tree.take_omitted_prior();
+    tree.record_omitted_prior(pick.dropped_prior_mass);
+    let (mass_micros, omitted_expansions, total_expansions) = tree.take_omitted_prior();
     assert_eq!(total_expansions, 1, "one call must count as one expansion");
     assert_eq!(
         omitted_expansions, 1,
         "the truncating call was not counted as omitting"
     );
-    let expected = (8.0 * f64::from(p) * 1e6) as u64;
-    let delta = mass_micros.abs_diff(expected);
+    let expected_micros = (f64::from(expected) * 1e6) as u64;
     assert!(
-        delta <= 8,
-        "dropped mass {mass_micros} micros != the 8 uniform children's {expected} \
-         (fixed-point rounding allows one micro per child, saw {delta})"
+        mass_micros.abs_diff(expected_micros) <= 8,
+        "counted {mass_micros} micros against {expected_micros} (fixed-point rounding \
+         allows one micro per child)"
+    );
+    assert_eq!(
+        tree.take_omitted_prior(),
+        (0, 0, 0),
+        "the bracket must be read-and-RESET, or two consecutive searches share one window"
     );
 }
 
@@ -971,7 +988,7 @@ fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
 fn an_untruncated_expansion_records_no_omitted_mass() {
     // The mutation half: a counter that always fires reports a cap cost on a node that has
     // fewer legal moves than the cap, which is most of the early game.
-    use super::backup::{pick_topk_children, take_omitted_prior_stats};
+    use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
@@ -986,8 +1003,7 @@ fn an_untruncated_expansion_records_no_omitted_mass() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy = vec![1.0f32 / n_actions as f32; n_actions];
 
-    take_omitted_prior_stats();
-    let (_chosen, truncated) = pick_topk_children(
+    let pick = pick_topk_children(
         &cells,
         0,
         0,
@@ -996,9 +1012,12 @@ fn an_untruncated_expansion_records_no_omitted_mass() {
         HALF,
         MAX_CHILDREN_PER_NODE,
     );
-    let (mass_micros, omitted_expansions, total_expansions) = take_omitted_prior_stats();
+    let tree = MCTSTree::new(1.5);
+    let _ = tree.take_omitted_prior();
+    tree.record_omitted_prior(pick.dropped_prior_mass);
+    let (mass_micros, omitted_expansions, total_expansions) = tree.take_omitted_prior();
 
-    assert!(!truncated);
+    assert!(!pick.truncated);
     assert_eq!(
         total_expansions, 1,
         "an untruncated expansion must still be counted"
@@ -1014,13 +1033,18 @@ fn an_untruncated_expansion_records_no_omitted_mass() {
 }
 
 #[test]
-fn test_topk_truncates_at_max_children() {
+fn test_topk_truncates_at_the_supplied_cap() {
     use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
+    // The cap is a LOCAL, not `MAX_CHILDREN_PER_NODE`: the fixture's in-window half is
+    // bounded by the 361-cell window, so a cap read from the production constant makes the
+    // fixture unconstructible as soon as that constant passes the window.
+    const CAP: usize = 128;
+
     // 600 unique cells split between 200 in-window (high priors) and
-    // 400 out-of-window (sort prior 0.0). Top K will be drawn from the
+    // 400 out-of-window (sort prior 0.0). Top-CAP will be drawn from the
     // 200 in-window cells since out-of-window sinks under sort.
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     'iw: for q in -HALF..=HALF {
@@ -1048,24 +1072,17 @@ fn test_topk_truncates_at_max_children() {
         .map(|i| (i + 1) as f32 / n_actions as f32)
         .collect();
 
-    let (chosen, sort_used) = pick_topk_children(
-        &cells,
-        0,
-        0,
-        &policy,
-        BOARD_SIZE as i32,
-        HALF,
-        MAX_CHILDREN_PER_NODE,
-    );
-    assert!(sort_used, "600 > K must take sort path");
+    let pick = pick_topk_children(&cells, 0, 0, &policy, BOARD_SIZE as i32, HALF, CAP);
+    let chosen = pick.children;
+    assert!(pick.truncated, "600 > CAP must report truncation");
     assert_eq!(
         chosen.len(),
-        MAX_CHILDREN_PER_NODE,
-        "chosen must equal K, got {}",
+        CAP,
+        "chosen must equal the cap, got {}",
         chosen.len()
     );
 
-    // Top K should all be in-window since out-of-window sort_prior=0.0
+    // Top-CAP should all be in-window since out-of-window sort_prior=0.0
     // and 200 in-window cells with policy > 0 dominate.
     for &((q, r), prior) in &chosen {
         let flat = Board::window_flat_idx_at(q, r, 0, 0);
@@ -1097,10 +1114,12 @@ fn test_topk_tie_break_by_flat_idx() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // K + 1 cells inside window with identical priors → exactly one is
+    // CAP + 1 cells inside window with identical priors → exactly one is
     // dropped. Tie-break = flat_idx asc, so the cell with the largest
-    // flat_idx is the one dropped.
-    let target = MAX_CHILDREN_PER_NODE + 1;
+    // flat_idx is the one dropped. CAP is a local for the same reason the sibling above
+    // uses one: the window bounds the fixture, the production constant does not.
+    const CAP: usize = 128;
+    let target = CAP + 1;
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     let mut flats_inserted: Vec<usize> = Vec::new();
     'outer: for q in -HALF..=HALF {
@@ -1118,17 +1137,10 @@ fn test_topk_tie_break_by_flat_idx() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform_high = vec![0.5_f32; n_actions];
 
-    let (chosen, sort_used) = pick_topk_children(
-        &cells,
-        0,
-        0,
-        &uniform_high,
-        BOARD_SIZE as i32,
-        HALF,
-        MAX_CHILDREN_PER_NODE,
-    );
-    assert!(sort_used);
-    assert_eq!(chosen.len(), MAX_CHILDREN_PER_NODE);
+    let pick = pick_topk_children(&cells, 0, 0, &uniform_high, BOARD_SIZE as i32, HALF, CAP);
+    let chosen = pick.children;
+    assert!(pick.truncated);
+    assert_eq!(chosen.len(), CAP);
 
     let chosen_flats: std::collections::HashSet<usize> = chosen
         .iter()
@@ -1140,7 +1152,7 @@ fn test_topk_tie_break_by_flat_idx() {
         !chosen_flats.contains(&max_flat),
         "highest flat_idx must be the dropped cell under tie (max_flat={max_flat})"
     );
-    assert_eq!(chosen_flats.len(), MAX_CHILDREN_PER_NODE);
+    assert_eq!(chosen_flats.len(), CAP);
 }
 
 #[test]
@@ -1165,7 +1177,7 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy = vec![1.0 / n_actions as f32; n_actions];
 
-    let (chosen, sort_used) = pick_topk_children(
+    let pick = pick_topk_children(
         &cells,
         0,
         0,
@@ -1174,6 +1186,7 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
         HALF,
         MAX_CHILDREN_PER_NODE,
     );
+    let (chosen, sort_used) = (pick.children, pick.truncated);
     assert!(!sort_used, "fast path expected when n_legal <= K");
     assert_eq!(chosen.len(), 50);
 
@@ -1224,7 +1237,7 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         *p = ((i % 17) as f32) * 0.013;
     }
 
-    let (chosen_small, _) = pick_topk_children(
+    let chosen_small = pick_topk_children(
         &set_small,
         0,
         0,
@@ -1233,7 +1246,7 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         HALF,
         MAX_CHILDREN_PER_NODE,
     );
-    let (chosen_large, _) = pick_topk_children(
+    let chosen_large = pick_topk_children(
         &set_large,
         0,
         0,
@@ -1244,7 +1257,7 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
     );
 
     assert_eq!(
-        chosen_small, chosen_large,
+        chosen_small.children, chosen_large.children,
         "pick_topk_children child ORDER must be independent of FxHashSet \
          capacity / iteration order (see backup.rs fn-doc)"
     );

@@ -227,6 +227,7 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
         batch_size=4, augment=False, recency_weight=0.0, recent_buffer=None,
         caps_provider=_NON_BINDING_CAPS,
         sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0,
     )
     assert trainer.step == before + 1
 
@@ -236,7 +237,8 @@ def test_graph_spec_never_calls_the_dense_entry_point() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _graph_buffer(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.0,
-                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.graph_calls) == 1
     assert rec.tensor_calls == [], "dense entry point must be unreachable from a graph spec"
 
@@ -248,7 +250,8 @@ def test_graph_spec_over_a_dense_buffer_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="graph"):
         run_declared_train_step(rec, _dense_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert rec.tensor_calls == [] and rec.graph_calls == []
 
 
@@ -257,7 +260,8 @@ def test_grid_spec_over_a_graph_buffer_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="grid"):
         run_declared_train_step(rec, _graph_buffer(), _DSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert rec.tensor_calls == [] and rec.graph_calls == []
 
 
@@ -313,7 +317,8 @@ def test_grid_recency_mix_contract_matches_old_side() -> None:
     run_declared_train_step(rec, _DenseBuf(), _DSPEC,
                             batch_size=8, augment=False, recency_weight=0.25,
                             recent_buffer=_RecentBuf(),
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.tensor_calls) == 1
     call = rec.tensor_calls[0]
     assert call["n"] == 8, "recent + uniform rows must concatenate to the full batch"
@@ -346,7 +351,8 @@ def test_unknown_representation_raises_named_error() -> None:
     with pytest.raises(RepresentationRouteError, match="voxel"):
         run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _AlienSpec(),
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
 
 
 def test_undeclared_encoding_raises_from_the_one_resolver() -> None:
@@ -380,7 +386,8 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
         run_declared_train_step(_HalfTrainer(), _graph_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
-                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                                recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
 
 
 # ── O-T7: graph-arm recency semantics (old-side commit-B parity) ─────────────────────────
@@ -392,7 +399,8 @@ def test_graph_arm_refuses_a_dense_recent_buffer() -> None:
         run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
                                 recent_buffer=_RecentBuf(),
-                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                            caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
 
 
 def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
@@ -413,7 +421,8 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _RecordingHexg(), _GSPEC,
                             batch_size=2, augment=False, recency_weight=0.25,
-                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1)
+                            recent_buffer=None, caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert seen == [{"batch_size": 2, "augment": False, "recent_frac": 0.25}]
     assert len(rec.graph_calls) == 1
     kw = rec.graph_calls[0]
@@ -431,7 +440,7 @@ def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
     inputs = kw["parts"][0]()
     for name in ("x", "edge_index", "edge_attr", "legal_index", "stone_mask",
                  "node_offsets", "legal_offsets", "policy_target", "outcomes",
-                 "value_valid", "is_full_search"):
+                 "value_valid", "policy_row_weight", "explicit_mask", "tail_mass"):
         assert getattr(inputs, name, None) is not None, (
             f"a materialised micro-batch is missing {name!r}")
 
@@ -447,7 +456,8 @@ def test_the_grid_route_never_invokes_the_caps_provider() -> None:
 
     rec = _RecordingTypedTrainer()
     run_declared_train_step(rec, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
-                            recency_weight=0.0, recent_buffer=None, caps_provider=_explode, sample_threads_provider=lambda: 1)
+                            recency_weight=0.0, recent_buffer=None, caps_provider=_explode, sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.tensor_calls) == 1
 
     invoked: list[int] = []
@@ -458,7 +468,8 @@ def test_the_grid_route_never_invokes_the_caps_provider() -> None:
 
     run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0, recent_buffer=None, caps_provider=_counting,
-                            sample_threads_provider=lambda: 1)
+                            sample_threads_provider=lambda: 1,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"
 
 
@@ -480,7 +491,8 @@ def test_the_grid_route_never_invokes_the_sample_threads_provider() -> None:
     run_declared_train_step(rec, _dense_buffer(), _DSPEC, batch_size=4, augment=False,
                             recency_weight=0.0, recent_buffer=None,
                             caps_provider=_NON_BINDING_CAPS,
-                            sample_threads_provider=_explode)
+                            sample_threads_provider=_explode,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert len(rec.tensor_calls) == 1
 
     invoked: list[int] = []
@@ -492,5 +504,6 @@ def test_the_grid_route_never_invokes_the_sample_threads_provider() -> None:
     run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0, recent_buffer=None,
                             caps_provider=_NON_BINDING_CAPS,
-                            sample_threads_provider=_counting)
+                            sample_threads_provider=_counting,
+                            fast_policy_weight_provider=lambda: 0.0)
     assert invoked == [1], "the graph arm must invoke the provider exactly once"

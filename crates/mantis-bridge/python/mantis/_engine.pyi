@@ -671,6 +671,7 @@ class HexgBuffer:
         value_valid: bool,
         game_length: int,
         game_id: int = -1,
+        tail_mass: float = 0.0,
     ) -> None: ...
     def sample_graph_batch(
         self,
@@ -704,6 +705,10 @@ class HexgBuffer:
 class GraphTargets:
     @property
     def policy_target(self) -> numpy.ndarray: ...
+    @property
+    def explicit_mask(self) -> numpy.ndarray: ...
+    @property
+    def tail_mass(self) -> numpy.ndarray: ...
     @property
     def outcomes(self) -> numpy.ndarray: ...
     @property
@@ -776,6 +781,7 @@ def derived_hexg_visit_capacity(
     n_sims_quick: int,
     n_sims_full: int,
     leaf_batch_size: int,
+    gumbel_m: int,
     search_kind: str,
 ) -> int: ...
 

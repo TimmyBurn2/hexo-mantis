@@ -6,13 +6,13 @@
 //! whose support were the visited set, or the top-K-by-prior set, would teach the net that
 //! every other legal move is unplayable; at radius 8 that is hundreds of moves per ply.
 //!
-//! WHY THE TREE IS DRIVEN DIRECTLY AND NOT THROUGH `SelfPlayRunner`. A graph run under
-//! `search.kind: gumbel` is refused at BOOT by `replay::hexg::derived_visit_capacity` — its
-//! target's support is the legal set, and the HEXG record's visit slot is derived from the
-//! sims regime, which bounds visits and not cells. That refusal is the standing blocker on
-//! the completed-Q target regime for the graph lineage (`mantis-selfplay/tests/
-//! target_boot_guards.rs`), so the runner cannot carry this game today. What is measured
-//! here is the SEARCH's own export, which is the thing the record would have to hold.
+//! WHY THE TREE IS DRIVEN DIRECTLY AND NOT THROUGH `SelfPlayRunner`. What is measured here
+//! is the SEARCH's own export over the full legal set. The RECORD does not hold that support
+//! any more: R347(a) stores the row sparse — the m sampled candidates' exact entries plus one
+//! tail mass — precisely because the export's support is the legal set and no sims regime
+//! bounds it. The two are different objects and this file measures the first;
+//! `crates/mantis-search/tests/gumbel_sparse_row_kl.rs` measures what the second costs
+//! against it.
 //!
 //! WHAT IS NOT YET TRUE, stated rather than left to be discovered: the root MATERIALIZES
 //! every legal child. The ruling asks for a root that samples and completes over the full

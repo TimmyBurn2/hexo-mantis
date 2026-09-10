@@ -50,6 +50,18 @@ impl SearchKind {
     pub fn completed_q_target(self) -> bool {
         matches!(self, SearchKind::Gumbel)
     }
+
+    /// R347(a) — whether this kind's graph rows are stored SPARSE: the m visited candidates'
+    /// exact entries plus one tail mass α, rather than a slot per legal action.
+    ///
+    /// It is the same predicate as `completed_q_target` today and is deliberately a SECOND
+    /// method rather than a reuse of the first: they answer different questions (what the
+    /// target MEANS versus how the row is LAID OUT), and a kind that completed its Q-values
+    /// but visited every action would want the first and not the second.
+    #[must_use]
+    pub fn stores_sparse_rows(self) -> bool {
+        matches!(self, SearchKind::Gumbel)
+    }
 }
 
 #[cfg(test)]
@@ -82,5 +94,11 @@ mod tests {
     fn the_completed_q_target_is_the_kinds_own_answer() {
         assert!(SearchKind::Gumbel.completed_q_target());
         assert!(!SearchKind::Puct.completed_q_target());
+    }
+
+    #[test]
+    fn only_the_gumbel_kind_stores_a_sparse_row() {
+        assert!(SearchKind::Gumbel.stores_sparse_rows());
+        assert!(!SearchKind::Puct.stores_sparse_rows());
     }
 }

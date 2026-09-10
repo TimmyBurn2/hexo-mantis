@@ -12,7 +12,7 @@
 //! `LegalSetPolicy` + `is_covered` are NOT defined here — WP4 moved them to
 //! `mantis_search` (the MCTS reads them). This module imports them.
 
-use fxhash::FxHashMap;
+use fxhash::{FxHashMap, FxHashSet};
 use mantis_core::{Board, Cell};
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use rand::{rng, RngExt};
@@ -663,6 +663,12 @@ pub fn refuse_zero_visit_export(
 /// `len > max_visits` → `VisitSlotsExceeded` (the silent top-k truncation is
 /// DELETED — a target that cannot be stored whole cannot be built).
 ///
+/// R347(a) — `explicit_support`, when supplied, is the set of cells the row stores CELL BY
+/// CELL; every other positive-mass legal cell is summed into the record's `tail_mass` α. It
+/// is `None` on the PUCT arm, whose exported target has no unstored support and whose α is
+/// therefore 0. The slot guard below then bounds the EXPLICIT entries, which under Gumbel is
+/// the minted m — so `max_visits` is what makes an over-m row unconstructible.
+///
 /// # Errors
 /// Returns [`TargetIntegrityError`] per the pinned order above — LAW-14: the
 /// caller latches it run-fatal (`runner/record.rs` dispatch → fatal-defect
@@ -677,6 +683,7 @@ pub fn record_position_graph(
     ply_index: u16,
     is_full_search: bool,
     max_visits: usize,
+    explicit_support: Option<&FxHashSet<(i32, i32)>>,
 ) -> Result<crate::replay::hexg::GraphRecord, TargetIntegrityError> {
     let (bcq, bcr) = board.window_center();
     let half = (trunk_sz - 1) / 2;
@@ -684,30 +691,43 @@ pub fn record_position_graph(
     // Visit target: read the ragged mass at each legal coord (no floor — a cell
     // absent from `ls` is truly 0-visit, and unstored cells read 0 at sample).
     // The f64 mass accumulates on the RAW read, PRE-filter (§3.3 rev-3 N-1).
+    //
+    // R347(a): with an `explicit_support` in hand the row is SPARSE — a positive-mass cell
+    // outside that set is summed into the tail mass α instead of taking a slot. The set is
+    // the search's own visited-candidate set, so the cells it excludes are exactly the ones
+    // whose completed-Q target is the recording prior times one scalar.
     let legal = board.legal_moves();
     let mut visits: Vec<(i16, i16, f32)> = Vec::with_capacity(legal.len());
     let mut sum: f64 = 0.0;
     let mut stored: f64 = 0.0;
+    let mut tail: f64 = 0.0;
     for &(q, r) in &legal {
         let p = ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0);
         sum += f64::from(p);
         if p > 0.0 {
-            visits.push((q as i16, r as i16, p));
-            stored += f64::from(p);
+            if explicit_support.is_some_and(|set| !set.contains(&(q, r))) {
+                tail += f64::from(p);
+            } else {
+                visits.push((q as i16, r as i16, p));
+                stored += f64::from(p);
+            }
         }
     }
 
     // T-3 loop 2 (F-RT-1): the guarded quantity must equal the SHIPPED quantity.
-    // `sum` is the PRE-filter scan (N-1, NaN-visible); `stored` accumulates the
+    // `sum` is the PRE-filter scan (N-1, NaN-visible); `stored + tail` accumulates the
     // post-`p > 0.0` shipped mass in the SAME scan (bit-identical to a second
     // pass — same f64 additions in push order; fused per the LAW-09 bracket) —
     // a sign-cancelling ls (e.g. {+1.5, −0.5}: scan sum 1, stored 1.5) would
     // otherwise construct a non-distribution record. A NaN `sum` makes this
     // comparison FALSE and falls through to the finiteness arm, so the pinned
-    // §3.3 check order below is preserved verbatim.
-    if (sum - stored).abs() > TARGET_MASS_TOL {
+    // §3.3 check order below is preserved verbatim. The tail is on the shipped side
+    // because the row ships it too — as one scalar rather than as cells.
+    if (sum - (stored + tail)).abs() > TARGET_MASS_TOL {
         return Err(TargetIntegrityError::MassNotUnity {
-            sum: stored,
+            // The SHIPPED mass, both halves: the explicit entries plus the tail scalar. On
+            // the PUCT arm the tail is 0 and this is the pre-R347 quantity unchanged.
+            sum: stored + tail,
             ply_index,
             n_cells: visits.len(),
         });
@@ -752,6 +772,9 @@ pub fn record_position_graph(
     Ok(crate::replay::hexg::GraphRecord {
         stones,
         visits,
+        // Clamped, not merely cast: the f64 sum of positive masses can land a few ULP past
+        // 1.0, and the push guard refuses anything outside 0..=1 by design.
+        tail_mass: (tail as f32).clamp(0.0, 1.0),
         current_player,
         moves_remaining,
         ply_index,
@@ -1777,6 +1800,7 @@ mod gnn_assemble_tests {
             b.ply.index() as u16,
             true,
             128,
+            None,
         )
         .expect("a full-mass target must record");
 
@@ -1826,7 +1850,7 @@ mod gnn_assemble_tests {
             dense,
             overflow: FxHashMap::default(),
         };
-        let err = super::record_position_graph(&b, &ls, trunk, 1, 2, 0, true, 2)
+        let err = super::record_position_graph(&b, &ls, trunk, 1, 2, 0, true, 2, None)
             .expect_err("5 cells against max_visits=2 must raise, never silently truncate");
         match err {
             super::TargetIntegrityError::VisitSlotsExceeded { n, max, .. } => {

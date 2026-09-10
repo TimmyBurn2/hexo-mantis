@@ -22,51 +22,56 @@
 //! - **FLOOR / ENVELOPE** — the kind's pool terms, stated and derived rather than
 //!   transcribed.
 
-use std::sync::{Mutex, MutexGuard};
-
 use mantis_core::Board;
 use mantis_search::{
-    take_omitted_prior_stats, MCTSTree, MctxRootState, SearchKind, MAX_ARMED_SIMS,
-    MAX_ARMED_SIMS_GUMBEL, MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
+    MCTSTree, MctxRootState, SearchKind, MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL,
+    MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
 };
 
 /// Board stride for a 19-window encoding with a pass slot — the shape every in-src MCTS
 /// fixture uses.
 const N_ACTIONS: usize = 19 * 19 + 1;
 
-/// A radius-8 board with two stones: comfortably over the per-node cap, so the two kinds
-/// are DISTINGUISHABLE at the root. Derived by construction, not asserted as a constant —
-/// the count is a property of the geometry, not of this test.
+/// A radius-8 board whose legal set clears the per-node cap, so the two kinds are
+/// DISTINGUISHABLE at the root.
+///
+/// GROWN UNTIL IT CLEARS THE CAP, not a stone list tuned to one. This was two adjacent
+/// stones, which put 232 moves in the legal set — comfortably over a 192-wide cap and under
+/// the 1024-wide one R347(c) minted, so the fixture stopped being able to tell the kinds
+/// apart the moment the constant moved. Stepping outward by one radius keeps every move
+/// legal from the stone before it and grows the union of balls monotonically, so the loop
+/// terminates against any cap the pool can serve.
 fn wide_board() -> Board {
     let mut board = Board::new();
     board.set_legal_move_radius(8);
     board
         .apply_move(0, 0)
         .expect("(0,0) is legal on a fresh board");
-    board.apply_move(1, 0).expect("(1,0) is legal beside it");
+    let mut q = 0;
+    while board.legal_moves().len() <= MAX_CHILDREN_PER_NODE {
+        q += 8;
+        assert!(
+            q <= 8 * 64,
+            "the legal set stopped growing at {} moves before clearing the cap {}",
+            board.legal_moves().len(),
+            MAX_CHILDREN_PER_NODE
+        );
+        board
+            .apply_move(q, 0)
+            .expect("a step of exactly one legal-move radius is legal from the last stone");
+    }
     board
 }
 
-/// Serialises every root expansion in this binary.
-///
-/// `take_omitted_prior_stats` reads PROCESS-GLOBAL counters, and cargo runs this file's
-/// tests on threads of one process. Without this, the omitted-mass witness measures its own
-/// expansion plus whichever sibling happened to expand inside its window — it first read
-/// "2 truncating expansions" for one truncating expansion, which is a wrong number rather
-/// than a flaky one. The lock is over the WINDOW, not just the call, so the measuring test
-/// holds it across take -> expand -> take.
-static EXPAND_LOCK: Mutex<()> = Mutex::new(());
-
-fn expand_lock() -> MutexGuard<'static, ()> {
-    // A poisoned lock means a sibling test panicked; the counters it left are exactly what
-    // the next `take` clears, so recovering is correct and hiding the panic is not — the
-    // sibling reports its own failure.
-    EXPAND_LOCK.lock().unwrap_or_else(|e| e.into_inner())
-}
-
 /// Expand the root once with a uniform policy and a stated leaf value.
+///
+/// THE SERIALISING LOCK THIS FILE USED TO HOLD IS GONE (R347). The omitted-prior counters
+/// were process-global, so cargo running this file's tests on threads of one process meant
+/// the omitted-mass witness measured its own expansion plus whichever sibling expanded
+/// inside its window — it once read "2 truncating expansions" for one truncating expansion,
+/// which is a wrong number rather than a flaky one. The counters are now per-`MCTSTree`, so
+/// the window belongs to the tree that opened it and no sibling can enter it.
 fn expand_root(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
-    let _guard = expand_lock();
     expand_root_unlocked(kind, value)
 }
 
@@ -177,10 +182,8 @@ fn the_gumbel_root_holds_the_full_legal_set_and_the_puct_root_does_not() {
          are indistinguishable here (got {legal})"
     );
 
-    let _guard = expand_lock();
-    let _ = take_omitted_prior_stats();
     let (gumbel, _) = expand_root_unlocked(SearchKind::Gumbel, 0.25);
-    let (_, omitted_expansions, _) = take_omitted_prior_stats();
+    let (_, omitted_expansions, _) = gumbel.omitted_prior_stats();
     assert_eq!(
         gumbel.root_n_children(),
         legal,
@@ -193,19 +196,40 @@ fn the_gumbel_root_holds_the_full_legal_set_and_the_puct_root_does_not() {
         "the omitted-prior witness, read at the root: no prior mass left the root"
     );
 
-    let _ = take_omitted_prior_stats();
     let (puct, _) = expand_root_unlocked(SearchKind::Puct, 0.25);
-    let (mass_micros, omitted_expansions, _) = take_omitted_prior_stats();
+    let (mass_micros, omitted_expansions, total_expansions) = puct.omitted_prior_stats();
+    println!(
+        "omitted-prior at the root: gumbel {:?}, puct {:?}; legal {legal}, cap \
+         {MAX_CHILDREN_PER_NODE}",
+        gumbel.omitted_prior_stats(),
+        puct.omitted_prior_stats()
+    );
     assert_eq!(
         puct.root_n_children(),
         MAX_CHILDREN_PER_NODE,
         "the PUCT root truncates at the per-node cap"
     );
     assert!(
-        omitted_expansions == 1 && mass_micros > 0,
-        "the PUCT root drops prior mass and the telemetry says so ({omitted_expansions} \
-         truncating expansions, {mass_micros} micros) — if it did not, the comparison above \
-         would prove nothing"
+        puct.root_n_children() < legal,
+        "the PUCT root kept every legal move, so it did not truncate and the comparison \
+         above proves nothing"
+    );
+    assert_eq!(
+        total_expansions, 1,
+        "the truncating expansion was not counted at all"
+    );
+    // AND THE DROPPED MASS IS ZERO HERE, WHICH IS A STRUCTURAL FACT AND NOT A GAP. This is
+    // the DENSE expand: its policy vector covers the 19-window's 361 cells and nothing else,
+    // so an off-window cell's sort prior is 0. Once the per-node cap exceeds 361 — R347(c)
+    // made it 1024 — every child the dense picker can drop is off-window and therefore
+    // zero-prior, so `mass_micros` cannot be positive on this arm at any board. The mass
+    // MECHANISM is witnessed where it can bite, at an explicit sub-window cap, in
+    // `mcts/tests.rs::omitted_prior_mass_is_the_tail_the_cap_dropped`.
+    assert_eq!(
+        (mass_micros, omitted_expansions),
+        (0, 0),
+        "the DENSE root dropped positive prior mass, which the 361-cell policy vector \
+         cannot supply above a {MAX_CHILDREN_PER_NODE}-wide cap"
     );
 }
 
@@ -299,8 +323,18 @@ fn a_search_at_the_gumbel_ceiling_still_fits_the_pool() {
 #[test]
 fn the_interior_selector_changes_where_the_visits_land() {
     fn drive(kind: SearchKind) -> Vec<u32> {
-        let _guard = expand_lock();
-        let board = wide_board();
+        // A NARROW board, deliberately: this test needs the two selectors to COMPETE over
+        // children that get REVISITED, and a fixture wide enough to exercise the per-node cap
+        // gives the drive more children than it has simulations — at which point both kinds
+        // spend every sim on a fresh unvisited child in prior order and agree by exhaustion
+        // rather than by running the same selector. The cap is `wide_board`'s subject; this
+        // one's is the descent.
+        let mut board = Board::new();
+        board.set_legal_move_radius(2);
+        board
+            .apply_move(0, 0)
+            .expect("(0,0) is legal on a fresh board");
+        board.apply_move(1, 0).expect("(1,0) is legal beside it");
         let mut tree = MCTSTree::new(1.5);
         tree.configure_quiescence(false, 0.0);
         tree.configure_search(kind, 50.0, 0.1);
@@ -366,7 +400,6 @@ fn the_interior_selector_changes_where_the_visits_land() {
 #[test]
 fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
     const M: usize = 8;
-    let _guard = expand_lock();
     let board = wide_board();
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);

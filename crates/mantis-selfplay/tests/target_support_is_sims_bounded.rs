@@ -31,13 +31,13 @@
 //! The root cap changes which actions CAN be visited. It does not change how many ARE, and
 //! only the visited ones are stored.
 //!
-//! AND THE COMPLETED TARGET, the other row kind, CANNOT BOOT ALONGSIDE IT.
-//! `search.kind: gumbel` on a graph run is refused by `derived_visit_capacity` at ANY
-//! capacity — its support is the legal set, which the config bounds nowhere. The grid path
-//! records fixed-width dense rows and has no variable-length visit vec at all, so the
-//! row-kind question does not arise there. There is therefore no bootable configuration in
-//! which two row kinds exist to be mixed. THIS IS ALSO THE BLOCKER on the completed-Q
-//! target regime: the refusal is what a minted visit-slot bound would have to replace.
+//! AND THE COMPLETED TARGET, THE OTHER ROW KIND, IS BOUNDED BY A DIFFERENT QUANTITY.
+//! `search.kind: gumbel` on a graph run now boots (R347(a)), and its row is SPARSE: the m
+//! sampled candidates' exact entries plus one tail mass, so its width is the minted
+//! `selfplay.gumbel_m` and NOT the sims regime. The two row kinds therefore have two
+//! bounds, each derived by the same one authority from the kind the run declared, and this
+//! file measures the PUCT one. The grid path records fixed-width dense rows and has no
+//! variable-length visit vec at all, so the row-kind question does not arise there.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -193,19 +193,22 @@ fn an_exported_rows_support_is_the_sim_budget_not_the_child_count() {
         })
         .max()
         .unwrap_or(0);
-    assert!(
-        widest_legal > MAX_CHILDREN_PER_NODE,
-        "no recorded position had more legal moves ({widest_legal}) than the per-node cap \
-         ({MAX_CHILDREN_PER_NODE}), so nothing truncated and the row widths above prove \
-         nothing"
+    // The CHILD COUNT a row could have had is `min(n_legal, cap)`, and it is that against
+    // the sim budget that decides whether the two predictions differ. Written as the cap
+    // alone while the cap sat below every r8 legal set; R347(c) raised it past them, at which
+    // point the cap stopped being the binding term and a cap-only guard started asking for a
+    // regime this drive cannot reach — while the property it guards was never in doubt.
+    let widest_children = widest_legal.min(MAX_CHILDREN_PER_NODE);
+    println!(
+        "widest recorded legal set {widest_legal}, per-node cap {MAX_CHILDREN_PER_NODE}, so \
+         the widest child count a row could have had is {widest_children} against a \
+         {SIMS}-sim budget"
     );
-    // Through locals so clippy does not fold two consts into a literal truth: the point is
-    // that the RELATION survives a change to either, which a const-folded check stops seeing.
-    let (budget, per_node_cap) = (SIMS, MAX_CHILDREN_PER_NODE);
     assert!(
-        budget < per_node_cap,
-        "the budget must sit BELOW the per-node cap or 'sims-bounded' and \
-         'child-count-bounded' make the same prediction and this test proves nothing"
+        widest_children > SIMS,
+        "the widest child count any recorded root could have had is {widest_children}, not \
+         more than the {SIMS}-sim budget — so 'sims-bounded' and 'child-count-bounded' make \
+         the same prediction here and the row widths above prove nothing"
     );
 }
 
@@ -226,6 +229,23 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
     board
         .apply_move(0, 0)
         .expect("(0,0) is legal on a fresh board");
+    // Grown until the legal set clears the per-node cap, rather than left at one stone: the
+    // state this test needs is a Gumbel root WIDER than the cap, and one radius-8 ball stopped
+    // being that when R347(c) raised the cap. Stepping outward by exactly one radius keeps
+    // every move legal from the stone before it and grows the union monotonically.
+    let mut q = 0;
+    while board.legal_moves().len() <= MAX_CHILDREN_PER_NODE {
+        q += 8;
+        assert!(
+            q <= 8 * 64,
+            "the legal set stopped growing at {} before clearing the cap {}",
+            board.legal_moves().len(),
+            MAX_CHILDREN_PER_NODE
+        );
+        board
+            .apply_move(q, 0)
+            .expect("a step of exactly one legal-move radius is legal from the last stone");
+    }
 
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);

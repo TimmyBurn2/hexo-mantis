@@ -12,9 +12,10 @@
 //! WHY BOTH KINDS. PCR is drawn in `play_one_move` BEFORE the search kind is dispatched, so
 //! it is meant to be kind-independent — and "meant to be" is what a witness is for.
 //!
-//! WHY THE DENSE PATH. `search.kind: gumbel` on the GRAPH path is refused at boot by
-//! `replay::hexg::derived_visit_capacity` (see `target_boot_guards.rs`), so the dense route
-//! is the only one on which both kinds can be driven end to end today.
+//! WHY THE DENSE PATH. The dense recorder is the one BOTH kinds share, so driving it is
+//! what makes the two arms of this witness comparable. (The graph path is no longer refused
+//! under `gumbel` — R347(a) gave it the sparse row — but its recorder is graph-only, so a
+//! kind-independence claim measured there would be measuring one recorder against itself.)
 //!
 //! THE RESIDUAL IS STATED, NOT ASSUMED AWAY. A move draws its arm before it searches, and a
 //! game's rows reach the drain only when the game FINALIZES — so the counters lead the rows

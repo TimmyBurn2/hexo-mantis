@@ -10,6 +10,21 @@ use half::f16;
 
 use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES};
 
+/// Reject a tail mass that is not a probability at push time (R347(a)). α is the mass the
+/// row does NOT store cell-by-cell, so a non-finite or out-of-range value is a target the
+/// trainer would spread over the remaining legal set as garbage.
+pub fn validate_tail_mass(tail_mass: f32) -> Result<(), String> {
+    if tail_mass.is_finite() && (0.0..=1.0).contains(&tail_mass) {
+        Ok(())
+    } else {
+        Err(format!(
+            "push_graph_position: tail_mass {tail_mass} is not a probability (must be finite \
+             and in 0.0..=1.0) — it is the R347(a) mass α on the legal actions the row does \
+             not store, which the trainer spreads over its own detached current prior"
+        ))
+    }
+}
+
 /// Reject a non-finite or negative visit prob at push time (the earliest point
 /// that can see the raw, unaligned value), naming the offending coord + value.
 /// The sample-time `mass_drop_check` guard is NaN-blind and sign-blind; this
@@ -62,12 +77,16 @@ impl HexgBuffer {
                 MAX_STONES
             ));
         }
+        // R347(a) — a row claiming more than the composed slot count is REFUSED here, at
+        // insert. Under `search.kind: gumbel` that slot count IS m, so overrun is not merely
+        // unstorable, it is a claim that Sequential Halving visited more than m candidates.
         if rec.visits.len() > self.visit_capacity {
             return Err(format!(
-                "push_graph_position: {} visit cells exceeds the derived visit capacity {} \
-                 (record_position_graph refuses over-cap targets with a typed \
-                 VisitSlotsExceeded — this push guard is the independent second line; \
-                 R255: the capacity is derived from the sims regime at composition)",
+                "push_graph_position: {} explicit visit entries exceeds the composed visit \
+                 capacity {} (record_position_graph refuses over-cap targets with a typed \
+                 VisitSlotsExceeded — this push guard is the independent second line; the \
+                 capacity is the sims regime's derivation under search.kind=puct and the \
+                 minted gumbel_m under search.kind=gumbel, R255/ADJ-D34 + R347(a))",
                 rec.visits.len(),
                 self.visit_capacity
             ));
@@ -80,6 +99,7 @@ impl HexgBuffer {
         }
         // Validate outcome finiteness before any mutation of `self`.
         validate_outcome(rec.outcome)?;
+        validate_tail_mass(rec.tail_mass)?;
         // Validate every visit prob before any mutation of `self`.
         for &(q, r, prob) in &rec.visits {
             validate_visit_prob(q, r, prob)?;
@@ -121,6 +141,7 @@ impl HexgBuffer {
             self.visit_probs[prob_base + i] = prob;
         }
         self.n_visits[slot] = rec.visits.len() as u16;
+        self.tail_mass[slot] = rec.tail_mass;
 
         // ── scalars ──
         self.current_player[slot] = rec.current_player;
@@ -176,6 +197,7 @@ impl HexgBuffer {
         GraphRecord {
             stones,
             visits,
+            tail_mass: self.tail_mass[slot],
             current_player: self.current_player[slot],
             moves_remaining: self.moves_remaining[slot],
             ply_index: self.ply_index[slot],

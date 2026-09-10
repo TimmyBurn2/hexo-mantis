@@ -1145,6 +1145,19 @@ pub(crate) fn play_one_move(
             "graph record dispatch requires the derived visit capacity — composed in \
              SelfPlayRunner::new's graph arm (R255)",
         );
+        // R347(a) — the sparse row's explicit support is the search's OWN visited-candidate
+        // set, read from the tree rather than inferred from the target: under Gumbel a
+        // visited candidate can carry LESS mass than an unvisited one with a strong prior,
+        // so "the top m by mass" is a different set and would put exact entries in the tail.
+        let explicit_support = if ctx.search_kind.stores_sparse_rows() {
+            Some(
+                tree.visited_root_child_cells()
+                    .into_iter()
+                    .collect::<fxhash::FxHashSet<(i32, i32)>>(),
+            )
+        } else {
+            None
+        };
         if let Err(err) = record_position_graph_dispatch(
             board,
             &target_policy,
@@ -1152,6 +1165,7 @@ pub(crate) fn play_one_move(
             record_full_search,
             graph_records_vec,
             visit_capacity,
+            explicit_support.as_ref(),
         ) {
             // LAW-14: a target-integrity defect is RUN-FATAL — latch the typed
             // message (variant name in Display) and halt; the bridge drain face

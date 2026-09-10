@@ -131,6 +131,7 @@ def _payload(
     train_over: dict | None = None,
     search_kind: str = "puct",
     n_simulations: int = 50,
+    selfplay_over: dict | None = None,
 ) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
@@ -145,7 +146,7 @@ def _payload(
         "search": {"kind": search_kind},
         "eval": _eval_block(),
         "train": _train_block(**(train_over or {})),
-        "selfplay": _selfplay_block(n_simulations=n_simulations),
+        "selfplay": {**_selfplay_block(n_simulations=n_simulations), **(selfplay_over or {})},
         "inference": _inference_block(),
         "monitor": _monitor_block(),
     }
@@ -194,20 +195,37 @@ def test_the_gumbel_kind_and_the_completed_target_agree_on_grid():
     assert cfg.train.policy_target == "completed_improved_policy"
 
 
-def test_the_gumbel_kind_on_a_graph_run_is_refused_by_the_record_format():
-    """THE STANDING BLOCKER, pinned so it is a stated gap rather than a surprise.
+def test_the_gumbel_kind_on_a_graph_run_mints_at_the_minted_slot_bound():
+    """THE BLOCKER THIS TEST USED TO PIN IS CLOSED (R347(a)), and the closure is what is
+    pinned now.
 
     A graph run under `gumbel` exports a target whose support is the LEGAL SET, and the
-    HEXG record's visit slot is derived from the sims regime — which bounds visits, not
-    cells. No sims regime retires the refusal, which is what makes this a MINT decision
-    (a minted slot bound) rather than a config a bigger budget could reach.
+    refusal stood on the HEXG record's visit slot being derived from the sims regime — which
+    bounds visits, not cells. R347(a)'s answer is that the ROW need not carry that support:
+    only `selfplay.gumbel_m` candidates are ever visited, every other legal action's target
+    is the recording prior times one scalar, and the row stores m entries plus that scalar.
+    So the mint decision the old refusal was waiting for was taken, and the slot bound is m.
     """
-    with pytest.raises(ValidationError, match="FULL legal set"):
+    cfg = RunConfig.model_validate(
+        _payload(
+            search_kind="gumbel",
+            train_over={"policy_target": "completed_improved_policy"},
+            n_simulations=192,
+        )
+    )
+    assert cfg.search.kind == "gumbel"
+    assert cfg.identity.representation == "graph"
+
+
+def test_a_gumbel_m_past_the_minted_bound_is_refused_on_a_graph_run():
+    """The refusal that REPLACED the blocker: m, not the sims regime (R347(a))."""
+    with pytest.raises(ValidationError, match="gumbel_m"):
         RunConfig.model_validate(
             _payload(
                 search_kind="gumbel",
                 train_over={"policy_target": "completed_improved_policy"},
                 n_simulations=192,
+                selfplay_over={"gumbel_m": 17},
             )
         )
 

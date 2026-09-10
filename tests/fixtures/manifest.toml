@@ -41,10 +41,19 @@ path = "replay/hexb_v9_golden.hexb"
 sha256 = "b15c729f14db42e25a7b4bc74331b55838b0dd1a60ec978c00b006e0ddd37602"
 added_by = "WP5"
 
+# KEPT as the REFUSAL fixture, not as a loadable ring: R347(a)'s v2 format inserted the
+# per-record tail mass, so this file's records are a different byte layout and
+# `replay_hexg.rs::the_v1_byte_golden_is_refused_by_name_and_leaves_the_buffer_untouched`
+# is what reads it now.
 [[required]]
 path = "replay/hexg_v1_golden.hexg"
 sha256 = "97ce1faf4a8de32a3a0de17ee1613c3820034c1a3a9685d342ba574d774840ef"
 added_by = "WP5"
+
+[[required]]
+path = "replay/hexg_v2_golden.hexg"
+sha256 = "3932c52054c1d13616ba108b535e1b39d81a47e932bf8e0b94d202a5bcd44524"
+added_by = "GUMBEL-3"
 
 # WP6 Stage B ⊕ oracle-first old-side capture (wp/WP6/CAPTURE_LOG.md). Dispatcher-
 # stamped shas of the FROZEN hexo_rl (rev 750b599) PUB pyo3-free record/finalize
@@ -360,12 +369,12 @@ added_by = "WPMAIN"
 # 64 KB budget the P-2a oracle asserts in-test.
 [[required]]
 path = "eval_selfplay_parity/child_parity_v1.json"
-sha256 = "22ba114f81d2a3aaf889309221de983d25107435ec973e7a51cabe4cf783dd04"
+sha256 = "58f3e29278d459439554a8ac6c2b3413757c7da9b745fcfc18c617945e0a45c2"
 added_by = "WP12-R"
 
 [[required]]
 path = "eval_selfplay_parity/dispersed_r6_v1.json"
-sha256 = "a0d4ff0f1bc88a3242b9381ccff5c9356333559dcb8a4f681f93dc3d50653b58"
+sha256 = "90ac8e352f035ccb2e6a729db0f8222feb9eca5eb799b145e185496f6b42e30b"
 added_by = "WP12-R"
 
 # ── WP12-R Phase T (TARGET INTEGRITY, T-2 ORACLE-WRITE) ────────────────────────────────

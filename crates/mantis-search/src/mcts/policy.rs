@@ -348,6 +348,34 @@ impl MCTSTree {
         completed_q::mctx_completed_qvalues(&children, raw, c_visit, c_scale)
     }
 
+    /// R347(a) — the root children Sequential Halving actually VISITED, as axial cells.
+    ///
+    /// This is the sparse Gumbel row's explicit support. Under Sequential Halving a round
+    /// visits only the candidates sitting at the schedule's considered level, so the visited
+    /// set is bounded by `m` however wide the legal set is; every other legal action completes
+    /// to the same `v_mix` and therefore carries the recording prior times one scalar, which
+    /// the row stores as the single tail mass instead of a slot each.
+    ///
+    /// Empty when the root is unexpanded or nothing was backed up — the caller's own
+    /// zero-visit refusal (`records::refuse_zero_visit_export`) is what turns that into an
+    /// error, so this reports the state rather than judging it.
+    #[must_use]
+    pub fn visited_root_child_cells(&self) -> Vec<(i32, i32)> {
+        let root = &self.pool[0];
+        if !root.is_expanded() {
+            return Vec::new();
+        }
+        let first = root.first_child as usize;
+        let n_ch = root.n_children as usize;
+        (first..first + n_ch)
+            .filter(|&i| self.pool[i].n_visits > 0)
+            .map(|i| {
+                let val = self.pool[i].action_idx;
+                ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
+            })
+            .collect()
+    }
+
     /// Returns (child_pool_index, prior) for each root child.
     /// Used by Gumbel MCTS to build the candidate list after root expansion.
     pub fn get_root_children_info(&self) -> Vec<(u32, f32)> {

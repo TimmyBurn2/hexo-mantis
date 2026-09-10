@@ -76,7 +76,7 @@ BASE_TRAIN: dict[str, Any] = {
     "draw_reward": -0.4, "ply_cap_value": -0.7, "policy_prune_frac": 0.0,
     "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
     "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
-    "ply_index_weight": 0.0, "threat_pos_weight": 1.0,
+    "ply_index_weight": 0.0, "threat_pos_weight": 1.0, "fast_policy_weight": 0.0,
 }
 
 
