@@ -267,7 +267,7 @@ def _bounded(smoke_run_config, **over):
                "disk_guard": dict(_DRIVE_DISK_GUARD)}
     monitor.update(over.pop("monitor", {}))
     return smoke_run_config(
-        "smoke_preflight_armed.yaml", eval_enabled=False,
+        "dev_example.yaml", eval_enabled=False,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                "batch_size": 8},
         monitor=monitor, **over,

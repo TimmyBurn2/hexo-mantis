@@ -169,17 +169,15 @@ def _check_scattered_keys(cfg: Mapping[str, Any], spec: EncodingSpec) -> None:
 # ---------------------------------------------------------------------------
 
 _CORPUS_PATHS: dict[str, str] = {
-    "v6":          "data/bootstrap_corpus.npz",
-    "v6_live2_ls": "data/bootstrap_corpus_v6_live2_ls.npz",
-    "v6w25":       "data/bootstrap_corpus_v6w25.npz",
     "gnn_axis_v1": "data/gnn_corpus_v1.hexg",
-    "gnn_axis_r8":  "data/gnn_corpus_r8.hexg",
+    "gnn_axis_r8": "data/gnn_corpus_r8.hexg",
 }
 
 _CORPUS_SHA_PINS: dict[str, str] = {
     # Launch-pinned sha256 — a corpus with a pin must be byte-identical across
-    # hosts. Absence of an encoding here means "no launch pin enforced".
-    "v6_live2_ls": "3813edc2fb10a7c5ab976a0293e38cbba0fd6b84e5295630f339ca421b345c97",
+    # hosts. Absence of an encoding here means "no launch pin enforced". The one pin this
+    # carried was on a dense corpus and went with the grid path (R346(f)); the dict stays
+    # because the mechanism does, and an EMPTY pin set is a truthful "none enforced".
 }
 
 
@@ -269,11 +267,9 @@ def _assert_no_registry_overlap() -> None:
 _assert_no_registry_overlap()
 
 
-_ANCHOR_PATHS: dict[str, str] = {
-    "v6":          "checkpoints/bootstrap_model_v6.pt",
-    "v6_live2_ls": "checkpoints/bootstrap_model_v6_live2.pt",
-    "v6w25":       "checkpoints/bootstrap_model_v6w25.pt",
-}
+# The three dense bootstrap anchors went with the grid path (R346(f)); the graph lineage
+# warm-starts from `identity.warm_start`, which is a minted config row and not a path table.
+_ANCHOR_PATHS: dict[str, str] = {}
 
 
 # ---------------------------------------------------------------------------

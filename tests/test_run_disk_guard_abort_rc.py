@@ -185,7 +185,7 @@ def _write_config(tmp_path: Path, smoke_run_config) -> Path:
     """A REAL minted config, bounded, guard-cadenced, written to disk so `main --config`
     reads it back through the ONE loader (no fixture object is smuggled past the CLI)."""
     config = smoke_run_config(
-        "smoke_preflight_armed.yaml", eval_enabled=False,
+        "dev_example.yaml", eval_enabled=False,
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
                "batch_size": 8},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1,

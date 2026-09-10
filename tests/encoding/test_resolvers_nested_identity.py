@@ -34,8 +34,8 @@ from mantis.encoding.resolvers import MissingEncodingError, resolve_from_config
 
 def test_nested_identity_encoding_resolves() -> None:
     """The WP8 nested shape — what `RunConfig` actually dumps — resolves."""
-    spec = resolve_from_config({"identity": {"encoding": "v6", "representation": "grid"}})
-    assert spec.name == "v6"
+    spec = resolve_from_config({"identity": {"encoding": "gnn_axis_v1", "representation": "graph"}})
+    assert spec.name == "gnn_axis_v1"
 
 
 def test_nested_identity_resolves_the_graph_encoding_run5_declares() -> None:
@@ -56,7 +56,7 @@ def test_disagreeing_dual_shape_raises_not_a_precedence_pick() -> None:
     from mantis.encoding.resolvers import EncodingDeclarationConflictError
 
     with pytest.raises(EncodingDeclarationConflictError):
-        resolve_from_config({"encoding": "v6", "identity": {"encoding": "gnn_axis_v1"}})
+        resolve_from_config({"encoding": "gnn_axis_v1", "identity": {"encoding": "gnn_axis_r8"}})
 
 
 # ── LAW-11: the accept-set widened, the no-default posture did not ──────────────────────
@@ -70,7 +70,7 @@ def test_neither_shape_present_still_raises() -> None:
 def test_identity_without_encoding_key_raises() -> None:
     """An `identity` block that omits `encoding` is an absent declaration, not a v6 config."""
     with pytest.raises(MissingEncodingError, match="declares no encoding"):
-        resolve_from_config({"identity": {"representation": "grid"}})
+        resolve_from_config({"identity": {"representation": "graph"}})
 
 
 def test_identity_not_a_mapping_raises() -> None:

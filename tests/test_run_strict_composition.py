@@ -255,19 +255,23 @@ def _no_terminal_eval_config(**kwargs) -> StepCoordinatorConfig:
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs), terminal_eval_enabled=False)
 
 
-def _bounded(name: str = "smoke_preflight_armed.yaml", factory=None, steps: int = _DRIVE_STEPS,
+def _bounded(name: str = "dev_example.yaml", factory=None, steps: int = _DRIVE_STEPS,
              eval_enabled: bool = False):
     """A real minted config, bounded so a drive terminates. The three step-clock knobs are
     co-overridden together because the reachability validator spans them: overriding
     `max_train_steps` alone leaves the config's own minted threshold of 100 above the new
     ceiling and the config stops loading (DESIGN_S §6.6 MF-3).
 
+    `train.draw_rate_abort` is disarmed for the same reason and by the same validator: an ARMED
+    `min_step` above the new ceiling is a floor the bounded run never reaches, which the schema
+    refuses by name. The drives below are about composition, not about the abort.
+
     WPMAIN/R120: `eval_enabled` is a CONFIG fact and `compose_run` has no parameter for it,
     so each drive declares its posture here; every drive's semantics are byte-preserved."""
     return factory(name,
                    train={"actor_sync_cadence_steps": 1, "max_train_steps": steps,
                           # WPTS/TD-1: graph drives run the real route; 256 batch is drag.
-                          "batch_size": 8},
+                          "batch_size": 8, "draw_rate_abort": None},
                    monitor={"actor_lag_threshold_steps": steps - 1},
                    eval_enabled=eval_enabled)
 
@@ -651,7 +655,7 @@ def test_the_axis_is_the_whole_minted_set_and_is_not_empty():
     """Vacancy guard for every parametrized oracle below. `_MINTED` is globbed, so it cannot
     silently omit a newly minted config — but a glob that returns nothing would silently
     delete the axis instead, and a parametrized test with zero params is a green no-op."""
-    assert len(_MINTED) >= 5, f"the minted-config axis collapsed to {_MINTED}"
+    assert len(_MINTED) >= 3, f"the minted-config axis collapsed to {_MINTED}"
     assert "run6.yaml" in _MINTED, f"the production config is not on the axis: {_MINTED}"
 
 
@@ -714,13 +718,15 @@ def test_the_minted_PRODUCTION_config_ships_the_actor_lag_abort_ARMED():
     )
 
 
-@pytest.mark.parametrize("name", ("smoke_preflight_armed.yaml", "smoke_radius_curriculum.yaml"))
+@pytest.mark.parametrize("name", ("dev_example.yaml", "run6.yaml"))
 def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, name: str
 ):
-    """Point 2 — the bounded drive, on BOTH representations (`gnn_axis_v1` / graph from the
-    `dev` template, `v6w25` / grid from the `grid` template). This is the behavioural half of
-    the axis: point 1 proves five configs resolve, this proves two of them DRIVE.
+    """Point 2 — the bounded drive, on two REAL minted configs. It used to be "on BOTH
+    representations", one from each template; R346(f) left one representation, so the axis is
+    two configs of the surviving one and the row's name keeps its history. This is the
+    behavioural half of the axis: point 1 proves every minted config resolves, this proves two
+    of them DRIVE.
 
     No `_default_step_coordinator_config` monkeypatch: the production builder runs, because
     S-4 makes the config author `stop_step`. That retires the C-6 harness patch for every
@@ -738,9 +744,9 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_both_representations(
 
     handles = mantis.run.compose_run(
         config=cfg, trainer=trainer, pool=pool,
-        # WPTS/TD-1: per-representation buffer — the graph arm samples a REAL HexgBuffer,
-        # the grid arm drives the dispatcher's dense sampler on the fake.
-        buffer=mk_graph_buffer(n_records=32) if name == "smoke_preflight_armed.yaml" else _Buffer(),
+        # WPTS/TD-1: the declared route samples a REAL HexgBuffer — the typed dispatcher
+        # refuses a shapeless fake at the route, by design.
+        buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 

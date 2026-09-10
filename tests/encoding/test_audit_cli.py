@@ -167,16 +167,25 @@ def test_section_checkpoints_declared_equals_inferred(tmp_path) -> None:
     import torch
 
     ck, co, va, root = _empty_dirs(tmp_path)
-    # A stamped v6-shaped checkpoint: declared==inferred → OK (info).
-    state = {
-        "trunk.input_conv.weight": torch.zeros(64, 8, 3, 3),
-        "policy_fc.weight": torch.zeros(362, 64),
-    }
-    torch.save({"model_state": state, "metadata": {"encoding_name": "v6"}}, ck / "m.pt")
+    # THE RECONCILIATION NOW REPORTS `no-infer`, AND THAT IS THE FINDING. §2 compared the
+    # DECLARED stamp against an encoding INFERRED from the state dict. Both ways of inferring
+    # one are gone: the dense conv-width probe went with the grid path (R346(f)), and the
+    # graph marker says GRAPH without ever saying WHICH graph while two graph rows are
+    # registered (R328(c)) — so a state dict on its own no longer determines an encoding.
+    # §2 must say `no-infer` rather than pick one, and it must stay `info`: a stamped
+    # checkpoint the audit cannot second-guess is a clean read, not a defect.
+    state = {"representation.input_proj.weight": torch.zeros(64, 11)}
+    torch.save({"model_state": state, "metadata": {"encoding_name": "gnn_axis_v1"}},
+               ck / "m.pt")
     report = audit(ck, co, va, repo_root=root)
-    # §2 (checkpoints) is the leg under test: the v6 match is reported and is clean (info).
     # The global exit code is dominated by §6's unrelated "no corpora to join against" warn,
     # so this test asserts on the §2 section directly, not on report.exit_code().
     s2 = [f for f in report.findings if f.section == "§2"]
-    assert any("declared==inferred (v6)" in f.message for f in s2)
+    assert any("declared=gnn_axis_v1 (no-infer)" in f.message for f in s2), (
+        f"§2 must report the stamp and decline to infer; got {[f.message for f in s2]}"
+    )
+    assert not any("declared==inferred" in f.message for f in s2), (
+        "a state dict alone no longer determines an encoding; a reconciliation that claims "
+        "it does has re-derived one from bytes that do not carry it (LAW-11)"
+    )
     assert all(f.severity == "info" for f in s2)
