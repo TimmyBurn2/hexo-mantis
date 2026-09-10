@@ -40,6 +40,38 @@ not because a ruling carded them.
   comment makes is sound; only its two witnesses are phantom.
 
 
+## Opened by R347 (CLEANUP WAVE 2)
+
+Both were found by running the gate set rather than by reading it, and both are pre-existing on
+`dev` — neither was introduced by wave 2.
+
+- **CARD-OC7-OVERRUN — BLOCKING (the integration tier, hence `make gates.exit`).**
+  `tests/train/test_clean_stop_save.py::test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint`
+  (OC-7) drives a real 50-step run on 14 workers and **exceeds its own stated 300 s tier ceiling**:
+  killed at the cap on `dev`, and uncapped it passed 900 s on both `dev` and `gumbel-3`. Its bound
+  `_OC7_BOUND = 50` was fixed by a stated, host-relative decision rule — the largest member of
+  {200, 100, 50, 32, 16} measuring <= 300 s **on the dev box** — and M-0 (PREREG_CS §5.3) measured
+  50 at **240.2 s** on 2026-08-01. The measurement no longer holds on that same box. Not yet
+  separated: host drift versus a real slowdown landing after 2026-08-01, a window that contains
+  five `mcts/` commits dated 2026-09-08/09, all of wave 1 among them. Until it is separated the
+  bound must NOT be re-aimed — the docstring records that the three measurements were taken before
+  the row existed precisely so the bound could not be lowered to make a red go away. Wave 2
+  proceeds with this ONE test deselected and the exclusion stated at each merge, on operator
+  direction; the separation belongs to AUDIT-3. **The consequence to hold on to: while this stands,
+  no `make gates.exit` run in this repository can complete, so "local green is the gate" is
+  answered by a gate that never finishes — the false-clean class, in the time dimension.**
+
+- **CARD-GATE17-LOCAL-COUPLING — CARDED.** `tests/tools/test_gate_vacuity.py::test_an_empty_diff_degrades_WIDE_rather_than_printing_green`
+  shells out to `rule7_gate.py --base HEAD` and asserts `returncode == 0`. Gate 17's local
+  supplement is **untracked by design** (R312(e)), so this TRACKED test's outcome depends on
+  whether an untracked file exists in the working directory and on what it contains: on a machine
+  with the operator terms armed and any matching content in the tree, a tracked test fails. Seen
+  live in wave 2 — the supplement was copied into a worktree branched before the redaction commit,
+  and the test went red on content the tracked floor does not catch. The test was right and the
+  tree was wrong, which is the good case; the bad case is the same coupling firing on a clean tree
+  somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
+  the verdict of a scan whose pattern set it cannot see.
+
 ## Reading the identifiers
 
 Cites below are `A:` for `docs/governance/archive/RULINGS_ACTIVE.md` and `R:` for
