@@ -61,8 +61,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         n_sims_quick: 50,
         n_sims_full: 100,
         random_opening_plies: 3,
-        selfplay_rotation_enabled: true,
-        encoding_name: Some("v6w25".to_string()),
+        encoding_name: Some("gnn_axis_r8".to_string()),
         inference_pool_size: Some(4096),
         forced_win_policy_enabled: true,
         forced_win_policy_depth: 5,
@@ -77,10 +76,11 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
     }
 }
 
-/// Test 1 — every field → exactly one slot; the field surface is EXACTLY the 45
-/// live fields (no jitter, no feature_len/policy_len). The exhaustive destructure
-/// (no `..`) is the compile-time completeness guard; the sentinel asserts are the
-/// no-cross-wire guard.
+/// Test 1 — every field → exactly one slot; the field surface is EXACTLY the live
+/// fields (no jitter, no feature_len/policy_len — and no count stated here, since a
+/// transcribed tally goes stale the first time a knob lands, R192(e)). The exhaustive
+/// destructure (no `..`) is the compile-time completeness guard; the sentinel asserts are
+/// the no-cross-wire guard.
 #[test]
 fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     let cfg = distinct_sentinels();
@@ -119,7 +119,6 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         n_sims_quick,
         n_sims_full,
         random_opening_plies,
-        selfplay_rotation_enabled,
         encoding_name,
         inference_pool_size,
         forced_win_policy_enabled,
@@ -165,8 +164,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(n_sims_quick, 50);
     assert_eq!(n_sims_full, 100);
     assert_eq!(random_opening_plies, 3);
-    assert!(selfplay_rotation_enabled);
-    assert_eq!(encoding_name, Some("v6w25".to_string()));
+    assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
     assert_eq!(inference_pool_size, Some(4096));
     assert!(forced_win_policy_enabled);
     assert_eq!(forced_win_policy_depth, 5);
@@ -189,9 +187,14 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
 fn distinct_config_constructs_and_exposes_spec_derived_shapes() {
     let runner = SelfPlayRunner::new(distinct_sentinels())
         .expect("ctor must accept the distinct-sentinel config");
-    // encoding_name = "v6w25" → state_stride 8×625 = 5000, policy_stride 626.
-    assert_eq!(runner.feature_len(), 5000);
-    assert_eq!(runner.policy_len(), 626);
+    // DERIVED from the same spec the runner resolved, never transcribed: a graph row carries
+    // no dense planes, so `state_stride` is 0 and the assertion still bites — it is the SPEC
+    // that decides both numbers, and a caller-supplied shape override (C-1) would make them
+    // disagree with it.
+    let spec = mantis_encoding::lookup_or_panic("gnn_axis_r8");
+    assert_eq!(runner.feature_len(), spec.state_stride());
+    assert_eq!(runner.policy_len(), spec.policy_stride());
+    assert_eq!(runner.policy_len(), 362, "the graph action space is 19*19 + 1");
     assert!(!runner.is_running());
 }
 

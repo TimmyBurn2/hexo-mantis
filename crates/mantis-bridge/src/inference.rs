@@ -373,6 +373,11 @@ impl PyInferenceBatcher {
         ))
     }
 
+    /// Close the queue and wake all blocked waiters.
+    pub fn close(&self) {
+        self.graph.close();
+    }
+
     // ── model version ─────────────────────────────────────────────────────────
 
     /// Increment the monotonic model version; returns the new value.
@@ -898,10 +903,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::*;
 
-    fn v6_spec() -> &'static RegistrySpec {
-        mantis_encoding::lookup("v6").expect("v6 registered")
-    }
-
     fn gnn_spec() -> &'static RegistrySpec {
         mantis_encoding::lookup("gnn_axis_v1").expect("gnn_axis_v1 registered")
     }
@@ -974,11 +975,14 @@ mod tests {
             0,
         )
         .expect("graph batcher constructs");
-        assert_eq!(
-            b.lock_recoveries(),
-            0,
-            "a fresh batcher has recovered nothing"
-        );
+        // READ THROUGH THE PRIVATE FIELD, not the getter. The `#[getter] lock_recoveries`
+        // that surfaced this counter to Python was deleted alongside the dense batcher
+        // methods at R346(f), while `lock_or_recover` still increments it — so the LAW-18
+        // in-run observable for a poisoned GRAPH lock currently has no FFI surface. This
+        // in-crate read keeps the recovery mechanism under test; restoring the getter is a
+        // production change and is reported rather than made here.
+        let recoveries = || b.lock_recoveries.load(Ordering::SeqCst);
+        assert_eq!(recoveries(), 0, "a fresh batcher has recovered nothing");
 
         poison(&b.in_flight_graphs);
 
@@ -986,12 +990,12 @@ mod tests {
         b.fail_remaining_graph_ids(&[1, 2, 3], "post-poison call");
 
         assert!(
-            b.lock_recoveries() >= 1,
-            "the seam recovered but did not REPORT — a silent swallow is what LAW-18 forbids"
+            recoveries() >= 1,
+            "the seam recovered but did not COUNT — a silent swallow is what LAW-18 forbids"
         );
         // And it is still usable afterwards, not wedged.
         b.fail_remaining_graph_ids(&[4], "second post-poison call");
-        assert!(b.lock_recoveries() >= 2);
+        assert!(recoveries() >= 2);
     }
 
     /// The mutation self-test for the recovery arm (LAW-07): if `lock_or_recover` ever stops
@@ -1019,19 +1023,20 @@ mod tests {
     }
 
     #[test]
-    fn grid_batcher_derives_shapes_and_is_grid() {
-        let b = PyInferenceBatcher::new(
-            Some(PyRegistrySpec::from_static(v6_spec())),
-            None,
-            None,
-            None,
-            0,
-        )
-        .expect("v6 batcher constructs");
-        assert!(!b.is_graph);
-        assert_eq!(b.representation, "grid");
-        assert_eq!(b.feature_len, v6_spec().state_stride());
-        assert_eq!(b.policy_len, v6_spec().policy_stride());
+    fn a_spec_batcher_derives_both_shapes_from_the_spec() {
+        // The sibling of `graph_batcher_reads_graph_params`, on the two DERIVED widths.
+        // Its grid arm went with the dense path (R346(f)); the derivation is the same code
+        // either way, and a graph row's `state_stride` is 0 because it carries no planes —
+        // read from the spec so that stays a derivation rather than a transcribed 0.
+        let spec = gnn_spec();
+        let b =
+            PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(spec)), None, None, None, 0)
+                .expect("a graph batcher constructs");
+        assert!(b.is_graph);
+        assert_eq!(b.representation, "graph");
+        assert_eq!(b.feature_len, spec.state_stride());
+        assert_eq!(b.policy_len, spec.policy_stride());
+        assert_eq!(b.policy_len, 362, "the graph action space is 19*19 + 1");
     }
 
     #[test]
@@ -1088,8 +1093,11 @@ mod tests {
     }
 
     #[test]
-    fn grid_batcher_rejects_graph_seam_methods() {
-        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0).unwrap();
+    fn a_specless_batcher_rejects_graph_seam_methods() {
+        // Constructed from explicit widths and NO spec, so `is_graph` is false: the seam
+        // guard fires on the batcher that could not have resolved a graph row.
+        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0)
+            .expect("explicit widths construct");
         assert!(b.require_graph().is_err());
         assert!(b.check_graph_request(vec![(0, 0, 1)], 1, 2).is_err());
         assert!(b.spawn_mock_graph_games(1).is_err());

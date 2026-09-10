@@ -247,7 +247,7 @@ class LocalInferenceEngine:
         continue`). This is the existing `infer_batch` contract, not a new approximation.
 
         NO PRODUCTION CONSUMER REACHES THIS METHOD (ADJ-WP12R-12, RED-TEAM F-RT-7).
-        Production callers of `infer_batch`/`infer` reach it through `SelfPlayWorker`, which
+        Production callers of `infer_batch`/`infer` reach it through the eval deploy head, which
         refuses a graph encoding outright, and the eval worker's graph
         arm goes through `infer_batch_ls` instead. The method is retained, not deleted,
         because `tests/selfplay/test_selfplay_census.py:114` pins it as a censused site and

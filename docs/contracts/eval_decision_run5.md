@@ -69,20 +69,25 @@ the RandomBot floor, and it is separate from the gate on purpose.
 
 ## The ladder, as minted (S-8)
 
-Six rungs are declared, in this order: `sealbot_d5`, `kraken_raw`, `sealbot_d6`,
-`kraken_mcts200`, `strix_128`, `strix_256`. Every one is deploy-matched and capped at 32
-games; the first is the only one active at round zero.
+ONE rung is declared: `sealbot_d5`. It is deploy-matched, capped at 32 games, and active at
+round zero.
 
-Four carry R139's operator-authorized skip grounds — verbatim, and per rung, so a reader of
-the log can tell a ruled skip from a broken box: kraken, weights not cleanly accessible;
-strix, actively changing. The two sealbot rungs resolve against the vendored engine pinned in
-`vendor/pins.toml`; see the liveness clause below for what that does and does not claim.
+R346(f) deleted the five rungs that stood beside it. Four of them belonged to two bot kinds
+that carried R139's operator-authorized skip grounds and could never play: what the tree
+carried was two refusal strings, their config keys and their resolver arms. The fifth was a
+second sealbot depth, excluded from the default battery by R326(e) on arithmetic (30.9 s per
+first move against a 3 600 s round budget), so it could not finish its minted games either.
+The deleted names are in `archive/grid-path` and are deliberately not repeated here: a
+decision that names an unresolvable opponent states a bar that never produced a game.
 
-**The Bradley-Terry fit therefore rests on two rungs of ONE engine family**, at two depths,
-plus the floor. However many games are recorded, one opponent lineage is all the information
-in the fit — that is a property of the instrument, not a defect to be worked around, and it
-is stated here because a reader who does not know it will over-read every ladder-shaped
-field in the run.
+`sealbot_d5` is declared against the vendored engine pinned in `vendor/pins.toml`; see the
+liveness clause below for what that does and does not claim.
+
+**The Bradley-Terry fit therefore rests on ONE rung of ONE engine family**, plus the floor.
+However many games are recorded, one opponent lineage at one depth is all the information in
+the fit — that is a property of the instrument, not a defect to be worked around, and it is
+stated here because a reader who does not know it will over-read every ladder-shaped field in
+the run. RUNG-2 is the carded work that widens it.
 
 A second instrument property, for the same reason: a deterministic opponent at a fixed depth
 facing a deterministic argmax head produces ONE trajectory per opening. eff_n on such a rung

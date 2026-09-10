@@ -254,22 +254,9 @@ fn a_gumbel_m_past_the_minted_bound_is_refused() {
     );
 }
 
-/// A GRID encoding is outside this guard entirely — dense records carry no HEXG visit slot.
-#[test]
-fn the_gumbel_kind_on_grid_is_untouched() {
-    let cfg = SelfPlayRunnerConfig {
-        encoding_name: Some("v6".to_string()),
-        search_kind: SearchKind::Gumbel,
-        n_simulations: 50,
-        leaf_batch_size: 8,
-        standard_sims: 0,
-        ..Default::default()
-    };
-    assert!(
-        SelfPlayRunner::new(cfg).is_ok(),
-        "a GRID encoding under the gumbel kind is outside this guard"
-    );
-}
+// The GRID arm's "outside this guard entirely" row went with the grid rows themselves
+// (R346(f)): there is no registered encoding left that this guard does not apply to, so the
+// control it provided is now structural rather than testable.
 
 /// The BOOT surface agrees with the mint surface — a graph runner under `gumbel` composes
 /// its ring at the minted m, and one past the bound does not boot.

@@ -41,7 +41,6 @@ from mantis.selfplay.graph_collate import GraphBatch, GraphWirePayload
 from mantis.selfplay.inference_server import InferenceServer
 
 GRAPH_SPEC = lookup("gnn_axis_v1")
-GRID_SPEC = lookup("v6")
 SEED = 20260817
 
 #: Node-feature width the collate stand-in reshapes against (registry `node_feat_dim`).
@@ -252,24 +251,13 @@ def graph_cfg(
     """
     inference: dict[str, Any] = {
         "inference_batch_size": batch_size, "inference_max_wait_ms": 20.0,
-        "trace_inference": False, "compile_inference": False,
-        "compile_inference_mode": "default", "compile_inference_dynamic": True,
-        "perf_timing": False, "perf_sync_cuda": False,
     }
     if not omit_block:
         inference["fused_graph_caps"] = {
             "max_fused_edges": max_fused_edges, "max_fused_nodes": max_fused_nodes,
         }
     inference.update(over)
-    return {"inference": inference, "encoding": "gnn_axis_v1",
-            "train": {"amp_dtype": "bf16"}}
-
-
-def grid_cfg(*, omit_block: bool = True, **over: Any) -> dict[str, Any]:
-    cfg = graph_cfg(omit_block=omit_block, **over)
-    cfg["encoding"] = "v6"
-    cfg["train"]["amp_dtype"] = "fp16"
-    return cfg
+    return {"inference": inference, "encoding": "gnn_axis_v1"}
 
 
 # ── the drive ───────────────────────────────────────────────────────────────────────────

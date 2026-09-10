@@ -744,7 +744,7 @@ mod tests {
         assert_eq!(
             b.size(),
             BOARD_SIZE,
-            "encoding-less board size defaults to v6 geometry"
+            "encoding-less board size falls back to the raw geometry default"
         );
         assert_eq!(b.current_player(), 1);
         assert_eq!(b.moves_remaining(), 1);
@@ -753,12 +753,41 @@ mod tests {
 
     #[test]
     fn with_encoding_name_binds_geometry_and_size() {
-        let b = PyBoard::with_encoding_name("v6").expect("v6 registered");
-        assert_eq!(b.size(), 19);
-        assert!(b.encoding.is_some());
-        let w25 = PyBoard::with_encoding_name("v6w25").expect("v6w25 registered");
-        assert_eq!(w25.size(), 25, "bound v6w25 board size = 25");
-        assert_eq!(w25.cluster_window_size(), 25);
+        // Both registered rows share the 19-cell action space and differ only in radius
+        // (R328(b)), so the RADIUS is what proves the spec's geometry reached the Board.
+        // Read from the registry rather than transcribed, so a moved row reds here.
+        for name in ["gnn_axis_v1", "gnn_axis_r8"] {
+            let spec = mantis_encoding::lookup_or_panic(name);
+            let b = PyBoard::with_encoding_name(name).expect("a registered encoding");
+            assert!(b.encoding.is_some());
+            assert_eq!(b.size(), spec.board_size, "{name}: bound board size");
+            assert_eq!(
+                b.legal_move_radius(),
+                spec.legal_move_radius as i32,
+                "{name}: the spec's radius must drive the bound Board"
+            );
+        }
+        assert_ne!(
+            PyBoard::with_encoding_name("gnn_axis_v1")
+                .expect("registered")
+                .legal_move_radius(),
+            PyBoard::with_encoding_name("gnn_axis_r8")
+                .expect("registered")
+                .legal_move_radius(),
+            "the two rows exist to differ in radius; if they stop, this test is vacuous"
+        );
+    }
+
+    #[test]
+    fn a_deleted_grid_encoding_name_is_refused() {
+        // R346(f): the three grid rows are gone from the registry, so binding one is the
+        // unknown-encoding error rather than a silent fall-through to graph geometry.
+        for name in ["v6", "v6w25", "v6_live2_ls"] {
+            assert!(
+                PyBoard::with_encoding_name(name).is_err(),
+                "{name} was deleted with the dense path and must not resolve"
+            );
+        }
     }
 
     #[test]
@@ -767,20 +796,16 @@ mod tests {
     }
 
     #[test]
-    fn radius_and_cluster_guards_fire_when_bound() {
-        let mut b = PyBoard::with_encoding_name("v6").unwrap();
+    fn radius_guard_fires_when_bound() {
+        // The two cluster setters this also drove went with the dense path (R346(f)); the
+        // radius override is the guard that remains, and the encoding-bound board refuses it.
+        let mut b = PyBoard::with_encoding_name("gnn_axis_v1").expect("registered");
         assert!(b.set_legal_move_radius(4).is_err());
-        assert!(b.set_cluster_threshold(8).is_err());
-        assert!(b.set_cluster_window_size(25).is_err());
-    }
-
-    #[test]
-    fn set_cluster_window_size_bounds_on_encoding_less() {
-        let mut b = PyBoard::new();
-        assert!(b.set_cluster_window_size(6).is_err(), "even rejected");
-        assert!(b.set_cluster_window_size(5).is_err(), "< 7 rejected");
-        assert!(b.set_cluster_window_size(25).is_ok());
-        assert_eq!(b.cluster_window_size(), 25);
+        let mut free = PyBoard::new();
+        assert!(
+            free.set_legal_move_radius(4).is_ok(),
+            "the guard is about the BINDING, not the value — an unbound board still accepts it"
+        );
     }
 
     #[test]
@@ -798,9 +823,10 @@ mod tests {
 
     #[test]
     fn clone_preserves_encoding_binding() {
-        let b = PyBoard::with_encoding_name("v6w25").unwrap();
+        let b = PyBoard::with_encoding_name("gnn_axis_r8").expect("registered");
         let c = b.clone();
-        assert_eq!(c.size(), 25);
+        assert_eq!(c.size(), b.size());
+        assert_eq!(c.legal_move_radius(), 8, "the r8 row's radius survives the clone");
         assert!(c.encoding.is_some());
     }
 

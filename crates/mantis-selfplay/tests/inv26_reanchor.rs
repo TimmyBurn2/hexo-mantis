@@ -35,7 +35,7 @@ fn random_only_runner(max_moves: usize, draw_reward: f32, ply_cap_value: f32) ->
         quiescence_blend_2: 0.0,
         dirichlet_enabled: false,
         random_opening_plies: max_moves as u32, // == max_moves → never MCTS
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some("gnn_axis_r8".to_string()),
         ..Default::default()
     })
     .expect("random-only runner must construct")

@@ -35,21 +35,16 @@ from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.hparams import (
     PoolDims,
     SelfPlayHParams,
-    _load_seed_corpus,
     build_runner_config,
     resolve_pool_encoding,
 )
 
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
-    "inference_pool_size": 1536, "c_visit": 40.0, "c_scale": 2.0,
+    "c_visit": 40.0, "c_scale": 2.0,
     "gumbel_m": 24, "gumbel_explore_moves": 14,
-    "results_queue_cap": 5000, "random_opening_plies": 3, "rotation_enabled": False,
-    "forced_win_policy_enabled": True, "forced_win_policy_depth": 4,
-    "forced_win_policy_weight": 0.75, "solver_enabled": True, "solver_depth": 20,
-    "solver_node_budget": 77000, "solver_neighbor_dist": 3, "solver_visit_weight": 0.45,
-    "seed_fraction": 0.0, "seed_corpus_path": None,
-    "log_investigation_metrics": False, "instrumentation_enabled": True,
+    "results_queue_cap": 5000, "random_opening_plies": 3,
+    "log_investigation_metrics": False,
 }
 BASE_MCTS: dict[str, Any] = {
     "n_simulations": 111, "c_puct": 1.75, "fpu_reduction": 0.4, "quiescence_enabled": False,
@@ -58,8 +53,8 @@ BASE_MCTS: dict[str, Any] = {
 }
 BASE_PLAYOUT_CAP: dict[str, Any] = {
     "fast_sims": 40, "fast_prob": 0.0, "standard_sims": 160, "full_search_prob": 0.0,
-    "n_sims_quick": 0, "n_sims_full": 0, "zoi_enabled": True, "zoi_lookback": 20,
-    "zoi_margin": 7, "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
+    "n_sims_quick": 0, "n_sims_full": 0,
+    "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 # WPMINT Phase K-A stage 0 left this block hand-written on purpose. It is NOT a `train:`
 # schema payload — `cfg()` below builds the LEGACY flat hparams dict the pool still reads, so
@@ -69,19 +64,17 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
 # `ply_cap_value: -0.7` are DISTINGUISHABLE from the minted defaults precisely so the oracles
 # below can prove they arrived at the Rust runner rather than a coincidence.
 BASE_TRAIN: dict[str, Any] = {
-    "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0, "fp16": True, "amp_dtype": "fp16",
+    "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
-    "eta_min": 5e-4, "min_lr": None, "checkpoint_interval": 0,
+    "eta_min": 5e-4, "checkpoint_interval": 0,
     "value_target": "pure_outcome_z", "policy_target": "raw_visit_distribution",
-    "draw_reward": -0.4, "ply_cap_value": -0.7, "policy_prune_frac": 0.0,
-    "entropy_reg_weight": 0.0, "aux_opp_reply_weight": 0.0, "uncertainty_weight": 0.0,
-    "ownership_weight": 0.0, "threat_weight": 0.0, "aux_chain_weight": 0.0,
-    "ply_index_weight": 0.0, "threat_pos_weight": 1.0, "fast_policy_weight": 0.0,
+    "draw_reward": -0.4, "ply_cap_value": -0.7,
+    "fast_policy_weight": 0.0,
 }
 
 
 def cfg(
-    *, encoding: str = "v6", selfplay: dict | None = None, mcts: dict | None = None,
+    *, encoding: str = "gnn_axis_v1", selfplay: dict | None = None, mcts: dict | None = None,
     playout_cap: dict | None = None, train: dict | None = None,
     search: dict | None = None,
 ) -> dict[str, Any]:
@@ -135,11 +128,10 @@ def assemble(monkeypatch):
 
     monkeypatch.setattr(hparams_mod, "SelfPlayRunnerConfig", _Factory)
 
-    def build(config: dict[str, Any], *, seed_prefixes=None) -> _RecordingRunnerConfig:
+    def build(config: dict[str, Any]) -> _RecordingRunnerConfig:
         hp = SelfPlayHParams.from_config(config)
         enc = resolve_pool_encoding(config, arch=None)
-        build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name,
-                            seed_prefixes=seed_prefixes)
+        build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
         return built[-1]
 
     return build
@@ -231,93 +223,6 @@ def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -
     assert recorded.recorded_kwargs["ply_cap_value"] == expected_ply
 
 
-# ═══ D-12 — seed corpus: five captured cases + the assembly wire ═════════════════
-def test_seed_corpus_none_path_frac_zero() -> None:
-    """D-12(a) — PASS iff no path and no seeding yields `None` (feature simply off)."""
-    assert _load_seed_corpus(None, 0.0) is None
-
-
-def test_seed_corpus_none_path_frac_positive() -> None:
-    """D-12(b) — PASS iff asking for seeding with no corpus raises. FAIL = a seeded run
-    that silently seeds nothing, which looks identical to a healthy run in every metric."""
-    with pytest.raises(ValueError) as exc:
-        _load_seed_corpus(None, 0.5)
-    assert "seed_fraction > 0 requires" in str(exc.value)
-
-
-def test_seed_corpus_malformed_raises(tmp_path) -> None:
-    """D-12(c) — PASS iff a JSONL line without `seed_moves` raises a ValueError that names
-    the path and the expected shape, chaining the underlying error."""
-    bad = tmp_path / "bad.jsonl"
-    bad.write_text('{"not_seed_moves": []}\n')
-    with pytest.raises(ValueError) as exc:
-        _load_seed_corpus(str(bad), 0.5)
-    assert "is malformed" in str(exc.value)
-    assert "seed_moves" in str(exc.value)
-
-
-def test_seed_corpus_zero_prefixes_raises(tmp_path) -> None:
-    """D-12(d) — PASS iff a syntactically fine but EMPTY corpus raises when seeding is on.
-    FAIL = seeding is a silent no-op, the exact failure this check exists for."""
-    empty = tmp_path / "empty.jsonl"
-    empty.write_text("\n\n")
-    with pytest.raises(ValueError) as exc:
-        _load_seed_corpus(str(empty), 0.5)
-    assert "yielded ZERO prefixes" in str(exc.value)
-
-
-@pytest.mark.parametrize("fraction", [0.5, 0.0], ids=["active", "inert_but_validated"])
-def test_seed_corpus_valid_parse(tmp_path, fraction: float) -> None:
-    """D-12(e) — PASS iff a valid corpus parses to the captured prefixes, and does so even
-    at `seed_fraction == 0` (parsed for validation, never fired). FAIL = a corpus that
-    only gets validated once seeding is switched on, i.e. the error surfaces in the run
-    that matters instead of the dry run before it."""
-    good = tmp_path / "good.jsonl"
-    good.write_text('{"seed_moves": [[0, 0], [1, -1]]}\n{"seed_moves": [[2, 3]]}\n')
-    assert _load_seed_corpus(str(good), fraction) == [[(0, 0), (1, -1)], [(2, 3)]]
-
-
-def test_seed_prefixes_land_on_the_runner_config(assemble, tmp_path) -> None:
-    """D-12 (assembly-wire arm) — PASS iff parsed prefixes handed to `build_runner_config`
-    land on the runner config's seed-corpus attribute. The ⊕ D-15 golden always passes
-    `seed_prefixes=None`, so this wire is otherwise completely untested. FAIL = a parsed
-    trap corpus that never reaches Rust — seeding configured, validated, and then
-    dropped."""
-    good = tmp_path / "good.jsonl"
-    good.write_text('{"seed_moves": [[0, 0], [1, -1]]}\n{"seed_moves": [[2, 3]]}\n')
-    prefixes = _load_seed_corpus(str(good), 0.5)
-
-    recorded = assemble(cfg(), seed_prefixes=prefixes)
-    assert recorded.recorded_attrs["seed_corpus"] == prefixes
-    assert recorded.real.seed_corpus == [[(0, 0), (1, -1)], [(2, 3)]]
-
-
-def test_absent_seed_prefixes_leave_the_attribute_unset(assemble) -> None:
-    """D-12 (negative arm) — PASS iff `seed_prefixes=None` never touches `seed_corpus`, so
-    the Rust default (no seeding) stands. FAIL = an explicit empty corpus is written,
-    which is a different thing from "no corpus"."""
-    recorded = assemble(cfg(), seed_prefixes=None)
-    assert "seed_corpus" not in recorded.recorded_attrs
-    assert recorded.real.seed_corpus is None
-
-
-# ═══ D-13 — inference_pool_size threading ════════════════════════════════════════
-@pytest.mark.parametrize(
-    "selfplay_over,expected",
-    [({"inference_pool_size": None}, None), ({"inference_pool_size": 999}, 999)],
-    ids=["absent", "int"],
-)
-def test_inference_pool_size_threading(assemble, selfplay_over, expected) -> None:
-    """D-13 — PASS iff the opt-in pool size threads through as declared: `None` stays
-    `None` (the engine's own prefill sizing), an int passes. FAIL = `None` turns into a
-    hard-coded size that pins the working set for every encoding."""
-    config = cfg(selfplay=selfplay_over)
-
-    hp = SelfPlayHParams.from_config(config)
-    assert hp.inference_pool_size == expected
-    assert assemble(config).recorded_kwargs["inference_pool_size"] == expected
-
-
 # ═══ D-14 — `search_kind` re-reads the LIVE config ═══════════════════════════════
 def test_search_kind_property_reads_live_config() -> None:
     """D-14 — PASS iff the `search_kind` property reflects a config mutated AFTER
@@ -350,47 +255,22 @@ def test_search_kind_property_reads_live_config() -> None:
 # ═══ D-18 — the derived dense dims, and the FFI agreement ════════════════════════
 @pytest.mark.parametrize(
     "encoding,expected",
-    [("v6w25", PoolDims(5000, 3750, 626)),
-     ("v6", PoolDims(2888, 2166, 362)),
-     ("gnn_axis_v1", PoolDims(0, 0, 362))],
+    [("gnn_axis_v1", PoolDims(0, 0, 362)),
+     ("gnn_axis_r8", PoolDims(0, 0, 362))],
 )
 def test_pool_dims_derivation_golden(assemble, encoding: str, expected: PoolDims) -> None:
-    """D-18 — PASS iff the derived dims equal the captured `pool_derived` block for all
-    three configs, including the degenerate graph case (0/0/policy).
+    """D-18 — PASS iff the derived dims equal the captured `pool_derived` block, which on a
+    graph encoding is the degenerate dense case (0/0/policy).
 
-    These dims size the reshape the drain applies to every dense row before it reaches the
-    replay buffer. FAIL = a wrong `feat_len` reshapes the batch into a differently-shaped
-    tensor of the same total size, which is silent corruption rather than an exception."""
+    The dense dims sized the reshape the drain applied to every dense row; with the dense
+    path gone (R346(f)) the assertion that matters is that they stay ZERO and the policy
+    length still comes off the spec — a non-zero feat_len here would mean something is
+    re-deriving a dense geometry no wire carries."""
     config = cfg(encoding=encoding, playout_cap={"fast_sims": 100})
     hp = SelfPlayHParams.from_config(config)
     enc = resolve_pool_encoding(config, arch=None)
-    _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name,
-                                  seed_prefixes=None)
+    _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
     assert dims == expected
-
-
-@pytest.mark.parametrize("encoding", ["v6", "v6w25"])
-def test_pool_dims_agree_with_the_rust_derivation(encoding: str) -> None:
-    """D-18 (FFI-agreement arm) — PASS iff the Python-side dims equal the lengths the Rust
-    batcher derives from the SAME spec.
-
-    The two derivations live on opposite sides of the FFI: Python computes
-    `n_kept_planes · trunk²` and reads `policy_logit_count`; Rust derives both from the
-    encoding name. Nothing else in the tree checks that they agree, and a disagreement is
-    a buffer/rows shape mismatch that surfaces as garbage rather than an error. The graph
-    arm is excluded on purpose — its dense dims are degenerate zeros, so the comparison
-    would be vacuous."""
-    from mantis._engine import InferenceBatcher
-
-    config = cfg(encoding=encoding)
-    hp = SelfPlayHParams.from_config(config)
-    enc = resolve_pool_encoding(config, arch=None)
-    _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name,
-                                  seed_prefixes=None)
-
-    batcher = InferenceBatcher(encoding_spec=lookup(encoding))
-    assert dims.feat_len == int(batcher.feature_len_py)
-    assert dims.pol_len == int(batcher.policy_len_py)
 
 
 def test_killed_knobs_are_never_read(assemble) -> None:

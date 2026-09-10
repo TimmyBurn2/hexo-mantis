@@ -9,10 +9,10 @@
 //! counts and the same move, only N times slower. So the width is counted in-run (LAW-18) and
 //! this file reads the counter.
 //!
-//! THE DENSE PATH, for `served_sims_exact.rs`'s reason: this file drives the arm whose
-//! counters it reads, and the dense recorder is the one both kinds share. (The graph path is
-//! no longer refused under this kind — R347(a) gave it the sparse row — but the counter this
-//! file reads is the search's, not the recorder's, so the arm is a drive choice.)
+//! THE GRAPH PATH, because after R346(f) it is the only one: the dense recorder this file
+//! used to drive is deleted. The counter read here is the SEARCH's and not the recorder's,
+//! so the arm was always a drive choice; `gnn_axis_r8` is the run6 identity row and the
+//! graph path is not refused under `gumbel` (R347(a) gave it the sparse row).
 //!
 //! THE DRIVEN MEAN AT 320/16 IS NOT 4, AND THE GAP IS ARITHMETIC RATHER THAN A SHORTFALL.
 //! The schedule's round-width profile is DISCONTINUOUS at its budget: the schedule built for
@@ -28,53 +28,63 @@
 //! read as `N_SIMS` it would be a floor no charged-root search can clear, which is the
 //! arithmetic the amendment itself says was not done.
 
-use std::ops::Range;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use mantis_encoding::lookup_or_panic;
 use mantis_search::mcts::seq_halving::considered_visits_sequence;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::DenseQueue;
+use mantis_selfplay::queues::GraphQueue;
+use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 /// The run6 full-arm regime the ruling names.
 const N_SIMS: usize = 320;
 const GUMBEL_M: usize = 16;
+const ENCODING: &str = "gnn_axis_r8";
 
-fn spawn_producer(
-    queue: DenseQueue,
-    policy_stride: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
+/// A uniform-prior mock inference server on the graph queue. The POLICY is irrelevant to a
+/// round-width count; what matters is that every requested leaf is answered promptly.
+fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
     thread::spawn(move || loop {
-        let batch = queue.pop_batch(1, 5);
+        let batch = queue.pop_graph_batch(8, 5);
         if batch.is_empty() {
             if queue.is_closed() {
                 break;
             }
             continue;
         }
-        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-        let mut flat: Vec<f32> = Vec::new();
-        let mut ranges: Vec<Range<usize>> = Vec::with_capacity(batch.len());
-        let mut values: Vec<f32> = Vec::with_capacity(batch.len());
-        let uniform = 1.0f32 / policy_stride as f32;
-        for _ in &batch {
-            let start = flat.len();
-            flat.extend(std::iter::repeat_n(uniform, policy_stride));
-            ranges.push(start..flat.len());
-            values.push(0.0);
+        let mut ids = Vec::with_capacity(batch.len());
+        let mut results = Vec::with_capacity(batch.len());
+        for (id, g) in batch {
+            let coords: Vec<(i32, i32)> = g
+                .legal_node_gather
+                .iter()
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
+                .collect();
+            let n = coords.len();
+            let probs = vec![1.0f32 / n.max(1) as f32; n];
+            ids.push(id);
+            results.push(
+                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
+                    .map(|ls| (ls, 0.0f32)),
+            );
         }
         served.fetch_add(ids.len(), Ordering::Relaxed);
-        let arc = Arc::new(flat);
-        queue.submit_results(&ids, &arc, &ranges, &values);
+        queue.submit_graph_results(&ids, results);
     })
 }
 
 /// `(round_leaves, rounds, max_sims_per_search)` from one driven worker.
-fn drive(kind: SearchKind, want_rows: usize) -> (u64, u64, u64) {
+fn drive(kind: SearchKind, want_records: usize) -> (u64, u64, u64) {
+    let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: 2,
@@ -87,21 +97,24 @@ fn drive(kind: SearchKind, want_rows: usize) -> (u64, u64, u64) {
         quiescence_enabled: false,
         solver_enabled: false,
         forced_win_policy_enabled: false,
-        encoding_name: Some("v6".to_string()),
+        encoding_name: Some(ENCODING.to_string()),
         ..Default::default()
     })
     .expect("runner constructs at the drive's parameters");
 
-    let policy_stride = runner.policy_len();
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_producer(runner.dense_producer(), policy_stride, served);
+    let producer = spawn_producer(
+        runner.graph_producer(),
+        spec.policy_logit_count,
+        served.clone(),
+    );
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
-    let mut rows = 0usize;
+    let mut records = 0usize;
     while Instant::now() < deadline {
-        rows += runner.drain_training_rows().len();
-        if rows >= want_rows || runner.fatal_defect().is_some() {
+        records += runner.drain_graph_records().len();
+        if records >= want_records || runner.fatal_defect().is_some() {
             break;
         }
         thread::sleep(Duration::from_millis(5));
@@ -116,8 +129,8 @@ fn drive(kind: SearchKind, want_rows: usize) -> (u64, u64, u64) {
         "{kind:?}: latched a fatal defect: {defect:?}"
     );
     assert!(
-        rows >= want_rows,
-        "{kind:?}: only {rows} rows inside the budget — a drive that searches nothing \
+        records >= want_records,
+        "{kind:?}: only {records} records inside the budget — a drive that searches nothing \
          cannot speak about round width"
     );
     (

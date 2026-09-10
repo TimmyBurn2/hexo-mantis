@@ -400,97 +400,18 @@ is silently disabled.
   `None`, never `"active"`. Beside it, only the GATE block claims `deploy_matched` — there both
   sides play at `spec.gate.deploy_sims`, so the flag is derived from the construction; the
   random floor plays at `random_model_sims` against a uniform bot and no longer claims it.
-- **The R250 absence family (this rule's ONLY exception): a key whose MECHANISM the active
-  encoding does not have is ABSENT from that encoding's stream — never zero, never
-  `null`-as-value.** Every `iteration_complete` block subtracted on these grounds (the
-  numbered rows below) is keyed on the SAME authority (`mantis.train.events.is_graph_run`,
-  which reads the run's declared `identity.representation`), so they cannot disagree about
-  which arm the run is on. The `None` convention above still governs every OTHER key,
-  including these blocks when their mechanism EXISTS but has no producer wired.
-- **(1) ADJ-D32 (R249 + R250): the cluster block.** Its three keys — `cluster_value_std_mean`,
-  `cluster_policy_disagreement_mean`, `cluster_variance_sample_count` — have three arms:
-  - **GRAPH representation** — all three OMITTED. The cluster-variance accumulators are
-    structurally unreachable on that arm (the search drive returns into the graph inference
-    path before any variance code runs, and the atomics are not passed to it), so there is
-    no producer to report `None` for. Absence rather than `None` because these keys had
-    already shipped as hard `0.0`s for a whole run: a key that has carried a number is read
-    as one, and `null` is what a JSON consumer coerces back to zero most readily.
-  - **PUCT + grid** — `cluster_variance_sample_count` ALWAYS present (a raw counter,
-    truthful at 0, and the evidence for the drop); each derived mean present only when the
-    producer supplied one, DROPPED per-field when the bridge returns `None` at zero samples.
-  - **Gumbel + grid** — the CONFRES S2 convention is RETAINED: all four regime-gated keys
-    (the three above plus `mcts_root_concentration`) stay present carrying `None`, so the
-    payload shape is regime-stable. That `None` is a REGIME-`None` ("no such instrument
-    under this descent"), not R249's zero-count `None`. Whether R249's drop should extend to
-    it is UNDER ADJUDICATION; until ruled, S2 stands.
-  `mcts_root_concentration` is NOT a cluster field — it is accumulated once per search,
-  path-independently — and stays on both representations, subject only to the S2 regime gate.
-- **(2) Item 10(b) (R250): `iteration_complete.k_cluster_histogram`.** The LAW-18 fire-rate
-  log for the K-cluster lever: a mapping from K (cluster views per recorded position) to the
-  cumulative count of positions recorded at that K, over buckets `"1"`..`"8"` plus a `">8"`
-  guard for any K outside the registry's `k_max`. Three arms:
-  - **GRAPH representation** — the key is OMITTED. The only writer is
-    `record_position` on the dense arm; `record_position_graph_dispatch` does not take the
-    histogram as a parameter, so a graph run's buckets are zero for want of a producer. A
-    histogram of zeros is a WORSE fabrication than a scalar zero, because it has shape and
-    therefore reads as a measured distribution.
-  - **No producer** (an engine build predating the getter) — keyed, carrying `None`, per the
-    unproduced-field convention. This is the case the R250 subtraction is NOT.
-  - **Grid** — the bucket mapping, cumulative since pool start. The labels are derived from
-    the vector's LENGTH, so widening the bucket array in Rust relabels the payload with no
-    Python edit. LAW-03: the unit is RECORDED POSITIONS; the buckets sum to the dense
-    `record_position` call count, so the distribution is self-normalising and no separate
-    denominator ships beside it.
-- **(3) R256/ADJ-D37: `iteration_complete.uncovered_forced_win`.** The LAW-18 fire-rate
-  log for the forced-win coverage clip: per-lever DROP EVENTS — a proven forced win
-  swallowed by the K-cluster WINDOW criterion while the injecting lever (O1
-  `forced_win_policy_weight` or the solver's `solver_visit_weight`) was armed. LAW-03 unit
-  note: the unit is lever-drop events, not distinct wins — a move with BOTH levers armed
-  can contribute two ticks (each armed lever independently dropped an injection).
-  Disclosure: every shipped config disarms both levers (`forced_win_policy_enabled:
-  false`, `solver_enabled: false`), so on minted runs this reads a truthful 0 until a
-  prereg row arms one — the instrument pre-positions for that re-arm (R163's
-  recommendation), per LAW-18. Producer: the ONE counted helper
-  `records::apply_forced_win_one_hot_ls_counted` (both mechanism sites route through it;
-  producer + mutation self-tests in `records::ls_tests`, Python seam pins in
-  `tests/train/test_uncovered_forced_win.py`). Three arms — the K histogram's gate,
-  INVERTED, on the same `is_graph_run` authority (R256: the instrument attaches to the
-  mechanism's measured live path, the LS target path, live on run5's graph arm):
-  - **GRAPH representation** — cumulative `{"total", "per_position"}`; `total` is a raw
-    counter, truthful at 0; `per_position` is the rate over the snapshot's cumulative
-    `positions_generated`, `None` before any position is recorded (a rate over zero
-    samples is not a measurement, R249).
-  - **Dense (grid) representation** — the key is OMITTED. Publishing it would resurrect
-    the ADJ-D37 arm-(i) trap: a `{total: 0}` reading zero on arms whose forced-win drops a
-    DIFFERENT mechanism owns (`v6`/`v6w25` take the Dense target arm). Disclosed:
-    `v6_live2_ls` is itself LS, so its Rust-side counter can tick while emission stays
-    graph-scoped per R256's explicit landing — the dense-LS stream gap is an adjudication-
-    queue disclosure, not an oversight.
-  - **No producer** (an engine build predating the getter) — keyed, carrying `None`, per
-    the unproduced-field convention.
-- **(4) R266/F-P1/N1 (fdc6f09/R245(c)): `training_step.symmetry_draws`.** The LAW-18
-  fire-rate log for the per-record compact/spread symmetry gate: a record that is
-  window-lossless under every D6 element draws from the FULL 12-element group, one that
-  is not draws only from `sym::WINDOW_PRESERVING_SYMS` (4 elements) — previously a silent
-  restriction with no in-run reading of how often each arm fires. Producer: the ONE
-  counted call site both sample cores route through
-  (the dense sample core's `record_symmetry_draw`). **RETIRED with the grid path (R346(f)):
-  the compact/spread gate was a property of the window-clamped DENSE record frame, and the
-  graph ring rotates whole-board coordinates through `rotate_axial` with nothing to clip. The
-  field is no longer produced and a reader draws its absence, never a zero.** Ticked ONLY on an `augment=True`
-  draw (the b349ec4/R249 disarmed-lever posture: an unaugmented draw never consults
-  `compact`, so counting it would fabricate a reading for a lever never exercised). Three
-  arms — the K histogram's gate (item (2)), NOT inverted (this mechanism, like the K
-  histogram, is DENSE-only — the graph arm has no window and keeps the full group
-  unconditionally, `sym::WINDOW_PRESERVING_SYMS`'s own doc):
-  - **DENSE (grid) representation** — cumulative `{"compact", "spread", "compact_fraction"}`;
-    the two raw counts are truthful at 0 (R249); `compact_fraction` is `None` until at
-    least one augmented draw has landed (a rate over zero samples is not a measurement).
-  - **GRAPH representation** — the key is OMITTED. The mechanism has no subject there
-    (publishing a keyed zero or `None` would both read as "measured" to a stream
-    consumer, the same D37/10(b) arm-(i) trap).
-  - **No producer** (an engine build predating the getters) — keyed, carrying `None`, per
-    the unproduced-field convention.
+- **The R250 absence family is RETIRED (R346(f)).** Its four rows —
+  `iteration_complete.{cluster_value_std_mean, cluster_policy_disagreement_mean,
+  cluster_variance_sample_count, k_cluster_histogram, uncovered_forced_win}` and
+  `training_step.symmetry_draws` — were every instrument whose MECHANISM lived on the dense
+  search arm: the per-leaf cluster-variance accumulation, the K-cluster record histogram, the
+  forced-win coverage-gate drop counter and the window-preserving symmetry gate. The arm is
+  deleted, so the fields are deleted with it rather than published as permanent absences, and
+  `mantis.train.events.is_graph_run` — the one authority they all keyed on — goes too. What
+  survives of that block is `iteration_complete.mcts_root_concentration`, which is accumulated
+  once per search in `play_one_move`, path-independently, and keeps its CONFRES S2 regime gate
+  (a value under PUCT, `None` under Gumbel). The `None` convention above governs every
+  remaining key without exception.
 - Known counter overlap (debt **R-QUARANTINE-COUNTER**): `checkpoints.persist_errors_total`
   is incremented BOTH by a fatal write failure and by a deliberately survivable quarantine
   write (`checkpoints.py::_write_quarantine`, the §6/R3 survive-run clause). Under the

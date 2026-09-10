@@ -105,20 +105,6 @@ def test_fg6_01_an_explicit_caps_argument_is_honoured_over_an_absent_block() -> 
         "max_fused_edges": 4_500_000, "max_fused_nodes": 170_000}
 
 
-def test_fg6_02_a_grid_server_is_unaffected_by_the_new_requirement() -> None:
-    """FG6-02 — the grid route never reads the block and never needs one.
-
-    The dense batch is a fixed-shape tensor already bounded by `inference_batch_size`, so
-    there is no unbounded quantity there for a cap to bound — the same scoping argument
-    `MicrobatchCapsConfig` makes for the train side. A grid construction that acquired this
-    requirement would break the four frozen grid coordinators for nothing."""
-    server = InferenceServer(
-        torch.nn.Linear(1, 1), _CPU, H.grid_cfg(omit_block=True),
-        batcher=_DummyBatcher(), encoding_spec=H.GRID_SPEC,
-    )
-    assert server.batch_timing_snapshot()["fusion"] is None
-
-
 # ═══ FG6-03/04/05/06 — the standalone engine ═════════════════════════════════════════════
 def test_fg6_03_the_local_engine_takes_a_required_keyword_only_caps_parameter() -> None:
     """FG6-03 — REQUIRED and KEYWORD-ONLY, with NO default.
@@ -149,17 +135,6 @@ def test_fg6_04_a_graph_engine_cannot_be_built_without_the_caps() -> None:
     net.eval()
     with pytest.raises(TypeError):
         LocalInferenceEngine(net, _CPU, encoding_spec=H.GRAPH_SPEC)  # type: ignore[call-arg]
-
-
-def test_fg6_05_a_grid_engine_passes_none_explicitly_and_constructs() -> None:
-    """FG6-05 — D-1's closing sentence, pinned: grid sites pass `None` EXPLICITLY, never an
-    omitted argument. `None` here means "this route has no fused graph forward to bound", and
-    it is written at the call site so a reader sees the decision rather than a silence."""
-    engine = LocalInferenceEngine(torch.nn.Linear(1, 1), _CPU,
-                                  encoding_spec=H.GRID_SPEC, fused_graph_caps=None,
- inference_batching=None, max_in_flight=0,
-                                  )
-    assert engine._graph_server is None, "a grid engine constructs no graph server"
 
 
 def test_fg6_06_the_threaded_caps_reach_the_engines_own_server() -> None:

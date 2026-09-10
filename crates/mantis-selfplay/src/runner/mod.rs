@@ -567,10 +567,10 @@ mod seam_roundtrip {
     /// default sim budget passes validation and no worker is started.
     fn runner() -> SelfPlayRunner {
         SelfPlayRunner::new(SelfPlayRunnerConfig {
-            encoding_name: Some("v6".to_string()),
+            encoding_name: Some("gnn_axis_v1".to_string()),
             ..Default::default()
         })
-        .expect("v6 must resolve via the registry")
+        .expect("gnn_axis_v1 must resolve via the registry")
     }
 
     #[test]

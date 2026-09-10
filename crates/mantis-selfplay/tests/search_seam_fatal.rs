@@ -1,6 +1,6 @@
-// R8 justify: the four legs are ONE claim with ONE construction — a seam failure and a
+// R8 justify: the legs are ONE claim with ONE construction — a seam failure and a
 // drain shutdown are the SAME `Err` arriving at the SAME line, and the only thing that
-// separates them is the discriminator under test. They share the two mock producers, the
+// separates them is the discriminator under test. They share the mock producer, the
 // `ThenDo` switch that is the whole experiment, and the healthy-prefix constant; splitting
 // failure from shutdown across files would put the two halves of one flip-set where a
 // reader can green one and never run the other.
@@ -15,19 +15,20 @@
 //! `VisitSlotsExceeded` refusal naming neither the failure nor the leaf (Phase A §4).
 //!
 //! FLIP-SET (a): an injected inference failure mid-game dies LOUD at the seam and nothing
-//! reaches the exporter or the buffer. Driven on BOTH arms, because both carry a failure
-//! leg and the counter is published on both (R256: the instrument attaches to the
-//! mechanism's measured live path, and that path is arm-independent here).
+//! reaches the exporter or the buffer. R346(f) deleted the dense arm and its queue, so the
+//! graph arm is the whole of the live path; the counter is still published arm-independently
+//! (R256), and the ARM name still rides the message, which is what would show if a second
+//! arm ever returned.
 //!
 //! THE DISCRIMINATOR IS THE OTHER HALF OF THE PIN. `stop()` flips `running=false` and then
-//! closes both queues, waking every in-flight waiter with `Err` — the §P22/D12
+//! closes the queue, waking every in-flight waiter with `Err` — the §P22/D12
 //! drain-shutdown path. A seam fix that made every `Err` run-fatal would turn every clean
 //! stop into a reported defect, which is a worse failure than the one being fixed. The
-//! shutdown legs below are RED under that naive fix and GREEN under the shipped one.
+//! shutdown leg below is RED under that naive fix and GREEN under the shipped one.
 //!
-//! Killers: M-SEAM-1 (restore `Err(_) => return 0` in either arm — the failure legs time
+//! Killers: M-SEAM-1 (restore `Err(_) => return 0` in the seam arm — the failure leg times
 //! out RED); M-SEAM-2 (drop the `is_closed()` discriminator and fail unconditionally — the
-//! shutdown legs go RED); M-SEAM-3 (tick `fires` instead of `inference_failures` in the
+//! shutdown leg goes RED); M-SEAM-3 (tick `fires` instead of `inference_failures` in the
 //! latch — the conjunct-separation asserts go RED).
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -36,7 +37,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
-use mantis_selfplay::queues::{DenseQueue, GraphQueue};
+use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
@@ -45,13 +46,12 @@ use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 /// RootExpansionFailed arm instead of the sim-loop arm).
 const SERVE_OK_BEFORE_FAILURE: usize = 6;
 const INJECTED_REASON: &str = "Graph inference failed: injected forward failure";
-const INJECTED_REASON_DENSE: &str = "injected dense forward failure";
 
 /// What a mock producer does once it has served its healthy prefix.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ThenDo {
     /// Fail every subsequent batch, the way the real inference server does on a forward
-    /// exception (`submit_graph_inference_failure` / `submit_failure`).
+    /// exception (`submit_graph_inference_failure`).
     Fail,
     /// POP the batch and never answer it, then idle. This is what makes the shutdown legs
     /// DETERMINISTIC rather than timing-hopeful: once a batch is popped and unanswered its
@@ -77,21 +77,6 @@ fn graph_runner() -> SelfPlayRunner {
     .expect("gnn runner constructs")
 }
 
-fn dense_runner() -> SelfPlayRunner {
-    SelfPlayRunner::new(SelfPlayRunnerConfig {
-        n_workers: 1,
-        max_moves_per_game: 12,
-        n_simulations: 16,
-        leaf_batch_size: 2,
-        standard_sims: 0,
-        dirichlet_enabled: false,
-        quiescence_enabled: false,
-        random_opening_plies: 0,
-        encoding_name: Some("v6".to_string()),
-        ..Default::default()
-    })
-    .expect("v6 runner constructs")
-}
 
 /// Mock graph producer (the target_wire_carry / target_latch_propagation pattern):
 /// uniform probs through the PRODUCTION `assemble_ls_from_gnn_probs`. Once
@@ -145,49 +130,6 @@ fn spawn_graph_producer(
     })
 }
 
-/// Dense sibling. Uniform policy rows; the failure leg is `submit_failure`, the dense
-/// queue's own producer-side failure surface.
-fn spawn_dense_producer(
-    queue: DenseQueue,
-    stride: usize,
-    served: Arc<AtomicUsize>,
-    after: ThenDo,
-    parked: Arc<AtomicBool>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_batch(4, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let ids: Vec<u64> = batch.iter().map(|(id, _)| *id).collect();
-        if served.load(Ordering::Relaxed) >= SERVE_OK_BEFORE_FAILURE {
-            match after {
-                ThenDo::Fail => {
-                    queue.submit_failure(&ids, INJECTED_REASON_DENSE);
-                    continue;
-                }
-                ThenDo::ParkHoldingTheBatch => {
-                    parked.store(true, Ordering::SeqCst);
-                    continue;
-                }
-            }
-        }
-        let mut flat: Vec<f32> = Vec::with_capacity(ids.len() * stride);
-        let mut ranges: Vec<std::ops::Range<usize>> = Vec::with_capacity(ids.len());
-        let mut values: Vec<f32> = Vec::with_capacity(ids.len());
-        for _ in &ids {
-            let start = flat.len();
-            flat.extend(std::iter::repeat_n(1.0f32 / stride as f32, stride));
-            ranges.push(start..flat.len());
-            values.push(0.0);
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_results(&ids, &Arc::new(flat), &ranges, &values);
-    })
-}
 
 fn wait_for_defect(runner: &SelfPlayRunner, secs: u64) -> Option<String> {
     let deadline = Instant::now() + Duration::from_secs(secs);
@@ -277,39 +219,6 @@ fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
     );
 }
 
-#[test]
-fn injected_dense_inference_failure_dies_loud_and_named_at_the_seam() {
-    let runner = dense_runner();
-    assert_eq!(runner.stats_snapshot().inference_failures_total, 0);
-
-    let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_dense_producer(
-        runner.dense_producer(),
-        runner.policy_len(),
-        served.clone(),
-        ThenDo::Fail,
-        Arc::new(AtomicBool::new(false)),
-    );
-
-    runner.start();
-    let msg = wait_for_defect(&runner, 120);
-    let halted = !runner.is_running();
-    let snap = runner.stats_snapshot();
-    runner.stop();
-    producer.join().expect("producer exits");
-
-    assert!(served.load(Ordering::Relaxed) >= SERVE_OK_BEFORE_FAILURE, "vacuous drive");
-    let msg = msg.expect(
-        "an injected DENSE inference failure never latched — the dense arm still skips the \
-         batch silently. The dense leg matters on its own: it is the arm the R250 absence \
-         rule would have wrongly excused this counter from (R256)",
-    );
-    assert!(msg.contains("InferenceSeamFailure"), "variant name must ride: {msg}");
-    assert!(msg.contains("dense"), "the failing ARM must ride the message: {msg}");
-    assert!(halted, "store-then-halt (LAW-14)");
-    assert_eq!(snap.inference_failures_total, 1, "the seam counter must count the dense fire");
-    assert_eq!(snap.target_integrity_defects, 0, "wrong counter ticked (M-SEAM-3)");
-}
 
 // ── The discriminator: a drain shutdown is NOT a defect ──────────────────────────────
 
@@ -357,32 +266,6 @@ fn graph_drain_shutdown_is_not_an_inference_failure() {
     );
 }
 
-#[test]
-fn dense_drain_shutdown_is_not_an_inference_failure() {
-    let runner = dense_runner();
-    let served = Arc::new(AtomicUsize::new(0));
-    let parked = Arc::new(AtomicBool::new(false));
-    let producer = spawn_dense_producer(
-        runner.dense_producer(),
-        runner.policy_len(),
-        served.clone(),
-        ThenDo::ParkHoldingTheBatch,
-        parked.clone(),
-    );
-
-    runner.start();
-    let blocked = wait_for(120, || parked.load(Ordering::SeqCst));
-    runner.stop();
-    producer.join().expect("producer exits");
-
-    assert!(blocked, "vacuous drive: the producer never parked holding a batch");
-    assert_eq!(
-        runner.stats_snapshot().inference_failures_total,
-        0,
-        "a clean dense stop was reported as an inference failure (M-SEAM-2)"
-    );
-    assert!(runner.fatal_defect().is_none(), "a clean stop latched a fatal defect");
-}
 
 // ── The discriminator: a queue closed by ANYTHING BUT our own stop (R276(a)) ─────────
 

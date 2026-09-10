@@ -70,7 +70,6 @@ from mantis.selfplay.pool_hooks import (
     RunnerStats,
 )
 from mantis.selfplay.utils import get_temperature, quarter_cosine_temperature
-from mantis.selfplay.worker import SelfPlayWorker
 
 __all__ = [
     "WIN_AXES",
@@ -112,7 +111,6 @@ __all__ = [
     "ScatterSlotCanonicalMismatch",
     "ScatterSlotOutOfBounds",
     "SelfPlayHParams",
-    "SelfPlayWorker",
     "WorkerPool",
     "build_runner_config",
     "collate_graph_batch",

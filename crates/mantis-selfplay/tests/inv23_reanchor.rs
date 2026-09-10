@@ -3,15 +3,15 @@
 //!
 //! The runner takes `encoding_name: Option<String>` and resolves the record at
 //! `SelfPlayRunner::new` time. This re-anchor pins:
-//!   1. `Some("v6w25")` → feature_len 5000 / policy_len 626;
-//!   2. `Some("v6")`    → feature_len 2888 / policy_len 362;
+//!   1. every REGISTERED name resolves to that row's own spec-derived shapes;
 //!   3. an UNKNOWN name → native `Err(String)` naming the bad name + a registry
 //!      hint (NOT a `PyValueError` — the pyo3 shell is WP7, R6);
 //!   4. `None` → native `Err` REGARDLESS of any shapes. The frozen config carried
 //!      `feature_len`/`policy_len` override kwargs that could rescue a `None`; C-1
 //!      DROPS those fields entirely, so `None`+shapes is structurally
 //!      unrepresentable — an absent identity key is always an error (LAW-11: shapes
-//!      do not tell Grid vs Graph; the frozen `None → v6` fallback is killed, D2).
+//!      do not tell one representation from another; the frozen `None → v6` fallback is
+//!      killed, D2).
 //!
 //! Workers are never spawned (`max_moves_per_game = 0`, and `new()` does not
 //! start) so no inference producer is needed.
@@ -37,25 +37,46 @@ fn cfg_with_encoding(encoding_name: Option<&str>) -> SelfPlayRunnerConfig {
     }
 }
 
-/// Test 1 — `Some("v6w25")` resolves to v6w25 geometry (state_stride 8×625 = 5000,
-/// policy_stride 626).
+/// Test 1 — EVERY registered name resolves, and both shapes come from that row's own
+/// spec. Iterated over `all_specs()` rather than naming rows, so a newly registered
+/// encoding is covered the day it lands (LAW-08) — the two grid rows this used to name by
+/// hand went with the dense path and their transcribed 5000/626 and 2888/362 went with
+/// them.
 #[test]
-fn encoding_name_v6w25_resolves_to_5000_626() {
-    let runner = SelfPlayRunner::new(cfg_with_encoding(Some("v6w25")))
-        .expect("v6w25 must resolve via the registry");
-    assert_eq!(runner.feature_len(), 5000, "v6w25 state_stride = 8×625");
-    assert_eq!(runner.policy_len(), 626, "v6w25 policy_stride");
-    assert!(!runner.is_running(), "runner must not auto-start");
+fn every_registered_encoding_name_resolves_to_its_own_spec_derived_shapes() {
+    let mut seen = 0usize;
+    for spec in mantis_encoding::all_specs() {
+        let runner = SelfPlayRunner::new(cfg_with_encoding(Some(spec.name)))
+            .unwrap_or_else(|e| panic!("{} must resolve via the registry: {e}", spec.name));
+        assert_eq!(
+            runner.feature_len(),
+            spec.state_stride(),
+            "{}: feature_len must be the row's own state_stride",
+            spec.name
+        );
+        assert_eq!(
+            runner.policy_len(),
+            spec.policy_stride(),
+            "{}: policy_len must be the row's own policy_stride",
+            spec.name
+        );
+        assert!(!runner.is_running(), "{}: runner must not auto-start", spec.name);
+        seen += 1;
+    }
+    assert!(seen > 0, "the registry shipped no encodings, so this test asserted nothing");
 }
 
-/// Test 2 — `Some("v6")` resolves to v6 geometry (2888 / 362).
+/// Test 2 — a DELETED grid row does not resolve. The `None → v6` fallback is killed and so
+/// is `v6` itself (R346(f)), so a stale config naming one is an error rather than a silent
+/// re-resolution onto graph geometry.
 #[test]
-fn encoding_name_v6_resolves_to_2888_362() {
-    let runner = SelfPlayRunner::new(cfg_with_encoding(Some("v6")))
-        .expect("v6 must resolve via the registry");
-    assert_eq!(runner.feature_len(), 2888, "v6 state_stride = 8×361");
-    assert_eq!(runner.policy_len(), 362, "v6 policy_stride = 361 + pass slot");
-    assert!(!runner.is_running());
+fn a_deleted_grid_encoding_name_does_not_resolve() {
+    for name in ["v6", "v6w25", "v6_live2_ls"] {
+        assert!(
+            SelfPlayRunner::new(cfg_with_encoding(Some(name))).is_err(),
+            "{name} was deleted with the dense path and must not resolve"
+        );
+    }
 }
 
 /// Test 3 — an unknown encoding name is a native `Err(String)` naming the bad name

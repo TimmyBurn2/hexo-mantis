@@ -28,7 +28,6 @@ from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _CPU = torch.device("cpu")
 _GRAPH_SPEC = RegistrySpec.from_registry("gnn_axis_v1")
-_GRID_SPEC = RegistrySpec.from_registry("v6")
 _CAPS = FusedGraphCapsSpec(max_fused_edges=4_500_000, max_fused_nodes=170_000)
 
 
@@ -105,18 +104,6 @@ def test_a_graph_engine_refuses_an_absent_batching_spec() -> None:
         LocalInferenceEngine(
             _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,
             inference_batching=None, max_in_flight=8, )
-
-
-def test_a_grid_engine_carries_none_and_builds_no_graph_server() -> None:
-    """The `None` arm is a real posture, not an oversight: a grid route opens no collector."""
-    engine = LocalInferenceEngine(
-        _Net(), _CPU, encoding_spec=_GRID_SPEC, fused_graph_caps=None,
-        inference_batching=None, max_in_flight=0, )
-    try:
-        assert engine._graph_server is None
-        assert engine._graph_batcher is None
-    finally:
-        engine.close()
 
 
 def test_the_resolver_refuses_an_absent_member() -> None:

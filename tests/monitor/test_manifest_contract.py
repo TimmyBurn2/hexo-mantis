@@ -205,46 +205,38 @@ def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
     )
 
 
-# ── item 10(b) (R4/LAW-07) — the K histogram's row cannot be quietly deleted ──────────
-def test_the_k_cluster_histogram_instrument_has_a_manifest_row() -> None:
-    """The in-run K histogram carries a producer-manifest row, keyed on the emitter's OWN
-    name for the field.
+# ── R346(f) — the K histogram's row went WITH its instrument, and stays gone ──────────
+def test_the_retired_dense_instruments_have_no_manifest_row() -> None:
+    """A manifest row outliving its instrument is a producer citation pointing at nothing.
 
-    THE ASYMMETRY THIS CLOSES (O-29, argued in full above): `verify_manifest` resolves the
-    rows it is HANDED, and an absent row is not a row — so `test_shipped_manifest_every_row_
-    resolves` stays GREEN under a deletion. Every registered family needs its own presence
-    pin; this is the K histogram's.
+    The R250 absence family — the K-cluster histogram, the cluster-variance block, the
+    forced-win coverage-drop counter and the compact/spread symmetry gate — was every
+    instrument whose mechanism lived on the DENSE search arm. R346(f) deleted that arm, so
+    the rows are deleted too rather than left describing a field nothing publishes. This is
+    the inverse of the pin it replaces: that one refused a row's quiet deletion while the
+    instrument lived; this one refuses its quiet SURVIVAL now that the instrument does not.
 
-    DERIVED, not transcribed: the expected row id comes from
-    `mantis.train.events.K_CLUSTER_HISTOGRAM_KEY`, the single authority the emitter, the
-    absence rule and the payload key all read, so renaming the field without renaming the row
-    reds here rather than leaving a row that resolves and describes nothing. The PRODUCER is
-    asserted to be the emitter function itself for the same reason resolution alone is not
-    enough: a row re-pointed at some other live symbol resolves perfectly and cites the wrong
-    thing.
-
-    MUTATIONS THAT RED IT: (1) delete the `k_cluster_histogram` row from
-    `producer_manifest.yaml`; (2) re-point its producer symbol at anything but the emitter.
-
-    RECORDED, NOT FIXED HERE (out of this card's scope): the sibling R250 subtraction — the
-    `iteration_complete` cluster block landed at ADJ-D32 — has NO manifest row at all, so
-    this pin is deliberately single-row rather than derived over the whole R250 absence
-    family. A family-derived expectation would red on that gap today.
+    MUTATIONS THAT RED IT: re-add any of the named rows to `producer_manifest.yaml`.
     """
-    from mantis.train.events import K_CLUSTER_HISTOGRAM_KEY
+    retired = {
+        "k_cluster_histogram",
+        "uncovered_forced_win",
+        "symmetry_draws",
+        "regime_gated_cluster_stats",
+    }
+    rows = {row["id"] for row in load_manifest(_SHIPPED_MANIFEST)["gates"]}
+    assert not (rows & retired), (
+        f"manifest rows survive their deleted dense instruments: {sorted(rows & retired)}. "
+        "R346(f) deleted the grid path; a row for a field nothing emits is exactly the "
+        "phantom-input class LAW-07 exists to refuse."
+    )
+    from mantis.train import events
 
-    rows = {row["id"]: row for row in load_manifest(_SHIPPED_MANIFEST)["gates"]}
-    assert K_CLUSTER_HISTOGRAM_KEY in rows, (
-        f"the in-run K histogram publishes `iteration_complete.{K_CLUSTER_HISTOGRAM_KEY}` and "
-        f"owes a live producer plus a named producer test (R4/LAW-07). Rows present: "
-        f"{sorted(rows)}"
-    )
-    producer = rows[K_CLUSTER_HISTOGRAM_KEY]["producer"]
-    assert producer["module"] == "mantis.train.events", producer
-    assert producer["symbol"] == "k_cluster_histogram_block", (
-        f"the row must cite the function that BUILDS the field, not a symbol that merely "
-        f"resolves; got {producer['symbol']!r}"
-    )
+    for symbol in ("k_cluster_histogram_block", "uncovered_forced_win_block",
+                   "symmetry_draw_block", "is_graph_run"):
+        assert not hasattr(events, symbol), (
+            f"mantis.train.events.{symbol} outlived the arm it gated"
+        )
 
 
 # ── AUDIT-1 F-10 (+ its sibling GATE-C03): the two ways a row resolved against nothing ──

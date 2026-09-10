@@ -227,7 +227,7 @@ path = "selfplay/pool/runner_config_goldens.json"
 # cannot read it. The precedent is this file's own history — both the selfplay-schema landing
 # and GUMBEL-REPAIR-1 amended it the same way. `full_config` carries `gumbel`, the NON-shipped
 # kind, so the golden proves the wire carries the VALUE rather than that a default coincided.
-sha256 = "59d0f89a5c0c1e86d90b6ab9c788a04e3657df71b41bfb7b9bff3dd31bf7f349"
+sha256 = "573de10c62ab153a6f3baa78ec0027df51a33eefdd2a89c20cfbbbe97c38194a"
 added_by = "WP-SP"
 
 [[required]]

@@ -73,7 +73,7 @@ _R169_SANCTIONED = "2/6 resolve locally"
 
 #: O-A19 arm 4 / abort 11's instrument.
 _LIVENESS_TOKENS = ("live", "liveness", "is running", "plays")
-_RUNG_TOKENS = ("sealbot_d5", "sealbot_d6", "rung")
+_RUNG_TOKENS = ("sealbot_d5", "rung")
 
 _NUMBER_RE = re.compile(r"(?<![\w.])\d+(?:\.\d+)?(?![\w.])")
 _STATUS_RE = re.compile(r"\*Status:")
@@ -198,17 +198,18 @@ def test_decision_per_side_compute_matches_the_minted_config(key: str) -> None:
     assert disagreeing == [], "\n".join(disagreeing)
 
 
-def test_decision_quotes_r139s_grounds_from_the_live_mapping() -> None:
-    """O-A16, two-sided with O-A2 (M-A2's second observer). The expected strings are read
-    from the SHIPPED mapping, so the drift gate and the resolver oracle cannot disagree
-    silently — a paraphrase in either place reds both."""
-    from mantis.bots.resolve import _R139_SKIP_GROUNDS
+def test_decision_names_no_bot_kind_the_resolver_cannot_resolve() -> None:
+    """O-A16, two-sided with O-A2. R346(f) deleted the kraken and strix kinds, so the
+    decision must not present either as a rung a run could play. Read from the SHIPPED known
+    set, so the drift gate and the resolver cannot disagree silently."""
+    from mantis.bots.resolve import _KNOWN_KINDS
 
     doc = _doc()
-    missing = sorted(g for g in _R139_SKIP_GROUNDS.values() if g not in doc)
-    assert missing == [], (
-        f"the decision does not carry R139's grounds verbatim: {missing}. R143 calls these "
-        f"skips OPERATOR-AUTHORIZED; the grounds are the words that say so."
+    claimed = set(re.findall(r"\b(sealbot|kraken|strix|random)_[A-Za-z0-9]+\b", doc))
+    unresolvable = sorted(k for k in claimed if k not in _KNOWN_KINDS)
+    assert unresolvable == [], (
+        f"the decision names bot kinds the resolver does not know: {unresolvable}. "
+        f"Known kinds: {sorted(_KNOWN_KINDS)}."
     )
 
 

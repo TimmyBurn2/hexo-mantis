@@ -90,7 +90,7 @@ def test_mutation_leaves_the_flat_shape_untouched(monkeypatch: pytest.MonkeyPatc
     """No unrelated casualty (R86 'alone'): the mutation is confined to the nested shape.
     A legacy flat config resolves identically before and after it, so the oracle above is
     detecting the bridge specifically and not a broken resolver in general."""
-    flat = {"encoding": "v6", "selfplay": {}, "mcts": {}}
+    flat = {"encoding": "gnn_axis_v1", "selfplay": {}, "mcts": {}}
     before = resolve_pool_encoding(flat, arch=None).encoding_name
     monkeypatch.setattr(hparams_mod, "resolve_from_config", _flat_only_resolve)
-    assert resolve_pool_encoding(flat, arch=None).encoding_name == before == "v6"
+    assert resolve_pool_encoding(flat, arch=None).encoding_name == before == "gnn_axis_v1"

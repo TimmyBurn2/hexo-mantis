@@ -499,10 +499,10 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
 mod tests {
     use super::*;
 
-    fn v6_config() -> PySelfPlayRunnerConfig {
+    fn graph_config() -> PySelfPlayRunnerConfig {
         PySelfPlayRunnerConfig {
             inner: SelfPlayRunnerConfig {
-                encoding_name: Some("v6".to_string()),
+                encoding_name: Some("gnn_axis_v1".to_string()),
                 n_workers: 1,
                 ..Default::default()
             },
@@ -544,14 +544,13 @@ mod tests {
             0,
             0,
             0,
-            false,
-            Some("v6".to_string()),
+            Some("gnn_axis_v1".to_string()),
             None,
         );
         let rust = cfg.to_rust();
         assert_eq!(rust.n_workers, 2);
         assert_eq!(rust.max_moves_per_game, 64);
-        assert_eq!(rust.encoding_name.as_deref(), Some("v6"));
+        assert_eq!(rust.encoding_name.as_deref(), Some("gnn_axis_v1"));
         // O1/solver/seed knobs come from Default.
         assert!(!rust.forced_win_policy_enabled);
         assert_eq!(rust.forced_win_policy_depth, 2);
@@ -559,24 +558,10 @@ mod tests {
         assert!((rust.solver_visit_weight - 0.3).abs() < 1e-6);
     }
 
-    #[test]
-    fn config_getset_attrs_round_trip() {
-        let mut cfg = v6_config();
-        cfg.set_solver_enabled(true);
-        cfg.set_solver_depth(24);
-        cfg.set_forced_win_policy_weight(0.5);
-        cfg.set_seed_fraction(0.1);
-        cfg.set_seed_corpus(Some(vec![vec![(0, 0), (1, 0)]]));
-        assert!(cfg.solver_enabled());
-        assert_eq!(cfg.solver_depth(), 24);
-        assert!((cfg.forced_win_policy_weight() - 0.5).abs() < 1e-6);
-        assert!((cfg.seed_fraction() - 0.1).abs() < 1e-6);
-        assert_eq!(cfg.to_rust().seed_corpus, Some(vec![vec![(0, 0), (1, 0)]]));
-    }
 
     #[test]
     fn runner_constructs_and_lifecycle() {
-        let r = PySelfPlayRunner::new(&v6_config()).expect("v6 runner constructs");
+        let r = PySelfPlayRunner::new(&graph_config()).expect("a graph runner constructs");
         assert!(!r.is_running());
         assert_eq!(r.games_completed(), 0);
         assert_eq!(r.model_version(), 0);
@@ -597,7 +582,7 @@ mod tests {
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
             1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, false, 16, 5, 50.0,
-            1.0, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, false, None, None,
+            1.0, 16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),
@@ -624,10 +609,12 @@ mod tests {
     /// ADJ-D32 / R249 MUTATION pin — a derived f64 mean over ZERO samples is `None`,
     /// never a number.
     ///
-    /// This is the defect's root: with `cluster_variance_samples` pinned at 0 on the
-    /// graph arm, a `0.0` here became `cluster_value_std_mean: 0.0` in every
-    /// `iteration_complete` of the run — a fabricated measurement in the run's ONE
-    /// event channel, indistinguishable from a real settled ensemble.
+    /// This is the defect's root: with the (since-deleted, R346(f)) cluster-variance
+    /// sample count pinned at 0 on the graph arm, a `0.0` here became a
+    /// `cluster_value_std_mean: 0.0` in every `iteration_complete` of the run — a
+    /// fabricated measurement in the run's ONE event channel, indistinguishable from a real
+    /// settled ensemble. The guard outlives the counters that motivated it: every
+    /// accum/count pair the bridge still derives runs through it.
     ///
     /// FALSIFYING MUTATION: restore the zero-count arm to `Some(0.0)` (or revert the
     /// return type to `f32` with `0.0`, which reds this by compile error instead).
@@ -649,44 +636,6 @@ mod tests {
         assert_eq!(derived_mean_f64(0, 4), Some(0.0));
     }
 
-    /// ADJ-D32 closing pin — each cluster mean derives from its OWN accumulator.
-    ///
-    /// The two accumulators share a divisor and a type, so a transposition compiles,
-    /// reads plausible, and is invisible in aggregate — the two series trade places for
-    /// the whole run and no post-hoc analysis can separate them again. Every
-    /// Python-side pin drives both means `None` (zero samples), where a swap is
-    /// `None == None`; DISTINCT seeded values are the only instrument that can see it.
-    /// The producing crate pins the atomic→snapshot half the same way
-    /// (`mantis_selfplay::runner::tests::stats_snapshot_reads_back_each_private_atomic`);
-    /// this is the snapshot→getter half.
-    ///
-    /// FALSIFYING MUTATION: swap `cluster_value_std_accum` and
-    /// `cluster_policy_disagreement_accum` inside `cluster_means`. MUST turn this RED.
-    #[test]
-    fn cluster_means_read_their_own_accumulators() {
-        let s = RunnerStatsSnapshot {
-            // mean 0.5 over 4 samples = 0.5 × 4 × 1e6.
-            cluster_value_std_accum: 2_000_000,
-            // mean 1.5 over the SAME 4 samples = 1.5 × 4 × 1e6. Deliberately unequal and
-            // deliberately not a permutation of the other, so a swap cannot read as noise.
-            cluster_policy_disagreement_accum: 6_000_000,
-            cluster_variance_samples: 4,
-            ..RunnerStatsSnapshot::default()
-        };
-
-        let (value_std, disagreement) = cluster_means(&s);
-        assert_eq!(
-            value_std,
-            Some(0.5),
-            "cluster_value_std_mean must derive from cluster_value_std_accum"
-        );
-        assert_eq!(
-            disagreement,
-            Some(1.5),
-            "cluster_policy_disagreement_mean must derive from \
-             cluster_policy_disagreement_accum"
-        );
-    }
 
     /// A fresh runner's graph-record drain is empty (numpy-free — no numpy is
     /// built for `collect_graph_data`). The `collect_data` 10-numpy-array marshal
@@ -694,7 +643,7 @@ mod tests {
     /// the embedded cargo-test interpreter cannot load numpy's C-extension.
     #[test]
     fn collect_graph_data_empty_on_fresh_runner() {
-        let r = PySelfPlayRunner::new(&v6_config()).unwrap();
+        let r = PySelfPlayRunner::new(&graph_config()).expect("a graph runner constructs");
         assert!(r
             .collect_graph_data()
             .expect("no fatal defect on a fresh runner")
