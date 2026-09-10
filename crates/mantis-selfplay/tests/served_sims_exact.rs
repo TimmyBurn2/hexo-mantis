@@ -22,13 +22,13 @@
 //! while the served node count disagrees with the number the config carries, and every g/h
 //! derived from `n_simulations` alone is wrong by the same factor.
 //!
-//! WHY THE GUMBEL ARM DRIVES A **GRID** ENCODING AND THE PUCT ARM DRIVES A GRAPH ONE. It is
-//! not a preference: `search.kind: gumbel` on the GRAPH path is refused at boot by
-//! `replay::hexg::derived_visit_capacity`, because that kind's exported target's support is
-//! the legal set and no sims regime derives a slot count that covers it
-//! (`target_boot_guards.rs`). The dense path records fixed-width rows and has no such slot,
-//! so it is the only route by which a Gumbel search can be driven end-to-end today. That
-//! refusal is a REAL BLOCKER on the completed-Q target regime, not a property of this file.
+//! WHY THE GUMBEL ARM DRIVES A **GRID** ENCODING AND THE PUCT ARM DRIVES A GRAPH ONE. The
+//! claim under test is about the SEARCH — how many leaves a budget serves — and the dense
+//! recorder is the one both kinds share, so driving it holds the recorder fixed while the
+//! kind varies. (This paragraph used to say the graph path was REFUSED under `gumbel` by
+//! `replay::hexg::derived_visit_capacity`, and that refusal is gone: R347(a) gave the graph
+//! arm a SPARSE row bounded by the minted `selfplay.gumbel_m`. The arm choice here survives
+//! it, because it was never about which paths boot.)
 //!
 //! WHAT IS MEASURED. The mock producers count every leaf they serve. With `n_workers: 1` and
 //! `random_opening_plies: 0` exactly one search is in flight at a time.

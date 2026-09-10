@@ -123,6 +123,7 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         0,
         0,
         PROD_LEAF_BATCH,
+        16,
         "puct",
     )
     .expect("the production sims regime must have a derivable capacity");

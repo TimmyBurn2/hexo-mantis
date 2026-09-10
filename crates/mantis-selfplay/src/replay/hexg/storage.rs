@@ -43,6 +43,7 @@ impl HexgBuffer {
             self.visit_qr[..self.capacity * vstride].rotate_left(self.head * vstride);
             self.visit_probs[..self.capacity * vcap].rotate_left(self.head * vcap);
             self.n_visits[..self.capacity].rotate_left(self.head);
+            self.tail_mass[..self.capacity].rotate_left(self.head);
             self.current_player[..self.capacity].rotate_left(self.head);
             self.moves_remaining[..self.capacity].rotate_left(self.head);
             self.ply_index[..self.capacity].rotate_left(self.head);
@@ -61,6 +62,7 @@ impl HexgBuffer {
         self.visit_qr.resize(new_capacity * vstride, 0i16);
         self.visit_probs.resize(new_capacity * vcap, 0.0f32);
         self.n_visits.resize(new_capacity, 0u16);
+        self.tail_mass.resize(new_capacity, 0.0f32);
         self.current_player.resize(new_capacity, 1i8);
         self.moves_remaining.resize(new_capacity, 2u8);
         self.ply_index.resize(new_capacity, 0u16);

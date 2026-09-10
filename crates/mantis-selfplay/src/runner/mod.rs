@@ -394,9 +394,32 @@ impl SelfPlayRunner {
                 config.n_sims_quick,
                 config.n_sims_full,
                 config.leaf_batch_size,
+                config.gumbel_m,
                 config.search_kind.as_config_str(),
             )
             .map_err(|e| format!("SelfPlayRunner: {e}"))?;
+            // R347(a) — the sparse row's tail is the RECORDING PRIOR times one scalar, and
+            // that identity is what the trainer's reconstruction rests on. Both target
+            // injectors write mass by cell AFTER the export, so either can land on a cell
+            // outside the visited-candidate set and give the tail a shape the prior does not
+            // have. Refused here, by name, rather than recorded as a row whose tail is
+            // quietly wrong.
+            if config.search_kind.stores_sparse_rows()
+                && (config.forced_win_policy_enabled || config.solver_enabled)
+            {
+                return Err(format!(
+                    "SelfPlayRunner: representation==graph with search.kind=gumbel stores the \
+                     SPARSE row of R347(a), whose tail mass alpha carries no per-cell shape — \
+                     the trainer rebuilds it from its own prior. \
+                     selfplay.forced_win_policy_enabled={} and selfplay.solver_enabled={} \
+                     inject target mass by cell after the export, so a cell outside the \
+                     search's visited-candidate set would land in the tail and be rebuilt as \
+                     the prior instead of as what was injected. Disarm both on this arm, or \
+                     run search.kind=puct (keys: search.kind, identity.representation, \
+                     selfplay.forced_win_policy_enabled, selfplay.solver_enabled)",
+                    config.forced_win_policy_enabled, config.solver_enabled
+                ));
+            }
             Some(cap)
         } else {
             None
@@ -760,6 +783,7 @@ mod seam_roundtrip {
         let g0 = GraphRecord {
             stones: vec![(1i16, 2i16, 1i8)],
             visits: vec![(1i16, 2i16, 0.5f32)],
+            tail_mass: 0.0,
             current_player: 1,
             moves_remaining: 2,
             ply_index: 4,

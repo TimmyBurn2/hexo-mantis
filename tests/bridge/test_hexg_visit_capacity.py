@@ -25,9 +25,10 @@ def _derive(**over):
         n_sims_quick=0,
         n_sims_full=0,
         leaf_batch_size=8,
-        # The completed-target refusal is a DENSITY check whose support bound depends on
-        # the SEARCH KIND, so a derivation that did not state one would be measuring an
-        # unstated regime.
+        # The slot count depends on the SEARCH KIND, so a derivation that did not state one
+        # would be measuring an unstated regime: under `puct` it is the sims regime's
+        # formula, under `gumbel` it is the minted m (R347(a)) and the sims regime is inert.
+        gumbel_m=16,
         search_kind="puct",
     )
     args.update(over)
@@ -51,21 +52,30 @@ def test_a_regime_over_the_ceiling_raises_naming_it() -> None:
         _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=70_000)
 
 
-def test_the_gumbel_kind_is_refused_at_every_capacity() -> None:
-    """The DENSITY check: the refusal is about the exported target's SUPPORT, not its
-    visit count, so no sims regime retires it.
+def test_the_gumbel_slot_count_is_the_minted_m_and_the_sims_regime_is_inert() -> None:
+    """R347(a) — the sparse row's slot count IS `selfplay.gumbel_m`.
 
     Under `puct` the exported target is the visit distribution and the sims regime bounds
     its support. Under `gumbel` the target covers the LEGAL SET, which is not a constant —
-    355 median and 8142 maximum at radius 8 — and which the config bounds nowhere.
+    355 median and 8142 maximum at radius 8 — so the ROW does not carry it: only the m
+    sampled candidates are ever visited, every other legal action's target is the recording
+    prior times one scalar, and the row stores m entries plus that scalar.
     """
-    with pytest.raises(ValueError, match="FULL legal set"):
-        _derive(search_kind="gumbel")
-    # A regime with an enormous derived capacity: still refused. That is "at ANY capacity".
-    with pytest.raises(ValueError, match="MINTED"):
-        _derive(search_kind="gumbel", full_search_prob=0.10, n_sims_quick=75, n_sims_full=600)
-    # And PUCT at the same shapes is fine.
+    assert _derive(search_kind="gumbel") == 16
+    assert _derive(search_kind="gumbel", gumbel_m=4) == 4
+    # A regime with an enormous PUCT-derived capacity does not move the Gumbel answer.
+    assert _derive(search_kind="gumbel", full_search_prob=0.10,
+                   n_sims_quick=75, n_sims_full=600) == 16
+    # And PUCT at the same shapes reads the sims regime, not m.
     assert _derive(full_search_prob=0.10, n_sims_quick=75, n_sims_full=600) == 607
+    assert _derive(gumbel_m=4) == 57
+
+
+def test_a_gumbel_m_past_the_minted_bound_is_refused() -> None:
+    """The refusal that REPLACED the at-any-capacity one: m, not the sims regime."""
+    for bad in (0, 17, 8192):
+        with pytest.raises(ValueError, match="gumbel_m"):
+            _derive(search_kind="gumbel", gumbel_m=bad)
 
 
 def test_an_unknown_kind_is_refused_rather_than_defaulted() -> None:

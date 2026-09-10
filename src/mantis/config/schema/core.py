@@ -737,13 +737,15 @@ class RunConfig(StrictModel):
         Graph-scoped: dense-362 records carry no HEXG visit slot, so the relation does
         not constrain grid configs (R250's absence principle, mint-side). The
         completed-Q leg of the derivation (child-count-wide support vs
-        The DENSITY leg is REACHABLE and it BINDS: ``search.kind: gumbel`` on a graph run
-        is refused outright, because that kind's exported target puts mass on the whole
-        legal set and the legal set is not a constant (355 median, 8142 maximum at radius
-        8). It refuses at MINT rather than at boot. THIS IS THE STANDING BLOCKER on a
-        completed-Q target regime for the graph lineage: the HEXG record's visit slot is
-        derived from the sims regime, and nothing derived can cover that support — a
-        MINTED slot bound is what the refusal is waiting for.
+        THE BLOCKER THIS DOCSTRING USED TO RECORD IS CLOSED (R347(a)). ``search.kind:
+        gumbel`` on a graph run was refused outright, on the grounds that its exported
+        target puts mass on the whole legal set and the legal set is not a constant. The
+        ruling's answer is that the ROW does not have to carry that support: under
+        Sequential Halving only the ``selfplay.gumbel_m`` sampled candidates are ever
+        visited, every other legal action's completed-Q target is the recording prior times
+        one scalar, and the row stores the m explicit entries plus that one scalar. So on the
+        Gumbel arm the slot count is the MINTED ``gumbel_m``, the sims regime does not enter,
+        and the refusal on that arm is an m past ``HEXG_GUMBEL_M_MAX``.
 
         The function-scope import mirrors ``mantis.run._select_buffer``'s stated
         posture: ``mantis._engine`` is already a transitive dependency of this module
@@ -765,6 +767,7 @@ class RunConfig(StrictModel):
                 n_sims_quick=pc.n_sims_quick,
                 n_sims_full=pc.n_sims_full,
                 leaf_batch_size=sp.leaf_batch_size,
+                gumbel_m=sp.gumbel_m,
                 search_kind=self.search.kind,
             )
         except ValueError as exc:
@@ -773,7 +776,8 @@ class RunConfig(StrictModel):
                 f"format: {exc} [derived from selfplay.mcts.n_simulations, "
                 "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
                 "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
-                "search.kind — R255/ADJ-D34: refused at mint, never at boot]"
+                "selfplay.gumbel_m, search.kind — R255/ADJ-D34 + R347(a): refused at mint, "
+                "never at boot]"
             ) from exc
         return self
 

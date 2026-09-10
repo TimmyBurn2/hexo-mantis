@@ -15,7 +15,8 @@ use mantis_selfplay::replay::hexg::push::validate_stone_player;
 use mantis_selfplay::replay::hexg::push::{validate_outcome, validate_visit_prob};
 use mantis_selfplay::replay::hexg::sample::mass_drop_check;
 use mantis_selfplay::replay::hexg::{
-    GraphRecord, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, HEXG_VISIT_COUNT_CEILING, MAX_STONES,
+    derived_visit_capacity, GraphRecord, HexgBuffer, HEXG_GUMBEL_M_MAX, HEXG_MAGIC, HEXG_VERSION,
+    HEXG_VISIT_COUNT_CEILING, MAX_STONES,
 };
 
 /// Slot geometry used by this suite's pre-R255 oracles (each buffer below is
@@ -30,6 +31,7 @@ fn sample_record() -> GraphRecord {
     GraphRecord {
         stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1), (2, 1, -1)],
         visits: vec![(2, 0, 0.5), (-1, 0, 0.3), (1, 1, 0.2)],
+        tail_mass: 0.0,
         current_player: -1,
         moves_remaining: 2,
         ply_index: 7,
@@ -125,12 +127,85 @@ fn push_rejects_over_cap() {
     );
     let over_v = GraphRecord {
         visits: vec![(0, 0, 0.1); VISIT_CAP + 1],
+        tail_mass: 0.0,
         ..sample_record()
     };
     assert!(
         buf.push_record_impl(&over_v, -1).is_err(),
         "over-visit-capacity must die loud"
     );
+}
+
+/// R347(a) PLANTED BREAK — a row claiming more than m explicit entries is REFUSED at insert.
+///
+/// Under Sequential Halving only m candidates are ever visited, so an (m+1)-entry row is not
+/// merely unstorable: it is a claim about the search that cannot be true. The refusal is the
+/// ring's own, at the write, and it happens BEFORE any slot is touched — so the ring a
+/// refused push leaves behind is the ring it had. Remove the guard in `push_record_impl` and
+/// this test reds (the write would run off the slot and corrupt the neighbouring record).
+#[test]
+fn a_sparse_row_over_the_minted_m_is_refused_at_insert() {
+    // The bound is DERIVED through the one authority, not transcribed: under `gumbel` the
+    // slot count IS the minted m and the sims regime does not enter.
+    let m = derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel")
+        .expect("the minted Gumbel slot bound resolves");
+    assert_eq!(m, HEXG_GUMBEL_M_MAX);
+
+    let sparse_row = |n: usize| GraphRecord {
+        // Distinct coords so the row is a real support and not one cell repeated.
+        visits: (0..n).map(|i| (i as i16, 0i16, 0.5 / n as f32)).collect(),
+        tail_mass: 0.5,
+        ..sample_record()
+    };
+
+    let mut buf = HexgBuffer::new(4, ENC, m).expect("a ring at the minted slot bound");
+    buf.push_record_impl(&sparse_row(m), 1)
+        .expect("exactly m explicit entries is the bound itself, not past it");
+    assert_eq!(buf.size(), 1);
+
+    let err = buf
+        .push_record_impl(&sparse_row(m + 1), 2)
+        .expect_err("m+1 explicit entries must be refused at insert");
+    assert!(
+        err.contains(&(m + 1).to_string()) && err.contains(&m.to_string()),
+        "the refusal must carry both the claimed count and the bound: {err}"
+    );
+    assert_eq!(buf.size(), 1, "a refused push must not have inserted");
+    assert_eq!(
+        buf.record_at(0).visits.len(),
+        m,
+        "a refused push must not have overwritten the row before it"
+    );
+}
+
+/// The tail mass is a PROBABILITY at the write face, and a row that is not one is refused
+/// before any slot is touched — alpha is spread over the remaining legal set by the trainer,
+/// so a NaN or an out-of-range value would become garbage on hundreds of actions.
+#[test]
+fn a_tail_mass_that_is_not_a_probability_is_refused_at_insert() {
+    let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
+    for bad in [f32::NAN, f32::INFINITY, -0.1f32, 1.0001f32] {
+        let rec = GraphRecord {
+            tail_mass: bad,
+            ..sample_record()
+        };
+        let err = buf
+            .push_record_impl(&rec, -1)
+            .expect_err("a non-probability tail mass must be refused");
+        assert!(err.contains("tail_mass"), "{err}");
+    }
+    assert_eq!(buf.size(), 0, "no refused row may have been inserted");
+    // The control: the bounds themselves are admissible.
+    for good in [0.0f32, 0.5, 1.0] {
+        buf.push_record_impl(
+            &GraphRecord {
+                tail_mass: good,
+                ..sample_record()
+            },
+            -1,
+        )
+        .expect("0.0, 0.5 and 1.0 are probabilities");
+    }
 }
 
 // ── O-20: persist round-trip byte-identical ─────────────────────────────────────
@@ -166,25 +241,27 @@ fn persist_roundtrip_byte_identical() {
 
 // ── O-21: frozen HEXG v1 byte-golden — load exact + re-save byte-identity ────────
 
-fn hexg_golden_path() -> std::path::PathBuf {
+fn fixture_path(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/replay/hexg_v1_golden.hexg")
+        .join("../../tests/fixtures/replay")
+        .join(name)
 }
 
 #[test]
-fn o21_hexg_v1_byte_golden_load_and_resave_identity() {
-    let golden = hexg_golden_path();
+fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
+    let golden = fixture_path("hexg_v2_golden.hexg");
     let golden_bytes = std::fs::read(&golden).expect("frozen hexg golden must exist");
-    assert_eq!(golden_bytes.len(), 148, "golden size drifted");
+    println!("hexg v2 golden: {} bytes for 2 records", golden_bytes.len());
 
     let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
     let n = buf.load_from_path_impl(golden.to_str().unwrap()).unwrap();
     assert_eq!(n, 2, "golden holds 2 records");
 
-    // Exact field values (CAPTURE_LOG §C).
+    // Exact field values (CAPTURE_LOG §C, re-minted at v2 with the R347(a) tail mass).
     let r0 = buf.record_at(0);
     assert_eq!(r0.stones, vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)]);
     assert_eq!(r0.visits, vec![(2, 0, 0.6), (0, 2, 0.4)]);
+    assert_eq!(r0.tail_mass, 0.0, "a full-support row carries no tail");
     assert_eq!(r0.current_player, 1);
     assert_eq!(r0.moves_remaining, 2);
     assert_eq!(r0.ply_index, 3);
@@ -196,7 +273,11 @@ fn o21_hexg_v1_byte_golden_load_and_resave_identity() {
 
     let r1 = buf.record_at(1);
     assert_eq!(r1.stones, vec![(0, 0, -1), (2, 1, 1)]);
-    assert_eq!(r1.visits, vec![(1, 1, 1.0)]);
+    assert_eq!(r1.visits, vec![(1, 1, 0.75)]);
+    // THE SPARSE ROW, frozen: the second record's explicit mass is 0.75 and its tail is
+    // 0.25, so a build that dropped the field would read 1.0 here and a build that
+    // mis-ordered it would read a stone coordinate.
+    assert_eq!(r1.tail_mass, 0.25);
     assert_eq!(r1.current_player, -1);
     assert_eq!(r1.moves_remaining, 4);
     assert_eq!(r1.ply_index, 8);
@@ -215,6 +296,42 @@ fn o21_hexg_v1_byte_golden_load_and_resave_identity() {
         "new-engine re-save must reproduce the frozen bytes"
     );
     let _ = std::fs::remove_file(resave);
+}
+
+/// R347(a) PLANTED BREAK — the v1 golden must be REFUSED, never re-parsed.
+///
+/// v2 inserted `tail_mass` after `weight`, so every byte of a v1 record from that offset on
+/// means something else: the first stone's `q` would be read as a probability and the
+/// record's own stone count would then be short by four bytes for the rest of the file. The
+/// version field is the only thing that can see this, because the payload is
+/// self-consistent under BOTH readings. Delete the version check and this test reds.
+#[test]
+fn the_v1_byte_golden_is_refused_by_name_and_leaves_the_buffer_untouched() {
+    let golden = fixture_path("hexg_v1_golden.hexg");
+    let mut buf = HexgBuffer::new(16, ENC, 128).unwrap();
+    let mut seed = sample_record();
+    seed.ply_index = 99;
+    buf.push_record_impl(&seed, 7).expect("seed push");
+    let before = buf.record_at(0);
+
+    let err = buf
+        .load_from_path_impl(golden.to_str().unwrap())
+        .expect_err("a v1 file must not load into a v2 build");
+    assert!(
+        err.contains("HEXG version 1") && err.contains("not supported"),
+        "the refusal must name the version it read: {err}"
+    );
+    assert!(
+        err.contains("tail mass"),
+        "the refusal must say WHAT changed, so a reader knows a v1 ring is regenerated \
+         rather than converted: {err}"
+    );
+    assert_eq!(buf.size(), 1, "a refused load must not change the ring");
+    assert_eq!(
+        buf.record_at(0),
+        before,
+        "a refused load must not touch a slot"
+    );
 }
 
 // ── O-22: bad version / slot-geometry ────────────────────────────────────────────
@@ -445,6 +562,7 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
     let rec = GraphRecord {
         stones: vec![],
         visits: vec![(2, 2, 0.6), (-2, -2, 0.3), (0, 0, 0.1)],
+        tail_mass: 0.0,
         current_player: 1,
         moves_remaining: 2,
         ply_index: 0,
@@ -526,6 +644,7 @@ fn sample_rejects_illegal_cell_visit_mass_drop() {
     let rec = GraphRecord {
         stones: vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)],
         visits: vec![(0, 0, 0.9), (2, 0, 0.1)],
+        tail_mass: 0.0,
         current_player: 1,
         moves_remaining: 2,
         ply_index: 5,
@@ -643,6 +762,7 @@ fn push_rejects_nan_visit_prob() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord {
         visits: vec![(2, 0, f32::NAN)],
+        tail_mass: 0.0,
         ..sample_record()
     };
     assert!(
@@ -660,6 +780,7 @@ fn push_rejects_negative_visit_prob() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = GraphRecord {
         visits: vec![(2, 0, -0.5), (-1, 0, 0.5)],
+        tail_mass: 0.0,
         ..sample_record()
     };
     assert!(
@@ -851,6 +972,7 @@ fn buffer_slots_are_sized_by_the_composed_visit_capacity() {
     // Over the COMPOSED capacity still dies loud.
     let over = GraphRecord {
         visits: vec![(0, 0, 0.001); 608],
+        tail_mass: 0.0,
         ..sample_record()
     };
     assert!(

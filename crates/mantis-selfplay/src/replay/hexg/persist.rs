@@ -2,13 +2,17 @@
 //! commit), and the little-endian cursor are one indivisible format unit; the
 //! atomicity proof depends on the parser and committer living together.
 //!
-//! HEXG v1 on-disk format — a SEPARATE format from dense HEXB. Ported from the
+//! HEXG v2 on-disk format — a SEPARATE format from dense HEXB. Ported from the
 //! predecessor engine's `replay_buffer/hexg/persist.rs` with the FFI-binding strip
 //! (the error type becomes `Result<_, String>`; error strings preserved).
 //!
+//! v2 (R347(a)) added the per-record `tail_mass` α of the sparse Gumbel row. A v1 payload has
+//! a different per-record layout at a byte offset the parser cannot detect from the data, so
+//! the version field is checked BEFORE any record is read and a v1 file is refused by name.
+//!
 //! Header (little-endian native):
 //!   [magic:   u32 = 0x48455847]  ("HEXG" — distinct from HEXB 0x48455842)
-//!   [version: u32 = 1]
+//!   [version: u32 = 2]
 //!   [max_stones: u32] [max_visits: u32]   (slot geometry; `max_visits` is the
 //!                                          buffer's DERIVED `visit_capacity`
 //!                                          (R255); reject on mismatch)
@@ -17,7 +21,7 @@
 //!   For each of `size` records (oldest → newest):
 //!     n_stones: u16, n_visits: u16, current_player: i8, moves_remaining: u8,
 //!     ply_index: u16, is_full_search: u8, value_valid: u8, outcome: f32,
-//!     game_length: u16, game_id: i64, weight: u16,
+//!     game_length: u16, game_id: i64, weight: u16, tail_mass: f32,
 //!     stones: n_stones × (q:i16, r:i16, p:i8),
 //!     visits: n_visits × (q:i16, r:i16, prob:f32)
 //!
@@ -35,7 +39,7 @@ use std::sync::atomic::Ordering;
 use super::{weight_bucket, HexgBuffer, HEXG_MAGIC, HEXG_VERSION, MAX_STONES};
 
 impl HexgBuffer {
-    /// Save all records (oldest → newest) to `path` in HEXG v1 format.
+    /// Save all records (oldest → newest) to `path` in HEXG v2 format.
     /// R345(b)(3): published through `atomic_save` — temp, fsync, rename, fsync(dir). This
     /// used to open `path` itself with `File::create`, which truncates the previous ring to
     /// zero before writing a byte, so a kill mid-save destroyed the resume input rather than
@@ -82,6 +86,8 @@ impl HexgBuffer {
             w.write_all(&self.game_ids[slot].to_le_bytes())
                 .map_err(io)?;
             w.write_all(&self.weights[slot].to_le_bytes()).map_err(io)?;
+            w.write_all(&self.tail_mass[slot].to_le_bytes())
+                .map_err(io)?;
 
             let stone_base = slot * MAX_STONES * 2;
             let player_base = slot * MAX_STONES;
@@ -131,7 +137,11 @@ impl HexgBuffer {
         let version = cur.u32()?;
         if version != HEXG_VERSION {
             return Err(format!(
-                "HEXG version {version} not supported (this build reads v{HEXG_VERSION})"
+                "HEXG version {version} not supported (this build reads v{HEXG_VERSION}). \
+                 v2 added the per-record tail mass alpha of the sparse Gumbel row (R347(a)), \
+                 so a v1 record is a different byte layout from `weight` onward and \
+                 re-parsing it would read a stone coordinate as a probability. There is no \
+                 in-place upgrade: a v1 ring is regenerated, not converted"
             ));
         }
         let max_stones = cur.u32()? as usize;
@@ -198,6 +208,7 @@ impl HexgBuffer {
             self.game_length[slot] = rec.game_length;
             self.game_ids[slot] = rec.game_id;
             self.weights[slot] = rec.weight;
+            self.tail_mass[slot] = rec.tail_mass;
             self.n_stones[slot] = rec.ns as u16;
             self.n_visits[slot] = rec.nv as u16;
 
@@ -249,6 +260,12 @@ fn parse_records(
         let game_length = cur.u16()?;
         let game_id = cur.i64()?;
         let weight = cur.u16()?;
+        let tail_mass = cur.f32()?;
+        if !tail_mass.is_finite() || !(0.0..=1.0).contains(&tail_mass) {
+            return Err(format!(
+                "HEXG load: record {slot} declares tail_mass {tail_mass}, not a probability"
+            ));
+        }
 
         let mut stones_qr = Vec::with_capacity(ns * 2);
         let mut stone_players = Vec::with_capacity(ns);
@@ -277,6 +294,7 @@ fn parse_records(
             game_length,
             game_id,
             weight,
+            tail_mass,
             stones_qr,
             stone_players,
             visit_qr,
@@ -299,6 +317,7 @@ struct ParsedRecord {
     game_length: u16,
     game_id: i64,
     weight: u16,
+    tail_mass: f32,
     stones_qr: Vec<i16>,
     stone_players: Vec<i8>,
     visit_qr: Vec<i16>,

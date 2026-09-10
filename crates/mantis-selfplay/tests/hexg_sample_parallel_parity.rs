@@ -53,7 +53,11 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
         // empty record cannot see a change to it: the draw COUNT would shift while every
         // drawn value still matched. This is the one input that makes that break visible.
         let empty = i % 7 == 3;
-        let n_stones = if empty { 0 } else { 6 + (splitmix64(&mut s) % 18) as i16 };
+        let n_stones = if empty {
+            0
+        } else {
+            6 + (splitmix64(&mut s) % 18) as i16
+        };
         let stones: Vec<(i16, i16, i8)> = (0..n_stones)
             .map(|q| (q, (q % 3) - 1, if q % 2 == 0 { 1 } else { -1 }))
             .collect();
@@ -66,6 +70,7 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
         let rec = GraphRecord {
             stones,
             visits,
+            tail_mass: 0.0,
             current_player: if i % 2 == 0 { 1 } else { -1 },
             moves_remaining: 2,
             ply_index: (i % 50) as u16,
@@ -83,19 +88,46 @@ fn filled_buffer(n_records: usize) -> HexgBuffer {
 fn assert_graphs_identical(a: &[AxisGraph], b: &[AxisGraph], case: &str) {
     assert_eq!(a.len(), b.len(), "{case}: graph count");
     for (i, (ga, gb)) in a.iter().zip(b).enumerate() {
-        assert_eq!(ga.node_feat.0, gb.node_feat.0, "{case}: graph {i} node_feat");
-        assert_eq!(ga.node_coords, gb.node_coords, "{case}: graph {i} node_coords");
-        assert_eq!(ga.edge_index.src, gb.edge_index.src, "{case}: graph {i} edge src");
-        assert_eq!(ga.edge_index.dst, gb.edge_index.dst, "{case}: graph {i} edge dst");
-        assert_eq!(ga.edge_attr.0, gb.edge_attr.0, "{case}: graph {i} edge_attr");
-        assert_eq!(ga.legal_node_gather, gb.legal_node_gather, "{case}: graph {i} gather");
+        assert_eq!(
+            ga.node_feat.0, gb.node_feat.0,
+            "{case}: graph {i} node_feat"
+        );
+        assert_eq!(
+            ga.node_coords, gb.node_coords,
+            "{case}: graph {i} node_coords"
+        );
+        assert_eq!(
+            ga.edge_index.src, gb.edge_index.src,
+            "{case}: graph {i} edge src"
+        );
+        assert_eq!(
+            ga.edge_index.dst, gb.edge_index.dst,
+            "{case}: graph {i} edge dst"
+        );
+        assert_eq!(
+            ga.edge_attr.0, gb.edge_attr.0,
+            "{case}: graph {i} edge_attr"
+        );
+        assert_eq!(
+            ga.legal_node_gather, gb.legal_node_gather,
+            "{case}: graph {i} gather"
+        );
         assert_eq!(
             ga.policy_scatter_index.0, gb.policy_scatter_index.0,
             "{case}: graph {i} scatter"
         );
-        assert_eq!(ga.n_nodes_checksum, gb.n_nodes_checksum, "{case}: graph {i} checksum");
-        assert_eq!(ga.window_center, gb.window_center, "{case}: graph {i} window_center");
-        assert_eq!(ga.current_player, gb.current_player, "{case}: graph {i} current_player");
+        assert_eq!(
+            ga.n_nodes_checksum, gb.n_nodes_checksum,
+            "{case}: graph {i} checksum"
+        );
+        assert_eq!(
+            ga.window_center, gb.window_center,
+            "{case}: graph {i} window_center"
+        );
+        assert_eq!(
+            ga.current_player, gb.current_player,
+            "{case}: graph {i} current_player"
+        );
     }
 }
 
@@ -123,7 +155,9 @@ fn parallel_rebuild_is_bit_identical_to_serial() {
         for &augment in &[false, true] {
             let mut serial = filled_buffer(records);
             let mut parallel = filled_buffer(records);
-            let (gs, ts) = serial.sample_graph_batch_impl(batch, augment, 0.0, 1).unwrap();
+            let (gs, ts) = serial
+                .sample_graph_batch_impl(batch, augment, 0.0, 1)
+                .unwrap();
             let (gp, tp) = parallel
                 .sample_graph_batch_impl(batch, augment, 0.0, threads)
                 .unwrap();
@@ -174,8 +208,16 @@ fn results_come_back_in_index_order() {
         distinct.len()
     );
     for (i, (a, b)) in gs.iter().zip(&gp).enumerate() {
-        assert_eq!(a.num_nodes(), b.num_nodes(), "graph {i} landed out of order");
-        assert_eq!(a.num_edges(), b.num_edges(), "graph {i} landed out of order");
+        assert_eq!(
+            a.num_nodes(),
+            b.num_nodes(),
+            "graph {i} landed out of order"
+        );
+        assert_eq!(
+            a.num_edges(),
+            b.num_edges(),
+            "graph {i} landed out of order"
+        );
     }
     assert_targets_identical(&ts, &tp, "index order");
 }
@@ -195,7 +237,10 @@ fn the_hoisted_draw_matches_the_original_inline_predicate() {
     let indices: Vec<usize> = (0..200usize).map(|i| (i * 7) % 128).collect();
     let empty_seen = {
         let buf = filled_buffer(128);
-        indices.iter().filter(|&&i| buf.record_at(i).stones.is_empty()).count()
+        indices
+            .iter()
+            .filter(|&&i| buf.record_at(i).stones.is_empty())
+            .count()
     };
     assert!(
         empty_seen > 0,
