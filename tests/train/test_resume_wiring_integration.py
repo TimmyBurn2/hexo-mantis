@@ -44,8 +44,7 @@ _LADDER_RUNGS = [
 
 def _eval_block() -> dict:
     return {
-        "random_model_sims": 1, "sealbot_model_sims": 1, "kraken_model_sims": 1,
-        "strix_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
+        "random_model_sims": 1, "sealbot_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {

@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     // Tests internal single-window helpers (window_center / in_window) used by
-    // search move generation. NOT the multi-cluster get_cluster_views path.
+    // search move generation.
     fn single_window_center_slides_with_bbox() {
         // After P1@(0,0) and P2@(8,0) the window must slide right.
         // Both stones must remain visible; the left side must also be accessible.
@@ -369,32 +369,6 @@ mod tests {
     }
 
     #[test]
-    fn test_threat_anchors_identification() {
-        let mut board = Board::new();
-        // Place a 3-in-a-row for P1 along the E axis: (0,0), (1,0), (2,0)
-        board.cells.insert((0, 0), Cell::P1);
-        board.cells.insert((1, 0), Cell::P1);
-        board.cells.insert((2, 0), Cell::P1);
-
-        // It's open at both ends ((-1,0) and (3,0) are Empty)
-        let anchors = board.get_threat_anchors();
-        assert_eq!(anchors.len(), 1);
-        assert_eq!(anchors[0], (1, 0)); // The center stone
-
-        // Now place another 4-in-a-row for P2 along the NE axis: (5,5), (5,6), (5,7), (5,8)
-        board.cells.insert((5, 5), Cell::P2);
-        board.cells.insert((5, 6), Cell::P2);
-        board.cells.insert((5, 7), Cell::P2);
-        board.cells.insert((5, 8), Cell::P2);
-
-        let anchors = board.get_threat_anchors();
-        assert_eq!(anchors.len(), 2);
-        // Centers for 4-in-a-row: count / 2 = 2. So (5, 5 + 2) = (5, 7).
-        assert!(anchors.contains(&(1, 0)));
-        assert!(anchors.contains(&(5, 7)));
-    }
-
-    #[test]
     fn test_apply_undo_symmetry() {
         let mut board = Board::new();
         let mut diffs = Vec::new();
@@ -437,26 +411,6 @@ mod tests {
         assert_eq!(*board.legal_moves_set(), *empty.legal_moves_set(), "undo must restore legal moves to the initial 25-cell set");
     }
 
-    #[test]
-    fn cluster_views_returns_two_planes() {
-        let mut b = Board::new();
-        b.apply_move(0, 0).unwrap(); // P1 at origin; turn passes to P2
-        let (views, centers) = b.get_cluster_views();
-        assert_eq!(views.len(), 1, "one cluster expected");
-        assert_eq!(centers.len(), 1);
-        assert_eq!(
-            views[0].len(),
-            2 * TOTAL_CELLS,
-            "get_cluster_views must return 2-plane views (2 * 361 = 722 floats)"
-        );
-        // Current player is P2. Plane 0 = P2 (current, no stones), Plane 1 = P1 (opponent).
-        // P1 stone at origin → flat index = HALF * BOARD_SIZE + HALF = 9*19+9 = 180.
-        let origin_flat = (HALF as usize) * BOARD_SIZE + (HALF as usize);
-        assert_eq!(views[0][TOTAL_CELLS + origin_flat], 1.0,
-            "P1 stone should be in opponent plane (offset TOTAL_CELLS)");
-        assert_eq!(views[0][origin_flat], 0.0,
-            "current player (P2) has no stones yet");
-    }
 }
 
 // ── Property-based tests ───────────────────────────────────────────────────────

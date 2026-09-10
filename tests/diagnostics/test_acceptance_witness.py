@@ -122,8 +122,7 @@ def _readout(seed: int) -> dict:
     device = torch.device("cpu")
     engine = LocalInferenceEngine(
         seeded_net(_tiny_arch(), seed=seed).to(device).eval(), device, encoding_spec=spec,
-        fused_graph_caps=None, inference_batching=None, max_in_flight=1, amp_dtype="bf16",
-    )
+        fused_graph_caps=None, inference_batching=None, max_in_flight=1, )
     try:
         openings = [
             Opening(opening_id="planted-win", moves=list(_WIN_LINE)),

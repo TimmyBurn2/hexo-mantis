@@ -847,7 +847,6 @@ class EvalPipeline:
             best_step=None, encoding=self._encoding, worker_device=cfg.worker_device,
             gate=gate_spec, rung_jobs=rung_jobs, random_floor_games=cfg.random_floor_games,
             random_model_sims=cfg.random_model_sims, sealbot_model_sims=cfg.sealbot_model_sims,
-            kraken_model_sims=cfg.kraken_model_sims, strix_model_sims=cfg.strix_model_sims,
             seed_base=cfg.gate.seed_base, round_timeout_sec=cfg.round_timeout_sec,
             result_path=str(result_path), progress_path=str(progress_path),
             ladder_bootstrap_resamples=cfg.ladder.bootstrap_resamples,

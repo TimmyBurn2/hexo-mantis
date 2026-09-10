@@ -51,8 +51,7 @@ _LADDER_RUNGS = [
 
 def _valid_eval_block() -> dict:
     return {
-        "random_model_sims": 96, "sealbot_model_sims": 128, "kraken_model_sims": 128,
-        "strix_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "random_model_sims": 96, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
@@ -220,31 +219,11 @@ def test_representation_closed_set_rejects_dense():
         RunConfig.model_validate(payload)
 
 
-def test_representation_grid_now_accepted():
-    # "grid" is in the closed set — accepted for a GRID encoding (v6w25). The ARCH-SCOPED
-    # blocks go with the arch (R322(d)): `_valid_payload` is a GRAPH payload, and a grid config
-    # carrying graph-only cap blocks is refused by name — which is the point of this repair and
-    # is executed by the conformance suite's T9 section, not re-asserted here.
-    payload = _valid_payload()
-    payload["identity"] = {"encoding": "v6w25", "representation": "grid"}
-    for key in ARCH_SCOPED_KEYS:
-        payload[key.section].pop(key.field, None)
-    cfg = RunConfig.model_validate(payload)
-    assert cfg.identity.representation == "grid"
-
-
 # ── F1 — representation↔encoding consistency is a RUNTIME guard (not test-only) ──
 def test_f1_graph_encoding_declared_grid_rejected_at_validate():
     # gnn_axis_v1 is a GRAPH encoding; declaring representation=grid must RAISE (LAW-06 pin guard).
     payload = _valid_payload()
     payload["identity"] = {"encoding": "gnn_axis_v1", "representation": "grid"}
-    with pytest.raises(ValidationError, match="disagrees with the registry"):
-        RunConfig.model_validate(payload)
-
-
-def test_f1_grid_encoding_declared_graph_rejected_at_validate():
-    payload = _valid_payload()
-    payload["identity"] = {"encoding": "v6w25", "representation": "graph"}
     with pytest.raises(ValidationError, match="disagrees with the registry"):
         RunConfig.model_validate(payload)
 

@@ -19,23 +19,28 @@
 //!
 //! ## Why leg 1 could not answer this
 //!
-//! Leg 1 filled every tree with the DENSE expand. `runner/params.rs:67,76` force
-//! `legal_set = true` for `LegalSetScatterMax` AND for graph specs, so for `gnn_axis_v1` and
-//! `v6_live2_ls` leg 1 measured a path production never takes. Under the dense expand
-//! off-window cells get `sort_prior = 0.0` (`backup.rs:97`) and are truncated by the
-//! per-node child cap, so they never become children — a zero there is structural, not a
-//! clearance. R155 makes that mechanical: a measurement clears an encoding ONLY when driven
+//! Leg 1 filled every tree with the DENSE expand. `runner/params.rs` forces `legal_set = true`
+//! for graph specs, so for `gnn_axis_v1` leg 1 measured a path production never takes. Under
+//! the dense expand off-window cells get `sort_prior = 0.0` (`backup.rs:97`) and are truncated
+//! by the per-node child cap, so they never become children — a zero there is structural, not
+//! a clearance. R155 makes that mechanical: a measurement clears an encoding ONLY when driven
 //! through that encoding's production expand.
 //!
-//! | encoding | production expand | leg |
+//! | encoding | expand | leg |
 //! |---|---|---|
-//! | `gnn_axis_v1` | `expand_and_backup_ls_at` | 2 (here) |
-//! | `v6_live2_ls` | `expand_and_backup_ls`    | 2 (here) |
-//! | `v6w25`       | `expand_and_backup`       | 1 — production-valid, stands |
+//! | `gnn_axis_v1` | `expand_and_backup_ls_at` (production) | 2 (here) |
+//! | `gnn_axis_r8` | `expand_and_backup_ls`                 | 2 (here) |
+//!
+//! R346(f) DELETED the grid rows this file's secondary arm used to carry (`v6_live2_ls`, and
+//! leg 1's `v6w25`). The second arm is now the surviving second graph row at the wider radius,
+//! driven through the UNFRAMED ls expand so both ls entry points stay under the mass law. The
+//! per-drop attribution to the K-cluster coverage gate is gone with `get_cluster_views`; the
+//! abort-4 off-window-child guard, which is what stops a structural zero being read as a
+//! clearance, is retained verbatim.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{is_covered, LegalSetPolicy, MCTSTree};
+use mantis_search::{LegalSetPolicy, MCTSTree};
 
 const N_SIMS: usize = 50; // run5 selfplay.mcts.n_simulations (target generation), NOT deploy_sims
 const LEAF_BATCH: usize = 8;
@@ -44,9 +49,9 @@ const TOL: f64 = 1e-6;
 
 #[derive(Clone, Copy)]
 enum Expand {
-    /// Graph: legal-set expand against the BUILDER's window centre.
+    /// Frame-explicit: legal-set expand against the BUILDER's window centre.
     LsAt,
-    /// Grid legal-set (`LegalSetScatterMax`): per-cluster legal-set expand, no centre.
+    /// Unframed: legal-set expand that reads the prior in the Board's own window frame.
     Ls,
 }
 
@@ -55,10 +60,8 @@ struct Row {
     n_legal: usize,
     n_children: usize,
     dropped_mass: f64,
-    dropped_children: usize,
     /// Off-window children that actually exist in the tree — PREREG abort 4.
     offwindow_children: usize,
-    attributable: bool,
 }
 
 fn geometry_for(enc: &str) -> (BoardGeometry, usize, i32) {
@@ -142,22 +145,13 @@ fn measure(board: &Board, n_actions: usize, trunk_sz: i32, mode: Expand, ply: u3
         "ply {ply}: exported mass {exported} EXCEEDS 1.0 — double-count (PREREG abort 2)"
     );
 
-    let (_v, centers) = board.get_cluster_views();
-    let ct = board.cluster_window_size() as i32;
-    let half = (ct - 1) / 2;
-
-    let mut dropped_children = 0usize;
     let mut offwindow_children = 0usize;
     for i in first..first + n_ch {
         let val = tree.pool[i].action_idx;
         let q = (val >> 16) as i32 - 32768;
         let r = (val & 0xFFFF) as i32 - 32768;
-        if board.window_flat_idx(q, r) < n_actions {
-            continue;
-        }
-        offwindow_children += 1;
-        if tree.pool[i].n_visits > 0 && !is_covered(q, r, &centers, ct, half) {
-            dropped_children += 1;
+        if board.window_flat_idx(q, r) >= n_actions {
+            offwindow_children += 1;
         }
     }
 
@@ -166,9 +160,7 @@ fn measure(board: &Board, n_actions: usize, trunk_sz: i32, mode: Expand, ply: u3
         n_legal: board.legal_moves().len(),
         n_children: n_ch,
         dropped_mass,
-        dropped_children,
         offwindow_children,
-        attributable: dropped_mass <= TOL || dropped_children > 0,
     })
 }
 
@@ -245,8 +237,8 @@ fn report(label: &str, rows: &[Row]) {
     println!("  positions WITH off-window children: {with_offwindow} (abort 4 needs > 0)");
     for r in rows.iter().filter(|r| r.dropped_mass > TOL).take(10) {
         println!(
-            "    ply {:>3}  n_legal {:>5}  n_children {:>4}  offwin {:>4}  dropped {:.6}  dropped_children {}",
-            r.ply, r.n_legal, r.n_children, r.offwindow_children, r.dropped_mass, r.dropped_children
+            "    ply {:>3}  n_legal {:>5}  n_children {:>4}  offwin {:>4}  dropped {:.6}",
+            r.ply, r.n_legal, r.n_children, r.offwindow_children, r.dropped_mass
         );
     }
 }
@@ -289,7 +281,6 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     let affected = rows.iter().filter(|r| r.dropped_mass > TOL).count();
     let max_legal = rows.iter().map(|r| r.n_legal).max().unwrap_or(0);
     let with_offwindow = rows.iter().filter(|r| r.offwindow_children > 0).count();
-    let unattributed = rows.iter().filter(|r| !r.attributable).count();
 
     // PREREG abort 1 — the tail must be reached.
     assert!(max_legal > 361, "gnn_axis_v1: sample never reached >361 legal (max {max_legal})");
@@ -310,20 +301,19 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     let b: Vec<f64> = again.iter().map(|r| r.dropped_mass).collect();
     assert_eq!(a, b, "gnn_axis_v1: instrument not deterministic at a fixed seed");
 
-    // ── SECONDARY: the ruled dense control arm, its production expand. Reported, and it
-    //    RETIRES leg 1's dense-path number for this encoding. Does not decide run5. ──
-    let ls_rows = collect("v6_live2_ls", Expand::Ls);
-    report("v6_live2_ls / expand_and_backup_ls [PRODUCTION]", &ls_rows);
+    // ── SECONDARY: the wider-radius graph row through the UNFRAMED ls expand. Reported;
+    //    it does not decide run5. ──
+    let ls_rows = collect("gnn_axis_r8", Expand::Ls);
+    report("gnn_axis_r8 / expand_and_backup_ls", &ls_rows);
 
     // [T-2, R92/O-5] Flipped report arms — the permanent regression assertions.
     assert_no_dropped_mass("gnn_axis_v1 / LsAt", &rows);
-    assert_no_dropped_mass("v6_live2_ls / Ls", &ls_rows);
+    assert_no_dropped_mass("gnn_axis_r8 / Ls", &ls_rows);
 
     println!(
         "\n=== R153 LEG 2 VERDICT INPUTS (gnn_axis_v1, PRODUCTION path) ===\n\
          \x20 positions: {}\n\x20 affected (dropped_mass > {TOL}): {affected}\n\
          \x20 positions with off-window children: {with_offwindow}\n\
-         \x20 unattributed drops: {unattributed}\n\
          \x20 max n_legal: {max_legal}\n\
          \x20 -> RUN5 EXPOSURE {}",
         rows.len(),

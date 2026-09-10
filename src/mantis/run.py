@@ -476,15 +476,9 @@ def _select_buffer(config: Any, capacity: int) -> Any:
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
         buffer.seed_sampler(config.seed)
         return buffer
-    if representation == "grid":
-        from mantis._engine import ReplayBuffer
-
-        buffer = ReplayBuffer(capacity, config.identity.encoding)
-        buffer.seed_sampler(config.seed)
-        return buffer
     raise RepresentationRouteError(
         f"identity.representation {representation!r} selects no buffer — an absent or "
-        "unknown representation is an ERROR, never a dense default (LAW-11)"
+        "unknown representation is an ERROR, never a default (LAW-11)"
     )
 
 
@@ -709,9 +703,6 @@ def _step_coordinator_config(
         batch_size=knobs.batch_size,
         augment=knobs.augment,
         recency_weight=knobs.recency_weight,
-        mixing_initial_w=knobs.mixing_initial_w,
-        mixing_min_w=knobs.mixing_min_w,
-        mixing_decay_steps=knobs.mixing_decay_steps,
         hard_gn_threshold=knobs.hard_gn_threshold,
         hard_gn_min_steps=knobs.hard_gn_min_steps,
         stop_step=stop_step,
@@ -721,7 +712,6 @@ def _step_coordinator_config(
         eval_final_drain_hard_cap_sec=drain_caps.eval_final_drain_hard_cap_sec,
         terminal_eval_hard_cap_sec=drain_caps.terminal_eval_hard_cap_sec,
         terminal_eval_enabled=knobs.terminal_eval_enabled,
-        bot_batch_share=knobs.bot_batch_share,
         selfplay_stall_timeout_sec=knobs.selfplay_stall_timeout_sec,
     )
 

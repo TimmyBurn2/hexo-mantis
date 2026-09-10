@@ -174,7 +174,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
 
     cfg = load_config(_CONFIG_DIR / config_name)
     pipeline = EvalPipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1,
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
@@ -235,7 +235,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
                       bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
                       run_gate=False),
         rung_jobs=[], random_floor_games=0, random_model_sims=1, sealbot_model_sims=1,
-        kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
+        seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         game_record=None,
@@ -245,7 +245,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # round-trips. Its own round-trip (both arms) is pinned by
     # tests/selfplay/test_fused_graph_caps_construction.py; here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
-                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
                          fused_graph_caps=None,
                          inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
@@ -253,7 +253,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back == disarmed
 
     armed = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),
@@ -273,7 +273,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # stderr nobody is reading — which is the exact failure `_REHYDRATED_SPEC_FIELDS`' own
     # docstring says the table exists to prevent, so it is pinned rather than assumed.
     targeted = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         leaf_build_threads=1, concurrency=1,
         **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
         ply_cap_adjudication=None, strength_floor=None,

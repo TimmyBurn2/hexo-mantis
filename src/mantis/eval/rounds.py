@@ -154,8 +154,6 @@ class RoundSpec:
     random_floor_games: int
     random_model_sims: int
     sealbot_model_sims: int
-    kraken_model_sims: int
-    strix_model_sims: int
     seed_base: int
     round_timeout_sec: float
     result_path: str

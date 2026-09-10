@@ -84,13 +84,9 @@ class CoordinatorKnobsSpec:
     batch_size: int
     augment: bool
     recency_weight: float
-    mixing_initial_w: float
-    mixing_min_w: float
-    mixing_decay_steps: float
     hard_gn_threshold: float
     hard_gn_min_steps: int
     terminal_eval_enabled: bool
-    bot_batch_share: float
     selfplay_stall_timeout_sec: float
 
 
@@ -114,13 +110,9 @@ def resolve_coordinator_knobs(train_section: Any) -> CoordinatorKnobsSpec:
         batch_size=int(train_section.batch_size),
         augment=bool(train_section.augment),
         recency_weight=float(train_section.recency_weight),
-        mixing_initial_w=float(train_section.mixing_initial_w),
-        mixing_min_w=float(train_section.mixing_min_w),
-        mixing_decay_steps=float(train_section.mixing_decay_steps),
         hard_gn_threshold=float(train_section.hard_gn_threshold),
         hard_gn_min_steps=int(train_section.hard_gn_min_steps),
         terminal_eval_enabled=bool(train_section.terminal_eval_enabled),
-        bot_batch_share=float(train_section.bot_batch_share),
         selfplay_stall_timeout_sec=float(train_section.selfplay_stall_timeout_sec),
     )
 

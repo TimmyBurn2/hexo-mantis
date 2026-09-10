@@ -46,20 +46,8 @@ _LADDER_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
      "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_raw", "bot": "kraken", "variant": "raw", "depth": None,
-     "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
     {"name": "sealbot_d6", "bot": "sealbot", "variant": "d6", "depth": 6,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "kraken_mcts200", "bot": "kraken", "variant": "mcts200", "depth": None,
-     "opponent_sims": 200, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_128", "bot": "strix", "variant": "s128", "depth": None,
-     "opponent_sims": 128, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-    {"name": "strix_256", "bot": "strix", "variant": "s256", "depth": None,
-     "opponent_sims": 256, "opening_book": "book_v1_s20260625_p4",
      "deploy_matched": True, "games_max": 32},
 ]
 
@@ -162,8 +150,7 @@ def _monitor_block() -> dict:
 
 def _payload(**eval_overrides) -> dict:
     eval_block = dict(
-        random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-        strix_model_sims=128, random_floor_games=0, worker_device="cuda",
+        random_model_sims=96, sealbot_model_sims=128, random_floor_games=0, worker_device="cuda",
         round_timeout_sec=3600.0, worker_kill_grace_sec=10.0,
         ply_cap_adjudication=None, strength_floor=None,
         gate=_gate(), ladder=_ladder(),

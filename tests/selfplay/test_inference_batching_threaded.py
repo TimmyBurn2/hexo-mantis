@@ -43,8 +43,7 @@ class _Net(torch.nn.Module):
 def _graph_engine(batching: InferenceBatchingSpec, max_in_flight: int) -> LocalInferenceEngine:
     return LocalInferenceEngine(
         _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,
-        inference_batching=batching, max_in_flight=max_in_flight, amp_dtype="bf16",
-    )
+        inference_batching=batching, max_in_flight=max_in_flight, )
 
 
 @pytest.mark.parametrize(
@@ -105,16 +104,14 @@ def test_a_graph_engine_refuses_an_absent_batching_spec() -> None:
     with pytest.raises(ValueError, match="inference_batching"):
         LocalInferenceEngine(
             _Net(), _CPU, encoding_spec=_GRAPH_SPEC, fused_graph_caps=_CAPS,
-            inference_batching=None, max_in_flight=8, amp_dtype="bf16",
-        )
+            inference_batching=None, max_in_flight=8, )
 
 
 def test_a_grid_engine_carries_none_and_builds_no_graph_server() -> None:
     """The `None` arm is a real posture, not an oversight: a grid route opens no collector."""
     engine = LocalInferenceEngine(
         _Net(), _CPU, encoding_spec=_GRID_SPEC, fused_graph_caps=None,
-        inference_batching=None, max_in_flight=0, amp_dtype="bf16",
-    )
+        inference_batching=None, max_in_flight=0, )
     try:
         assert engine._graph_server is None
         assert engine._graph_batcher is None
@@ -156,12 +153,12 @@ def test_the_round_spec_carries_the_batching_across_the_process_seam() -> None:
                       bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1,
                       run_gate=False),
         rung_jobs=[], random_floor_games=0, random_model_sims=1, sealbot_model_sims=1,
-        kraken_model_sims=1, strix_model_sims=1, seed_base=1, round_timeout_sec=1.0,
+        seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=10,
         ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None, fused_graph_caps=_CAPS,
-        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        inference_batching=batching, leaf_batch_size=8, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
     )
     back = RoundSpec.from_dict(json.loads(json.dumps(dataclasses.asdict(spec))))
     assert isinstance(back.inference_batching, InferenceBatchingSpec), (

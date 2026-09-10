@@ -120,9 +120,6 @@ class LocalInferenceEngine:
         # value-identical on every reachable input — and a genuine model/spec
         # disagreement now fails loudly instead of silently decoding down the other arm.
         self._is_graph = is_graph_representation(self.encoding_spec)
-        # AUDIT-1 F-31. Resolved ONCE here through the one authority (`amp_dtype_for`,
-        # LAW-06) and applied at both decode call sites.
-        self._(str(self.encoding_spec.representation))
         # NIGHTRUN-1 E1. `1` is the SERIAL path and the exact-parity control — the same
         # identity default `HexgBuffer.sample_graph_batch`'s `n_threads` carries, and for the
         # same reason: this layer must not invent a host reservation. The EVAL round derives

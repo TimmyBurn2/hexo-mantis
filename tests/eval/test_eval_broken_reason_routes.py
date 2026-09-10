@@ -76,7 +76,10 @@ from mantis.eval.errors import EvalBrokenReason, LadderStateError  # RED-at-impo
 from mantis.eval.ladder import LadderState
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
-from mantis.model import CnnArch, build_net
+from mantis.encoding import lookup
+from mantis.model import GnnArch, build_net
+
+_GSPEC = lookup("gnn_axis_v1")
 
 #: The seven routes, each with the member it must produce and the phase that member forces.
 #: Stated here rather than derived from the enum: an oracle that read its expectation out of
@@ -111,7 +114,8 @@ _VALID_WORKER_RESULT = {
 
 # ── harness (private copy; house convention, see this file's docstring) ─────────────────
 def _tiny_model():
-    arch = CnnArch(board_size=5, in_channels=4, filters=8, res_blocks=1)
+    arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     return net
@@ -134,8 +138,7 @@ def _eval_cfg() -> EvalConfig:
         bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     return EvalConfig(
-        random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-        strix_model_sims=128, random_floor_games=4, worker_device="cpu",
+        random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
         round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate, ladder=ladder,
         ply_cap_adjudication=None, strength_floor=None,
     )
@@ -248,8 +251,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
     spool_dir.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16,
-        max_plies=128, amp_dtype="bf16",
-        eval_cfg=_eval_cfg(),
+        max_plies=128, eval_cfg=_eval_cfg(),
         coordinator_cfg_caps=DrainCaps(
             final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,

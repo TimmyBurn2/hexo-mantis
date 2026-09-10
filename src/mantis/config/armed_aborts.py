@@ -1419,17 +1419,6 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
         "`--config` still unions it into the audit set, and its live consumer is the burst "
         "oracle in tests/tools/test_preflight_armed_smoke.py (LAW-08).",
     ),
-    (
-        "configs/smoke_radius_curriculum.yaml",
-        "smoke config — bounded local drive, not a production run (R59).",
-    ),
-    (
-        "configs/sustained_kcluster.yaml",
-        "not currently a production run config. WPAX Phase P wrote this row from the tree's "
-        "own state (it is absent from PRODUCTION_CONFIGS at HEAD), NOT from an operator "
-        "ruling — see CARD-EXEMPT-CONFIGS-OPERATOR-CONFIRM. If it is minted, its row moves "
-        "to PRODUCTION_CONFIGS.",
-    ),
 )
 
 

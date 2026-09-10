@@ -65,8 +65,7 @@ def _eval_cfg() -> EvalConfig:
         bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     return EvalConfig(
-        random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-        strix_model_sims=128, random_floor_games=4, worker_device="cpu",
+        random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
         round_timeout_sec=5.0, worker_kill_grace_sec=0.1, gate=gate, ladder=ladder,
         ply_cap_adjudication=None, strength_floor=None,
     )
@@ -92,7 +91,6 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             eval_final_drain_hard_cap_sec=5.0, terminal_eval_hard_cap_sec=5.0,
         ),
         encoding="v6_live2_ls",
-        amp_dtype="bf16",
         max_plies=128,
         c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16,
         run_id=_RUN_ID,

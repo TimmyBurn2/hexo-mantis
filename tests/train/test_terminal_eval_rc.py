@@ -545,16 +545,14 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                           activation_wr_lower_ci=0.65, calibration_every_k_rounds=4,
                           calibration_games=8, bootstrap_resamples=1000,
                           bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234)
-    eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-                          strix_model_sims=128, random_floor_games=4, worker_device="cpu",
+    eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
                           round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
                           ply_cap_adjudication=None, strength_floor=None, gate=gate,
                           ladder=ladder)
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16",
-        max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
         eval_cfg=eval_cfg,
         coordinator_cfg_caps=DrainCaps(final_eval_drain_timeout_sec=0.05,
                                        eval_final_drain_safety_factor=1.0,

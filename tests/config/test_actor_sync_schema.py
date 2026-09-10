@@ -39,8 +39,7 @@ _NEW_KEYS = (
 
 def _eval_block() -> dict:
     return {
-        "random_model_sims": 96, "sealbot_model_sims": 128, "kraken_model_sims": 128,
-        "strix_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "random_model_sims": 96, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {

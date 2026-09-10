@@ -63,7 +63,7 @@ def test_the_registry_owned_quantities_are_read_from_the_registry(smoke_run_conf
     """
     from mantis import _engine
 
-    for name in ("v6", "v6w25", "v6_live2_ls"):
+    for name in ("gnn_axis_v1", "gnn_axis_r8"):
         spec = lookup(name)
         assert _engine.Board.with_encoding_name(name).size == spec.board_size, name
         assert _engine.RegistrySpec.from_registry(name).policy_stride == spec.policy_logit_count

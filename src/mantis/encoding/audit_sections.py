@@ -33,8 +33,8 @@ from mantis.encoding.audit import (
     CorpusEntry,
     Severity,
 )
-from mantis.encoding.resolvers import detect_encoding_from_state_dict
 from mantis.encoding.registry import _load as _load_registry
+from mantis.encoding.resolvers import detect_encoding_from_state_dict
 from mantis.util.yaml_io import DuplicateKeyError, parse_config_yaml
 
 # Deliberately-unstamped dead checkpoint directories. These prefixes are

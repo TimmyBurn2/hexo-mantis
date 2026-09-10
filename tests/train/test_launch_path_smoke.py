@@ -44,8 +44,7 @@ def _synthetic_batch(spec):
 def _eval_block():
     # WP11-A schema extension: eval.gate/eval.ladder are now required (design §c.1).
     return {
-        "random_model_sims": 1, "sealbot_model_sims": 1, "kraken_model_sims": 1,
-        "strix_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
+        "random_model_sims": 1, "sealbot_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {

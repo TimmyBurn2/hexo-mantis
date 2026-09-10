@@ -896,9 +896,6 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
             gumbel_m=sp.gumbel_m, search_kind=config.search.kind,
         )
         return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
-    from mantis._engine import ReplayBuffer
-
-    return ReplayBuffer(capacity, config.identity.encoding)
 
 
 def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:

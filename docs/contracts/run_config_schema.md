@@ -45,7 +45,7 @@ YAML keys and enumerates the audit root name-agnostically.
 
 ## Shape
 
-Twelve top-level fields; **191 leaf key-paths** under the walker that descends nested blocks
+Twelve top-level fields; **151 leaf key-paths** under the walker that descends nested blocks
 (including optional ones) and counts a `list[SubModel]` field as ONE leaf.
 
 | section | leaves | models |
@@ -120,8 +120,6 @@ name at the moment it fires.
 | `_search_kind_fits_the_node_pool` | `RunConfig` | `search.kind: gumbel` reaches the root's full legal set and so spends `MAX_ROOT_CHILDREN` pool slots on it, lowering the sim ceiling from `MAX_ARMED_SIMS` to `MAX_ARMED_SIMS_GUMBEL` — both read across the bridge from `mantis-search`, neither transcribed. The field bounds keep the LOOSE value because a `Field(le=…)` cannot see a key in another SECTION, so without this a config in the gap between the two ceilings would validate clean and be refused by `SelfPlayRunner::new` at BOOT — the same inversion R255/ADJ-D34 closed for the visit capacity, one section away. All five armed sims knobs are checked, not only `n_simulations`: any of them overflows the same pool |
 | `_draw_rate_evidence_bar_within_configured_capacity` | `RunConfig` | `train.draw_rate_abort.N_pool_min` <= `DRAW_RATE_WINDOW * selfplay.n_workers`, the measured ceiling of the pooled window sum; the bound that replaced the retired `min_samples: le=DRAW_RATE_WINDOW` pin. **A CAPACITY check, not a reachability one (R95/ADJ-22)** — whether the bar is actually met depends on how many workers report, which load time cannot witness; an unmet bar surfaces at runtime as an absence of observations (R92), never as a healthy `0.0` |
 | `_one_drawn_game_cannot_fire_the_abort` | `DrawRateAbortConfig` | `1 / N_pool_min` < `threshold`: below that a SINGLE drawn game meets the bar and fires a hard abort |
-| `_entropy_sign` | `TrainConfig` | `train.entropy_reg_weight` >= 0, raised as the NAMED sign-law error rather than a bare bound message |
-| `_mixing_floor_is_below_its_start` | `TrainConfig` | `train.mixing_min_w` <= `train.mixing_initial_w`, else the floor wins at every step and two sibling keys decide nothing while still reading as the schedule's terms |
 | `_stages_are_strictly_increasing` | `TrainConfig` | `train.replay_capacity_schedule` steps strictly increase; the consumer's cursor only moves forward, so an out-of-order stage is applied at the wrong boundary |
 | `_validate_ladder` | `LadderConfig` | non-empty rungs, unique rung names, `0 < activation_wr_lower_ci <= graduation_wr_lower_ci < 1`, and two `>= 1` cadence floors |
 | `_mutual_exclusion` | `PlayoutCapConfig` | `fast_prob` and `full_search_prob` are mutually exclusive; a configured quick/full pair must differ and its probability must sit in `(0, 1)` |
@@ -147,7 +145,7 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | discovery/loader shared authority: a file discovery skips is a file the loader refuses | tests/config/test_config_discovery_authority.py |
 | encoding reconcile decision-equivalence + absent -> raise | tests/config/test_resolve_encoding.py |
 | eval `model_sims` resolver + unknown-opponent / `None` raise | tests/config/test_resolve_nsims.py |
-| amp dtype token graph->bf16 / grid->fp16 + the DAG no-torch guard | tests/config/test_resolve_amp.py, tests/config/test_resolve_amp_dtype.py |
+| amp dtype token pinned to bf16 + the DAG no-torch guard | tests/config/test_resolve_amp.py |
 | bootstrap path resolver | tests/config/test_resolve_bootstrap.py |
 | resolved-config emit: 8-knob payload, death-of-merge census, and no `train`/`selfplay`/`monitor` leaf threaded into it | tests/config/test_resolved_config_emit.py, tests/config/test_resolved_config_emit_p2.py |
 | one-key diff; mint output validates; header stamped; unknown delta key exits 2; diff exit 0 on an exactly-claimed diff, exit 1 otherwise | tests/config/test_mint_and_diff.py |
@@ -156,7 +154,7 @@ and with the coordinator field deleted there is no collision left to disambiguat
 | every-key-has-consumer bijection, the 177 count, the walker's descent into an OPTIONAL block, and a mutation self-test in both copies | tests/config/test_every_key_has_consumer.py, tests/config/test_every_key_has_consumer_p2.py |
 | the radius field is removed everywhere: no schedule on the schema, no resolver module, no symbol in either `__all__` | tests/config/test_radius_removed.py |
 | `train` section bounds and required-field census | tests/config/test_train_schema.py |
-| `train.entropy_reg_weight` sign law; `policy_target`/`search.kind` cross-section consistency | tests/config/test_train_entropy.py, tests/config/test_train_policy_value_target_consistency.py |
+| `policy_target`/`search.kind` cross-section consistency | tests/config/test_train_policy_value_target_consistency.py |
 | the eighteen coordinator knobs are read by ONE resolver and each moves the behaviour it names | tests/config/test_coordinator_knobs_wiring.py |
 | the four `monitor.drain.*` keys each move the join bound the eval pipeline uses; the builder takes them as a required keyword-only parameter | tests/config/test_drain_caps_wiring.py |
 | `train.draw_rate_abort` bounds, the evidence-bar CAPACITY rule, the one-drawn-game rule, and every config stating its posture explicitly | tests/config/test_drawrate_schema_range.py |
@@ -235,8 +233,5 @@ is also written at the field it belongs to.
   bound moved. Every committed config mints 2 and 3.
 - `train.draw_rate_abort.threshold` still admits a hair-trigger below `1 / N_pool_min`;
   `_one_drawn_game_cannot_fire_the_abort` closes the part of it that matters.
-- `train.bot_batch_share` is half-wired by design: its sibling `bot_corpus_path` was dead and
-  is deleted, so only an injecting caller can supply a bot buffer, and `0.0` is the only value
-  the composition root can honour.
 - `N_pool_min`'s minted value rests on a continuity argument, not on a measured early-run draw
   distribution; it is revisable at mint prereg.

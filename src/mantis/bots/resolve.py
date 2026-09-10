@@ -2,29 +2,21 @@
 
 `kind="random"` resolves to the in-repo `RandomBot` unconditionally. `kind="sealbot"` resolves
 to the vendored fixed-depth engine through `mantis.bots.sealbot`, or refuses with a reason
-naming the ONE step that is missing. `kind in {"kraken","strix"}` refuses with R139's
-OPERATOR-AUTHORIZED grounds, verbatim and per rung, and so does a sealbot rung at a depth
-R326(e) excluded from the default battery.
+naming the ONE step that is missing. A sealbot rung at a depth
+R326(e) excluded from the default battery refuses with R139's OPERATOR-AUTHORIZED marker. The
+kraken and strix kinds are DELETED (R346(f)): both were permanently refused rungs, so what the
+tree carried was two refusal strings and their config keys.
 
 THE ENV-KEY CHANNEL IS DELETED (WP12-R Phase A, DESIGN_A §2.2(2)), and the deletion is argued
 rather than convenient (R125/R79). For `sealbot` the key became simply WRONG: the authority
 for where the engine lives is `vendor/pins.toml` plus `make vendor` (CLAUDE.md's vendoring
 law), and two authorities for one fact is R79's exact prohibition — an env key that can point
-anywhere is a host-path surface wearing a disguise. For `kraken`/`strix` it was a
-silent-arming surface with nothing behind it: R139 rules both out for run5 with named grounds,
-and a key whose only effect is to change which of two refusal strings is printed is not a
-feature. Nothing is lost diagnostically — the replacement reasons carry strictly MORE
+anywhere is a host-path surface wearing a disguise. Nothing is lost diagnostically — the replacement reasons carry strictly MORE
 information — and `tests/bots/test_sealbot_resolve.py` pins both halves (behaviour and a
 source scan), because a dead key still reads to an operator as an arming surface.
 
-ORDERING IS LOAD-BEARING AND IT IS A TRAP (DESIGN_A §2.2(4)). The sims routing below executes
-BEFORE any refusal, exactly as it did at HEAD. `eval.kraken_model_sims` and
-`eval.strix_model_sims` have exactly ONE live consumer each — `resolve_eval_model_sims`, and
-the only route to it for those kinds is this call. Hoisting the grounds-bearing raise above it
-would instantly turn two consumer-registry citations (`tests/config/
-test_every_key_has_consumer.py:52-53`) into the precise falsehood R93 exists to catch, and the
-LAW-08 bijection test would stay green while it happened. `tests/eval/test_resolver_wiring.py`
-re-verifies the routing per kind BY MUTATION, which is the only thing that can see it.
+The sims routing runs BEFORE any refusal, exactly as it did at HEAD.
+`tests/eval/test_resolver_wiring.py` re-verifies the routing per kind BY MUTATION.
 """
 from __future__ import annotations
 
@@ -38,16 +30,7 @@ from mantis.bots.random_bot import RandomBot
 
 BotFactory = Callable[..., Any]
 
-_KNOWN_KINDS: tuple[str, ...] = ("random", "sealbot", "kraken", "strix")
-
-#: R139's own words, per rung. The strings are EXACT and they are the deliverable: R143 calls
-#: these skips OPERATOR-AUTHORIZED rather than a dispatcher shortfall, so a reader of the log
-#: has to be able to tell a ruled skip from a broken box. A paraphrase is a drift, and
-#: kraken's grounds appearing on a strix skip is a false diagnosis — both are pinned.
-_R139_SKIP_GROUNDS: dict[str, str] = {
-    "kraken": "weights not cleanly accessible",
-    "strix": "actively changing",
-}
+_KNOWN_KINDS: tuple[str, ...] = ("random", "sealbot")
 
 #: The marker every R139 refusal carries, and the `operator_authorized` skip class.
 _R139_SKIP_MARKER = "operator-authorized skip (R139)"
@@ -149,12 +132,7 @@ def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None) -> B
 
         return _factory
 
-    if kind == "sealbot":
-        return _resolve_sealbot(depth)
-
-    raise RungUnresolvable(
-        rung=kind, reason=f"{_R139_SKIP_MARKER}: {kind} — {_R139_SKIP_GROUNDS[kind]}"
-    )
+    return _resolve_sealbot(depth)
 
 
 __all__ = ["SKIP_REASON_MARKERS", "BotFactory", "resolve_bot"]

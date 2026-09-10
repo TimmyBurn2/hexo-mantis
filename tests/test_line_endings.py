@@ -17,9 +17,9 @@ Two independent pins here, because they fail for different reasons:
   it replaces ("sha256 mismatch") sent the reader toward re-minting the manifest, which is the trap:
   the manifest is right, the checkout is wrong, and a re-mint breaks Linux CI.
 
-Deliberately NOT "assert no fixture contains b'\\r\\n'": 3 of the 65 fixtures legitimately do
-(`small_cnn_scalar.pt`, `small_cnn_aux_chain.pt`, `b6_hotpath.npz` - chance byte pairs inside
-pickled/compressed streams). That rule would red on correct files. The comparison below is against
+Deliberately NOT "assert no fixture contains b'\\r\\n'": some manifest-pinned fixtures
+legitimately do (`b6_hotpath.npz` - chance byte pairs inside pickled/compressed streams).
+That rule would red on correct files. The comparison below is against
 git's own stored blob, so it fires only when the working tree differs from the repository *by line
 endings alone*, and stays silent on ordinary content edits.
 

@@ -65,7 +65,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
         bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
     )
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=24,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=24,
         leaf_build_threads=1, concurrency=1,
         round_index=0, round_id="f816_37_instrument", step=7, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
@@ -74,8 +74,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
                            opponent_sims=None, opening_book=_BOOK, deploy_matched=True,
                            games=0)],
         random_floor_games=0,
-        random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,
-        seed_base=_SEED, round_timeout_sec=600.0,
+        random_model_sims=2, sealbot_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"),
         progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,

@@ -190,7 +190,7 @@ def graph_engine():
     engine = LocalInferenceEngine(net, torch.device("cpu"), encoding_spec=spec,
                                   fused_graph_caps=_CAPS,
                                   inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10), max_in_flight=8,
-                                  amp_dtype="bf16")
+                                  )
     try:
         yield engine, spec
     finally:
@@ -617,8 +617,7 @@ def test_infer_batch_ls_refuses_a_dense_spec() -> None:
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
         inference_batching=None,
-        max_in_flight=0, amp_dtype="bf16",
-    )
+        max_in_flight=0, )
     try:
         with pytest.raises(NotImplementedError):
             engine.infer_batch_ls([Board.with_encoding_name("v6")])
@@ -644,8 +643,7 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
         inference_batching=None,
-        max_in_flight=0, amp_dtype="bf16",
-    )
+        max_in_flight=0, )
     try:
         with pytest.raises(EvalDecodeUnsupportedError):
             worker.build_candidate_player(engine, 2, spec=spec, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)
@@ -675,8 +673,7 @@ def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) 
         torch.nn.Identity(), torch.device("cpu"), encoding_spec=lookup("v6"),
         fused_graph_caps=None,
         inference_batching=None,
-        max_in_flight=0, amp_dtype="bf16",
-    )
+        max_in_flight=0, )
     try:
         with pytest.raises(NotImplementedError) as single:
             dense_engine.infer_ls(Board.with_encoding_name("v6"))

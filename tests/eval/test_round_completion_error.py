@@ -37,7 +37,10 @@ import pytest
 from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
-from mantis.model import CnnArch, build_net
+from mantis.encoding import lookup
+from mantis.model import GnnArch, build_net
+
+_GSPEC = lookup("gnn_axis_v1")
 
 
 # ── shared fixtures (self-contained; deliberately duplicated from test_eval_broken.py's
@@ -47,7 +50,8 @@ from mantis.model import CnnArch, build_net
 def _tiny_model():
     import torch
 
-    arch = CnnArch(board_size=5, in_channels=4, filters=8, res_blocks=1)
+    arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
+                   hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
     net = build_net(arch)
     net.arch = arch
     return net
@@ -73,8 +77,7 @@ def _eval_cfg(**overrides: Any) -> EvalConfig:
         bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     defaults = dict(
-        random_model_sims=96, sealbot_model_sims=128, kraken_model_sims=128,
-        strix_model_sims=128, random_floor_games=4, worker_device="cpu",
+        random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
         round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate, ladder=ladder,
         ply_cap_adjudication=None, strength_floor=None,
     )
@@ -105,7 +108,6 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: "EvalConfig | None" = None, **
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
         ),
         encoding="v6_live2_ls",
-        amp_dtype="bf16",
         max_plies=128,
         c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json", promotion=_promotion_hooks(tmp_path),

@@ -183,8 +183,8 @@ class IdentityConfig(StrictModel):
 class LadderRung(StrictModel):
     """One opponent-ladder rung (design §c.1). `bot` is the resolver kind (closed set,
     WP11-A); `depth` is sealbot's fixed-depth bar (LAW-15), `opponent_sims` the
-    kraken/strix opponent-side sims — exactly one of the two is meaningful per `bot`, both
-    travel as `None` where inapplicable rather than a sentinel int (R1: no code default).
+    opponent-side sims — exactly one of the two is meaningful per `bot`, and both travel as
+    `None` where inapplicable rather than as a sentinel int (R1: no code default).
 
     RED-TEAM F2 (MAJOR): a fixed-depth bar of 0 or negative, an opponent-sims count of 0 or
     negative, or a rung that can never play a single game (`games_max < 1`) are each
@@ -193,7 +193,7 @@ class LadderRung(StrictModel):
     """
 
     name: str = Field(min_length=1)
-    bot: Literal["sealbot", "kraken", "strix", "random"]
+    bot: Literal["sealbot", "random"]
     variant: str = Field(min_length=1)
     depth: int | None = Field(ge=1)
     opponent_sims: int | None = Field(ge=1)
@@ -413,8 +413,6 @@ class EvalConfig(StrictModel):
 
     random_model_sims: int = Field(ge=1)
     sealbot_model_sims: int = Field(ge=1)
-    kraken_model_sims: int = Field(ge=1)
-    strix_model_sims: int = Field(ge=1)
     random_floor_games: int = Field(ge=0)
     worker_device: Literal["cuda", "cpu"]
     round_timeout_sec: float = Field(gt=0, le=_EVAL_TIMEOUT_CEILING_SEC, allow_inf_nan=False)

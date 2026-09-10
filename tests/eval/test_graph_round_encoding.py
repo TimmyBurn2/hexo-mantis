@@ -114,12 +114,11 @@ def _round_spec(
         )
     ]
     return RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, amp_dtype="bf16", max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         round_index=0, round_id=f"oracle_{enc_name}", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=enc_name, worker_device="cpu",
         gate=gate, rung_jobs=rung_jobs, random_floor_games=floor_games,
-        random_model_sims=2, sealbot_model_sims=2, kraken_model_sims=2, strix_model_sims=2,
-        seed_base=_SEED, round_timeout_sec=600.0,
+        random_model_sims=2, sealbot_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"), progress_path=str(tmp_path / "progress.txt"),
         ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1234,

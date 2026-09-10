@@ -21,10 +21,16 @@
 //!
 //! Positions come from the r153 instruments' generators at fixed seeds (LCG verbatim),
 //! so every construction is reproducible and shared with the O1r fixture family.
+//!
+//! R346(f) note: the constructions used to census the visited children that were off-window
+//! AND uncovered by any K-cluster window. `Board::get_cluster_views` went with the dense path
+//! and the export was already coverage-free, so the census is now over OFF-WINDOW visited
+//! children — the class that routes to `overflow`, which is the class every assertion below
+//! is actually about. The preconditions still refuse a vacuous pass.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{is_covered, LegalSetPolicy, MCTSTree};
+use mantis_search::{LegalSetPolicy, MCTSTree};
 
 const N_SIMS: usize = 50; // run5 target-generation regime (PROVENANCE_T0 §1)
 const LEAF_BATCH: usize = 8;
@@ -119,14 +125,14 @@ fn mass_at(ls: &LegalSetPolicy, board: &Board, q: i32, r: i32, n_actions: usize)
 }
 
 /// Precondition harness: run the production search on a generator board and return the
-/// tree plus the (visited, uncovered-off-window) child census — the constructions must
-/// PROVE they exercise the defect regime rather than pass vacuously.
+/// tree plus the (visited, off-window) child census — the constructions must PROVE they
+/// exercise the defect regime rather than pass vacuously.
 struct Setup {
     board: Board,
     tree: MCTSTree,
     n_actions: usize,
     visited: Vec<(i32, i32, u32)>,
-    visited_uncovered: Vec<(i32, i32)>,
+    visited_offwindow: Vec<(i32, i32)>,
 }
 
 fn setup(seed: u64, plies: usize, sims: usize) -> Setup {
@@ -140,12 +146,8 @@ fn setup(seed: u64, plies: usize, sims: usize) -> Setup {
     let first = root.first_child as usize;
     let n_ch = root.n_children as usize;
 
-    let (_views, centers) = board.get_cluster_views();
-    let ct = board.cluster_window_size() as i32;
-    let half = (ct - 1) / 2;
-
     let mut visited = Vec::new();
-    let mut visited_uncovered = Vec::new();
+    let mut visited_offwindow = Vec::new();
     for i in first..first + n_ch {
         let v = tree.pool[i].n_visits;
         if v == 0 {
@@ -153,11 +155,11 @@ fn setup(seed: u64, plies: usize, sims: usize) -> Setup {
         }
         let (q, r) = coord_of(&tree, i);
         visited.push((q, r, v));
-        if board.window_flat_idx(q, r) >= n_actions && !is_covered(q, r, &centers, ct, half) {
-            visited_uncovered.push((q, r));
+        if board.window_flat_idx(q, r) >= n_actions {
+            visited_offwindow.push((q, r));
         }
     }
-    Setup { board, tree, n_actions, visited, visited_uncovered }
+    Setup { board, tree, n_actions, visited, visited_offwindow }
 }
 
 // ── S1a arm 1: T > 0 — full-mass export, off-window mass carried ─────────────────────
@@ -166,9 +168,9 @@ fn s1a_t1_export_sums_to_unity_with_offwindow_mass_carried() {
     // Band-2 position (survey: seed 8675309 ply 3, n_legal 232, HEAD drop 0.306122).
     let s = setup(8_675_309, 3, N_SIMS);
     assert!(
-        !s.visited_uncovered.is_empty(),
-        "construction failed: no visited uncovered off-window child — the position no \
-         longer exercises the defect regime (re-derive from the survey)"
+        !s.visited_offwindow.is_empty(),
+        "construction failed: no visited off-window child — the position no longer \
+         exercises the defect regime (re-derive from the survey)"
     );
     let ls = s.tree.get_policy_ls(1.0, s.n_actions);
     let total: f64 = export_mass(&ls);
@@ -206,9 +208,9 @@ fn s1a_t0_uncovered_best_child_exports_a_one_hot() {
         .expect("search must visit at least one child");
     assert!(best_v > 0);
     assert!(
-        s.visited_uncovered.contains(&(best_q, best_r)),
-        "construction failed: the max-visit child ({best_q},{best_r}) is not uncovered \
-         off-window — the T=0 arm's defect regime is not exercised"
+        s.visited_offwindow.contains(&(best_q, best_r)),
+        "construction failed: the max-visit child ({best_q},{best_r}) is not off-window \
+         — the T=0 arm's defect regime is not exercised"
     );
 
     let ls = s.tree.get_policy_ls(0.0, s.n_actions);
@@ -221,7 +223,7 @@ fn s1a_t0_uncovered_best_child_exports_a_one_hot() {
     let m = f64::from(ls.overflow.get(&(best_q, best_r)).copied().unwrap_or(0.0));
     assert!(
         (m - 1.0).abs() <= TOL,
-        "the uncovered best child ({best_q},{best_r}) must carry the one-hot in overflow, \
+        "the off-window best child ({best_q},{best_r}) must carry the one-hot in overflow, \
          got {m}"
     );
 }
@@ -270,8 +272,8 @@ fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
 fn s1b_improved_ls_keeps_every_child_including_uncovered() {
     let s = setup(8_675_309, 3, N_SIMS);
     assert!(
-        !s.visited_uncovered.is_empty(),
-        "construction failed: no visited uncovered off-window child"
+        !s.visited_offwindow.is_empty(),
+        "construction failed: no visited off-window child"
     );
     let improved = s.tree.get_improved_policy_ls(s.n_actions, 50.0, 1.0);
     let total = export_mass(&improved);
@@ -290,11 +292,11 @@ fn s1b_improved_ls_keeps_every_child_including_uncovered() {
              (policy.rs:261-264 form, §1.1 arm 3) redistributed it over the subset (M-B)"
         );
     }
-    // And the uncovered children specifically (the arm-3 victims) are present.
-    for &(q, r) in &s.visited_uncovered {
+    // And the off-window children specifically (the arm-3 victims) are present.
+    for &(q, r) in &s.visited_offwindow {
         assert!(
             improved.overflow.contains_key(&(q, r)),
-            "visited uncovered child ({q},{r}) absent from the improved overflow — \
+            "visited off-window child ({q},{r}) absent from the improved overflow — \
              subset renormalization (the authority's second forbidden mode)"
         );
     }

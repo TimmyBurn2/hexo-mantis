@@ -474,9 +474,10 @@ is silently disabled.
   is not draws only from `sym::WINDOW_PRESERVING_SYMS` (4 elements) — previously a silent
   restriction with no in-run reading of how often each arm fires. Producer: the ONE
   counted call site both sample cores route through
-  (`crates/mantis-selfplay/src/replay/sample.rs::record_symmetry_draw`; producer +
-  mutation self-tests in `crates/mantis-selfplay/tests/replay_compact_gate.rs`, Python
-  seam pins in `tests/train/test_symmetry_draws.py`). Ticked ONLY on an `augment=True`
+  (the dense sample core's `record_symmetry_draw`). **RETIRED with the grid path (R346(f)):
+  the compact/spread gate was a property of the window-clamped DENSE record frame, and the
+  graph ring rotates whole-board coordinates through `rotate_axial` with nothing to clip. The
+  field is no longer produced and a reader draws its absence, never a zero.** Ticked ONLY on an `augment=True`
   draw (the b349ec4/R249 disarmed-lever posture: an unaugmented draw never consults
   `compact`, so counting it would fabricate a reading for a lever never exercised). Three
   arms — the K histogram's gate (item (2)), NOT inverted (this mechanism, like the K

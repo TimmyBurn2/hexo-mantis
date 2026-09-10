@@ -16,8 +16,6 @@ search:
 eval:
   random_model_sims: 96
   sealbot_model_sims: 128
-  kraken_model_sims: 128
-  strix_model_sims: 128
   random_floor_games: 4
   worker_device: cuda
   round_timeout_sec: 3600.0
@@ -42,46 +40,6 @@ eval:
       variant: d5
       depth: 5
       opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: kraken_raw
-      bot: kraken
-      variant: raw
-      depth: null
-      opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: sealbot_d6
-      bot: sealbot
-      variant: d6
-      depth: 6
-      opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: kraken_mcts200
-      bot: kraken
-      variant: mcts200
-      depth: null
-      opponent_sims: 200
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: strix_128
-      bot: strix
-      variant: s128
-      depth: null
-      opponent_sims: 128
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 32
-    - name: strix_256
-      bot: strix
-      variant: s256
-      depth: null
-      opponent_sims: 256
       opening_book: book_v1_s20260625_p4
       deploy_matched: true
       games_max: 32

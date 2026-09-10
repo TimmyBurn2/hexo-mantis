@@ -45,8 +45,6 @@ search:
 eval:
   random_model_sims: 1
   sealbot_model_sims: 1
-  kraken_model_sims: 1
-  strix_model_sims: 1
   random_floor_games: 4
   worker_device: cpu
   round_timeout_sec: 3600.0
