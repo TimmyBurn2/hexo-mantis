@@ -564,12 +564,36 @@ class.** Recorded here rather than left as silent drift (R9).
 
 ## 5. Config system
 
-- Every config file is explicit and complete. There is NO inheritance, NO base-merge, NO
-  code-side default for any config value. Loader = `yaml.safe_load` → schema validate.
-  Missing key = hard error. Unknown key = hard error (kills the silently-disabled-
-  opponent class). `extra="forbid"` on every model.
+- Every config file is explicit and complete about what the RUN DECIDES. There is NO
+  inheritance, NO base-merge, and no value has a second authority. Loader = `yaml.safe_load` →
+  schema validate. Unknown key = hard error (kills the silently-disabled-opponent class).
+  `extra="forbid"` on every model. A missing key is a hard error unless the schema itself
+  declares the key omittable — see the amendment below.
 - A default lives in exactly one place: the schema field. Duplicated default authorities
-  (code + yaml) are structurally impossible because code has no defaults.
+  (code + yaml) are structurally impossible because no CALL SITE has a default.
+
+  <!-- AMENDMENT (R347 / CONFIG-1, 2026-09-10): the two bullets above used to read "NO
+       code-side default for any config value" and "code has no defaults", which contradicted
+       the schema-field sentence between them and, from CONFIG-1 on, would be false. What
+       changed: the OPERATIONAL CONSTANTS — a watchdog deadline, a poll interval, a
+       subprocess-join bound, a disk threshold, a queue cap, a diagnostic switch — now carry a
+       schema default and are absent from the YAML. 23 leaves moved; `configs/run6.yaml` went
+       from 190 keys to 127. What did NOT change, and is the whole of why this is R1 rather
+       than an exception to it: the default lives in the schema FIELD and nowhere else, no
+       call site carries a fallback, and every ARMING key stays required — `gate_interval`,
+       the actor-lag pair, `supervisor_kill_grace_sec` and the WR/axis warn family are all
+       still mandatory, because that is where R1's silently-disabled-opponent reason bites.
+       The set is DECLARED, with per-row grounds, in
+       `mantis.config.schema.core.OPERATIONAL_DEFAULT_KEYS` — the one authority, checked in
+       both directions by `tests/config/test_schema.py::test_o16_all_fields_required_no_code_side_defaults`
+       so an undeclared default and a stale declaration are each a red. A run that wants
+       another value MINTS the row (`mint_config.py --mint-row`), which is the same deliberate
+       act and is visible in the stamped header; a defaulted BLOCK is minted whole.
+       THE PROVENANCE HALF, which is what makes the shrink safe: `build_run_collaborators`
+       writes the COMPLETE resolved config (`resolved_config.yaml`, every leaf including the
+       defaulted ones) into the run directory before any collaborator is built, and re-reads
+       it through `RunConfig` so the record is strict on its own bytes. A schema default
+       revised later therefore cannot rewrite what an old run is recorded as having used. -->
 - Copy-drift antidote (the cost of explicit-complete): `tools/mint_config.py` generates a
   complete config from a named template + an explicit delta mapping, stamping the delta
   into the file header; a one-key-diff assert tool verifies two configs differ exactly
