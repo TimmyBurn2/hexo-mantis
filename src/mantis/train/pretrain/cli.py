@@ -1,30 +1,13 @@
-# >300 justify (R8). ONE entry point over ONE linear act — parse, resolve the encoding, read
-# the training terms from the config, load the corpus, build the net, train, save, validate.
-# Splitting it forks the argv namespace and the assembled config dict into two modules that
-# must agree about every term, which is the duplicate-authority shape F-816-25 was filed for.
-"""Bootstrap pretrain CLI (WP10 §a.7 IMPROVE of `bootstrap/pretrain_cli.py`).
+# >300 justify (R8). ONE entry point over ONE linear act — parse, resolve the encoding, read the
+# training terms from the config, load the corpus, build the net, train, save, validate. A split
+# forks the argv namespace and the assembled config dict into two modules that must agree about
+# every term, which is the duplicate-authority shape this file was rewritten to end.
+"""Bootstrap pretrain CLI: the `python -m mantis.train.pretrain` entry.
 
-The `python -m mantis.train.pretrain` entry: argparse surface + config resolution + corpus load +
-model build + train/save/validate orchestration.
-
-Ratified WP10 amendments over a pure relocation:
-  * **Personal/hardcoded config paths → explicit params.** The old CLI hardcoded
-    `configs/model.yaml` / `configs/training.yaml` / `configs/corpus.yaml`; those files do not
-    exist in the new repo. The corpus NPZ path is `--corpus-npz` or the registry
-    `resolve_corpus_path`.
-  * **KILLED-branch flags removed** — `--gpool-sites` / `--head-no-gpool` / `--pool-type` /
-    `--pool-attn-dropout` / `--canvas-realness` / `--gpool-bias-active` / `--policy-only-bias`
-    (v8 / pma / pma_global / gpool-bias / canvas_realness are all KILLED — F-04/F-05, v8 never
-    crosses). The new `build_net` CNN does not carry those knobs.
-  * **`pretrain_legacy` raw-JSON corpus fallback KILLED** — 0 config consumers (grep-verified);
-    a missing NPZ is now a loud error, not a silent raw-JSON re-scan.
-  * Model construction via `build_net(arch_from_spec_and_config(...))` (WP9 authority); events via
-    the injected `EventSink`.
-
-F-816-25 / R296(b): the five flags that shadowed minted `train.*` keys are GONE and `--config`
-is REQUIRED in their place — see `training_terms`, the one read path. R-TRAINCONFIG-SCHEMA, the
-old ground for a CLI-side training knob, is DEAD: that schema extension landed (WPSC SC-A1) and
-all six are live `train.*` leaves today.
+Argparse surface, config resolution, corpus load, model build, train/save/validate. Config paths
+are explicit parameters rather than hardcoded files, a missing corpus is a loud error rather than
+a silent raw-JSON re-scan, and the five flags that shadowed minted `train.*` keys are GONE with
+`--config` REQUIRED in their place — see `training_terms`, the one read path.
 """
 from __future__ import annotations
 
@@ -44,18 +27,16 @@ from mantis.util.device import best_device
 
 _LOG = logging.getLogger(__name__)
 
-#: The dense arm's label smoothing. The parser's default is `None` so "was it supplied?" is
-#: answerable — the graph route refuses flags it would ignore, and it cannot refuse a value it
-#: cannot distinguish from a default. THIS is the one default authority for the term.
+#: The dense arm's label smoothing and the ONE default authority for it; the parser's own default
+#: is `None` so "was it supplied?" stays answerable, since the graph route refuses flags it would
+#: ignore and cannot refuse a value it cannot tell from a default.
 DEFAULT_LABEL_SMOOTHING = 0.05
 
 
 def _build_arg_parser() -> argparse.ArgumentParser:
-    # `allow_abbrev=False` is LOAD-BEARING, not tidiness (found by this fix's own oracle).
-    # With argparse's default prefix matching, the DELETED `--lr` is an unambiguous abbreviation
-    # of the surviving `--lr-peak`, so an old command line `--lr 0.002` would silently set the
-    # cosine restart peak instead of erroring — a deleted shadow re-entering as a different
-    # knob, which is worse than the shadow this fix removed.
+    # `allow_abbrev=False` is LOAD-BEARING: with prefix matching, the DELETED `--lr` is an
+    # unambiguous abbreviation of `--lr-peak`, so `--lr 0.002` would silently set the cosine
+    # restart peak instead of erroring.
     parser = argparse.ArgumentParser(
         description="Bootstrap pretrain pipeline (mantis)", allow_abbrev=False
     )
@@ -84,7 +65,7 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--res-blocks", type=int, default=None, help="Trunk depth")
     parser.add_argument("--corpus-npz", type=str, default=None,
                         help="Corpus NPZ path (default: registry resolve_corpus_path)")
-    # ── the held-out stopping rule (R328(d)) — ALL-OR-NONE, like the split that feeds it ──
+    # the held-out stopping rule — ALL-OR-NONE, like the split that feeds it
     parser.add_argument("--heldout-hexg", type=str, default=None,
                         help="held-out .hexg ring; enables the held-out policy-loss stop")
     parser.add_argument("--eval-every", type=int, default=None,
@@ -106,28 +87,21 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-#: The `train.*` leaves this CLI is NOT allowed to have an opinion about (F-816-25, R296(b)).
-#: Named as data rather than spelled out in the reader below so the oracle can assert the SET,
-#: not a hand-listed copy of it that would stay green while a seventh shadow was added.
+#: The `train.*` leaves this CLI may not have an opinion about. Named as data so the oracle can
+#: assert the SET, not a hand-listed copy that stays green while a seventh shadow is added.
 SHADOWED_TRAIN_KEYS: tuple[str, ...] = ("lr", "weight_decay", "batch_size", "eta_min")
 
 
 def training_terms(train_cfg: TrainConfig) -> dict[str, float | int | bool | str]:
     """The training terms a bootstrap pretrain runs on, read from the minted config.
 
-    THE ONE READ PATH, and that is the whole of F-816-25's fix. Each of the first six was a
-    code-side literal on the argparse surface — three of them DIVERGENT from `configs/run5.yaml`
-    — so a bootstrap pretrain ran on the parser's numbers while the minted ones sat inert. Two
-    authorities over one number is R79; here there is one, and it is the config.
-
-    `pretrain_eta_min` is the one renamed key: `BootstrapTrainer` reads that name, and the
-    rename happens HERE rather than at the trainer so the mapping is visible at the seam that
-    performs it.
+    THE ONE READ PATH: each term was a code-side literal on the argparse surface, three of them
+    DIVERGENT from the shipped config, so a pretrain ran on the parser's numbers while the minted
+    ones sat inert.
 
     Raises:
-        AttributeError: if `train_cfg` lacks a key this reads. Not defended against — a
-            validated `TrainConfig` cannot, and a caller passing something else is a defect
-            that should surface by name rather than as a silently-defaulted number.
+        AttributeError: `train_cfg` lacks a key this reads — undefended, since a validated
+            `TrainConfig` cannot and any other caller is a defect that should surface by name.
     """
     return {
         "lr": float(train_cfg.lr),
@@ -138,18 +112,12 @@ def training_terms(train_cfg: TrainConfig) -> dict[str, float | int | bool | str
 
 
 def _resolve_encoding_name(args: argparse.Namespace) -> str:
-    """Resolve the encoding: --encoding, else auto-detect from the --resume checkpoint.
-
-    There is no third branch. Pretraining with an unstated encoding silently produced a
-    v6 model until R45 (LAW-11, LAW-05); an absent encoding now raises.
+    """Resolve the encoding: --encoding, else auto-detect from the --resume checkpoint. There is
+    no third branch — an unstated encoding silently produced a v6 model until LAW-11.
 
     Raises:
-        MissingEncodingError: if neither `--encoding` nor `--resume` was given. R45 names
-            the convention by ERROR CLASS, and this is that class — so it raises the class
-            error rather than `SystemExit`, even though the surrounding function uses
-            `SystemExit` for its argument-shaped failures. `pretrain()` converts it to a
-            clean CLI message at the boundary, so the operator still sees a message rather
-            than a traceback.
+        MissingEncodingError: neither `--encoding` nor `--resume` was given, raised as the class
+            error rather than `SystemExit`, which `pretrain()` converts at the boundary.
     """
     if args.encoding is not None:
         return args.encoding
@@ -171,15 +139,12 @@ def _resolve_encoding_name(args: argparse.Namespace) -> str:
 
 
 def pretrain(argv: list[str] | None = None) -> None:
-    # AUDIT-1 F-08: THE one mantis handler, not `basicConfig` — two bootstraps for one sink is
-    # the duplicate-authority shape, and the other one was dead. `configure_logging` is
-    # idempotent (it removes a previously installed mantis handler first), so a repeated entry
-    # cannot double every line.
+    # THE one mantis handler, not `basicConfig`: `configure_logging` is idempotent, so a
+    # repeated entry cannot double every line.
     configure_logging()
     args = _build_arg_parser().parse_args(argv)
 
-    # The class error is the authority (R45); the CLI boundary is the only place it is
-    # turned into a message, so an operator who forgot a flag gets one line, not a stack.
+    # The class error is the authority; the CLI boundary is the only place it becomes a message.
     try:
         encoding = _resolve_encoding_name(args)
     except MissingEncodingError as e:
@@ -202,15 +167,14 @@ def pretrain(argv: list[str] | None = None) -> None:
     _LOG.info("pretrain_device device=%s encoding=%s", device, encoding)
 
     # The GRAPH arm is a REROUTE, not a second pipeline: it hands a loaded `.hexg` ring to the
-    # SAME declared train-step seam the self-play loop uses (R325(c)).
+    # SAME declared train-step seam the self-play loop uses.
     if getattr(spec, "representation", None) == "graph":
         from mantis.train.pretrain.graph_route import GraphPretrainError, run_graph_pretrain
 
         ring_path = (Path(args.corpus_hexg) if args.corpus_hexg is not None
                      else Path(_resolve_corpus_path(spec)))
-        # ALL-OR-NONE, the same shape `--split-*` takes in the encoder and for the same reason:
-        # a patience without a ring, or a ring without a cadence, is a stopping rule nobody
-        # declared. Silence is the pre-existing behaviour — budget-bound, no monitor.
+        # ALL-OR-NONE: a patience without a ring, or a ring without a cadence, is a stopping
+        # rule nobody declared. Silence is the pre-existing behaviour — budget-bound.
         _stop_flags = (args.heldout_hexg, args.eval_every, args.patience, args.min_delta)
         if any(f is not None for f in _stop_flags) and not all(f is not None for f in _stop_flags):
             raise SystemExit(

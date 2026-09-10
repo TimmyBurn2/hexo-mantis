@@ -1,36 +1,11 @@
-"""⊕ what a PRE-`search.kind` checkpoint does against the live schema, stated outright.
+"""What a pre-`search.kind` checkpoint does against the live schema.
 
-THE CLASS, and it is not hypothetical. `load_checkpoint` schema-validates the checkpoint's
-EMBEDDED config through the LIVE `RunConfig`. That makes every REQUIRED-with-no-default field
-addition a break in every artifact written before it: the run6 BC warm-start could not be
-loaded at HEAD because GUMBEL-REPAIR-1 added `selfplay.gumbel_variant` and
-`gumbel_root_counts`, and nothing in the suite caught it — the schema grew, the tests stayed
-green, and every warm start and every `--resume-from` from an older artifact was bricked.
-
-WHAT THIS BRANCH DOES TO IT: WORSE, BY ONE ERROR CLASS, AND SAID SO HERE RATHER THAN LEFT TO
-BE DISCOVERED. A pre-branch config now fails TWICE — it carries keys `extra="forbid"` rejects
-(`selfplay.gumbel_mcts` and the two `completed_q_values`) AND lacks the one this branch
-requires (`search.kind`). Giving `search.kind` a default is NOT the fix: R1 forbids a
-code-side default and LAW-11 makes an absent identity key an error.
-
-WHAT THIS FILE THEREFORE ASSERTS is the outcome as it stands, on both halves:
-
-  1. the refusal HAPPENS, and names both halves, so the class is visible; and
-  2. the SANCTIONED RECOVERY still works — `strip_and_restamp` (LAW-12's one weights-only
-     path) never reads the embedded config, it re-synthesises one from the live schema, and
-     the artifact it produces loads clean and carries `search.kind`.
-
-(2) is the property the wave-3 re-mint actually depends on, and it is the reason this branch
-does not strand the warm start even though it widens the refusal.
-
-THE REAL DEFECT IS NOT FIXED HERE, and the reason is scope rather than difficulty: a
-checkpoint's embedded config is a HISTORICAL RECORD, and validating a record against today's
-schema asks the wrong question. Changing that means moving `docs/design/repo_design.md` §6's
-*"schema-validated on write AND read"* and retiring T-CK-04
-(`test_config_snapshot_schema_validated_on_read`) — a checkpoint-contract change (contract
-#4, LAW-12 territory) that belongs to a ruling, not to the tail of a search packet. This file
-is the witness that keeps the class from going quiet in the meantime: when the loader stops
-validating records, arm (1) reds and its message says what to do.
+`load_checkpoint` schema-validates the checkpoint's EMBEDDED config through the live
+`RunConfig`, so every required-with-no-default field addition breaks every older artifact.
+Arm 1 pins that the refusal happens and names both halves (the keys `extra="forbid"` rejects
+AND the missing `search.kind`); arm 2 pins that `strip_and_restamp` — which re-synthesises a
+config from the live schema rather than reading the embedded one — still recovers the
+artifact, which is what the wave-3 re-mint depends on.
 """
 from __future__ import annotations
 
@@ -62,7 +37,7 @@ _DELETED = (
 
 
 def _pre_branch(config: dict[str, Any]) -> dict[str, Any]:
-    """The same config as it would have been written BEFORE this branch."""
+    """Return the config as it would have been written before this branch."""
     old = copy.deepcopy(config)
     old.pop("search", None)
     for section, leaf, value in _DELETED:
@@ -71,8 +46,10 @@ def _pre_branch(config: dict[str, Any]) -> dict[str, Any]:
 
 
 def _rewrite_with_config(path: Path, config: dict[str, Any], out_dir: Path) -> Path:
-    """Re-save a saved envelope with a different embedded config, under its correct
-    provenance filename — a stale content hash would otherwise mask the field under test."""
+    """Re-save an envelope with a different embedded config under its correct provenance filename.
+
+    A stale content hash would otherwise mask the field under test.
+    """
     payload = torch.load(path, weights_only=True)
     payload["config"] = config
     md = payload["metadata"]
@@ -94,10 +71,9 @@ def pre_branch_checkpoint(tmp_path, tiny_net, optim_scaler_sched, valid_config,
 
 
 def test_a_pre_branch_checkpoint_is_REFUSED_and_names_both_halves(pre_branch_checkpoint):
-    """Arm 1 — the refusal, and what it says.
+    """Prove an old checkpoint is refused and the message names both the extra and missing keys.
 
-    It must name BOTH halves, because an operator reading only "extra key" would delete the
-    old keys and hit the missing one on the next attempt.
+    Naming only one half sends the operator round the loop twice.
     """
     with pytest.raises(ValidationError) as excinfo:
         load_checkpoint(pre_branch_checkpoint)
@@ -111,13 +87,10 @@ def test_a_pre_branch_checkpoint_is_REFUSED_and_names_both_halves(pre_branch_che
 
 
 def test_the_sanctioned_weights_strip_still_recovers_it(pre_branch_checkpoint, tmp_path):
-    """Arm 2 — LAW-12's one path is unaffected, which is why the warm start is not stranded.
+    """Prove the sanctioned weights-strip still recovers a refused checkpoint.
 
-    `strip_and_restamp` reads the raw payload and re-synthesises a config from the LIVE
-    schema; it never validates the embedded one. The artifact it writes loads clean.
-
-    MUTATION THAT REDS IT: a strip whose synthetic config forgot `search.kind` — the write
-    would fail schema validation, which is the same class one layer up.
+    `strip_and_restamp` re-synthesises the config from the live schema and never validates
+    the embedded one, so the artifact it writes loads clean.
     """
     out = tmp_path / "stripped"
     out.mkdir()
@@ -143,8 +116,7 @@ def test_the_sanctioned_weights_strip_still_recovers_it(pre_branch_checkpoint, t
 
 def test_a_LIVE_checkpoint_round_trips(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                        metadata_kwargs):
-    """The control: the refusal above is about the AGE of the config, not about this file's
-    fixture. A config written by this branch loads."""
+    """Control: a config written at HEAD loads, so the refusal above is about the config's age."""
     opt, scaler, sched = optim_scaler_sched
     live = save_checkpoint(
         model=tiny_net, optimizer=opt, scaler=scaler, scheduler=sched, step=100,

@@ -1,31 +1,21 @@
-// R8 justify: ONE derivation — the HEXG visit-slot capacity — and every refusal it can
-// make, in the file that also drives the BOOT guard against the same numbers. The mint
-// surface and the boot surface must agree, and a test that measured only one of them
-// could not say so; the two dialects' support bounds are the same claim read twice.
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — boot-guard oracles, RE-RULED by
-//! R255/ADJ-D34 (the previous byte-frozen S2b suite pinned the `MAX_VISITS = 128`
-//! literal this ruling deletes; rewriting these oracles is the ruling's own act).
+// R8 justify: ONE derivation — the HEXG visit-slot capacity — and every refusal it can make,
+// in the file that also drives the BOOT guard against the same numbers; the mint surface and
+// the boot surface must agree, and a test measuring only one of them could not say so.
+//! Boot-guard oracles for the HEXG visit-slot capacity, at the runner's effective-sims seam.
 //!
-//! POST-R255 contract, at the runner's effective-sims resolution seam
-//! (`SelfPlayRunner::new`, runner/mod.rs):
+//!  * Under `puct` the capacity is DERIVED at composition:
+//!    `max(ARMED effective sim counts) + leaf_batch_size - 1`, via the one authority
+//!    `replay::hexg::derived_visit_capacity` (shared verbatim with the mint-time schema
+//!    validator). Armed arms: standard always (effective = standard_sims else
+//!    n_simulations), fast iff `fast_prob > 0`, quick/full iff `full_search_prob > 0`.
+//!  * A derived capacity past the `u16` count ceiling `HEXG_VISIT_COUNT_CEILING` is an
+//!    error, refused at mint by the schema twin; the boot refusal is defense in depth for
+//!    un-minted constructions.
+//!  * Under `gumbel` the row is SPARSE — m exact entries plus one tail mass — so the slot
+//!    count is the minted `gumbel_m`, and m outside `1..=HEXG_GUMBEL_M_MAX` is the refusal.
 //!
-//!  * The guard's capacity is DERIVED at composition from the configured sims
-//!    regime: `max(ARMED effective sim counts) + leaf_batch_size - 1`, via the ONE
-//!    authority `replay::hexg::derived_visit_capacity` (shared verbatim with the
-//!    mint-time schema validator through the bridge — no second formula).
-//!    Armed arms: standard (always; effective = standard_sims else n_simulations),
-//!    fast iff `fast_prob > 0`, quick/full iff `full_search_prob > 0`.
-//!  * A regime the record format cannot honor (derived capacity past the
-//!    `u16` count ceiling `HEXG_VISIT_COUNT_CEILING`) is an ERROR — refused at
-//!    mint by the schema twin; this boot-side refusal is the defense-in-depth
-//!    line for un-minted constructions (tests, direct API use).
-//!  * `search.kind: gumbel` on graph does NOT use that formula at all (R347(a)). Its row
-//!    is SPARSE — the m visited candidates' exact entries plus one tail mass alpha — so its
-//!    slot count is the MINTED `gumbel_m`, and a `gumbel_m` outside
-//!    `1..=HEXG_GUMBEL_M_MAX` is the refusal on that arm.
-//!
-//! Killers: M-G' (derivation dropped → 600/75 admit reds), M-I' (the gumbel m bound
-//! dropped), M-O (unarmed-arm filter dropped).
+//! Killers: derivation dropped (600/75 admit reds), gumbel m bound dropped, unarmed-arm
+//! filter dropped.
 
 use mantis_search::SearchKind;
 use mantis_selfplay::replay::hexg::{
@@ -51,7 +41,7 @@ fn graph_cfg() -> SelfPlayRunnerConfig {
     }
 }
 
-/// The prereg'd PCR 600/75 shape (RUN5_MINT_PREREG SIMS-REGIME row: R160/R163/R165).
+/// Build the prereg'd PCR 600/75 sims-regime shape.
 fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
     SelfPlayRunnerConfig {
         full_search_prob: 0.10,
@@ -60,8 +50,6 @@ fn pcr_600_75_cfg() -> SelfPlayRunnerConfig {
         ..graph_cfg()
     }
 }
-
-// ── the derivation authority ─────────────────────────────────────────────────────────
 
 #[test]
 fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
@@ -89,7 +77,7 @@ fn derived_capacity_is_max_armed_plus_leaf_overshoot() {
 
 #[test]
 fn derivation_ignores_a_defined_but_unarmed_arm() {
-    // [M-O] `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
+    // `fast_sims: 500` at `fast_prob: 0.0` must NOT enter the max: 50+8-1=57.
     assert_eq!(
         derived_visit_capacity(50, 0, 0.0, 500, 0.0, 0, 0, 8, 16, "puct"),
         Ok(57)
@@ -130,12 +118,9 @@ fn the_ceiling_is_the_u16_count_type_not_a_tunable() {
     assert!(derived_visit_capacity(65_529, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "puct").is_err());
 }
 
-// ── boot behavior (the dispatch's pin: 600/75 boots) ────────────────────────────────
-
 #[test]
 fn boot_admits_the_prereg_600_75_pcr_regime() {
-    // ADJ-D34's exact defect: the minted PCR config refused to boot at ANY
-    // leaf_batch_size >= 1 under the 128 literal. R255 pin: it boots.
+    // The minted PCR config once refused to boot at any leaf_batch_size under a 128 literal.
     assert!(
         SelfPlayRunner::new(pcr_600_75_cfg()).is_ok(),
         "R255: a 600/75-shaped PCR regime must BOOT — the guard's capacity is derived \
@@ -145,7 +130,7 @@ fn boot_admits_the_prereg_600_75_pcr_regime() {
 
 #[test]
 fn boot_admits_the_run5_shape() {
-    // run5: 50 + 8 - 1 = 57 → capacity 57, boots (R119: values read, never set).
+    // run5: 50 + 8 - 1 = 57 → capacity 57, boots.
     assert!(
         SelfPlayRunner::new(graph_cfg()).is_ok(),
         "the guard must admit the run5 shape (50 sims + batch 8)"
@@ -154,17 +139,9 @@ fn boot_admits_the_run5_shape() {
 
 #[test]
 fn boot_refuses_a_regime_over_the_format_ceiling() {
-    // Defense-in-depth: the schema twin refuses this at mint; a direct construction
-    // must still die loud at boot, with the derivation's own message.
-    //
-    // AUDIT-1 F-21 CHANGED WHICH AXIS THIS ROW CAN USE — the same interaction its Python twin
-    // (`tests/config/test_graph_visit_capacity_relation.py`) records. The mutation used to be
-    // `n_sims_full: 70_000`, which is now refused EARLIER by a TIGHTER ceiling:
-    // `MAX_ARMED_SIMS` (= `MAX_NODES / (4 * MAX_CHILDREN_PER_NODE)`), because the MCTS
-    // node pool overflows from the sim count alone above that. On the SIMS axis the pool
-    // bound subsumes the record-format one — at the pool ceiling the derived capacity is
-    // still nowhere near 65535. `leaf_batch_size` is the OTHER term the capacity is derived from
-    // and carries no such bound, so this row's subject survives on that axis.
+    // The schema twin refuses this at mint; a direct construction must still die loud at
+    // boot. The mutation must ride `leaf_batch_size`, not the sims axis: on sims the tighter
+    // `MAX_ARMED_SIMS` pool bound fires first and this ceiling is never reached.
     let cfg = SelfPlayRunnerConfig {
         leaf_batch_size: 70_000,
         ..graph_cfg()
@@ -180,10 +157,8 @@ fn boot_refuses_a_regime_over_the_format_ceiling() {
 
 #[test]
 fn boot_refuses_a_sim_budget_the_node_pool_cannot_serve() {
-    // The interaction pinned rather than left for the next reader to rediscover: the old
-    // 70_000-sim mutation now reds against the POOL bound, not the record format. Both
-    // refusals are correct and a config hitting either cannot boot; what changed is which one
-    // names it, and a reader of the row above needs to be able to find that out here.
+    // The sims axis reds against the POOL bound, not the record format; both refusals are
+    // correct, and this row records which one names a 70_000-sim budget.
     let cfg = SelfPlayRunnerConfig {
         full_search_prob: 0.10,
         n_sims_quick: 75,
@@ -200,14 +175,10 @@ fn boot_refuses_a_sim_budget_the_node_pool_cannot_serve() {
     );
 }
 
-// ── the density check: which SUPPORT the record has to hold ────────────────────────
-
-/// R347(a) — under `gumbel` the slot count IS the minted m, and the sims regime does not
-/// enter; under `puct` it is the derived formula, and m does not enter.
+/// Prove the gumbel slot count is the minted m and the puct one the derived formula.
 ///
-/// The two halves are asserted together because the failure this guards against is a
-/// SECOND authority: a reader who saw only one arm could reasonably add the other arm's
-/// term to it, and the row would then be sized by a quantity that does not bound it.
+/// Both halves are asserted together: a reader who saw one arm could add the other arm's
+/// term to it, sizing the row by a quantity that does not bound it.
 #[test]
 fn the_gumbel_slot_count_is_the_minted_m_and_the_puct_one_is_the_derived_formula() {
     // PUCT: the sims regime decides, at every m.
@@ -236,7 +207,7 @@ fn the_gumbel_slot_count_is_the_minted_m_and_the_puct_one_is_the_derived_formula
     );
 }
 
-/// The refusal on the Gumbel arm is m past the MINTED bound — not a sims regime.
+/// Prove the Gumbel arm's refusal is m past the minted bound, never a sims regime.
 #[test]
 fn a_gumbel_m_past_the_minted_bound_is_refused() {
     for bad in [0usize, HEXG_GUMBEL_M_MAX + 1, 8192] {
@@ -247,19 +218,14 @@ fn a_gumbel_m_past_the_minted_bound_is_refused() {
             "the refusal must name the key and the minted bound: {err}"
         );
     }
-    // The bound itself resolves — a bound that refused its own value would be off by one.
+    // The bound itself resolves — a bound refusing its own value would be off by one.
     assert_eq!(
         derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel"),
         Ok(HEXG_GUMBEL_M_MAX)
     );
 }
 
-// The GRID arm's "outside this guard entirely" row went with the grid rows themselves
-// (R346(f)): there is no registered encoding left that this guard does not apply to, so the
-// control it provided is now structural rather than testable.
-
-/// The BOOT surface agrees with the mint surface — a graph runner under `gumbel` composes
-/// its ring at the minted m, and one past the bound does not boot.
+/// Prove the boot surface agrees with the mint surface on the gumbel ring's minted m.
 #[test]
 fn boot_composes_the_gumbel_graph_ring_at_the_minted_m() {
     let cfg = SelfPlayRunnerConfig {
@@ -283,13 +249,7 @@ fn boot_composes_the_gumbel_graph_ring_at_the_minted_m() {
     assert!(err.contains("gumbel_m"), "{err}");
 }
 
-// R347(a)'s injector guard — "the two target injectors cannot be armed on the arm that
-// stores a tail" — has no subject after R346(f): the O1 forced-win and solver injectors and
-// their config keys are deleted, so nothing can be armed on the sparse-row arm.
-
-
-/// An unknown kind is REFUSED here too, not defaulted — the mint surface and the runner
-/// surface must agree about what a kind name means.
+/// Prove an unknown search kind is refused by the derivation, never defaulted.
 #[test]
 fn an_unknown_kind_is_refused_by_the_capacity_derivation() {
     let err = derived_visit_capacity(50, 0, 0.0, 50, 0.0, 0, 0, 8, 16, "mctx")

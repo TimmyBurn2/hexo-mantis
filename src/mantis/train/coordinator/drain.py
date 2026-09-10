@@ -1,16 +1,8 @@
-"""Terminal-eval flush + close_out (WP10 §a.4 split — `drain` slice).
+"""Terminal-eval flush and close_out — the run-lifecycle epilogue, training already stopped.
 
-The run-lifecycle epilogue: training has STOPPED. Eval is reached ONLY through the injected
-`EvalPipelineLike` (no `train → eval` import; DAG-clean). These are free functions taking the
-coordinator instance so `drain.py` never imports `step.py` (acyclic); `StepCoordinator` exposes
-thin `flush_pending_eval` / `run_terminal_eval` / `close_out` methods that delegate here.
-
-The promotion runtime is LIVE (WP11-A wired it): completed rounds route through
-`_apply_promotion` into the pipeline's `apply_gate_decision`. Since WP-UNFREEZE (R49) a gate
-decision moves ONLY the deploy tag (anchor + best_model.pt) — actor weights sync continuously
-in `mantis.train.actor_sync` — so every route calls the SAME single-signature applier and the
-pool's lifecycle state is irrelevant to a gate decision. With no pipeline injected
-(`eval_pipeline is None`) both flush functions no-op.
+Eval is reached ONLY through the injected `EvalPipelineLike`, and these are free functions
+taking the coordinator instance so `drain.py` never imports `step.py` (acyclic). With no
+pipeline injected both flush functions no-op.
 """
 from __future__ import annotations
 
@@ -24,21 +16,12 @@ _LOG = logging.getLogger(__name__)
 
 
 def _route_eval_result(coord: Any, result: Any) -> Any:
-    """Route completed eval-round result(s) through the coordinator's async eval-RESULT seam
-    (`on_eval_round_complete` — THE sealbot-WR consumer, §c.4b), then apply any promotion
-    decision (WP11-A `_apply_promotion`).
+    """Route completed eval-round result(s) through `on_eval_round_complete`, then apply any
+    promotion decision.
 
-    Shapes handled EXPLICITLY (RED-TEAM F7 — the sealbot gate's only feed path must never go
-    quiet the way F-10 did):
-      * ``None``            — no pending round; the normal no-op.
-      * a ``Mapping``       — ONE completed round (the pre-WP11-A teardown shape).
-      * a list/tuple        — a BATCH of completed rounds (the N-2 handshake shape WP11-A's
-                              drain may plausibly return): every Mapping element is routed,
-                              one handler call per round.
-      * anything else       — LOUD: an `eval_result_unroutable` event + an ERROR log. It is
-                              deliberately not a raise: a raise here escapes into `close_out`
-                              and skips `on_drained` (`pool.stop`) and the terminal eval
-                              (RED-TEAM F10), which is a worse failure than a recorded drop.
+    A `Mapping` is ONE round, a list/tuple a BATCH, and any other shape is recorded loud rather
+    than raised: a raise here escapes into `close_out` and skips `on_drained` (`pool.stop`) and
+    the terminal eval, which is worse than a recorded drop.
     """
     handler = getattr(coord, "on_eval_round_complete", None)
     if result is None:
@@ -64,10 +47,8 @@ def _route_eval_result(coord: Any, result: Any) -> Any:
 
 
 def _apply_promotion(coord: Any, result: Any) -> None:
-    """WP11-A: apply a promoted round's gate decision through the injected pipeline's
-    `apply_gate_decision` (mantis/eval/promote.py's ONE call site). A promoted result with
-    NO promotion surface (no pipeline, or one missing the method) is recorded LOUD — the
-    same posture as `_unroutable` — never silently dropped."""
+    """Apply a promoted round's gate decision through the injected pipeline; a promoted result
+    with NO promotion surface is recorded loud, never silently dropped."""
     if not isinstance(result, Mapping) or not result.get("promoted"):
         return
     pipeline = getattr(coord, "eval_pipeline", None)
@@ -94,9 +75,8 @@ def _unroutable(coord: Any, result: Any, reason: str) -> None:
 
 
 def flush_pending_eval(coord: Any) -> Any:
-    """Drain a possibly-promoted final eval before teardown (D-012). No-op when no eval
-    pipeline is injected. A drained promotion moves only the deploy tag (WP-UNFREEZE,
-    R49), so this route and the terminal route call the SAME single-signature applier."""
+    """Drain a possibly-promoted final eval before teardown; no-op when no eval pipeline is
+    injected."""
     pipeline = getattr(coord, "eval_pipeline", None)
     if pipeline is None:
         return None
@@ -114,39 +94,13 @@ def run_terminal_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
     pipeline is injected or `terminal_eval_enabled` is False."""
     pipeline = getattr(coord, "eval_pipeline", None)
     cfg = coord.config
-    # WPMINT Phase K-A: read as a plain attribute, never `getattr(cfg, …, True)`. That
-    # fallback was a SECOND default authority beside the dataclass field's own `= True`
-    # (census §1 Surface 3): if the field is ever made required — which is what authoring
-    # `terminal_eval_enabled` as a config key does — a call site that omitted it would have
-    # silently inherited "run the terminal eval" from HERE, with every
-    # `dataclasses.fields()` assertion still green. An absent attribute must be an
-    # AttributeError naming the field, not an inherited posture (R1/LAW-08).
+    # Read as a plain attribute, never `getattr(cfg, …, True)`: a fallback here would be a
+    # second default authority beside the schema field, and an absent key must raise.
     if pipeline is None or not cfg.terminal_eval_enabled:
         return None
-    # R343(c) — A RUN BEING STOPPED TO BE RESUMED HAS NOT CLOSED, so it does not run its
-    # closing measurement. The cost this removes is MEASURED, not supposed — F-R-P2B-4 timed a
-    # SIGTERM's checkpoint at seconds and the terminal battery that followed it at t+67 min and
-    # still running, bounded by `terminal_eval_hard_cap_sec` (14400 s in `run6.yaml`) rather
-    # than by `round_timeout_sec`. On the 12 h block R343(f) sets that is up to a THIRD of the
-    # run spent closing a run about to be reopened, and RESUME-1 exists to make stopping cheap
-    # enough to be worth doing.
-    #
-    # THE DECISION IS PASSED IN, NOT RE-DERIVED HERE, AND A FAILING TEST IS WHY. The first cut
-    # keyed the skip on `shutdown.shutdown_save` alone, reasoning that only a signal sets it.
-    # That is false: the DISK GUARD stops a run by SIGTERMing its OWN process
-    # (`lifecycle/disk_guard.py`), so an rc-47 abort arrives here indistinguishable from an
-    # operator's Ctrl-C. The obvious repair — also require `abort_rule is None` — is ALSO false
-    # here, because the disk rule is recorded in `run.py`'s teardown STRICTLY AFTER `close_out`
-    # (that ordering is deliberate: it is what makes `record_abort`'s first-fire-wins keep the
-    # ROOT CAUSE when the terminal round breaks too). At this point in the epilogue `abort_rule`
-    # is still None on a disk abort.
-    #
-    # So the fact cannot be reconstructed from the coordinator's own state at all, and the ONE
-    # place that holds every term — the shutdown state, the guard's latched `critical_fired`,
-    # and the recorded rule — is the composition root's `finally`. It decides; this function
-    # obeys. The default is FALSE, so anything that does not positively assert a resumable stop
-    # still runs its terminal battery: an ABORTED run is being diagnosed, not resumed, and its
-    # terminal round is part of the record the rc-48 seam reads.
+    # A resumable stop is PASSED IN, never re-derived here: the disk guard stops a run by
+    # SIGTERMing its own process and its abort rule is recorded after `close_out`, so no state
+    # visible here separates an operator stop from an abort. The default is False.
     if resumable_stop:
         _LOG.info(
             "terminal_eval_skipped_on_signal_stop step=%s — this stop is an interruption, not "
@@ -163,9 +117,8 @@ def run_terminal_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
     _LOG.info("terminal_eval step=%s", getattr(coord, "_train_step", None))
     emit_via(getattr(coord, "_sink", None),
              {"event": "terminal_eval", "step": getattr(coord, "_train_step", None)})
-    # Terminal promotion: the pool is already stopped here, and that is FINE — a gate
-    # decision is pool-independent on every route (WP-UNFREEZE, R49): it writes the
-    # deploy tag only, so the mid-run/terminal asymmetry the old sync flag encoded is gone.
+    # The pool is already stopped here, and that is fine: a gate decision writes the deploy tag
+    # only, so it is pool-independent on every route.
     result = _route_eval_result(coord, pipeline.run_evaluation(
         coord.eval_model, coord._train_step, best,
         full_config=coord.full_config, best_model_step=best_step, ignore_stride=True,
@@ -175,28 +128,17 @@ def run_terminal_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
 
 
 def _record_terminal_outcome(coord: Any, result: Any) -> None:
-    """Latch the TERMINAL round's own reason on the coordinator (WP12-R Phase O, R152).
+    """Latch the TERMINAL round's own reason on the coordinator.
 
-    THE one writer, and it is reachable only from `run_terminal_eval` — the one function
-    that passes `ignore_stride=True`. That is what keeps R133's split structural rather
-    than conditional: a mid-run break stays non-fatal (rounds recur; persistent breakage is
-    the watchdog's jurisdiction) because no mid-run route can reach this line, not because
-    somebody remembered to test for it.
+    THE one writer, reachable only from `run_terminal_eval` — that is what keeps the mid-run
+    /terminal split structural rather than conditional. The reason is read in ONE expression off
+    the routed mapping and travels as the enum member's own `str` value, because the train
+    package may not import the eval package.
 
-    The reason is read in ONE expression off the ROUTED MAPPING itself — no derivation, no
-    recomputation — so the latch cannot disagree with the round it came from. It travels as
-    the reason enum member's own `str` value: the train package may not import the eval
-    package at all (repo_design §2, census-tested — which is why this docstring names no
-    dotted path into it), so this layer TRANSPORTS the fact and never authors it; the
-    composition root re-parses it through the reason enum before naming a rule.
-
-    Both failure arms are LOUD, the `disarm_staleness` posture verbatim (`close_out`
-    below): a coordinator without the set-once writer, and a result shape the seam cannot
-    read, are both wiring bugs, and a wiring bug that degraded to "no terminal outcome"
-    would restore rc 0 on a broken run — the exact defect this phase closes. This is
-    deliberately NOT `_unroutable`'s recorded-drop posture: that exists because a raise
-    there would skip `on_drained`/`pool.stop`, and by the time this runs both have already
-    happened (`close_out`'s order).
+    Raises:
+        TypeError: the routed result is not a mapping, or the coordinator has no set-once
+            writer; both are wiring bugs, and degrading either would report a broken run as
+            rc 0.
     """
     if not isinstance(result, Mapping):
         raise TypeError(
@@ -210,36 +152,31 @@ def _record_terminal_outcome(coord: Any, result: Any) -> None:
             "record_terminal_eval_reason(); without it a broken terminal round cannot "
             "reach the process exit code and the run reports success (R133/LAW-15)"
         )
-    # Written as the attribute call and not through a local: the census that keeps this the
-    # ONE writer (`tests/train/test_terminal_eval_rc.py`, O-07) walks the AST for a call to
-    # this name, and a bound-local indirection would make a second writer invisible to it.
+    # Written as the attribute call and not through a local: the one-writer census walks the AST
+    # for a call to this name, and a bound local would hide a second writer from it.
     coord.record_terminal_eval_reason(result["eval_broken_reason"])
 
 
 def close_out(
     coord: Any, on_drained: Callable[[], None] | None = None, *, resumable_stop: bool = False,
 ) -> None:
-    """The run epilogue (§D-LOOPFIX W1): (0) DISARM the heartbeat watchdog's staleness fire,
-    (1) DRAIN the in-flight eval, (2) ``on_drained()`` (the caller passes ``pool.stop`` so
-    the terminal eval runs on an UNLOADED GPU), (3) TERMINAL full-battery eval on the final
-    ckpt. The drain-before-stop order survives for drain-BOUNDING reasons alone (the flush
-    joins the in-flight round under its budget); gate decisions themselves are
-    pool-independent on every route (WP-UNFREEZE, R49).
+    """Run the epilogue: disarm the watchdog's staleness fire, drain the in-flight eval, call
+    `on_drained` (the caller passes `pool.stop`), then run the terminal eval on an unloaded GPU.
 
-    Step (0) is the FIRST action and it is load-bearing (O-27): the close-out waits below
-    are legally up to 14400 s, an order of magnitude past the 1800 s staleness deadline, so
-    a disarm that lands after `flush_pending_eval` turns every clean finish with a long
-    terminal eval into a false-42 supervisor RELAUNCH STORM. Only staleness is disarmed —
-    the persist-fatal fire and the heartbeat-file `seq` stay live through the whole epilogue.
+    The disarm is FIRST and load-bearing: the close-out waits are legally up to 14400 s against
+    a 1800 s staleness deadline, so a disarm landing later turns every clean finish with a long
+    terminal eval into a false-42 relaunch storm. Only staleness is disarmed — the persist-fatal
+    fire and the heartbeat `seq` stay live through the whole epilogue.
+
+    Raises:
+        TypeError: `coord.heartbeat_watchdog` carries no `disarm_staleness()`.
     """
     watchdog = getattr(coord, "heartbeat_watchdog", None)
     if watchdog is not None:
         disarm = getattr(watchdog, "disarm_staleness", None)
         if disarm is None:
-            # FAIL LOUD (RED-TEAM F8): silently skipping the disarm because a duck-typed
-            # object lacks the method is the exact false-42 relaunch storm MUST-2 exists to
-            # prevent. A wrong object here is a wiring bug, and a wiring bug must not
-            # degrade into "no watchdog" without anybody noticing.
+            # Fail loud: a duck-typed object without the method is a wiring bug, and letting it
+            # degrade into "no watchdog" is the false-42 relaunch storm this disarm prevents.
             raise TypeError(
                 f"close_out: coord.heartbeat_watchdog ({type(watchdog).__name__}) has no "
                 "disarm_staleness(); a close-out that cannot disarm staleness would "

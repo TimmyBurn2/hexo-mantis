@@ -1,14 +1,8 @@
-"""⊕⊕ Suite B — lifecycle CONTRACT (WP10, 14 tests: T-LC-01 … T-LC-14).
+"""Lifecycle CONTRACT: SIGINT/SIGTERM save-then-exit, always-armed self-play stall watchdog,
+disk guard, persist-fatal.
 
-Contract-tested per repo_design §11 (run-safety core): SIGINT/SIGTERM save-then-exit,
-always-armed self-play stall watchdog, disk guard, persist-fatal. Written oracle-first
-against the OLD `signals.py` / `disk_guard.py` / `_fire_stall_watchdog` behavior (the code IS
-the spec — CPU-capturable / self-consistent). RED until IMPL writes `mantis.train.lifecycle.*`
-(Slice 1); IMPL turns it green.
-
-Each test's docstring cites its `T-LC-*` id + the one-line PASS bar from `wp/WP10/PREREG.md`.
-Signals use a real ShutdownState + monkeypatched sys.exit; the watchdog/disk-guard use a fake
-clock / injected EventSink spy / monkeypatched exit_fn + os.kill + free-space fn.
+Signals use a real ShutdownState + monkeypatched sys.exit; the watchdog and disk guard use a
+fake clock, an injected EventSink spy, and monkeypatched exit_fn / os.kill / free-space fn.
 """
 from __future__ import annotations
 
@@ -22,7 +16,6 @@ from pathlib import Path
 import pytest
 import torch
 
-# ── Slice 1 lifecycle surface under conformance (RED until IMPL) ───────────────────────────
 from mantis.train.emit import EventSink, NullEventSink  # noqa: F401 — the injected emit seam
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
@@ -33,10 +26,8 @@ from mantis.train.lifecycle.watchdog import (
     watchdog_snapshot_path,
 )
 
-GB = 1_000_000_000  # decimal GB — DISPATCHER-DIRECTED correction (WP10 Slice 1): the port
-# reproduces the old `monitoring/disk_guard.py` `usage.free / 1e9` divisor EXACTLY
-# (zero-behavior-change); the original `1024 ** 3` mandated a ~7.4% threshold shift and was
-# corrected together with disk_guard.py as a coupled fix, not a silent edit-to-pass.
+GB = 1_000_000_000  # decimal GB: reproduces the old `usage.free / 1e9` divisor exactly, where
+# `1024 ** 3` would have shifted every threshold by ~7.4%.
 
 
 @pytest.fixture
@@ -59,10 +50,9 @@ def _fake_disk_usage(free_gb: float):
     return f
 
 
-# ═══ Signal choreography ═════════════════════════════════════════════════════════════════════
 def test_sigint_sets_save_then_exit_state(restore_signals):
-    """T-LC-01 — PASS iff one SIGINT flips running=False and shutdown_save=True. Bites: a signal
-    that does not request a save."""
+    """One SIGINT flips running=False and shutdown_save=True. Bites: a signal that does not
+    request a save."""
     state = ShutdownState()
     install_signal_handlers(state)
     handler = signal.getsignal(signal.SIGINT)
@@ -73,8 +63,8 @@ def test_sigint_sets_save_then_exit_state(restore_signals):
 
 
 def test_sigterm_sets_save_then_exit_state(restore_signals):
-    """T-LC-02 — PASS iff one SIGTERM does the same. Bites: SIGTERM ignored (the disk-guard fail
-    path relies on it)."""
+    """One SIGTERM does the same. Bites: SIGTERM ignored (the disk-guard fail path relies on
+    it)."""
     state = ShutdownState()
     install_signal_handlers(state)
     handler = signal.getsignal(signal.SIGTERM)
@@ -85,9 +75,8 @@ def test_sigterm_sets_save_then_exit_state(restore_signals):
 
 
 def test_double_signal_force_exits(restore_signals, monkeypatch):
-    """T-LC-03 — PASS iff a second signal (stop_count>=2) force-tears-down registered children
-    then calls os._exit(1). Bites: the second signal not forcing exit, or exiting without
-    tearing down children (CARD-ORPHAN-WORKERS, R230)."""
+    """A second signal (stop_count>=2) force-tears-down registered children then calls
+    os._exit(1). Bites: no forced exit, or exiting with children left orphaned."""
     from mantis.train.lifecycle import signals as sig_mod
     state = ShutdownState()
     install_signal_handlers(state)
@@ -106,10 +95,8 @@ def test_double_signal_force_exits(restore_signals, monkeypatch):
 
 
 def test_loop_saves_final_checkpoint_on_shutdown():
-    """T-LC-04 — PASS iff the loop, observing shutdown_save, calls trainer.save_checkpoint before
-    returning (via a TrainerLike spy). Bites: a shutdown that exits without the final save.
-    (Slice 2: run_training_loop lives in train/loop.py — the injection contract is inferred, see
-    ORACLE_NOTES J8; this is the most IMPL-coupled Suite-B test.)"""
+    """The loop, observing shutdown_save, calls trainer.save_checkpoint before returning.
+    Bites: a shutdown that exits without the final save."""
     from mantis.train.loop import run_training_loop  # Slice 2 (lazy)
 
     class SpyTrainer:
@@ -126,7 +113,6 @@ def test_loop_saves_final_checkpoint_on_shutdown():
     assert spy.saved, "loop must call trainer.save_checkpoint on shutdown_save before returning"
 
 
-# ═══ Stall watchdog ══════════════════════════════════════════════════════════════════════════
 def _watchdog(spy_sink, fake_clock, *, timeout=DEFAULT_SELFPLAY_STALL_TIMEOUT_SEC):
     exits: list = []
     snaps: list = []
@@ -139,16 +125,16 @@ def _watchdog(spy_sink, fake_clock, *, timeout=DEFAULT_SELFPLAY_STALL_TIMEOUT_SE
 
 
 def test_watchdog_arms_always(spy_sink, fake_clock):
-    """T-LC-05 — PASS iff the watchdog arms and emits selfplay_stall_watchdog_armed regardless of
-    config. Bites: a conditionally-armed watchdog."""
+    """The watchdog arms and emits selfplay_stall_watchdog_armed regardless of config. Bites: a
+    conditionally-armed watchdog."""
     wd, _exits, _snaps = _watchdog(spy_sink, fake_clock)
     wd.arm(0)
     assert spy_sink.has("selfplay_stall_watchdog_armed")
 
 
 def test_watchdog_resets_on_new_games(spy_sink, fake_clock):
-    """T-LC-06 — PASS iff tick(games_completed) with an increased count resets the stall clock.
-    Bites: a stall clock that never resets → spurious fire."""
+    """tick(games_completed) with an increased count resets the stall clock. Bites: a stall
+    clock that never resets, so it fires spuriously."""
     fake_clock.t = 0.0
     wd, exits, _snaps = _watchdog(spy_sink, fake_clock, timeout=1800.0)
     wd.arm(0)                      # baseline at t=0, games=0
@@ -158,8 +144,8 @@ def test_watchdog_resets_on_new_games(spy_sink, fake_clock):
 
 
 def test_watchdog_fires_after_timeout(spy_sink, fake_clock):
-    """T-LC-07 — PASS iff no new games for >= timeout → loud selfplay_stall_watchdog log + best-
-    effort snapshot + os._exit(SELFPLAY_STALL_EXIT_CODE). Bites: no fire / wrong exit code / a
+    """No new games for >= timeout gives a loud selfplay_stall_watchdog log, a best-effort
+    snapshot and os._exit(SELFPLAY_STALL_EXIT_CODE). Bites: no fire, wrong exit code, or a
     clean-shutdown attempt."""
     fake_clock.t = 0.0
     wd, exits, snaps = _watchdog(spy_sink, fake_clock, timeout=1800.0)
@@ -171,9 +157,8 @@ def test_watchdog_fires_after_timeout(spy_sink, fake_clock):
 
 
 def test_watchdog_snapshot_path_is_distinct():
-    """T-LC-08 — PASS iff the fire-time snapshot targets <buffer>.watchdog, never the canonical
-    replay_buffer.bin. Bites: the watchdog truncating the known-good resume buffer. (Path derived
-    via watchdog_snapshot_path — inferred surface, ORACLE_NOTES J7.)"""
+    """The fire-time snapshot targets <buffer>.watchdog, never the canonical replay_buffer.bin.
+    Bites: the watchdog truncating the known-good resume buffer."""
     canonical = Path("/data/run/replay_buffer.bin")
     snap = watchdog_snapshot_path(canonical)
     assert str(snap).endswith(".watchdog")
@@ -182,8 +167,8 @@ def test_watchdog_snapshot_path_is_distinct():
 
 
 def test_watchdog_no_fire_when_timeout_nonpositive(spy_sink, fake_clock):
-    """T-LC-09 — PASS iff selfplay_stall_timeout_sec <= 0 never fires while the arm-log still
-    emits. Bites: firing when the timeout is disabled."""
+    """selfplay_stall_timeout_sec <= 0 never fires while the arm-log still emits. Bites: firing
+    when the timeout is disabled."""
     fake_clock.t = 0.0
     wd, exits, _snaps = _watchdog(spy_sink, fake_clock, timeout=0.0)
     wd.arm(0)
@@ -192,10 +177,9 @@ def test_watchdog_no_fire_when_timeout_nonpositive(spy_sink, fake_clock):
     assert not exits
 
 
-# ═══ Disk guard ══════════════════════════════════════════════════════════════════════════════
 def test_disk_guard_emits_free_event(tmp_path, spy_sink, monkeypatch):
-    """T-LC-10 — PASS iff check_once emits a disk_free event with disk_free_gb through the injected
-    EventSink. Bites: no emission."""
+    """check_once emits a disk_free event with disk_free_gb through the injected EventSink.
+    Bites: no emission."""
     monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(20))
     dg = DiskGuard(watch_path=tmp_path, interval_sec=60, warn_gb=10, fail_gb=5,
                    keep_all=False, sink=spy_sink)
@@ -206,8 +190,8 @@ def test_disk_guard_emits_free_event(tmp_path, spy_sink, monkeypatch):
 
 
 def test_disk_guard_warns_below_warn_gb(tmp_path, spy_sink, monkeypatch):
-    """T-LC-11 — PASS iff free < warn_gb → warn log + disk_alert level=warn. Bites: no warning near
-    the threshold."""
+    """free < warn_gb gives a warn log + disk_alert level=warn. Bites: no warning near the
+    threshold."""
     monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(8))  # < warn_gb=10
     dg = DiskGuard(watch_path=tmp_path, interval_sec=60, warn_gb=10, fail_gb=5,
                    keep_all=False, sink=spy_sink)
@@ -217,8 +201,8 @@ def test_disk_guard_warns_below_warn_gb(tmp_path, spy_sink, monkeypatch):
 
 
 def test_disk_guard_sigterm_below_fail_gb(tmp_path, spy_sink, monkeypatch):
-    """T-LC-12 — PASS iff free < fail_gb → disk_alert level=critical + os.kill(getpid(), SIGTERM).
-    Bites: no SIGTERM (the run burns disk to zero)."""
+    """free < fail_gb gives disk_alert level=critical + os.kill(getpid(), SIGTERM). Bites: no
+    SIGTERM, so the run burns disk to zero."""
     monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(3))  # < fail_gb=5
     kills: list = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: kills.append((pid, sig)))
@@ -231,8 +215,8 @@ def test_disk_guard_sigterm_below_fail_gb(tmp_path, spy_sink, monkeypatch):
 
 
 def test_disk_guard_thresholds_ignore_keep_all(tmp_path, spy_sink, monkeypatch):
-    """T-LC-13 — PASS iff keep_all=True does NOT disable the disk thresholds. Bites: keep_all
-    silencing the safety guard."""
+    """keep_all=True does NOT disable the disk thresholds. Bites: keep_all silencing the safety
+    guard."""
     monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(3))  # < fail_gb=5
     kills: list = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: kills.append((pid, sig)))
@@ -242,18 +226,14 @@ def test_disk_guard_thresholds_ignore_keep_all(tmp_path, spy_sink, monkeypatch):
     assert kills == [(os.getpid(), signal.SIGTERM)], "keep_all must NOT silence the SIGTERM guard"
 
 
-# ═══ Persist-fatal (repo_design §11 / LAW-14) ════════════════════════════════════════════════
 def test_buffer_persist_error_increments_counter_and_aborts(tmp_path, tiny_net, valid_config,
                                                             metadata_kwargs, monkeypatch):
-    """T-LC-14 — PASS iff a buffer/checkpoint save failure increments persist_errors_total and
-    aborts (run-fatal), NOT a silent except: pass. Bites: a swallowed persist failure.
-    Realized via the checkpoint save path (torch.save forced to fail) — ORACLE_NOTES J9.
+    """A buffer/checkpoint save failure increments persist_errors_total and aborts run-fatally
+    rather than swallowing it. Bites: a swallowed persist failure.
 
-    `persist_errors_total` is a process-wide module GLOBAL and the `global … += 1` under test
-    cannot be undone by an assertion. The monkeypatch pins it to 0 here AND RESTORES the
-    pre-test value at teardown, so the increment cannot leak into another suite (WP13-A
-    REVIEW-impl F-2: the heartbeat watchdog's persist-fatal rule is the literal `> 0`, so a
-    leaked count would abort a later, healthy watchdog on inherited state)."""
+    `persist_errors_total` is a process-wide module GLOBAL, so the monkeypatch pins it to 0 AND
+    restores the pre-test value at teardown: the heartbeat watchdog's persist-fatal rule is the
+    literal `> 0`, and a leaked count would abort a later, healthy watchdog."""
     from mantis.train import checkpoints  # Slice 1
     monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
     before = checkpoints.persist_errors_total

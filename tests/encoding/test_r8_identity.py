@@ -66,7 +66,7 @@ def test_r328b_04_the_roster_carries_both_graph_rows() -> None:
     assert graph == [R8, V1], f"graph roster is {graph}"
 
 
-# ═══ the marker branch the second graph row forced open ══════════════════════════════════
+# the marker branch the second graph row forced open
 def test_r328c_05_an_unstamped_graph_checkpoint_now_REFUSES_instead_of_guessing() -> None:
     """THE DEFECT THE IDENTITY CHANGE EXPOSED, and the reason it is code and not a gate.
 

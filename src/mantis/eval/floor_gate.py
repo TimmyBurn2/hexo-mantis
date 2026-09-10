@@ -1,37 +1,14 @@
 """The strength-floor gate — the cheap probe that decides whether the EXPENSIVE ladder runs.
 
-MEASURED GROUNDS (F-R-P2B-5). A terminal eval round at training step 33 spent its entire
-`monitor.drain.terminal_eval_hard_cap_sec` budget and completed ZERO spec'd games. The worker
-was healthy the whole time — single process, ~73-74% CPU, GPU active, 2:54:53 of CPU time at
-the cap — so nothing wedged; the round was simply asked for more games than a near-random
-candidate can finish at the configured search width. `run_round`'s phase order is what turned
-that into a total loss: the gate block runs FIRST and is the round's most expensive phase, so
-the budget was gone before the cheapest opponent in the spec was ever reached.
+MEASURED GROUNDS: a terminal eval round spent its whole hard-cap budget and completed ZERO
+spec'd games on a healthy worker, because the gate block ran first and is the round's most
+expensive phase. Two pure functions over already-played records plus their verdict type — it
+plays nothing, spawns nothing and reads no config, so the rule is testable without a GPU.
 
-WHAT THIS MODULE IS. Two pure functions over already-played game records, plus the verdict
-type that carries their arithmetic. It plays nothing, spawns nothing, and reads no config: the
-worker owns the probe games and `mantis.config.resolve.eval_posture` owns the terms. That
-split is deliberate — the decision rule is the part worth testing without a GPU, a book, or a
-subprocess.
-
-WHY DECISIVENESS AND NOT ONLY WIN RATE. The same burn measured `draw_rate` 1.0 with
-`avg_game_length` at the arena's 128-move cap: every game was a ply-cap non-result. A win-rate
-bar alone reads such a round as a perfectly healthy 0.5 — the draw-aware win rate of an
-all-draw set is exactly 0.5 — and would let the ladder run on a candidate that has never
-finished a game. `decisive_rate` is the axis that separates "the two sides are evenly matched"
-from "neither side can finish", and it is measured from the arena's recorded `terminal` field
-rather than re-derived from `(winner, plies)`, which cannot tell a win found ON the cap ply
-from the cap itself.
-
-THE VERDICT IS ARMED IN TWO COMMITTED CONFIGS. `configs/run5.yaml` and
-`configs/shakedown_20260807.yaml` mint `strength_floor: {probe_games: 4, min_decisive_rate:
-0.25, min_winrate: 0.0}`; the other five mint `null`. So `evaluate_strength_floor` HAS callers
-in a shipped run — `eval/worker.py::run_round`'s PHASE 0 and `tools/acceptance_witness.py` —
-and on those two configs the round's phase order IS the floor-first one. This paragraph said
-the opposite ("every committed config mints null, so no caller in a shipped run") from the
-module's landing until AUDIT-1 F-05 measured it; the arming happened at the run5 mint and the
-docstring was never revisited. Repaired in place under R311(c). Changing the three values is a
-mint event and they remain operator-owned prereg rows.
+DECISIVENESS AND NOT ONLY WIN RATE, because a win-rate bar reads an all-draw set (that burn
+measured `draw_rate` 1.0 at the arena's move cap) as a healthy 0.5. `decisive_rate` comes from
+the arena's recorded `terminal` field, which `(winner, plies)` cannot reconstruct. The verdict
+IS armed in two committed configs, and changing its three values is a mint event.
 """
 from __future__ import annotations
 
@@ -41,11 +18,8 @@ from typing import Any
 
 from mantis.arena.adjudicate import TERMINAL_PLY_CAP
 
-#: The floor probe's own regime label. It is NOT `"random"` even though the probe plays the
-#: random opponent: a probe game and a `random_floor_games` game are scored by different rules
-#: (the probe's outcome gates a round; the floor's outcome is reported as `wr_random`), and
-#: `aggregate_rung`'s MixedRegimeError exists precisely so two differently-purposed sets never
-#: pool. Keeping the label distinct is what stops a future change from pooling them silently.
+#: The floor probe's own regime label, deliberately NOT `"random"` even though the probe plays
+#: the random opponent: the two sets are scored by different rules and must never pool.
 FLOOR_PROBE_VARIANT = "floor_probe"
 
 
@@ -54,9 +28,8 @@ class StrengthFloorVerdict:
     """One floor decision plus every number that produced it.
 
     `passed` is the only field the round branches on; the rest exist so the emitted event can
-    show HOW the bar was met or missed. LAW-18's complaint about a bare flag is exactly this:
-    a `False` with no measurement beside it cannot distinguish a starved probe from a failing
-    candidate.
+    show HOW the bar was met or missed — a bare `False` cannot distinguish a starved probe from
+    a failing candidate.
     """
 
     passed: bool
@@ -88,10 +61,8 @@ class StrengthFloorVerdict:
 def probe_measurements(records: Sequence[Any]) -> tuple[int, int, float, int]:
     """`(games, decisive_games, draw_aware_wins, draws)` over arena `GameRecord`s.
 
-    `draw_aware_wins` counts a draw as half a win — the same convention
-    `worker.py::_draw_aware_wr` and `aggregate.py` already use for every other win rate in
-    this package, so the floor's number is comparable with the ones beside it rather than a
-    second definition of "win rate" in the same result payload.
+    A draw counts as half a win, the convention every other win rate in this package uses, so
+    the floor's number is comparable with the ones beside it.
     """
     games = len(records)
     decisive_games = sum(1 for rec in records if rec.terminal != TERMINAL_PLY_CAP)
@@ -103,14 +74,9 @@ def probe_measurements(records: Sequence[Any]) -> tuple[int, int, float, int]:
 def evaluate_strength_floor(records: Sequence[Any], spec: Any) -> StrengthFloorVerdict:
     """Decide the floor from the probe's records and the resolved `StrengthFloorSpec`.
 
-    Both bars must hold, and BOTH are reported whether or not either fails — a verdict that
-    stopped at the first failing bar would make the other one invisible, and an operator
-    re-tuning the floor needs to see the axis they are not currently failing on.
-
-    An EMPTY probe fails, and fails loudly rather than dividing by zero: zero games is zero
-    evidence, and a floor that passes on no evidence is the phantom-gate class LAW-07 exists
-    to prevent. `probe_games >= 1` makes an empty probe unreachable through a validated
-    config, so this arm is defence in depth, not the expected path.
+    Both bars must hold and BOTH are reported either way, so an operator re-tuning the floor
+    sees the axis they are not currently failing on. An EMPTY probe fails rather than dividing
+    by zero: zero games is zero evidence.
     """
     games, decisive_games, wins, draws = probe_measurements(records)
     decisive_rate = (decisive_games / games) if games else 0.0

@@ -1,40 +1,11 @@
-"""⊕ WPMAIN ORACLE — the preflight child boots THE path, proved at the process boundary
-(DESIGN §1.4/§9, oracles O-C1 + O-C2).
+"""The preflight child boots the composition root, proved at the process boundary.
 
-RED at drive time until IMPL re-points the child: the spawn below passes NO `--device`, and
-at `b482243` the tool's `_require_preflight_args` refuses that with rc 2 (R126 kills the flag
-— DESIGN ADDENDUM C.1.2). So the first assertion is the RED anchor, and it is red for the
-right reason: the surface it drives is the one this WP deletes.
+`run_boot_identity` and `resolved_config` are emitted by `compose_run` and by nothing else in
+the tree, so their presence in the CHILD's own log directory is evidence no AST census can
+forge: the parent re-execs a fresh interpreter, and what that process did is observable only
+from what it left behind.
 
-Why a SUBPROCESS oracle exists at all when `tests/test_run_one_authority.py` already censuses
-the child's source: the dispatch's minimum set says "at SUBPROCESS level (real spawn, not
-import-level only)", and it is right to. Every static census in this WP reads the file the
-parent RE-EXECS — but the parent re-execs `os.path.abspath(__file__)` in a fresh interpreter,
-and what that process actually did is only observable from what it left behind. The child's
-own JSONL segment is that evidence, and it is evidence no AST can forge:
-
-- `run_boot_identity` and `resolved_config` are emitted by `compose_run` and by nothing else
-  in the tree. Their presence in the CHILD's log directory is proof the child went through
-  the composition root, at the process boundary (O-C1).
-- `run_boot_identity.config_sha256` is `config_identity_sha256` of the config the child
-  ACTUALLY composed. The parent hashes the config IT loaded with the same one authority — so
-  a child that read a different file, or composed a differently-overridden config, is a
-  named mismatch instead of an invisible one. That is the F-B1 closure, re-run through the
-  new path (O-C2).
-- `run_boot_identity.run_id` is the CONFIG's run_id. At `b482243` the child passes
-  `run_id=booted.run_id` explicitly; after R123 the parameter is gone and the composer reads
-  `config.run_id` itself. Either way the published id must be the minted one and never the
-  retired `"run"` default — this is the behavioural half of O-A5.
-
-`tests/tools/test_preflight_armed_smoke.py` remains the R103 live consumer of
-`configs/smoke_preflight_armed.yaml` and success criterion 3's own oracle; its ASSERTIONS go
-green on the new path unedited (its one mechanical argv hunk — dropping the dead `--device
-cpu` — is IMPL's, per the R88 census). This file does not restate it: it asserts the
-convergence property that file never could, because a green report proves the tool worked,
-not that the child took THE path.
-
-INTEGRATION tier: a real ~30 s CPU boot + burst, the same drive class as the armed smoke.
-Fakes: none. Real tool, real subprocess, real config, real burst.
+INTEGRATION tier: a real ~30 s CPU boot + burst. No fakes — real tool, subprocess, config.
 """
 from __future__ import annotations
 
@@ -55,18 +26,16 @@ _REPO = Path(__file__).resolve().parents[2]
 _TOOL = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
 _CONFIG = _REPO / "configs" / "smoke_preflight_armed.yaml"
 
-#: The armed smoke's minimum legal burst plus headroom, and the number
-#: `test_preflight_armed_smoke.py` drives — one burst length, one authority.
+#: The burst length `test_preflight_armed_smoke.py` drives — one authority.
 _BURST_STEPS = 16
 
-#: The four events `compose_run` alone publishes into a run's own segment.
+#: The events `compose_run` alone publishes into a run's own segment.
 _COMPOSER_EVENTS = ("run_boot_identity", "resolved_config")
 
 
 @pytest.fixture(scope="module")
 def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ceiling_sec):
-    """ONE real preflight spawn, shared by every assertion below (a second boot to re-assert the
-    same process would be waste, not independence). Budget from `conftest.PREFLIGHT_BUDGET_SEC`."""
+    """Spawn ONE real preflight, shared by every assertion below."""
     out_dir = tmp_path_factory.mktemp("preflight_convergence")
     proc = subprocess.run(
         [sys.executable, str(_TOOL), "--config", str(_CONFIG),
@@ -79,9 +48,10 @@ def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ce
 
 
 def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed — the same helper, by
-    the same guard idiom, as `tests/tools/test_preflight_mint.py`'s. FSTRING_MIDDLE is 3.12+
-    (PEP 701); on the 3.11 floor f-strings lex as STRING."""
+    """Return source with COMMENT / STRING / f-string-literal tokens removed.
+
+    FSTRING_MIDDLE is 3.12+ (PEP 701); on the 3.11 floor f-strings lex as STRING.
+    """
     skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         return "\n".join(tok.string for tok in tokenize.tokenize(handle.readline)
@@ -89,8 +59,7 @@ def _code_text(path: Path) -> str:
 
 
 def _child_events(out_dir: Path) -> list[dict]:
-    """The CHILD's own event stream. `build_run_safety(log_dir=out_dir/"logs")` is the only
-    thing that writes here, and only `compose_run` calls it."""
+    """Return the CHILD's own event stream — only `compose_run` writes here."""
     segments = sorted((out_dir / "logs").glob("*.jsonl"))
     assert segments, (
         f"the child left no JSONL segment under {out_dir / 'logs'} — it never reached "
@@ -101,17 +70,11 @@ def _child_events(out_dir: Path) -> list[dict]:
 
 
 def test_the_child_boots_green_with_no_device_flag_on_the_argv(preflight_child) -> None:
-    """O-C1, arm 1 — and the RED anchor.
+    """The child boots the CONFIG's own device, with no `--device` flag on the argv.
 
-    The invocation carries `--config --burst-steps --out-dir --timeout-sec` and nothing
-    else. At `b482243` that is rc 2 (`_require_preflight_args` lists `--device` among the
-    required four). After R126 the flag does not exist and the child boots the CONFIG's own
-    device — which is the whole property: preflighting run5 boots run5's minted device, so
-    a `--device cpu` invocation can no longer false-clear a cuda run's memory wall
-    (the WPBOX 16 GiB OOM; LAW-03's instrument-that-cannot-false-clear corollary).
-
-    MUTATION THAT REDS IT: keep the flag. Nothing else in the WP drives the argv the parent
-    actually builds — the source censuses read `_child_argv`'s TEXT; this runs it."""
+    Killer: restore the flag — a `--device cpu` invocation can then false-clear a cuda run's
+    memory wall. This is the only oracle that RUNS the argv the parent builds.
+    """
     proc, out_dir = preflight_child
     tail = (proc.stdout + proc.stderr)[-3000:]
     assert proc.returncode == 0, (
@@ -124,17 +87,11 @@ def test_the_child_boots_green_with_no_device_flag_on_the_argv(preflight_child) 
 
 
 def test_the_child_process_left_the_composition_roots_own_boot_events(preflight_child) -> None:
-    """O-C1, arm 2 — the convergence proof, at the process boundary.
+    """The child's segment carries the composition root's own boot events, exactly once each.
 
-    `run_boot_identity` and `resolved_config` are emitted by `compose_run` and by nothing
-    else. A child that boots an approximation of the composition root — which is exactly
-    what `_boot_main` IS at `b482243`, and what it would remain if the re-point were partial
-    — cannot produce them.
-
-    MUTATION THAT REDS IT: re-point the child at a shim that rebuilds the composition
-    inline. rc stays 0, the evidence report stays `pass`, `test_preflight_armed_smoke.py`
-    stays green, and the two boot paths are two again. No other oracle in this WP observes
-    the child PROCESS."""
+    Killer: re-point the child at a shim that rebuilds the composition inline — rc stays 0
+    and the evidence report stays `pass`, so no other oracle observes the child PROCESS.
+    """
     _proc, out_dir = preflight_child
     names = [event.get("event") for event in _child_events(out_dir)]
     for event in _COMPOSER_EVENTS:
@@ -147,21 +104,14 @@ def test_the_child_process_left_the_composition_roots_own_boot_events(preflight_
 def test_the_childs_published_identity_is_the_config_it_actually_composed(
     preflight_child,
 ) -> None:
-    """O-C2 — the `run_boot_identity` sha handshake, green through the new path.
+    """The identity the child publishes is of the config it actually composed.
 
-    F-B1's defect was precisely that parent and child read the config INDEPENDENTLY and only
-    the parent's identity was published, so a child that read a different file was invisible
-    in the evidence artefact. The hash is recomputed here from the config the child was
-    ASKED to boot, with the burst override applied the same way the child applies it
-    (`dump -> mutate one key -> model_validate`, `preflight_mint.py:544-553`).
+    The hash is recomputed from the config the child was ASKED to boot, with the burst
+    override applied the way the child applies it, so a child that read a different file is a
+    named mismatch. The run id must be the MINTED one, never a default a log cannot attribute.
 
-    MUTATION THAT REDS IT: publish the pre-override config's hash (the run then advertises a
-    posture it is not running); or compose a config other than the burst-overridden one —
-    the two-config boot O-A4 forbids structurally, caught here behaviourally, end to end.
-
-    The `run_id` assertion is O-A5's behavioural half: the published id is the MINTED one,
-    never `compose_run`'s retired `run_id: str = "run"` default in any guise. A segment
-    named for a default id is a run whose logs cannot be attributed."""
+    Killer: publish the pre-override config's hash, or compose a second config.
+    """
     _proc, out_dir = preflight_child
     raw = load_config(_CONFIG).model_dump()
     raw["train"]["max_train_steps"] = _BURST_STEPS
@@ -179,31 +129,15 @@ def test_the_childs_published_identity_is_the_config_it_actually_composed(
 
 
 def test_the_tool_no_longer_builds_a_single_collaborator_for_itself() -> None:
-    """O-C1, arm 3 — the INVERTED O-9 census (§4): the four builder tokens
-    (`init_trainer`, `WorkerPool`, `HexgBuffer`, `ReplayBuffer`) were REQUIRED to be present
-    in the tool; they are now BANNED from it.
+    """The tool constructs none of the run's collaborators itself.
 
-    RED FOR A REASON OTHER THAN "not built yet": this asserts a DELETION. At `b482243` all
-    four are present and O-9 (`test_preflight_mint.py:940-970`) requires them to be. The
-    predicate does not weaken — it inverts, which is the presence->ban pattern R121(a)
-    sanctions and which O-10 already used. Its equal-or-stronger successors for the
-    "the collaborators are real" claim are O-A3 (the builder-reality census, at the code's
-    new home) and O-F1/O-B1 (behavioural drives through the real objects), named in DESIGN
-    §4 — the census alone never earned that claim, and the tree measured why.
+    The scan is over CODE with comment/string tokens removed: the tool's prose goes on NAMING
+    these builders, and a raw-text census would flag that and teach people to word comments
+    around a gate.
 
-    MUTATION THAT REDS IT: leave one construction behind "just for the preflight". One is
-    all it takes: a tool that builds even one collaborator differently is a tool that
-    preflights a run5 nobody will launch.
-
-    `build_run_safety(` and `StepCoordinatorConfig(` stay banned verbatim, as O-9 had them —
-    those are `compose_run`'s to construct, and the throwaway coordinator-config call
-    (`preflight_mint.py:906-911`) dies with D-3.
-
-    The scan is over CODE with comment/string tokens removed — O-9's own `_code_text`
-    instrument, kept for O-9's own stated reason: a raw-text census flags the tool's prose,
-    and that is the false positive which teaches people to word comments around a gate. The
-    tool's docstrings will go on NAMING these builders (they describe what the child boots);
-    what must disappear is the tool constructing them."""
+    Killer: leave one construction behind "just for the preflight" — a tool that builds even
+    one collaborator differently preflights a run nobody will launch.
+    """
     source = _code_text(_TOOL)
     for token in ("init_trainer", "WorkerPool", "HexgBuffer", "ReplayBuffer",
                   "build_run_safety", "StepCoordinatorConfig"):

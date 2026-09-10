@@ -1,35 +1,12 @@
-"""`GnnNetV2` — the `gnn_axis_v1` wire, two model-side mechanisms swapped in.
+"""`GnnNetV2` — the `gnn_axis_v1` wire, two model-side mechanisms swapped in: a
+`concat(stone-masked mean, max over REAL nodes)` readout, because the win condition is a max and
+a mean over a growing node set dilutes it; and a degree-normalized dummy aggregation, so
+`‖agg[dummy]‖` stops scaling with the real-node count while real-node GINE sums stay UNTOUCHED.
 
-WHAT V2 IS, and it is exactly two components (WP-AXIS2 candidates A and C(i), model-side half):
-
-  * **Readout (A).** `concat(stone-masked mean, max over REAL nodes)`, so the value head sees a
-    max statistic. The win condition is a max and the v1 readout is a mean; a mean over a
-    growing node set dilutes a single strong signal, which is what GNN-1 names.
-  * **Dummy aggregation (C(i)).** The virtual node's incoming aggregation is degree-normalized,
-    so `‖agg[dummy]‖` stops scaling with the real-node count. Real-node GINE sums — and the
-    count signal they carry — are UNTOUCHED, which is what keeps this from becoming the global
-    mean aggregation that would destroy GINE's injectivity premise.
-
-WHAT V2 IS NOT. No wire change: V2 consumes `gnn_axis_v1` and adds NO registry row, so no
-`node_feat_dim`, no `contract_version`, no builder question is opened. No config key. No arch
-field naming a property V2 claims. No training and no strength claim — the behavioral witnesses
-this module is built against are forward-only comparisons of FUNCTION FORM at random init, and
-F-01 is the standing fence: static probes once passed while self-play collapsed to 0–1 %.
-
-TWO DERIVATIONS THAT MUST STAY DERIVATIONS, both of them wire facts rather than constants:
-
-  * The dummy is the node that is NEITHER legal NOR a stone. There is no `real_mask` on the
-    wire — the masks it carries are `legal` and `stone` — and `dummy_idx == n_real` makes the
-    dummy the last row of each graph, so a literal `N-1` would work today and would be a
-    code-side constant standing in for a wire fact the moment the builder reorders.
-  * The dummy's in-degree is counted off the edge list, never taken as `n_real`.
-
-BC/STRIX WARMSTART SURVIVES, deliberately. `BC_TRANSFER_PREFIXES` is
-`("representation.", "policy_head.")` and `load_representation_policy_from_bc` raises on ANY
-key mismatch, so a trunk change that renamed or re-shaped a `representation.*` tensor would
-destroy the warmstart path. `RepresentationNetworkV2` therefore holds the same modules under the
-same names at the same shapes — C(i) lives entirely in the forward, not in the parameters. This
-is the property that separates A/C(i) from candidate B, which cannot preserve it.
+V2 consumes `gnn_axis_v1` and adds no registry row, config key or arch field. Two wire facts
+stay DERIVED: the dummy is the node that is NEITHER legal NOR a stone, and its in-degree is
+counted off the edge list. `RepresentationNetworkV2` keeps V1's module names and shapes because
+`load_representation_policy_from_bc` raises on ANY key mismatch.
 """
 from __future__ import annotations
 
@@ -48,15 +25,8 @@ def segment_max_with_fallback(
 ) -> Tensor:
     """Per-graph max over `mask`-selected nodes; falls back to ALL nodes where none are masked.
 
-    Deliberately the same shape as `segment_mean_with_fallback`, including the fallback, so the
-    two halves of the V2 readout degenerate the same way on the same graphs rather than one of
-    them producing a sentinel the other never would.
-
-    MASK BY SENTINEL, NOT BY `nonzero`. `emb[mask]` decomposes into `aten::nonzero` +
-    `aten::index` and `nonzero` forces a host-device sync to report its data-dependent length —
-    the same cost `forward_batch`'s legal gather was rewritten to avoid. Filling the unmasked
-    rows with the dtype's minimum keeps the reduction over a fixed shape.
-
+    Masking is by SENTINEL, not `emb[mask]`, which decomposes into `aten::nonzero` and forces a
+    host-device sync to report its data-dependent length.
     Args:
         emb: `(N, D)` node embeddings (block-diagonal batch).
         mask: `(N,)` bool — the preferred subset.
@@ -71,11 +41,8 @@ def segment_max_with_fallback(
     dtype = emb.dtype
     floor = torch.finfo(dtype).min
 
-    # `scatter_reduce_`, not `index_reduce_`: the latter is a beta API that warns on every
-    # process, and this runs on the trainer's own forward. The index it needs is `batch_vec`
-    # widened to `emb`'s shape, and `expand` is a stride-0 VIEW — it allocates nothing, which
-    # matters because the naive `repeat` here would be an `(N, D)` int64 tensor on the one
-    # axis that scales with the batch.
+    # `scatter_reduce_`, not the beta `index_reduce_`, which warns on every process. `expand` is
+    # a stride-0 VIEW, so the widened index allocates nothing where `repeat` would allocate (N, D).
     scatter_index = batch_vec.unsqueeze(-1).expand(-1, d)
 
     masked = emb.masked_fill(~mask.unsqueeze(-1), floor)
@@ -91,24 +58,18 @@ def segment_max_with_fallback(
 
 
 class RepresentationNetworkV2(RepresentationNetwork):
-    """V1's trunk, parameter-identical, with the dummy node's aggregation degree-normalized.
+    """V1's trunk, parameter-identical — same module names and shapes, so the BC warmstart still
+    loads — with the dummy node's aggregation degree-normalized."""
 
-    Same modules under the same names at the same shapes — see the module docstring on why that
-    is load-bearing rather than incidental. The whole of C(i) is the divisor computed here and
-    handed to each conv.
-    """
-
-    def forward(  # type: ignore[override] — V2's trunk needs the mask V1's has no use for
+    def forward(  # type: ignore[override]
         self,
         x: Tensor,
         edge_index: Tensor,
         edge_attr: Tensor,
         normalize_mask: Tensor | None = None,
     ) -> Tensor:
-        """`normalize_mask` is `(N,)` bool, True on nodes whose aggregation is degree-normalized.
-
-        `None` reproduces V1's forward exactly, which is what makes W-C2 constructible: with the
-        dummy's edges removed there is nothing to normalize and the two nets must agree exactly.
+        """`normalize_mask` is `(N,)` bool, True on nodes whose aggregation is degree-normalized;
+        `None` reproduces V1's forward exactly.
         """
         divisor = None
         if normalize_mask is not None and edge_index.shape[1] > 0:
@@ -134,12 +95,7 @@ class RepresentationNetworkV2(RepresentationNetwork):
 
 
 class GnnNetV2(GnnNet):
-    """The V2 graph net: mean+max readout over a degree-normalized-dummy trunk.
-
-    Constructed from a declared `GnnArchV2`. The two overrides below ARE the arch: the trunk it
-    builds and the width its readout pools. Nothing else differs from `GnnNet`, which is the
-    seam's own claim — adding a model kind is a component swap behind the contract.
-    """
+    """The V2 graph net: mean+max readout over a degree-normalized-dummy trunk."""
 
     def __init__(self, arch: GnnArchV2) -> None:
         super().__init__(arch)  # type: ignore[arg-type] — the field sets are identical by design
@@ -160,7 +116,7 @@ class GnnNetV2(GnnNet):
         real[legal_index] = True
         return real
 
-    def node_embeddings(  # type: ignore[override] — V2's trunk takes the normalization mask
+    def node_embeddings(  # type: ignore[override]
         self,
         x: Tensor,
         edge_index: Tensor,
@@ -226,10 +182,8 @@ class GnnNetV2(GnnNet):
         legal_mask: Tensor,
         stone_mask: Tensor,
     ) -> tuple[Tensor, Tensor, Tensor]:
-        """The deploy twin. Non-delegating for V1's reason — the MEAN half still carries the
-        ~5e-7 accumulation-order drift that made the pair separate; the MAX half adds no drift
-        term, because a maximum is order-independent in exact arithmetic and under IEEE
-        `maximum` for non-NaN inputs.
+        """The deploy twin, non-delegating: the MEAN half carries a ~5e-7 accumulation-order
+        drift and the MAX half adds none.
 
         Args:
             x: `(N, in_dim)` node features for ONE graph.

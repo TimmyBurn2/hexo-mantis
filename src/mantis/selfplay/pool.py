@@ -1,20 +1,11 @@
 """The self-play worker pool: construction, thread lifecycle, and the read surface.
 
->300 justify: ONE object. The trainer duck-types the pool as a single collaborator and
-reads ~20 members off it, so the class cannot be split without breaking that contract; what
-IS split is the implementation — the drain loop (`pool_drain`), the buffer push arms
-(`pool_push`) and the hook/snapshot surface (`pool_hooks`) are free functions over the pool
-instance, and this module holds only the constructor, `start`/`stop`, and thin delegators.
-The delegator block is long because the surface is wide, not because it does much.
-
-Concurrency is Rust-owned: worker threads live inside the runner. Python contributes two
-threads — the inference server and the stats feeder — and the feeder is the SOLE producer
-of training data, so its death is fatal and reported through `check_producer_health`.
-
-Every knob is resolved ONCE at construction through `hparams` (there is no config read in
-the hot loop), with two deliberate exceptions that re-read the LIVE config because the old
-behaviour did and callers depend on it: the `search_kind` property and
-`buffer_composition`'s independent draw/ply-cap resolution.
+>300 justify: ONE object. The trainer duck-types the pool as a single collaborator and reads
+about twenty members off it, so the class cannot be split without breaking that contract; what
+IS split is the implementation, into free functions over the pool instance. Concurrency is
+Rust-owned, and the Python-side stats feeder is the SOLE producer of training data, so its death
+is fatal and reported through `check_producer_health`. Every knob is resolved ONCE at
+construction, except `search_kind` and `buffer_composition`, which re-read the LIVE config.
 """
 from __future__ import annotations
 
@@ -64,17 +55,10 @@ _LOG = logging.getLogger(__name__)
 
 
 def _collate_dump_target(config: Any) -> tuple[str, Any]:
-    """R342(b)(i): where a self-play graph-contract failure is dumped, and its context.
-
-    The directory is DERIVED from the run's own checkpoint directory, exactly as the trainer's
-    dump is (`train/coordinator/dispatch.py::_dump_train_collate`), so all three paths' dumps
-    land as siblings under one run record and no second path authority exists.
-
-    The context is a CALLABLE for the eval path's reason — what is interesting about it is read
-    at the moment of the fire, not at construction. This server is never concurrent in the eval
-    sense, so `concurrency` is 1 by construction and SAYS so rather than leaving a reader of the
-    artifact to infer it.
-    """
+    """Where a self-play graph-contract failure is dumped, and its context. The directory is
+    DERIVED from the run's own checkpoint directory, exactly as the trainer's dump is, so all
+    three paths' dumps land under one run record with no second path authority. The context is
+    a CALLABLE, because what is interesting is read at the moment of the fire."""
     try:
         ckpt_dir = config["train"]["checkpoint_dir"]
     except (KeyError, TypeError):
@@ -105,15 +89,10 @@ class WorkerPool:
     ) -> None:
         """Build the runner, the inference server and the drain state.
 
-        `arch` is REQUIRED (pass `None` to state explicitly that there is nothing to
-        cross-check): the resolved encoding's canvas geometry is checked against the
-        arch's DECLARED `board_size`, so a mis-paired arch and config fail before any
-        Rust runner exists. Nothing is sniffed off the live module — a graph arch
-        declares no board size and passes vacuously, which is the frozen behaviour.
-
-        `sink` / `recorder` / `heartbeat` are injected collaborators with no-op defaults:
-        events are dropped, nothing is recorded, no heartbeat fires. Each default is a
-        declared seam, not a silent failure.
+        `arch` is REQUIRED (pass `None` to state that there is nothing to cross-check): the
+        resolved encoding's canvas geometry is checked against the arch's DECLARED `board_size`,
+        so a mis-paired arch and config fail before any Rust runner exists. `sink`/`recorder`/
+        `heartbeat` are injected with no-op defaults — declared seams, not silent failures.
         """
         self.model = model
         self.config = config
@@ -137,11 +116,9 @@ class WorkerPool:
         self.quiescence_blend_2 = hp.quiescence_blend_2
         self._effective_sims_per_move = hp.effective_sims_per_move
 
-        # The pool takes a RAW engine buffer and wraps it: the facade resolves the kind
-        # from the SAME spec the drain dispatches on and cross-checks the handle, so a
-        # graph buffer under a grid encoding (or the inverse) dies here rather than
-        # producing corrupt training data. Everything downstream pushes through
-        # `self.replay_buffer`, so the guard cannot be bypassed.
+        # The pool takes a RAW engine buffer and wraps it: the facade resolves the kind from
+        # the SAME spec the drain dispatches on and cross-checks the handle, so a graph buffer
+        # under a grid encoding dies here rather than producing corrupt training data.
         self.replay_buffer = ReplayFacade(spec, replay_buffer)
 
         sp_config, dims = build_runner_config(
@@ -156,11 +133,10 @@ class WorkerPool:
             encoding_spec=spec,
             heartbeat=heartbeat,
             sink=sink,
-            # R342(b)(i): 1-in-1 on the self-play path too, for the WHOLE run. The
-            # batch-size-derived 1-in-64 that stood here does not return. It rested on
-            # "a class that has only ever fired on eval", and `F-816-37` has since fired on
-            # the training path (R340 leg 3) — at 1-in-64 a corrupted batch had 63 chances
-            # in 64 of passing through untouched.
+            # 1-in-1 on the self-play path too, for the WHOLE run. The batch-size-derived
+            # 1-in-64 that stood here rested on "a class that has only ever fired on eval", and
+            # the class has since fired on the training path — at 1-in-64 a corrupted batch had
+            # 63 chances in 64 of passing through untouched.
             collate_check_period=1,
             collate_dump=_collate_dump_target(config),
         )
@@ -178,10 +154,9 @@ class WorkerPool:
         self.x_wins = 0
         self.o_wins = 0
         self.draws = 0
-        # None = NOT MEASURED. A drain has to observe a positive `positions_generated`
-        # delta over a positive interval before there is a rate at all; a starting 0.0 was
-        # published on `iteration_complete` as "the search is doing nothing" for every
-        # iteration before the first drain (AUDIT-1 F-28/C07).
+        # None = NOT MEASURED. A drain has to observe a positive `positions_generated` delta
+        # over a positive interval before there is a rate at all; a starting 0.0 was published
+        # as "the search is doing nothing" for every iteration before the first drain.
         self._sims_per_sec: float | None = None
         self._last_drain_time: float = time.monotonic()
         # Last-seen runner `positions_generated`; the per-drain delta is what the
@@ -213,9 +188,8 @@ class WorkerPool:
         self._log_investigation_metrics = hp.log_investigation_metrics
         self._instrumentation = PoolInstrumentation(
             log_investigation_metrics=hp.log_investigation_metrics,
-            # AUDIT-1 F-42. The n_components bound is per-ENCODING (8 on v6w25, 5 on
-            # v6_live2_ls, the engine default where the spec sets none) and was a module
-            # literal 5. It is resolved from the same spec the drain dispatches on.
+            # The n_components bound is per-ENCODING and was a module literal 5. It is
+            # resolved from the same spec the drain dispatches on.
             cluster_threshold=(
                 spec.cluster_threshold if spec.cluster_threshold is not None
                 else DEFAULT_CLUSTER_THRESHOLD
@@ -229,12 +203,9 @@ class WorkerPool:
 
     @property
     def inference_batch_timing(self) -> dict[str, Any]:
-        """The inference server's batching instrument (queue wait / collate / occupancy).
-
-        The LAW-18 companion to `batch_fill_pct`: the ratio says how full the batches
-        were on average, this says what the distribution was and what each batch waited
-        for.
-        """
+        """The inference server's batching instrument (queue wait / collate / occupancy) — the
+        companion to `batch_fill_pct`, which says how full the batches were on average where
+        this says what the distribution was and what each batch waited for."""
         return _inference_batch_timing(self)
 
     @property
@@ -253,24 +224,11 @@ class WorkerPool:
     def draw_rate(self) -> float:
         """The pool's draw SHARE — `draws / games_completed`, a fraction in [0, 1].
 
-        F-816-2: the third outcome share had no property and `iteration_complete` built it
-        by hand as `pool.draws / games_played`, pairing a LIVE numerator with the
-        coordinator's `_games_played` — a snapshot taken near the top of `step()` and frozen
-        while the feeder thread kept draining. On the shakedown burn, where every game is a
-        draw, that emitted 1.3333, 1.5, 1.125, 1.2222 and 1.0909 at steps 2, 3, 5, 6 and 7:
-        values a fraction cannot take, and a metric whose definition is wrong even where its
-        value is harmless.
-
-        Reading both counters under `_lock`, off the SAME drain-consistent update
-        (`pool_drain` writes all four together), is what makes the value a fraction. It is
-        the same shape as `x_winrate`/`o_winrate` above, which never had the defect for
-        exactly this reason — and now the three shares share a denominator, so they sum to 1
-        instead of being three incommensurable numbers printed side by side.
-
-        NOT the armed abort's statistic, and the distinction matters: `draw_rate_collapse`
-        reads `pooled_draw_rate(pool.pooled_draw_counts(), …)`, a `Sum/Sum` over per-worker
-        0/1 windows that is structurally incapable of exceeding 1. This property is
-        telemetry.
+        `iteration_complete` used to build this by hand, pairing a LIVE numerator with a
+        coordinator snapshot frozen while the feeder kept draining; on the shakedown burn that
+        emitted 1.3333, 1.5 and 1.125 — values a fraction cannot take. Reading both counters
+        under `_lock` off the SAME update is what makes it a fraction. NOT the armed abort's
+        statistic, which is a `Sum/Sum` that cannot exceed 1; this property is telemetry.
         """
         with self._lock:
             total = self.games_completed
@@ -285,17 +243,13 @@ class WorkerPool:
 
     @property
     def search_kind(self) -> str:
-        """The run's `search.kind`, as its config spelling.
-
-        Read from the LIVE config, not from the frozen ctor-time hparams: the PUCT-only
-        diagnostics are descent-rule-specific and meaningless under Gumbel-root sampling,
-        so the event emitter suppresses them under `gumbel` — and it must see a config
-        flipped after construction.
+        """The run's `search.kind`, as its config spelling, read from the LIVE config rather than
+        the frozen ctor-time hparams: the PUCT-only diagnostics are meaningless under Gumbel-root
+        sampling, so the emitter must see a config flipped after construction.
 
         Raises:
-            MissingSearchKindError: the config carries no `search.kind`, or carries one this
-                build does not implement. NOT defaulted (R1/LAW-11): a pool that cannot say
-                which search it ran must not answer "puct".
+            MissingSearchKindError: no `search.kind`, or one this build does not implement. NOT
+                defaulted: a pool that cannot say which search it ran must not answer "puct".
         """
         return resolve_search_kind(self.config)
 
@@ -322,23 +276,16 @@ class WorkerPool:
         return self._instrumentation.current_stride5_p90(self._lock)
 
     def pooled_draw_counts(self) -> tuple[int, int]:
-        """`(Sum(draws), Sum(completed))` over the union of the per-worker draw windows.
-
-        WPMINT Phase DS (R92): raw counts, no parameters. The evidence bar
-        (`train.draw_rate_abort.N_pool_min`) is applied at the abort DECISION, not here —
-        this path carries no config authority at all now, which is one fewer layer that
-        could hold a second default over the operator's pre-registered value (R1).
-        """
+        """`(Sum(draws), Sum(completed))` over the union of the per-worker draw windows. Raw
+        counts, no parameters: the evidence bar is applied at the abort DECISION, so this path
+        holds no second default over the operator's pre-registered value."""
         return self._instrumentation.pooled_draw_counts(self._lock)
 
     def terminal_reason_counts(self) -> dict[str, int]:
-        """Cumulative terminal-reason counts since pool start.
-
-        Reports the four KNOWN reason codes only. A code outside that set is counted
-        internally but never surfaced here, so the total under-counts games whenever an
-        unknown code appears. That is the frozen behaviour and it is pinned deliberately:
-        `buffer_composition`'s `n_games_observed` inherits the same under-count.
-        """
+        """Cumulative terminal-reason counts since pool start, for the four KNOWN reason codes
+        only — a code outside that set is counted internally but never surfaced, so the total
+        under-counts games whenever an unknown code appears. Frozen behaviour, pinned
+        deliberately, and `buffer_composition` inherits the same under-count."""
         return self._instrumentation.terminal_reason_counts(self._lock)
 
     def model_version_summary(self) -> dict[str, Any]:
@@ -364,36 +311,22 @@ class WorkerPool:
 
     # ── lifecycle ───────────────────────────────────────────────────────────────
     def check_producer_health(self) -> None:
-        """Fail-fast hook the trainer calls every step.
-
-        The buffer feeder is the SOLE producer draining Rust self-play results into the
-        replay buffer. If it died on an exception, re-raise LOUD so training aborts
-        instead of silently running on a stale buffer. A clean `stop()` leaves
-        `_producer_exc` as None — no false abort.
-        """
+        """Fail-fast hook the trainer calls every step. The buffer feeder is the SOLE producer,
+        so a death by exception re-raises LOUD rather than letting training run on a stale
+        buffer; a clean `stop()` leaves `_producer_exc` as None, so there is no false abort."""
         if self._producer_exc is not None:
             raise RuntimeError(
                 "self-play buffer feeder died — training cannot continue on a "
                 "stale buffer (see the selfplay_producer_died log for the cause)"
             ) from self._producer_exc
-        # R345(b)(7). `guard_worker` catches a worker panic, counts it and halts the runner —
-        # and nothing in Python read the count, so the failure presented as a healthy pool
-        # draining nothing until `selfplay_stall_timeout_sec` (1800 s) noticed. Read here
-        # because this is the hook the trainer already calls every step; thirty minutes of a
-        # promoting run training on data no worker is producing is the cost of not reading it.
-        #
-        # `worker_panics` and NOT `is_running()`: `running` also goes false on a CLEAN stop,
-        # so reading it would abort every orderly shutdown. The counter is zero in a healthy
-        # run and non-zero only because a worker died. `getattr` because a runner double or an
-        # older wheel may not expose it, and an absent instrument must read as no measurement —
-        # never as a failure, which would make this check the thing that stops runs.
-        # The name is a METHOD on the engine runner (`pub fn worker_panics`) and a plain int
-        # FIELD on `RunnerStats`; doubles use both shapes. Accepting either is not laxity —
-        # picking one would make this check pass vacuously against half the callers it has.
-        # `int(...)` over a `getattr` default is `object` to pyright, which cannot know the
-        # two real shapes are `() -> int` and `int`; the runtime `callable` branch is the
-        # narrowing it cannot express. Suppressed at the ONE line rather than widened in
-        # pyproject (gate 14: exclusions are enumerated with grounds, and this is not a class).
+        # `guard_worker` catches a worker panic, counts it and halts the runner — and nothing in
+        # Python read the count, so the failure presented as a healthy pool draining nothing until
+        # the 1800 s stall timeout noticed. `worker_panics` and NOT `is_running()`, because
+        # `running` also goes false on a CLEAN stop; `getattr` because a runner double or an older
+        # wheel may not expose it, and an absent instrument must read as no measurement. It is a
+        # METHOD on the engine runner and a plain int FIELD on `RunnerStats`, so accepting either
+        # shape is not laxity — picking one would make this check pass vacuously against half its
+        # callers.
         raw: Any = getattr(self._runner, "worker_panics", 0)
         panics = int(raw() if callable(raw) else raw)  # pyright: ignore[reportArgumentType]
         if panics > 0:
@@ -405,13 +338,9 @@ class WorkerPool:
             )
 
     def _stats_loop(self) -> None:
-        """Guard wrapper around the drain loop — see :meth:`check_producer_health`.
-
-        The feeder is the sole producer; an unguarded raise kills the daemon silently and
-        leaves training on a stale buffer. Catch, log LOUD at error level, and flag
-        producer death so the trainer fails fast on its next step. Nothing is swallowed:
-        the exception is stored and re-raised with its cause attached.
-        """
+        """Guard wrapper around the drain loop — see :meth:`check_producer_health`. An
+        unguarded raise kills the daemon silently and leaves training on a stale buffer, so the
+        exception is logged LOUD, stored, and re-raised with its cause attached."""
         try:
             run_stats_loop(self)
         except Exception as exc:  # noqa: BLE001 — sole-producer watchdog
@@ -429,9 +358,8 @@ class WorkerPool:
         self._stop_event.clear()
         self.model.eval()
 
-        # WP12R Step 3 narration (R210/R216/R218, LAW-18): lifecycle events emitted through
-        # the injected selfplay-local `EventSink`. No sink ⇒ dropped (the declared default,
-        # not a silent failure — `pool_hooks.EventSink`'s docstring at `:32-40`).
+        # Lifecycle events go through the injected selfplay-local `EventSink`; no sink means
+        # dropped, which is the declared default rather than a silent failure.
         if self._sink is not None:
             self._sink.emit({
                 "event": "runner_started",

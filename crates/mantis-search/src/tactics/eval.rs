@@ -6,22 +6,12 @@
 //! with BOTH colours is dead (0 — blocked, neither side can complete six there);
 //! a pure run scores a run-length-weighted potential, antisymmetric in colour.
 //!
-//! # SOUNDNESS INVARIANT — the load-bearing property
-//! The static eval is for move ORDERING and NON-PROOF heuristic-leaf scores
-//! ONLY. A heuristic-leaf score is reported as **UNKNOWN, never as a proof**:
-//! `search::solve` feeds it through `Scored::heuristic`/`clamp_heuristic`, which
-//! pins it strictly inside `(-WIN_THRESHOLD, WIN_THRESHOLD)`, so it can NEVER
-//! read as a mate. Only terminal backups (`terminal_value_to_move`, CF-1) and the
-//! stone-count shortcuts in `search.rs` declare WIN/LOSS; the value head is never
-//! read. Alpha-beta cutoffs the eval enables cannot change a root verdict
-//! (root = full window, exact) nor a proven LOSS (concluded only on a fully
-//! examined, non-cutoff node — see `search::solve` soundness note).
-//!
-//! # DEFERRED (later perf increments — NOT built here)
-//! - the INCREMENTAL eval accumulator (make/undo delta); this is a per-leaf full
-//!   re-scan — correct-first, the incremental hoist is a later increment.
-//! - eval-tie-break ORDERING wiring + net-policy ordering.
-//! - PVS / LMR / aspiration / killers / history.
+//! # Soundness invariant
+//! The static eval is for move ORDERING and NON-PROOF heuristic-leaf scores only. A
+//! heuristic leaf is reported as UNKNOWN, never as a proof: `search::solve` clamps it
+//! strictly inside `(-WIN_THRESHOLD, WIN_THRESHOLD)`, so it can never read as a mate. Only
+//! terminal backups and the stone-count shortcuts declare WIN/LOSS, and alpha-beta cutoffs
+//! the eval enables change neither a root verdict nor a proven LOSS.
 
 #![allow(dead_code)]
 
@@ -34,14 +24,14 @@ use super::WIN_THRESHOLD;
 /// `3^6` — one entry per length-6 ternary window.
 const N_PATTERNS: usize = 729;
 
-/// Run-length potential weights `W[count]` for a PURE (single-colour) length-6
-/// window. Strongly superlinear so the search prefers longer runs / earlier
-/// cutoffs; symmetric for the opponent (negated). Ordering/heuristic ONLY — the
-/// exact values are not load-bearing for soundness (every leaf is clamped).
+/// Run-length potential weights `W[count]` for a pure single-colour length-6 window.
+///
+/// Strongly superlinear so the search prefers longer runs, negated for the opponent. The
+/// exact values are not load-bearing for soundness: every leaf is clamped.
 const RUN_WEIGHT: [i32; 7] = [0, 1, 5, 25, 125, 625, 3125];
 
-/// The 729-entry ternary pattern table, built once. `PATTERN_TABLE[pi]` =
-/// `0` if the window holds BOTH colours (dead), else `W[mine] - W[theirs]`.
+/// Return the 729-entry ternary pattern table, built once: `0` for a window holding both
+/// colours (dead), else `W[mine] - W[theirs]`.
 fn pattern_table() -> &'static [i32; N_PATTERNS] {
     use std::sync::OnceLock;
     static TABLE: OnceLock<[i32; N_PATTERNS]> = OnceLock::new();
@@ -73,14 +63,11 @@ fn mine_cell(p: Player) -> Cell {
     }
 }
 
-/// Heuristic static score for `board` from the side-to-move's perspective,
-/// summed over every length-6 window that overlaps a stone (each window scored
-/// ONCE). `None` on an empty board (nothing to score). The result is clamped
-/// strictly inside the proof region so a caller can never mistake it for a mate.
+/// Score `board` from the side-to-move's perspective over every length-6 window that
+/// overlaps a stone, each scored once; `None` on an empty board.
 ///
-/// Move-ordering hint / UNKNOWN-leaf value ONLY — NEVER a proof. Wiring this in
-/// MUST NOT change any WIN/LOSS proof in `search.rs` (it does not: every leaf is
-/// re-clamped by `clamp_heuristic`, and α-β preserves the exact root verdict).
+/// A move-ordering hint or UNKNOWN-leaf value only, never a proof: the result is clamped
+/// strictly inside the proof region so a caller cannot mistake it for a mate.
 #[allow(clippy::question_mark)] // the empty-board guard returns None; `?` would discard the first cell
 pub(crate) fn static_eval(board: &Board) -> Option<i32> {
     if board.cells_iter().next().is_none() {
@@ -121,17 +108,15 @@ pub(crate) fn static_eval(board: &Board) -> Option<i32> {
     Some(score.clamp(-bound, bound) as i32)
 }
 
-/// Heuristic value for a NON-PROOF leaf (horizon / quiet node), side-to-move
-/// perspective. `None` (empty board) => `0`. The caller (`search::solve`) CLAMPS
-/// this strictly inside the proof region (`clamp_heuristic`), so it can NEVER
-/// masquerade as a mate — the soundness invariant: a heuristic leaf is never a
-/// proof.
+/// Heuristic value for a non-proof leaf, side-to-move perspective; an empty board is `0`.
+///
+/// The caller clamps this strictly inside the proof region, so it can never masquerade as
+/// a mate.
 #[inline]
 pub(crate) fn heuristic_leaf(board: &Board) -> i32 {
     static_eval(board).unwrap_or(0)
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,9 +133,7 @@ mod tests {
     }
 
     fn board_with(stones: &[((i32, i32), Cell)], stm: Player) -> Board {
-        // static_board-equivalent: plant stones, side-to-move `stm`, default
-        // (mr=1, ply=0, last_move=None). bbox is inert to static_eval (it
-        // iterates cells, never the bbox).
+        // The bbox is inert to static_eval, which iterates cells and never the bbox.
         Board::from_stones(stones, stm, 1, 0, None)
     }
 
@@ -166,8 +149,7 @@ mod tests {
     #[test]
     fn pattern_table_run_length_monotonic_and_antisymmetric() {
         let t = pattern_table();
-        // Pure-mine potential strictly increases with run length; pure-opp mirrors
-        // it negative; and swapping colours negates the weight (antisymmetry).
+        // Pure-mine potential increases with run length and a colour swap negates it.
         let mut prev = i32::MIN;
         for n in 0..=6usize {
             let mut mine = [0usize; 6];
@@ -193,10 +175,9 @@ mod tests {
 
     #[test]
     fn static_eval_sign_follows_side_to_move_advantage() {
-        // P1 holds an open length-4 run; the rest empty. From P1-to-move the eval
-        // is positive (P1 has the potential), from P2-to-move it is the negation.
-        let stones: Vec<((i32, i32), Cell)> =
-            (0..4).map(|q| ((q, 0), Cell::P1)).collect();
+        // P1 holds an open length-4 run, so P1-to-move scores positive and P2-to-move
+        // scores its negation.
+        let stones: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let as_p1 = static_eval(&board_with(&stones, Player::One)).unwrap();
         let as_p2 = static_eval(&board_with(&stones, Player::Two)).unwrap();
         assert!(as_p1 > 0, "side-with-the-run must score positive, got {as_p1}");
@@ -205,9 +186,8 @@ mod tests {
 
     #[test]
     fn static_eval_never_reaches_proof_region() {
-        // SOUNDNESS: a heuristic leaf can NEVER masquerade as a mate, even on a
-        // dense board with many long runs. `heuristic_leaf` stays strictly inside
-        // the proof region for every constructed position.
+        // A heuristic leaf must stay strictly inside the proof region even on a dense
+        // board with many long runs.
         let dense: Vec<((i32, i32), Cell)> = (0..20)
             .map(|q| ((q, 0), if q % 2 == 0 { Cell::P1 } else { Cell::P2 }))
             .chain((0..20).map(|q| ((q, 1), Cell::P1)))

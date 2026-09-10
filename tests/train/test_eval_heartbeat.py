@@ -1,18 +1,8 @@
-"""⊕ WP11-A — the `eval_round` heartbeat source (build_run_safety caller + poller beat).
+"""The `eval_round` heartbeat source: its deadline, its poller beat and its arming.
 
-RED-at-import until IMPL writes `mantis.eval.pipeline`. ORACLE-FIRST (⊕): the top-level
-`import mantis.eval.pipeline` raises ModuleNotFoundError before any port code exists — that
-import failure carries the whole file (`HEARTBEAT_SOURCES`, `MonitorConfig`,
-`HeartbeatWatchdog`, `build_run_safety` all ALREADY EXIST at HEAD, WP13-A; only the
-`"eval_round"` 4th source + its deadline field are new).
-
-Today `HEARTBEAT_SOURCES == ("train_step", "inference_dispatch", "selfplay_drain")` (3
-sources; `src/mantis/monitor/heartbeat.py`, already read). IMPL adds `"eval_round"` as the
-4th source, a `heartbeat_deadline_eval_round_sec` field on `MonitorConfig`
-(`src/mantis/monitor/config.py`), and the matching entry in `build_run_safety`'s deadlines
-dict (`src/mantis/train/subsystems.py:239-243`). The pipeline's persistent poller/keepalive
-thread (§c.3) beats `"eval_round"` on EVERY tick, idle or active — a between-round gap can
-never false-fire the watchdog (round PROGRESS is bounded separately, by `round_timeout_sec`).
+The pipeline's persistent poller thread beats `"eval_round"` on EVERY tick, idle or active, so a
+between-round gap can never false-fire the watchdog — round PROGRESS is bounded separately by
+`round_timeout_sec`.
 """
 from __future__ import annotations
 
@@ -52,7 +42,7 @@ class FakeBuffer:
 
 
 def test_eval_round_is_a_registered_heartbeat_source() -> None:
-    """`"eval_round"` must join the 3 shipped sources as the 4th (§c.8)."""
+    """`"eval_round"` must join the three shipped sources as the fourth."""
     assert "eval_round" in HEARTBEAT_SOURCES, (
         f"HEARTBEAT_SOURCES must gain eval_round (4th source): {HEARTBEAT_SOURCES}"
     )
@@ -62,7 +52,7 @@ def test_eval_round_is_a_registered_heartbeat_source() -> None:
 
 
 def test_monitor_config_carries_eval_round_deadline() -> None:
-    """`MonitorConfig.heartbeat_deadline_eval_round_sec` — mint: 1800.0 (§a.4 row)."""
+    """`MonitorConfig.heartbeat_deadline_eval_round_sec` is minted at 1800.0."""
     cfg = MonitorConfig()
     assert hasattr(cfg, "heartbeat_deadline_eval_round_sec"), (
         "MonitorConfig must gain heartbeat_deadline_eval_round_sec"
@@ -71,9 +61,8 @@ def test_monitor_config_carries_eval_round_deadline() -> None:
 
 
 def test_poller_thread_beats_eval_round() -> None:
-    """The pipeline's persistent poller thread beats the LITERAL `"eval_round"` heartbeat
-    source on every tick, WITH or WITHOUT an in-flight round (idle beats too — the source
-    proves the enforcement thread is alive; round progress is bounded separately)."""
+    """The poller beats `"eval_round"` on every tick, idle or active: the source proves the
+    enforcement thread is alive, and round progress is bounded separately."""
     registry = HeartbeatRegistry()
     beats: list[str] = []
     real_beat = registry.beat
@@ -88,9 +77,7 @@ def test_poller_thread_beats_eval_round() -> None:
         run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test", game_record_dir=str("/tmp/mantis-eval-heartbeat-test") + "_games",
         ladder_state_path="/tmp/mantis-eval-heartbeat-test/ladder.json",
         promotion=object(), sink=None, heartbeat=_spy_beat,
-        # F-816-10 D-1: resolved once in the parent, carried on every RoundSpec. This
-        # drive never builds an engine, so the value is inert here — but the parameter
-        # carries no default, so the decision is written rather than omitted.
+        # Inert in this drive, but the parameter carries no default so the decision is written.
         fused_graph_caps=None,
         inference_batching=None,
     )
@@ -106,21 +93,14 @@ def test_poller_thread_beats_eval_round() -> None:
 
 
 def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
-    """`build_run_safety(..., wired_sources=[..., "eval_round"])` must construct cleanly (no
-    missing-deadline ValueError) and the arm event must name the `eval_round` source — i.e.
-    once `eval_round` is a real HEARTBEAT_SOURCES member with a deadline wired into
-    `build_run_safety`'s deadlines dict, arming succeeds and `eval_round` appears in the
-    `heartbeat_watchdog_armed` event's `sources`, deadlines, and `wired_sources`."""
+    """Arming with `eval_round` wired must construct cleanly and name the source in the arm event."""
     sink = SpySink()
     run_safety = build_run_safety(
         log_dir=tmp_path, run_id="test-run", buffer=FakeBuffer(),
         buffer_persist_path=tmp_path / "replay.bin",
         wired_sources=["train_step", "inference_dispatch", "selfplay_drain", "eval_round"],
-        # WP-UNFREEZE E36 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
-        # WPAX RED-TEAM F-2: `monitor_cfg` is REQUIRED too. This test asserts the
-        # `eval_round` deadline arms at the MonitorConfig DEFAULT 1800.0, so the default
-        # instance is now passed explicitly rather than reached through an absent-kwarg
-        # fallback that also silently disarmed the actor-lag abort.
+        # The default instance is passed EXPLICITLY: reaching it through an absent kwarg also
+        # silently disarmed the actor-lag abort.
         monitor_cfg=MonitorConfig(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
@@ -140,9 +120,8 @@ def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
 
 
 def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
-    """A wedged `eval_round` poller (never beats past its deadline) fires
-    `WATCHDOG_STALL_EXIT_CODE` (42) via the injected `exit_fn`, exactly like the 3 shipped
-    sources — under a FAKE clock, no real sleeping."""
+    """A wedged `eval_round` poller fires the shared stall exit code, like the three shipped
+    sources, under a FAKE clock."""
     sink = SpySink()
     exit_spy = _ExitSpy()
     registry = HeartbeatRegistry(sources=("train_step", "inference_dispatch",
@@ -175,10 +154,8 @@ def test_stale_eval_poller_fires_42_under_fake_clock(tmp_path) -> None:
 
 
 def test_headless_launch_without_pipeline_is_unwired_loud_not_fatal(tmp_path) -> None:
-    """When `eval_round` is a known+deadlined source but nothing ever beat it (a headless
-    launch with no eval pipeline wired), the watchdog must emit `heartbeat_source_unwired`
-    for it and NEVER fire 42 for it (killing a healthy pipeline-less run is the worse
-    failure)."""
+    """A known, deadlined but never-beaten source is reported unwired, never aborted: killing a
+    healthy pipeline-less run is the worse failure."""
     sink = SpySink()
     exit_spy = _ExitSpy()
     fake_time = {"t": 0.0}
@@ -205,11 +182,8 @@ def test_headless_launch_without_pipeline_is_unwired_loud_not_fatal(tmp_path) ->
     registry.beat("inference_dispatch")
     registry.beat("selfplay_drain")
     fake_time["t"] = 10.0  # past every deadline, but eval_round is undeclared/never-beaten
-    # Beat the three WIRED sources again at the jumped clock so only eval_round is stale —
-    # otherwise a wired-but-unbeaten-since-t0 source (e.g. train_step) would fire the shared
-    # 42 first and the eval_round-unwired path under test would never be reached (the
-    # fixture bug this correction fixes: staleness is checked source-by-source in order, and
-    # `_check_source_staleness` returns on the FIRST fire it finds).
+    # Beat the three WIRED sources again at the jumped clock so only eval_round is stale:
+    # staleness is checked source-by-source and returns on the FIRST fire it finds.
     registry.beat("train_step")
     registry.beat("inference_dispatch")
     registry.beat("selfplay_drain")

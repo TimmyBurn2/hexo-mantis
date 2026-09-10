@@ -1,25 +1,16 @@
-"""⊕ R335(e) Leg 1 — check 17 vectorized: SAME verdict, SAME message, SAME precedence.
+"""Check 17 vectorized: SAME verdict, SAME message, SAME precedence.
 
-WHAT THIS PINS. `_check_semantic`'s check 17 (`AugRoundTripMismatch`) was a nested Python
-loop — `np.where(legal_graph == g)` per graph, then a comprehension over that graph's legal
-nodes building two `tuple()`s per iteration. Measured at the run5 train-path part shape it was
-**62.6 ms of a 106.4 ms semantic layer** (`PERF_TRANCHE3_RESULTS.md` §1.1). The rewrite is
-three linear numpy passes and is required to change NOTHING a caller can observe.
+The property is equivalence to the nested Python loop it replaced (62.6 ms of a 106.4 ms
+semantic layer at the train-path part shape), so that loop is transcribed as
+`_check17_reference` and both run on every case. A golden file would pin the messages but not
+the equivalence.
 
-WHY A REFERENCE ORACLE AND NOT A GOLDEN. The property is *equivalence to the loop that was
-there*, so the loop that was there is transcribed below as `_check17_reference` and both are
-run on every case. A golden file would pin the messages but not the equivalence, and would go
-stale silently the first time the message changed for a good reason.
+A vectorization that stops CHECKING passes any parity suite fed only clean data, so every case
+that must RAISE is asserted on BOTH sides with a byte-equal message, and
+`test_the_vectorized_check_still_fires` corrupts real captured wire and demands the error.
 
-F-10 IS THE SHAPE THIS FILE EXISTS TO REFUSE. F-10 is a ported feature that arrived silently
-unarmed; a vectorization that stops CHECKING is the same defect in a new costume, and passes a
-parity suite that only ever feeds it clean data. So every case that must RAISE is asserted to
-raise on BOTH sides with a byte-equal message, and `test_the_vectorized_check_still_fires` is
-the LAW-07 mutation self-test: it corrupts real captured wire and demands the named error.
-
-THE FOUR EDGE CASES R335(e) NAMES, all present: `None` cells (`all_none`, `mixed`), an empty
-`sel` for a graph that has legal nodes but no matching cell (`bad_first`, `bad_middle`), a
-graph with ZERO legal nodes (`test_zero_legal_node_graph_parity`), and the length guard.
+Edge cases covered: `None` cells, an empty `sel` for a graph with legal nodes but no matching
+cell, a graph with ZERO legal nodes, and the length guard.
 """
 from __future__ import annotations
 
@@ -48,7 +39,7 @@ def _check17_reference(
     B: int,
     target_argmax_cells: Any,
 ) -> None:
-    """Check 17 EXACTLY as it stood at `736c4b5`, transcribed. The equivalence oracle."""
+    """Check 17 as it stood before the rewrite, transcribed. The equivalence oracle."""
     Lg = legal_node_gather.size
     if target_argmax_cells is None:
         return
@@ -132,9 +123,8 @@ def _cases(fields: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-#: Parametrised by NAME so the ids are readable; the list is checked against `_cases` itself
-#: inside the test, so a case added there without a name here fails loudly instead of silently
-#: not running (the shape a hand-maintained roster otherwise takes).
+#: Parametrised by NAME for readable ids; checked against `_cases` inside the test, so a case
+#: added there without a name here fails loudly instead of silently not running.
 CASE_NAMES: tuple[str, ...] = (
     "all_legal", "all_none", "bad_first", "bad_last", "bad_middle", "mixed",
     "none_sequence", "too_long", "too_short", "two_bad", "wrong_arity",
@@ -171,9 +161,8 @@ def test_verdict_parity_old_loop_vs_shipped_check(payload_fields, case: str) -> 
 def test_zero_legal_node_graph_parity() -> None:
     """`Lg == 0`: every non-`None` cell must raise, on both sides, naming graph 0.
 
-    Built by hand rather than from a fixture: the one captured zero-legal payload
-    (`empty_legal`) is refused by check 13 (`EmptyLegalSet`) before the semantic layer runs,
-    so it cannot reach check 17 at all. Only the check is called here, not the collate.
+    Built by hand because the captured zero-legal payload is refused by check 13 before the
+    semantic layer runs, so it cannot reach check 17 at all.
     """
     B = 2
     legal_offsets = np.zeros(B + 1, dtype=np.int64)
@@ -181,20 +170,15 @@ def test_zero_legal_node_graph_parity() -> None:
     coords = np.zeros((0, 2), dtype=np.int64)
     for cells in ([None, None], [(4, 5), None], [None, (4, 5)]):
         shipped = _verdict(lambda c=cells: _check17_reference(coords, legal_offsets, gather, B, c))
-        # The shipped path cannot be entered with a 0-node wire, so the reference is compared
-        # against the vectorized body through the collate's own guard on a REAL wire below;
-        # here the reference is pinned so a change to it is visible.
+        # The shipped path cannot be entered with a 0-node wire, so only the reference is
+        # pinned here; the vectorized body is compared on a REAL wire below.
         expect = ("", "") if all(c is None for c in cells) else ("AugRoundTripMismatch", "")
         assert (shipped[0], "") == expect, f"{cells!r} -> {shipped!r}"
 
 
 def test_the_vectorized_check_still_fires(payload_fields) -> None:
-    """LAW-07 mutation self-test, through the PRODUCTION collate entry point.
-
-    A rewrite that quietly stopped checking would pass every clean-data assertion in this file.
-    This is the arm that refuses it: a real captured wire, one corrupted target cell, the
-    trainer's own `semantic="full"`, and the named error demanded.
-    """
+    """Mutation self-test through the PRODUCTION collate entry point: a real captured wire,
+    one corrupted target cell, the trainer's own `semantic="full"`, and the named error."""
     fields = payload_fields("b6")
     B = int(fields["n_graphs"])
     cells: list[Any] = [None] * B
@@ -204,8 +188,7 @@ def test_the_vectorized_check_still_fires(payload_fields) -> None:
             GraphWirePayload(**fields), semantic="full", device="cpu",
             target_argmax_cells=cells, **GEOMETRY,
         )
-    # The clean twin under the SAME kwargs must collate — a check that fires on healthy data
-    # is worse than the defect it replaces.
+    # the clean twin under the SAME kwargs must still collate
     clean = payload_fields("b6")
     collate_graph_batch(
         GraphWirePayload(**clean), semantic="full", device="cpu",
@@ -215,11 +198,7 @@ def test_the_vectorized_check_still_fires(payload_fields) -> None:
 
 
 def test_check_17_still_runs_after_15_and_16(payload_fields) -> None:
-    """PRECEDENCE: a wire corrupt for BOTH check 16 and check 17 must raise 16's error.
-
-    The rewrite must not reorder the layer. `policy_dst_slot` is perturbed so check 16 fires,
-    and a bad target cell is supplied so check 17 would fire too; 16 comes first.
-    """
+    """PRECEDENCE: a wire corrupt for BOTH check 16 and check 17 must raise 16's error."""
     fields = payload_fields("b6")
     B = int(fields["n_graphs"])
     fields["policy_dst_slot"] = np.asarray(fields["policy_dst_slot"]).copy()
@@ -234,6 +213,5 @@ def test_check_17_still_runs_after_15_and_16(payload_fields) -> None:
 
 
 def test_canonical_slot_helper_is_still_the_one_used() -> None:
-    """A guard on the transcription: `_check17_reference` uses the module's own helpers, so
-    this file cannot drift into testing a private copy of the geometry."""
+    """Guard the transcription: the reference uses the module's own helpers, not a copy."""
     assert callable(_graph_of) and callable(_canonical_slot_vec)

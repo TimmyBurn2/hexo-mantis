@@ -1,26 +1,19 @@
-"""Q-FIND-1 — the collector's saturation threshold against the in-flight supply the same
-config provisions.
+"""The collector's saturation threshold against the in-flight supply the same config provisions.
 
-The Rust collector waits for `inference_batch_size / 2` queued graphs
-(`GraphQueue::pop_graph_batch_blocking`) before serving a forward. The in-flight supply is
-`n_workers * <graphs a worker can have queued at once>`: ONE under the serial per-graph
-submit, and the whole `leaf_batch_size` under `GraphQueue::submit_graphs_and_wait`. When
-the threshold exceeds the supply the loop can NEVER satisfy its condition — every forward
-runs to the `inference_max_wait_ms` deadline and then serves whatever happens to be
-queued, which is what Q-FIND-1 measured as a 1/64 = 1.5625% fill. Nothing in the schema,
-in any gate, or in any test asserted the relation before this file.
+The Rust collector waits for `inference_batch_size / 2` queued graphs before serving a
+forward. In-flight supply is `n_workers` under the serial per-graph submit and
+`n_workers * leaf_batch_size` under `submit_graphs_and_wait`; when the threshold exceeds
+the supply, every forward runs to the `inference_max_wait_ms` deadline and serves whatever
+happens to be queued (measured once at a 1/64 fill).
 
-The `/ 2` divisor is a Rust literal with no Python accessor, so it is restated here ONCE,
-with its behavioural authority pinned on the Rust side rather than here:
-`crates/mantis-selfplay/tests/queue_roundtrip.rs::a_reachable_threshold_returns_before_the_deadline`
-(batch_size 8, supply 8 ⇒ returns off the threshold) and
-`::an_unreachable_threshold_still_serves_on_the_deadline` (batch_size 64, supply 1 ⇒ runs
-to the deadline and still serves). If the divisor moves, those two red.
+The `/ 2` divisor is a Rust literal with no Python accessor, restated here once; its
+behavioural authority is `crates/mantis-selfplay/tests/queue_roundtrip.rs`
+(`a_reachable_threshold_returns_before_the_deadline` and
+`an_unreachable_threshold_still_serves_on_the_deadline`), which red if the divisor moves.
 
-SCOPE (ruling R263): the knob move that would make every minted config reachable is a
-SEPARATE, separately-benched package and is deliberately NOT made here. What this file
-asserts is what the dispatch change alone delivers, plus a named tripwire on the configs
-that are still starved — so the gap is visible and un-ignorable rather than silent.
+The knob move that would make every minted config reachable is a separate, separately
+benched package: this file asserts what the dispatch change alone delivers plus a named
+tripwire on the configs still starved.
 """
 from __future__ import annotations
 
@@ -39,9 +32,7 @@ _THRESHOLD_DIVISOR = 2
 
 
 def _graph_config_paths() -> list[Path]:
-    """Every minted config whose representation is `graph` — the only ones the graph
-    queue serves. `discover_configs` is the ONE discovery authority (R71), not a sixth
-    flat glob."""
+    """Return every minted config whose representation is `graph`, via the one discovery authority."""
     return [p for p in discover_configs(_CONFIGS_DIR) if load_config(p).identity.representation == "graph"]
 
 
@@ -59,12 +50,12 @@ def _threshold(knobs: dict[str, int]) -> int:
 
 
 def _serial_supply(knobs: dict[str, int]) -> int:
-    """Pre-change: one blocking submit per worker ⇒ one graph in flight per worker."""
+    """Return the serial-submit supply: one graph in flight per worker."""
     return knobs["n_workers"]
 
 
 def _batched_supply(knobs: dict[str, int]) -> int:
-    """Post-change: one `submit_graphs_and_wait` per worker ⇒ the whole leaf batch."""
+    """Return the batched-submit supply: one whole leaf batch in flight per worker."""
     return knobs["n_workers"] * knobs["leaf_batch_size"]
 
 
@@ -96,11 +87,10 @@ def _ledger_text() -> str:
 def test_the_batched_submit_raises_the_in_flight_supply_on_every_graph_config(
     config_path: Path,
 ) -> None:
-    """The dispatch change must not be a no-op on any shipped graph config.
+    """Prove the batched submit raises in-flight supply on every shipped graph config.
 
-    A config minted with `leaf_batch_size: 1` would provision the same supply before and
-    after — the fix would land and measure nothing, and the in-run `occupancy` histogram
-    would stay pinned on its `{"1": N}` bucket with no defect anywhere to find.
+    A config minted with `leaf_batch_size: 1` provisions the same supply either way, so the
+    change would land and measure nothing.
     """
     knobs = _knobs(load_config(config_path))
     assert knobs["leaf_batch_size"] > 1, (
@@ -112,13 +102,10 @@ def test_the_batched_submit_raises_the_in_flight_supply_on_every_graph_config(
 
 
 def test_the_batched_submit_makes_the_threshold_reachable_where_the_serial_one_could_not() -> None:
-    """The config-level headline: on at least one minted graph config the batched submit
-    flips the collector threshold from unreachable to reachable.
+    """Prove at least one minted graph config flips from unreachable to reachable.
 
-    Not every config flips — the ones that do not are the prereg BATCHING row's business
-    (R263 scopes the knob move out of this change) and the next test names them. But if NO
-    shipped config flips, the fix has no config it can be measured on at all, and the
-    failure message below prints the whole derived ledger rather than a bare `False`.
+    Configs that do not flip are the next test's business; if none flips, the change has no
+    shipped config it can be measured on at all.
     """
     rows = _ledger()
     assert rows, "no graph configs discovered — the ledger is vacuous"
@@ -137,14 +124,10 @@ def test_the_batched_submit_makes_the_threshold_reachable_where_the_serial_one_c
 def test_a_still_starved_graph_config_is_starved_only_on_the_worker_supply_axis(
     config_path: Path,
 ) -> None:
-    """The named tripwire on the half R263 scopes out.
+    """Prove a still-starved graph config is starved only because it provisions one worker.
 
-    A graph config whose threshold is still unreachable after the dispatch change must be
-    starved for exactly ONE reason: it provisions a single worker. That is the axis the
-    prereg BATCHING row moves (`n_workers`, or `inference_batch_size` downward). A config
-    that raised `n_workers` and is STILL starved moved the knob without clearing the
-    threshold — a half-applied prereg row, which is precisely the state that would read as
-    "the batching fix did not work" in the run.
+    A config that raised `n_workers` and is still starved moved the knob without clearing
+    the threshold, which reads in-run as "the batching fix did not work".
     """
     knobs = _knobs(load_config(config_path))
     if _reachable(knobs, _batched_supply(knobs)):
@@ -160,10 +143,11 @@ def test_a_still_starved_graph_config_is_starved_only_on_the_worker_supply_axis(
 
 
 def test_the_reachability_predicate_is_not_vacuous() -> None:
-    """Self-test (LAW-07): the predicate must REFUSE a starved provisioning and ACCEPT a
-    provisioned one. Without this, a discovery that found zero graph configs — or a
-    predicate that returned `True` unconditionally — would let every assertion above pass
-    while asserting nothing."""
+    """Prove the reachability predicate refuses a starved provisioning and accepts a supplied one.
+
+    Zero discovered configs, or a predicate stuck at True, would let every assertion above
+    pass while asserting nothing.
+    """
     assert _graph_config_paths(), "no graph configs discovered — the parametrization is vacuous"
 
     starved = {
@@ -181,6 +165,5 @@ def test_the_reachability_predicate_is_not_vacuous() -> None:
     provisioned = dict(starved, n_workers=4)
     assert _batched_supply(provisioned) == 32
     assert _reachable(provisioned, _batched_supply(provisioned))
-    # ... and the SAME provisioning is still starved under the serial submit, which is the
-    # whole claim the dispatch change makes.
+    # The same provisioning is still starved under the serial submit — the whole claim.
     assert not _reachable(provisioned, _serial_supply(provisioned))

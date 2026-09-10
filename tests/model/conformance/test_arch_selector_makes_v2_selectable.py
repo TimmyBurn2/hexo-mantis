@@ -1,46 +1,24 @@
-# >300 justify (R8): the selector's closed registry, the incumbent pin that keeps production
-# on the arch it has always built, and the end-to-end round trip that proves a NON-incumbent
-# arch is reachable are one unit — the round trip is only evidence while the incumbent pin says
-# nothing quietly changed underneath it.
-"""T10 — CANDIDATE D: the arch selector, and what it does and does not close (R322(d)).
+# >300 justify (R8): the selector's closed registry, the incumbent pin that keeps production on
+# the arch it has always built, and the end-to-end round trip proving a NON-incumbent arch is
+# reachable are one unit — the round trip is only evidence while the incumbent pin says nothing
+# quietly changed underneath it.
+"""CONFORMANCE — the arch selector, and what it does and does not close.
 
-B1 landed `GnnNetV2` behind the model contract and disclosed one limitation in its own exit:
-**V2 is not selectable from a minted config.** R322(d) orders the selector, "suite-proven via a
-throwaway diagnostic config", with "every shipped production config still selecting its current
-arch, byte-unchanged".
+`GnnNetV2` landed behind the model contract with one disclosed limitation: it was not selectable
+from a minted config. The mechanism that closes it is `ARCH_KINDS`, the ONE vocabulary keyed by
+the declared dataclass's own name (a model fact, so the checkpoint loader imports it rather than
+keeping a second copy); `ARCH_KINDS_BY_REPRESENTATION`, under which `graph` admits TWO kinds,
+which is why a selector has to exist; `select_arch(..., *, arch_kind)`, keyword-only with NO
+default; and `INCUMBENT_ARCH_KIND`, a statement about HISTORY rather than a default, pinned
+below against the real minted configs.
 
-WHAT LANDED, AND IT IS THE MECHANISM IN FULL:
+`identity.arch_kind` is an OPTIONAL schema leaf: the production entry point honours a present row
+and resolves an absent one to the incumbent, and the rows below pin BOTH halves. Config-less call
+sites never reach this table — their authority is the artifact's stamp.
 
-  * `ARCH_KINDS` — the ONE arch-kind vocabulary, keyed by the declared dataclass's own name.
-    It used to be a private table inside `mantis.train.checkpoints`, authored at B1 because the
-    LOADER is where the need first bit; a kind vocabulary is a model fact, so it moved to
-    `mantis.model.arch` and the loader now imports it. Two copies of a discriminator is the
-    duplicate-authority class that file's own docstring warns about.
-  * `ARCH_KINDS_BY_REPRESENTATION` — the pairing rule (`SEAM_V1_DESIGN` §2.1's missing half,
-    stated for the arch side). `graph` admits TWO kinds now, which is exactly why a selector
-    has to exist at all.
-  * `select_arch(spec, config, *, arch_kind)` — keyword-only, NO default. A caller that does
-    not know which kind it wants is not entitled to one.
-  * `INCUMBENT_ARCH_KIND` — a statement about HISTORY, not a default, and pinned below against
-    the real minted configs: what this tree has always built, per representation.
-
-THE CONFIG ROW LANDED AT R330(e), AND IT IS EMPTY IN EVERY SHIPPED CONFIG. B2 reported that a
-selector key would be REQUIRED under R1 and would put a minted row into the two production
-configs, which R322(d) makes a HALT; R323(b) then ruled the key "enters production configs only
-as a minted row at run6's mint". R330(e) lands the plumbing under that ruling: `identity.arch_kind`
-is an OPTIONAL schema leaf (the one optional identity leaf, enumerated as such in
-`tests/config/test_schema.py`), `arch_from_spec_and_config` honours a present row and resolves an
-absent one to the incumbent, and the rows below pin BOTH halves — no shipped config carries the
-row yet, and a config that does carry it builds what it names. Config-less call sites (a
-checkpoint's legacy read, `strip_and_restamp`, the pretrain validator) never reach this table:
-their authority is the artifact's stamp, `mantis.train.checkpoints.stamped_arch_kind`.
-
-WHAT "THROWAWAY DIAGNOSTIC CONFIG" MEANS BELOW, stated precisely so the round trip is not read
-as more than it is: the test MINTS a real config file, loads it through the ONE loader, builds
-V2 through the selector against that config's own resolved encoding spec, serves a batch, and
-deletes the file. Everything except the KIND comes from the minted config; the kind is the
-selector's explicit argument, because no key can carry it yet. That is the honest boundary of
-what candidate D closes at B2.
+"Throwaway diagnostic config" means the test MINTS a real config file, loads it through the ONE
+loader, builds V2 through the selector against that config's own resolved encoding spec, serves
+a batch, and deletes the file. Everything except the KIND comes from the minted config.
 """
 from __future__ import annotations
 
@@ -77,7 +55,7 @@ _SEED = 20260830
 
 #: Widths for the diagnostic build — small enough for the default tier. The config does not
 #: carry them (no arch width key is a live `RunConfig` leaf, which is its own finding), so the
-#: dataclass defaults would otherwise apply and make this a slow test for no gain.
+#: dataclass defaults would otherwise make this a slow test for no gain.
 _WIDTHS = {"hidden": 8, "num_layers": 2, "policy_hidden": 8, "value_hidden": 8}
 
 
@@ -86,12 +64,10 @@ class SelectorWentVacuous(ConformanceRefusal):
 
 
 def _config_source(representation: str) -> tuple[dict, str]:
-    """A shipped config's raw YAML for `representation`, as a diagnostic config's base.
-
-    Copied from a real minted file rather than authored here: a hand-built config would drift
-    from the schema the moment a key is added, and the point of the round trip is that the
-    diagnostic config is a config the REAL loader accepts.
-    """
+    """A shipped config's raw YAML for `representation`, as a diagnostic config's base. Copied
+    from a real minted file rather than authored here: a hand-built config would drift from the
+    schema the moment a key is added, and the point of the round trip is that the diagnostic
+    config is one the REAL loader accepts."""
     for path in sorted(CONFIGS.glob("*.yaml")):
         if load_config(path).identity.representation == representation:
             return yaml.safe_load(path.read_text(encoding="utf-8")), path.name
@@ -107,14 +83,10 @@ def _graph_config_source() -> tuple[dict, str]:
 
 @pytest.fixture
 def diagnostic_config(tmp_path):
-    """A THROWAWAY minted graph config: written, loaded through the one loader, then deleted.
-
-    It lives under `tmp_path`, never under `configs/` — a file there would be discovered by
-    `discover_configs`, which gates 7 and 12 both consume, so a diagnostic config parked in the
-    audit root is a config nobody declared. Deleted at the end of the test either way, and the
-    deletion is asserted, because "throwaway" is a property of the file's lifetime and not of
-    its name.
-    """
+    """A THROWAWAY minted graph config: written, loaded through the one loader, then deleted. It
+    lives under `tmp_path`, never under `configs/`, where `discover_configs` would find it and two
+    gates would audit a config nobody declared. The deletion is asserted, because "throwaway" is a
+    property of the file's lifetime and not of its name."""
     raw, base = _graph_config_source()
     raw["run_id"] = "seam-b2-arch-selector-diagnostic"
     path = tmp_path / "arch_selector_diagnostic.yaml"
@@ -126,13 +98,10 @@ def diagnostic_config(tmp_path):
 
 # ── the vocabulary and the pairing rule ──────────────────────────────────────────────────
 def test_the_kind_vocabulary_is_set_equal_to_build_nets_dispatch(derived):
-    """The registry and the dispatch are one claim, checked as SET EQUALITY in both directions.
-
-    A kind in the registry that `build_net` cannot build is a name that resolves to nothing; an
-    arch `build_net` dispatches on that the registry does not name is an arch no selector, no
-    stamp and no manifest can reach. The suite's T7 section already derives the dispatch census
-    from `build_net` itself, and this row consumes the same source rather than a second list.
-    """
+    """The registry and the dispatch are one claim, checked as SET EQUALITY in both directions:
+    a kind in the registry `build_net` cannot build is a name resolving to nothing, and an arch
+    `build_net` dispatches on that the registry does not name is one no selector, stamp or
+    manifest can reach. The dispatch census comes from `build_net` itself, not a second list."""
     import inspect
 
     from mantis.model import build as build_module
@@ -174,27 +143,20 @@ def test_the_selector_has_a_representation_with_a_REAL_choice(derived):
     )
 
 
-# ── the incumbent: history, pinned against the real minted files ─────────────────────────
-#: The configs whose `identity.arch_kind` is MINTED, and the kind each is ruled to name. R323(b)
-#: reserved the row to run6's mint act; R336(b) IS that ruling and names `GnnArchV2` on W-C1's
-#: measured 78.5x-vs-2.49x hazard. Written here as data so the two pins below read the SAME
-#: authority: a config carrying the row without an entry still reds, and an entry naming a kind
-#: the file does not carry reds too. Widening it is a mint act with a ruling behind it.
+#: The configs whose `identity.arch_kind` is MINTED, and the kind each is ruled to name. Written
+#: as data so the two pins below read the SAME authority: a config carrying the row without an
+#: entry reds, and an entry naming a kind the file does not carry reds too. Widening it is a
+#: mint act with a ruling behind it.
 _MINTED_ARCH_KIND_ROW = {"run6.yaml": "GnnArchV2"}
 
 
 def test_every_shipped_config_still_selects_the_arch_it_has_always_selected(derived):
-    """R322(d)'s "every shipped production config still selects its current arch", plus the ONE
-    ruled departure from it.
-
-    EXECUTED against every minted file, not argued: each config is loaded through the one
-    loader, its encoding resolved through the registry, and the arch the production entry point
-    (`arch_from_spec_and_config`) returns is asserted to be the incumbent for its
-    representation — EXCEPT where `_MINTED_ARCH_KIND_ROW` records a ruled minted row, where it
-    is asserted to be exactly the kind that ruling names. A selector that quietly re-pointed
-    production is still what this catches: an unruled move reds against the incumbent, and a
-    ruled one that built something other than its ruling's kind reds against the row.
-    """
+    """Every shipped production config still selects its current arch, plus the ONE ruled
+    departure. EXECUTED against every minted file: each is loaded through the one loader, its
+    encoding resolved through the registry, and the arch the production entry point returns must
+    be the incumbent for its representation — except where `_MINTED_ARCH_KIND_ROW` records a
+    ruled minted row, where it must be exactly the kind that ruling names. An unruled move reds
+    against the incumbent; a ruled one that built something else reds against the row."""
     seen = 0
     for path in sorted(CONFIGS.glob("*.yaml")):
         config = load_config(path)
@@ -231,15 +193,11 @@ def test_an_UNKNOWN_kind_is_REFUSED_and_not_resolved_to_the_nearest_fit():
 
 
 def test_a_kind_the_REPRESENTATION_does_not_admit_is_REFUSED():
-    """PB-T10b. The pairing rule with teeth: a kind the representation does not admit builds
-    nothing.
-
-    IT USED TO NAME `CnnArch`, the grid arch on a graph encoding, and R346(f) deleted it — so
-    the kind is now unknown to the build rather than known-and-not-admitted, and the two
-    refusals have different messages. The pairing rule is driven instead by adding a kind to
-    `ARCH_KINDS` that `ARCH_KINDS_BY_REPRESENTATION` does not list for `graph`, which is the
-    exact shape a new arch arrives in before its pairing row is written.
-    """
+    """The pairing rule with teeth: a kind the representation does not admit builds nothing. It
+    used to name the grid arch on a graph encoding; with that arch deleted the kind is unknown to
+    the build rather than known-and-not-admitted, so the rule is driven instead by adding a kind
+    to `ARCH_KINDS` that the pairing table does not list for `graph` — the exact shape a new arch
+    arrives in before its pairing row is written."""
     import mantis.model.arch as arch_mod
 
     spec = lookup("gnn_axis_v1")
@@ -267,13 +225,10 @@ def test_select_arch_takes_NO_default_kind():
 
 # ── the round trip: a minted config, V2, a served batch, a stable hash ───────────────────
 def _batch(in_dim: int, edge_dim: int, n_real: int = 12, n_stones: int = 3) -> dict:
-    """A synthetic star graph on the `gnn_axis_v1` wire's dummy topology.
-
-    SYNTHETIC AND LABELLED AS SUCH (T6's rule): it reproduces the wire's shape — one dummy node
-    bidirectionally connected to every real node, all-zero edge attrs — so `forward_batch` has
-    something legal to serve. It is not a position and no reachability is implied by it; the
-    claim under test is that the SELECTED net serves the wire at all, not what it says.
-    """
+    """A synthetic star graph on the `gnn_axis_v1` wire's dummy topology, LABELLED AS SUCH: one
+    dummy node bidirectionally connected to every real node, all-zero edge attrs, so
+    `forward_batch` has something legal to serve. It is not a position, and the claim under test
+    is that the SELECTED net serves the wire at all."""
     dummy = n_real
     n = n_real + 1
     src = torch.cat([torch.arange(n_real), torch.full((n_real,), dummy)])
@@ -313,12 +268,9 @@ def _digest(*tensors: torch.Tensor) -> str:
 def test_a_minted_config_round_trips_through_the_selector_to_a_SERVED_batch(
     arch_kind, diagnostic_config, derived
 ):
-    """CANDIDATE D's proof: select → build → serve → hash, over a real minted config.
-
-    Parametrized over BOTH graph kinds rather than V2 alone, and that is the row's point: the
-    two runs differ in exactly one argument, so "V2 is reachable" is demonstrated against V1 as
-    its own control rather than asserted on its own.
-    """
+    """The proof: select, build, serve, hash, over a real minted config. Parametrized over BOTH
+    graph kinds rather than V2 alone, and that is the row's point — the two runs differ in exactly
+    one argument, so "V2 is reachable" is demonstrated against V1 as its own control."""
     path, base = diagnostic_config
     config = load_config(path)
     assert config.identity.representation == "graph"
@@ -355,10 +307,8 @@ def test_the_round_trip_is_STABLE_across_two_builds_of_the_same_kind(diagnostic_
 
 def test_the_two_kinds_are_DIFFERENT_functions_on_the_same_minted_config(diagnostic_config):
     """The control that keeps the round trip from being satisfiable by a selector that ignores
-    its argument. Same config, same seed, same batch, one argument different — and the served
-    outputs must NOT agree. (`GnnNetV2`'s value readout consumes a max statistic V1 cannot see;
-    the witnesses for WHY that is the right difference live in `test_gnn_v2_witnesses.py`, and
-    nothing here is a strength claim in either direction — F-01 is the standing fence.)"""
+    its argument: same config, same seed, same batch, one argument different, and the served
+    outputs must NOT agree. Nothing here is a strength claim in either direction."""
     path, _base = diagnostic_config
     config = load_config(path)
     spec = lookup(config.identity.encoding)
@@ -390,12 +340,11 @@ def test_the_selected_V2_arch_is_the_SIBLING_dataclass_and_not_V1(diagnostic_con
 def test_the_selector_row_is_the_ONE_config_key_naming_an_arch_and_only_the_minted_set_carries_it(
     derived,
 ):
-    """R323(b): the row enters production configs ONLY as a minted row at run6's mint. That mint
-    has now happened (R336(b)/R338), so the pin's second half moves from "every config omits it"
-    to "exactly `_MINTED_ARCH_KIND_ROW` carries it, at exactly the kind its ruling names" — the
-    same refusal, re-aimed rather than relaxed: a row minted early still reds (no entry), a row
-    minted at a kind nobody ruled still reds (wrong value), and a second arch-naming key still
-    reds against the schema half, which is untouched."""
+    """The `arch_kind` row enters production configs ONLY as a minted row, and that mint has
+    happened — so the pin's second half is "exactly `_MINTED_ARCH_KIND_ROW` carries it, at exactly
+    the kind its ruling names". The same refusal, re-aimed rather than relaxed: a row minted early
+    reds for having no entry, one minted at an unruled kind reds on the value, and a second
+    arch-naming key still reds against the untouched schema half."""
     from mantis.config.schema import RunConfig
 
     from test_config_partition_shared_vs_arch_scoped import live_leaf_paths
@@ -445,16 +394,11 @@ def test_a_minted_arch_kind_row_is_honoured_by_the_production_entry_point(tmp_pa
 def test_a_row_naming_a_kind_the_representation_does_not_admit_is_refused_at_construction(
     tmp_path,
 ):
-    """The schema cannot import the vocabulary (a config↔model cycle, gate 9), so the refusal
-    lives in `select_arch` and fires at the first net built — before anything trains or serves.
-    A config naming a kind its representation does not admit is refused by name, never resolved
-    to the nearest fit.
-
-    THE NOT-ADMITTED HALF HAS NO CONFIG-LEVEL SUBJECT SINCE R346(f): with one representation
-    registered, every kind in the vocabulary is admitted by it, and `_config_source("grid")`
-    has no shipped base to copy. What a config CAN still name is a kind this build does not
-    have at all, which is the half below and the one an operator actually mistypes.
-    """
+    """The schema cannot import the vocabulary (a config-to-model cycle), so the refusal lives in
+    `select_arch` and fires at the first net built, before anything trains or serves. The
+    NOT-ADMITTED half has no config-level subject any more — with one representation registered,
+    every kind in the vocabulary is admitted by it — so what a config CAN still name is a kind
+    this build does not have at all, which is the half below and the one an operator mistypes."""
     raw, _base = _graph_config_source()
     raw["run_id"] = "r330e-row-refused"
     path = tmp_path / "bad_row.yaml"

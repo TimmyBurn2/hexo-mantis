@@ -1,11 +1,10 @@
-//! R8-justify: the relocated O-16..O-30 HEXG oracle roster (the frozen v1 byte-golden O-21 and the D6 aug-coherence/ADV-7 canaries among them) binds ONE buffer type, HexgBuffer, through one shared record/path/symmetry helper set; a split would break the frozen O-numbering and duplicate the helpers.
-//! HEXG (graph) oracle suite — relocated out of src (R5). AUDIT-1 F-52: the two lines
-//! above stated 33 and 32 for the same module, over 37 tests. Counts are derived, never
-//! asserted (R192(e)) — and two DIFFERENT wrong counts in adjacent lines is the reason.
-//! Ported from the predecessor engine's `replay_buffer/hexg/tests.rs`; every
-//! `sample_graph_batch_impl` assertion is re-anchored from the deferred
-//! `GraphWire` to the buffer-owned `Vec<AxisGraph>` (single graph → local ==
-//! global, R-1). Covers O-16..O-30.
+//! R8-justify: the HEXG oracle roster — the frozen byte-golden and the D6 aug-coherence
+//! canaries among them — binds ONE buffer type, HexgBuffer, through one shared
+//! record/path/symmetry helper set; a split would duplicate that helper set.
+//!
+//! The HEXG (graph) oracle suite. Every `sample_graph_batch_impl` assertion is anchored on
+//! the buffer-owned `Vec<AxisGraph>` rather than a wire type, so a single graph means local
+//! index == global index.
 
 use std::io::Write;
 
@@ -19,8 +18,7 @@ use mantis_selfplay::replay::hexg::{
     HEXG_VISIT_COUNT_CEILING, MAX_STONES,
 };
 
-/// Slot geometry used by this suite's pre-R255 oracles (each buffer below is
-/// constructed with it EXPLICITLY — a test geometry choice, not a shipped tunable).
+/// Slot geometry for this suite: a test choice, passed explicitly, not a shipped tunable.
 const VISIT_CAP: usize = 128;
 use mantis_selfplay::replay::sym::rotate_axial;
 
@@ -54,8 +52,8 @@ fn unique_path(stem: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("hexg_{stem}_{pid}_{nanos}_{n}.hexg"))
 }
 
-/// Group inverse of D6 element `s` (reflect-then-rotate): reflections (s>=6) are
-/// involutions; rotations invert to `(6-n)%6`.
+/// Group inverse of D6 element `s`: reflections (s>=6) are involutions, rotations invert
+/// to `(6-n)%6`.
 fn inv_sym(s: usize) -> usize {
     if s >= 6 {
         s
@@ -64,18 +62,14 @@ fn inv_sym(s: usize) -> usize {
     }
 }
 
-// ── O-17: push/read round-trip ──────────────────────────────────────────────────
-
 #[test]
 fn push_read_roundtrip() {
     let mut buf = HexgBuffer::new(8, ENC, 128).unwrap();
     let rec = sample_record();
     buf.push_record_impl(&rec, 42).unwrap();
     assert_eq!(buf.size, 1);
-    // R345(b)(6): `record_at` now reads the slot's stored `game_id` back out, so the
-    // round-trip's expected value carries the id it was PUSHED under, not the fixture's
-    // untagged sentinel. Asserting against the sentinel would have made the read-back
-    // silently drop the one field the same-game dedupe runs on.
+    // `record_at` reads the slot's stored `game_id` back out, so the expected value carries
+    // the id it was PUSHED under: the sentinel would hide a dropped dedupe field.
     let stored = GraphRecord {
         game_id: 42,
         ..rec.clone()
@@ -87,8 +81,6 @@ fn push_read_roundtrip() {
     );
     assert_eq!(buf.game_ids[0], 42);
 }
-
-// ── O-18: ring wrap + size cap ──────────────────────────────────────────────────
 
 #[test]
 fn ring_wraps_and_caps_size() {
@@ -110,8 +102,6 @@ fn ring_wraps_and_caps_size() {
         );
     }
 }
-
-// ── O-19: over-cap push LOUD ─────────────────────────────────────────────────────
 
 #[test]
 fn push_rejects_over_cap() {
@@ -135,23 +125,18 @@ fn push_rejects_over_cap() {
     );
 }
 
-/// R347(a) PLANTED BREAK — a row claiming more than m explicit entries is REFUSED at insert.
-///
-/// Under Sequential Halving only m candidates are ever visited, so an (m+1)-entry row is not
-/// merely unstorable: it is a claim about the search that cannot be true. The refusal is the
-/// ring's own, at the write, and it happens BEFORE any slot is touched — so the ring a
-/// refused push leaves behind is the ring it had. Remove the guard in `push_record_impl` and
-/// this test reds (the write would run off the slot and corrupt the neighbouring record).
+/// PLANTED BREAK — a row claiming more than m explicit entries is refused at insert, before
+/// any slot is touched. Remove the guard in `push_record_impl` and this test reds.
 #[test]
 fn a_sparse_row_over_the_minted_m_is_refused_at_insert() {
-    // The bound is DERIVED through the one authority, not transcribed: under `gumbel` the
-    // slot count IS the minted m and the sims regime does not enter.
+    // The bound is derived through the one authority: under `gumbel` the slot count IS the
+    // minted m and the sims regime does not enter.
     let m = derived_visit_capacity(320, 0, 0.0, 64, 0.0, 0, 0, 8, HEXG_GUMBEL_M_MAX, "gumbel")
         .expect("the minted Gumbel slot bound resolves");
     assert_eq!(m, HEXG_GUMBEL_M_MAX);
 
     let sparse_row = |n: usize| GraphRecord {
-        // Distinct coords so the row is a real support and not one cell repeated.
+        // Distinct coords so the row is a real support, not one cell repeated.
         visits: (0..n).map(|i| (i as i16, 0i16, 0.5 / n as f32)).collect(),
         tail_mass: 0.5,
         ..sample_record()
@@ -177,9 +162,8 @@ fn a_sparse_row_over_the_minted_m_is_refused_at_insert() {
     );
 }
 
-/// The tail mass is a PROBABILITY at the write face, and a row that is not one is refused
-/// before any slot is touched — alpha is spread over the remaining legal set by the trainer,
-/// so a NaN or an out-of-range value would become garbage on hundreds of actions.
+/// The tail mass is a probability at the write face: the trainer spreads it over the whole
+/// remaining legal set, so a NaN would become garbage on hundreds of actions.
 #[test]
 fn a_tail_mass_that_is_not_a_probability_is_refused_at_insert() {
     let mut buf = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
@@ -206,8 +190,6 @@ fn a_tail_mass_that_is_not_a_probability_is_refused_at_insert() {
         .expect("0.0, 0.5 and 1.0 are probabilities");
     }
 }
-
-// ── O-20: persist round-trip byte-identical ─────────────────────────────────────
 
 #[test]
 fn persist_roundtrip_byte_identical() {
@@ -238,8 +220,6 @@ fn persist_roundtrip_byte_identical() {
     let _ = std::fs::remove_file(path);
 }
 
-// ── O-21: frozen HEXG v1 byte-golden — load exact + re-save byte-identity ────────
-
 fn fixture_path(name: &str) -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/replay")
@@ -256,7 +236,7 @@ fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
     let n = buf.load_from_path_impl(golden.to_str().unwrap()).unwrap();
     assert_eq!(n, 2, "golden holds 2 records");
 
-    // Exact field values (CAPTURE_LOG §C, re-minted at v2 with the R347(a) tail mass).
+    // Exact field values, re-minted at v2 with the tail mass.
     let r0 = buf.record_at(0);
     assert_eq!(r0.stones, vec![(0, 0, 1), (1, 0, -1), (0, 1, 1)]);
     assert_eq!(r0.visits, vec![(2, 0, 0.6), (0, 2, 0.4)]);
@@ -273,9 +253,8 @@ fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
     let r1 = buf.record_at(1);
     assert_eq!(r1.stones, vec![(0, 0, -1), (2, 1, 1)]);
     assert_eq!(r1.visits, vec![(1, 1, 0.75)]);
-    // THE SPARSE ROW, frozen: the second record's explicit mass is 0.75 and its tail is
-    // 0.25, so a build that dropped the field would read 1.0 here and a build that
-    // mis-ordered it would read a stone coordinate.
+    // The frozen sparse row: explicit mass 0.75, tail 0.25 — a build that dropped the field
+    // reads 1.0 here and one that mis-ordered it reads a stone coordinate.
     assert_eq!(r1.tail_mass, 0.25);
     assert_eq!(r1.current_player, -1);
     assert_eq!(r1.moves_remaining, 4);
@@ -286,7 +265,7 @@ fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
     assert_eq!(r1.game_length, 12);
     assert_eq!(buf.game_ids[1], 43);
 
-    // Re-save → byte-identical to the frozen golden.
+    // Re-save must be byte-identical to the frozen golden.
     let resave = unique_path("o21_resave");
     buf.save_to_path_impl(resave.to_str().unwrap()).unwrap();
     let resaved = std::fs::read(&resave).unwrap();
@@ -297,13 +276,9 @@ fn o21_hexg_v2_byte_golden_load_and_resave_identity() {
     let _ = std::fs::remove_file(resave);
 }
 
-/// R347(a) PLANTED BREAK — the v1 golden must be REFUSED, never re-parsed.
-///
-/// v2 inserted `tail_mass` after `weight`, so every byte of a v1 record from that offset on
-/// means something else: the first stone's `q` would be read as a probability and the
-/// record's own stone count would then be short by four bytes for the rest of the file. The
-/// version field is the only thing that can see this, because the payload is
-/// self-consistent under BOTH readings. Delete the version check and this test reds.
+/// PLANTED BREAK — the v1 golden must be refused, never re-parsed: v2 inserted `tail_mass`
+/// after `weight`, and the payload is self-consistent under BOTH readings, so only the
+/// version field can see the difference. Delete the version check and this test reds.
 #[test]
 fn the_v1_byte_golden_is_refused_by_name_and_leaves_the_buffer_untouched() {
     let golden = fixture_path("hexg_v1_golden.hexg");
@@ -332,8 +307,6 @@ fn the_v1_byte_golden_is_refused_by_name_and_leaves_the_buffer_untouched() {
         "a refused load must not touch a slot"
     );
 }
-
-// ── O-22: bad version / slot-geometry ────────────────────────────────────────────
 
 #[test]
 fn load_rejects_bad_version() {
@@ -375,8 +348,6 @@ fn load_rejects_slot_geometry_mismatch() {
     let _ = std::fs::remove_file(path);
 }
 
-// ── O-16: cross-magic rejection (both directions) ────────────────────────────────
-
 #[test]
 fn load_rejects_dense_hexb_magic() {
     let path = unique_path("hexb_magic");
@@ -394,19 +365,13 @@ fn load_rejects_dense_hexb_magic() {
     let _ = std::fs::remove_file(path);
 }
 
-// O-16's other direction (a HEXG file offered to the dense HEXB loader) went with that
-// loader at R346(f). The HEXB magic pin above is what remains of the pair, and it is the
-// half that still guards a live reader.
-
-// ── O-23: a grid encoding name is refused at construction ────────────────────────
+// The other direction — a HEXG file offered to the dense loader — went with that loader; the
+// magic pin above is the half that still guards a live reader.
 
 #[test]
 fn grid_encoding_rejected_at_construction() {
-    // Before R346(f) `"v6"` was a REGISTERED grid row and this asserted that HexgBuffer
-    // refused it by representation. The row is deleted, so the refusal now comes from the
-    // registry — which is the stronger of the two, and the assertion on the message is what
-    // keeps this from passing as a bare typo check: a resurrected grid row would have to get
-    // past the registry's own `representation="grid"` refusal first.
+    // No grid row is registered any more, so the refusal comes from the registry itself. The
+    // assertion on the message is what keeps this from passing as a bare typo check.
     let err = HexgBuffer::new(4, "v6", 128)
         .err()
         .expect("a grid encoding name must be refused");
@@ -415,8 +380,6 @@ fn grid_encoding_rejected_at_construction() {
         "the refusal must name the offered encoding and the registered set: {err}"
     );
 }
-
-// ── O-24: rebuild-at-sample parity vs direct builder (re-anchored to AxisGraph) ──
 
 #[test]
 fn sample_wire_matches_direct_builder_unaugmented() {
@@ -433,7 +396,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     );
     assert_eq!(buf.contract_version, 1);
 
-    // Direct native build on the SAME stones (identity — augment off).
+    // Direct native build on the SAME stones, with augment off.
     let stones: Vec<(i32, i32, i8)> = rec
         .stones
         .iter()
@@ -448,7 +411,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     };
     let g = build_axis_graph(&StoneList { stones }, &params);
 
-    // Single graph → local == global: every field must match the direct build.
+    // Single graph, so local == global: every field must match the direct build.
     assert_eq!(sg.node_feat.0, g.node_feat.0, "node_feat parity");
     assert_eq!(sg.node_coords, g.node_coords, "node_coords parity");
     assert_eq!(
@@ -463,7 +426,7 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     );
     assert_eq!(*sg, g, "the whole sampled graph equals the direct build");
 
-    // Policy target: length == n_legal, each legal node gets its visit-map mass.
+    // Policy target: length == n_legal, each legal node carrying its visit-map mass.
     let n_legal = g.legal_node_gather.len();
     assert_eq!(targets.policy_target.len(), n_legal);
     let mass: f32 = targets.policy_target.iter().sum();
@@ -474,8 +437,6 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     assert_eq!(targets.argmax_valid, vec![1]);
     assert_eq!((targets.argmax_q[0], targets.argmax_r[0]), (2, 0));
 }
-
-// ── O-25: D6 aug round-trip coherence + ADV-7 canary ─────────────────────────────
 
 #[test]
 fn rotate_axial_roundtrips_under_inverse() {
@@ -574,8 +535,6 @@ fn empty_board_record_survives_d6_augmented_sample_align() {
     }
 }
 
-// ── O-26: atomic load on failure ─────────────────────────────────────────────────
-
 #[test]
 fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
     let mut src = HexgBuffer::new(8, ENC, 128).unwrap();
@@ -630,8 +589,6 @@ fn failed_truncated_load_is_loud_and_leaves_buffer_untouched() {
     let _ = std::fs::remove_file(&trunc_path);
 }
 
-// ── O-27: mass-drop guard ────────────────────────────────────────────────────────
-
 #[test]
 fn sample_rejects_illegal_cell_visit_mass_drop() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
@@ -683,8 +640,6 @@ fn legit_push_sample_roundtrip_does_not_trip_mass_drop_guard() {
         }
     }
 }
-
-// ── O-29: game_id rebase on load ─────────────────────────────────────────────────
 
 #[test]
 fn load_rebases_next_game_id_past_loaded_max() {
@@ -748,8 +703,6 @@ fn load_with_i64_max_game_id_does_not_panic_and_saturates() {
     );
     let _ = std::fs::remove_file(path);
 }
-
-// ── O-28: push-time validation ───────────────────────────────────────────────────
 
 #[test]
 fn push_rejects_nan_visit_prob() {
@@ -871,8 +824,6 @@ fn legit_push_unaffected_by_outcome_and_stone_player_guards() {
     assert_eq!(buf.game_ids[0], 42);
 }
 
-// ── O-30: recency sampler ────────────────────────────────────────────────────────
-
 #[test]
 fn recency_sampler_draws_the_newest_slot_fraction() {
     let cap = 600;
@@ -942,13 +893,10 @@ fn recency_sampler_recent_window_clamped_by_size_before_ring_fills() {
     }
 }
 
-// ── R255/ADJ-D34: the visit slot is DERIVED capacity, not a 128 literal ─────────
-
 #[test]
 fn buffer_slots_are_sized_by_the_composed_visit_capacity() {
-    // A 600/75-regime-shaped capacity (607): a 130-visit record — over the old
-    // 128 literal — pushes and round-trips intact. Reds if anything on the
-    // push/read path still clamps at the deleted constant.
+    // The visit slot is DERIVED capacity, never a literal: at a composed 607 a 130-visit
+    // record round-trips intact, and this reds if the push/read path still clamps at 128.
     let mut buf = HexgBuffer::new(4, ENC, 607).unwrap();
     let visits: Vec<(i16, i16, f32)> = (0..130)
         .map(|i| (i as i16, -(i as i16), 1.0 / 130.0))
@@ -1009,8 +957,8 @@ fn persist_roundtrips_a_non_default_capacity_and_rejects_mismatch() {
     assert_eq!(same.load_from_path_impl(path_s), Ok(1));
     assert_eq!(same.record_at(0).visits.len(), 200);
 
-    // A buffer composed under a DIFFERENT regime refuses the file, naming both
-    // geometries — a silent remap would smuggle one regime's records into another.
+    // A buffer composed under a DIFFERENT regime refuses the file and names both geometries;
+    // a silent remap would smuggle one regime's records into another.
     let mut other = HexgBuffer::new(4, ENC, VISIT_CAP).unwrap();
     let err = other.load_from_path_impl(path_s).unwrap_err();
     assert!(
@@ -1022,15 +970,12 @@ fn persist_roundtrips_a_non_default_capacity_and_rejects_mismatch() {
 
 #[test]
 fn resize_preserves_records_at_a_non_default_capacity_across_wrap() {
-    // RED-TEAM HOLE-1 closure: `resize_impl` is production-reachable (the trainer's
-    // capacity schedule calls `buffer.resize`, train/coordinator/step.py) and its
-    // stride arithmetic must follow the COMPOSED capacity — a resurrected 128
-    // stride in storage.rs survives every other pin because no oracle exercised
-    // resize at a non-default geometry. Killer mutation: `vstride = 128 * 2` (or
-    // any constant) in `resize_impl`.
+    // `resize_impl` is production-reachable (the trainer's capacity schedule calls
+    // `buffer.resize`) and its stride arithmetic must follow the COMPOSED capacity.
+    // Killer mutation: `vstride = 128 * 2` (or any constant) in `resize_impl`.
     let mut buf = HexgBuffer::new(4, ENC, 607).unwrap();
-    // Fill PAST wrap (head != 0 at size == capacity) with >128-visit records so
-    // the linearise+extend path moves wide slots.
+    // Fill PAST wrap (head != 0 at size == capacity) with wide records, so the
+    // linearise+extend path moves wide slots.
     for i in 0..6 {
         let visits: Vec<(i16, i16, f32)> = (0..(129 + i))
             .map(|j| (j as i16, i as i16, 1.0 / (129 + i) as f32))
@@ -1045,8 +990,8 @@ fn resize_preserves_records_at_a_non_default_capacity_across_wrap() {
         buf.head, 0,
         "premise: head is mid-ring so resize must linearise"
     );
-    // Logical (oldest → newest) content before the resize; resize linearises, so
-    // physical slots relocate but the logical sequence must survive byte-identically.
+    // Resize linearises, so physical slots relocate but the logical oldest-to-newest
+    // sequence must survive byte-identically.
     let before: Vec<GraphRecord> = (0..4)
         .map(|i| buf.record_at((buf.head + buf.capacity - buf.size + i) % buf.capacity))
         .collect();

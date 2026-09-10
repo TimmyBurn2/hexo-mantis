@@ -1,26 +1,11 @@
-// Exceeds the 300-line soft cap (R8): the full 22-method `InferenceBatcher`
-// Python surface (dense + graph paths + mock harness + model-version) REMAPPED
-// over the WP6 `DenseQueue`/`GraphQueue`, plus the `GraphWire` pyclass (3 scalar
-// + 13 numpy COPY getters + single-read `take()`) port as one line-auditable
-// unit with their tests. Splitting the batcher from the wire it fuses would
-// scatter the graph-seam story across files (out of the R2 4-file write scope).
-//! `InferenceBatcher` (REMAP over WP6 `DenseQueue` + `GraphQueue`) + `GraphWire`
-//! pyclass. Behaviour-exact structural port of the frozen `inference_bridge.rs`
-//! PyO3 surface: NAME + Python-facing method names PRESERVED (WP8 consumer
-//! compat), internals reimplemented over the already-`pub` WP6 queue API.
+// Exceeds the 300-line soft cap (R8): the 22-method `InferenceBatcher` Python surface and the
+// `GraphWire` pyclass it fuses are one auditable unit — splitting them scatters the graph seam.
+//! `InferenceBatcher` (a remap over the WP6 `DenseQueue` + `GraphQueue`) and the `GraphWire`
+//! pyclass. Behaviour-exact structural port of the frozen PyO3 surface: NAME and Python-facing
+//! method names PRESERVED, internals reimplemented over the already-`pub` queue API.
 //!
-//! Two new-side reconciliations, both bridge-internal (no cross-crate seam):
-//! - The WP6 queues expose NO pending-request accessor, so `has_pending_*` reads
-//!   a bridge-side mock-submit counter (accurate for the mock-game harness — the
-//!   method's only consumer; a production batcher's real-worker submits flow
-//!   straight to the shared queue and are not counted, and `has_pending_*` is a
-//!   non-production introspection helper). See the module notes in IMPL_NOTES.
-//! - `GraphWire`'s single-read `take()` latch is the NEW WP6 wire capability; the
-//!   bridge pyclass owns the moved-out `GraphWireArrays` (repeatable COPY getters,
-//!   old behaviour PRESERVED) PLUS a Python-facing `take()` latch that raises
-//!   `WireAlreadyConsumed` on a second call.
-//!
-//! F-42: every pyclass sets `module = "mantis._engine"`.
+//! `has_pending_*` reads a bridge-side mock-submit counter, because the queues expose no
+//! pending accessor and a production batcher's submits go straight to the shared queue.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -50,15 +35,10 @@ pyo3::create_exception!(
     "Raised when GraphWire.take() is called a second time (the single-read latch)."
 );
 
-/// What a GIL-free (`py.detach`) section on the graph seam can fail with, carried across
-/// the detach boundary as plain data and mapped to its Python face once the GIL is back.
-///
-/// `WireConsumed` is why this type exists. Both production fuse sites — the trainer's
-/// `HexgBuffer::sample_graph_batch` and the server's `next_graph_batch` — used to
-/// `expect()` the single-read guard, so a wire that had already yielded its arrays would
-/// cross the FFI as a PanicException. Under `panic = "unwind"` that is caught rather than
-/// aborting (R2/LAW-13), but the house rule is upstream of that: a production path fails
-/// through a NAMED error that propagates, never through a panic.
+/// What a GIL-free (`py.detach`) section on the graph seam can fail with, carried across the
+/// detach boundary as plain data and mapped to its Python face once the GIL is back. Both
+/// production fuse sites used to `expect()` the single-read guard, so an already-taken wire
+/// crossed the FFI as a PanicException.
 pub(crate) enum SeamFailure {
     /// An impl-layer failure that already carries its own message.
     Message(String),
@@ -79,8 +59,8 @@ impl From<WireConsumedGuard> for SeamFailure {
 }
 
 impl SeamFailure {
-    /// Map to the Python face: an impl message keeps the `ValueError` the seam has always
-    /// raised; the single-read guard routes as the named `WireAlreadyConsumed`.
+    /// Map to the Python face: an impl message keeps the seam's `ValueError`, the single-read
+    /// guard routes as the named `WireAlreadyConsumed`.
     pub(crate) fn into_pyerr(self) -> PyErr {
         match self {
             SeamFailure::Message(message) => PyValueError::new_err(message),
@@ -89,11 +69,8 @@ impl SeamFailure {
     }
 }
 
-/// Model-version source for a batcher. A standalone batcher (the `new(...)` ctor)
-/// owns its counter; a runner-produced batcher (`SelfPlayRunner.batcher`) writes
-/// through to the runner's `model_version` atomic so worker threads observe the
-/// bump (frozen: the runner read `self.batcher.current_model_version()`; new: the
-/// runner OWNS the atomic and the batcher bumps it via the SEAM).
+/// Model-version source: a standalone batcher owns its counter, a runner-produced one writes
+/// through to the runner's atomic so worker threads observe the bump.
 #[derive(Clone)]
 enum ModelVersionSrc {
     Own(Arc<AtomicU64>),
@@ -101,9 +78,8 @@ enum ModelVersionSrc {
 }
 
 impl ModelVersionSrc {
-    /// Increment and return the new value. `Own`: atomic `fetch_add(1)+1` (frozen
-    /// `bump_model_version`). `Runner`: read-inc-write via the SEAM (bumps are
-    /// single-threaded — the InferenceServer swaps weights on one thread).
+    /// Increment and return the new value. `Runner` is read-inc-write via the SEAM, safe
+    /// because the InferenceServer swaps weights on one thread.
     fn bump(&self) -> u64 {
         match self {
             Self::Own(a) => a.fetch_add(1, Ordering::Relaxed) + 1,
@@ -123,12 +99,7 @@ impl ModelVersionSrc {
     }
 }
 
-/// Per-in-flight-graph assemble metadata retained between `next_graph_batch`
-/// (which moves the graph's wire arrays into numpy) and
-/// `submit_graph_inference_results` (which reads the slot map + legal coords to
-/// build the `LegalSetPolicy` Rust-side). The WP6 `GraphQueue` does NOT retain
-/// this (the frozen batcher's `in_flight_graphs` DashMap has no WP6 counterpart),
-/// so the bridge holds it.
+/// Per-in-flight-graph assemble metadata the WP6 `GraphQueue` does NOT retain, so the bridge does.
 struct InFlightGraph {
     policy_dst_slot: Vec<i32>,
     legal_coords: Vec<(i32, i32)>,
@@ -136,22 +107,10 @@ struct InFlightGraph {
 
 /// Take a lock, RECOVERING from poisoning instead of propagating it.
 ///
-/// Poisoning is a one-way latch: the first panic while the guard is held marks the mutex
-/// forever, so every later `.lock().expect(...)` panics too. On this seam that turns one bad
-/// graph into a permanently bricked batcher — and under R2/LAW-13 (`panic = "unwind"`) the
-/// panic crosses the FFI as a catchable `PanicException` rather than aborting, so the process
-/// SURVIVES to keep hitting the dead lock for the rest of the run. Loud once, then silent
-/// forever, is the worst of both.
-///
-/// Recovery is sound HERE specifically because the guarded value is plain owned data
-/// (`HashMap<u64, InFlightGraph>` — no raw pointers, no cross-field invariant). The worst a
-/// mid-mutation panic can leave behind is a missing or half-updated entry, and the seam
-/// already tolerates a missing id by construction: `submit_graph_inference_results` skips
-/// unknown ids under the frozen tolerant-remove semantics. A poisoned map is degraded, not
-/// unsound, so continuing beats dying.
-///
-/// Every recovery bumps `counter`, which is what makes this observable rather than a silent
-/// swallow (LAW-18: a lever under test logs its own fire-rate in-run).
+/// Poisoning is a one-way latch, so the first panic under the guard would brick this batcher
+/// for the rest of the run — and under `panic = "unwind"` the process survives to keep hitting
+/// the dead lock. Sound HERE because the guarded value is plain owned data and the seam already
+/// skips unknown ids. Every recovery bumps `counter`, which is what makes it observable.
 pub(crate) fn lock_or_recover<'a, T>(
     mutex: &'a Mutex<T>,
     counter: &AtomicUsize,
@@ -165,8 +124,7 @@ pub(crate) fn lock_or_recover<'a, T>(
     }
 }
 
-/// Saturating decrement of a mock-pending counter (never underflows on a
-/// production batcher whose real submits the bridge never incremented).
+/// Saturating decrement of a mock-pending counter (a production batcher never incremented it).
 fn decrement_pending(counter: &AtomicUsize, by: usize) {
     if by == 0 {
         return;
@@ -181,8 +139,7 @@ fn decrement_pending(counter: &AtomicUsize, by: usize) {
     }
 }
 
-/// Rust-owned blocking inference batcher exposed to Python — the fused-model NN face over the
-/// WP6 graph queue.
+/// Rust-owned blocking inference batcher exposed to Python — the fused-model NN face.
 #[pyclass(name = "InferenceBatcher", module = "mantis._engine")]
 #[derive(Clone)]
 pub struct PyInferenceBatcher {
@@ -197,19 +154,14 @@ pub struct PyInferenceBatcher {
     graph_contract_version: u32,
     model_version: ModelVersionSrc,
     in_flight_graphs: Arc<Mutex<HashMap<u64, InFlightGraph>>>,
-    /// Times `in_flight_graphs` was found poisoned and recovered. Non-zero means a panic
-    /// happened under the guard on some earlier call; the seam kept serving. Read from Python
-    /// via the `lock_recoveries` getter so a run can alert on it instead of discovering it in
-    /// a post-mortem (LAW-18).
+    /// Times `in_flight_graphs` was found poisoned and recovered; non-zero means a panic under
+    /// the guard on an earlier call, and the seam kept serving.
     lock_recoveries: Arc<AtomicUsize>,
     completed_graph_games: Arc<AtomicUsize>,
     graph_pending: Arc<AtomicUsize>,
 }
 
 impl PyInferenceBatcher {
-    /// Shared field-init body — the `new(...)` ctor and `from_runner` both funnel
-    /// through here so the bridge-side state (in-flight map, counters) is created
-    /// in one place.
     #[allow(clippy::too_many_arguments)]
     fn from_parts(
         graph: GraphQueue,
@@ -241,10 +193,7 @@ impl PyInferenceBatcher {
         }
     }
 
-    /// Build a batcher over a runner's live queues (the `SelfPlayRunner.batcher`
-    /// getter). Shares the runner's `model_version` atomic (via the SEAM) so a
-    /// `bump_model_version` reaches worker threads. `spec` is always present (the
-    /// runner resolved it at construction).
+    /// Build a batcher over a runner's live queues, sharing its `model_version` atomic.
     pub(crate) fn from_runner(
         spec: &'static RegistrySpec,
         graph: GraphQueue,
@@ -266,10 +215,8 @@ impl PyInferenceBatcher {
         )
     }
 
-    /// Graph seam guard: a grid batcher (every dense construction) raises
-    /// `RepresentationMismatch` (frozen `require_graph`, error text verbatim).
-    /// The ONE place `in_flight_graphs` is locked. Poison-recovering (see `lock_or_recover`)
-    /// and recovery-counting; no caller may re-introduce a bare `.lock().expect(...)`.
+    /// Graph seam guard: a grid batcher raises `RepresentationMismatch`. The ONE place
+    /// `in_flight_graphs` is locked — no caller may re-introduce a bare `.lock().expect(...)`.
     fn lock_in_flight(&self) -> MutexGuard<'_, HashMap<u64, InFlightGraph>> {
         lock_or_recover(&self.in_flight_graphs, &self.lock_recoveries)
     }
@@ -284,9 +231,7 @@ impl PyInferenceBatcher {
         Ok(())
     }
 
-    /// Drop the in-flight metadata for `ids` and wake+fail their still-pending
-    /// graph waiters (frozen `fail_remaining_graph_ids`; the WP6 `fail_remaining`
-    /// only sets `Err` on a not-yet-set waiter — idempotent).
+    /// Drop the in-flight metadata for `ids` and wake+fail their still-pending graph waiters.
     fn fail_remaining_graph_ids(&self, ids: &[u64], msg: &str) {
         {
             let mut in_flight = self.lock_in_flight();
@@ -298,10 +243,8 @@ impl PyInferenceBatcher {
     }
 }
 
-/// Resolve the `(win_length, radius, trunk_size, contract_version)` graph build
-/// params from a spec. A graph spec `.expect`s its `Some` fields (frozen: a
-/// missing field on a graph spec is a registry desync — die loud, LOCKED #4
-/// PanicException). A grid spec returns the inert `(0, 0, 0, 1)`.
+/// Resolve the graph build params from a spec: a graph spec `.expect`s its `Some` fields, since
+/// a missing one is a registry desync, and a grid spec returns the inert `(0, 0, 0, 1)`.
 fn graph_params(spec: &'static RegistrySpec) -> (u8, u16, i32, u32) {
     if spec.is_graph() {
         (
@@ -320,17 +263,10 @@ fn graph_params(spec: &'static RegistrySpec) -> (u8, u16, i32, u32) {
 
 #[pymethods]
 impl PyInferenceBatcher {
-    /// Construct a batcher. Feature/policy width precedence: explicit kwargs >
-    /// `encoding_spec` derivation > error (the frozen legacy-v6 fallback arms are
-    /// retired). `pool_size` is accepted for signature compat but inert — the WP6
-    /// queues own no feature-buffer pool (the frozen flume pool is dropped).
-    ///
-    /// `max_in_flight` declares the most graphs this batcher's callers can ever have queued
-    /// at once — `n_workers x leaf_batch_size` for a pool, the leaf-batch width for a
-    /// single-stream deploy head. The collector's saturation threshold is DERIVED from it
-    /// (ledger F-1/F-2). `0` is the UNDECLARED posture, not a supply of zero: it keeps the
-    /// frozen half-batch threshold, which is what every construction that has no pool
-    /// behind it wants.
+    /// Construct a batcher. Width precedence: explicit kwargs > `encoding_spec` derivation >
+    /// error; `pool_size` is accepted for signature compat but inert. `max_in_flight` declares
+    /// the most graphs callers can ever have queued at once and the collector's saturation
+    /// threshold derives from it — `0` is UNDECLARED, not a supply of zero.
     #[new]
     #[pyo3(signature = (encoding_spec = None, feature_len = None, policy_len = None, pool_size = None, max_in_flight = 0))]
     pub fn new(
@@ -373,30 +309,20 @@ impl PyInferenceBatcher {
         ))
     }
 
-    /// How many times the in-flight-graph lock was found poisoned and recovered.
-    ///
-    /// STAYS ZERO in a healthy run. Non-zero is a real defect report: a panic occurred under
-    /// the guard, the seam recovered and kept serving, and the in-flight map may be missing an
-    /// entry. Surfaced so a run can alert on it (LAW-18) rather than have it show up as
-    /// unexplained missing-id skips much later.
+    /// Times the in-flight-graph lock was recovered from poisoning; STAYS ZERO in a healthy run.
     #[getter]
     pub fn lock_recoveries(&self) -> usize {
         self.lock_recoveries.load(Ordering::SeqCst)
     }
 
-    /// Close the queue and wake all blocked waiters.
     pub fn close(&self) {
         self.graph.close();
     }
 
-    // ── model version ─────────────────────────────────────────────────────────
-
-    /// Increment the monotonic model version; returns the new value.
     pub fn bump_model_version(&self) -> u64 {
         self.model_version.bump()
     }
 
-    /// Read the current model version (snapshot).
     #[getter]
     pub fn model_version(&self) -> u64 {
         self.model_version.get()
@@ -413,21 +339,16 @@ impl PyInferenceBatcher {
         self.representation
     }
 
-    // ── graph path (all but the two counters guard `require_graph`) ────────────
-
-    /// Whether at least one mock graph request is currently pending.
     pub fn has_pending_graph_requests(&self) -> bool {
         self.graph_pending.load(Ordering::SeqCst) > 0
     }
 
-    /// Number of completed mock graph games (test assertions).
     pub fn completed_graph_games(&self) -> usize {
         self.completed_graph_games.load(Ordering::SeqCst)
     }
 
-    /// Seam obligations only: build a graph from the request params (running the
-    /// coord / current_player / moves_remaining range guards) and discard it.
-    /// Raises `ValueError` on any violation.
+    /// Seam obligations only: build a graph from the request params, running the coord,
+    /// current_player and moves_remaining range guards, then discard it.
     pub fn check_graph_request(
         &self,
         stones: Vec<(i64, i64, i64)>,
@@ -447,13 +368,8 @@ impl PyInferenceBatcher {
         Ok(())
     }
 
-    /// Spawn N mock graph games on native threads. Each builds a FIXED mixed
-    /// spread board (two far clusters → in- + off-window legal nodes) and blocks
-    /// on `submit_graph_and_wait`.
-    /// The graph queue's DECLARED supply — the most graphs its callers can ever have in
-    /// flight (`0` = undeclared). The collector's saturation threshold is derived from it,
-    /// so exposing it is what makes the relation observable from a test rather than
-    /// inferred from a timing.
+    /// The graph queue's DECLARED supply (`0` = undeclared). The collector's saturation
+    /// threshold derives from it, so exposing it makes the relation observable from a test.
     #[getter]
     fn graph_max_in_flight(&self) -> usize {
         self.graph.max_in_flight()
@@ -489,9 +405,8 @@ impl PyInferenceBatcher {
         Ok(())
     }
 
-    /// Pop up to `batch_size` graph requests, fuse them PyG block-diagonal, and
-    /// return `(request_ids, GraphWire)`. Retains per-id assemble metadata for
-    /// `submit_graph_inference_results`. Releases the GIL around the blocking pop.
+    /// Pop up to `batch_size` graph requests, fuse them PyG block-diagonal and return
+    /// `(request_ids, GraphWire)`, retaining per-id assemble metadata. Releases the GIL.
     #[pyo3(signature = (batch_size, max_wait_ms = 10))]
     pub fn next_graph_batch(
         &self,
@@ -511,20 +426,14 @@ impl PyInferenceBatcher {
         {
             let mut in_flight = self.lock_in_flight();
             for (id, graph) in pulled {
-                // builder_impl handshake (defense-in-depth; the build path asserted
-                // it) — a non-native tag must never reach the wire.
+                // builder_impl handshake: a non-native tag must never reach the wire.
                 if graph.builder_impl != BUILDER_IMPL_NATIVE {
                     return Err(PyValueError::new_err(
                         "next_graph_batch: non-native builder_impl on a queued graph",
                     ));
                 }
-                // CHECKED, not indexed. This runs WITH `in_flight` held, so a panic here
-                // poisons the lock for the rest of the process — and `legal_node_gather` is
-                // queue-supplied data indexing a SEPARATE array (`node_coords`), which is
-                // precisely the pairing where a builder bug or a truncated wire yields an
-                // out-of-range row. `lock_or_recover` above is the second line of defence;
-                // this is the first: turn the malformed graph into a `PyValueError` the
-                // caller can see, and never enter the panic path at all.
+                // CHECKED, not indexed: this runs WITH `in_flight` held, and
+                // `legal_node_gather` indexes a SEPARATE array, where a builder bug shows up.
                 let legal_coords: Option<Vec<(i32, i32)>> = graph
                     .legal_node_gather
                     .iter()
@@ -554,10 +463,7 @@ impl PyInferenceBatcher {
                 graphs.push(graph);
             }
         }
-        // GIL-FREE, like the pop above it (A5). The fuse is 25.3 % of the card and pure
-        // Rust CPU (ledger §10.1 #2); holding the GIL through it blocks every other Python
-        // thread in the process for its whole duration. `&[AxisGraph]` carries no Python
-        // object, so the closure is `Ungil`.
+        // GIL-FREE like the pop: the fuse is 25.3 % of the card and carries no Python object.
         let contract_version = self.graph_contract_version;
         let fused = py.detach(move || {
             let mut wire = GraphWire::from_axis_graphs(&graphs, contract_version);
@@ -567,10 +473,8 @@ impl PyInferenceBatcher {
         Ok((ids, PyGraphWire::from_arrays(arrays)))
     }
 
-    /// Ragged OUTPUT: wake each graph waiter with its assembled
-    /// `(LegalSetPolicy, value)`. `legal_offsets` segments `legal_probs_flat` per
-    /// id; the per-leaf `LegalSetPolicy` is built Rust-side from the retained
-    /// `policy_dst_slot` + coords via `assemble_ls_from_gnn_probs`.
+    /// Ragged OUTPUT: wake each graph waiter with its assembled `(LegalSetPolicy, value)`,
+    /// segmenting `legal_probs_flat` by `legal_offsets`.
     pub fn submit_graph_inference_results(
         &self,
         request_ids: Vec<u64>,
@@ -618,8 +522,7 @@ impl PyInferenceBatcher {
             let leaf_probs = &probs[start as usize..end as usize];
 
             let meta = { self.lock_in_flight().remove(&id) };
-            // Unknown id (already consumed / never emitted) — skip (frozen tolerant
-            // remove semantics).
+            // Unknown id (already consumed / never emitted) — skip, tolerant-remove semantics.
             let Some(meta) = meta else { continue };
             if meta.policy_dst_slot.len() != leaf_probs.len() {
                 let msg = format!(
@@ -652,9 +555,7 @@ impl PyInferenceBatcher {
         Ok(())
     }
 
-    /// Signal failure for a batch of graph requests: wake each waiter with `Err`
-    /// and drop its in-flight state (frozen `submit_graph_inference_failure`;
-    /// DESIGN §a.1 row 20 maps this onto the idempotent WP6 `fail_remaining`).
+    /// Wake each graph waiter with `Err` and drop its in-flight state, idempotently.
     pub fn submit_graph_inference_failure(
         &self,
         request_ids: Vec<u64>,
@@ -665,15 +566,9 @@ impl PyInferenceBatcher {
         Ok(())
     }
 
-    /// Blocking graph-inference driver for the step-0 smoke / eval round-trip:
-    /// build one axis graph per position, submit them, release the GIL, and block
-    /// until each leaf's `LegalSetPolicy` is assembled. Returns per-position
-    /// `(dense, overflow[(q,r)->prob], value)`.
-    ///
-    /// This is `submit_graphs_and_wait_ls` with the builder's window centre
-    /// PROJECTED AWAY — ONE authority for the graph build + submit sequence, so
-    /// the frame-carrying driver and this one cannot drift (WP12-R D-22). The
-    /// 3-tuple output is byte-identical to the pre-WP12-R implementation.
+    /// Blocking graph-inference driver for the step-0 smoke / eval round-trip, returning
+    /// per-position `(dense, overflow[(q,r)->prob], value)`. This is `submit_graphs_and_wait_ls`
+    /// with the window centre PROJECTED AWAY, so the two drivers cannot drift.
     #[allow(clippy::type_complexity)]
     #[pyo3(signature = (positions, n_threads = 1))]
     pub fn submit_graphs_and_wait(
@@ -689,25 +584,14 @@ impl PyInferenceBatcher {
             .collect())
     }
 
-    /// Graph submit-and-wait carrying the BUILDER's frame (WP12-R Phase
-    /// EVALDECODE, operator ruling R138). Returns per-position
+    /// Graph submit-and-wait carrying the BUILDER's frame, returning per-position
     /// `(dense, overflow[(q,r)->prob], value, window_center)`.
     ///
-    /// Why the centre must come from HERE (DESIGN §c.2): self-play frames its
-    /// expand on the builder's `g.window_center` (`search_drive.rs:373 -> :421`),
-    /// `Board` does NOT expose `window_center` to Python, and a bridge method that
-    /// silently recomputed one from the pending board would erase the only
-    /// leaf/policy alignment cross-check there is — the hazard the CNN sibling
-    /// guards against ("never trust a Python-supplied order", `mcts.rs:152-153`).
-    /// `MCTSTree.expand_and_backup_ls_graph` cross-checks what this returns
-    /// against the pending board with an always-on `PyValueError`.
-    ///
-    /// `n_threads` is the LEAF BUILD's width (NIGHTRUN-1 E1). `1` is the serial path and
-    /// the exact-parity control; a production caller passes a DERIVED budget
-    /// (`mantis.config.resolve.sample_threads`) rather than this layer inventing one. The
-    /// build also runs INSIDE `py.detach` now: it is pure Rust over data already copied
-    /// out of Python, and holding the GIL across it blocked the inference-server thread
-    /// for the whole of it — tranche-1's own M-1 mechanism in a second place.
+    /// The centre must come from HERE: self-play frames its expand on the builder's
+    /// `g.window_center`, `Board` does not expose one to Python, and recomputing it would erase
+    /// the only leaf/policy alignment cross-check there is. `n_threads` is the LEAF BUILD's
+    /// width, `1` being the serial exact-parity control; the build runs inside `py.detach`,
+    /// because holding the GIL across it blocked the inference-server thread throughout.
     #[allow(clippy::type_complexity)]
     #[pyo3(signature = (positions, n_threads = 1))]
     pub fn submit_graphs_and_wait_ls(
@@ -727,17 +611,11 @@ impl PyInferenceBatcher {
                 build_leaf_graphs_batch(&positions, win_length, radius, trunk_size, n_threads)
             })
             .map_err(PyValueError::new_err)?;
-        // The builder's own centre, captured BEFORE the graphs are moved into the
-        // detached submit loop; index-aligned with `positions` and therefore with
-        // the results below.
+        // The builder's own centre, captured BEFORE the graphs move into the detached loop.
         let centers: Vec<(i32, i32)> = graphs.iter().map(|g| g.window_center).collect();
         let graph_q = self.graph.clone();
-        // ONE batch submit, not a serial loop of blocking submits (Q-FIND-1/R263).
-        // The eval/arena decode shares the self-play dispatch behaviour by
-        // construction — a serial arm here would make the two disagree about
-        // batching, the drift the WP12-R D-22 "ONE authority" note above exists to
-        // prevent. `collect` into a `Result` scans a Vec whose waiters have ALL
-        // already resolved, so the first-`Err` return cannot orphan a tail waiter.
+        // ONE batch submit, not a serial loop, so the eval/arena decode shares self-play's
+        // dispatch by construction. `collect` scans a Vec whose waiters have ALL resolved.
         let results: Result<Vec<(LegalSetPolicy, f32)>, String> =
             py.detach(|| graph_q.submit_graphs_and_wait(graphs).into_iter().collect());
         let results = results.map_err(PyValueError::new_err)?;
@@ -755,27 +633,19 @@ impl PyInferenceBatcher {
 }
 
 /// Block-diagonal ragged graph wire — the fuse-out of `next_graph_batch` /
-/// `HexgBuffer.sample_graph_batch`. Owns the moved-out `GraphWireArrays`.
+/// `HexgBuffer.sample_graph_batch`, owning the moved-out `GraphWireArrays`.
 ///
-/// `take()` MOVES every array into numpy (`IntoPyArray`, which "consumes `self` and moves
-/// its data into a NumPy array") rather than copying it — PERF-TRANCHE-1 A2, against ledger
-/// §10.1 #4, `wire_copyout` 12.43 ms/pop of pure memcpy-plus-first-touch. The production
-/// serve loop reads this face exactly once (`graph_wire_from_rust`), so the copy it used to
-/// pay bought nothing.
-///
-/// CONTRACT CHANGE, deliberate: the 13 per-array getters still COPY and are still freely
-/// repeatable, but only UNTIL `take()`. After `take()` the buffers are gone — they belong to
-/// numpy — and every getter raises `WireAlreadyConsumed`. The single-read latch is now the
-/// `Option` itself rather than a flag beside the data, so there is no state in which a getter
-/// can hand back an empty array and have it read as a measurement.
+/// `take()` MOVES every array into numpy rather than copying it (measured: `wire_copyout`
+/// 12.43 ms/pop of pure memcpy, and the production serve loop reads this face once). The 13
+/// getters still COPY and stay repeatable, but only UNTIL `take()`; the latch is the `Option`
+/// itself, so no getter can hand back an empty array.
 #[pyclass(name = "GraphWire", module = "mantis._engine")]
 pub struct PyGraphWire {
     arrays: Option<GraphWireArrays>,
 }
 
 impl PyGraphWire {
-    /// Wrap the arrays a caller already moved out of the WP6 `GraphWire` (via one
-    /// internal Rust `take()` at fuse time).
+    /// Wrap arrays a caller already moved out of the WP6 `GraphWire`.
     pub(crate) fn from_arrays(arrays: GraphWireArrays) -> Self {
         PyGraphWire {
             arrays: Some(arrays),
@@ -860,12 +730,9 @@ impl PyGraphWire {
         Ok(PyArray1::from_slice(py, &self.arrays()?.current_player))
     }
 
-    /// Single-read latch: MOVES all wire fields out once as a dict; a second call — and
-    /// every per-array getter afterwards — raises `WireAlreadyConsumed`.
-    ///
-    /// `into_pyarray` hands numpy the `Vec`'s own allocation instead of memcpying it into a
-    /// fresh one, which is the whole of A2. numpy's `resize` cannot be used on an array
-    /// built this way; nothing in this repo resizes a wire array.
+    /// Single-read latch: MOVES all wire fields out once as a dict; a second call — and every
+    /// getter afterwards — raises `WireAlreadyConsumed`. `into_pyarray` hands numpy the `Vec`'s
+    /// own allocation, so numpy's `resize` cannot be used on the result.
     fn take<'py>(&mut self, py: Python<'py>) -> PyResult<Bound<'py, PyDict>> {
         let a = self.arrays.take().ok_or_else(|| {
             WireAlreadyConsumed::new_err(
@@ -893,8 +760,7 @@ impl PyGraphWire {
     }
 }
 
-/// Register the `InferenceBatcher` + `GraphWire` pyclasses and the
-/// `WireAlreadyConsumed` exception into `_engine`. Called by Slice ASM.
+/// Register the `InferenceBatcher` and `GraphWire` pyclasses and `WireAlreadyConsumed`.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyInferenceBatcher>()?;
     m.add_class::<PyGraphWire>()?;
@@ -913,11 +779,8 @@ mod tests {
         mantis_encoding::lookup("gnn_axis_v1").expect("gnn_axis_v1 registered")
     }
 
-    // ── poisoned-lock recovery (item 2) ───────────────────────────────────────────────
-    //
-    // Poison a real `Mutex` the only way it can be poisoned — panic while the guard is held,
-    // on another thread — then prove the seam keeps working. Without recovery every one of
-    // these would panic instead, which is the bricked-batcher defect.
+    // Poison a real `Mutex` the only way it can be — panic while the guard is held, on another
+    // thread — then prove the seam keeps working rather than bricking.
 
     /// Panic under the guard on a scratch thread; returns once the mutex is genuinely poisoned.
     fn poison<T: Send + 'static>(mutex: &Arc<Mutex<T>>) {
@@ -956,7 +819,6 @@ mod tests {
             1,
             "recovery must be counted (LAW-18)"
         );
-        // The data is intact: recovery hands back the map, it does not reset it.
         assert_eq!(
             guard
                 .get(&7)
@@ -966,7 +828,6 @@ mod tests {
         );
         drop(guard);
 
-        // Poisoning is a one-way latch, so every later lock recovers and counts again.
         drop(lock_or_recover(&mutex, &counter));
         assert_eq!(counter.load(Ordering::SeqCst), 2);
     }
@@ -996,16 +857,12 @@ mod tests {
             b.lock_recoveries() >= 1,
             "the seam recovered but did not REPORT — a silent swallow is what LAW-18 forbids"
         );
-        // And it is still usable afterwards, not wedged.
         b.fail_remaining_graph_ids(&[4], "second post-poison call");
         assert!(b.lock_recoveries() >= 2);
     }
 
-    /// The mutation self-test for the recovery arm (LAW-07): if `lock_or_recover` ever stops
-    /// counting, `lock_recoveries` becomes a phantom input that reads 0 through a real
-    /// incident. Mechanism: the counter is the ONLY evidence a poisoning happened — the
-    /// recovered map looks identical to a healthy one, so an uncounted recovery is invisible
-    /// by construction.
+    /// The mutation self-test for the recovery arm: an uncounted recovery is invisible, because
+    /// a recovered map looks identical to a healthy one.
     #[test]
     fn recovery_counter_is_the_only_evidence_and_it_moves() {
         let mutex = Arc::new(Mutex::new(HashMap::<u64, InFlightGraph>::new()));
@@ -1027,10 +884,8 @@ mod tests {
 
     #[test]
     fn a_spec_batcher_derives_both_shapes_from_the_spec() {
-        // The sibling of `graph_batcher_reads_graph_params`, on the two DERIVED widths.
-        // Its grid arm went with the dense path (R346(f)); the derivation is the same code
-        // either way, and a graph row's `state_stride` is 0 because it carries no planes —
-        // read from the spec so that stays a derivation rather than a transcribed 0.
+        // The sibling of `graph_batcher_reads_graph_params` on the DERIVED widths. A graph row's
+        // `state_stride` is 0 — read from the spec so that stays a derivation, not a literal.
         let spec = gnn_spec();
         let b =
             PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(spec)), None, None, None, 0)
@@ -1044,8 +899,7 @@ mod tests {
 
     #[test]
     fn explicit_lens_without_spec_construct() {
-        // Two DISTINCT widths, neither of them any registered row's, so a crosswire between
-        // the two slots cannot read as a plausible spec derivation.
+        // Two DISTINCT widths, neither any registered row's, so a crosswire cannot look plausible.
         let b = PyInferenceBatcher::new(None, Some(777), Some(362), None, 0)
             .expect("explicit lens construct");
         assert_eq!(b.feature_len, 777);
@@ -1070,11 +924,8 @@ mod tests {
         .expect("graph batcher constructs");
         assert!(b.is_graph);
         assert_eq!(b.representation, "graph");
-        // AUDIT-1 F-41. These read `6`, `6` and `19` — the row's own geometry restated by
-        // hand, in the test whose whole subject is that the batcher READS the row. The
-        // sibling `grid_batcher_derives_shapes_and_is_grid` three functions above was
-        // already in the derived form; this one was not, so an r8 row could enter the
-        // registry and the Rust-side pin of run6's identity geometry would still assert 6.
+        // These used to restate the row's own geometry by hand in the test whose subject is
+        // that the batcher READS the row, so an r8 row could land with this pin asserting 6.
         let spec = gnn_spec();
         assert_eq!(
             b.graph_win_length as usize,
@@ -1099,8 +950,7 @@ mod tests {
 
     #[test]
     fn a_specless_batcher_rejects_graph_seam_methods() {
-        // Constructed from explicit widths and NO spec, so `is_graph` is false: the seam
-        // guard fires on the batcher that could not have resolved a graph row.
+        // Constructed from explicit widths and NO spec, so `is_graph` is false.
         let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0)
             .expect("explicit widths construct");
         assert!(b.require_graph().is_err());
@@ -1108,12 +958,8 @@ mod tests {
         assert!(b.spawn_mock_graph_games(1).is_err());
     }
 
-    /// GraphWire single-read `take()` latch (O20 / ADV): a fresh wire is
-    /// takeable once; a second acquisition of the latch fails, and `take()` on an
-    /// already-consumed wire raises `WireAlreadyConsumed`. Numpy-free: the guard
-    /// returns the mapped exception BEFORE materializing the array dict (the
-    /// numpy-materializing legs of take()/getters are pinned by the Python O20
-    /// surface post-ASM — the embedded cargo-test interpreter can't load numpy).
+    /// GraphWire single-read `take()` latch: takeable once, second acquisition raises
+    /// `WireAlreadyConsumed`. Numpy-free — the guard returns before materializing the dict.
     #[test]
     fn graph_wire_take_is_single_read() {
         let stones: Vec<(i64, i64, i64)> = (0..5i64)
@@ -1125,16 +971,11 @@ mod tests {
         let arrays = wire.take().expect("first fuse take");
         let gw = PyGraphWire::from_arrays(arrays);
 
-        // The NUMPY-FREE half of the latch, which is all this interpreter can witness: a
-        // fresh wire serves its scalars, and a wire whose arrays are gone refuses them.
-        // `take()` itself materialises numpy arrays and PANICS here on the absent module,
-        // so the consumed-wire path is driven from Python, where numpy exists:
-        // `tests/bridge/test_graph_wire_adv.py::test_wire_getters_refuse_after_take` and
-        // `::test_take_moves_rather_than_copies`.
+        // The NUMPY-FREE half of the latch, all this interpreter can witness; the consumed-wire
+        // path is driven from Python in `tests/bridge/test_graph_wire_adv.py`.
         assert_eq!(gw.n_graphs().expect("a fresh wire serves its scalars"), 1);
 
-        // A2 made the latch the `Option` itself rather than a flag beside the data, so
-        // "consumed" is constructible without going through numpy at all.
+        // The latch is the `Option` itself, so "consumed" is constructible without numpy.
         let consumed = PyGraphWire { arrays: None };
         assert!(
             consumed.n_graphs().is_err(),
@@ -1151,10 +992,8 @@ mod tests {
         });
     }
 
-    /// The routing both production fuse sites now use (SEAM-B1 §1(a)). A wire whose arrays
-    /// are gone yields the guard as a VALUE that `SeamFailure` maps to the named
-    /// `WireAlreadyConsumed`; the impl channel keeps its `ValueError`. Before this, the
-    /// same state met `expect()` and crossed the FFI as a PanicException.
+    /// The routing both production fuse sites use: an already-taken wire yields the guard as a
+    /// VALUE mapped to `WireAlreadyConsumed`, where before it crossed as a panic.
     #[test]
     fn consumed_wire_routes_named_rather_than_panicking() {
         let stones: Vec<(i64, i64, i64)> = (0..5i64)
@@ -1165,7 +1004,6 @@ mod tests {
         let mut wire = GraphWire::from_axis_graphs(&[graph], 1);
         wire.take().expect("the first take yields the fused arrays");
 
-        // The exact expression both production sites run, on an already-consumed wire.
         let routed = wire.take().map_err(SeamFailure::from);
         let Err(failure) = routed else {
             panic!("a consumed wire must not yield arrays a second time");

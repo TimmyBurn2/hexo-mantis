@@ -87,7 +87,7 @@ def test_out_of_wire_condemns_even_when_the_rate_is_clear(tmp_path: Path) -> Non
     assert evaluate(tmp_path) == 1
 
 
-# ── the two ways it could wrongly report CLEAR ──────────────────────────────────────────
+# the two ways it could wrongly report CLEAR
 def test_missing_record_refuses(tmp_path: Path) -> None:
     assert evaluate(tmp_path / "nope") == 2
 

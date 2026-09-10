@@ -1,32 +1,19 @@
-// R8 >300 justify: ONE oracle family (O-1 Rust leg) = flat fixture reader + the production
-// search harness + three HEAD-runnable legs + the gated post-fix record-chain leg; the
-// reader/harness must sit in the same frozen file as the tests that prove they read the
-// committed fixture correctly (the graph_child_parity precedent).
-//! ⊕ WP12-R Phase T (TARGET INTEGRITY) — O-1 exported-target parity, RUST LEG (O1r).
-//! Written at T-2 ORACLE-WRITE, byte-frozen through IMPL. Fixture family:
-//! `tests/fixtures/eval_selfplay_parity/target_parity_v1.json` (+ `_dispersed_`),
-//! minted from the RAW root-child visits of the production call sequence at HEAD —
-//! post-fix expected pairs are derivable at HEAD because `total` already sums ALL
-//! children pre-fix (DESIGN_T §1.1 arm 1); the mint probe is preserved at
-//! wp/WP12R/oracle_write_probes/zz_mint_t_probe.rs with its survey log.
+// R8 >300 justify: ONE oracle family (the exported-target parity Rust leg) = flat fixture
+// reader + the production search harness + three HEAD-runnable legs + the gated post-fix
+// record-chain leg; the reader and harness must sit in the same frozen file as the tests that
+// prove they read the committed fixture correctly.
+//! Exported-target parity, Rust leg, against the frozen fixture family
+//! `tests/fixtures/eval_selfplay_parity/target_parity_v1.json` (+ `_dispersed_`).
 //!
-//! Legs:
-//!  * `o1r_export_matches_fixture[_dispersed]` — production expand → `get_policy_ls`
-//!    (T=1) == frozen `(coord, mass)` pairs, Σ == 1. PRE-FIX: RED (HEAD drops 0.183673 /
-//!    0.306122 / 1.000000 on the affected positions; the compact p0 and the >=5000-legal
-//!    dispersed p2 are drop-free at HEAD — recorded, see ORACLE_NOTES_T.md on flip-set
-//!    row 1's split construction).
-//!  * `o1r_buffer_roundtrip_preserves_pairs` — fixture pairs pushed as a `GraphRecord`
-//!    → `push_record_impl` → `sample_graph_batch_impl` → aligned target == pairs
-//!    (stage-3 conservation on the SAME bytes the Python leg O1p consumes). PRE-FIX:
-//!    GREEN (stage 3 is provably conserving; DESIGN_T §1.5).
-//!  * `o1r_record_chain_full_mass` [gated `phase_t_postfix`] — the full §5 O-1 chain
-//!    including `record_position_graph`'s POST-FIX `Result` signature; does not compile
-//!    at HEAD, wired by IMPL (loud gate, enumerated in ORACLE_NOTES_T.md — no silent skip).
+//! Three legs run at HEAD: the production expand → `get_policy_ls` export must equal the frozen
+//! `(coord, mass)` pairs and sum to 1; the same pairs must survive a `GraphRecord` push and
+//! re-sample unchanged. The fourth, `o1r_record_chain_full_mass`, drives the full chain through
+//! `record_position_graph`'s `Result` signature and is compiled only under the `phase_t_postfix`
+//! feature — a loud gate rather than a silent skip.
 //!
-//! Killers (PREREG_T §3): M-A (O1r export legs), M-J (record-chain leg + the buffer legs
-//! via the T-2 recorded amendment). M-D/M-K stay GREEN here by design: every fixture
-//! position carries <= 57 nonzero cells (< 128), and this chain never passes finalize.
+//! Killers: M-A (the export legs), M-J (the record-chain and buffer legs). M-D/M-K stay green
+//! here by design: every fixture position carries <= 57 nonzero cells and this chain never
+//! passes finalize.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
@@ -37,7 +24,7 @@ const N_SIMS: usize = 50;
 const LEAF_BATCH: usize = 8;
 const PAIR_TOL: f64 = 1e-6;
 
-// ── flat fixture reader (house pattern: graph_child_parity.rs — no serde dep) ─────────
+// Flat fixture reader, house pattern: no serde dep.
 fn fixture_text(name: &str) -> String {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../tests/fixtures/eval_selfplay_parity")
@@ -189,7 +176,6 @@ fn load_pos(src: &str, i: usize) -> Pos {
     }
 }
 
-// ── the production search (byte-equal to the r153 leg-2 instrument harness) ──────────
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
@@ -322,7 +308,6 @@ fn check_roundtrip(src: &str, i: usize) {
     assert_pairs_match(&pos.id, &got, &pos.expected);
 }
 
-// ── O1r export legs (HEAD-runnable; PRE-FIX RED on the affected positions) ───────────
 #[test]
 fn o1r_export_matches_fixture() {
     let src = fixture_text("target_parity_v1.json");
@@ -341,8 +326,8 @@ fn o1r_export_matches_dispersed_fixture() {
     assert_eq!(scalar(&src, "schema"), 1);
     let n = scalar(&src, "n_positions");
     assert_eq!(n, 3, "dispersed companion is pre-registered at 3 positions");
-    // Band preconditions (flip-set rows 1-2 as amended at T-2): p0 in the 193-235
-    // n_legal band; p1 the HIGH-magnitude degenerate row; p2 the >=5000-legal row.
+    // Band preconditions: p0 in the 193-235 n_legal band, p1 the HIGH-magnitude degenerate row,
+    // p2 the >=5000-legal row.
     assert!(
         (193..=235).contains(&scalar(&src, "p0_n_legal")),
         "p0 left the 193-235 band"
@@ -356,7 +341,6 @@ fn o1r_export_matches_dispersed_fixture() {
     }
 }
 
-// ── O1r buffer round-trip (HEAD-runnable; PRE-FIX GREEN — stage 3 conserves) ─────────
 #[test]
 fn o1r_buffer_roundtrip_preserves_pairs() {
     for name in ["target_parity_v1.json", "target_parity_dispersed_v1.json"] {
@@ -367,16 +351,13 @@ fn o1r_buffer_roundtrip_preserves_pairs() {
     }
 }
 
-// ── O1r full record chain (POST-FIX ONLY: `record_position_graph -> Result`) ─────────
-// GATED, not skipped silently: the whole test compiles only under the `phase_t_postfix`
-// feature, which IMPL declares as a DEFAULT feature of mantis-selfplay when the fix
-// lands (ORACLE_NOTES_T.md §gating). At HEAD the pre-fix signature (no Result) makes
-// this leg non-compilable — the exact class DESIGN_T §3.3 introduces.
+// Compiles only under the `phase_t_postfix` feature: the pre-fix `record_position_graph`
+// signature makes this leg non-compilable, so the gate is loud rather than a silent skip.
 #[cfg(feature = "phase_t_postfix")]
 #[test]
 fn o1r_record_chain_full_mass() {
     use mantis_selfplay::records::record_position_graph;
-    const MAX_VISITS: usize = 128; // test slot geometry (post-R255: derived in prod)
+    const MAX_VISITS: usize = 128; // test slot geometry; derived in production
 
     for name in ["target_parity_v1.json", "target_parity_dispersed_v1.json"] {
         let src = fixture_text(name);

@@ -1,53 +1,11 @@
-# >300 justify (R8). NO LINE COUNT is stated, per G-DFIX-4 and R192(e)'s derive-or-delete:
-# R8 asks for a one-line justification, not a tally, and a number that must be re-edited
-# whenever a row is added will eventually be wrong and then be read as evidence.
-# The rows here are ONE claim — "the lever logs its own fire rate IN-RUN, all the way to the
-# sink" — and R164's whole content is that the producer half and the arrival half must not
-# live in different files: a test-visible-only counter passes every producer row ever written.
-# The `iteration_complete` fakes (pool, buffer, rstats, sink) are the arrival half's rig and
-# are shared by every row that drives it.
-"""⊕ F-816-10 F4 — the fusion counters (LAW-18, R164, LAW-07).
+# >300 justify (R8): ONE claim — the lever logs its own fire rate in-run, all the way to the
+# sink — whose producer half and arrival half must not live in different files, because a
+# test-visible-only counter passes every producer row ever written.
+"""The fusion counters, driven over the real wire from producer to sink.
 
-Written by ORACLE-WRITE **before** the feature exists. Every row drives the REAL
-`InferenceServer._run_graph_loop` over a real wire, and the arrival rows drive the REAL
-`pool_hooks.inference_batch_timing` -> `emit_iteration_complete_event` chain, so a counter
-that exists only in a snapshot a test reads reds here.
-
-WHY DISTRIBUTIONS AND NOT MEANS. `_occupancy_agg`'s own docstring is the reason, and it
-transfers verbatim: *"A mean ratio alone cannot distinguish 'always 1 request per forward'
-from 'sometimes 64, sometimes 0'"*. For a MEMORY bound the tail IS the question — a mean fused
-E of 400 k with a max of 9 M is a run that OOMs, and the two readings agree on the mean. The
-histogram key is the bucket's power-of-two LOWER bound, the same rule the occupancy histogram
-already uses.
-
-WHY PER PART AND NOT PER POP. The part is what the GPU sees and what the cap bounds. A pop's
-total is recoverable as the sum over its parts; the reverse is not.
-
-The defect each row is the ONLY witness to:
-
-- **FG4-01** — a producer that counts POPS instead of PARTS. It passes every non-splitting
-  row, so it is paired with FG4-02 rather than asserted alone.
-- **FG4-02** — a deleted split (`fusion_parts == 1` at any occupancy), and a `fusion_splits`
-  that counts parts rather than split POPS.
-- **FG4-03** — an EDGES-ONLY implementation. It passes every other row here (the MB-19
-  mutation transplanted from `tests/train/test_graph_microbatch_bound.py`).
-- **FG4-04** — R164's own failure mode: a counter that is visible to a test and never reaches
-  the ONE channel. `iteration_complete` is driven end to end, not asserted on the snapshot.
-- **FG4-05** — a fabricated zero block on a grid run, where there is NO producer
-  (`docs/contracts/event_manifest.md`'s unproduced-field convention, the F-10 class).
-- **FG4-06** — an off-by-one greedy that admits one over-bound part. Read off the INSTRUMENT
-  rather than off the planner, because the instrument is what an operator will trust at the
-  box and it can disagree with the planner if it measures the wrong tensor.
-- **FG4-07** — an idle lever indistinguishable from a missing one. `fusion_splits` and
-  `fusion_bound_hits` stay VISIBLE at 0 on the producing path (the `empty_polls` /
-  `target_integrity_defects` posture).
-- **FG4-08** — a mean smuggled in where a distribution was promised.
-- **FG4-09** — `_forward_count` redefined to count PARTS. It is the denominator of
-  `batch_fill_pct`, whose meaning is *requests per pop against `inference_batch_size`* — an
-  occupancy, not a GPU-forward count — and it is banked on both sides of the R274(d) bench, so
-  redefining it would move a metric silently (design §4.4).
-- **FG4-10** — a distribution shipped without the bound it was measured against, which is
-  unreadable for the same reason `batch_size`/`max_wait_ms` already travel with the occupancy.
+Distributions, not means: for a MEMORY bound the tail IS the question — a mean fused E of 400 k
+with a max of 9 M is a run that OOMs, and both readings agree on the mean. Histogram keys are
+the bucket's power-of-two LOWER bound. Per PART, not per pop: the part is what the cap bounds.
 """
 from __future__ import annotations
 
@@ -62,8 +20,7 @@ from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.pool_hooks import batch_fill_pct, inference_batch_timing
 from mantis.train.events import emit_iteration_complete_event
 
-#: Eight graphs whose per-graph edge counts are equal, so an edges cap at `k` graphs' worth
-#: produces a plan of known M without depending on the ragged layout.
+#: Equal per-graph edge counts, so an edges cap at `k` graphs' worth gives a known M.
 _EIGHT = [3, 3, 3, 3, 3, 3, 3, 3]
 
 
@@ -75,10 +32,8 @@ def _fusion(server: InferenceServer) -> dict[str, Any]:
     return snap["fusion"]
 
 
-# ═══ FG4-01/02/03 — the producer rows ════════════════════════════════════════════════════
 def test_fg4_01_a_pop_that_fits_reports_one_part_and_no_split(monkeypatch) -> None:
-    """FG4-01 — the non-splitting path is INSTRUMENTED, not silent: one part, zero splits, one
-    histogram sample on each distribution. This is the path every smoke config takes."""
+    """The non-splitting path — every smoke config's path — is instrumented, not silent."""
     payload = H.build_payload(_EIGHT)
     ec, nc = H.per_graph_counts(payload)
     server, batcher, _ = H.drive_one_pop(monkeypatch, payload)
@@ -95,11 +50,11 @@ def test_fg4_01_a_pop_that_fits_reports_one_part_and_no_split(monkeypatch) -> No
 
 
 def test_fg4_02_a_pop_that_must_split_reports_its_parts_and_its_cuts(monkeypatch) -> None:
-    """FG4-02 — M parts, ONE split pop, M histogram samples, and M-1 edge-driven cuts.
+    """A split pop reports M parts, ONE split, M histogram samples and M-1 edge-driven cuts.
 
-    Two mutations die here and nowhere else: deleting the split (`fusion_parts == 1`) and
-    counting parts as pops (`fusion_splits == M`). `fusion_splits` is the LEVER'S OWN FIRE
-    RATE — LAW-18's subject — so it counts POPS THAT SPLIT, not cuts."""
+    `fusion_splits` is the lever's own fire rate, so it counts POPS THAT SPLIT, not cuts.
+    Killer: delete the split, or count parts as pops.
+    """
     payload = H.build_payload(_EIGHT)
     ec, nc = H.per_graph_counts(payload)
     cap_e = 2 * int(ec[0])          # exactly two graphs per forward
@@ -129,11 +84,10 @@ def test_fg4_02_a_pop_that_must_split_reports_its_parts_and_its_cuts(monkeypatch
 def test_fg4_03_a_node_driven_split_attributes_its_cuts_to_the_node_member(
     monkeypatch
 ) -> None:
-    """FG4-03 — the MB-19 mutation: an edges-only implementation passes every other row here.
+    """A node-driven split attributes its cuts to the node member.
 
-    The bank member is node-heavy and edge-light by construction, which is also the point
-    D-5 makes the calibration sweep carry: V-D's death must be reconfirmed by measurement, not
-    by hand count."""
+    Killer: an edges-only implementation, which passes every other row here.
+    """
     payload = H.build_payload(_EIGHT, edges_per_graph=[1] * 8)
     _ec, nc = H.per_graph_counts(payload)
     cap_n = 2 * int(nc[0])
@@ -152,7 +106,6 @@ def test_fg4_03_a_node_driven_split_attributes_its_cuts_to_the_node_member(
         "which member to re-fit at the box")
 
 
-# ═══ FG4-06/07/08/10 — the shape of what is reported ═════════════════════════════════════
 _BOUND_BANK = [
     ("uniform", [3] * 8, None),
     ("ragged", [2, 5, 3, 7, 4, 6, 1, 8], None),
@@ -166,11 +119,8 @@ _BOUND_BANK = [
 def test_fg4_06_no_part_ever_exceeds_either_cap_on_the_instrument(
     monkeypatch, label: str, legal: list[int], edges: list[int] | None
 ) -> None:
-    """FG4-06 — the bound, read off the INSTRUMENT rather than off the planner.
-
-    A planner that partitions correctly and an instrument that measures the wrong tensor
-    disagree, and it is the instrument the operator reads at the box when deciding whether the
-    cap held. `max` is the reading that matters for a memory bound; a mean cannot fail."""
+    """No part exceeds either cap, read off the INSTRUMENT rather than off the planner —
+    a correct planner and an instrument measuring the wrong tensor disagree."""
     payload = H.build_payload(legal, edges)
     ec, nc = H.per_graph_counts(payload)
     cap_e, cap_n = int(ec.max()) + 1, int(nc.max()) + 1
@@ -188,12 +138,8 @@ def test_fg4_06_no_part_ever_exceeds_either_cap_on_the_instrument(
 
 
 def test_fg4_07_the_lever_stays_visible_at_zero_on_the_producing_path(monkeypatch) -> None:
-    """FG4-07 — an IDLE lever must be distinguishable from a MISSING one.
-
-    `fusion_splits == 0` on a graph run that never split is a measurement; `fusion` absent or
-    `None` on the same run would be "no producer". The two mean opposite things to whoever
-    reads the burst, and §11's third falsifier (`fusion_splits == 0` across a burst that
-    reaches ply > 120) can only fire if the zero is published."""
+    """An IDLE lever stays visible at zero: `fusion_splits == 0` is a measurement, while an
+    absent or `None` block means "no producer"."""
     payload = H.build_payload([3, 3])
     server, _batcher, _ = H.drive_one_pop(monkeypatch, payload)
     f = _fusion(server)
@@ -203,9 +149,8 @@ def test_fg4_07_the_lever_stays_visible_at_zero_on_the_producing_path(monkeypatc
 
 
 def test_fg4_07_the_instrument_is_defined_before_the_first_forward(monkeypatch) -> None:
-    """FG4-07 second limb — read before any pop: the caps are already known (they were
-    resolved at construction, §3.3), the counters are defined zeros and the two distributions
-    are `None` because no part has been measured. No division by zero, no fabricated zero."""
+    """Before the first forward the caps are known, the counters are zero and the
+    distributions are `None` — no division by zero, no fabricated zero."""
     import mantis.selfplay.graph_collate as collate_mod
 
     monkeypatch.setattr(collate_mod, "collate_graph_batch", H.collate_from_payload)
@@ -222,11 +167,7 @@ def test_fg4_07_the_instrument_is_defined_before_the_first_forward(monkeypatch) 
 
 
 def test_fg4_08_the_distributions_are_power_of_two_bucketed_histograms(monkeypatch) -> None:
-    """FG4-08 — histograms with power-of-two LOWER-bound keys, not means.
-
-    Asserted as a distribution (every key a power of two, every part in the bucket whose lower
-    bound it clears) rather than as a summary, because a mean fused-E is exactly the reading
-    that cannot tell a safe run from one about to OOM."""
+    """The distributions are power-of-two LOWER-bound bucketed histograms, not means."""
     payload = H.build_payload([1, 1, 1, 30])
     ec, nc = H.per_graph_counts(payload)
     server, batcher, _ = H.drive_one_pop(
@@ -253,9 +194,8 @@ def test_fg4_08_the_distributions_are_power_of_two_bucketed_histograms(monkeypat
 
 
 def test_fg4_10_the_caps_travel_with_the_distributions(monkeypatch) -> None:
-    """FG4-10 — an occupancy is unreadable without the bound it was measured against, the
-    same reason `batch_size`/`max_wait_ms` already ride the block. A histogram whose maximum
-    is 4.4 M edges says nothing until the cap beside it says 4.5 M or 9 M."""
+    """The caps travel with the distributions — a max of 4.4 M edges says nothing until the
+    cap beside it says 4.5 M or 9 M."""
     payload = H.build_payload([3, 3])
     server, _batcher, _ = H.drive_one_pop(
         monkeypatch, payload, max_fused_edges=4_500_000, max_fused_nodes=170_000)
@@ -263,15 +203,12 @@ def test_fg4_10_the_caps_travel_with_the_distributions(monkeypatch) -> None:
         "max_fused_edges": 4_500_000, "max_fused_nodes": 170_000}
 
 
-# ═══ FG4-09 — `_forward_count` stays one per POP ═════════════════════════════════════════
 def test_fg4_09_forward_count_stays_one_per_pop_under_a_split(monkeypatch) -> None:
-    """FG4-09 — design §4.4's first behavioural delta IMPL must not accidentally "fix".
+    """`_forward_count` stays one per POP under a split.
 
-    `_forward_count` is `batch_fill_pct`'s DENOMINATOR (`pool_hooks.batch_fill_pct`), and that
-    metric means *requests per pop against `inference_batch_size`* — an occupancy. Counting
-    parts there would divide by M and silently move a number banked on both sides of the
-    R274(d) bench. `fusion_parts` is where GPU forwards are counted, and this row asserts the
-    two are DIFFERENT under a split, which is the only regime that can tell them apart."""
+    It is `batch_fill_pct`'s denominator and that metric is an occupancy, so counting parts
+    there would divide by M and silently move a banked number; `fusion_parts` counts forwards.
+    """
     payload = H.build_payload(_EIGHT)
     ec, _nc = H.per_graph_counts(payload)
     server, batcher, _ = H.drive_one_pop(
@@ -294,16 +231,9 @@ def test_fg4_09_forward_count_stays_one_per_pop_under_a_split(monkeypatch) -> No
 
 
 def test_fg4_09_collate_is_recorded_once_per_part_not_once_per_pop(monkeypatch) -> None:
-    """FG4-09 second limb — design §4.4's OTHER behavioural delta, recorded so it is not read
-    as drift when someone diffs the two counters.
-
-    `_record_collate` now fires once per PART, so `collate.count == sum(M)` where it used to
-    equal `queue_wait.count`. The asymmetry is already the documented design of those two
-    counters (a batch whose collate raises still contributes a real wait sample), and this row
-    is what stops the new inequality being mistaken for a leak — and stops an implementation
-    that collates ONCE and slices tensors afterwards, which would be the post-collate design
-    §4.1(1) rejects: a design whose first allocation is proportional to the uncapped quantity
-    cannot meet a bound."""
+    """Collate is recorded once per PART, so `collate.count == sum(M)` rather than
+    `queue_wait.count` — by design, not a leak. Killer: collate ONCE and slice afterwards,
+    whose first allocation is proportional to the uncapped quantity."""
     payload = H.build_payload(_EIGHT)
     ec, _nc = H.per_graph_counts(payload)
     server, batcher, _ = H.drive_one_pop(
@@ -320,7 +250,6 @@ def test_fg4_09_collate_is_recorded_once_per_part_not_once_per_pop(monkeypatch) 
         "the wait is measured at the POP; only the collate follows the split")
 
 
-# ═══ FG4-04/05 — arrival at the sink ═════════════════════════════════════════════════════
 class _ListSink:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -330,8 +259,7 @@ class _ListSink:
 
 
 class _TelemetryPool:
-    """The narrow telemetry surface over a REAL inference server — the batching member goes
-    through the REAL `pool_hooks` function, so this drives the production producer."""
+    """Narrow telemetry surface over a REAL server, through the REAL `pool_hooks`."""
 
     search_kind = "gumbel"
     avg_game_length = 12.0
@@ -378,12 +306,8 @@ def _emit(pool: Any) -> dict[str, Any]:
 
 
 def test_fg4_04_the_fusion_block_reaches_the_sink_on_iteration_complete(monkeypatch) -> None:
-    """FG4-04 — R164, discharged the only way it can be: the block travels server -> hook ->
-    builder -> sink, whole, and is compared against the server's own snapshot.
-
-    A test-visible-only counter satisfies FG4-01..03 completely and reaches nobody. This row
-    is the difference, and it is why the counters ride an EXISTING event field
-    (`iteration_complete.inference_batching`) rather than a new one nothing consumes."""
+    """The block travels server -> hook -> builder -> sink whole, matching the snapshot —
+    a test-visible-only counter satisfies every producer row above and reaches nobody."""
     payload = H.build_payload(_EIGHT)
     ec, _nc = H.per_graph_counts(payload)
     server, batcher, _ = H.drive_one_pop(

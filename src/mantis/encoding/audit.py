@@ -1,32 +1,17 @@
 # >300 lines: the audit CLI keeps its AuditReport/AuditFinding dataclasses, the
 # text + JSON renderers, and the top-level orchestration together; the section
 # emitters live in audit_sections.py (§1-4/§6) and tools/hardcode_scan.py (§5).
-"""Encoding audit CLI.
+"""Encoding audit CLI: a single-shot pre-flight over project-wide encoding posture.
 
-Single-shot operator tool surfacing project-wide encoding posture. Pre-flight
-gate before sustained runs.
+Invoked as `python -m mantis.encoding audit`. Six report sections:
+    1. Registered encodings — every spec from the compiled registry.
+    2. Checkpoints         — `.pt` files, declared (metadata) vs inferred shape.
+    3. Corpora             — `.npz` files, sidecar vs filename, sha256 reconciliation.
+    4. Variants            — variant config resolves under the registry.
+    5. Hardcoded literals  — geometry literals outside an allowlist.
+    6. Cross-table         — checkpoints against corpora via sha256.
 
-Six report sections:
-    1. Registered encodings — every spec from the compiled registry (all_specs).
-    2. Checkpoints       — `.pt` files, declared (metadata) vs inferred shape.
-    3. Corpora           — `.npz` files, sidecar declared vs filename inferred,
-                           sha256 reconciliation.
-    4. Variants          — variant config resolves under registry.
-    5. Hardcoded literals — grep for `19`, `25`, `361`, `5`, `8` outside an
-                           allowlist (tools/hardcode_scan.py).
-    6. Cross-table — ckpts ↔ corpora via sha256 (INV-1..6).
-
-Exit codes:
-    0 — every section clean (only `info` findings).
-    1 — at least one `warn`, no `error`.
-    2 — at least one `error`.
-
-Invocation:
-    python -m mantis.encoding audit
-
-§1 (registered) reads the compiled registry via `all_specs()`; §6 (cross-table)
-reproduces the WP3 Rust reference INV-1..6 logic. §2/§3/§4 are the filesystem /
-torch / npz sections; §5 is the hardcode grep (tools/hardcode_scan.py).
+Exit codes: 0 clean (info only), 1 at least one warn, 2 at least one error.
 """
 from __future__ import annotations
 
@@ -63,8 +48,7 @@ class AuditReport:
     sections: dict[str, AuditSection] = field(default_factory=dict)
     findings: list[AuditFinding] = field(default_factory=list)
     strict: bool = False
-    # Raw hardcode hits collected by §5 when json_mode=True (embedded in JSON
-    # output instead of the /tmp side-channel).
+    # Raw §5 hits, embedded in JSON output when json_mode is on.
     _raw_hardcode_hits: list[dict] = field(default_factory=list)
 
     def add_finding(self, severity: Severity, section: str, message: str) -> None:
@@ -209,7 +193,7 @@ def _render_table(headers: Sequence[str], rows: Sequence[Sequence[str]]) -> str:
 
 
 def _repo_root() -> Path:
-    """Walk up from this module to the repo root (crates/ + src/ siblings)."""
+    """Walk up from this module to the repo root, identified by sibling crates/ and src/."""
     here = Path(__file__).resolve()
     for ancestor in (here, *here.parents):
         if (ancestor / "crates").is_dir() and (ancestor / "src").is_dir():
@@ -218,11 +202,10 @@ def _repo_root() -> Path:
 
 
 def _scan_hardcodes(report: AuditReport, scan_root: Path, *, collect_raw: bool) -> None:
-    """§5 — dynamically load the relocated scanner (tools/hardcode_scan.py).
+    """Run §5 by loading `tools/hardcode_scan.py` by path.
 
-    The scanner lives under `tools/` (not a package); load it by file path to
-    avoid any sys.path mutation (LAW-17). If it is absent (installed-wheel
-    layout), emit a warn rather than crashing.
+    `tools/` is not a package, so loading by path avoids any sys.path mutation; an absent
+    scanner (installed-wheel layout) emits a warn rather than crashing.
     """
     scanner_path = _repo_root() / "tools" / "hardcode_scan.py"
     if not scanner_path.is_file():
@@ -254,9 +237,7 @@ def audit(
     collect_raw_hardcode: bool = False,
 ) -> AuditReport:
     """Run the full 6-section audit; return AuditReport."""
-    # Lazy import (function-level): the section emitters import AuditReport et al.
-    # back from this module — a lazy edge keeps the module DAG acyclic (gate 9;
-    # repo_design §2 "top-level imports only; lazy imports need a stated reason").
+    # Lazy: the section emitters import back from this module, so this edge keeps the DAG acyclic.
     from mantis.encoding.audit_sections import (
         _section_checkpoints,
         _section_corpora,

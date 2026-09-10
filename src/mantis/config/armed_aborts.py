@@ -1,74 +1,22 @@
-# R8 >300 justify: the manifest ROWS are data and their reason text IS the row —
-# `note` is a live consumer's field, printed by gate 12 on every run, not a comment that
-# can be trimmed. The two walkers below (`_dotted`, `audit_arming`) carry the F-4 named-arm
-# and disarmed-short-circuit rationale; splitting them from the
-# rows they walk would put "which aborts must arm" and the predicate that reads it on
-# opposite sides of an import, which is the drift this module exists to prevent. Phase X adds
-# `exit_code_for_abort` for the same reason: "which code does a
-# fired abort exit with" is answered BY the rows, and a resolver living anywhere else becomes
-# a second authority for that answer the first time a row's `exit_code` moves. Phase K-B adds
-# a third row and the `ceiling_path` mechanism it needs: the row
-# is where "why is grad-norm deferred, and what closes it" is written, and gate 12 prints that
-# text on every run. WPMAIN RT-2/R132 adds a FOURTH row plus the
-# exported `DISK_SPACE_ABORT_RULE` the composition root imports: the disk-guard abort's rule
-# name has two readers — this row and `mantis.run` — because `mantis.train` may not import this
-# module, so a bare literal at each would be the duplicated-authority shape R1 exists to kill.
-# The row's own `note` carries why it is REQUIRED, what drift it exists to catch and the
-# operator-SIGTERM residual R132 did not close, which is data gate 12 prints, not a comment.
-# WP12-R Phase O (R152) adds a FIFTH row plus the exported
-# `TERMINAL_EVAL_BROKEN_ABORT_RULE`, for the reason the disk-guard row above exists in this
-# shape: the broken-terminal-eval rule name has two readers (this row and `mantis.run`), and
-# `mantis.train` may not import this module. Its `note` carries the one-code-for-seven-reasons
-# decision, the two disclosed residuals and the cooperative-delivery argument — gate-12-printed
-# data, not commentary. The same phase deletes the last exit-code LITERAL in the row set
-# (`actor_lag`'s bare 45 became `ACTOR_LAG_EXIT_CODE`): an AST census now forbids an integer
-# literal in any `exit_code=`, because an identity check cannot witness one — CPython interns
-# the small ints, so a typed `48` IS the imported constant under `is`.
-# R251 / ADJ-D22 adds the CADENCE axis — `Cadence`, `EARLIEST_FIRE_FRACTION` and
-# `audit_cadence` — and it belongs beside the rows for the same reason the rows and their
-# walkers do: "which aborts must arm" and "when can an armed one still fire" are one
-# question the moment a large `monitor.gate_interval` can leave a threshold armed in the
-# config and unread in the run. Splitting them would put the row set and the bound its rows
-# are judged against on opposite sides of an import, and the fraction is deliberately here
-# rather than in a schema model so no minted config can relax its own audit.
-# R265 / ADJ-D38 adds `SampleClock` beside `Cadence`, and it is the same argument once more:
-# "when can an armed row fire" is unanswerable without "in WHICH CLOCK does that row's
-# evidence arrive", because the two are different keys on different axes — the draw-rate
-# gate ticks on `monitor.gate_interval`, the sealbot-WR trajectory on `train.eval_interval`.
-# The period belongs to the CLOCK rather than to the row precisely so a row cannot name its
-# own: a row that supplies its own period is a row that can be audited in a clock it never
-# ticks in, which is the D38 defect stated as a shape.
-"""The armed-abort manifest — WHICH aborts a production config MUST arm (R61, DESIGN_P §8).
+# R8 >300 justify: the manifest ROWS are data and their `note` text IS the row — a field
+# gate 12 prints on every run, not a comment. The walkers (`_dotted`, `audit_arming`,
+# `audit_cadence`), the exit-code resolver and the cadence/clock axes each answer a question
+# the rows themselves hold the operands for; splitting any of them out would put "which
+# aborts must arm" and the predicates that read it on opposite sides of an import.
+"""The armed-abort manifest — WHICH aborts a production config MUST arm.
 
-ONE authority, and it is DATA. A markdown register would need a parser, and the parser's
-grammar becomes a second authority with its own failure modes (a row that parses to nothing
-reads as "no such requirement"). A typed frozen dataclass is read by `import`, carries its
-invariant in `__post_init__`, and cannot drift from a doc twin — so this module ships no doc
-twin of the rows. The precedent is `config/resolve/composition.py:10-13`: "the rule is a
-config-layer fact, so it lives in the config layer", and "which aborts a production config
-must arm" is a config-layer fact of exactly that species.
+ONE authority, and it is DATA: a typed frozen dataclass read by `import`, carrying its
+invariant in `__post_init__`, with no doc twin to drift from.
 
-SF-4 — THE LAYER BOUNDARY. This module makes ZERO filesystem calls. `PRODUCTION_CONFIGS`
-holds repo-relative STRINGS (data); resolving them against a repo root, and reading a
-`source_pin`'s pinned file, both live in `tools/ci_gates/preflight_mint.py`, where
-`REPO_ROOT = Path(__file__).resolve().parents[2]` is structurally sound. A shipped package
-that resolved `parents[3]` to the repo root would be depending on an editable install.
-Pinned by `tests/config/test_armed_abort_manifest.py`,
-`test_the_manifest_module_makes_no_filesystem_call`.
+THE LAYER BOUNDARY. This module makes ZERO filesystem calls. `PRODUCTION_CONFIGS` holds
+repo-relative STRINGS; resolving them against a repo root lives in
+`tools/ci_gates/preflight_mint.py`, because a shipped package that resolved one would be
+depending on an editable install. Pinned by `tests/config/test_armed_abort_manifest.py`.
 
-`wr_hard_abort_enabled` is a DEFERRED row since R265 / ADJ-D38, and the sentence this
-paragraph used to carry ("ABSENT BY DECISION, not by oversight … a later reader must not
-'fix' it in") was HALF right and is corrected here rather than deleted. The half that
-stands: the sealbot win-rate abort ships WARN-ONLY by operator ruling G-3, STATE §6 names
-the mint-blocking pair as "draw-rate + actor-lag", and NOTHING here may flip it REQUIRED —
-that would gate every production mint on `monitor.wr_hard_abort_enabled: true`, a value the
-operator deliberately mints false, and moving it is a ruling and not a manifest edit. The
-half that was WRONG: absence from the manifest was read as "the axis needs no row", and
-ADJ-D38 measured what that bought — gate 12's cadence audit could not compute even a FALSE
-affirmative for the WR axis, so the axis sat entirely outside the R251 machinery while its
-own consec knobs were free to go unfireable. A DEFERRED row prints loudly on every gate-12
-run, gates nothing, and makes the flip a one-field data edit (§8.5); that is the posture for
-a live gate whose DISPOSITION is owed, and it is what the row below carries.
+`wr_hard_abort_enabled` is a DEFERRED row: the sealbot win-rate abort ships WARN-ONLY by
+operator ruling and nothing here may flip it REQUIRED, because that would gate every
+production mint on a value the operator deliberately mints false. A DEFERRED row prints
+loudly on every gate-12 run, gates nothing, and makes the flip a one-field data edit.
 """
 from __future__ import annotations
 
@@ -78,13 +26,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-# The exit-code AUTHORITY (WPMINT Phase X, CARD-ABORT-EXIT / R84). 42/43/45 already live in
-# `mantis.monitor.heartbeat` and `monitor/supervise.py` imports two of them across the
-# supervisor seam, so 46 joins them there rather than opening a fourth site for one family.
-# Imported rather than re-typed: the row below is the manifest's copy of the number, and a
-# literal here would be the second place "which code does the draw-rate abort use" is
-# written. `mantis.monitor.heartbeat` imports nothing from `mantis` (stdlib only), so this is
-# a leaf edge in the same direction `config/resolve/monitor.py` already takes (gate 9).
+# The exit-code AUTHORITY. Imported rather than re-typed: a literal here would be a second
+# place "which code does this abort use" is written.
 from mantis.monitor.heartbeat import (
     ACTOR_LAG_EXIT_CODE,
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
@@ -92,49 +35,27 @@ from mantis.monitor.heartbeat import (
     TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
 
-#: The disk-guard abort's RULE NAME — one spelling, exported (WPMAIN RT-2 / R132).
-#:
-#: Every other rule name in this file is a string literal typed once, because its producer
-#: (`StepCoordinator._fire_hard_abort`) receives the name from the gate that fires and never
-#: has to agree with a row. The disk-guard rule is different: `mantis.train` may not import
-#: this module (the rule-name carrier's whole point), so the guard publishes only the FACT
-#: that it fired and `mantis.run.compose_run` — which already imports `exit_code_for_abort`
-#: for its own rc resolution — names the rule. That name therefore has TWO readers, the row
-#: below and the root, and a bare literal at each would be exactly the duplicated-authority
-#: shape R1 exists to kill: rename the row and the root goes on recording a rule the resolver
-#: answers `None` for, which is `UnregisteredAbortExitError` at every disk-full event.
+#: The disk-guard abort's RULE NAME — one spelling, exported. It has TWO readers, the row
+#: below and `mantis.run.compose_run`, because `mantis.train` may not import this module; a
+#: bare literal at each would let a rename leave the resolver answering `None`.
 DISK_SPACE_ABORT_RULE: str = "disk_space_exhausted"
 
-#: The broken-terminal-eval RULE NAME — one spelling, exported (WP12-R Phase O, R152).
-#:
-#: Same shape and same grounds as `DISK_SPACE_ABORT_RULE` one line above: `mantis.train`
-#: may not import this module, so the coordinator's terminal-eval latch carries only the
-#: FACT (the round's own reason string) and `mantis.run.compose_run` — which already
-#: imports `exit_code_for_abort` for its own rc resolution — names the rule. Two readers,
-#: the row below and the root, so a bare literal at each is the duplicated-authority shape
-#: R1 exists to kill: rename the row and the root goes on recording a rule the resolver
-#: answers `None` for, i.e. `UnregisteredAbortExitError` on every broken terminal battery.
+#: The broken-terminal-eval RULE NAME — one spelling, exported, same shape and grounds as
+#: `DISK_SPACE_ABORT_RULE`: the row below and `mantis.run.compose_run` are its two readers.
 TERMINAL_EVAL_BROKEN_ABORT_RULE: str = "terminal_eval_broken"
 
-#: The disk guard's LIVENESS PROBE NAME (AUDIT-1 F-11 / R334(b)).
-#:
-#: Exported for exactly the reason `DISK_SPACE_ABORT_RULE` two lines above is: the name has
-#: TWO readers — the row below and `mantis.run.compose_run`, which owns the running guard and
-#: supplies the answer — and `mantis.train` may not import this module. A bare literal at each
-#: is the duplicated-authority shape R1 exists to kill, and here it fails LOUDLY rather than
-#: silently: rename one and `audit_arming_live` raises `ProducerProbeMissingError` naming both
-#: sides, which is the behaviour a phantom input must have.
+#: The disk guard's LIVENESS PROBE NAME. Two readers — the row below and
+#: `mantis.run.compose_run`, which owns the running guard — and a rename fails LOUDLY:
+#: `audit_arming_live` raises `ProducerProbeMissingError` naming both sides.
 DISK_GUARD_LIVENESS_PROBE: str = "disk_guard_checks_completed"
 
 
 def _is_real_number(value: Any) -> bool:
-    """True for a finite `int`/`float` that is not a `bool` (WPMINT Phase K-B).
+    """True for a finite `int`/`float` that is not a `bool`.
 
-    Extracted from `Mechanism.is_armed`'s own guard so the ceiling and the value are judged
-    by ONE rule. `bool` is excluded because `isinstance(True, int)` is True and `True`
-    arriving on a threshold path is a type confusion, not a threshold. Non-finite is excluded
-    because `inf` compares greater than every ceiling and `nan` compares False against all of
-    them — both would decide an arming question by accident.
+    `bool` is excluded because `isinstance(True, int)` is True and a `True` on a threshold
+    path is a type confusion; non-finite is excluded because `inf` beats every ceiling and
+    `nan` compares False against all of them, so either would decide arming by accident.
     """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return False
@@ -149,102 +70,36 @@ class Status(StrEnum):
 
 
 class Mechanism(StrEnum):
-    """The predicate that decides "armed" for a row's value. DATA, not a branch on `name`.
-
-    `audit_arming` never branches on a row's identity: `status` selects the list and
-    `mechanism` selects the predicate, which is what makes Phase D's DEFERRED→REQUIRED flip
-    a one-field data edit (§8.5, proven by O-7 rather than asserted).
-    """
+    """The predicate that decides "armed" for a row's value. DATA, not a branch on `name`."""
 
     CONFIG_BOOL = "config_bool"
     CONFIG_THRESHOLD_GT_ZERO = "config_threshold_gt_zero"
-    #: WPMINT Phase K-B (adjudication call K-c). An UPPER-bounded threshold: armed iff the
-    #: value is a real, finite, positive number that is ALSO no greater than a ceiling read
-    #: off a second config path (`ArmedAbort.ceiling_path`).
-    #:
-    #: Why a second member rather than a tighter `CONFIG_THRESHOLD_GT_ZERO`: `> 0` is the
-    #: correct and complete predicate for `train.draw_rate_abort.threshold`, whose schema
-    #: already closes the high end at `le=1`. It is the WRONG predicate for
-    #: `train.hard_gn_threshold`, whose range is genuinely unbounded above and whose shipped
-    #: `1e9` is finite, positive and unreachable by any real gradient norm — `> 0` reads that
-    #: as ARMED, which is the "armed in the config, absent in effect" defect this manifest
-    #: exists to make visible.
-    #:
-    #: Why the ceiling is DATA on the row and not a number here: a literal ceiling in this
-    #: enum would be a policy value nobody pre-registered, which is the class R84 refused when
-    #: it ratified `exit_code=None` rather than fabricating a `46`. The row names a config
-    #: path instead, so the ceiling is a value the operator already minted for the same
-    #: quantity, it moves when the config moves, and `is_armed` stays a pure predicate.
+    #: An UPPER-bounded threshold: armed iff the value is a real, finite, positive number that
+    #: is ALSO no greater than a ceiling read off the row's `ceiling_path`. `> 0` alone reads
+    #: an unreachable `1e9` as ARMED, which is "armed in the config, absent in effect".
     CONFIG_THRESHOLD_BELOW_CEILING = "config_threshold_below_ceiling"
-    #: RECAL-PREP / R308(g)(i). A TOKEN, not a number: armed iff the value is a non-empty
-    #: string. Its subject is `allocator_posture`, whose value is a member of a closed regime
-    #: set or the R119 `null` placeholder.
-    #:
-    #: Why a fourth member rather than reusing one of the three above: all three read NUMBERS.
-    #: `CONFIG_THRESHOLD_GT_ZERO` answers False for `"default"` — `_is_real_number` rejects a
-    #: str — so a correctly minted posture would report DISARMED forever, which is the
-    #: "armed in the config, absent in the audit" defect this manifest exists to make visible,
-    #: pointing the other way. A predicate that cannot see its own subject is not a predicate.
-    #:
-    #: Why the closed SET is not enumerated here: it lives in the schema `Literal` and in
-    #: `mantis.config.resolve.allocator_posture`, and duplicating it would be a second
-    #: authority over which regimes exist — the same reason `ceiling_path` is DATA on the row
-    #: rather than a literal in this enum. This member answers exactly one question ("is a
-    #: value minted here, or is this the placeholder"), which is what the audit needs.
+    #: A TOKEN, not a number: armed iff the value is a non-empty string. Its subject is
+    #: `allocator_posture`, whose value is a regime member or the `null` placeholder — a
+    #: numeric predicate would report a correctly minted posture DISARMED forever.
     CONFIG_ENUM_VALUED = "config_enum_valued"
-    #: AUDIT-1 F-11 / R334(b). `CONFIG_THRESHOLD_GT_ZERO` with a SECOND operand: the row's
-    #: producer must have run at least once. Armed iff the config value is a real, finite,
-    #: positive number AND the probe named by `ArmedAbort.producer_probe` answers True — but
-    #: ONLY when a probe answer is supplied. With no answer the verdict is the `> 0` test
-    #: alone, byte-for-byte, which is what keeps `audit_arming` pure over config and CI gate
-    #: 12 untouched.
-    #:
-    #: THE DEFECT IT CLOSES, measured. `disk_space_exhausted` audits ARMED off
-    #: `monitor.disk_guard.fail_gb > 0`, a CONFIG NUMBER. A `DiskGuard` whose `check_once`
-    #: raises on every tick emits no `disk_free`, increments no `checks_total`, never sets
-    #: `critical_fired` — and every instrument still reports the abort armed, because a
-    #: threshold nobody reads is indistinguishable from a threshold being read. The rc-47
-    #: abort R132 closed can be dead for a whole run while the volume fills and the supervisor
-    #: relaunches into it. `Cadence` already asks "can this row still fire in time"; this asks
-    #: the prior question, "is anything producing the evidence at all".
-    #:
-    #: WHY A FIFTH MEMBER RATHER THAN A LIVENESS FLAG ON EVERY ROW. `audit_arming` never
-    #: branches on a row's identity: `status` picks the list, `mechanism` picks the predicate.
-    #: A flag read by every predicate would make liveness a property of the AUDIT rather than
-    #: of the ROW, and the four existing mechanisms would silently acquire a second operand
-    #: they were never judged against. One member, read by exactly one row, keeps every other
-    #: row's verdict unchanged by construction.
-    #:
-    #: WHY THE PROBE IS A NAME AND NOT A CALLABLE ON THE ROW. `MANIFEST` is import-time data
-    #: with no process behind it; a callable there would either close over nothing useful or
-    #: drag a live subsystem into a module whose whole discipline is making ZERO filesystem
-    #: calls (SF-4). The row names a probe; the caller that HAS the subsystem supplies the
-    #: answer — the same split `ceiling_path` uses, one layer up.
+    #: `CONFIG_THRESHOLD_GT_ZERO` with a SECOND operand: the probe named by the row's
+    #: `producer_probe` must also answer True, but ONLY when an answer is supplied, so the
+    #: pure-config audit gate 12 runs is unchanged. A threshold nobody reads is otherwise
+    #: indistinguishable from one being read.
     CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER = "config_threshold_gt_zero_with_live_producer"
 
     def is_armed(self, value: Any, *, ceiling: Any = None,
                  producer_live: bool | None = None) -> bool:
-        """True iff `value` arms the abort. A real predicate in BOTH directions — a
-        constant here would silently arm or disarm every row at once.
+        """True iff `value` arms the abort. A real predicate in BOTH directions.
 
-        `ceiling` is consumed ONLY by `CONFIG_THRESHOLD_BELOW_CEILING` and is resolved by
-        `audit_arming` from the row's own `ceiling_path`; the other two mechanisms ignore it,
-        which is why it is keyword-only with a `None` that means "no ceiling was named". A
-        `CONFIG_THRESHOLD_BELOW_CEILING` row with no usable ceiling reports DISARMED rather
-        than ARMED: an unjudgeable row must fail toward visibility, never toward silence.
-
-        `CONFIG_THRESHOLD_GT_ZERO`'s arms are BYTE-UNCHANGED, deliberately: this phase authors
-        knobs and changes no verdict. `_is_real_number`'s finiteness test is applied only on
-        the new branch, so `is_armed(inf)` still answers True for the `> 0` mechanism (a value
-        `train.draw_rate_abort.threshold`'s `le=1` cannot produce anyway).
+        `ceiling` is consumed only by `CONFIG_THRESHOLD_BELOW_CEILING` and is resolved by
+        `audit_arming` from the row's own `ceiling_path`; a row with no usable ceiling reports
+        DISARMED, because an unjudgeable row must fail toward visibility, never toward silence.
         """
         if self is Mechanism.CONFIG_BOOL:
             return value is True
         if self is Mechanism.CONFIG_ENUM_VALUED:
-            # `bool` is excluded before `str` is tested only for symmetry with the numeric
-            # branches below; a bool is not a str, so this is a statement of intent rather
-            # than a live guard. `""` is DISARMED: an empty token is the placeholder wearing
-            # a different spelling.
+            # `""` is DISARMED: an empty token is the placeholder wearing another spelling.
             return isinstance(value, str) and value != ""
         if isinstance(value, bool) or not isinstance(value, (int, float)):
             return False
@@ -253,134 +108,68 @@ class Mechanism(StrEnum):
                 return False
             return 0.0 < float(value) <= float(ceiling)
         if self is Mechanism.CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER:
-            # `producer_live is None` means NO ANSWER WAS SUPPLIED, which is not the same as
-            # "the producer is dead": it is the pure-config audit gate 12 runs, where no
-            # process exists to ask. Collapsing the two would make every CI run report the
-            # disk row DISARMED and turn a live gate red on every commit.
+            # `producer_live is None` means NO ANSWER WAS SUPPLIED, not "the producer is
+            # dead": collapsing the two would red the pure-config audit on every commit.
             return float(value) > 0.0 and producer_live is not False
         return float(value) > 0.0
 
 
-#: The FRACTION of a run's own `train.max_train_steps` inside which an ARMED abort must be
-#: able to fire (R251 / ADJ-D22). ONE authority, consumed by `audit_cadence` below.
-#:
-#: THE DEFECT IT CLOSES, measured. `monitor.gate_interval: 1000000000` with a 40-step run
-#: produces ZERO gate boundaries, so an ARMED `train.draw_rate_abort` is never evaluated —
-#: and gate 12 audited that config green, because `Mechanism.is_armed` reads a THRESHOLD and
-#: a threshold that is never READ is armed in the config and absent in effect. The interval's
-#: `ge=1` bans exactly one spelling of "never gate" and permits every larger one, so the
-#: arming predicate alone cannot see the class. A LARGE INTERVAL IS NEVER A SANCTIONED
-#: DISARM: the one sanctioned spelling stays the explicit R56-style pin the grad-norm row
-#: below carries, which is a written, owned, tamper-evident row and not a number nobody read.
-#:
-#: WHY IT IS NOT A PER-CONFIG KEY. A config that could set its own audit fraction could relax
-#: its own audit, and the disarm this constant exists to refuse would be re-spellable as
-#: `earliest_fire_fraction: 1.0` — ADJ-D20's gate-3c self-comparison class relocated one
-#: layer down. It lives HERE, beside the rows, because "which aborts must arm" already lives
-#: here: the row set and the bound its rows are judged against then cannot drift apart across
-#: an import, and `RunConfig`'s `extra="forbid"` makes minting the name a loud refusal rather
-#: than a quiet override (driven, not asserted, by
-#: `tests/config/test_armed_abort_cadence.py::
-#: test_the_fraction_is_a_named_constant_and_a_config_can_never_set_it`).
-#:
-#: WHY 0.25, and the grounds are that IT BINDS NO MINTED VALUE TODAY. It is a bound, not a
-#: target: an armed abort that cannot possibly fire in the first quarter of a run has missed
-#: the early-run regime it exists to catch, and every armed row on every committed config
-#: clears it with margin (measured on the tree: run5's draw-rate row is earliest-fire 25000
-#: of 1000000, a 10x margin; its actor-lag row 101; the armed preflight smoke's draw-rate row
-#: 30 of 200). A TIGHTER fraction would begin authoring `train.draw_rate_abort.min_step`
-#: policy from a CI gate — the class call K-c/R84 refused when it declined to invent a
-#: grad-norm threshold — and a looser one buys nothing, because the class this refuses (an
-#: interval that outruns the run by orders of magnitude) sits nowhere near the boundary.
-#: Moving this number is a ruling, not a tuning.
+#: The FRACTION of a run's own `train.max_train_steps` inside which an ARMED abort must be able
+#: to fire. ONE authority, consumed by `audit_cadence`. Deliberately NOT a config key: a config
+#: that could set its own fraction could relax its own audit. 0.25 is a bound, not a target —
+#: every armed row on every committed config clears it with margin (run5's draw-rate row is
+#: earliest-fire 25000 of 1000000, its actor-lag row 101, the armed smoke's draw-rate row 30 of
+#: 200). Moving this number is a ruling, not a tuning.
 EARLIEST_FIRE_FRACTION: float = 0.25
 
-#: The config path the bound is taken FROM. Named once and walked through the SAME `_dotted`
-#: every row's own paths go through, so renaming the run-length key is one loud
-#: `ArmingSurfaceMissingError` rather than a silent bound of zero.
+#: The config path the bound is taken FROM, walked through the SAME `_dotted` as every row's
+#: paths, so renaming it is one loud `ArmingSurfaceMissingError` and not a silent bound of zero.
 RUN_LENGTH_PATH: str = "train.max_train_steps"
 
 
 class SampleClockNotDerivableError(ValueError):
-    """A row's SAMPLE CLOCK period could not be derived from the config (R265 / ADJ-D38).
+    """A row's SAMPLE CLOCK period could not be derived from the config.
 
-    The audit RAISES here instead of falling back to the training-step clock, and that is the
-    whole ruling in one branch: reading an axis in a clock it does not tick in is exactly the
-    defect ADJ-D38 measured. Gate 12 computed every row's fire step in TRAINING STEPS while
-    the sealbot-WR axis's evidence arrives per EVAL ROUND, so a WR row judged that way would
-    be judged against a cadence key it never reads — and it would audit GREEN. A silent
-    fallback would make "one tick is one training step" and "nobody could derive this row's
-    tick" the same observable, which is MF-7's class relocated onto the cadence axis.
-
-    `preflight_mint.py` maps it onto `PreflightManifestError`, rc 31: a manifest defect an
-    operator can fix in one line, never the tool's own unnamed internal error (F-4's class).
+    The audit RAISES instead of falling back to the training-step clock: an axis judged in a
+    clock it does not tick in audits GREEN on exactly the configs this exists to refuse.
+    `preflight_mint.py` maps it onto `PreflightManifestError`, rc 31.
     """
 
 
 class SampleClock(StrEnum):
-    """WHICH CLOCK an axis's samples arrive in, and how long ONE tick of it is in TRAINING
-    STEPS. DATA, and the period is a live config PATH — never a number written here.
+    """WHICH CLOCK an axis's samples arrive in, and how long ONE tick is in TRAINING STEPS.
 
-    R265 / ADJ-D38. `Cadence` used to answer "when can this row first fire" in the
-    training-step clock for every row, and got away with it because every row it held either
-    ticked in that clock or declared its own period as an operand. The sealbot-WR axis breaks
-    both halves: its samples arrive once per COMPLETED EVAL ROUND
-    (`train/coordinator/step.py::on_eval_round_complete` appends exactly one `(step, wr)` per
-    routed result), so the step clock is the wrong denominator — and nothing would have
-    stopped a WR row DECLARING `monitor.gate_interval` as its interval operand, which is how
-    an axis ends up audited in another axis's clock with every check green.
-
-    So the period is a property of the CLOCK, not of the row. Three consequences, all of them
-    the point: every row on an axis reads the SAME live key; a row cannot supply its own
-    period; and a second row added to an existing axis inherits the right cadence by
-    construction rather than by its author remembering.
-
-    An axis whose period cannot be derived RAISES (`SampleClockNotDerivableError`). There is
-    no default tick anywhere in this class.
+    The period is a property of the CLOCK and is a live config PATH, never a number written
+    here — a row that supplied its own period could be audited in a clock it never ticks in.
+    An axis whose period cannot be derived RAISES; there is no default tick in this class.
     """
 
-    #: One sample per TRAINING STEP. The period is 1 by the DEFINITION of the clock, not by a
-    #: number this file chose — which is why this member names no config path and why a
-    #: `period_path` of `None` here does not mean "underivable". The grad-norm gate (evaluated
-    #: inside the burst, per step) and the actor-lag invariant tick here.
+    #: One sample per TRAINING STEP. The period is 1 by DEFINITION of the clock, which is why
+    #: this member names no config path and why its `None` does not mean "underivable".
     TRAIN_STEP = "train_step"
 
-    #: One sample per hard-abort GATE BOUNDARY. `train/coordinator/step.py::
-    #: _run_gate_interval` runs the live hard-abort gates only when
-    #: `self._train_step % cfg.gate_interval == 0`, and `monitor.gate_interval` is the minted
-    #: key `mantis.run.compose_run` threads into `StepCoordinatorConfig.gate_interval`.
+    #: One sample per hard-abort GATE BOUNDARY: `step.py::_run_gate_interval` runs the live
+    #: gates only when `self._train_step % cfg.gate_interval == 0`.
     GATE_BOUNDARY = "gate_boundary"
 
-    #: One sample per completed EVAL ROUND. `train/coordinator/step.py::_maybe_kick_eval`
-    #: kicks a round only at `self._train_step % cfg.eval_interval == 0` and never at round 0,
-    #: so round `r` lands at training step `r * eval_interval` with `r >= 1`; every routed
-    #: result then appends exactly one WR sample. `train.eval_interval` is the minted key
-    #: `resolve_coordinator_knobs` reads into `StepCoordinatorConfig.eval_interval`.
-    #:
-    #: DISCLOSED, because this clock has a second switch the audit cannot see from one path:
-    #: `eval_enabled` false builds NO eval pipeline, so the axis ticks zero times however
-    #: small the interval is. A row carries ONE `config_path` and the WR row spends it on the
-    #: disposition flag; the eval-enabled half is held by
-    #: `tests/config/test_minted_config_remint.py::
-    #: test_a_minted_config_carries_the_identity_and_eval_leaves`, which asserts it True over
-    #: all six committed configs — the same disposition the `terminal_eval_broken` row takes
-    #: for the same reason.
+    #: One sample per completed EVAL ROUND: round `r` lands at training step
+    #: `r * train.eval_interval` with `r >= 1`, and each routed result appends one WR sample.
+    #: DISCLOSED: `eval_enabled` false builds NO eval pipeline, so the axis ticks zero times
+    #: however small the interval is; that half is held by `test_minted_config_remint.py`.
     EVAL_ROUND = "eval_round"
 
-    #: NOT step-clocked at all — a wall-clock poll (the disk guard) or a close-out rule (the
-    #: terminal eval). Asking such a row for a period is a category error, and `period_steps`
-    #: RAISES rather than answering 1: answering 1 is precisely the step-clock fallback this
-    #: class exists to make impossible. Such a row is judged by the STEP FLOOR its rule
-    #: imposes instead (`Cadence.step_floor`), which is a derived answer and not an exemption.
+    #: NOT step-clocked at all — a wall-clock poll or a close-out rule. `period_steps` RAISES
+    #: rather than answering 1, which would be the step-clock fallback this class forbids; such
+    #: a row is judged by the STEP FLOOR its rule imposes instead.
     NO_STEP_CLOCK = "no_step_clock"
 
     @property
     def period_path(self) -> str | None:
         """The live config key ONE tick of this clock is measured by.
 
-        `None` on the two members that have no config period, and the two mean different
-        things — `TRAIN_STEP`'s tick is definitional, `NO_STEP_CLOCK` has no step tick at all
-        — which is why `period_steps` branches on the MEMBER and not on this being `None`.
+        `None` on the two members with no config period, and they mean different things —
+        `TRAIN_STEP`'s tick is definitional, `NO_STEP_CLOCK` has no step tick at all — which is
+        why `period_steps` branches on the MEMBER and not on this being `None`.
         """
         return {
             SampleClock.TRAIN_STEP: None,
@@ -397,13 +186,9 @@ class SampleClock(StrEnum):
     def period_steps(self, config: Any, *, row: str) -> float:
         """TRAINING STEPS per tick of this clock, DERIVED from `config`. Never a fallback.
 
-        A value that is not a real, finite, non-`bool` number is UNDERIVABLE and raises:
-        `_dotted` short-circuits an explicitly-disarmed block to `None`, and a `None` period
-        read as "1 step" would audit an axis that never ticks as one that ticks every step.
-        A real number BELOW 1 is a different thing — it is derivable and degenerate — and it
-        is passed through so `Cadence.earliest_fire_samples` can answer `math.inf` for it,
-        the fail-toward-visibility currency that axis already speaks (a schema `ge=1` on both
-        period keys makes it unreachable from a validated config either way).
+        A value that is not a real, finite, non-`bool` number is UNDERIVABLE and raises. A real
+        number BELOW 1 is derivable and degenerate, and passes through so
+        `Cadence.earliest_fire_samples` can answer `math.inf` for it.
         """
         if self is SampleClock.TRAIN_STEP:
             return 1.0
@@ -428,25 +213,12 @@ class SampleClock(StrEnum):
 
 
 def _evals_to_first_fire(consec: float, min_step: float, period: float) -> float:
-    """EVAL ROUNDS before ONE sealbot-WR trigger can first fire (R265 / ADJ-D38).
+    """EVAL ROUNDS before ONE sealbot-WR trigger can first fire.
 
-    Derived from `monitor/rules.py::sealbot_wr_trajectory_alert`, which every trigger routes
-    through, and from nothing else:
-
-    * `len(history) >= n_consec` needs `consec` samples — but `if not wr_history: return
-      None` needs at least ONE regardless, so a `consec` of 0 (the schema's `ge=0` admits it)
-      does NOT let a trigger fire before the first round. `max(consec, 1)`, and that floor is
-      the arithmetic half of the `history[-0:]` hair-trigger ADJ-D38 records as a separate,
-      unruled operator question — 0 arms a weaker-evidence variant, it does not disable a
-      rule;
-    * `current_step > min_step` is STRICT and round `r` lands at `r * period`, so the first
-      round past the floor is `floor(min_step / period) + 1`.
-
-    OPTIMISTIC by construction, exactly as `GATE_INTERVAL_CONSEC`'s BUG-1 note is: it assumes
-    every round yields a WR sample (a round whose result carries no `wr_sealbot` is
-    skip-counted and appends nothing) and, for trigger B, that a positive peak exists. An
-    EARLIEST-POSSIBLE-fire bound wants the optimistic case — this is a reachability floor,
-    not a prediction of when a run would actually abort.
+    Derived from `monitor/rules.py::sealbot_wr_trajectory_alert`: `len(history) >= n_consec`
+    needs `consec` samples, but the empty-history guard needs at least ONE regardless, hence
+    the `max(consec, 1)` floor; `current_step > min_step` is STRICT and round `r` lands at
+    `r * period`. OPTIMISTIC by construction — a reachability floor, not a prediction.
     """
     if period < 1.0:
         return math.inf
@@ -456,149 +228,59 @@ def _evals_to_first_fire(consec: float, min_step: float, period: float) -> float
 class Cadence(StrEnum):
     """WHEN a row's abort can FIRST fire, in TRAINING STEPS. DATA, not a branch on `name`.
 
-    The twin of `Mechanism`, and for the same reason: `audit_cadence` never asks which row it
-    is holding — `cadence` selects the arithmetic and the row supplies the operands through
-    `cadence_paths`. `mechanism` answers "is this abort armed"; `cadence` answers "can the
-    armed thing still fire inside the run", and ADJ-D22 measured that the first answer alone
-    is not enough.
+    The twin of `Mechanism`: `cadence` selects the arithmetic and the row supplies the operands
+    through `cadence_paths`. Every member is derived from the code that evaluates the row,
+    cited at the member; no operand is baked in.
 
-    Every member is DERIVED FROM THE CODE THAT EVALUATES THE ROW, cited at the member — never
-    from a key name someone typed here. No operand is baked in: the row names its own paths,
-    so the arithmetic runs over values the operator minted and this file invents no number.
-    That is the rule `CONFIG_THRESHOLD_BELOW_CEILING`'s `ceiling_path` already follows.
-
-    `earliest_fire_step` answers in three currencies and the difference between the last two
-    is load-bearing: a finite float is a step, `math.inf` is "these operands can never fire"
-    (the ADJ-D22 outcome), and `None` is "NO STEP CADENCE GOVERNS THIS ROW AT ALL" — which is
-    a truthful answer for a wall-clock or close-out rule and must never be forged into a
-    number, the class R84 refused when it declined to fabricate an exit code.
-
-    R265 / ADJ-D38 SPLITS THAT ANSWER IN TWO, and the split is the ruling. `earliest_fire_
-    samples` answers in the row's OWN sample clock — gate boundaries for the draw-rate gate,
-    EVAL ROUNDS for the sealbot-WR trajectory — and `earliest_fire_step` is that count times
-    the clock's period, which `SampleClock` derives from a live key. No member holds its own
-    period any more: the interval `GATE_INTERVAL_CONSEC` used to take as operand 0 is now
-    read off `SampleClock.GATE_BOUNDARY`, so a row cannot name a cadence key its axis does
-    not tick on, and the audit compares the count against the bound converted into that same
-    clock. For a period of exactly what the row used to declare the published STEP is
-    unchanged to the bit — the D38 change is which rows CAN be judged, not what the judged
-    ones answer.
+    `earliest_fire_step` answers in three currencies and the difference between the last two is
+    load-bearing: a finite float is a step, `math.inf` is "these operands can never fire", and
+    `None` is "no step cadence governs this row at all" — which must never be forged into a
+    number. It is `earliest_fire_samples`, in the row's OWN clock, times that clock's period.
     """
 
-    #: `train/coordinator/step.py::_run_gate_interval` runs the gate only when
-    #: `self._train_step % cfg.gate_interval == 0` — so this member's SAMPLE CLOCK is
-    #: `SampleClock.GATE_BOUNDARY` and the interval is read there, NOT declared here (R265).
-    #: `monitor/rules.py::check_draw_rate_collapse` then refuses on `len(history) < consec`
-    #: and on `current_step < min_step`, so the earliest fire is the first gate BOUNDARY that
-    #: is both the `consec`-th observation and at or past `min_step`. Operands, in order:
-    #: (consec path, min-step path).
-    #:
-    #: BUG-1: a boundary that yields no observation neither advances NOR resets `consec`
-    #: (`_sample`), so `consec * interval` bounds a real fire from BELOW. That is exactly what
-    #: an EARLIEST-POSSIBLE-fire bound wants — the optimistic case — and it is why this is a
-    #: reachability floor and not a prediction of when a run would actually abort.
-    #:
-    #: FORMER DISCLOSED RESIDUAL, CLOSED by ADJ-D36 — and closed by DERIVATION, not by an
-    #: import or a copy. This member used to publish a FALSE AFFIRMATIVE for any `consec`
-    #: above the coordinator's ring depth: `step.py::_sample` trimmed the gate history to a
-    #: literal `_GATE_HISTORY_DEPTH = 32` while `rules.py::check_draw_rate_collapse` refuses
-    #: on `len(history) < consec`, so `consec >= 33` was PERMANENTLY unfireable while this
-    #: arithmetic computed a finite step and published it as though the run could deliver
-    #: it. The literal is DELETED: `_run_hard_abort_gates`'s draw-rate arm now trims its
-    #: ring to `spec.consec` — the SAME minted value this member reads as its `consec` operand
-    #: (`train.draw_rate_abort.consec`) — so a finite answer here is deliverable by
-    #: construction for every schema-legal `consec`. ONE authority on both sides of the
-    #: audit, and NO new DAG edge in either direction: `mantis.config` still imports
-    #: nothing from `mantis.train`, because there is no longer a constant to import, and
-    #: nothing was re-typed here for a first divergence to falsify. The tie between this
-    #: member's published number and the machine's actual fire is DRIVEN, not asserted, by
-    #: `tests/train/test_drawrate_gate_capacity.py::
-    #: test_the_published_earliest_fire_step_is_deliverable_above_the_old_depth`, which
-    #: fires a REAL coordinator at the exact observation count this arithmetic publishes
-    #: for a `consec` the old code could never satisfy.
+    #: The draw-rate gate on `SampleClock.GATE_BOUNDARY`: `check_draw_rate_collapse` refuses on
+    #: `len(history) < consec` and on `current_step < min_step`, so the earliest fire is the
+    #: first boundary that is both the `consec`-th observation and at or past `min_step`. A
+    #: boundary yielding no observation neither advances NOR resets `consec`, so this bounds a
+    #: real fire from BELOW. Operands: (consec path, min-step path).
     GATE_INTERVAL_CONSEC = "gate_interval_consec"
 
-    #: R265 / ADJ-D38 — the sealbot-WR trajectory abort, in the EVAL-ROUND clock.
-    #:
-    #: `train/coordinator/step.py::on_eval_round_complete` appends ONE `(step, wr)` sample per
-    #: routed eval-round result, and `monitor/rules.py::sealbot_wr_trajectory_alert` fires on
-    #: whichever of its three triggers is first satisfiable — C early-death, B collapse-from-
-    #: peak, A rolling — each of which needs `len(history) >= its consec` AND
-    #: `current_step > its min_step`. The earliest possible fire is therefore the MINIMUM over
-    #: the three, in ROUNDS, and `SampleClock.EVAL_ROUND` converts a round to training steps
-    #: through `train.eval_interval`. Operands, in the order `_evals_to_first_fire` pairs
-    #: them: (collapse-consec path, early-death-min-step path, collapse-min-step path,
-    #: rolling-consec path, rolling-min-step path) — B and C SHARE
-    #: `monitor.wr_collapse_consecutive_evals`, which is why five paths cover three triggers.
-    #:
-    #: WHY THIS MEMBER EXISTS AT ALL, which is the ruling: judged in the TRAINING-STEP clock
-    #: this axis reads healthy on a config that can never deliver it. An `eval_interval` three
-    #: orders of magnitude past the run produces zero rounds and therefore zero WR samples,
-    #: while `monitor.gate_interval` — the key a step-clock audit would reach for — says
-    #: nothing whatever about it. ADJ-D22's defect, on the axis LAW-15/F-30 names as the one
-    #: that actually kills runs.
+    #: The sealbot-WR trajectory abort in the EVAL-ROUND clock: the earliest fire is the
+    #: MINIMUM over its three triggers, in ROUNDS, converted through `train.eval_interval`.
+    #: Operands: (collapse-consec, early-death-min-step, collapse-min-step, rolling-consec,
+    #: rolling-min-step) — B and C SHARE `monitor.wr_collapse_consecutive_evals`, which is why
+    #: five paths cover three triggers.
     EVAL_ROUND_CONSEC = "eval_round_consec"
 
-    #: `train/coordinator/step.py` D3: the grad-norm gate is evaluated PER TRAINING STEP
-    #: inside the burst (its producer is the trainer's own loss dict) and fires when
-    #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. The counter advances once per step, so
-    #: the earliest fire is the `hard_gn_min_steps`-th step. Operands: (min-steps path,).
+    #: The grad-norm gate is evaluated PER TRAINING STEP inside the burst and fires when
+    #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. Operands: (min-steps path,).
     CONSEC_TRAIN_STEPS = "consec_train_steps"
 
-    #: `train/lifecycle/heartbeat_watchdog.py::ActorLagSpec` — `learner_step_fn() -
-    #: actor_ckpt_step_fn() > threshold_steps`. The QUANTITIES are step-clock; the SAMPLING
-    #: rides the watchdog's seconds poll, which adds no STEP floor (the spec's own docstring
-    #: says so). With a frozen actor the strict `>` is first satisfiable one step past the
-    #: threshold. Operands: (threshold-steps path,).
+    #: `ActorLagSpec` — `learner_step_fn() - actor_ckpt_step_fn() > threshold_steps`. The
+    #: seconds poll adds no STEP floor, so a frozen actor first satisfies the strict `>` one
+    #: step past the threshold. Operands: (threshold-steps path,).
     STEP_LAG_THRESHOLD = "step_lag_threshold"
 
-    #: `train/lifecycle/disk_guard.py` — a daemon thread on `while not
-    #: self._stop_event.wait(timeout=self._interval)`. NO train-step boundary gates it, so the
-    #: earliest TRAIN STEP at which it can fire is 0. That is a derived answer and not an
-    #: exemption: the row stays inside the comparison, and a guard that ever acquired a step
-    #: gate would need its own member. Operands: none.
-    #:
-    #: DISCLOSED RESIDUAL, and it is the same class one axis over: a wall-clock rule can be
-    #: cadence-disarmed in SECONDS (`monitor.disk_guard.interval_sec` set past the run's wall
-    #: time) and this fraction cannot see it, because a config carries no wall-clock run
-    #: length to take a fraction OF. Stated, not papered over.
+    #: The disk guard's daemon thread. NO train-step boundary gates it, so the earliest TRAIN
+    #: STEP is 0 — a derived answer, not an exemption. Operands: none. DISCLOSED: a wall-clock
+    #: rule can still be cadence-disarmed in SECONDS (`monitor.disk_guard.interval_sec` past
+    #: the run's wall time), which this fraction cannot see.
     WALL_CLOCK_POLL = "wall_clock_poll"
 
-    #: `train/coordinator/drain.py::close_out` -> `run_terminal_eval` — the LAST action of the
-    #: run, reached on every termination including an aborted one. It has no in-run step
-    #: cadence, so it answers `None` and the fraction rule does not apply to it: asking when a
-    #: close-out rule can fire "early" is a category error, and answering `max_train_steps`
-    #: would fail every such row forever for a reason that is not a defect.
+    #: `drain.close_out` -> `run_terminal_eval`, the LAST action of the run. It has no in-run
+    #: step cadence, so it answers `None` and the fraction rule does not bind it: asking when a
+    #: close-out rule fires "early" is a category error.
     CLOSE_OUT_TERMINAL = "close_out_terminal"
 
-    #: F-816-10 (R276(f)). The rule is evaluated when the object it guards is CONSTRUCTED —
-    #: `mantis.config.resolve.fused_graph_caps.resolve_fused_graph_caps`, called eagerly from
-    #: the graph branch of `InferenceServer.__init__`, which refuses an uncalibrated cap before
-    #: a single training step or self-play game exists. It has no in-run step cadence to speak
-    #: of, so it ticks in `SampleClock.NO_STEP_CLOCK` and consumes no operands.
-    #:
-    #: WHY IT IS A NEW MEMBER AND NOT `CLOSE_OUT_TERMINAL` OR `WALL_CLOCK_POLL`, both of which
-    #: also carry no step clock: their `step_floor` answers say different things, and the
-    #: difference is the whole content of this axis. `CLOSE_OUT_TERMINAL` answers `None` —
-    #: "asking when this fires early is a category error" — which is FALSE here; this rule
-    #: fires at the earliest moment there is. `WALL_CLOCK_POLL` answers `0.0` for a daemon
-    #: thread that could fire at any wall-clock instant, which is the RIGHT number for the
-    #: wrong reason. This member answers `0.0` because the rule is evaluated BEFORE step 0 and
-    #: cannot be reached later at all: an uncalibrated config never gets a run to fire during.
-    #: Reusing either sibling would put a true number under a false mechanism, which is the
-    #: `Mechanism` lesson (a predicate that reads right for the wrong reason) on the sibling
-    #: axis.
+    #: A rule evaluated when the object it guards is CONSTRUCTED (`resolve_fused_graph_caps`,
+    #: called eagerly from the graph branch of `InferenceServer.__init__`). Its floor is 0.0
+    #: because it fires before step 0 and cannot be reached later — NOT `WALL_CLOCK_POLL`'s
+    #: "could fire at any instant" 0.0, and not `CLOSE_OUT_TERMINAL`'s `None`. No operands.
     CONSTRUCTION_TIME = "construction_time"
 
     @property
     def sample_clock(self) -> SampleClock:
-        """WHICH clock this member's evidence arrives in (R265 / ADJ-D38). DATA, like
-        `arity` — `audit_cadence` reads it off the member and never asks which row it holds.
-
-        This is what makes "no axis is auditable in a clock it doesn't tick in" a structural
-        property rather than an authoring convention: the member that knows the arithmetic
-        also names the clock, and the clock (not the row) owns the period key.
-        """
+        """WHICH clock this member's evidence arrives in. DATA, like `arity`."""
         return {
             Cadence.GATE_INTERVAL_CONSEC: SampleClock.GATE_BOUNDARY,
             Cadence.EVAL_ROUND_CONSEC: SampleClock.EVAL_ROUND,
@@ -611,14 +293,8 @@ class Cadence(StrEnum):
 
     @property
     def arity(self) -> int:
-        """How many `cadence_paths` this member CONSUMES. Enforced by `ArmedAbort` in both
-        directions, so a path the arithmetic never reads cannot sit on a row pretending to be
-        an input (LAW-07's phantom-input class, the rule `ceiling_path` already gets).
-
-        `GATE_INTERVAL_CONSEC` counts 2 and not 3 since R265: its interval moved off the row
-        and onto `SampleClock.GATE_BOUNDARY`, so a row can no longer declare the key its own
-        axis is sampled by — and the arity rule now REFUSES the row that tries.
-        """
+        """How many `cadence_paths` this member CONSUMES; `ArmedAbort` enforces it both ways,
+        so a path the arithmetic never reads cannot sit on a row pretending to be an input."""
         return {
             Cadence.GATE_INTERVAL_CONSEC: 2,
             Cadence.EVAL_ROUND_CONSEC: 5,
@@ -630,22 +306,12 @@ class Cadence(StrEnum):
         }[self]
 
     def step_floor(self) -> float | None:
-        """The earliest TRAINING STEP a NOT-STEP-CLOCKED member's rule imposes (R265).
+        """The earliest TRAINING STEP a NOT-STEP-CLOCKED member's rule imposes.
 
-        Defined only for the two `NO_STEP_CLOCK` members, and it RAISES on the others: a
-        step-clocked row that took an answer from here would be skipping its own clock, which
-        is the fallback this split exists to make unreachable. The two answers are the ones
-        R251 already derived — `0.0` for a wall-clock poll (a daemon thread on a `wait`
-        timeout; no train-step boundary gates it, so the floor is genuinely zero) and `None`
-        for a close-out rule (asking when a close-out rule fires "early" is a category error,
-        and `max_train_steps` would fail every such row forever for a non-defect).
-
-        F-816-10 adds a THIRD, and it takes the `0.0` answer on its own grounds rather than by
-        falling into the else-branch: a `CONSTRUCTION_TIME` rule is evaluated before training
-        step 0 exists, so `0.0` is not "could fire any time" (the wall-clock reading) but "has
-        already fired or will never get the chance". Same number, different statement, and the
-        member docstring is where the difference is recorded so a reader is not left to infer
-        it from a shared branch.
+        Defined only for the `NO_STEP_CLOCK` members and RAISES on the others. `0.0` for a
+        wall-clock poll (no train-step boundary gates it) and for a construction-time rule (it
+        has already fired or never will); `None` for a close-out rule, where asking when it
+        fires "early" is a category error and `max_train_steps` would fail it forever.
         """
         if self.sample_clock.is_step_clocked:
             raise SampleClockNotDerivableError(
@@ -659,21 +325,12 @@ class Cadence(StrEnum):
     def earliest_fire_samples(
         self, values: tuple[Any, ...], *, period_steps: float
     ) -> float | None:
-        """How many TICKS OF THIS ROW'S OWN SAMPLE CLOCK before it can first fire (R265).
+        """How many TICKS OF THIS ROW'S OWN SAMPLE CLOCK before it can first fire.
 
-        The unit is the axis's own: gate BOUNDARIES for the draw-rate gate, EVAL ROUNDS for
-        the sealbot-WR trajectory, TRAINING STEPS for the two per-step rules. `period_steps`
-        is how many training steps one of those ticks takes, and it arrives from
-        `SampleClock.period_steps` — never from an operand, so no row can denominate itself.
-
-        A real function of `values` in every member — a constant here would pass or fail every
-        row at once, the warning `is_armed` carries on the sibling axis.
-
-        An operand that is not a real, finite, non-`bool` number answers `math.inf`: an
-        unjudgeable rule must fail toward VISIBILITY, never toward silence, and reading a gate
-        that never runs as a gate that fires at tick 0 is the exact inversion. A degenerate
-        period (below one training step) answers `math.inf` for the same reason, which is the
-        answer R251 gave a sub-1 `gate_interval` before the split and gives it still.
+        `period_steps` arrives from `SampleClock.period_steps`, never from an operand, so no
+        row can denominate itself. An operand that is not a real, finite, non-`bool` number
+        answers `math.inf`, as does a degenerate period below one training step: an unjudgeable
+        rule must fail toward VISIBILITY, never toward silence.
         """
         if not self.sample_clock.is_step_clocked:
             raise SampleClockNotDerivableError(
@@ -713,16 +370,12 @@ class Cadence(StrEnum):
     def earliest_fire_step(
         self, values: tuple[Any, ...], *, period_steps: float | None
     ) -> float | None:
-        """The earliest TRAIN STEP at which this cadence can fire — the SAME three currencies
-        R251 published (a finite step, `math.inf` for "these operands can never fire", `None`
-        for "no step cadence governs this row at all"), now COMPOSED from the split above.
+        """The earliest TRAIN STEP at which this cadence can fire, in the three currencies
+        above, COMPOSED from `earliest_fire_samples` and `step_floor`.
 
-        For a step-clocked member it is `earliest_fire_samples * period_steps`, and
-        `period_steps` is REQUIRED: passing `None` there raises rather than assuming one
-        training step per tick, because that assumption IS the D38 defect. For a
-        `NO_STEP_CLOCK` member it is `step_floor()`, and `period_steps` must be `None` for the
-        mirror-image reason — a period on an axis with no step clock is an operand nobody can
-        have derived.
+        `period_steps` is REQUIRED for a step-clocked member — assuming one step per tick IS
+        the defect this split exists to close — and must be `None` for a `NO_STEP_CLOCK` one,
+        where a period is an operand nobody can have derived.
         """
         if not self.sample_clock.is_step_clocked:
             if period_steps is not None:
@@ -741,8 +394,8 @@ class Cadence(StrEnum):
             )
         samples = self.earliest_fire_samples(values, period_steps=period_steps)
         if samples is None or not math.isfinite(samples):
-            # `math.inf * 0.0` is `nan`, and a nan step would compare False against every
-            # bound and read as WITHIN — the unfireable row auditing green, one multiply late.
+            # `math.inf * 0.0` is `nan`, and a nan step compares False against every bound and
+            # reads as WITHIN — the unfireable row auditing green, one multiply late.
             return samples
         return samples * float(period_steps)
 
@@ -751,18 +404,10 @@ class Cadence(StrEnum):
 class ArmedAbort:
     """One row: an abort, the config surface that arms it, and its ownership posture.
 
-    `owner` and `source_pin` are REQUIRED on a DEFERRED row; `owner` is FORBIDDEN on a
-    REQUIRED one and `source_pin` is UNCONSTRAINED there. Each of the three rules
-    `__post_init__` enforces is a way for a row to go invisible: an owner-less deferred row
-    has nobody to chase, a pin-less one is not tamper-evident, and a required row carrying
-    an owner reads as already-excused.
-
-    N-1 (WPAX Phase D, R73): this sentence used to say `source_pin` was FORBIDDEN on a
-    REQUIRED row. That was FALSE — `__post_init__` never constrained it — and acting on it
-    would have dropped the draw-rate pin at Phase D's flip, leaving the newly-REQUIRED row
-    with no tamper-evidence exactly as it started gating a production mint, and silently
-    emptying the two pin-scan tests that stand on "no pinned row means this test has no
-    subject". A REQUIRED row MAY keep a pin, and this one does.
+    `owner` and `source_pin` are REQUIRED on a DEFERRED row; `owner` is FORBIDDEN on a REQUIRED
+    one and `source_pin` is UNCONSTRAINED there, so a REQUIRED row MAY keep its pin. Each rule
+    closes a way for a row to go invisible: an owner-less deferred row has nobody to chase, a
+    pin-less one is not tamper-evident, and a required row carrying an owner reads as excused.
     """
 
     name: str
@@ -773,33 +418,21 @@ class ArmedAbort:
     owner: str | None
     source_pin: tuple[str, str] | None
     note: str
-    #: WPMINT Phase K-B: the SECOND config path a `CONFIG_THRESHOLD_BELOW_CEILING` row needs
-    #: — where its upper bound is minted. It is the one field here that carries a default,
-    #: and the default is safe for the reason the other three rules are enforced rather than
-    #: documented: `__post_init__` REQUIRES it on the mechanism that consumes it and FORBIDS
-    #: it on the two that do not, in both directions, so `None` can neither arm a row nor
-    #: excuse one. A no-default field would instead have forced nine frozen-oracle
-    #: construction sites to type `ceiling_path=None`, which buys nothing the predicate below
-    #: does not already guarantee.
+    #: The SECOND config path a `CONFIG_THRESHOLD_BELOW_CEILING` row needs — where its upper
+    #: bound is minted. The default is safe because `__post_init__` REQUIRES it on the
+    #: mechanism that consumes it and FORBIDS it on the others, in both directions, so `None`
+    #: can neither arm a row nor excuse one.
     ceiling_path: str | None = None
-    #: R251 / ADJ-D22: WHEN this row's abort can first fire, and the paths its arithmetic
-    #: reads. Both carry defaults for exactly the reason `ceiling_path` does — a no-default
-    #: field would force every synthetic-row construction site in the suite to type
-    #: `cadence=None`, buying nothing — and the defaults are safe because they are not silent:
-    #: `audit_cadence` reports a REQUIRED row with NO cadence as OUT OF BOUND by name, so an
-    #: undeclared cadence gates rather than passes. `__post_init__` enforces the arity pairing
-    #: in both directions, so a path the arithmetic never reads cannot sit on a row.
+    #: WHEN this row's abort can first fire, and the paths its arithmetic reads. The defaults
+    #: are safe because they are not silent: `audit_cadence` reports a REQUIRED row with NO
+    #: cadence as OUT OF BOUND by name, and `__post_init__` enforces the arity pairing both
+    #: ways, so a path the arithmetic never reads cannot sit on a row.
     cadence: Cadence | None = None
     cadence_paths: tuple[str, ...] = ()
-    #: AUDIT-1 F-11 / R334(b): the NAME of the liveness probe a
-    #: `CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER` row is judged by. A name, never a
-    #: callable, for the reason the mechanism's own comment gives: this module holds
-    #: import-time data and makes no filesystem call, so the caller that OWNS the running
-    #: subsystem supplies the answer and the row only says which one it needs. It carries a
-    #: default for the reason `ceiling_path` does — a no-default field would force every
-    #: synthetic-row construction site in the suite to type `producer_probe=None`, buying
-    #: nothing — and the default is safe because `__post_init__` REQUIRES it on the mechanism
-    #: that consumes it and FORBIDS it on the four that do not, in both directions.
+    #: The NAME of the liveness probe a `CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER` row is
+    #: judged by — a name, never a callable, because this module holds import-time data and
+    #: makes no filesystem call, so the caller that OWNS the subsystem supplies the answer.
+    #: `__post_init__` requires it on the one mechanism that reads it and forbids it elsewhere.
     producer_probe: str | None = None
 
     def __post_init__(self) -> None:
@@ -870,7 +503,7 @@ class AuditResult:
     disarmed: tuple[ArmedAbort, ...]
 
 
-#: The rows. R61 fixes the set, ADJ-08's census supplies the values, R65 fixes the statuses.
+#: The rows — the ONE authority for which aborts a production config must arm.
 MANIFEST: tuple[ArmedAbort, ...] = (
     ArmedAbort(
         name="actor_lag",
@@ -893,10 +526,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="train.draw_rate_abort.threshold",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
         cadence=Cadence.GATE_INTERVAL_CONSEC,
-        # R265 / ADJ-D38: `monitor.gate_interval` is NO LONGER an operand here. It is the
-        # PERIOD of this row's sample clock, read off `SampleClock.GATE_BOUNDARY` — the same
-        # key, the same value, one authority for every row on the axis, and no row able to
-        # name a cadence key its own axis is not sampled by.
+        # `monitor.gate_interval` is NOT an operand here: it is the PERIOD of this row's
+        # sample clock, read off `SampleClock.GATE_BOUNDARY`, so one authority serves the axis.
         cadence_paths=("train.draw_rate_abort.consec", "train.draw_rate_abort.min_step"),
         status=Status.REQUIRED,
         exit_code=DRAW_RATE_COLLAPSE_EXIT_CODE,
@@ -1074,9 +705,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         config_path="train.hard_gn_threshold",
         ceiling_path="monitor.alert_grad_norm_max",
         mechanism=Mechanism.CONFIG_THRESHOLD_BELOW_CEILING,
-        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays
-        # the ONE-FIELD data edit §8.5 claims it is. It has a live consumer meanwhile:
-        # `preflight_mint.py::_print_deferred_rows` prints it on every gate run.
+        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays a
+        # one-field data edit; `preflight_mint.py::_print_deferred_rows` prints it meanwhile.
         cadence=Cadence.CONSEC_TRAIN_STEPS,
         cadence_paths=("train.hard_gn_min_steps",),
         status=Status.DEFERRED,
@@ -1123,11 +753,9 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name="sealbot_wr_abort",
         config_path="monitor.wr_hard_abort_enabled",
         mechanism=Mechanism.CONFIG_BOOL,
-        # Declared for the reason the grad-norm row above declares one, and for a second
-        # reason that is this row's whole point: the WR axis had NO row at all, so gate 12's
-        # cadence audit could not compute even a FALSE affirmative for it (ADJ-D38). Its live
-        # consumer meanwhile is `preflight_mint.py::_print_deferred_rows`, which prints the
-        # cadence AND the clock it ticks in on every gate run.
+        # Declared on a DEFERRED row so the flip to REQUIRED stays a one-field data edit. With
+        # no row at all the cadence audit could not compute even a FALSE answer for this axis;
+        # `preflight_mint.py::_print_deferred_rows` prints the cadence and its clock meanwhile.
         cadence=Cadence.EVAL_ROUND_CONSEC,
         cadence_paths=("monitor.wr_collapse_consecutive_evals",
                        "monitor.wr_early_death_min_step",
@@ -1203,10 +831,8 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name="fused_graph_caps_calibrated",
         config_path="inference.fused_graph_caps.max_fused_edges",
         mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
-        # Declared even though a DEFERRED row is not audited, so the flip to REQUIRED stays
-        # the ONE-FIELD data edit §8.5 claims it is — and it has a live consumer meanwhile:
-        # `preflight_mint.py::_print_deferred_rows` prints it on every gate run. The rule runs
-        # at CONSTRUCTION (the resolver is called eagerly from the graph branch of
+        # Declared on a DEFERRED row so the flip to REQUIRED stays a one-field data edit. The
+        # rule runs at CONSTRUCTION (the resolver is called eagerly from
         # `InferenceServer.__init__`), so it consumes no operands: there is no threshold to
         # accumulate and no window to fill, only a value that is present or is `null`.
         cadence=Cadence.CONSTRUCTION_TIME,
@@ -1271,18 +897,14 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         name="allocator_posture_minted",
         config_path="allocator_posture",
         mechanism=Mechanism.CONFIG_ENUM_VALUED,
-        # The rule runs at CONSTRUCTION -- the assertion fires in the run process's builder
-        # and in the eval child's first statement -- so it consumes no operands: there is no
-        # threshold to accumulate and no window to fill, only a value that is minted or is
-        # `null`. Declared on a DEFERRED row for `fused_graph_caps_calibrated`'s reason: the
-        # flip to REQUIRED must stay the one-field data edit S8.5 claims it is.
+        # The rule runs at CONSTRUCTION — in the run process's builder and in the eval child's
+        # first statement — so it consumes no operands: a value is minted or it is `null`.
         cadence=Cadence.CONSTRUCTION_TIME,
         cadence_paths=(),
         status=Status.REQUIRED,
         exit_code=None,
-        # F-RESIT-5: `owner` is NOT dropped on the flip, it is set to None. The dataclass takes
-        # it positionally, so removing the keyword is a TypeError at import — which is how this
-        # sitting rediscovered it, exactly where Δ8 said it would.
+        # `owner` is NOT dropped on the flip, it is set to None: the dataclass takes it
+        # positionally, so removing the keyword is a TypeError at import.
         owner=None,
         source_pin=(
             "src/mantis/config/resolve/allocator_posture.py",
@@ -1324,58 +946,20 @@ MANIFEST: tuple[ArmedAbort, ...] = (
     ),
 )
 
-#: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them
-#: is the tool's (SF-4).
-#:
-#: ADJ-13 N-1: membership here is not decoration and is not free to move — the run the
-#: operator is about to mint is audited BY NAME, and exempting it is a red gate rather than a
-#: bookkeeping edit. R346(f) pruned `configs/` to run6 plus ONE smoke, so `configs/run5.yaml`
-#: (a finished run) and `configs/shakedown_20260807.yaml` (its rehearsal) left the tree with
-#: their rows; the partition below is what keeps their absence from reading as an exemption.
+#: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them is
+#: the tool's job. Membership is audited BY NAME, so exempting the run an operator is about to
+#: mint is a red gate rather than a bookkeeping edit.
 PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml",)
 
-#: The OTHER half of the same authority (MF-7). R59's "deliberate disarming remains legal for
-#: smoke configs" used to be expressed by ABSENCE from `PRODUCTION_CONFIGS` — which made
-#: "deliberately exempt" and "nobody remembered to list it" the SAME observable, and a
-#: disarmed `configs/run6.yaml` dropped into the tree audited GREEN (measured: rc 0).
+#: The OTHER half of the same authority: the two tuples must PARTITION the config set EXACTLY,
+#: and the tool hard-fails (rc 31) on either kind of drift — a config on disk named by neither
+#: tuple, or a tuple naming a config that is not on disk. Exemption by ABSENCE made
+#: "deliberately exempt" and "nobody listed it" the same observable.
 #:
-#: So the exemption is now WRITTEN, and the two tuples must PARTITION the config set EXACTLY.
-#: The tool hard-fails (rc 31) on either kind of drift: a config present on disk and
-#: named by neither tuple, and a tuple naming a config that is not on disk. That is gate 11's
-#: `KNOWN_DEBT` shape (`silent_encoding_gate.py:126,338-344`) applied to the config set —
-#: registered debt whose staleness is itself a failure.
-#:
-#: **What "the config set" means, and why the earlier wording was FALSE** (ADJ-13 F-1). This
-#: comment used to say `configs/*.yaml`, and the tool implemented exactly that — a flat
-#: `*.yaml` glob — while gate 7 validated `**/*.yaml` + `**/*.yml`. So `configs/run6.yml` and
-#: `configs/prod/run6.yaml` passed gate 7 and were never audited by gate 12: the claim below
-#: was measured FALSE for two of the three ways to add a config, because MF-7's fix had been
-#: fitted to the reviewer's `run6.yaml` rather than to the class. Discovery is now
-#: `mantis.config.loader.discover_configs` — ONE authority, consumed by both gates (R71) —
-#: and the declaration accepts subdirectory-relative paths, which it previously reported STALE
-#: while the file sat on disk.
-#:
-#: **That was still not enough, and the recheck measured why** (R-2). Widening discovery by one
-#: more extension leaves the boundary one extension further out: `configs/run6.txt` and
-#: `configs/run6.YAML` were schema-valid, DISARMED on the required row, mintable, launchable —
-#: and rc 0 from both gates. The asymmetry was never between two globs; it was that DISCOVERY
-#: answered "is this a config" by extension while the LOADER answered it by CONTENT, so the
-#: complement of every enumeration stayed launchable and invisible.
-#:
-#: **R75 rules which side closes it.** Not the loader — narrowing its accept-set was DECLINED,
-#: and a run may be launched from a path of any shape. The protection is the **shared-authority
-#: invariant**: whatever the loader accepts, the audit must see. `discover_configs` is therefore
-#: name-agnostic — every path under `configs/` except a real directory, which `read_text`
-#: refuses by type. With that, and only with that:
-#:
-#: Adding ANY file to `configs/` — at any name, at any depth — now FORCES a one-line declaration
-#: here or in `PRODUCTION_CONFIGS`; it can no longer be forgotten into exemption, and there is
-#: no longer a class of file the gates are silent about. The cost is deliberate: `configs/` may
-#: hold only complete configs, so a stray note or an editor backup is a red gate rather than a
-#: quiet resident of the audit root. The one limit still standing, stated rather than implied:
-#: this binds `configs/`, and a loadable config OUTSIDE that directory is reachable by
-#: `python -m mantis.run` without being discovered (CARD-CONFIG-DISCOVERY-ROOT) — `--config`
-#: does audit it, shape-agnostically, which is what covers the mint path.
+#: Discovery is `mantis.config.loader.discover_configs`, shared by gates 7 and 12 and
+#: NAME-AGNOSTIC, so adding ANY file under `configs/` forces a declaration here or in
+#: `PRODUCTION_CONFIGS`; the deliberate cost is that `configs/` may hold only complete configs.
+#: A loadable config OUTSIDE `configs/` is still reachable without being discovered.
 #:
 #: `(repo-relative path, why it is exempt)`. The reason is data, printed by the tool on the
 #: failure path, so an exemption cannot be a bare path nobody can justify later.
@@ -1404,42 +988,25 @@ EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
 
 
 class ArmingSurfaceMissingError(AttributeError):
-    """A row's `config_path` does not resolve on a real `RunConfig` (RED-TEAM_P F-4).
+    """A row's `config_path` does not resolve on a real `RunConfig`.
 
-    Subclasses `AttributeError` deliberately: `_dotted`'s failure has always been one, so
-    every existing caller keeps its behaviour and nothing that catches `AttributeError`
-    today starts leaking this one. What changes is that the failure is NAMED and carries
-    the three things an operator needs — WHICH ROW is broken, WHAT PATH it declared, and
-    WHICH SEGMENT of that path does not exist. Pydantic's `BaseModel.__getattr__` supplies
-    only the last, and `preflight_mint.main`'s handler chain then lost even that, collapsing
-    the whole class into rc 1 `PreflightInternalError` — the one outcome that tool's own
-    docstring says cannot exist. The tool maps this to `PreflightManifestError`, rc 31.
-
-    Written to the CLASS, not to one row (R71): the same route swallows a typo in ANY row's
-    `config_path`.
+    Subclasses `AttributeError` deliberately, so every existing caller keeps its behaviour;
+    what changes is that the failure is NAMED and carries WHICH ROW is broken, WHAT PATH it
+    declared and WHICH SEGMENT does not exist. The tool maps it to `PreflightManifestError`,
+    rc 31. Written to the CLASS, not to one row.
     """
 
 
 def _dotted(obj: Any, path: str, *, row: str = "<unnamed row>") -> Any:
     """Walk a dotted path into a validated config object.
 
-    Two arms beyond the plain walk, and each is load-bearing:
+    A MISSING attribute raises `ArmingSurfaceMissingError` naming the row, the full path and
+    the failing segment — caught per segment, because only that can say WHICH segment failed.
+    A `None` met MID-WALK is an EXPLICITLY DISARMED block and short-circuits to `None`, so a
+    legitimately disarmed config reports DISARMED instead of failing the gate at rc 31.
 
-    * a MISSING attribute raises `ArmingSurfaceMissingError` naming the row, the full path
-      and the failing segment. `try/except AttributeError` PER SEGMENT rather than a
-      `hasattr` pre-check, because only the former can say which segment failed and because
-      the AttributeError comes from pydantic's `BaseModel.__getattr__`, not a plain lookup;
-    * a `None` met MID-WALK is an EXPLICITLY DISARMED block and short-circuits to `None`.
-      Without it a legitimately disarmed config — `train.draw_rate_abort: null`, the posture
-      R59 permits for smoke configs and four of the five committed configs carry — would
-      raise `'NoneType' object has no attribute 'threshold'` and fail gate 12 at rc 31
-      instead of being reported DISARMED.
-
-    DISCLOSED RESIDUAL: a typo AFTER a legitimately-`None` segment reports "disarmed"
-    rather than raising, because the walk short-circuits before reaching it. It is caught
-    where it gates — `PRODUCTION_CONFIGS` is run5 and run5 is ARMED, so the walk reaches the
-    leaf and the typo raises. Both arms are pinned by
-    `tests/tools/test_drawrate_arming_surface_named_failure.py`.
+    DISCLOSED RESIDUAL: a typo AFTER a legitimately-`None` segment reports "disarmed" rather
+    than raising, because the walk short-circuits before reaching it.
     """
     for part in path.split("."):
         if obj is None:
@@ -1460,9 +1027,8 @@ def _dotted(obj: Any, path: str, *, row: str = "<unnamed row>") -> Any:
 def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> AuditResult:
     """Assertion (c): every REQUIRED row must be armed in `config`.
 
-    Never branches on a row's `name` and never special-cases draw-rate: `status` selects
-    the list, `mechanism` selects the predicate, and both are data. `manifest` is a keyword
-    so O-7 can drive an in-memory copy with the deferred row flipped (§8.5).
+    Never branches on a row's `name`: `status` selects the list, `mechanism` the predicate.
+    `manifest` is a keyword so a test can drive an in-memory copy with a row flipped.
     """
     required = tuple(row for row in manifest if row.status is Status.REQUIRED)
     deferred = tuple(row for row in manifest if row.status is Status.DEFERRED)
@@ -1470,10 +1036,8 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
         row for row in required
         if not row.mechanism.is_armed(
             _dotted(config, row.config_path, row=row.name),
-            # WPMINT Phase K-B: resolved through the SAME walker as the value, so a typo in a
-            # `ceiling_path` raises `ArmingSurfaceMissingError` naming the row exactly as a
-            # typo in a `config_path` does. Still no branch on a row's identity — `mechanism`
-            # selects the predicate and the row supplies both operands.
+            # Resolved through the SAME walker as the value, so a typo in a `ceiling_path`
+            # raises `ArmingSurfaceMissingError` naming the row as a `config_path` typo does.
             ceiling=(None if row.ceiling_path is None
                      else _dotted(config, row.ceiling_path, row=row.name)),
         )
@@ -1482,13 +1046,11 @@ def audit_arming(config: Any, *, manifest: tuple[ArmedAbort, ...] = MANIFEST) ->
 
 
 class ProducerProbeMissingError(KeyError):
-    """A row names a `producer_probe` the caller did not supply (AUDIT-1 F-11 / R334(b)).
+    """A row names a `producer_probe` the caller did not supply.
 
-    A NAMED refusal rather than a default, in either direction. Defaulting the answer to True
-    would arm a row whose producer nobody looked at — the phantom gate input this mechanism
-    exists to close, wearing the audit's own clothes. Defaulting it to False would report a
-    healthy run's abort DISARMED because a CALLER forgot a key, which teaches operators to
-    ignore the finding. So an unanswerable row raises and names itself.
+    A NAMED refusal rather than a default in either direction: True would arm a row whose
+    producer nobody looked at, False would report a healthy run's abort DISARMED because a
+    caller forgot a key. So an unanswerable row raises and names itself.
     """
 
     def __init__(self, row: str, probe: str, supplied: tuple[str, ...]) -> None:
@@ -1506,19 +1068,12 @@ def audit_arming_live(
     probes: Mapping[str, Callable[[], bool]],
     manifest: tuple[ArmedAbort, ...] = MANIFEST,
 ) -> AuditResult:
-    """Assertion (c) again, with the LIVE producers a running process can supply (R334(b)).
+    """Assertion (c) again, with the LIVE producers a running process can supply.
 
     The same predicate machinery as `audit_arming` and the same absence of any branch on a
-    row's name — `status` picks the list, `mechanism` picks the predicate, and the row now
-    supplies a third operand. What changes is only WHO answers: a row whose mechanism reads a
-    probe gets that probe's live answer instead of `None`.
-
-    WHY A SECOND ENTRY POINT RATHER THAN A KEYWORD ON THE FIRST. `audit_arming` is what CI
-    gate 12 runs, and its contract is that it is PURE OVER CONFIG — no process, no GPU, no
-    filesystem. A probes keyword defaulting to empty would keep that true in practice while
-    making it a property of the call site rather than of the function, and the first caller
-    to pass `probes=` from a place with no live subsystem would be auditing liveness against
-    fakes. Two functions, two contracts, one predicate.
+    row's name; only WHO answers changes. A SECOND entry point rather than a keyword on the
+    first, because `audit_arming` is what CI gate 12 runs and its contract is that it is PURE
+    OVER CONFIG — a defaulted `probes=` would make that a property of the call site.
 
     Args:
         config: a validated `RunConfig` (or anything `_dotted` can walk).
@@ -1559,20 +1114,12 @@ def audit_arming_live(
 class CadenceVerdict:
     """One armed row judged on the cadence axis. `within` is the only field that gates.
 
-    `earliest_step` carries the three currencies `Cadence.earliest_fire_step` answers in —
-    a step, `math.inf` for "these operands can never fire", and `None` for "no step cadence
-    governs this row" — because collapsing them here would destroy exactly the distinction
-    the operator needs to tell a DEFECT from a rule that is not step-cadenced at all.
-
-    R265 / ADJ-D38 adds the row's OWN CLOCK beside the step answer, and publishes both rather
-    than replacing one with the other. `earliest_samples` / `bound_samples` are the pair the
-    verdict is actually DECIDED on — a count of the axis's own ticks against the bound
-    converted into the same ticks — while `earliest_step` / `bound` stay the currency an
-    operator reads a run in. `period_steps` is what ties them, derived from `clock`'s live
-    key; it is `None` exactly when `clock` is `NO_STEP_CLOCK`, where a period would be a
-    number nobody could have derived and `earliest_step` carries the rule's step FLOOR
-    instead. Publishing both is the anti-vacuity posture the whole cadence block already
-    takes: a reader can see WHICH clock a row was judged in, not just that it passed.
+    `earliest_step` carries the three currencies `Cadence.earliest_fire_step` answers in — a
+    step, `math.inf` for "these operands can never fire", `None` for "no step cadence governs
+    this row" — because collapsing them destroys the distinction between a DEFECT and a rule
+    that is not step-cadenced at all. `earliest_samples`/`bound_samples` are the pair the
+    verdict is DECIDED on, in the axis's own ticks; `period_steps` ties them to the step
+    currency and is `None` exactly when `clock` is `NO_STEP_CLOCK`.
     """
 
     row: ArmedAbort
@@ -1592,47 +1139,23 @@ def audit_cadence(
     manifest: tuple[ArmedAbort, ...] = MANIFEST,
     fraction: float = EARLIEST_FIRE_FRACTION,
 ) -> tuple[CadenceVerdict, ...]:
-    """R251: can every ARMED required row still FIRE inside this config's own run?
+    """Can every ARMED required row still FIRE inside this config's own run?
 
-    The second half of assertion (c). `audit_arming` asks whether the arming surface is set;
-    this asks whether the machinery that reads it ever runs, which ADJ-D22 measured are
-    different questions: `monitor.gate_interval: 1000000000` leaves a threshold armed in the
-    config and unread in the run, and every check that existed before this one read it green.
+    The second half of assertion (c): `audit_arming` asks whether the arming surface is set,
+    this asks whether the machinery that reads it ever runs. Scope is REQUIRED and ARMED rows
+    only — a disarmed row is already a failure from `audit_arming` — and a row whose cadence
+    answers `None` is REPORTED, never failed. A REQUIRED row that declares NO cadence is OUT OF
+    BOUND by name: an unjudgeable armed row must fail toward visibility.
 
-    SCOPE, deliberately narrow in three directions:
-
-    * REQUIRED rows only — a DEFERRED row is printed loudly and audited by nothing (R56);
-    * ARMED rows only — a disarmed row is already rc 30 from `audit_arming`, and reporting it
-      again under a second name sends the operator chasing a cadence question about an abort
-      that is simply off;
-    * a row whose cadence answers `None` is REPORTED and never failed. Its rule has no in-run
-      step cadence (close-out), so a fraction of the run is a category error for it, and
-      forging a number would be the class R84 refused.
-
-    A REQUIRED row that declares NO cadence is OUT OF BOUND by name. That is the same rule
-    `Mechanism.is_armed` applies to a missing ceiling: an unjudgeable armed row must fail
-    toward visibility, or "nobody declared it" and "it is fine" become one observable.
-
-    R265 / ADJ-D38 — EACH ROW IS JUDGED IN ITS OWN SAMPLE CLOCK. The row's cadence names the
-    clock, the clock derives its period from a live key, and the comparison happens in ticks
-    of that clock: `earliest_fire_samples <= bound / period`. For a fixed period that is the
-    same verdict the step-clock comparison gave (multiply both sides), which is why no
-    committed config changes colour; what changes is that an axis sampled on a DIFFERENT key
-    can now be judged at all, instead of being judged against a key it never reads or — the
-    state ADJ-D38 measured on the WR axis — not being judged at all. A clock whose period
-    cannot be derived RAISES `SampleClockNotDerivableError`; there is no step-clock fallback
-    anywhere on this path.
-
-    `manifest` and `fraction` are keywords for the same reason `audit_arming`'s `manifest`
-    is: the trigger has to be drivable in both directions, and `fraction` is what the audit's
-    own mutation pin neuters to prove the comparison is live rather than decorative.
+    Each row is judged in its OWN sample clock: `earliest_fire_samples <= bound / period`, the
+    period derived from a live key. A clock whose period cannot be derived RAISES
+    `SampleClockNotDerivableError`; there is no step-clock fallback anywhere on this path.
     """
     armed = audit_arming(config, manifest=manifest)
     disarmed = {row.name for row in armed.disarmed}
     total = _dotted(config, RUN_LENGTH_PATH, row="<cadence bound>")
     # An unreadable run length yields a bound of `-inf`, so every judged row reports OUT of
-    # bound: the audit must never quietly widen its own bound to "anything goes" because the
-    # key it takes the bound from went missing.
+    # bound: the audit must never widen its own bound because the key it reads went missing.
     bound = float(fraction) * float(total) if _is_real_number(total) else -math.inf
     verdicts: list[CadenceVerdict] = []
     for row in armed.required:
@@ -1655,9 +1178,8 @@ def audit_cadence(
             period = clock.period_steps(config, row=row.name)
             samples = row.cadence.earliest_fire_samples(values, period_steps=period)
             earliest = row.cadence.earliest_fire_step(values, period_steps=period)
-            # A degenerate period cannot divide the bound, and it must not be read as a
-            # generous one: `-inf` ticks refuses every row whose clock does not advance. Its
-            # `earliest_fire_samples` is already `inf`, so the two agree by construction.
+            # A degenerate period cannot divide the bound and must not read as a generous one:
+            # `-inf` ticks refuses every row whose clock does not advance.
             bound_samples = bound / period if period >= 1.0 else -math.inf
             within = samples is None or samples <= bound_samples
             tick = f"{clock.period_path}={period}"
@@ -1689,30 +1211,13 @@ def exit_code_for_abort(
 ) -> int | None:
     """The process exit code a FIRED abort rule maps to, or `None` if none is authored.
 
-    The other half of CARD-ABORT-EXIT (R84). `StepCoordinator._fire_hard_abort` records the
-    rule NAME on `ShutdownState.abort_rule`; this resolves that name to the number a
-    supervisor reads off the process, at the boundary where the manifest already lives.
+    Looks the row up and returns whatever `exit_code` it carries — never a branch on a rule's
+    identity — so the manifest stays the ONE authority and no second literal can disagree.
 
-    It NEVER branches on a rule's identity — it looks the row up and returns whatever
-    `exit_code` that row carries, exactly as `Mechanism.is_armed` selects a predicate from
-    data rather than from a name. So the manifest stays the ONE authority: flipping a row's
-    `exit_code` moves this function's answer with no code change here, and no second literal
-    exists to disagree with the row.
-
-    `None` has two distinct and equally truthful sources, and neither is an error:
-
-    * a rule with NO manifest row at all — R84 refused to invent a code for an abort nobody
-      registered, and inventing one HERE would be that same class one layer down. CORRECTED
-      at R265: this bullet used to name `grad_norm_hard_abort` and `sealbot_wr_abort` as its
-      examples, and BOTH have since gained rows (K-B and ADJ-D38 respectively). They answer
-      `None` through the SECOND source below now, not this one; the class stands and its
-      examples were transcribed, which is why they went stale;
-    * a row that is registered but carries `exit_code=None` — the posture the draw-rate row
-      itself held until Phase X, and the posture both DEFERRED rows hold today.
-
-    A caller must therefore treat `None` as "this abort has no authored exit code", never as
-    "no abort fired" — `ShutdownState.abort_rule is None` is the only thing that means the
-    latter.
+    `None` has two distinct and equally truthful sources, neither an error: a rule with NO
+    manifest row at all, and a registered row carrying `exit_code=None`. A caller must read
+    `None` as "this abort has no authored exit code", never as "no abort fired" —
+    `ShutdownState.abort_rule is None` is the only thing that means the latter.
     """
     for row in manifest:
         if row.name == rule:

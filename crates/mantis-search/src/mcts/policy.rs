@@ -1,17 +1,14 @@
-// Exceeds the 300-line soft cap: the dense + legal-set policy extractors, root
-// Dirichlet, and their in-src tests port as one unit (share completed_q + setup).
-//! Policy extraction for MCTSTree — temperature-applied policy,
-//! Gumbel completed-Q improved policy, root children info,
-//! Dirichlet noise application at root, top-visits selection.
+// >300 justify (R8): the dense and legal-set extractors, root Dirichlet and their in-src
+// tests are one unit, sharing `completed_q` and one setup helper.
+//! Policy extraction for MCTSTree: temperature policy, Gumbel completed-Q improved policy,
+//! root children info, root Dirichlet noise, top-visits selection.
 
 use super::{completed_q, MCTSTree};
 use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashMap;
 
 impl MCTSTree {
-    /// `n_actions` is the policy stride supplied by the caller (=
-    /// `spec.policy_stride()`). 19-window with a pass slot = bs²+1; a no-pass
-    /// encoding = bs². The caller passes the correct stride for its encoding.
+    /// Temperature-applied visit policy over `n_actions`, the caller's own encoding stride.
     pub fn get_policy(&self, temperature: f32, n_actions: usize) -> Vec<f32> {
         let mut policy = vec![0.0f32; n_actions];
 
@@ -56,21 +53,9 @@ impl MCTSTree {
         policy
     }
 
-    /// Compute improved policy targets using Gumbel completed Q-values
-    /// (Danihelka et al., Gumbel AlphaZero, ICLR 2022 §4, Appendix D Eq. 33).
-    ///
-    /// `n_actions` is the policy stride supplied by the caller (=
-    /// `spec.policy_stride()`); see `get_policy` for the rationale.
-    ///
-    /// `child_data` already carries (action, visits, prior, q_val) and the
-    /// softmax is sparse (only entries in `child_data` are non-zero before exp).
-    /// The max-logit / sum-exp passes iterate `child_data` directly instead of
-    /// scanning a full n_actions-wide sentinel vector, and the final exp/scatter
-    /// writes straight into `policy[action]`.
-    ///
-    /// Returns an `n_actions`-dim probability distribution that incorporates
-    /// MCTS Q-values into the prior, giving useful policy signal even at
-    /// low simulation counts.
+    /// Improved policy targets from Gumbel completed Q-values (Danihelka et al., ICLR 2022
+    /// §4, Appendix D Eq. 33). The softmax is sparse: only `child_data` entries are non-zero
+    /// before exp, so its passes iterate that rather than a full-width vector.
     pub fn get_improved_policy(&self, n_actions: usize, c_visit: f32, c_scale: f32) -> Vec<f32> {
         let mut policy = vec![0.0f32; n_actions];
 
@@ -82,19 +67,16 @@ impl MCTSTree {
         let first = root.first_child as usize;
         let n_ch = root.n_children as usize;
 
-        // Children store w_value in their own player-to-move perspective (backup.rs negamax).
-        // When root.moves_remaining==1 the children belong to the opponent, so negate their Q
-        // to bring them into root's perspective before computing completed-Q targets.
+        // Children store w_value in their own player-to-move perspective, so at
+        // `moves_remaining == 1` their Q is negated into the root's.
         let q_sign: f32 = if self.pool[0].moves_remaining == 1 {
             -1.0
         } else {
             1.0
         };
 
-        // The completed-Q math lives in `super::completed_q`. The ONE dense↔ragged
-        // divergence (off-window handling + output container) stays here in the
-        // scatter: the dense form drops `action >= n_actions` and scatters into a
-        // `Vec<f32>`. `actions[i]` is the flat index for `children[i]`.
+        // The ONE dense-vs-ragged divergence lives in this scatter: the dense form drops
+        // `action >= n_actions` and writes into a `Vec<f32>`.
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut actions: Vec<usize> = Vec::with_capacity(n_ch);
 
@@ -121,10 +103,8 @@ impl MCTSTree {
             actions.push(action);
         }
 
-        // NO zero-visit special case, and none is needed: every completed value is then
-        // `v_mix`, the rescale maps a constant vector to zeros, and
-        // `softmax(log_prior + 0)` is the normalized prior — the same answer a prior
-        // fallback would give, reached by the completion's own arithmetic.
+        // No zero-visit branch is needed: every completed value is then `v_mix`, so the
+        // rescale zeroes and `softmax(log_prior)` IS the normalized prior.
         let masses = completed_q::mctx_improved_policy_masses(
             &children,
             self.root_raw_value(),
@@ -135,21 +115,17 @@ impl MCTSTree {
             policy[*action] = mass;
         }
 
-        // Note: policy pruning is applied only in the Python training loop
-        // to avoid double-pruning.
+        // Policy pruning lives only in the Python training loop, to avoid double-pruning.
 
         policy
     }
 
-    /// Legal-set counterpart of `get_policy`. Keys each root child by board
-    /// coord into a ragged `LegalSetPolicy` (in-window → `dense`, off-window →
-    /// `overflow`). NO-DROP law (authority records.rs:468-479; R34/R153/R156,
-    /// WP12-R Phase T): EVERY root child is routed — in- AND off-window,
-    /// covered or not — so `Σdense + Σoverflow == 1` by construction whenever
-    /// any child was visited. A zero-visit root returns the prior-fallback
-    /// distribution over the FULL child set — the improved exporters' exact
-    /// semantics (`prior_fallback_masses`), so the ls seam has ONE fallback
-    /// authority. The export never reads cluster-coverage geometry.
+    /// Legal-set counterpart of `get_policy`, keyed by board coord into a ragged
+    /// `LegalSetPolicy` (in-window to `dense`, off-window to `overflow`).
+    ///
+    /// NO-DROP: every root child is routed, so `Σdense + Σoverflow == 1` whenever any child was
+    /// visited. A zero-visit root returns the improved exporters' own prior fallback over the
+    /// FULL child set, so there is ONE fallback authority; coverage geometry is never read.
     pub fn get_policy_ls(&self, temperature: f32, n_actions: usize) -> LegalSetPolicy {
         let mut dense = vec![0.0f32; n_actions];
         let mut overflow: FxHashMap<(i32, i32), f32> = FxHashMap::default();
@@ -195,10 +171,8 @@ impl MCTSTree {
             return LegalSetPolicy { dense, overflow };
         }
 
-        // total == 0 (zero-visit root, sims = 1 / inference-failure regime):
-        // the prior-fallback distribution over the FULL child set — byte-equal
-        // to the improved exporters' `sum_n == 0` arm (ONE fallback semantics;
-        // DESIGN_T §3.1 closes the silent all-zero arm).
+        // Zero-visit root: the prior fallback over the FULL child set, byte-equal to the
+        // improved exporters' own arm, rather than a silent all-zero export.
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
         for j in 0..n_ch {
@@ -227,13 +201,10 @@ impl MCTSTree {
         LegalSetPolicy { dense, overflow }
     }
 
-    /// Legal-set counterpart of `get_improved_policy`. The completed-Q softmax
-    /// math is FROZEN; the differences are (1) EVERY off-window child is
-    /// retained (keyed into `overflow`) — the NO-DROP law (records.rs:468-479
-    /// authority; the pre-Phase-T uncovered drop subset-renormalized the
-    /// remaining masses, the authority's second forbidden mode) — and (2) the
-    /// output is the ragged `LegalSetPolicy`. The child SET the frozen math
-    /// runs over is the full root-child set; the formulas are untouched.
+    /// Legal-set counterpart of `get_improved_policy`, over the full root-child set.
+    ///
+    /// The completed-Q math is FROZEN; only the output container and NO-DROP differ — every
+    /// off-window child is retained, since dropping them subset-renormalized the remainder.
     pub fn get_improved_policy_ls(
         &self,
         n_actions: usize,
@@ -255,10 +226,8 @@ impl MCTSTree {
             1.0
         };
 
-        // The completed-Q math is shared with the dense exporter via
-        // `super::completed_q`. The ONE divergence stays here: the ragged scatter (every
-        // child kept; no coverage read). `coords[i] = (q, r, flat)` for `children[i]`;
-        // flat >= n_actions ⇒ off-window (→ overflow).
+        // The ONE divergence from the dense exporter is this ragged scatter: every child
+        // kept, no coverage read, `flat >= n_actions` meaning off-window.
         let mut children: Vec<completed_q::CqChild> = Vec::with_capacity(n_ch);
         let mut coords: Vec<(i32, i32, usize)> = Vec::with_capacity(n_ch);
 
@@ -300,22 +269,16 @@ impl MCTSTree {
         LegalSetPolicy { dense, overflow }
     }
 
-    /// Mctx's completed Q-values for the root's children, in child order.
-    ///
-    /// The transform `mctx_completed_qvalues` applies is pinned against Mctx's own
-    /// output; this wrapper is the tree-side extraction that feeds it — the same
-    /// child scan `get_improved_policy_ls` runs, including the negamax perspective
-    /// flip, so the root selector and the exported target complete their Q-values
-    /// from ONE definition rather than two.
-    ///
-    /// Empty when the root is unexpanded.
+    /// Mctx's completed Q-values for the root's children, in child order; empty when the root
+    /// is unexpanded. The same child scan `get_improved_policy_ls` runs, negamax flip included,
+    /// so the selector and the exported target complete from ONE definition.
     #[must_use]
     pub fn root_completed_qvalues(&self, c_visit: f32, c_scale: f32) -> Vec<f32> {
         self.node_completed_qvalues(0, c_visit, c_scale)
     }
 
-    /// `root_completed_qvalues` for ANY node. Mctx completes Q-values at every node it
-    /// selects from, root and interior alike, off that node's own raw value.
+    /// `root_completed_qvalues` for ANY node — Mctx completes at every node it selects from,
+    /// off that node's own raw value.
     #[must_use]
     pub fn node_completed_qvalues(&self, node_idx: u32, c_visit: f32, c_scale: f32) -> Vec<f32> {
         let node = &self.pool[node_idx as usize];
@@ -348,17 +311,12 @@ impl MCTSTree {
         completed_q::mctx_completed_qvalues(&children, raw, c_visit, c_scale)
     }
 
-    /// R347(a) — the root children Sequential Halving actually VISITED, as axial cells.
+    /// The root children Sequential Halving actually VISITED, as axial cells — the sparse
+    /// Gumbel row's explicit support, bounded by `m` however wide the legal set is.
     ///
-    /// This is the sparse Gumbel row's explicit support. Under Sequential Halving a round
-    /// visits only the candidates sitting at the schedule's considered level, so the visited
-    /// set is bounded by `m` however wide the legal set is; every other legal action completes
-    /// to the same `v_mix` and therefore carries the recording prior times one scalar, which
-    /// the row stores as the single tail mass instead of a slot each.
-    ///
-    /// Empty when the root is unexpanded or nothing was backed up — the caller's own
-    /// zero-visit refusal (`records::refuse_zero_visit_export`) is what turns that into an
-    /// error, so this reports the state rather than judging it.
+    /// Every other legal action completes to the same `v_mix`, carrying the recording prior
+    /// times one scalar, which the row stores as a single tail mass. Empty when the root is
+    /// unexpanded or nothing was backed up; the caller's zero-visit refusal judges that.
     #[must_use]
     pub fn visited_root_child_cells(&self) -> Vec<(i32, i32)> {
         let root = &self.pool[0];
@@ -376,8 +334,7 @@ impl MCTSTree {
             .collect()
     }
 
-    /// Returns (child_pool_index, prior) for each root child.
-    /// Used by Gumbel MCTS to build the candidate list after root expansion.
+    /// `(child_pool_index, prior)` per root child — Gumbel's candidate list after expansion.
     pub fn get_root_children_info(&self) -> Vec<(u32, f32)> {
         let root = &self.pool[0];
         if !root.is_expanded() {
@@ -390,8 +347,8 @@ impl MCTSTree {
             .collect()
     }
 
-    // The loop indexes both `self.pool[first + j]` and `noise[j]`, so the range
-    // form is intentional; the FROZEN FMA blend below is byte-verbatim (S4 golden).
+    // The loop indexes both `self.pool[first + j]` and `noise[j]`, so the range form is
+    // intentional; the FMA blend below is byte-verbatim against the golden.
     #[allow(clippy::needless_range_loop)]
     pub fn apply_dirichlet_to_root(&mut self, noise: &[f32], epsilon: f32) {
         let root = &self.pool[0];
@@ -406,16 +363,12 @@ impl MCTSTree {
 
         for j in 0..n_ch {
             let child = &mut self.pool[first + j];
-            // §F2: `(1.0 - epsilon) * prior + epsilon * noise` → fused FMA.
+            // `(1.0 - epsilon) * prior + epsilon * noise`, fused.
             child.prior = epsilon.mul_add(noise[j], (1.0 - epsilon) * child.prior);
         }
     }
 
-    /// Top-N children of root by visit count.
-    /// Returns Vec<((q, r), visits, prior, q_value)> sorted by visits descending.
-    ///
-    /// Returns raw `(i32, i32)` axial coords; Python callers format with
-    /// f-strings at the call site.
+    /// Top-N root children by visit count, descending, as raw axial coords.
     pub fn get_top_visits(&self, n: usize) -> Vec<((i32, i32), u32, f32, f32)> {
         let root = &self.pool[0];
         if !root.is_expanded() {
@@ -547,7 +500,7 @@ mod tests {
         let tree = setup_expanded_root();
         let info = tree.get_root_children_info();
         assert_eq!(info.len(), tree.root_n_children());
-        // All priors should be > 0 (from uniform policy over full action space).
+        // All priors are > 0, from a uniform policy over the full action space.
         for &(idx, prior) in &info {
             assert!(prior > 0.0, "prior for child {idx} should be > 0");
         }
@@ -557,10 +510,8 @@ mod tests {
         );
     }
 
-    // ── get_improved_policy tests ────────────────────────────────────────────
-
-    /// Helper: set up a tree with N root children having specified visits, w_values, and priors.
-    /// Each child is placed at action (0, j) for j in 0..N.
+    /// A tree with N root children at the given visits, w_values and priors, child `j` at
+    /// action `(0, j)`.
     fn setup_improved_policy_tree(
         children: &[(u32, f32, f32)], // (visits, w_value, prior)
     ) -> MCTSTree {
@@ -603,7 +554,6 @@ mod tests {
 
     #[test]
     fn test_improved_policy_sums_to_one() {
-        // Three children with different visits and Q values.
         let tree = setup_improved_policy_tree(&[
             (10, 5.0, 0.5), // Q=0.5
             (8, -2.0, 0.3), // Q=-0.25
@@ -619,7 +569,7 @@ mod tests {
 
     #[test]
     fn test_improved_policy_no_visits_returns_prior() {
-        // All children unvisited — should return normalized priors.
+        // All children unvisited: normalized priors.
         let tree = setup_improved_policy_tree(&[(0, 0.0, 0.6), (0, 0.0, 0.4)]);
         let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
         let sum: f32 = policy.iter().sum();
@@ -628,7 +578,7 @@ mod tests {
             "prior fallback should sum to 1.0, got {sum}"
         );
 
-        // The two non-zero entries should roughly reflect priors.
+        // The two non-zero entries roughly reflect the priors.
         let nonzero: Vec<f32> = policy.iter().copied().filter(|&p| p > 0.0).collect();
         assert_eq!(nonzero.len(), 2);
         assert!(
@@ -639,15 +589,14 @@ mod tests {
 
     #[test]
     fn test_improved_policy_q_ordering() {
-        // Two children: one clearly winning (Q=+0.9), one losing (Q=-0.9).
-        // Equal priors — the improved policy should favor the winning child.
+        // Equal priors, one winning child and one losing: the improved policy must favor
+        // the winner.
         let tree = setup_improved_policy_tree(&[
             (50, 45.0, 0.5),  // Q=+0.9
             (50, -45.0, 0.5), // Q=-0.9
         ]);
         let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
 
-        // Find the two non-zero actions.
         let (cq, cr) = tree.root_board.window_center();
         let idx_good = Board::window_flat_idx_at(0, 0, cq, cr);
         let idx_bad = Board::window_flat_idx_at(0, 1, cq, cr);
@@ -660,15 +609,12 @@ mod tests {
         );
     }
 
-    // Note: policy_prune_frac test removed — pruning now lives only in
-    // Python's training loop to avoid double-pruning.
-
     #[test]
     fn test_improved_policy_illegal_actions_stay_zero() {
         let tree = setup_improved_policy_tree(&[(10, 5.0, 0.7), (5, 1.0, 0.3)]);
         let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
 
-        // Only 2 actions should be non-zero out of board_size*board_size+1.
+        // Only 2 actions are non-zero out of the full stride.
         let nonzero_count = policy.iter().filter(|&&p| p > 0.0).count();
         assert_eq!(
             nonzero_count, 2,

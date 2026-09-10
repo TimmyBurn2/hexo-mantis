@@ -1,23 +1,10 @@
-"""R345(b)(3) — a full checkpoint loads STRICT, and a resume may not change identity.
+"""A full checkpoint loads STRICT, and a resume may not change identity.
 
-TWO REFUSALS THAT DID NOT EXIST.
-
-STRICTNESS. `resume_trainer` loaded every checkpoint with `strict=False`, and the comment
-explaining it is about a BARE ANCHOR: a weights-only artifact is a genuine SUBSET of the
-`build_net` key set (T-CK-25), so strict would reject it spuriously. That reasoning is sound
-and is preserved. What it never justified is applying the same leniency to a FULL checkpoint,
-where a missing key means the arch that was stamped and the net that was rebuilt disagree —
-and the run then trains a partly-randomly-initialised model while its optimizer state,
-scheduler and step counter all say it is continuing. The one condition that silently discards
-learned weights was the one condition nothing checked.
-
-IDENTITY. `resume_trainer` APPLIES `config_overrides` onto the checkpoint's baked config
-(CONFRES F1(A)), and nothing compares the result's identity block against the artifact. The
-encoding half has a check — `load_checkpoint` refuses when `metadata.encoding_name` and
-`config.identity.encoding` disagree — but that compares the checkpoint against ITSELF, not
-against the run about to resume from it. A resume that changes `representation` or
-`arch_kind` gets a net built from the checkpoint's stamped arch and a config claiming
-another, which is LAW-11's subject one layer out.
+Leniency is correct only for a bare anchor, whose key set is a genuine SUBSET of
+`build_net`'s; on a FULL checkpoint a missing key means the stamped arch and the rebuilt
+net disagree, and the run trains partly-random weights while its step counter says it is
+continuing. Identity is compared against the RUN about to resume, not the artifact
+against itself, which is what `load_checkpoint`'s encoding check already covers.
 """
 from __future__ import annotations
 
@@ -42,10 +29,8 @@ from mantis.train.trainer.core import Trainer
 def _rewrite(payload: dict, directory: Path) -> Path:
     """Re-publish a modified payload under a filename its own content hash validates.
 
-    `_verify_provenance` re-derives `{run_id}_{step:08d}_{sha8}` from the payload and compares
-    it against the filename, so a tampered payload saved under any other name is rejected for
-    provenance BEFORE the state dict is ever loaded — the check would mask the one this suite
-    is about. Naming it correctly is what makes the strictness assertion reachable.
+    `_verify_provenance` rejects a mismatched name BEFORE the state dict is loaded, which
+    would mask the strictness refusal this suite is about.
     """
     md = payload["metadata"]
     path = directory / checkpoint_filename(md["run_id"], int(md["step"]), content_sha8(payload))
@@ -58,7 +43,6 @@ def _write_full(tmp_path: Path) -> Path:
     return trainer.save_checkpoint(None)
 
 
-# ── strictness ──────────────────────────────────────────────────────────────────────────
 def test_a_full_checkpoint_missing_a_weight_is_refused(tmp_path: Path) -> None:
     """The defect: a key silently dropped, and the run continues on a random tensor."""
     path = _write_full(tmp_path)
@@ -95,11 +79,7 @@ def test_a_healthy_full_checkpoint_still_resumes(tmp_path: Path) -> None:
 
 
 def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
-    """T-CK-25's reason is preserved: `kind == "weights"` is a SUBSET by construction.
-
-    Strictness keyed on the kind rather than applied everywhere is the whole shape of this
-    half — a rule that also rejected anchors would have made the leg a regression.
-    """
+    """A weights-only artifact is a SUBSET by construction, so leniency stays keyed on kind."""
     path = _write_full(tmp_path)
     payload = torch.load(path, weights_only=True, map_location="cpu")
     payload["kind"] = "weights"
@@ -115,7 +95,6 @@ def test_a_bare_anchor_subset_still_loads_leniently(tmp_path: Path) -> None:
     )
 
 
-# ── identity ────────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("key,value", [
     ("representation", "grid"),
     ("arch_kind", "GnnArchV2"),
@@ -166,17 +145,10 @@ def test_the_halt_names_both_sides(tmp_path: Path) -> None:
     )
 
 
-# ── target semantics ────────────────────────────────────────────────────────────────────
-#
-# These leaves build no net, so every identity check above passes them. What they decide is
-# whether a stored replay row is a visit-count distribution or a completed improved policy —
-# and, through the same one decision, which loss the trainer applies. Since R345(b)(3) a
-# resume RESTORES the ring, so moving one continues training on rows built under the other
-# meaning, with no provenance on a row to tell them apart.
-#
-# `search.kind` IS one of them now, and it is the one that DECIDES the other: it is the
-# search that builds the target. `train.policy_target` stays beside it because it is the
-# leaf the checkpoint STAMP carries — the artifact's own record of what its rows mean.
+# These target-semantics leaves build no net, so every identity check above passes them;
+# what they decide is whether a stored replay row is a visit-count distribution or a
+# completed improved policy, and a restored ring carries no per-row provenance to tell
+# the two apart. `search.kind` decides it, `train.policy_target` is what the stamp carries.
 @pytest.mark.parametrize("section,leaf,value", [
     ("train", "policy_target", "completed_improved_policy"),
     ("search", "kind", "gumbel"),
@@ -231,16 +203,8 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
 def test_the_search_regime_knobs_are_deliberately_not_target_semantics_keys(
     tmp_path: Path,
 ) -> None:
-    """The considered OMISSION, pinned so it cannot be closed by accident.
-
-    `selfplay.gumbel_m` changes a target's QUALITY, not its meaning — a completed-Q policy
-    from a wider candidate set is still a completed-Q policy — which puts it with
-    `mcts.n_simulations`, `c_puct` and the playout-cap knobs, none of which are
-    resume-guarded and some of which a run legitimately varies mid-flight. Guarding one
-    search knob and not its siblings would assert a distinction that does not exist. What
-    the guarded leaves have that this one does not is that they change what a STORED ROW
-    IS.
-    """
+    """The considered OMISSION: `gumbel_m` changes a target's QUALITY, not its meaning,
+    which puts it with the other unguarded search knobs a run legitimately varies."""
     path = _write_full(tmp_path)
     selfplay = dict(load_checkpoint(path).config["selfplay"])
     selfplay["gumbel_m"] = selfplay["gumbel_m"] + 8

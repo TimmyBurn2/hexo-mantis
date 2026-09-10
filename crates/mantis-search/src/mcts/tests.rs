@@ -1,10 +1,8 @@
-// Exceeds the 300-line soft cap: the shared mcts unit suite (selection/backup/
-// policy/quiescence/CF-1/fpu/gumbel-disabled/top-K) + its setup helpers port as
-// one in-src module (D1/§b — reaches pool/next_free internals).
+// Exceeds the 300-line soft cap: the shared mcts unit suite and its setup helpers port as one
+// in-src module because they reach pool/next_free internals.
 //
-// VERBATIM-ported unit fixtures: the action-index encodings (`0u32 + 32768`),
-// the range-membership assertion, and the `&vec![0.0; n]` calls are kept as in
-// the source; suppress the cosmetic style lints they trip.
+// VERBATIM-ported unit fixtures — the action-index encodings, the range-membership assertion
+// and the `&vec![0.0; n]` calls — trip cosmetic style lints that are suppressed below.
 #![allow(
     clippy::identity_op,
     clippy::manual_range_contains,
@@ -59,7 +57,6 @@ pub(super) fn setup_two_child_tree(c_puct: f32) -> (MCTSTree, u32, u32) {
 fn test_puct_prefers_higher_prior_when_unvisited() {
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 1;
-    // fpu_value=0.0: both children unvisited, Q=0 for both; prior drives selection.
     let score_a = tree.puct_score(child_a, 0, 1.0, 0.0);
     let score_b = tree.puct_score(child_b, 0, 1.0, 0.0);
     assert!(
@@ -75,8 +72,8 @@ fn test_puct_visits_reduce_exploration() {
     tree.pool[child_a as usize].n_visits = 99;
     tree.pool[child_a as usize].w_value = 0.0;
 
-    // child_a is visited (n_visits=99), child_b is unvisited → fpu_value applies.
-    // With fpu_value=0.0 the unvisited child still looks like Q=0, but has higher U.
+    // child_a is visited, child_b is not, so `fpu_value` applies: at 0.0 the unvisited child
+    // still looks like Q=0 but has the higher U.
     let score_a = tree.puct_score(child_a, 0, 100.0, 0.0);
     let score_b = tree.puct_score(child_b, 0, 100.0, 0.0);
     assert!(
@@ -283,27 +280,23 @@ fn test_virtual_loss_q_adjustment() {
 
 #[test]
 fn test_dynamic_fpu_reduces_unvisited_q() {
-    // Dynamic FPU: unvisited children should receive parent_q - reduction*sqrt(mass).
     let (mut tree, child_a, child_b) = setup_two_child_tree(1.5);
     tree.fpu_reduction = 0.25;
     tree.pool[0].n_visits = 10;
     tree.pool[0].w_value = 3.0; // parent Q = 0.3
 
-    // child_a: visited (n_visits=1), Q from w_value/n_visits.
     tree.pool[child_a as usize].n_visits = 1;
     tree.pool[child_a as usize].w_value = 0.2;
 
-    // child_b: unvisited → should get fpu_value.
-    // explored_mass = prior of child_a = 0.7  → reduction = 0.25*sqrt(0.7) ≈ 0.209
-    // fpu_value = parent_q(0.3) - 0.209 ≈ 0.091
+    // child_b is unvisited, so explored_mass = 0.7, reduction = 0.25*sqrt(0.7) ~ 0.209 and
+    // fpu_value = parent_q(0.3) - 0.209 ~ 0.091.
     let explored_mass: f32 = 0.7;
     let expected_fpu = (3.0f32 / 10.0) - 0.25 * explored_mass.sqrt();
 
-    // child_b uses fpu_value; child_a (visited) uses its own Q.
     let score_b_fpu = tree.puct_score(child_b, 0, 10.0, expected_fpu);
     let score_b_zero_fpu = tree.puct_score(child_b, 0, 10.0, 0.0);
-    // With parent_q > 0, FPU value < 0.3 but > 0.0 — so dynamic FPU raises score
-    // compared to the legacy Q=0 baseline when parent_q is positive.
+    // With parent_q > 0 the FPU value sits below 0.3 but above 0.0, so dynamic FPU raises the
+    // score against the legacy Q=0 baseline.
     assert!(
         score_b_fpu > score_b_zero_fpu || expected_fpu < 0.0,
         "dynamic FPU should raise unvisited score when parent_q > 0: \
@@ -311,19 +304,14 @@ fn test_dynamic_fpu_reduces_unvisited_q() {
     );
 }
 
-// ── Quiescence tests ──────────────────────────────────────────────────────
-
 #[test]
 fn test_quiescence_overrides_value_for_3_winning_moves() {
-    // Board where P1 (current player to move next, but we'll evaluate from P1's perspective)
-    // has ≥3 winning moves → value should be overridden to 1.0.
+    // P1 has >= 3 winning moves, so the value is overridden to 1.0.
     let mut tree = MCTSTree::new(1.5);
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // Build a board where P1 has exactly 3 winning cells:
-    // Two from (0,0)..(4,0): q=-1 and q=5
-    // One from (20,0)..(24,0): q=19 (west end blocked, east end free)
+    // Three winning cells for P1: q=-1 and q=5 off (0,0)..(4,0), and q=19 off (20,0)..(24,0).
     let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
     for q in 0..5i32 {
         stones.push(((q, 0), Cell::P1));
@@ -337,7 +325,6 @@ fn test_quiescence_overrides_value_for_3_winning_moves() {
     // ply must be ≥ 8 so the early-game ply gate does not short-circuit.
     let board = Board::from_stones(&stones, Player::One, 1, 20, None);
 
-    // Current player is P1; P1 has 1 + 2 = 3 winning cells → forced win.
     let wins = board.count_winning_moves(Player::One);
     assert!(wins >= 3, "expected ≥3 winning moves for P1, got {wins}");
 
@@ -354,8 +341,7 @@ fn test_quiescence_overrides_value_for_3_opponent_winning_moves() {
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // Current player is P1, but opponent (P2) has 3 winning moves → value = -1.0
-    // P2 stones: (0,0)..(4,0) unblocked (2 cells) + (20,0)..(24,0) east-only blocked (1 cell)
+    // Current player is P1 but P2 has 3 winning moves, so the value is -1.0.
     let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
     for q in 0..5i32 {
         stones.push(((q, 0), Cell::P2));
@@ -386,7 +372,6 @@ fn test_quiescence_blend_for_2_winning_moves() {
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // P1 has exactly 2 winning moves (unblocked 5-in-a-row along E axis)
     let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
     // ply must be ≥ 8 so the early-game ply gate does not short-circuit.
     let board = Board::from_stones(&stones, Player::One, 1, 10, None);
@@ -411,7 +396,6 @@ fn test_quiescence_disabled_does_not_change_value() {
     let mut tree = MCTSTree::new(1.5);
     tree.quiescence_enabled = false;
 
-    // Give P1 a huge number of winning moves
     let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
     let board = Board::from_stones(&stones, Player::One, 1, 0, None);
 
@@ -429,7 +413,6 @@ fn test_quiescence_fire_count_increments_and_resets() {
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // Board setup: P1 has ≥3 winning moves (same as the 3-winning-moves override test).
     let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
     for q in 0..5i32 {
         stones.push(((q, 0), Cell::P1));
@@ -443,10 +426,8 @@ fn test_quiescence_fire_count_increments_and_resets() {
     let wins = board.count_winning_moves(Player::One);
     assert!(wins >= 3, "expected ≥3 winning moves for P1, got {wins}");
 
-    // Counter starts at 0.
     assert_eq!(tree.quiescence_fire_count.load(Ordering::Relaxed), 0);
 
-    // First call fires → counter = 1.
     let result = tree.apply_quiescence(&board, 0.5);
     assert_eq!(result, 1.0, "forced win should override to 1.0");
     assert_eq!(
@@ -455,7 +436,6 @@ fn test_quiescence_fire_count_increments_and_resets() {
         "counter should be 1 after one firing call"
     );
 
-    // Second call fires again → counter = 2.
     tree.apply_quiescence(&board, 0.5);
     assert_eq!(
         tree.quiescence_fire_count.load(Ordering::Relaxed),
@@ -463,7 +443,6 @@ fn test_quiescence_fire_count_increments_and_resets() {
         "counter should accumulate across calls"
     );
 
-    // new_game() resets counter to 0.
     tree.new_game(Board::new());
     assert_eq!(
         tree.quiescence_fire_count.load(Ordering::Relaxed),
@@ -478,7 +457,6 @@ fn test_quiescence_no_override_in_early_game() {
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // Early game — no threatening formations.
     let board = Board::new();
     let nn_value = 0.123f32;
     let corrected = tree.apply_quiescence(&board, nn_value);
@@ -514,20 +492,12 @@ fn test_no_forced_win_short_circuit_in_expansion() {
     );
 }
 
-// ── CF-1: compound-turn terminal sign ────────────────────────────────────
-//
-// `expand_and_backup_single` assigns the terminal value of a `check_win`
-// leaf. The leaf's side-to-move (== `board.moves_remaining`) decides the
-// sign, NOT a hardcoded -1.0:
-//   * stone-2 / turn-final win → `apply_move` flips the player, leaf has
-//     `mr==2` (opponent/loser to move) → terminal value -1.0 (correct).
-//   * stone-1 win (mid-turn)   → `apply_move` keeps the player (mr 2→1, no
-//     flip), leaf has `mr==1` (winner still to move) → terminal value +1.0.
-// The pre-fix hardcode scored the stone-1 win as -1.0, dragging its parent's
-// Q toward a loss → PUCT avoided completing on the first stone (CF-1).
-//
-// Placement: these exercise `expand_and_backup_single` on a non-legal-cadence
-// terminal fixture built via `Board::from_stones` (feature `test-fixtures`).
+// CF-1: compound-turn terminal sign. The leaf's side-to-move (== `board.moves_remaining`)
+// decides the sign of a `check_win` leaf's terminal value, NOT a hardcoded -1.0: a turn-final
+// win leaves `mr==2` (loser to move) -> -1.0, while a stone-1 win keeps the player and leaves
+// `mr==1` (winner to move) -> +1.0. The pre-fix hardcode scored the stone-1 win as -1.0 and
+// dragged its parent's Q toward a loss, so PUCT avoided completing on the first stone. These
+// exercise `expand_and_backup_single` on a non-legal-cadence fixture from `Board::from_stones`.
 
 /// Build a P1 6-in-a-row along the E/W axis with `last_move` on the line.
 /// `mr`/`player` are set by the caller to model stone-1 vs stone-2 wins.
@@ -566,10 +536,8 @@ fn run_terminal_leaf(parent_mr: u8, leaf_mr: u8, board: &Board) -> (f32, f32) {
     (tree.pool[1].terminal_value, tree.pool[0].w_value)
 }
 
-/// Case A — stone-1 win: leaf `mr==1` (winner to move) from a `mr==2`
-/// parent. Terminal value must be +1.0, and since the parent does NOT flip
-/// (mr==2), the winning child drags the parent's Q toward +1 → PUCT prefers
-/// completing on the first stone (the policy-target signal). FAILS on the
+/// Case A — stone-1 win: leaf `mr==1` from an `mr==2` parent. The terminal value must be +1.0,
+/// and since the parent does not flip, the winning child drags its Q toward +1. FAILS on the
 /// pre-fix hardcoded -1.0.
 #[test]
 fn test_cf1_stone1_win_scored_as_win() {
@@ -586,10 +554,9 @@ fn test_cf1_stone1_win_scored_as_win() {
     );
 }
 
-/// Case B — stone-2 / turn-final win: leaf `mr==2` (opponent to move) from a
-/// `mr==1` parent. Terminal value must stay -1.0; the negamax flip at the
-/// mr==1 parent turns that into +1.0 for the mover. Proves the leaf-side
-/// derivation does NOT regress the case the hardcode handled correctly.
+/// Case B — stone-2 / turn-final win: leaf `mr==2` from an `mr==1` parent. The terminal value
+/// stays -1.0 and the negamax flip turns it into +1.0 for the mover, proving the leaf-side
+/// derivation does not regress the case the hardcode handled correctly.
 #[test]
 fn test_cf1_stone2_win_still_scored_as_loss_to_mover() {
     let board = make_stone1_win_board(2, Player::Two);
@@ -605,18 +572,11 @@ fn test_cf1_stone2_win_still_scored_as_loss_to_mover() {
     );
 }
 
-// ── CF-6: FPU sign consistency (pinning test, no production-logic change) ──
-//
-// Pins the verified no-bug invariant in `puct_score`:
-//   * A VISITED child's stored Q is mr-negated: at an mr==1 parent the child is
-//     the OTHER player (apply_move flips), so its own-perspective Q must be
-//     flipped into the parent's frame (`-child.q_value_vl`); at mr==2 the child
-//     is the SAME player (no flip, `+child.q_value_vl`).
-//   * An UNVISITED child's `fpu_value` is supplied by the caller ALREADY in the
-//     parent's to-move frame, so it is NEVER mr-negated — identical at mr==1 and
-//     mr==2.
-// Setting c_puct=0.0 makes the U term exactly 0, so `puct_score == q` and the
-// q-part is read directly. Flipping either expected sign makes this FAIL.
+// CF-6: FPU sign consistency, pinning a verified no-bug invariant in `puct_score`. A VISITED
+// child's stored Q is mr-negated (at `mr==1` the child is the other player, at `mr==2` the
+// same), while an UNVISITED child's `fpu_value` arrives ALREADY in the parent's to-move frame
+// and is NEVER negated. `c_puct=0.0` zeroes the U term so `puct_score == q`; flipping either
+// expected sign fails.
 
 #[test]
 fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
@@ -624,16 +584,13 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
     let sqrt_n = 2.0_f32.sqrt();
     const FPU: f32 = -0.3;
 
-    // c1: visited child, known decisive own-frame Q. virtual_loss_count==0 from
-    // setup, so q_value_vl == w_value / n_visits.
+    // c1: visited child with a decisive own-frame Q, no virtual loss, so q_value_vl = w/n.
     tree.pool[c1 as usize].n_visits = 4;
     tree.pool[c1 as usize].w_value = 2.0; // own-frame Q = 2.0 / 4 = 0.5
     let own_q = tree.pool[c1 as usize].q_value_vl(tree.virtual_loss);
     assert!((own_q - 0.5).abs() < 1e-6, "precondition: own_q = {own_q}");
-    // c2 stays unvisited (n_visits == 0 from setup).
     assert_eq!(tree.pool[c2 as usize].n_visits, 0);
 
-    // --- mr == 2 parent (children are the SAME player) ---
     assert_eq!(tree.pool[0].moves_remaining, 2);
     let q_visited_mr2 = tree.puct_score(c1, 0, sqrt_n, FPU);
     assert!(
@@ -646,7 +603,6 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
         "mr2 unvisited q = {q_unvisited_mr2}, want fpu_value {FPU}"
     );
 
-    // --- mr == 1 parent (children are the OTHER player) ---
     tree.pool[0].moves_remaining = 1;
     let q_visited_mr1 = tree.puct_score(c1, 0, sqrt_n, FPU);
     assert!(
@@ -660,14 +616,11 @@ fn test_cf6_fpu_sign_consistent_with_visited_child_at_both_mr() {
     );
 }
 
-// ── Gumbel MCTS tests ────────────────────────────────────────────────────
-
 pub(super) fn setup_expanded_root() -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     let board = Board::new();
     tree.new_game(board);
 
-    // Expand root with uniform priors.
     let _leaves = tree
         .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
@@ -679,10 +632,9 @@ pub(super) fn setup_expanded_root() -> MCTSTree {
 
 #[test]
 fn test_wp6_driver_setters_roundtrip() {
-    // WP6 Stage A: the two narrow public setters exposed for the (separate-crate)
-    // selfplay worker-loop driver. In-crate test reads the pub(crate) fields directly.
-    // AUDIT-1 F-02: the setter validates against the ROOT's child range, so this round-trip
-    // needs a root that HAS children — a bare tree owns none and index 3 belongs to nothing.
+    // The two narrow public setters for the separate-crate selfplay driver; the in-crate test
+    // reads the `pub(crate)` fields directly. The setter validates against the ROOT's child
+    // range, so this round-trip needs a root that HAS children.
     let mut tree = setup_expanded_root();
     let first = tree.pool[0].first_child;
     tree.set_forced_root_child(Some(first))
@@ -729,11 +681,9 @@ fn test_forced_root_child_selection() {
     let n_ch = root.n_children as usize;
     assert!(n_ch >= 2, "need at least 2 children");
 
-    // Force selection to second child.
     let target_child = first + 1;
     tree.forced_root_child = Some(target_child);
 
-    // Run several simulations — all should go through the forced child.
     let n_sims = 10;
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
@@ -747,7 +697,6 @@ fn test_forced_root_child_selection() {
         tree.expand_and_backup(&policies, &values);
     }
 
-    // The forced child should have gotten all visits (minus root expansion).
     let forced_visits = tree.pool[target_child as usize].n_visits;
     assert!(
         forced_visits >= n_sims as u32 - 1,
@@ -756,7 +705,6 @@ fn test_forced_root_child_selection() {
         forced_visits
     );
 
-    // First child (not forced) should have 0 visits.
     let other_visits = tree.pool[first as usize].n_visits;
     assert_eq!(
         other_visits, 0,
@@ -768,7 +716,6 @@ fn test_forced_root_child_selection() {
 
 #[test]
 fn test_forced_root_none_uses_puct() {
-    // With forced_root_child = None, PUCT selects normally.
     let mut tree = setup_expanded_root();
     tree.forced_root_child = None;
 
@@ -785,7 +732,6 @@ fn test_forced_root_none_uses_puct() {
         tree.expand_and_backup(&policies, &values);
     }
 
-    // Multiple children should have visits (PUCT spreads them).
     let first = tree.pool[0].first_child as usize;
     let n_ch = tree.pool[0].n_children as usize;
     let visited_count = (first..first + n_ch)
@@ -799,8 +745,7 @@ fn test_forced_root_none_uses_puct() {
 
 #[test]
 fn test_gumbel_disabled_no_behavior_change() {
-    // When forced_root_child is None, behavior is identical to pre-Gumbel code.
-    // Verify by running search twice with same setup and checking same results.
+    // With `forced_root_child` None the behaviour is pre-Gumbel: two runs must agree.
     let run_search = || -> Vec<u32> {
         let mut tree = MCTSTree::new(1.5);
         let board = Board::new();
@@ -819,7 +764,6 @@ fn test_gumbel_disabled_no_behavior_change() {
             tree.expand_and_backup(&policies, &values);
         }
 
-        // Extract visit counts for root children
         let first = tree.pool[0].first_child as usize;
         let n_ch = tree.pool[0].n_children as usize;
         (first..first + n_ch)
@@ -829,7 +773,6 @@ fn test_gumbel_disabled_no_behavior_change() {
 
     let visits_a = run_search();
     let visits_b = run_search();
-    // With deterministic input (uniform policy, value=0), results should match.
     assert_eq!(
         visits_a, visits_b,
         "search with forced_root_child=None should be deterministic"
@@ -838,8 +781,7 @@ fn test_gumbel_disabled_no_behavior_change() {
 
 #[test]
 fn test_nonroot_uses_puct_when_root_forced() {
-    // Verify that non-root selection still uses PUCT (spreads visits)
-    // even when root selection is forced.
+    // Non-root selection still uses PUCT even when root selection is forced.
     let mut tree = setup_expanded_root();
     let first_child = tree.pool[0].first_child;
     tree.forced_root_child = Some(first_child);
@@ -847,7 +789,6 @@ fn test_nonroot_uses_puct_when_root_forced() {
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let uniform = vec![1.0 / n_actions as f32; n_actions];
 
-    // Run enough sims to expand the forced child and go deeper.
     for _ in 0..30 {
         let leaves = tree
             .select_leaves(1)
@@ -858,10 +799,8 @@ fn test_nonroot_uses_puct_when_root_forced() {
         tree.expand_and_backup(&policies, &values);
     }
 
-    // The forced child should now be expanded with multiple children.
     let fc = &tree.pool[first_child as usize];
     if fc.is_expanded() && fc.n_children > 1 {
-        // Multiple grandchildren should have visits (PUCT below root).
         let gc_first = fc.first_child as usize;
         let gc_n = fc.n_children as usize;
         let gc_visited = (gc_first..gc_first + gc_n)
@@ -905,22 +844,18 @@ fn test_last_search_stats_bounds_after_sims() {
     );
 }
 
-// ── Top-K leaf cap tests ─────────────────────────────────────────────────
-
 #[test]
 fn omitted_prior_mass_is_the_tail_the_cap_dropped() {
-    // R345(b)(5). The cap's own `topk_truncated` flag says only that SOMETHING was dropped,
-    // and at radius 8 that is true on essentially every ply — measured 3009 of 3010
-    // expansions on a driven game — so the flag carries no information. This pins the
-    // quantity that does: the summed PRIOR of the children the cap threw away.
+    // The cap's own `topk_truncated` flag says only that SOMETHING was dropped, which at
+    // radius 8 is true on essentially every ply — measured 3009 of 3010 expansions on a driven
+    // game — so it carries no information. This pins the summed PRIOR of what was thrown away.
     use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // The cap is the picker's own PARAMETER, and a LOCAL value is what this fixture uses:
-    // the window holds 361 cells, so a fixture sized off `MAX_CHILDREN_PER_NODE` stops
-    // being constructible the moment that constant is raised past the window. The mechanism
-    // under test is the cap, not the production value of it.
+    // The cap is the picker's own PARAMETER and this fixture uses a LOCAL: the window holds
+    // 361 cells, so a fixture sized off `MAX_CHILDREN_PER_NODE` stops being constructible the
+    // moment that constant passes the window.
     const CAP: usize = 64;
 
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
@@ -1036,14 +971,12 @@ fn test_topk_truncates_at_the_supplied_cap() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // The cap is a LOCAL, not `MAX_CHILDREN_PER_NODE`: the fixture's in-window half is
-    // bounded by the 361-cell window, so a cap read from the production constant makes the
-    // fixture unconstructible as soon as that constant passes the window.
+    // A LOCAL cap, not `MAX_CHILDREN_PER_NODE`: the 361-cell window bounds the fixture, and
+    // the production constant does not.
     const CAP: usize = 128;
 
-    // 600 unique cells split between 200 in-window (high priors) and
-    // 400 out-of-window (sort prior 0.0). Top-CAP will be drawn from the
-    // 200 in-window cells since out-of-window sinks under sort.
+    // 600 unique cells: 200 in-window with high priors, 400 out-of-window at sort prior 0.0,
+    // so top-CAP is drawn from the in-window set.
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     'iw: for q in -HALF..=HALF {
         for r in -HALF..=HALF {
@@ -1063,8 +996,7 @@ fn test_topk_truncates_at_the_supplied_cap() {
     }
     assert_eq!(cells.len(), 600, "test setup must produce 600 cells");
 
-    // Strictly increasing prior with flat_idx → unique priors for
-    // every in-window cell.
+    // Strictly increasing prior with flat_idx gives every in-window cell a unique prior.
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let policy: Vec<f32> = (0..n_actions)
         .map(|i| (i + 1) as f32 / n_actions as f32)
@@ -1080,8 +1012,7 @@ fn test_topk_truncates_at_the_supplied_cap() {
         chosen.len()
     );
 
-    // Top-CAP should all be in-window since out-of-window sort_prior=0.0
-    // and 200 in-window cells with policy > 0 dominate.
+    // Out-of-window cells sort at 0.0, so top-CAP is entirely in-window.
     for &((q, r), prior) in &chosen {
         let flat = Board::window_flat_idx_at(q, r, 0, 0);
         assert!(
@@ -1094,8 +1025,7 @@ fn test_topk_truncates_at_the_supplied_cap() {
         );
     }
 
-    // With all-in-window selection and priors monotonic in flat, the
-    // chosen Vec's priors must be non-increasing.
+    // Priors monotonic in flat_idx, so the chosen Vec's priors must be non-increasing.
     for w in chosen.windows(2) {
         assert!(
             w[0].1 >= w[1].1,
@@ -1112,10 +1042,9 @@ fn test_topk_tie_break_by_flat_idx() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // CAP + 1 cells inside window with identical priors → exactly one is
-    // dropped. Tie-break = flat_idx asc, so the cell with the largest
-    // flat_idx is the one dropped. CAP is a local for the same reason the sibling above
-    // uses one: the window bounds the fixture, the production constant does not.
+    // CAP + 1 cells inside the window at identical priors, so exactly one is dropped and the
+    // flat_idx-ascending tie-break drops the largest flat_idx. CAP is a local for the sibling's
+    // reason: the window bounds the fixture, the production constant does not.
     const CAP: usize = 128;
     let target = CAP + 1;
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
@@ -1159,8 +1088,7 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
 
-    // 50 cells, K=192 → fast path; all cells must appear in the output
-    // and `sort_used` is false.
+    // 50 cells with K=192 takes the fast path: every cell appears and `sort_used` is false.
     let mut cells: FxHashSet<(i32, i32)> = FxHashSet::default();
     'outer: for q in -3..=4 {
         for r in -3..=4 {
@@ -1199,11 +1127,9 @@ fn test_topk_fast_path_keeps_all_when_under_cap() {
 
 #[test]
 fn test_topk_child_order_independent_of_hashset_capacity() {
-    // Regression guard. `pick_topk_children` must emit children in a canonical
-    // order that does NOT depend on the `FxHashSet`'s capacity or iteration
-    // order. A `legal_moves_set` capacity-reserve changed the hashbrown table
-    // layout; before the fix the `n_legal <= K` path collected children in raw
-    // iteration order, leaking that layout into MCTS.
+    // Regression guard: `pick_topk_children` must emit a canonical order independent of the
+    // `FxHashSet`'s capacity or iteration order. A `legal_moves_set` capacity-reserve changed
+    // the hashbrown layout, and the `n_legal <= K` path leaked it into MCTS.
     use super::backup::pick_topk_children;
     use fxhash::FxHashSet;
     use mantis_core::board::HALF;
@@ -1212,8 +1138,7 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         .flat_map(|q| (-3..=3).map(move |r| (q, r)))
         .collect();
 
-    // Same elements, deliberately different table capacities → the two sets
-    // iterate in different orders (exactly the layout-drift scenario).
+    // Same elements at deliberately different capacities, so the two sets iterate differently.
     let mut set_small: FxHashSet<(i32, i32)> = FxHashSet::default();
     for &c in &coords {
         set_small.insert(c);
@@ -1228,7 +1153,6 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
         "the two sets must hold identical moves"
     );
 
-    // Non-uniform policy so there is a real prior ordering to canonicalize.
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
     let mut policy = vec![0.0f32; n_actions];
     for (i, p) in policy.iter_mut().enumerate() {
@@ -1261,21 +1185,15 @@ fn test_topk_child_order_independent_of_hashset_capacity() {
     );
 }
 
-// ── AUDIT-1 F-02: the desync is a NAMED error, and the forced child is bounded ────────
-//
-// `select_one_leaf` did `board.apply_move_tracked(q, r).expect("selected move should always
-// be legal")`. `Board::apply_move` errs ONLY on occupancy — never on radius — so the expect
-// fires exactly when a child's stored `action_idx` decodes to a cell already on the board:
-// the tree and the board have desynchronised. It fired in production: `selfplay/worker.py`
-// carried a `BaseException` handler matching the message text `"cell already occupied"` to
-// restart the tree at root, and only when the batch was larger than one.
+// The desync is a NAMED error, and the forced child is bounded. `select_one_leaf` used
+// `expect("selected move should always be legal")`, and `Board::apply_move` errs ONLY on
+// occupancy, so it fired exactly when a child's stored `action_idx` decoded to an occupied
+// cell — tree and board desynchronised. It fired in production: `selfplay/worker.py` matched
+// the panic's message text to restart the tree at root.
 
-/// A tree whose root has ONE child, pointing at a cell the root board already holds.
-///
-/// The stone at (0, 0) is played BEFORE `new_game`, so the tree's root board carries it; the
-/// child's `action_idx` is then overwritten to decode back to that same cell. This is exactly
-/// the state the production `expect` fired on — a child whose stored action is no longer
-/// legal on the board the descent walks.
+/// A tree whose root has ONE child pointing at a cell the root board already holds: the stone
+/// is played BEFORE `new_game` and the child's `action_idx` is overwritten to decode back to
+/// it — exactly the state the production `expect` fired on.
 fn desynchronised_root() -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     let mut board = Board::new();
@@ -1309,9 +1227,8 @@ fn a_child_pointing_at_an_occupied_cell_is_an_ERR_not_a_panic() {
 
 #[test]
 fn the_failing_descent_leaves_no_virtual_loss_behind() {
-    // A propagated Err must not permanently penalise the path it walked: the nodes on the
-    // descent already took their virtual loss, and a caller that recovers would search a
-    // tree biased against the branch that failed.
+    // A propagated Err must not permanently penalise the path it walked: those nodes already
+    // took their virtual loss, and a recovering caller would search a biased tree.
     let mut tree = desynchronised_root();
     let before = tree.pool[0].virtual_loss_count;
     let _ = tree.select_leaves(1);
@@ -1332,10 +1249,10 @@ fn a_healthy_tree_still_selects_leaves() {
 
 #[test]
 fn a_forced_root_child_outside_the_roots_range_is_refused() {
-    // The second trigger. `u32::MAX` index-panicked on the next descent; any other foreign
-    // index descended into a node the root does not own — and an uninitialised slot carries
-    // `action_idx = u32::MAX`, which decodes to (32767, 32767), a cell an UNBOUNDED board
-    // accepts. That arm produced neither a panic nor an error.
+    // The second trigger. `u32::MAX` index-panicked on the next descent, and any other foreign
+    // index descended into a node the root does not own — an uninitialised slot's
+    // `action_idx = u32::MAX` decodes to (32767, 32767), which an UNBOUNDED board accepts, so
+    // that arm produced neither a panic nor an error.
     let mut tree = setup_expanded_root();
     let err = tree
         .set_forced_root_child(Some(u32::MAX))
@@ -1372,24 +1289,19 @@ fn a_root_with_no_children_accepts_no_forced_child_at_all() {
     assert!(tree.set_forced_root_child(None).is_ok());
 }
 
-// ── AUDIT-1 F-22: a short batch degrades the BATCH, not the TREE ──────────────────────
-//
-// `expand_and_backup` takes `n = pending.len().min(policies.len()).min(values.len())` and
-// drops the rest of `pending` — which is already `mem::take`n. `select_one_leaf` incremented
-// the virtual loss of every node on each of those descents, and nothing else ever decrements
-// it, so those nodes stayed permanently penalised for the rest of the search: their PUCT
-// score depressed by a loss that will never be backed up. The inference side returning a
-// short batch is exactly when that happens, and it happens on the deploy-strength path.
+// A short batch degrades the BATCH, not the TREE. `expand_and_backup` took
+// `n = pending.len().min(policies.len()).min(values.len())` and dropped the rest of an already
+// `mem::take`n `pending`, so every node on those descents kept a virtual loss nothing would
+// ever back up — permanently depressing their PUCT score, on the deploy-strength path.
 
 #[test]
 fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {
-    // `setup_two_child_tree` is the fixture the virtual-loss divergence row already uses,
-    // and it is the one that reliably yields TWO distinct leaves in one batch.
+    // The fixture the virtual-loss divergence row uses, and the one that reliably yields TWO
+    // distinct leaves in one batch.
     let (mut tree, _child_a, _child_b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 1;
     let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
 
-    // Select two leaves, then answer for only ONE.
     let leaves = tree.select_leaves(2).expect("no desync");
     assert_eq!(leaves.len(), 2, "the fixture needs two distinct leaves");
     let dropped: Vec<u32> = tree.pending.iter().skip(1).map(|(idx, _)| *idx).collect();

@@ -1,29 +1,11 @@
-"""⊕ RECAL-PREP item 2 — the eval-child growth reader (R308(g)(ii)).
+"""The eval-child growth reader: a stated stopping rule, applied and recorded.
 
-Written by ORACLE **before** the feature exists.
-
-WHAT THIS TOOL IS FOR, in one sentence from the sitting it comes from: *a term measured by
-watching until it looks flat is not a bound* (`RECAL_EXIT_2026-08-22.md` §11b). STEP 1d as the
-procedure writes it takes a maximum over one eval round and carries it into a four-constant-term
-budget; that procedure produced 0.881 GiB, then 1.1855, then was falsified at 3.5293 by the
-strengthened STEP 4. The replacement is not a longer look — it is a STATED STOPPING RULE that a
-tool applies and a record carries.
-
-The defect each row is the ONLY witness to:
-
-- **RD-01** — a verdict from a stopping rule nobody wrote down. `--plateau-rounds` and
-  `--band-pct` have NO defaults; the tool prints the rule it applied beside the verdict.
-- **RD-02** — "no data" reading as "converged". Zero rounds, too few rounds, and a file with no
-  events of the expected kind are each a NAMED REFUSAL with rc 2, never a verdict. This is the
-  half that would have caught the sitting's `peaks.py` before it produced 1 392 GiB.
-- **RD-03** — a rule that cannot say GROWING. A classifier that answers PLATEAU on a climbing
-  series is a classifier with one arm, and the term this tool exists for has grown on every
-  occasion it has been measured.
-- **RD-04** — a figure without its sampling limit. Every readout states the rounds observed and
-  the wall seconds they cover, per the block's own convention (`larger governs`, and a limit
-  stated beside every number).
-- **RD-05** — a reader that silently drops the rounds whose child had no counters. An
-  `available: false` round is REPORTED as unmeasured and excluded from the verdict by name.
+A term measured by watching until it looks flat is not a bound — the procedure this replaces read
+0.881 GiB, then 1.1855, then was falsified at 3.5293. The defects each row witnesses: a verdict
+from a stopping rule nobody wrote down (`--plateau-rounds` and `--band-pct` have NO defaults and
+are printed beside the verdict); "no data" reading as "converged" (every such case is a named
+refusal with rc 2); a classifier that cannot say GROWING; a figure without its sampling limit;
+and a reader that silently drops the rounds whose child had no counters.
 """
 from __future__ import annotations
 
@@ -80,7 +62,6 @@ def _stream(*events: str) -> str:
     return "".join(e + "\n" for e in events)
 
 
-# ── RD-01 / RD-03: the classifier, both arms, under one stated rule ─────────────────────
 def test_rd03_a_flat_series_is_a_plateau():
     peaks = [1.00, 1.01, 0.99, 1.02, 1.00]
     assert classify(peaks, plateau_rounds=3, band_pct=5.0) == PLATEAU
@@ -92,21 +73,18 @@ def test_rd03_a_climbing_series_is_growing():
 
 
 def test_rd03_the_sittings_own_series_is_growing_under_any_reasonable_band():
-    """0.881 -> 1.186 -> 3.529: the three readings the sitting took, in order. A rule that
-    calls this PLATEAU is not a rule."""
+    """0.881 -> 1.186 -> 3.529, the three readings actually taken: a rule that calls this PLATEAU is not a rule."""
     assert classify([0.881, 1.186, 3.529], plateau_rounds=3, band_pct=25.0) == GROWING
 
 
 def test_rd03_a_late_jump_after_a_long_flat_run_is_growing():
-    """The failure mode STEP 1d actually hit: flat for the final 30% of a 24-minute drive,
-    and then a 2.98x reading from a phase the drive never entered."""
+    """The failure mode actually hit: flat for the final 30% of a drive, then a 2.98x reading."""
     peaks = [1.0] * 10 + [3.0]
     assert classify(peaks, plateau_rounds=3, band_pct=5.0) == GROWING
 
 
 def test_rd03_an_early_jump_that_then_settles_is_a_plateau():
-    """Growth OUTSIDE the trailing window is history, not a live trend — otherwise no series
-    that ever rose could ever converge, and the rule would have exactly one arm."""
+    """Growth OUTSIDE the trailing window is history: otherwise no series that ever rose could converge."""
     peaks = [1.0, 3.0, 3.0, 3.01, 2.99, 3.0]
     assert classify(peaks, plateau_rounds=3, band_pct=5.0) == PLATEAU
 
@@ -123,7 +101,6 @@ def test_rd01_the_window_is_a_real_parameter_in_both_directions():
     assert classify(peaks, plateau_rounds=5, band_pct=5.0) == GROWING
 
 
-# ── RD-02: refusals, never a verdict ─────────────────────────────────────────────────────
 def test_rd02_too_few_rounds_refuses_rather_than_answering():
     with pytest.raises(InsufficientRoundsError) as exc:
         classify([1.0, 1.0], plateau_rounds=3, band_pct=5.0)
@@ -148,13 +125,11 @@ def test_rd02_an_empty_stream_refuses():
 
 
 def test_rd02_a_non_json_line_is_skipped_but_an_all_noise_stream_still_refuses():
-    """A run log carries lines that are not events; that is not a reason to guess. The
-    refusal comes from finding no ROUNDS, not from finding a line it could not parse."""
+    """The refusal comes from finding no ROUNDS, not from finding a line it could not parse."""
     with pytest.raises(NoRoundsFoundError):
         read_rounds_from_events("not json at all\nstill not json\n")
 
 
-# ── RD-05: unmeasured rounds are reported, not dropped ───────────────────────────────────
 def test_rd05_rounds_whose_child_had_no_counters_are_kept_and_flagged():
     rounds = read_rounds_from_events(_stream(
         _event("r1", 10, 1.0),
@@ -181,7 +156,6 @@ def test_rd05_the_verdict_is_taken_over_the_measured_rounds_only(tmp_path, capsy
     assert "unmeasured" in out.lower(), "an excluded round must be named, never dropped"
 
 
-# ── RD-04: the sampling limit, beside every figure ──────────────────────────────────────
 def test_rd04_the_readout_states_the_rule_it_applied_and_the_sample_it_applied_it_to(
     tmp_path, capsys,
 ):
@@ -223,14 +197,12 @@ def test_rd02_the_cli_refuses_a_missing_file_with_rc_2(tmp_path, capsys):
 
 
 def test_rd01_the_stopping_rule_arguments_have_no_defaults(capsys):
-    """A default here would be a stopping rule nobody chose, applied to a mint-critical
-    term. `SystemExit(2)` is argparse's own refusal, and it is the right one."""
+    """A default here would be a stopping rule nobody chose, applied to a mint-critical term."""
     with pytest.raises(SystemExit) as exc:
         main(["--events", "irrelevant.jsonl"])
     assert exc.value.code == 2
 
 
-# ── the marker channel is readable by the same tool ──────────────────────────────────────
 def test_the_reader_accepts_the_child_marker_channel_too(tmp_path, capsys):
     """One tool, two transports: the structured event stream when a run wrote one, and the
     child's own stdout markers when the sitting only has a log."""
@@ -263,7 +235,7 @@ def test_the_two_transports_are_not_both_accepted_at_once(tmp_path):
 
 
 def test_the_module_is_runnable_as_a_module_entry_point():
-    """CLAUDE.md's `python -m mantis.*` law: no loose script files."""
+    """Entry points are `python -m mantis.*`: no loose script files."""
     import mantis.diagnostics.eval_child_memory as mod
 
     assert Path(mod.__file__).name == "eval_child_memory.py"

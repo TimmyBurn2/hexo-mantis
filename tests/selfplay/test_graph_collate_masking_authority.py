@@ -1,25 +1,9 @@
-"""WPSC Phase 3 SC-B6 — masking single-authority (A4; DESIGN_P3.md §7). `legal_mask`
-(dense bool) and `legal_offsets` (CSR) are two VIEWS of the identical Rust-computed legal
-set, constructed together in `collate_graph_batch` (`graph_collate.py`) and never
-independently re-derived downstream. `train_step_from_graph_batch` (`trainer/core.py`)
-and `ragged_policy_ce`/`GnnNet.forward_batch` consume them as required, no-default
-parameters — there is no signature-level path to omit-and-fall-back-to-a-recomputed-mask.
+"""Hold the legal set to ONE authority across its co-derived views.
 
-R284 UPDATE: `GnnNet.forward_batch`'s required view is now `legal_index` (the wire's
-`legal_node_gather`) rather than `legal_mask` — the third co-derived view of the SAME
-Rust-computed legal set, and the one the ragged output is ordered by. `legal_mask` remains on
-`GraphBatch` and remains constructed in the same act from the same array, so the two rows below
-that assert mask/CSR agreement are unaffected and still assert what they always did.
-
-`tests/selfplay/test_gnn_seam_smoke.py`/`test_buffer_facade.py` read first per DESIGN_P3.
-md §7.2 — neither covers this exact masking-consistency/AST-scan surface, so this is a
-genuinely new file. Reuses the session-scoped `payload_fields` fixture from `tests/
-selfplay/conftest.py` (the "b6" golden — a REAL 6-graph fixture, sha-pinned, not a
-from-scratch synthetic payload) rather than hand-building a wire payload.
-
-GREEN-guard (DESIGN_P3.md §7.2): all three assertion classes already hold against HEAD's
-current code — a producer test for an EXISTING correct structure (LAW-07), not a
-RED-at-import pin. Stays in the tree unstaged.
+The dense mask, the CSR offsets and the gather are views of the identical Rust-computed legal
+set, constructed together in `collate_graph_batch` and never re-derived downstream; every
+consumer takes its view as a required, no-default parameter, so there is no signature-level
+path to omit it and fall back to a recomputed one.
 """
 from __future__ import annotations
 
@@ -33,16 +17,10 @@ from mantis.train.trainer.core import Trainer
 
 
 def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geometry) -> None:
-    """A4 re-expressed against the GATHER (R297(c)), and it asserts MORE than it used to.
+    """Prove the gather and the CSR are one set: same total count AND no duplicate entries.
 
-    The old form was `legal_mask.sum() == legal_offsets[-1]`. That was two assertions wearing one
-    face, because `legal_mask` was a SCATTER of the gather (`legal_mask_np[gather] = True`): the
-    count agreed only if the gather's length matched the CSR **and** the gather had no duplicate
-    entries — a duplicate would scatter twice into one cell and sink the sum below the length.
-
-    Re-expressed naively as `len(gather) == legal_offsets[-1]`, the uniqueness half is silently
-    lost. Both halves are therefore asserted explicitly below, which is a strictly stronger test
-    than the one it replaces and names the property instead of implying it through a scatter.
+    The mask form implied uniqueness through a scatter that collapsed repeats; a naive
+    `len(gather) == legal_offsets[-1]` would lose that half silently, so both are explicit.
     """
     batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
                                 **wire_geometry)
@@ -57,8 +35,7 @@ def test_the_gather_and_the_CSR_are_one_set_total_count(payload_fields, wire_geo
 
 
 def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields, wire_geometry) -> None:
-    """The per-graph half, re-expressed. Each graph's slice of the gather must fall inside that
-    graph's node range and must be exactly as long as the CSR says."""
+    """Prove each graph's gather slice sits inside its own node range and matches the CSR length."""
     batch = collate_graph_batch(GraphWirePayload(**payload_fields("b6")), expected_version=1,
                                 **wire_geometry)
     for i in range(int(batch.n_graphs)):
@@ -73,18 +50,11 @@ def test_the_gather_and_the_CSR_agree_per_graph_segment(payload_fields, wire_geo
 
 
 def test_the_legal_set_is_never_RE_DERIVED_inside_its_consumers() -> None:
-    """A4's single-authority half, re-pointed at a consumer that actually has the set.
+    """Prove the legal set is never re-derived inside a consumer that actually receives it.
 
-    **THE OLD FORM WAS VACUOUS AND THIS IS THE FINDING, not a refactor.** It scanned
-    `train_step_from_graph_batch`'s source text for `legal_mask =` / `legal_offsets =`. That
-    function's signature is `parts`/denominators/caps — it never had either name in it, so the
-    assertion could not fail: a guard green because there is nothing there to be red about, which
-    is the phantom class (LAW-07). The subject moved when the trainer was partitioned and the
-    guard did not move with it.
-
-    Re-pointed at `ragged_policy_ce`, which genuinely takes `legal_offsets` as a required
-    parameter, and derived from the **AST** rather than from a substring (R296(f)): a text scan
-    for `"legal_offsets ="` also matches a comment, a docstring, or `legal_offsets == x`.
+    The subject is asserted present first: a scan pointed at a function that never had the name
+    is a guard with nothing to be red about. Derived from the AST, because a text scan for
+    `"legal_offsets ="` also matches a comment, a docstring, or `legal_offsets == x`.
     """
     import ast
     import inspect
@@ -110,20 +80,12 @@ def test_the_legal_set_is_never_RE_DERIVED_inside_its_consumers() -> None:
 
 
 def test_ragged_policy_ce_and_forward_batch_require_the_legal_set_no_default() -> None:
-    """The "unconstructible" half of A4: a caller cannot construct a valid call without
-    supplying the legal set — no accidental omit-and-fall-back path.
+    """Prove both consumers require the legal set with no default, so omitting it is
+    unconstructible rather than a silent fallback.
 
-    RENAMED at R284 (R73 name-truth: a test name is a behavioural claim). `forward_batch`'s
-    required legal-set view is now `legal_index` — the wire's `legal_node_gather` — rather than
-    `legal_mask`, because the boolean mask forced a `nonzero` and with it a host-device
-    synchronization on the serve thread's hot path (P-MASK). **The A4 property this row exists
-    for is unchanged and is checked on the same parameter POSITION**: no default, so there is
-    still no signature-level path to omit the legal set and fall back to a recomputed one. What
-    moved is WHICH co-derived view the net requires, not whether it requires one.
-
-    The alternative considered and rejected was an OPTIONAL `legal_index` with a mask fallback:
-    that is precisely the omit-and-fall-back shape this file bans, and a caller that forgot it
-    would silently get the slow path (`plan/R284_PERF_DESIGN.md` §1.5)."""
+    A `legal_mask` parameter beside `legal_index` would be two authorities for one set, and an
+    optional `legal_index` with a mask fallback would hand a forgetful caller the slow path.
+    """
     ce_params = inspect.signature(ragged_policy_ce).parameters
     assert ce_params["legal_offsets"].default is inspect.Parameter.empty
 

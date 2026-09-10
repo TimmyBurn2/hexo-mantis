@@ -1,24 +1,12 @@
-"""Q-FIND-1 batch dispatch — cross-FFI parity + per-id demux integrity.
+"""Batch dispatch — cross-FFI parity + per-id demux integrity.
 
-The correctness oracle for the dispatch change (`GraphQueue::submit_graphs_and_wait`).
-The block-diagonal fuse itself is already pinned by
-`crates/mantis-selfplay/tests/queue_fuse_pin.rs`; what was NOT pinned anywhere is that
-routing N leaves through ONE pop yields per-leaf results identical to routing them one at
-a time. That is the property the batching fix relies on and the property a bad demux would
-break SILENTLY — every leaf would still get *a* policy, just the wrong one, and the tree
-would back up nonsense with no error.
-
-`InferenceBatcher.submit_graphs_and_wait{,_ls}` is the eval/arena decode driver and the
-second live instance of the serial-blocking submit the fix removes (design §9 finding 1);
-leaving it serial while fixing self-play would make the two arms disagree about batching,
-which is what the WP12-R D-22 "ONE authority" note exists to prevent.
-
-Per-segment probabilities are a function of the SEGMENT WIDTH alone, so a serial forward
-and a fused forward produce bit-identical inputs for the same leaf: any difference in the
-output is the dispatch, never the arithmetic. They also sum to 1 per segment, because
-`assemble_ls_from_gnn_probs` refuses a segment that does not (segmented-softmax invariant,
-always-on) — position-encoding the MASS is not available, so identity rides the value and
-the width.
+The block-diagonal fuse is pinned in `queue_fuse_pin.rs`; what was NOT pinned anywhere is that
+routing N leaves through ONE pop yields per-leaf results identical to routing them one at a
+time. A bad demux breaks that SILENTLY — every leaf still gets *a* policy, just the wrong one.
+The eval/arena decode driver shares this submit, so leaving it serial would make the two arms
+disagree about batching. Per-segment probabilities depend on the SEGMENT WIDTH alone, so serial
+and fused forwards see bit-identical inputs: any output difference is the dispatch, never the
+arithmetic.
 """
 from __future__ import annotations
 
@@ -31,9 +19,9 @@ import pytest
 
 from mantis import _engine
 
-# Five positions with DELIBERATELY different legal-set widths (measured: 126 / 138 / 156 /
-# 230 / 196 legal cells). Equal widths would hide a segment-offset bug entirely, so the
-# fixture disagreeing with itself is load-bearing — `test_ragged_widths_...` asserts it.
+# Five positions with DELIBERATELY different legal-set widths (measured: 126 / 138 / 156 / 230 /
+# 196 legal cells); equal widths would hide a segment-offset bug, and `test_ragged_widths_...`
+# asserts the fixture disagrees with itself.
 _POSITIONS: list[tuple[list[tuple[int, int, int]], int, int]] = [
     ([(0, 0, 1)], -1, 2),
     ([(0, 0, 1), (1, 0, -1)], 1, 1),
@@ -53,9 +41,8 @@ def graph_batcher():
 
 
 def _segment_probs(offsets: np.ndarray) -> np.ndarray:
-    """A normalized ramp per segment: entry k of a width-w segment carries
-    `(k + 1) / (w * (w + 1) / 2)`. Determined by the width ALONE (so serial and fused
-    agree exactly) and sums to 1 per segment (so the assemble-side invariant holds)."""
+    """A normalized ramp per segment, determined by the width ALONE so serial and fused agree
+    exactly, and summing to 1 per segment so the assemble-side invariant holds."""
     flat = np.zeros((int(offsets[-1]),), dtype=np.float32)
     for i in range(len(offsets) - 1):
         s, e = int(offsets[i]), int(offsets[i + 1])
@@ -71,20 +58,17 @@ def _segment_widths(offsets: np.ndarray) -> list[int]:
 
 
 def _policy_width(dense: Any, overflow: Any) -> int:
-    """The assembled policy's own legal-set width: in-window slots carry a nonzero
-    probability (the ramp has no zero entry) and off-window cells ride `overflow`."""
+    """The assembled policy's own legal-set width: in-window slots carry a nonzero probability
+    and off-window cells ride `overflow`."""
     return int(np.count_nonzero(np.asarray(dense, dtype=np.float64))) + len(overflow)
 
 
 def _round_trip(
     batcher: Any, positions: list, *, values_from: str = "width"
 ) -> tuple[list, int]:
-    """One blocking `submit_graphs_and_wait` served by a producer driven HERE.
-
-    Returns `(results, pops)`; `pops` counts the NON-EMPTY producer pops it took to serve
-    the whole call. `pops == 1` for an N-position call is the dispatch claim — the serial
-    submit it replaces could only ever put one graph in the queue at a time.
-    """
+    """One blocking `submit_graphs_and_wait` served by a producer driven HERE, returning
+    `(results, pops)`. `pops == 1` for an N-position call is the dispatch claim: the serial
+    submit it replaces could only put one graph in the queue at a time."""
     box: dict[str, Any] = {}
 
     def submitter() -> None:
@@ -98,17 +82,9 @@ def _round_trip(
 
     pops = 0
     served = 0
-    # BUDGETED BY WALL TIME, NOT BY ITERATION COUNT (NIGHTRUN-1 E1). This loop used to run
-    # a fixed 200 iterations, and it worked only because `submit_graphs_and_wait` held the
-    # GIL from entry through the enqueue: the submitter had always queued its graphs before
-    # this thread could poll once. E1 moved the leaf BUILD inside `py.detach`, which is the
-    # correct thing for a pure-Rust span on a 30 ms path — and an empty pop returns
-    # IMMEDIATELY, so all 200 iterations burned in microseconds while the submitter was
-    # still building, and every round trip then blocked forever with nothing left to pop.
-    # The harness was resting on an ordering the GIL happened to provide. Production never
-    # was: `InferenceServer.run` loops on `next_graph_batch` for the life of the server and
-    # `continue`s on an empty pop, which is what this now does. Every assertion below is
-    # byte-unchanged.
+    # BUDGETED BY WALL TIME, NOT BY ITERATION COUNT: a fixed count worked only while the submit
+    # held the GIL through the enqueue. With the leaf BUILD inside `py.detach`, empty pops
+    # return immediately and every iteration burns while the submitter is still building.
     deadline = time.monotonic() + 30.0
     while served < len(positions) and time.monotonic() < deadline:
         ids, wire = batcher.next_graph_batch(len(positions), 200)
@@ -138,12 +114,8 @@ def _round_trip(
 def test_fused_batch_returns_per_graph_results_identical_to_serial_forwards(
     graph_batcher,
 ) -> None:
-    """One N-graph pop vs N one-graph pops must agree, per graph.
-
-    The serial arm is the pre-change dispatch, reproduced exactly by calling with one
-    position at a time; the fused arm is the new one. If this reds, the fix is wrong
-    regardless of what it does to throughput.
-    """
+    """One N-graph pop vs N one-graph pops must agree, per graph. The serial arm is the
+    pre-change dispatch, reproduced by calling with one position at a time."""
     serial = [_round_trip(graph_batcher, [p])[0][0] for p in _POSITIONS]
     fused, pops = _round_trip(graph_batcher, _POSITIONS)
 
@@ -162,16 +134,15 @@ def test_fused_batch_returns_per_graph_results_identical_to_serial_forwards(
 def test_ragged_widths_do_not_bleed_across_graphs_in_the_fused_batch(
     graph_batcher,
 ) -> None:
-    """Positions with DIFFERENT legal-set widths in one batch: each graph's assembled
-    policy must carry its OWN width. Equal widths would hide a segment-offset bug, so the
-    fixture is asserted to disagree with itself first."""
+    """Positions with DIFFERENT legal-set widths in one batch: each graph's assembled policy
+    must carry its OWN width, and the fixture is asserted to disagree with itself first."""
     fused, pops = _round_trip(graph_batcher, _POSITIONS)
 
     assert pops == 1
     widths = [_policy_width(dense, overflow) for dense, overflow, _ in fused]
     assert len(set(widths)) > 1, "fixture must exercise ragged widths, else the pin is vacuous"
-    # `values_from="width"` makes the producer stamp each segment's own width into its
-    # value, so a crossed segment is arithmetically visible rather than merely plausible.
+    # `values_from="width"` stamps each segment's width into its value, so a crossed segment is
+    # arithmetically visible rather than merely plausible.
     for i, (dense, overflow, value) in enumerate(fused):
         assert _policy_width(dense, overflow) == pytest.approx(value), (
             f"leaf {i} assembled a width-{_policy_width(dense, overflow)} policy from a "
@@ -182,21 +153,16 @@ def test_ragged_widths_do_not_bleed_across_graphs_in_the_fused_batch(
 def test_each_request_id_receives_its_own_segment_of_the_flat_probs(
     graph_batcher,
 ) -> None:
-    """`submit_graph_inference_results` segments one flat probs array by `legal_offsets`
-    and assembles each id's policy from ITS retained `policy_dst_slot`. Feed a fused batch
-    whose values are position-encoded and assert each leaf's own index came back.
-
-    The first assertion is the dispatch claim itself: the batch ARRIVES fused. Under the
-    serial submit this call replaces, `next_graph_batch` could only ever hand back one id.
-    """
+    """Each id's policy is assembled from ITS retained `policy_dst_slot`, checked by feeding a
+    fused batch whose values are position-encoded. The pop assertion is the dispatch claim
+    itself: under the serial submit, `next_graph_batch` could only hand back one id."""
     fused, pops = _round_trip(graph_batcher, _POSITIONS, values_from="index")
 
     assert pops == 1, "the batch must arrive fused, not one at a time"
     assert len(fused) == len(_POSITIONS)
     for i, (dense, overflow, value) in enumerate(fused):
         assert value == pytest.approx(float(i)), f"waiter {i} received another graph's value"
-        # Each policy still sums to 1 over its own legal set (segmented-softmax invariant),
-        # which a segment shifted by even one entry would break.
+        # Each policy still sums to 1 over its own legal set; a one-entry shift breaks that.
         mass = float(np.asarray(dense, dtype=np.float64).sum()) + sum(
             p for _, p in overflow
         )
@@ -206,14 +172,10 @@ def test_each_request_id_receives_its_own_segment_of_the_flat_probs(
 def test_a_segment_length_mismatch_fails_that_id_and_the_tail_rather_than_crossing_them(
     graph_batcher,
 ) -> None:
-    """The die-loud arm: a segment whose length disagrees with the retained
-    `policy_dst_slot` must raise and fail the remaining ids, never assemble a shifted
-    policy. Producer-side mutation self-test for the demux (LAW-07).
-
-    Under the serial submit this call replaces, only ONE id is ever in flight, so the same
-    mutation trips the endpoint check instead and the tail does not exist — the assertion
-    on the pop width below is what makes this test bind the batched dispatch.
-    """
+    """The die-loud arm: a segment whose length disagrees with the retained `policy_dst_slot`
+    must raise and fail the remaining ids, never assemble a shifted policy. Under the serial
+    submit only ONE id is in flight and the tail does not exist, so the pop-width assertion is
+    what binds this to the batched dispatch."""
     box: dict[str, Any] = {}
 
     def submitter() -> None:

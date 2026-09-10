@@ -1,34 +1,13 @@
-"""R8 >300 justify: one gate-parity harness (record builders + gate_cfg + promotion-sequence
-spy) shared by the truth-table, pooled-arithmetic, escalation and sequence-order oracles —
-splitting would duplicate the record/spy fixtures across files and let them drift apart.
+"""Pin the deploy-strength gate's ported arithmetic.
 
-⊕ WP11-A DESIGN §b/§c.2/§c.5 — the run3 deploy-strength gate, ported knob-for-knob.
-Truth table + pooled draw-aware arithmetic frozen from
-`hexo_rl/eval/deploy_strength_eval.py` (read in full this session):
-  * `_wr_for_label` (:363-376): `wr = (wins + 0.5*draws) / n` — draw-aware.
-  * screen (:488-494): `wr_screen` = draw-aware WR over the SCREEN games alone.
-  * escalation (:500-514): `escalate = wr_screen >= screen_confirm_lo` — a SINGLE lower
-    bound, no upper band (`screen_confirm_hi` is NOT ported — MUST-FIX 1).
-  * confirm + pool (:516-524): `pooled = screen + confirm`; `wr_confirm` = draw-aware WR over
-    the POOLED set (NEVER confirm-only).
-  * promotion (:555-563): `wr_ok = wr_confirm >= promotion_winrate`;
-    `ci_clean = ci_lo_boot is not None and ci_lo_boot > 0.0`;
-    `low_power = guard["low_power_warning"]`; `promoted = wr_ok and ci_clean and not low_power`.
-  * `effective_n_guard`/`distinct_per_pair` (round_robin.py:203-253): distinct-game dedup by
-    `(p1, p2, tuple(moves))`; `low_power_warning = distinct_per_pair_min < min_distinct_per_pair`.
+R8 >300 justify: one harness — record builders, gate_cfg, promotion-sequence spy — shared by every
+oracle here, which would drift apart if duplicated across files.
 
-RED-at-import: `mantis.eval.aggregate` / `mantis.eval.promote` / `mantis.eval.snapshot` do not
-exist yet.
-
-ORACLE-CHOSEN SEAM (documented, not a design contradiction — the design leaves the internal
-promotion-decision function unnamed): `mantis.eval.aggregate` exposes a small PURE function
-    gate_promotion_decision(wr_confirm: float, ci_lo_boot: float | None, low_power: bool,
-                             promotion_winrate: float) -> bool
-implementing exactly the :560-563 truth table, called BY `aggregate_gate` positionally/by-
-keyword with those 4 parameter names — the 8-corner truth table is pinned against this pure
-function directly (cheap, exact), and a second test proves `aggregate_gate` actually CALLS it
-(spied) rather than reimplementing the table ad hoc (a B-1 fix: aggregate CONSTRUCTION must be
-real, not just the table).
+  * draw-aware win rate `(wins + 0.5*draws) / n`, over the SCREEN games alone for `wr_screen`;
+  * escalation on a SINGLE lower bound, with no upper band;
+  * `wr_confirm` over the POOLED screen+confirm set, never confirm-only;
+  * `promoted = wr_ok and ci_clean and not low_power`, `ci_clean` needing `ci_lo_boot > 0.0`;
+  * distinct-game dedup by `(p1, p2, tuple(moves))` feeding the low-power warning.
 """
 from __future__ import annotations
 
@@ -40,17 +19,12 @@ from mantis.eval.aggregate import (  # noqa: F401 — RED-at-import anchor: mant
     should_escalate,
 )
 
-# ── shared record-construction helpers ──────────────────────────────────────────────────
-# ORACLE-CHOSEN record shape (parity with hexo_rl's `_play_pair`/round_robin.py convention,
-# reused verbatim per design's aggregate.py citation): {"p1", "p2", "winner": "p1"|"p2"|"draw",
-# "moves": [[q, r], ...]}. `moves` drives trajectory-hash dedupe (LAW-04); distinct per test.
+# Record shape: {"p1", "p2", "winner": "p1"|"p2"|"draw", "moves": [[q, r], ...]}, where `moves`
+# drives the trajectory-hash dedupe.
 
 
 def _records(n: int, *, wins: int, draws: int, losses: int, tag: str) -> list[dict]:
-    """`n` = wins+draws+losses paired games, "cand" vs "best"; draw-aware WR = (wins+0.5*draws)/n.
-    Every record gets a DISTINCT move list (`tag` + index) unless the caller overrides via
-    `_records_with_moves` — distinctness here is irrelevant to wr_confirm/wr_screen arithmetic
-    (only to dedup/low_power, tested separately)."""
+    """Build `n` paired "cand" vs "best" games, each with a distinct move list."""
     assert wins + draws + losses == n
     out: list[dict] = []
     i = 0
@@ -77,19 +51,19 @@ def _gate_cfg(**overrides):
     return SimpleNamespace(**base)
 
 
-# ══ the pure truth-table function — all 8 boolean corners of (wr_ok, ci_clean, low_power) ═
-# wr_ok: 0.60 -> True, 0.50 -> False (bar=0.55). ci_clean: 5.0 -> True, None -> False.
+# All 8 corners of (wr_ok, ci_clean, low_power): wr_ok is 0.60 vs 0.50 against a 0.55 bar,
+# ci_clean is 5.0 vs None.
 @pytest.mark.parametrize(
     "wr_confirm,ci_lo_boot,low_power,expected",
     [
-        (0.60, 5.0, False, True),     # wr_ok, ci_clean, not low_power -> PROMOTE (only True cell)
-        (0.60, 5.0, True, False),     # wr_ok, ci_clean, low_power -> blocked
-        (0.60, None, False, False),   # wr_ok, not ci_clean, not low_power -> blocked
-        (0.60, None, True, False),    # wr_ok, not ci_clean, low_power -> blocked
-        (0.50, 5.0, False, False),    # not wr_ok, ci_clean, not low_power -> blocked
-        (0.50, 5.0, True, False),     # not wr_ok, ci_clean, low_power -> blocked
-        (0.50, None, False, False),   # not wr_ok, not ci_clean, not low_power -> blocked
-        (0.50, None, True, False),    # not wr_ok, not ci_clean, low_power -> blocked
+        (0.60, 5.0, False, True),     # the only cell that promotes
+        (0.60, 5.0, True, False),
+        (0.60, None, False, False),
+        (0.60, None, True, False),
+        (0.50, 5.0, False, False),
+        (0.50, 5.0, True, False),
+        (0.50, None, False, False),
+        (0.50, None, True, False),
     ],
 )
 def test_gate_truth_table_matches_run3(wr_confirm, ci_lo_boot, low_power, expected) -> None:
@@ -101,9 +75,9 @@ def test_gate_truth_table_matches_run3(wr_confirm, ci_lo_boot, low_power, expect
 @pytest.mark.parametrize(
     "wr_confirm,ci_lo_boot,low_power,expected",
     [
-        (0.55, 5.0, False, True),    # exactly AT the bar -> wr_ok is `>=`, so PROMOTE
-        (0.60, -1.0, False, False),  # a NEGATIVE ci_lo_boot is present but not > 0 -> not ci_clean
-        (0.60, 0.0, False, False),   # exactly zero is NOT `> 0.0` -> not ci_clean (boundary)
+        (0.55, 5.0, False, True),    # exactly at the bar: wr_ok is `>=`
+        (0.60, -1.0, False, False),  # present but not > 0
+        (0.60, 0.0, False, False),   # exactly zero is not `> 0.0`
     ],
 )
 def test_gate_truth_table_boundary_cases(wr_confirm, ci_lo_boot, low_power, expected) -> None:
@@ -136,21 +110,20 @@ def test_aggregate_gate_calls_the_pure_decision_function_not_a_reimplementation(
     assert result.promoted == real(wr_c, ci_c, lp_c, bar_c)
 
 
-# ══ MUST-FIX 2 — pooled draw-aware wr_confirm (screen+confirm), never confirm-only ════════
 def test_wr_confirm_is_pooled_draw_aware_from_raw_records() -> None:
     from mantis.eval.aggregate import aggregate_gate
 
-    # screen: n=80, wins=24, draws=30, losses=26 -> draw-aware WR = (24+15)/80 = 39/80 = 0.4875
+    # draw-aware WR = (24+15)/80 = 0.4875
     screen = _records(80, wins=24, draws=30, losses=26, tag="s")
-    # confirm: n=128, wins=55, draws=40, losses=33 -> (55+20)/128 = 75/128 = 0.5859375
+    # draw-aware WR = (55+20)/128 = 0.5859375
     confirm = _records(128, wins=55, draws=40, losses=33, tag="c")
     cfg = _gate_cfg(promotion_winrate=0.55)
 
     result = aggregate_gate(screen, confirm, cfg)
 
-    pooled_wr = (79 + 0.5 * 70) / 208             # 114/208 = 0.5480769230769231 — CORRECT
-    confirm_only_wr = 75 / 128                    # 0.5859375 — WRONG (confirm-only bug)
-    draw_blind_pooled_wr = 79 / (79 + 59)         # 0.5724637681159420 — WRONG (draw-blind bug)
+    pooled_wr = (79 + 0.5 * 70) / 208             # 0.548077 — correct
+    confirm_only_wr = 75 / 128                    # 0.585938 — the confirm-only bug
+    draw_blind_pooled_wr = 79 / (79 + 59)         # 0.572464 — the draw-blind bug
 
     assert pooled_wr != pytest.approx(confirm_only_wr)
     assert pooled_wr != pytest.approx(draw_blind_pooled_wr)
@@ -165,35 +138,22 @@ def test_wr_confirm_is_pooled_draw_aware_from_raw_records() -> None:
     assert result.n_screen == 80 and result.n_confirm == 128 and result.n_pooled == 208
 
 
-# ══ MUST-FIX 2 — bootstrap + low-power guard consume the SAME pooled set ═════════════════
 def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
     from mantis.eval.aggregate import aggregate_gate
 
     cfg = _gate_cfg(min_distinct_per_pair=10)
 
-    # Screen: only 3 DISTINCT move sequences repeated to fill 80 games (screen-alone distinct
-    # count = 3, well under threshold 10 -> a screen-only guard would flag low_power).
+    # 3 distinct sequences filling 80 games: screen alone is under the threshold of 10, so a
+    # screen-only guard would flag low_power.
     distinct_screen_moves = [[[0, 0], [1, 1]], [[0, 1], [1, 0]], [[0, 2], [1, 2]]]
     screen = [
         {"p1": "cand", "p2": "best", "winner": "p1" if i % 2 == 0 else "p2",
          "moves": distinct_screen_moves[i % 3]}
         for i in range(80)
     ]
-    # Confirm: 128 NEW distinct sequences (none matching the screen ones, none repeated among
-    # themselves) -> pooled distinct count = 3 + 128 = 131 >= 10 -> pooling flips low_power
-    # from True (screen-alone) to False.
-    #
-    # A wins/draws/losses-MIXED outcome cycle (not a plain p1/p2 alternation) is load-bearing
-    # here: a LAW-04-compliant bootstrap resamples the DISTINCT-game outcome array (never the
-    # raw 208 records), and a low-resolution outcome set (few distinct games, or a purely
-    # binary 0/1 alternating pattern) lets the 2.5% empirical quantile collapse onto the SAME
-    # discrete atom across many different seeds by construction (verified empirically in
-    # REVIEW_IMPL — 12 seeds through the shipped aggregate_gate all landed on one value at
-    # n=11 distinct games; re-verified in this fix pass that a plain 0/1-alternating pattern
-    # still collides at n=67 for this test's specific seed pair, 20260625 vs 999). Mixing in a
-    # draw value (0.5) and 128 distinct games gives the bootstrap resample-mean distribution
-    # enough resolution that seed_base=20260625 and seed_base=999 land on two DIFFERENT 2.5%
-    # quantiles (empirically verified for this exact fixture in this fix pass).
+    # 128 new distinct sequences take the pooled count to 131, flipping low_power to False. The
+    # MIXED outcome cycle is load-bearing: measured, a plain 0/1 alternation collides on one 2.5%
+    # quantile across seeds (12 at n=11; still colliding at n=67 for the 20260625/999 pair).
     _confirm_outcome_cycle = ["p1", "p1", "draw", "p2", "p1", "p2", "draw", "p1", "p2", "p1"]
     distinct_confirm_moves = [[[9, k], [8, k]] for k in range(128)]
     confirm = [
@@ -215,8 +175,7 @@ def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
     )
     assert result.eff_n == pooled_distinct, "eff_n (LAW-04) must be the pooled distinct-game count"
 
-    # Determinism-under-same-seed proxy for "bootstrap seeded from gate.seed_base" (:526-528):
-    # two identical calls with the same seed_base must produce an IDENTICAL bootstrap CI.
+    # Two identical calls with the same seed_base must produce an identical bootstrap CI.
     result2 = aggregate_gate(screen, confirm, cfg)
     assert result.elo_ci_lower_boot == result2.elo_ci_lower_boot, (
         "the bootstrap must be seeded from gate.seed_base — identical inputs/seed must "
@@ -230,7 +189,6 @@ def test_bootstrap_and_low_power_guard_consume_the_pooled_set() -> None:
     )
 
 
-# ══ escalation — single lower bound, no upper band (MUST-FIX 1) ═══════════════════════════
 @pytest.mark.parametrize(
     "wr_screen,expected_escalate",
     [(0.30, False), (0.43, False), (0.44, True), (0.50, True), (0.99, True)],
@@ -241,11 +199,8 @@ def test_screen_escalates_iff_wr_screen_at_least_screen_confirm_lo(wr_screen, ex
     assert should_escalate(wr_screen, screen_confirm_lo=0.44) is expected_escalate
 
 
-# ══ promotion sequence order (deploy-only since WP-UNFREEZE) + F-12 snapshot pin ══════════
 class _SpyOrder:
-    """R-37: the sync-method arms are GONE with the split — the deploy path has no actor
-    surface to call, so any sync-shaped call on this spy is an AttributeError, which is
-    exactly the failure the anchor-only sequence pin wants."""
+    """Record the promotion call order, carrying no actor surface so a sync-shaped call raises."""
 
     def __init__(self) -> None:
         self.order: list[str] = []
@@ -263,10 +218,8 @@ def _hooks(spy: "_SpyOrder", tmp_path):
 
     from mantis.eval.promote import DeployTagHooks
 
-    # `best_model` must be a proper attribute-bearing fixture (not a bare `object()`, which
-    # has no `__dict__` and cannot take the sabotage attribute-set below) — a plain
-    # SimpleNamespace is the minimal such fixture (test_promoted_weights_are_the_evaluated_
-    # snapshot_bytes assigns a throwaway `.state_dict` onto it to prove it is never read).
+    # `best_model` must bear attributes: a bare `object()` has no `__dict__` and cannot take the
+    # throwaway `.state_dict` the sabotage row assigns onto it.
     anchor_state = SimpleNamespace(best_model=SimpleNamespace(), best_model_step=None)
     return DeployTagHooks(
         anchor_state=anchor_state,
@@ -282,14 +235,8 @@ def _fake_snapshot(monkeypatch, state_dict: dict) -> None:
 
 
 def test_gate_pass_sequence_is_anchor_only(tmp_path, monkeypatch) -> None:
-    """E1 rewrite (WP-UNFREEZE, R49): a gate pass moves ONLY the deploy tag — the full
-    call sequence is `guarded_load -> save_anchor`, nothing else. Full-list equality:
-    any sync-shaped call in the spy log fails here (and would AttributeError besides —
-    the spy no longer carries an actor surface). E2 (`test_terminal_promotion_does_not_
-    sync_pool`) is DELETED with grounds: its `sync_inference` parameter is the thing R49
-    deletes, and its conclusion (the gate never syncs) is now universal — pinned stronger
-    by this test + the S4 field-set census + the signature pin in
-    tests/train/test_actor_deploy_independence.py."""
+    """Prove a gate pass moves ONLY the deploy tag: `guarded_load -> save_anchor` and nothing
+    else, by full-list equality so any sync-shaped call fails here."""
     from mantis.eval.promote import apply_gate_decision
 
     spy = _SpyOrder()
@@ -310,8 +257,7 @@ def test_promoted_weights_are_the_evaluated_snapshot_bytes(tmp_path, monkeypatch
     spy = _SpyOrder()
     hooks = _hooks(spy, tmp_path)
     _fake_snapshot(monkeypatch, evaluated_state_dict)
-    # Sabotage: if apply_gate_decision ever reads the live module instead of the snapshot,
-    # this would be the wrong value it should NEVER see.
+    # Sabotage: the value promotion would read if it ever consulted the live module.
     hooks.anchor_state.best_model.state_dict = lambda: live_module_state_dict  # type: ignore[attr-defined]
 
     result = {"promoted": True, "eval_broken_reason": None, "step": 4200,

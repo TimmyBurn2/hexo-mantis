@@ -3,47 +3,19 @@
 # against a census computed in another can be satisfied by editing whichever side is cheaper.
 """T7 — every arch `build_net` dispatches STATES ITS FLOOR, and the suite proves it stated one.
 
-WHAT THIS SECTION IS FOR. SEAM_V1_DESIGN §3: "a new arch states its floor before anyone argues
-about its speed." The perf rig produced the ×1.88-of-the-silicon-floor reading twice
-(PERF-BASELINE, PERF-TRANCHE-1) and had NO producer test either time: the floor was a number in
-a ledger, and nothing in the tree would have gone red if the harness that made it had stopped
-measuring what its name says. This tier is that missing producer test, generalised per arch.
+The perf rig produced its x1.88-of-the-silicon-floor reading twice with NO producer test either
+time, so nothing would have gone red if the harness had stopped measuring what its name says.
 
-TWO CLAIMS, and only the first one gates.
+TWO CLAIMS, only the first gating. (1) THE MANIFEST: the arch kinds `build_net` dispatches and
+the kinds with a registered floor probe are EQUAL, as SET EQUALITY in both directions, with the
+required side DERIVED by walking `build.py`'s own `isinstance` branches — a typed list beside
+this tier is edited in the same commit as a new arch and can never notice one. (2) THE
+MEASUREMENT (`slow`): a TABLE asserting no magnitude, whose one assertion is the NESTING — that
+the served arm did not read faster than the forward it contains — made noise-aware.
 
-  1. **THE MANIFEST.** The set of arch kinds `mantis.model.build.build_net` dispatches and the
-     set with a registered floor probe are EQUAL — checked in BOTH directions, as SET EQUALITY
-     and never as a cardinality (§2.7). The required side is DERIVED by walking `build.py`'s own
-     `isinstance(arch, X)` branches, so adding a third arch to `build_net` makes this tier red
-     until that arch states a floor. That is the whole mechanism GnnNetV2 has to satisfy, and it
-     is why the derivation is off the dispatch rather than off a typed list beside it: a typed
-     list is edited in the same commit as the arch and never notices.
-
-  2. **THE MEASUREMENT** (`slow`) — floor µs and serving overhead per arch, as a TABLE. It
-     asserts no magnitude, exactly as T6 does not, and for the same reason: a µs figure is
-     host-attested or it is mechanism evidence, and nothing here is written into a tracked path.
-     What it DOES assert is the NESTING — that the served arm did not read faster than the
-     forward it contains — and that assertion is noise-aware, which is argued at
-     `nesting_verdict` and is the one thing in this tier that can go red on a measurement.
-
-WHAT "FLOOR" AND "OVERHEAD" MEAN HERE, because both words are already loaded in this repo.
-FLOOR is the arch's own forward, alone: input construction outside the timed region, no seam, no
-queue, no collate. OVERHEAD is `served / floor` where `served` is the SAME forward reached
-through the arch's serving path — so the ratio is dimensionless and is a RELATION BETWEEN TWO
-MEASUREMENTS TAKEN IN THE SAME PROCESS, which is what makes it host-independent and reportable
-where a level is not. `PERF_BASELINE_LEDGER`'s 2.805-against-1.494 is this ratio's shape; this
-tier commits neither number and compares against neither.
-
-THE TIMER IS T6'S, IMPORTED, NOT REIMPLEMENTED. T6's module docstring argues that the instrument
-and the self-tests showing it measures what its name says are one unit — so a second timer here
-would be one whose exclusion of input construction nobody asserts. Importing it keeps ONE timer
-authority and lets T6's differential remain the thing that makes both tiers non-vacuous.
-
-THE GRAVES (read at HEAD, `docs/governance/falsified.md`). This tier PROPOSES NO OPTIMIZATION and
-changes no hot path — F-17/F-18/F-19 (bench-falsified legal-set perf ideas, with F-19's
-build-once-per-leaf corollary standing) and F-21 (the borrowed CUDA kernel, with its stated
-fallback order) are cited because the first thing an overhead number does is tempt someone, and
-they are the fence that temptation clears first.
+FLOOR is the arch's forward alone, input construction outside the timed region; OVERHEAD is
+`served / floor` with both terms measured in one process, which is what makes it reportable
+where a level is not. The timer is T6's, imported, so there is ONE timer authority.
 """
 from __future__ import annotations
 
@@ -103,13 +75,8 @@ class FloorProbe:
 
 
 def arch_kinds_dispatched(source: Path | str) -> frozenset[str]:
-    """The arch kinds `build_net` names in its own `isinstance` branches.
-
-    DERIVED FROM THE DISPATCH, which is the point: the alternative — a tuple of arch classes
-    typed next to this tier — is written and edited in the same commit as a new arch, so it can
-    never be the thing that notices one. Accepts a path or a source string so the planted breaks
-    below drive the same walker over a stand-in.
-    """
+    """The arch kinds `build_net` names in its own `isinstance` branches, DERIVED from the
+    dispatch. Accepts a path or a source string so the planted breaks drive the same walker."""
     text = Path(source).read_text(encoding="utf-8") if isinstance(source, Path) else source
     tree = ast.parse(text)
     kinds: set[str] = set()
@@ -132,13 +99,9 @@ def arch_kinds_dispatched(source: Path | str) -> frozenset[str]:
 def check_floor_manifest(
     dispatched: frozenset[str], registered: frozenset[str]
 ) -> frozenset[str]:
-    """SET EQUALITY, both directions, and a vacuity refusal in front of it.
-
-    The vacuity refusal is not decoration: a walker that returns the empty set makes
-    `dispatched <= registered` true for free, which is the shape of green this suite exists to
-    refuse. Cardinality is never compared — two sets of the same size that disagree on a member
-    is exactly the case an arch rename produces.
-    """
+    """SET EQUALITY, both directions, with a vacuity refusal in front of it: an empty
+    `dispatched` makes the subset test true for free, and two same-sized sets disagreeing on a
+    member is exactly what an arch rename produces."""
     if not dispatched:
         raise DispatchCensusEmpty(
             f"the walk of {BUILD_SOURCE.name} found no arch branch in `build_net`. An empty "
@@ -163,12 +126,9 @@ def check_floor_manifest(
 
 
 def serving_overhead(floor: Measurement, served: Measurement) -> float:
-    """`served / floor` — dimensionless, both terms measured in THIS process.
-
-    Refuses the two degenerate ways the ratio stops meaning its name: the same measurement on
-    both sides (1.0 by construction), and a served arm that came in beneath the forward it is
-    supposed to contain (the arms are not nested, so the ratio is not an overhead).
-    """
+    """`served / floor` — dimensionless, both terms measured in THIS process. Refuses the two
+    degenerate readings: one measurement on both sides, and a served arm beneath the forward it
+    is supposed to contain."""
     if floor is served:
         raise OverheadFromOneMeasurement(
             "the floor and served arms are the same Measurement object, so the ratio is 1.0 by "
@@ -189,46 +149,30 @@ NESTING_ORDERED = "ordered"
 NESTING_INVERTED = "inverted"
 NESTING_UNRESOLVED = "unresolved"
 
-#: Instrument parameters for the paired reading — NOT thresholds on any subject, in T6's own
-#: sense of that distinction. They stand where `repeats=5, warmup=2` did: a five-sample median
-#: of a wall-clock CPU timing is decided by whichever repeat the scheduler preempted, and the
-#: median of twenty-five is not.
+#: Instrument parameters for the paired reading — NOT thresholds on any subject. A five-sample
+#: median of a wall-clock CPU timing is decided by whichever repeat the scheduler preempted;
+#: the median of twenty-five is not.
 _NESTING_REPEATS = 25
 _NESTING_WARMUP = 5
-#: The sleep the mutation self-tests plant to make a REAL inversion, on the same footing as
-#: T6's `_DIFFERENTIAL_SLEEP_S`. It is an instrument parameter and no subject's threshold.
-#: Larger than T6's for headroom, and the headroom was measured: at 0.005 s under load ~20 the
-#: planted deficit cleared the bar by a factor of 2.9 at worst, and a self-test that proves the
-#: gate can bite must not itself be the flaky thing.
+#: The sleep the mutation self-tests plant to make a REAL inversion — an instrument parameter,
+#: no subject's threshold. Measured: at 0.005 s under load ~20 the planted deficit cleared the
+#: bar by a factor of 2.9 at worst.
 _INVERSION_PLANT_S = 0.02
 
 
 class ServingNestingUnresolved(UserWarning):
-    """The two arms differ by less than the noise the measurement itself carries.
-
-    A WARNING and not a refusal, and not a skip either: `test_NO_MODULE_of_the_conformance_
-    suite_DISARMS_a_TEST` refuses every skip spelling in this suite, and it is right to — a
-    silent skip is this suite's headline failure mode. So an inconclusive reading is REPORTED,
-    on the test record and in pytest's warnings summary, and the run continues.
-    """
+    """The two arms differ by less than the noise the measurement itself carries. A WARNING, not
+    a refusal and not a skip — this suite refuses every skip spelling — so the reading is
+    REPORTED and the run continues."""
 
 
 def nesting_noise_ns(floor: Measurement, served: Measurement) -> float:
     """The spread the two readings JOINTLY carry, in ns — the bar an inversion must clear.
 
-    The sum of the two IQRs, undivided, and the undivided part was measured rather than
-    chosen. The textbook move is `IQR / sqrt(repeats)`, the shape of a median's standard error
-    (asymptotically 1.253·sigma/sqrt(n) against an IQR of 1.349·sigma on a normal). It assumes
-    the samples are independent draws. Under host contention they are not: the load arrives in
-    bursts, consecutive repeats land inside the same burst, and the effective sample count is
-    a small fraction of the nominal one — LAW-04's own argument, in the time domain instead of
-    the game domain. Driven on this box at load ~20 the sqrt form left the bar at 29.18 ms
-    against a 31.58 ms deficit and red the tier, on a pair whose two arms are nested by
-    construction. So the reduction is not taken, and `repeats` earns its keep by steadying the
-    MEDIAN rather than by shrinking the bar.
-
-    A NOISE BAR, not a p-value, and it commits no magnitude: both terms are measured in this
-    process, exactly like the ratio they qualify.
+    The sum of the two IQRs, UNDIVIDED, measured rather than chosen: `IQR / sqrt(repeats)`
+    assumes independent draws, but host load arrives in bursts, so the effective sample count is
+    a fraction of the nominal. Driven at load ~20 the sqrt form left the bar at 29.18 ms against
+    a 31.58 ms deficit and red a pair nested by construction. A noise bar, not a p-value.
     """
     return floor.iqr_ns + served.iqr_ns
 
@@ -236,18 +180,10 @@ def nesting_noise_ns(floor: Measurement, served: Measurement) -> float:
 def nesting_verdict(floor: Measurement, served: Measurement) -> str:
     """ORDERED / INVERTED / UNRESOLVED for one pair — and the ASYMMETRY is the whole design.
 
-    `served` containing `floor` is STRUCTURAL: for the graph arches the floor arm times `run`
-    while the served arm times `collate` + `run` + the ragged softmax, and for the grid arch
-    the floor arm times `net.forward` while the served arm times the plane assembly plus that
-    same forward. A reading that AGREES with the structure therefore needs no margin at all —
-    any `served >= floor` is ORDERED, and the strict guard is what reports its ratio.
-
-    Only a reading that CONTRADICTS the structure has to clear the noise bar before it is
-    treated as evidence, and the reason is what the guard is FOR: a served arm that stopped
-    containing the forward misses by the whole of a collate, never by a hairline. A hairline
-    deficit is the scheduler. Calling the scheduler a defect is how this tier became a coin
-    flip — it sits in the gate set every merge must pass, and on this box at load ~19 it read
-    a 500-fold spread on identical work and inverted a different row on every ordering.
+    `served` containing `floor` is STRUCTURAL, so any `served >= floor` is ORDERED with no
+    margin. Only a reading that CONTRADICTS the structure must clear the noise bar, because a
+    served arm that stopped containing the forward misses by a whole collate and never by a
+    hairline — a hairline deficit is the scheduler.
     """
     deficit = floor.median_ns - served.median_ns
     if deficit <= 0.0:
@@ -255,18 +191,11 @@ def nesting_verdict(floor: Measurement, served: Measurement) -> str:
     return NESTING_INVERTED if deficit > nesting_noise_ns(floor, served) else NESTING_UNRESOLVED
 
 
-# --------------------------------------------------------------------------------------- #
-# The registered probes — one per arch kind `build_net` dispatches
-# --------------------------------------------------------------------------------------- #
 def _gnn_probe_arms(spec, arch_cls=GnnArch):
     """Graph arches: floor = `forward_batch` on an already-collated batch; served = the same
-    forward reached from the wire, through `collate_graph_batch` and the ragged softmax.
-
-    `arch_cls` is the only thing that differs between the V1 and V2 probes, which is the seam's
-    own claim in miniature: the serving path is the arch's, and swapping the arch swaps nothing
-    else. A second copy of these arms for V2 would have been a second serving path to keep in
-    step, and the first divergence would have been invisible.
-    """
+    forward from the wire, through `collate_graph_batch` and the ragged softmax. `arch_cls` is
+    the only difference between the V1 and V2 probes, so there is one serving path to keep in
+    step rather than two."""
     import torch
 
     from mantis._engine import HexgBuffer
@@ -339,14 +268,11 @@ def registered_probes() -> dict[str, FloorProbe]:
 def specs_for(arch_kind: str) -> tuple[Any, ...]:
     """EVERY registered encoding whose representation the arch kind serves, NAME-SORTED.
 
-    AUDIT-1 F-41. This returned the FIRST match in `all_specs()` order, so the table measured
-    `gnn_axis_v1` and never `gnn_axis_r8` — run6's own identity — and a roster REORDER would
-    have silently changed the subject of a measurement nothing else in the tree reproduces.
-    Name-sorted so the order is a property of the registry's contents, not its declaration order.
+    It returned the FIRST match in `all_specs()` order, so the table measured `gnn_axis_v1` and
+    never run6's own `gnn_axis_r8`, and a roster REORDER silently changed the subject.
 
     Raises:
-        ArchDeclaresNoFloor: no registered encoding carries this arch's representation, so its
-            floor cannot be measured on any subject the tree actually ships.
+        ArchDeclaresNoFloor: no registered encoding carries this arch's representation.
     """
     graph = arch_kind.startswith("GnnArch")
     matches = tuple(sorted((s for s in roster() if bool(s.is_graph) is graph),
@@ -359,9 +285,6 @@ def specs_for(arch_kind: str) -> tuple[Any, ...]:
     return matches
 
 
-# --------------------------------------------------------------------------------------- #
-# The manifest and its planted breaks — ALL DEFAULT TIER
-# --------------------------------------------------------------------------------------- #
 def test_EVERY_arch_build_net_dispatches_HAS_a_registered_floor_probe(derived):
     """Claim 1. Both directions, set equality, against a census derived from the dispatch."""
     dispatched = arch_kinds_dispatched(BUILD_SOURCE)
@@ -372,10 +295,9 @@ def test_EVERY_arch_build_net_dispatches_HAS_a_registered_floor_probe(derived):
 
 
 def test_the_dispatch_census_SEES_a_third_arch_branch(derived):
-    """PB-T7a. The manifest is only load-bearing if adding an arch to `build_net` moves the
-    required set — otherwise it is a fixed set of literals agreeing with itself. The planted
-    name is deliberately one no registry knows: an arch that HAS landed cannot demonstrate the
-    refusal, which is exactly what happened when `GnnArchV2` stood here and then registered."""
+    """PB-T7a. The manifest is load-bearing only if adding an arch to `build_net` moves the
+    required set. The planted name is deliberately one no registry knows: an arch that HAS
+    landed cannot demonstrate the refusal, which is what happened when `GnnArchV2` stood here."""
     planted = (
         "def build_net(arch):\n"
         "    if isinstance(arch, GnnArch):\n        return B()\n"
@@ -423,11 +345,9 @@ def test_the_manifest_does_NOT_fire_on_the_REAL_pair():
 
 
 def test_the_CHECKPOINT_LOADERS_arch_registry_matches_the_same_dispatch(derived):
-    """PK3, third registry. `train.checkpoints._ARCH_KINDS` is what rehydrates a stamp, and an
-    arch missing from it is a checkpoint that cannot come back — the LAW-12 half of the same
-    manifest. Checked against THIS census rather than a second walk, so the three registries
-    (floor probes, memory envelopes, loader kinds) are all held to one reading of `build_net`.
-    """
+    """PK3, third registry. `train.checkpoints._ARCH_KINDS` is what rehydrates a stamp, so an
+    arch missing from it is a checkpoint that cannot come back. Checked against THIS census, so
+    all three registries are held to one reading of `build_net`."""
     from mantis.train.checkpoints import _ARCH_KINDS
 
     dispatched = arch_kinds_dispatched(BUILD_SOURCE)
@@ -439,13 +359,9 @@ def test_the_CHECKPOINT_LOADERS_arch_registry_matches_the_same_dispatch(derived)
     )
 
 
-# --------------------------------------------------------------------------------------- #
-# The overhead relation and its planted breaks — ALL DEFAULT TIER
-# --------------------------------------------------------------------------------------- #
 def test_the_OVERHEAD_is_a_RELATION_between_two_measurements_not_a_level(derived):
-    """Self-test. A sleep injected into the served arm ALONE must push the ratio above 1. Both
-    terms are measured in this process, so no host-dependent bound is committed — the same
-    device T6's differential uses, applied to a ratio instead of a difference."""
+    """Self-test. A sleep injected into the served arm ALONE must push the ratio above 1; both
+    terms are measured in this process, so no host-dependent bound is committed."""
     sleep_s = 0.005
     floor = measure_forward(
         lambda: None, lambda p: None, repeats=3, warmup=1, device_type="cpu"
@@ -479,13 +395,9 @@ def test_a_SERVED_arm_BENEATH_the_floor_is_refused():
 
 
 def test_the_NOISE_AWARE_verdict_STILL_REDS_on_a_GENUINELY_inverted_arm(derived):
-    """THE MUTATION SELF-TEST for the loosened comparison (LAW-07). A gate that cannot go red
-    is worse than no gate, so the loosening is only admissible with this beside it.
-
-    The plant is a REAL measurement, not two hand-built Measurements: the floor arm sleeps and
-    the served arm does not, which is precisely the shape `ServedBeneathTheFloor` names — a
-    served arm timing a different, smaller thing. It must survive the noise bar and reach the
-    strict refusal, on whatever host runs it."""
+    """THE MUTATION SELF-TEST for the loosened comparison (LAW-07). The plant is a REAL
+    measurement — the floor arm sleeps and the served arm does not — and it must survive the
+    noise bar and reach the strict refusal on whatever host runs it."""
     floor, served = measure_forward_paired(
         lambda: None, lambda payload: time.sleep(_INVERSION_PLANT_S),
         lambda: None, lambda payload: None,
@@ -503,10 +415,9 @@ def test_the_NOISE_AWARE_verdict_STILL_REDS_on_a_GENUINELY_inverted_arm(derived)
 
 
 def test_the_NOISE_AWARE_verdict_RESOLVES_a_GENUINELY_nested_pair(derived):
-    """Non-vacuity control, and the half that stops the loosening becoming an off switch. A
-    verdict that answered UNRESOLVED to everything would never red, never be seen to have
-    stopped asserting, and would pass every mutation test above — vacuous green in its newest
-    costume. So the ordered direction must RESOLVE, not merely fail to be inverted."""
+    """Non-vacuity control, the half that stops the loosening becoming an off switch: a verdict
+    answering UNRESOLVED to everything would never red and would pass every mutation test above.
+    So the ordered direction must RESOLVE, not merely fail to be inverted."""
     floor, served = measure_forward_paired(
         lambda: None, lambda payload: None,
         lambda: None, lambda payload: time.sleep(_INVERSION_PLANT_S),
@@ -518,10 +429,9 @@ def test_the_NOISE_AWARE_verdict_RESOLVES_a_GENUINELY_nested_pair(derived):
 
 
 def test_a_HAIRLINE_inversion_reads_UNRESOLVED_where_the_STRICT_form_reds(derived):
-    """The loosening, shown to be REAL and shown to be a bar rather than a switch. Both pairs
-    carry the SAME spread; only the deficit differs. If the first pair still red, nothing here
-    changed and the coin flip is intact; if the second pair did not, the bar is an off switch.
-    """
+    """The loosening, shown REAL and shown to be a bar rather than a switch. Both pairs carry the
+    SAME spread and only the deficit differs: if the first still red nothing changed, and if the
+    second did not, the bar is an off switch."""
     spread = Measurement(median_ns=1000.0, iqr_ns=200.0, sync_calls=0, repeats=25)
     hairline = Measurement(median_ns=990.0, iqr_ns=200.0, sync_calls=0, repeats=25)
     gross = Measurement(median_ns=10.0, iqr_ns=200.0, sync_calls=0, repeats=25)
@@ -533,9 +443,8 @@ def test_a_HAIRLINE_inversion_reads_UNRESOLVED_where_the_STRICT_form_reds(derive
 
 
 def test_the_NOISE_BAR_FOLLOWS_the_SPREAD_of_the_readings_it_qualifies(derived):
-    """The bar's one moving part, and the property that keeps it honest in BOTH directions: a
-    steady reading demands a small gap before it will call an inversion, a jittery one demands
-    a large gap. A constant bar would be a magnitude committed in a tier that commits none."""
+    """The bar's one moving part: a steady reading demands a small gap before it calls an
+    inversion, a jittery one demands a large gap. A constant bar would commit a magnitude."""
     steady = Measurement(median_ns=1000.0, iqr_ns=10.0, sync_calls=0, repeats=25)
     jittery = Measurement(median_ns=1000.0, iqr_ns=900.0, sync_calls=0, repeats=25)
     derived("t7.noise.steady_ns", nesting_noise_ns(steady, steady))
@@ -573,30 +482,17 @@ def test_the_FLOOR_arm_input_FOLLOWS_the_arch_it_was_built_for(derived):
     )
 
 
-# --------------------------------------------------------------------------------------- #
-# The MEASUREMENT (`slow`) — a table, no magnitude asserted
-# --------------------------------------------------------------------------------------- #
 @pytest.mark.slow
 def test_report_the_per_arch_floor_and_serving_overhead(derived):
-    """The measurement. One row per registered arch kind: floor median, served median, the
-    dimensionless overhead, repeats and device. NO MAGNITUDE is compared to a threshold and
-    nothing is written to a tracked path. The one comparison made is the NESTING, and its bar
-    is not a threshold either: it is the spread the reading itself carries, so a steadier
-    measurement demands a smaller gap and no number is committed from any host.
+    """The measurement: one row per registered arch kind — floor median, served median, the
+    dimensionless overhead, repeats and device. No magnitude is compared to a threshold and
+    nothing is written to a tracked path; the one comparison is the NESTING.
 
-    THE TWO ARMS ARE TIMED ALTERNATELY, and that is not a detail. Run in sequence they occupy
-    two different windows of whatever else the box is doing, and at load ~19 on 16 cores the
-    difference between the windows swamped the difference between the arms: the same arm read
-    163.588 ms and 0.309 ms on two runs of the same pair, and which row inverted depended on
-    which arm was measured first. That is what made this tier a coin flip in a gate set every
-    merge must pass.
-
-    COVERAGE, STATED, because a table is read as its own scope: CPU only, at the smallest net
-    each arch admits, on EVERY registered encoding the arch serves (AUDIT-1 F-41 — it was one,
-    picked by roster order, and it was never r8). The magnitudes are
-    therefore mechanism evidence about the SEAM's shape and are not comparable to
-    `PERF_BASELINE_LEDGER`'s production-shape readings — which were taken on the box, at
-    production width, in bf16.
+    THE TWO ARMS ARE TIMED ALTERNATELY: run in sequence they occupy different windows of
+    whatever else the box is doing, and at load ~19 the same arm read 163.588 ms and 0.309 ms on
+    two runs of one pair. COVERAGE: CPU only, smallest net each arch admits, every registered
+    encoding the arch serves — mechanism evidence about the SEAM, not comparable to the ledger's
+    production-shape readings taken on the box in bf16.
     """
     rows: list[dict] = []
     readings: dict[tuple[str, str], tuple[Measurement, Measurement]] = {}

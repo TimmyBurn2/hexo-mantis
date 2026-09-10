@@ -22,7 +22,7 @@ BOARD: int = _lookup_encoding("gnn_axis_r8").board_size   # 19 — registry-deri
 HALF: int = (BOARD - 1) // 2                      # 9
 
 
-# ── Round trip ───────────────────────────────────────────────────────────────
+# Round trip
 
 def test_flat_to_axial_round_trip_all_cells():
     for flat in range(BOARD * BOARD):
@@ -42,7 +42,7 @@ def test_axial_to_flat_out_of_window_returns_none():
     assert axial_to_flat(-HALF, -HALF, BOARD) is not None
 
 
-# ── Known values ─────────────────────────────────────────────────────────────
+# Known values
 
 KNOWN_TRIPLES = [
     (0,                       -HALF, -HALF),
@@ -64,7 +64,7 @@ def test_flat_to_axial_known_values(flat: int, q: int, r: int):
     assert axial_to_flat(q, r, BOARD) == flat
 
 
-# ── cell_to_flat ─────────────────────────────────────────────────────────────
+# cell_to_flat
 
 def test_cell_to_flat_origin():
     assert cell_to_flat("0,0", BOARD) == HALF * BOARD + HALF
@@ -98,7 +98,7 @@ def test_cell_to_flat_out_of_window_raises():
         cell_to_flat(f"0,{-(HALF + 1)}", BOARD)
 
 
-# ── axial_distance ──────────────────────────────────────────────────────────
+# axial_distance
 
 KNOWN_DISTANCES = [
     ((0, 0), (0, 0), 0),

@@ -1,34 +1,16 @@
 //! `mantis-graph` — axis-graph builder for the GNN encoding.
 //! >300 lines: verbatim single-file port of the frozen axis-graph builder; splitting is barred while the byte-parity gate stands (repo_design §8).
 //!
-//! ONE Rust source compiled to TWO targets: native (`cargo check -p
-//! mantis-graph`) and wasm32
-//! (`cargo check -p mantis-graph --target wasm32-unknown-unknown`).
-//! The core builder is dep-free and
-//! `std::thread`/`rayon`/PyO3-free so it crosses the wasm boundary clean; the
-//! criterion bench (`benches/`) is a dev-only surface outside the wasm/core
-//! path.
-//!
-//! This is a FAITHFUL port of the predecessor Python oracle
-//! `strix_v1_graph.py::build_axis_graph_raw` (private records archive) for the
-//! LEGACY schema (`relative_stones=true`, `threat_features=true`,
-//! `prune_empty_edges=false`, `win_length=6`, `radius=6`) — the schema the
-//! amended ragged contract fixes as `node_feat_dim=11`
-//! (`docs/contracts/graph_wire.md`). The Python builder stays the historical
-//! TEST ORACLE (the graph-parity fixture harness:
-//! `crates/mantis-graph/tests/graph_parity.rs`); it is never a
-//! production path.
-//!
-//! Byte-exact on the integer outputs (node order, edge_index, n_stones,
-//! scatter indices); float features to ≤1e-6 (features accumulate in f64 then
-//! cast to f32, mirroring the oracle's Python-float → `torch.float32` path).
+//! ONE dep-free source compiled to native and wasm32, `std::thread`/`rayon`/PyO3-free so it
+//! crosses the wasm boundary clean. A FAITHFUL port of the Python oracle
+//! `strix_v1_graph.py::build_axis_graph_raw` for the LEGACY schema, which
+//! `docs/contracts/graph_wire.md` fixes at `node_feat_dim=11`; that Python builder stays the
+//! historical TEST ORACLE, never a production path. Byte-exact on the integer outputs, floats
+//! to <=1e-6 because features accumulate in f64 then cast to f32 as the oracle does.
 #![cfg_attr(not(feature = "native"), allow(dead_code))]
 #![allow(clippy::many_single_char_names)]
-// Deliberate, bounded integer work: axial coords pack into an i64 key, node
-// ids are < ~1000 (measured max 897, predecessor probe), slot math is the
-// byte-parity port of the predecessor dense engine's `window_flat_idx_at_geom`.
-// The pedantic cast lints flag every one of
-// these intentional, in-range conversions — silenced crate-wide with intent.
+// Deliberate, bounded integer work: axial coords pack into an i64 key, node ids are < ~1000
+// (measured max 897), slot math is the byte-parity port of `window_flat_idx_at_geom`.
 #![allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
@@ -41,10 +23,7 @@
 use std::collections::{HashMap, HashSet};
 use std::hash::{BuildHasherDefault, Hasher};
 
-// ── constants (LEGACY relative+threat schema, contract v1 §2.1) ──────────────
-
-/// Per-node feature width: relative-7 base + 4 threat = 11
-/// (`docs/contracts/graph_wire.md`; the oracle's `strix_v1_graph.py`).
+/// Per-node feature width: relative-7 base + 4 threat = 11.
 pub const NODE_FEAT_DIM: usize = 11;
 /// Relative-schema base width (own, opp, empty, moves, norm_q, norm_r, inv_dist).
 pub const BASE_DIM: usize = 7;
@@ -52,32 +31,18 @@ pub const BASE_DIM: usize = 7;
 pub const EDGE_FEAT_DIM: usize = 5;
 /// The 3 win axes in axial coords (the oracle's `WIN_AXES`).
 pub const WIN_AXES: [(i32, i32); 3] = [(1, 0), (0, 1), (1, -1)];
-/// Wire tag: 1 = native Rust builder (this crate); 2 = Python oracle.
-/// The contract's `NonNativeSampleBuilder` handshake asserts this == 1 on any
-/// training/self-play path (`docs/contracts/graph_wire.md`).
+/// Wire tag: 1 = native Rust builder (this crate); 2 = Python oracle. The contract's
+/// `NonNativeSampleBuilder` handshake asserts this == 1 on any training/self-play path.
 pub const BUILDER_IMPL_NATIVE: u8 = 1;
-/// Sentinel for a legal node whose cell falls OUTSIDE the trunk-sized policy
-/// window (the predecessor dense engine's `window_flat_idx` returns
-/// `usize::MAX` there). Off-window legal cells have NO dense action slot
-/// (predecessor builder record, private records archive). Type is `i32`/-1 per
-/// the predecessor seam ruling (private records archive,
-/// option (b)): the deploy policy path is ragged per-legal-node, so this field
-/// is training/probe METADATA, not deploy-critical — the contract's original
-/// u16 cannot carry the sentinel cleanly and was amended
-/// (`docs/contracts/graph_wire.md`).
+/// Sentinel for a legal node whose cell falls OUTSIDE the trunk-sized policy window: those
+/// cells have NO dense action slot. `i32`/-1 because the deploy policy path is ragged
+/// per-legal-node, so this field is training/probe metadata and a u16 cannot carry -1.
 pub const OFF_WINDOW_SLOT: i32 = -1;
-/// Crate identity pin — asserted by downstream DAG-pin tests
-/// (mantis-encoding / mantis-selfplay / mantis-bridge); retained from the
-/// WP0 skeleton (additive vs the ported source, DESIGN DEV-5).
+/// Crate identity pin — asserted by downstream DAG-pin tests.
 pub const CRATE_NAME: &str = "mantis-graph";
 
-// ── fast, dep-free, wasm-clean coordinate hashing ────────────────────────────
-//
-// Coordinate keys are packed i64 (`(q<<32)|r`) integers; the default SipHash
-// is overkill and slow for the ~30k point-lookups the threat + edge walks do
-// per position. A tiny FNV-1a keeps Cargo.toml's core dependency list EMPTY
-// (the crate's whole reason for existing as its own compilation unit) while
-// buying the BUILD-HOT speedup. Not cryptographic — never fed untrusted input.
+// Coordinate keys are packed i64; SipHash is overkill for the ~30k point-lookups per position,
+// and a tiny FNV-1a keeps the core dependency list EMPTY. Never fed untrusted input.
 #[derive(Default)]
 struct FnvHasher(u64);
 impl Hasher for FnvHasher {
@@ -116,17 +81,12 @@ fn pack(q: i32, r: i32) -> i64 {
     (i64::from(q) << 32) | i64::from(r as u32)
 }
 
-// ── payload types (contract v1 §2.1 single-graph slice) ──────────────────────
-
 /// Flat, row-major node feature matrix, shape `(N, NODE_FEAT_DIM)`.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct NodeFeat(pub Vec<f32>);
 
-/// COO edge index as two parallel LOCAL-id arrays (PyTorch-Geometric
-/// convention: `edge_index[0]`=src, `[1]`=dst). Block-diagonal global
-/// offsetting into an `i64` batch array is the collate resolver's job
-/// (`docs/contracts/graph_wire.md`) — this per-leaf builder emits local u32
-/// ids (a single graph never exceeds ~900 nodes, WP-A distribution).
+/// COO edge index as two parallel LOCAL-id arrays (`edge_index[0]`=src, `[1]`=dst). Block-
+/// diagonal global offsetting into an `i64` batch array is the collate resolver's job.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EdgeIndex {
     pub src: Vec<u32>,
@@ -137,23 +97,14 @@ pub struct EdgeIndex {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct EdgeAttr(pub Vec<f32>);
 
-/// Per-legal-node destination action slot (0..trunk²) in the dense action
-/// space, computed via `window_flat_idx_at_geom` at the graph's bbox-midpoint
-/// `window_center`; `OFF_WINDOW_SLOT` (-1) for off-window legal cells. Type is
-/// `i32` per the amended contract (`docs/contracts/graph_wire.md`): the
-/// predecessor seam option-(b) ruling demoted this field to training/probe
-/// metadata (deploy policy rides the ragged per-legal-node path), and the
-/// original u16 could not carry the off-window sentinel cleanly.
+/// Per-legal-node destination action slot (0..trunk²), computed via `window_flat_idx_at_geom`
+/// at the graph's bbox-midpoint `window_center`; `OFF_WINDOW_SLOT` for off-window cells.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct PolicyScatterIndex(pub Vec<i32>);
 
-/// One built axis-graph — the single-leaf slice of the ragged contract, plus
-/// the semantic-layer geometry the amended contract carries on the wire
-/// (`node_coords`, `n_stones`, `window_center`, `current_player`,
-/// `builder_impl`, `n_nodes_checksum`) so the resolver's F1-F3 geometric
-/// assertions can fire. Node rows are laid out `[stones | legal | dummy]`,
-/// each block coordinate-sorted (contract-relevant ordering — the D6 rebuild
-/// path depends on the deterministic sort, `docs/contracts/graph_wire.md`).
+/// One built axis-graph — the single-leaf slice of the ragged contract plus the wire geometry
+/// the resolver's F1-F3 assertions read. Node rows are `[stones | legal | dummy]`, each block
+/// coordinate-sorted; the D6 rebuild path depends on that deterministic sort.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct AxisGraph {
     pub node_feat: NodeFeat,
@@ -164,17 +115,14 @@ pub struct AxisGraph {
     pub policy_scatter_index: PolicyScatterIndex,
     /// Raw `(q, r)` per node, flat `[2 * N]` (dummy row = (0, 0)).
     pub node_coords: Vec<i32>,
-    /// LOCAL node-row index of each legal node (into `node_feat`); the
-    /// contract's `legal_node_gather` before block-diagonal offsetting.
+    /// LOCAL node-row index of each legal node — the contract's `legal_node_gather` before
+    /// block-diagonal offsetting.
     pub legal_node_gather: Vec<u32>,
     /// Number of stone nodes = the `[stones | legal]` split point.
     pub n_stones: u16,
-    /// Declared node count (stones + legal + 1 dummy) = N; the off-by-one
-    /// tripwire (`NodeCountChecksum`, ADV-1).
+    /// Declared node count (stones + legal + 1 dummy) = N; the off-by-one tripwire.
     pub n_nodes_checksum: u32,
-    /// Bbox-midpoint window centre `(cq, cr)` (the predecessor dense
-    /// engine's `window_center`),
-    /// the origin of the coord→action-slot map.
+    /// Bbox-midpoint window centre `(cq, cr)`, the origin of the coord->action-slot map.
     pub window_center: (i32, i32),
     /// +1 / −1 side to move for this position.
     pub current_player: i8,
@@ -201,8 +149,8 @@ pub struct StoneList {
     pub stones: Vec<(i32, i32, i8)>,
 }
 
-/// Board/window parameters. `current_player` is the side to move (+1/−1;
-/// terminal → treat as −1, matching the oracle's `Some(P1)->1 else -1`).
+/// Board/window parameters. `current_player` is the side to move (+1/-1; terminal is treated
+/// as -1, matching the oracle).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuildParams {
     pub win_length: u8,
@@ -214,17 +162,10 @@ pub struct BuildParams {
 }
 
 impl BuildParams {
-    /// The geometry of registry row `gnn_axis_v1`, as a NAMED constant.
-    ///
-    /// AUDIT-1 F-41: this was `impl Default`, so `BuildParams::V1_GEOMETRY` and
-    /// `..BuildParams::V1_GEOMETRY` read as "the usual geometry" at every call site while
-    /// meaning one specific registry row. A second graph row (`gnn_axis_r8`) exists and
-    /// differs in `radius`, so "the usual" had stopped being well defined. The value is
-    /// unchanged; what changed is that every site now names the row it means.
-    ///
-    /// `mantis-encoding`'s `axis_pin` holds this equal to the row itself — this crate is
-    /// dep-free by `repo_design` §2 and cannot read the registry, so the equality is pinned
-    /// in the lowest crate that sees both.
+    /// The geometry of registry row `gnn_axis_v1`, as a NAMED constant. It replaced an
+    /// `impl Default` reading as "the usual geometry" while meaning one specific row, and a
+    /// second row (`gnn_axis_r8`) differs in `radius`. `mantis-encoding`'s `axis_pin` holds
+    /// this equal to the row: this crate is dep-free and cannot read the registry itself.
     pub const V1_GEOMETRY: BuildParams = BuildParams {
         win_length: 6,
         radius: 6,
@@ -234,16 +175,10 @@ impl BuildParams {
     };
 }
 
-// ── window geometry (byte-parity with the predecessor dense engine) ──────────
-
-/// Bbox-midpoint window centre over stones — the predecessor dense
-/// engine's `window_center`
-/// (`(min+max)/2`, i32 truncate-toward-zero). `(0, 0)` when stoneless.
-///
-/// `manual_midpoint` is ALLOWED on purpose: `i32::midpoint` rounds toward
-/// negative infinity, but the engine (and the anchor calibration of every v6/
-/// v7 checkpoint) uses truncate-toward-zero `(min+max)/2`. Swapping to
-/// `midpoint` would silently break byte-parity for negative-coordinate boards.
+/// Bbox-midpoint window centre over stones — `(min+max)/2`, i32 truncate-toward-zero, `(0, 0)`
+/// when stoneless. `manual_midpoint` is ALLOWED on purpose: `i32::midpoint` rounds toward
+/// negative infinity, and swapping to it would silently break byte-parity for negative-
+/// coordinate boards against every v6/v7 checkpoint's anchor calibration.
 #[allow(clippy::manual_midpoint)]
 #[inline]
 fn window_center(stones: &[(i32, i32, i8)]) -> (i32, i32) {
@@ -261,10 +196,8 @@ fn window_center(stones: &[(i32, i32, i8)]) -> (i32, i32) {
     ((min_q + max_q) / 2, (min_r + max_r) / 2)
 }
 
-/// The predecessor dense engine's `window_flat_idx_at_geom` —
-/// window-relative flat index, or
-/// `usize::MAX` off-window. Returned as i32 slot (`OFF_WINDOW_SLOT` = -1 for
-/// off-window, per the amended contract §2.1).
+/// The dense engine's `window_flat_idx_at_geom` — window-relative flat index, returned as an
+/// i32 slot with `OFF_WINDOW_SLOT` (-1) for off-window.
 #[inline]
 fn window_flat_idx(q: i32, r: i32, cq: i32, cr: i32, trunk_sz: i32) -> i32 {
     let half = (trunk_sz - 1) / 2;
@@ -284,8 +217,6 @@ fn hex_distance(a: (i32, i32), b: (i32, i32)) -> i32 {
     let ds = (b.0 - a.0 + b.1 - a.1).abs();
     dq.max(dr).max(ds)
 }
-
-// ── node kind ────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
@@ -311,25 +242,13 @@ impl Kind {
     }
 }
 
-// ── threat features (port of node_threat_features) ───────────────────────────
-
-/// The oracle's `node_threat_features` — returns
-/// `[own_max/wl, opp_max/wl, own_axes/3, opp_axes/3]` in f64. `stone_at`
-/// returns 0 for empty (0 never equals ±1, so it never counts as own/opp).
-/// How many table cells per real node a dense coordinate index may spend before the builder
-/// falls back to the hash map (AUDIT-1 F-51 HOT-09).
+/// How many table cells per real node a dense coordinate index may spend before falling back
+/// to the hash map.
 ///
-/// WHY A BUDGET AT ALL. A hash map is span-independent; a dense table over the position's
-/// bounding box is not, and this board is UNBOUNDED. Stones that walk in one direction give a
-/// bbox whose area grows with the span while the node count does not, so an unbudgeted table
-/// would trade a bounded hash for an unbounded allocation — on the leaf path, once per leaf.
-///
-/// WHY THIS NUMBER. It is expressed PER NODE rather than as a cell count so the bound is
-/// O(n_real) in every position: the table can never cost more than a fixed multiple of the data
-/// it indexes. 64 is comfortably above what real play produces — the legal set IS the union of
-/// the stones' radius-balls, so play stays inside a growing blob rather than scattering — and
-/// `axis_index_is_dense` is public so a test can assert which arm a given position takes
-/// instead of anyone assuming.
+/// A hash map is span-independent; a dense table over the bounding box is not, and this board
+/// is UNBOUNDED, so an unbudgeted table trades a bounded hash for an unbounded allocation on
+/// the leaf path. Expressed PER NODE so the bound is O(n_real); 64 is comfortably above what
+/// real play produces, and `axis_index_is_dense` lets a test assert which arm was taken.
 pub const DENSE_INDEX_CELLS_PER_NODE: usize = 64;
 
 /// The bounding box of `coords[..2 * n_real]` as `(q0, q1, r0, r1)`, or `None` when empty.
@@ -349,10 +268,8 @@ fn coord_bbox(coords: &[i32], n_real: usize) -> Option<(i32, i32, i32, i32)> {
     Some((q0, q1, r0, r1))
 }
 
-/// Whether a position's node set is compact enough for the dense coordinate index.
-///
-/// Public so the choice is TESTABLE rather than inferred from a timing: a position that
-/// silently fell back would look like a perf regression with no observable saying why.
+/// Whether a position's node set is compact enough for the dense coordinate index. Public so
+/// the choice is TESTABLE: a position that silently fell back would look like a perf regression.
 #[must_use]
 pub fn axis_index_is_dense(coords: &[i32], n_real: usize) -> bool {
     match coord_bbox(coords, n_real) {
@@ -403,22 +320,16 @@ impl CoordIndex {
     }
 }
 
-/// The dense coordinate index's answer for one cell, or `None` when the position took the hash
-/// arm. Exists so the SUBSTITUTION is provable rather than inferred: a test can build the hash
-/// map itself and assert the two agree on every cell the axis walk could probe, which is the
-/// claim `all_1696_cases_byte_parity` cannot make (every golden position is compact, so it
-/// exercises one arm only).
+/// The dense coordinate index's answer for one cell, or `None` on the hash arm. Public so the
+/// SUBSTITUTION is provable: a test can build the hash map and assert the two agree on every
+/// cell the axis walk probes, which the golden suite cannot — every golden position is compact.
 #[must_use]
 pub fn coord_index_probe(coords: &[i32], n_real: usize, q: i32, r: i32) -> Option<Option<u32>> {
     CoordIndex::build(coords, n_real).map(|ix| ix.get(q, r))
 }
 
-/// A dense `(q, r) -> player` table over the STONES' bbox, expanded by the threat walk's reach.
-///
-/// The same substitution as `CoordIndex`, for HOT-09's SECOND map: the threat walk probes
-/// `stone_map` three axes by `2 * win_length - 1` cells for EVERY real node. `0` is returned
-/// both for "no stone" and for "outside the box", which is exactly what the map's
-/// `unwrap_or(0)` already meant — a cell beyond the expanded bbox cannot hold a stone.
+/// A dense `(q, r) -> player` table over the STONES' bbox expanded by the threat walk's reach.
+/// `0` means both "no stone" and "outside the box", which is what `unwrap_or(0)` already meant.
 struct StoneIndex {
     q0: i32,
     r0: i32,
@@ -570,34 +481,13 @@ fn node_threat_features(
     ]
 }
 
-// ── legal moves ──────────────────────────────────────────────────────────────
-
-/// The oracle's `legal_moves_from_stones` — empty cells within
-/// hex-distance ≤ radius of any stone, sorted lexicographically `(q, r)`.
+/// The oracle's `legal_moves_from_stones` — empty cells within hex-distance <= radius of any
+/// stone, sorted lexicographically `(q, r)`.
 ///
-/// WP-1 empty-board fallback (launch-blocker fix): the Python graph oracle
-/// this fn ports has NO empty-board case (`stone_map` empty → the `for (sq,
-/// sr) in stone_map.keys()` loop never runs → vacuous `[]`) because the
-/// oracle is only ever invoked by `strix_v1_bot.py`, which short-circuits
-/// its own opening move before calling the graph builder at all — the
-/// empty board is genuinely out-of-domain for that call site, not a tested
-/// oracle behavior. Live graph self-play has no such short-circuit: MCTS
-/// roots a search at ply 0 and calls straight into this fn, so a vacuous
-/// `[]` starves the root of any legal node and `EmptyLegalSet` fires before
-/// the game can start (predecessor incident record, private archive). The
-/// authority for what a 0-stone board's legal
-/// set IS is the dense engine's own board-legality rule, not the graph
-/// oracle's untested vacuous default — so this mirrors the predecessor
-/// dense engine's `Board::legal_moves_set()` empty-board special case
-/// EXACTLY (that engine ports into mantis-core with its own WP): a fixed
-/// 5×5 region `(dq, dr) ∈
-/// [-2,2]×[-2,2]` (25 cells) around the absolute origin, a hardcoded
-/// literal that — like the dense fn it mirrors — does NOT scale with
-/// `radius` (dense ignores `Board.legal_move_radius` in this branch too).
-/// This is a DELIBERATE, DOCUMENTED divergence from the Python graph
-/// oracle for n_stones==0 only; every stone-bearing board is untouched and
-/// stays byte-exact against the oracle (the graph-parity fixture harness,
-/// `crates/mantis-graph/tests/graph_parity.rs`).
+/// EMPTY-BOARD DIVERGENCE, deliberate and for `n_stones == 0` only: the Python oracle returns a
+/// vacuous `[]` there, which starved an MCTS root at ply 0. This mirrors the dense engine's
+/// `Board::legal_moves_set()` case exactly — a fixed 5x5 region around the origin that, like
+/// the dense fn, does NOT scale with `radius`. Stone-bearing boards stay byte-exact.
 fn legal_moves_from_stones(
     stone_map: &FnvMap<i64, i8>,
     stones: &[(i32, i32, i8)],
@@ -610,9 +500,7 @@ fn legal_moves_from_stones(
                 legal.push((dq, dr));
             }
         }
-        // Already lexicographic (dq ascending outer, dr ascending inner) but
-        // sort explicitly to keep the ordering contract obvious/robust, same
-        // as the general branch below.
+        // Already lexicographic, but sorted explicitly to keep the ordering contract obvious.
         legal.sort_unstable();
         return legal;
     }
@@ -644,20 +532,14 @@ fn legal_moves_from_stones(
     legal
 }
 
-// ── the builder ──────────────────────────────────────────────────────────────
-
-/// Build one axis-graph — the once-per-evaluated-leaf construction. Faithful
-/// port of `build_axis_graph_raw` for the LEGACY relative+threat schema.
-/// Never call the search-time-incremental variant (design ruling: no
-/// search-time-incremental variant exists — see docs/governance/falsified.md
-/// F-19): one payload per evaluated leaf, no parallelism inside (the caller
-/// parallelizes over leaves).
+/// Build one axis-graph — the once-per-evaluated-leaf construction, a faithful port of
+/// `build_axis_graph_raw`. One payload per evaluated leaf, no parallelism inside; no
+/// search-time-incremental variant exists, and proposing one is falsified work (F-19).
 #[must_use]
 #[allow(clippy::missing_panics_doc)] // panics ARE the contract (verify_contract, die loud)
 pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGraph {
-    // Parameter-domain asserts (predecessor review): the threat window buffer is
-    // [i8; 64] = 2*wl-1 cells, so wl <= 32 is the REAL bound — assert it
-    // upfront rather than relying on the incidental index-bounds panic.
+    // Parameter-domain asserts: the threat window buffer is [i8; 64] = 2*wl-1 cells, so
+    // wl <= 32 is the REAL bound — asserted upfront rather than left to an index panic.
     assert!(
         (1..=32).contains(&params.win_length),
         "BuildParams: win_length {} outside supported 1..=32 (threat cells buffer bound)",
@@ -676,13 +558,8 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         stone_map.insert(pack(q, r), p);
     }
 
-    // --- entry-point derivations (game_to_axis_graph_raw_lean) ---
-    // stones sorted by coord (q, r) — carries the owning player. Derived from
-    // the DEDUPED `stone_map` (not the raw input Vec) to match the oracle's
-    // `sorted(stone_map.items())` exactly: the Python builder receives a dict,
-    // so a duplicate coord collapses to one node (last-player-wins, the
-    // HashMap-insert semantics above). A real board never has duplicates, but
-    // matching the dict is what makes this a faithful port on the whole domain.
+    // Stones sorted by coord, derived from the DEDUPED `stone_map` so a duplicate coord
+    // collapses to one node exactly as the oracle's dict does.
     let mut stones: Vec<(i32, i32, i8)> = stone_map
         .iter()
         .map(|(&k, &p)| ((k >> 32) as i32, k as u32 as i32, p))
@@ -808,12 +685,9 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
     let mut edge_src: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_dst: Vec<u32> = Vec::with_capacity(cap);
     let mut edge_attr: Vec<f32> = Vec::with_capacity(cap * EDGE_FEAT_DIM);
-    // HOT-08. `dedup_axis_edges` re-derived each edge's axis by SCANNING the one-hot it had
-    // just been handed, five floats per edge over twice the final edge count. The emitter knows
-    // the axis, the sign and the distance — and `(src, axis, sign, d)` partitions the axis edges
-    // IDENTICALLY to `(src, dst, axis)`, because `dst = src + sign * d * axis_delta` — so the
-    // key is carried rather than reconstructed, and it is LINEAR in the node count where an
-    // `(src, dst)` key space is quadratic.
+    // `(src, axis, sign, d)` partitions the axis edges IDENTICALLY to `(src, dst, axis)` since
+    // `dst = src + sign * d * axis_delta`, so the key is carried rather than reconstructed from
+    // a one-hot scan — and it is LINEAR in the node count where `(src, dst)` is quadratic.
     let mut edge_key: Vec<u32> = Vec::with_capacity(cap);
 
     for i in 0..n_real {
@@ -879,10 +753,8 @@ pub fn build_axis_graph(stones_in: &StoneList, params: &BuildParams) -> AxisGrap
         edge_attr.extend_from_slice(&[0.0; EDGE_FEAT_DIM]);
     }
 
-    // --- threat features (real nodes only) ---
-    // The reach is the threat walk's own `win_length - 1` cells along an axis; nothing beyond
-    // the stones' bbox expanded by it can hold a stone, so the table is complete for every
-    // probe the walk makes.
+    // The reach is the threat walk's own `win_length - 1` cells, so nothing beyond the stones'
+    // bbox expanded by it can hold a stone and the table is complete for every probe.
     let stone_index = StoneIndex::build(&stones, i32::from(params.win_length) - 1);
     for idx in 0..n_real {
         let c = (coords[idx * 2], coords[idx * 2 + 1]);
@@ -945,12 +817,8 @@ fn axis_idx_of(a: &[f32]) -> u8 {
     }
 }
 
-/// Dedup by `(src, dst, axis_idx)` keeping the FIRST occurrence, preserving
-/// insertion order (the oracle's dedup rule). Compacts all three arrays
-/// IN PLACE (single pass, no reallocation) so `edge_attr[e]` stays bound to
-/// `edge_index[:, e]`. Key packs into one u64 (src/dst < ~1000 nodes, axis in
-/// 0..2) to skip tuple hashing on the hot dedup pass.
-/// `3 axes x 2 signs`, the per-node stride multiplier of the carried dedup key.
+/// Dedup by `(src, dst, axis_idx)` keeping the FIRST occurrence in insertion order. Compacts
+/// all three arrays IN PLACE so `edge_attr[e]` stays bound to `edge_index[:, e]`.
 const DEDUP_STRIDE_AXES: u32 = 6;
 
 fn dedup_axis_edges(
@@ -963,10 +831,8 @@ fn dedup_axis_edges(
 ) {
     let e = src.len();
     debug_assert_eq!(key_of.len(), e, "one carried dedup key per emitted edge");
-    // The key space is `n_real * 3 axes * 2 signs * window`, LINEAR in the node count and
-    // independent of the board span, so a bit per key is a few kilobytes rather than a hash
-    // table sized to the edge count. `saturating_mul` keeps a pathological geometry from
-    // wrapping into a small, wrong allocation.
+    // The key space is LINEAR in the node count and span-independent, so a bit per key is a few
+    // kilobytes; `saturating_mul` keeps a pathological geometry from wrapping into a small one.
     let bits = n_real
         .saturating_mul(DEDUP_STRIDE_AXES as usize)
         .saturating_mul(window.max(1));
@@ -993,27 +859,13 @@ fn dedup_axis_edges(
     attr.truncate(w * EDGE_FEAT_DIM);
 }
 
-/// ALWAYS-ON producer-side contract verification
-/// (`docs/contracts/graph_wire.md`) — promoted from `debug_assert` per
-/// predecessor review (dispatcher ruling):
-/// runs once per built graph in EVERY profile, release included, so the Rust
-/// producer has real defense-in-depth in production, not only in tests. A
-/// payload that fails a check PANICS with the NAMED contract error and is
-/// never emitted (die loud; the self-play worker dies with it — seam design
-/// ruling 6). Measured cost: bounded well under the ~3% always-on budget
-/// (measured; private records archive).
+/// ALWAYS-ON producer-side contract verification: once per built graph in EVERY profile,
+/// release included. A payload that fails PANICS with the NAMED contract error and is never
+/// emitted; the self-play worker dies with it. Measured well under the 3 % always-on budget.
 ///
-/// Leaf-checkable subset of the 18 named checks: `NodeCountChecksum`,
-/// `NodeFeatDimMismatch`, `EdgeAttrDimMismatch`, `EdgeIndexOutOfBounds`,
-/// `GatherNotLegalNode`, `ScatterSlotOutOfBounds`,
-/// `ScatterSlotCanonicalMismatch`, `ScatterSlotAliasing`, `EmptyLegalSet`,
-/// `EdgeAttrGeometryMismatch` (the contract's headline semantic check, ADV-8).
-/// Batch/wire-context checks (offsets, cross-graph, version, dtype,
-/// aug-round-trip) belong to the collate resolver (mantis-selfplay, later WP).
-///
-/// `float_cmp` allowed: the compared floats are EXACT constants the builder
-/// itself wrote (one-hot 0.0/1.0, integral signed_dist, ±1.0 src_player) —
-/// approximate comparison would WEAKEN the check.
+/// The leaf-checkable subset of the 18 named checks; batch/wire-context checks belong to the
+/// collate resolver. `float_cmp` is allowed because the compared floats are EXACT constants
+/// the builder itself wrote, so approximate comparison would WEAKEN the check.
 #[allow(clippy::float_cmp)]
 fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &BuildParams) {
     let trunk_sz = params.trunk_size;
@@ -1059,9 +911,8 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
     let dummy_idx = (n - 1) as u32;
     let cur_f = f32::from(g.current_player);
     let window = i32::from(params.win_length) - 1;
-    // Per-edge: bounds + EdgeAttrGeometryMismatch (recompute expected attrs
-    // from the WIRE arrays only — node_coords endpoints, stone/own columns,
-    // current_player — mirroring the resolver's check, contract §2.5 F2).
+    // Per-edge: bounds + EdgeAttrGeometryMismatch, recomputing expected attrs from the WIRE
+    // arrays only, mirroring the resolver's check.
     for e in 0..n_edges {
         let s = g.edge_index.src[e];
         let d = g.edge_index.dst[e];
@@ -1150,7 +1001,6 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
     }
 }
 
-// ── native-only surface (cfg-gating pattern for a future threaded caller) ────
 #[cfg(all(feature = "native", not(target_arch = "wasm32")))]
 #[must_use]
 pub fn parallelism_hint() -> usize {
@@ -1176,14 +1026,8 @@ mod tests {
 
     #[test]
     fn empty_board_matches_dense_5x5_fallback() {
-        // WP-1 launch-blocker fix: n_stones == 0 must mirror the
-        // predecessor dense engine's `Board::legal_moves_set()` empty-board
-        // special case EXACTLY (that engine ports into mantis-core with its
-        // own WP) — a fixed 5x5 region
-        // `(dq, dr) in [-2,2]x[-2,2]`, 25 cells around the origin, NOT the
-        // vacuous `[]` the Python graph oracle returns for a stoneless
-        // `stone_map` (that fn is never exercised at n_stones==0 in real
-        // oracle usage — see `legal_moves_from_stones`'s doc comment).
+        // n_stones == 0 must mirror the dense engine's empty-board case exactly — a fixed 5x5
+        // region, 25 cells around the origin — and NOT the oracle's vacuous `[]`.
         let g = build_axis_graph(&StoneList::default(), &BuildParams::V1_GEOMETRY);
         assert_eq!(g.n_stones, 0);
         assert_eq!(g.legal_node_gather.len(), 25, "empty board must yield the dense 5x5 = 25 legal cells");
@@ -1212,9 +1056,8 @@ mod tests {
         got.sort_unstable();
         assert_eq!(got, expected, "empty-board legal cell set must byte-match dense's 5x5 fallback");
 
-        // Radius-independence (review of the dense reference: that branch
-        // ignores `Board.legal_move_radius` entirely) — a very different
-        // `radius` must NOT change the empty-board fallback shape.
+        // Radius-independence: the dense reference's empty-board branch ignores
+        // `legal_move_radius`, so a very different `radius` must not change the fallback shape.
         let g2 = build_axis_graph(
             &StoneList::default(),
             &BuildParams { radius: 1, ..BuildParams::V1_GEOMETRY },
@@ -1224,24 +1067,11 @@ mod tests {
 
     #[test]
     fn single_stone_legal_set_matches_dense_ball_formula() {
-        // WP-1 verification (NOT a fix — this general per-stone branch was
-        // already correct, only the n_stones==0 branch was broken): dense's
-        // non-empty branch (the predecessor dense engine's
-        // `Board::legal_moves_set()`) computes, for every existing
-        // stone, all empty cells within hex-distance <= radius via the same
-        // axial hex-ball loop (`dq in -r..=r`, `dr` clamped so the ball
-        // constraint `|dq|,|dr|,|dq+dr| <= r` holds). For a 1-stone board
-        // that's a single ball around that one stone. Replicate dense's OWN
-        // loop shape here (not `legal_moves_from_stones`'s hex-ball filter —
-        // that would just be comparing the fn to itself) so a real
-        // divergence between the two independent formulas would be caught.
-        // AUDIT-1 F-49 read this line as an unpinned copy of `mantis_core`'s
-        // `DEFAULT_LEGAL_MOVE_RADIUS`. It is NOT one, and the distinction is the point of the
-        // test: this crate is dep-free (`repo_design` §2) and cannot import that constant, and
-        // the whole value of this arm is that it replicates the predecessor dense engine's OWN
-        // loop shape INDEPENDENTLY. Importing the number would make it the same authority
-        // twice. What was missing is the cross-check, and it now exists in the lowest crate
-        // that sees both: `mantis-encoding/tests/axis_pin.rs`.
+        // Verification, not a fix. This replicates the dense engine's OWN loop shape rather
+        // than calling `legal_moves_from_stones`, so a real divergence between two independent
+        // formulas is caught. The radius literal is deliberately NOT `mantis_core`'s
+        // `DEFAULT_LEGAL_MOVE_RADIUS` — this crate is dep-free, and importing it would make it
+        // the same authority twice; the cross-check lives in `mantis-encoding/tests/axis_pin.rs`.
         let radius = 5i32; // the predecessor dense engine's default, replicated independently
         let (sq, sr) = (3i32, -2i32);
         let mut expected: Vec<(i32, i32)> = Vec::new();

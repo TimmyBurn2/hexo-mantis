@@ -1,16 +1,12 @@
-"""O3 — arch-off-module ban (grep-gate census + mutation self-test).
+"""The arch-off-module ban: a census plus its mutation self-test.
 
-repo_design §3: reading arch attributes off a live `nn.Module` is banned — arch
-travels on the declared dataclasses; the old `model_representation` isinstance sniff
-is DELETED and stays deleted. The census scans the model construction-authority
-layer (`src/mantis/model/`) for the broadened sniff pattern set (N2/N3) and proves
-it bites via a planted-mutation self-test (LAW-07).
+Reading arch attributes off a live `nn.Module` is banned — arch travels on the declared
+dataclasses, and the `model_representation` isinstance sniff stays deleted.
 
-Scope note: the attribute-sniff patterns are checked over `src/mantis/model/` (where
-build_net + the adapter live and where a sniff would be re-introduced); the deleted
-`def model_representation` is checked repo-wide. The pre-existing encoding-layer
-`getattr(spec, "representation", "grid")` (WP7 `resolvers.py`) is a SPEC read, not an
-nn.Module sniff, and is out of WP9 scope.
+Scope: the attribute-sniff patterns are checked over `src/mantis/model/`, where build_net and
+the adapter live and where a sniff would be re-introduced; the deleted `def
+model_representation` is checked repo-wide. A `getattr(spec, "representation", ...)` is a SPEC
+read, not an nn.Module sniff.
 """
 from __future__ import annotations
 
@@ -34,7 +30,7 @@ _RE_HASATTR = re.compile(
     r"hasattr\s*\([^,]+,\s*[\"'](in_channels|filters|out_features|board_size|representation|"
     r"node_feat_dim|edge_feat_dim|value_head_type)[\"']\s*\)"
 )
-# (e) dense-default "grid" token (the removed build_net.py:215 / :105 sites).
+# (e) dense-default "grid" token.
 _RE_DENSE_DEFAULT = re.compile(
     r"getattr\([^)]*,\s*[\"']grid[\"']\s*\)"
     r"|\.get\(\s*[\"']representation[\"']\s*,\s*[\"']grid[\"']"
@@ -47,9 +43,7 @@ def _py_files(root: Path) -> list[Path]:
 
 
 def _code_only(line: str) -> str:
-    """`line` with any trailing `#` comment removed — naive but sufficient here, because a `#`
-    inside a string literal on a line that ALSO carries a dense default is not a shape this
-    tree produces, and over-stripping can only lose a hit in a string, never invent one."""
+    """`line` with any trailing `#` comment removed; over-stripping can lose a hit, never invent one."""
     return line.split("#", 1)[0]
 
 
@@ -86,32 +80,16 @@ def test_no_arch_sniffs_in_model_layer() -> None:
 
 
 def test_no_representation_default_anywhere_under_src() -> None:
-    """AUDIT-1 F-35 — the DENSE-BY-DEFAULT arm, censused over the WHOLE package.
+    """The DENSE-BY-DEFAULT arm, censused over the WHOLE package.
 
-    `getattr(x, "representation", "grid")` sat at SIX sites outside the model layer: both
-    encoding spec filters, `train/subsystems.py`, `train/anchor.py` TWICE (one of them reading
-    a legacy checkpoint's metadata, so live for any artifact lacking the field) and
-    `train/trainer/core.py`. LAW-11 holds at the schema and at `is_graph_representation`, and
-    each of those re-introduced the default one layer down — a THIRD representation would have
-    been silently grid at every one of them.
-
-    WHY THIS ROW AND NOT `find_arch_sniffs(_SRC)`. The audit's repair line says "widen the
-    census root to `src/mantis/`", and I ran that: it returns TEN findings, and every one is
-    correct code. Nine are `.board_size` read off a registry SPEC whose receiver is not in
-    `_ALLOWED_RECEIVERS` (`_V6`, `_V6W25_SPEC`, `resolved`, `encoding_spec`, `s`) or a
-    `.filters` read off an argparse namespace; the tenth is
-    `pretrain/cli.py`'s `isinstance(model, HexTacToeNet)`, which REFUSES a non-dense net at a
-    dense-only CLI rather than branching to a dense default. This module's own docstring makes
-    that distinction for the sibling pattern — *"inside an affirmative guard it is correct
-    dispatch, and a gate that fires on correct code trains reviewers to ignore it"*. Widening
-    wholesale would need five receiver names allowlisted, and an allowlist that grows per
-    call site is how a census stops meaning anything. So the ROOT widens for the pattern F-35
-    is actually about, and the arch-off-a-module patterns keep their tighter root above.
+    A representation read defaulting to "grid" once sat at six sites outside the model layer,
+    each re-introducing one layer down the default the schema forbids. Only this PATTERN widens
+    its root: running the full sniff set over `src/mantis/` returns ten findings that are all
+    correct code, and allowlisting five more receiver names per call site is how a census stops
+    meaning anything.
     """
-    # CODE, not comments. A comment that RECORDS a removed default contains the removed
-    # default — this exact row tripped on `anchor.py`'s own note about the `getattr(...,
-    # "grid")` it deleted. Strip the comment tail before matching, so the census sees what
-    # runs and not what is written about what used to run.
+    # CODE, not comments: a comment that RECORDS a removed default contains the removed default,
+    # so the tail is stripped before matching.
     offenders = [
         f"{path}:{i}" for path in _py_files(_SRC)
         for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1)
@@ -129,7 +107,7 @@ def test_model_representation_symbol_is_deleted_repo_wide() -> None:
 
 
 def test_census_bites_planted_sniff(tmp_path: Path) -> None:
-    """Mutation self-test (LAW-07): a planted type-name sniff → census FAILS."""
+    """A planted type-name sniff must make the census FAIL."""
     planted = tmp_path / "mut.py"
     planted.write_text('def f(m):\n    return type(m).__name__ == "GnnNet"\n')
     assert find_arch_sniffs(tmp_path), "census must bite the planted type-name sniff"

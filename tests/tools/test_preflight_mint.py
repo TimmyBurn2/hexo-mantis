@@ -1,86 +1,19 @@
-"""⊕ WPAX Phase P ORACLE — C-3: the mint preflight's corpus + structural pins (DESIGN_P §12).
+"""The mint preflight's corpus + structural pins.
 
-RED-at-import until IMPL lands `tools/ci_gates/preflight_mint.py` (C-2) and
-`mantis.config.armed_aborts` (C-1). Both loads below are the RED anchor; every oracle in
-this file rides on them, exactly as `tests/test_run_strict_composition.py` rides on
-`mantis.config.resolve.composition`.
+What this file exists to stop: run5 minting on a preflight that returned rc 0 while the sync
+cadence, the lag transport or the arming was broken. Three predicates exist only because
+executing the design's earlier versions found them satisfiable by a broken run.
 
-What this file exists to stop, in one sentence: run5 minting on a preflight that returned
-rc 0 while the thing it was about — the sync cadence, the lag transport, the arming — was
-broken. Three of the predicates below exist ONLY because REVIEW_DESIGN_P executed the
-design's earlier versions and found them satisfiable by a broken run (MF-3, MF-4, MF-5);
-this file is where those three defects become un-reintroducible.
+"Exactly one predicate flips per mutation" is FALSE — a thinned stream flips a1 AND a2, and a
+frozen actor is also a stale one — so the cross-check pins the EXACT declared flip-set per row
+plus pairwise-distinct signatures, and pins predicate order so a report is deterministic. Every
+stream's `ts` is re-based onto a modelled clock, which makes b4c's window HARDER, never easier.
 
-The oracles, and the defect each one is the ONLY witness to:
-
-- M2  b0     — the lag emission absent → the reading is unobservable. Sole witness to (b)
-               having a subject at all.
-- M3  b3     — a frozen actor callable. Sole witness against `actor_ckpt_step_fn = lambda: 0`.
-- M4  b5a    — swapped lag callables driven through a REAL watchdog. Per §7.5 this is the
-               ONLY deterministic producer of the inversion axis in the whole phase; the
-               tool's own contribution is probabilistic and says so (rc 23, ADJ-12).
-- M5  b1     — a hardcoded `lag_steps` inconsistent with its own operands.
-- M6  b4a    — an actor source that MOVES but reports a value `ActorSync` never recorded.
-- M7  a1/a2  — a missed cadence boundary (the run3 failure), sub-reason `missed`.
-- M8  (a)    — zero syncs, named separately from a cadence mismatch.
-- M9  all    — the healthy drive. Half of "each mutation dies alone" is that NOTHING flips
-               on a healthy stream; without it a predicate that has gone unconditionally
-               red is invisible (the mirror image of gate 11's vacuity floor).
-- M11 R7     — an `--out-dir` inside the repo. Sole witness that the gate cannot manufacture
-               the gate-6 violation it would then have to report.
-- M12 §5.5   — a burst below the binding validator's floor is REFUSED with the minimum
-               stated, not silently clamped.
-- M13 MF-7   — mode AUDIT is green on the real tree AND says out loud that (a) and (b) did
-               not run. Sole witness against a CI log reading `gate 12 … exit 0` as "the
-               preflight was green".
-- M14 a1/a2  — an OVER-FIRING sync stream, sub-reason `extra`. Sole witness to MF-4: the
-               design's earlier SET equality passed this stream (measured, 102 events).
-- M15 b4c    — a HEALTHY run whose last lag sample predates the final syncs. Sole witness to
-               MF-5: the design's earlier `max` equality returned rc 28 on this stream.
-- M16 b4c    — a stale-but-legitimate actor mirror. Sole witness that MF-5's replacement did
-               not lose the transport-cross-check b4 existed for.
-- O-1…O-5, O-9, O-10 — the anti-evasion pins on the TOOL: no CLI defaults, no stand-ins, no
-               `sys.path` write, one override key, no validator-skipping construction, and —
-               INVERTED by WPMAIN (R120/R121(a)/R126) — the tool builds NO collaborator of
-               its own, passes NO eval posture, and declares NO device flag. All three are
-               presence->ban re-points with named equal-or-stronger successors (see each
-               test's docstring); the boot itself lives at `mantis.run`.
-- O-12       — an AUDIT-mode report can never carry `"verdict": "pass"` under `a_sync` or
-               `b_lag`. Behavioural, not AST.
-- the independence cross-check — the property RED-TEAM will attack. See §"cross-check".
-
-DEVIATIONS FROM DESIGN_P, logged in ORACLE_NOTES_P.md and repeated here so a reader of the
-file alone is not misled:
-
- 1. DESIGN names no entry point for the predicates. This file pins ONE seam,
-    `evaluate_assertions(events, *, cadence_steps, burst_steps, poll_interval_sec)`,
-    returning the §9.1 `assertions` object verbatim. The RETURN SHAPE is the design's; only
-    the name is ours, and it is the minimum needed for §12's corpus to exist.
- 2. §12's "exactly one of {a1…a4, b0…b4c, b5a, c, manifest} flips" is literally FALSE, by
-    the design's own §7.1 table (a thinned stream flips a1 AND a2) and by physics (a frozen
-    actor is also a stale one; b3 and b4c both fall). The cross-check therefore pins the
-    EXACT declared flip-set per row plus pairwise-distinct signatures — strictly stronger
-    than "at least one flips", and honest about which predicates are conjoined.
- 3. §7.4's b-table is ordered but does not say which predicate NAMES the failure when two
-    fall. This file pins table order (b0, b1, b2, b3, b4a, b4b, b4c, b5a), so a report is
-    deterministic. Same for a (a1 before a2).
- 4. O-1's "every CLI arg is `required=True`" is incompatible with §10.2's gate-12 step,
-    which invokes `--audit-only` alone. The R1 content of O-1 — no defaults — is pinned by
-    AST; the requiredness is pinned BEHAVIOURALLY, per mode.
- 5. Every event stream's `ts` is re-based onto §7.4's modelled clock (0.5 s/step, samples at
-    the real 15 s `heartbeat_file_interval_sec`). A unit-scale drive completes in
-    milliseconds, which would make b4c's `P = 5.0 s` window vacuous — re-basing makes b4c
-    HARDER, never easier. The PAYLOADS are the real objects' own.
-
->300 justify (R8): one gate, one corpus. Every row of §12 is a mutation of the SAME
-event stream against the SAME predicate set, and the module's load-bearing assertion is
-the cross-check that each mutation flips exactly its declared predicate set — a property
-that only exists while all of them are collected in one place. Splitting by predicate
-would delete the cross-check; splitting by mutation would duplicate the stream builders,
-which are the thing the mutations mutate. (DESIGN §13.1 wrote this line at design time
-with "exactly one predicate"; deviation 2 above measures that claim false, so the clause
-is corrected rather than copied — an R8 justification that is not true is worse than none,
-which is SF-7's own ruling applied to itself.)
+>300 justify (R8): one gate, one corpus. Every row is a mutation of the SAME event stream against
+the SAME predicate set, and the load-bearing assertion is the cross-check that each mutation
+flips exactly its declared set — a property that exists only while all of them are collected in
+one place. Splitting by predicate deletes the cross-check; splitting by mutation duplicates the
+stream builders, which are the thing the mutations mutate.
 """
 from __future__ import annotations
 
@@ -103,7 +36,7 @@ from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWat
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 
-#: The four new Phase-P test files. O-3 scans the tool AND its tests (R5 / LAW-17).
+#: The four new test files. The sys.path census scans the tool AND its tests.
 PHASE_P_TEST_FILES = (
     "tests/tools/test_preflight_mint.py",
     "tests/config/test_armed_abort_manifest.py",
@@ -113,8 +46,8 @@ PHASE_P_TEST_FILES = (
 
 
 def _load_tool():
-    """Load the gate script by absolute path — the `tests/tools/test_silent_encoding_gate.py
-    :21-29` precedent, ZERO `sys.path` mutation (R5 / LAW-17). `tools/` is not a package."""
+    """Load the gate script by absolute path, with ZERO `sys.path` mutation: `tools/` is not a
+    package."""
     if not TOOL_PATH.is_file():
         raise ModuleNotFoundError(
             f"RED anchor: {TOOL_PATH.relative_to(REPO_ROOT)} does not exist at HEAD — "
@@ -130,7 +63,7 @@ def _load_tool():
 
 TOOL = _load_tool()  # RED-at-import anchor #1
 
-# ── the modelled run: every number is a MEASURED repo fact, none invented ─────────────
+# The modelled run: every number below is a MEASURED repo fact, none invented.
 _N = 101              # §5.5 — the minimum legal burst on all five minted configs
 _C = 1                # train.actor_sync_cadence_steps, all five minted configs
 _P = 5.0              # monitor.heartbeat_poll_interval_sec — configs/run6.yaml:198
@@ -138,10 +71,9 @@ _STEP_SEC = 0.5       # §7.4's modelled step duration (§14 item 17: the real r
 _SAMPLE_TS = (0.0, 15.0, 30.0, 45.0)   # heartbeat_file_interval_sec 15.0 — run6.yaml:199
 _THRESHOLD = 100      # monitor.actor_lag_threshold_steps — run6.yaml:202
 
-#: (learner_step, actor_ckpt_step) at each of the four sample instants. The third pair is
-#: the one poll that lands INSIDE the sync window (§7.5), which is what makes
-#: `inversion_discrimination == "proven"` reachable at cadence 1 — and therefore what makes
-#: a fully-green baseline exist at all (MF-3: rc 0 REQUIRES `proven`).
+#: (learner_step, actor_ckpt_step) at each of the four sample instants. The third pair is the
+#: one poll that lands INSIDE the sync window, which is what makes
+#: `inversion_discrimination == "proven"` reachable at cadence 1 — and rc 0 requires `proven`.
 _HEALTHY_READINGS = ((0, 0), (30, 30), (60, 59), (90, 90))
 _FROZEN_ACTOR_READINGS = ((0, 0), (30, 0), (60, 0), (90, 0))
 _STALE_MIRROR_READINGS = ((0, 0), (30, 0), (60, 20), (90, 50))
@@ -151,12 +83,9 @@ B_KEYS = ("b0", "b1", "b2", "b3", "b4a", "b4b", "b4c", "b5a")
 SAMPLE_EVENT = "actor_lag_sample"
 
 
-# ── real-object drives ────────────────────────────────────────────────────────────────
 class _SyncTarget:
-    """Stand-in for the injected sync target (N-8). `ActorSync.__init__` requires one
-    (`actor_sync.py:34`) and `maybe_sync` calls two methods on it (`:69-70`), so this is
-    unavoidable — and legitimate: O-2 bans stand-ins in the TOOL, not in a unit test, and
-    the object under test (ActorSync's own cadence and emission logic) is the real one."""
+    """Stand-in for the injected sync target, which `ActorSync.__init__` requires. Legitimate
+    here: stand-ins are banned in the TOOL, not in a unit test."""
 
     def __init__(self) -> None:
         self.pushes: list = []
@@ -176,9 +105,8 @@ def _read(sink: JsonlEventSink, name: str) -> list[dict]:
 
 
 def _real_syncs(tmp_path: Path, tag: str, steps, *, cadence: int = _C) -> list[dict]:
-    """Drive a REAL `ActorSync` at `cadence` over `steps`, through a REAL `JsonlEventSink`,
-    and read the events back off disk. `ts` is re-based onto the modelled clock
-    (deviation 5)."""
+    """Drive a REAL `ActorSync` at `cadence` over `steps` through a REAL `JsonlEventSink` and
+    read the events back off disk, with `ts` re-based onto the modelled clock."""
     sink = JsonlEventSink(log_dir=tmp_path / f"sync_{tag}", run_id=f"oracle_p_{tag}")
     learner = {"v": 0}
     sync = ActorSync(target=_SyncTarget(), state_dict_fn=lambda: {},
@@ -194,13 +122,9 @@ def _real_syncs(tmp_path: Path, tag: str, steps, *, cadence: int = _C) -> list[d
 
 
 def _real_samples(tmp_path: Path, tag: str, readings, *, swapped: bool = False) -> list[dict]:
-    """Drive a REAL `HeartbeatWatchdog` with a REAL `ActorLagSpec` through a REAL sink, one
-    poll per reading, and read the `actor_lag_sample` events back off disk.
-
-    RED at HEAD by construction: the emission is TD-6 (M-1) and does not exist yet, so this
-    returns `[]` today and every b-row fails on b0 instead of on its own predicate. That is
-    the honest RED, and it is why C-5 is the producer test this rig depends on.
-    """
+    """Drive a REAL `HeartbeatWatchdog` with a REAL `ActorLagSpec` through a REAL sink, one poll
+    per reading, and read the `actor_lag_sample` events back off disk. RED at HEAD by
+    construction: the emission does not exist yet, so this returns `[]`."""
     sink = JsonlEventSink(log_dir=tmp_path / f"lag_{tag}", run_id=f"oracle_p_{tag}")
     state = {"learner": 0, "actor": 0}
     learner_fn, actor_fn = (lambda: state["learner"]), (lambda: state["actor"])
@@ -230,12 +154,8 @@ def _real_samples(tmp_path: Path, tag: str, readings, *, swapped: bool = False) 
 
 
 def _model_samples(readings) -> list[dict]:
-    """The same stream, constructed rather than driven — §12's "predicate-level" rows.
-
-    Licensed by `test_the_modelled_sample_stream_is_what_the_REAL_watchdog_emits`, which
-    asserts payload equality against the real drive. Without that bridge this would be a
-    second authority for the sample's shape (LAW-08).
-    """
+    """The same stream, constructed rather than driven, and licensed by the bridge test — without
+    it this is a second authority for the sample's shape."""
     return [{"event": "actor_lag_sample", "seq": index, "ts": _SAMPLE_TS[index],
              "learner_step": learner, "actor_ckpt_step": actor,
              "lag_steps": learner - actor, "threshold_steps": _THRESHOLD}
@@ -243,44 +163,38 @@ def _model_samples(readings) -> list[dict]:
 
 
 def _stream(syncs: list[dict], samples: list[dict], *, final_step: int = _N) -> list[dict]:
-    """One JSONL segment, in emission order. `shutdown_save` is §7.3's step ground truth:
-    there is no per-step event in a 101-step burst (`log_interval=1000`, `run.py:90`), so N
-    must come from an independent witness."""
+    """One JSONL segment, in emission order. `shutdown_save` is the step ground truth: a
+    101-step burst emits no per-step event at `log_interval=1000`."""
     save = [{"event": "shutdown_save", "step": final_step,
              "ts": _STEP_SEC * float(final_step) + 0.5}]
     return sorted(syncs + samples + save, key=lambda event: float(event["ts"]))
 
 
 def _assertions(events: list[dict], *, cadence: int = _C, burst: int = _N):
-    """THE seam (deviation 1). Return shape is DESIGN §9.1's `assertions` object."""
+    """THE seam. Return shape is the design's `assertions` object."""
     return TOOL.evaluate_assertions(events, cadence_steps=cadence, burst_steps=burst,
                                     poll_interval_sec=_P)
 
 
 def _vector(block, keys) -> tuple[frozenset, frozenset]:
-    """(affirmatively-False predicates, not-evaluated predicates).
-
-    Three-valued on purpose: `b0` and the zero-sync arm GATE the predicates behind them, and
-    collapsing "did not hold" into "was not evaluated" is how a cross-check stops
-    discriminating. Both sets are pinned per row, so a predicate that quietly becomes
-    unevaluated is caught too.
-    """
+    """Return (affirmatively-False predicates, not-evaluated predicates). Three-valued on purpose:
+    `b0` and the zero-sync arm GATE the predicates behind them, and collapsing "did not hold" into
+    "was not evaluated" stops a cross-check discriminating."""
     missing = [key for key in keys if key not in block]
     assert not missing, f"the report block must carry every predicate key; missing {missing}"
     return (frozenset(k for k in keys if block[k] is False),
             frozenset(k for k in keys if block[k] is None))
 
 
-# ── the corpus: one healthy stream, mutated in exactly one place per row ──────────────
+# The corpus: one healthy stream, mutated in exactly one place per row.
 def _row_healthy(tmp_path):
     return {"events": _stream(_real_syncs(tmp_path, "healthy", range(1, _N + 1)),
                               _real_samples(tmp_path, "healthy", _HEALTHY_READINGS))}
 
 
 def _row_m2(tmp_path):
-    """The `actor_lag_sample` emission removed from `heartbeat_watchdog.py`: the samples are
-    driven for real and then FILTERED OUT, so the row is deterministic both before and after
-    TD-6 lands."""
+    """The `actor_lag_sample` emission removed: the samples are driven for real and then
+    FILTERED OUT, so the row is deterministic both before and after the emission lands."""
     return {"events": _stream(_real_syncs(tmp_path, "m2", range(1, _N + 1)), [])}
 
 
@@ -318,8 +232,8 @@ def _row_m7(tmp_path):
 
 
 def _row_m8(tmp_path):
-    """Zero syncs, with the physically consistent lag stream: an actor that was never synced
-    never advances."""
+    """Zero syncs, with the physically consistent lag stream: an actor never synced never
+    advances."""
     return {"events": _stream(_real_syncs(tmp_path, "m8", []),
                               _real_samples(tmp_path, "m8", _FROZEN_ACTOR_READINGS))}
 
@@ -353,8 +267,8 @@ def _row_m10(tmp_path):
     return row
 
 
-#: name → (builder, a_failure, a_false, a_none, a_sub, b_failure, b_false, b_none, b_sub,
-#:         c_fails, manifest_fails). See deviations 2 and 3.
+#: name -> (builder, a_failure, a_false, a_none, a_sub, b_failure, b_false, b_none, b_sub,
+#:          c_fails, manifest_fails).
 _CORPUS = {
     "M2": (_row_m2, None, (), (), None,
            "PreflightLagUnobservableError", ("b0",), B_KEYS[1:], None, False, False),
@@ -410,10 +324,9 @@ def _declared(name) -> tuple:
             c_fails, manifest_fails)
 
 
-# ══ the healthy inverse — a gate that cannot go green is as useless as one that cannot
-#    go red (dispatch §PHASE P RED-TEAM lens) ══════════════════════════════════════════
+# The healthy inverse — a gate that cannot go green is as useless as one that cannot go red.
 def test_a_healthy_stream_passes_every_predicate(tmp_path) -> None:
-    """M9. Real `ActorSync` over 101 steps at cadence 1 + real watchdog samples."""
+    """Real `ActorSync` over 101 steps at cadence 1 + real watchdog samples: nothing flips."""
     observed = _observe(_row_healthy(tmp_path))
     assert observed["a"]["verdict"] == "pass", f"a_sync must be green: {observed['a']!r}"
     assert observed["b"]["verdict"] == "pass", f"b_lag must be green: {observed['b']!r}"
@@ -440,11 +353,9 @@ def test_a_healthy_stream_passes_every_predicate(tmp_path) -> None:
 
 
 def test_the_inversion_axis_is_proven_only_by_a_discriminating_sample(tmp_path) -> None:
-    """MF-3, the defect REVIEW found by execution: with the operands exchanged at
-    `subsystems.py:276-277`, a `C == 1` config produces no negative lag and no discriminating
-    sample — and the design's earlier ruling returned **rc 0** on a genuinely inverted
-    wiring. Both arms are asserted, because only the pair shows the axis is a real COUNT.
-    """
+    """With the lag operands exchanged, a `C == 1` config produces no negative lag and no
+    discriminating sample. Both arms are asserted, because only the pair shows the axis is a
+    real COUNT."""
     equal_only = _stream(_real_syncs(tmp_path, "inv_a", range(1, _N + 1)),
                          _model_samples(((0, 0), (30, 30), (60, 60), (90, 90))))
     block = _assertions(equal_only)["b_lag"]
@@ -474,9 +385,8 @@ def test_the_inversion_axis_is_proven_only_by_a_discriminating_sample(tmp_path) 
 
 
 def test_at_cadence_above_one_an_undiscriminated_axis_is_a_FROZEN_reading(tmp_path) -> None:
-    """§7.5 rule 4. At cadence > 1 the learner is STRUCTURALLY ahead between syncs, so a
-    reading that never shows it is frozen (rc 26), not merely undiscriminated (rc 23). Two
-    rc values for one condition is the kind of thing that rots into one; this pins both."""
+    """At cadence > 1 the learner is STRUCTURALLY ahead between syncs, so a reading that never
+    shows it is frozen (rc 26), not merely undiscriminated (rc 23)."""
     stream = _stream(_real_syncs(tmp_path, "cadence5", range(1, _N + 1)),
                      _model_samples(((0, 0), (30, 30), (60, 60), (90, 90))))
     block = TOOL.evaluate_assertions(stream, cadence_steps=5, burst_steps=_N,
@@ -491,9 +401,8 @@ def test_at_cadence_above_one_an_undiscriminated_axis_is_a_FROZEN_reading(tmp_pa
 
 
 def test_the_modelled_sample_stream_is_what_the_REAL_watchdog_emits(tmp_path) -> None:
-    """The bridge that licenses `_model_samples`. Without it the modelled stream is a second
-    authority for the sample's shape (LAW-08) and every predicate-level row is testing a
-    fiction. Compared on payload, not on `ts` — `ts` is re-based by deviation 5."""
+    """The bridge that licenses `_model_samples`; without it every predicate-level row tests a
+    fiction. Compared on payload, not on the re-based `ts`."""
     real = _real_samples(tmp_path, "bridge", _HEALTHY_READINGS)
     model = _model_samples(_HEALTHY_READINGS)
     def strip(events):
@@ -505,9 +414,9 @@ def test_the_modelled_sample_stream_is_what_the_REAL_watchdog_emits(tmp_path) ->
     )
 
 
-# ══ assertion (a) — sync presence and cadence-consistency (§7.1) ═══════════════════════
+# Assertion (a) — sync presence and cadence-consistency.
 def test_a_missed_cadence_boundary_fails_the_sync_check(tmp_path) -> None:
-    """M7 — the run3 failure. Real `ActorSync`, one boundary skipped."""
+    """A real `ActorSync` with one boundary skipped fails a1/a2 with sub-reason `missed`."""
     block = _observe(_row_m7(tmp_path))["a"]
     assert (block["a1"], block["a2"]) == (False, False)
     assert (block["a3"], block["a4"]) == (True, True), (
@@ -520,8 +429,8 @@ def test_a_missed_cadence_boundary_fails_the_sync_check(tmp_path) -> None:
 
 
 def test_an_over_firing_sync_stream_fails_by_name(tmp_path) -> None:
-    """M14 — the mutation the design's earlier SET-equality predicate PASSED (MF-4,
-    re-produced by execution at 102 events). Real `ActorSync`, step 1 driven twice."""
+    """Step 1 driven twice: the over-firing stream the design's earlier SET-equality predicate
+    PASSED, re-produced by execution at 102 events."""
     block = _observe(_row_m14(tmp_path))["a"]
     assert block["observed_syncs"] == _N + 1, (
         "the stream must really carry a duplicate — otherwise this oracle is testing "
@@ -542,9 +451,8 @@ def test_an_over_firing_sync_stream_fails_by_name(tmp_path) -> None:
 
 
 def test_zero_syncs_fails_by_name(tmp_path) -> None:
-    """M8 — named separately from a cadence mismatch: 'the actor was never synced' and 'the
-    actor was synced at the wrong steps' are different diagnoses and get different codes
-    (§6.3 rc 20 vs rc 21)."""
+    """Zero syncs is named separately from a cadence mismatch: "never synced" and "synced at
+    the wrong steps" are different diagnoses and get different codes (rc 20 vs rc 21)."""
     block = _observe(_row_m8(tmp_path))["a"]
     assert block["failure"] == "PreflightSyncAbsentError", (
         f"zero actor_sync events is its own named outcome; got {block.get('failure')!r}"
@@ -559,10 +467,8 @@ def test_zero_syncs_fails_by_name(tmp_path) -> None:
 def test_a_burst_shorter_than_one_cadence_still_expects_the_unconditional_first_sync(
     tmp_path,
 ) -> None:
-    """§7.1's boundary ruling, and the dispatcher's stated hazard — 'a preflight that demands
-    ≥1 sync from a burst too short to produce one'. It does not exist at HEAD:
-    `actor_sync.py:63` syncs unconditionally on the FIRST call. Pinned so nobody re-derives
-    it, and so a future `expected = {k : k%C==0}` (dropping the `{1} ∪`) is caught."""
+    """A burst too short to produce a sync still produces one: `ActorSync` syncs unconditionally
+    on the FIRST call. Pinned so a future `expected` that drops the `{1} u` is caught."""
     syncs = _real_syncs(tmp_path, "shortburst", [1, 2, 3], cadence=7)
     assert [event["step"] for event in syncs] == [1], (
         "at cadence 7 over steps 1..3 a real ActorSync syncs exactly once, on the first "
@@ -575,10 +481,10 @@ def test_a_burst_shorter_than_one_cadence_still_expects_the_unconditional_first_
     )
 
 
-# ══ assertion (b) — the lag transport (§7.4) ══════════════════════════════════════════
+# Assertion (b) — the lag transport.
 def test_a_watchdog_that_never_samples_makes_the_lag_unobservable(tmp_path) -> None:
-    """M2. This is the state of the tree at HEAD (TD-6): `_check_actor_lag` emits only on
-    `lag < 0` or `lag > threshold`, so a healthy run publishes NOTHING about the reading."""
+    """The state of the tree at HEAD: `_check_actor_lag` emits only on `lag < 0` or
+    `lag > threshold`, so a healthy run publishes NOTHING about the reading."""
     block = _observe(_row_m2(tmp_path))["b"]
     assert block["b0"] is False and block["failure"] == "PreflightLagUnobservableError"
     assert block["samples"] == 0
@@ -589,7 +495,7 @@ def test_a_watchdog_that_never_samples_makes_the_lag_unobservable(tmp_path) -> N
 
 
 def test_a_frozen_actor_callable_fails_the_live_lag_check(tmp_path) -> None:
-    """M3 — `actor_ckpt_step_fn = lambda: 0`, driven through a REAL watchdog."""
+    """`actor_ckpt_step_fn = lambda: 0`, driven through a REAL watchdog."""
     block = _observe(_row_m3(tmp_path))["b"]
     assert block["b3"] is False, f"a constant actor source must fail b3; got {block!r}"
     assert block["b2"] is True, "the learner side is healthy here — only the actor froze"
@@ -597,14 +503,9 @@ def test_a_frozen_actor_callable_fails_the_live_lag_check(tmp_path) -> None:
 
 
 def test_swapped_lag_callables_emit_actor_lag_negative(tmp_path) -> None:
-    """M4 — §7.5's named producer: **the only DETERMINISTIC closure of the inversion axis in
-    this phase.** The tool's own contribution is probabilistic and its rc says so (rc 23,
-    ADJ-12), so operator sign-off on run5's mint cites THIS test's green as the closure.
-
-    Driven through a real `HeartbeatWatchdog` with a real `ActorLagSpec` whose two callables
-    are exchanged — not a synthetic negative stream, because the thing under test is that
-    the exchange is OBSERVABLE at all.
-    """
+    """The only DETERMINISTIC closure of the inversion axis in this phase, driven through a real
+    watchdog whose two lag callables are exchanged rather than a synthetic negative stream: the
+    thing under test is that the exchange is OBSERVABLE at all."""
     row = _row_m4(tmp_path)
     negatives = [e for e in row["events"] if e.get("event") == "actor_lag_negative"]
     assert len(negatives) == 1, (
@@ -620,8 +521,8 @@ def test_swapped_lag_callables_emit_actor_lag_negative(tmp_path) -> None:
 
 
 def test_a_hardcoded_lag_value_fails_the_arithmetic_check(tmp_path) -> None:
-    """M5 — b1's only producer. §7.4 records b1's honest scope: it is a source-mutation
-    detector, vacuous against an unmodified watchdog, and the report SAYS so."""
+    """b1's only producer. b1 is a source-mutation detector, vacuous against an unmodified
+    watchdog, and the report SAYS so."""
     block = _observe(_row_m5(tmp_path))["b"]
     assert block["b1"] is False and block["failure"] == "PreflightLagArithmeticError"
     assert block["b5a"] is True, (
@@ -631,9 +532,8 @@ def test_a_hardcoded_lag_value_fails_the_arithmetic_check(tmp_path) -> None:
 
 
 def test_a_moving_but_foreign_actor_source_is_rejected(tmp_path) -> None:
-    """M6 — the membership half of b4, which survived REVIEW's attack #4 intact. The planted
-    value MOVES, is self-consistent, is non-decreasing and is never late; only membership
-    catches it."""
+    """The membership half of b4: the planted value MOVES, is self-consistent, is
+    non-decreasing and is never late, so only membership catches it."""
     block = _observe(_row_m6(tmp_path))["b"]
     assert block["b4a"] is False and block["sub_reason"] == "foreign"
     assert block["failure"] == "PreflightLagSourceMismatchError"
@@ -646,14 +546,9 @@ def test_a_moving_but_foreign_actor_source_is_rejected(tmp_path) -> None:
 def test_a_healthy_run_whose_last_sample_predates_the_final_syncs_is_not_a_source_mismatch(
     tmp_path,
 ) -> None:
-    """M15 — MF-5's false positive, re-produced. The design's earlier b4 required
-    `max(l.actor_ckpt_step) == max(s.actor_ckpt_step)`; on a healthy run the watchdog samples
-    every 15 s, sampling STOPS at close-out, and syncs happen every step — so the last
-    reading is ALWAYS behind the last sync, and rc 28 fired on a perfectly healthy run.
-
-    The first assertion is the load-bearing one: it proves this stream really is inside the
-    hazard window, so the second is not passing by accident.
-    """
+    """The earlier b4 required `max(l.actor_ckpt_step) == max(s.actor_ckpt_step)`, and on a
+    healthy run sampling stops at close-out while syncs happen every step, so rc 28 fired on a
+    healthy run. The first assertion proves this stream really is inside the hazard window."""
     row = _row_healthy(tmp_path)
     samples = [e for e in row["events"] if e.get("event") == "actor_lag_sample"]
     syncs = [e for e in row["events"] if e.get("event") == "actor_sync"]
@@ -669,10 +564,8 @@ def test_a_healthy_run_whose_last_sample_predates_the_final_syncs_is_not_a_sourc
 
 
 def test_a_stale_but_legitimate_actor_mirror_is_rejected(tmp_path) -> None:
-    """M16 — MF-5's other half: the replacement must not LOSE the property b4 existed for.
-    Every value here is a legitimate sync step, the sequence is non-decreasing and
-    self-consistent, so b1/b2/b3/b4a/b4b/b5a all pass. Only the `ts`-bounded staleness
-    conjunct kills it."""
+    """A stale-but-legitimate mirror passes b1/b2/b3/b4a/b4b/b5a, so only the `ts`-bounded
+    staleness conjunct kills it — the property b4 existed for."""
     block = _observe(_row_m16(tmp_path))["b"]
     assert block["b4c"] is False and block["sub_reason"] == "stale"
     assert block["failure"] == "PreflightLagSourceMismatchError"
@@ -683,8 +576,8 @@ def test_a_stale_but_legitimate_actor_mirror_is_rejected(tmp_path) -> None:
 
 
 def test_a_regressing_actor_source_is_rejected(tmp_path) -> None:
-    """b4b — the third arm of MF-5's split (a re-read of a rotated file, a reset mirror).
-    Split from b4a/b4c because a regression is neither foreign nor merely late."""
+    """A regressed mirror (a re-read of a rotated file, a reset mirror) is neither foreign nor
+    merely late, so it needs its own arm."""
     stream = _stream(_real_syncs(tmp_path, "regress", range(1, _N + 1)),
                      _model_samples(((0, 0), (30, 30), (60, 20), (90, 90))))
     block = _assertions(stream)["b_lag"]
@@ -692,22 +585,19 @@ def test_a_regressing_actor_source_is_rejected(tmp_path) -> None:
     assert block["b4a"] is True, "every value is still a legitimate sync step"
 
 
-# ══ the CLI contract (§6.3, §9.2) ═════════════════════════════════════════════════════
+# The CLI contract.
 def _run_tool(*args, timeout: int = 300):
     return subprocess.run([sys.executable, str(TOOL_PATH), *args], cwd=str(REPO_ROOT),
                           capture_output=True, text=True, timeout=timeout)
 
 
 def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
-    """M11 / §9.2. The child's `log_dir` is a real `JsonlEventSink` writing `*.jsonl`, and
-    gate 6 rejects stray `*.jsonl` outside `tests/fixtures/`. A gate that can dirty the tree
-    it gates is a gate that will — so the refusal must land BEFORE anything is created."""
+    """An `--out-dir` inside the repo is REFUSED before anything is created: the child writes
+    `*.jsonl` and gate 6 rejects those, so the gate would manufacture its own violation."""
     inside = REPO_ROOT / "_preflight_oracle_outdir"
     assert not inside.exists(), "the oracle's probe path must not pre-exist"
-    # CARD-PREFLIGHT-ORACLE-OUTDIR-CLEANUP (R43 opening granted via R110/GROUND_PFC): when
-    # the guard under test FAILS, the tool creates this path inside the repo; the finally
-    # removes what the failure created so one red assertion does not also litter the tree
-    # the conftest sweep then has to catch. The guard itself is untouched.
+    # When the guard under test FAILS, the tool creates this path inside the repo; the finally
+    # removes what the failure created so one red assertion does not also litter the tree.
     try:
         result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N),
                            "--out-dir", str(inside), "--timeout-sec", "60")
@@ -726,9 +616,8 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
 
 
 def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
-    """M12 / §5.5. `actor_lag_threshold_steps: 100 < max_train_steps` binds the burst from
-    below on every minted config, so the minimum legal burst is 101. The gate must TEACH
-    that (quote the binding validator, state the minimum), not merely reject."""
+    """The minimum legal burst is 101 on every minted config, and the refusal must TEACH that —
+    quote the binding validator, state the minimum — not merely reject."""
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "50",
                        "--out-dir", str(tmp_path), "--timeout-sec", "60")
     output = result.stdout + result.stderr
@@ -744,10 +633,8 @@ def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
 
 
 def test_the_preflight_args_carry_no_defaults_and_are_enforced_per_mode(tmp_path) -> None:
-    """O-1, in its behavioural form (deviation 4). R1's posture is that a required input is
-    required — but argparse cannot express 'required in mode PREFLIGHT only', and §10.2's
-    gate-12 step invokes `--audit-only` alone. So the four PREFLIGHT inputs are pinned by
-    driving each one's absence."""
+    """Requiredness is pinned BEHAVIOURALLY, per mode: argparse cannot express "required in mode
+    PREFLIGHT only" and the gate-12 step invokes `--audit-only` alone."""
     full = {"--config": "configs/run6.yaml", "--burst-steps": str(_N),
             "--out-dir": str(tmp_path), "--timeout-sec": "60"}
     for omitted in full:
@@ -762,9 +649,8 @@ def test_the_preflight_args_carry_no_defaults_and_are_enforced_per_mode(tmp_path
 
 
 def test_audit_only_is_green_on_the_real_tree() -> None:
-    """M13 / MF-7. The gate-12 invocation verbatim (§10.2). rc 0 — AND it must say out loud
-    that rc 0 covers assertion (c) alone, because a CI log reading `gate 12 … exit 0` is
-    exactly the artefact a later reader cites as 'the preflight was green'."""
+    """The gate-12 invocation verbatim: rc 0, AND it says out loud that rc 0 covers assertion
+    (c) alone — a CI log reading `gate 12 ... exit 0` is what a later reader cites."""
     result = _run_tool("--audit-only")
     assert result.returncode == 0, (
         "configs/run6.yaml arms the one required row (the R59 flip at :203), so mode AUDIT "
@@ -776,13 +662,9 @@ def test_audit_only_is_green_on_the_real_tree() -> None:
             f"the mandatory AUDIT stdout line (§6.3b) must carry {needle!r}; got "
             f"stdout={result.stdout!r}"
         )
-    # R81 (ADJ-15) — the ONE granted R43 re-point, and the whole of it. Phase D flips the
-    # draw-rate row to REQUIRED, so the shipped manifest holds ZERO deferred rows and
-    # gate-12 stdout can no longer carry one. What must still hold is that R56's loud-debt
-    # MECHANISM works: `_print_deferred_rows` survives (CARD-COORD-KNOBS will feed it rows)
-    # and is driven here on a SYNTHETIC deferred row through the `manifest=` keyword — the
-    # same seam `audit_arming` already exposes. Keeping a row deferred so this assertion
-    # stayed true was REJECTED: it would shape the shipped manifest to suit a test.
+    # The shipped manifest holds ZERO deferred rows, so gate-12 stdout can no longer carry one;
+    # what must still hold is that the loud-debt MECHANISM works, driven here on a SYNTHETIC row
+    # through the `manifest=` keyword.
     import contextlib
     import io
 
@@ -818,8 +700,8 @@ def test_audit_only_is_green_on_the_real_tree() -> None:
 def test_an_audit_report_can_never_read_as_a_green_for_the_dynamic_assertions(
     tmp_path,
 ) -> None:
-    """O-12 / MF-7 — behavioural, not AST. Drives the tool in AUDIT mode and reads the JSON
-    it actually emitted."""
+    """Behavioural, not AST: drives the tool in AUDIT mode and reads the JSON it actually
+    emitted."""
     result = _run_tool("--audit-only", "--out-dir", str(tmp_path))
     assert result.returncode == 0, (result.stdout + result.stderr)[-3000:]
     reports = sorted(tmp_path.glob("preflight_*.json"))
@@ -841,13 +723,11 @@ def test_an_audit_report_can_never_read_as_a_green_for_the_dynamic_assertions(
     assert report["manifest"]["source_pins_ok"] is True
 
 
-# ══ structural pins on the TOOL (§13.2) ═══════════════════════════════════════════════
+# Structural pins on the TOOL.
 def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed. A raw-text census
-    would flag the tool's own prose ('zero monkeypatch, by design'), which is the false
-    positive that teaches people to word comments around a gate."""
-    # FSTRING_MIDDLE is 3.12+ (PEP 701); on the 3.11 floor f-strings lex as STRING —
-    # same guard idiom as test_armed_abort_manifest.py / test_drawrate_arming_authority.py.
+    """Return source with COMMENT / STRING / f-string tokens removed: a raw-text census would
+    flag the tool's own prose, teaching people to word comments around a gate."""
+    # FSTRING_MIDDLE is 3.12+; on the 3.11 floor f-strings lex as STRING.
     skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         return "\n".join(
@@ -867,16 +747,12 @@ def _add_argument_calls():
 
 
 def test_the_parser_declares_no_defaults() -> None:
-    """O-1's AST half. A `default=` in the parser is a code-side default authority for a run
-    input, which is the R1 defect this whole repo is arranged against."""
+    """A `default=` in the parser is a code-side default authority for a run input, which is
+    the defect this repo is arranged against."""
     calls = _add_argument_calls()
-    # WPMAIN/R126: `--device` DIED on both callers (device is `config.train.device`), so the
-    # surface is FIVE documented inputs plus the suppressed `--_boot`. The bound is pinned
-    # rather than floored: `>= 6` kept passing NUMERICALLY across the removal while the
-    # census silently under-described the surface. The equal-or-stronger successor for the
-    # dropped `--device` entry is the O-G3 device-flag BAN over BOTH parsers
-    # (`tests/config/test_train_device_authority.py`), which also catches `--gpu` /
-    # `--torch-device` — the presence->ban pattern R121(a) sanctions.
+    # `--device` DIED on both callers, so the surface is FIVE documented inputs plus the
+    # suppressed `--_boot`. Pinned rather than floored: `>= 6` kept passing NUMERICALLY across
+    # the removal. The successor is the device-flag BAN over BOTH parsers.
     assert len(calls) == 6, (
         f"the tool declares exactly the five documented CLI inputs plus the suppressed "
         f"--_boot; found {len(calls)}"
@@ -896,11 +772,8 @@ def test_the_parser_declares_no_defaults() -> None:
 
 
 def test_the_tool_contains_no_stand_in_for_a_production_object() -> None:
-    """O-2 / §4.1 — the distinguishing test for ADJ-10: does the tool contain any object that
-    stands in for a production one? When a collaborator is missing a method the tool does NOT
-    supply one; it lets the AttributeError reach it and reports
-    `PreflightTreeDefectError(attr, site, card)`. That refusal is the whole reason the
-    two-mode split is not 'option A wearing a hat'."""
+    """The tool contains no stand-in for a production object: a missing collaborator method is
+    not supplied, and the AttributeError reaches it as `PreflightTreeDefectError`."""
     for token in ("monkeypatch", "unittest.mock", "SimpleNamespace", "MagicMock",
                   "mock.patch", "setattr(", "pytest"):
         assert token not in TOOL_CODE, (
@@ -910,8 +783,8 @@ def test_the_tool_contains_no_stand_in_for_a_production_object() -> None:
 
 
 def test_no_sys_path_mutation_in_the_tool_or_its_tests() -> None:
-    """O-3 / R5 / LAW-17. The tool re-execs ITSELF as the boot child (§6.2) and the child
-    inherits the venv; a `sys.path` write there would be the one place the ban is tempting."""
+    """Zero `sys.path` writes. The tool re-execs ITSELF as the boot child and the child
+    inherits the venv, which is the one place the ban is tempting."""
     for rel in (str(TOOL_PATH.relative_to(REPO_ROOT)), *PHASE_P_TEST_FILES):
         code = _code_text(REPO_ROOT / rel)
         for token in ("sys.path.append", "sys.path.insert", "sys.path.extend",
@@ -923,12 +796,9 @@ def test_no_sys_path_mutation_in_the_tool_or_its_tests() -> None:
 
 
 def test_the_override_map_carries_exactly_one_key() -> None:
-    """O-4 / §5.4. `stop_step` must keep exactly ONE source
-    (`train.max_train_steps` → `resolve_max_train_steps` → `run.py:167-170` → `step.py:233`).
-    A second entry here — `actor_lag_abort_enabled`, say — would make the preflight the
-    second run-length (or arming) authority, which is the R1 breach §5.4 discriminates
-    against. The report's `override.keys` is emitted from this same constant (one
-    authority), so the two cannot disagree."""
+    """`stop_step` keeps exactly ONE source; a second entry in the override tuple would make the
+    preflight a second run-length authority. `override.keys` is emitted from this same
+    constant."""
     assert tuple(TOOL.OVERRIDE_KEYS) == ("train.max_train_steps",), (
         "the burst override writes exactly one dotted key and reads nothing; got "
         f"{TOOL.OVERRIDE_KEYS!r}"
@@ -936,9 +806,8 @@ def test_the_override_map_carries_exactly_one_key() -> None:
 
 
 def test_the_tool_never_constructs_a_config_by_a_validator_skipping_route() -> None:
-    """O-5 / §11 rig 4. F-3's route is `model_copy(update=…)` / `model_construct(...)` —
-    constructions that SKIP the cross-field validators. The override's route is
-    `dump → mutate → model_validate`, which IS the validator (`loader.py:39-44`)."""
+    """The override's route is `dump -> mutate -> model_validate`, which IS the validator, never
+    a construction that SKIPS the cross-field validators."""
     for token in ("model_copy", "model_construct"):
         assert token not in TOOL_CODE, (
             f"{token} skips every @model_validator — the preflight must construct configs "
@@ -949,24 +818,10 @@ def test_the_tool_never_constructs_a_config_by_a_validator_skipping_route() -> N
 
 
 def test_compose_run_is_driven_with_the_four_real_collaborators() -> None:
-    """O-9 / §4.1 + R64, INVERTED by WPMAIN (CARD-RUN-MAIN, R121(a)).
-
-    Exactly one `compose_run` call site, driven with the SIX explicit kwargs the re-cut root
-    declares, and NOTHING the composition root builds for itself is passed in or patched.
-
-    What changed, and why it is a re-point and not a weakening: the builder tokens
-    (`init_trainer` / `WorkerPool` / `HexgBuffer` / `ReplayBuffer`) used to be REQUIRED to
-    appear in this tool. That was the one-authority violation the card ended — a CI gate
-    owning the only real collaborator build — so they are BANNED here now, on the same
-    presence->ban pattern O-10 already used. The equal-or-stronger successors for the "the
-    collaborators are real" claim are NAMED: `tests/test_run_one_authority.py`'s
-    builder-reality census (a bound CALL at the code's new home, strictly stronger than a
-    token appearing anywhere in a file) PAIRED with the behavioural drives
-    `tests/test_run_buffer_route.py` and `tests/test_run_launcher.py`. Token presence alone
-    was MEASURED insufficient by this very tree (`test_preflight_mint_process.py`: a
-    silent-default mutation left 1773 tests green), which is why the successor is
-    census+behaviour and not another token census.
-    """
+    """Exactly one `compose_run` call site with the six explicit kwargs, and nothing the
+    composition root builds for itself is passed in or patched. The builder tokens are BANNED
+    here rather than required, a CI gate owning the only real collaborator build having been the
+    one-authority violation."""
     calls = [node for node in ast.walk(TOOL_TREE) if isinstance(node, ast.Call)
              and getattr(node.func, "id", getattr(node.func, "attr", None)) == "compose_run"]
     assert len(calls) == 1, f"exactly one compose_run call site; found {len(calls)}"
@@ -992,19 +847,10 @@ def test_compose_run_is_driven_with_the_four_real_collaborators() -> None:
 
 
 def test_eval_enabled_is_the_literal_True_and_is_not_derived() -> None:
-    """O-10 / ADJ-11, re-pointed by WPMAIN (R120). The SUBJECT moves from "the literal True"
-    to "NO ROUTE AT ALL", which strictly dominates it.
-
-    `eval_enabled` used to be a `compose_run` parameter with a code-side default `True`, and
-    this tool hardcoded the literal so R64's "the preflight may never force False" could be
-    enforced by inspection. R120 made it a typed, required config key and DELETED the
-    parameter, so the child now passes NOTHING and CAN pass nothing: forcing a posture the
-    minted config did not declare is unrepresentable rather than merely unwritten.
-
-    The CLI ban survives verbatim — it is the half that must, and
-    `tests/test_run_eval_enabled_authority.py` extends it to the launcher, which never had
-    it. The no-local-assignment ban survives too: a local `eval_enabled = …` was how the
-    banned escape came back quietly."""
+    """The tool declares NO eval posture at all, which strictly dominates the old "literal True"
+    pin: the parameter is DELETED, so the child passes nothing and CAN pass nothing. The
+    no-local-assignment ban survives, because a local `eval_enabled = ...` was how the escape
+    came back quietly."""
     calls = [node for node in ast.walk(TOOL_TREE) if isinstance(node, ast.Call)
              and getattr(node.func, "id", getattr(node.func, "attr", None)) == "compose_run"]
     keywords = {kw.arg for kw in calls[0].keywords}
@@ -1024,25 +870,12 @@ def test_eval_enabled_is_the_literal_True_and_is_not_derived() -> None:
     )
 
 
-# ══ the cross-check: LAW-07's "each mutation dies alone", measured ════════════════════
+# The cross-check: "each mutation dies alone", measured.
 def test_each_mutation_flips_exactly_its_declared_predicates(tmp_path) -> None:
-    """§12's load-bearing assertion, and the property RED-TEAM will attack.
-
-    Deviation 2 (also in the module docstring): §12's literal "exactly one of {a1…a4,
-    b0…b4c, b5a, c, manifest} flips" is FALSE — by the design's own §7.1 table (a thinned
-    stream flips a1 AND a2) and by physics (an actor frozen at 0 is also, necessarily, a
-    stale one; b3 and b4c both fall). What survives, and what is pinned here, is strictly
-    stronger than "at least one flips":
-
-      1. every mutation flips EXACTLY its declared set — no more (no cross-talk) and no
-         fewer (it dies);
-      2. the not-evaluated set is declared too, so a predicate that quietly stops being
-         computed is caught rather than read as a pass;
-      3. every mutation's signature is UNIQUE, which is the operational content of "dies
-         alone": no two mutations can be confused for one another in a report;
-      4. the healthy stream flips NOTHING — the other half of the property, and the only
-         thing that catches a predicate which has gone unconditionally red.
-    """
+    """Every mutation flips EXACTLY its declared predicate set, and the healthy stream flips
+    nothing: no cross-talk, no silent death, the not-evaluated set declared so a predicate that
+    stops being computed is not read as a pass, signatures UNIQUE, and the healthy row catching a
+    predicate gone unconditionally red."""
     healthy = _signature(_observe(_row_healthy(tmp_path)))
     assert healthy == (None, (), (), None, None, (), (), None, False, False), (
         f"the healthy stream must flip nothing on any of the four axes; got {healthy}"
@@ -1074,9 +907,8 @@ def test_each_mutation_flips_exactly_its_declared_predicates(tmp_path) -> None:
 
 
 def test_every_corpus_row_is_actually_caught(tmp_path) -> None:
-    """The vacuity floor for the cross-check itself: a row whose builder silently produced
-    the healthy stream would still satisfy `declared == observed` if its declaration were
-    also empty. Every mutation row must make at least one axis non-green."""
+    """The vacuity floor for the cross-check: a row whose builder silently produced the healthy
+    stream would still satisfy `declared == observed` if its declaration were also empty."""
     uncaught = []
     for name in sorted(_CORPUS):
         observed = _observe(_CORPUS[name][0](tmp_path / f"vac_{name}"))

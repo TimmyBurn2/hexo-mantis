@@ -1,42 +1,21 @@
-// R8 >300 justify: the R92-committed instrument — measurement harness (frozen semantics)
-// + the T-2 flipped assertion arm live in ONE file so the regression oracle and the
-// prereg'd measurement it derives from can never drift apart.
-//! R153 LEG 2 (R155): dropped target mass through each encoding's PRODUCTION expand.
+// R8 >300 justify: the measurement harness (frozen semantics) and the flipped assertion arm
+// live in ONE file so the regression oracle and the prereg'd measurement it derives from can
+// never drift apart.
+//! Dropped target mass through each encoding's PRODUCTION expand.
 //!
-//! Verdict rule frozen in `wp/WP12R/PREREG_R153_LEG2.md` BEFORE this file first ran.
-//! COMMITTED with the WP12-R Phase T fix as a PERMANENT regression oracle (R92,
-//! DESIGN_T §5 O-5): the prereg + measurement artifacts are committed VERBATIM at
-//! `docs/design/measurements/PREREG_R153_LEG2.md` and
-//! `docs/design/measurements/MEASUREMENT_R153_LEG2.md` (the in-repo citation chain).
+//! A permanent regression oracle: every sampled row must satisfy `dropped_mass <= 1e-6` and
+//! the degenerate count must be 0, on both production-expand encodings. The prereg and
+//! measurement artifacts are committed verbatim under `docs/design/measurements/`.
 //!
-//! [T-2 ORACLE-WRITE] Report arms FLIPPED TO ASSERTIONS per O-5 — measurement
-//! semantics (generators, seeds, expands, TOL) UNCHANGED: every sampled row must now
-//! satisfy `dropped_mass <= 1e-6` and the degenerate count must be 0, on BOTH
-//! production-expand encodings. Instrument aborts 1-4 are retained as-is (abort 4
-//! keeps the instrument honest forever). PRE-FIX this test is RED — the R160 binding
-//! table it red-derives from is `wp/WP12R/PROVENANCE_T0.md` §3 (256/480 affected,
-//! 37 degenerate at the 50-sim production regime).
+//! A measurement clears an encoding ONLY when driven through that encoding's production
+//! expand: under the DENSE expand off-window cells get `sort_prior = 0.0` and are truncated
+//! by the per-node child cap, so a zero there is structural rather than a clearance. Instrument
+//! abort 4, the off-window-child guard, is what keeps that distinction honest forever.
 //!
-//! ## Why leg 1 could not answer this
-//!
-//! Leg 1 filled every tree with the DENSE expand. `runner/params.rs` forces `legal_set = true`
-//! for graph specs, so for `gnn_axis_v1` leg 1 measured a path production never takes. Under
-//! the dense expand off-window cells get `sort_prior = 0.0` (`backup.rs:97`) and are truncated
-//! by the per-node child cap, so they never become children — a zero there is structural, not
-//! a clearance. R155 makes that mechanical: a measurement clears an encoding ONLY when driven
-//! through that encoding's production expand.
-//!
-//! | encoding | expand | leg |
-//! |---|---|---|
-//! | `gnn_axis_v1` | `expand_and_backup_ls_at` (production) | 2 (here) |
-//! | `gnn_axis_r8` | `expand_and_backup_ls`                 | 2 (here) |
-//!
-//! R346(f) DELETED the grid rows this file's secondary arm used to carry (`v6_live2_ls`, and
-//! leg 1's `v6w25`). The second arm is now the surviving second graph row at the wider radius,
-//! driven through the UNFRAMED ls expand so both ls entry points stay under the mass law. The
-//! per-drop attribution to the K-cluster coverage gate is gone with `get_cluster_views`; the
-//! abort-4 off-window-child guard, which is what stops a structural zero being read as a
-//! clearance, is retained verbatim.
+//! | encoding | expand |
+//! |---|---|
+//! | `gnn_axis_v1` | `expand_and_backup_ls_at` (production) |
+//! | `gnn_axis_r8` | `expand_and_backup_ls` (unframed) |
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
@@ -60,7 +39,7 @@ struct Row {
     n_legal: usize,
     n_children: usize,
     dropped_mass: f64,
-    /// Off-window children that actually exist in the tree — PREREG abort 4.
+    /// Off-window children that actually exist in the tree — what abort 4 checks.
     offwindow_children: usize,
 }
 
@@ -78,10 +57,9 @@ fn geometry_for(enc: &str) -> (BoardGeometry, usize, i32) {
 }
 
 /// The NO-DROP uniform legal-set policy: `1/n_legal` on EVERY legal move, split into the
-/// in-window `dense` half and the coord-keyed off-window `overflow` half — the producer's
-/// own contract (`assemble_ls_from_gnn_probs`, dense + overflow sum to 1). This is what
-/// makes off-window cells become real children with real priors, which is precisely the
-/// condition leg 1's dense expand could not create.
+/// in-window `dense` half and the coord-keyed off-window `overflow` half, matching the
+/// producer's own contract. This is what makes off-window cells become real children with
+/// real priors — the condition a dense expand cannot create.
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
@@ -252,8 +230,8 @@ fn collect(enc: &str, mode: Expand) -> Vec<Row> {
     rows
 }
 
-/// [T-2, R92/O-5] The flipped report arm: every sampled row conserves target mass and
-/// the degenerate class is EXTINCT. Fails naming the first offending row.
+/// Every sampled row conserves target mass and the degenerate class is EXTINCT. Fails naming
+/// the first offending row.
 fn assert_no_dropped_mass(label: &str, rows: &[Row]) {
     for r in rows {
         assert!(
@@ -274,7 +252,7 @@ fn assert_no_dropped_mass(label: &str, rows: &[Row]) {
 
 #[test]
 fn r153_leg2_run5_exposure_through_production_expand() {
-    // ── PRIMARY: run5's encoding, its production expand. This decides run5 exposure. ──
+    // PRIMARY: run5's encoding, its production expand. This decides run5 exposure.
     let rows = collect("gnn_axis_v1", Expand::LsAt);
     report("gnn_axis_v1 / expand_and_backup_ls_at [PRODUCTION]", &rows);
 
@@ -286,7 +264,7 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     assert!(max_legal > 361, "gnn_axis_v1: sample never reached >361 legal (max {max_legal})");
 
     // PREREG abort 4 — THE ONE THAT MATTERS. A zero reached because the tree still holds no
-    // off-window child would be leg 1's false-clear wearing leg 2's label.
+    // off-window child would be a false clear.
     assert!(
         with_offwindow > 0,
         "ABORT 4: no position produced an off-window CHILD, so a zero here would be \
@@ -301,12 +279,12 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     let b: Vec<f64> = again.iter().map(|r| r.dropped_mass).collect();
     assert_eq!(a, b, "gnn_axis_v1: instrument not deterministic at a fixed seed");
 
-    // ── SECONDARY: the wider-radius graph row through the UNFRAMED ls expand. Reported;
-    //    it does not decide run5. ──
+    // SECONDARY: the wider-radius graph row through the UNFRAMED ls expand. Reported; it
+    // does not decide run5.
     let ls_rows = collect("gnn_axis_r8", Expand::Ls);
     report("gnn_axis_r8 / expand_and_backup_ls", &ls_rows);
 
-    // [T-2, R92/O-5] Flipped report arms — the permanent regression assertions.
+    // Flipped report arms — the permanent regression assertions.
     assert_no_dropped_mass("gnn_axis_v1 / LsAt", &rows);
     assert_no_dropped_mass("gnn_axis_r8 / Ls", &ls_rows);
 

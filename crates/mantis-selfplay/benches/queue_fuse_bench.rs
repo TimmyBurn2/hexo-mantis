@@ -1,15 +1,13 @@
-//! PERF-TRANCHE-1 A1 — the block-diagonal fuse, benched at run5's MEASURED pop shape.
+//! The block-diagonal fuse, benched at run5's measured pop shape.
 //!
-//! Prereg hotspot (LAW-09): `GraphWire::from_axis_graphs`, ledger §10.1 line #2 —
-//! `wire_fuse` 33.78 ms/pop, 0.859 ms/sim, 25.3 % of the card, at a derived 1.35 GB/s of
-//! output. The A/B is old-side vs new-side on ONE host in one session; this bench carries
-//! no `tools/bench_floors.toml` row because the attested floor host is not the box the
-//! tranche measures on, and a floor comparison across hosts is not a measurement.
+//! Prereg hotspot: `GraphWire::from_axis_graphs`, measured at 33.78 ms/pop, 0.859 ms/sim,
+//! 25.3% of the card. This bench carries no `tools/bench_floors.toml` row: the attested
+//! floor host is not the box the tranche measures on, and a cross-host floor comparison is
+//! not a measurement.
 //!
-//! The corpus is shaped to the ledger's own contended reading — 39.29 graphs per served
-//! pop, 1 203 310 fused edges — and `assert_corpus_shape` refuses to run if it has drifted
-//! off that shape, because a fuse benched at the wrong edge count measures a different
-//! function than the one the ledger ranked.
+//! The corpus is shaped to the measured contended reading — 39.29 graphs per served pop,
+//! 1 203 310 fused edges — and `assert_corpus_shape` refuses to run off that shape, since a
+//! fuse benched at the wrong edge count measures a different function.
 
 use std::collections::HashSet;
 use std::sync::mpsc;
@@ -21,12 +19,11 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion
 use mantis_graph::AxisGraph;
 use mantis_selfplay::queues::{build_leaf_graph, GraphWire};
 
-// The SAME `concat_by_offset` the parity proof pins byte-identical to the whole-batch fuse
-// (`tests/prefuse_concat_parity.rs`). Timing a second copy would be timing unverified code.
+// The same `concat_by_offset` the parity proof pins byte-identical to the whole-batch fuse;
+// timing a second copy would be timing unverified code.
 #[path = "../tests/common/mod.rs"]
 mod common;
 
-// ── Regime constants, pinned to the ledger's §2.2 contended reading ──────────
 /// Achieved batch at twelve workers was 39.29 of 64; 40 is that, rounded to the batch the
 /// pop actually hands the fuse.
 const POP_GRAPHS: usize = 40;
@@ -61,8 +58,8 @@ fn build_pop_corpus() -> Vec<AxisGraph> {
     build_pop_corpus_seeded(CORPUS_SEED)
 }
 
-/// The same corpus at a caller-chosen seed. The cross-thread arm needs a FRESH pop per
-/// sample — re-handing one corpus would leave it warm and measure nothing.
+/// Build the corpus at a caller-chosen seed; the cross-thread arm needs a fresh pop per
+/// sample, since re-handing one corpus would leave it warm and measure nothing.
 fn build_pop_corpus_seeded(seed: u64) -> Vec<AxisGraph> {
     let mut s = seed;
     let mut graphs = Vec::with_capacity(POP_GRAPHS);
@@ -135,27 +132,17 @@ fn queue_fuse_from_axis_graphs_pop40(c: &mut Criterion) {
     });
 }
 
-/// R335(e) Leg 2 — SCOUT §1.2's FALSIFIER, run without a GPU.
+/// Falsifier for the cold-read model of the in-run fuse's 12.8 ms/pop remainder.
 ///
-/// §1.2 argues the in-run fuse's 12.8 ms/pop remainder over cache-hot is not bandwidth but
-/// COLD READS: HOT-14's mechanism is that the graphs were written by OTHER worker cores and
-/// the server pays a cross-core transfer for every dirty line. The falsifier §1.2 states is
-/// *"re-run the criterion arm with the source arrays deliberately evicted"*.
-///
-/// EVICTION IS THE WRONG INSTRUMENT ON THIS SHAPE and this arm does better. The pop's source
-/// arrays are ~37 MB against a 16 MB L3, so they do not fit in either arm — a residency
-/// experiment cannot separate them. What DOES separate them is WHO WROTE THE LINES, which is
-/// the mechanism HOT-14 actually names. So: a builder thread builds each pop and hands it
-/// over, and the fuse is timed on a thread that has never touched those bytes. Against
-/// `..._pop40` — same corpus shape, same fuse, same process — the ratio is the mechanism's own
-/// number.
-///
-/// A ratio near 1.0 FALSIFIES the cold-read model on this host and HOT-14 needs re-opening.
+/// Eviction cannot separate the arms here: the pop's source arrays are ~37 MB against a
+/// 16 MB L3, so they fit in neither. What separates them is who wrote the lines, so a
+/// builder thread builds each pop and the fuse is timed on a thread that never touched
+/// those bytes. Read as a ratio against `..._pop40`; a ratio near 1.0 falsifies the model.
 fn queue_fuse_cross_thread_pop40(c: &mut Criterion) {
     let (want_tx, want_rx) = mpsc::channel::<u64>();
     let (corpus_tx, corpus_rx) = mpsc::channel::<Vec<AxisGraph>>();
-    // The builder thread exists to make the bytes DIRTY IN ANOTHER CORE'S CACHE, which is the
-    // only property under test; it exits when the request channel closes.
+    // The builder thread exists to make the bytes dirty in another core's cache, which is
+    // the property under test; it exits when the request channel closes.
     let builder = thread::spawn(move || {
         while let Ok(seed) = want_rx.recv() {
             if corpus_tx.send(build_pop_corpus_seeded(seed)).is_err() {
@@ -192,18 +179,16 @@ criterion_group! {
     targets = queue_fuse_from_axis_graphs_pop40
 }
 
-/// R335(e) Leg 2 — THE NUMBER THAT DECIDES `S-PREFUSE`, and it is not the fuse's cost.
+/// Bench the server-side concat, which is what a worker-side fuse would leave behind.
 ///
-/// Under the card the workers fuse and the server CONCATENATES. The server therefore still
-/// touches every byte: `concat_by_offset` memcpys the bulk arrays and adds a running base to
-/// the index and offset arrays. The card's saving is `fuse − concat` on the server thread,
-/// not the whole fuse — so this arm is benched cross-thread, exactly like the fuse arm above,
-/// and the two are read as a pair.
+/// The server still touches every byte — `concat_by_offset` memcpys the bulk arrays and
+/// rebases the index and offset arrays — so the saving is `fuse − concat` on the server
+/// thread, not the whole fuse. Benched cross-thread and read as a pair with the arm above.
 fn queue_concat_cross_thread_pop40(c: &mut Criterion) {
     let (want_tx, want_rx) = mpsc::channel::<u64>();
     let (parts_tx, parts_rx) = mpsc::channel::<Vec<mantis_selfplay::queues::GraphWireArrays>>();
-    // The builder thread does what a WORKER would under the card: build its slice AND fuse it,
-    // so the server-side arm receives already-fused wire written by another core.
+    // The builder thread does what a worker would: build its slice and fuse it, so this arm
+    // receives already-fused wire written by another core.
     let builder = thread::spawn(move || {
         while let Ok(seed) = want_rx.recv() {
             let graphs = build_pop_corpus_seeded(seed);
@@ -238,8 +223,8 @@ criterion_group! {
     name = cross_thread;
     config = Criterion::default()
         .warm_up_time(Duration::from_secs(3))
-        // The setup builds a whole pop per sample, so this arm is deliberately smaller: the
-        // number wanted is a RATIO against the arm above, not a tight CI of its own.
+        // The setup builds a whole pop per sample, and the number wanted is a ratio against
+        // the arm above rather than a tight CI of its own.
         .sample_size(30);
     targets = queue_fuse_cross_thread_pop40, queue_concat_cross_thread_pop40
 }

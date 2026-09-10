@@ -1,35 +1,24 @@
-// Exceeds the 300-line soft cap: the proof TT (encode/decode, 2-slot bucket,
-// replacement policy) + its soundness test suite port as one auditable unit.
+// Exceeds the 300-line soft cap: the proof TT (encode/decode, 2-slot bucket, replacement
+// policy) and its soundness test suite are one auditable unit.
 //! Transposition table — generation-aged 2-slot bucket.
 //!
-//! FOUNDATION: a game-theoretic cache of PROVEN outcomes keyed by
-//! `(zobrist_hash, side_to_move, moves_remaining)` — depth-INDEPENDENT (a proven
-//! win/loss is a proven win/loss regardless of the depth it was found at). A
-//! 2-bucket generation-aged table with int16 mate-distance score quantization,
-//! over the engine's native u128 zobrist.
+//! A game-theoretic cache of PROVEN outcomes keyed by
+//! `(zobrist_hash, side_to_move, moves_remaining)` — depth-INDEPENDENT, since a proven win or
+//! loss stays proven regardless of the depth it was found at.
 //!
 //! # SOUNDNESS INVARIANT — the load-bearing property
-//! **Only a proven LOSS is trusted as a proof.** `get_loss_proof` returns a
-//! verdict ONLY for an entry flagged `is_proof` whose decoded score is a
-//! mate-magnitude LOSS; everything else (bounds, best moves, heuristic scores) is
-//! ORDERING data and is NEVER read as a proof conclusion. A WIN is never returned
-//! as a cached proof — a WIN cache hit would carry an empty principal variation
-//! and could truncate the override line, so WINs are always reconstructed fresh
-//! (the `store_bound` best-move hint only ORDERS the fresh re-search).
+//! **Only a proven LOSS is trusted as a proof.** `get_loss_proof` returns a verdict ONLY for an
+//! entry flagged `is_proof` whose decoded score is a mate-magnitude LOSS; bounds, best moves and
+//! heuristic scores are ORDERING data and are NEVER read as a conclusion. A WIN hit would carry
+//! an empty principal variation and could truncate the override line, so WINs are reconstructed
+//! fresh and the stored best move only ORDERS the re-search.
 //!
-//! Eviction is sound by construction: the table is a CACHE. A bucket collision is
-//! resolved by full-key comparison (never a false hit), and evicting a proven-LOSS
-//! entry only forces a re-proof later (a miss, more nodes) — never a false proof.
-//! The replacement policy (depth-preferred + always-replace + generation aging) is
-//! a pure recall/throughput heuristic; it ranks `is_proof` above any non-proof
-//! entry so a heuristic bound can never evict a proof from the depth-preferred slot.
-//!
-//! # DEFERRED (bench-gate / perf-box only — NOT built here)
-//! The byte-level `#[repr(C)]` 16-byte packing + 64-byte bucket alignment is a
-//! memory-layout micro-opt deferred to the perf box. This module uses readable
-//! fields (int16 mate-distance `score`, an `EXACT/LOWER/UPPER` enum, an `Option`
-//! best move); the algorithmic wins (2-slot aged bucket, mate-distance
-//! quantization, best-move ordering) are all present.
+//! Eviction is sound by construction: a bucket collision is resolved by full-key comparison, and
+//! evicting a proven-LOSS entry only forces a re-proof later. The replacement policy ranks
+//! `is_proof` above any non-proof entry, so a heuristic bound can never evict a proof from the
+//! depth-preferred slot. The byte-level `#[repr(C)]` packing is deferred to the perf box; the
+//! algorithmic wins are all present.
+//! fields; the algorithmic wins are all present.
 
 use super::{MATE, WIN_THRESHOLD};
 
@@ -156,24 +145,15 @@ impl ProofTt {
         (h as usize) & (N_BUCKETS - 1)
     }
 
-    /// Bump the generation (deploy-time reuse across `prove` calls): entries from
-    /// the prior generation become preferentially replaceable.
+    /// Bump the generation (deploy-time reuse across `prove` calls): entries from the prior
+    /// generation become preferentially replaceable.
     ///
-    /// AUDIT-1 F-48 counted this as dead — zero callers — and it is, but it is NOT deletable
-    /// on its own and the reason is worth stating. `TacticalSolver::prove`/`prove_in_place`
-    /// take `&self` and construct a FRESH `ProofTt` per call, so no table survives to be aged.
-    /// The bump, the `generation` comparison inside `store_loss_proof`'s replacement rule, and
-    /// the `stale_generation_entry_is_replaceable` test are ONE coherent mechanism with ONE
-    /// switch: the solver owning its table. Deleting the API half would leave a replacement
-    /// policy whose only exercise is gone and a test with no way to drive it.
-    ///
-    /// THAT SWITCH IS A PERF DECISION, and it is banked as one. The same per-call construction
-    /// is `vec![[Slot::EMPTY; 2]; 1 << 16]` at `size_of::<Slot>() == 64` — an 8 MiB
-    /// alloc-and-fill ahead of a node budget in the tens of thousands — so owning the table
-    /// removes the alloc AND activates the aging in one change. LAW-09 wants that
-    /// pre-registered with an expected gain bracket and one IQR-gated bench, not folded into a
-    /// dead-code commit. It is LATENT meanwhile: `selfplay.solver_node_budget` arms the solver
-    /// and all seven configs mint it off.
+    /// Currently ZERO callers, and NOT deletable on its own: `prove`/`prove_in_place` construct
+    /// a FRESH `ProofTt` per call, so no table survives to be aged, and the bump, the
+    /// `generation` comparison in the replacement rule and the staleness test are ONE mechanism
+    /// with ONE switch — the solver owning its table. That switch is a PERF DECISION, banked as
+    /// one: the per-call construction is an 8 MiB alloc-and-fill ahead of a node budget in the
+    /// tens of thousands, which wants a pre-registered gain bracket and an IQR-gated bench.
     #[inline]
     pub fn new_generation(&mut self) {
         self.generation = self.generation.wrapping_add(1);
@@ -247,9 +227,9 @@ impl ProofTt {
         });
     }
 
-    /// 2-slot replacement: update-in-place on a key match (keeping the more
-    /// authoritative of old/new); else depth-preferred slot 0 / always-replace
-    /// slot 1, with stale-generation entries always yielding.
+    /// 2-slot replacement: update-in-place on a key match, keeping the more authoritative of
+    /// old and new; else depth-preferred slot 0 / always-replace slot 1, with stale-generation
+    /// entries always yielding.
     fn put(&mut self, entry: Slot) {
         let gen = self.generation;
         let b = &mut self.buckets[Self::index(entry.key)];
@@ -262,11 +242,10 @@ impl ProofTt {
                 return;
             }
         }
-        // Depth-preferred slot 0: replace if empty, stale-generation, or the new
-        // entry is at least as authoritative (rank). Demote the displaced entry to
-        // the always-replace slot 1 so a recently-deep record survives one round.
-        let replace_depth =
-            !b[0].used || b[0].gen != gen || entry.rank() >= b[0].rank();
+        // Depth-preferred slot 0: replace if empty, stale-generation, or at least as
+        // authoritative. The displaced entry is demoted to always-replace, so a recently-deep
+        // record survives one round.
+        let replace_depth = !b[0].used || b[0].gen != gen || entry.rank() >= b[0].rank();
         if replace_depth {
             b[1] = b[0];
             b[0] = entry;
@@ -296,9 +275,8 @@ mod tests {
 
     #[test]
     fn int16_encode_decode_round_trips_mate_distance() {
-        // A LOSS landing at absolute ply `m`, observed at node ply `p`, must decode
-        // (at the SAME probe ply) to the SAME mate-distance-aware i32 score, for a
-        // range of node plies and mate depths — node-relative encoding is reusable.
+        // A LOSS landing at absolute ply `m`, observed at node ply `p`, must decode at the SAME
+        // probe ply to the SAME mate-distance-aware score across a range of plies and depths.
         for &p in &[0, 1, 4, 7, 20] {
             for &k in &[0, 1, 3, 8, 25] {
                 let m = p + k; // mate lands k plies below the node
@@ -326,13 +304,11 @@ mod tests {
 
     #[test]
     fn heuristic_score_clamps_into_int16_band_never_a_proof() {
-        // A heuristic (sub-threshold, non-mate) score must clamp strictly inside the
-        // i16 mate band so a decoded value can NEVER read as a proof magnitude. The
-        // boundary values just inside the proof region (`±(WIN_THRESHOLD-1)`, far
-        // larger than i16) exercise the clamp. (Inputs AT/over the mate magnitude —
-        // `i32::MIN/MAX` — are genuine mate scores and correctly encode to the band;
-        // the search never feeds an out-of-band heuristic: leaves are pre-clamped by
-        // `clamp_heuristic`.)
+        // A heuristic (sub-threshold, non-mate) score must clamp strictly inside the i16 mate
+        // band so a decoded value can NEVER read as a proof magnitude; the boundary values just
+        // inside the proof region exercise the clamp. Inputs at or over the mate magnitude are
+        // genuine mate scores and correctly encode to the band, and the search never feeds an
+        // out-of-band heuristic because leaves are pre-clamped.
         for &v in &[-WIN_THRESHOLD + 1, -123, 0, 77, WIN_THRESHOLD - 1] {
             assert!(v.abs() < WIN_THRESHOLD, "test input {v} must be a genuine heuristic (sub-mate)");
             let e = encode_score(v, 0);
@@ -367,9 +343,8 @@ mod tests {
 
     #[test]
     fn full_key_verification_no_false_hit_on_bucket_collision() {
-        // Two DISTINCT keys that collide on the bucket index must not cross-hit:
-        // the index folds only the low word + turn bits, so toggling a HIGH bit of
-        // the zobrist keeps the same bucket but a different key.
+        // Two DISTINCT keys that collide on the bucket index must not cross-hit: the index folds
+        // only the low word and turn bits, so toggling a HIGH zobrist bit keeps the bucket.
         let mut tt = ProofTt::new();
         let k1 = (0x0000_0000_0000_0001_u128, 1i8, 2u8);
         let k2 = (k1.0 | (1u128 << 100), 1i8, 2u8); // same low word/turn -> same bucket
@@ -381,9 +356,8 @@ mod tests {
 
     #[test]
     fn depth_preferred_slot_keeps_the_deeper_proof() {
-        // Two distinct keys in one bucket: a deeper entry takes the depth-preferred
-        // slot and survives a shallower store (which lands in always-replace), then
-        // a third distinct key (always-replace) does not displace the deep slot.
+        // Two distinct keys in one bucket: a deeper entry takes the depth-preferred slot and
+        // survives a shallower store, then a third distinct key does not displace it.
         let mut tt = ProofTt::new();
         let base = 0u128;
         let deep = (base, 1i8, 2u8);
@@ -419,9 +393,8 @@ mod tests {
 
     #[test]
     fn stale_generation_entry_is_replaceable() {
-        // Aging: an entry from a prior generation yields the depth slot to a NEW
-        // generation store even when the newcomer is shallower — so a reused TT
-        // does not pin stale deep entries forever.
+        // Aging: an entry from a prior generation yields the depth slot to a NEW generation
+        // store even when the newcomer is shallower, so a reused TT does not pin stale entries.
         let mut tt = ProofTt::new();
         let old = (0u128, 1i8, 2u8);
         let new = (1u128 << 100, 1i8, 2u8);

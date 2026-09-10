@@ -17,9 +17,7 @@ from mantis.data.sources.base import CorpusSource, GameRecord
 from mantis.data.sources.human import HumanGameSource
 
 
-# --------------------------------------------------------------------------- #
 # GameRecord / CorpusSource contract
-# --------------------------------------------------------------------------- #
 def test_gamerecord_fields() -> None:
     rec = GameRecord(game_id_str="g", moves=[(0, 0), (1, 0)], winner=1, source="human")
     assert rec.metadata == {}
@@ -31,9 +29,7 @@ def test_corpussource_is_abstract() -> None:
         CorpusSource()  # type: ignore[abstract]
 
 
-# --------------------------------------------------------------------------- #
 # HumanGameSource
-# --------------------------------------------------------------------------- #
 def _valid_human_game() -> dict:
     moves = [{"x": q, "y": r, "anon_player": "p1" if i % 2 == 0 else "p2"}
              for i, (q, r) in enumerate(FROZEN_GAMES["g2"][0])]
@@ -78,9 +74,7 @@ def test_human_source_filters(tmp_path) -> None:
     assert list(HumanGameSource(tmp_path)) == []
 
 
-# --------------------------------------------------------------------------- #
 # CorpusMetrics pipeline counters
-# --------------------------------------------------------------------------- #
 def test_corpus_metrics_counters() -> None:
     m = CorpusMetrics(flush_interval=100)
     m.record_game("human", 22)
@@ -98,9 +92,7 @@ def test_corpus_metrics_counters() -> None:
     assert SourceMetrics().positions_per_hour() == 0.0
 
 
-# --------------------------------------------------------------------------- #
 # analyse_* stat-dict key sets
-# --------------------------------------------------------------------------- #
 def _synthetic_records() -> list[GameRecord]:
     recs = []
     for i, (gid, (moves, winner)) in enumerate(FROZEN_GAMES.items()):

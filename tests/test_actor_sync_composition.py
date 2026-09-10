@@ -1,20 +1,11 @@
-"""⊕ WPUF Phase U ORACLE — O-U3 behavioral half (+ O-U1 composition): with the gate,
-promotion and eval machinery NEVER CONSTRUCTED (`eval_enabled=False`, `run.py`'s eval
-branch not taken), continuous actor sync runs unimpaired through `compose_run`
-(DESIGN_U §2.3/§8 O-U1 last bullet). Sync provably needs nothing the deploy side
-provides, because the deploy side does not exist in the process.
+"""Continuous actor sync runs unimpaired with the gate, promotion and eval machinery ABSENT.
 
-RED-at-import until IMPL lands `mantis.train.actor_sync`.
+`eval_enabled=False` means none of the deploy side is constructed in this process, so sync
+provably needs nothing it provides.
 
-DEVIATION FROM DESIGN PATH (logged in ORACLE_NOTES_U.md): DESIGN §8/§10 R-32 places this
-test inside the existing `tests/test_run_composition.py`; ORACLE-WRITE's writable surface
-is NEW files only (same precedent as tests/config/test_train_policy_value_target_
-consistency.py's logged deviation), so it lives here. IMPL may merge it at port time.
-
-Bounded by construction: the coordinator's `stop_step` terminates the loop (O2 sets
-`shutdown.running=False`); no thread is started (build_run_safety is replaced by fakes);
-no sleeps (the warmup/waiting branches are never entered: buffer above floor, fresh games
-every step).
+Bounded by construction: the coordinator's `stop_step` terminates the loop, no thread starts
+(`build_run_safety` is faked), and no sleep is reached — the buffer is above floor and every
+step sees fresh games.
 """
 from __future__ import annotations
 
@@ -22,7 +13,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import mantis.run
-import mantis.train.actor_sync  # noqa: F401 — RED-at-import anchor (module does not exist yet)
+import mantis.train.actor_sync  # noqa: F401 — import anchor
 
 _STOP_STEP = 5
 
@@ -36,8 +27,8 @@ class _RunnerStats:
 
 
 class _SyncRecordingPool:
-    """The routing-harness FakePool surface + start/stop + the ActorSyncTarget recorders.
-    `games_completed` yields one fresh game per read so every step() runs one burst."""
+    """Pool double with the sync recorders; `games_completed` yields one fresh game per read,
+    so every step runs one burst."""
 
     def __init__(self) -> None:
         self._games = 0
@@ -45,7 +36,7 @@ class _SyncRecordingPool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -92,8 +83,6 @@ class _Trainer:
         self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -124,11 +113,9 @@ class _Buffer:
 def test_compose_run_syncs_actor_on_cadence_without_eval(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
-    """The dependency-absence proof: `eval_enabled=False` means no gate, no promotion
-    hooks, no eval pipeline exist ANYWHERE in the process, yet the pool records
-    cadence-consistent weight pushes (a real minted config at cadence 1, the
-    zero-staleness posture — DESIGN §5) and the actor's recorded
-    step ends inside the cadence bound of the learner's."""
+    """The dependency-absence proof: with no eval pipeline in the process at all, the pool
+    still records cadence-consistent weight pushes and the actor's recorded step ends inside
+    the cadence bound of the learner's."""
     pool = _SyncRecordingPool()
     trainer = _Trainer()
 
@@ -141,24 +128,17 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_build_run_safety)
-    # WPAX S-4 retired C-6: stop_step is now config-authored (train.max_train_steps), so this
-    # oracle drives the PRODUCTION _default_step_coordinator_config() with no monkeypatch.
-    # Retirement is for eval_enabled=False ONLY. The eval_enabled=True posture still needs the
-    # patch: terminal_eval_enabled defaults True in that builder, has NO config key, and is
-    # owned by R-TRAINCONFIG-SCHEMA / ADJ-08 (see DESIGN_S §6.7).
-    # NEW COUPLING: the step counts below now depend on the builder's other 24 knobs
-    # (eval_interval=1000, max_train_burst=1, log_interval=1000). That is deliberate — the
-    # oracle exercises the production seam — but a change to max_train_burst moves them.
+    # `stop_step` is config-authored, so this drives the PRODUCTION coordinator config with no
+    # monkeypatch — which couples the step counts below to that builder's other knobs.
 
     handles = mantis.run.compose_run(
-        # reachability bound: cadence < threshold < max_train_steps, so this hunk depends
-        # on _STOP_STEP >= 3
+        # Reachability bound: cadence < threshold < max_train_steps, so _STOP_STEP >= 3.
         config=smoke_run_config(
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
-                   # WPTS/TD-1: real graph route per step; the minted 256 batch is drag.
+                   # Real graph route per step; the minted 256 batch is drag.
                    "batch_size": 8},
             monitor={"actor_lag_threshold_steps": _STOP_STEP - 1},
-            # WPMAIN/R120: the eval posture is the CONFIG's fact; no parameter can force it.
+            # The eval posture is the config's fact; no parameter can force it.
             eval_enabled=False),
         trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
@@ -178,7 +158,7 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
     assert pool.step_calls == sorted(set(pool.step_calls)), (
         f"recorded sync steps must be strictly increasing: {pool.step_calls}"
     )
-    cadence = 1  # the composed config's cadence (DESIGN §5): the MOST-synced world
+    cadence = 1  # the composed config's cadence: the most-synced world
     assert trainer.step - pool.step_calls[-1] < cadence + 1, (
         f"actor_ckpt_step {pool.step_calls[-1]} must track learner_step {trainer.step} "
         f"within the cadence bound"

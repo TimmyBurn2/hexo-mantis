@@ -1,29 +1,12 @@
-"""PRE-COLLATE graph-batch splitting — the mechanism `train.microbatch_caps` bounds with
-(WP12-R dispatch 6 phase F2, CARD-RUN5-GPU-OOM, R179).
+"""PRE-COLLATE graph-batch splitting — the mechanism `train.microbatch_caps` bounds with.
 
-WHY PRE-COLLATE, AND NOT POST-COLLATE. The seam is the choice; the rest follows from it. A
-post-collate split (collate once, slice and re-index the tensors) leaves the FULL-E input
-tensors resident for the whole step — at run5's measured `E = 18 735 930` the first two
-allocations alone are `edge_index (2,E) int64 = 300 MB` and `edge_attr (E,5) fp32 = 375 MB`,
-both unbounded in E, which IS the defect. A design whose first allocation is proportional to
-the uncapped quantity cannot meet a criterion that says "bounded by the caps". Partitioning
-the WIRE, before any torch tensor exists, makes one micro-batch's tensors the only ones
-resident.
+A post-collate split leaves the FULL-E input tensors resident for the whole step: at run5's
+measured `E = 18_735_930` the first two allocations alone are 300 MB and 375 MB, both unbounded
+in E, which IS the defect. The Rust wire getters COPY OUT, so the caller converts the wire to a
+payload EXACTLY ONCE per step and this module slices numpy views of it.
 
-THE COPY-OUT TRAP, RECORDED. The Rust `GraphWire` getters COPY OUT
-(`crates/mantis-bridge/src/hexg.rs:192-194`), so reading a getter once per micro-batch would
-copy the whole array M times. The caller converts the wire to a `GraphWirePayload` EXACTLY
-ONCE per step (`graph_collate.graph_wire_from_rust`) and this module slices numpy views of
-that payload, so host cost matches HEAD, which reads each getter exactly once.
-
-THE PARTITION IS ORDER-PRESERVING, SEQUENTIAL AND GREEDY — deliberately NOT bin packing. A
-packer would reorder graphs as a function of the whole batch, be non-obvious to a reader, and
-save at most one micro-batch. The refusal is recorded here so a later "optimisation" argues
-against a decision rather than filling a silence.
-
-Pure numpy on CSR offsets; no torch, no config, no device. Every part is handed to the real
-`collate_graph_batch(semantic="full")` afterwards and therefore passes the full 18-check
-contract on its own — the slice is not trusted, it is validated.
+The partition is order-preserving, sequential and greedy, deliberately NOT bin packing. Every
+part is handed to the real `collate_graph_batch` afterwards, so the slice is validated.
 """
 from __future__ import annotations
 
@@ -39,77 +22,41 @@ from mantis.selfplay.graph_collate import GraphWirePayload
 _KEY = "train.microbatch_caps"
 _MEMBERS = ("max_edges", "max_nodes")
 
-#: The INFERENCE arm's naming of the same partition (F-816-10, D-2). One greedy loop, one
-#: over-cap check, TWO name authorities: the shared planner's refusal must name the key an
-#: operator would actually edit, and an inference-side failure that said
-#: `train.microbatch_caps` would be a FALSE PROVENANCE RECORD (R73) sending them to re-mint a
-#: key that had nothing to do with it. The block path and its member spellings are ONE naming
-#: fact with two components and travel together — they are never passed apart.
+#: The INFERENCE arm's naming of the same partition. One greedy loop, one over-cap check, TWO
+#: name authorities: an inference-side failure that said `train.microbatch_caps` would be FALSE
+#: PROVENANCE sending an operator to re-mint a key that had nothing to do with it. The block path
+#: and its member spellings are ONE naming fact and are never passed apart.
 _FUSED_KEY = "inference.fused_graph_caps"
 _FUSED_MEMBERS = ("max_fused_edges", "max_fused_nodes")
 
 
 class GraphMicroBatchOverCap(ValueError):
-    """ONE graph exceeds a member of `train.microbatch_caps` on its own.
-
-    No split can rescue it: micro-batching partitions at GRAPH boundaries, so a single graph
-    is the atom. Raised at the partition — before any device allocation and before
-    `optimizer.zero_grad()` — naming the offending graph, its edge count, its node count,
-    WHICH member it exceeded, that member's value and the config key path.
-
-    R114's original clause: never a silent truncation, never a silent drop. A skip would
-    silently change the batch composition AND both loss denominators, and let a run train on
-    a biased sub-population while reporting a normal step. Clamping the cap up at runtime is
-    refused for a different reason: it is tune-to-green at runtime (R61) and it makes the
-    peak-allocation bound unprovable.
-    """
+    """ONE graph exceeds a member of `train.microbatch_caps` on its own, so no split can rescue
+    it: micro-batching partitions at GRAPH boundaries. Raised at the partition, before any device
+    allocation, naming the graph, both counts, the member breached and the config key. Never a
+    silent drop, which would change the batch composition and both loss denominators while
+    reporting a normal step, and never a runtime clamp, which makes the peak bound unprovable."""
 
 
 class FusedGraphOverCap(ValueError):
-    """ONE graph exceeds a member of `inference.fused_graph_caps` on its own (F-816-10).
-
-    The inference arm's twin of `GraphMicroBatchOverCap`, and deliberately NOT a subclass of it
-    in either direction (D-2). The two seams must stay diagnosable APART: every trainer-side
-    `except GraphMicroBatchOverCap` would otherwise silently swallow an inference-side refusal
-    — turning a run-fatal memory refusal into a skipped forward on the wrong seam, with a
-    message that would still read correctly and no assertion anywhere that could notice.
-
-    Raised at the partition, BEFORE any device allocation, and it travels the existing R276
-    seam unchanged: the inner `except Exception` in `_run_graph_loop` logs
-    `graph_inference_forward_failed` and routes every waiter to
-    `submit_graph_inference_failure`. No OOM handler, no retry, no catch-and-degrade, no new
-    failure path — a retry on a memory failure is the silent catch-and-retry R276(f) forbids by
-    name, and clamping the cap up at runtime is tune-to-green (R61) that makes the
-    peak-allocation bound unprovable.
-    """
+    """The inference twin of `GraphMicroBatchOverCap`, deliberately NOT a subclass in either
+    direction: a trainer-side `except GraphMicroBatchOverCap` would otherwise swallow an
+    inference-side refusal, turning a run-fatal memory refusal into a skipped forward on the
+    wrong seam. No OOM handler, no retry, no catch-and-degrade."""
 
 
 class GraphEmptyBatchError(ValueError):
-    """A graph training step was handed ZERO micro-batches (`B == 0`).
-
-    A training step with no graphs cannot produce a gradient, so the only honest outcomes are
-    a raise or a silent no-op — and a silent no-op would let a run report steps it never took
-    (LAW-14's posture). HEAD already fails here, but incidentally and uninformatively:
-    `ragged_policy_ce` early-returns a `torch.zeros(())` with no `grad_fn`
-    (`train/losses.py:89-90`), so `loss.backward()` raises `RuntimeError: element 0 of tensors
-    does not require grad` — loud, but naming neither the condition nor the subsystem.
-
-    DECLARED DEFENSIVE: whether `sample_graph_batch` can return `n_graphs == 0` through the
-    coordinator's `min_buf_size` gate is UNVERIFIED (DESIGN_DFIX §3.3 names the settling
-    measurement). This is a named failure on a path of unverified reachability, not a claim
-    that the path is live.
-    """
+    """A graph training step was handed ZERO micro-batches, which cannot produce a gradient, so
+    the only honest outcomes are a raise or a no-op that lets a run report steps it never took.
+    HEAD already fails here uninformatively, naming neither the condition nor the subsystem.
+    DECLARED DEFENSIVE: the path's reachability through the warmup gate is UNVERIFIED."""
 
 
 @dataclass(frozen=True)
 class GraphTargetSlice:
-    """One micro-batch's slice of the target arrays plus the argmax-cell sequence.
-
-    `target_argmax_cells` is here and not left to the caller because `collate_graph_batch`
-    LENGTH-CHECKS it against the part's own `B` (`graph_collate.py:586-590`,
-    `AugRoundTripMismatch`) and indexes it per graph: an unsliced full-length list makes
-    EVERY part raise.
-    """
+    """One micro-batch's slice of the target arrays plus the argmax-cell sequence, which is
+    sliced here because the collate LENGTH-CHECKS it against the part's own `B` — an unsliced
+    full-length list makes EVERY part raise."""
 
     policy_target: np.ndarray
     explicit_mask: np.ndarray
@@ -131,21 +78,10 @@ def plan_microbatches(
 ) -> tuple[tuple[int, int], ...]:
     """Partition `[0, B)` into contiguous ordered `(g0, g1)` micro-batches under BOTH members.
 
-    Returns `()` when `B == 0`: a naive reading of the greedy loop appends a trailing part
-    unconditionally and yields `[(0, 0)]`, one EMPTY part, which would then collate a
-    zero-graph batch. Zero parts is the honest answer and the trainer raises on it by name.
-
-    A pure function of `(edge counts, node counts, caps)` — no host state, no RNG, no device.
-
-    `key`/`members` name the CONFIG BLOCK the caps came from, and they exist only so the
-    refusal below tells the truth on both arms (F-816-10 D-2). They are ONE naming fact with
-    two components — the block path and the two member spellings under it — so they are passed
-    together or not at all, and `plan_fused_forwards` is the only caller that passes them. The
-    defaults are BEHAVIOUR-PRESERVING: every existing caller keeps its exact current message
-    byte for byte, which is what makes a defaulted parameter here hide no authority. A REQUIRED
-    parameter was the design's original shape and was overruled: it churns every direct caller
-    and moves `tests/train/test_graph_microbatch_authority.py`, whose frozen AST census is the
-    whole reason the inference members are not spelled `max_edges`/`max_nodes`.
+    Returns `()` when `B == 0`: a naive greedy loop appends a trailing part unconditionally and
+    would collate a zero-graph batch. A pure function of `(edge counts, node counts, caps)`.
+    `key`/`members` name the CONFIG BLOCK the caps came from, so the refusal tells the truth on
+    both arms; their defaults are behaviour-preserving and hide no authority.
     """
     eo = np.asarray(edge_offsets, dtype=np.int64)
     no = np.asarray(node_offsets, dtype=np.int64)
@@ -157,12 +93,9 @@ def plan_microbatches(
     # Out of domain FIRST, before any packing: a single graph over either member has no split
     # that rescues it, and a bound that admits one over-bound part is not a bound.
     for i in range(b):
-        # BOTH members are tested before raising, and every one that is breached is named.
-        # Two sequential `if ... raise` statements report only the first: an operator whose
-        # graph breaks both caps fixes the member they were told about, re-runs, and meets
-        # the second as an apparently-new surprise. The single-member message is byte-identical
-        # to what it has always been; only the both-breached case gained a second clause
-        # (RED-TEAM H2).
+        # BOTH members are tested before raising: two sequential `if ... raise` statements report
+        # only the first, so an operator whose graph breaks both fixes one and meets the other as
+        # an apparently-new surprise.
         breaches = [(m, cap) for m, cap, count in
                     ((members[0], max_edges, int(ec[i])), (members[1], max_nodes, int(nc[i])))
                     if count > cap]
@@ -193,19 +126,10 @@ def plan_fused_forwards(
     node_offsets: Any,
     caps: FusedGraphCapsSpec,
 ) -> tuple[tuple[int, int], ...]:
-    """Partition ONE fused inference pop into bounded forwards (F-816-10, verdict V-A).
-
-    An ADAPTER over `plan_microbatches`, not a second transcription: ONE greedy loop, ONE
-    over-cap check, ONE algorithm. Two implementations of one partition agree right up until
-    they diverge, and the divergence would be a memory bound that is correct on one arm only.
-    What differs between the arms is the NAME AUTHORITY and the exception TYPE, and both differ
-    for the same reason — a refusal must send the operator to the key they actually have to
-    re-mint.
-
-    Called PRE-COLLATE, on the wire's own CSR offsets, before any torch tensor exists: a
-    post-collate split leaves the full-E tensors resident for the whole forward, and a design
-    whose first allocation is proportional to the uncapped quantity cannot meet a bound.
-    """
+    """Partition ONE fused inference pop into bounded forwards — an ADAPTER over
+    `plan_microbatches`, not a second transcription, since two implementations of one partition
+    agree right up until they diverge. What differs is the NAME AUTHORITY and the exception TYPE,
+    both so a refusal sends the operator to the key they have to re-mint."""
     try:
         return plan_microbatches(
             edge_offsets, node_offsets,
@@ -219,15 +143,9 @@ def plan_fused_forwards(
 def slice_graph_wire(payload: GraphWirePayload, g0: int, g1: int) -> GraphWirePayload:
     """The sub-wire holding graphs `[g0, g1)`, re-based so it is a valid wire on its own.
 
-    THE FLAT-`edge_index` TRAP, RECORDED. The wire's `edge_index` is flat of size `2E` and is
-    reshaped `(2, E)` by the collate (`graph_collate.py:339-341`, and `_check_structural`'s
-    `len(edge_index) != 2E` check at `:406-407`). An edge RANGE is therefore **two disjoint
-    ranges of the flat array**, not one contiguous slice: `[e0:e1]` from the source row and
-    `[E+e0:E+e1]` from the destination row, both shifted down by `node_offsets[g0]`.
-
-    Every array keeps its contract dtype (numpy slicing preserves dtype; the three re-basings
-    are int64-minus-int64), because `_check_structural` re-validates all thirteen dtypes on
-    every part.
+    THE FLAT-`edge_index` TRAP: it is flat of size `2E` and reshaped `(2, E)` by the collate, so
+    an edge RANGE is TWO disjoint ranges — `[e0:e1]` and `[E+e0:E+e1]` — both shifted down by
+    `node_offsets[g0]`.
     """
     no = np.asarray(payload.node_offsets, dtype=np.int64)
     eo = np.asarray(payload.edge_offsets, dtype=np.int64)
@@ -268,11 +186,8 @@ def slice_graph_wire(payload: GraphWirePayload, g0: int, g1: int) -> GraphWirePa
 
 def slice_targets(targets: Any, legal_offsets: Any, g0: int, g1: int) -> GraphTargetSlice:
     """Slice the target arrays and the argmax-cell sequence for graphs `[g0, g1)`.
-
-    `policy_target` and `explicit_mask` are flat PER LEGAL NODE, so their bounds come from
-    the wire's own `legal_offsets` (a first-class payload field) — derivable pre-collate
-    without touching torch. The rest, `tail_mass` included, are per-graph.
-    """
+    `policy_target` and `explicit_mask` are flat PER LEGAL NODE, so their bounds come from the
+    wire's own `legal_offsets`; the rest, `tail_mass` included, are per-graph."""
     lo = np.asarray(legal_offsets, dtype=np.int64)
     l0, l1 = int(lo[g0]), int(lo[g1])
     cells: Sequence[Any] = targets.target_argmax_cells

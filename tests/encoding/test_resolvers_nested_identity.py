@@ -1,36 +1,15 @@
-"""WPBRIDGE Phase T — TD-4 / CARD-POOL-ENCODING-BRIDGE: `resolve_from_config` is THE one
-authority for WHERE a config declares its encoding (R1 one-authority, LAW-11, LAW-08).
+"""`resolve_from_config` is THE one authority for WHERE a config declares its encoding.
 
-RED AT HEAD (`ca237d2`): `resolve_from_config` read only the flat top-level `encoding` key.
-`RunConfig.model_dump()` carries `identity.encoding` and no flat key, so every caller that
-did not privately re-implement the lift died on `MissingEncodingError`. Two callers DID
-re-implement it (`train/trainer/core.py::_resolve_spec`, `train/orchestrator.py`) and five
-did not — `selfplay/hparams.py::resolve_pool_encoding` (the pool), `selfplay/worker.py`,
-`selfplay/inference_server.py`, `train/subsystems.py`, `encoding/audit_sections.py`. That
-split is the defect: duplicated authority for a schema fact, which is what R1 forbids.
-
-The census-reproducing repro, at HEAD:
-
-    resolve_pool_encoding(load_config("configs/run6.yaml").model_dump(), arch=None)
-    -> MissingEncodingError: config has no 'encoding' key ... (LAW-11, R28)
-
-and it is why mode PREFLIGHT could not run a burst at all (parent rc 33, child rc 1).
-
-The fix adds the nested shape to the ONE resolver and deletes both private bridges. Reading
-`identity.encoding` is NOT a fallback and NOT a default: `IdentityConfig.encoding` is a
-required, defaultless, registry-cross-checked field (`config/schema/core.py:50`), and a
-config declaring an encoding in NO shape still raises. The LAW-11 arms are re-asserted here
-rather than assumed, because widening an accept-set is exactly how a no-fallback posture
-gets lost by accident.
+It reads the nested `identity.encoding` that `RunConfig.model_dump()` carries as well as the
+flat key; no caller re-implements the lift. Reading the nested shape is NOT a fallback and NOT
+a default — a config declaring an encoding in NO shape still raises, and those arms are
+re-asserted here because widening an accept-set is how a no-fallback posture gets lost.
 """
 from __future__ import annotations
 
 import pytest
 
 from mantis.encoding.resolvers import MissingEncodingError, resolve_from_config
-
-# ── the shape TD-4 was about ────────────────────────────────────────────────────────────
-
 
 def test_nested_identity_encoding_resolves() -> None:
     """The WP8 nested shape — what `RunConfig` actually dumps — resolves."""
@@ -47,19 +26,16 @@ def test_nested_identity_resolves_the_graph_encoding_run5_declares() -> None:
 
 
 def test_disagreeing_dual_shape_raises_not_a_precedence_pick() -> None:
-    """WPTS Phase P re-point (R90a; the subject deliberately changed by R104). This test
-    pinned FLAT-first precedence — the WPBRIDGE bridge-parity intent. The operator ruled
-    precedence is the wrong question: a dual-shape config whose declarations DISAGREE is
-    corrupt input, and the one authority RAISES rather than silently picking a winner.
-    Under `extra="forbid"` a real `RunConfig` still can never carry both, so this pins
-    intent, not a live path — the intent is now agreement-or-raise."""
+    """A dual-shape config whose declarations DISAGREE is corrupt input: the one authority
+    RAISES rather than picking a winner. `extra="forbid"` means no real `RunConfig` carries
+    both, so this pins the intent, not a live path."""
     from mantis.encoding.resolvers import EncodingDeclarationConflictError
 
     with pytest.raises(EncodingDeclarationConflictError):
         resolve_from_config({"encoding": "gnn_axis_v1", "identity": {"encoding": "gnn_axis_r8"}})
 
 
-# ── LAW-11: the accept-set widened, the no-default posture did not ──────────────────────
+# the accept-set widened; the no-default posture did not
 
 
 def test_neither_shape_present_still_raises() -> None:
@@ -84,7 +60,7 @@ def test_identity_encoding_none_raises() -> None:
 
 
 def test_error_message_names_both_shapes() -> None:
-    """Name-truth (R73): the diagnostic must tell the operator every place it looked."""
+    """The diagnostic must tell the operator every place it looked."""
     with pytest.raises(MissingEncodingError) as exc:
         resolve_from_config({})
     msg = str(exc.value)

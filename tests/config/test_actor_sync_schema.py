@@ -149,7 +149,7 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
     }
 
 
-# ── construction + named absence errors ───────────────────────────────────────────────
+# construction + named absence errors
 def test_valid_payload_with_the_three_knobs_constructs_clean() -> None:
     cfg = RunConfig.model_validate(_payload())
     assert cfg.train.actor_sync_cadence_steps == 1
@@ -172,7 +172,7 @@ def test_schema_fields_are_required_with_no_pydantic_level_default() -> None:
     assert MonitorSchemaConfig.model_fields["actor_lag_abort_enabled"].is_required()
 
 
-# ── bounds: no representable "off" (R49) ──────────────────────────────────────────────
+# bounds: no representable "off" (R49)
 @pytest.mark.parametrize("bad_cadence", [0, -1])
 def test_cadence_has_no_representable_off_value(bad_cadence: int) -> None:
     """`ge=1`: the schema CANNOT express "don't sync" — R49 enforced at the type level."""
@@ -189,7 +189,7 @@ def test_lag_threshold_rejects_nonpositive(bad_threshold: int) -> None:
             _payload(monitor_over={"actor_lag_threshold_steps": bad_threshold}))
 
 
-# ── the cross-field validator (RunConfig-level; DESIGN §5's named message) ────────────
+# the cross-field validator (RunConfig-level; DESIGN §5's named message)
 @pytest.mark.parametrize("threshold", [8, 4])
 def test_threshold_at_or_below_cadence_rejected_with_named_message(threshold: int) -> None:
     with pytest.raises(ValidationError,
@@ -206,7 +206,7 @@ def test_threshold_just_above_cadence_accepted() -> None:
     assert cfg.monitor.actor_lag_threshold_steps == 9
 
 
-# ── resolvers: the ONE read path per knob ─────────────────────────────────────────────
+# resolvers: the ONE read path per knob
 def test_resolver_returns_the_configured_cadence() -> None:
     cfg = RunConfig.model_validate(
         _payload(train_over={"actor_sync_cadence_steps": 7}))
@@ -229,7 +229,7 @@ def test_runtime_monitor_config_carries_the_smoke_posture() -> None:
     assert runtime.actor_lag_abort_enabled is False
 
 
-# ── the minted configs carry all three keys (a hand-revert fails LOCALLY) ─────────────
+# the minted configs carry all three keys (a hand-revert fails LOCALLY)
 @pytest.mark.parametrize("name", _CONFIGS)
 def test_minted_config_carries_all_three_keys(name: str) -> None:
     data = yaml.safe_load((_REPO / "configs" / name).read_text(encoding="utf-8"))

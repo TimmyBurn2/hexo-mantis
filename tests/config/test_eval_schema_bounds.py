@@ -1,41 +1,18 @@
-# >300 justify (R8). Pre-existing gap, closed
-# by WPMINT Phase W. The file is a per-FIELD bounds census over the `eval` section's
-# ALWAYS-PRESENT leaves: each field contributes a parametrized out-of-domain rejection and an
-# in-domain boundary acceptance, so the length tracks the section's field count rather than any
-# logic. Splitting it by sub-model would put `EvalConfig`, `GateConfig` and `LadderConfig`
-# bounds in three files while the defect class (a silently-loaded out-of-domain value) is one
-# class with one triage protocol; the census reads as a census only while it is whole.
-# NOT covered here, and named so the census's edge is legible rather than assumed: the two
-# `Block | None` postures `eval.ply_cap_adjudication` / `eval.strength_floor`, whose fields do
-# not exist on a disarmed payload and whose bounds therefore need an ARMED fixture. Their
-# census is tests/config/test_eval_posture_schema.py.
-"""RED-TEAM-FIX WP11-A F2 (MAJOR) — numeric-bounds validation on eval/gate/ladder schema
-fields (mantis-migration/wp/WP11A/RED_TEAM.md Finding F2).
+# >300 justify (R8): a per-FIELD bounds census over the `eval` section's always-present leaves,
+# each contributing one out-of-domain rejection and one in-domain boundary acceptance, so the
+# length tracks the field count rather than any logic. NOT covered: the two `Block | None`
+# postures, whose bounds need an ARMED fixture (tests/config/test_eval_posture_schema.py).
+"""Numeric-bounds validation on the eval/gate/ladder schema fields.
 
-Pre-fix, `eval.random_model_sims=-5`, `eval.ladder.bootstrap_ci_level` outside `(0,1)`, and
-`eval.gate.promotion_winrate=2.0` all loaded SILENTLY (no error at config-load time) — the
-first two degrade to either a downstream `np.quantile` crash deep inside a worker subprocess
-or a silently-inverted-but-plausible CI; the third permanently and silently disables
-promotion forever (`wr_confirm >= 2.0` can never be true). R1/LAW-08 exist to kill exactly
-this "silently-disabled-lever"/"silently-wrong-number" class.
+Pre-fix, `random_model_sims=-5`, a `bootstrap_ci_level` outside `(0,1)` and
+`gate.promotion_winrate=2.0` all loaded SILENTLY — crashing `np.quantile` inside a worker,
+inverting a CI, or disabling promotion forever. Every case is parametrized: one out-of-domain
+value raises a `ValidationError` naming the field, one in-domain boundary value loads clean.
 
-This is a NEW file (frozen-oracle discipline: `tests/eval/test_ladder_config_schema.py` and
-`tests/config/test_schema_strict.py` are NOT edited here, only read for convention). Every
-case is parametrized: one out-of-domain value -> `pydantic.ValidationError` naming the
-field, one in-domain boundary value -> loads clean. Named error means the field path
-appears in `str(ValidationError)` (pydantic includes the dotted `loc` automatically for a
-`Field(ge=/le=/gt=/lt=)` constraint — no hand-rolled message needed for these to be "named").
-
-RED-TEAM-2 F-RT2-1 (BLOCKER, extended here by the F-RT2-1 FIX pass): `round_timeout_sec`
-and `worker_kill_grace_sec` were floor-only bounds (`gt=0`/`ge=0`) that silently admitted
-`float("inf")` — a REAL `.inf` YAML literal parsed clean through `RunConfig.model_validate`
-end to end, and `worker_kill_grace_sec=+inf` reproduced F1's exact silent-poller-death
-failure mode via a real `multiprocessing.Process.join(float("inf"))` `OverflowError` inside
-`_escalate_and_finalize` (pipeline.py) — a code path entirely outside F1's own catch-all.
-Both fields (plus `eval.ladder.bt_prior_games`, the third floor-only float this sweep
-found) now carry `allow_inf_nan=False` (rejects `inf`/`-inf`/`nan` with a named pydantic
-`finite_number` error) and, for the two timeout fields the isolation-law join arithmetic
-depends on, a finite ceiling (`mantis.config.schema._EVAL_TIMEOUT_CEILING_SEC`, one day).
+The two timeout fields were floor-only bounds that admitted a REAL `.inf` YAML literal end to
+end, which reproduced a silent poller death through `Process.join(float("inf"))`. They and
+`ladder.bt_prior_games` now carry `allow_inf_nan=False`, and the timeouts a join depends on
+carry a finite ceiling.
 """
 from __future__ import annotations
 
@@ -82,10 +59,8 @@ def _ladder(**overrides: Any) -> dict:
     return base
 
 
-#: WPMINT Phase K-A stage 0: the complete `train:` payload, DERIVED from a MINTED config
-#: rather than restated — eleven files carried a hand-written copy, so a new `train.*` key
-#: cost eleven edits. `dev_example.yaml`'s resolved block was measured byte-identical to the
-#: census it replaces, so the swap is zero-behavior-change.
+#: The complete `train:` payload, DERIVED from a MINTED config rather than restated — eleven
+#: hand-written copies meant a new `train.*` key cost eleven edits.
 _MINTED_TRAIN: dict = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").train.model_dump()
 
@@ -113,17 +88,14 @@ def _selfplay_block() -> dict:
 def _inference_block() -> dict:
     return {
         "inference_batch_size": 64, "inference_max_wait_ms": 10,
-        # F-816-10: `inference.fused_graph_caps` is a REQUIRED block. The pair here is
-        # the template's NON-BINDING-BY-CONSTRUCTION value, so nothing in this file
-        # exercises a split; the R119 `null` placeholder is pinned by
-        # tests/config/test_fused_graph_caps_authority.py against the real configs.
+        # A REQUIRED block; this pair is the NON-BINDING-BY-CONSTRUCTION template value.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
 
 
 def _monitor_block() -> dict:
     return {
-        # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
+        # the ARMING cadence, schema-only and required
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
         "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
@@ -159,9 +131,7 @@ def _payload(**eval_overrides: Any) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf; `null` is the placeholder, refused at boot on a cuda process.
         "allocator_posture": None,
         "run_id": "unit_test",
         "seed": 1,
@@ -176,7 +146,7 @@ def _payload(**eval_overrides: Any) -> dict:
 
 
 def _set_path(payload: dict, path: "tuple[str, ...]", value: Any) -> dict:
-    """Deep-set `payload["eval"][...path][-1]] = value` (path is relative to `eval`)."""
+    """Deep-set a value at `path`, which is relative to `eval`."""
     payload = copy.deepcopy(payload)
     node = payload["eval"]
     for key in path[:-1]:
@@ -193,9 +163,8 @@ def _validate(payload: dict) -> RunConfig:
     return RunConfig.model_validate(payload)
 
 
-# ── the two RED_TEAM-reproduced silent-load repro cases, closed loop ────────────────────
 def test_random_model_sims_negative_is_rejected_not_silently_loaded() -> None:
-    """RED_TEAM.md item 6: `eval.random_model_sims = -5` previously loaded with zero error."""
+    """`eval.random_model_sims = -5` previously loaded with zero error."""
     payload = _payload(random_model_sims=-5)
     with pytest.raises(ValidationError) as ei:
         _validate(payload)
@@ -203,9 +172,7 @@ def test_random_model_sims_negative_is_rejected_not_silently_loaded() -> None:
 
 
 def test_bootstrap_ci_level_out_of_unit_interval_is_rejected_not_silently_loaded() -> None:
-    """RED_TEAM.md item 6: `bootstrap_ci_level = 1.5` and `= -0.1` previously loaded with
-    zero error; `1.5` degrades to a runtime `np.quantile` crash deep in a worker subprocess,
-    `-0.1` silently computes a statistically-inverted-but-plausible CI. Both closed here."""
+    """`bootstrap_ci_level = 1.5` crashes `np.quantile` in a worker; `-0.1` silently inverts."""
     for bad in (1.5, -0.1, 0.0, 1.0):
         payload = _payload()
         payload["eval"]["ladder"]["bootstrap_ci_level"] = bad
@@ -215,8 +182,7 @@ def test_bootstrap_ci_level_out_of_unit_interval_is_rejected_not_silently_loaded
 
 
 def test_promotion_winrate_above_one_is_rejected_not_silently_loaded() -> None:
-    """RED_TEAM.md item 6: `promotion_winrate = 2.0` previously loaded with zero error and
-    permanently+silently disabled promotion forever (`wr_confirm >= 2.0` can never hold)."""
+    """`promotion_winrate = 2.0` loaded clean and disabled promotion forever."""
     payload = _payload()
     payload["eval"]["gate"]["promotion_winrate"] = 2.0
     with pytest.raises(ValidationError) as ei:
@@ -224,8 +190,8 @@ def test_promotion_winrate_above_one_is_rejected_not_silently_loaded() -> None:
     assert "promotion_winrate" in str(ei.value)
 
 
-# ── full parametrized sweep: every bounded numeric field, out-of-domain + in-domain ─────
-# (path relative to `eval`; "rungs0" addresses eval.ladder.rungs[0])
+# Every bounded numeric field, out-of-domain + in-domain. Paths are relative to `eval`; "rungs0"
+# addresses eval.ladder.rungs[0].
 _OUT_OF_DOMAIN_CASES = [
     # EvalConfig
     (("random_model_sims",), 0, "eval.random_model_sims"),
@@ -235,8 +201,7 @@ _OUT_OF_DOMAIN_CASES = [
     (("round_timeout_sec",), 0.0, "eval.round_timeout_sec"),
     (("round_timeout_sec",), -1.0, "eval.round_timeout_sec"),
     (("worker_kill_grace_sec",), -1.0, "eval.worker_kill_grace_sec"),
-    # RED-TEAM-2 F-RT2-1: non-finite + above-ceiling on the two isolation-law timeout
-    # fields, plus the sweep-found third floor-only float (bt_prior_games).
+    # Non-finite and above-ceiling on the two timeout fields, plus the third floor-only float.
     (("round_timeout_sec",), float("inf"), "eval.round_timeout_sec"),
     (("round_timeout_sec",), float("-inf"), "eval.round_timeout_sec"),
     (("round_timeout_sec",), float("nan"), "eval.round_timeout_sec"),
@@ -294,8 +259,7 @@ _IN_DOMAIN_BOUNDARY_CASES = [
     (("random_floor_games",), 0),
     (("round_timeout_sec",), 0.001),
     (("worker_kill_grace_sec",), 0.0),
-    # RED-TEAM-2 F-RT2-1: the exact ceiling value must still load (the fix must reject
-    # ONLY non-finite/above-ceiling, never clamp or reject a legitimate boundary value).
+    # The exact ceiling must still load: the fix rejects only non-finite/above-ceiling values.
     (("round_timeout_sec",), _EVAL_TIMEOUT_CEILING_SEC),
     (("worker_kill_grace_sec",), _EVAL_TIMEOUT_CEILING_SEC),
     (("ladder", "bt_prior_games"), 1e18),
@@ -329,20 +293,15 @@ def test_in_domain_boundary_value_loads_clean(path: "tuple[str, ...]", value: An
 
 
 def test_valid_payload_still_loads_after_bounds_added() -> None:
-    """Sanity anchor: the fully-populated in-domain payload must still validate — the
-    bounds added for F2 must never reject a legitimate, already-shipped config shape."""
+    """Sanity anchor: the bounds must never reject a legitimate, already-shipped config shape."""
     cfg = RunConfig.model_validate(_payload())
     assert cfg.eval.gate.promotion_winrate == 0.55
     assert cfg.eval.ladder.bootstrap_ci_level == 0.95
 
 
-# ── RED-TEAM-2 F-RT2-1 (BLOCKER): the ORIGINAL repro shape, closed loop ──────────────────
-# RED_TEAM_2.md: `worker_kill_grace_sec: .inf` is a genuine YAML document, parsed by
-# `yaml.safe_load` (NOT a hand-constructed Python float) and validated through the full
-# `RunConfig.model_validate` path -- the exact repro shape the finding used.
+    # The ORIGINAL repro shape: a genuine YAML document, not a hand-constructed Python float.
 def _yaml_doc_with_eval_override(field: str, yaml_literal: str) -> dict:
-    """Build a full `RunConfig`-shaped payload where `eval.<field>` is parsed from a REAL
-    YAML literal (`.inf`/`-.inf`/`.nan`), not a Python `float(...)` call site."""
+    """A full payload whose `eval.<field>` is parsed from a REAL YAML literal, not `float(...)`."""
     doc_text = f"eval_override_value: {yaml_literal}\n"
     parsed_value = yaml.safe_load(doc_text)["eval_override_value"]
     payload = _payload()
@@ -364,12 +323,8 @@ def _yaml_doc_with_eval_override(field: str, yaml_literal: str) -> dict:
          "round_timeout_sec=.inf", "round_timeout_sec=-.inf", "round_timeout_sec=.nan"],
 )
 def test_original_f_rt2_1_repro_real_yaml_document_now_rejected(field: str, yaml_literal: str) -> None:
-    """RED-TEAM-2 F-RT2-1's exact reproduction: `worker_kill_grace_sec: .inf` (a genuine
-    YAML document, `yaml.safe_load` then `RunConfig.model_validate`) previously loaded
-    SILENTLY and went on to reproduce F1's silent-poller-death failure mode via a real
-    `multiprocessing.Process.join(float('inf'))` `OverflowError`. The schema now makes
-    this repro impossible: a named `ValidationError` at config-load time, never a
-    downstream crash three layers deep in a poller thread."""
+    """The exact reproduction: `worker_kill_grace_sec: .inf` as a genuine YAML document loaded
+    SILENTLY and killed a poller through `Process.join(float('inf'))`."""
     payload = _yaml_doc_with_eval_override(field, yaml_literal)
     assert not math.isfinite(payload["eval"][field])  # confirm the injected value IS non-finite
     with pytest.raises(ValidationError) as ei:
@@ -381,9 +336,7 @@ def test_original_f_rt2_1_repro_real_yaml_document_now_rejected(field: str, yaml
 
 
 def test_original_f_rt2_1_repro_ceiling_boundary_still_loads() -> None:
-    """The non-.inf half of the original repro shape: a `worker_kill_grace_sec` at the
-    (finite) ceiling is legitimate and must still load -- the fix closes `.inf`
-    specifically, not the whole floor-only domain."""
+    """The non-`.inf` half of the repro: a grace at the finite ceiling is legitimate."""
     payload = _payload()
     payload["eval"]["worker_kill_grace_sec"] = _EVAL_TIMEOUT_CEILING_SEC
     cfg = _validate(payload)
@@ -391,9 +344,7 @@ def test_original_f_rt2_1_repro_ceiling_boundary_still_loads() -> None:
 
 
 def test_bt_prior_games_rejects_non_finite_via_real_yaml_document() -> None:
-    """The sweep-found third floor-only float (`eval.ladder.bt_prior_games`): traced
-    downstream to `bt.py`'s `fit_bt` -- an `inf` prior degrades every rating/`p_hat` to
-    NaN (non-crashing but silently corrupting every downstream scheduling decision)."""
+    """An `inf` `bt_prior_games` degrades every rating and `p_hat` in `fit_bt` to NaN."""
     payload = _yaml_doc_with_eval_override("bt_prior_games_probe", ".inf")
     bad_value = payload["eval"].pop("bt_prior_games_probe")
     payload["eval"]["ladder"]["bt_prior_games"] = bad_value
@@ -403,9 +354,7 @@ def test_bt_prior_games_rejects_non_finite_via_real_yaml_document() -> None:
 
 
 def test_minted_configs_still_load_after_f_rt2_1_bounds() -> None:
-    """R1: the fix must never require re-minting a shipped config. Every minted config's
-    `round_timeout_sec=3600.0` / `worker_kill_grace_sec=10.0` / `bt_prior_games=1.0` are
-    each many orders of magnitude below the new ceiling/finite-only bound."""
+    """The fix must never require re-minting a shipped config."""
     payload = _payload()  # mirrors the minted-config values verbatim (see docstring)
     assert payload["eval"]["round_timeout_sec"] == 3600.0
     assert payload["eval"]["worker_kill_grace_sec"] == 10.0

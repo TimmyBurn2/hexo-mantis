@@ -1,30 +1,17 @@
-"""Out-of-process supervisor (WP13-A §c.5, L-C) — `python -m mantis.monitor.supervise`.
+"""Out-of-process supervisor — `python -m mantis.monitor.supervise`.
 
 The backstop for the one failure the in-process watchdog cannot cover: a watchdog thread
-STARVED by the GIL held in non-yielding native code. The child's watchdog thread mirrors
-its heartbeats to a file with a monotonic ``seq``; a frozen ``seq`` means "the watchdog
-thread itself can no longer run", and only a separate process can act on that.
+STARVED by the GIL held in non-yielding native code. A frozen heartbeat ``seq`` means that
+thread can no longer run, and only a separate process can act on it.
 
-Two liveness inputs, deliberately distinct:
-  * the child EXIT code — 42 relaunch (stall/livelock is the transient class), 0 stop,
-    43 stop (a persistent-storage fault relaunches straight back into itself), any other
-    code propagated with NO relaunch (a crash-loop is worse than a loud stop);
-  * heartbeat-file ``seq`` PROGRESSION, measured on the supervisor's OWN monotonic clock —
-    never file mtime, never wall clock (mtime-forgery and NTP-skew immune, O-13); a ``pid``
-    change resets the baseline, because a legitimate restart is not a stall.
-
-Host-neutral by construction: the child PROGRAM sees the verbatim argv after ``--`` as its own
-``sys.argv``; no default paths, no provider names, no baked launcher (§7). The ``Popen``-level
-argv now carries one prefix — the arming trampoline, which `execvp`s into the given command and
-so is gone by the time that command runs (see `spawn_child`). Torch-free (O-18) — a liveness
-babysitter must not need seconds and gigabytes to load on a box whose GPU just wedged.
+Two liveness inputs: the child EXIT code (42 relaunch, 0 stop, 43 stop, anything else
+propagated with NO relaunch) and ``seq`` progression on this process's OWN monotonic clock,
+never mtime and never wall clock. Host-neutral and torch-free by construction.
 
 >300 justify (R8): ONE subject — the out-of-process babysitter — and its three inseparable
 halves: the staleness core it decides FROM, the exit-code table it decides BY, and the real
-`Popen`/signal collaborators `main` binds INTO it. Splitting would put the decision in one
-file and its premise in another, and the whole unit has a second, file-scoped property that a
-split would make unverifiable: it must stay torch-free (O-18), which is a claim about this
-file as a unit, not about any one of its parts.
+`Popen`/signal collaborators `main` binds INTO it. A split would put the decision in one file
+and its premise in another, and would make the file-scoped torch-free property unverifiable.
 """
 from __future__ import annotations
 
@@ -60,12 +47,8 @@ RELAUNCH_BUDGET_EXIT_CODE: int = 44
 class LivenessTracker:
     """Staleness core: keys on heartbeat ``seq`` progression, on the caller's clock.
 
-    `observe` records progress when the seq ADVANCES (same pid) or when a NEW pid is seen
-    for the first time (a restart re-bases the baseline — not forgery, not an instant
-    stall). An unchanged or regressed seq under an already-seen pid accrues staleness, so
-    neither an mtime touch nor a pid FLIP buys freshness: two writers alternating pids on
-    one heartbeat path used to keep a frozen `seq` looking healthy forever (RED-TEAM F6),
-    because every flip re-based the window.
+    A regressed or unchanged seq under an already-seen pid accrues staleness, so a pid FLIP
+    buys no freshness: two writers alternating pids kept a frozen `seq` looking healthy.
     """
 
     def __init__(self, *, stale_after_sec: float) -> None:
@@ -103,12 +86,9 @@ class LivenessTracker:
 
     @property
     def ever_observed(self) -> bool:
-        """True once ANY heartbeat state has been read for the current child.
-
-        False means the file was never written at all — a configuration fault (a
-        `--heartbeat-file` that does not match the child's) rather than a stall, and the
-        supervisor says so distinctly instead of reporting a stale heartbeat (RED-TEAM F3′).
-        """
+        """True once ANY heartbeat state has been read for the current child; False means a
+        `--heartbeat-file` that does not match the child's, which is a config fault rather
+        than a stall."""
         return self.observations > 0
 
     def is_stale(self, now: float) -> bool:
@@ -121,9 +101,7 @@ class LivenessTracker:
 class Supervisor:
     """Spawn the child, watch its exit code and its heartbeat ``seq``, relaunch or stop.
 
-    Collaborators are injected (``spawn_fn``/``kill_fn``/``clock``/``sleep_fn``/
-    ``read_heartbeat``) so the whole loop is drivable deterministically in tests; `main()`
-    binds the real ones.
+    Collaborators are injected so the loop is deterministically drivable; `main()` binds real ones.
     """
 
     def __init__(
@@ -156,12 +134,10 @@ class Supervisor:
         self._tracker = LivenessTracker(stale_after_sec=stale_after_sec)
         self.relaunches = 0
         self.spawns = 0
-        # The LIVE child handle, published so the module-level stop ladder can reach it when a
-        # signal or an escaping exception unwinds `run()`. Additive and externally inert: the
-        # loop never reads it, and nothing in the frozen fake-driven oracle knows it exists.
+        # The LIVE child handle, so the module-level stop ladder can reach it when a signal or
+        # an escaping exception unwinds `run()`. The loop itself never reads it.
         self.child: Any = None
 
-    # ── the loop ─────────────────────────────────────────────────────────────────────
     def run(self) -> int:
         """Supervise until a terminal decision; returns the supervisor's exit code."""
         child = self._spawn()
@@ -198,13 +174,8 @@ class Supervisor:
         if code == 0:
             return 0
         if code == PARENT_VANISHED_EXIT_CODE:
-            # The child's own arming gate found the pid that stamped it already gone — this
-            # supervisor died between its `Popen` and the child's entry point, and what is
-            # reading this is a RELAUNCHED or otherwise later supervisor. Named rather than
-            # swallowed into the catch-all below: it is the one rc that says the child never
-            # began, so there is nothing to relaunch it INTO and a crash-loop would be the only
-            # possible outcome. This arm is also the only artifact the exit-71 path can leave
-            # anywhere — the run had no sink, no out-dir and no run id when it took it.
+            # The child's arming gate found the pid that stamped it already gone: nothing to
+            # relaunch it INTO, so a crash-loop would be the only possible outcome.
             self._emit("supervisor_stop", reason="child_parent_vanished", code=code)
             return PARENT_VANISHED_EXIT_CODE
         if code == PERSIST_FATAL_EXIT_CODE:
@@ -218,7 +189,6 @@ class Supervisor:
             return RELAUNCH_BUDGET_EXIT_CODE
         return None
 
-    # ── collaborators ────────────────────────────────────────────────────────────────
     def _spawn(self) -> Any:
         child = self._spawn_fn(list(self._child_argv))
         self.child = child
@@ -247,11 +217,8 @@ class Supervisor:
         return True
 
     def _read_state(self) -> Any:
-        """Read the heartbeat file. `read_heartbeat_file` contracts never to raise, but this
-        is LEVEL 2 of the livelock protection and an injected reader is a duck-typed seam:
-        one exception here would kill the supervisor loop and leave the child unsupervised
-        (RED-TEAM F4 did exactly that with an `Infinity` seq). A failed read is counted as
-        "no progress observable" — the safe side, which errs toward a relaunch."""
+        """Read the heartbeat file; a failed read counts as "no progress observable", because
+        one exception on this duck-typed seam would kill the loop and unsupervise the child."""
         try:
             return self._read_heartbeat(self._heartbeat_file)
         except Exception as exc:  # noqa: BLE001 — level 2 must outlive a corrupt file
@@ -260,68 +227,31 @@ class Supervisor:
             return None
 
     def _emit(self, event: str, **fields: Any) -> None:
-        """One JSON line per action on the supervisor's OWN stream (never the child's
-        event sink — separate process, separate file identity)."""
+        """Write one JSON line per action to the supervisor's OWN stream, never the child's."""
         stream = self._stream if self._stream is not None else sys.stderr
         line = json.dumps({"event": event, "ts": time.time(), **fields}, default=str)
         stream.write(line + "\n")
         stream.flush()
 
 
-# ── real collaborators + CLI ─────────────────────────────────────────────────────────
 def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
     """Launch the child through the arming trampoline — no shell, no baked path.
 
-    THE ARGV CONTRACT, AT THE LEVEL IT ACTUALLY HOLDS. The child PROGRAM's own `sys.argv` is
-    byte-for-byte the argv given after `--`; the `Popen`-level argv carries exactly one prefix,
-    `python -m PARENT_DEATH_ARM_EXEC_MODULE --`, and that prefix `execvp`s itself out of
-    existence before the child program's first instruction. Nothing the run records — argv in
-    provenance included — sees it. Saying "verbatim" without naming the level would be the kind
-    of stale claim the R8 header rules exist to prevent.
+    The child PROGRAM's `sys.argv` is byte-for-byte the argv after `--`; the one `Popen`-level
+    prefix `execvp`s itself away before the child's first instruction.
 
-    WHY THE TRAMPOLINE (Q3 A4b). `PR_SET_PDEATHSIG` is cleared across `fork` and preserved
-    across `execve`. `uv run` — this repo's own idiom — does NOT exec, so under a plain `Popen`
-    the supervisor's DIRECT child was the wrapper and the run was a grandchild nobody had
-    promised to kill: measured, `kill -9` on the supervisor left a running GPU holder behind.
-    The trampoline arms and then becomes the wrapper, so the wrapper dies with the supervisor;
-    the run's own gate arms against its direct parent when that parent is the trampoline's
-    process, and the two together take the whole chain down. Either half ALONE is inert, which
-    is why they land together.
+    WHY THE TRAMPOLINE: `PR_SET_PDEATHSIG` is cleared across `fork` and preserved across
+    `execve`, and `uv run` does not exec — so a plain `Popen` made the run a grandchild nobody
+    had promised to kill (measured: `kill -9` here left a running GPU holder behind).
 
-    ONE thing is injected and it is NOT the child's argv: the child's ENVIRONMENT carries this
-    supervisor's pid under `PARENT_DEATH_PPID_ENV`, which is how a mantis run learns it is
-    supervised and may arm `PR_SET_PDEATHSIG` (F-816-19). Until this existed, a supervisor
-    killed outright — `kill -9`, an OOM kill, a dropped session — ORPHANED the run: the
-    process holding the GPU, the trainer, the worker pool and the buffer kept running with
-    nobody watching it.
+    A COPY of the environment carries this supervisor's pid; mutating `os.environ` would stamp
+    every later child of this process with a parent that is merely "some ancestor".
 
-    A COPY of the environment is built and passed; `os.environ` is NEVER mutated, and that is
-    not tidiness. A mutation would leak the stamp to every LATER child of this process — in a
-    test session, to children that are not runs at all — and each of them would then read a
-    stamp naming a parent that is merely "some ancestor", which is the exact confusion the
-    child's gate exists to refuse.
-
-    MAIN-THREAD CALL, and it is a real precondition rather than a nicety: `PR_SET_PDEATHSIG`
-    fires when the parent THREAD dies, so a child spawned from a worker thread here would be
-    SIGKILLed the moment that thread returned — a premature kill of a healthy run, strictly
-    worse than the orphan the arming prevents. The supervisor is single-threaded today; this
-    refusal is what makes that fact fail LOUD instead of silently arming a premature kill.
-    The MIRROR case is the same hazard read from the other end and is why this guard has to
-    stay: a supervisor that grew a NON-DAEMON thread outliving its main thread would arm the
-    child against a thread that returns while the supervisor is still alive and working, and
-    the kernel would SIGKILL a healthy run under a supervisor that never asked for it.
-
-    NEW SESSION, and it is the second half of the signal posture rather than a spawn detail.
-    Without it the child shares the terminal's process group, so a `Ctrl-C` is delivered to the
-    RUN by the tty AND forwarded to it by this supervisor's own stop ladder — two deliveries
-    the run cannot tell apart from an operator's deliberate second press, which is LAW-16's
-    force-exit: `os._exit(1)` mid-save. With it, every signal the child receives comes from
-    this supervisor, exactly once, and `stop_count` counts presses instead of routes. In-tree
-    precedent for the same reasoning: `tools/ci_gates/preflight_mint.py`'s `--_boot` child.
-    The cost is disclosed: `kill -INT -<pgid>` no longer reaches the run directly (a directed
-    `kill <run-pid>` still does), and the run has no controlling terminal — nothing in
-    `src/mantis/` reads one. `PR_SET_PDEATHSIG` is session-independent, so the arming is
-    unaffected.
+    MAIN-THREAD CALL is a precondition: `PR_SET_PDEATHSIG` fires on the parent THREAD's death,
+    so a child spawned off a worker thread dies the moment that thread returns. NEW SESSION is
+    the other half: otherwise a `Ctrl-C` reaches the run twice and reads as a force-exit second
+    press. Disclosed cost: `kill -INT -<pgid>` no longer reaches the run, which also has no
+    controlling terminal.
     """
     if threading.current_thread() is not threading.main_thread():
         raise RuntimeError(
@@ -333,11 +263,8 @@ def spawn_child(child_argv: Sequence[str]) -> subprocess.Popen[bytes]:
             "the supervisor ever needs to spawn off its main thread, the child's arming gate "
             "must be re-derived against a thread identity FIRST."
         )
-    # THE REFUSALS ARE MANDATORY, not tidiness. With the trampoline in front, a bad child
-    # command would make `Popen` SUCCEED and move the failure into the child — turning a
-    # launcher typo into a `child_error` rc the supervisor reads as the run's own diagnosis.
-    # Resolving the program here keeps both failures exactly where they were before the
-    # trampoline existed: loud, in the supervisor, before anything is spawned.
+    # THE REFUSALS ARE MANDATORY: with the trampoline in front, a bad child command would make
+    # `Popen` SUCCEED and turn a launcher typo into a `child_error` rc read as a run diagnosis.
     argv = list(child_argv)
     if not argv or not str(argv[0]):
         raise ValueError(
@@ -360,14 +287,11 @@ def signal_child(child: Any, sig: int) -> None:
     child.send_signal(sig)
 
 
-# ── the supervisor's own signal posture ──────────────────────────────────────────────
 class _SupervisorStop(BaseException):
     """Raised FROM the stop handler to unwind `Supervisor.run`'s poll sleep.
 
-    `BaseException` and not `Exception` on purpose: it must not be swallowed by an
-    `except Exception` anywhere it passes through. It is a control-flow token for a stop the
-    operator asked for — the same family as `KeyboardInterrupt`, which is exactly what CPython
-    raises for the identical event when the default handler is left in place.
+    `BaseException` so it cannot be swallowed by an `except Exception` on the way through —
+    the same family as `KeyboardInterrupt`.
     """
 
     def __init__(self, signum: int, press: int) -> None:
@@ -376,15 +300,12 @@ class _SupervisorStop(BaseException):
         self.press = int(press)
 
 
-#: Press counter for LAW-16's second-signal affordance, mirrored at the supervisor. A list and
-#: not an `int` because the handler must mutate it without a `global`; process-scoped, which is
-#: exactly the lifetime of "how many times has the operator asked this supervisor to stop".
+#: Press counter for the second-signal affordance, mirrored at the supervisor. A list and not
+#: an `int` because the handler must mutate it without a `global`.
 _PRESSES: list[int] = [0]
 
-#: Failures of the emergency-stop path itself. `monitor/**` allows NO `except …: pass` (O-20,
-#: censused): an optional effect is either counted through `best_effort` or fails loud, and the
-#: stop path's own emits are the textbook optional effect — the commonest reason to be on that
-#: path at all is that the stream they write to has died.
+#: Failures of the emergency-stop path itself. `monitor/**` allows no `except ...: pass`, and
+#: the commonest reason to be on this path is that the stream its emits write to has died.
 _STOP_COUNTERS = BestEffortCounters()
 
 
@@ -395,14 +316,10 @@ def _on_stop_signal(signum: int, _frame: Any) -> None:
 
 def _install_stop_handlers() -> None:
     """Install the stop handler for SIGINT, SIGTERM and SIGHUP. Called by `main`, NEVER at
-    import: `signal.signal` at module scope would install handlers in every process that so
-    much as imports this module, pytest included.
+    import, which would install handlers in every process that imports this module.
 
-    SIGHUP is in the set deliberately and is not scope creep. `spawn_child` puts the child in
-    its own session, so on a terminal close the SUPERVISOR is the only process that receives
-    SIGHUP, and its default disposition is to terminate — after which the run's armed
-    `PR_SET_PDEATHSIG` SIGKILLs it, unsaved. Omitting SIGHUP would have this module CREATE that
-    hole on the "close the terminal" gesture; with the handler it is a cooperative save.
+    SIGHUP is deliberate: the child has its own session, so a terminal close reaches only the
+    supervisor, and dying by default would have the run's armed PDEATHSIG kill it unsaved.
     """
     for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
         signal.signal(sig, _on_stop_signal)
@@ -417,36 +334,18 @@ def stop_child_cooperatively(
 ) -> int | None:
     """SIGTERM → bounded wait → SIGKILL → bounded reap, on a REAL child handle.
 
-    THIS IS THE LADDER `Supervisor._kill` CANNOT BECOME, and the reason is mechanical rather
-    than stylistic: `_kill` is driven by a frozen oracle whose `FakeChild` exposes `.pid` and
-    `.poll()` and nothing else, so a `wait()` there is an `AttributeError` in a HELD test. Kept
-    as a module-level function over the real `Popen`, it can use `wait(timeout=…)` — which is
-    what makes the wait BOUNDED AND EARLY-RETURNING instead of `_kill`'s unconditional
-    `sleep(grace)`, i.e. what lets a healthy child actually finish its save.
+    THE LADDER `Supervisor._kill` CANNOT BECOME: its frozen oracle's `FakeChild` has no
+    `wait()`, so only here can the wait be bounded AND early-returning rather than an
+    unconditional `sleep(grace)`. Always SIGTERM outbound whatever signal arrived — the run
+    registers one handler for both, and one outbound vocabulary is one thing to reason about.
 
-    ALWAYS SIGTERM OUTBOUND, whatever signal this supervisor received: the run registers one
-    handler for SIGINT and SIGTERM alike, the child has no controlling terminal, and one
-    outbound vocabulary is one thing to reason about.
+    The bound is the minted `monitor.supervisor_kill_grace_sec` and has no second authority;
+    `--kill-grace-sec` is an override published in `supervisor_boot_identity`.
 
-    THE BOUND IS `grace_sec` AND THERE IS NO SECOND AUTHORITY FOR IT — it is the MINTED
-    `monitor.supervisor_kill_grace_sec`, loaded from the run's own config by `main` and resolved
-    through `resolve_monitor_config`. (This sentence used to name `main`'s `--kill-grace-sec`
-    flag as the arrival route, and until F-816-24 that route began at a bare dataclass default,
-    so the claim of a single authority was the thing it denied: the minted key reached nothing.
-    The flag survives as an OVERRIDE, and one that is published in `supervisor_boot_identity`
-    rather than applied silently.) Whether the value is ADEQUATE against a measured >320 s
-    cooperative drain is a prereg/mint question (RQ-7, prereg row 19) and is deliberately NOT
-    answered here; this function is written so that answering it is a change to one number in
-    one config.
-
-    LAW-16 mirrored, not reimplemented: a further signal arriving while we wait lands as
-    `_SupervisorStop` INSIDE the wait. The second re-forwards SIGTERM — which is the run's OWN
-    second press, so the run's `force_teardown_all` still tears down its registered mp children
-    rather than leaving them to the kernel — and the third stops waiting and SIGKILLs.
-
-    Returns the child's exit code, or None if it could not be reaped inside the bound. The
-    supervisor NEVER blocks forever: an unreapable child is a `D`-state pathology and the
-    correct posture is to say so and leave.
+    A further signal lands as `_SupervisorStop` INSIDE the wait: the second re-forwards SIGTERM
+    so the run's own `force_teardown_all` runs, and the third SIGKILLs. Returns the exit code,
+    or None for a child unreapable inside the bound — a `D`-state pathology worth saying rather
+    than blocking on forever.
     """
     pid = getattr(child, "pid", None)
     grace = float(grace_sec)
@@ -486,49 +385,27 @@ def stop_child_cooperatively(
 
 def _die_of(signum: int) -> None:
     """Die OF the signal we were asked to die of: restore the default disposition and re-raise
-    it at ourselves. NO NUMBER IS MINTED — the waiter (a shell, `systemd`, a job scheduler) sees
-    "terminated by SIGTERM", which is the truth and what `systemctl stop` expects, and
-    `repo_design.md`'s rule that a signal-caused clean stop resolves to 0 at the RUN stays true
-    end to end.
-
-    The trailing `os._exit` is reached only if the signal was blocked or ignored upstream of
-    this process, in which case 128+n is the shell's own long-standing encoding of "died of
-    signal n" rather than a code this repo authored.
-    """
+    it at ourselves, so the waiter sees "terminated by SIGTERM" and no number is minted. The
+    trailing `os._exit` is reached only if the signal was blocked upstream."""
     sys.stderr.flush()
     signal.signal(signum, signal.SIG_DFL)
     os.kill(os.getpid(), signum)
     os._exit(128 + int(signum))   # pragma: no cover — only if the signal is blocked
 
 
-#: The two signals `stop_child_cooperatively`'s own ladder can put in the child's `wait()`
-#: code (as `-signum`) — it sends nothing else, ever (see that function). A negative code
-#: outside this set was NOT caused by our escalation and is a genuine child diagnosis.
+#: The two signals this module's ladder can put in a child's `wait()` code (as `-signum`); it
+#: sends nothing else. A negative code outside this set is a genuine child diagnosis.
 _LADDER_SIGNALS: frozenset[int] = frozenset({int(signal.SIGTERM), int(signal.SIGKILL)})
 
 
 def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
-    """The stop path: cooperative ladder, then the rc decision (fix-design §2.4, RED-TEAM
-    addendum 2 fix).
+    """The stop path: the cooperative ladder, then the rc decision.
 
-    THE CHILD'S DIAGNOSIS OUTRANKS THE STOP GESTURE — but only a genuine one. A disk-guard 47
-    or a terminal-eval-broken 48 recorded during the drain must not be erased by the fact that
-    an operator also pressed Ctrl-C, so a positive child code is propagated exactly as
-    `_on_child_exit` would propagate it, with the relaunch suppressed (a stop is a stop).
-
-    A NEGATIVE code is `Popen.wait()`'s "died of signal N" shape, and `stop_child_cooperatively`
-    ONLY EVER sends SIGTERM then, on escalation, SIGKILL — so `-SIGTERM`/`-SIGKILL` here is our
-    OWN stop gesture landing back on the child, not a diagnosis. Propagating it as `child_error`
-    made `main` return e.g. `-9`, and `SystemExit(-9)` is exit status 247 — on the grace-timeout
-    and third-press paths, the common ones under the shipped 30 s grace, defeating `_die_of`'s
-    own contract that the waiter sees "died of SIGTERM" (RED-TEAM addendum 2, BROKE-IT). Those
-    two codes fall through to the die-of-signal path below instead.
-
-    A negative code OUTSIDE `_LADDER_SIGNALS` (e.g. `-11` for a child that SIGSEGVs on its own,
-    mid-drain, independent of anything this ladder sent) is still a genuine diagnosis and stays
-    `child_error` with its real code named — never relabelled as "died of the stop gesture",
-    and never routed through `_die_of` to mint an unrelated 128+n. A 0 or an unreapable child
-    (`code is None`) leaves nothing to report but the gesture itself, and we die of it.
+    THE CHILD'S DIAGNOSIS OUTRANKS THE STOP GESTURE, but only a genuine one. A positive child
+    code propagates as `_on_child_exit` would, with the relaunch suppressed. `-SIGTERM` and
+    `-SIGKILL` are this ladder's OWN gesture landing back on the child, not a diagnosis, and
+    propagating them made `main` return `-9`, i.e. exit status 247 — they fall through to the
+    die-of-signal path. Any other negative code keeps its own code.
     """
     child = supervisor.child
     code: int | None = None
@@ -546,22 +423,13 @@ def _stop_and_exit(supervisor: Supervisor, stop: _SupervisorStop) -> int:
 
 
 def _best_effort_stop(supervisor: Supervisor) -> None:
-    """Stop the child cooperatively on the way out of an escaping exception, then let that
-    exception continue unchanged.
+    """Stop the child cooperatively while an exception escapes, then let it continue unchanged.
 
-    `_emit` writes to stderr on every spawn/exit/stale event, so a `BrokenPipeError` (the log
-    consumer went away) or a `MemoryError` here used to unwind the supervisor's main thread in
-    milliseconds — and with the run now armed against this process, the KERNEL would SIGKILL a
-    healthy run mid-save. Nothing is swallowed but a failure of the stop itself: the original
-    exception is re-raised by the caller, so the supervisor still dies loud with its own
-    traceback.
-
-    THE LADDER GETS A TOLERANT EMIT HERE, and that is the whole reason this wrapper exists
-    rather than a direct call. The commonest way to reach this path is that the SINK ITSELF
-    died, so a ladder whose first act is an `_emit` would raise again before it ever sent the
-    SIGTERM — the child would then be killed by the kernel exactly as before the fix, and the
-    row that proves otherwise would be green for the wrong reason. Losing the stop-path events
-    on a dead stream is the correct trade: they had no reader anyway.
+    `_emit` writes to stderr on every event, so a `BrokenPipeError` here used to unwind the
+    main thread in milliseconds and have the KERNEL SIGKILL a healthy run mid-save. The ladder
+    gets a TOLERANT emit, which is why this wrapper exists: the commonest way to reach this
+    path is that the sink itself died, and a ladder that emits first would raise before ever
+    sending the SIGTERM.
     """
     child = getattr(supervisor, "child", None)
     if child is None:
@@ -580,9 +448,8 @@ def _best_effort_stop(supervisor: Supervisor) -> None:
             counters=_STOP_COUNTERS,
         )
     except _SupervisorStop:
-        # An operator signalled us DURING the emergency stop. The child already has its
-        # SIGTERM; counting this is the honest record, and re-raising would replace the
-        # original failure — the one the operator needs to read — with the gesture.
+        # An operator signalled us DURING the emergency stop. Counting it is the honest record;
+        # re-raising would replace the original failure with the gesture.
         _STOP_COUNTERS.increment("supervisor_stop_interrupted")
 
 
@@ -601,10 +468,8 @@ def _split_argv(argv: Sequence[str]) -> tuple[list[str], list[str]]:
     return args[:cut], child
 
 
-#: The named refusal for a missing `--config`. R1/LAW-11: absent is an error, never a default.
-#: It names the missing input AND where a minted one comes from — argparse's own "the following
-#: arguments are required: --config" names the flag and no remedy, which tells an operator
-#: nothing about what a config is.
+#: The named refusal for a missing `--config`: absent is an error, never a default. It names
+#: the missing input AND where a minted one comes from, which argparse's own line does not.
 _CONFIG_REFUSAL = (
     "usage: python -m mantis.monitor.supervise --config PATH --heartbeat-file PATH [flags] "
     "-- CHILD_ARGV...\n"
@@ -616,9 +481,7 @@ _CONFIG_REFUSAL = (
 )
 
 #: `(argparse dest, MonitorConfig field)` for every threshold a flag may override. The flags
-#: carry NO code-side default (R1: a default lives only in the schema field) — `None` means
-#: "not supplied", the config supplies the value, and anything actually supplied is PUBLISHED
-#: in the boot event rather than silently replacing a minted number.
+#: carry NO code-side default, and anything supplied is PUBLISHED in the boot event.
 _OVERRIDABLE: tuple[tuple[str, str], ...] = (
     ("stale_after_sec", "supervisor_stale_after_sec"),
     ("poll_interval_sec", "supervisor_poll_interval_sec"),
@@ -630,19 +493,15 @@ _OVERRIDABLE: tuple[tuple[str, str], ...] = (
 def _require_config(flags: Sequence[str]) -> None:
     """Refuse a missing `--config` BY NAME, before argparse can pre-empt the message.
 
-    The ordering is the whole point. With `required=True` set, `parse_args` exits with
-    argparse's generic line the instant the flag is absent, so a named check written after it is
-    unreachable. This pre-scans raw flags exactly as `_split_argv` pre-scans raw argv, and
-    `required=True` stays below as a backstop that in practice never fires.
+    With `required=True`, `parse_args` exits on the generic line the instant the flag is
+    absent, so a named check written after it is unreachable.
     """
     for index, flag in enumerate(flags):
         if flag.startswith("--config="):
             return
         if flag == "--config":
-            # PRESENT IS NOT THE SAME AS SUPPLIED. A trailing `--config` with nothing after it
-            # satisfies a presence test and then falls through to argparse's "expected one
-            # argument" — a stock message with no remedy in it, which is the half this refusal
-            # exists to add (REVIEW(impl) #3).
+            # PRESENT IS NOT SUPPLIED: a trailing `--config` satisfies a presence test and
+            # falls through to argparse's stock "expected one argument", which has no remedy.
             if index + 1 < len(flags) and not flags[index + 1].startswith("-"):
                 return
             raise SystemExit(_CONFIG_REFUSAL)
@@ -652,36 +511,18 @@ def _require_config(flags: Sequence[str]) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry: the MINTED config is the threshold authority; a flag overrides and SAYS SO.
 
-    F-816-24. Until this existed, `main` built a bare `MonitorConfig()` and used its dataclass
-    literals as the argparse defaults, so the four minted `monitor.supervisor_*` keys reached no
-    process: a `supervisor_kill_grace_sec` written into `configs/` changed nothing about the
-    grace this program actually waits. The config is now REQUIRED, read through the ONE loader,
-    and resolved through the ONE resolver.
-
-    THE SIGNAL POSTURE IS INSTALLED HERE AND NOWHERE ELSE. Until this existed the supervisor
-    had NO handlers at all, so its own catchable death — an operator's `kill`, a terminal
-    close, a `BrokenPipeError` out of `_emit` — killed it instantly and, with the child now
-    armed against it, had the KERNEL SIGKILL a healthy run mid-save. The run's own
-    save-then-exit path (LAW-16) was reachable only by signalling the run directly, which is
-    not what an operator supervising a run does.
-
-    Three exits, and none of them invents a number:
-      * a caught stop  -> the cooperative ladder, then die OF that signal (`_stop_and_exit`);
-      * an escaping exception -> stop the child cooperatively FIRST, then re-raise unchanged,
-        so the supervisor still dies loud with its own traceback;
-      * everything else -> `Supervisor.run`'s existing exit-code contract, untouched.
+    `main` used to use a bare `MonitorConfig()`'s dataclass literals as the argparse defaults,
+    so the four minted `monitor.supervisor_*` keys reached no process. The signal posture is
+    installed here and nowhere else: without handlers the supervisor's own catchable death had
+    the KERNEL SIGKILL a healthy run mid-save. Three exits, none inventing a number — a caught
+    stop takes the ladder then dies OF that signal, an escaping exception stops the child then
+    re-raises unchanged, everything else keeps `Supervisor.run`'s exit-code contract.
     """
-    # AUDIT-1 F-08: the ONE mantis stderr handler, at this process entry too. A supervisor
-    # whose own INFO lines are dropped cannot report why it relaunched.
+    # The one mantis stderr handler, at this process entry too: a supervisor whose own INFO
+    # lines are dropped cannot report why it relaunched.
     configure_logging()
-    # LAZY BY NECESSITY, NOT BY TASTE — and gate 9's own rule is "top-level imports only; lazy
-    # imports need a stated reason", so here is the reason. A top-level `mantis.config` import
-    # in this module closes a condensed-subpackage cycle, because `config/resolve/monitor.py`
-    # imports `mantis.monitor.config`. Measured, by moving the import up and running the gate:
-    # `CYCLE: mantis.config -> mantis.monitor -> mantis.config`. Deferring it here also keeps
-    # `import mantis.monitor.supervise` as cheap as it was — but note that makes the IMPORT-time
-    # O-18 check trivially true, so the load-bearing torch check is the RUN-time one, taken from
-    # inside a process that has actually executed this function.
+    # LAZY BY NECESSITY: a top-level `mantis.config` import here closes the cycle
+    # `mantis.config -> mantis.monitor -> mantis.config`.
     from mantis.config.loader import config_identity_sha256, load_config
     from mantis.config.resolve.monitor import resolve_monitor_config
 
@@ -699,33 +540,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--max-relaunches", type=int, default=None)
     args = parser.parse_args(flags)
 
-    # HOST-NEUTRALITY IS INTACT (§7): the operator supplies the path, exactly as they already
-    # supply --heartbeat-file and the whole child argv. Nothing is discovered, nothing is baked,
-    # no path is defaulted — a *defaulted* config path is what would breach it, not a required one.
+    # Host-neutrality is intact: the operator supplies the path, as they already supply
+    # --heartbeat-file and the child argv. A *defaulted* config path would breach it.
     config = load_config(args.config)
     thresholds = resolve_monitor_config(config.monitor)
     supplied = {dest: getattr(args, dest) for dest, _ in _OVERRIDABLE}
     overrides = {dest: value for dest, value in supplied.items() if value is not None}
-    # A NON-FINITE OR NEGATIVE BOUND IS MALFORMED, AND REFUSING IT IS NOT AUTHORING A VALUE.
-    #
-    # WHAT THIS DOES NOT DO, STATED BECAUSE AN EARLIER COMMENT HERE OVERCLAIMED IT. This refuses
-    # MALFORMED values. It does NOT bound the grace. `--kill-grace-sec 1e308` is finite and
-    # non-negative, passes this check, and then produces exactly the NaN failure — driven:
-    # `wait(timeout=1e308)` never fires, so the automatic escalation never runs and only the
-    # operator's second and third signal recover the child. And the hazard is NOT specific to
-    # the override path: `MonitorSchemaConfig.supervisor_kill_grace_sec` carries `Field(ge=0)`
-    # and nothing else, so the same value is MINTABLE. Closing the class needs an upper bound,
-    # i.e. a number — which is an operator/architect value under R119, on a key whose derivation
-    # is already prereg row 19's. Filed as `F-816-27`; deliberately not decided here.
-    # D2's rule is that this mechanism publishes and does not JUDGE — it takes no view on
-    # whether 5 s or 500 s is the right grace, because that is an operator's to mint (R119).
-    # Well-formedness is a different question. `--kill-grace-sec=nan` was driven end to end by
-    # RED-TEAM: `Popen.wait(timeout=nan)` never raises `TimeoutExpired`, so the ladder's
-    # automatic SIGTERM -> grace -> SIGKILL escalation silently stops escalating and only the
-    # operator's second and third signal recover the child. That converts a LAW-16 bounded stop
-    # into an unbounded one through an input nothing validated. The schema already refuses these
-    # values for the minted keys (`Field(ge=0)`); the flags had no such guard, which is the
-    # duplicate-authority asymmetry this packet exists to close, pointing the other way.
+    # A NON-FINITE OR NEGATIVE BOUND IS MALFORMED: `Popen.wait(timeout=nan)` never raises
+    # `TimeoutExpired`, so the ladder silently stops escalating. This does NOT bound the grace —
+    # `1e308` passes and fails the same way; an upper bound is an operator value.
     malformed = sorted(
         dest for dest, value in overrides.items()
         if not math.isfinite(float(value)) or float(value) < 0
@@ -752,34 +575,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     _install_stop_handlers()
     try:
-        # THE PARENT-SIDE IDENTITY WITNESS (F-B1 class), published as the first EVENT —
-        # the same one authority (`config_identity_sha256`) as the run's own `run_boot_identity`.
-        #
-        # HANDLERS ARE INSTALLED BEFORE THIS EMIT, matching `run.py`, whose signal handlers are
-        # hoisted above its own identity publication. An earlier draft published first and called
-        # itself "the parent-side twin" while inverting the twin's order (REVIEW(impl) #1); the
-        # window was benign — no child exists until `run()` — but it had grown to cover `load_config`
-        # and schema validation, which is real file I/O the old in-memory path did not do, and a
-        # deviation nobody wrote down is one nobody can weigh later.
-        #
-        # IT IS ALSO INSIDE THE `try`, and that is the second half of the same argument. `main`'s
-        # docstring promises three exits, and all three are scoped to this block; an earlier draft
-        # emitted ABOVE it, so a signal landing during the emit — the statement immediately after
-        # the handlers arm, i.e. reachable — escaped as a raw `_SupervisorStop` traceback, taking
-        # none of the three documented paths and bypassing `_die_of`'s "died of signal N"
-        # convention (RED-TEAM #4, driven). Nothing is orphaned either way, because no child
-        # exists until `run()`; what was wrong was that the contract had a hole in it. Once this program reads a config, parent and child read config files
-        # INDEPENDENTLY and nothing makes them the same file; publishing the parent's identity is what
-        # makes a divergence visible instead of invisible. It is PUBLISH, not COMPARE: learning the
-        # child's config would mean parsing the verbatim child argv, which `spawn_child`'s contract
-        # forbids (an env-channel handshake that breaches nothing is possible and is filed as
-        # F-816-26, but its half lives in the child).
-        #
-        # The effective bounds are read back OFF THE LIVE OBJECT, never off the args namespace: the
-        # defect being closed here is precisely that a config and a process disagreed, so the record
-        # names what this supervisor will actually do. `overrides` names any flag an operator
-        # supplied, so a hand-variation of a minted safety bound is an event in the record rather
-        # than a silent substitution.
+        # THE PARENT-SIDE IDENTITY WITNESS, first EVENT out, through the same authority as the
+        # run's own `run_boot_identity`. Handlers arm BEFORE it and it is INSIDE the `try`, so a
+        # signal landing during it takes one of the three documented exits. PUBLISH, not
+        # COMPARE: the child's config is not readable without parsing its verbatim argv.
         supervisor._emit(
             "supervisor_boot_identity",
             config=str(args.config),

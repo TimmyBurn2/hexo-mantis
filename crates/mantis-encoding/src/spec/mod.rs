@@ -23,26 +23,22 @@ pub enum PolicyPool {
     None,
     ScatterMax,
     ScatterMean,
-    /// Scatter-max over K cluster windows WITHOUT the off-window drop — the
-    /// aggregated MCTS prior / improved-policy target is a ragged legal-set
-    /// (board-coord-keyed), retaining off-global-window cells covered by some
-    /// cluster.
+    /// Scatter-max over K cluster windows WITHOUT the off-window drop: the target is a ragged
+    /// board-coord-keyed legal set, retaining off-global-window cells some cluster covers.
     LegalSetScatterMax,
 }
 
-/// Input representation discriminant. `Grid` = the dense CNN plane encodings;
-/// `Graph` = the axis-graph / GNN encodings. The TOML key `representation` is
-/// REQUIRED (absent → parse error, LAW-11 — never a default). The enum stays a CLOSED type
-/// with one member rather than disappearing: it is what makes an absent or unknown
-/// representation a parse error instead of a fall-through, on both sides of the FFI.
+/// Input representation discriminant; the TOML key is REQUIRED and absent is a parse error.
+/// The enum stays a closed one-member type rather than disappearing, because that is what makes
+/// an absent or unknown representation an error instead of a fall-through across the FFI.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Representation {
     Graph,
 }
 
 impl Representation {
-    /// Parse the TOML value string. `"grid"` is REFUSED BY NAME, not merely unknown: the dense
-    /// path was deleted by R346(f), and a stale row must say so rather than resolve to graph.
+    /// Parse the TOML value string. `"grid"` is refused BY NAME, not merely unknown, so a stale
+    /// row says the dense path is gone rather than resolving to graph.
     pub fn parse(s: &str) -> Result<Self, String> {
         match s {
             "graph" => Ok(Representation::Graph),
@@ -110,12 +106,10 @@ impl PolicyPool {
 
 /// Full encoding record parsed from `registry.toml`.
 ///
-/// All `&'static str` / `&'static [..]` fields point at heap data leaked at
-/// registry init time (`Box::leak`), so addresses are stable for the process
-/// lifetime. Cheap to copy — pass by value or `&'static`.
+/// All `&'static` fields point at heap data leaked at registry init time, so addresses are
+/// stable for the process lifetime. Cheap to copy — pass by value or `&'static`.
 #[derive(Copy, Clone, Debug)]
 pub struct RegistrySpec {
-    /// &'static after Box::leak in registry::load(); stable for process lifetime.
     pub name: &'static str,
     pub board_size: usize,
     pub trunk_size: usize,
@@ -123,24 +117,18 @@ pub struct RegistrySpec {
     pub cluster_threshold: Option<usize>,
     pub legal_move_radius: usize,
     pub n_planes: usize,
-    /// &'static after Box::leak in registry::load(); stable for process lifetime.
     pub plane_layout: &'static [&'static str],
     pub policy_logit_count: usize,
     pub has_pass_slot: bool,
     pub is_multi_window: bool,
     pub value_pool: ValuePool,
     pub policy_pool: PolicyPool,
-    /// &'static after Box::leak in registry::load(); stable for process lifetime.
     pub sym_table_id: &'static str,
     pub schema_version: u32,
-    /// &'static after Box::leak in registry::load(); stable for process lifetime.
     pub notes: &'static str,
 
-    /// Physical source-plane indices retained by this encoding's wire format.
-    /// Length == `n_planes`. See `registry.toml` header for the canonical
-    /// X+history / O+history block convention.
-    ///
-    /// &'static after Box::leak in registry::load(); stable for process lifetime.
+    /// Physical source-plane indices retained by this encoding's wire format; length ==
+    /// `n_planes`. The `registry.toml` header carries the plane-block convention.
     pub kept_plane_indices: &'static [usize],
     /// Source tensor plane count *before* the `kept_plane_indices` slice.
     /// Used by the validator for the kept-indices upper bound.
@@ -150,13 +138,11 @@ pub struct RegistrySpec {
     /// encodings emit exactly 1 view per leaf (`k_max = 1`).
     pub k_max: u32,
 
-    /// Number of chain-length planes (= 6 across all current encodings: 3 hex
-    /// axes × 2 players). REQUIRED TOML field; the SOLE authority for
-    /// `chain_stride()` (no source constant, no replay reach-through).
+    /// Number of chain-length planes (3 hex axes × 2 players). Required TOML field, and the
+    /// sole authority for `chain_stride()`.
     pub n_chain_planes: usize,
 
-    /// `Grid` (dense CNN planes) vs `Graph` (axis-graph GNN). TOML key
-    /// `representation` (REQUIRED — absent = error).
+    /// TOML key `representation`; required, and absent is an error.
     pub representation: Representation,
     /// Per-node feature width (graph only). = 11 for gnn_axis_v1
     /// (= `mantis_graph::NODE_FEAT_DIM`).
@@ -209,9 +195,7 @@ impl RegistrySpec {
         self.n_planes * self.n_cells()
     }
 
-    /// Chain plane stride = `n_chain_planes` × n_cells. The `n_chain_planes`
-    /// TOML field is the authority (the old reach-through into the replay
-    /// module's `N_CHAIN_PLANES` constant is severed — DAG).
+    /// Chain plane stride = `n_chain_planes` × n_cells, with the TOML field as the authority.
     #[inline]
     #[must_use]
     pub fn chain_stride(&self) -> usize {
@@ -247,9 +231,8 @@ impl RegistrySpec {
             })
     }
 
-    /// Slice index of the current-player t0 stone plane (source plane 0).
-    /// Always 0 today but derived from the registry so a plane-reorder cannot
-    /// silently shift it.
+    /// Slice index of the current-player t0 stone plane (source plane 0), derived from the
+    /// registry so a plane-reorder cannot silently shift it.
     #[inline]
     #[must_use]
     pub fn cur_stone_slot(&self) -> usize {
@@ -293,15 +276,8 @@ impl RegistrySpec {
 
     /// Wire-format signature for cross-encoding compatibility checks.
     ///
-    /// Two encodings are wire-identical when they produce byte-identical on-disk
-    /// rows for the replay-buffer format. The wire layout depends on
-    /// `(n_planes, board_size, policy_logit_count, has_pass_slot, sym_table_id)`
-    /// — every other registry field affects training semantics but not stored
-    /// bytes. Both registered encodings are graph and store no dense rows:
-    ///   - gnn_axis_v1  → (0, 19, 362, true, "size_19")
-    ///   - gnn_axis_r8  → (0, 19, 362, true, "size_19")
-    ///
-    /// Derived from existing fields — the TOML source of truth is untouched.
+    /// Two encodings are wire-identical when they produce byte-identical on-disk replay rows.
+    /// Every registry field outside this tuple affects training semantics but not stored bytes.
     #[inline]
     #[must_use]
     pub fn wire_signature(&self) -> (usize, usize, usize, bool, &'static str) {

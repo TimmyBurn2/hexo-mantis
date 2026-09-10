@@ -1,32 +1,21 @@
-# >300 justify (R8): the oracle bank for ONE module. Every test here drives a predicate in
-# `mantis.monitor.rules`, and each rule needs BOTH halves — the firing case and the mutation
-# half that proves it stays silent otherwise — so the file grows two tests per rule by
-# construction. They are kept together because the emitter tests assert the rules fire in
-# `WARN_RULE_NAMES` order: splitting per-rule files would leave the ordering assertion with
-# no natural home and let a rule be added in one file while the order pin sat in another.
-"""⊕ O-03/O-04/O-05 + O-21 — the pure stateless rule functions (decision-parity + the
-three run-safety hard-aborts on LIVE-shaped inputs).
+# >300 justify (R8): the oracle bank for ONE module. Every test drives a predicate in
+# `mantis.monitor.rules`, and each rule needs BOTH halves — the firing case and the mutation half
+# that proves it stays silent otherwise — so the file grows two tests per rule by construction.
+# The emitter tests assert the rules fire in `WARN_RULE_NAMES` order, so splitting per rule would
+# leave the ordering assertion with no natural home.
+"""The pure stateless rule functions: decision-parity plus the run-safety hard-aborts on
+LIVE-shaped inputs.
 
-RED-at-import until IMPL writes `mantis.monitor.rules` + `mantis.monitor.config`. This is
-an ORACLE-FIRST (⊕) file: the top-level `import mantis.monitor.rules` raises
-ModuleNotFoundError before any port code exists.
+An ORACLE-FIRST file — the top-level `import mantis.monitor.rules` raises before any port code
+exists. Decision-parity is asserted against the old-side semantics, where the code IS the spec:
+the sealbot-WR triggers A/B/C with their "N consecutive, not a single dip" guards; the warn rules
+at their registered boundaries, including the non-finite grad-norm pin and the 3-window
+strictly-increasing rule, and the headless emitter routing one `training_alert` per fired rule
+through the injected sink in rule order; and draw-rate collapse over `pooled_draw_rate` history.
 
-Decision-parity is asserted against the OLD-side semantics in
-`hexo_rl/monitoring/alert_rules.py` (the code IS the spec):
-  * O-05 sealbot-WR triggers A/B/C with the "N consecutive, not a single dip" guards
-    (old `config.py` values verbatim: 0.10/2/20000; peak×0.5/3/25000; 0.05/3/15000);
-  * O-21 warn rules at the registered boundaries (1.0 / 1.5 nats, 10.0 gn incl. the NaN
-    `gn == gn` pin, 3-window strictly-increasing), and the headless emitter routing one
-    `training_alert` event per fired rule through the injected sink, in rule order;
-  * O-03 draw-rate collapse over `pooled_draw_rate` history (LIVE producer — the NaN
-    `draw_target_fraction` phantom is never keyed on).
-
-(O-04 stride5-spam was REMOVED at close-out per operator directive B.)
-
-`check_draw_rate_collapse` takes explicit `threshold`/`consec`/`min_step` kwargs (NOT a
-`StepCoordinatorConfig` object) so `monitor/**` keeps zero `train` import (DAG §2). The
-draw-rate threshold lives in `StepCoordinatorConfig` (WP10); the coordinator passes it in
-(see ORACLE_NOTES: IMPL API constraint).
+`check_draw_rate_collapse` takes explicit `threshold`/`consec`/`min_step` kwargs rather than a
+`StepCoordinatorConfig`, so `monitor/**` keeps zero `train` import; the coordinator passes the
+threshold in.
 """
 from __future__ import annotations
 
@@ -50,9 +39,8 @@ from mantis.monitor.rules import (
 )
 
 
-# ══ O-05 sealbot-WR decision parity ═══════════════════════════════════════════════════
-# Each row: (label, history[(step,wr)], current_step, expect_fire). Values chosen against
-# the old alert_rules.check_sealbot_wr_hard_abort semantics with the default MonitorConfig.
+# Each row: (label, history[(step,wr)], current_step, expect_fire), chosen against the old
+# `check_sealbot_wr_hard_abort` semantics with the default MonitorConfig.
 _SEALBOT_BATTERY: list[tuple[str, list[tuple[int, float]], int, bool]] = [
     ("empty_history_no_fire", [], 30000, False),
     ("healthy_high_wr_no_fire",
@@ -84,25 +72,14 @@ _SEALBOT_BATTERY: list[tuple[str, list[tuple[int, float]], int, bool]] = [
 @pytest.mark.parametrize("label,history,step,expect_fire",
                          _SEALBOT_BATTERY, ids=[r[0] for r in _SEALBOT_BATTERY])
 def test_sealbot_wr_decision_parity(label, history, step, expect_fire) -> None:
-    """O-05 / P-05 — 100% decision match with the old-side triggers A/B/C incl. the
-    consecutive-N guards. A message (truthy) = fire; None = no fire (the de-diagnosis of the
-    MESSAGE text happens at the instrument, §0 — parity here is the DECISION only).
-
-    The DECISION is a property of the trajectory, INDEPENDENT of the abort disposition, so
-    it is asserted on `sealbot_wr_trajectory_alert` (which ignores the flag). The
-    default-posture flip (warn-only) is a coordinator/disposition concern, tested at the
-    hard-abort wrapper below and in test_coordinator_gates."""
+    """O-05 / P-05 — 100% decision match with the old-side triggers A/B/C incl."""
     cfg = MonitorConfig()
     msg = sealbot_wr_trajectory_alert(list(history), step, cfg)
     assert (msg is not None) is expect_fire, f"{label}: fire={msg is not None}, want {expect_fire}"
 
 
 def test_hard_abort_disposition_requires_the_enabled_flag() -> None:
-    """O-05 / operator G-3 — the DEFAULT `MonitorConfig()` ships `wr_hard_abort_enabled=False`
-    (warn-only), so `check_sealbot_wr_hard_abort` returns None on a collapse; the SAME
-    trajectory yields a message from `sealbot_wr_trajectory_alert`, and setting the flag True
-    restores the hard-abort disposition (the A/B/C capability is unchanged — only the default
-    disposition moved)."""
+    """O-05 / operator G-3 — the DEFAULT `MonitorConfig()` ships `wr_hard_abort_enabled=False` (warn-only), so `check_sealbot_wr_hard_abort` returns None on a collapse; the SAME trajectory yields a message from `sealbot_wr_trajectory_alert`, and setting the flag True restores the hard-abort disposition (the A/B/C capability is unchanged — only the default disposition moved)."""
     collapse = [(16000, 0.01), (17000, 0.01), (18000, 0.01)]
     default_cfg = MonitorConfig()
     assert default_cfg.wr_hard_abort_enabled is False, "shipped default is warn-only"
@@ -115,7 +92,6 @@ def test_hard_abort_disposition_requires_the_enabled_flag() -> None:
     assert hard is not None and "HARD-ABORT" in hard and "Objective-A" in hard
 
 
-# ══ O-21 warn-rule decision parity ════════════════════════════════════════════════════
 def test_entropy_collapse_boundary() -> None:
     """O-21 — combined-stream entropy fires strictly BELOW alert_entropy_min (1.0)."""
     cfg = MonitorConfig()
@@ -126,8 +102,7 @@ def test_entropy_collapse_boundary() -> None:
 
 
 def test_selfplay_entropy_collapse_boundary_and_nonfinite_guard() -> None:
-    """O-21 — selfplay entropy fires below collapse_threshold_nats (1.5); NaN/inf are ignored
-    (isfinite guard); the canonical field wins over the legacy fallback."""
+    """O-21 — selfplay entropy fires below collapse_threshold_nats (1.5); NaN/inf are ignored (isfinite guard); the canonical field wins over the legacy fallback."""
     cfg = MonitorConfig()
     assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": 1.49}, cfg) is not None
     assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": 1.5}, cfg) is None
@@ -138,17 +113,7 @@ def test_selfplay_entropy_collapse_boundary_and_nonfinite_guard() -> None:
 
 
 def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
-    """O-21 — fires strictly ABOVE alert_grad_norm_max (10.0), and on any NON-FINITE norm.
-
-    REVERSED BY ITEM 6. This test previously pinned the opposite: `a NaN must never trip the
-    instability abort`, carried over as old-side parity via a `gn == gn` filter. That filter
-    made the alert silent in exactly the state that matters most — `clip_and_step` has
-    scaled by a NaN coefficient, so every weight is already NaN (falsified row F-11's
-    cascade) — while a merely large finite norm still alerted. A NaN norm is unbounded, and
-    unbounded is above any threshold.
-
-    An ABSENT grad_norm still does not fire: a missing reading is not a bad one.
-    """
+    """O-21 — fires strictly ABOVE alert_grad_norm_max (10.0), and on any NON-FINITE norm."""
     cfg = MonitorConfig()
     assert check_grad_norm_spike({"grad_norm": 10.01}, cfg) is not None
     assert check_grad_norm_spike({"grad_norm": 10.0}, cfg) is None      # not > 10.0
@@ -162,8 +127,7 @@ def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
 
 
 def test_loss_increase_window_strictly_increasing() -> None:
-    """O-21 — fires only when the last (window+1) losses are all strictly increasing; a window
-    of exactly `n` (3) samples is too short to fire."""
+    """O-21 — fires only when the last (window+1) losses are all strictly increasing; a window of exactly `n` (3) samples is too short to fire."""
     cfg = MonitorConfig()  # alert_loss_increase_window == 3
     assert check_loss_increase_window([1.0, 2.0, 3.0], cfg) is None          # len == n
     assert check_loss_increase_window([1.0, 2.0, 3.0, 4.0], cfg) is not None  # 4 strictly up
@@ -172,9 +136,7 @@ def test_loss_increase_window_strictly_increasing() -> None:
 
 
 def test_headless_emitter_routes_training_alert_events_in_rule_order() -> None:
-    """O-21 — the headless emitter fires the 4 warn rules and routes ONE `training_alert`
-    event per fired rule through the INJECTED sink (structlog is dead), rule order preserved,
-    and returns the fired messages. Bites an alert path with no live sink producer (LAW-07)."""
+    """O-21 — the headless emitter fires the 4 warn rules and routes ONE `training_alert` event per fired rule through the INJECTED sink (structlog is dead), rule order preserved, and returns the fired messages."""
     cfg = MonitorConfig()
     sink = _RecordingSink()
     loss_window: list[float] = [1.0, 2.0, 3.0]  # caller-owned deque tail
@@ -196,12 +158,7 @@ def test_headless_emitter_routes_training_alert_events_in_rule_order() -> None:
 
 
 def test_headless_emitter_nonfinite_grad_norm_fires_through_the_sink() -> None:
-    """Item 6 — a NaN grad_norm must reach the event stream as a grad_norm_spike alert.
-
-    REVERSED: this pinned `does_not_fire`. End-to-end through the emitter, because the unit
-    rule firing is worthless if the emitter filters it out one layer up — which is precisely
-    how the old behaviour was arranged.
-    """
+    """Item 6 — a NaN grad_norm must reach the event stream as a grad_norm_spike alert."""
     cfg = MonitorConfig()
     sink = _RecordingSink()
     payload = {"event": "training_step", "step": 1, "grad_norm": float("nan"),
@@ -213,13 +170,7 @@ def test_headless_emitter_nonfinite_grad_norm_fires_through_the_sink() -> None:
 
 
 def test_a_nonfinite_loss_fires_its_own_rule_and_stays_out_of_the_window() -> None:
-    """Item 6 — the two halves together, and they are in tension by design.
-
-    A non-finite loss must NOT enter the loss window (a NaN poisons every later comparison
-    in `check_loss_increase_window`, since NaN comparisons are False), but "not in the
-    window" had silently become "not reported anywhere". Both halves are asserted here so a
-    future change cannot restore one at the other's expense.
-    """
+    """Item 6 — the two halves together, and they are in tension by design."""
     cfg = MonitorConfig()
     sink = _RecordingSink()
     window: list[float] = []
@@ -246,23 +197,12 @@ def test_a_finite_loss_does_not_fire_the_nonfinite_rule() -> None:
                    for e in sink.events if e.get("event") == "training_alert")
 
 
-# ══ (O-04 stride5-spam rule REMOVED at close-out, operator directive B — stride5-spam is a
-#     dead artifact of bad hyperparams that never occurs under current recipes. The
-#     selfplay-owned `WorkerPool.current_stride5_p90()` producer is unrelated and stays.) ══
+# The stride5-spam rule was REMOVED at close-out: it is a dead artifact of bad hyperparams that
+# never occurs under current recipes. The selfplay-owned `current_stride5_p90()` producer stays.
 
 
-# ══ O-03 draw-rate collapse rule (on the LIVE producer) ═══════════════════════════════
 def test_pooled_draw_rate_below_the_bar_is_no_observation() -> None:
-    """O-03, RE-POINTED by WPMINT Phase DS (R92). The retired assertion was
-    `recent_pool_draw_rate({}) == 0.0` — "the LIVE producer returns 0.0 for an empty worker
-    map, so the gate can never fire on empty signal". Phase DR measured the other half of
-    that: the `0.0` was APPENDED to the abort history as a real healthy measurement (DR-4).
-
-    R92 replaces the value with a TYPE. Below `N_pool_min` completed games the producer
-    reports `None` — no observation — which never reaches this rule's `history` at all, so
-    the gate still cannot fire on empty signal AND cannot record a healthy reading it did
-    not measure. Both halves asserted, because either alone is satisfied by the old
-    behaviour."""
+    """O-03, RE-POINTED by WPMINT Phase DS (R92)."""
     assert pooled_draw_rate((0, 0), N_pool_min=50) is None
     assert pooled_draw_rate((3, 3), N_pool_min=50) is None, (
         "three drawn games is not evidence: a 1.0 here would be a total-collapse abort on "
@@ -275,8 +215,7 @@ def test_pooled_draw_rate_below_the_bar_is_no_observation() -> None:
 
 
 def test_draw_rate_collapse_fires_on_sustained_high_rate_past_min_step() -> None:
-    """O-03 / P-03 — fires iff the last `consec` samples are all >= threshold AND
-    current_step >= min_step. Empty/zero history never fires."""
+    """O-03 / P-03 — fires iff the last `consec` samples are all >= threshold AND current_step >= min_step."""
     history = [pooled_draw_rate((45, 100), N_pool_min=50) for _ in range(3)]  # 0.45 each
     assert check_draw_rate_collapse(history, 50000, threshold=0.4, consec=3, min_step=20000) is not None
 
@@ -300,19 +239,7 @@ def test_draw_rate_collapse_threshold_nonpositive_disables() -> None:
 
 
 def test_draw_rate_collapse_measured_healthy_zero_never_fires() -> None:
-    """O-03 — a history of MEASURED 0.0 never fires even when configured.
-
-    R73 name-truth (WPMINT DS-VERIFY, DSV-3). This test used to be called
-    `..._empty_signal_never_fires` and its docstring said "no worker has a game yet". Both
-    became FALSE at Phase DS: the drive is `pooled_draw_rate((0, 50), N_pool_min=50)` —
-    fifty COMPLETED games of which zero were drawn, which is a healthy pool reporting
-    honestly, the exact OPPOSITE of an empty signal.
-
-    Under R92 an empty signal is not `0.0` at all: below `N_pool_min` the producer returns
-    `None`, nothing is appended to the history, and a skip is counted. That case has its own
-    producer test; this one's live subject is the healthy-zero reading, and it is named for
-    it now.
-    """
+    """O-03 — a history of MEASURED 0.0 never fires even when configured."""
     history = [pooled_draw_rate((0, 50), N_pool_min=50) for _ in range(5)]
     assert all(x == 0.0 for x in history)
     assert check_draw_rate_collapse(history, 50000, threshold=0.4, consec=3, min_step=0) is None

@@ -1,27 +1,9 @@
-"""Item 1 pin: every real build input of `mantis._engine` is a uv cache key.
+"""Every real build input of `mantis._engine` is a uv cache key.
 
-THE DEFECT CLASS (stale extension). uv's `cache-keys` REPLACES uv's default key set, and uv
-decides whether to invoke the build AT ALL. A build input that is not a key is therefore not
-"cargo rebuilds anyway" — cargo is never asked, and the venv keeps serving the previous
-`.so`/`.pyd`. CI cannot see it because CI always builds cold: green in CI, stale in every
-developer checkout that already had a build.
-
-WHY A DERIVED CENSUS AND NOT A TRANSCRIBED LIST. The `cache-keys` list names crates one at a
-time, so the failure mode is a future crate author adding `crates/mantis-newthing` and
-forgetting the two lines. A test that re-listed the expected keys would have to be edited in
-the same commit that forgets them, which is no protection at all. So the REQUIRED set is
-derived from the workspace itself (`[workspace] members`) and the COVERED set is derived by
-resolving each declared glob against the real filesystem — neither side is transcribed, and a
-new crate turns this red until it is keyed (R98, derive at point of use).
-
-SCOPE — WHAT THIS PIN DOES AND DOES NOT COVER. `registry.toml` specifically is ALSO protected
-at runtime: CI gate 8's handshake hashes the on-disk registry and compares it to the compiled
-`_engine.registry_sha()`, so a stale extension serving a stale registry hard-errors at
-`import mantis.encoding`. That drift is LOUD. Every other build input — `Cargo.lock`, the
-dependency crates' sources, `RUSTFLAGS` — has no such handshake, and for those a missing cache
-key is silent. This test is what stands behind the silent ones; it asserts registry.toml too,
-because the item's contract names it and because belt-and-braces on the one input with a
-cross-language identity role is cheap.
+`cache-keys` REPLACES uv's default key set and uv decides whether to build at all, so an
+unkeyed build input leaves the venv serving the previous `.so` — invisible to CI, which always
+builds cold. Both sides are derived (workspace members vs globs resolved against the tree), so
+a new crate turns this red until it is keyed.
 """
 from __future__ import annotations
 
@@ -35,9 +17,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 BRIDGE_DIR = REPO_ROOT / "crates" / "mantis-bridge"
 BRIDGE_PYPROJECT = BRIDGE_DIR / "pyproject.toml"
 
-# The env keys that must be declared. `make build.native` sets RUSTFLAGS=-C target-cpu=native;
-# without these a later plain `make build` sees no keyed change and KEEPS the host-pinned
-# binary — R2/LAW-13's portability promise with no return path, and a poisoned `make bench`.
+# `make build.native` sets RUSTFLAGS=-C target-cpu=native; without these keys a later plain
+# `make build` sees no keyed change and keeps the host-pinned binary.
 REQUIRED_ENV_KEYS = ("RUSTFLAGS", "CARGO_BUILD_RUSTFLAGS")
 
 
@@ -55,12 +36,7 @@ CACHE_KEYS = _load_cache_keys()
 
 
 def _covered_files(cache_keys: list[dict[str, str]]) -> set[Path]:
-    """Resolve every `{file = ...}` glob against the real tree, relative to the bridge dir.
-
-    `glob.glob(..., root_dir=, recursive=True)` is used rather than a hand-rolled matcher: the
-    keys contain both `..` segments and `**`, and re-implementing that matching is exactly the
-    drift-from-the-thing-it-certifies class this repo keeps finding.
-    """
+    """Resolve every `{file = ...}` glob against the real tree, relative to the bridge dir."""
     covered: set[Path] = set()
     for entry in cache_keys:
         pattern = entry.get("file")
@@ -83,10 +59,8 @@ def _workspace_members() -> list[Path]:
 def _required_build_inputs() -> set[Path]:
     """Every file whose content can change the emitted extension.
 
-    Deliberately `src/**/*` and not `src/**/*.rs`: `crates/mantis-encoding/src` holds
-    `registry.toml`, which is `include_str!`-ed into the binary. Anything else a future author
-    drops into a `src/` tree is a build input by the same argument — which is why the glob
-    stays wide even though AUDIT-1 F-36 took the second such file (`manifests.toml`) out.
+    `src/**/*` rather than `src/**/*.rs`: `crates/mantis-encoding/src` holds `registry.toml`,
+    which is `include_str!`-ed into the binary.
     """
     required: set[Path] = {
         (REPO_ROOT / "Cargo.toml").resolve(),
@@ -104,9 +78,6 @@ def _required_build_inputs() -> set[Path]:
 
 def _uncovered(cache_keys: list[dict[str, str]]) -> set[Path]:
     return _required_build_inputs() - _covered_files(cache_keys)
-
-
-# --- the census ---------------------------------------------------------------------------
 
 
 def test_every_workspace_build_input_is_a_cache_key() -> None:
@@ -128,12 +99,7 @@ def test_every_workspace_build_input_is_a_cache_key() -> None:
     ],
 )
 def test_embedded_registry_data_files_are_cache_keys(rel: str) -> None:
-    """The `include_str!`-ed data files, named explicitly.
-
-    These are the reason the encoding glob is `src/**/*` rather than `src/**/*.rs`. A future
-    author "tidying" that glob to `.rs` would still pass the census above only if these two
-    files vanished; naming them here makes the tidy-up fail loudly instead.
-    """
+    """Name the `include_str!`-ed data files, so tidying the encoding glob to `.rs` fails loud."""
     target = (REPO_ROOT / rel).resolve()
     assert target.is_file(), f"{rel} does not exist — the pin is asserting against a ghost"
     assert target in _covered_files(CACHE_KEYS), (
@@ -156,13 +122,8 @@ def test_lockfile_is_a_cache_key() -> None:
     assert (REPO_ROOT / "Cargo.lock").resolve() in _covered_files(CACHE_KEYS)
 
 
-# --- LAW-07 mutation self-tests: the census must BITE --------------------------------------
-#
-# Each case removes ONE key from an in-memory copy of the list and asserts the named file goes
-# uncovered. Mechanism, per case: the glob that resolved to that file is gone, so
-# `_covered_files` no longer yields it, so it appears in `_required_build_inputs() - covered`.
-# Without these, a census that silently covered everything (a bad glob, a `root_dir` change, a
-# `.resolve()` mismatch on symlinks) would report green forever — a phantom gate (LAW-07).
+# Mutation self-tests: each case drops ONE key from an in-memory copy and asserts the named
+# file goes uncovered, so a census that silently covered everything cannot report green.
 
 
 def _without(pattern: str) -> list[dict[str, str]]:
@@ -208,12 +169,7 @@ def test_env_check_bites_when_rustflags_is_removed() -> None:
 
 
 def test_a_new_crate_would_be_caught() -> None:
-    """The trap the cache-keys comment names in its own words: adding a crate and forgetting it.
-
-    Simulated without touching the tree — a synthetic member is appended to the REQUIRED side
-    and must come back uncovered, proving the census is member-driven rather than keyed to the
-    six crates that happen to exist today.
-    """
+    """Prove the census is member-driven: a crate that does not exist must not resolve covered."""
     synthetic = (REPO_ROOT / "crates" / "mantis-newthing" / "src" / "lib.rs").resolve()
     covered = _covered_files(CACHE_KEYS)
     assert synthetic not in covered, (

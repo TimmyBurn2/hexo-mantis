@@ -1,44 +1,18 @@
-# >300 justify (R8): the oracles below (O-D1's seven arms, O-D2, O-E3's two) share ONE real
-# composed drive — real `build_run_safety`, real `JsonlEventSink`, real `HeartbeatWatchdog`,
-# real `DiskGuard`, real signal handlers — and R5 bars cross-test imports, so splitting them
-# would fork a second copy of the drivable pool/trainer harness AND a second real-subsystem
-# boot per file. One harness, one boot shape, four subjects that are all "what LAW-16 owes at
-# the composition root" is the smaller LAW-03 cost.
-"""⊕ WPMAIN ORACLE — LAW-16 at the composition root (DESIGN §7/§8/§5.4, O-D1/O-D2/O-E3).
+# >300 justify (R8): every oracle below shares ONE real composed drive — real
+# `build_run_safety`, `JsonlEventSink`, `HeartbeatWatchdog`, `DiskGuard` and signal handlers —
+# and cross-test imports are barred, so splitting them would fork a second drivable harness AND
+# a second real-subsystem boot per file.
+"""LAW-16 at the composition root.
 
-RED-at-import until IMPL lands the schema keys these drives compose from (`eval_enabled`,
-`monitor.disk_guard.*`) — every drive builds its config through the ONE loader, so a config
-the loader would reject is a config no test can smuggle past.
+What this file exists to stop, measured and not inferred: signals were UNARMED in every composed
+run, because `install_signal_handlers` fired only on the loop's self-construct branch while the
+root always injects its own `ShutdownState` — a probe over 19 real drives found SIGINT at
+`default_int_handler` and SIGTERM at `SIG_DFL` on all 19. The disk guard was never constructed,
+and `resolve_config` / `to_event_payload` had zero production call sites.
 
-What this file exists to stop, measured at `b482243` and not inferred:
-
-- **Signals are UNARMED in every composed run.** `install_signal_handlers` fires only on
-  `run_training_loop`'s self-construct branch (`loop.py:53-56`), and `compose_run` always
-  injects its own `ShutdownState` (`run.py:282`->`:303`) — so the branch never runs. A probe
-  over 19 real `compose_run` drives found SIGINT at `default_int_handler` and SIGTERM at
-  `SIG_DFL` on ALL 19. LAW-16's save-then-exit has been dead in every composed run,
-  including the preflight child's. (F-1-SIGNALS, ruled in-scope by R121(b).)
-- **The disk guard is never constructed.** `build_subsystems` (`subsystems.py:150`) is the
-  only `DiskGuard(` site in the tree and has zero callers; its `60/10/5` are code-side
-  `dict.get` defaults nothing reads. LAW-16's third leg has never run. (F-2-DISKGUARD.)
-- **`resolve_config` / `to_event_payload` have zero production call sites** — a resolved-
-  config emit surface with no emitter (LAW-08). §5.4 absorbs it rather than deleting it.
-
-R121(b) is explicit that **oracles fake nothing** on these paths: the census probe's faked
-`build_run_safety` was census-tier only and is not a model here. What IS substituted, and
-why, disclosed in full:
-
-- `trainer` / `pool` are the suite's drivable fakes. They are COLLABORATORS, injected by
-  `compose_run`'s own pinned contract (`run.py:175-179`, Q-INJECTION) — the same posture
-  every wiring oracle in `tests/test_run_composition.py` uses. The buffer is the REAL
-  `HexgBuffer` (the graph route refuses a shapeless fake at dispatch, by design).
-- `build_run_safety` is called FOR REAL; the wrapper below only records the real object it
-  returned and installs recording delegates over `watchdog.stop` / `sink.close`. Nothing is
-  stood in for.
-- `DiskGuard` is the REAL class, subclassed only to record its construction kwargs and its
-  `stop()` — behaviour untouched (`super()` on every path).
-- O-D2 alone substitutes `StepCoordinator` with a raiser: its subject IS the failure, and
-  there is no other way to make construction fail exactly at that seam.
+Oracles fake nothing on these paths: `build_run_safety` is called FOR REAL and only wrapped to
+record, `DiskGuard` is the REAL class subclassed to record kwargs, and the buffer is a real
+`HexgBuffer`. Only the trainer, the pool and (in one oracle) `StepCoordinator` are substituted.
 """
 from __future__ import annotations
 
@@ -58,25 +32,19 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
 
 _REPO = Path(__file__).resolve().parents[1]
-#: The SHIPPED manifest, from its own module (AUDIT-1 F-47). `DEFAULT_MANIFEST_PATH` named
-#: itself "the ONE seam-7 instance" and had zero references while THREE test files rebuilt
-#: the path by hand — so the finding was right that it was unreferenced and wrong that the
-#: repair was deletion: deleting it would have left the three hand copies and no authority.
+#: The SHIPPED manifest, from its own module. Its path constant had zero references while three
+#: test files rebuilt the path by hand, so deletion would have left the copies and no authority.
 _MANIFEST = DEFAULT_MANIFEST_PATH
 
-#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1 (the
-#: reachability validator spans cadence < actor_lag_threshold < max_train_steps).
+#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
 
-#: Disk-guard values for the drives: an interval short enough that the guard's own thread
-#: emits inside a sub-second burst, and thresholds low enough that it can NEVER fire on a
-#: real filesystem (a critical alert SIGTERMs the pytest process — the guard's real
-#: behaviour, exercised deliberately in tests/config/test_disk_guard_keys.py against a
-#: RIGGED filesystem, never against the box the suite runs on).
+#: Disk-guard values: an interval short enough that the guard's thread emits inside a
+#: sub-second burst, and thresholds low enough that it can NEVER fire on a real filesystem — a
+#: critical alert SIGTERMs the pytest process.
 _DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
 
-#: The producer-manifest row §5.4 adds, and the node it must name (MISS-14: the row and its
-#: producer test land in the SAME commit or gate 4's manifest check reds).
+#: The producer-manifest row and the node it must name; both land in the SAME commit.
 _RESOLVED_CONFIG_PRODUCER_TEST = (
     "tests/test_run_root_lifecycle.py::"
     "test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity_witness"
@@ -85,28 +53,23 @@ _RESOLVED_CONFIG_PRODUCER_TEST = (
 
 @pytest.fixture(autouse=True)
 def restore_signal_dispositions():
-    """Every drive in this file installs process-global SIGINT/SIGTERM handlers. Save and
-    restore around each test so one drive's handlers cannot decide another test's fate.
-
-    (DESIGN §3 routes an equivalent autouse fixture into `tests/conftest.py` at IMPL, for
-    the whole ~2173-test collection; this local one nests cleanly inside it — each restore
-    returns to what it saved.)"""
+    """Save and restore the process-global SIGINT/SIGTERM handlers around each test, so one
+    drive's handlers cannot decide another test's fate."""
     saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     yield
     for sig, handler in saved.items():
         signal.signal(sig, handler)
 
 
-# ── the drivable collaborators (injection-first contract, R-10) ───────────────────────
 class _Pool:
-    """Drivable stand-in for `WorkerPool` at the injected seam. `start`/`stop` are recorded
+    """Drivable stand-in for `WorkerPool` at the injected seam; `start`/`stop` are recorded
     because the teardown ladder's contract is "pool stopped IFF started"."""
 
     search_kind = "gumbel"
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
+    draw_rate = 0.05  # the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9
@@ -162,7 +125,7 @@ class _Pool:
 
 class _Trainer:
     """Drivable stand-in for the trainer at the injected seam, conforming to the DECLARED
-    train-step surface (`train_step_from_graph_batch` / `_from_tensors`, R102)."""
+    train-step surface."""
 
     def __init__(self, on_step=None) -> None:
         self.step = 0
@@ -170,10 +133,9 @@ class _Trainer:
         self.device = "cpu"
         self.saves: list = []
         self._on_step = on_step
-        # A REAL directory, and a `save_checkpoint` that returns a REAL path: R343(c) made both
-        # signal-save legs write a resume sidecar BESIDE the checkpoint they saved, so a fake
-        # that returned None would exercise the lifecycle rows while the leg that makes the
-        # stop resumable went unmeasured — which is precisely the gap a live box run found.
+        # A REAL directory and a `save_checkpoint` returning a REAL path: both signal-save legs
+        # write a resume sidecar BESIDE the checkpoint, so a fake returning None would leave the
+        # leg that makes the stop resumable unmeasured.
         self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-root-lifecycle-"))
 
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
@@ -224,15 +186,9 @@ class _Recorders:
 
 
 def _install_recorders(monkeypatch, request) -> _Recorders:
-    """N4 (dispatcher-ownable backlog): on the COMPLETED compose_run path `close_out` never
-    touches `run_safety.sink` — `run.py:899-920`'s own comment records this as deliberate
-    debt (CARD-PROTOCOL-COMPLETE, R106), bounded in PRODUCTION because both real callers
-    exit the process right after `compose_run` returns. This pytest process does not exit
-    between tests, so a suite of in-process composed drives accumulates open write fds to
-    completed segment files for the rest of the session — harness hygiene, not a production
-    defect. `request.addfinalizer` closes the REAL sink (idempotent, `sink.py:205-206`)
-    after every drive through this recorder, regardless of which teardown path the run
-    itself took or whether the test's own assertions raise."""
+    """Close the REAL sink after every drive: on the COMPLETED path `close_out` never touches
+    it, which is bounded in production because both real callers exit the process right after,
+    but this pytest process does not."""
     rec = _Recorders()
     real_build = mantis_run.build_run_safety
     _RecordedDiskGuard.instances = rec.disk_guards
@@ -262,7 +218,7 @@ def _install_recorders(monkeypatch, request) -> _Recorders:
 
 def _bounded(smoke_run_config, **over):
     """A REAL minted graph config, bounded so the drive terminates, with eval OFF by the
-    CONFIG's own value (R120: no parameter can force it, so the config is the only route)."""
+    CONFIG's own value — no parameter can force it."""
     monitor = {"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                "disk_guard": dict(_DRIVE_DISK_GUARD)}
     monitor.update(over.pop("monitor", {}))
@@ -281,9 +237,9 @@ def _events(run_safety) -> list[dict]:
 
 
 def _installed(sig: int):
-    """The live disposition, asserted to be a real handler BEFORE anything delivers a
-    signal — a drive that sends SIGTERM at `SIG_DFL` would kill the test runner, so the
-    RED state of this oracle must be an assertion failure, never a dead pytest."""
+    """Assert the live disposition is a real handler BEFORE anything delivers a signal: a drive
+    that sent SIGTERM at `SIG_DFL` would kill the test runner, so the RED state of this oracle
+    must be an assertion failure, never a dead pytest."""
     handler = signal.getsignal(sig)
     assert handler not in (signal.SIG_DFL, signal.SIG_IGN) and callable(handler), (
         f"{signal.Signals(sig).name} is at {handler!r} during a composed run: LAW-16's "
@@ -292,22 +248,11 @@ def _installed(sig: int):
     return handler
 
 
-# ══ O-D1 — the lifecycle contract at the root ═════════════════════════════════════════
+# O-D1 — the lifecycle contract at the root.
 def test_the_signal_install_has_exactly_two_call_sites_and_one_of_them_is_the_root() -> None:
-    """O-D1's structural arm — the call-site census behind the behavioural drives.
-
-    Measured at `b482243`: `install_signal_handlers` has exactly ONE call site,
-    `train/loop.py::run_training_loop`, on the branch that only runs when NO state is
-    injected — and `compose_run` always injects one. That is the whole of F-1: a live
-    mechanism wired to a branch nothing takes.
-
-    After the hoist there are exactly TWO sites: the loop's self-construct branch (a caller
-    that builds its own state owns its own handler policy — unchanged, and still the only
-    thing that keeps `run_training_loop` usable standalone) and the composition root.
-
-    MUTATION THAT REDS IT: a third site. Handler installation is process-global and
-    last-writer-wins, so two roots installing over each other is one silently disarmed
-    shutdown path — the F-1 defect re-created with more code."""
+    """`install_signal_handlers` has exactly TWO call sites: the loop's self-construct branch and
+    the composition root. It used to have one, on a branch nothing takes. A third site would be
+    one silently disarmed shutdown path, since installation is process-global last-writer-wins."""
     import ast
 
     sites: set[str] = set()
@@ -337,15 +282,9 @@ def test_the_signal_install_has_exactly_two_call_sites_and_one_of_them_is_the_ro
 def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D1(c) — the load-bearing half, and the one a "handlers exist" check would miss.
-
-    `install_signal_handlers(state)` closes over the state it flips. If the root installs
-    handlers over a DIFFERENT `ShutdownState` than the one it injects into the loop, every
-    handler-presence assertion passes and the run still never stops on a signal. So the
-    closure cell is read and compared by IDENTITY against `handles.shutdown`.
-
-    MUTATION THAT REDS IT: `install_signal_handlers(ShutdownState())` beside the injected
-    one — the F-1 defect's most plausible "fix", and behaviourally invisible."""
+    """The handlers close over the SAME `ShutdownState` the root injects, compared by IDENTITY:
+    a root that installed over a different state passes every presence assertion and still never
+    stops on a signal."""
     rec = _install_recorders(monkeypatch, request)
     captured: dict[str, Any] = {}
 
@@ -371,17 +310,9 @@ def test_the_installed_handlers_are_bound_to_the_state_the_loop_actually_polls(
 def test_a_signal_mid_run_saves_then_exits(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D1(a) — LAW-16's headline: one signal -> `running=False` + `shutdown_save=True` ->
-    the loop's final `trainer.save_checkpoint` before returning (T-LC-04's law, now reached
-    from the composed root rather than from a hand-built loop).
-
-    A REAL SIGTERM is delivered to this process from inside a step, guarded by `_installed`
-    so an unarmed disposition fails the assertion instead of killing pytest.
-
-    MUTATION THAT REDS IT: remove the handler install from `compose_run` (i.e. HEAD) — the
-    guard fires; or bind handlers that only set `running=False` without `shutdown_save` —
-    the run stops without its final checkpoint, which is the save-then-exit half of LAW-16
-    and the one that loses the run's work."""
+    """One REAL SIGTERM delivered from inside a step gives `running=False` + `shutdown_save=True`
+    and the loop's final `trainer.save_checkpoint`. Handlers that set only `running=False` stop
+    the run without its final checkpoint."""
     import os
 
     _install_recorders(monkeypatch, request)
@@ -413,14 +344,8 @@ def test_a_signal_mid_run_saves_then_exits(
 def test_a_second_signal_force_exits(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D1(b) — the second press is the operator's escape hatch: `stop_count >= 2` ->
-    force-teardown all children then `os._exit(1)`. Driven by invoking the handler the
-    ROOT installed (calling it is exactly what the OS does); a real second delivery would
-    take pytest with it, so `os._exit` and `force_teardown_all` are intercepted.
-
-    MUTATION THAT REDS IT: a root that installs its own cooperative-only handler instead of
-    `install_signal_handlers` — a run that cannot be force-stopped is a run that has to be
-    `kill -9`d, which loses the buffer."""
+    """The second press force-tears down all children then `os._exit(1)`. Driven by invoking the
+    handler the ROOT installed, since a real second delivery would take pytest with it."""
     from mantis.train.lifecycle import signals as sig_mod
     import os
     teardown_called: list = []
@@ -443,16 +368,8 @@ def test_a_second_signal_force_exits(
 def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D1(d) + O-D1(e) — LAW-16's other two legs, both asserted from the run's OWN stream.
-
-    The watchdog arm is already true at HEAD (`run.py:280`) and is re-affirmed here so a
-    root rewrite cannot drop it silently. The disk guard is the NEW leg: at `b482243` it is
-    never constructed in any run, so `disk_free` cannot appear in any event stream.
-
-    MUTATION THAT REDS IT: delete `run_safety.watchdog.start()` (the armed event vanishes);
-    construct the disk guard but never `start()` it (no `disk_free`); or leak it — the
-    teardown assertion below is what makes "armed" mean "armed and accounted for", so a
-    guard thread outliving its run cannot pass as a green."""
+    """The watchdog and the disk guard are both armed AND accounted for at teardown, asserted
+    from the run's OWN stream — a guard thread outliving its run cannot pass as green."""
     rec = _install_recorders(monkeypatch, request)
     handles = mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=_Trainer(on_step=lambda _s: _sleep_a_beat()),
@@ -483,21 +400,12 @@ def test_the_watchdog_and_the_disk_guard_are_both_armed_at_boot(
 def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D1(f) — the window §7 leg 1 DEFINES rather than glosses.
+    """A signal during `pool.start()` completes composition and returns with ZERO steps.
 
-    Handlers install before `pool.start()`, so a signal can arrive while workers are still
-    spawning. Nothing between the install and the loop polls the state, so composition
-    COMPLETES; the loop's entry-set arm (`loop.py:91-94`) then saves and returns with ZERO
-    steps, and `close_out` drains. That is the designed behaviour — a pre-`pool.start()`
-    `if not shutdown.running:` check was argued against (a rarely-exercised extra branch in
-    the one composer), so the window is bounded and PINNED instead.
-
-    MUTATION THAT REDS IT: install the handlers AFTER `pool.start()` (the signal lands on
-    the default disposition mid-spawn and kills the process with workers alive), or add the
-    pre-start bail-out (composition no longer completes and the entry-set arm never runs).
-
-    `trainer.step == 0` with `saves` non-empty is the whole signature of the entry-set arm:
-    a run that took a step took it AFTER the signal, which is the leak this pins shut."""
+    Nothing between the handler install and the loop polls the state, so the loop's entry-set arm
+    saves and returns and `close_out` drains. A pre-start bail-out was argued against as a
+    rarely-exercised branch in the one composer, so the window is bounded and PINNED instead.
+    """
     _install_recorders(monkeypatch, request)
     trainer = _Trainer()
 
@@ -521,29 +429,22 @@ def test_a_signal_delivered_during_composition_completes_the_boot_then_saves(
     )
 
 
-# ══ O-D2 — partial composition leaks nothing ══════════════════════════════════════════
+# O-D2 — partial composition leaks nothing.
 class _CoordinatorSeamFailure(RuntimeError):
-    """A distinctive failure at the coordinator seam, so 'the ORIGINAL exception propagates'
-    is an identity claim and not a family claim."""
+    """A distinctive failure at the coordinator seam, so "the ORIGINAL exception propagates" is
+    an identity claim rather than a family claim."""
 
 
 def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-D2 — the RED-TEAM lens, pre-registered: builder N succeeds, builder N+1 raises.
+    """Builder N succeeds, builder N+1 raises: no worker process and no non-daemon thread
+    survives, and the ORIGINAL failure propagates.
 
-    By the time `StepCoordinator` is constructed the pool is started, the watchdog thread is
-    running and the disk-guard thread is running. If the raise simply propagates, all three
-    survive the failed compose: worker processes, a polling watchdog whose `exit_fn` is
-    `os._exit`, and a daemon guard that will SIGTERM a process that is no longer running a
-    run. DESIGN §8's contract is "no worker process and no non-daemon thread survives a
-    failed compose; nothing is half-alive; the failure that propagates is the original".
-
-    MUTATION THAT REDS IT: wrap the teardown in a bare `except Exception: pass` (the
-    original exception is swallowed — LAW-14), or omit any single stop (its recorder stays
-    at 0). Chaining the teardown failure as `__context__` rather than replacing the original
-    is asserted by TYPE: a caller that sees a teardown error instead of the real one debugs
-    the wrong thing."""
+    A bare propagate would leave a watchdog whose `exit_fn` is `os._exit` and a guard that will
+    SIGTERM a process no longer running a run. Chaining as `__context__` rather than replacing
+    the original is asserted by TYPE.
+    """
     rec = _install_recorders(monkeypatch, request)
 
     def _raising_coordinator(**_kwargs):
@@ -568,23 +469,13 @@ def test_a_failure_at_the_coordinator_seam_tears_everything_down_and_re_raises(
     assert rec.sink_closes >= 1, "…and the event sink is closed, not left holding the segment"
 
 
-# ══ O-E3 — the resolved-config producer ═══════════════════════════════════════════════
+# O-E3 — the resolved-config producer.
 def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity_witness(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """O-E3 / §5.4 — LAW-08: `resolve_config` + `to_event_payload` (`config/emit.py:63/:52`)
-    have ZERO production call sites at `b482243`. A resolved-config surface with no emitter
-    is a payload nobody has ever published; the alternative under R116 is deleting it.
-
-    Ordering is asserted, not just presence: the identity witness
-    (`run_boot_identity`) must land FIRST — it is the F-B1 closure and has to exist even if
-    the boot later wedges — and the resolved posture immediately after it.
-
-    MUTATION THAT REDS IT: emit it twice (two postures in one segment, and a consumer that
-    reads the last one silently disagrees with a consumer that reads the first); emit it
-    before the identity witness; or rebuild the payload inline instead of calling
-    `to_event_payload(resolve_config(config))` — the payload equality catches the second
-    authority."""
+    """`resolve_config` + `to_event_payload` are emitted exactly once, after the identity
+    witness. Ordering is asserted, not just presence: `run_boot_identity` must land FIRST,
+    because it has to exist even if the boot later wedges."""
     _install_recorders(monkeypatch, request)
     config = _bounded(smoke_run_config)
     handles = mantis_run.compose_run(
@@ -608,13 +499,8 @@ def test_the_composed_boot_publishes_its_resolved_config_once_after_the_identity
 
 
 def test_the_shipped_manifest_claims_the_resolved_config_producer_and_names_this_test() -> None:
-    """O-E3, the R4/LAW-07 half: a gate input with no producer row is the phantom-gate class
-    (LAW-07's own origin, F-10). §5.4 adds one row; MISS-14 pins that the row and its named
-    producer test land in the SAME commit, because `verify_manifest` resolves the
-    `producer_test` node and reds on a name that does not exist.
-
-    MUTATION THAT REDS IT: add the emit without the manifest row (no row claims the event),
-    or point the row's `producer_test` at a test that does not drive the emit."""
+    """The manifest row claiming the event exists and names a producer test that does — a gate
+    input with no producer row is the phantom-gate class."""
     verify_manifest(_MANIFEST, _REPO)  # must not raise
     manifest = yaml.safe_load(_MANIFEST.read_text(encoding="utf-8"))
     rows = [row for row in manifest["gates"]
@@ -632,9 +518,8 @@ def test_the_shipped_manifest_claims_the_resolved_config_producer_and_names_this
 
 
 def _sleep_a_beat() -> None:
-    """A per-step pause long enough that the disk guard's own thread (interval 0.02 s) gets
-    several ticks inside a 3-step burst. Stated rather than tuned silently: the margin is
-    ~20 expected emissions against an assertion of >= 1."""
+    """A per-step pause long enough that the disk guard's thread gets several ticks inside a
+    3-step burst: ~20 expected emissions against an assertion of >= 1."""
     import time
 
     time.sleep(0.15)

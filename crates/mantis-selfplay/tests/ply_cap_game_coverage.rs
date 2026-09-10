@@ -1,50 +1,20 @@
-//! ⊕ F-816-9 Phase C — the coverage test the tiers lacked (R274(f), flip-set (c)).
+//! The ply-cap coverage the tiers lacked.
 //!
-//! THE FINDING THIS EXISTS FOR. 19/19 CI gates were green while the run could not complete
-//! one iteration, because no tier plays a game anywhere near the ply cap: every gate drive
-//! caps at a few dozen moves, and the whole ply > ~120 regime — where every game lands under
-//! R269's degenerate ply-cap flood, and where all five F-816-9 replicates died — was
-//! STRUCTURALLY UNOBSERVED. That blindness is part of the defect class, not an aside
-//! (Phase A §7.4).
+//! Every CI gate was green while the run could not complete one iteration: no tier plays a game
+//! anywhere near the ply cap, so the ply > ~120 regime, where all five replicates died, was
+//! STRUCTURALLY UNOBSERVED. This drives complete games at run5's production self-play parameters
+//! through the PRODUCTION record path, served by a healthy mock graph producer.
 //!
-//! Drive: complete games at run5's production self-play parameters (`configs/run5.yaml`
-//! selfplay block: 50 sims, leaf_batch 8, 128-move cap, Dirichlet armed, quiescence on,
-//! solver and forced-win off, completed-Q off) through the PRODUCTION record path, served by
-//! a healthy mock graph producer, driven to the ply cap.
+//! The accelerator is disclosed, not buried: `random_opening_plies` is set HERE, in the harness,
+//! never in a config file, and it skips MCTS *and* recording for the opening, so it reaches the
+//! deep regime without touching a single SEARCH parameter. Measured: a full 128-ply game at 50
+//! sims in a DEBUG build did not complete in 600 s. Asserted: the cap is genuinely reached;
+//! every recorded position's support fits the capacity as computed by the production derivation
+//! rather than transcribed; and no fatal defect with both counters at 0 — the negative control,
+//! since a pin firing on healthy play is worse than the defect it replaces.
 //!
-//! THE ACCELERATOR IS DISCLOSED, NOT BURIED — same disclosure Phase A made of the same
-//! mechanism. `random_opening_plies` is set HERE, in the harness, never in a config file. It
-//! skips MCTS *and* recording for the opening (`game.rs`), so it moves the worker into the
-//! ply-120+ regime without touching a single SEARCH parameter: the searches this file
-//! measures run at the full production regime, on a real 120-stone board with a legal set in
-//! the thousands, and every one of them goes through the production record path. What it does
-//! NOT cover is search behaviour at plies 0-119; the existing gate tiers cover short games,
-//! and the hole this file exists to close is the deep end.
-//!
-//! WHY IT IS NEEDED, measured rather than assumed: a full 128-ply game at 50 sims in a DEBUG
-//! build (which is what `cargo test` runs) did not complete in 600 s on the dev box. Phase A
-//! reported the same shape from the other side — a 4-worker full-length release run made 474
-//! moves in 2996 s and completed no game. The accelerator is what makes the deep regime
-//! reachable inside a test tier at all.
-//!
-//! Asserted:
-//!   * the game reaches the ply cap — the regime under test, not a proxy for it;
-//!   * EVERY recorded position's positive-mass support fits the DERIVED visit capacity, with
-//!     the capacity computed by the production derivation rather than transcribed (R255,
-//!     R192(e) derive-or-delete). This is the `over_capacity == 0` claim;
-//!   * no fatal defect, and BOTH R275(b) counters read 0 — a healthy game must not trip
-//!     either pin. This is the negative control for the whole packet: a pin that fires on
-//!     healthy play would be worse than the defect it replaces.
-//!
-//! TIER PLACEMENT: default `cargo test --workspace` tier (CI gate 2), not `#[ignore]`d. The
-//! packet expected a gated tier; with the accelerator the drive fits the default tier, and
-//! default is strictly better for a coverage hole whose entire history is "nobody ran it".
-//! The runtime is stated in the commit, not here — a transcribed duration is a tally that
-//! goes stale exactly like a line count (R192(e)).
-//!
-//! Killer: any change that re-admits an over-capacity or zero-visit export on healthy play
-//! reds this file; so does a regression that stops games reaching the cap (the drive would
-//! then be measuring a short game and saying nothing about the regime).
+//! Killer: any change that re-admits an over-capacity or zero-visit export on healthy play, or a
+//! regression that stops games reaching the cap, reds this file.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -58,16 +28,15 @@ use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::derived_visit_capacity;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-// `configs/run5.yaml`, selfplay block. Named here so a drift between this drive and the
-// shipped production regime is a one-diff read.
+// `configs/run5.yaml`, selfplay block: named here so drift from the shipped regime is one diff.
 const PROD_SIMS: usize = 50;
 const PROD_LEAF_BATCH: usize = 8;
 const PROD_PLY_CAP: usize = 128;
 const PROD_FAST_SIMS: usize = 50;
 const PROD_DIRICHLET_ALPHA: f32 = 0.3;
 const PROD_DIRICHLET_EPSILON: f32 = 0.25;
-/// HARNESS-ONLY accelerator (see the header). Plies below this are played at random with no
-/// search and no recording, so the searched-and-recorded window is exactly the deep regime.
+/// HARNESS-ONLY accelerator: plies below this are played at random with no search and no
+/// recording, so the searched-and-recorded window is exactly the deep regime.
 const RANDOM_OPENING_PLIES: u32 = 120;
 /// Derived, never transcribed: what the drive above must record per game.
 const SEARCHED_PLIES: usize = PROD_PLY_CAP - RANDOM_OPENING_PLIES as usize;
@@ -155,16 +124,10 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     );
 
     runner.start();
-    // Wait on the RECORDS, not on `games_completed`. Two race modes die here rather than
-    // becoming a flake: the counter advancing before the finalized rows reach the drain
-    // queue (a drain of 0), and a second game finishing between the break and the drain (a
-    // drain of 2 games). Only FINALIZED games reach this queue — an in-progress game's rows
-    // live in the worker's local vec — so the accumulated length is always a whole number of
-    // games.
-    // Wait for a game that reached the CAP, not merely for a game. The 120-ply random
-    // opening is unseeded, so a spontaneous six-in-a-row or colony during it would end a
-    // game early; waiting on the deepest recorded ply makes such a game a non-event instead
-    // of a flake (cross-model RED-TEAM, hole 4). The deadline is the only failure mode.
+    // Wait on the RECORDS, not on `games_completed`: only FINALIZED games reach this queue, so
+    // the length is always a whole number of games and a counter running ahead of the rows
+    // cannot flake. Wait for a game that reached the CAP — the random opening is unseeded, so a
+    // spontaneous win during it would end a game early. The deadline is the only failure mode.
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut records = Vec::new();
     while Instant::now() < deadline {
@@ -202,7 +165,6 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         records.len()
     );
 
-    // The regime, asserted rather than assumed: the ply cap is genuinely reached.
     let max_ply = records.iter().map(|r| r.ply_index).max().unwrap_or(0);
     assert_eq!(
         usize::from(max_ply) + 1,
@@ -212,7 +174,6 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
          restore that blindness while reporting green"
     );
 
-    // over_capacity == 0, against the DERIVED bound.
     let over: Vec<(u16, usize)> = records
         .iter()
         .map(|r| (r.ply_index, r.visits.len()))
@@ -223,7 +184,7 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
         "positions exceeded the derived visit capacity {capacity} on HEALTHY play: {over:?}"
     );
 
-    // Both R275(b) pins are negative controls here: healthy play must trip neither.
+    // Negative controls: healthy play must trip neither pin.
     assert_eq!(
         snap.target_integrity_defects, 0,
         "the exporter pin fired on a healthy full-length game — a pin that refuses real \

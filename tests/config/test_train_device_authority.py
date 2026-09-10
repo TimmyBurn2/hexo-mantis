@@ -1,34 +1,7 @@
-"""⊕ WPMAIN ORACLE — `train.device` is a CONFIG FACT, and the `--device` flag is dead
-(R126 / DESIGN ADDENDUM C.1, oracles O-G1/O-G2/O-G3).
+"""Pin `train.device` as a config fact with no CLI, parameter or literal route beside it.
 
-RED-at-import until IMPL lands `mantis.run.build_run_collaborators` and the
-`train.device: Literal["cpu","cuda"]` schema field.
-
-What this file exists to stop, and why the architect ruled it mint-critical:
-
-At `b482243` the run device is a CLI-only input on both callers — `--device`, required, no
-default, any torch device string. So `preflight_mint.py --config configs/run6.yaml --device
-cpu` preflights a CUDA-minted run on the CPU. That is not a hypothetical: it is exactly the
-wall the WPBOX burst hit (CARD-RUN5-GPU-OOM, a 16 GiB GPU OOM in GNN inference), and a
-cpu-flagged preflight FALSE-CLEARS it. R126 grounds (a) names the corollary: an instrument
-that can be pointed away from the failure it exists to find is not an instrument (LAW-03).
-
-The three oracles:
-
-- **O-G1** — the value reaches the REAL consumers. `torch.device(config.train.device)` is
-  computed once in the builder and threaded into `init_trainer(...)` and `WorkerPool(...)`,
-  which keep their `device` constructor parameters (collaborator threading BELOW the
-  composition surface, not config-fact carriers). Registry row producer.
-- **O-G2** — the SC-A pair: absent -> named raise; off-vocabulary -> named raise against a
-  CLOSED `Literal`. `test_o16_all_fields_required_no_code_side_defaults` already covers
-  `TrainConfig`, so the no-default half needs no edit (measured, C.1.1); what it does NOT
-  give is either of these drives.
-- **O-G3** — the flag cannot come back, on EITHER parser. This is the named
-  equal-or-stronger successor for every `--device` census entry the R88 sweep drops
-  (P-15/P-16), on the presence->ban pattern loop 1 already used for O-9's builder tokens.
-
-Fakes: none. O-G1 drives the REAL builder (integration tier — it constructs a real net and a
-real pool); O-G2/O-G3 are schema drives and source censuses.
+A device flag lets a preflight be pointed at the CPU for a CUDA-minted run, which false-clears
+the very GPU wall the preflight exists to find.
 """
 from __future__ import annotations
 
@@ -43,17 +16,15 @@ from pydantic import ValidationError
 import mantis.run as mantis_run
 from mantis.config.loader import load_config
 from mantis.config.schema import RunConfig
-from mantis.run import build_run_collaborators, launch_run  # RED-at-import anchor
+from mantis.run import build_run_collaborators, launch_run
 
 _REPO = Path(__file__).resolve().parents[2]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _TOOL_PY = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
 _CONFIGS = _REPO / "configs"
 
-#: The closed vocabulary R126 writes, verbatim and in R126's own member order. The order is
-#: deliberate and NOT reconciled with `eval.worker_device`'s `Literal["cuda","cpu"]`: member
-#: order carries no validation semantics in pydantic, and reordering an untouched seam is
-#: scope widening for zero behaviour (ADDENDUM C.1.1).
+#: The closed vocabulary, verbatim. Member order carries no pydantic semantics, so it is
+#: deliberately not reconciled with `eval.worker_device`'s opposite ordering.
 _DEVICE_VOCABULARY = ("cpu", "cuda")
 
 
@@ -62,8 +33,7 @@ def _dump(name: str = "smoke_preflight_armed.yaml") -> dict:
 
 
 def _string_constants(tree: ast.AST) -> set[str]:
-    """Every string CONSTANT in code position — docstrings excluded, so prose that mentions
-    a device does not trip a census about what the code hardcodes."""
+    """Collect every string constant in code position, excluding docstrings."""
     docstrings = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Module | ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef):
@@ -86,14 +56,11 @@ def _declared_options(path: Path) -> set[str]:
             if isinstance(arg, ast.Constant) and isinstance(arg.value, str)}
 
 
-# ══ O-G2 — the named-raise pair (SC-A, mirroring O-D4) ════════════════════════════════
 def test_a_config_without_a_train_device_is_refused_by_name() -> None:
-    """O-G2, arm 1 — R1/LAW-11 posture: absent is an ERROR naming the key, never a
-    code-side "cpu".
+    """Prove an absent `train.device` is an error naming the key, never a code-side "cpu".
 
-    MUTATION THAT REDS IT: `device: str = "cpu"` on `TrainConfig`. A defaulted device is the
-    posture-divergence hole one layer down from the flag: every config that forgets it
-    silently preflights and runs on the CPU, and the GPU wall stays invisible."""
+    Killer: `device: str = "cpu"` on `TrainConfig`.
+    """
     payload = _dump()
     payload["train"].pop("device", None)
     with pytest.raises(ValidationError, match="device"):
@@ -102,17 +69,11 @@ def test_a_config_without_a_train_device_is_refused_by_name() -> None:
 
 @pytest.mark.parametrize("value", ["mps", "cuda:1", "CPU", ""])
 def test_a_device_outside_the_closed_vocabulary_is_refused_naming_the_members(value: str) -> None:
-    """O-G2, arm 2 — the vocabulary is CLOSED, and the refusal must teach it.
+    """Prove an off-vocabulary device is refused with the closed vocabulary rendered.
 
-    `cuda:1` is the deliberate narrowing (ADDENDUM C.1.1): the dead flag accepted any torch
-    device string, so a pinned multi-GPU index would have parsed and booted. It is now
-    unrepresentable, matching `eval.worker_device`'s own closed vocabulary; widening the enum
-    later is a named design act, not a config edit.
-
-    MUTATION THAT REDS IT: declare the field as a bare `str`. Every existing config still
-    validates, `test_o16` still passes (a `str` field with no default is required), and the
-    first typo — `cude` — reaches `torch.device()` as a runtime error inside a boot instead
-    of a validation error at load."""
+    `cuda:1` is deliberately unrepresentable: widening the enum is a design act, not a config
+    edit. Killer: declare the field as a bare `str` — every existing config still validates.
+    """
     payload = _dump()
     payload["train"]["device"] = value
     with pytest.raises(ValidationError) as exc_info:
@@ -128,24 +89,18 @@ def test_a_device_outside_the_closed_vocabulary_is_refused_naming_the_members(va
 
 @pytest.mark.parametrize("value", list(_DEVICE_VOCABULARY))
 def test_both_vocabulary_members_validate(value: str) -> None:
-    """O-G2, premise arm — neither member is accidentally unreachable (a `Literal["cpu"]`
-    typo would pass every refusal assertion above)."""
+    """Prove neither vocabulary member is accidentally unreachable."""
     payload = _dump()
     payload["train"]["device"] = value
     assert RunConfig.model_validate(payload).train.device == value
 
 
-# ══ O-G3 — no device ROUTE on either caller ═══════════════════════════════════════════
 def test_neither_parser_declares_a_device_flavoured_option() -> None:
-    """O-G3, arm 1 — the named successor for the dropped `--device` census entries (P-15).
+    """Prove neither parser declares a device-flavoured option.
 
-    Both parsers are swept, because R126 kills the flag on BOTH callers and a ban on one
-    side leaves the divergence route open on the other. The pattern is O-10's own
-    (`no CLI switch may reach eval_enabled`), applied to the device fact.
-
-    MUTATION THAT REDS IT: re-add `--device` — or `--torch-device`, or `--gpu`, which a
-    literal `"--device" not in declared` check would wave through. The census is a substring
-    match on the declared option strings, deliberately."""
+    The census is a deliberate substring match, so `--torch-device` and `--gpu` are caught too;
+    both parsers are swept because a ban on one leaves the route open on the other.
+    """
     for path in (_RUN_PY, _TOOL_PY):
         declared = _declared_options(path)
         assert declared, f"premise: {path.name} declares CLI options at all"
@@ -175,12 +130,10 @@ def test_neither_parser_declares_a_device_flavoured_option() -> None:
 
 
 def test_no_composition_entry_point_declares_a_device_parameter() -> None:
-    """O-G3, arm 2 — the parameter half. MF-1: no parameter carries a config fact, which is
-    the same doctrine that deleted `eval_enabled` and `run_id` from `compose_run`.
+    """Prove no composition entry point declares a device parameter.
 
-    MUTATION THAT REDS IT: `build_run_collaborators(..., device: str = "cpu")` — a parameter
-    default is a MIGRATED authority (MF-2 Attack B): every `dataclasses.fields`-style census
-    stays green while a caller that omits the argument silently inherits a posture."""
+    Killer: a defaulted `device` parameter — a migrated authority every field census misses.
+    """
     for function in (build_run_collaborators, launch_run, mantis_run.compose_run):
         parameters = list(inspect.signature(function).parameters)
         assert "device" not in parameters, (
@@ -190,13 +143,11 @@ def test_no_composition_entry_point_declares_a_device_parameter() -> None:
 
 
 def test_the_composition_root_hardcodes_no_device_string() -> None:
-    """O-G3, arm 3 — the last route: not a flag, not a parameter, a LITERAL.
+    """Prove the composition root hardcodes no device string.
 
-    MUTATION THAT REDS IT: `torch.device("cpu")` in the builder. The signature census sees
-    nothing, the parser census sees nothing, every config still validates, and the run boots
-    on the CPU whatever run5 says — the false-clear, one layer deeper. Docstrings are
-    excluded from the scan on purpose: prose that DESCRIBES the vocabulary must stay
-    writable (§C.1.4's amp discussion names both members)."""
+    Killer: `torch.device("cpu")` in the builder, which every other census here waves through.
+    Docstrings are excluded so prose describing the vocabulary stays writable.
+    """
     constants = _string_constants(ast.parse(_RUN_PY.read_text(encoding="utf-8")))
     offenders = constants & set(_DEVICE_VOCABULARY)
     assert not offenders, (
@@ -205,24 +156,15 @@ def test_the_composition_root_hardcodes_no_device_string() -> None:
     )
 
 
-# ══ O-G1 — the value reaches the real consumers ═══════════════════════════════════════
 @pytest.mark.integration
 def test_the_configs_device_reaches_the_real_trainer_and_the_real_pool(
     tmp_path, smoke_run_config
 ) -> None:
-    """O-G1 — the registry row's named producer (R93: set the knob, observe the consumer).
+    """Prove the config's device reaches the real trainer and the real pool.
 
-    The REAL builder, the REAL `init_trainer` -> `build_net`, the REAL `WorkerPool`. Both
-    consumers keep their own `device` constructor parameters, so the assertion is that the
-    ONE computed `torch.device` object's value arrives at both — a builder that threads the
-    config to the trainer and a literal to the pool is a run whose learner and actors sit on
-    different devices, which is a class of failure that shows up as a mystery slowdown.
-
-    MUTATION THAT REDS IT: hardcode either constructor's device. The static census above
-    catches the literal spelling; this catches the value, including a transposition that
-    passes the literal ban (e.g. threading `eval.worker_device` — the ADJACENT fact R126
-    explicitly rules a DIFFERENT fact, so transcribing one into the other is the proxy
-    inference the ruling refuses)."""
+    Killer: hardcode either constructor's device, or thread the adjacent `eval.worker_device`
+    — both pass the static censuses above and split learner from actors.
+    """
     config = smoke_run_config("smoke_preflight_armed.yaml", train={"device": "cpu"})
     collab = build_run_collaborators(config=config, out_dir=tmp_path)
     assert collab.trainer.device == torch.device("cpu"), (
@@ -235,18 +177,11 @@ def test_the_configs_device_reaches_the_real_trainer_and_the_real_pool(
 
 @pytest.mark.integration
 def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(tmp_path, smoke_run_config) -> None:
-    """O-G1, the mutation direction CI can observe without a GPU — and the property R126
-    grounds (a) actually demands.
+    """Prove a cuda-minted config either reaches cuda or fails loud, never boots on the cpu.
 
-    On a CUDA box: the declared `cuda` reaches both consumers. On a CUDA-less box (the CI
-    tier, and this repo's pinned CPU torch wheel): the boot FAILS LOUD. Either way, what is
-    unrepresentable is the third outcome — a cuda-declared config quietly running on the
-    CPU, which is what a `--device cpu` preflight against a cuda run5 produced and what
-    turned a 16 GiB OOM into a green.
-
-    MUTATION THAT REDS IT: any fallback that coerces an unavailable device to `cpu`
-    (`torch.device("cuda" if torch.cuda.is_available() else "cpu")` — the single most
-    commonly written line in this class). It is invisible to every other oracle here."""
+    Killer: any fallback coercing an unavailable device to `cpu`, invisible to every other
+    oracle here.
+    """
     config = smoke_run_config("smoke_preflight_armed.yaml", train={"device": "cuda"})
     if torch.cuda.is_available():
         collab = build_run_collaborators(config=config, out_dir=tmp_path)

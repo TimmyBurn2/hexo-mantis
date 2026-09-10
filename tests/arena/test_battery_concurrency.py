@@ -1,23 +1,7 @@
-"""⊕ R335(e) Leg 3 — `S-BATTERY-G`: G games in flight, UNARMED, serial default byte-for-byte.
+"""G games in flight must match the serial default byte-for-byte, in the same order.
 
-WHAT LANDED AND WHAT DID NOT. `play_paired_match` gains `player_factory` and `concurrency`.
-`concurrency=1` — the default, and what every shipped config runs, because no config key
-touches this — is the loop that was there before. **No value is armed by this leg**: the
-concurrency figure is an operator prereg row (R335(e)), so what exists here is the CAPABILITY
-and its determinism proof, never a battery-rate claim.
-
-WHY A RATE CLAIM WOULD BE WORTHLESS HERE ANYWAY. Tranche-2 §10.1 measured every one of eight
-battery games running to the 128-ply cap, because an untrained candidate cannot beat `RandomBot`
-inside it — **a battery rate is a statement about the CAP × the sim budget until a candidate can
-end games**. The rate is measured at the mint's own battery under the minted value, not here.
-
-THE RISK IS DETERMINISM, NOT SPEED (SCOUT §5 P3 risk 3). Two properties must survive: per-game
-trajectory identity, and a STABLE GAME INDEX — records must reassemble in loop order however
-the threads finish. Both are asserted below on the CPU arm, which is the only arm on which
-identity is provable: `index_add_` is nondeterministic on CUDA, so the CUDA arm can assert
-aggregate equivalence only, and that limitation is disclosed here rather than discovered later.
-There is no CUDA in this workspace (torch is `2.11.0+cpu`), so the CUDA arm is NOT run and is
-NOT reported as passing.
+Identity is provable on the CPU arm only: `index_add_` is nondeterministic on CUDA, so a CUDA
+arm could assert aggregate equivalence at best, and no CUDA arm is run here.
 """
 from __future__ import annotations
 
@@ -40,8 +24,7 @@ class _Opening:
 
 
 class _DeterministicBot:
-    """Picks a legal move by a per-game counter — stateful, so sharing one across concurrent
-    games would interleave two games' counters and is exactly what `player_factory` prevents."""
+    """Pick a legal move by a per-game counter; stateful, so sharing one interleaves games."""
 
     def __init__(self, stride: int) -> None:
         self._stride = stride
@@ -74,15 +57,7 @@ def _regime_key() -> RegimeKey:
 
 
 def _openings(n: int = 6) -> list[_Opening]:
-    """`n` distinct four-ply openings DERIVED from the engine's own legal set.
-
-    The hand-written coordinates this replaces were off the legal set from `op3` onward —
-    they started at `(3, 0)`, and an EMPTY board's legal region is the 5x5 block around the
-    origin regardless of radius, so half these openings were positions the rules cannot
-    reach. Nothing noticed until R345(b)(2) put a legality boundary in the match loop.
-    Asking the board what is legal, rather than asserting it here, is what stops the fixture
-    drifting off the rules again (R192(e), derive-or-delete).
-    """
+    """Build `n` distinct four-ply openings derived from the engine's own legal set."""
     openings: list[_Opening] = []
     for i in range(n):
         board = _board_factory()
@@ -112,11 +87,10 @@ def _play(concurrency: int, sink: list | None = None):
 
 @pytest.mark.parametrize("concurrency", [2, 3, 4, 12])
 def test_cpu_arm_trajectory_identity_and_stable_game_index(concurrency: int) -> None:
-    """WITNESS (i): G-in-flight and serial produce byte-identical records, IN THE SAME ORDER.
+    """G-in-flight and serial produce byte-identical records, in the same order.
 
-    Compared as whole records, not as a set: the ORDER is half the property. A consumer that
-    indexes into this list — and the eval ladder does — sees a stable game index only if the
-    concurrent arm reassembles in loop order.
+    Order is half the property: the eval ladder indexes into this list, so the game index is
+    stable only if the concurrent arm reassembles in loop order.
     """
     serial = _play(1)
     parallel = _play(concurrency)
@@ -130,12 +104,10 @@ def test_cpu_arm_trajectory_identity_and_stable_game_index(concurrency: int) -> 
 
 
 def test_law_04_dedupe_still_counts_distinct_games() -> None:
-    """WITNESS (iii): concurrency must not become a way to manufacture duplicate games.
+    """Concurrency must not manufacture duplicate games: the distinct-hash count is unmoved.
 
-    LAW-04 counts DISTINCT games by trajectory hash. The paired law plays each opening twice
-    with colors swapped, and those two games are genuinely different trajectories; the count of
-    distinct hashes must therefore be identical under both arms, and equal to the game count
-    when the openings are distinct.
+    The paired law plays each opening twice with colors swapped, and those are genuinely
+    different trajectories, so distinct hashes must equal the game count on distinct openings.
     """
     serial = _play(1)
     parallel = _play(4)
@@ -158,12 +130,7 @@ def test_record_sink_fires_in_loop_order_under_concurrency() -> None:
 
 
 def test_each_worker_thread_gets_its_own_player_pair() -> None:
-    """The factory is called once per WORKER THREAD, not once per game.
-
-    Sharing one pair across threads would interleave two games on one search tree — the
-    mechanism `player_factory` exists to prevent — and building a pair per game would pay the
-    construction cost G times over.
-    """
+    """The factory is called once per worker thread, not once per game."""
     made: list[int] = []
     lock = threading.Lock()
 
@@ -187,11 +154,9 @@ def test_each_worker_thread_gets_its_own_player_pair() -> None:
 
 
 def test_serial_default_ignores_the_factory_entirely() -> None:
-    """`concurrency=1` runs on the objects the CALLER passed — the factory is never consulted.
+    """`concurrency=1` runs on the objects the caller passed; the factory is never consulted.
 
-    This is what 'the default is today's serial loop byte-for-byte' means operationally: a
-    caller that passes a factory but leaves concurrency alone gets the old behaviour on the old
-    objects, and the pinned `new_game()` count proves the old objects are the ones that played.
+    The pinned `new_game()` count proves the caller's own objects are the ones that played.
     """
     calls: list[int] = []
     cand, opp = _pair()

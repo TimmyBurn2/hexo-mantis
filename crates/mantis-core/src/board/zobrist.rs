@@ -144,7 +144,7 @@ mod tests {
     }
 }
 
-// ── Property-based tests ───────────────────────────────────────────────────────
+// Property-based tests
 
 #[cfg(test)]
 mod prop_tests {

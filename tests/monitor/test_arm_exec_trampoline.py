@@ -1,29 +1,16 @@
-"""Q3 red-team A4b — the arming trampoline, driven as real process chains.
+"""The arming trampoline, driven as real process chains.
 
-THE DEFECT, MEASURED. `uv run` does not `exec`. Under a plain `Popen` the supervisor's DIRECT
-child was therefore the wrapper and the run — the process holding the GPU, the trainer, the
-worker pool and the buffer — was a GRANDCHILD nobody had promised to kill: `kill -9` on the
-supervisor of `-- uv run python -m mantis.run` left it alive and reparented.
+MEASURED: `uv run` does not `exec`, so the supervisor's DIRECT child was the wrapper and the run
+holding the GPU was a GRANDCHILD nobody had promised to kill. The fix is two halves that are
+inert apart, hence tested together: the trampoline arms `PR_SET_PDEATHSIG` then `execvp`s, so
+the WRAPPER dies with the supervisor; and the run's own gate arms against its DIRECT parent when
+the stamped supervisor is its grandparent, so the run dies with the wrapper. The non-exec
+wrapper is a four-line local spawner rather than a real launcher, and every process in every
+chain is self-limited by a bounded sleep, so this file cannot manufacture the class it detects.
 
-THE FIX IS TWO HALVES THAT ARE INERT APART, which is why they are tested together here:
-  * the trampoline arms `PR_SET_PDEATHSIG` and then `execvp`s the child, and the arming
-    survives `execve` — so the WRAPPER dies with the supervisor;
-  * the run's own gate arms against its DIRECT parent when the stamped supervisor is its
-    grandparent — so the run dies with the wrapper.
-Either half alone leaves the run alive, and both degenerate cases have their own row below.
-
-CI MUST NOT DEPEND ON A THIRD-PARTY LAUNCHER'S SEMANTICS, so the non-exec wrapper is a
-four-line Python spawner written to `tmp_path` — the exact shape the design measured `uv run`
-to have (fork, do not exec, wait). Every process in every chain is self-limited by a bounded
-sleep, so a row that dies mid-way cannot leave a permanent survivor: this file must never
-manufacture the class it exists to detect.
-
->300 justify (R8): ONE claim — "a run launched through the trampoline dies with its supervisor,
-and the design's own depth-2 boundary is where it stops" — whose rows are only evidence in
-PAIRS. Each positive (the chain dies) means nothing without the negative control on the SAME
-chain builder (the same chain WITHOUT the trampoline survives), and the residual row is the
-same builder with one more wrapper. Splitting the file would duplicate the chain builder and
-the pid reaper, and a drifted copy of the control silently stops controlling anything.
+>300 justify (R8): ONE claim whose rows are only evidence in PAIRS — each positive needs the
+negative control built by the SAME chain builder, and splitting the file would let a drifted
+copy of the control silently stop controlling anything.
 """
 from __future__ import annotations
 
@@ -48,9 +35,7 @@ _LINUX_ONLY = pytest.mark.skipif(
 
 
 def _alive(pid: int | None) -> bool:
-    """True iff `pid` names a live, non-zombie process. Counting a zombie as alive fails a row
-    for the wrong reason; counting one as dead PASSES a row for the wrong reason, which is
-    worse."""
+    """True iff `pid` is a live, non-zombie process: a zombie read as dead passes a row wrongly."""
     if pid is None:
         return False
     try:
@@ -74,8 +59,7 @@ def _ppid_of(pid: int | None) -> int | None:
 
 
 def _write_wrapper(tmp_path: Path) -> Path:
-    """The non-exec wrapper: fork a child, wait for it, never `exec`. This is `uv run`'s
-    measured shape and the entire reason the trampoline exists."""
+    """The non-exec wrapper: fork a child, wait, never `exec` — `uv run`'s measured shape."""
     wrapper = tmp_path / "wrapper.py"
     wrapper.write_text(
         "import subprocess, sys\n"
@@ -87,8 +71,7 @@ def _write_wrapper(tmp_path: Path) -> Path:
 
 
 def _write_leaf(tmp_path: Path, marker: Path, *, arm: bool) -> Path:
-    """The run stand-in. `arm=True` calls the PRODUCTION gate — never a hand-rolled prctl,
-    which would test the test rather than the fix."""
+    """The run stand-in. `arm=True` calls the PRODUCTION gate, never a hand-rolled prctl."""
     leaf = tmp_path / f"leaf_{marker.stem}.py"
     reasons = marker.parent / (marker.name + ".reasons")
     arm_lines = (
@@ -110,13 +93,9 @@ def _write_leaf(tmp_path: Path, marker: Path, *, arm: bool) -> Path:
 
 
 def _write_supervisor_stub(tmp_path: Path, pidfile: Path, *, trampoline: bool) -> Path:
-    """A supervisor stand-in that launches its child through the PRODUCTION `spawn_child`
-    (`trampoline=True`) or through the plain, pre-fix `Popen` shape (`trampoline=False`).
-
-    The second is the NEGATIVE CONTROL and it is deliberately a hand-written copy of what
-    `spawn_child` used to be: stamping the environment and starting a new session, i.e. every
-    part of the fix EXCEPT the trampoline. Without it, a green positive row could be green
-    because something else in the environment reaps the chain.
+    """A supervisor stand-in launching its child through the PRODUCTION `spawn_child`, or
+    through the plain pre-fix `Popen` shape — the NEGATIVE CONTROL, which is every part of the
+    fix EXCEPT the trampoline.
     """
     stub = tmp_path / f"sup_{'tramp' if trampoline else 'plain'}_{pidfile.stem}.py"
     launch = (
@@ -170,7 +149,7 @@ def _reap(sup: subprocess.Popen[bytes], *pids: int | None) -> None:
 
 def _run_chain(tmp_path: Path, chain: list[str], *, trampoline: bool,
                marker: Path) -> tuple[subprocess.Popen[bytes], int, int]:
-    """Start `supervisor-stub -> chain…` and return (stub handle, first-child pid, leaf pid)."""
+    """Start `supervisor-stub -> chain…`; returns (stub handle, first-child pid, leaf pid)."""
     pidfile = tmp_path / f"{marker.stem}.childpid"
     stub = _write_supervisor_stub(tmp_path, pidfile, trampoline=trampoline)
     sup = subprocess.Popen([sys.executable, str(stub), *chain], cwd=os.getcwd())
@@ -183,13 +162,10 @@ def _armed(marker: Path) -> bool:
     return bool(int(marker.read_text(encoding="utf-8").split()[1]))
 
 
-# ── the mechanism ────────────────────────────────────────────────────────────────────────
 @_LINUX_ONLY
 def test_the_trampoline_execs_into_the_program_it_was_given(tmp_path) -> None:
-    """`execvp`, not a `Popen`: the program it becomes must report the trampoline's OWN pid and
-    the verbatim tail as its `sys.argv`. A trampoline that SPAWNED its child instead would put
-    a fork between the arming and the run — and `PR_SET_PDEATHSIG` is cleared across `fork`,
-    so the whole mechanism would be inert while every other row still looked plausible."""
+    """`execvp`, not a `Popen`: the program must report the trampoline's OWN pid and the verbatim
+    tail as `sys.argv`, since `PR_SET_PDEATHSIG` is cleared across `fork`."""
     probe = tmp_path / "probe.py"
     probe.write_text(
         "import json, os, sys\n"
@@ -213,9 +189,7 @@ def test_the_trampoline_execs_into_the_program_it_was_given(tmp_path) -> None:
 
 @_LINUX_ONLY
 def test_a_wrapper_launched_through_the_trampoline_dies_with_the_supervisor(tmp_path) -> None:
-    """THE A4b ROW, first half. The supervisor's direct child is the WRAPPER, and before this
-    fix nothing killed it. Through the trampoline it carries the arming across its own `exec`
-    and the kernel takes it down with the supervisor."""
+    """First half: the WRAPPER carries the arming across its own `exec` and dies with it."""
     marker = tmp_path / "w1.marker"
     wrapper, leaf = _write_wrapper(tmp_path), _write_leaf(tmp_path, marker, arm=False)
     sup, wrapper_pid, leaf_pid = _run_chain(
@@ -235,9 +209,8 @@ def test_a_wrapper_launched_through_the_trampoline_dies_with_the_supervisor(tmp_
 
 @_LINUX_ONLY
 def test_the_run_under_one_wrapper_dies_with_the_supervisor(tmp_path) -> None:
-    """THE A4b ROW, end to end and with the production gate in the leaf. Supervisor SIGKILLed →
-    kernel kills the armed wrapper → the wrapper's death fires the run's own depth-2 arming →
-    the run is gone. This is the shape `-- uv run python -m mantis.run` produces."""
+    """End to end: supervisor SIGKILLed → the kernel kills the armed wrapper → that death fires
+    the run's own depth-2 arming → the run is gone."""
     marker = tmp_path / "w2.marker"
     wrapper, leaf = _write_wrapper(tmp_path), _write_leaf(tmp_path, marker, arm=True)
     sup, wrapper_pid, leaf_pid = _run_chain(
@@ -258,10 +231,8 @@ def test_the_run_under_one_wrapper_dies_with_the_supervisor(tmp_path) -> None:
 
 @_LINUX_ONLY
 def test_the_same_chain_WITHOUT_the_trampoline_leaves_the_run_alive(tmp_path) -> None:
-    """THE NEGATIVE CONTROL, and the load-bearing half of this file. The identical chain
-    launched by the pre-fix `Popen` shape must SURVIVE. Two things ride on it: if it dies
-    anyway, the rows above are green because something else reaps the chain and prove nothing;
-    and it is the direct measurement of the defect the packet claims to close."""
+    """THE NEGATIVE CONTROL: the same chain on the pre-fix `Popen` shape must SURVIVE, or the
+    rows above are green because something else reaps the chain."""
     marker = tmp_path / "w3.marker"
     wrapper, leaf = _write_wrapper(tmp_path), _write_leaf(tmp_path, marker, arm=True)
     sup, wrapper_pid, leaf_pid = _run_chain(
@@ -282,9 +253,7 @@ def test_the_same_chain_WITHOUT_the_trampoline_leaves_the_run_alive(tmp_path) ->
 
 @_LINUX_ONLY
 def test_a_direct_launch_through_the_trampoline_still_dies(tmp_path) -> None:
-    """The no-wrapper regression. The trampoline must not have broken the case that already
-    worked — and here it is the STRONGER shape: the arming is in place from the leaf's first
-    instruction, before any import it would otherwise be gated behind."""
+    """The no-wrapper regression, and the stronger shape: armed from the leaf's first line."""
     marker = tmp_path / "d1.marker"
     leaf = _write_leaf(tmp_path, marker, arm=True)
     sup, leaf_pid_reported, leaf_pid = _run_chain(
@@ -303,13 +272,9 @@ def test_a_direct_launch_through_the_trampoline_still_dies(tmp_path) -> None:
 
 @_LINUX_ONLY
 def test_two_stacked_wrappers_are_NOT_armed_and_say_so(tmp_path) -> None:
-    """THE DISCLOSED RESIDUAL, measured and NAMED rather than assumed (RQ-9).
-
-    With two non-exec wrappers the run is three hops from the supervisor, so there is an
-    UNARMED process between it and the one the trampoline armed: the cascade cannot reach it.
-    The gate must refuse to arm — arming against the nearer wrapper would tie the run to a
-    process nobody promised to kill — and it must name `wrapper_chain_too_deep`, because the
-    A6 finding was precisely that this decision was invisible after the fact."""
+    """THE DISCLOSED RESIDUAL, measured and NAMED. Three hops from the supervisor leaves an
+    UNARMED process in between, so the gate must refuse to arm and must say
+    `wrapper_chain_too_deep` — that decision was previously invisible after the fact."""
     marker = tmp_path / "deep.marker"
     wrapper, leaf = _write_wrapper(tmp_path), _write_leaf(tmp_path, marker, arm=True)
     sup, first_pid, leaf_pid = _run_chain(
@@ -338,11 +303,9 @@ def test_two_stacked_wrappers_are_NOT_armed_and_say_so(tmp_path) -> None:
         _reap(sup, first_pid, second_pid, leaf_pid)
 
 
-# ── the trampoline's own failure surface ─────────────────────────────────────────────────
 @pytest.mark.parametrize("tail", [[], ["python", "-c", "pass"]])
 def test_the_trampoline_refuses_an_argv_with_no_separator(tail) -> None:
-    """Usage refusal, mirroring `supervise._split_argv`. A trampoline that guessed where its
-    own flags end would silently swallow the first word of the child command."""
+    """Usage refusal: guessing where the trampoline's own flags end would swallow a word."""
     out = subprocess.run(
         [sys.executable, "-m", PARENT_DEATH_ARM_EXEC_MODULE, *tail],
         cwd=os.getcwd(), capture_output=True, text=True, timeout=_DEADLINE_SEC,
@@ -352,18 +315,14 @@ def test_the_trampoline_refuses_an_argv_with_no_separator(tail) -> None:
 
 
 def test_an_unresolvable_program_fails_in_the_supervisor_not_the_child() -> None:
-    """With a trampoline in front, a typo'd child command would make `Popen` SUCCEED and move
-    the failure into the child — turning a launcher typo into a `child_error` rc the supervisor
-    reads as the run's own diagnosis. `spawn_child` resolves the program itself, so the failure
-    stays exactly where it was before the trampoline existed: loud, and in the supervisor."""
+    """`spawn_child` resolves the program itself, so a typo'd child command fails in the
+    supervisor rather than becoming a `child_error` rc read as the run's own diagnosis."""
     with pytest.raises(FileNotFoundError):
         spawn_child(["mantis-no-such-program-q3-a4b", "--config", "x"])
 
 
 def test_the_trampoline_module_name_is_the_contract_constant() -> None:
-    """One spelling of the contract. A hard-coded second copy of the module path in
-    `spawn_child` is drift that no import-DAG gate can see — the coupling is a STRING, which
-    is exactly why it needs a test of its own."""
+    """One spelling of the contract: a second hard-coded module path is drift no gate can see."""
     source = inspect.getsource(spawn_child)
     assert "PARENT_DEATH_ARM_EXEC_MODULE" in source, (
         "`spawn_child` must name the trampoline by the contract constant"

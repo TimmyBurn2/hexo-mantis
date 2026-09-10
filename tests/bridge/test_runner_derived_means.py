@@ -1,30 +1,23 @@
-"""Derived-mean value-parity (O19, review gap 4) + the R249 zero-count reading.
+"""Derived-mean value parity across the FFI, and the zero-count reading.
 
-The 4 bridge-derived means reconstruct the frozen fixed-point formula from the
-SEAM RAW atomics: `accum / (count x 1_000_000.0)`, with
-`mcts_mean_root_concentration` in f32 arithmetic and the other three in f64
-(DESIGN §c.6).
+The bridge-derived means reconstruct the fixed-point formula from the seam raw atomics:
+`accum / (count x 1_000_000.0)`, with `mcts_mean_root_concentration` in f32 and the others
+in f64.
 
-The Rust unit tests in `runner.rs` are the AUTHORITATIVE O19 oracle: they seed
-`(accum, count)` states directly and pin the divisor, the f32/f64 split and the
-zero-count arm (`zero_count_derived_mean_is_none_never_zero`). Seeding the raw
-atomics from Python is NOT reachable (the accumulators are worker-thread-private;
-no bridge setter exists), so the Python leg asserts what a FRESH (empty) runner
-reports across the real FFI boundary. Documented per DESIGN §b: the Rust unit
-tests carry the seeded-value parity.
+The Rust unit tests in `runner.rs` are the authoritative oracle: they seed `(accum, count)`
+directly and pin the divisor, the f32/f64 split and the zero-count arm. Seeding the raw
+atomics from Python is not reachable — the accumulators are worker-thread-private and no
+bridge setter exists — so this leg asserts what a fresh runner reports across the real FFI.
 
-ADJ-D32 / R249 (this file's assertions CHANGED with the fix): the two cluster means
-used to be asserted `== 0.0` on an empty runner, and that assertion was a
-restatement of the defect — a mean over zero samples read as a measured zero, which
-on the graph arm is the permanent state. They now read `None`. The two MCTS means
-keep the zero-guard: `mcts_stat_count` advances once per search on both arms, so
-its zero is a run that has not moved yet, not an absent instrument.
+A mean over zero samples reads `None`, never a measured zero. The two MCTS means keep a
+zero-guard because `mcts_stat_count` advances once per search, so its zero is a run that has
+not moved yet rather than an absent instrument.
 """
 import math
 
 from mantis import _engine
 
-#: Means whose zero-count arm still returns 0.0 (see the module docstring).
+#: Means whose zero-count arm still returns 0.0.
 ZERO_GUARDED_MEANS = [
     "mcts_mean_depth",
     "mcts_mean_root_concentration",
@@ -46,16 +39,14 @@ def test_every_derived_mean_is_present_and_finite():
 
 
 def test_mcts_means_keep_the_zero_guard_on_an_empty_runner():
-    """`mcts_stat_count == 0` -> 0.0. Scoped deliberately (ADJ-D32 mandate is the cluster
-    pair): this counter advances once per search on BOTH arms, so its zero is transient."""
+    """Prove the MCTS means keep their zero-guard: `mcts_stat_count`'s zero is transient."""
     runner = _fresh_runner()
     for name in ZERO_GUARDED_MEANS:
         assert getattr(runner, name) == 0.0, f"{name} zero-guard changed unannounced"
 
 
 def test_raw_count_getters_present():
-    """The raw atomic count getters the means derive from are plain loads and
-    read 0 on a fresh runner."""
+    """Prove the raw atomic count getters are plain loads that read 0 on a fresh runner."""
     runner = _fresh_runner()
     assert runner.mcts_quiescence_fires == 0
     assert runner.games_completed == 0
@@ -63,16 +54,10 @@ def test_raw_count_getters_present():
 
 
 def test_max_sims_per_search_is_on_the_surface_and_truthful_at_zero():
-    """R335(c)/LAW-18 — the served-sims lever reports its own rate in-run.
+    """Prove the served-sims counter reaches Python and reads a truthful zero, not the budget.
 
-    The clamp that made a search stop at exactly `n_simulations` is worthless as evidence if
-    the only place it can be read is a Rust test: the ledger's `53.46 sims/move` line was
-    measured in a run, and re-measuring it must not need a diagnostic rig branch. This pins
-    that the counter reaches Python at all, and that its zero is TRUTHFUL — no search has
-    completed on a fresh runner, so the honest reading is 0 and not the budget.
-
-    The exact-budget assertion lives where it can be driven:
-    `crates/mantis-selfplay/tests/served_sims_exact.rs`.
+    The exact-budget assertion lives in `crates/mantis-selfplay/tests/served_sims_exact.rs`,
+    where it can be driven.
     """
     runner = _fresh_runner()
     assert runner.max_sims_per_search == 0

@@ -1,50 +1,21 @@
-# >300 justify (R8): ONE claim — OF2-10, that the peak allocation of one graph training step
-# is bounded BY CONSTRUCTION by the two members of `train.microbatch_caps` — and every row
-# below is a leg of that one claim over one shared rig (`_microbatch_harness`, the enumerated
-# `_bank`, the run5 caps). The device-free legs and the GPU legs must not be separated: R179
-# makes the construction the evidence and the measurement corroboration, and a reader who
-# meets leg 2 on its own will read a survived burst as the bar, which is precisely what R179
-# bans. The R96 correction recorded below is the same argument in the other direction — leg
-# 2's premise puts the batch under both caps, i.e. M = 1, so it cannot detect MB-17 at all
-# and conjunct 3's residency probe is the only detector. That is checkable only while the
-# two sit in one file.
-"""⊕ WP12-R dispatch 6 phase F2 — OF2-10, the STRUCTURAL bound (DESIGN_DFIX §5.2,
-PREREG_DFIX §4, R179).
+# >300 justify (R8): ONE claim — that the peak allocation of one graph training step is bounded
+# BY CONSTRUCTION by the two members of `train.microbatch_caps` — and every row below is a leg
+# of that one claim over one shared rig. The device-free legs and the GPU legs must not be
+# separated: the construction is the evidence and the measurement only corroboration, and the
+# GPU leg's own premise (M = 1) makes it unable to detect the laziness conjunct 3 catches.
+"""OF2-10 — the STRUCTURAL bound on one graph training step's peak allocation.
 
-**This file carries the card's success criterion.** R179 bans "got further" as evidence: the
-claim CARD-RUN5-GPU-OOM is closed on is that *peak allocation of one graph training step is
-bounded by the two members of `train.microbatch_caps`*, and that peak allocation is bounded by
-the caps must be shown by CONSTRUCTION over an adversarial bank, not by a burst that happened
-not to die. Burst survival is corroboration only, and never appears here.
+This file carries the card's success criterion, and "got further" is banned as evidence: the
+claim is that peak allocation of one graph training step is bounded by the two members of
+`train.microbatch_caps`, shown by CONSTRUCTION over an adversarial bank. Burst survival is
+corroboration only and never appears here.
 
-**Leg 1 (CI, device-free)** — the adversarial bank: parts summing to exactly `max_edges`, to
-`max_edges - 1`, to `max_edges + 1`, a **high-N / low-E member whose split MUST be
-node-driven**, and a single-graph batch. Both members hold on every part; the over-cap member
-raises.
-
-**The third clause is what makes leg 1 not a tautology.** An implementation that accumulates
-EDGES ONLY passes every edge assertion in this file and REDs exactly one member — the
-high-N/low-E one, where it produces M = 1 against a required M >= 2 (MB-19). Rev-1 of the
-design would have shipped precisely that mutation as its implementation, which is why the
-node term is in the bank rather than in a sentence.
-
-**Conjunct 3 — only ONE micro-batch is ever resident (CI, device-free)** —
-`test_of2_10_only_one_microbatch_is_resident_at_a_time`. Break this and the step allocates the
-whole un-split batch while every count-based oracle stays green.
-
-**Leg 2 (box / GPU only, loud skip elsewhere with grounds printed)** — the measured
-`max_memory_allocated` delta over one training step at `(E, N) ~ caps`, against the sizing
-pass's budget. **Leg 2b** repeats the measurement at ~2x the caps, where the caps BIND, so the
-accumulation loop's own peak is measured too.
-
-> **[R96 CORRECTION, RED_TEAM_DFIX_B F-RT-1.]** This docstring used to say leg 2 *"is the ONLY
-> detector of MB-17 … laziness is a memory property and no CI oracle can see it"*. **Both
-> halves were FALSE.** Leg 2's premise puts the batch UNDER both members, i.e. **M = 1**, and
-> at M = 1 an eager and a lazy `parts` are the same program — it cannot detect MB-17 anywhere.
-> And laziness is a **liveness** property of the Python object graph, which a device-free
-> `weakref.finalize` probe reads directly. MB-17 SURVIVED the whole bank (131 passed, 0
-> failed) while six artifacts said it was covered. Conjunct 3's detector is the CI row named
-> above, 160 lines below this sentence.
+Leg 1 (CI, device-free) is the adversarial bank: parts summing to exactly `max_edges`, to
+`max_edges - 1`, to `max_edges + 1`, a HIGH-N / LOW-E member whose split MUST be node-driven,
+and a single-graph batch — an implementation accumulating EDGES ONLY passes every edge
+assertion here and REDs exactly that member. Conjunct 3 (CI) is that only ONE micro-batch is
+ever resident. Leg 2 (GPU only, loud skip elsewhere) is the measured `max_memory_allocated`
+delta at `(E, N) ~ caps`, with leg 2b repeating it at ~2x the caps, where the caps BIND.
 """
 from __future__ import annotations
 
@@ -71,7 +42,6 @@ def _offsets(counts: np.ndarray) -> np.ndarray:
     return np.concatenate([[0], np.cumsum(counts)]).astype(np.int64)
 
 
-# ── the adversarial bank, ENUMERATED (never randomised: each member is a named boundary) ──
 def _bank() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, dict[str, Any]]]:
     """`name -> (ec, nc, max_edges, max_nodes, expectations)`."""
     ec = np.array([40, 35, 25, 50, 30], dtype=np.int64)      # sum 180
@@ -96,13 +66,8 @@ def _bank() -> dict[str, tuple[np.ndarray, np.ndarray, int, int, dict[str, Any]]
 
 @pytest.mark.parametrize("case", sorted(_bank()))
 def test_of2_10_leg1_both_members_hold_on_every_part(case: str) -> None:
-    """OF2-10 leg 1 — the bound, by construction. Every part is within BOTH members, and the
-    high-N/low-E member's split is node-driven.
-
-    "Peak allocation is bounded by the caps" reduces to this statement plus the sizing pass's
-    measured cost model `peak ~ a + b*E + c*N`: if no micro-batch ever exceeds `max_edges` or
-    `max_nodes`, then no step ever allocates more than the model's value at the caps. The
-    model is the sizing pass's; the partition half is this row's."""
+    """OF2-10 leg 1 — every part is within BOTH members and the high-N/low-E split is
+    node-driven, which with the sizing model `peak ~ a + b*E + c*N` bounds every step."""
     ec, nc, max_edges, max_nodes, want = _bank()[case]
     parts = plan_microbatches(_offsets(ec), _offsets(nc), max_edges, max_nodes)
     for g0, g1 in parts:
@@ -128,9 +93,8 @@ def test_of2_10_leg1_both_members_hold_on_every_part(case: str) -> None:
 
 @pytest.mark.parametrize("member", ["max_edges", "max_nodes"])
 def test_of2_10_leg1_the_over_cap_member_raises(member: str) -> None:
-    """OF2-10 leg 1, the out-of-domain half — a single graph over either member has no split
-    that rescues it, so it RAISES rather than yielding a part that breaches its own bound. A
-    bound that silently admits one over-bound part is not a bound."""
+    """OF2-10 leg 1, out of domain — a single graph over either member RAISES rather than
+    yielding a part that breaches its own bound."""
     ec = np.array([40, 35, 25, 50, 30], dtype=np.int64)
     nc = np.array([8, 7, 5, 10, 6], dtype=np.int64)
     max_edges = 49 if member == "max_edges" else 1000
@@ -141,8 +105,7 @@ def test_of2_10_leg1_the_over_cap_member_raises(member: str) -> None:
 
 
 def test_of2_10_leg1_the_bank_covers_the_three_named_edge_boundaries() -> None:
-    """OF2-10 leg 1 premise — the bank actually contains the members PREREG named. An
-    adversarial bank that quietly lost its boundary cases is an adversarial bank in name."""
+    """OF2-10 leg 1's premise — the bank still contains the members prereg named."""
     bank = _bank()
     ec = bank["sum_equals_max_edges"][0]
     # a CONTIGUOUS PREFIX sums to exactly the cap on the `sum_equals_max_edges` member
@@ -154,33 +117,19 @@ def test_of2_10_leg1_the_bank_covers_the_three_named_edge_boundaries() -> None:
                          "sum_one_above_max_edges", "node_driven", "single_graph"}
 
 
-# ── conjunct 3: ONLY ONE MICRO-BATCH IS EVER RESIDENT (device-free) ──────────────────────
 def _max_concurrently_live_parts(trainer, replay, caps, batch_size: int) -> int:
-    """Drive one real training step and return the MAXIMUM number of `GraphStepInputs` alive
-    at the same moment.
+    """Drive one real training step and return the MAXIMUM number of `GraphStepInputs` alive at
+    the same moment.
 
-    Laziness is not a memory property that only an allocator can see — it is a LIVENESS
-    property of the Python object graph, and CPython makes it directly observable. Each
-    `parts` callable is wrapped and the finalizer is registered **on the returned object's `x`
-    TENSOR, not on the `GraphStepInputs` wrapper**; the counter goes up on materialisation and
-    down when that tensor is collected. Under refcounting the drop is deterministic at the
-    `del` in the accumulation loop, so the reading is exact, not statistical.
-
-    **WHY THE TENSOR AND NOT THE WRAPPER — measured, and it is the difference between an
-    oracle and a decoration (RED-TEAM ANALOGUE-A).** A mutation that collates eagerly and then
-    hands out a FRESH wrapper per call keeps every micro-batch's tensors resident while each
-    wrapper dies immediately. Watching the wrapper reads **1** and passes; watching `obj.x`
-    reads **M**. Measured on this rig, both forms, both programs:
+    Laziness is a LIVENESS property of the Python object graph: the finalizer is registered on
+    the returned object's `x` TENSOR, not on the `GraphStepInputs` wrapper, and under
+    refcounting the drop is deterministic at the `del` in the accumulation loop. Watching the
+    wrapper cannot see the defect, because a mutation that collates eagerly and hands out a
+    fresh wrapper per call keeps every micro-batch's tensors resident. Measured on this rig:
 
         SHIPPED     finalize-on-WRAPPER -> 1     finalize-on-obj.x -> 1
         ANALOGUE-A  finalize-on-WRAPPER -> 1     finalize-on-obj.x -> 4   <- the bytes
-
-    Counting wrappers would have been the same class of defect this row exists to close, one
-    level in: an oracle that cannot see what it claims to measure. The bytes live on the
-    tensors, so the tensors are what is watched.
-
-    Nothing about the step is faked: the real dispatcher builds the real callables, and the
-    wrapper only observes what it is handed on the way past."""
+    """
     live = 0
     peak = 0
     real_step = trainer.train_step_from_graph_batch
@@ -196,8 +145,7 @@ def _max_concurrently_live_parts(trainer, replay, caps, batch_size: int) -> int:
                 nonlocal live
                 live -= 1
 
-            # ON THE TENSOR, NOT THE WRAPPER — see the docstring's measurement. A fresh
-            # wrapper around already-collated tensors dies immediately and would read 1.
+            # ON THE TENSOR, NOT THE WRAPPER — see the docstring's measurement.
             weakref.finalize(obj.x, _released)
             return obj
 
@@ -216,28 +164,16 @@ def _max_concurrently_live_parts(trainer, replay, caps, batch_size: int) -> int:
 
 @pytest.mark.parametrize("m", [2, 4])
 def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> None:
-    """**CONJUNCT 3 OF THE BOUND, and until this row it had NO detector anywhere.**
+    """CONJUNCT 3 OF THE BOUND — only one micro-batch is ever resident.
 
-    The bound this card rests on is a composition of three statements: (1) every micro-batch is
-    within both members — OF2-10 leg 1, device-free; (2) peak allocation at the caps is under
-    the sizing budget — leg 2, GPU; and (3) **only one micro-batch is ever resident**. Break
-    (3) and the step allocates the WHOLE un-split batch — the 2.49-2.56x overshoot the card
-    exists to close — while `microbatches`, `edges`, `nodes` and every cadence count stay
-    exactly correct. `trainer/core.py` says so in its own docstring: a `Sequence` of
-    already-collated batches *"would hold every micro-batch resident at once, defeating the cap
-    while passing every count-based oracle."*
+    Break it and the step allocates the WHOLE un-split batch — the 2.49-2.56x overshoot the card
+    exists to close — while `microbatches`, `edges`, `nodes` and every cadence count stay exactly
+    correct. Shipped code reads 1; removing the `del` reads 2; collating eagerly reads M.
 
-    **WHY THIS ROW EXISTS NOW.** MB-17 (`parts = [make() for make in parts]`) was registered
-    with leg 2 named as its only detector, in four separate artifacts. That was FALSE, and
-    measurably so: leg 2's premise asserts the batch sits UNDER both members, which by
-    `plan_microbatches`' own contract means **M = 1** — and at M = 1 an eager and a lazy
-    `parts` are the SAME PROGRAM. RED-TEAM ran MB-17 against the whole bank and it SURVIVED
-    (131 passed, 0 failed), together with its unbanked sibling (the `del` removed from the
-    accumulation loop). The stated grounds for having no CI oracle — *"laziness is a memory
-    property; no CI oracle can see it"* — were refuted by a fourteen-line device-free probe.
-
-    This row kills both, on CPU, in under a second: shipped code reads **1**, the `del`-removal
-    sibling reads **2**, MB-17 reads **M**."""
+    The eager mutation SURVIVED the whole bank (131 passed, 0 failed) while four artifacts named
+    the GPU leg as its only detector — that leg's premise puts the batch under both members,
+    i.e. M = 1, where an eager and a lazy `parts` are the same program.
+    """
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
     e_cap, n_cap = H.caps_for_exactly(replay.wire, m)
@@ -260,101 +196,31 @@ def test_of2_10_only_one_microbatch_is_resident_at_a_time(tmp_path, m: int) -> N
         "accumulation loop is what makes it 1.")
 
 
-# ── leg 2: the box ────────────────────────────────────────────────────────────────────────
-#: **THE SIZING PASS'S BUDGET, in GiB, with its derivation.** RE-FITTED at the F-816-10/-12
-#: box sitting (R281(d), R282(b), R283) against terms measured THAT sitting. Every term below
-#: carries **the sha it was measured at and the regime it was measured in** — R281(d)(ii)'s
-#: dated-premise convention, adopted because the superseded derivation (kept below) read as a
-#: current measurement for as long as it did precisely by carrying neither tag.
+#: THE SIZING PASS'S BUDGET, in GiB, with its derivation. Every term carries the sha it was
+#: measured at and the regime it was measured in; an untagged term is UNMEASURED, not inherited.
+#: All four below were measured at 24ae93e, POST-Design-A:
 #:
-#: **A term with no sha and no regime tag is UNMEASURED, not inherited.**
-#:
-#:     15.479 GiB usable card   [measured 24ae93e, POST-Design-A, torch.cuda.mem_get_info]
-#:   -  0.261      CUDA context [measured 24ae93e, POST-Design-A, total-free on an idle card]
-#:   -  2.244      SELF-PLAY/INFERENCE RESIDENT SHARE at the minted `inference.fused_graph_caps`
-#:                 [measured 24ae93e, POST-Design-A, fused batch up to
-#:                  n_workers x leaf_batch_size = 160 — this SUPERSEDES the 1.287 GiB figure
-#:                  measured at 528eb37, which was taken when `submit_graph_and_wait` put
-#:                  exactly ONE graph in flight per worker]
-#:   -  0.881      eval child on `worker_device: cuda`
-#:                 [measured 24ae93e, POST-Design-A, peak over one live eval round]
+#:     15.479 GiB usable card (torch.cuda.mem_get_info)
+#:   -  0.261      CUDA context (total-free on an idle card)
+#:   -  2.244      self-play/inference resident share at the minted `fused_graph_caps` (160)
+#:   -  0.881      eval child on `worker_device: cuda` (peak over one live eval round)
 #:   = 12.094      device left to the trainer
-#:   / 1.2278      measured fragmentation ratio
-#:                 [measured 24ae93e, POST-Design-A, DEFAULT allocator posture]
+#:   / 1.2278      measured fragmentation ratio (DEFAULT allocator posture)
 #:   = 9.850 GiB   allocatable
 #:
-#: **THE RE-FIT CONFIRMED THIS CONSTANT RATHER THAN MOVING IT** — 9.431 sat 0.419 GiB under the
-#: 9.850 the measured terms admitted — and **R326(b) HAS NOW MOVED IT ANYWAY, on a different
-#: ground: the permission was never DERIVED from what the trainer needs.** Both derivations above
-#: compute what the CARD can spare; neither asks what the step DRAWS. Measured across two
-#: sittings on two shas, the step draws **7 992 252 928 B = 7.443 GiB**, byte-identical. The
-#: cap-permitted ceiling was `9.431 x frag = 11.777 GiB`, **77.4 % of the whole card for a step
-#: that uses 7.443** — a 4.33 GiB gap between permitted and drawn, and it is that gap, not any
-#: measurement, that refused the partition at sittings 3 and 4.
-#:
-#:     7.443 GiB   MEASURED trainer peak, this oracle, reproduced to the byte
-#:                 [RECAL_SITTING3_RECORD:354 and RECAL_SITTING4_RECORD:275]
-#:   x 1.129       stated allowance, +12.9 %
-#:   = 8.40 GiB    the permission, ARMED by the operator's RECAL-SITTING-5 forwarding
-#:
-#: **THE CEILING CONVENTION IS UNCHANGED:** the partition term is still `budget x frag`, the
-#: PERMISSION and not the draw. Only the permission shrank. The closing boundary — the largest
-#: budget at which conjunct-2 headroom still equals M — was re-derived independently at
-#: pre-flight as **8.4669** against the sitting's 8.4666, and 8.40 clears it by 0.067.
-#:
-#: **WHAT THIS COSTS THIS ROW, so the next reader is not surprised by it:** the margin below is
-#: budget-relative, so 7.443 under 8.40 reads **11.4 %** where it read 21.1 % under 9.431. That
-#: is under `_REQUIRED_MARGIN` and the row therefore reports PASS-WITH-DISCLOSURE. It is
-#: arithmetic, not a regression: 12.9 % over the NEED is 11.4 % of the BUDGET.
-#:
-#: **On the old 0.85 margin, which is no longer applied here.** It was sized for two NAMED
-#: unknowns. One — the eval child — is now a measured, subtracted term. The other — a
-#: fragmentation swing — is what the partition's remaining headroom covers, and it is the
-#: named residual risk of this sizing: at the minted pair the WHOLE partition declares
-#: 14.965 GiB against a 15.479 GiB card (+0.514 GiB), so a fragmentation ratio above ~1.30
-#: would close it. The live pre-mint validation run peaked at 12.05 GiB of card, 3.87 GiB
-#: below the wall, because the trainer does not reach this ceiling in practice (its measured
-#: peak that sitting was 7.447 GiB at 84.6% of `max_edges`).
-#:
-#: THE SUPERSEDED DERIVATION, kept verbatim because R281(d) is a ruling about how this comment
-#: is written and deleting the evidence would delete the lesson (`wp/WP12R/MEASUREMENT_SIZING.md`,
-#: RTX 5080, torch 2.11.0+cu128, two live boots at `528eb37`, ratified R193):
-#:
-#:     15.479 - 0.330 (CUDA context) - 1.287 (self-play cache) = 13.862 reserved
-#:     / 1.2493 = 11.096 allocatable * 0.85 margin = 9.431 GiB
-#:
-#: The 1.287 GiB line is the F-816-12 defect itself: one member of a partition moved by a large
-#: factor and its partner kept the value fitted before the move, while the oracle below — which
-#: measures the trainer ALONE — stayed green through it.
-#:
-#: Transcribed ONCE, here, with the arithmetic beside it so a reader can re-derive it rather
-#: than trust it. If the operator re-sizes, this constant and the EDGE-CAP row move together.
-#:
-#: **AND A SECOND CONSTANT DOES NOT MOVE WITH IT — READ `test_graph_microbatch_authority.py`
-#: BEFORE ASSUMING IT SHOULD.** That file carries its own `_SIZING_BUDGET_BYTES` for the SIZING
-#: FRONTIER, and R326(b) deliberately left it where it was. The two are the same nominal
-#: quantity in two different denominations. **R327(d) rules it STAYS UNMOVED** and files the
-#: consolidation as debt at `plan/CARD-BUDGET-AUTHORITY-CONSOLIDATION.md`, with both measured
-#: arms as grounds — so the disagreement is ruled and carried, not open and not resolved.
-#:
-#: **R338(c) MOVES IT 8.40 -> 8.8972 AT THE RUN6 MINT, AND THE MOVE IS A CHANGE OF STATISTIC, NOT
-#: OF POLICY.** R326(b)'s pattern is unchanged — measured need plus a stated allowance — and the
-#: allowance is R330(b)'s armed 3 %. What moved is WHICH need: 8.40 was 12.9 % over an r6 peak,
-#: and FINISH-1's r8 figure (8.091338) was a POINT, `n = 1`, and said so. Sitting 9 sampled the
-#: r8/GnnArchV2 step delta 60 times on the real ring — min 7.405569 · p50 7.907190 · p90 8.186055
-#: · p95 8.358100 · MAX 8.638102 — so the old budget is exceeded by the measured maximum and
-#: R330(b)'s 3 % over the point figure by about one step in twenty. R338(c) takes the allowance
-#: over the MAX: *"a partition is a bound; a percentile readable as a bound is the 'absent is not
-#: zero' family — an OOM at the 5th-percentile step ends the run."*
+#: The ARMED constant is derived from what the step DRAWS, not from what the card can spare.
+#: Sitting 9 sampled the r8/GnnArchV2 step delta 60 times on the real ring — min 7.405569,
+#: p50 7.907190, p90 8.186055, p95 8.358100, MAX 8.638102 — and the allowance is over the MAX,
+#: because a partition is a bound and an OOM at the 5th-percentile step ends the run:
 #:
 #:     8.638102 (measured MAX, 60 steps, batch 256, real r8 ring) x 1.03 = 8.897245
 #:     armed FLOORED to 8.8972 — 47 KiB below the derivation, conservative on both sides
 #:
-#: The cost is 0.7528 GiB of card the eval/self-play share gives up against a p50-based cap, and
-#: the partition still closes: at this value `L = 1.9316` against the `1.740313` the M = 0.35
-#: floor demands, and the largest cap the partition affords is 9.0508 — so it fits with 0.1536
-#: GiB of cap to spare. `plan/SITTING10_EVIDENCE/s10_partition_arithmetic.py` in the migration
-#: workspace is the arithmetic; this line is its one consumer in the tree.
+#: The partition term is `budget x frag`, the PERMISSION and not the draw; it still closes with
+#: 0.1536 GiB of cap to spare. NAMED RESIDUAL: the partition declares 14.965 GiB against a
+#: 15.479 GiB card, so a fragmentation ratio above ~1.30 would close it.
+#: `test_graph_microbatch_authority.py` carries its OWN `_SIZING_BUDGET_BYTES` for the SIZING
+#: FRONTIER, ruled to STAY UNMOVED — do not move one assuming the other follows.
 _SIZING_BUDGET_GIB = 8.8972
 _SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)
 
@@ -362,29 +228,21 @@ _SIZING_BUDGET_BYTES = int(_SIZING_BUDGET_GIB * 1024 ** 3)
 _REQUIRED_MARGIN = 0.15
 
 #: How close to the minted caps the fixture must get before a peak measurement means anything.
-#: MEASURED on this fixture: nodes reach **99.9%** of `max_nodes` and edges **84.6%** of
-#: `max_edges` — the fixture's mean in-degree is 3316/148 = 22.4 against the cap pair's ratio
-#: of 26.5, so the NODE member is what binds and edges land below their own cap. The floors
-#: are set under those measurements with a little slack, NOT at them: their job is to catch a
-#: fixture that has stopped reaching the regime at all. The first shipped version of this leg
-#: measured peak on a 32-graph toy — roughly five orders below the sized caps — and asserted
-#: `peak > 0`, which is green whatever the allocation is; these floors are what make that
-#: unconstructible.
+#: MEASURED here: nodes reach 99.9% of `max_nodes`, edges 84.6% of `max_edges` (mean in-degree
+#: 22.4 against the cap pair's 26.5, so the NODE member binds). The floors sit under those with
+#: slack — their job is to catch a fixture that has stopped reaching the regime at all.
 _MIN_EDGE_FRACTION = 0.75
 _MIN_NODE_FRACTION = 0.95
 
 
 def _run5_caps() -> MicrobatchCapsSpec:
-    """run5's OWN minted caps, through the real loader and the real resolver — DERIVED, never
-    transcribed, so the operator's mint act moves this leg with it and pins nothing."""
+    """run5's OWN minted caps, through the real loader and resolver — DERIVED, never transcribed."""
     return resolve_microbatch_caps(load_config(_CONFIGS / "run6.yaml").model_dump())
 
 
 def _cap_regime_batch(caps: MicrobatchCapsSpec):
-    """A wire sized to sit just under BOTH minted members — the `(E, N) ~ caps` the row names.
-
-    The graph count is derived from the caps and the fixture's own per-graph counts, so it
-    tracks a re-mint instead of being a magic number."""
+    """A wire sized to sit just under BOTH minted members, with the graph count derived from the
+    caps and the fixture's own per-graph counts so it tracks a re-mint."""
     probe = H.uniform_graph_buffer(8)
     ec, nc = H.per_graph_counts(probe.sample_graph_batch(4, augment=False, recent_frac=0.0)[0])
     per_e, per_n = int(ec[0]), int(nc[0])
@@ -394,12 +252,8 @@ def _cap_regime_batch(caps: MicrobatchCapsSpec):
 
 
 def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
-    """OF2-10 leg 2's PREMISE, checked device-free so CI carries it.
-
-    A peak-allocation measurement taken far below the caps bounds nothing about the caps. This
-    leg asserts the fixture actually reaches the regime BEFORE the box spends a GPU on it — so
-    if a fixture change silently shrinks `(E, N)`, that is caught here, in CI, rather than
-    surfacing as a comfortable green from the measured leg nobody can re-run."""
+    """OF2-10 leg 2's PREMISE, device-free so CI carries it: a peak measured far below the caps
+    bounds nothing, so a fixture change that shrinks `(E, N)` is caught here."""
     caps = _run5_caps()
     replay, n_graphs = _cap_regime_batch(caps)
     ec, nc = H.per_graph_counts(replay.wire)
@@ -436,27 +290,16 @@ def test_of2_10_leg2_fixture_reaches_the_minted_cap_regime() -> None:
                            "`test_of2_10_only_one_microbatch_is_resident_at_a_time`, which is "
                            "device-free and runs in CI.")
 def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> None:
-    """OF2-10 leg 2 — the MEASURED half, and PREREG §0.1's clause 2 for closing
-    CARD-RUN5-GPU-OOM.
+    """OF2-10 leg 2 — the MEASURED half, and the clause for closing CARD-RUN5-GPU-OOM.
 
-    Three bands, all PREREG_DFIX §4's: PASS is `<= budget` with `>= 15%` margin;
-    PASS-WITH-DISCLOSURE is within budget under 15% margin, and prints the number and the
-    margin; over budget is an ABORT — HALT and re-size (one re-size is a finding and is
-    disclosed AS a re-size; a second is a design failure).
-
-    WHAT IS REAL HERE: run5's OWN minted caps (through the real loader and resolver), run5's
-    OWN arch (`hidden=128, num_layers=4`, resolved from `configs/run6.yaml`), the real
-    dispatcher, the real partition, the real collate and a `(E, N)` that sits just under both
-    minted members. The measurement is the DELTA across the step
-    (`reset_peak_memory_stats` -> `max_memory_allocated`), not an absolute reading.
-
-    DISCLOSED, so a green is not read for more than it is: (a) the buffer is SYNTHETIC and its
-    mean in-degree is 22.4 against run5's measured 26.8, so bytes-per-edge here is not
-    guaranteed to equal production's 2203.57; (b) the node member binds first on this fixture,
-    so `E` reaches ~85% of `max_edges` while `N` reaches ~100% of `max_nodes` — the leg bounds
-    peak AT THE (E, N) IT REPORTS, and the fraction of each cap is printed beside the result;
-    (c) the eval child on `eval.worker_device: cuda` is co-resident in production and appears
-    in NO number here — it is what the 0.85 margin in the budget is partly for."""
+    Three bands: PASS is `<= budget` with `>= 15%` margin; PASS-WITH-DISCLOSURE is within budget
+    under that margin and prints the number; over budget is an ABORT — halt and re-size. Real
+    here: run5's own minted caps and arch through the real loader and resolver, the real
+    dispatcher, partition and collate, and a `(E, N)` just under both members; the measurement
+    is the DELTA across the step. DISCLOSED: the buffer is SYNTHETIC at mean in-degree 22.4
+    against run5's measured 26.8, the node member binds first so `E` reaches only ~85% of
+    `max_edges`, and the co-resident eval child appears in NO number here.
+    """
     caps = _run5_caps()
     replay, n_graphs = _cap_regime_batch(caps)
     ec, nc = H.per_graph_counts(replay.wire)
@@ -493,21 +336,14 @@ def test_of2_10_leg2_peak_allocation_is_under_the_sizing_budget(tmp_path) -> Non
               f"{_REQUIRED_MARGIN:.0%} the row asks for — reported, per PREREG_DFIX §4.")
 
 
-#: Leg 2b's ceiling on `peak(2x) / peak(1x)`. The DEFECT SIGNATURE it exists to catch is peak
-#: scaling with the INPUT rather than with the cap — a leak reads ~2.0. NOT calibrated on the
-#: box (no CUDA here), so it is set to catch that signature with room, not to be a tight
-#: envelope; the first box run's job is to REPORT the real ratio, and if it lands near 1.0 this
-#: constant should tighten to a measured value. Stated so nobody reads 1.25 as a measurement.
+#: Leg 2b's ceiling on `peak(2x) / peak(1x)`. It catches peak scaling with the INPUT rather
+#: than the cap, which reads ~2.0; NOT calibrated on the box, so 1.25 is not a measurement.
 _ACCUM_PEAK_RATIO_CEILING = 1.25
 
 
 def test_of2_10_leg2b_premise_the_doubled_batch_actually_binds_the_caps() -> None:
-    """Leg 2b's PREMISE, device-free, so CI carries it.
-
-    Moved out of the GPU-skipped body under the dispatcher's pre-commit review: leg 2b's
-    `len(plan) >= 2` assert used to sit INSIDE the `skipif`, which is the one place this
-    phase's own F-RT-1 lesson had not been applied — a premise that only runs where the test
-    runs is a premise nobody checks. If the doubled batch ever stops splitting, leg 2b silently
+    """Leg 2b's PREMISE, device-free so CI carries it: a premise that only runs where the test
+    runs is a premise nobody checks. If the doubled batch stops splitting, leg 2b silently
     becomes a second copy of leg 2 and the accumulation loop goes unmeasured again."""
     caps = _run5_caps()
     _single, n_single = _cap_regime_batch(caps)
@@ -535,24 +371,14 @@ def test_of2_10_leg2b_premise_the_doubled_batch_actually_binds_the_caps() -> Non
                            "device-free liveness row and leg 2b's premise row both run here, "
                            "so a skip is a missing NUMBER, not a missing detector.")
 def test_of2_10_leg2b_doubling_the_input_does_not_move_the_peak(tmp_path) -> None:
-    """OF2-10 leg 2b — **a step at ~2x the caps costs no more than a step at 1x**, which is
-    the true statement of the bound. Added under RED-TEAM F-RT-1; the comparison itself added
-    under the dispatcher's pre-commit review.
+    """OF2-10 leg 2b — a step at ~2x the caps costs no more than a step at 1x, which is the true
+    statement of the bound.
 
-    RENAMED AND TIGHTENED. The first version asserted only `peak <= budget` while its name
-    promised a comparison against the 1x step — and at the predicted 9.318 GiB against the
-    9.431 GiB budget OF THAT TIME that left **~14% (1.161 GiB) of slack a leak could hide in**.
-    (R326(b) has since re-derived the budget to 8.40; the figure above is left at the value the
-    defect was measured against, because re-computing a historical slack at a later budget would
-    describe a comparison nobody ran.) It now measures
-    BOTH steps in the same process and compares them directly, so the name and the assertion
-    say the same thing. A leak that scales peak with the INPUT reads ~2.0 and cannot hide in
-    the budget's headroom.
-
-    Disclosures inherited from leg 2 (synthetic in-degree 22.4 vs run5's 26.8; the eval child
-    absent from every number) plus leg 2b's own: **the budget's fragmentation divisor (1.2493)
-    was measured on the UN-SPLIT program**, so the post-fix allocation pattern is UNVERIFIED
-    and this leg is the first instrument that would show it."""
+    The first version asserted only `peak <= budget` while its name promised a comparison, which
+    left ~14% (1.161 GiB) of slack a leak could hide in. It now measures BOTH steps in one
+    process, so a leak that scales peak with the INPUT reads ~2.0. Leg 2b's own disclosure: the
+    budget's fragmentation divisor was measured on the UN-SPLIT program.
+    """
     caps = _run5_caps()
     single, n_single = _cap_regime_batch(caps)
     doubled = H.ReplayWireBuffer(H.uniform_graph_buffer(2 * n_single + 8), 2 * n_single)

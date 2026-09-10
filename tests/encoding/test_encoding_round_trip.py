@@ -63,7 +63,7 @@ def _gnn_state() -> dict:
     }
 
 
-# ── 1. Registry stable-instance identity ────────────────────────────────────
+# 1. Registry stable-instance identity
 
 
 @pytest.mark.parametrize("name", _REGISTERED)
@@ -72,7 +72,7 @@ def test_lookup_stable_instance(name: str) -> None:
     assert lookup(name) is spec, f"{name}: lookup() returned a non-stable instance"
 
 
-# ── 2. Rust↔Python helper parity ────────────────────────────────────────────
+# 2. Rust↔Python helper parity
 
 
 @pytest.mark.parametrize("name", _REGISTERED)
@@ -86,7 +86,7 @@ def test_helper_parity_shim_vs_engine(name: str) -> None:
     assert tuple(py.kept_plane_indices) == tuple(rs.kept_plane_indices)
 
 
-# ── 3. Unified detector — the grid shape fallback is RETIRED (R346(f)) ──────
+# 3. Unified detector — the grid shape fallback is RETIRED (R346(f))
 
 
 def test_the_grid_shape_fallback_is_gone_and_an_unstamped_grid_shape_refuses() -> None:
@@ -161,7 +161,7 @@ def test_detect_filename_is_not_a_signal() -> None:
     assert spec is not None and spec.name == "gnn_axis_v1"
 
 
-# ── 3c. The miss arms — strict raises, lenient answers None ──────────────────
+# 3c. The miss arms — strict raises, lenient answers None
 
 
 def test_detect_lenient_no_marker_returns_none() -> None:

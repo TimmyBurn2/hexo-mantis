@@ -1,12 +1,12 @@
 """Config delta assertions: two-file --expect diff, and a self-contained --from-header check.
 
-Two-file mode (unchanged):
+Two-file mode:
     uv run python tools/config_diff.py A.yaml B.yaml --expect dotted.key [--expect k2 ...]
   Exit 0 iff {keys whose values differ} == {expected}; exit 1 on any mismatch; exit 2 on load error.
 
-Lying-header mode (B3, red-team #3):
+Lying-header mode:
     uv run python tools/config_diff.py --from-header <config.yaml>
-  Parses the config's stamped header (`# template:` + `# delta:` lines) → the CLAIMED delta-key
+  Parses the config's stamped header (`# template:` + `# delta:` lines) into the CLAIMED delta-key
   set, re-diffs the config against tools/config_templates/<t>.yaml, and asserts claimed == actual.
   Exit 0 MATCH; exit 1 naming the lie (an omitted real diff OR a claimed-but-unchanged key); exit 2
   on load/parse error (missing template, unparseable header, invalid config).
@@ -42,18 +42,12 @@ def _diff_keys(flat_a: dict[str, object], flat_b: dict[str, object]) -> set[str]
 def _covers(claimed: str, actual: str) -> bool:
     """True iff a delta claimed on `claimed` accounts for the real diff at `actual`.
 
-    Exact match, or `actual` sits INSIDE the block `claimed` names. A mint delta may set a
-    whole BLOCK — `--set 'train.draw_rate_abort={threshold: …, min_step: …, N_pool_min: …}'`
-    — and in some cases it MUST: `mint_config._resolve_parent` requires every path segment to
-    exist in the template, so a leaf inside a template block that ships `null` cannot be
-    addressed at all. The header then truthfully claims one key while the flattened diff
-    reports its leaves, and comparing the two sets literally reads that as a lying header.
+    Exact match, or `actual` sits INSIDE the block `claimed` names. A mint delta may set a whole
+    BLOCK, and sometimes must: `mint_config._resolve_parent` requires every path segment to exist
+    in the template, so a leaf inside a template block that ships `null` cannot be addressed.
 
-    The widening is bounded and it is one-way: a claimed block with NO real diff under it is
-    still reported (`HEADER CLAIMS … but it is unchanged`), so a header cannot claim a delta
-    it did not make; and a real diff OUTSIDE every claimed block is still reported, so a
-    header cannot hide one. What it stops asserting is that a delta names a LEAF, which was
-    never the rule — it was an artefact of every previous delta happening to be one.
+    The widening is one-way: a claimed block with no real diff under it is still reported, and so
+    is a real diff outside every claimed block, so a header can neither invent nor hide a delta.
     """
     return actual == claimed or actual.startswith(f"{claimed}.")
 

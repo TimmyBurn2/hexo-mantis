@@ -1,32 +1,14 @@
-# The R8 justification this file carried is RETIRED with two of its four holes (R346(f)): it
-# argued that four seam pins plus one production `StepCoordinator` were one unit, and the
-# file is now under the cap. The coordinator fakes below (pool / trainer / buffer /
-# eval-pipeline / sink) still exist to drive the REAL `_emit_iteration_complete`, which is
-# the only way to pin the caller half of this seam.
-"""ADJ-D32 / R249 + R250 — the WIRING the payload pins cannot see.
+# The coordinator fakes below (pool / trainer / buffer / eval-pipeline / sink) exist to drive
+# the REAL `_emit_iteration_complete`, the only way to pin the caller half of this seam.
+"""The WIRING the payload pins cannot see.
 
-`tests/train/test_cluster_stat_absence.py` drives the real `emit_iteration_complete_event`
-through a spy sink and asserts on the emitted payload, so a mutation in the builder or its
-helper reds there. It stops one level short at BOTH ends of the seam the payload travels,
-and this file closes those ends:
-
-  H-1  the CALLER. `StepCoordinator._emit_iteration_complete` is what hands the builder the
-       config `is_graph_run` reads. Pass `{}` there and R250 (absence) silently degrades to
-       R249 (zero-count drop): `cluster_variance_sample_count: 0` ships in every
-       `iteration_complete` of a graph run, for an instrument that does not exist on that
-       arm. The payload pins cannot see it — they choose the config themselves. Nor does
-       `test_full_config_carries_the_real_config_not_an_empty_dict` (O-S1b): it asserts on
-       `coordinator.full_config`, the ATTRIBUTE, and says nothing about what is passed on.
-  H-2  the PRODUCER — RETIRED with the getters (R346(f)); see the block below.
-  H-3  the TYPE AUTHORITY. Both `_engine.pyi` twins are the only thing pyright reads for the
-       FFI getters — never the compiled module — so a stub still saying `-> float` lets a
-       consumer write `runner.cluster_value_std_mean + 1.0` with gate 14 at ZERO and fail at
-       runtime on precisely the arm this card is about.
-  H-4  the WHEEL-COMPAT DEFAULT — RETIRED with the fields (R346(f)); see the block below.
-
-The snapshot→getter half of the same crosswiring question is pinned in Rust
-(`runner.rs::tests::cluster_means_read_their_own_accumulators`) — it is unreachable from
-Python, since nothing outside `mantis-selfplay` can seed the atomics.
+`tests/train/test_cluster_stat_absence.py` asserts on the emitted payload, so a mutation in the
+builder reds there; it stops one level short at both ends of the seam. The CALLER:
+`StepCoordinator._emit_iteration_complete` hands the builder the config `is_graph_run` reads, and
+passing `{}` degrades absence into `cluster_variance_sample_count: 0` shipping in every
+`iteration_complete` of a graph run, for an instrument that does not exist on that arm. The TYPE
+AUTHORITY: both `_engine.pyi` twins are the only thing pyright reads for the FFI getters, so a
+stub still declaring one type-checks a consumer that fails at runtime.
 """
 from __future__ import annotations
 
@@ -47,8 +29,8 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through; cross-test imports are barred, so
+    each file that needs one builds it."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -64,8 +46,7 @@ CLUSTER_KEYS = ("cluster_value_std_mean", "cluster_policy_disagreement_mean",
                 "cluster_variance_sample_count")
 CLUSTER_MEANS = CLUSTER_KEYS[:2]
 
-# Minted-config-derived knobs (the WPMINT Phase K-A/K-B precedent every coordinator test in
-# this directory follows — no hand-restated numbers).
+# Minted-config-derived knobs: no hand-restated numbers.
 _CONFIG = load_config(REPO_ROOT / "configs" / "dev_example.yaml")
 GRAPH_CONFIG: dict[str, Any] = {"identity": {"encoding": "gnn_axis_v1",
                                              "representation": "graph"}}
@@ -73,8 +54,6 @@ GRID_CONFIG: dict[str, Any] = {"identity": {"encoding": "v6_live2_ls",
                                             "representation": "grid"}}
 
 
-# ── coordinator collaborators (the same minimal surface as
-#    tests/train/test_iteration_complete_decoupling.py's fakes) ──────────────────────────
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -90,7 +69,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -149,9 +128,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # DELEGATED to a real `HexgBuffer`: the dispatcher collates the wire for real before the
+        # trainer stub sees it, so a hand-built payload would be a second wire format.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -206,21 +184,11 @@ def _one_iteration_complete(sink: _SpySink) -> dict[str, Any]:
     return events[0]
 
 
-# ═══ H-1 — the coordinator's own emit seam, on a GRAPH run ═══
 def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
-    """R250 asserted on the event stream a PRODUCTION `StepCoordinator` produces.
-
-    Driven through `_emit_iteration_complete` — the one site that hands the builder its
-    `config` argument — rather than a full `step()`, because a graph declaration additionally
-    routes the training step through `dispatch` and demands a graph-capable buffer
-    (`RepresentationRouteError`). That is a different seam; the grid test below carries the
-    full-`step()` evidence that the production loop really reaches this method.
-
-    FALSIFYING MUTATION: pass `{}` (or any config without `identity`) as the builder's
-    `config` argument in `coordinator/step.py::_emit_iteration_complete`. `is_graph_run` then
-    reads non-graph, the graph arm is never taken, and `cluster_variance_sample_count: 0`
-    reaches the ONE channel on a run whose producer does not exist.
-    """
+    """Absence asserted on the event stream a PRODUCTION `StepCoordinator` produces, driven
+    through `_emit_iteration_complete` — the one site that hands the builder its `config`.
+    FALSIFYING MUTATION: pass `{}` there; `is_graph_run` reads non-graph, the graph arm is never
+    taken, and `cluster_variance_sample_count: 0` reaches the ONE channel with no producer."""
     coord, cfg, sink = _coordinator(GRAPH_CONFIG)
     coord._emit_iteration_complete(cfg)
     payload = _one_iteration_complete(sink)
@@ -236,33 +204,14 @@ def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
     )
 
 
-# ═══ H-2 and H-4 — RETIRED WITH THE FIELDS THEY GUARDED (R346(f)) ═══
-# H-2 threaded two DISTINCT values through the snapshot so a transposition of the two
-# `getattr` names could not survive; H-4 pinned that a wheel without the getters reported
-# absence rather than a fabricated 0.0. Both measured `RunnerStats.cluster_value_std_mean` /
-# `cluster_policy_disagreement_mean` / `cluster_variance_sample_count`, which are DELETED:
-# the engine exposes no getter, so the snapshot would have carried the wheel-compat default
-# forever and the "absence" H-4 asserted would have been the only reading it could ever
-# produce — a pin on a constant. The surviving claim is that the fields do not come back
-# without their producers, and it is asserted where the snapshot's field set is asserted
-# exactly (`tests/selfplay/test_pool_surface.py`). H-3 below is untouched: it is about the
-# TYPE STUBS, and a stub re-declaring a getter the engine lacks is still a live hazard.
-
-
-# ═══ H-3 — the shipped type stubs must not re-declare the retired cluster getters ═══
+# The snapshot-crosswiring and wheel-compat pins retired with the fields they guarded: with no
+# cluster-mean getter, both would be pins on a constant. That the fields do not come back
+# without their producers is asserted in `tests/selfplay/test_pool_surface.py`.
 def test_neither_engine_stub_declares_a_cluster_mean_getter() -> None:
-    """INVERTED by R346(f). The two `_engine.pyi` twins are the ONLY type authority for the FFI
-    getters — pyright reads the stub, never the compiled module — and this row used to pin that
-    both declared the cluster means `float | None` rather than `float`, because the getter
-    returned None at zero cluster-variance samples.
-
-    The cluster-variance accumulators only ever ran on the dense arm's `*k >= 2` branch, so the
-    getters went with it and the engine exposes neither. What is pinned now is that a stub does
-    not RE-declare one: a typed getter with no compiled counterpart is a phantom the checker
-    would bless and every reader would trust.
-
-    FALSIFYING MUTATION: add either getter back to either twin.
-    """
+    """The two `_engine.pyi` twins are the ONLY type authority for the FFI getters — pyright
+    reads the stub, never the compiled module — so a stub declaring a getter the engine no
+    longer exposes is a phantom the checker blesses and every reader trusts.
+    FALSIFYING MUTATION: add either getter back to either twin."""
     twins = (REPO_ROOT / "src" / "mantis" / "_engine.pyi",
              REPO_ROOT / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi")
 

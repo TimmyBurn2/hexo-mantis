@@ -1,34 +1,14 @@
 //! HEXG — graph-position replay ring for the GNN training-data path.
 //!
-//! R8: >300 LOC by design — the record/buffer types, the slot-geometry
-//! constants, and the R255 capacity-derivation authority
-//! (`derived_visit_capacity` + its ceiling) are one contract unit: the derivation
-//! IS the slot geometry, and splitting it from the struct it sizes would let the
-//! two drift apart, which is the exact defect ADJ-D34 closed.
+//! R8: >300 LOC by design — the record/buffer types, the slot-geometry constants and the
+//! capacity-derivation authority are one contract unit: the derivation IS the slot geometry, and
+//! splitting it from the struct it sizes would let the two drift apart.
 //!
-//! A PARALLEL ring beside the dense `ReplayBuffer`. It stores a COMPACT
-//! whole-board position record — sorted stone list + sparse coord-keyed MCTS
-//! visit target + outcome/value_valid + per-game scalars — and rebuilds the axis
-//! graph + aligns the policy target AT SAMPLE TIME on the native builder
-//! (`mantis_graph::build_axis_graph`). NO dense planes, NO aux, NO K-cluster.
-//!
-//! Ported from the predecessor engine's `replay_buffer/hexg/` with the
-//! FFI-binding strip. The old sample path fused the per-graph builds via the
-//! block-diagonal graph-wire fuse (`from_axis_graphs`) and returned that wire +
-//! `GraphTargets`; the terminal fuse is deferred to WP6 (the wire type lives in
-//! the predecessor inference-bridge module, which routes to WP6). WP5's
-//! `sample_graph_batch_impl` returns the buffer-owned `(Vec<AxisGraph>,
-//! GraphTargets)` — for a single graph local == global, so the fuse changes no
-//! computed value (R-1).
-//!
-//! ## Sample = rebuild-at-native-builder
-//! `sample_graph_batch_impl` weighted-samples record indices, D6-rotates the
-//! stored stone coords AND the visit-map keys by one uniform per-sample element
-//! (`sym::rotate_axial` — the single source shared with the CNN cell-scatter),
-//! rebuilds via `build_axis_graph` (which stamps `builder_impl = 1`), and aligns
-//! the rotated visit-keys to the built legal nodes → the per-legal-node policy
-//! target. One call emits graph + target together, so a graph/target desync is
-//! structurally impossible.
+//! A PARALLEL ring beside the dense `ReplayBuffer`, storing a COMPACT whole-board record and
+//! rebuilding the axis graph plus aligning the policy target AT SAMPLE TIME on the native builder.
+//! `sample_graph_batch_impl` D6-rotates the stored stone coords AND the visit-map keys by one
+//! uniform per-sample element, rebuilds, and aligns the rotated keys to the built legal nodes —
+//! one call emits graph and target together, so a desync is structurally impossible.
 
 mod persist;
 pub mod push;
@@ -44,45 +24,33 @@ use rand::SeedableRng;
 use super::schedule::WeightSchedule;
 use mantis_encoding::RegistrySpec;
 
-// ── slot geometry ──────────────────────────────────────────────────────────────
-
 /// Max stones per record slot. Over-cap push is a LOUD error.
 pub const MAX_STONES: usize = 256;
 
-/// Structural ceiling on a record's visit-slot capacity: the per-record
-/// `n_visits` counter (SoA field and HEXG on-disk field alike) is `u16`, so no
-/// capacity past `u16::MAX` can be stored whatever the sims regime asks.
-/// DERIVED from the storage type, never tuned (R255/ADJ-D34: the guard carries
-/// no literal — the old `MAX_VISITS = 128` tunable is deleted).
+/// Structural ceiling on a record's visit-slot capacity: the per-record `n_visits` counter is
+/// `u16`, so no capacity past `u16::MAX` can be stored whatever the sims regime asks. DERIVED
+/// from the storage type, never tuned.
 pub const HEXG_VISIT_COUNT_CEILING: usize = u16::MAX as usize;
 
-/// R347(a) — the MINTED visit-slot bound for a `search.kind: gumbel` graph row.
+/// The MINTED visit-slot bound for a `search.kind: gumbel` graph row.
 ///
-/// Under Sequential Halving only the m sampled candidates are ever visited, so the
-/// completed-Q target is EXACT on those m entries and, on every UNVISITED legal action,
-/// equals the recording prior times one scalar (every unvisited child completes to the same
-/// `v_mix`, so its improved-policy mass is `prior * exp(c) / Z`). The row therefore stores the
-/// m explicit `(action, target)` entries plus the tail mass α, and its slot count is m rather
-/// than the legal-set size.
+/// Under Sequential Halving only the m sampled candidates are ever visited, so the completed-Q
+/// target is EXACT on those m entries and, on every unvisited legal action, equals the recording
+/// prior times one scalar. The row stores the m explicit `(action, target)` entries plus the tail
+/// mass α, so its slot count is m rather than the legal-set size.
 ///
-/// MINTED, not derived: no arithmetic over the sims regime produces it. It is the ceiling on
-/// `selfplay.gumbel_m` that the graph record format will store, and a config asking for more
+/// MINTED, not derived: no arithmetic over the sims regime produces it. A config asking for more
 /// is a mint-time error rather than a truncation at record time.
 pub const HEXG_GUMBEL_M_MAX: usize = 16;
 
-/// Structural ceiling on the record COUNT a buffer may be asked for (AUDIT-1 F-38).
-///
-/// DERIVED, never tuned: the widest per-record allocation this buffer makes is
-/// `capacity * MAX_STONES * 2` (`stones_qr`), and this is the largest capacity for which that
-/// product cannot overflow `usize` — so the arithmetic is safe before any allocator is asked.
-/// It is enormously larger than any real ring (run5's is thousands), which is the point: the
-/// bound exists to stop a wrap, not to express a policy about buffer sizes.
+/// Structural ceiling on the record COUNT a buffer may be asked for. DERIVED, never tuned: the
+/// widest per-record allocation is `capacity * MAX_STONES * 2`, and this is the largest capacity
+/// for which that product cannot overflow `usize`. The bound stops a wrap, not a policy.
 pub const HEXG_CAPACITY_CEILING: usize = usize::MAX / (MAX_STONES * 2);
 
-/// The ONE effective-standard-budget resolution: `standard_sims` wins when set,
-/// else `n_simulations`. Shared by [`derived_visit_capacity`] and the runner's
-/// own zero-check + budget bake (`SelfPlayRunner::new`) so the guard capacity and
-/// the workers' baked budget cannot silently diverge onto two copies of the rule.
+/// The ONE effective-standard-budget resolution: `standard_sims` wins when set, else
+/// `n_simulations`. Shared by [`derived_visit_capacity`] and the runner's own budget bake, so the
+/// guard capacity and the workers' baked budget cannot diverge onto two copies of the rule.
 #[must_use]
 pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> usize {
     if standard_sims == 0 {
@@ -92,45 +60,26 @@ pub fn effective_standard_sims(n_simulations: usize, standard_sims: usize) -> us
     }
 }
 
-/// R255/ADJ-D34 — THE derivation authority for the HEXG visit-slot capacity.
+/// THE derivation authority for the HEXG visit-slot capacity.
 ///
-/// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1`, the largest
-/// positive-mass support a graph record can carry. Armed arms: standard (always;
-/// effective = `standard_sims` else `n_simulations`), fast iff `fast_prob > 0`,
-/// quick/full iff `full_search_prob > 0`.
+/// `capacity = max(ARMED effective sim budgets) + leaf_batch_size − 1`, the largest positive-mass
+/// support a graph record can carry; armed arms are standard always, fast iff `fast_prob > 0`,
+/// quick/full iff `full_search_prob > 0`. The `− 1` is now HEADROOM rather than a bound, and the
+/// formula is deliberately UNCHANGED, because tightening a mint-time validator changes which
+/// configs mint.
 ///
-/// THE `− 1` TERM IS NOW HEADROOM, NOT A BOUND (R335(c), 2026-09-04). It was derived
-/// from the sim loops overshooting by up to `leaf_batch_size − 1` on an uncapped final
-/// batch; `search_drive::run_mcts_search` now clamps that batch, so a PUCT search backs
-/// up exactly `max_armed` visits and the Gumbel arm backs up fewer. The FORMULA IS
-/// DELIBERATELY UNCHANGED: it is a mint-time validator, so tightening it changes which
-/// configs mint, which is a ruling's call and not a perf leg's.
-///
-/// Called by BOTH enforcement surfaces — the mint-time schema validator
-/// (through the bridge twin `derived_hexg_visit_capacity`) and the
-/// `SelfPlayRunner` boot guard — so the two cannot drift onto second formulas.
-///
-/// SCOPE (R275(a)): this formula is derived from the CURRENT visit-limited target
-/// construction, and so are the two F-816-9 pins that sit downstream of it
-/// (`records::refuse_zero_visit_export` and `search_drive::InferenceSeamFailure`).
-///
-/// UNDER `search.kind: gumbel` THE ANSWER IS NOT THIS FORMULA (R347(a)). That kind stores a
-/// SPARSE row — the m sampled candidates' exact completed-Q entries plus the tail mass α — so
-/// its slot count is the minted `gumbel_m`, bounded by [`HEXG_GUMBEL_M_MAX`], and the sims
-/// regime does not enter. The two kinds are resolved in ONE function so that a caller cannot
-/// reach a second authority for either.
+/// Called by BOTH enforcement surfaces — the mint-time schema validator through its bridge twin
+/// and the `SelfPlayRunner` boot guard — so the two cannot drift onto second formulas. Under
+/// `search.kind: gumbel` the answer is NOT this formula: that kind stores a SPARSE row, so its
+/// slot count is the minted `gumbel_m`. Both kinds resolve in ONE function.
 ///
 /// # Errors
-/// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`] — no slot sizing
-///   can honor the regime; the schema twin makes this a MINT-time error, and
-///   the boot-side call is defense-in-depth for un-minted constructions;
+/// * the derived capacity exceeds [`HEXG_VISIT_COUNT_CEILING`];
 /// * `search_kind` is not a kind this build knows;
-/// * `search.kind: gumbel` with `gumbel_m` outside `1..=`[`HEXG_GUMBEL_M_MAX`] — the sparse
-///   row's slot count IS m, and m past the minted bound is a mint-time error.
+/// * `search.kind: gumbel` with `gumbel_m` outside `1..=`[`HEXG_GUMBEL_M_MAX`].
 ///
-/// THE PUCT CHECK IS A DENSITY CHECK, NOT A VISIT CHECK. The sims regime bounds how many
-/// visits a row RECORDS; it says nothing about how many cells the exported distribution puts
-/// mass on. Under `puct` the exported target is the visit distribution and the two coincide.
+/// The PUCT check is a DENSITY check, not a visit check: the sims regime bounds how many visits a
+/// row RECORDS, never how many cells the exported distribution puts mass on.
 #[allow(clippy::too_many_arguments)]
 pub fn derived_visit_capacity(
     n_simulations: usize,
@@ -144,8 +93,8 @@ pub fn derived_visit_capacity(
     gumbel_m: usize,
     search_kind: &str,
 ) -> Result<usize, String> {
-    // Parsed FIRST: under Gumbel the sims regime is not the subject at all, so deriving a
-    // capacity from it and then discarding it would be arithmetic a reader has to un-read.
+    // Parsed FIRST: under Gumbel the sims regime is not the subject, so deriving a capacity from
+    // it and then discarding it would be arithmetic a reader has to un-read.
     let kind = mantis_search::SearchKind::from_config_str(search_kind).ok_or_else(|| {
         format!(
             "search.kind = {search_kind:?} is not a known search kind \
@@ -192,8 +141,8 @@ pub fn derived_visit_capacity(
 
 /// HEXG on-disk magic — "HEXG" little-endian (distinct from HEXB `0x48455842`).
 pub const HEXG_MAGIC: u32 = 0x4845_5847;
-/// HEXG on-disk version. v2 — the sparse Gumbel row (R347(a)) added the per-record tail
-/// mass α, so a v1 file is a DIFFERENT record shape and is refused by name, never re-parsed.
+/// HEXG on-disk version. v2 added the per-record tail mass α, so a v1 file is a DIFFERENT record
+/// shape and is refused by name, never re-parsed.
 pub const HEXG_VERSION: u32 = 2;
 
 /// Weight-bucket boundaries mirror `ReplayBuffer::weight_bucket`.
@@ -209,22 +158,18 @@ pub(crate) fn weight_bucket(w_bits: u16) -> usize {
     }
 }
 
-/// The single compact graph-position record. Coords are `i16`; the visit target
-/// is the sparse coord→prob MCTS distribution over the FULL legal set.
+/// The single compact graph-position record: coords are `i16` and the visit target is the sparse
+/// coord→prob MCTS distribution over the FULL legal set.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphRecord {
     /// Sorted (order irrelevant — the builder re-sorts) stone list `(q, r, ±1)`.
     pub stones: Vec<(i16, i16, i8)>,
-    /// Sparse coord-keyed visit target `(q, r, prob)` over legal moves. Under
-    /// `search.kind: gumbel` these are the m EXPLICIT entries only (R347(a)); the rest of
-    /// the distribution is [`GraphRecord::tail_mass`].
+    /// Sparse coord-keyed visit target `(q, r, prob)` over legal moves. Under `search.kind:
+    /// gumbel` these are the m EXPLICIT entries only; the rest is [`GraphRecord::tail_mass`].
     pub visits: Vec<(i16, i16, f32)>,
-    /// R347(a) — the tail mass α: the target mass on every legal action NOT in `visits`.
-    ///
-    /// `0.0` under `search.kind: puct`, whose exported target has no unstored support. Under
-    /// `gumbel` the tail's SHAPE is the recording prior renormalized over the unstored legal
-    /// set, and the trainer rebuilds it as α times its own DETACHED current prior over that
-    /// set — so the row stores the scalar and not the shape.
+    /// The tail mass α: the target mass on every legal action NOT in `visits`. `0.0` under
+    /// `search.kind: puct`; under `gumbel` the tail's SHAPE is the recording prior renormalized
+    /// over the unstored legal set, so the row stores the scalar and not the shape.
     pub tail_mass: f32,
     /// Side to move (+1 / −1).
     pub current_player: i8,
@@ -240,21 +185,15 @@ pub struct GraphRecord {
     pub value_valid: bool,
     /// Completed-game length (compound moves) — sampling weight.
     pub game_length: u16,
-    /// R345(b)(6) — WHICH GAME this position came from, stamped once per game at
-    /// `finalize_game_graph`. `-1` is the untagged sentinel and means the record was built
-    /// outside a game (a test, a fixture); a production self-play record always carries a real
-    /// id. Before this field every self-play row was pushed with `-1`, so `sample_indices`'s
-    /// same-game dedupe — which skips the guard on `-1` — had never once fired on real data,
-    /// and a batch could be a dozen positions from one game reported as a dozen samples.
+    /// WHICH GAME this position came from, stamped once per game. `-1` is the untagged sentinel;
+    /// before this field every self-play row carried `-1`, so `sample_indices`'s same-game dedupe
+    /// had never once fired on real data.
     pub game_id: i64,
 }
 
-// ── HexgBuffer ─────────────────────────────────────────────────────────────────
-
-/// Graph-position replay ring (parallel to `ReplayBuffer`). Fixed-slot SoA Vecs;
-/// ring overwrite by `head`; weighted rejection sampler + game-length weight
-/// schedule lifted verbatim from HEXB. Fields are `pub` for the relocated HEXG
-/// oracle suite (`tests/replay_hexg.rs`).
+/// Graph-position replay ring, parallel to `ReplayBuffer`: fixed-slot SoA Vecs, ring overwrite by
+/// `head`, weighted rejection sampler and game-length weight schedule lifted verbatim from HEXB.
+/// Fields are `pub` for the relocated HEXG oracle suite.
 pub struct HexgBuffer {
     pub capacity: usize,
     pub size: usize,
@@ -266,11 +205,10 @@ pub struct HexgBuffer {
     pub radius: u16,
     pub trunk_size: i32,
     pub contract_version: u32,
-    /// Per-buffer visit-slot capacity, DERIVED at composition from the sims
-    /// regime (`derived_visit_capacity`) — never a literal (R255/ADJ-D34).
+    /// Per-buffer visit-slot capacity, DERIVED at composition from the sims regime, never a
+    /// literal.
     pub visit_capacity: usize,
 
-    // ── fixed-slot record storage (SoA) ──
     pub stones_qr: Vec<i16>,      // flat [cap * MAX_STONES * 2]
     pub stone_players: Vec<i8>,   // flat [cap * MAX_STONES]
     pub n_stones: Vec<u16>,       // [cap]
@@ -290,10 +228,8 @@ pub struct HexgBuffer {
 
     pub weight_schedule: WeightSchedule,
     pub next_game_id: i64,
-    //: R345(b)(6) — the LAST sampled batch's composition, written by
-    //: `record_batch_composition` and read by the per-batch line the trainer logs. Kept on the
-    //: buffer rather than returned from `sample_graph_batch` so the hot path keeps its
-    //: signature; a reader asks after the batch it cares about.
+    //: The LAST sampled batch's composition, kept on the buffer rather than returned from
+    //: `sample_graph_batch` so the hot path keeps its signature.
     pub last_batch_distinct_games: u32,
     pub last_batch_max_rows_per_game: u32,
     pub last_batch_untagged_rows: u32,
@@ -304,20 +240,13 @@ pub struct HexgBuffer {
 }
 
 impl HexgBuffer {
-    /// Create a graph-position ring with `capacity` records and `visit_capacity`
-    /// visit slots per record.
-    ///
-    /// `encoding` MUST be a `representation == "graph"` spec — the rebuild
-    /// `BuildParams` come from its graph fields. A grid encoding is a LOUD error.
-    /// `visit_capacity` is the DERIVED slot geometry (`derived_visit_capacity` at
-    /// the composition site — R255/ADJ-D34: no default, no literal); a value the
-    /// format cannot store (`0` or past [`HEXG_VISIT_COUNT_CEILING`]) is a LOUD
-    /// error.
+    /// Create a graph-position ring with `capacity` records and `visit_capacity` visit slots each.
+    /// `encoding` MUST be a `representation == "graph"` spec, since the rebuild `BuildParams` come
+    /// from its graph fields, and `visit_capacity` is the DERIVED slot geometry — no default, no
+    /// literal, and a value the format cannot store is a LOUD error.
     pub fn new(capacity: usize, encoding: &str, visit_capacity: usize) -> Result<Self, String> {
-        // AUDIT-1 F-38. `lookup_or_panic` ran BEFORE this function's own `Result` checks, so
-        // an unknown encoding name reached Python as a `PanicException` while every other
-        // refusal here is a named `ValueError` — and `SelfPlayRunner::new` and
-        // `PyRegistrySpec::from_registry` both already return the sorted known list.
+        // `lookup_or_panic` ran BEFORE this function's own `Result` checks, so an unknown encoding
+        // name reached Python as a `PanicException` while every other refusal is a named error.
         let spec = mantis_encoding::registry::lookup(encoding).ok_or_else(|| {
             let mut known: Vec<&str> = mantis_encoding::registry::all_specs()
                 .map(|s| s.name)
@@ -331,11 +260,9 @@ impl HexgBuffer {
                  (use ReplayBuffer for dense encodings)"
             ));
         }
-        // AUDIT-1 F-38. `capacity` was UNBOUNDED at the FFI. Zero panics on the first push
-        // (an index out of bounds and a `% 0`), and a huge value wraps the slot-geometry
-        // product in release or aborts inside `handle_alloc_error` — the one exit
-        // `panic = "unwind"` cannot convert into a Python exception, so it takes the process
-        // with it. Both are refused here, by name, before anything is allocated.
+        // `capacity` was UNBOUNDED at the FFI: zero panics on the first push, and a huge value
+        // wraps the slot-geometry product or aborts inside `handle_alloc_error` — the one exit
+        // `panic = "unwind"` cannot convert into a Python exception. Both are refused by name.
         if capacity == 0 {
             return Err(
                 "HexgBuffer: capacity 0 stores nothing and panics on the first push \
@@ -407,19 +334,10 @@ impl HexgBuffer {
         })
     }
 
-    /// Re-seed the SAMPLER from a caller-supplied seed, replacing the OS-entropy stream
-    /// `new` installs.
-    ///
-    /// `new` seeds from `rand::rng()` because a ring with no declared seed must not pretend
-    /// to a reproducible stream. That left production with no way to declare one: two
-    /// launches of the same config drew different batch sequences, and no Python-side
-    /// `seed_everything` could reach this field. This is that declaration — one method, the
-    /// same `StdRng` type, no new dependency, and no per-sample cost (R344(a); the
-    /// alternative it was chosen over is costed in `CARD-RING-SAMPLER-SEED`).
-    ///
-    /// It does NOT make a resumed run continue the pre-stop stream — capturing ChaCha word
-    /// position needs rand's private backend, which the crate's `rand` pin exists to keep
-    /// this crate away from. What it buys is run-to-run reproducibility from a fixed seed.
+    /// Re-seed the SAMPLER from a caller-supplied seed, replacing the OS-entropy stream `new`
+    /// installs, because a ring with no declared seed must not pretend to a reproducible stream.
+    /// It does NOT make a resumed run continue the pre-stop stream; what it buys is run-to-run
+    /// reproducibility from a fixed seed.
     pub fn seed_sampler(&mut self, seed: u64) {
         self.rng = StdRng::seed_from_u64(seed);
     }
@@ -457,23 +375,14 @@ impl HexgBuffer {
     }
 }
 
-/// Aligned training targets emitted alongside the per-graph `Vec<AxisGraph>` by
-/// `sample_graph_batch_impl`. Plain-Rust struct (the old binding getters move to
-/// WP7); `target_argmax_cells` is a pure method.
+/// Aligned training targets emitted alongside the per-graph `Vec<AxisGraph>`.
 ///
-/// * `policy_target` — flat `[Lg]` per-legal-node CE target (graphs concatenated,
-///   in `legal_node_gather` order). Each graph's segment sums to ~1 MINUS its `tail_mass`;
-///   under `puct` the tail is 0 and the segment sums to ~1 as before.
-/// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry for that legal
-///   node. Its complement per graph is the "remaining legal set" the tail is spread over,
-///   and it is emitted rather than inferred from `policy_target > 0` so an explicit entry
-///   that underflows to zero cannot be silently reclassified as tail.
-/// * `tail_mass` — `[B]` per-row α (R347(a)).
-/// * `outcomes` / `value_valid` — `[B]` value target + draw-mask.
-/// * `is_full_search` — `[B]` policy-loss gate.
-/// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the
-///   ROTATED frame (the AugRoundTrip runtime canary), decoded by
-///   `target_argmax_cells`.
+/// * `policy_target` — flat `[Lg]` per-legal-node CE target in `legal_node_gather` order; each
+///   graph's segment sums to ~1 MINUS its `tail_mass`.
+/// * `explicit_mask` — flat `[Lg]`, 1 where the row carried a STORED entry, emitted rather than
+///   inferred from `policy_target > 0` so an underflowed entry is not reclassified as tail.
+/// * `tail_mass` / `outcomes` / `value_valid` / `is_full_search` — `[B]` per-row scalars.
+/// * argmax_q/argmax_r/argmax_valid — per-graph max-mass legal node in the ROTATED frame.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct GraphTargets {
     pub policy_target: Vec<f32>,

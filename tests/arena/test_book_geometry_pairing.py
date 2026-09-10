@@ -1,22 +1,15 @@
-"""R345(b)(2) finding — an opening book only replays under the geometry it was minted at.
+"""An opening book only replays under the geometry it was minted at.
 
-WHAT THE LEGALITY BOUNDARY FOUND. `book_v1_s20260625_p4` is minted against `gnn_axis_v1`
-(`tools/mint_opening_book.py::_MINT_ENCODING`, `legal_move_radius = 6`), and its openings are
-uniform-random draws from that board's legal set — so they scatter up to six hex-steps apart.
-Replayed under a radius-5 encoding, 292 of its 512 openings (57.03%) contain a move that is
-not in the board's legal set, and until R345(b)(2) the arena played them anyway: every one of
-those games started from a position the rules cannot reach, and the promotion bar read the
-result.
+`book_v1_s20260625_p4` is minted against `gnn_axis_v1` at `legal_move_radius = 6` and its
+openings scatter up to six hex-steps apart. Under a radius-5 encoding 292 of its 512 openings
+contain a move outside the board's legal set, and the arena used to play them anyway.
 
-WHY THIS IS A PAIRING TEST AND NOT A BOOK TEST. The book is not wrong — it is correct for its
-declared minting geometry, and `tests/arena/test_books.py` already pins that it reproduces
-from its minter args. What had no check at all was the PAIRING: nothing anywhere related a
-config's `identity.encoding` to the `opening_book` its eval blocks name. That is the LAW-08
-shape one level up — a registered artifact with a consumer that cannot use it.
+This is a PAIRING check, not a book check: the book is correct for its declared minting
+geometry, and nothing anywhere related a config's `identity.encoding` to the `opening_book`
+its eval blocks name.
 
-THE NUMBERS BELOW ARE DERIVED, NEVER TRANSCRIBED (R192(e)). The required radius is computed
-from the book's own moves and the encodings' radii are read from the registry, so a re-minted
-book or a moved registry row changes what this suite asserts rather than making it stale.
+The numbers are derived, never transcribed: the required radius is computed from the book's
+own moves and the encodings' radii are read from the registry.
 """
 from __future__ import annotations
 
@@ -34,14 +27,9 @@ _REPO = Path(__file__).resolve().parents[2]
 _BOOKS_DIR = _REPO / "src" / "mantis" / "arena" / "books"
 _CONFIGS = _REPO / "configs"
 
-#: Configs whose `identity.encoding` cannot replay the book their eval blocks name. NOT a
-#: waiver — an inventory, asserted EXACTLY below, so closing the gap reds this suite and the
-#: row must then be removed rather than quietly outliving its reason (the reverse-check shape
-#: gate 13 uses on its "deliberately absent" section).
-#:
-#: EMPTY since R346(f). Its one member was `sustained_kcluster.yaml`, a legacy dense/k-cluster
-#: config on no run6 path whose radius-5 encoding could not replay `book_v1_s20260625_p4`; the
-#: config went with the grid rows, and the gap closed by deletion rather than by a re-mint.
+#: Configs whose `identity.encoding` cannot replay the book their eval blocks name. Not a
+#: waiver but an inventory, asserted EXACTLY below, so closing a gap reds this suite and the
+#: row must be removed rather than outliving its reason.
 _KNOWN_UNPLAYABLE_PAIRINGS: set[str] = set()
 
 
@@ -51,11 +39,11 @@ def _hex_distance(a: tuple[int, int], b: tuple[int, int]) -> int:
 
 
 def _required_radius(moves: list[tuple[int, int]]) -> int:
-    """The smallest `legal_move_radius` under which `moves` replays.
+    """Return the smallest `legal_move_radius` under which `moves` replays.
 
-    Each move after the first must fall inside the radius ball of SOME already-placed stone
-    (`Board::legal_moves_set` is that union), so the requirement of one move is its distance
-    to the NEAREST earlier stone, and the requirement of the sequence is the largest of those.
+    Each move after the first must fall inside the radius ball of some already-placed stone,
+    so one move's requirement is its distance to the nearest earlier stone and the sequence's
+    is the largest of those.
     """
     return max(
         (min(_hex_distance(moves[i], moves[j]) for j in range(i)) for i in range(1, len(moves))),
@@ -71,7 +59,7 @@ def _book_openings(book_id: str) -> list[list[tuple[int, int]]]:
 
 
 def _books_named_by(config: dict) -> set[str]:
-    """Every `opening_book` value anywhere in a config, found structurally."""
+    """Return every `opening_book` value anywhere in a config, found structurally."""
     found: set[str] = set()
 
     def walk(node: object) -> None:
@@ -95,13 +83,10 @@ def _config_files() -> list[Path]:
     return files
 
 
-# ── the measurement ─────────────────────────────────────────────────────────────────────
 def test_the_book_declares_its_geometry_by_construction() -> None:
-    """The book's required radius, derived from its own moves, is its minting encoding's."""
-    # Read out of the minter's SOURCE, not imported: `tools/` is not an importable package
-    # and R5 bars the `sys.path` write that would make it one, so the established shape here
-    # (tests/arena/test_books.py) is to reach the tool by path. The value is still derived
-    # from the tool rather than transcribed into this file.
+    """Prove the book's required radius, derived from its own moves, is its minting encoding's."""
+    # Read out of the minter's source rather than imported: `tools/` is not importable and
+    # `sys.path` may not move, so the value is still derived from the tool, not transcribed.
     source = (_REPO / "tools" / "mint_opening_book.py").read_text(encoding="utf-8")
     match = re.search(r'^_MINT_ENCODING\s*=\s*"([^"]+)"', source, re.M)
     assert match is not None, (
@@ -124,7 +109,7 @@ def test_the_book_declares_its_geometry_by_construction() -> None:
 def test_the_radius_5_gap_is_real_and_the_radius_6_one_is_not(
     radius: int, expected_playable: bool
 ) -> None:
-    """The finding itself, as a measurement rather than a sentence."""
+    """Measure the gap: radius 5 cannot replay the book, radius 6 and 8 can."""
     openings = _book_openings("book_v1_s20260625_p4")
     unplayable = [mv for mv in openings if _required_radius(mv) > radius]
     assert (not unplayable) == expected_playable, (
@@ -132,9 +117,8 @@ def test_the_radius_5_gap_is_real_and_the_radius_6_one_is_not(
     )
 
 
-# ── the standing pairing check ──────────────────────────────────────────────────────────
 def test_every_shipped_config_pairs_its_encoding_with_a_replayable_book() -> None:
-    """`identity.encoding`'s radius must cover every book the config's eval blocks name."""
+    """Prove every shipped config's encoding radius covers every book its eval blocks name."""
     broken: dict[str, str] = {}
     for path in _config_files():
         config = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -157,10 +141,7 @@ def test_every_shipped_config_pairs_its_encoding_with_a_replayable_book() -> Non
 
 
 def test_run6_is_not_one_of_them() -> None:
-    """Stated separately because it is the fact the packet's hold turns on.
-
-    Folded into the inventory above it would be one absent dict key — true, and invisible.
-    """
+    """Prove run6's encoding replays every book it names, stated separately so it is visible."""
     config = yaml.safe_load((_CONFIGS / "run6.yaml").read_text(encoding="utf-8"))
     radius = lookup(config["identity"]["encoding"]).legal_move_radius
     for book_id in _books_named_by(config):

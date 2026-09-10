@@ -1,26 +1,21 @@
-"""NIGHTRUN-1 E1 — the eval leaf build's WIDTH is threaded end to end, or it is nothing.
+"""The eval leaf build's WIDTH is threaded end to end, or it is nothing.
 
-WHY THIS FILE IS THE LEVER'S ONLY WITNESS. `leaf_build_threads` defaults to `1` at three
-layers, and `1` is the SERIAL path — the behaviour that shipped. So a break anywhere in the
-chain produces **byte-identical results and no error**: correct graphs, correct policies,
-correct promotions, and 95 % of the eval path back in a serial loop nobody notices for a run.
-That is the silently-disabled-knob class R1 and LAW-08 exist for, and a default of `1` is only
-defensible with this file beside it.
-
-THE CHAIN, and every link is asserted here:
+`leaf_build_threads` defaults to `1` at three layers, and `1` is the SERIAL path that shipped,
+so a break anywhere in the chain produces byte-identical results and no error: correct graphs,
+correct promotions, and most of the eval path back in a serial loop nobody notices. A default
+of `1` is only defensible with this file beside it.
 
     run.py  --resolve_leaf_build_threads-->  build_eval_pipeline
             --self._leaf_build_threads-->    RoundSpec (crosses the process seam)
             --spec.leaf_build_threads-->     LocalInferenceEngine (both eval sites)
             --self._leaf_build_threads-->    submit_graphs_and_wait_ls(positions, n)
 
-STRUCTURE, NEVER TEXT (R296(f)). Every check below reads an AST or drives a real object. A
-grep for `leaf_build_threads` would pass on a commented-out line, on a docstring, and on a
-keyword that is computed and then discarded.
+STRUCTURE, NEVER TEXT: every check reads an AST or drives a real object, because a grep would
+pass on a commented-out line, a docstring, or a keyword computed and then discarded.
 
-THE GRID ARM IS A ROW, not an omission. A grid round builds no leaf graphs, so its width must
-be the serial `1` and must NOT call the resolver — reading a graph-only host reservation on a
-grid run would make it a grid dependency, the same reason `fused_graph_caps` is graph-only.
+The grid arm is a ROW, not an omission: a grid round builds no leaf graphs, so its width must be
+the serial `1` and must NOT call the resolver, which would make a graph-only host reservation a
+grid dependency.
 """
 from __future__ import annotations
 
@@ -89,8 +84,8 @@ def test_the_pipeline_puts_its_width_on_every_round_spec() -> None:
 
 
 def test_both_eval_engine_constructions_thread_the_specs_width() -> None:
-    """BOTH sites, counted rather than spot-checked: the gate block builds a second engine
-    for the anchor, and a width threaded to only one of them is a half-on lever."""
+    """BOTH sites, counted rather than spot-checked: the gate block builds a second engine for
+    the anchor, and a width threaded to only one of them is a half-on lever."""
     source = (_REPO / "src" / "mantis" / "eval" / "worker.py").read_text(encoding="utf-8")
     tree = ast.parse(source)
     sites = [
@@ -112,8 +107,8 @@ def test_both_eval_engine_constructions_thread_the_specs_width() -> None:
 
 
 def test_the_engine_passes_its_width_to_the_rust_call() -> None:
-    """The last link, and the one a reviewer is most likely to miss: the engine may hold the
-    width and still call the Rust entry point with its serial default."""
+    """The last link: the engine may hold the width and still call the Rust entry point with its
+    serial default."""
     from mantis.selfplay import inference_local
 
     source = inspect.getsource(inference_local)
@@ -141,9 +136,8 @@ def test_the_engine_passes_its_width_to_the_rust_call() -> None:
 def test_the_derivation_reserves_and_never_returns_zero(
     cores: int, n_workers: int, want: int,
 ) -> None:
-    """The arithmetic, stated as cases rather than asserted about this machine. The floor of
-    1 matters: 1 is the serial path, and a budget of "no threads at all" is not a state the
-    build loop can be in."""
+    """The arithmetic as cases rather than an assertion about this machine. The floor of 1
+    matters: a budget of "no threads at all" is not a state the build loop can be in."""
     from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 
     got = resolve_leaf_build_threads({"selfplay": {"n_workers": n_workers}}, cpu_count=cores)
@@ -151,8 +145,8 @@ def test_the_derivation_reserves_and_never_returns_zero(
 
 
 def test_the_derivation_is_the_RING_S_arithmetic_and_not_a_second_copy() -> None:
-    """ONE authority for the reservation. If these two ever disagree, the next person to
-    change the ring's reservation has silently changed an eval path too — or failed to."""
+    """ONE authority for the reservation: if these two disagree, changing the ring's reservation
+    has silently changed an eval path too, or failed to."""
     from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
     from mantis.config.resolve.sample_threads import resolve_sample_threads
 
@@ -164,8 +158,8 @@ def test_the_derivation_is_the_RING_S_arithmetic_and_not_a_second_copy() -> None
 
 
 def test_a_missing_reservation_input_RAISES_rather_than_defaulting() -> None:
-    """LAW-11: absent is an error. A silent fallback here would hand the eval child every
-    core the self-play workers are using."""
+    """Absent is an error: a silent fallback would hand the eval child every core the self-play
+    workers are using."""
     from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
     from mantis.config.resolve.sample_threads import MissingSampleThreadsInputError
 

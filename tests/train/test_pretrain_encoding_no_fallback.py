@@ -1,14 +1,10 @@
-"""Pretrain encoding resolution never defaults (R45, LAW-11/LAW-05).
+"""Pretrain encoding resolution never defaults.
 
-Two arms lived here. `validate._config_encoding` silently resolved a checkpoint config with
-no encoding to a dense default; `cli._resolve_encoding_name` silently pretrained a dense
-model when neither `--encoding` nor `--resume` was passed. The second was found by running
-gate 11 before landing it, and is the sixth arm of this class (ADJ-03) — it is on a TRAINING
-path, so it is the more consequential of the two.
+Two arms: a checkpoint config with no encoding, and a CLI invocation passing neither
+`--encoding` nor `--resume`. Both must raise rather than silently pretrain a dense model.
 
-`validate.py` went with the dense pretrain path (R346(f)), and it was a veneer over THE one
-resolver — so its arm is pinned here on `resolve_from_config` itself, which is what it always
-delegated to and what any replacement veneer would have to call.
+The checkpoint arm is pinned on `resolve_from_config` itself — the one resolver any veneer
+has to call.
 """
 from __future__ import annotations
 
@@ -27,16 +23,15 @@ from mantis.train.pretrain.cli import _resolve_encoding_name
 
 
 def _config_encoding(config: dict) -> str:
-    """What the deleted `validate._config_encoding` veneer did: the ONE resolver, by name."""
+    """What a config-encoding veneer does: the ONE resolver, by name."""
     return resolve_from_config(config).name
 
 
-# ── the ONE resolver, on the shapes a checkpoint config arrives in ──────────────────
+# the ONE resolver, on the shapes a checkpoint config arrives in
 
 
 def test_checkpoint_config_with_no_encoding_at_all_raises():
-    # WPTS Phase P (R104): `_config_encoding` is a veneer over THE one resolver, so the
-    # message is the resolver's own spelling; the raise-arm is unchanged (LAW-11 re-pin).
+    # the message is the one resolver's own spelling, since the veneer delegates to it
     with pytest.raises(MissingEncodingError, match="declares no encoding"):
         _config_encoding({"board_size": 19})
 
@@ -47,8 +42,7 @@ def test_checkpoint_config_with_empty_encoding_mapping_raises():
 
 
 def test_checkpoint_config_with_non_string_version_raises():
-    # Present-but-malformed is the one authority's `EncodingRegistryError` classification
-    # (MissingEncodingError subclasses it, so the family narrowed, not the raise).
+    # present-but-malformed is `EncodingRegistryError`, which `MissingEncodingError` subclasses
     with pytest.raises(EncodingRegistryError, match="must be a string"):
         _config_encoding({"encoding": {"version": 6}})
 
@@ -65,9 +59,7 @@ def test_checkpoint_config_with_identity_but_non_string_encoding_raises():
         ({"identity": {"encoding": "gnn_axis_r8"}}, "gnn_axis_r8"),
         ({"encoding": "gnn_axis_v1"}, "gnn_axis_v1"),
         ({"encoding": {"version": "gnn_axis_r8"}}, "gnn_axis_r8"),
-        # AGREEING dual-shape resolves (WPTS Phase P re-point, R104: the old row here
-        # pinned "identity wins over a conflicting flat key" — the precedence R104 rejects;
-        # the conflict raise is pinned below).
+        # an AGREEING dual shape resolves; the disagreeing one raises, pinned below
         ({"identity": {"encoding": "gnn_axis_v1"}, "encoding": "gnn_axis_v1"},
          "gnn_axis_v1"),
     ],
@@ -78,15 +70,13 @@ def test_explicit_encodings_still_resolve(cfg, expected):
 
 
 def test_conflicting_dual_shape_is_corrupt_input_and_raises():
-    """WPTS Phase P (ADJ-25/R104): a checkpoint config declaring two encodings that
-    disagree is corrupt; the veneer surfaces the one authority's named error rather than
-    silently preferring either shape."""
+    """A checkpoint config declaring two encodings that disagree is corrupt input."""
     with pytest.raises(EncodingDeclarationConflictError):
         _config_encoding({"identity": {"encoding": "gnn_axis_r8"},
                           "encoding": "gnn_axis_v1"})
 
 
-# ── cli._resolve_encoding_name (ADJ-03, the sixth arm) ───────────────────────────────
+# cli._resolve_encoding_name
 
 
 def _args(**kw) -> argparse.Namespace:
@@ -94,12 +84,7 @@ def _args(**kw) -> argparse.Namespace:
 
 
 def test_pretrain_cli_without_encoding_or_resume_raises_the_class_error():
-    """R45 names the convention by ERROR CLASS, so the CLI raises that class.
-
-    REVIEW-impl rejected an earlier `SystemExit` here: the repo already has named errors
-    for exactly this class, and an implementation that has to widen the rule's own
-    statement of itself in order to comply has not matched the convention.
-    """
+    """The convention is named by ERROR CLASS, so the CLI raises that class, not `SystemExit`."""
     with pytest.raises(MissingEncodingError, match="no encoding specified"):
         _resolve_encoding_name(_args())
 
@@ -114,17 +99,11 @@ def test_pretrain_cli_error_names_both_ways_out():
 
 
 def test_pretrain_cli_boundary_converts_the_class_error_to_a_clean_message():
-    """`pretrain()` turns it into one line, so a forgotten flag is not a traceback.
+    """`pretrain()` turns the class error into one line at the BOUNDARY, so a forgotten flag
+    is not a traceback.
 
-    This is what makes raising the class error at the resolver compatible with CLI
-    ergonomics — the conversion happens once, at the boundary, not at the seam.
-
-    The argv moved at F-816-25 and the assertion did not. It used to read
-    `["--corpus", "/nonexistent"]`, which reached the boundary only because argparse's prefix
-    matching silently expanded `--corpus` to `--corpus-npz`; `allow_abbrev=False` — the guard
-    that stops a DELETED flag re-entering as a live one — ends that, and `--config` is now
-    required. A real config path is passed rather than a fake one so this row does not depend
-    on the encoding check happening before the config load, which is not what it tests.
+    A real config path is passed rather than a fake one, so this row does not depend on the
+    encoding check happening before the config load.
     """
     from mantis.train.pretrain.cli import pretrain
 

@@ -40,7 +40,11 @@ pub fn corpus(n: usize, radius: u16, seed: u64) -> Vec<AxisGraph> {
             let q = draw(&mut s, -COORD_HALF, COORD_HALF);
             let r = draw(&mut s, -COORD_HALF, COORD_HALF);
             if seen.insert((q, r)) {
-                let player = if stones.len().is_multiple_of(2) { 1 } else { -1 };
+                let player = if stones.len().is_multiple_of(2) {
+                    1
+                } else {
+                    -1
+                };
                 stones.push((q, r, player));
             }
         }
@@ -82,25 +86,39 @@ pub fn concat_by_offset(parts: Vec<GraphWireArrays>) -> GraphWireArrays {
     let mut legal_base: i64 = 0;
     // Pass 1: everything except `edge_index`'s dst half.
     for p in &parts {
-        let n_p = *p.node_offsets.last().expect("a wire carries B+1 node offsets");
-        let e_p = *p.edge_offsets.last().expect("a wire carries B+1 edge offsets");
-        let l_p = *p.legal_offsets.last().expect("a wire carries B+1 legal offsets");
+        let n_p = *p
+            .node_offsets
+            .last()
+            .expect("a wire carries B+1 node offsets");
+        let e_p = *p
+            .edge_offsets
+            .last()
+            .expect("a wire carries B+1 edge offsets");
+        let l_p = *p
+            .legal_offsets
+            .last()
+            .expect("a wire carries B+1 legal offsets");
         let e_p_us = e_p as usize;
 
         out.n_graphs += p.n_graphs;
         out.node_feat.extend_from_slice(&p.node_feat);
         out.node_coords.extend_from_slice(&p.node_coords);
         out.edge_attr.extend_from_slice(&p.edge_attr);
-        out.edge_index.extend(p.edge_index[..e_p_us].iter().map(|&s| s + node_base));
-        out.legal_node_gather.extend(p.legal_node_gather.iter().map(|&g| g + node_base));
+        out.edge_index
+            .extend(p.edge_index[..e_p_us].iter().map(|&s| s + node_base));
+        out.legal_node_gather
+            .extend(p.legal_node_gather.iter().map(|&g| g + node_base));
         out.policy_dst_slot.extend_from_slice(&p.policy_dst_slot);
         out.n_nodes_checksum.extend_from_slice(&p.n_nodes_checksum);
         out.n_stones.extend_from_slice(&p.n_stones);
         out.window_center.extend_from_slice(&p.window_center);
         out.current_player.extend_from_slice(&p.current_player);
-        out.node_offsets.extend(p.node_offsets[1..].iter().map(|&o| o + node_base));
-        out.edge_offsets.extend(p.edge_offsets[1..].iter().map(|&o| o + edge_base));
-        out.legal_offsets.extend(p.legal_offsets[1..].iter().map(|&o| o + legal_base));
+        out.node_offsets
+            .extend(p.node_offsets[1..].iter().map(|&o| o + node_base));
+        out.edge_offsets
+            .extend(p.edge_offsets[1..].iter().map(|&o| o + edge_base));
+        out.legal_offsets
+            .extend(p.legal_offsets[1..].iter().map(|&o| o + legal_base));
 
         node_base += n_p;
         edge_base += e_p;
@@ -112,7 +130,8 @@ pub fn concat_by_offset(parts: Vec<GraphWireArrays>) -> GraphWireArrays {
     let mut node_base_dst: i64 = 0;
     for p in &parts {
         let e_p_us = *p.edge_offsets.last().expect("edge offsets") as usize;
-        out.edge_index.extend(p.edge_index[e_p_us..].iter().map(|&d| d + node_base_dst));
+        out.edge_index
+            .extend(p.edge_index[e_p_us..].iter().map(|&d| d + node_base_dst));
         node_base_dst += *p.node_offsets.last().expect("node offsets");
     }
     out
@@ -122,4 +141,3 @@ pub fn fuse(graphs: &[AxisGraph]) -> GraphWireArrays {
     let mut w = GraphWire::from_axis_graphs(graphs, 1);
     w.take().expect("a freshly fused wire always has arrays")
 }
-

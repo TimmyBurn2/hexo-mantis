@@ -47,7 +47,7 @@ def test_existence_checked_exactly_once():
     assert calls == ["exists.pt"]
 
 
-# ── the guard is WIRED, and that is the half that was missing ──────────────────────────────
+# the guard is WIRED, and that is the half that was missing
 def test_run_main_calls_the_resolver_before_it_launches() -> None:
     """AUDIT-1 F-47's repair, pinned STRUCTURALLY rather than by running a launch.
 

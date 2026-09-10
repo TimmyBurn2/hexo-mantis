@@ -1,24 +1,10 @@
-//! R8-justify: the per-move search phase (`play_one_move` → `run_mcts_search` →
-//! `infer_and_expand{,_graph}` → `select_move`) plus its Copy arg-bundles is one
-//! cohesive port unit lifted from the frozen `inner.rs` search-drive band
-//! (`:742-1099`); splitting the target-policy build order (temperature →
-//! completed-Q → O1 → solver) across files would scatter the load-bearing ORDER.
-//!
-//! Search-drive phase (WP6 D1) — drives the WP4 `mantis_search` primitives. The
-//! Gumbel Sequential-Halving arm steers the tree via the amended
-//! `set_forced_root_child` setter (per phase: force a candidate → select/expand →
-//! clear → `halve_candidates`); the PUCT arm applies Dirichlet root noise (never
-//! under Gumbel). Leaves encode to the dense queue OR build+submit to the graph
-//! queue; the graph path is rotation-free at inference (D-seam-3). The
-//! target-policy build ORDER is EXACTLY: temperature-annealed visit policy →
-//! optional completed-Q improved policy → O1 forced-win one-hot → D-WS3 solver
-//! soft-inject (frozen `:1157/1163/1241/1291`).
-//!
-//! The per-move model-version snapshot (frozen `:1214`) is RESTORED: the model
-//! version is read once per move from a runner-owned `model_version` atomic
-//! (`InferContext::model_version`, default 0 until WP7 wires the NN setter) and
-//! dedup-pushed into `version_seen`, so a no-NN run's drain tuple is byte-identical
-//! to the frozen `(mv_min, mv_max, mv_distinct) = (0, 0, 1)`.
+//! R8-justify: the per-move search phase (`play_one_move` -> `run_mcts_search` ->
+//! `infer_and_expand{,_graph}` -> `select_move`) plus its Copy arg-bundles is one unit;
+//! splitting it would scatter the load-bearing target-policy build ORDER, which is EXACTLY:
+//! temperature-annealed visit policy -> optional completed-Q improved policy -> forced-win
+//! one-hot -> solver soft-inject.
+//! The graph path is rotation-free at inference: the builder is passed no `sym_idx`,
+//! pinned by `crates/mantis-selfplay/tests/rotation_parity.rs`.
 
 use std::sync::atomic::AtomicBool;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -46,48 +32,37 @@ use super::record::record_position_graph_dispatch;
 pub(crate) struct InferContext<'a> {
     pub(crate) graph_queue: &'a GraphQueue,
     pub(crate) spec: &'static RegistrySpec,
-    /// Runner-owned model-version snapshot source (frozen `inner.rs:1214` =
-    /// `batcher.current_model_version()`). Read once per move and dedup-pushed into
-    /// `version_seen`. Default 0 (no-NN) until WP7 wires the real setter.
+    /// Read once per move and dedup-pushed into `version_seen`; default 0 on a no-NN run.
     pub(crate) model_version: &'a AtomicU64,
-    /// R276(a): the runner's kill switch, read by `seam_or_shutdown` to tell OUR stop
-    /// from a queue closed by anything else (a dying inference server, above all).
+    /// The runner's kill switch: tells OUR stop from a queue closed by anything else.
     pub(crate) running: &'a AtomicBool,
 }
 
-/// Per-move MCTS accumulators + `positions_generated` (frozen `:94`).
-/// `export_offwindow_mass_moves` fires once per move whose exported target carries
-/// overflow mass (LAW-18, DESIGN_T §3.6).
+/// Per-move MCTS accumulators. `export_offwindow_mass_moves` fires once per move whose
+/// exported target carries overflow mass.
 #[derive(Clone, Copy)]
 pub(crate) struct MoveAccumulators<'a> {
     pub(crate) mcts_depth_accum: &'a AtomicU64,
     pub(crate) mcts_conc_accum: &'a AtomicU64,
     pub(crate) mcts_stat_count: &'a AtomicU64,
     pub(crate) mcts_quiescence_fires: &'a AtomicU64,
-    /// R335(c) — `fetch_max`ed with each search's served-leaf count.
+    /// `fetch_max`ed with each search's served-leaf count.
     pub(crate) max_sims_per_search: &'a AtomicU64,
-    /// LAW-18 — the playout-cap arm as DRAWN, counted at the draw itself.
+    /// The playout-cap arm as DRAWN, counted at the draw itself.
     pub(crate) pcr_full_moves: &'a AtomicU64,
     pub(crate) pcr_quick_moves: &'a AtomicU64,
-    /// LAW-18 — the Gumbel round's width (see [`GumbelRoundCounters`]). Zero on a PUCT run,
-    /// which issues no rounds; the reader omits the mean rather than publishing a 0/0.
+    /// The Gumbel round's width; zero on a PUCT run, whose reader omits the mean.
     pub(crate) gumbel_round_leaves: &'a AtomicU64,
     pub(crate) gumbel_rounds: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
 }
 
-/// WP12-R Phase T fatal-defect latch handle (DESIGN_T §3.4; LAW-14). Store the
-/// typed message (first defect wins), count the fire, THEN flip `running=false`
-/// (store-then-halt) — a worker panic is NOT loud (`stop()` swallows joins), so
-/// this is what makes the typed raise reach the supervisor via the drain face.
-///
-/// TWO counters, ONE slot (R275(b)): the message channel is shared because there
-/// is one supervisor-facing halt reason, but the fire counts stay separate —
-/// `fires` counts target-integrity refusals at the record dispatch, and
-/// `inference_failures` counts seam failures. Folding them would make the two
-/// conjuncts of the F-816-9 class indistinguishable in the event stream, which is
-/// the one thing the in-run instrument exists to prevent (LAW-18).
+/// Fatal-defect latch handle: store the typed message (first defect wins), count the fire,
+/// THEN flip `running=false` — a worker panic is NOT loud, so this is what makes the typed
+/// raise reach the supervisor via the drain face. TWO counters, ONE slot: `fires` counts
+/// target-integrity refusals and `inference_failures` counts seam failures, because folding
+/// them would make the two conjuncts indistinguishable in the event stream.
 #[derive(Clone, Copy)]
 pub(crate) struct FatalDefectLatch<'a> {
     pub(crate) slot: &'a std::sync::Mutex<Option<String>>,
@@ -101,8 +76,7 @@ impl FatalDefectLatch<'_> {
         self.store_counted(msg, self.fires);
     }
 
-    /// R275(b) SEAM conjunct: latch a named inference failure. Same store-then-halt
-    /// ordering, its OWN counter.
+    /// Latch a named inference failure: same store-then-halt ordering, its OWN counter.
     pub(crate) fn store_inference_failure(&self, msg: String) {
         self.store_counted(msg, self.inference_failures);
     }
@@ -119,14 +93,12 @@ impl FatalDefectLatch<'_> {
     }
 }
 
-/// Per-move scalar context (frozen `:141`). `Copy` — mirrors the flat
-/// `WorkerParams` layout plus the per-game dynamics (`game_sims`, `is_fast_game`,
-/// `game_start_ply`).
+/// Per-move scalar context, `Copy` — the flat `WorkerParams` layout plus per-game dynamics.
 #[derive(Clone, Copy)]
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct MovePlayContext {
     pub(crate) leaf_batch_size: usize,
-    /// DERIVED HEXG visit capacity (R255) — `Some` iff this is a graph run.
+    /// DERIVED HEXG visit capacity — `Some` iff this is a graph run.
     pub(crate) visit_capacity: Option<usize>,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
@@ -149,8 +121,7 @@ pub(crate) struct MovePlayContext {
     pub(crate) game_start_ply: usize,
 }
 
-/// Per-move policy — the ragged legal-set policy (frozen `:713`). The dense scatter_max
-/// vector went with the grid path (R346(f)).
+/// Per-move policy — the ragged legal-set policy.
 #[derive(Clone)]
 pub(crate) enum MovePolicy {
     Ls(LegalSetPolicy),
@@ -179,25 +150,18 @@ pub(crate) enum MoveOutcome {
     Continue,
 }
 
-/// LAW-18 — the Gumbel round's WIDTH, in the two terms a mean is taken over.
-///
-/// `round_leaves / rounds` is leaves per inference round trip. At `m` candidates the first
-/// round is `m` wide and each halving takes it down, so the mean over a search is well below
-/// `m` and well above 1 — and 1 is exactly what a batching lever that had silently stopped
-/// batching would read.
+/// The Gumbel round's WIDTH, in the two terms a mean is taken over. `round_leaves / rounds` is
+/// leaves per inference round trip; the mean is well below `m` and well above 1, and 1 is what
+/// a batching lever that had silently stopped batching would read.
 #[derive(Clone, Copy)]
 pub(crate) struct GumbelRoundCounters<'a> {
     pub(crate) round_leaves: &'a AtomicU64,
     pub(crate) rounds: &'a AtomicU64,
 }
 
-/// How one inference round trip picks its leaves.
-///
-/// `Batch(n)` is PUCT's: `select_leaves(n)` descends `n` times from an unconstrained root,
-/// spread by virtual loss. `Round(&[..])` is Gumbel's: one descent under EACH of the round's
-/// surviving candidates, which is the halving phase's own width — `m` leaves, then `m/2`,
-/// and so on — and needs no virtual loss across candidates because their subtrees are
-/// disjoint.
+/// How one inference round trip picks its leaves. `Batch(n)` is PUCT's: `n` descents from an
+/// unconstrained root, spread by virtual loss. `Round(&[..])` is Gumbel's: one descent under
+/// EACH surviving candidate, needing no virtual loss because their subtrees are disjoint.
 #[derive(Clone, Copy)]
 enum LeafSelection<'a> {
     Batch(usize),
@@ -206,47 +170,26 @@ enum LeafSelection<'a> {
 
 /// Result of `run_mcts_search`.
 enum McTSSearchResult {
-    /// The Gumbel root state (PUCT: `None`) and the leaves this search actually
-    /// served — R335(c)'s per-search visit count, `fetch_max`ed by the caller.
+    /// The Gumbel root state (PUCT: `None`) and the leaves served, `fetch_max`ed by the caller.
     Completed(Option<MctxRootState>, usize),
     RootExpansionFailed,
-    /// R275(b) SEAM conjunct: a leaf inference FAILED. The search is abandoned
-    /// here and never reports `Completed` — see [`InferenceSeamFailure`].
+    /// A leaf inference FAILED. The search is abandoned here and never reports `Completed`.
     InferenceFailed(InferenceSeamFailure),
 }
 
-/// R275(b) SEAM conjunct — a leaf inference that FAILED, as distinct from a
-/// shutdown (F-816-9 Phase A §4 links 1-3, §7.3).
+/// A leaf inference that FAILED, as distinct from a shutdown.
 ///
-/// Pre-fix every failure arm of `infer_and_expand{,_graph}` collapsed to
-/// `return 0`: the reason string travelled back from the waiter verbatim and was
-/// dropped on the floor, the sim loop `break`ed on `n == 0`, and
-/// `run_mcts_search` still returned `Completed`. A search that backed up ZERO
-/// visits then reached the target exporter, which manufactured a policy target
-/// out of the ε-noise-mixed priors — and the failure resurfaced 100+ plies later
-/// as a target-integrity refusal naming neither the failure nor the leaf. The
-/// silent degradation is the crime: LAW-14 makes a failed inference run-fatal and
-/// NAMED, at the seam, with the reason carried.
+/// Pre-fix every failure arm collapsed to `return 0`: the reason was dropped, the sim loop
+/// `break`ed on `n == 0`, and the search still reported `Completed`. A search that backed up
+/// ZERO visits then reached the exporter, which manufactured a target out of the noise-mixed
+/// priors, and the failure resurfaced 100+ plies later as an unrelated-looking refusal.
 ///
-/// **A DRAIN SHUTDOWN IS NOT A FAILURE, AND `is_closed()` IS THE WRONG WAY TO SAY
-/// SO** (R276(a) merge-gate finding). `stop()` flips `running=false` and then closes
-/// both queues, waking every in-flight waiter with `Err` (`runner/mod.rs::stop`);
-/// the §P22/D12 drain-shutdown path depends on those `Err`s being a skip, not a
-/// defect. The first shipped discriminator asked `queue.is_closed()`, and that
-/// reads a state whose CAUSE is untyped: `close()` takes no reason, and the Python
-/// inference server closes the batcher from a `finally` on ANY loop exit —
-/// `inference_server.py`'s own comment says "Release blocked Rust waiters even if
-/// this thread exits unexpectedly." So an inference-server DEATH closed the queue,
-/// every in-flight failure then observed `closed`, and the failure re-entered
-/// through the shutdown door: exactly the silent degrade this pin exists to kill.
-///
-/// The discriminator is therefore the RUNNER'S OWN KILL SWITCH, not the queue's
-/// state. `SelfPlayRunner::stop()` stores `running=false` BEFORE either
-/// `close()`, and `WorkerPool.stop()` calls `self._runner.stop()` (pool.py:393)
-/// before `self._inference_server.stop()` (:394) — so on every clean stop the flag
-/// is already false when the waiter wakes, and on a server death it is still true.
-/// No queue is read at all, which also retires the wrong-queue hole
-/// (`dense_queue` vs `graph_queue`) by construction rather than by oracle.
+/// **A DRAIN SHUTDOWN IS NOT A FAILURE, AND `is_closed()` IS THE WRONG WAY TO SAY SO.**
+/// `close()` takes no reason, and the Python inference server closes the batcher from a
+/// `finally` on ANY loop exit, so a server DEATH closed the queue and every in-flight failure
+/// re-entered through the shutdown door. The discriminator is the RUNNER'S OWN KILL SWITCH,
+/// stored false BEFORE either `close()` and before the inference server is stopped: on a clean
+/// stop the flag is already false when the waiter wakes, on a server death it is still true.
 pub(crate) struct InferenceSeamFailure {
     arm: &'static str,
     stage: &'static str,
@@ -277,14 +220,10 @@ impl std::fmt::Display for InferenceSeamFailure {
     }
 }
 
-/// Classify one inference-failure arm. `running == false` means OUR OWN `stop()` is
-/// under way, which is the drain-shutdown skip (`Ok(0)`); anything else — including a
-/// queue closed by a dying inference server — is the named run-fatal seam failure.
-///
-/// `SeqCst` matches the store side (`SelfPlayRunner::stop` and
-/// `FatalDefectLatch::store_counted` both use `SeqCst`), so the flag a waking waiter
-/// reads is ordered against the close that woke it. This is a cold path; the ordering
-/// costs nothing and a weaker one would make the argument above unprovable.
+/// Classify one inference-failure arm: `running == false` is OUR OWN `stop()`, the
+/// drain-shutdown skip (`Ok(0)`); anything else is the named run-fatal seam failure. `SeqCst`
+/// matches the store side, so the flag a waking waiter reads is ordered against the close that
+/// woke it.
 fn seam_or_shutdown(
     running: &AtomicBool,
     arm: &'static str,
@@ -298,8 +237,6 @@ fn seam_or_shutdown(
     }
 }
 
-// ── Inference + expansion (HOT path) ────────────────────────────────────────
-
 /// One leaf-selection call, in whichever mode this round trip runs.
 #[inline]
 fn select_for(
@@ -312,41 +249,29 @@ fn select_for(
     }
 }
 
-/// Selects leaves, encodes per-cluster state, submits to the dense inference
-/// queue, forward/inverse-scatters under the per-game symmetry, accumulates I2
-/// cluster-variance metrics, aggregates per-leaf policies, and runs
-/// `expand_and_backup`. Frozen `inner.rs:742`.
+/// Selects leaves, encodes per-cluster state, submits to the dense inference queue,
+/// forward/inverse-scatters under the per-game symmetry, aggregates per-leaf policies, and runs
+/// `expand_and_backup`.
 ///
 /// # Errors
-/// R275(b) SEAM conjunct: [`InferenceSeamFailure`] when a leaf inference FAILS on
-/// an OPEN queue. An empty leaf set is `Ok(0)` — that is search exhaustion, not a
-/// failure — and so is any failure arm reached with the queue already closed (the
-/// drain-shutdown path).
-/// GNN counterpart of `infer_and_expand` (frozen `inner.rs:893`). Builds ONE axis
-/// graph per evaluated leaf (F-19 build-once-per-leaf: no reuse, no patching),
-/// submits the whole batch through the parallel graph queue in ONE
-/// `submit_graphs_and_wait` (D4), and expands via `expand_and_backup_ls_at`
-/// against the BUILDER's per-leaf `window_center`. Rotation-free at inference (v1
-/// coord pre-rotation is WP5 sample-time aug).
+/// [`InferenceSeamFailure`] when a leaf inference FAILS on an OPEN queue. An empty leaf set is
+/// `Ok(0)`, search exhaustion rather than failure, and so is a failure arm reached with the
+/// queue already closed.
+/// GNN counterpart. Builds ONE axis graph per evaluated leaf (no reuse, no patching), submits
+/// the batch in ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf
+/// `window_center`. Rotation-free at inference.
 ///
 /// # Errors
-/// R275(b) SEAM conjunct: a build-guard trip or a graph-inference failure is a
-/// named [`InferenceSeamFailure`], NOT the pre-fix silent `return 0`. This is the
-/// exact leg F-816-9 died on — the graph waiter's `Err(reason)` travelled back
-/// verbatim (D6) and was then discarded.
-// `#[cold]`/`#[inline(never)]` are DELETED with the dense arm they were paired against: they
-// told LLVM to lay this out as the unlikely branch and optimize it for size, and it is now the
-// only inference path there is.
+/// A build-guard trip or a graph-inference failure is a named [`InferenceSeamFailure`].
+// `#[cold]`/`#[inline(never)]` are DELETED with the dense arm: they told LLVM to optimize this
+// as the unlikely branch, and it is now the only inference path there is.
 fn infer_and_expand_graph(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
     agg_trunk_sz: i32,
     infer: InferContext,
 ) -> Result<usize, InferenceSeamFailure> {
-    // AUDIT-1 F-02: a tree/board desync is a NAMED run-fatal seam failure, not a panic that
-    // `guard_worker` converts into `running = false` with no reason latched. It routes through
-    // the same channel every other leaf-inference failure does, so R275(b)'s instrument sees
-    // it and `store_fatal_defect` names it.
+    // A tree/board desync is a NAMED run-fatal seam failure, not a bare panic.
     let leaves = select_for(tree, selection)
         .map_err(|desync| InferenceSeamFailure::new("graph", "selection", desync.to_string()))?;
     if leaves.is_empty() {
@@ -366,8 +291,7 @@ fn infer_and_expand_graph(
     let mut graphs = Vec::with_capacity(leaves.len());
     let mut centers: Vec<(i32, i32)> = Vec::with_capacity(leaves.len());
     for leaf in &leaves {
-        // Stone list from the board's sparse cell map (order irrelevant — the
-        // builder coordinate-sorts). `Cell`/`Player` are `#[repr(i8)]` (±1).
+        // Order is irrelevant: the builder coordinate-sorts. `Cell`/`Player` are `#[repr(i8)]`.
         let mut stones: Vec<(i64, i64, i64)> = Vec::new();
         for (&(q, r), &cell) in leaf.cells_iter() {
             stones.push((i64::from(q), i64::from(r), cell as i64));
@@ -386,14 +310,9 @@ fn infer_and_expand_graph(
                 centers.push(g.window_center);
                 graphs.push(g);
             }
-            // Seam guard tripped (unreachable for a valid self-play board). R275(b):
-            // the pre-fix response was a silent batch-skip, argued from D6 —
-            // "nothing was enqueued, so there is no waiter to carry the reason to".
-            // That argues only that the reason cannot travel the QUEUE; it never
-            // argued for discarding it. The reason is right here, and a guard the
-            // board cannot legitimately trip is a defect, not a degrade. NOT routed
-            // through `seam_or_shutdown`: a build guard is a pure function of the
-            // board, so a closed queue cannot cause it and cannot excuse it.
+            // Seam guard tripped (unreachable for a valid self-play board). NOT routed through
+            // `seam_or_shutdown`: a build guard is a pure function of the board, so a closed
+            // queue cannot cause it and cannot excuse it.
             Err(reason) => {
                 return Err(InferenceSeamFailure::new(
                     "graph",
@@ -404,20 +323,12 @@ fn infer_and_expand_graph(
         }
     }
 
-    // Submit the WHOLE leaf batch in one shot and block on the assembled
-    // `(LegalSetPolicy, value)` of each. Q-FIND-1/R263: submitting one graph at a
-    // time put exactly one leaf in flight per worker, so the collector's saturation
-    // threshold was structurally unreachable and every forward carried a single
-    // graph. The returned `Vec` is indexed by SUBMISSION ORDER — the same order as
-    // `leaves` and `centers`, which `expand_and_backup_ls_at` below requires.
+    // Submit the WHOLE leaf batch in one shot: one graph at a time put exactly one leaf in
+    // flight per worker, making the collector's saturation threshold structurally unreachable.
+    // The returned `Vec` is indexed by SUBMISSION ORDER, which `expand_and_backup_ls_at` requires.
     let results = infer.graph_queue.submit_graphs_and_wait(graphs);
-    // COLLECT-ALL-THEN-DECIDE: every waiter has already resolved by the time this
-    // Vec exists, so the refusal below cannot orphan one. The waiter's
-    // `Err(reason)` travels back verbatim (D6) — R275(b) stops it being collapsed
-    // to a batch-skip and carries it into the named failure instead. This is the
-    // line F-816-9 died at: `graph_inference_forward_failed` on the box became
-    // `return 0` here, and the run's only symptom was a target-integrity refusal
-    // 100+ plies later.
+    // COLLECT-ALL-THEN-DECIDE: every waiter has resolved by the time this Vec exists, so the
+    // refusal below cannot orphan one, and `Err(reason)` is carried into the named failure.
     let mut aggregated_ls: Vec<LegalSetPolicy> = Vec::with_capacity(results.len());
     let mut aggregated_values: Vec<f32> = Vec::with_capacity(results.len());
     for res in results {
@@ -445,12 +356,8 @@ fn infer_and_expand_graph(
     }
 
     let n = leaves.len();
-    // Expand frame trunk = spec.trunk_size (`agg_trunk_sz`) — the SAME trunk the
-    // builder baked into `policy_scatter_index`. ALWAYS-ON tripwire (frozen
-    // `inner.rs:945`, a real `assert!`): the threaded `agg_trunk_sz` MUST still equal
-    // the spec's canonical graph trunk, else the expand frame drifts from the built
-    // slot window and silently misreads every in-window slot. One integer compare per
-    // leaf batch (release strips no `assert!`); die-loud on mismatch.
+    // Expand frame trunk = spec.trunk_size — the SAME trunk the builder baked into
+    // `policy_scatter_index`; a drifted frame silently misreads every in-window slot.
     assert_eq!(
         agg_trunk_sz, infer.spec.trunk_size as i32,
         "graph trunk mismatch: spec agg_trunk_sz vs spec graph trunk_size"
@@ -459,16 +366,11 @@ fn infer_and_expand_graph(
     Ok(n)
 }
 
-// ── MCTS search dispatch (HOT path) ─────────────────────────────────────────
-
 /// Two-branch dispatcher on the ONE search kind: Gumbel (Gumbel-Top-k root sampling +
-/// Sequential Halving, no Dirichlet — the Gumbel draw IS the root exploration) or PUCT
-/// (Dirichlet root noise, PUCT descent).
+/// Sequential Halving, no Dirichlet — the Gumbel draw IS the root exploration) or PUCT.
 ///
-/// THE ROOT'S OWN EVALUATION IS CHARGED under both kinds, and that is what makes `N`
-/// mean `N leaves`. The deleted `gumbel_root_counts` key made the charge a config
-/// choice, so "equal NN work at a fixed budget" was a claim a config could quietly
-/// falsify; now the served count is the leaf count on both arms by construction.
+/// THE ROOT'S OWN EVALUATION IS CHARGED under both kinds, which is what makes `N` mean `N
+/// leaves`; a config key for the charge made "equal NN work at a fixed budget" falsifiable.
 #[allow(clippy::too_many_arguments)]
 fn run_mcts_search(
     tree: &mut MCTSTree,
@@ -488,8 +390,7 @@ fn run_mcts_search(
     infer: InferContext,
     rounds: GumbelRoundCounters,
 ) -> McTSSearchResult {
-    // Both kinds open the same way: ONE leaf, which is the root itself, evaluated and
-    // backed up. It is charged against the budget on both arms.
+    // Both kinds open with ONE leaf, the root itself, charged against the budget on both arms.
     let root_sims = match infer_and_expand_graph(tree, LeafSelection::Batch(1), agg_trunk_sz, infer)
     {
         Ok(n) => n,
@@ -508,21 +409,17 @@ fn run_mcts_search(
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                // THE ROUND, not the simulation, is the unit. Every candidate alive at the
-                // current considered visit level is descended into ONCE, and the whole set
-                // goes to the producer as one batch — `m` leaves, then `m/2`, and so on.
-                // The batch is re-derived from the tree's own visit counts each round, which
-                // is what makes the halving Mctx's and not a phase allocation.
+                // THE ROUND, not the simulation, is the unit, and the batch is re-derived from
+                // the tree's own visit counts each round — which is what makes the halving
+                // Mctx's rather than a phase allocation.
                 let mut round = state.round_batch(tree, c_visit, c_scale);
                 if round.is_empty() {
                     break;
                 }
                 // The budget is the last word: a round is never allowed to overspend it.
                 round.truncate(budget - spent);
-                // The indices come from the root state, but the range check is the SAME one
-                // every other forced descent takes — a candidate the root does not own is a
-                // bookkeeping defect and takes the run-fatal exit, not a silent descent into
-                // a subtree belonging to nothing (AUDIT-1 F-02).
+                // A candidate the root does not own is a bookkeeping defect and takes the
+                // run-fatal exit, via the same range check every other forced descent takes.
                 for &child in &round {
                     if let Err(err) = tree.set_forced_root_child(Some(child)) {
                         let _ = tree.set_forced_root_child(None);
@@ -547,9 +444,8 @@ fn run_mcts_search(
                 if n == 0 {
                     break;
                 }
-                // LAW-18: the round's own width, logged where it is decided. A batching
-                // lever whose fire rate is not in the run cannot be told from a lever that
-                // is issuing one leaf per round trip.
+                // The round's own width, logged where it is decided: a lever whose fire rate is
+                // not in the run cannot be told from one issuing a leaf per trip.
                 rounds.round_leaves.fetch_add(n as u64, Ordering::Relaxed);
                 rounds.rounds.fetch_add(1, Ordering::Relaxed);
                 spent += n;
@@ -576,10 +472,8 @@ fn run_mcts_search(
                 if !running.load(Ordering::Relaxed) {
                     break;
                 }
-                // R335(c): the last batch is sized to the REMAINING budget. Unclamped, this
-                // loop served 53-56 sims against a configured 50, which is what made the
-                // ledger's served-sims line disagree with the config and every "fixed nodes"
-                // claim unstatable.
+                // The last batch is sized to the REMAINING budget: unclamped, this loop served
+                // 53-56 sims against a configured 50.
                 let batch = leaf_batch_size.min(move_sims - sims_done);
                 let n = match infer_and_expand_graph(
                     tree,
@@ -600,12 +494,8 @@ fn run_mcts_search(
     }
 }
 
-// ── Per-move dispatcher (warm/HOT path) ─────────────────────────────────────
-
-/// Orchestrates one full move: playout-cap selection, MCTS search, per-move stat
-/// accumulation, target-policy build (temperature -> completed-Q), sampling, position
-/// recording (BEFORE apply), and apply-move.
-/// Frozen `inner.rs:1099`.
+/// Orchestrate one full move: playout-cap selection, MCTS search, stat accumulation,
+/// target-policy build, sampling, position recording (BEFORE apply), and apply-move.
 #[allow(clippy::too_many_arguments)]
 #[allow(clippy::too_many_lines)]
 pub(crate) fn play_one_move(
@@ -667,18 +557,15 @@ pub(crate) fn play_one_move(
         },
     ) {
         McTSSearchResult::Completed(gs, sims_served) => {
-            // R335(c): the per-search visit count, as a MAX rather than a mean — a mean
-            // hides a single overshooting search, and the property is an upper bound.
+            // A MAX rather than a mean: a mean hides a single overshooting search.
             accumulators
                 .max_sims_per_search
                 .fetch_max(sims_served as u64, Ordering::Relaxed);
             gs
         }
         McTSSearchResult::RootExpansionFailed => return MoveOutcome::Continue,
-        // R275(b) SEAM conjunct: LAW-14 store-then-halt on its OWN counter. The
-        // message rides the shared latch slot to the drain face, so the supervisor
-        // reads the inference failure that killed the run instead of a
-        // target-integrity refusal a hundred plies downstream.
+        // Store-then-halt on its OWN counter, so the supervisor reads the inference failure
+        // that killed the run instead of a refusal a hundred plies downstream.
         McTSSearchResult::InferenceFailed(err) => {
             fatal_latch.store_inference_failure(err.to_string());
             return MoveOutcome::Break;
@@ -689,11 +576,9 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
 
-    // ── R275(b) EXPORTER conjunct: no visits, no target ──
-    // BEFORE any exporter runs, and arm-independent — `records::refuse_zero_visit_export`
-    // is the one place that decides a search is exportable. `policy` below feeds BOTH the
-    // recorded target and the move actually played, so a zero-visit search would otherwise
-    // also sample its move from the prior fallback.
+    // No visits, no target — BEFORE any exporter runs and arm-independent. `policy` below feeds
+    // BOTH the recorded target and the move played, so a zero-visit search would otherwise also
+    // sample its move from the prior fallback.
     if let Err(err) = records::refuse_zero_visit_export(tree, board.ply.index() as u16) {
         fatal_latch.store(err.to_string());
         return MoveOutcome::Break;
@@ -724,10 +609,7 @@ pub(crate) fn play_one_move(
         );
     }
 
-    // Phase B' Class-1 (frozen `inner.rs:1214`): snapshot the model version once per
-    // move and dedup-push into `version_seen`. The pure-Rust runner sources it from a
-    // runner-owned `model_version` atomic (default 0 until WP7 wires the NN setter), so
-    // a no-NN run's drain tuple `(mv_min, mv_max, mv_distinct)` is the frozen (0, 0, 1).
+    // Snapshot the model version once per move; a no-NN run's drain tuple is (0, 0, 1).
     {
         let v = infer.model_version.load(Ordering::Relaxed);
         if !version_seen.contains(&v) {
@@ -735,8 +617,7 @@ pub(crate) fn play_one_move(
         }
     }
 
-    // The training target's semantics are the search kind's own answer — there is no
-    // second flag that can disagree with the search that produced the tree.
+    // The target's semantics are the search kind's own answer — no second flag can disagree.
     let target_policy = if ctx.search_kind.completed_q_target() {
         MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.c_visit, ctx.c_scale))
     } else {
@@ -745,9 +626,7 @@ pub(crate) fn play_one_move(
 
     let record_full_search = move_is_full_search;
 
-    // LAW-18 (DESIGN_T §3.6): count a move whose exported target carries
-    // off-window (overflow) mass — the restored-mass fire-rate; pre-Phase-T
-    // this population was being truncated by the coverage gate.
+    // The restored-mass fire-rate: this population used to be truncated by the coverage gate.
     let MovePolicy::Ls(ls) = &target_policy;
     if ls.overflow.values().any(|&p| p > 0.0) {
         accumulators
@@ -775,10 +654,8 @@ pub(crate) fn play_one_move(
             "graph record dispatch requires the derived visit capacity — composed in \
              SelfPlayRunner::new's graph arm (R255)",
         );
-        // R347(a) — the sparse row's explicit support is the search's OWN visited-candidate
-        // set, read from the tree rather than inferred from the target: under Gumbel a
-        // visited candidate can carry LESS mass than an unvisited one with a strong prior,
-        // so "the top m by mass" is a different set and would put exact entries in the tail.
+        // The sparse row's support is the search's OWN visited-candidate set, read from the
+        // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
             Some(
                 tree.visited_root_child_cells()
@@ -797,9 +674,7 @@ pub(crate) fn play_one_move(
             visit_capacity,
             explicit_support.as_ref(),
         ) {
-            // LAW-14: a target-integrity defect is RUN-FATAL — latch the typed
-            // message (variant name in Display) and halt; the bridge drain face
-            // raises it to the supervisor (DESIGN_T §3.4).
+            // A target-integrity defect is RUN-FATAL: latch the typed message and halt.
             fatal_latch.store(err.to_string());
             return MoveOutcome::Break;
         }
@@ -821,9 +696,8 @@ fn relative_explore_gate(ply: usize, game_start_ply: usize, explore_moves: usize
     ply.saturating_sub(game_start_ply) >= explore_moves
 }
 
-/// Per-move legal-move sampler (frozen `inner.rs:1439`). ZOI-filters when enabled,
-/// picks via Gumbel winner (post exploration gate) or visit-count sampling, falls
-/// back to uniform random. `None` when no legal moves (caller breaks).
+/// Per-move legal-move sampler. ZOI-filters when enabled, picks via Gumbel winner (post
+/// exploration gate) or visit-count sampling, falls back to uniform random.
 #[allow(clippy::too_many_arguments)]
 fn select_move(
     board: &Board,
@@ -842,23 +716,16 @@ fn select_move(
 
     let legal = full_legal;
 
-    // Move selection: Gumbel winner or visit-count sampling, gated on ply RELATIVE to
-    // game start.
-    //
-    // `gumbel_explore_moves` IS item 7's switch, and no new key is needed for it:
-    // the paper's action selection is the Sequential-Halving winner and the
-    // exploration comes from the Gumbel draw itself, so a Gumbel run that wants no
-    // visit-count sampling mints `gumbel_explore_moves: 0` and takes the winner
-    // from the first ply. A second boolean would be a second authority over one
-    // behaviour.
+    // Gated on ply RELATIVE to game start. `gumbel_explore_moves` is the whole switch: the
+    // action selection is the Sequential-Halving winner and the exploration comes from the
+    // Gumbel draw, so "no visit sampling" is `gumbel_explore_moves: 0`.
     let use_gumbel_winner = gumbel_state.is_some()
         && relative_explore_gate(
             board.ply.index() as usize,
             ctx.game_start_ply,
             ctx.gumbel_explore_moves,
         );
-    // Mctx's final action: the highest-scoring of the MOST-VISITED children, which is
-    // Sequential Halving's answer rather than a visit-count sample.
+    // Mctx's final action: the highest-scoring of the MOST-VISITED children.
     let winner_pool = if use_gumbel_winner {
         gumbel_state.and_then(|state| state.best_action(tree, ctx.c_visit, ctx.c_scale))
     } else {
@@ -887,13 +754,9 @@ fn select_move(
 mod explore_gate_tests {
     use super::relative_explore_gate;
 
-    /// ⊕ GUMBEL-REPAIR-1 item 7 — the first-N-ply visit sampling IS a config switch, and
-    /// `selfplay.gumbel_explore_moves` is it. No second key is needed and none was added.
-    ///
-    /// The paper's action selection is the Sequential-Halving winner and the exploration
-    /// comes from the Gumbel draw itself, so "visit sampling off" is `explore_moves: 0` —
-    /// the gate then opens at the game's own first ply and every move is the winner. A
-    /// second boolean would be a second authority over one behaviour (R1).
+    /// The first-N-ply visit sampling IS this switch and needs no second key: the action
+    /// selection is the Sequential-Halving winner, so `explore_moves: 0` opens the gate at the
+    /// game's own first ply.
     #[test]
     fn zero_explore_moves_takes_the_winner_from_the_first_ply() {
         for ply in 0..4 {
@@ -919,9 +782,7 @@ mod explore_gate_tests {
         );
     }
 
-    /// D-WS3V3: the span is RELATIVE to the game's own start, so a seeded game that begins
-    /// deep in a replayed prefix explores for its own first `explore_moves` moves rather
-    /// than opening the gate immediately because the absolute ply is already large.
+    /// RELATIVE to the game's own start, so a seeded deep-prefix game still explores.
     #[test]
     fn the_span_is_relative_to_the_games_start() {
         assert!(

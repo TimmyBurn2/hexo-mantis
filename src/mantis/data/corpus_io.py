@@ -1,25 +1,10 @@
-# ~300-line file (LAW-17, at the soft cap): single-authority corpus sidecar IO
-# (save/load + sha256 + encoding/schema validation) — one cohesive module, kept whole.
 """Corpus metadata sidecar — save/load with sha256 + encoding validation.
 
-Implements the corpus side of the encoding registry contract. Sidecar
-``<path>.metadata.json`` is written next to each ``.npz`` (separate file — keeps
-``.npz`` archive bytes immutable for sha-stability).
-
-Public API:
-  - ``save_corpus(path, *, arrays, encoding_name, ...)`` writes npz + sidecar.
-  - ``load_corpus(path, *, expected_encoding=None)`` validates sidecar sha256 +
-    encoding match; raises ``CorpusMetadataError`` on mismatch; emits
-    ``DeprecationWarning`` if the sidecar is absent.
-  - ``validate_corpus_sidecar(path, *, expected_encoding=None, actual_sha=None)``
-    — same sidecar validation as ``load_corpus`` (schema version, sha256,
-    encoding match) WITHOUT the eager full-array load; accepts an already-computed
-    ``actual_sha`` to avoid re-streaming a large npz a caller has already hashed.
-  - ``CorpusMetadataError`` exception type for all metadata failures.
-  - ``compute_npz_sha256(path)`` exposed for backfill script reuse.
-
-Schema version: 1. Future bumps: write ``schema_version=N``; load rejects
-sidecars with ``schema_version > <known>``.
+The corpus side of the encoding registry contract. The sidecar is a separate
+``<path>.metadata.json`` beside each ``.npz``, which keeps the archive bytes immutable for
+sha-stability. Validation failures raise ``CorpusMetadataError``, an absent sidecar emits a
+``DeprecationWarning``, and load rejects a sidecar declaring a schema version above the known
+one.
 """
 from __future__ import annotations
 
@@ -81,15 +66,10 @@ def _utc_now_iso() -> str:
 
 
 def _infer_n_positions(arrays: dict[str, np.ndarray]) -> int:
-    """Leading dim of the first array.
-
-    Raises CorpusMetadataError if `arrays` is empty or the first array is
-    0-dim.
-    """
+    """Leading dim of the first array; raises CorpusMetadataError if empty or 0-dim."""
     if not arrays:
         raise CorpusMetadataError("save_corpus: arrays dict is empty")
-    # Prefer 'states' (canonical corpus key) if present, else first
-    # insertion-ordered array.
+    # 'states' is the canonical corpus key; otherwise the first insertion-ordered array.
     if "states" in arrays:
         first = arrays["states"]
     else:
@@ -111,18 +91,10 @@ def save_corpus(
     extra: dict[str, Any] | None = None,
     compress: bool = True,
 ) -> None:
-    """Save `arrays` as npz at `path`; write sidecar metadata.
+    """Save `arrays` as npz at `path`; write the `<path>.metadata.json` sidecar beside it.
 
-    Sidecar = `<path>.metadata.json` with:
-      encoding_name, sha256, n_positions, source_manifest, created_at,
-      created_by_commit, schema_version, extra.
-
-    `n_positions` is the leading dim of `arrays["states"]` if present,
-    else the first inserted array's leading dim.
-
-    `compress=True` (default) uses `np.savez_compressed`; pass `False` to
-    write an uncompressed archive (lets downstream loaders use
-    `np.load(mmap_mode='r')` for near-zero RAM at startup).
+    `n_positions` is the leading dim of `arrays["states"]` if present, else of the first
+    inserted array. `compress=False` lets downstream loaders use `np.load(mmap_mode='r')`.
     """
     npz_path = pathlib.Path(path)
     npz_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,8 +105,8 @@ def save_corpus(
         np.savez_compressed(npz_path, **arrays)  # pyright: ignore[reportArgumentType]
     else:
         np.savez(npz_path, **arrays)  # pyright: ignore[reportArgumentType]
-    # np.savez_compressed appends `.npz` if extension absent — match its
-    # actual on-disk path so sha + sidecar line up.
+    # np.savez_compressed appends `.npz` when the extension is absent — match its actual
+    # on-disk path so sha and sidecar line up.
     if not npz_path.exists() and npz_path.with_suffix(".npz").exists():
         npz_path = npz_path.with_suffix(".npz")
 
@@ -154,12 +126,8 @@ def save_corpus(
 
 
 def _load_arrays(npz_path: pathlib.Path) -> dict[str, np.ndarray]:
-    """Read all arrays from an npz into a dict (eager, not mmap).
-
-    Eager copy keeps caller free to use the file post-close (sidecar
-    sha-check needs the file open separately). Callers that want mmap
-    should call `np.load(path, mmap_mode='r')` directly — `load_corpus`
-    is the validation path, not the streaming path.
+    """Read all arrays from an npz into a dict (eager, not mmap), which leaves the caller free
+    to use the file post-close; a caller wanting mmap calls `np.load` directly.
     """
     out: dict[str, np.ndarray] = {}
     with np.load(npz_path) as data:
@@ -174,31 +142,14 @@ def validate_corpus_sidecar(
     expected_encoding: str | None = None,
     actual_sha: str | None = None,
 ) -> dict[str, Any]:
-    """Validate a corpus npz's sidecar WITHOUT loading the array payload.
-
-    Same validation semantics as `load_corpus` (schema_version, sha256,
-    encoding_name) minus the eager `_load_arrays` copy — for a caller that
-    only needs "is this the right, non-desynced corpus", not the arrays
-    themselves.
-
+    """Validate a corpus npz's sidecar WITHOUT loading the array payload — the same semantics as
+    `load_corpus` minus the eager array copy; an absent sidecar warns and returns `{}`.
     Args:
         path: npz path.
         expected_encoding: raise if sidecar's `encoding_name` differs.
         actual_sha: an already-computed sha256 of `path`, reused instead of
             re-streaming the file a second time. Computed fresh (one
             stream) when omitted.
-
-    Behaviour:
-      - Sidecar present:
-          * parse json; reject `schema_version > SCHEMA_VERSION`.
-          * compare `actual_sha` (or a fresh streaming sha256 of `path`)
-            against the sidecar's declared `sha256`; raise on mismatch.
-          * if `expected_encoding` given and sidecar's `encoding_name`
-            differs, raise.
-          * return metadata.
-      - Sidecar absent:
-          * emit DeprecationWarning naming the path.
-          * return {}.
 
     Raises:
       CorpusMetadataError on any validation failure.
@@ -264,18 +215,7 @@ def load_corpus(
     *,
     expected_encoding: str | None = None,
 ) -> tuple[dict[str, np.ndarray], dict[str, Any]]:
-    """Load `.npz` arrays + validate sidecar metadata.
-
-    Behaviour:
-      - Sidecar present:
-          * parse json; reject `schema_version > SCHEMA_VERSION`.
-          * recompute sha256 of `path`; raise on mismatch.
-          * if `expected_encoding` given and sidecar's `encoding_name`
-            differs, raise.
-          * return (arrays, metadata).
-      - Sidecar absent:
-          * emit DeprecationWarning naming the path.
-          * return (arrays, {}).
+    """Load `.npz` arrays and validate the sidecar; absent sidecar warns and returns `{}`.
 
     Raises:
       CorpusMetadataError on any validation failure.

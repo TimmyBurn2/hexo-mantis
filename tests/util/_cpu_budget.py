@@ -1,36 +1,16 @@
 """CPU thread budget detection + per-library env defaults — TEST-TREE, NOT WIRED.
 
-RELOCATED from ``src/mantis/util/cpu_budget.py`` under **R289(q)**, which gave this module
-two futures — *"relocates under tests/ or names a live consumer"* — and this is the first.
+Relocated out of ``src/mantis/util/``: an AST census found ZERO consumers outside this module
+and its own test. The code is preserved because the failure mode it addresses is real and
+measured; the wiring is what is absent. Wiring ``apply_auto_thread_budget`` into an entry point
+sets ``OMP_NUM_THREADS`` and its siblings process-wide, moving every timing measurement on this
+machine and confounding the perf lane's banked before-side — a scheduling reason, re-openable
+once the re-bench readout lands.
 
-WHY IT MOVED, and what the move does NOT mean. An AST census over ``src/``, ``tools/`` and
-``tests/`` found **zero** consumers outside this module and its own test: the four ``src/``
-hits were docstring and comment prose, which is why a grep-level check reports the opposite.
-The paragraph below used to open *"Imported VERY early ... by the training / self-play /
-benchmark entry points"* — a statement about wiring that had stopped being true, and a
-docstring asserting a contract nothing honours is the SF-7 class this repo has been burned by.
-The code is preserved verbatim BECAUSE the failure mode it addresses is real and measured; it
-is the wiring that is absent, not the reasoning.
-
-WHY IT WAS NOT WIRED INSTEAD, stated so the choice is re-openable rather than silent. Wiring
-``apply_auto_thread_budget`` into an entry point sets ``OMP_NUM_THREADS`` and its siblings
-process-wide, which moves **every timing measurement on this machine**. The perf lane's
-before-side is banked at a specific ``dev`` head and its re-bench is vested and unrun; changing
-thread budgets between the banked before-side and the after-side would confound the whole lane.
-That is a scheduling reason, not a verdict on the design — **wire-vs-keep-here is re-openable
-after the re-bench readout lands**, and this docstring is where a future reader should start.
-
-Stdlib-only, so the import-order constraint it was written for is trivially satisfied wherever
-it ends up living.
-
-PyTorch / NumPy / OpenBLAS / MKL all read OMP_NUM_THREADS (and sibling
-vars) at native-runtime initialisation, which happens during their
-import. The env vars must be set in os.environ before ``import numpy``
-or ``import torch``. Without this, on a rented container with N threads
-carved out of an M-thread host (rented 42-of-128 containers, spot instances, ...)
-every BLAS op tries to grab M threads against the N-slot cgroup, manifesting
-as 100 % container CPU + ~60 % GPU util + self-play workers starved of
-inference dispatches.
+PyTorch / NumPy / OpenBLAS / MKL read these vars at native-runtime initialisation, during
+import, so they must be set before ``import numpy`` or ``import torch``. Without it, on a
+container with N threads carved out of an M-thread host, every BLAS op grabs M threads against
+the N-slot cgroup: 100 % container CPU, ~60 % GPU util, self-play workers starved. Stdlib-only.
 """
 
 from __future__ import annotations
@@ -50,10 +30,8 @@ _THREAD_ENV_VARS: tuple[str, ...] = (
 
 
 def detect_cpu_budget() -> int:
-    """Return the smallest of (host nproc, sched affinity, cgroup quotas).
-
-    Falls through to 1 if every detection fails (paranoid but harmless).
-    """
+    """Return the smallest of (host nproc, sched affinity, cgroup quotas), or 1 if every
+    detection fails."""
     candidates: list[int] = []
     n = os.cpu_count()
     if n:
@@ -86,24 +64,11 @@ def detect_cpu_budget() -> int:
 
 
 def derive_per_lib(budget: int, n_workers: int | None) -> int:
-    """Return per-library thread count given detected cgroup budget + worker count.
+    """Return the per-library thread count for a detected budget and worker count.
 
-    Without ``n_workers``: ``clamp(budget // 4, 1, 8)`` — sized for a
-    trainer-only / bench workload where ~2 concurrent BLAS callers (trainer
-    + inference server) share the cgroup. Caps at 8 so a 128-vCPU bare-metal
-    host doesn't grant 32-thread BLAS for tiny ops.
-
-    With ``n_workers`` (self-play / sweep workload): ``clamp(budget //
-    (4 + n_workers // 8), 1, 8)``. Rough rule: each batch of 8 self-play
-    workers adds one more concurrent BLAS-using thread (state encoding,
-    target generation), so the slice gets smaller as the worker count rises.
-    Examples:
-
-      laptop (budget=16, n=14)       → 16 // (4 + 1) = 3
-      rented  (budget=41, n=24)      → 41 // (4 + 3) = 5
-      bare metal (budget=128, n=24)  → 128 // 7 = 18 → clamp 8
-      bare metal (budget=128, n=0)   → 128 // 4 = 32 → clamp 8
-    """
+    ``clamp(budget // (4 + n_workers // 8), 1, 8)``, divisor 4 when ``n_workers`` is absent: each
+    batch of 8 self-play workers adds roughly one more concurrent BLAS caller, and the cap of 8
+    stops a 128-vCPU host granting 32-thread BLAS for tiny ops."""
     if n_workers is None or n_workers <= 0:
         divisor = 4
     else:
@@ -117,21 +82,11 @@ def apply_auto_thread_budget(
     log_prefix: str = "[mantis]",
     silent: bool = False,
 ) -> dict[str, Any]:
-    """Set per-library thread caps in os.environ based on detected cgroup budget.
+    """Set per-library thread caps in os.environ from the detected cgroup budget.
 
-    Idempotent — guarded by ``_MANTIS_THREAD_BUDGET_APPLIED``.
-
-    Operator overrides (precedence high → low):
-      1. ``_MANTIS_THREAD_BUDGET_APPLIED`` already set → no-op.
-      2. ``MANTIS_THREAD_BUDGET=N`` → forces per-lib value to N.
-      3. Pre-existing per-var env (e.g. ``OMP_NUM_THREADS=6``) → respected
-         via ``setdefault``; only fills the vars that are NOT already set.
-
-    ``n_workers`` shrinks the per-lib slice for self-play workloads where
-    many python threads are concurrently issuing BLAS calls. See
-    ``derive_per_lib`` for the heuristic. Pass ``None`` for trainer-only
-    / bench paths.
-    """
+    Idempotent via ``_MANTIS_THREAD_BUDGET_APPLIED``; then ``MANTIS_THREAD_BUDGET=N``; then any
+    pre-existing per-var env, filled with ``setdefault`` so only unset vars are touched.
+    ``n_workers`` shrinks the per-lib slice for self-play workloads."""
     if "_MANTIS_THREAD_BUDGET_APPLIED" in os.environ:
         return {
             "cpu_budget": detect_cpu_budget(),
@@ -167,12 +122,9 @@ def apply_auto_thread_budget(
 
 
 def apply_torch_interop_cap() -> None:
-    """Apply ``torch.set_num_interop_threads`` from env after torch is imported.
-
-    Inter-op threads have no env hook in PyTorch — must be set programmatically
-    BEFORE any parallel torch work. Call this from script entry points right
-    after ``import torch``. No-op if no relevant env var is set.
-    """
+    """Apply ``torch.set_num_interop_threads`` from env after torch is imported — inter-op
+    threads have no env hook, so they must be set before any parallel torch work. No-op if no
+    relevant env var is set."""
     n = int(os.environ.get("TORCH_INTEROP_THREADS", os.environ.get("OMP_NUM_THREADS", "0")))
     if n <= 0:
         return
@@ -180,7 +132,5 @@ def apply_torch_interop_cap() -> None:
         import torch as _torch  # local: callers have already imported torch
         _torch.set_num_interop_threads(n)
     except (RuntimeError, ImportError):
-        # RuntimeError: parallel runtime already started (set in a prior call).
-        # ImportError: torch not actually present (impossible in caller path,
-        # but defensive — keep the function side-effect-only).
+        # RuntimeError: the parallel runtime already started; ImportError: torch absent.
         pass

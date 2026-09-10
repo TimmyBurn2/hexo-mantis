@@ -52,7 +52,7 @@ def _playout_cap(**over: object) -> dict:
     return out
 
 
-# ── MctsConfig ────────────────────────────────────────────────────────────────────────
+# MctsConfig
 def test_mcts_valid_payload_constructs_clean():
     cfg = MctsConfig.model_validate(VALID_MCTS)
     assert cfg.n_simulations == 50
@@ -84,7 +84,7 @@ def test_mcts_has_no_pydantic_level_default():
         assert field.is_required(), f"MctsConfig.{name} has a code-side default"
 
 
-# ── PlayoutCapConfig ──────────────────────────────────────────────────────────────────
+# PlayoutCapConfig
 def test_playout_cap_valid_payload_constructs_clean():
     cfg = PlayoutCapConfig.model_validate(VALID_PLAYOUT_CAP)
     assert cfg.fast_sims == 50

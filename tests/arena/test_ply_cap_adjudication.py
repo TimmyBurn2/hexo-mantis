@@ -1,22 +1,11 @@
-"""Ply-cap adjudication — the criterion class, the arena seam, and the INERT default.
+"""Ply-cap adjudication: the criterion class, the arena seam, and the INERT default.
 
-The suite's spine is one pair of tests that must be read together: the DISARMED arm proves a
-ply-capped game still scores `"draw"` exactly as it did before this seam existed, and the
-ARMED arm proves that the SAME position under an adjudicator scores differently. Without the
-second, the first is vacuous — it would pass equally against a seam that could never fire,
-which is the phantom-lever class LAW-07 exists to prevent.
+The disarmed and armed arms are read together — without the armed one, the disarmed arm passes
+equally against a seam that can never fire. `terminal` exists because a genuine win on the cap
+ply and a capped non-result both report `plies == max_plies`.
 
-The second thing pinned here is the `terminal` field's REASON FOR EXISTING: a genuine win
-found on the cap ply and a capped non-result both report `plies == max_plies`, so any
-consumer that derives decisiveness from `(winner, plies)` misreads the first as the second.
-The strength-floor probe is exactly such a consumer, so the distinction is pinned as
-something the record itself carries.
-
-POSITIONS ARE PLANTED THROUGH THE OPENING, never through a bot script. `_play_one_game`
-replays an opening onto the board with `board.apply_move` directly, so the sequence is
-deterministic and independent of the compound two-stone turn order (LAW-03: the engine hands
-the first stone to player 1 and then alternates in PAIRS, so ply index and player are not the
-same alternation and a bot-scripted line silently splits between the two sides).
+Positions are planted through the OPENING, not a bot script: the engine hands the first stone
+to player 1 and then alternates in PAIRS, so a bot-scripted line splits between the two sides.
 """
 from __future__ import annotations
 
@@ -39,18 +28,9 @@ from mantis.arena.regime import RegimeKey
 
 _ENCODING = "gnn_axis_v1"
 
-#: A LOPSIDED, unfinished position, ten plies long. Player 1's stones are collinear and
-#: player -1's are scattered, so both criteria measure a non-zero margin — asserted below
-#: rather than assumed, because a balanced position would make every award test vacuous. The
-#: cell assignment follows the engine's own compound-turn order (1, then pairs), verified by
-#: the two `longest`/`count_winning_moves` assertions in `test_the_planted_position_is_lopsided`.
-#: REACHABLE, and that is now load-bearing rather than incidental. The cells this replaces
-#: put player -1 on row `r = 9`, up to 18 hex-steps from the nearest stone — a position no
-#: legal sequence can produce at any encoding's `legal_move_radius`, so the adjudicator was
-#: being measured on input the game cannot hand it. R345(b)(2)'s legality boundary refuses to
-#: replay it. Every property the assertions below read is preserved and re-derived from the
-#: engine, not asserted here: unfinished, `longest(1) = 5` against `longest(-1) = 1`, and
-#: `count_winning_moves(1) = 2` against `0`.
+#: A LOPSIDED, unfinished, and LEGALLY REACHABLE position, ten plies long — every stone within
+#: the encoding's `legal_move_radius`, or the replay refuses it. Its properties are re-derived
+#: from the engine below, never asserted here.
 _PLANTED = [
     (0, 0),          # ply 0  -> player  1
     (0, 4), (2, 4),  # plies 1,2 -> player -1
@@ -59,9 +39,8 @@ _PLANTED = [
     (3, 0), (4, 0),  # plies 7,8 -> player  1
     (8, 4),          # ply 9  -> player -1
 ]
-#: The same position CONTINUED to a genuine win on the last permitted ply: player -1 takes
-#: plies 9,10 and player 1 completes its six at ply 11, so the game ends `plies == 12` WITH a
-#: winner — the shape that is indistinguishable from a cap without the `terminal` field.
+#: The same position continued to a genuine win on the last permitted ply — the shape that is
+#: indistinguishable from a cap without the `terminal` field.
 _WIN_ON_CAP = [*_PLANTED, (10, 4), (5, 0)]
 
 
@@ -118,11 +97,8 @@ def _play(moves: list, *, max_plies: int, adjudicator):
     )
 
 
-# ── the fixture's own premise ──────────────────────────────────────────────────────────
 def test_the_planted_position_is_lopsided_and_unfinished() -> None:
-    """Guard the premise every award test below rests on. If the engine's turn order or line
-    geometry ever moved, these assertions fail HERE — naming the fixture — instead of turning
-    the award tests into passes against a balanced board."""
+    """Guard the premise every award test rests on, so a moved turn order fails HERE."""
     board = _planted_board()
     assert not board.check_win(), "the planted position must be unfinished"
     assert board.ply == len(_PLANTED)
@@ -134,11 +110,8 @@ def test_the_planted_position_is_lopsided_and_unfinished() -> None:
     )
 
 
-# ── the criterion class ────────────────────────────────────────────────────────────────
 def test_an_unimplemented_criterion_refuses_loudly_instead_of_defaulting_to_draw() -> None:
-    """A criterion this module cannot honour must RAISE. A fall-through to `"draw"` would
-    read ARMED in the config and be absent in effect — the exact silently-disabled-lever
-    class R1/LAW-08 exist to kill."""
+    """Prove an unhonourable criterion RAISES rather than reading armed and being inert."""
     with pytest.raises(PlyCapCriterionError) as ei:
         PlyCapAdjudicator("centre_control", 1)
     assert "centre_control" in str(ei.value)
@@ -146,8 +119,7 @@ def test_an_unimplemented_criterion_refuses_loudly_instead_of_defaulting_to_draw
 
 
 def test_the_criterion_set_is_closed_and_matches_the_schema_literal() -> None:
-    """The adjudicator's closed set and the schema `Literal` are ONE fact. Two authorities
-    for it is how a config-legal criterion becomes a round-time refusal."""
+    """Prove the closed set and the schema `Literal` are ONE fact, not two authorities."""
     from typing import get_args
 
     from mantis.config.schema import PlyCapAdjudicationConfig
@@ -161,12 +133,7 @@ def test_the_criterion_set_is_closed_and_matches_the_schema_literal() -> None:
 
 @pytest.mark.parametrize("criterion", PLY_CAP_CRITERIA)
 def test_every_criterion_is_seat_neutral_in_its_MEASUREMENT(criterion: str) -> None:
-    """The signed margin must invert exactly when the seat swaps, for both criteria.
-
-    This is a claim about the MEASUREMENT, not about the position: the seat asymmetry the
-    module discloses for `immediate_win_margin` is about which side never moves again after
-    the cap, not about the arithmetic being lopsided in one direction.
-    """
+    """Prove the signed margin inverts exactly when the seat swaps, for both criteria."""
     board = _planted_board()
     adj = PlyCapAdjudicator(criterion, 1)
     plus = adj.measure(board, candidate_color=1, plies=board.ply)
@@ -176,8 +143,7 @@ def test_every_criterion_is_seat_neutral_in_its_MEASUREMENT(criterion: str) -> N
 
 
 def test_each_criterion_reads_the_engine_rather_than_a_transcribed_number() -> None:
-    """Both margins are re-derived here from the engine's own queries at the point of use, so
-    the test cannot drift away from what the adjudicator computes (R192(e))."""
+    """Re-derive both margins from the engine at the point of use, so the test cannot drift."""
     board = _planted_board()
     assert PlyCapAdjudicator(CRITERION_LONGEST_RUN, 1).measure(
         board, candidate_color=1, plies=board.ply
@@ -204,8 +170,7 @@ def test_a_margin_below_the_bar_stays_a_draw_and_one_at_the_bar_awards() -> None
 
 
 def test_the_adjudicator_counts_its_own_fires() -> None:
-    """LAW-18: the lever reports its fire rate. The tally is the count the round's event
-    carries, and it must move once per capped game and split by outcome."""
+    """Prove the tally moves once per capped game, splits by outcome, and hands back a copy."""
     board = _planted_board()
     adj = PlyCapAdjudicator(CRITERION_LONGEST_RUN, 1)
     assert adj.tally() == {"adjudicated": 0, "candidate": 0, "opponent": 0, "draw": 0}
@@ -221,10 +186,8 @@ def test_the_adjudicator_counts_its_own_fires() -> None:
     assert adj.tally()["adjudicated"] == 2, "tally() must hand back a COPY, never the ring"
 
 
-# ── the arena seam: INERT by default, and the mutation that proves it is not vacuous ────
 def test_a_capped_game_is_a_draw_when_no_adjudicator_is_armed() -> None:
-    """THE INERTNESS ARM. `adjudicator=None` is what every committed config produces, and on
-    it the capped game keeps the label it had before this seam existed."""
+    """THE INERTNESS ARM: `adjudicator=None`, what every committed config produces, still draws."""
     records = _play(_PLANTED, max_plies=len(_PLANTED), adjudicator=None)
     assert records, "the fixture must produce games or the assertion below is vacuous"
     for rec in records:
@@ -234,7 +197,7 @@ def test_a_capped_game_is_a_draw_when_no_adjudicator_is_armed() -> None:
 
 
 def test_the_same_capped_game_is_awarded_once_a_criterion_is_armed() -> None:
-    """THE MUTATION ARM — without it the test above passes against a dead seam."""
+    """THE MUTATION ARM: without it the inertness arm passes against a dead seam."""
     disarmed = _play(_PLANTED, max_plies=len(_PLANTED), adjudicator=None)
     adj = PlyCapAdjudicator(CRITERION_LONGEST_RUN, 1)
     armed = _play(_PLANTED, max_plies=len(_PLANTED), adjudicator=adj)
@@ -252,12 +215,7 @@ def test_the_same_capped_game_is_awarded_once_a_criterion_is_armed() -> None:
 
 
 def test_a_win_found_on_the_cap_ply_is_recorded_as_a_win_not_a_cap() -> None:
-    """The misclassification `terminal` exists to prevent, pinned directly.
-
-    A game whose winning move lands exactly at `max_plies` reports `plies == max_plies` —
-    indistinguishable from a capped non-result to any consumer reading `(winner, plies)`.
-    The recorded reason separates them, and such a game must NOT reach adjudication.
-    """
+    """Pin the misclassification `terminal` exists to prevent: a win at `max_plies` is a win."""
     adj = PlyCapAdjudicator(CRITERION_LONGEST_RUN, 1)
     records = _play(_WIN_ON_CAP, max_plies=len(_WIN_ON_CAP), adjudicator=adj)
     assert records

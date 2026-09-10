@@ -1,36 +1,12 @@
-"""StepCoordinator.step() — the per-step outer-loop core (WP10 §a.4 split — `step` slice).
+"""StepCoordinator.step() — the per-step outer-loop core.
 
->300 justify: `step()` reproduces one outer iteration of the old
-`loop.py::_run_loop` closure (warmup tick / waiting-for-games tick / training burst) — one
-cohesive control-flow unit, kept together. Behaviour-exact on the reachable seams, routed
-through the injected collaborators (`config.py` Protocols); the stall watchdog is driven via
-the Slice-1 `lifecycle.watchdog.StallWatchdog.tick(...)` (the slice-2 wiring the DESIGN calls
-for). The terminal-eval flush + close_out live in `drain.py`. WP13-A adds the run-safety
-instrumentation half to the SAME control-flow unit (it is one loop, not two): the
-`train_step` heartbeat beats, the log_interval NARRATION emission + the 4 WARN rules, the
-gate_interval ARMING boundary (the draw-rate hard-abort gate + the LAW-18 `monitor_gates`
-summary — split off the narration knob by R242/ADJ-D12), and the async eval-RESULT
-consumer `on_eval_round_complete` (warn-only sealbot by default, operator G-3) — all in this
-file so the loop's decision trail stays readable end to end. (The stride5-spam gate was
-REMOVED at close-out, operator directive B.) WP12-R Phase CS adds the THIRD save leg
-(R137/CARD-CLEANSTOP-SAVE) to the SAME unit: the O2 iteration-limit arm is the one
-OUTER-loop site that ACTS on the clean-completion predicate by ending the run — the inner
-burst-break evaluates the character-identical expression but only ends the burst, leaving
-`running` True so the outer arm fires on the next `step()` — so the save that makes a
-finished run's product exist has to sit on this arm; splitting it out would put the write in
-one file and the decision that authorizes it in another.
+>300 justify: one outer iteration (warmup tick / waiting-for-games tick / training burst)
+plus its run-safety instrumentation is ONE control-flow unit. The clean-completion save has
+to sit on the arm that ACTS on the completion predicate, so splitting the file would put the
+write in one place and the decision authorizing it in another.
 
-Severances (must not re-enter): the `bot_refresh` subprocess family (`_tick_bot_refresh`,
-force-refresh sentinel) is a DEFINITE KILL — NOT ported. The `track_b_*` snapshot/attribution
-call-sites (F-22..F-33 KILL) are severed. The DISPLAY half (dashboard renderers, TB writer),
-the perf/tracemalloc probes and the value-probe cadence stay DEFER/ARCH; events route through
-the injected `EventSink`. The probe-as-gate class (early-game probe, value-spread canary) is
-FALSIFIED (F-27/F-30) and never becomes a run gate here.
-
-L-B/L-A discipline: `step()` NEVER blocks on eval and NEVER reads the eval KICK return for
-WR — a blocking drain in the step path is the run3 wedge class the independent heartbeat
-watchdog exists to kill. Completed eval ROUNDS reach the sealbot-WR gate only through
-`on_eval_round_complete` (WP11-A routes them mid-run; `drain.py` routes them at teardown).
+`step()` never blocks on eval and never reads the eval kick return; completed rounds reach
+the sealbot-WR gate only through `on_eval_round_complete`.
 """
 from __future__ import annotations
 
@@ -42,7 +18,7 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
 
-import mantis.monitor.rules as _rules  # module-attribute counter reads (F-29)
+import mantis.monitor.rules as _rules  # module-attribute counter reads
 import mantis.train.buffer_persist as _buffer_persist
 import mantis.train.bundle as _bundle
 import mantis.train.resume_state as _resume_state
@@ -77,11 +53,8 @@ from mantis.train.events import (
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _steps_budget
 
-#: How many COMPLETE resume bundles the run keeps (R345(b)(3)). Two, not one: pruning to one
-#: means the moment a new bundle's manifest commits, the only other resume point is already
-#: gone, so a bundle that turns out to be unreadable leaves nothing behind it. Not a config
-#: key — the operator has no decision to make here and a knob would be a third authority over
-#: a disk budget `monitor.disk_guard` already owns.
+#: How many COMPLETE resume bundles the run keeps. Two, not one: pruning to one means an
+#: unreadable new bundle leaves nothing behind it. Not a config key.
 _BUNDLES_RETAINED = 2
 
 _LOG = logging.getLogger(__name__)
@@ -90,16 +63,8 @@ _LOG = logging.getLogger(__name__)
 def _anchor_sha256(anchor_state: Any) -> str | None:
     """The live anchor's PARAMETER identity, or None when there is no anchor file to hash.
 
-    IN THE GUARD'S OWN DENOMINATION, and a live box run is why. `checkpoint_state_sha256` is what
-    `resolve_anchor` compares the launch pin against (AUDIT-1 F-32: one denomination with
-    `net_param_hash` and `state_dict_param_hash`). The first cut recorded a FILE sha256 here,
-    which reads plausibly and is useless to the one consumer that matters — the resume could not
-    compare it against the pin at all, so it could not answer the question the pin asks.
-
-    Hashed from the STORED weights rather than the live module: the artifact a resumed run
-    reloads is the one on disk, and a digest over the in-memory net would agree with itself no
-    matter what `best_model.pt` actually holds. `None` is honest — a run with no anchor yet has
-    no hash to assert — and the pre-flight assert is what refuses to START such a run.
+    In `checkpoint_state_sha256`'s denomination, the one `resolve_anchor` compares the launch
+    pin against; hashed from the STORED weights, because a resumed run reloads the disk artifact.
     """
     path = getattr(anchor_state, "best_model_path", None)
     if path is None or not Path(path).exists():
@@ -108,99 +73,42 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
 
     return checkpoint_state_sha256(Path(path))
 
-#: The gate keys carried by the LAW-18 `monitor_gates` summary (checks/fires/skips/warns).
-#: The KEPT WP10 grad-norm abort is in the list so the one hard-abort that is unconditionally
-#: ACTIVE at landing is visible in the ONE channel like the WP13-A gates. `sealbot_wr_abort`
-#: ships WARN-ONLY (operator G-3) and `draw_rate_collapse` is armed BY THE CONFIG
-#: (`train.draw_rate_abort`; `null` is the explicit off posture — WPAX Phase D, R65/R80) —
-#: both named here so their inert/warn posture is readable, never silent. (`stride5_spam` was
-#: REMOVED at close-out, operator directive B.)
+#: The gate keys carried by the `monitor_gates` summary (checks/fires/skips/warns).
+#: `sealbot_wr_abort` ships warn-only and `draw_rate_collapse` is armed by the config, so both
+#: are named here to keep an inert posture readable rather than silent.
 GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
 )
 
-#: The WP12-R Phase-T target-integrity counters (LAW-18 / R164), in the order
-#: `IMPL_NOTES_T §3.6` names them, minus the one R346(f) took, and the RECORDED-POSITION
-#: counter their fire rate is taken over. Both live on the `RunnerStats` snapshot `mantis.train.events` already reads
-#: once per `iteration_complete`, so nothing here opens a second reader of the pool.
-#:
-#: `inference_failures_total` joins them at R275(b) and is NOT a fourth Phase-T counter:
-#: it is the SEAM conjunct of the same defect class (F-816-9 — "a search that did not run
-#: is exported as if it had"), and it rides this block because the two conjuncts are only
-#: useful read together. A run that dies with `inference_failures_total` advanced and
-#: `target_integrity_defects` at 0 was killed at the seam BEFORE any target was built; the
-#: reverse ordering says the seam held and the exporter caught something else. Splitting
-#: them across two blocks would make that read a join across events.
-#: `gridls_zero_policy_rows` LEFT with R346(f): it counted zero-policy rows on the dense
-#: grid/LS record path, whose engine getter is gone, so it would have published a permanent 0
-#: reading as "measured, none found" — the phantom input LAW-07 refuses.
+#: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
+#: over, all read off the one `RunnerStats` snapshot. `inference_failures_total` rides here
+#: because it is the seam conjunct of the same defect class and is only useful read beside them.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
 )
 _POSITIONS_COUNTER = "positions_generated"
 
-# The sealbot-WR ring deliberately has NO depth constant either (R265 / ADJ-D38, extending
-# ADJ-D36 one gate over). `WR_HISTORY_DEPTH = 5` clipped it while all three WR triggers
-# refuse on `len(history) >= their consec`, so every schema-legal
-# `monitor.wr_collapse_consecutive_evals` or `monitor.wr_rolling_consecutive_evals` >= 6 was
-# armed-in-the-config and permanently unfireable. Its capacity is now derived at the point of
-# use in `on_eval_round_complete` from the minted consec keys AND from rule B's own peak
-# window (`monitor.rules.WR_PEAK_WINDOW_EVALS`) — the one job the deleted literal was ALSO
-# doing, which is why that half is named and preserved rather than derived away.
-# The draw-rate ring deliberately has NO depth constant (ADJ-D36): its capacity is the
-# minted `train.draw_rate_abort.consec`, derived at the point of use in
-# `_run_hard_abort_gates`'s draw-rate arm. A constant here was the "fifth face" clip — any
-# schema-legal `consec` above it was armed-in-the-config, permanently-unfireable-in-effect,
-# while gate 12's cadence audit published a fire step the run could not deliver.
-# (Plain `#`, not `#:` — this documents an ABSENCE, and `#:` would attach to whatever
-# assignment follows.)
+# Neither the sealbot-WR ring nor the draw-rate ring has a depth constant: a literal clipped
+# every schema-legal `consec` above it into unfireable-in-effect, so capacity is derived at the
+# point of use. Plain `#` — this documents an ABSENCE and must attach to no assignment.
 
 
 def _snapshot_counter(rstats: Any, name: str) -> int | None:
-    """Read ONE cumulative counter off the runner snapshot, or `None` if the snapshot does
-    not carry it.
+    """Read ONE cumulative counter off the runner snapshot, or `None` when it is absent.
 
-    **THE `None` ARM CANNOT FIRE IN PRODUCTION, and saying so is the point** (RED-TEAM F-02
-    — graded instance FOUR of this phase's weak axis, and the first instance in shipped code
-    rather than in an instrument). An earlier version of this docstring spent eleven lines on
-    what `None` MEANS in the event stream without checking what can REACH it. Measured:
-    `pool_hooks.RunnerStats` declares every counter in the block `int = 0` and `runner_stats()`
-    supplies every field explicitly, so a real snapshot ALWAYS carries the attribute —
-    `getattr(rstats, name, None)` never returns `None` on any production path, and no oracle
-    drives that arm (O-23's `None` is reached through the OTHER condition, a zero
-    `positions_delta`). The precedent the old text cited to justify the arm — `pool_hooks`'s
-    own per-field `getattr` defaults — is the very mechanism that makes it unreachable.
-
-    So the arm's TRUE purpose, stated honestly: it keeps the **17 injected telemetry
-    stand-ins** drivable — one of them a SEALED oracle
-    (`tests/train/test_terminal_eval_rc.py`'s five-attribute `_RunnerStats`, which O-05 node
-    1 drives through `coord.step()` at `log_interval=1`). It is a test-driven branch in
-    production code. It is NOT deleted, because deleting it reds those 17 files and the full
-    mutation battery has already been driven against these bytes; it is recorded as
-    `Q-O-DEAD-NOT-MEASURED-ARM`.
-
-    What the arm does NOT do, so the next reader does not re-derive it wrong: it does not
-    protect against a counter losing its producer. A renamed bridge getter is swallowed one
-    layer BELOW this function by `pool_hooks`'s `getattr(r, name, 0)`, which publishes a
-    fabricated `0` — `Q-O-BRIDGE-GETTER-NAMES`, measured at the Rust level by RED-TEAM §2.
-    If the value ever DOES arrive as `None`, `event_manifest.md`'s convention governs it
-    (NOT MEASURED, never a fabricated value) — that contract is correct; only its
-    reachability was overstated.
+    The `None` arm cannot fire in production — `RunnerStats` declares every counter — and is
+    kept only because injected telemetry stand-ins drive it.
     """
     value = getattr(rstats, name, None)
     return None if value is None else int(value)
 
 
 def _fire_rate(delta: int | None, positions_delta: int | None) -> float | None:
-    """Fires per RECORDED POSITION over the interval (LAW-03: the unit is stated, and the
-    denominator is published beside the rate so no consumer has to guess it).
+    """Fires per RECORDED POSITION over the interval; `None` when there is nothing to divide by.
 
-    `None` when there is nothing to divide by. `delta / max(1, positions_delta)` is the
-    tempting divide-by-zero guard and it is exactly what this must not do: with no position
-    recorded there is NO rate, and publishing `0.0` would tell a reader "this lever did not
-    fire per position", which is a claim nobody measured. A NEGATIVE delta is passed through
-    as measured — the atomics are monotonic, so a decrease is a wiring bug and a `max(0, …)`
-    would hide it behind a plausible reading (the `actor_lag_negative` precedent).
+    No `max(1, ...)` guard: with no position recorded there is NO rate, and `0.0` would claim a
+    measurement nobody took. A negative delta passes through, since the atomics are monotonic
+    and a decrease is a wiring bug.
     """
     if delta is None or positions_delta is None or positions_delta == 0:
         return None
@@ -208,12 +116,8 @@ def _fire_rate(delta: int | None, positions_delta: int | None) -> float | None:
 
 
 class StepCoordinator:
-    """Owns the per-step mutable state extracted from the old `loop.py::_run_loop`.
-
-    One ``step()`` equals one outer iteration; it returns a :class:`StepOutcome` describing
-    every decision. The caller (`run_training_loop`) installs signal handlers against the same
-    ``ShutdownState`` this coordinator holds and calls ``close_out()`` (drain.py) at teardown.
-    """
+    """Own the per-step mutable state of the outer training loop; one ``step()`` is one outer
+    iteration returning a :class:`StepOutcome`."""
 
     def __init__(
         self,
@@ -267,40 +171,22 @@ class StepCoordinator:
         self._clock = clock or RealClock()
         self._sink = sink
         self._exit_fn = exit_fn
-        # WP13-A run-safety seams: the heartbeat fn (the watchdog's `train_step` source),
-        # the monitor thresholds and the independent watchdog `close_out` disarms.
+        # Run-safety seams: the heartbeat fn, the monitor thresholds, the independent watchdog.
         self._heartbeat = heartbeat
-        # REQUIRED, no fallback — R292(b)'s class-wide half, completed under the R43 grant
-        # F-816-29 (R299(b), diff-scoped, same-act re-pin, per-event and NOT precedent). This was
-        # the last silent default in the chain: `build_run_safety` already required the parameter
-        # one layer up, and a bare fallback substitutes 29 dataclass literals for whatever the
-        # operator minted — F-816-24's defect at a second site. `MonitorConfig` is no longer
-        # constructible from this module, which is what the single-authority guard now asserts.
+        # REQUIRED, no fallback: a default here substitutes dataclass literals for whatever the
+        # operator minted. `MonitorConfig` is no longer constructible from this module.
         self.monitor_cfg = monitor_cfg
         self.heartbeat_watchdog = heartbeat_watchdog
-        # R137/CARD-CLEANSTOP-SAVE: the clean-completion latch. A plain bool, PUBLIC because
-        # `train/loop.py`'s post-loop guard is its one consumer (`_clean_stop_already_saved`)
-        # and a private name would make that read look like an intrusion. Set AFTER the leg-3
-        # write (never before — see `_clean_stop_save`), and carrying NO set-once guard: the
-        # leg has no internal latch because exactly-once is a property of the DRIVER, not of
-        # a branch only a test can reach. Deliberately NOT the first-non-None shape
-        # `record_terminal_eval_reason` uses.
+        # The clean-completion latch, PUBLIC because `train/loop.py`'s post-loop guard is its
+        # one consumer. Set AFTER the leg-3 write, and carrying no set-once guard: exactly-once
+        # is a property of the driver, not of a branch only a test can reach.
         self.clean_stop_saved = False
-        # WP-UNFREEZE: the continuous actor-sync engine (mantis.train.actor_sync).
-        # None is a unit-test affordance ONLY (like `eval_pipeline=None`); production
-        # wiring is unconditional at the ONE composition root, pinned by
-        # tests/train/test_actor_sync_isolation.py.
+        # None is a unit-test affordance ONLY; production wiring is unconditional at the one
+        # composition root.
         self.actor_sync = actor_sync
-        # R345(b)(3): every PERIODIC checkpoint becomes a full resume bundle. The cadence stays
-        # the trainer's (R173 — `_maybe_periodic_checkpoint` is the one reader of
-        # `train.checkpoint_interval`); the ring and the sidecar come from here, because the
-        # trainer holds neither the buffer nor the round counter. Installed at construction so
-        # the two signal-stop legs and the periodic leg share ONE publisher and cannot drift on
-        # what a bundle contains — the exact drift `persist_resume_state`'s own docstring
-        # records having hit when only one of two stop legs was wired.
-        # `trainer=None` is a unit-test affordance (the same one `eval_pipeline=None` is), so
-        # the install is guarded rather than assumed; production wiring is unconditional
-        # because production always has a trainer.
+        # Every PERIODIC checkpoint becomes a full resume bundle: the cadence stays the
+        # trainer's, the ring and sidecar come from here because the trainer holds neither, and
+        # one publisher keeps the stop legs from drifting. `trainer=None` is a test affordance.
         if self.trainer is not None:
             self.trainer.bundle_publisher = (
                 lambda path, _step: self.persist_resume_state(path)
@@ -313,54 +199,44 @@ class StepCoordinator:
         self._schedule_idx = 0
         self.last_warmup_log = 0.0
         self._last_loss_info: dict[str, float] | None = None
-        # WPTS Phase T: the resolved encoding spec (lazy, once) — the straight arm's typed
-        # route dispatches off spec.representation, resolved from the DECLARED config this
-        # coordinator already holds, through THE one resolver (never a buffer sniff).
+        # The resolved encoding spec (lazy, once): the straight arm dispatches off
+        # spec.representation, resolved from the declared config through the one resolver.
         self._resolved_step_spec: Any | None = None
-        #: PERF-TRANCHE-1 B1 — the ring rebuild's thread budget, derived once (see
-        #: `_sample_threads`). `None` = not yet derived, never "no threads".
+        #: The ring rebuild's thread budget, derived once (see `_sample_threads`).
+        #: `None` = not yet derived, never "no threads".
         self._resolved_sample_threads: int | None = None
-        #: WP12-R F2: the memo behind `_microbatch_caps`, the graph-only cap thunk.
+        #: The memo behind `_microbatch_caps`, the graph-only cap thunk.
         self._resolved_caps: Any | None = None
         self._initial_policy_loss: float | None = None
         self._consec_high_gn = 0
         self._eval_round_last_step = -1
 
-        # WP13-A gate state — every ring is caller-owned (the rules are stateless).
+        # Gate state — every ring is caller-owned (the rules are stateless).
         self._wr_history: list[tuple[int, float]] = []
-        # Which sealbot rung the entries in `_wr_history` came from (AUDIT-1 F-14). `None`
-        # before the first round, and whenever the round reported no sealbot rung at all.
+        # Which sealbot rung the entries in `_wr_history` came from; `None` before the first
+        # round, and whenever the round reported no sealbot rung at all.
         self._wr_history_rung: str | None = None
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
         self._last_iter_games = 0
-        # WP12-R Phase O (R164): the previous `iteration_complete` boundary's counter
-        # readings, so the payload can publish an INTERVAL delta beside the cumulative
-        # total. Seeded at 0 (pool start), the same baseline `_last_iter_games` uses.
+        # The previous `iteration_complete` boundary's counter readings, so the payload can
+        # publish an INTERVAL delta beside the cumulative total. Seeded at 0 (pool start).
         self._last_target_counters: dict[str, int] = dict.fromkeys(
             (*_TARGET_INTEGRITY_COUNTERS, _POSITIONS_COUNTER), 0,
         )
-        # WP12-R Phase O (R152/R133): the TERMINAL round's outcome, latched set-once by
-        # `drain._record_terminal_outcome` and read by the composition root.
+        # The TERMINAL round's outcome, latched set-once by `drain._record_terminal_outcome`
+        # and read by the composition root.
         self._terminal_eval_reason: str | None = None
         self._run_started = self._clock.now()
-        # `warns` is carried alongside checks/fires/skips so the warn-only sealbot posture
-        # (operator G-3) is visible per-gate in every `monitor_gates` event, not silent.
+        # `warns` rides beside checks/fires/skips so the warn-only sealbot posture is visible
+        # per-gate in every `monitor_gates` event, not silent.
         self._gate_stats: dict[str, dict[str, int]] = {
             name: {"checks": 0, "fires": 0, "skips": 0, "warns": 0} for name in GATE_NAMES
         }
 
-        # Self-play stall watchdog — always armed (context law, LAW-16). Driven via
-        # `.tick(...)` from step(); fires → best-effort snapshot to a DISTINCT path + exit.
-        # NO code-side default (R1). This read used to be
-        # `mixing_cfg.get("buffer_persist_path", "checkpoints/replay_buffer.bin")`, and the
-        # production root passes `mixing_cfg={}` — so the default ALWAYS won, and it is
-        # CWD-relative: a run launched from outside the repo root wrote its stall snapshot
-        # into some unrelated `./checkpoints/`, not into its own `--out-dir`. Derived instead
-        # from the trainer's own checkpoint directory, which is the object that actually
-        # knows where this run's artifacts live (R98, derive at point of use).
-        # Resolved at FIRE time, not here: the path is only needed if the watchdog actually
-        # fires, and deferring keeps construction free of any trainer-attribute requirement.
+        # Self-play stall watchdog — always armed; fires to a DISTINCT snapshot path + exit. No
+        # code-side default for that path: it is derived from the trainer's own checkpoint dir
+        # and resolved at FIRE time, so construction needs no trainer attribute.
         def _snapshot_target() -> Path:
             bp = self.mixing_cfg.get("buffer_persist_path")
             if bp is None:
@@ -373,61 +249,39 @@ class StepCoordinator:
             sink=sink,
             exit_fn=exit_fn,
             save_snapshot=lambda: self._snapshot_buffer(_snapshot_target()),
-            # Item 4(b): the stall abort saves WEIGHTS, not just positions. Routed through
-            # the trainer's own stamped save path so the artifact is a real envelope-v2
-            # checkpoint (LAW-12), not a bare state_dict nothing can load.
+            # The stall abort saves WEIGHTS too, routed through the trainer's stamped save path
+            # so the artifact is a real envelope-v2 checkpoint, not a bare state_dict.
             save_model=lambda: self.trainer.save_checkpoint(self._last_loss_info or None),
         )
         self._watchdog.arm(getattr(pool, "games_completed", 0))
 
-    # ── watchdog snapshot (distinct path; never the canonical resume buffer) ──────────────
     def _snapshot_buffer(self, path: Any) -> None:
         saver = getattr(self.buffer, "save_to_path", None)
         if saver is not None:
             saver(str(path))
 
     def _disk_critical(self) -> bool:
-        """Has the disk guard already fired? Read through `subsystems`, defensively.
-
-        `False` when no guard is wired, which is every test harness and every composition
-        without a disk guard — the safe direction: an absent guard means no disk abort is in
-        flight, so the ring is persisted as normal.
-        """
+        """Has the disk guard already fired? `False` when none is wired — the safe direction,
+        since an absent guard means no disk abort is in flight."""
         guard = getattr(self.subsystems, "disk_guard", None)
         return bool(guard is not None and getattr(guard, "critical_fired", False))
 
-    # ── the RESUME sidecar (R343(c)/CARD-RESUME; NOT the watchdog snapshot above) ─────────
     def persist_resume_state(self, checkpoint_path: Any) -> Any:
         """Persist the ring and write the sidecar that makes `checkpoint_path` resumable.
 
-        PUBLIC, AND CALLED FROM TWO PLACES, because a live box run found that one was not
-        enough: a signal stop has TWO save legs — this coordinator's O3 arm, and `loop.py`'s
-        `_final_save()` — and the loop's is the one that completes the stop when `step()` does
-        not return. The first cut wired only O3; the box test stopped a run whose `step()` was
-        mid-flight, got a checkpoint from `_final_save` and NO sidecar, which is exactly the
-        silent empty-ring resume R343(c) forbids. Both legs now call this, and it is safe to
-        call twice: the ring write and the atomic sidecar replace are idempotent for a given
-        state, and the LAST caller wins with the truest step.
+        Called from BOTH save legs — this coordinator's O3 arm and `loop.py`'s `_final_save()`,
+        the one that completes a stop when `step()` does not return. Safe to call twice: both
+        writes are idempotent and the last caller wins with the truest step.
 
-        THE RESUMABLE-STOP GUARD LIVES HERE rather than at either call site, so the two legs
-        cannot drift apart on the question. Persisting the ring is a LARGE WRITE, and the one
-        abort that reaches these legs with `abort_rule` still unrecorded is the DISK GUARD's —
-        it stops a run by SIGTERMing its own process and `run.py` records its rule only in the
-        teardown. Persisting a 100k-position ring on the one abort that fires BECAUSE THE DISK
-        IS FULL would deepen the condition that fired, or raise ENOSPC out of a LAW-14 path and
-        turn a clean rc 47 into a crash. The guard latches `critical_fired` BEFORE it signals,
-        which is what makes it readable in time; absent a guard the term is False.
+        The resumable-stop guard lives here so the two legs cannot drift. The one abort that
+        reaches them with `abort_rule` unrecorded is the disk guard's, and persisting a large
+        ring on a full disk would deepen the condition that fired.
+
+        Distinct from `_snapshot_buffer`, the watchdog's best-effort `.watchdog` snapshot: this
+        one IS the resume buffer, and a failure stops the run loudly rather than leaving a
+        resume that silently refills from empty.
 
         Returns the sidecar path, or `None` when the stop is not a resumable one.
-
-        DISTINCT FROM `_snapshot_buffer` DIRECTLY ABOVE, and the distinction is the whole
-        reason both exist. That one is the stall watchdog's abnormal-exit snapshot: best-effort,
-        written to a `.watchdog` path precisely so it can never truncate the resume buffer. This
-        one IS the resume buffer, and it is LAW-14 — a failure here propagates and stops the run
-        loudly, because the alternative is an exit that reports success and a resume that
-        silently refills the ring from empty (R343(c)).
-
-        Returns the sidecar path.
 
         Raises:
             OSError: the ring or the sidecar could not be written.
@@ -435,18 +289,12 @@ class StepCoordinator:
         """
         if self.shutdown.abort_rule is not None or self._disk_critical():
             return None
-        # R345(b)(3): the ring is named for ITS OWN checkpoint rather than written to one
-        # canonical `replay_buffer.bin` every save overwrote. That single path made "keep the
-        # previous bundle" impossible in principle — the previous ring was gone the moment the
-        # next save began — so retention had nothing to retain.
+        # The ring is named for ITS OWN checkpoint rather than one canonical path every save
+        # overwrote — that made "keep the previous bundle" impossible in principle.
         ring_path = _bundle.ring_path_for(checkpoint_path)
-        # THE STEP COMES FROM THE CHECKPOINT, not from `self._train_step` (R345(b)(3)). The
-        # coordinator's counter is refreshed AFTER `_run_training_step` returns, while the
-        # periodic seam fires INSIDE it — so at a periodic publication `_train_step` is one
-        # behind, and a manifest built from it would disagree with the very checkpoint it
-        # certifies. The filename is the artefact of record and carries the step
-        # (`checkpoint_filename`), so reading it there makes the two unable to diverge; the
-        # counter is the fallback for a name that does not parse (a quarantine write).
+        # THE STEP COMES FROM THE CHECKPOINT, not `self._train_step`: the counter is refreshed
+        # after `_run_training_step` returns while the periodic seam fires inside it, so at a
+        # periodic publication it is one behind. The counter is the unparsable-name fallback.
         bundle_step = _bundle.step_of(checkpoint_path)
         if bundle_step is None:
             bundle_step = int(self._train_step)
@@ -456,15 +304,12 @@ class StepCoordinator:
             run_id=str(self.full_config.get("run_id", "")),
             step=bundle_step,
             checkpoint_filename=Path(checkpoint_path).name,
-            # The counters with no HEAD mechanism (`pipeline.py` resets both every launch).
-            # Read through the pipeline's own accessor so this site never reaches into its
-            # private state — a second authority for "which round is next" is exactly what
-            # `gate.stride`'s modular arithmetic cannot survive.
+            # The counters with no HEAD mechanism. Read through the pipeline's own accessor: a
+            # second authority for "which round is next" is what `gate.stride` cannot survive.
             round_counter=(0 if pipeline is None else int(pipeline.round_counter)),
             last_p_hat=({} if pipeline is None else dict(pipeline.last_p_hat)),
             anchor_sha256=_anchor_sha256(self.anchor_state),
-            # A placeholder the publisher replaces: the ring's hash cannot be known until it
-            # is written, and the sidecar records it. `_publish` closes over `state`.
+            # A placeholder the publisher replaces: the ring's hash is unknown until written.
             ring=None,
             rng=_resume_state.capture_rng_streams(),
         )
@@ -480,7 +325,7 @@ class StepCoordinator:
             _resume_state.write_resume_state(
                 dataclasses.replace(state, ring=ring), checkpoint_path,
             )
-            del path  # the sidecar's own path authority is `sidecar_path_for` (R345(b)(3))
+            del path  # the sidecar's own path authority is `sidecar_path_for`
 
         manifest = _bundle.publish_bundle(
             checkpoint_path=checkpoint_path,
@@ -509,7 +354,6 @@ class StepCoordinator:
         })
         return side
 
-    # ── outcome builder ───────────────────────────────────────────────────────────────────
     def _build_outcome(self, **kw: Any) -> StepOutcome:
         return StepOutcome(
             train_step=self._train_step,
@@ -523,73 +367,40 @@ class StepCoordinator:
         _LOG.info("stop_requested reason=%s", reason)
         self.shutdown.running = False
 
-    # ── the terminal-eval outcome latch (WP12-R Phase O, R152/R133) ───────────────────
     @property
     def terminal_eval_reason(self) -> str | None:
-        """The TERMINAL eval round's typed reason, or `None` for a clean (or not-yet-run)
-        terminal battery. Read once, by the composition root, after `close_out` returns.
+        """The TERMINAL eval round's typed reason, or `None` for a clean terminal battery.
 
-        A `str` and never the reason ENUM: the train package may not import the eval
-        package at all (repo_design §2, census-tested — which is why this docstring names no
-        dotted path into it). The authority is NOT weakened by the crossing: the string is
-        the enum member's own value, produced by the enum on the eval side and re-parsed by
-        the enum at the process boundary, where an unregistered spelling is a loud
-        `ValueError`. This layer transports the fact and never authors it.
+        A `str` and never the reason enum, because the train package may not import the eval
+        package; the enum re-parses it at the boundary, where an unknown spelling is loud.
         """
         return self._terminal_eval_reason
 
     def record_terminal_eval_reason(self, reason: str | None) -> None:
         """Record the terminal round's outcome. **FIRST NON-`None` WINS.**
 
-        The semantic is stated as MEASURED, not as intended (RED-TEAM F-04 corrected an
-        earlier version of this docstring, which said "SET-ONCE, first call wins" — that is
-        NOT what the guard below does). The guard is `if self._terminal_eval_reason is not
-        None: return`, so:
-
-        * a first call with a REASON latches it, and every later call is refused —
-          driven: `record("killed")` then `record("exit_nonzero")` → `"killed"`;
-        * a first call with `None` (a CLEAN terminal round) latches nothing, so a later
-          call CAN still write — driven: `record(None)` then `record("killed")` →
-          `"killed"`, where a true set-once would have kept `None`.
-
-        The stated purpose — "a later resolution must not re-label the outcome that stopped
-        the run" — is therefore delivered **only for a non-`None` first call**. That is
-        arguably the right rule here and it is why `ShutdownState.record_abort`'s shape was
-        copied rather than its literal contract: `record_abort`'s value is always non-`None`,
-        so for it the two semantics coincide, while `None` is a LEGAL clean-round value here.
-
-        **The difference is inert today and NOT pinned, which is why it is written down.**
-        There is exactly ONE writer in all of `src/` (`drain._record_terminal_outcome`,
-        reachable only from `drain.run_terminal_eval`) and it is called at most once per run,
-        so no production path calls this twice — but **no test in `tests/` calls it twice
-        either**: O-07 censuses call SITES, not invocations. An inert difference nobody has
-        pinned is how the next phase's regression gets in. `Q-O-LATCH-SET-ONCE-UNPINNED`.
-
-        The one-writer property is what keeps R133's mid-run/terminal split structural — a
-        mid-run broken round cannot reach this method at all, so it stays non-fatal by
-        construction rather than by a conditional somebody can get wrong later.
+        Not set-once, as measured: a first call with `None` (a clean round) latches nothing, so
+        a later call can still write. One writer in `src/`, so the difference is unpinned.
         """
         if self._terminal_eval_reason is not None:
             return
         self._terminal_eval_reason = reason
 
-    # ── one outer iteration ─────────────────────────────────────────────────────────────
     def step(self) -> StepOutcome:
         """Run exactly one outer iteration; return a :class:`StepOutcome`."""
         cfg = self.config
 
-        # L-B: the outer loop is alive. Beaten at ENTRY (so every early-return branch —
-        # warmup, waiting-for-games — still proves liveness) and once per burst iteration.
+        # The outer loop is alive. Beaten at ENTRY so every early-return branch still proves
+        # liveness, and once per burst iteration.
         self._beat("train_step")
 
-        # F02 fail-fast: the self-play feeder is the sole producer — abort loudly if it died.
+        # Fail-fast: the self-play feeder is the sole producer — abort loudly if it died.
         health = getattr(self.pool, "check_producer_health", None)
         if health is not None:
             health()
 
-        # WP11-A: non-blocking eval-result poll at the TOP of every iteration — main-thread
-        # routing through drain._route_eval_result, on every branch (warmup/waiting-for-
-        # games included), never a blocking call (never `drain_pending()`; §c.4b).
+        # Non-blocking eval-result poll at the TOP of every iteration, on every branch
+        # (warmup and waiting-for-games included); never a blocking drain.
         eval_drained = self._poll_eval_results()
 
         base = dict(
@@ -599,38 +410,18 @@ class StepCoordinator:
             instrumentation_emitted=[], pool_overflow_delta=0,
         )
 
-        # O2: iteration-limit reached — CLEAN COMPLETION, and the THIRD save leg
-        # (R137/CARD-CLEANSTOP-SAVE). This is the one OUTER-loop site that ACTS on the
-        # clean-completion predicate — it is not the only site that EVALUATES it: the inner
-        # burst-break runs the character-identical expression once per burst iteration, but
-        # only `break`s the burst and leaves `running` True, so `step()` returns normally and
-        # THIS arm fires on the next call. Acting on it is what makes this the only place the
-        # save can sit, and it is why the leg lives here and not in
-        # `drain.close_out` (it runs from a `finally`, i.e. on aborted exits too, and now
-        # also latches the terminal-eval reason) nor after `loop.py`'s `while` (the loop
-        # cannot tell WHY it exited, and `abort_rule` is still None there for the rc-48
-        # class, which `run.py` records ~80 lines later).
-        #
-        # The save runs BEFORE `running = False` so the run's product is on disk before the
-        # driver is told to stop. It does NOT make the filesystem a cleanliness proxy: the
-        # disk guard (rc 47) and the terminal-eval reason (rc 48) are both recorded in
-        # `run.py`'s teardown, strictly AFTER `close_out`, so a leg-3 artefact legally
-        # coexists with a non-zero rc. Clean-vs-aborted is carried by
-        # `ShutdownState.abort_rule` — which this leg neither reads nor writes — and by the
-        # rc it resolves to, never by a file's presence.
+        # O2: iteration-limit reached — CLEAN COMPLETION, and the third save leg. The one
+        # OUTER-loop site that ACTS on the completion predicate (the inner burst-break only
+        # ends the burst), so the save must sit here; it runs before `running = False`, and
+        # clean-vs-aborted is carried by `ShutdownState.abort_rule`, never by a file.
         if cfg.stop_step is not None and self._train_step >= cfg.stop_step:
             self._clean_stop_save(cfg)
             self.shutdown.running = False
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
 
-        # O3: shutdown-save (signal-handler flag) — save the checkpoint, persist the ring and
-        # its sidecar, then stop. R178(a) deleted the old `_try_save_buffer(...,
-        # "shutdown_signal", ...)` call here as a measured production no-op, and it was right
-        # to: that helper is best-effort by design and the key it gates on was never set. What
-        # replaces it is NOT that call re-added. `persist_resume_state` is LAW-14 — a stop that
-        # cannot record its ring has not stopped resumably, and R343(c) forbids the resume that
-        # would follow (a ring refilled from empty).
+        # O3: shutdown-save — checkpoint, ring and sidecar, then stop. `persist_resume_state`
+        # is run-fatal: a stop that cannot record its ring has not stopped resumably.
         if self.shutdown.shutdown_save:
             ckpt = self.trainer.save_checkpoint(self._last_loss_info or None)
             self.persist_resume_state(ckpt)
@@ -639,7 +430,7 @@ class StepCoordinator:
                                        **{**base, "checkpoint_saved": True})
 
         self._games_played = int(getattr(self.pool, "games_completed", 0))
-        # Stall watchdog — driven via tick(...) (slice-2 wiring; behaviour byte-identical).
+        # Stall watchdog — driven via tick(...).
         self._watchdog.tick(self._games_played, self._clock.now())
 
         # O4: warmup — buffer below the training floor.
@@ -666,9 +457,8 @@ class StepCoordinator:
         checkpoint_saved = False
         hard_abort_fired = False
         axis_emitted = False
-        # Burst accumulators (item 7): the eval kick now runs PER TRAINING STEP inside the
-        # burst, so its two outcomes are OR-folded across the burst exactly like the flags
-        # above rather than being the single post-burst call's return.
+        # Burst accumulators: the eval kick runs PER TRAINING STEP inside the burst, so its two
+        # outcomes are OR-folded across the burst like the flags above.
         eval_kicked_off = False
         eval_skipped_busy = False
 
@@ -685,12 +475,11 @@ class StepCoordinator:
                     buffer_resized = new_cap
                 self._schedule_idx += 1
 
-            # D2: training step — mixed (corpus + selfplay) when a pretrained buffer is present,
-            # else a straight self-play step. Both route through the injected trainer.
+            # D2: training step — mixed when a pretrained buffer is present, else straight
+            # self-play. Both route through the injected trainer.
             loss_info = self._run_training_step(cfg)
             self._train_step = self.trainer.step
-            # D2b (WP-UNFREEZE): continuous actor weight sync — per inner step, the
-            # house cadence pattern (D4, log_interval); `_train_step` advances by
+            # D2b: continuous actor weight sync, per inner step. `_train_step` advances by
             # exactly 1 per burst iteration so a modulo boundary can never be skipped.
             if self.actor_sync is not None:
                 self.actor_sync.maybe_sync(self._train_step)
@@ -698,40 +487,14 @@ class StepCoordinator:
                 self._initial_policy_loss = float(loss_info["policy_loss"])
             self._last_loss_info = loss_info
 
-            # D3: hard-abort on sustained gradient norm (run-safety; reads the trainer's own gn).
-            # WP13-A routes the FIRE through the shared `_fire_hard_abort` contract so this
-            # gate is visible in the ONE channel (a `hard_abort` event + `monitor_gates`)
-            # like every other gate; the DECISION (threshold, consecutive count, reset) is
-            # byte-identical to WP10.
+            # D3: hard-abort on sustained gradient norm. The FIRE routes through the shared
+            # `_fire_hard_abort` contract so this gate is visible in the one channel.
             self._gate_stats["grad_norm_hard_abort"]["checks"] += 1
             step_gn = float(loss_info.get("grad_norm", 0.0))
-            # NaN/inf is EXCLUDED from this abort, and that is a KNOWN GAP, not an oversight
-            # — see ADJ-D13. Item 6 changed this line to
-            # `if not math.isfinite(step_gn) or step_gn > cfg.hard_gn_threshold:` and it was
-            # REVERTED for two reasons, both operator-owned:
-            #   1. R56 — this exact comparison is a SOURCE PIN in
-            #      `config/armed_aborts.py`'s `grad_norm_hard_abort` row. The preflight's own
-            #      failure text is "re-adjudicate the row rather than editing the pin".
-            #   2. The row is DEFERRED and knowingly disarmed: `train.hard_gn_threshold` is
-            #      the unauthored 1e9 that no finite norm reaches. Making non-finite fire
-            #      REGARDLESS of the threshold would partially ARM a row the manifest says
-            #      run5 mints disarmed "knowingly and in writing" — an armed-value change.
-            # The other two item-6 paths (the trainer's non-finite guard, and the alert rules)
-            # DID land, so a NaN is caught and reported; only this backstop stays gated.
-            #
-            # R345(b)(1) ANNOTATION — WHAT A NaN REACHING THIS LINE NOW MEANS. It used to mean
-            # the weights were ALREADY gone: `clip_and_step` had scaled by a non-finite clip
-            # coefficient and stepped, and this comparison was reading the epitaph. It now
-            # means the opposite — the trainer REFUSED the step, the weights are intact, and
-            # `self.step` did not advance. The pinned comparison below is UNCHANGED, character
-            # for character, and the R56 scan is untouched: the guard sits in
-            # `train/losses.py::clip_and_step` and the two trainer tails, never here. Nothing
-            # about the DEFERRED row's posture moves either — `train.hard_gn_threshold` is
-            # still the unauthored 1e9, still knowingly disarmed, and this line still resets
-            # `_consec_high_gn` on a NaN. That reset is now correct rather than a hedge: a
-            # refused step contributed no gradient, so it is not evidence of a sustained high
-            # norm, and counting it as a consecutive high-norm step would fire the abort on
-            # the run's own safety mechanism working.
+            # NaN/inf is EXCLUDED from this abort — a KNOWN GAP, not an oversight. This exact
+            # comparison is a SOURCE PIN in `config/armed_aborts.py`'s `grad_norm_hard_abort`
+            # row: re-adjudicate the row rather than editing the line. The non-finite guard is
+            # in `clip_and_step`, which refuses the step, so resetting the counter is correct.
             if math.isfinite(step_gn) and step_gn > cfg.hard_gn_threshold:
                 self._consec_high_gn += 1
                 if self._consec_high_gn >= cfg.hard_gn_min_steps:
@@ -746,53 +509,24 @@ class StepCoordinator:
             else:
                 self._consec_high_gn = 0
 
-            # D4 IS DELETED (R178(a) / R116 / LAW-08). It was the checkpoint-cadence
-            # replay-BUFFER save, gated on `cfg.checkpoint_interval` (fed by the now-deleted
-            # `train.buffer_save_interval`), and F-CS-2 measured its `_try_save_buffer` call
-            # a no-op on every production leg. Every committed config minted the interval at
-            # `0`, so the arm never fired even before the helper's own early return — the
-            # deletion moves no production behaviour. `checkpoint_saved` therefore stays
-            # `False` for the whole burst path; the O2/O3 legs above still report `True`,
-            # which is where a real checkpoint write is announced.
+            # There is no checkpoint-cadence buffer save on this leg: `checkpoint_saved` stays
+            # `False` for the whole burst path, and the O2/O3 legs above announce a real write.
 
-            # WP13-A: the cadence boundaries are tested PER TRAINING STEP (old-side parity,
-            # `step_coordinator.py:1370/1383`). Testing them once per burst would skip every
-            # boundary the post-burst step does not land exactly on, thinning BOTH the LAW-18
-            # emission stream and the sampling cadence of the draw-rate gate by ~the mean
-            # burst — the gate's `consec` window would silently stretch by that factor.
-            #
-            # R242 (ADJ-D12): TWO boundaries now, on TWO knobs. `_run_log_interval` is
-            # narration (`train.log_interval`); `_run_gate_interval` is arming
-            # (`monitor.gate_interval`). Both are still tested per training step, for the
-            # reason above, which is unchanged.
+            # The cadence boundaries are tested PER TRAINING STEP: once per burst would skip
+            # every boundary the post-burst step misses, stretching the draw-rate gate's
+            # `consec` window. Two knobs — narration (`log`) and arming (`gate`).
             axis_emitted = self._run_log_interval(cfg, loss_info) or axis_emitted
             hard_abort_fired = self._run_gate_interval(cfg) or hard_abort_fired
 
-            # INSIDE the burst (item 7). `_maybe_kick_eval` tests
-            # `self._train_step % cfg.eval_interval != 0`, and it used to run ONCE after the
-            # whole burst — so with `max_train_burst > 1` a burst that steps over the exact
-            # multiple (e.g. interval 500, burst 3, landing on 499 → 502) never satisfied the
-            # modulo and the eval round was SILENTLY SKIPPED. Not delayed: skipped, because
-            # `_eval_round_last_step` is keyed on the round index. Long runs could go many
-            # intervals without an eval while the config said otherwise. Tested per training
-            # step, the exact boundary is always hit.
-            #
-            # The kick return is NEVER consumed for WR and adds NO blocking call: completed
-            # rounds reach `on_eval_round_complete` via the async drain (§c.4b).
-            # `_maybe_kick_eval` consumes the ACK only for `eval_skipped_busy` (P-06 pin).
+            # Kicked INSIDE the burst: run once after the whole burst, a burst that stepped over
+            # the exact multiple never satisfied the modulo and the round was SILENTLY SKIPPED.
+            # The kick return is never consumed for WR; rounds arrive via the drain.
             kicked_step, skipped_step = self._maybe_kick_eval(cfg)
             eval_kicked_off = eval_kicked_off or kicked_step
             eval_skipped_busy = eval_skipped_busy or skipped_step
 
-        # WP12R Step 3 narration (R210): `iteration_complete` emits at the O6 training-burst
-        # return, per coordinator step, INDEPENDENT of `log_interval`. `training_step`
-        # alerting stays `log_interval`-gated (above, in `_run_log_interval`) — "games_total
-        # is a per-iteration counter, not a training-logging event" (R210). R242 (ADJ-D12)
-        # decoupled a SECOND thing R210 had left on that knob and which R210 never governed:
-        # the hard-abort gates and `monitor_gates` now ride `monitor.gate_interval`
-        # (`_run_gate_interval`). NOT called on O2/O3
-        # early returns (clean-completion / shutdown-save): those are not training-burst
-        # returns (`loss_info` would be {}, `games_this_iter` degenerate).
+        # `iteration_complete` emits at the O6 burst return, per coordinator step, INDEPENDENT
+        # of `log_interval`. Not called on the O2/O3 early returns, which are not burst returns.
         self._emit_iteration_complete(cfg)
         return self._build_outcome(
             in_warmup=False, waiting_for_games=False,
@@ -802,43 +536,17 @@ class StepCoordinator:
                "hard_abort_fired": hard_abort_fired, "axis_emitted": axis_emitted},
         )
 
-    # ── R137 leg 3: the clean-completion save ─────────────────────────────────────────
     def _clean_stop_save(self, cfg: StepCoordinatorConfig) -> None:
-        """The CLEAN-COMPLETION save — the THIRD taxonomy leg (R137/CARD-CLEANSTOP-SAVE),
-        beside the trainer's periodic cadence and the signal-driven `shutdown_save`.
+        """The CLEAN-COMPLETION save — the third save leg, beside the trainer's periodic cadence
+        and the signal-driven `shutdown_save`.
 
-        It is its OWN semantic, not a differently-triggered `shutdown_save`: leg 1's artefact
-        means "a resumption point — the run continues past it", leg 2's means "a rescue of
-        interrupted work — the run did not finish", and leg 3's means "the run FINISHED" —
-        the terminal weights the terminal eval and the deploy tag are about. A leg that were
-        merely shutdown_save fired differently would label a completed run as interrupted.
+        Its artefact means "the run FINISHED", not "a resumption point" or "a rescue of
+        interrupted work". It calls the SAME `trainer.save_checkpoint` the other legs call, so
+        the product rides the one stamp path, and a failure is NOT caught — the persist-fatal
+        watchdog already owns that exit code.
 
-        LAW-12: this is the SAME `trainer.save_checkpoint` entry legs 1 and 2 call, so the
-        run's product rides the ONE stamp path — `checkpoints.save_checkpoint(kind="full")`
-        -> `_write_v2_payload`, config validated before any file exists, stamp built once and
-        immutable, filename carrying run-id + content hash. No second write surface, no
-        re-stamp, no added loader.
-
-        LAW-14: a failure is NOT caught. `_write_v2_payload` counts it on
-        `checkpoints.persist_errors_total` and re-raises; that counter is the persist-fatal
-        watchdog's REGISTERED input (`monitor/producer_manifest.yaml`, id `persist_fatal`),
-        and the watchdog is NOT disarmed during close-out. Catching here would be the
-        silent-except LAW-14 forbids AND a second authority for a storage fault's exit code
-        beside the registered chain that already owns `PERSIST_FATAL_EXIT_CODE`. This card
-        authors no new exit code.
-
-        The latch and the event both land AFTER the write, deliberately UNLIKE `loop.py`'s
-        `_final_save`, which emits `shutdown_save` BEFORE its own: an event named for a save
-        is a CLAIM the save happened, so a pre-emit puts a false record in the stream of
-        every failed final save, and a pre-set latch would suppress leg 2 on a run whose
-        leg-3 write died — turning one lost save into two. `loop.py`'s ordering is a queued
-        row, not something silently mirrored here.
-
-        The event publishes the WRITER'S returned path, never a directory string re-derived
-        here, which could name a file that does not exist. `step` and `stop_step` are carried
-        as two fields because they are two different facts: a resumed run past its cap fires
-        this arm with `_train_step > stop_step` (LAW-18: "did the run's final save happen,
-        and to what file" must be answerable from the ONE channel).
+        The latch and the event land AFTER the write: an event named for a save is a claim it
+        happened, and a pre-set latch would suppress leg 2 on a run whose leg-3 write died.
         """
         path = self.trainer.save_checkpoint(self._last_loss_info or None)
         self.clean_stop_saved = True
@@ -849,36 +557,20 @@ class StepCoordinator:
             "path": None if path is None else str(path),
         })
 
-    # ── L-B heartbeat ─────────────────────────────────────────────────────────────────
     def _beat(self, source: str) -> None:
-        """Beat one heartbeat source. An unknown source raises inside the registry — a
-        wiring bug must be loud, never a silently-dropped beat the watchdog can't see."""
+        """Beat one heartbeat source; an unknown source raises in the registry, because a
+        wiring bug must be loud rather than a beat the watchdog silently never sees."""
         if self._heartbeat is not None:
             self._heartbeat(source)
 
-    # ── WP13-A: the NARRATION boundary (log_interval) ─────────────────────────────────
     def _run_log_interval(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float]
     ) -> bool:
-        """At the `log_interval` boundary, emit the run's NARRATION: the `training_step`
-        payload, the 4 WARN rules over it (plus the loss-window trim) and the axis
-        distribution. Returns ``axis_emitted``.
+        """Emit the run's NARRATION at the `log_interval` boundary — the `training_step`
+        payload, the WARN rules over it and the axis distribution. Returns ``axis_emitted``.
 
-        R242 (ADJ-D12) — WHAT LEFT THIS METHOD. The two LIVE-producer hard-abort gates and the
-        LAW-18 `monitor_gates` summary are NO LONGER run here; they moved to
-        `_run_gate_interval`, on `monitor.gate_interval`. R210's clause "training_step
-        alerting stays gated" governed GAMES-VISIBILITY narration and is SUPERSEDED IN SCOPE
-        by R242 for the arming half: it was never arming-cadence law. What it still governs is
-        exactly this method — the `training_step` event, the WARN rules and
-        `emit_axis_distribution` stay `log_interval`-gated, because they are logging.
-
-        WP12R Step 3 narration (R210): `iteration_complete` is NO LONGER emitted here either.
-        It moved to `_emit_iteration_complete` at the O6 training-burst return, per
-        coordinator step, INDEPENDENT of `log_interval`.
-
-        The `loss_info` guard STAYS on this half and is correct here: every payload this
-        method builds is made OF the trainer's loss dict, so with no loss there is nothing to
-        narrate. `_run_gate_interval` deliberately carries no such guard — see its docstring.
+        Arming moved out to `_run_gate_interval`; only logging is `log_interval`-gated. The
+        `loss_info` guard belongs here: every payload built here is made of the loss dict.
         """
         if not loss_info or cfg.log_interval <= 0 or self._train_step % cfg.log_interval != 0:
             return False
@@ -896,38 +588,19 @@ class StepCoordinator:
         )
         return axis is not None
 
-    # ── R242: the ARMING boundary (gate_interval) ─────────────────────────────────────
     def _run_gate_interval(self, cfg: StepCoordinatorConfig) -> bool:
-        """At the `monitor.gate_interval` boundary: run the LIVE-producer hard-abort gates and
-        publish the LAW-18 `monitor_gates` summary. Returns ``hard_abort_fired``.
+        """Run the live-producer hard-abort gates and publish the `monitor_gates` summary at the
+        `monitor.gate_interval` boundary. Returns ``hard_abort_fired``.
 
-        THE DEFECT THIS CLOSES (ADJ-D12 / R242). Both of these used to sit inside
-        `_run_log_interval`, behind `self._train_step % cfg.log_interval != 0` — so the whole
-        arming path ran on the NARRATION cadence. At run5's minted `train.log_interval: 1000`
-        that means no draw-rate observation could be taken and no `monitor_gates` event could
-        exist before training step 1000: armed machinery with a blind first kilometre, the
-        F-43 class on the abort path itself. The two knobs are now independent, and
-        `log_interval` decides nothing about arming.
+        Split off `log_interval` so arming never rides the narration cadence: at a minted
+        `log_interval: 1000` no draw-rate observation could be taken before training step 1000.
 
-        NO `loss_info` CONDITION HERE, and that is a deliberate semantic WIDENING, not an
-        omission. The gates' producer is the POOL (`pooled_draw_counts`), not the trainer, so
-        an arming decision that waited on the trainer having produced a loss dict would be the
-        same hidden coupling this item removes, one layer in. (The KEPT grad-norm gate is
-        untouched by this: it is evaluated inline in the burst at D3, per training step,
-        because its producer really is the trainer's own loss dict.)
+        NO `loss_info` condition, deliberately: these gates' producer is the POOL, not the
+        trainer. `consec` counts OBSERVATIONS taken at a stride of AT LEAST `gate_interval`
+        steps, so `consec * gate_interval` bounds a fire's span from below.
 
-        `consec` semantics follow the stride, at the strength the stride actually gives:
-        `_sample` ATTEMPTS one observation per gate run, so `train.draw_rate_abort.consec`
-        counts consecutive OBSERVATIONS taken at a stride of AT LEAST `gate_interval` training
-        steps. A boundary that observes nothing neither advances nor resets the counter, so
-        `consec * gate_interval` bounds the span a fire covers from BELOW and never equals it
-        (see `_sample`). Every committed config mints `gate_interval` equal to its own
-        `train.log_interval`, so no armed value's meaning moves as this lands; the re-scaled
-        stride and the re-derived `consec` are mint-prereg rows.
-
-        The `<= 0` arm mirrors `_run_log_interval`'s and is unreachable from any minted config
-        (`MonitorSchemaConfig.gate_interval` is `ge=1`, for the reason stated at the field);
-        it exists so a direct construction cannot raise `ZeroDivisionError` inside the burst.
+        The `<= 0` arm is unreachable from any minted config; it exists so a direct construction
+        cannot raise `ZeroDivisionError` inside the burst.
         """
         if cfg.gate_interval <= 0 or self._train_step % cfg.gate_interval != 0:
             return False
@@ -939,38 +612,23 @@ class StepCoordinator:
     def _emit_training_step(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
     ) -> dict[str, Any]:
-        """Build + emit the `training_step` event (WP13-A §c.4) through the injected sink
-        and return its payload (the 4 WARN rules read it). Split out of the old
-        `_emit_training_events` (WP12R Step 3 narration, R210): `iteration_complete` moved to
-        `_emit_iteration_complete` at the O6 return; this half STAYS `log_interval`-gated,
-        and after R242 it is one of the three things that still are — narration is all
-        `log_interval` decides now."""
+        """Build and emit the `training_step` event through the injected sink and return its
+        payload (the WARN rules read it). Stays `log_interval`-gated: it is narration."""
         payload = emit_training_step_event(
             self._train_step, loss_info,
-            # `quiescence_fires_per_step` has NO producer new-side (the solver-delta half is
-            # DEFER/ARCH): the field travels as None = NOT MEASURED. A constant 0 would read
-            # as a real measurement ("quiescence never fires") — a miniature F-10.
+            # `quiescence_fires_per_step` has no producer here: the field travels as None =
+            # NOT MEASURED, because a constant 0 would read as "quiescence never fires".
             None, sink,
         )
         return payload
 
     def _emit_iteration_complete(self, cfg: StepCoordinatorConfig) -> None:
-        """Build + emit `iteration_complete` (the per-iteration counter payload) at the O6
-        training-burst return, per coordinator step, INDEPENDENT of `log_interval` (WP12R
-        Step 3 narration, R210). Carries `games_total`, `games_this_iter`, `buffer_size`,
-        `corpus_selfplay_frac`, `batch_fill_pct`, the `target_integrity` block, plus
-        `mcts_mean_depth` and the regime-gated cluster stats.
+        """Build and emit `iteration_complete` at the O6 training-burst return, per coordinator
+        step and INDEPENDENT of `log_interval`.
 
-        R218 rider 1 (`Q-O-TWO-POOL-READS` collapse): takes the `RunnerStats` snapshot from
-        `_target_integrity_report` and passes it INTO `emit_iteration_complete_event` as the
-        `rstats` kwarg, so the builder does NOT make its own `pool.runner_stats()` call. ONE
-        atomic snapshot per emit — the straddle between the `target_integrity` block and the
-        `mcts_mean_depth`/cluster block is ELIMINATED (a semantic change, more correct than a
-        no-op). See `_target_integrity_report`'s docstring for the cost disclosure.
-
-        Updates `self._last_iter_games` so an "iteration" = one coordinator `step()` = one
-        burst (the `games_this_iter` denominator). NOT called on O2/O3 early returns
-        (clean-completion / shutdown-save) — those are not training-burst returns.
+        Passes the `RunnerStats` snapshot from `_target_integrity_report` into the builder, so
+        ONE atomic snapshot serves the whole payload and the two blocks cannot straddle a game
+        boundary. Not called on the O2/O3 early returns.
         """
         sink = self._sink if self._sink is not None else NullEventSink()
         w_pre = 0.0
@@ -984,41 +642,13 @@ class StepCoordinator:
         self._last_iter_games = self._games_played
 
     def _target_integrity_report(self) -> tuple[dict[str, Any], Any]:
-        """The Phase-T target-integrity counters (+ R275(b)'s seam counter, same block)
-        as an `iteration_complete` block
-        (WP12-R Phase O, R164 / LAW-18), and the `RunnerStats` snapshot they were built from.
+        """The target-integrity counters as an `iteration_complete` block, and the `RunnerStats`
+        snapshot they were built from.
 
-        `PREREG_T §0b` names `export_offwindow_mass_moves` as THE in-run witness attributing
-        the expected game-shape drift — and at HEAD that counter was readable only by a test
-        calling `runner_stats(pool)`. A witness a live run cannot read is not a witness, and
-        LAW-18's text is explicit that a post-hoc offline probe cannot distinguish "starved"
-        from "ineffective". So each counter publishes its cumulative `total`, its INTERVAL
-        `delta` and a `per_position` rate over the `positions_delta` denominator published
-        beside it. An idle lever stays VISIBLE at 0 (the `chain_loss_with_fire_rate`
-        posture): nothing is omitted for being zero, which is what keeps a permanently-0
-        `target_integrity_defects` — its latch is run-fatal, so it reads 0 in every run that
-        survives to emit — distinguishable from a field with no producer.
-
-        Returns `(report, rstats)`: the report dict travels into `iteration_complete`'s
-        `target_integrity` block; `rstats` (the SAME snapshot) travels into
-        `emit_iteration_complete_event`'s `rstats` kwarg so the builder does NOT make its own
-        `pool.runner_stats()` call (R218 rider 1, `Q-O-TWO-POOL-READS` collapse).
-
-        COST, stated as MEASURED (WP12R Step 3 narration, R210 + R218 rider 1): this method
-        makes ONE `pool.runner_stats()` FFI crossing per `iteration_complete` emit. After
-        R210's decoupling `iteration_complete` emits per coordinator step (per burst), so this
-        runs once per burst, NOT once per `log_interval` boundary. R218 rider 1 COLLAPSED the
-        two reads (this one + `events.py:297`'s) into ONE — the builder no longer takes its
-        own snapshot. One FFI crossing (~20 atomic loads) per burst, plus three subtractions
-        and three divisions. At run5's `log_interval=1000` this ran on 1 step in 1000; per
-        burst it runs on every `step()` return.
-
-        SEMANTIC CHANGE (R218 rider 1): the collapse ELIMINATES the straddle. Before it,
-        `target_integrity` came from THIS snapshot and `mcts_mean_depth`/cluster stats came
-        from a second `runner_stats()` call inside `emit_iteration_complete_event`, taken
-        microseconds apart with workers live — the two could straddle a game boundary (a
-        counter increment between the reads). After the collapse, both blocks operate on the
-        SAME atomic snapshot. This is more correct (guaranteed-consistent), not a no-op.
+        Each counter publishes its cumulative `total`, its INTERVAL `delta` and a `per_position`
+        rate over the denominator published beside it. An idle lever stays VISIBLE at 0, which
+        keeps a permanently-0 `target_integrity_defects` distinguishable from a field with no
+        producer. Costs ONE `pool.runner_stats()` FFI crossing per emit, reused by the builder.
         """
         rstats = self.pool.runner_stats()
         positions = _snapshot_counter(rstats, _POSITIONS_COUNTER)
@@ -1037,86 +667,45 @@ class StepCoordinator:
         return report, rstats
 
     def _games_per_hour(self) -> float | None:
-        """Games per hour over the run clock, or `None` before the clock has advanced.
-
-        AUDIT-1 F-28/C07: a rate over zero elapsed time is an ABSENT measurement, not a rate
-        of zero. The `0.0` was published on `iteration_complete` as a measured stall.
-        """
+        """Games per hour over the run clock, or `None` before the clock has advanced — a rate
+        over zero elapsed time is an ABSENT measurement, not a rate of zero."""
         elapsed = self._clock.now() - self._run_started
         return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _steps_per_hour(self) -> float | None:
-        """R29 gap metric (b), the twin of `_games_per_hour` over the SAME clock: train
-        steps per hour from the coordinator's own step counter. Published beside (a) in
-        `iteration_complete` — the cutover floor's live emitter (WPBOX CB-3).
-
-        `None` before the clock has advanced, for `_games_per_hour`'s reason (F-28/C07).
-        """
+        """Train steps per hour over the same clock as `_games_per_hour`, published beside it;
+        `None` before the clock has advanced, for that method's reason."""
         elapsed = self._clock.now() - self._run_started
         return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
-        """The DEFER→WP13 draw-rate gate, keyed on the LIVE pool producer.
+        """The draw-rate hard-abort gate, keyed on the LIVE pool producer.
 
-        Run by `_run_gate_interval` at the `monitor.gate_interval` boundary (R242 / ADJ-D12) —
-        `monitor.gate_interval` train steps is THE ATTEMPT STRIDE of this gate; `consec` is
-        counted in OBSERVATIONS, which a boundary may fail to supply and which a failed
-        boundary does not reset (see `_sample`). Until R242 the caller was `_run_log_interval`
-        and the stride was `train.log_interval`, which is why run5's minted 1000 made this
-        gate unable to take even one sample before training step 1000.
-
-        draw-rate reads `pooled_draw_rate(pool.pooled_draw_counts(), N_pool_min=…)` — the
-        POOLED COUNT-WEIGHTED rate over the union of worker windows (R92), with the evidence
-        bar config-authored — never the NaN draw-target phantom at `pool_push.py:135`, whose
-        very TOKEN is grep-banned here (O-15). A missing producer AND insufficient evidence
-        are both SKIP-counted (LAW-18), never silently read as a healthy signal. (The
-        stride5-spam gate was REMOVED at close-out, operator directive B.)
+        Run at the `monitor.gate_interval` boundary, which is this gate's ATTEMPT stride, while
+        `consec` counts OBSERVATIONS a boundary may fail to supply and a failure does not reset.
+        Reads the POOLED count-weighted rate over the union of worker windows with a
+        config-authored evidence bar; a missing producer and insufficient evidence are both
+        SKIP-counted, never read as a healthy signal.
         """
         counts_fn = getattr(self.pool, "pooled_draw_counts", None)
         spec = cfg.draw_rate_abort
-        # WPAX Phase D: `is not None`, NOT `> 0`. Under the type change `draw_rate_abort` is
-        # `None` on every disarmed run, and `None > 0` would raise TypeError here once per
-        # step() — so testing for absence is required BY the type change, not a tidy-up.
-        # Both absences (EXPLICIT-off `train.draw_rate_abort: null`, and a producer that has
-        # not landed) route through `_sample` with a `None` producer, which is what SKIP-
-        # counts them (LAW-18) — `_sample` owns that counter and always has. WPMINT DR-1 /
-        # R72: the earlier shape guarded the live path with `if draw and spec is not None`
-        # plus an `elif draw:` skip arm. `_sample` returns False whenever its producer is
-        # None and the producer is None exactly when `spec is None`, so `draw` implied
-        # `spec is not None`: the conjunct had NO flip-set and the `elif` arm was provably
-        # unreachable (its LAW-18 comment was measured false). The early return keeps `spec`
-        # narrowed for the type checker without a conjunct that no input can flip.
+        # `is not None`, NOT `> 0`: `draw_rate_abort` is `None` on every disarmed run and
+        # `None > 0` raises. Both absences route through `_sample` with a `None` producer,
+        # which is the one site that SKIP-counts them.
         if spec is None or counts_fn is None:
             self._sample("draw_rate_collapse", self._draw_rate_history, None)
             return False
-        # WPMINT Phase DS (R92): `_sample`'s return IS branched on now, and the conjunct DR-1
-        # ruled out has become live. Pre-R92 the producer could only yield a float, so past
-        # the early return `_sample` returned True unconditionally and branching on it would
-        # have been a second no-flip-set conjunct (R72). `pooled_draw_rate` returns `None`
-        # when `Sum(completed) < N_pool_min` — INSUFFICIENT EVIDENCE, which R92 makes a NO
-        # OBSERVATION rather than a fabricated healthy 0.0 (DR-4) — so the False arm has a
-        # real flip-set: an armed spec, a live producer, and a pool below the bar. Its
-        # witness is `test_drawrate_gate_branch_flipset.py`'s drive B5.
-        #
-        # The return is required, not tidy: `consec` counts consecutive OBSERVATIONS — at
-        # MOST one per gate run, i.e. per `monitor.gate_interval` training steps (R242), and
-        # a boundary can legitimately yield none — so running the rule when nothing was
-        # appended would re-decide the abort on a stale tail. `_sample` has already
-        # skip-counted this case (LAW-18, ONE skip site).
+        # Branching on the return is required, not tidy: `pooled_draw_rate` returns `None` below
+        # `N_pool_min` (insufficient evidence, not a fabricated healthy 0.0), and `consec` counts
+        # OBSERVATIONS, so running the rule with nothing appended re-decides on a stale tail.
         if not self._sample(
             "draw_rate_collapse", self._draw_rate_history,
             lambda: pooled_draw_rate(counts_fn(), N_pool_min=spec.N_pool_min),
         ):
             return False
-        # ADJ-D36: the ring's capacity IS the minted `consec` — derived here from the ONE
-        # authority (`train.draw_rate_abort.consec`, the same value `check_draw_rate_collapse`
-        # gates `len(history)` on), so no schema-legal `consec` is unfireable. A literal depth
-        # was the "fifth face" of armed-in-the-config-absent-in-effect: `consec` above it
-        # could never satisfy the length gate while the R251 cadence audit published a fire
-        # step the run structurally could not deliver. The trim sits AFTER a True `_sample`
-        # return (True == exactly one append; the skip arms append nothing and must never
-        # touch the ring — R92/BUG-1), which is the one place `spec` is narrowed and in
-        # scope, so the disarmed arm needs no capacity at all: nothing ever appends there.
+        # The ring's capacity IS the minted `consec`, derived from the one authority
+        # `check_draw_rate_collapse` also gates on, so no schema-legal `consec` is unfireable.
+        # The trim sits AFTER a True `_sample` return, the one place `spec` is narrowed.
         del self._draw_rate_history[:-spec.consec]
         message = check_draw_rate_collapse(self._draw_rate_history, self._train_step,
                                            threshold=spec.threshold,
@@ -1128,38 +717,18 @@ class StepCoordinator:
         """Append one LIVE producer sample to ``history``; False (+skip) when there is no
         observation to append.
 
-        THE SAMPLING STRIDE IS `monitor.gate_interval` (R242 / ADJ-D12): an observation is
-        ATTEMPTED once per `_run_gate_interval` boundary. It is NOT taken once per boundary,
-        and the difference is load-bearing. An earlier version of this paragraph said
-        "'consecutive OBSERVATIONS' means consecutive gate-interval boundaries, and a rule's
-        `consec` is denominated in them" — MEASURED FALSE. A boundary that yields no
-        observation (absent producer, or `pooled_draw_rate` returning `None` below
-        `N_pool_min`) neither appends NOR RESETS: `consec` counts consecutive ENTRIES IN
-        `history`, so two observations separated by an evidence blackout of any length are
-        still consecutive to the rule. `consec * gate_interval` is therefore a LOWER BOUND on
-        the step span a fire covers, never an equality — driven by
-        `tests/train/test_gate_interval_decoupling.py::test_p10_a_skipped_boundary_neither_advances_nor_resets_consec`,
-        where an observation at boundary 1, an 8-boundary blackout and boundaries 10-11 fire
-        the abort at step 11 with `consec=3`. Before R242 the stride was `train.log_interval`
-        and the two facts were one knob.
+        An observation is ATTEMPTED once per `_run_gate_interval` boundary, not taken. A
+        boundary that yields none neither appends NOR resets, so `consec` counts consecutive
+        ENTRIES IN `history` and `consec * gate_interval` is a LOWER BOUND on the span a fire
+        covers, never an equality.
 
-        TWO absences, ONE counter (LAW-18). The producer itself may be absent — a disarmed
-        gate, or a producer that has not landed — and a LIVE producer may return `None`,
-        which under R92 means INSUFFICIENT EVIDENCE (`Sum(completed) < N_pool_min`). Both are
-        skips and neither appends: an unobserved interval must never enter an abort history
-        as a number, in either direction. R72: both arms have flip-sets, driven in
-        `test_drawrate_gate_branch_flipset.py` (B1/B2 for the first, B5 for the second).
+        Two absences, one skip counter — an absent producer, and a live producer returning
+        `None` for insufficient evidence. Neither appends: an unobserved interval must never
+        enter an abort history as a number.
 
-        THE CALLER OWNS THE RING'S CAPACITY (ADJ-D36). A True return means EXACTLY ONE
-        append, and `_run_hard_abort_gates`'s draw-rate arm trims its ring to its own
-        spec's `consec` right after it — this function must never clip the ring itself:
-        the constant it used to hold here silently capped every history that slid through
-        it, which is how a schema-legal `consec` above the cap became armed-in-the-config,
-        absent-in-effect. Prose over a required `capacity` kwarg is DELIBERATE (D36
-        review): there is exactly one appending caller, the trim is reachability-pinned by
-        the flip-set oracle and length-pinned by the capacity oracle, and a signature
-        change would edit the frozen flip-set corpus's direct `_sample` drives to serve a
-        caller that does not exist.
+        THE CALLER OWNS THE RING'S CAPACITY. A True return means exactly one append; this
+        function must never clip the ring, because a constant here silently capped every
+        history that slid through it.
         """
         self._gate_stats[gate]["checks"] += 1
         if producer is None:
@@ -1173,30 +742,14 @@ class StepCoordinator:
         return True
 
     def _fire_hard_abort(self, rule: str, message: str | None, step: int | None = None) -> bool:
-        """The ONE fire contract every WP13-A gate shares: stop the run + one `hard_abort`
-        event naming the rule and carrying the rule's own message.
+        """Stop the run and emit one `hard_abort` event naming the rule and its message.
 
-        A gate that resolves AFTER the run already stopped (the teardown-routed eval result)
-        records a DISTINCT `hard_abort_after_stop` event: the trail stays complete, but a
-        stopped run is never reported as a second abort decision.
+        A gate resolving AFTER the run stopped records a DISTINCT `hard_abort_after_stop`, so
+        the trail stays complete without reporting a second abort decision.
 
-        WPMINT Phase X (CARD-ABORT-EXIT / R84): the fire also records the RULE NAME on
-        `ShutdownState.abort_rule`, beside the `running = False` it was already writing. That
-        is the whole of R84's "supervisor-distinguishable from a clean run" on this side — the
-        three clean stops (`stop()`, O2 iteration-limit, O3 shutdown-save) leave the field
-        `None`. The NAME, not a code: this method must not import `mantis.config.armed_aborts`,
-        and it is shared by rules that have no authored exit code, so the rule -> code
-        resolution (`armed_aborts.exit_code_for_abort`) belongs at the process boundary, not
-        here. The record is deliberately paired with `running = False` — it must be
-        impossible to stop the run on a fired rule without recording which rule it was.
-
-        WPMAIN RT-2/R132: the bare assignment became `ShutdownState.record_abort`, which is now
-        the ONE writer of that field. Nothing about this path's behaviour moves — the state is
-        `None` here on every reachable call (the `hard_abort_after_stop` arm above returns
-        before it) so first-fire-wins records exactly what the assignment recorded. What
-        changed is that the disk-guard leg gained a second fire path, and the set-once
-        invariant this method's docstring already claimed is enforced by the carrier rather
-        than by two call sites agreeing to be careful.
+        The fire also records the RULE NAME on `ShutdownState.abort_rule`, paired with
+        `running = False` so a fired rule can never go unrecorded. The name, not a code: rule →
+        exit-code resolution belongs at the process boundary.
         """
         if message is None:
             return False
@@ -1216,14 +769,9 @@ class StepCoordinator:
         return True
 
     def _emit_monitor_gates(self, cfg: StepCoordinatorConfig, sink: Any) -> None:
-        """LAW-18 in-run visibility: every gate publishes its own checks/fires/skips AND
-        its live threshold, so an inert gate (explicitly disarmed, or a producer that has
-        not landed yet) is READABLE in the event stream instead of silently dead.
-
-        WPAX Phase D: `draw_rate_threshold` keeps its event-contract NAME and is now read
-        off the resolved block. `null` is the EXPLICIT off posture (`train.draw_rate_abort:
-        null`) — it used to be `0.0`, a number in the middle of the range an operator picks
-        from, which is precisely the spelling R79 removed."""
+        """Publish every gate's checks/fires/skips and its live threshold, so an inert gate is
+        READABLE in the event stream instead of silently dead. `draw_rate_threshold` is `None`
+        on the explicit off posture; it used to be `0.0`, a number in the operator's own range."""
         spec = cfg.draw_rate_abort
         emit_via(sink, {
             "event": "monitor_gates",
@@ -1231,109 +779,67 @@ class StepCoordinator:
             "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
             "draw_rate_threshold": None if spec is None else spec.threshold,
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
-            "sealbot_wr_result_producer_pending": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
+            "sealbot_wr_result_producer_pending": None,  # producer landed (eval.rounds)
             "wr_history_len": len(self._wr_history),
-            # F-14: the ring's length means nothing without the rung it is a series OVER.
+            # The ring's length means nothing without the rung it is a series OVER.
             "wr_history_rung": self._wr_history_rung,
-            # The watchdog's best-effort counters get a LIVE in-run consumer here (LAW-08 /
-            # LAW-18): a degraded fire-path effect (a failed mirror, a timed-out snapshot)
-            # is readable in the ONE channel while the run is alive, not only in the
-            # `heartbeat_watchdog_fire_complete` event emitted moments before `os._exit`.
+            # The watchdog's best-effort counters get a live in-run consumer here: a degraded
+            # fire path is readable while the run is alive, not only moments before `os._exit`.
             "watchdog_best_effort": self._watchdog_counters(),
-            # AUDIT-1 F-29 (LAW-18): per-WARN-rule count of the steps at which the rule could
-            # not run because its payload input was absent. `check_selfplay_entropy_collapse`
-            # reads two keys that no producer in `src/` writes, so it has NEVER been able to
-            # fire — and "never fires" and "healthy" were the same observable. Module-attribute
-            # read, never a from-imported dict (the counter-binding rule).
+            # Per-WARN-rule count of steps at which the rule could not run for want of its
+            # input, else "never fires" and "healthy" are one observable. Module-attribute read.
             "warn_rule_skipped_absent": dict(_rules.WARN_RULE_SKIPS),
-            # R-BUFFER-PERSIST-COUNTER (WPCLEAN Phase RES): the best-effort buffer-save
-            # swallows are counted and read HERE, live — a module-attribute read, never a
-            # from-import of the int (the subsystems.py counter-binding rule).
+            # The best-effort buffer-save swallows, counted and read live. A module-attribute
+            # read, never a from-import of the int.
             "buffer_save_errors_total": int(_buffer_persist.buffer_save_errors_total),
         })
 
     def _watchdog_counters(self) -> dict[str, int] | None:
-        """The watchdog's best-effort counters, or `None` when NO WATCHDOG IS WIRED.
-
-        AUDIT-1 F-28/C05: this returned `{}` for both "the watchdog is armed and nothing has
-        failed" and "there is no watchdog to ask", so the healthiest run and the one with no
-        fire path at all published the same block. An empty mapping from a LIVE watchdog is a
-        real, good measurement; absence is not.
-        """
+        """The watchdog's best-effort counters, or `None` when NO WATCHDOG IS WIRED — an empty
+        mapping from a live watchdog is a real measurement and absence is not."""
         counters = getattr(self.heartbeat_watchdog, "counters", None)
         snapshot = getattr(counters, "snapshot", None)
         if not callable(snapshot):
             return None
-        # `WatchdogCounters.snapshot()` contract: a str→int mapping (duck-typed here —
-        # the watchdog is an injected Any collaborator).
+        # `snapshot()` returns a str-to-int mapping, duck-typed: the watchdog is injected Any.
         return dict(cast("Mapping[str, int]", snapshot()))
 
-    # ── the async eval-RESULT seam — THE sealbot-WR consumer (§c.4b, MUST-1) ──────────
     def on_eval_round_complete(self, result: Mapping[str, Any]) -> None:
         """Consume ONE completed (drained) eval-round result dict.
 
-        The new-side twin of old `step_coordinator.py` L1168-1200, which read the async
-        `_pending_eval_result` — NEVER the eval kick return. Callers today: `drain.py`'s
-        `flush_pending_eval` / `run_terminal_eval`; mid-run, WP11-A's non-blocking drain
-        runtime MUST route every completed round here (Appendix B handshake).
+        Callers: `drain.py`'s `flush_pending_eval` / `run_terminal_eval`, and the mid-run
+        non-blocking drain, which MUST route every completed round here.
 
-        `wr_sealbot` absent/None ⇒ ONE `sealbot_wr_gate_skipped` event + skip counter
-        (LAW-18: an inert gate is loud, never silently dead), carrying ONE of THREE reasons
-        — `eval_round_broken`, `strength_floor_refused`, `wr_sealbot_absent` — in that
-        precedence, so the three distinct causes of "this gate has no number" are never the
-        same observable (F-RESIT-14, R324(d)). That path appends NOTHING and
-        must never trim either: a skipped observation that clipped the ring would let an
-        evidence blackout shorten a tail the config asked for (R92/BUG-1's contract, this
-        axis's version, driven by `tests/train/test_wr_gate_capacity.py`).
+        `wr_sealbot` absent/None gives ONE `sealbot_wr_gate_skipped` event plus a skip counter
+        carrying one of three reasons — `eval_round_broken`, `strength_floor_refused`,
+        `wr_sealbot_absent` — in that precedence, so the three causes of "this gate has no
+        number" are never one observable. That path appends nothing and must not trim.
 
-        THIS METHOD OWNS THE RING'S CAPACITY (R265 / ADJ-D38), and it derives it — from the
-        two minted consec keys the trajectory rules gate their tails on, and from rule B's
-        own peak window. A literal here made every consec above it unfireable while the
-        abort audited armed; deriving it WITHOUT the window floor would instead have widened
-        rule B's peak with the ring, which is a behavioural change to an armed rule and a
-        ruling rather than a rider.
+        THIS METHOD OWNS THE RING'S CAPACITY and derives it from the two minted consec keys and
+        rule B's peak window; a literal made every larger consec unfireable, and dropping the
+        window floor would widen rule B's peak with the ring.
 
-        Disposition (operator G-3): a sustained-collapse trajectory HARD-ABORTS only when
-        `monitor_cfg.wr_hard_abort_enabled` is True; the shipped default is False = WARN-ONLY,
-        which emits a VISIBLE `sealbot_wr_warn` carrying the same de-diagnosed trajectory fact
-        and does NOT set `shutdown.running=False`. Warn-only is never silent — a warn-only
-        gate that emitted nothing would be the silently-disabled class (R1/LAW-18).
+        A collapse trajectory HARD-ABORTS only when `wr_hard_abort_enabled` is True; the shipped
+        default is warn-only, which still emits a visible `sealbot_wr_warn`.
         """
         payload: Mapping[str, Any] = result or {}
         stats = self._gate_stats["sealbot_wr_abort"]
         stats["checks"] += 1
-        # `or self._train_step` would rewrite a legitimate step 0 (falsy) to the current
-        # train step and mis-stamp the WR ring (RED-TEAM F12): test for absence, not truth.
+        # `or self._train_step` would rewrite a legitimate step 0 (falsy) to the current train
+        # step and mis-stamp the WR ring: test for absence, not truth.
         raw_step = payload.get("step")
         step = self._train_step if raw_step is None else int(raw_step)
-        # F-RESIT-14's GATE HOLE, closed here. A round that BROKE and a healthy round that
-        # simply carried no sealbot number reached this gate as the SAME observable: one skip
-        # event, one reason string, `wr_sealbot_absent`. They are not the same fact. A round
-        # that could not run is not a round that ran without a number, and LAW-15's promotion
-        # bar must not be reported as merely un-evidenced when the evidence PATH failed.
-        # Measured at the 2026-08-27 re-sit: every in-run round ended `eval_broken`
-        # (`reason=join_timeout`, the round-progress budget escalating), the promotion gate
-        # therefore never fired for the life of the burst, and this event said
-        # `wr_sealbot_absent` each time — indistinguishable from a healthy quiet round.
-        #
-        # `.get` and NOT a subscript, deliberately, and the asymmetry with
-        # `apply_gate_decision` is the point: there a subscript is right because an ABSENT
-        # reason must never read as clean on the PROMOTION path (R152/LAW-11). Here the
-        # mapping legitimately predates the key on the terminal and hand-built routes, and a
-        # `KeyError` raised in this method kills the poller thread — converting a VISIBLE skip
-        # into a silent hang, which is the F1 failure mode the eval pipeline is built against.
+        # A round that BROKE and a healthy round carrying no sealbot number used to reach this
+        # gate as the SAME observable, and the promotion bar must not read as un-evidenced when
+        # the evidence PATH failed. `.get` and NOT a subscript, unlike `apply_gate_decision`:
+        # the key legitimately postdates some routes, and a `KeyError` kills the poller thread.
         broken = payload.get("eval_broken_reason")
-        # R324(d): F-RESIT-14's HOLE IN A THIRD FORM. A round the strength floor REFUSED is
-        # not broken and is not healthy-but-metric-less — it is deliberately not played, and
-        # before this branch it reached here as `wr_sealbot_absent`, indistinguishable from a
-        # quiet healthy round. Exactly the defect closed above, arriving by a new cause.
-        # `.get` chained through the same absence-tolerant route as `broken`, and PRESENCE is
-        # the arming evidence: a disarmed round carries no `strength_floor` key at all, so
-        # `floor_refused` is False and this gate behaves as it did before the floor existed.
+        # A round the strength floor REFUSED is neither broken nor healthy-but-metric-less.
+        # PRESENCE of the key is the arming evidence: a disarmed round carries none.
         floor = payload.get("strength_floor")
         floor_refused = False
-        # `None` on every arm but a refusal, so a consumer reads one key rather than
-        # inferring the case from a string — the same shape `eval_broken_reason` already has.
+        # `None` on every arm but a refusal, so a consumer reads one key rather than inferring
+        # the case from a string.
         floor_failed_bars: list[Any] | None = None
         if isinstance(floor, Mapping) and floor.get("passed") is False:
             floor_refused = True
@@ -1341,9 +847,8 @@ class StepCoordinator:
         wr = payload.get("wr_sealbot")
         if wr is None:
             stats["skips"] += 1
-            # PRECEDENCE, stated rather than incidental: broken outranks refused. A round
-            # that broke may carry a floor payload from before the break, and "this round
-            # could not run" is the stronger fact about why the gate has no number.
+            # Precedence, stated rather than incidental: broken outranks refused. A round that
+            # broke may carry a floor payload from before the break.
             if broken is not None:
                 reason = "eval_round_broken"
             elif floor_refused:
@@ -1354,29 +859,18 @@ class StepCoordinator:
                 "event": "sealbot_wr_gate_skipped",
                 "step": step,
                 "reason": reason,
-                # Present on EVERY skip, `None` on the healthy-but-metric-less arm, so a
-                # consumer reads one key rather than inferring the case from a string.
+                # Present on EVERY skip, `None` on the healthy-but-metric-less arm.
                 "eval_broken_reason": broken,
-                # The refusal's own evidence, on the same terms: the bars that failed, or
-                # `None` when the floor did not refuse this round.
+                # The bars that failed, or `None` when the floor did not refuse this round.
                 "strength_floor_failed_bars": floor_failed_bars,
                 "skipped_total": stats["skips"],
-                "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
+                "pending_producer": None,  # producer landed (eval.rounds)
             })
             return
-        # AUDIT-1 F-14. The ring used to be one series by assumption. `wr_sealbot` is the WR
-        # of the FIRST sealbot rung with games this round, name dropped: once `sealbot_d5`
-        # SATURATES it gets 0 games off-cadence (run5 mints `calibration_every_k_rounds: 4`),
-        # so consecutive rounds report d6 then d5 then d6 — and an 8-game calibration reading
-        # sits beside 32-game ones while `sealbot_wr_trajectory_alert` tests
-        # `wr < peak * ratio` across the lot. A drop from one opponent's WR to a HARDER
-        # opponent's is not a collapse, and that is the false positive the `wr_hard_abort`
-        # capability would have fired on.
-        #
-        # The ring is per-rung: when the reporting rung changes, the series STARTS OVER and
-        # says so. Clearing is the conservative direction — a trigger that needs N
-        # observations simply waits N more rounds — and the alternative (carrying the rung in
-        # the tuple) would reshape a ring two rules in `monitor/rules.py` read.
+        # The ring is PER-RUNG. `wr_sealbot` is the first sealbot rung with games this round, so
+        # a saturated rung going off-cadence makes consecutive rounds report different rungs, and
+        # a drop to a HARDER opponent is not a collapse. A rung change restarts the series and
+        # says so; carrying the rung in the tuple would reshape a ring two rules read.
         rung = payload.get("wr_sealbot_rung")
         if rung != self._wr_history_rung:
             if self._wr_history:
@@ -1394,16 +888,9 @@ class StepCoordinator:
             self._wr_history.clear()
             self._wr_history_rung = rung
         self._wr_history.append((step, float(wr)))
-        # R265 / ADJ-D38: the ring's capacity is DERIVED from everything that reads it — the
-        # two minted consec keys (`sealbot_wr_trajectory_alert` refuses each trigger on
-        # `len(history) >= its consec`) and rule B's own peak window. A literal here was the
-        # ADJ-D36 "fifth face" on this axis: any consec above it could never satisfy its
-        # length gate while `monitor.wr_hard_abort_enabled` armed the abort and gate 12's
-        # cadence audit had no row for the axis at all. `max` over the three, so no reader is
-        # starved AND rule B's window is never the thing that shrinks; the peak window's
-        # positive value is also what keeps this `del` slice safe — `[:-0]` deletes NOTHING
-        # in Python, so a capacity that could reach 0 would silently make the ring unbounded
-        # (the same `-0` hair-trigger that makes a consec of 0 read the WHOLE ring).
+        # The capacity is DERIVED from everything that reads it — the two minted consec keys and
+        # rule B's peak window — so no schema-legal consec is unfireable. `max` also keeps it
+        # positive, since `[:-0]` deletes NOTHING and a 0 capacity would unbound the ring.
         capacity = max(WR_PEAK_WINDOW_EVALS,
                        int(self.monitor_cfg.wr_collapse_consecutive_evals),
                        int(self.monitor_cfg.wr_rolling_consecutive_evals))
@@ -1425,22 +912,12 @@ class StepCoordinator:
                 "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
             })
 
-    # ── training-step dispatch (mixed vs straight self-play) ──────────────────────────────
     def _run_training_step(self, cfg: StepCoordinatorConfig) -> dict[str, float]:
-        # WPMINT Phase K-B CLOSED the R1 violation Phase K-A disclosed here. This line read
-        # `int(self.train_cfg.get("batch_size", self.full_config.get("batch_size", 256)))`,
-        # and K-A MEASURED that on the production path both lookups miss — `compose_run`
-        # passes `train_cfg={}` and a `full_config` whose top-level keys are the RunConfig
-        # SECTIONS — so the batch size was unconditionally the literal `256` while
-        # `StepCoordinatorConfig.batch_size` (the builder's `8`) sat beside it unread. It is
-        # now `train.batch_size`, minted at 256 so the number is unchanged and only its
-        # AUTHOR moved (`mantis.config.resolve.coordinator.resolve_coordinator_knobs`). The
-        # dict lookups are deleted rather than kept as a fallback: a fallback is the second
-        # authority, and `train_cfg` is the legacy flat-hparams path this root does not use.
+        # `train.batch_size`, minted at 256. This was a dict lookup whose two levels both miss
+        # on the production path, so the batch size was unconditionally a literal fallback.
         batch_size = cfg.batch_size
-        # Straight self-play step (WPTS Phase T / TD-1 / R102): the DECLARED dispatcher
-        # routes off the resolved representation to the trainer's TYPED entry points
-        # (`train_step_from_graph_batch` / `train_step_from_tensors`). `train_step` is dead.
+        # The DECLARED dispatcher routes off the resolved representation to the trainer's typed
+        # entry points (`train_step_from_graph_batch` / `train_step_from_tensors`).
         return run_declared_train_step(
             self.trainer, self.buffer, self._step_spec(),
             batch_size=batch_size, augment=cfg.augment,
@@ -1451,7 +928,7 @@ class StepCoordinator:
         )
 
     def _fast_policy_weight(self) -> float:
-        """R347(b) — the graph route's fast-arm policy weight, resolved lazily.
+        """The graph route's fast-arm policy weight, resolved lazily.
 
         Not memoised, unlike the caps: it is one dict lookup and a float, and a memo would be
         a second place the value lives.
@@ -1459,50 +936,36 @@ class StepCoordinator:
         return resolve_fast_policy_weight(self.full_config)
 
     def _step_spec(self) -> Any:
-        """The resolved encoding spec, lazily resolved ONCE from the declared config this
-        coordinator holds (`full_config`), through THE one resolver. An undeclared encoding
-        raises `MissingEncodingError` — the LAW-11 posture, never a default arm."""
+        """The resolved encoding spec, lazily resolved ONCE from the declared config through
+        the one resolver. An undeclared encoding raises `MissingEncodingError`, never a
+        default arm."""
         if self._resolved_step_spec is None:
             self._resolved_step_spec = resolve_step_spec(self.full_config)
         return self._resolved_step_spec
 
     def _sample_threads(self) -> int:
-        """The ring rebuild's thread budget, derived ONCE from this coordinator's config.
-
-        Cached for `_step_spec`'s reason and not for speed: the derivation reads
-        `selfplay.n_workers` and the host's core count, both fixed for the life of the run,
-        so re-deriving it per step would be a second reading of a constant.
-        """
+        """The ring rebuild's thread budget, derived ONCE from this coordinator's config; cached
+        for `_step_spec`'s reason, not for speed, since its inputs are fixed for the run."""
         if self._resolved_sample_threads is None:
             self._resolved_sample_threads = resolve_sample_threads(self.full_config)
         return self._resolved_sample_threads
 
     def _microbatch_caps(self) -> Any:
-        """The resolved graph micro-batch caps, lazily resolved ONCE from the declared config
-        this coordinator holds, through THE one resolver. Absence raises by name.
+        """The resolved graph micro-batch caps, lazily resolved ONCE. Absence raises by name.
 
-        Passed to the dispatcher as a CALLABLE — the BOUND METHOD, not a call — and invoked by
-        the GRAPH arm only, so a grid run never reads `train`. That asymmetry is the whole
-        point and it is not decoration: Python evaluates every argument before the call, so
-        `caps_provider=self._microbatch_caps()` would resolve `full_config["train"]` on BOTH
-        representations, and FOUR FROZEN test files build a `StepCoordinator` whose
-        `full_config` is `{"identity": {...}}` with no `train` key at all. A graph-only knob
-        must not make a grid config unloadable (WP12-R F2, DESIGN_DFIX §3.11.1).
-
-        Memoised, mirroring `_step_spec` above — the burst calls this once per coordinator,
-        not once per step. It mirrors `_step_spec` in MEMOISATION and deliberately NOT in call
-        site: `_step_spec()` is invoked unconditionally because it DECIDES the route, while
-        these caps are meaningful only on one branch OF that decision. Eager for the router,
-        lazy for the routed.
+        Passed to the dispatcher as a CALLABLE — the bound method, not a call — and invoked by
+        the GRAPH arm only. Python evaluates every argument before the call, so calling it here
+        would resolve `full_config["train"]` on BOTH representations, and a graph-only knob must
+        not make a grid config unloadable. Memoised like `_step_spec`, but lazy where that one is
+        eager: `_step_spec` DECIDES the route, these caps matter on one branch of it.
         """
         if self._resolved_caps is None:
             self._resolved_caps = resolve_microbatch_caps(self.full_config)
         return self._resolved_caps
 
-    # ── eval kickoff at the boundary (via the INJECTED EvalPipelineLike; no train→eval) ───
     def _maybe_kick_eval(self, cfg: StepCoordinatorConfig) -> tuple[bool, bool]:
-        """Returns `(eval_kicked_off, eval_skipped_busy)`. The kick ACK is consumed ONLY
-        for `eval_skipped_busy` (`ack.get("kicked") is False`) — NEVER for WR (P-06)."""
+        """Return `(eval_kicked_off, eval_skipped_busy)`. The kick ACK is consumed ONLY for
+        `eval_skipped_busy` (`ack.get("kicked") is False`) — never for WR."""
         if self.eval_pipeline is None or cfg.eval_interval <= 0:
             return False, False
         round_idx = self._train_step // cfg.eval_interval
@@ -1521,7 +984,6 @@ class StepCoordinator:
         eval_kicked_off = bool(ack.get("kicked") is True)
         return eval_kicked_off, eval_skipped_busy
 
-    # ── the async eval-result POLL at the top of step() (main-thread, never blocking) ─────
     def _poll_eval_results(self) -> bool:
         if self.eval_pipeline is None:
             return False
@@ -1532,7 +994,7 @@ class StepCoordinator:
         drain._route_eval_result(self, result)
         return True
 
-    # ── close-out / terminal-eval flush (delegates to drain.py; §a.4 `drain` slice) ───────
+    # close-out / terminal-eval flush (delegated to drain.py)
     def flush_pending_eval(self) -> Any:
         from mantis.train.coordinator import drain
         return drain.flush_pending_eval(self)

@@ -1,40 +1,15 @@
-"""⊕ WP11-A — full headless eval round, end to end (mantis.eval.pipeline; integration-tier).
+"""Full headless eval round, end to end (integration tier).
 
-RED-at-import until IMPL writes `mantis.eval.pipeline` (+ worker.py, snapshot.py, bots).
-Marked `@pytest.mark.integration` (CI integration tier, `make test.integration`) because —
-unlike the other `tests/eval/*.py` suites, which fake the subprocess boundary to stay fast
-and deterministic — THIS suite's whole point is to prove the real out-of-process worker
-actually runs a real headless round on CPU: no `multiprocessing.get_context` patch here.
-`worker_device="cpu"`.
+Unlike the other `tests/eval/*.py` suites, which fake the subprocess boundary to stay fast,
+this one runs the REAL out-of-process worker on CPU: no `multiprocessing.get_context` patch.
 
-FIX-PASS amendment (design-gap G-1..G-3, dispatcher ruling option (b)): a hand-sized net was
-NOT a registered encoding and its tensors never matched what the engine actually feeds a net
-through this path — `mantis.eval.worker` runs inference via `LocalInferenceEngine` bound to
-the encoding the ROUND DECLARED (WP12-R Phase B threads `RoundSpec.encoding`), so the wire it
-decodes carries the declared encoding's geometry whatever the net was built at. This fixture
-builds `_ENC` end-to-end (board, snapshot tag, RegimeKey stamps) and a REAL-ARCH net whose
-node/edge dims are READ OFF that encoding's spec, minimal width/depth for speed —
-registry-true, so the wire and the net match exactly, no accidental shape coincidence.
+The net is built at dims READ OFF `_ENC`'s registry spec, because the worker runs inference
+bound to the encoding the ROUND declared — the wire carries that geometry whatever the net was
+built at. `LadderState.initial()` marks ONLY rung index 0 active, so the resolvable stub is
+index 0 and plays from round 1 while `sealbot_d5` stays loud-skipped behind it.
 
-Second dispatcher-ruled amendment (required by Part 4's revert of the first-round
-dormant-rung top-up, deviation #3): `LadderState.initial()` marks ONLY rung INDEX 0 active;
-every other rung starts dormant and activates only when its immediate predecessor's most
-recent MEASURED round clears `activation_wr_lower_ci` (STATE §5's real chained law). The
-resolvable stub (`bot="random"`) is therefore rung index 0 here — the ONE in-repo resolvable
-rung, per DESIGN.md's census: "0 of 6 [ladder] rungs resolve locally" — so it plays from
-round 1 without needing the reverted top-up. `sealbot_d5` sits behind it (index 1) and
-never activates in this fixture's short run (its own predecessor's WR never needs to clear
-the bar for the round to complete); it stays loud-skipped every round it IS active for
-(no `MANTIS_BOT_SEALBOT` adapter at HEAD) — consistent with the 0/6 census, not a fixture
-workaround. The real end-to-end round is exercised by the gate block (skipped here — no
-`best_model` yet, run3 `run(best_model=None)` parity) + the random floor + the resolvable
-ladder rung.
-
-IMPL API pin introduced by this oracle: the routed round-result dict carries an ADDITIONAL
-`"worker_pid"` key beyond the §c.2 shape (§c.2 is explicitly superset-stable: "consumers
-must tolerate additions, never removals") — the concrete mechanism this suite uses to
-assert "eval inference out-of-process" (a dispatch success criterion) without reaching
-into pipeline internals.
+The routed result carries an ADDITIONAL `"worker_pid"` key beyond the superset-stable shape; it
+is how this suite asserts eval inference is out-of-process without reaching into internals.
 """
 from __future__ import annotations
 
@@ -61,26 +36,16 @@ from mantis.model import GnnArch, build_net
 pytestmark = pytest.mark.integration
 
 
-#: A DENSE encoding at radius 8, not radius-5 `v6`: this round replays real openings from
-#: `book_v1_s20260625_p4`, which is minted against `gnn_axis_v1` and 292 of whose 512 openings
-#: need radius >= 6 (tests/arena/test_book_geometry_pairing.py). Under `v6` the round dies in
-#: the eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
+#: A DENSE encoding at radius 8, not radius-5 `v6`: the round replays real openings from
+#: `book_v1_s20260625_p4`, most of which need radius >= 6. Under `v6` the round dies in the
+#: eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
 _ENC = "gnn_axis_v1"
 
 
 def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
-    # Registry-TRUE dims, DERIVED from the spec rather than written as literals. They used to
-    # be `board_size=19, in_channels=8` beside a comment naming `[encodings.v6]` — correct
-    # then, and exactly the coincidence that breaks the moment the encoding moves, which it
-    # just did. `test_graph_round_encoding._net` makes the same argument for the same reason.
-    # `weight_seed` is DETERMINISTIC-but-DIFFERENT per round: with n_sims=4 (a genuinely
-    # shallow search) most individual games between two weak/untrained players end in the
-    # ply-cap draw (`arena/match.py::DEFAULT_MAX_PLIES=128` — the board is unbounded, a
-    # 6-in-a-row is not guaranteed within any ply budget), so a handful of decisive games
-    # per round is a low-probability, high-variance event — reproducible determinism (a
-    # fixed seed per round, not "whatever torch's global RNG state happens to be") is what
-    # keeps `test_second_round_scheduling_reflects_first_round_bt` from being flaky across
-    # runs while still exercising the REAL worker/arena/BT path end to end.
+    # Registry-TRUE dims, DERIVED from the spec rather than written as literals, so the wire and
+    # the net cannot drift apart when the encoding moves. `weight_seed` is deterministic-but
+    # -different per round because at `n_sims=4` a decisive game is a high-variance event.
     torch.manual_seed(weight_seed)
     spec = lookup(_ENC)
     arch = GnnArch(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim),
@@ -92,14 +57,12 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
 
 def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
     rungs = [
-        # index 0: `LadderState.initial()` starts ONLY the first rung ACTIVE (STATE §5's
-        # real chained activation law, post deviation-#3-revert) — the resolvable stub
-        # must be index 0 so it plays from round 1 without a top-up.
+        # `LadderState.initial()` starts ONLY the first rung ACTIVE, so the resolvable stub must
+        # be index 0 to play from round 1.
         LadderRung(name="resolvable_stub", bot="random", variant="raw", depth=None,
                    opponent_sims=None, opening_book="book_v1_s20260625_p4",
                    deploy_matched=True, games_max=20),
-        # index 1: dormant behind the stub; never resolves (0/6 census) even if it later
-        # activates — exercises the loud-skip path, not a fixture workaround.
+        # Dormant behind the stub and never resolvable, so it exercises the loud-skip path.
         LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
                    opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32),
     ]
@@ -155,25 +118,17 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
-        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in the
-        # parent and carries it to every `RoundSpec` — the eval child is a SECOND
-        # allocator on the same card that no in-process bound can see. `None` is the
-        # GRID arm, written out rather than omitted.
+        # The pipeline resolves the fused-forward memory bound ONCE in the parent and carries it
+        # to every `RoundSpec`; `None` is the GRID arm, written out rather than omitted.
         fused_graph_caps=None,
         inference_batching=None,
     )
 
 
 def _poll_until_complete(pipeline, *, timeout: float) -> dict:
-    """CARD-EVAL-CLOCK closure (R62, WPCLEAN Phase RES) — the RESTRUCTURE arm, with the
-    injection arm measured out: this suite's whole point is a REAL out-of-process worker
-    (module docstring), so a fake pipeline clock cannot compress the round — it can only
-    disarm the pipeline's own budget kills while the subprocess still needs real seconds.
-    The load-sensitivity R62 recorded (red three times under contaminated load) came from
-    90 s ceilings doing double duty as timing claims. They are not timing claims: every
-    ceiling here is a runaway bound, and 600 s bounds runaway exactly as well while no
-    plausible load contamination reaches it. Healthy rounds complete in seconds and are
-    unaffected."""
+    """Poll for the round result. The ceilings here are RUNAWAY bounds, never timing claims —
+    a real subprocess needs real seconds, and 600 s bounds runaway while no plausible load
+    contamination reaches it. Healthy rounds complete in seconds."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         result = pipeline.poll_completed()
@@ -217,28 +172,19 @@ def test_round_records_carry_regime_key_on_every_record(tmp_path) -> None:
         assert rungs_played
         regime_keys = [info["regime_key"] for info in rungs_played.values()]
         assert all(regime_keys), "every played rung's aggregate must carry a non-empty regime_key"
-        # aggregate_rung raises MixedRegimeError on a mixed regime_key set (test_aggregate_regime.py
-        # pins this directly) — a successfully-produced aggregate here is itself evidence every
-        # underlying per-game record shared one canonical regime_key. Distinct rungs must not
-        # collide on the same key (they differ in bot/opponent, so their regime_keys must differ).
+        # `aggregate_rung` raises on a mixed regime_key set, so a produced aggregate is itself
+        # evidence that every underlying record shared one canonical key; distinct rungs differ
+        # in bot/opponent, so their keys must differ too.
         assert len(set(regime_keys)) == len(regime_keys)
     finally:
         pipeline.stop()
 
 
 def test_second_round_scheduling_reflects_first_round_bt(tmp_path) -> None:
-    # Two DIFFERENT deterministic weight seeds — empirically verified (this fix pass) to
-    # be reproducibly decisive-outcome-yielding at this fixture's game count, so the BT
-    # fit's p_hat genuinely differs between rounds instead of racing "will a 6-in-a-row
-    # happen to form before the ply cap" on an unseeded net (see `_tiny_model` docstring).
-    # THE ADJUDICATOR IS ARMED FOR THIS ROW ONLY, and it is the mechanism rather than a
-    # workaround. `arena/adjudicate.py`'s own docstring describes this exact fixture state:
-    # *"every game reached the ply cap and `draw_rate` sat at 1.0, so at early strength the
-    # eval instrument's entire outcome channel was one constant. A constant carries no
-    # signal."* Two untrained nets at `random_model_sims=4` on an unbounded board do not
-    # complete a six-in-a-row inside the cap, so every game draws and both rounds fit
-    # `p_hat = 0.5` — the assertion below cannot see the difference it exists to check.
-    # The sibling rows keep the disarmed posture every shipped config mints.
+    # Two DIFFERENT deterministic weight seeds, so the BT fit's p_hat genuinely differs between
+    # rounds. THE ADJUDICATOR IS ARMED FOR THIS ROW ONLY, and it is the mechanism rather than a
+    # workaround: two untrained nets at `random_model_sims=4` draw every game on an unbounded
+    # board, both rounds fit `p_hat = 0.5`, and the assertion below goes blind.
     pipeline = _build_pipeline(tmp_path, adjudicate=True)
     try:
         pipeline.run_evaluation(_tiny_model(weight_seed=42), 1000, None,

@@ -1,60 +1,18 @@
-# R8 justify: one drift check over one document, and every arm of it is answered by importing
-# `RunConfig` itself — the leaf walk, the key citations, the reversed "deliberately absent"
-# region, the symbol resolution and the stated leaf count all read the SAME derived key set.
-# An arm living in another file would need its own copy of that derivation, and a transcribed
-# key list is exactly how the doc this gate checks rotted through four schema versions.
-"""CI gate 13: docs/contracts/run_config_schema.md may not cite a key or a symbol the
-shipped schema does not have (WPMINT Phase W, R91's design question).
+# R8 justify: one drift check over one document, every arm answered by importing `RunConfig`
+# itself, so an arm in another file would need its own copy of that derivation — and a
+# transcribed key list is how the doc this gate checks rotted through four schema versions.
+"""CI gate 13: docs/contracts/run_config_schema.md may not cite a config key or a `mantis.*`
+symbol the shipped schema does not have.
 
-WHY THIS EXISTS. Contract #5's doc drifted for four schema versions while every gate stayed
-green, because nothing in the repo read it — measured and recorded in repo_design §4's own v2
-amendment ("no test, no tool, no Makefile target, no CI gate names the contract file"). The
-three claims that had gone FALSE by WPMINT Phase W were all of one shape: a config key that no
-longer exists (`selfplay.legal_move_radius_schedule`), a resolver symbol that was retired
-(`mantis.config.resolve.radius.resolve_radius_from_schedule`), and a count that had moved.
-This gate closes exactly that shape.
+The doc drifted for four schema versions while every gate stayed green, because nothing read it.
+Every check is answered by importing the LIVE authority — `RunConfig`, the module tree,
+`mantis.config.schema.leaf_paths` — never a transcribed copy, four divergent copies of the leaf
+walker having already been measured. The "deliberately absent" section is checked in REVERSE:
+every citation under it must FAIL to resolve, so a retired key coming back reds the gate.
 
-THE GATE-12 PATTERN, AND WHAT IT FORBIDS. Every check below is answered by importing the LIVE
-authority — `RunConfig` for keys, the module tree for symbols — never by consulting a
-transcribed copy of either. Nothing here is a list of key names that a future phase would have
-to remember to update.
-
-THE WALKER IS IMPORTED, NOT TRANSCRIBED (AUDIT-1 F-44). This file used to carry its own copy
-and argued the copy was self-defending, because two test files asserted the same count against
-the same schema and a divergent walker here would disagree with the doc. That argument was
-false in both directions and the measurement is the reason it is gone: the count in the
-argument had itself gone stale, and the copies did NOT agree — `test_eval_config_remint.py`'s
-pre-DR-6 copy walked to 182 and the conformance partition's `live_leaf_paths` to 199 against
-this gate's 191, none of them able to see the others. The walker now lives at
-`mantis.config.schema.leaf_paths`, in `src/` where a gate may legitimately import it; importing
-it from a TEST module remains barred outright (R5/LAW-17), which is what made the copy look
-necessary in the first place.
-
-THE "DELIBERATELY ABSENT" SECTION IS CHECKED IN REVERSE, not exempted. That section exists to
-name keys and modules the schema does NOT have — a retired radius field, a dead gate knob, six
-deleted coordinator fields — so an exemption would have made the doc's most load-bearing list
-the one part of it nothing checks. Instead every citation under that heading must FAIL to
-resolve. A retired key that quietly comes back reds this gate, which is the direction that
-matters: `selfplay.legal_move_radius_schedule` returning is exactly the consumer-less-knob
-regression the section was written to prevent.
-
-WHAT THIS GATE DELIBERATELY DOES NOT DO. It does not require the doc to enumerate every
-leaf, and it does not check prose for truth. It is a citation check: every config key and
-every `mantis.*` symbol the doc NAMES must exist (or, under the absent heading, must not). A
-claim the doc simply omits is invisible to it. That bound is stated rather than hidden, because
-a gate whose real reach is narrower than its name is the class this repo keeps closing.
-
-THE BARE-SYMBOL ARM AND ITS BOUND (WPCLEAN Phase RES, closing the DSV2-2 blind spot). The
-WPMINT close-out measured that a doc naming a DELETED validator by bare name left this gate
-at rc 0 — `_SYMBOL_RE` sees only `mantis.`-rooted dotted names. The closure is structural,
-not doc-wide: in the `## Cross-field rules` table, the first two cells of every data row are
-LIVE-claim citations (validator name, model name) and each backticked identifier there must
-be a name DEFINED in the schema package (static AST walk over `src/mantis/config/schema` —
-no imports, no side effects). Doc-wide bare-name checking is deliberately NOT done: the doc
-legitimately cites retired names as history (`min_samples` in the version table), and a
-word-list exemption for "retired"-flavored prose is exactly the teach-people-to-word-around-
-the-gate failure the armed-abort census warns about. The bound: a stale bare name in PROSE
-still passes; one in the claim columns reds.
+The bounds: the doc need not enumerate every leaf, prose is not checked for truth, and a bare
+undotted name is checked only in the first two cells of the cross-field table, where doc-wide
+checking would need a word-list exemption for history the doc legitimately cites.
 """
 from __future__ import annotations
 
@@ -75,14 +33,9 @@ _KEY_RE = re.compile(r"`([a-z_]+(?:\.[A-Za-z_][A-Za-z0-9_]*)+)`")
 #: A citation SHAPED like a config key: an all-lowercase root and snake_case tails.
 _KEY_SHAPED_RE = re.compile(r"[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+")
 
-#: The dotted roots this doc may cite that are NOT `RunConfig` sections. AUDIT-1 F-26: the
-#: gate did `if key.split(".")[0] not in sections: continue`, which is how a dotted module
-#: path escapes the key check — and equally how a citation whose SECTION was renamed or
-#: deleted escapes it, since a stale key and a module path are structurally identical
-#: (`train.gone_away` vs `torch.dtype`). Shape cannot separate them, so the legitimate
-#: non-config roots are DECLARED and anything else with an unknown root is stale.
-#: Adding a root here is the act of saying "this doc may talk about that namespace", and it
-#: is four entries wide precisely so the diff is the review.
+#: The dotted roots this doc may cite that are NOT `RunConfig` sections. A stale key and a
+#: module path are structurally identical (`train.gone_away` vs `torch.dtype`), so the
+#: legitimate non-config roots are DECLARED and any other unknown root is stale.
 _NON_CONFIG_ROOTS: frozenset[str] = frozenset({
     "mantis",  # the package; symbol citations are separately resolved by `_SYMBOL_RE`
     "torch",   # `torch.dtype` in the amp-dtype rows
@@ -91,8 +44,8 @@ _NON_CONFIG_ROOTS: frozenset[str] = frozenset({
 })
 #: A backticked or bare dotted symbol rooted at the package.
 _SYMBOL_RE = re.compile(r"(?<![\w.])(mantis(?:\.[A-Za-z_][A-Za-z0-9_]*)+)")
-#: The doc's own statement of the leaf count, e.g. "**191 leaf key-paths**". The NUMBER is
-#: derived from the live schema on both sides of the comparison; only the doc's copy is text.
+#: The doc's own statement of the leaf count, e.g. "**191 leaf key-paths**"; the live side of
+#: the comparison is always derived from the schema.
 _COUNT_RE = re.compile(r"\*\*(\d+) leaf key-paths\*\*")
 #: The doc's header version line, e.g. "- version: v9".
 _HEADER_VERSION_RE = re.compile(r"^- version:\s*v(\d+)\s*$", re.M)
@@ -111,9 +64,8 @@ _BARE_RE = re.compile(r"`([A-Za-z_][A-Za-z0-9_]*)`")
 def _schema_defined_names() -> set[str]:
     """Every name DEFINED in the schema package, by static AST walk — no imports.
 
-    The bare-symbol arm's universe. Static on purpose: importing arbitrary modules to
-    build a name set would execute them, and the universe must exist even while the
-    package is broken enough that the doc's claims are exactly what needs checking.
+    Static on purpose: building the name set by import would execute the modules, and the
+    universe must exist even while the package is broken enough to need checking.
     """
     import ast
 
@@ -133,8 +85,8 @@ def _schema_defined_names() -> set[str]:
 def _symbol_exists(dotted: str) -> bool:
     """True iff `dotted` names an importable module, or an attribute reachable from one.
 
-    Walks the longest importable prefix, then resolves the remainder by `getattr`. A retired
-    module (`mantis.config.resolve.radius`) and a retired function on a live module both fail.
+    Walks the longest importable prefix, then resolves the remainder by `getattr`, so a retired
+    module and a retired function on a live module both fail.
     """
     parts = dotted.split(".")
     module = None
@@ -163,9 +115,8 @@ def check(doc_path: Path) -> list[str]:
 
     leaves = leaf_paths(RunConfig)
     sections = set(RunConfig.model_fields)
-    # A doc may legitimately name an interior BLOCK (`train.draw_rate_abort`,
-    # `monitor.drain`) as well as a leaf, so a cited key passes if it is a leaf or a
-    # dotted prefix of one.
+    # A doc may name an interior BLOCK as well as a leaf, so a cited key passes if it is a leaf
+    # or a dotted prefix of one.
     valid = set(leaves)
     for leaf in leaves:
         parts = leaf.split(".")
@@ -182,8 +133,8 @@ def check(doc_path: Path) -> list[str]:
             in_absent = line.strip() == ABSENT_HEADING
             saw_absent = saw_absent or in_absent
             in_cross_field = line.strip().startswith(_CROSS_FIELD_HEADING)
-        # The bare-symbol arm (DSV2-2): the first two cells of a cross-field table row are
-        # live-claim citations — validator name, model name — and must be DEFINED names.
+        # The first two cells of a cross-field table row are live-claim citations — validator
+        # name, model name — and must be DEFINED names.
         if in_cross_field and line.lstrip().startswith("|"):
             cells = [c.strip() for c in line.strip().strip("|").split("|")]
             claim_tokens = [
@@ -201,13 +152,9 @@ def check(doc_path: Path) -> list[str]:
             key = match.group(1)
             root = key.split(".")[0]
             if root not in sections:
-                # AUDIT-1 F-26. This `continue` is how a dotted module path, a filename or
-                # ordinary prose escapes the key check — necessary, and it is also the hole:
-                # a key whose SECTION was renamed or removed has an unknown root too, so a
-                # STALE citation reads exactly like prose and the check that exists to catch
-                # stale citations skips it. The two are separated by shape: `a.b_c` with a
-                # snake_case tail and no file extension is a config-key CITATION, and an
-                # unknown root then means the section is gone.
+                # A stale citation and a module path are structurally identical, so shape
+                # separates them: `a.b_c` with a snake_case tail is a config-key CITATION, and
+                # an unknown root then means the section is gone.
                 if _KEY_SHAPED_RE.fullmatch(key) and root not in _NON_CONFIG_ROOTS:
                     failures.append(
                         f"{doc_path}:{lineno}: cites `{key}`, whose root section `{root}` "
@@ -252,10 +199,8 @@ def check(doc_path: Path) -> list[str]:
             f"table would silently retire it"
         )
 
-    # AUDIT-1 F-52 item 3. The header said v9 while the table's own last row was v12 — three
-    # versions of drift in the file this gate exists to keep honest, and nothing checked the
-    # line because nothing DERIVED it. The table is the authority: a row is added when a
-    # version lands, so its maximum IS the contract's version.
+    # The version table is the authority — a row lands when a version does — and nothing
+    # checked the header line against it while it said v9 over a table ending at v12.
     header = _HEADER_VERSION_RE.search(text)
     rows = [int(m.group(1)) for m in _TABLE_VERSION_RE.finditer(text)]
     if not rows:

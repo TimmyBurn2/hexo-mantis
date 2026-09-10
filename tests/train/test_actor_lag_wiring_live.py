@@ -1,26 +1,13 @@
 """The composed lag-watchdog callables read the LIVE engine and the LIVE trainer.
 
-REVIEW-impl MF-1. Every lag oracle injects its own callables, and every `compose_run` test
-fakes `build_run_safety` — so the two lambdas the composition root actually hands to the
-watchdog (`run.py`: `actor_ckpt_step_fn`, `learner_step_fn`) were pinned by **nothing**.
-Replacing either with `lambda: 0`, or swapping them, passed all 1681 tests while blinding
-or false-firing the exit-45 actor-lag invariant at run5.
+Every lag oracle injects its own callables and every `compose_run` test fakes
+`build_run_safety`, so the two lambdas the composition root hands the watchdog were pinned by
+NOTHING: replacing either with `lambda: 0`, or swapping them, passed the whole suite while
+blinding the exit-45 actor-lag invariant. These are that missing producer test.
 
-That is the F-10 / LAW-07 phantom-gate class — a gate fed by nothing — on the very
-invariant this WP ships. R4 is explicit: no gate input without a producer test. These are
-that producer test.
-
-Deliberately NOT frozen: written after ORACLE-WRITE, in response to a review finding.
-
-WPAX R67: the RED-TEAM F-2 signature census that used to close this file has been FOLDED into
-`tests/train/test_actor_lag_watchdog.py`'s parametrized no-defaults census, which is the one
-authority for that rule (LAW-08). It lived here only because that file was byte-frozen and the
-fix pass that found F-2 held no R43 event; R67 was that event. Nothing replaces it here.
-
->300 justify (R8): the RED-TEAM F-1 pins at the end are the SAME subject as this file's
-existing ones — what the composition root hands `build_run_safety`, and what that builder
-does with it — and R5 bars cross-test imports, so a second file would fork a fourth copy of
-the drivable pool/trainer/buffer fakes above.
+>300 justify (R8): the arming pins at the end have the SAME subject as the ones above — what
+the composition root hands `build_run_safety` and what that builder does with it — and
+cross-test imports are barred, so a second file would fork the pool/trainer/buffer fakes.
 """
 from __future__ import annotations
 
@@ -54,7 +41,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -90,8 +77,7 @@ class _Trainer:
         self.device = "cpu"
         self.inference_sd = {"w": "SENTINEL"}
 
-    # WPTS/TD-1 re-point (R90a): the dead `train_step` fake is gone — the double
-    # conforms to the DECLARED seam (typed entry points + `device`).
+    # The double conforms to the DECLARED seam: typed entry points + `device`.
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
         return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
@@ -115,16 +101,14 @@ class _Buffer:
     def save_to_path(self, p) -> None: ...
 
 
-#: The UNPATCHED production builder, captured at import so the patch below can delegate to
-#: it without re-entering itself (WPMINT Phase K-A stage 0).
+#: The UNPATCHED production builder, captured at import so the patch below can delegate to it
+#: without re-entering itself.
 _PRODUCTION_BUILDER = mantis.run._step_coordinator_config
 
 
 def _bounded_config(**kwargs) -> StepCoordinatorConfig:
-    """WPMINT Phase K-A stage 0: the harness's own deltas over the REAL builder, not a
-    24-kwarg restatement of it. `draw_rate_abort` (and every other config-authored value)
-    is passed THROUGH untouched; `stop_step` stays the harness's own bound, which is this
-    patch's stated reason for existing."""
+    """The harness's own deltas over the REAL builder, not a 24-kwarg restatement of it: every
+    config-authored value passes THROUGH untouched, and `stop_step` is the harness's bound."""
     return dataclasses.replace(_PRODUCTION_BUILDER(**kwargs),
                                eval_interval=0, log_interval=1, stop_step=_STOP_STEP)
 
@@ -133,13 +117,9 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
                                *, abort_enabled=None):
     """Run `compose_run` and return (captured_kwargs, pool, trainer).
 
-    Captures what the composition root ACTUALLY hands `build_run_safety`, rather than
-    what a test injects in its place.
-
-    WPAX S-1: the config is a REAL minted `RunConfig` (the strict gate rejects the
-    `SimpleNamespace()` this used to pass), bounded by co-overriding all three step-clock
-    knobs — the reachability validator spans `cadence < threshold < max_train_steps`, so
-    `_STOP_STEP` must stay >= 3 for the chain to hold.
+    Captures what the composition root ACTUALLY hands `build_run_safety`. The config is a REAL
+    minted `RunConfig`, bounded by co-overriding all three step-clock knobs: the reachability
+    validator spans `cadence < threshold < max_train_steps`, so `_STOP_STEP` must stay >= 3.
     """
     captured: dict = {}
     pool, trainer = _Pool(), _Trainer()
@@ -161,10 +141,10 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
     mantis.run.compose_run(
         config=smoke_run_config(
             train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP,
-                   # WPTS/TD-1: real graph route per step; the minted 256 batch is drag.
+                   # Real graph route per step; the minted 256 batch is drag.
                    "batch_size": 8},
             monitor=monitor_overrides,
-            # WPMAIN/R120: the eval posture is the CONFIG's fact; no parameter can force it.
+            # The eval posture is the CONFIG's fact; no parameter can force it.
             eval_enabled=False),
         trainer=trainer, pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
@@ -180,11 +160,8 @@ def test_composition_root_supplies_both_lag_callables(tmp_path, monkeypatch, smo
 
 
 def test_learner_step_fn_reads_the_live_trainer(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
-    """Not a captured snapshot: mutating the trainer must move the reading.
-
-    A build-time snapshot would freeze `learner_step` and the lag would never grow, so the
-    invariant could never fire however far the actor fell behind.
-    """
+    """Not a captured snapshot: mutating the trainer must move the reading, or `learner_step`
+    freezes and the lag can never grow however far the actor falls behind."""
     captured, _pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     trainer.step = 4242
     assert captured["learner_step_fn"]() == 4242
@@ -203,11 +180,8 @@ def test_actor_ckpt_step_fn_reads_the_live_sync_engine(tmp_path, monkeypatch, sm
 
 
 def test_the_two_lag_callables_are_not_swapped(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer):
-    """Swapping them inverts the invariant into a permanent false-negative.
-
-    `learner_step − actor_ckpt_step` would go negative rather than positive, so a starved
-    actor would read as healthy no matter how far behind it fell.
-    """
+    """Swapping them inverts the invariant: `learner_step − actor_ckpt_step` goes negative, so a
+    starved actor reads as healthy however far behind it falls."""
     captured, pool, trainer = _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer)
     trainer.step = pool.step_calls[-1] + 500
 
@@ -229,8 +203,7 @@ def test_neither_callable_is_a_constant(tmp_path, monkeypatch, smoke_run_config,
     trainer.step = 8
     assert captured["learner_step_fn"]() == 8, "learner_step_fn returns a constant"
 
-    # The actor reading must be the engine's real synced step. The harness guarantees at
-    # least one sync, so a zero here means the callable is a stub rather than a reading.
+    # The harness guarantees at least one sync, so a zero actor reading means a stub.
     actor = captured["actor_ckpt_step_fn"]()
     assert actor == pool.step_calls[-1] and actor > 0, (
         f"actor_ckpt_step_fn returned {actor}; expected the live synced step "
@@ -242,22 +215,10 @@ def test_neither_callable_is_a_constant(tmp_path, monkeypatch, smoke_run_config,
 def test_the_composed_monitor_cfg_carries_the_declared_arming(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, armed
 ):
-    """The arming value must survive the WHOLE chain, not just its first arrow.
-
-    WPAX REVIEW-impl found the one live resurrection route this card left open: the
-    registry chain `resolve_monitor_config -> build_run_safety ->
-    ActorLagSpec.abort_enabled` was pinned at the FIRST arrow only. A disarm written into
-    `compose_run` after `_resolve_monitor_cfg` returns left the suite 1725-green while an
-    ARMED run5 config reached `build_run_safety` as `False` — the silent disarm this card
-    exists to make impossible, surviving one hop past where anything was looking.
-
-    This is the same LAW-07 / R4 phantom-gate class as MF-1 above (a gate input pinned by
-    nothing), one arrow further down, and it matters more since WPAX `0ef05ff` armed the
-    abort for run5.
-
-    BOTH directions are driven deliberately: the pin is on the TRANSPORT, not on a value.
-    Hardcoding either `True` or `False` anywhere in the chain fails exactly one arm — an
-    assertion that only checked `is True` would be satisfied by a hardcoded `True`.
+    """The arming must survive the WHOLE chain, not just its first arrow: pinned at
+    `resolve_monitor_config` only, a disarm written into `compose_run` afterwards left the suite
+    green while an ARMED config reached `build_run_safety` as `False`. Both directions are
+    driven because the pin is on the TRANSPORT — `is True` alone passes on a hardcoded `True`.
     """
     captured, _pool, _trainer = _compose_capturing_lag_fns(
         tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, abort_enabled=armed)
@@ -271,34 +232,11 @@ def test_the_composed_monitor_cfg_carries_the_declared_arming(
 def test_the_REAL_build_run_safety_carries_the_declared_arming_into_ActorLagSpec(
     tmp_path, smoke_run_config, armed
 ):
-    """The LAST arrow of the arming chain, driven through the REAL builder (RED-TEAM F-1).
-
-    The pin above monkeypatches `build_run_safety` and asserts on the kwarg it RECEIVES, so
-    it covers `config -> resolve_monitor_config -> the build_run_safety kwarg` and stops
-    there. The arrow both consumer registries name LAST —
-    `build_run_safety -> ActorLagSpec.abort_enabled`, at `subsystems.py`'s
-    `ActorLagSpec(abort_enabled=cfg.actor_lag_abort_enabled)` — is outside it, and was
-    measured to have exactly one producer test, which hand-builds an ARMED `MonitorConfig`
-    and asserts a fire. Hardcoding `abort_enabled=True` at that site therefore left the
-    whole suite green while arming the exit-45 hard abort for all four minted configs that
-    deliberately ship it DISARMED — a healthy-run false 45 on every non-production config
-    (WPUF F-3's failure mode), through the arrow this card declared closed.
-
-    So this test does what the one above cannot: NO monkeypatch on `build_run_safety`. It
-    composes the monitor config from a REAL minted `RunConfig` through the production
-    resolver, hands it to the REAL builder, and reads the arming back off the
-    `ActorLagSpec` the watchdog actually holds.
-
-    BOTH directions are parametrized for the same reason as above, and here the reason is
-    load-bearing rather than stylistic: a hardcoded `True` at the wiring site fails ONLY the
-    `[False]` arm and a hardcoded `False` fails ONLY the `[True]` arm. An assertion on one
-    value would be satisfied by the constant it is asserting. The assertion is written
-    against `monitor_cfg`'s own field, not against `armed`, because the pin is on the
-    TRANSPORT; the `armed` assertion beside it closes the loop back to the config.
-
-    The watchdog is left UNSTARTED and unarmed — this reads composition, not behaviour, and
-    a started daemon thread in a unit test is a flake surface. The fire path from an armed
-    spec is the frozen `test_build_run_safety_wires_actor_lag_from_monitor_config`'s job.
+    """The LAST arrow of the arming chain, driven through the REAL builder: no monkeypatch, a
+    real minted `RunConfig` through the production resolver, and the arming read back off the
+    `ActorLagSpec` the watchdog holds. Hardcoding `abort_enabled=True` at that site would arm
+    the exit-45 abort on every config that ships it disarmed with the suite still green. The
+    watchdog is left unstarted — this reads composition, and a daemon thread is a flake surface.
     """
     cfg = smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _STOP_STEP},

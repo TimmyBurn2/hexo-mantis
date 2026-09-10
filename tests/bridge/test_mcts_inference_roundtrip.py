@@ -1,20 +1,9 @@
-"""MCTSTree + InferenceBatcher round-trip (O20, review gap 3).
+"""MCTSTree + InferenceBatcher round-trip.
 
-MCTSTree: ctor-compose (new_full + configure_quiescence via the 5-arg bridge
-ctor), new_game -> select_leaves -> get_policy / get_improved_policy round-trip;
-forced_root_child get/set.
-
-InferenceBatcher: ALL 22 Python methods present AND exercised via the mock-game
-helpers over the dense + graph queues (no method silently dropped — a dropped
-method is a WP8-compat break); the 3 getters return the spec-derived values.
-
-WP12-R Phase EVALDECODE (E-1, R90a auto-grant) widened this to 22: the card adds
-`submit_graphs_and_wait_ls` (the frame-carrying graph driver `submit_graphs_and_wait`
-becomes a projection of) and `MCTSTree.expand_and_backup_ls_graph`. The surface
-assertion below is `hasattr`-presence over THIS FILE'S OWN literal list, so a new
-method leaves it green while the docstring above goes false — that hazard is why the
-count and the list move together, and why the round-trip at the bottom exercises the
-new tree method rather than only naming it.
+MCTSTree: ctor-compose, new_game -> select_leaves -> get_policy / get_improved_policy, and
+forced_root_child get/set. InferenceBatcher: the compat surface is present AND exercised over
+the graph queue — a method that only exists would pass a presence check while raising on every
+call, so each is driven for real.
 """
 import threading
 
@@ -23,10 +12,8 @@ import pytest
 
 from mantis import _engine
 
-# The Python-facing InferenceBatcher surface (DESIGN §a.1 table, widened by WP12-R Phase
-# EVALDECODE, narrowed by R346(f) when the six dense-queue methods and `feature_len_py` went
-# with the dense wire). A LIST, not a count: `test_the_declared_inference_surface_equals_the_
-# live_class` compares it to `dir()` both ways, which is what a count could never do.
+# The Python-facing InferenceBatcher compat surface. A LIST, not a count: it is compared to
+# `dir()` in BOTH directions, which is what a count could never do.
 INFERENCE_METHODS = [
     "close",
     "bump_model_version",
@@ -45,7 +32,6 @@ INFERENCE_METHODS = [
 ]
 
 
-# ------------------------------- MCTSTree -------------------------------------
 def test_mctstree_ctor_compose_and_policy_round_trip():
     tree = _engine.MCTSTree(1.5, 1.0, 0.25, True, 0.3)  # new_full + configure_quiescence
     assert tree.quiescence_fire_count == 0
@@ -66,11 +52,9 @@ def test_mctstree_ctor_compose_and_policy_round_trip():
 
 
 def test_mctstree_forced_root_child_round_trip():
-    """AUDIT-1 F-02: the setter validates against the ROOT'S CHILD RANGE now, so the
-    round-trip needs a root that HAS children and an index that is one of them. A bare tree
-    owns nothing, and the old `= 3` was storing an index into an uninitialised pool slot —
-    whose `action_idx` of `u32::MAX` decodes to the cell (32767, 32767), which an UNBOUNDED
-    board accepts. That is the arm that produced neither a panic nor an error."""
+    """The setter validates against the ROOT'S CHILD RANGE, so the round-trip needs a root
+    that HAS children: on a bare tree an arbitrary index decodes to a cell an UNBOUNDED board
+    accepts, producing neither a panic nor an error."""
     tree = _engine.MCTSTree()
     assert tree.forced_root_child is None
     with pytest.raises(ValueError, match="not a child of the root"):
@@ -90,14 +74,11 @@ def test_mctstree_forced_root_child_round_trip():
 
 
 def test_mctstree_expand_and_backup_ls_graph_round_trip():
-    """⊕ WP12-R Phase EVALDECODE (E-1, hunk 3) — the graph legal-set expand door.
+    """The graph legal-set expand door, executed rather than only named.
 
-    `submit_graphs_and_wait_ls` carries the BUILDER's window centre OUT; the new tree
-    method carries dense + the ragged overflow + that centre back IN and expands through
-    the same `expand_and_backup_ls_at` self-play expands through. A presence check over a
-    literal name list (above) would stay green for a method that raises on every call, so
-    the surface widening is paired with an execution here. RED at HEAD: neither method
-    exists yet.
+    `submit_graphs_and_wait_ls` carries the BUILDER's window centre OUT; the tree method
+    carries dense + ragged overflow + that centre back IN, through the same
+    `expand_and_backup_ls_at` self-play expands through.
     """
     spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
     ib = _engine.InferenceBatcher(encoding_spec=spec)
@@ -137,7 +118,7 @@ def test_mctstree_expand_and_backup_ls_graph_round_trip():
     ])
     t.join(timeout=10)
     assert len(results) == 1
-    dense, overflow, value, center = results[0]  # (dense, overflow, value, window centre)
+    dense, overflow, value, center = results[0]
     assert len(dense) == spec.policy_stride
     assert isinstance(value, float)
     assert len(tuple(center)) == 2
@@ -150,10 +131,8 @@ def test_mctstree_expand_and_backup_ls_graph_round_trip():
     ib.close()
 
 
-# ---------------------------- InferenceBatcher --------------------------------
-#: Public methods on the live class that the WP8 compat list deliberately does NOT carry, each
-#: with its ground. The set below is asserted for EQUALITY against `dir()` minus this, so a row
-#: here that stops being true reds just as loudly as a method that appears unannounced.
+#: Public methods on the live class the compat list deliberately does NOT carry, each with its
+#: ground. Asserted for EQUALITY, so a row that stops being true reds as loudly as a new method.
 NOT_IN_THE_COMPAT_SURFACE: dict[str, str] = {
     "graph_max_in_flight": "a CONSTRUCTION parameter read back, not a WP8 call-surface method; "
                            "it post-dates the compat list and belongs to the fused-graph caps",
@@ -163,13 +142,8 @@ NOT_IN_THE_COMPAT_SURFACE: dict[str, str] = {
 
 
 def test_the_declared_inference_surface_equals_the_live_class():
-    """Set equality, both directions — AUDIT-1 F-49.
-
-    This asserted `len(INFERENCE_METHODS) == 21` against a list literal in this same module: a
-    method ADDED to the bridge was invisible to it, which is the direction that matters for a
-    compat surface. The count form could only ever notice someone editing the literal. The set
-    form reds on a new `#[pymethods]` fn, which is the pin the audit named.
-    """
+    """Set equality, both directions: a count form could only notice an edit to the literal,
+    while this reds on a new `#[pymethods]` fn nobody declared."""
     live = {name for name in dir(_engine.InferenceBatcher) if not name.startswith("_")}
     declared = set(INFERENCE_METHODS)
     assert declared - live == set(), (
@@ -253,6 +227,6 @@ def test_inference_batcher_submit_graphs_and_wait():
     results = ib.submit_graphs_and_wait([([(0, 0, 1), (1, 0, -1)], 1, 100)])
     t.join(timeout=10)
     assert len(results) == 1
-    dense, overflow, value = results[0]  # (dense probs, overflow (q,r)->prob, value)
+    dense, overflow, value = results[0]  # overflow maps (q,r) -> prob
     assert isinstance(value, float)
     ib.close()

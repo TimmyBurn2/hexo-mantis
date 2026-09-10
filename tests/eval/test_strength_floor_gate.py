@@ -47,7 +47,7 @@ def _spec(*, decisive: float, wr: float, games: int = 4) -> StrengthFloorSpec:
     )
 
 
-# ── the measurement ────────────────────────────────────────────────────────────────────
+# the measurement
 def test_probe_measurements_count_decisiveness_from_the_recorded_terminal() -> None:
     """A capped game is NOT decisive; a won or lost game is. The count comes off `terminal`,
     which is why the arena records it — `(winner, plies)` cannot distinguish a win found on
@@ -66,7 +66,7 @@ def test_the_win_rate_is_draw_aware_like_every_other_win_rate_in_the_package() -
     assert verdict.winrate == pytest.approx(0.5)
 
 
-# ── the measured defect this bar exists for ────────────────────────────────────────────
+# the measured defect this bar exists for
 def test_an_all_ply_cap_probe_reads_a_healthy_half_on_the_WIN_RATE_axis_alone() -> None:
     """The shakedown burn's shape, reproduced: every game a ply-cap draw (`draw_rate` 1.0).
 
@@ -86,7 +86,7 @@ def test_an_all_ply_cap_probe_reads_a_healthy_half_on_the_WIN_RATE_axis_alone() 
     assert with_decisive.decisive_rate == pytest.approx(0.0)
 
 
-# ── the decision rule ──────────────────────────────────────────────────────────────────
+# the decision rule
 def test_both_bars_are_reported_even_when_both_fail() -> None:
     """A verdict that stopped at the first failing bar would hide the other axis from an
     operator re-tuning the floor. Both must appear."""

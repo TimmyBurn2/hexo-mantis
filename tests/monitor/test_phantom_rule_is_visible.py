@@ -1,22 +1,14 @@
-"""AUDIT-1 F-29 — a rule that has never been able to fire says so, and the gate-8 handshake
-skip is a WARNING.
+"""A rule that has never been able to fire says so, and the registry-handshake skip is a WARNING.
 
-TWO INSTRUMENTS, ONE CLASS: something that never ran was indistinguishable from something
-that ran and found nothing.
+Two instruments, one class: something that never ran was indistinguishable from something that
+ran and found nothing.
 
-**The phantom WARN rule.** `check_selfplay_entropy_collapse` reads
-`selfplay_model_entropy_batch` — which NO producer anywhere in `src/` writes — and falls back
-to `policy_entropy_selfplay`, which has no producer either (it travelled as JSON `NaN`, now as
-`None` under F-01). So the rule has never once been able to fire. It sits in
-`WARN_RULE_NAMES`, it is cited by the manifest row `warn.training_step_alerts`, and
-`monitor_gates` carried no per-rule skip count — so "this rule is quiet" and "this rule has
-never been able to speak" were one silence.
-
-**The gate-8 handshake.** `mantis.encoding._registry_sha_handshake` returned after an INFO
-line when no on-disk `registry.toml` was found above `__file__`, while its own docstring says
-the skip is "NEVER a silent pass". It was silent twice over: `mantis.run` installs no logging
-handler at all (F-08), so lastResort drops INFO; and the skip means the stale-`.so` guard DID
-NOT RUN, which is a statement about the run's own provenance.
+`check_selfplay_entropy_collapse` reads `selfplay_model_entropy_batch`, which no producer in
+`src/` writes, and falls back to `policy_entropy_selfplay`, which has none either — so the rule
+has never once been able to fire, while sitting in `WARN_RULE_NAMES` with no per-rule skip
+count. `mantis.encoding._registry_sha_handshake` returned after an INFO line when no on-disk
+`registry.toml` was found, and `mantis.run` installs no logging handler, so lastResort drops
+INFO; the skip means the stale-`.so` guard DID NOT RUN, a statement about the run's provenance.
 """
 from __future__ import annotations
 
@@ -51,7 +43,6 @@ def _run(payload: dict[str, Any]) -> list[str]:
     return rules.emit_training_step_alerts(payload, MonitorConfig(), [], sink=_Sink())
 
 
-# ── the phantom rule ──────────────────────────────────────────────────────────────────
 
 def test_every_WARN_rule_declares_the_input_its_verdict_depends_on() -> None:
     """The mapping is the thing that makes 'did not run' expressible at all, so it must cover
@@ -69,7 +60,7 @@ def test_the_selfplay_entropy_rule_counts_itself_as_UNABLE_TO_RUN() -> None:
 
 def test_the_count_ACCUMULATES_so_a_permanently_dead_rule_is_visible() -> None:
     """One skip is a quiet step; a hundred is a rule with no producer, and the number is what
-    tells them apart (LAW-18: a lever under test logs its own fire rate in-run)."""
+    tells them apart."""
     for step in range(5):
         _run({"loss_total": 1.0, "grad_norm": 0.5, "step": step})
     assert rules.WARN_RULE_SKIPS["selfplay_entropy_collapse"] == 5
@@ -83,9 +74,9 @@ def test_a_rule_WITH_its_input_is_not_counted_as_skipped() -> None:
 
 
 def test_the_entropy_rule_is_counted_absent_too_now_that_policy_entropy_is_None() -> None:
-    """F-01 and F-29 meet here: `policy_entropy` used to be a fabricated `0.0`, so
-    `entropy_collapse` FIRED every step. It is `None` now — and absence must be counted, or
-    the repair would trade a false alarm for a new silence."""
+    """`policy_entropy` used to be a fabricated `0.0`, so `entropy_collapse` FIRED every step.
+    It is `None` now, and absence must be counted or the repair trades a false alarm for a new
+    silence."""
     _run({"loss_total": 1.0, "grad_norm": 0.5, "step": 1})
     assert rules.WARN_RULE_SKIPS["entropy_collapse"] == 1
 
@@ -117,7 +108,6 @@ def test_the_coordinator_publishes_the_counts_in_the_ONE_channel() -> None:
     assert "WARN_RULE_SKIPS" in source
 
 
-# ── the gate-8 handshake ──────────────────────────────────────────────────────────────
 
 def test_a_skipped_handshake_logs_at_WARNING_not_INFO(
     caplog: pytest.LogCaptureFixture, tmp_path: Any
@@ -138,16 +128,14 @@ def test_a_skipped_handshake_logs_at_WARNING_not_INFO(
 
 
 def test_the_skip_is_readable_as_STATE_not_only_as_a_log_line() -> None:
-    """A log line reaches a terminal or it does not; `handshake_ran()` is the fact itself, so
-    a composition root can publish it into the event stream (LAW-08's live consumer)."""
+    """A log line reaches a terminal or it does not; `handshake_ran()` is the fact itself, so a
+    composition root can publish it into the event stream."""
     import mantis.encoding as enc
 
     assert callable(enc.handshake_ran)
     assert isinstance(enc.handshake_skipped, list)
     # In this repo layout the on-disk registry IS found, so the import-time handshake really
-    # compared a sha — which is the state this assertion is about. The row above calls the
-    # handshake with an EXPLICIT absent path and must NOT have changed it: an explicit path is
-    # a probe (the LAW-07 mutation self-test's own surface), and a probe that poisoned the
-    # run's provenance state would be the instrument corrupting what it measures.
+    # compared a sha. The row above calls the handshake with an EXPLICIT absent path, which is a
+    # probe and must not poison the run's provenance state.
     assert enc.handshake_ran() is True
     assert enc.handshake_skipped == []

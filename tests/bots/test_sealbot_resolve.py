@@ -1,51 +1,20 @@
-"""⊕ WP12-R Phase A / O-A1..O-A4 (DESIGN_A §2.2, PREREG_A §1) — the resolver rewrite.
+"""The bot resolver's refusal surface.
 
-At HEAD `bots/resolve.py` refuses all three external kinds through an ENV-KEY channel
-(`resolve.py:35-39,61-71`), which DESIGN_A §2.2(2) deletes as argued (R125/R79): for
-`sealbot` the authority for where the engine lives is `vendor/pins.toml` + `make vendor`,
-and two authorities for one fact is R79's exact prohibition; for the deleted `kraken`/`strix`
-kinds the key
-is a silent-arming surface with nothing behind it, since R139 rules both out for run5 with
-named grounds.
+The ENV-KEY channel through which all three external kinds were refused is DELETED: the authority
+for where the sealbot engine lives is `vendor/pins.toml` + `make vendor`, and for the deleted
+kinds the key was a silent-arming surface with nothing behind it.
 
-The defect each row is the ONLY witness to:
+Each row is the only witness to one defect: a sealbot skip that does not say which STEP is
+missing, where three environments must give three PAIRWISE DISTINCT reasons each naming the
+command that fixes it; a ruled skip that reads like a dispatcher shortfall, its grounds being PER
+RUNG; the env channel surviving, observed both BEHAVIOURALLY and by SOURCE, since a dead key
+still reads as an arming surface and a live key producing equal strings is a disguised channel;
+and a host path or endpoint entering `bots/`, scoped to the token classes the sibling census does
+not cover.
 
-- **O-A1** — a sealbot rung that skips without saying which STEP is missing. Three
-  environments (no vendor root / vendor root but no extension / the loader itself raised)
-  must produce three PAIRWISE DISTINCT reasons, each naming the exact command that fixes
-  it. A single "sealbot unavailable" string satisfies every other row in this file and is
-  precisely what makes a box misconfiguration indistinguishable from a ruled skip.
-- **O-A2** — a kraken/strix skip that reads like a dispatcher shortfall. R143 says these
-  skips are OPERATOR-AUTHORIZED; R139's grounds are the words that say so, and they are
-  PER RUNG. A paraphrase is a drift and cross-contamination is a false diagnosis.
-- **O-A3** — the env channel surviving the rewrite. Two observers, deliberately: the
-  BEHAVIOUR (set vs unset produce the identical outcome) and the SOURCE (no `MANTIS_BOT_`
-  literal under `src/`). Either alone is defeatable — a dead key still reads as an arming
-  surface to an operator, and a live key that happens to produce equal strings today is a
-  host-path channel wearing a disguise.
-- **O-A4** — a host path or default endpoint entering `bots/` with the adapter. Rule 7.
-  Scoped to the tokens `tests/bots/test_protocol.py::test_no_host_path_tokens_in_bots_
-  sources` does NOT cover (`~`-leading literals, `http(s)://`), so the two are one authority
-  split by token class, never a duplicate pin.
-
-SEAM (frozen here, ORACLE-FIRST — IMPL builds to it or files a grant):
-  * `mantis.bots.sealbot.find_vendor_root() -> pathlib.Path | None` — walks up from
-    `mantis.__file__` for a directory holding `vendor/pins.toml`; `None`, never a default
-    path, when not found.
-  * `mantis.bots.sealbot.load_sealbot_modules() -> tuple[Any, Any]` — `(minimax_module,
-    game_module)`; raises `RungUnresolvable(rung="sealbot", reason=...)`.
-  * `bots/resolve.py` reaches it THROUGH the module object (`_sealbot_mod.load_sealbot_
-    modules()`), never a from-import binding — the SR-3 property, so `monkeypatch.setattr`
-    on the module attribute is seen at call time.
-  * `mantis.bots.resolve._R139_SKIP_GROUNDS: dict[str, str]` — DESIGN_A §2.2(3)'s mapping.
-
->300 justify: one resolver, one file. Every row here is an assertion about the SAME function's
-refusal surface — which reason fires, whether two reasons can be confused for one another, and
-whether the ordering that decides between them holds. Splitting them would put the ruled skips
-(R139's kraken/strix, R326(e)'s excluded sealbot depth) in one file and the environment-state
-refusals in another, and the whole point of the pairwise-distinctness rows is that a reader of
-the log can tell those two classes apart: an oracle that can only see one class at a time
-cannot assert they are distinguishable.
+>300 justify: one resolver, one file. Every row asserts something about the SAME refusal surface,
+and the point of the pairwise-distinctness rows is that a reader can tell the ruled skips from
+the environment-state refusals — an oracle seeing one class at a time cannot assert that.
 """
 from __future__ import annotations
 
@@ -62,15 +31,14 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src"
 _BOTS_SRC = _SRC / "mantis" / "bots"
 
-#: The three env keys DESIGN_A §2.2(2) deletes. Named here, in the ORACLE, because after
-#: the rewrite there is nowhere in `src/` left to read them from.
+#: The three deleted env keys, named here in the ORACLE because after the rewrite there is
+#: nowhere in `src/` left to read them from.
 _DEAD_ENV_KEYS = {
     "sealbot": "MANTIS_BOT_SEALBOT",
 }
 
-#: The two commands a skip reason must name. Not host paths and not endpoints: `make
-#: vendor` is the repo's ONE vendoring mechanism (CLAUDE.md "Deliberately absent") and the
-#: build invocation is DESIGN_A §2.6's, run inside the gitignored vendor tree.
+#: The two commands a skip reason must name. Not host paths and not endpoints: `make vendor` is
+#: the repo's ONE vendoring mechanism, and the build invocation runs inside the gitignored tree.
 _VENDOR_CMD = "make vendor"
 _BUILD_CMD = "build_ext --inplace"
 
@@ -78,13 +46,9 @@ _RESOLVED = "<resolved>"
 
 
 def _reason_or_resolved(kind: str, *, depth: int | None) -> str:
-    """The outcome CLASS of one `resolve_bot` call, as a comparable string.
-
-    Environment-robust on purpose: on a box where the extension is built, `sealbot`
-    RESOLVES rather than raising, and an oracle that hard-required a raise would red for an
-    environment reason rather than for its own. `RungUnresolvable` -> its `.reason`;
-    a returned factory -> the `_RESOLVED` sentinel.
-    """
+    """Return the outcome CLASS of one `resolve_bot` call, as a comparable string.
+    Environment-robust on purpose: where the extension is built `sealbot` RESOLVES, and an oracle
+    that hard-required a raise would red for an environment reason rather than its own."""
     from mantis.bots.resolve import resolve_bot
 
     try:
@@ -100,17 +64,13 @@ def _no_vendor_root(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(sealbot_mod, "find_vendor_root", lambda: None)
 
 
-# ── O-A1: three environments, three distinct reasons, each naming its own missing step ──
+# Three environments, three distinct reasons, each naming its own missing step.
 def test_sealbot_refusal_reasons_are_pairwise_distinct_across_three_environments(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """O-A1, all three arms plus the distinctness assertion, in ONE function.
-
-    The one-function shape is PREREG_A §9 C-11's specified shape and it is what makes the
-    `[unreached]` labels in M-A1 valid: under M-A1 (the loader stops raising) arm (a)'s
-    `pytest.raises` fails at block exit and arms (b), (c) and the distinctness assertion
-    below never execute. Post-conditions sit OUTSIDE every block (SR-6).
-    """
+    """All three arms plus the distinctness assertion, in ONE function so the `[unreached]`
+    labels stay valid: if the loader stops raising, arm (a) fails at block exit and the rest
+    never execute. Post-conditions sit OUTSIDE every block."""
     import mantis.bots.sealbot as sealbot_mod
     from mantis.bots.resolve import resolve_bot
 
@@ -122,8 +82,8 @@ def test_sealbot_refusal_reasons_are_pairwise_distinct_across_three_environments
     assert absent_exc.value.rung == "sealbot"
     assert _VENDOR_CMD in reason_no_vendor, reason_no_vendor
 
-    # (b) vendor root present, extension absent -> name the BUILD step. `tmp_path` holds no
-    # `external/sealbot/current/minimax_cpp*.so`, which is the whole of the condition.
+    # (b) vendor root present, extension absent -> name the BUILD step; `tmp_path` holds no
+    # built extension, which is the whole of the condition.
     monkeypatch.setattr(sealbot_mod, "find_vendor_root", lambda: tmp_path)
     with pytest.raises(RungUnresolvable) as unbuilt_exc:
         resolve_bot("sealbot", depth=5, opponent_sims=128)
@@ -131,8 +91,7 @@ def test_sealbot_refusal_reasons_are_pairwise_distinct_across_three_environments
     assert _BUILD_CMD in reason_no_build, reason_no_build
 
     # (c) the loader itself raised -> carry the underlying failure's repr. A loader that
-    # swallowed it would report "not built" for an ABI mismatch, which is R145's exact
-    # predicted failure wearing the wrong label.
+    # swallowed it would report "not built" for an ABI mismatch.
     def _explode() -> tuple[Any, Any]:
         raise ImportError("undefined symbol: _ZTIN8pybind116detail13type_casterE")
 
@@ -157,8 +116,8 @@ def test_sealbot_refusal_reason_names_exactly_its_own_missing_step(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, arm: str, must_contain: str,
     must_not_contain: str,
 ) -> None:
-    """O-A1's reason-SHAPE arms. A reason that named both commands would be a checklist,
-    not a diagnosis: the operator could not tell which step to run."""
+    """A reason that named both commands would be a checklist, not a diagnosis: the operator
+    could not tell which step to run."""
     import mantis.bots.sealbot as sealbot_mod
     from mantis.bots.resolve import resolve_bot
 
@@ -174,18 +133,12 @@ def test_sealbot_refusal_reason_names_exactly_its_own_missing_step(
     )
 
 
-# ── R326(e): the depth-6 sealbot rung is EXCLUDED from the default battery ──────────────
+# The depth-6 sealbot rung is EXCLUDED from the default battery.
 def test_the_excluded_sealbot_depth_refuses_as_an_operator_authorized_skip() -> None:
-    """R326(e). The rung is minted in all seven configs and cannot finish inside
-    `eval.round_timeout_sec` at the measured 30.9 s/move, so it loud-skips per R139 instead of
-    killing a round.
-
-    The refusal must land in the SAME class kraken and strix use — `operator_authorized` —
-    because the in-run skip-class counter (LAW-18/R164) buckets on that marker, and a ruled
-    exclusion that reported as `build_absent` would read to an operator as a broken box.
-
-    MUTATION THAT REDS IT: the exclusion removed, or its reason rewritten without the R139
-    marker."""
+    """The rung is minted in every config and cannot finish inside `eval.round_timeout_sec` at
+    the measured 30.9 s/move, so it loud-skips instead of killing a round — in the SAME class the
+    other ruled skips use, because the skip-class counter buckets on that marker and
+    `build_absent` would read to an operator as a broken box."""
     from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS, resolve_bot
 
     depth = next(iter(_R326_EXCLUDED_SEALBOT_DEPTHS))
@@ -203,16 +156,9 @@ def test_the_excluded_sealbot_depth_refuses_as_an_operator_authorized_skip() -> 
 
 
 def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> None:
-    """The exclusion must be a statement about ONE depth, not about sealbot.
-
-    `sealbot_d5` is the rung that carries `wr_sealbot` — the gate's own sealbot signal — so an
-    exclusion that caught the kind rather than the depth would silently disarm the eval gate's
-    only resolvable opponent while looking like a narrow skip. Driven against the LIVE ladder
-    rather than a literal, so a re-minted ladder moves this row with it — and the ladder HAS
-    been re-minted since (R346(f) took the kraken/strix rungs and `sealbot_d6` with them), so
-    the assertion is that a survivor remains rather than that the exclusion is a proper subset.
-
-    MUTATION THAT REDS IT: the guard keyed on `kind == "sealbot"` instead of on the depth."""
+    """The exclusion is a statement about ONE depth, not about sealbot: `sealbot_d5` carries the
+    gate's own sealbot signal, so catching the kind would silently disarm the gate's only
+    resolvable opponent while looking like a narrow skip. Driven against the LIVE ladder."""
     import yaml
 
     from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
@@ -232,14 +178,9 @@ def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> N
 
 
 def test_the_exclusion_fires_BEFORE_the_extension_probe() -> None:
-    """An excluded rung must read the same in a warm checkout and a cold one.
-
-    If the guard sat after `load_sealbot_modules`, the reason on a box without the built
-    extension would be `BUILD_ABSENT` — a broken-box diagnosis for a rung the operator ruled
-    out — and the skip-class counter would bucket it as `build_absent`. Driven by making the
-    probe explode: the ruled reason must still come back.
-
-    MUTATION THAT REDS IT: the guard moved below the `try:`."""
+    """An excluded rung reads the same in a warm checkout and a cold one: a guard sitting after
+    the loader would give a broken-box diagnosis for a rung the operator ruled out. Driven by
+    making the probe explode — the ruled reason must still come back."""
     import mantis.bots.resolve as resolve_mod
 
     depth = next(iter(resolve_mod._R326_EXCLUDED_SEALBOT_DEPTHS))
@@ -255,18 +196,13 @@ def test_the_exclusion_fires_BEFORE_the_extension_probe() -> None:
     assert "operator-authorized skip (R139)" in exc.value.reason, exc.value.reason
 
 
-# ── O-A3: the env channel is GONE — behaviour and source, two observers ─────────────────
+# The env channel is GONE — behaviour and source, two observers.
 @pytest.mark.parametrize("kind", sorted(_DEAD_ENV_KEYS))
 def test_setting_the_deleted_env_key_changes_nothing(
     monkeypatch: pytest.MonkeyPatch, kind: str
 ) -> None:
-    """O-A3 arm (a). Compares the outcome CLASS with the key deleted vs set to a value that
-    looks like the old contract's payload.
-
-    The sealbot parametrization pins the vendor environment (`_no_vendor_root`). It used to
-    run beside `kraken` and `strix`, which had no vendor seam; both bot kinds are deleted, so
-    the map is the parametrization and a kind that leaves the resolver leaves this row.
-    """
+    """The outcome CLASS is identical with the key deleted and with it set to a value shaped like
+    the old contract's payload."""
     env_key = _DEAD_ENV_KEYS[kind]
     if kind == "sealbot":
         _no_vendor_root(monkeypatch)
@@ -285,8 +221,8 @@ def test_setting_the_deleted_env_key_changes_nothing(
 
 
 def test_no_mantis_bot_env_literal_survives_under_src() -> None:
-    """O-A3 arm (b) / N-A5. A source scan, with its own detector self-test inline so the
-    row cannot pass by scanning nothing (R81/R86)."""
+    """A source scan for the deleted key, with its own detector self-test inline so the row
+    cannot pass by scanning nothing."""
     needle = "MANTIS_BOT_"
     assert needle in "prefix MANTIS_BOT_SEALBOT suffix", "the detector itself must fire"
 
@@ -301,15 +237,10 @@ def test_no_mantis_bot_env_literal_survives_under_src() -> None:
     )
 
 
-# ── O-A4: no host path / default endpoint enters bots/ with the adapter ─────────────────
+# No host path or default endpoint enters bots/ with the adapter.
 def test_no_home_relative_or_url_literal_in_bots_sources() -> None:
-    """O-A4 (Rule 7). Token classes NOT covered by
-    `tests/bots/test_protocol.py::test_no_host_path_tokens_in_bots_sources`, which pins
-    `/home/` and `/`-leading absolute literals: this row adds `~`-leading paths and
-    `http(s)://` endpoints. AST string constants only, so prose about vendoring in a
-    docstring or a comment is not a false positive — and the vendor URL R139 requires lives
-    in `vendor/pins.toml`, which is not under `src/`.
-    """
+    """The token classes the sibling census does not pin: `~`-leading paths and `http(s)://`
+    endpoints, over AST string constants only, so prose about vendoring is not a false positive."""
     url_re = re.compile(r"https?://")
     assert url_re.search("see https://example.invalid/x") is not None, "detector must fire"
 

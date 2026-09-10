@@ -1,24 +1,11 @@
 """Suite Q3 — the inference batching instrument (collector wait / collate / occupancy).
 
->300 justify: ONE instrument, one set of fakes. Every assertion here binds the same
-producer chain — `InferenceServer`'s graph-loop timers -> `pool_hooks` -> the
-`iteration_complete` builder -> the sink — and the loop-driving fakes (a scripted graph
-batcher, a dense batcher, a stub net, a hand-built collated batch, the telemetry pool)
-are shared by all of them. Splitting the measurement arms from the arrival arms would put
-the producer in one file and the thing that proves it reaches the channel in another, and
-would duplicate every fake across the seam.
-
-The producer tests for the two `iteration_complete` batching fields (LAW-07/LAW-18):
-`inference_batching`, authored here, and `batch_fill_pct`, which shipped a live producer
-and NO manifest row. Both arms drive the REAL producer — the graph loop's own timers on a
-real `InferenceServer` — through the real hook and assert arrival at an injected sink, so
-a deleted timer or a dropped payload key reds here instead of going quiet in a run.
-
-WHY the occupancy distribution and not just the ratio: `batch_fill_pct` is a mean, and a
-mean cannot separate "one request per forward, every forward" from "sometimes 64,
-sometimes 0" — the two agree on the ratio and disagree on everything that matters about
-the queue. `test_an_occupancy_histogram_separates_always_one_from_a_mixed_load` is that
-separation, asserted.
+>300 justify: ONE instrument, one set of fakes. Every assertion binds the same producer chain —
+the graph loop's timers -> `pool_hooks` -> the `iteration_complete` builder -> the sink — so
+splitting the measurement arms from the arrival arms would duplicate every fake across the seam.
+Both batching fields get their producer test here, driving the REAL producer through the real
+hook into an injected sink. The occupancy DISTRIBUTION is asserted and not just the ratio,
+because a mean cannot separate "one request per forward" from "sometimes 64, sometimes 0".
 """
 from __future__ import annotations
 
@@ -47,11 +34,8 @@ def device() -> torch.device:
 def _cfg(**over: Any) -> dict[str, Any]:
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
-        # F-816-10: the graph arm resolves the fused-forward memory bound at
-        # construction. NON-BINDING here on purpose — the rows in this file are
-        # about the WAIT and OCCUPANCY instruments, which are measured at the POP
-        # and are blind to the split by construction; a cap that bound would put a
-        # split into rows that assert nothing about it.
+        # The graph arm resolves the fused-forward memory bound at construction. NON-BINDING
+        # here: these rows measure WAIT and OCCUPANCY at the POP and are blind to the split.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
@@ -60,13 +44,8 @@ def _cfg(**over: Any) -> dict[str, Any]:
 
 def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
               ) -> GraphWirePayload:
-    """A REAL `GraphWirePayload` matching `_hand_built_batch`'s shape.
-
-    F-816-10: `_run_graph_loop` now reads the wire's own CSR offsets ONCE per pop to plan its
-    bounded forwards, so an opaque `object()` sentinel no longer reaches the collate — the
-    plan is computed BEFORE it. The collate stays monkeypatched (these rows are about the
-    timing instrument, not the wire contract); only the offsets have to be real.
-    """
+    """A REAL `GraphWirePayload` matching `_hand_built_batch`'s shape — `_run_graph_loop` reads
+    the wire's own CSR offsets to plan, so only the offsets have to be real."""
     nodes = n_graphs * nodes_per_graph
     return GraphWirePayload(
         contract_version=1, builder_impl=1, n_graphs=n_graphs,
@@ -88,8 +67,8 @@ def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int 
 
 
 class _FakeGraphBatcher:
-    """Drives `_run_graph_loop` over a scripted list of per-pop request counts, sleeping
-    `wait_s` inside every pop so the measured collector wait has a known lower bound."""
+    """Drives `_run_graph_loop` over scripted per-pop request counts, sleeping `wait_s` inside
+    every pop so the measured collector wait has a known lower bound."""
 
     def __init__(self, wire: Any, counts: list[int], wait_s: float = 0.0) -> None:
         self._wire = wire
@@ -140,8 +119,7 @@ class _FiniteGraphNet(torch.nn.Module):
 
 
 def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch:
-    """A minimal VALID collated batch — enough for `stone_mask_from_batch`,
-    `segment_softmax` and the finiteness gate, without a live Rust queue."""
+    """A minimal VALID collated batch, without a live Rust queue."""
     n = n_graphs * nodes_per_graph
     node_offsets = torch.arange(0, n + 1, nodes_per_graph, dtype=torch.int64)
     legal_mask = torch.zeros(n, dtype=torch.bool)
@@ -153,10 +131,8 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         edge_index=torch.zeros((2, 0), dtype=torch.int64),
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
         legal_offsets=torch.arange(0, 2 * n_graphs + 1, 2, dtype=torch.int64),
-        # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending
-        # across the fuse (wire check 13). It used to be all zeros, which worked only
-        # because the stub reads `.numel()` — a stub that counted PER GRAPH would have
-        # put every legal node in graph 0 and the fixture would not have said so.
+        # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending across
+        # the fuse. All zeros worked only because the stub reads `.numel()`.
         legal_node_gather=torch.tensor(
             [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
             dtype=torch.int64,
@@ -196,16 +172,12 @@ def _run_graph_server(
     return server
 
 
-# ══ the instrument itself ════════════════════════════════════════════════════════
 def test_the_graph_loop_measures_its_own_collector_wait_and_collate_cost(
     device, monkeypatch
 ) -> None:
-    """Q3-01 — the wait spent inside `next_graph_batch` and the cost of
-    `collate_graph_batch` are both MEASURED, per served batch, with known lower bounds.
-
-    The collector wait is the load-bearing number: it is exactly the Rust-side
-    `batch_size / 2`-or-deadline wait, so a wait pegged at `inference_max_wait_ms` on
-    every forward says the threshold was never reached."""
+    """The collector wait inside `next_graph_batch` and the collate cost are MEASURED per served
+    batch: a wait pegged at `inference_max_wait_ms` says the batch threshold was never reached.
+    """
     server = _run_graph_server(
         device, monkeypatch, [2, 2, 2], wait_s=0.005, collate_s=0.002,
     )
@@ -226,11 +198,8 @@ def test_the_graph_loop_measures_its_own_collector_wait_and_collate_cost(
 def test_an_occupancy_histogram_separates_always_one_from_a_mixed_load(
     device, monkeypatch
 ) -> None:
-    """Q3-02 — min/max/histogram resolve what the mean cannot.
-
-    Two loads with the SAME mean occupancy (1,1,1,1 vs 1,1,1,... plus one full batch) are
-    indistinguishable by ratio; the histogram is what tells them apart, so it is asserted
-    as a distribution, not as a summary."""
+    """min/max/histogram resolve what the mean cannot: two loads with the SAME mean occupancy
+    are indistinguishable by ratio, so the histogram is asserted as a distribution."""
     server = _run_graph_server(device, monkeypatch, [1, 1, 8], batch_size=8)
     occ = server.batch_timing_snapshot()["occupancy"]
 
@@ -248,8 +217,7 @@ def test_an_occupancy_histogram_separates_always_one_from_a_mixed_load(
 
 
 def test_the_instrument_is_defined_before_the_first_forward(device, monkeypatch) -> None:
-    """Q3-04 — read before any batch: no division by zero, and no fabricated zero
-    either. Every derived reading is `None`; the two config facts are already known."""
+    """Read before any batch: every derived reading is `None`, never a fabricated zero."""
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: None)
     server = InferenceServer(
         _FiniteGraphNet(), device, _cfg(inference_batch_size=64),
@@ -262,7 +230,6 @@ def test_the_instrument_is_defined_before_the_first_forward(device, monkeypatch)
     assert snap["empty_polls"] == 0
 
 
-# ══ arrival at the sink (the manifest's producer tests) ══════════════════════════
 class _ListSink:
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -272,15 +239,14 @@ class _ListSink:
 
 
 class _TelemetryPool:
-    """The narrow `PoolTelemetryLike` surface over a REAL inference server — the two
-    batching members go through the REAL `pool_hooks` functions, so this drives the
-    production producer and not a restatement of it."""
+    """The narrow `PoolTelemetryLike` surface over a REAL inference server, driving the REAL
+    `pool_hooks` rather than a restatement of them."""
 
     search_kind = "gumbel"          # suppresses the PUCT-only cluster block
     avg_game_length = 12.0
     x_winrate = 0.5
     o_winrate = 0.4
-    draw_rate = 0.1  # F-816-2: the third outcome share.
+    draw_rate = 0.1  # the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     recent_move_histories: list[list[tuple[int, int]]] = []
@@ -323,8 +289,8 @@ def _emit(pool: Any) -> dict[str, Any]:
 def test_the_batching_block_reaches_the_sink_on_iteration_complete(
     device, monkeypatch
 ) -> None:
-    """Q3-05 — the manifest producer test for `inference_batching`: a LIVE graph-loop
-    measurement travels pool -> hook -> builder -> sink, whole and unfabricated."""
+    """The manifest producer test for `inference_batching`: a LIVE graph-loop measurement
+    travels pool -> hook -> builder -> sink, whole and unfabricated."""
     server = _run_graph_server(device, monkeypatch, [2, 2], wait_s=0.003)
     payload = _emit(_TelemetryPool(server))
 
@@ -339,11 +305,8 @@ def test_the_batching_block_reaches_the_sink_on_iteration_complete(
 def test_batch_fill_pct_reaches_the_sink_from_the_live_inference_counters(
     device, monkeypatch
 ) -> None:
-    """Q3-06 — the manifest producer test for `batch_fill_pct`, which had none.
-
-    2 requests per forward against 8 configured slots is 25%, and the SAME server's
-    occupancy block agrees — the ratio and the distribution are two readings of one
-    producer, so they can never drift apart silently."""
+    """The manifest producer test for `batch_fill_pct`: 2 requests per forward against 8 slots
+    is 25%, and the SAME server's occupancy block agrees."""
     server = _run_graph_server(device, monkeypatch, [2, 2, 2], batch_size=8)
     payload = _emit(_TelemetryPool(server))
 
@@ -356,20 +319,8 @@ def test_batch_fill_pct_reaches_the_sink_from_the_live_inference_counters(
 def test_the_occupancy_histogram_leaves_the_one_bucket_under_a_batched_submit(
     device, monkeypatch
 ) -> None:
-    """Q-FIND-1 — the post-fix contract on the LIVE instrument: no forward serves a
-    single graph.
-
-    The pre-fix run5 shape is `histogram == {"1": N}`, `mean == 1.0`, `max == 1` — the
-    reading Q-FIND-1b pre-registered at 1.5625% fill, and the shape
-    `test_an_occupancy_histogram_separates_always_one_from_a_mixed_load` above holds as
-    the *starved* reference. This is its complement: the shape a whole-leaf-batch submit
-    must produce on the same producer chain.
-
-    SCOPE, stated so it is not over-read: the counts are SCRIPTED by the fake batcher, so
-    this pins what the instrument reports for a batched arrival — it does not itself
-    exercise the Rust dispatch. The dispatch claim is pinned queue-side
-    (`crates/mantis-selfplay/tests/queue_roundtrip.rs`) and cross-FFI
-    (`tests/bridge/test_graph_batch_dispatch_parity.py`).
+    """No forward serves a single graph. The counts are SCRIPTED by the fake batcher, so this
+    pins what the instrument reports, not the Rust dispatch (pinned queue-side and cross-FFI).
     """
     server = _run_graph_server(device, monkeypatch, [8, 8, 7, 8, 6], batch_size=8)
     occ = server.batch_timing_snapshot()["occupancy"]
@@ -385,14 +336,8 @@ def test_the_occupancy_histogram_leaves_the_one_bucket_under_a_batched_submit(
 def test_batch_fill_pct_and_the_occupancy_block_agree_on_the_same_forwards(
     device, monkeypatch
 ) -> None:
-    """Q-FIND-1 — the two published instruments may not disagree.
-
-    `batch_fill_pct` (`pool_hooks.batch_fill_pct`) and `inference_batching.occupancy`
-    (`InferenceServer.batch_timing_snapshot`) are computed from DIFFERENT accumulators
-    over the same loop, so a drift between them means one of the two counters stopped
-    being fed — which is exactly how a starved-queue reading would go quiet after the
-    dispatch change.
-    """
+    """`batch_fill_pct` and `inference_batching.occupancy` come from DIFFERENT accumulators over
+    the same loop, so a drift between them means one counter stopped being fed."""
     server = _run_graph_server(device, monkeypatch, [8, 4, 8], batch_size=8)
     occ = server.batch_timing_snapshot()["occupancy"]
 
@@ -404,18 +349,16 @@ def test_batch_fill_pct_and_the_occupancy_block_agree_on_the_same_forwards(
 
 
 def test_a_telemetry_source_without_the_producer_publishes_none_never_zero() -> None:
-    """Q3-07 — the key is always present and carries `None` when the source produces
-    nothing for it. A consumer must read `None` as "no producer", never as zero."""
+    """The key is always present and carries `None`, which a consumer reads as "no producer"."""
 
     class _NoInstrumentPool:
-        """A telemetry source with NO batching producer — declares no such member at all
-        (not a member that raises: `getattr`'s default would swallow that)."""
+        """A telemetry source with NO batching producer — no such member at all."""
 
         search_kind = "gumbel"
         avg_game_length = 12.0
         x_winrate = 0.5
         o_winrate = 0.4
-        draw_rate = 0.1  # F-816-2: the third outcome share.
+        draw_rate = 0.1  # the third outcome share.
         draws = 1
         sims_per_sec = 100.0
         batch_fill_pct = 0.0

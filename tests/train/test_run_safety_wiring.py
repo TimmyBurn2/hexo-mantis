@@ -1,26 +1,10 @@
-"""⊕ O-27 (+ O-25, O-23, the exit-code equality pin) — the run-safety composition + close-out.
+"""The run-safety composition and its close-out.
 
-RED-at-import until IMPL writes `mantis.monitor.config` + `mantis.train.lifecycle.heartbeat_watchdog`.
-ORACLE-FIRST (⊕): the top-level imports raise ModuleNotFoundError before any port code exists.
+`close_out` disarms staleness FIRST, so a clean finish with a long terminal eval cannot become a
+false-42 relaunch storm; persist-fatal is never disarmed, and a late-disarm mutant false-fires.
 
-O-27 (MUST-2, P-27) — the disarm-at-close_out WIRING oracle. A dropped/late disarm turns every
-clean finish with a >30 min terminal eval into a false-42 supervisor relaunch STORM. With the
-watchdog ARMED + its thread running (tiny deadline), `drain.close_out` entering a fake eval
-drain that BLOCKS longer than the staleness deadline must produce ZERO staleness fires; the
-heartbeat-file `seq` keeps advancing through it; a persist increment mid-drain STILL fires 43
-(persist-fatal is NEVER disarmed). The late-disarm mutant (disarm AFTER the blocked flush) is
-shown to false-fire — proving the FIRST-action ordering is load-bearing.
-
-Also: O-25 MonitorConfig live-consumer sweep (dead knobs cannot ship), O-23 L-A census (no
-`mantis.eval` top-level import under train/monitor), and the `42 == 42` exit-code equality pin.
-
->300 justify: ONE seam under test — the run-safety COMPOSITION (`build_run_safety`) and the
-close-out it hands to `drain.close_out` — sharing one harness (`_make_watchdog`,
-`BlockingPipeline`, the exit/sink spies, `_drain_coord`). The disarm ordering, the wiring
-census that proves all three heartbeat sources are reachable (RED-TEAM F3), the result-seam
-routing and the config sweeps are all assertions about that same composition; splitting them
-would duplicate the harness and let the "what is wired" and "what happens at teardown" halves
-drift apart, which is precisely the gap F3 exploited.
+>300 justify (R8): ONE seam — `build_run_safety` and the close-out it hands to `drain.close_out`
+— sharing one harness; split, "what is wired" and "what happens at teardown" drift apart.
 """
 from __future__ import annotations
 
@@ -48,7 +32,6 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 
 
-# ── harness ───────────────────────────────────────────────────────────────────────────
 class _ExitSpy:
     def __init__(self) -> None:
         self.codes: list[int] = []
@@ -66,12 +49,11 @@ class SpySink:
 
 
 class BlockingPipeline:
-    """A fake eval pipeline whose `drain_pending` BLOCKS longer than the staleness deadline —
-    the legally-long close-out wait that must not false-fire the watchdog."""
+    """A fake pipeline whose `drain_pending` blocks past the staleness deadline."""
 
     def __init__(self, *, block_sec: float, counters_box=None) -> None:
         self._block = block_sec
-        self._counters_box = counters_box   # if given, bump it at drain start (mid-drain persist)
+        self._counters_box = counters_box   # bumped at drain start: a mid-drain persist
 
     def drain_pending(self):
         if self._counters_box is not None:
@@ -104,10 +86,9 @@ def _fake_coord(*, watchdog, pipeline, sink):
     )
 
 
-# ── O-27 — disarm-at-close_out (the ⊕ oracle) ─────────────────────────────────────────
 def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
-    """O-27 / P-27 — `close_out` disarms staleness FIRST, so a blocked >deadline drain produces
-    ZERO staleness fires and the heartbeat-file seq keeps advancing through the whole window."""
+    """A blocked drain past the deadline produces ZERO staleness fires, and the heartbeat seq
+    keeps advancing through the window."""
     sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
@@ -124,9 +105,8 @@ def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
         assert state is not None and state.seq >= 1, (
             "the watchdog thread must keep mirroring a fresh seq through the blocked drain"
         )
-        # P-27 registers STRICT increase across the blocked window: a `seq` that merely
-        # exists proves nothing — the supervisor keys on PROGRESSION, so a frozen-but-present
-        # seq during a long close-out is exactly the stale-kill condition.
+        # STRICT increase: the supervisor keys on PROGRESSION, so a frozen-but-present seq
+        # during a long close-out is exactly the stale-kill condition.
         assert state.seq > seq_before, (
             f"seq must STRICTLY increase through the blocked close-out "
             f"({seq_before} → {state.seq})"
@@ -136,8 +116,7 @@ def test_close_out_disarms_staleness_no_false_fire(tmp_path) -> None:
 
 
 def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
-    """O-27 / P-27 — persist-fatal is NEVER disarmed: a persist increment DURING the blocked
-    close-out drain still fires 43, while staleness stays silent (42 absent)."""
+    """Persist-fatal is NEVER disarmed: an increment mid-drain still fires 43."""
     sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
     box = [0]
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: box[0], hb_file=hb)
@@ -153,10 +132,7 @@ def test_persist_fatal_still_fires_after_close_out_disarm(tmp_path) -> None:
 
 
 def test_late_disarm_mutant_false_fires(tmp_path) -> None:
-    """O-27 / P-27 (mutant self-test) — the late-disarm mutant: if disarm happens AFTER the
-    blocked flush (not FIRST), a false 42 lands during the block. Reproducing that ordering here
-    MUST fire 42 — proving the disarm-FIRST ordering in the real close_out is load-bearing and
-    the oracle above is not vacuous."""
+    """Disarming AFTER the blocked flush false-fires 42, so the row above is not vacuous."""
     sink, exit_spy, hb = SpySink(), _ExitSpy(), tmp_path / "hb.json"
     wd = _make_watchdog(sink=sink, exit_fn=exit_spy, counters_fn=lambda: 0, hb_file=hb)
     pipe = BlockingPipeline(block_sec=0.8)
@@ -169,7 +145,6 @@ def test_late_disarm_mutant_false_fires(tmp_path) -> None:
         wd.stop()
 
 
-# ── O-25 — MonitorConfig live-consumer sweep ──────────────────────────────────────────
 _CONSUMER_SOURCES = (
     _SRC / "monitor" / "rules.py",
     _SRC / "monitor" / "config.py",
@@ -182,17 +157,14 @@ _CONSUMER_SOURCES = (
 
 
 def test_every_monitor_config_field_has_a_live_consumer() -> None:
-    """O-25 / P-25 — every `MonitorConfig` field name is referenced by rules/watchdog/supervisor/
-    emission source (LAW-08 applied to the dataclass). A dead knob cannot ship in the schema-debt
-    window."""
+    """Every `MonitorConfig` field has a live consumer — a dead knob cannot ship."""
     blob = "".join(p.read_text() for p in _CONSUMER_SOURCES if p.exists())
     orphans = [f.name for f in dataclasses.fields(MonitorConfig) if f.name not in blob]
     assert orphans == [], f"MonitorConfig fields with no live consumer (dead knobs): {orphans}"
 
 
 def test_monitor_config_is_frozen_with_no_lenient_from_dict() -> None:
-    """O-25 / D1 — MonitorConfig is a FROZEN dataclass (explicit kwargs only); the old lenient
-    `from_dict` (silently ignoring unknown keys — an R1 violation in spirit) is DEAD."""
+    """`MonitorConfig` is FROZEN, with no lenient `from_dict` ignoring unknown keys."""
     assert dataclasses.is_dataclass(MonitorConfig)
     cfg = MonitorConfig()
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -201,10 +173,7 @@ def test_monitor_config_is_frozen_with_no_lenient_from_dict() -> None:
 
 
 def test_monitor_config_carries_old_lineage_sealbot_defaults() -> None:
-    """O-25 — the sealbot-WR thresholds are the old `MonitoringConfig` values verbatim (0.10/2/
-    20000; peak×0.5/25000/3; 0.05/15000). The default DISPOSITION ships WARN-ONLY
-    (`wr_hard_abort_enabled=False`, operator G-3): the TRIGGERS are unchanged, only the default
-    posture moved — the hard-abort is one field away."""
+    """The sealbot-WR thresholds are the old lineage values verbatim, shipped WARN-ONLY."""
     cfg = MonitorConfig()
     assert cfg.wr_hard_abort_enabled is False, "operator G-3: ships warn-only, not hard-abort"
     assert MonitorConfig(wr_hard_abort_enabled=True).wr_hard_abort_enabled is True, (
@@ -220,7 +189,6 @@ def test_monitor_config_carries_old_lineage_sealbot_defaults() -> None:
     assert cfg.wr_early_death_min_step == 15000
 
 
-# ── O-23 — L-A census (no in-process eval on train/monitor surfaces) ──────────────────
 def _top_level_imports(tree: ast.Module) -> list[str]:
     targets: list[str] = []
     for node in tree.body:
@@ -233,9 +201,8 @@ def _top_level_imports(tree: ast.Module) -> list[str]:
 
 
 def test_no_top_level_eval_import_under_train_or_monitor() -> None:
-    """O-23 / P-23 — no `mantis.eval` top-level import under `train/**` or `monitor/**`; eval is
-    reached only via the injected `EvalPipelineLike`. Co-enforced with WP11-A's subprocess-
-    isolation side — nothing here constructs an in-process CUDA eval from the run loop."""
+    """No `mantis.eval` top-level import under `train/**` or `monitor/**`: eval is reached only
+    through the injected pipeline."""
     violations: list[str] = []
     for root in (_SRC / "train", _SRC / "monitor"):
         for path in sorted(root.rglob("*.py")):
@@ -246,24 +213,15 @@ def test_no_top_level_eval_import_under_train_or_monitor() -> None:
     assert violations == [], f"train/monitor must not top-level import mantis.eval: {violations}"
 
 
-# ── exit-code equality pin ────────────────────────────────────────────────────────────
 def test_stall_exit_code_equality_pin() -> None:
-    """O-17/O-27 — the WP10 games-progress watchdog and the L-B heartbeat watchdog share ONE
-    restart-wrapper key (42); the supervisor keys on exactly this value."""
+    """Both watchdogs share ONE restart-wrapper key, 42, the value the supervisor keys on."""
     assert SELFPLAY_STALL_EXIT_CODE == WATCHDOG_STALL_EXIT_CODE == 42
 
 
-# ══ RED-TEAM F3 — the composition root must actually WIRE all three sources ═══════════
 def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_path) -> None:
-    """RED-TEAM F3 — the wiring the watchdog depends on had NO oracle: `build_run_safety` has
-    no in-repo caller, so nothing asserted that the pool and the inference server can even
-    receive `registry.beat`. An unwired source then looks exactly like a wedged one (false 42
-    ⇒ relaunch storm ⇒ rc 44).
-
-    Asserts, end to end: the composition root exposes THE `HeartbeatFn` (bound to its own
-    registry); both self-play collaborators ACCEPT a `heartbeat=` kwarg; the beat lands in the
-    registry for each of the three declared sources; and the declaration reaches the watchdog.
-    """
+    """The root exposes THE bound `HeartbeatFn`, both collaborators accept a `heartbeat=`
+    kwarg, and every declared source beats into the registry. `build_run_safety` has no in-repo
+    caller, so without this an unwired source looks exactly like a wedged one."""
     import inspect
 
     from mantis.selfplay.inference_server import InferenceServer
@@ -274,11 +232,8 @@ def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_pat
         log_dir=tmp_path, run_id="wiring", buffer=None,
         buffer_persist_path=tmp_path / "replay_buffer.bin",
         wired_sources=HEARTBEAT_SOURCES,
-        # WP-UNFREEZE E31 fallout: the two lag-fn kwargs are REQUIRED (no defaults).
-        # WPAX RED-TEAM F-2: `monitor_cfg` is now REQUIRED too — this call site used to
-        # omit it and silently take the bare-`MonitorConfig()` (disarmed) arm. This test
-        # is about heartbeat wiring, so an explicit default-valued MonitorConfig is the
-        # honest subject; the arming transport is pinned in test_actor_lag_wiring_live.py.
+        # The lag-fn kwargs and `monitor_cfg` are REQUIRED; this row is about heartbeat
+        # wiring, so an explicit default-valued MonitorConfig is the honest subject.
         monitor_cfg=MonitorConfig(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
@@ -298,14 +253,12 @@ def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_pat
 
 
 def test_every_declared_heartbeat_source_has_a_live_emitter() -> None:
-    """RED-TEAM F3 — each of the three declared sources must be emitted by a REAL producer
-    module (the quoted source literal at its beat site), so the registry cannot declare a
-    stage nothing feeds. Complements the manifest's `heartbeat.*` event_literal rows."""
+    """Each declared source has a REAL producer, so no stage is declared that nothing feeds."""
     emitters = {
         "train_step": _SRC / "train" / "coordinator" / "step.py",
         "inference_dispatch": _SRC / "selfplay" / "inference_server.py",
         "selfplay_drain": _SRC / "selfplay" / "pool_drain.py",
-        # WP11-A: the eval pipeline's persistent poller thread beats this every tick.
+        # The eval pipeline's persistent poller thread beats this every tick.
         "eval_round": _SRC / "eval" / "pipeline.py",
     }
     assert set(emitters) == set(HEARTBEAT_SOURCES), "the emitter map must cover every source"
@@ -315,9 +268,8 @@ def test_every_declared_heartbeat_source_has_a_live_emitter() -> None:
 
 
 def test_build_run_safety_requires_an_explicit_wiring_declaration() -> None:
-    """RED-TEAM F3 — `wired_sources` has NO default: the root must STATE what it wired, so a
-    forgotten `heartbeat=` kwarg surfaces as a loud `heartbeat_source_unwired` rather than as
-    a 42 on a healthy run. Bites a signature that infers the declaration."""
+    """`wired_sources` has NO default, so a forgotten `heartbeat=` surfaces loudly rather than
+    as a 42 on a healthy run."""
     import inspect
 
     from mantis.train.subsystems import build_run_safety
@@ -326,7 +278,6 @@ def test_build_run_safety_requires_an_explicit_wiring_declaration() -> None:
     assert param.default is inspect.Parameter.empty, "wired_sources must be required"
 
 
-# ══ RED-TEAM F7 / F8 — the result seam and the disarm must never fail SILENTLY ════════
 class _RecordingCoord(SimpleNamespace):
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
@@ -346,10 +297,8 @@ def _drain_coord(result, sink):
 
 
 def test_a_batch_of_eval_rounds_is_routed_not_dropped() -> None:
-    """RED-TEAM F7 — a drain returning a LIST of completed rounds (the N-2 handshake shape
-    WP11-A may plausibly return) used to be dropped with `routed=0`, no event, no counter and
-    no log: the sealbot gate's only feed path going quiet exactly the way F-10 did. Every
-    Mapping in the batch must reach the handler, one call per round."""
+    """Every Mapping in a batched drain reaches the handler — a dropped batch takes the
+    sealbot gate's only feed path quiet."""
     sink = SpySink()
     rounds = [{"step": 1, "wr_sealbot": 0.4}, {"step": 2, "wr_sealbot": 0.5}]
     coord = _drain_coord(rounds, sink)
@@ -358,9 +307,8 @@ def test_a_batch_of_eval_rounds_is_routed_not_dropped() -> None:
 
 
 def test_an_unroutable_eval_result_is_recorded_loudly() -> None:
-    """RED-TEAM F7 — a shape the seam cannot consume is RECORDED
-    (`eval_result_unroutable`), never dropped in silence. It is deliberately not a raise: a
-    raise escapes into `close_out` and skips `pool.stop` + the terminal eval (F10)."""
+    """An unconsumable shape is RECORDED, not raised: a raise escapes `close_out` and skips
+    `pool.stop` and the terminal eval."""
     sink = SpySink()
     coord = _drain_coord("a bare ack string", sink)
     drain.flush_pending_eval(coord)
@@ -370,9 +318,7 @@ def test_an_unroutable_eval_result_is_recorded_loudly() -> None:
 
 
 def test_close_out_fails_loud_when_the_watchdog_cannot_disarm() -> None:
-    """RED-TEAM F8 — a duck-typed watchdog without `disarm_staleness` used to make `close_out`
-    SKIP the disarm silently: the exact false-42 relaunch storm MUST-2 exists to prevent,
-    reachable by injecting the wrong object. A wiring bug must fail loud."""
+    """A watchdog without `disarm_staleness` fails loud rather than skipping the disarm."""
     sink = SpySink()
     coord = _drain_coord(None, sink)
     coord.heartbeat_watchdog = SimpleNamespace(arm=lambda: None)   # no disarm_staleness

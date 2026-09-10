@@ -1,27 +1,12 @@
-"""R265 / ADJ-D38 — the PER-AXIS mutation battery on the fireability audit itself.
+"""The PER-AXIS mutation battery on the fireability audit itself.
 
-`tests/config/test_armed_abort_cadence.py` pins what the audit computes. This file pins that
-the audit BITES, per axis, in the axis's own sample clock — LAW-07's "every gate input cites
-a live producer AND a mutation self-test", applied to the thing R265 changed.
-
-The shape of every drive is the same and it is the shape the ruling asks for: take the real
+`tests/config/test_armed_abort_cadence.py` pins what the audit computes; this file pins that it
+BITES, per axis, in that axis's own sample clock. Every drive has one shape: take the real
 production config, make ONE armed row unfireable IN ITS OWN CLOCK, assert the audit reds for
-THAT row and stays green for the others, then put the key back and assert green. A per-axis
-battery rather than a per-config one, because the defect R265 closes is precisely that one
-axis's verdict was being computed from another axis's key — an all-rows-at-once assertion
-cannot see that.
-
-THE LOAD-BEARING DRIVE is `test_the_WR_axis_audits_GREEN_when_judged_in_the_GATE_clock`: it
-builds the row R251 would have produced for the sealbot-WR axis — same arithmetic, same
-manifest machinery, the GATE-BOUNDARY clock — and measures it GREEN on the very config the
-correct row refuses. That is ADJ-D38's "worse than D36 on the audit side" as a number, and it
-is the reason the clock had to move onto the axis instead of onto the row.
-
-The WR row ships DEFERRED (operator ruling G-3 mints `wr_hard_abort_enabled` false on every
-production config, and a CI gate may not overrule a pre-registered value), so every WR drive
-here flips it REQUIRED and arms it IN MEMORY — the §8.5 one-field data edit, the same way
-`test_armed_abort_manifest.py::test_flipping_the_deferred_row_to_required_needs_no_code_change`
-drives its own subject. Nothing on disk moves; no armed VALUE moves.
+THAT row and stays green for the others, then put the key back and assert green. Per-axis rather
+than per-config, because the defect being closed is one axis's verdict computed from another
+axis's key. The WR row ships DEFERRED, so every WR drive flips it REQUIRED and arms it IN
+MEMORY: nothing on disk moves, and no armed VALUE moves.
 """
 from __future__ import annotations
 
@@ -44,8 +29,8 @@ from mantis.config.schema import RunConfig
 REPO_ROOT = Path(__file__).resolve().parents[2]
 RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 
-#: Well past the old `WR_HISTORY_DEPTH = 5` — the exact region ADJ-D38 names as armed in the
-#: config and permanently unfireable in effect before the ring fix. A test INPUT.
+#: Well past the old `WR_HISTORY_DEPTH = 5`: armed in config, permanently unfireable in effect
+#: before the ring fix. A test INPUT.
 _ABOVE_OLD_WR_DEPTH = 9
 
 
@@ -55,9 +40,8 @@ def run5() -> RunConfig:
 
 
 def _revalidated(config: RunConfig, section: str, key: str, value: object) -> RunConfig:
-    """`dump -> mutate ONE key -> model_validate` — the loader's own final step, so every
-    cross-field validator re-runs and every mutation below is one a run could be launched
-    from. A synthetic config built any other way would prove nothing about a real mint."""
+    """`dump -> mutate ONE key -> model_validate`, the loader's own final step, so every
+    cross-field validator re-runs and every mutation below is one a run could be launched from."""
     raw = config.model_dump()
     raw[section][key] = value
     return RunConfig.model_validate(raw)
@@ -72,13 +56,9 @@ def _armed_wr(config: RunConfig, **monitor_overrides: object) -> RunConfig:
 
 
 def _required_manifest() -> tuple[ArmedAbort, ...]:
-    """The shipped manifest with every DEFERRED row flipped REQUIRED — the §8.5 data edit.
-
-    Derived from `MANIFEST`, never a re-typed row set: a transcribed copy would stop being
-    the shipped rows the first time one moved, and this battery would then be auditing a
-    manifest nobody ships. `owner` is dropped because `__post_init__` forbids it on a
-    REQUIRED row; `source_pin` is kept, which a REQUIRED row may carry (N-1 / R73).
-    """
+    """The shipped manifest with every DEFERRED row flipped REQUIRED, derived from `MANIFEST`
+    rather than re-typed: a transcribed copy would stop being the shipped rows the first time one
+    moved. `owner` is dropped because `__post_init__` forbids it on a REQUIRED row."""
     return tuple(
         dataclasses.replace(row, status=Status.REQUIRED, owner=None)
         if row.status is Status.DEFERRED else row
@@ -94,11 +74,9 @@ def _judged(config: RunConfig, manifest: tuple[ArmedAbort, ...]) -> dict:
     return {v.row.name: v for v in audit_cadence(config, manifest=manifest)}
 
 
-# ══ the baseline: with every row REQUIRED and armed, run5 is GREEN ═════════════════════
 def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> None:
-    """Every mutation below claims "this key alone reds this row alone". That claim needs a
-    green start, and it needs the WR row to actually BE judged — a row the audit skips
-    (disarmed, or still deferred) would make every drive here vacuously green."""
+    """Every mutation below claims "this key alone reds this row alone", which needs a green
+    start and needs the WR row to actually BE judged — a skipped row makes them vacuous."""
     manifest = _required_manifest()
     armed = _armed_wr(load_config(RUN5))
     judged = _judged(armed, manifest)
@@ -115,20 +93,16 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> N
     )
 
 
-# ══ per-axis kills: one key, one row, in that row's own clock ══════════════════════════
 @pytest.mark.parametrize(
     "label,section,key,value,expected",
     [
         # The draw-rate axis's own clock: gate boundaries. ADJ-D22's measured config.
         ("gate_interval outruns the run", "monitor", "gate_interval", 1_000_000_000,
          "draw_rate_collapse"),
-        # The BOUND rather than a cadence key — a run short enough that the draw-rate row's
-        # own min_step no longer fits inside it, chosen to sit BETWEEN the two axes'
-        # earliest fires so it reds one and not the other.
+        # The BOUND rather than a cadence key, sitting BETWEEN the two axes' earliest fires.
         ("run too short for the draw-rate min_step", "train", "max_train_steps", 80_000,
          "draw_rate_collapse"),
-        # The WR axis's own clock: eval rounds. THE R265 CASE — this key is invisible to a
-        # step-clock audit, and `monitor.gate_interval` says nothing whatever about it.
+        # The WR axis's own clock: eval rounds — invisible to a step-clock audit.
         ("eval_interval outruns the run", "train", "eval_interval", 1_000_000_000,
          "sealbot_wr_abort"),
         # The actor-lag axis: the train-step clock, its threshold past the bound.
@@ -139,15 +113,10 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> N
 def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(
     label: str, section: str, key: str, value: object, expected: str,
 ) -> None:
-    """The kill table, as code. Each row makes exactly one axis unfireable and asserts the
-    audit names THAT axis and no other — which is the property a single all-rows assertion
-    cannot give, and the property the D38 defect violated in the quietest possible way.
-
-    `train.max_train_steps` is the odd one out and is here deliberately: it moves the BOUND
-    rather than a cadence key, so it proves the comparison is live from the other side. Its
-    value is chosen to land BETWEEN the two step answers — the draw-rate row's 25000-step
-    min_step no longer fits in an 80000-step run's quarter (20000) while the WR row's 16
-    eval rounds (16000 steps) still does — so even the bound mutation names ONE row.
+    """The kill table, as code: each row makes exactly one axis unfireable and asserts the audit
+    names THAT axis and no other — the property an all-rows assertion cannot give.
+    `train.max_train_steps` moves the BOUND instead of a cadence key, and its value lands BETWEEN
+    the two step answers so even the bound mutation names ONE row.
     """
     manifest = _required_manifest()
     armed = _armed_wr(load_config(RUN5))
@@ -165,17 +134,9 @@ def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(
 
 
 def test_a_WR_consec_past_the_old_ring_depth_is_VISIBLE_to_the_audit() -> None:
-    """The specific ADJ-D38 case, on the audit side.
-
-    Before this ruling the WR axis had NO manifest row, so a consec past the old ring depth
-    was invisible to gate 12 in both directions — it could not be reported unfireable and it
-    could not be reported fireable either. Now the published number MOVES with the consec
-    (so the operand is read), and a consec absurd enough to outrun the run's own eval budget
-    is OUT OF BOUND by name.
-
-    The min_steps are zeroed so the CONSEC is what binds; at run5's minted min_steps the
-    step floors dominate and this drive would be measuring those instead.
-    """
+    """With no manifest row the WR axis was invisible to the gate in both directions. Now the
+    published number MOVES with the consec, and a consec outrunning the run's eval budget is OUT
+    OF BOUND by name. The min_steps are zeroed so the CONSEC binds, not the step floors."""
     manifest = _required_manifest()
     base = _armed_wr(load_config(RUN5), wr_early_death_min_step=0, wr_collapse_min_step=0,
                      wr_rolling_min_step=0)
@@ -200,19 +161,11 @@ def test_a_WR_consec_past_the_old_ring_depth_is_VISIBLE_to_the_audit() -> None:
     )
 
 
-# ══ the false affirmative R265 exists to kill ══════════════════════════════════════════
 def test_the_WR_axis_audits_GREEN_when_judged_in_the_GATE_clock() -> None:
-    """ADJ-D38's "worse than D36 on the audit side", measured rather than argued.
-
-    The row below is the one R251's machinery would have produced for this axis: the same
-    `Cadence` arithmetic, the same manifest, the same audit — judged on the GATE-BOUNDARY
-    clock, because that is the only step-cadence key a pre-R265 row had to reach for. On a
-    config whose eval cadence outruns the run three orders of magnitude it reports the row
-    fireable, WITH A CONCRETE NUMBER, while the correct row refuses the same config.
-
-    That difference is the whole reason the period moved onto the CLOCK: an author could not
-    have got this wrong on purpose, and nothing in the old machinery would have told them.
-    """
+    """The false affirmative, measured: the row below is what the previous machinery would have
+    produced for this axis — same arithmetic, same manifest, judged on the GATE-BOUNDARY clock.
+    On a config whose eval cadence outruns the run it reports the row fireable WITH A CONCRETE
+    NUMBER, while the correct row refuses the same config. Hence the period lives on the CLOCK."""
     vacuous = _revalidated(_armed_wr(load_config(RUN5)),
                            "train", "eval_interval", 1_000_000_000)
     correct = next(row for row in _required_manifest() if row.name == "sealbot_wr_abort")
@@ -243,15 +196,9 @@ def test_the_WR_axis_audits_GREEN_when_judged_in_the_GATE_clock() -> None:
 
 
 def test_the_audit_itself_RAISES_when_a_rows_clock_cannot_be_derived() -> None:
-    """The fail-loud path, driven through `audit_cadence` rather than through the clock in
-    isolation — a raise that never reaches the audit closes nothing.
-
-    A duck-typed config is used deliberately (`audit_cadence` takes `Any`): the schema's
-    `ge=1` on `train.eval_interval` makes an underivable period unreachable through the
-    loader, so the only honest drive is one that supplies the shape directly. What must NOT
-    happen is the audit answering anyway with a one-step tick — that answer is friendlier,
-    which is exactly why it has to be a raise.
-    """
+    """The fail-loud path, driven through `audit_cadence` rather than the clock in isolation. A
+    duck-typed config is used because the schema's `ge=1` makes an underivable period
+    unreachable through the loader; the audit must raise, not answer with a one-step tick."""
     from types import SimpleNamespace
 
     from mantis.config.armed_aborts import SampleClockNotDerivableError

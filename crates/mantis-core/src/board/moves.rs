@@ -5,22 +5,9 @@ use std::cell::RefCell;
 use fxhash::FxHashSet;
 use super::state::{Board, Cell, Player, HEX_AXES, hex_distance};
 
-/// Per-thread reusable scratch buffers for `get_clusters()` BFS partition.
-///
-/// Pre-optimization, `get_clusters` allocated `stones`, `visited`, and `queue`
-/// Vecs on every call. Per leaf expansion + per record this produced churn
-/// proportional to leaves/move × clusters/board on the hot path. Reusing
-/// per-thread scratch eliminates those three allocations; the returned
-/// `Vec<Vec<(i32,i32)>>` is still owned-per-cluster (return-type contract is
-/// unchanged).
-///
-/// Thread-local rather than per-Board: `Board::clone` is on the search hot
-/// path (leaf expansion reconstructs a board per leaf) and the established
-/// pattern (see the legal_cache handling in `Clone`) is to skip cache-shaped
-/// fields in Clone. A per-Board scratch would need the same skip-on-clone
-/// treatment AND would not survive across distinct Board calls (each leaf is
-/// a fresh clone). Thread-local is shared across all leaves on the same
-/// worker thread — strictly more reuse and zero Clone footprint.
+/// Per-thread reusable scratch buffers for the `get_clusters()` BFS partition, replacing three
+/// per-call Vec allocations. Thread-local because `Board::clone` is itself on the search hot
+/// path, so a per-Board scratch would need skip-on-clone treatment and survive nothing.
 struct ClusterScratch {
     stones: Vec<(i32, i32)>,
     visited: Vec<bool>,
@@ -41,60 +28,30 @@ thread_local! {
     static CLUSTER_SCRATCH_TLS: RefCell<ClusterScratch> = RefCell::new(ClusterScratch::new());
 }
 
-/// Stones in a row required to win. `pub` + re-exported from `board` so
-/// downstream search code uses `WIN_LENGTH - 1` instead of a bare `5`.
+/// Stones in a row required to win; re-exported so search says `WIN_LENGTH - 1`, not a bare 5.
 pub const WIN_LENGTH: usize = 6;
 
-/// Default maximum hex distance from any existing stone at which a new stone
-/// may be placed.  The official game rule is 8, but self-play with early
-/// bootstrap nets fragments the board past the 19×19 view window; the
-/// practical radius is capped at 5 to bound game extent without changing the
-/// network architecture or buffer schema.  Real games (corpus + reference
-/// bots) never exceed radius 5 between consecutive plies, so the rule cap is
-/// a no-op for in-distribution play and only suppresses fragmentation in
-/// self-play.
-///
-/// A per-Board override (`Board::legal_move_radius`) lets self-play callers
-/// vary r per game.  This constant remains the canonical default for fresh
-/// Boards (eval, bots, tests, corpus replay).
+/// Default maximum hex distance at which a new stone may be placed. The official rule is 8;
+/// the cap is 5 because self-play with early bootstrap nets fragments the board past the
+/// 19×19 view window, while real games never exceed radius 5 between consecutive plies.
 pub const DEFAULT_LEGAL_MOVE_RADIUS: i32 = 5;
 
-/// Cells in a closed hex ball of the given radius, centre included: `3r² + 3r + 1`.
-///
-/// AUDIT-1 F-49. Eight assertions across `mantis-core`'s suites read `90` under the comment
-/// "radius 5 default: 91 - 1", with the formula living only in those comments. If the engine
-/// default follows R328's grounds, every one of them reds with a message asserting a false
-/// fact. The arithmetic has ONE home now, and the tests say `hex_ball_cells(R) - 1`.
+/// Cells in a closed hex ball of the given radius, centre included: `3r² + 3r + 1`. ONE home
+/// for the arithmetic, so tests say `hex_ball_cells(R) - 1` rather than a transcribed `90`.
 #[must_use]
 pub const fn hex_ball_cells(radius: i32) -> usize {
     (3 * radius * radius + 3 * radius + 1) as usize
 }
 
-/// Default maximum hex distance between stones that share a single cluster
-/// for the `get_clusters()` partition.  Originally 8 to match the legal-move
-/// radius (one cluster per "reachable neighborhood"); lowered to 5 so that
-/// legal_radius == cluster_radius, removing the cluster / move-radius
-/// mismatch that produced extra-wide cluster windows under
-/// `get_cluster_views()`.  A per-Board override `Board.cluster_threshold`
-/// lets corpus generation widen this to 8 alongside `cluster_window_size = 25`
-/// for matched-perception A/B — without disturbing the default.
+/// Default maximum hex distance between stones sharing a cluster, held equal to the
+/// legal-move radius so the cluster and move windows cannot mismatch.
 pub const DEFAULT_CLUSTER_THRESHOLD: i32 = 5;
 
 impl Board {
-    /// Shared reference to the lazily-maintained legal move set.
-    ///
-    /// If the cache is dirty (any `apply_move` or `undo_move` since the last
-    /// call), rebuilds by iterating a hex ball of radius `legal_move_radius`
-    /// centred on every existing stone and collecting unoccupied cells.
-    ///
-    /// Prefer this over `legal_moves()` in search expansion — it avoids a Vec
-    /// allocation.  During tree traversal, `apply_move_tracked` / `undo_move`
-    /// are cheap (just a dirty-flag set); the rebuild cost is paid only once
-    /// per leaf expansion.
-    ///
-    /// The returned reference borrows `*self`, so invalidating the cache
-    /// while it is live is statically rejected (INV-3 — see the
-    /// `legal_cache` field doc in `state::core`):
+    /// Shared reference to the lazily-maintained legal move set, rebuilt on demand from a hex
+    /// ball of radius `legal_move_radius` around every stone. Prefer it over `legal_moves()`
+    /// in search expansion. The returned reference borrows `*self`, so invalidating the cache
+    /// while it is live is statically rejected (INV-3, `legal_cache` in `state::core`):
     ///
     /// ```compile_fail,E0502
     /// use mantis_core::board::Board;
@@ -125,24 +82,12 @@ impl Board {
                     }
                 }
             } else {
-                // For every placed stone, emit all empty cells within the
-                // Board's per-game `legal_move_radius` (default 5).
-                // The hex ball in axial coords is the set of (dq, dr) satisfying:
-                //   |dq| ≤ R, |dr| ≤ R, |dq + dr| ≤ R
-                // which translates to dr ∈ [max(-R, -R-dq), min(R, R-dq)].
+                // For every placed stone, emit all empty cells within `legal_move_radius`.
+                // The hex ball in axial coords: |dq| ≤ R, |dr| ≤ R, |dq + dr| ≤ R.
                 let r = self.legal_move_radius;
-                // Bbox-based upper bound on the legal-move set size. Two
-                // independent valid upper bounds, take the min (tighter):
-                //  (a) bbox area — every legal cell lies in the axial rectangle
-                //      [min_q-r, max_q+r] × [min_r-r, max_r+r]; each cell at
-                //      most once a legal move. Tight late-game (high density).
-                //  (b) cells.len() · hex-ball-area — every stone contributes at
-                //      most a radius-r ball of legal positions; the union can't
-                //      exceed the sum. Tight early-game (low density).
-                // O(1) integer math, no allocation. saturating ops are
-                // defensive against extreme board sizes. Reserving a proven
-                // upper bound lets the insert loop grow the table in a single
-                // allocation — zero in-loop hashbrown rehash cascade.
+                // Bbox-based upper bound on the legal-move set size: the min of the axial
+                // bbox area (tight late-game) and cells.len() × hex-ball area (tight early).
+                // A proven bound lets the insert loop grow the table in ONE allocation.
                 let ru = r.max(0) as usize;
                 let w_q = (self.max_q.saturating_sub(self.min_q) as usize)
                     .saturating_add(1)
@@ -178,33 +123,25 @@ impl Board {
         unsafe { &*self.legal_cache.get() }
     }
 
-    /// All legal moves as a sorted Vec.  Delegates to `legal_moves_set()`.
-    ///
-    /// Use `legal_moves_set()` in performance-critical paths.
+    /// All legal moves as a sorted Vec; use `legal_moves_set()` on performance-critical paths.
     pub fn legal_moves(&self) -> Vec<(i32, i32)> {
         let mut moves_vec: Vec<(i32, i32)> = self.legal_moves_set().iter().copied().collect();
         moves_vec.sort_unstable();
         moves_vec
     }
 
-    /// Number of legal moves — O(1) when cache is clean, O(n²+bbox) on first
-    /// call after a mutating operation (same cost as the original legal_moves()).
+    /// Number of legal moves — O(1) when the cache is clean, O(n²+bbox) after a mutation.
     pub fn legal_move_count(&self) -> usize {
         self.legal_moves_set().len()
     }
-
-    // ── Win detection ─────────────────────────────────────────────────────────
 
     /// Returns true if either player has 6 in a row (checks last move only).
     pub fn check_win(&self) -> bool {
         match self.last_move {
             None => false,
             Some((q, r)) => {
-                // Invariant: `apply_move` (state/core.rs) atomically inserts the
-                // cell into `self.cells` and sets `self.last_move`. `check_win`
-                // is only meaningful after `apply_move`, so when
-                // `last_move == Some((q, r))` the cell at (q, r) is guaranteed
-                // present → `.unwrap()` is sound.
+                // `apply_move` atomically inserts the cell and sets `last_move`, so when
+                // `last_move == Some((q, r))` the cell is present and `.unwrap()` is sound.
                 let cell = *self.cells.get(&(q, r)).unwrap();
                 self.count_in_line(q, r, cell) >= WIN_LENGTH
             }
@@ -243,8 +180,7 @@ impl Board {
         false
     }
 
-    /// Maximum consecutive run through (q, r) for stones of type `cell`,
-    /// checked along all three hex axes.
+    /// Maximum consecutive run through (q, r) for stones of type `cell`, over all three axes.
     fn count_in_line(&self, q: i32, r: i32, cell: Cell) -> usize {
         let mut best = 0;
         for &(dq, dr) in &HEX_AXES {
@@ -273,28 +209,17 @@ impl Board {
         count
     }
 
-    /// CF-1 terminal value from the side-to-move's perspective at a `check_win`
-    /// leaf. `apply_move` flips the player ONLY on a turn-final stone
-    /// (`moves_remaining` 1→0→flip→2); a first-stone win keeps the winner to
-    /// move (`moves_remaining` 2→1, no flip). So at a won terminal:
-    ///   `moves_remaining == 1` ⇒ the winner is still to move ⇒ **+1.0**
-    ///   `moves_remaining == 2` ⇒ the player flipped to the loser ⇒ **-1.0**
-    ///
-    /// This is the single engine-owned surface for the CF-1 sign; downstream
-    /// search backup and eval bots read it here rather than re-deriving it.
-    /// Only meaningful when `check_win()` is true.
+    /// CF-1 terminal value from the side-to-move's perspective at a `check_win` leaf, and the
+    /// single engine-owned surface for that sign. `apply_move` flips the player ONLY on a
+    /// turn-final stone, so `moves_remaining == 1` means the winner is still to move (**+1.0**)
+    /// and `moves_remaining == 2` means it flipped to the loser (**-1.0**).
     #[inline]
     pub fn terminal_value_to_move(&self) -> f32 {
         if self.moves_remaining == 1 { 1.0 } else { -1.0 }
     }
 
-    /// Returns true if `player` has at least `min_len` consecutive stones along
-    /// any of the three hex axes.  Used as a cheap pre-check before the more
-    /// expensive `count_winning_moves`: a winning move requires ≥ WIN_LENGTH-1
-    /// consecutive stones, so if no such run exists the full count is unnecessary.
-    ///
-    /// O(player_stones × 3 × avg_run_length) — much cheaper than O(legal_moves)
-    /// because legal_moves grows with hex-ball radius while stone count is fixed.
+    /// True if `player` has at least `min_len` consecutive stones along any hex axis — a cheap
+    /// O(stones × 3 × avg_run) pre-check before the O(legal_moves) `count_winning_moves`.
     pub fn has_player_long_run(&self, player: Player, min_len: usize) -> bool {
         let cell = match player {
             Player::One => Cell::P1,
@@ -316,16 +241,9 @@ impl Board {
         false
     }
 
-    /// Count how many empty cells, if occupied by `player`, would give `player`
-    /// a completed 6-in-a-row (a winning move).
-    ///
-    /// Scans the legal-move set (cells within the legal radius of any stone),
-    /// which is O(legal_moves).  Each cell is checked by computing the run length
-    /// through it along all three hex axes — without actually placing a stone —
-    /// using the existing `count_direction` helper.
-    ///
-    /// Used by the search quiescence check: if `count >= 3` the current player
-    /// has a provably forced win because the opponent can block at most 2 per turn.
+    /// Count how many empty cells, if occupied by `player`, would complete a 6-in-a-row, by
+    /// testing each legal cell's run length along all three axes without placing a stone. At
+    /// `count >= 3` the side to move has a forced win: the opponent blocks at most 2 per turn.
     pub fn count_winning_moves(&self, player: Player) -> u32 {
         let cell = match player {
             Player::One => Cell::P1,
@@ -350,13 +268,8 @@ impl Board {
         count
     }
 
-    /// All empty legal cells that complete a 6-in-a-row for `player`, sorted.
-    ///
-    /// The enumerating variant of `count_winning_moves` — same per-cell run
-    /// test, returns the cells (not just the count). The threat/defense
-    /// enumeration primitive for an offline threat-space search: the cells a
-    /// player can play to win NOW (own threats), and equivalently the cells the
-    /// opponent must occupy to deny them (defenses). Deterministic (sorted).
+    /// All empty legal cells that complete a 6-in-a-row for `player`, sorted — the cells a
+    /// player can play to win NOW, and equivalently the cells the opponent must deny.
     pub fn winning_moves(&self, player: Player) -> Vec<(i32, i32)> {
         let cell = match player {
             Player::One => Cell::P1,
@@ -379,25 +292,13 @@ impl Board {
         wins
     }
 
-    /// Cells that, if `player` plays them, give `player` ≥1 immediate winning move
-    /// afterward — i.e. moves that CREATE a must-answer threat (an open-4 → win-in-1).
-    /// The threat-creating move set behind a threat-space search; lets the search
-    /// narrow branching to forcing moves and reach deep mates cheaply.
+    /// Cells that, if `player` plays them, give `player` ≥1 immediate winning move afterward —
+    /// the threat-CREATING move set behind a threat-space search.
     ///
-    /// **Fast implementation (Tier 1):** enumerates candidates FROM player-stone
-    /// neighborhoods instead of scanning all legal cells.
-    ///
-    /// For each player stone, iterate the 6 length-6 windows per axis containing
-    /// it. A window with exactly 4 existing player stones + 2 empties (no opponent)
-    /// yields 2 candidate empties: playing either one creates a win-in-1. Dedup
-    /// candidates, intersect with `legal_moves_set()`, return sorted.
-    ///
-    /// Output is IDENTICAL to the linear scan (equivalence asserted by fuzz test
-    /// `threat_moves_equivalence_fuzz`). Complexity: O(stones × 3 × 6 × 6) vs
-    /// the old O(legal × 3 × 6 × 6); early-game stones ≪ legal cells → 10–100×
-    /// fewer HashMap probes in practice.
-    ///
-    /// Computed in-engine so a boundary caller pays ONE hop. Sorted/deterministic.
+    /// Candidates come FROM player-stone neighborhoods rather than a scan of all legal cells:
+    /// per stone, the 6 length-6 windows per axis, a window with exactly 4 player stones + 2
+    /// empties and no opponent yielding 2 candidates. Output is IDENTICAL to the linear scan
+    /// (asserted by `threat_moves_equivalence_fuzz`). Sorted and deterministic.
     pub fn threat_moves(&self, player: Player) -> Vec<(i32, i32)> {
         let pcell = match player {
             Player::One => Cell::P1,
@@ -405,24 +306,19 @@ impl Board {
         };
         let legal = self.legal_moves_set();
 
-        // Collect candidates from player-stone windows.
         let mut candidates: FxHashSet<(i32, i32)> = FxHashSet::default();
 
         for (&(sq, sr), &sc) in &self.cells {
             if sc != pcell {
                 continue;
             }
-            // For each axis, walk the 6 windows that contain stone (sq, sr).
-            // Window starting at offset s means the stone is at position (-s) within
-            // the window: s ∈ -5..=0.
+            // Per axis, the 6 windows containing (sq, sr): offset s puts the stone at (-s).
             for &(dq, dr) in &HEX_AXES {
                 for s in -5..=0i32 {
                     let mut pcount = 0usize; // existing player stones in window
                     let mut ecount = 0usize; // empty cells in window
                     let mut dead = false;
                     let mut empties = [(0i32, 0i32); 2];
-                    // Window starts at (sq + s*dq, sr + s*dr) and runs for 6 steps.
-                    // Stone (sq,sr) is at position (-s) inside the window (0-indexed).
                     let wq = sq + s * dq;
                     let wr = sr + s * dr;
                     for i in 0..6i32 {
@@ -438,9 +334,8 @@ impl Board {
                             _ => { dead = true; break; } // opponent or over-2-empties kill
                         }
                     }
-                    // Window must have exactly 4 existing player stones + 2 empties.
-                    // Playing either empty → 5 player + 1 empty = win-in-1 exists.
-                    // Note: pcount counts existing stones only (c is NOT in cells).
+                    // Exactly 4 existing player stones + 2 empties: playing either empty
+                    // gives 5 + 1 empty = a win-in-1. `pcount` counts existing stones only.
                     if !dead && pcount == 4 && ecount == 2 {
                         for &e in &empties {
                             if legal.contains(&e) {
@@ -457,9 +352,7 @@ impl Board {
         out
     }
 
-    /// Reference (oracle) implementation of `threat_moves` — linear scan over
-    /// all legal cells. Used ONLY in tests to assert equivalence with the fast
-    /// neighborhood-enumeration version. Not compiled into release builds.
+    /// Oracle implementation of `threat_moves` — a linear scan, used ONLY in tests.
     #[cfg(test)]
     pub fn threat_moves_ref(&self, player: Player) -> Vec<(i32, i32)> {
         let pcell = match player {
@@ -502,11 +395,8 @@ impl Board {
         out
     }
 
-    /// Returns the lexicographically-first empty legal cell that completes a
-    /// 6-in-a-row for `player`, or `None`. Deterministic across `FxHashSet`
-    /// iteration order (legal set is sorted). Mirrors `count_winning_moves`'s
-    /// per-cell run test but returns the cell — the primitive behind the
-    /// forced-win one-hot POLICY target (depth-1 detection).
+    /// The lexicographically-first empty legal cell completing a 6-in-a-row for `player`, or
+    /// `None`. Deterministic; the primitive behind the forced-win one-hot POLICY target.
     pub fn first_winning_move(&self, player: Player) -> Option<(i32, i32)> {
         let cell = match player {
             Player::One => Cell::P1,
@@ -528,28 +418,16 @@ impl Board {
         None
     }
 
-    /// Returns the immediate move (for the SIDE TO MOVE) that proves a
-    /// within-turn forced win, or `None`. Forced-win → one-hot POLICY target
-    /// detector. Rides the same winning-move primitive as the quiescence VALUE
-    /// override (`count_winning_moves` / `count_direction`) but returns a
-    /// single hard target move:
+    /// The immediate move (for the SIDE TO MOVE) that proves a within-turn forced win, or
+    /// `None` — the forced-win one-hot POLICY target detector.
     ///
-    /// * `depth >= 1` (any turn-phase): a move completing 6-in-a-row *now*.
-    /// * `depth >= 2` AND `moves_remaining == 2`: a first placement that leaves
-    ///   the SAME player an immediate win on the SECOND stone of this turn.
-    ///   Both stones of a turn are placed before the opponent replies, so such a
-    ///   setup is a *proven* forced win. Turn-phase is read from
-    ///   `moves_remaining` — NOT ply parity (CF-1/CF-6 discipline). At `mr == 1`
-    ///   the opponent moves before the second stone, so depth-2 is deliberately
-    ///   suppressed.
+    /// * `depth >= 1`: a move completing 6-in-a-row now, at any turn-phase.
+    /// * `depth >= 2` AND `moves_remaining == 2`: a first placement leaving the SAME player an
+    ///   immediate win on the turn's second stone. Turn-phase comes from `moves_remaining`,
+    ///   never ply parity; at `mr == 1` the opponent replies first, so depth-2 is suppressed.
     ///
-    /// Cheap-pre-gated by `has_player_long_run` (a one-move win needs ≥5, a
-    /// two-move win ≥4 consecutive own stones) so the O(legal) / O(legal²) scans
-    /// run only on genuine threats. Called once per move at training-target
-    /// extraction — NOT in the per-simulation search hot path. Recall note: the
-    /// depth-2 ≥4-run pre-gate skips rare two-gap setups (e.g. `XX__XX`,
-    /// max-run 2); precision over recall, matching the reference's
-    /// candidate-set-only detection.
+    /// Pre-gated by `has_player_long_run` (≥5 for a one-move win, ≥4 for two), which skips
+    /// rare two-gap setups such as `XX__XX`: precision over recall.
     pub fn forced_win_move(&self, depth: u8) -> Option<(i32, i32)> {
         if depth == 0 {
             return None;
@@ -563,9 +441,7 @@ impl Board {
             }
         }
 
-        // depth-2: a first placement that sets up an immediate win on the same
-        // turn's second stone. Only when the player still holds both placements
-        // (mr == 2) — otherwise the opponent replies before the second stone.
+        // depth-2 only at mr == 2 — otherwise the opponent replies before the second stone.
         if depth >= 2
             && self.moves_remaining == 2
             && self.has_player_long_run(player, WIN_LENGTH - 2)
@@ -578,8 +454,7 @@ impl Board {
                 if probe.apply_move(q, r).is_err() {
                     continue;
                 }
-                // mr 2→1, no flip: `probe.current_player == player`. A win
-                // available now == the same player completes 6 on the 2nd stone.
+                // mr 2→1, no flip: a win available now means the same player completes 6.
                 if probe.has_player_long_run(player, WIN_LENGTH - 1)
                     && probe.first_winning_move(player).is_some()
                 {
@@ -591,16 +466,9 @@ impl Board {
         None
     }
 
-    /// Returns the cells forming the winning 6-in-a-row, or an empty Vec if no win.
-    ///
-    /// Fast path: checks from the last placed stone along all three hex axes.
-    /// Fallback: if last_move doesn't yield a 6-line, scans all placed stones
-    /// for any 6-in-a-row. Mirrors `player_wins`'s fallback — both must agree
-    /// on outcome or a downstream threat-target column goes empty on
-    /// `winner=Some(_)` games where the winning line was not completed by the
-    /// immediately-prior move (2-moves-per-turn rule: the first move of a turn
-    /// can complete a 6-line while the second sits off-line; `winner()` finds
-    /// it via fallback, this fn must too).
+    /// The cells forming the winning 6-in-a-row, or an empty Vec if no win. Fast path from the
+    /// last placed stone, fallback scan over all stones — the fallback must agree with
+    /// `player_wins`'s, since the first stone of a turn can complete a line the second misses.
     pub fn find_winning_line(&self) -> Vec<(i32, i32)> {
         if let Some((lq, lr)) = self.last_move {
             if let Some(&cell) = self.cells.get(&(lq, lr)) {
@@ -618,9 +486,7 @@ impl Board {
                 }
             }
         }
-        // Fallback scan. Sort stones by (q, r) so the choice of returned line
-        // is deterministic across HashMap iteration orders. Per-game-end call
-        // (not hot path) — sort cost is negligible.
+        // Stones sorted by (q, r) so the returned line is deterministic across map orders.
         let mut stones: Vec<((i32, i32), Cell)> =
             self.cells.iter().map(|(&k, &v)| (k, v)).collect();
         stones.sort_unstable_by_key(|&((q, r), _)| (q, r));
@@ -644,13 +510,8 @@ impl Board {
         vec![]
     }
 
-    // ── Cluster helpers ───────────────────────────────────────────────────────
-
-    /// Partition all placed stones (both colours) into clusters where two
-    /// stones share a cluster iff their `hex_distance` is at most
-    /// `self.cluster_threshold` (default `DEFAULT_CLUSTER_THRESHOLD = 5`,
-    /// runtime-overridable via `set_cluster_threshold`).  Used by
-    /// `get_cluster_views()` to emit one window-sized view per cluster.
+    /// Partition all placed stones into clusters where two stones share one iff their
+    /// `hex_distance` is at most `self.cluster_threshold`. Consumed by `get_cluster_views()`.
     pub fn get_clusters(&self) -> Vec<Vec<(i32, i32)>> {
         let mut clusters: Vec<Vec<(i32, i32)>> = Vec::new();
         if self.cells.is_empty() {
@@ -696,8 +557,6 @@ impl Board {
     }
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -706,15 +565,13 @@ mod tests {
     #[test]
     fn test_count_winning_moves_empty_board() {
         let board = Board::new();
-        // No stones → no winning moves for either player.
         assert_eq!(board.count_winning_moves(Player::One), 0);
         assert_eq!(board.count_winning_moves(Player::Two), 0);
     }
 
     #[test]
     fn test_count_winning_moves_five_in_row() {
-        // P1 has 5 stones in a row along E axis: q=0..4 at r=0.
-        // Placing at q=-1 or q=5 completes 6-in-a-row → 2 winning moves.
+        // P1 has 5 in a row on the E axis (q=0..4, r=0), so q=-1 and q=5 both complete 6.
         let mut board = Board::new();
         board.apply_move(0, 0).unwrap(); // P1 ply0 (single)
         // Place 4 more P1 stones (need P2 filler moves between each pair)
@@ -724,16 +581,13 @@ mod tests {
         board.apply_move(0, 7).unwrap(); board.apply_move(0, 6).unwrap(); // P2 turn
         board.apply_move(3, 0).unwrap(); board.apply_move(4, 0).unwrap(); // P1 turn
 
-        // It's P2's turn, but we can count P1's winning moves directly.
         let p1_wins = board.count_winning_moves(Player::One);
-        // Cells q=-1,r=0 and q=5,r=0 both complete 5-in-a-row to 6.
         assert_eq!(p1_wins, 2, "5-in-a-row should have exactly 2 winning moves");
     }
 
     #[test]
     fn test_count_winning_moves_five_blocked_one_end() {
-        // P1: 5 in a row q=0..4 at r=0.
-        // P2 blocker at q=-1,r=0 → only q=5 is a winning cell.
+        // P1 5 in a row at r=0 with a P2 blocker at q=-1, so only q=5 wins.
         let mut board = Board::new();
         board.apply_move(0, 0).unwrap(); // P1
         board.apply_move(-1, 0).unwrap(); board.apply_move(0, 9).unwrap(); // P2 (blocker + filler)
@@ -747,7 +601,6 @@ mod tests {
 
     #[test]
     fn test_count_winning_moves_zero_when_early_game() {
-        // After a few scattered moves no one has 5-in-a-row.
         let mut board = Board::new();
         board.apply_move(0, 0).unwrap(); // P1
         board.apply_move(3, 3).unwrap(); board.apply_move(4, 4).unwrap(); // P2
@@ -759,14 +612,11 @@ mod tests {
 
     #[test]
     fn test_count_winning_moves_three_independent_winning_cells() {
-        // P1 has three separate 5-in-a-row threats, each with one open end.
-        // Axis E at r=0: stones q=0..4; winning cell at q=5 (q=-1 blocked by P2)
-        // Axis NE at q=0: stones r=0..4; winning cell at r=5 (r=-1 blocked by P2)
-        // Axis NW: stones (0,0),(-1,1),(-2,2),(-3,3),(-4,4); winning cell at (-5,5)
+        // P1 has three separate 5-in-a-row threats, each with one open end: E axis r=0 (win
+        // at q=5), NE axis q=0 (win at r=5), NW axis (win at (-5,5)); other ends P2-blocked.
 
         let mut board = Board::new();
 
-        // We'll manually insert stones to avoid dealing with turn structure.
         for q in 0..5i32 {
             board.cells.insert((q, 0), Cell::P1);
         }
@@ -785,7 +635,6 @@ mod tests {
         // Blocker for NW-axis south end
         board.cells.insert((1, -1), Cell::P2);
 
-        // Rebuild legal cache.
         board.has_stones = true;
         board.mark_cache_dirty();
 
@@ -819,7 +668,6 @@ mod tests {
     #[test]
     fn test_has_player_long_run_returns_false_for_scattered() {
         let mut board = Board::new();
-        // Scattered P1 stones — no run of 3 along any axis.
         board.cells.insert((0, 0), Cell::P1);
         board.cells.insert((5, 0), Cell::P1);
         board.cells.insert((0, 5), Cell::P1);
@@ -828,16 +676,10 @@ mod tests {
         assert!(!board.has_player_long_run(Player::One, 3));
     }
 
-    // ── Forced-win → one-hot policy target detector ───────────────────────────
-    // `forced_win_move(depth)` returns the immediate move (for the SIDE TO MOVE)
-    // that proves a within-turn forced win: depth-1 = a move completing 6 now;
-    // depth-2 (only at moves_remaining==2) = a first placement that leaves the
-    // SAME player an immediate win on the second placement (opponent never moves
-    // between the two stones of one turn). Turn-phase is read from
-    // moves_remaining — never ply parity (CF-1/CF-6 discipline).
+    // `forced_win_move(depth)`: depth-1 completes 6 now; depth-2 (only at mr==2) is a first
+    // placement leaving the SAME player an immediate win on the second stone.
 
-    /// Build a static position with explicit side-to-move + turn-phase. bbox is
-    /// set so a depth-2 clone+`apply_move` stays internally consistent.
+    /// Build a static position with explicit side-to-move + turn-phase, bbox included.
     fn fwm_board(stones: &[((i32, i32), Cell)], player: Player, mr: u8) -> Board {
         let mut b = Board::new();
         let (mut lq, mut hq, mut lr, mut hr) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
@@ -868,7 +710,6 @@ mod tests {
 
     #[test]
     fn test_forced_win_move_depth1_completes_six() {
-        // P1 5-in-a-row, P1 to move (mr=2): depth-1 returns a 6-completing move.
         let stones: Vec<_> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
         let b = fwm_board(&stones, Player::One, 2);
         let mv = b.forced_win_move(1).expect("depth-1 forced win exists");
@@ -890,9 +731,7 @@ mod tests {
 
     #[test]
     fn test_forced_win_move_depth2_sets_up_within_turn_win() {
-        // P1 4-in-a-row (q=0..3, r=0): no single move wins (depth-1 None). At
-        // mr==2, a first placement leaves P1 an immediate win for the SECOND
-        // stone of the same turn → depth-2 fires and the returned move proves it.
+        // P1 4-in-a-row: no single move wins, but at mr==2 a first placement leaves P1 a win.
         let stones: Vec<_> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let b = fwm_board(&stones, Player::One, 2);
         assert_eq!(b.forced_win_move(1), None, "4-in-a-row has no immediate win");
@@ -910,9 +749,7 @@ mod tests {
 
     #[test]
     fn test_forced_win_move_depth2_guarded_at_mr1() {
-        // Same 4-in-a-row but P1 has only its LAST placement this turn (mr==1):
-        // after it the OPPONENT moves and can block → NOT forced. The turn-phase
-        // guard must suppress depth-2 at mr==1.
+        // Same 4-in-a-row at mr==1: the opponent moves next, so depth-2 must be suppressed.
         let stones: Vec<_> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let b = fwm_board(&stones, Player::One, 1);
         assert_eq!(b.forced_win_move(2), None,
@@ -921,8 +758,6 @@ mod tests {
 
     #[test]
     fn test_forced_win_move_targets_side_to_move_only() {
-        // P2 holds the 5-in-a-row but it is P1 to move: must NOT return the
-        // opponent's winning cell.
         let stones: Vec<_> = (0..5).map(|q| ((q, 0), Cell::P2)).collect();
         let b = fwm_board(&stones, Player::One, 2);
         assert_eq!(b.forced_win_move(2), None, "only the side-to-move's wins count");
@@ -937,9 +772,7 @@ mod tests {
 
     #[test]
     fn test_terminal_value_to_move_cf1_sign() {
-        // Engine-owned CF-1 terminal sign. At a won terminal, mr==1
-        // (first-stone win, winner still to move) ⇒ +1.0; mr==2 (turn-final
-        // win, flipped to loser) ⇒ -1.0. The search backup mirrors this.
+        // Engine-owned CF-1 sign: mr==1 (winner still to move) ⇒ +1.0, mr==2 ⇒ -1.0.
         let stones: Vec<_> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
         let b1 = fwm_board(&stones, Player::One, 1);
         assert_eq!(b1.terminal_value_to_move(), 1.0, "mr==1 ⇒ +1.0");
@@ -947,15 +780,8 @@ mod tests {
         assert_eq!(b2.terminal_value_to_move(), -1.0, "mr==2 ⇒ -1.0");
     }
 
-    // ── Threat-moves equivalence fuzz ─────────────────────────────────────────
-    //
-    // Pins fast `threat_moves` (neighborhood-enumeration) == oracle
-    // `threat_moves_ref` (linear scan over all legal cells) over a broad corpus.
-    //
-    // This equivalence IS the soundness guarantee: the loss guard and
-    // candidate-completeness both depend on `threat_moves` returning an IDENTICAL
-    // set. If the sets differ on ANY board, the test fails — that divergence
-    // would be a soundness bug.
+    // Pins fast `threat_moves` == oracle `threat_moves_ref` over a broad corpus. That
+    // equivalence IS the soundness guarantee behind the loss guard and candidate completeness.
 
     /// Build a random board by playing `n` legal moves chosen by a splitmix64 PRNG.
     fn random_board(seed: u64, n: usize) -> Board {
@@ -980,10 +806,8 @@ mod tests {
     #[test]
     #[cfg_attr(miri, ignore)] // 200-board runtime — excluded set per prereg
     fn threat_moves_equivalence_fuzz() {
-        // Cover diverse stone counts (5..=50) and densities via varying seeds.
-        // 200 random boards × 2 players = 400 equivalence checks.
+        // 200 random boards × 2 players = 400 checks, over stone counts 5..=50.
         for seed in 0u64..200 {
-            // Vary stone count so we test early/mid/late-game densities.
             let n = 5 + ((seed * 7 + 13) % 46) as usize; // 5..50 stones
             let board = random_board(seed.wrapping_mul(0xdeadbeef), n);
 
@@ -1000,9 +824,7 @@ mod tests {
 
     #[test]
     fn threat_moves_five_in_row_open_at_both_ends() {
-        // P1 has 4-in-a-row (q=0..3, r=0). Placing at q=4 or q=-1 creates a
-        // 5-stone line with 1 empty at the other end — a new win-in-1.
-        // Both cells must appear in threat_moves(P1).
+        // P1 4-in-a-row: q=4 and q=-1 each make a 5-stone line with one empty end.
         let mut board = Board::new();
         for q in 0..4i32 {
             board.cells.insert((q, 0), Cell::P1);
@@ -1023,7 +845,6 @@ mod tests {
 
     #[test]
     fn threat_moves_empty_board_is_empty() {
-        // No stones → no threat moves for either player.
         let board = Board::new();
         assert_eq!(board.threat_moves(Player::One), board.threat_moves_ref(Player::One));
         assert_eq!(board.threat_moves(Player::Two), board.threat_moves_ref(Player::Two));
@@ -1031,20 +852,12 @@ mod tests {
         assert!(board.threat_moves(Player::Two).is_empty());
     }
 
-    // NOTE: the Candidate-A proof test `miri_dirty_flag_set_while_borrowed_panics`
-    // is deleted — its trigger (setting the dirty flag through `&self` while a
-    // returned reference is live) is statically unwritable under the r2
-    // construct: the flag is private to `state::core` and the sole
-    // crate-visible true-setter, `mark_cache_dirty`, takes `&mut self`. Its
-    // intent is carried by the `compile_fail,E0502` doctest on
-    // `legal_moves_set` (a strictly stronger, compile-time guarantee) and its
-    // Miri slot by `miri_clone_while_set_borrowed` in tests/miri_cache.rs.
+    // The dirty-flag-while-borrowed trigger is statically unwritable: the flag is private to
+    // `state::core` and its sole crate-visible true-setter takes `&mut self`.
 
     #[test]
     fn threat_moves_opponent_blocked_window_excluded() {
-        // P1 4-in-a-row (q=0..3, r=0) with P2 stone at q=4 (blocks east end).
-        // Only q=-1 creates a threat (extends westward to 4+1=5 p1 stones open at
-        // q=-2 or q=5 depending on window). Reference oracle is ground truth.
+        // A P2 stone at q=4 blocks the east end; the reference oracle is ground truth.
         let mut board = Board::new();
         for q in 0..4i32 {
             board.cells.insert((q, 0), Cell::P1);

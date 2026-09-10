@@ -1,24 +1,15 @@
-# >300 justify (R8). Pre-existing gap, closed
-# by WPMINT Phase W. This is ⊕⊕ Suite A, an oracle-first conformance suite whose every test is
-# numbered against a PREREG row (`T-CK-*`) and was written and reviewed BEFORE the port existed.
-# Splitting it renumbers nothing but breaks the 1:1 test->spec mapping REVIEW-design reads it
-# through, and the suite's value is that ONE file answers "does this envelope conform" — the
-# LAW-12 stamp/provenance/loader contract has one subject, not four.
-"""⊕⊕ Suite A — checkpoint CONFORMANCE (WP10, 33 tests: T-CK-01 … T-CK-33).
+# >300 justify (R8): an oracle-first conformance suite whose every test is numbered against a
+# PREREG row (`T-CK-*`) and was written before the port existed. Splitting it breaks the 1:1
+# test->spec mapping the design review reads it through, and the stamp/provenance/loader contract
+# has one subject, not four.
+"""Suite A — checkpoint CONFORMANCE (T-CK-01 … T-CK-33).
 
-Written oracle-first against repo_design §6 (the envelope-v2 contract) + the dispatcher
-old-side captures (`wp/WP10/oldside/*`, pinned into `tests/fixtures/train/*.json`) BEFORE any
-port code. The suite is RED until IMPL lands `mantis.train.checkpoints` (Slice 1) — importing
-the not-yet-written module is the correct oracle-first state; IMPL turns it green.
+Written oracle-first against the envelope-v2 contract and the pinned old-side captures before any
+port code, so each test's docstring cites its `T-CK-*` id and its one-line PASS bar and asserts on
+PUBLIC surfaces only.
 
-Each test's docstring cites its `T-CK-*` id + the one-line PASS bar from `wp/WP10/PREREG.md`
-so REVIEW-design can map test→spec 1:1. Tests assert on the DESIGN §c PUBLIC surfaces, never
-private internals.
-
-Slice note (see ORACLE_NOTES.md J1): the resume-precedence tests T-CK-14/15/17 read from
-`mantis.train.orchestrator` and T-CK-18/19 need `mantis.train.trainer.core.Trainer` — both
-Slice 2. Those five import their Slice-2 symbols LAZILY (inside the test) so the other 28 tests
-can go green at Slice 1 (checkpoints only), matching the DESIGN IMPL-DAG gate for Suite A.
+The resume-precedence tests T-CK-14/15/17 and the Trainer tests T-CK-18/19 import their symbols
+LAZILY inside the test, so the other tests can go green before those modules land.
 """
 from __future__ import annotations
 
@@ -34,7 +25,6 @@ from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import EncodingRegistryError, all_specs
 from mantis.model import GnnArch, RepresentationMismatch  # noqa: F401 (arch types)
 
-# ── Slice 1 surface under conformance (RED until IMPL writes train/checkpoints.py) ─────────
 import mantis.train.checkpoints as checkpoints
 
 
@@ -81,8 +71,8 @@ from mantis.train.checkpoints import (
 
 KILLED_PREFIXES = ("cluster_pool.", "global_encoder.", "gpool_bias_branch.")
 
-# The 18-key checkpoint-owned set, pinned LOCALLY (T-CK-15 mutation self-test: mutating the
-# real constant makes the equality bite). Source: DESIGN §c.2 == old constant (#C3 verified).
+# The 18-key checkpoint-owned set, pinned LOCALLY, so T-CK-15's mutation self-test bites when the
+# real constant is mutated.
 _FROZEN_OWNED_LOCAL = frozenset({
     "encoding", "cluster_window_size", "cluster_threshold", "legal_move_radius", "board_size",
     "in_channels", "input_channels", "res_blocks", "filters", "se_reduction_ratio", "model",
@@ -94,7 +84,6 @@ class _Evil:
     """A non-tensor picklable object — `weights_only=True` must refuse to unpickle it."""
 
 
-# ── module helpers (operate on the on-disk payload; key names per repo_design §6) ──────────
 def _save_full(tmp: Path, *, net, opt, scaler, sched, config, meta, step: int = 100,
                kind: str = "full", allow_quarantine: bool = False) -> Path:
     return save_checkpoint(
@@ -110,8 +99,7 @@ def _load_raw(path: Path) -> dict[str, Any]:
 
 
 def _resave_rehashed(payload: dict[str, Any], checkpoint_dir: Path) -> Path:
-    """Re-save a mutated payload to its correct `{run_id}_{step:08d}_{sha8}.ckpt` name (so a
-    stale content-hash never masks the field under test). run_id/step read from metadata."""
+    """Re-save a mutated payload under its correct `{run_id}_{step:08d}_{sha8}` name, so a stale content-hash never masks the field under test."""
     md = payload["metadata"]
     sha8 = content_sha8(payload)
     p = Path(checkpoint_dir) / checkpoint_filename(md["run_id"], md["step"], sha8)
@@ -120,17 +108,13 @@ def _resave_rehashed(payload: dict[str, Any], checkpoint_dir: Path) -> Path:
 
 
 def _overrides(result: Any) -> dict[str, Any]:
-    """build_resume_config_overrides may return a bare overrides dict or a richer object with
-    an `.overrides` field — accept either (return-shape flagged in ORACLE_NOTES J4)."""
+    """Accept either return shape of build_resume_config_overrides: a bare overrides dict, or a richer object with an `.overrides` field."""
     return dict(getattr(result, "overrides", result))
 
 
-# ═══ Envelope v2 fields ════════════════════════════════════════════════════════════════════
 def test_full_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_sched,
                                             valid_config, metadata_kwargs):
-    """T-CK-01 — PASS iff the full payload has schema_version==2, kind=='full', model_state,
-    optimizer/scaler/scheduler_state, config, metadata{encoding_name,run_id,step,commit_sha,
-    created_utc,arch,corpus_sha256?}. Bites: dropping any required field / schema_version≠2."""
+    """T-CK-01 — the full payload carries schema_version==2, kind=='full', model_state, the three optimizer/scaler/scheduler states, config and the metadata block."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs, step=100, kind="full")
@@ -146,16 +130,15 @@ def test_full_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_sch
     assert md.encoding_name == "gnn_axis_v1"
     assert md.run_id
     assert md.step == 100
-    assert md.commit_sha  # present (may be "unknown" outside a git checkout) — never blocks
+    assert md.commit_sha
     assert md.created_utc
     assert isinstance(md.arch, GnnArch)
-    assert hasattr(md, "corpus_sha256")  # optional field exists on the dataclass
+    assert hasattr(md, "corpus_sha256")
 
 
 def test_weights_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_sched,
                                                valid_config, metadata_kwargs):
-    """T-CK-02 — PASS iff a weights save is kind=='weights' with model_state + metadata and NO
-    optimizer/scaler/scheduler_state. Bites: a weights save leaking optimizer state / missing kind."""
+    """T-CK-02 — a weights save is kind=='weights' with model_state + metadata and NO optimizer/scaler/scheduler state."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs, step=100, kind="weights")
@@ -170,8 +153,7 @@ def test_weights_envelope_has_v2_schema_fields(tmp_path, tiny_net, optim_scaler_
 
 def test_config_snapshot_schema_validated_on_write(tmp_path, tiny_net, optim_scaler_sched,
                                                    valid_config, invalid_config, metadata_kwargs):
-    """T-CK-03 — PASS iff an invalid/incomplete config raises on write while a complete valid
-    config saves. Bites: writing an unvalidated config snapshot."""
+    """T-CK-03 — an invalid or incomplete config raises on write while a complete valid one saves."""
     opt, scaler, sched = optim_scaler_sched
     with pytest.raises(ValueError):  # pydantic ValidationError ⊂ ValueError
         _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
@@ -183,8 +165,7 @@ def test_config_snapshot_schema_validated_on_write(tmp_path, tiny_net, optim_sca
 
 def test_config_snapshot_schema_validated_on_read(tmp_path, tiny_net, optim_scaler_sched,
                                                   valid_config, metadata_kwargs):
-    """T-CK-04 — PASS iff loading an envelope whose embedded config fails schema raises. Bites:
-    a loader that skips config re-validation."""
+    """T-CK-04 — loading an envelope whose embedded config fails schema raises, so the loader cannot skip config re-validation."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
@@ -197,8 +178,7 @@ def test_config_snapshot_schema_validated_on_read(tmp_path, tiny_net, optim_scal
 
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):
-    """T-CK-05 — PASS iff a save whose encoding_name cannot be resolved raises (no metadata-
-    omitted fallback). Bites: the old 'legacy caller → warn + omit metadata' path returning."""
+    """T-CK-05 — a save whose encoding_name cannot be resolved raises; there is no metadata-omitted fallback."""
     opt, scaler, sched = optim_scaler_sched
     meta_no_enc = {"run_id": "runa", "arch": tiny_arch}  # encoding_name MISSING
     with pytest.raises(CheckpointStampError):
@@ -206,12 +186,9 @@ def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched,
                    config=valid_config, meta=meta_no_enc)
 
 
-# ═══ Filename (run-id + content-hash) ════════════════════════════════════════════════════════
 def test_filename_carries_run_id_step_sha8(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                            mk_meta, tiny_arch):
-    """T-CK-06 — PASS iff basename == {run_id}_{step:08d}_{sha8}.ckpt and sha8 is the first 8
-    hex of the payload content hash. Bites: the old checkpoint_{step}.pt name / missing run_id
-    or hash."""
+    """T-CK-06 — the basename is `{run_id}_{step:08d}_{sha8}.ckpt` and sha8 is the first 8 hex of the payload content hash."""
     opt, scaler, sched = optim_scaler_sched
     meta = mk_meta(tiny_arch, run_id="runa")
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
@@ -228,8 +205,7 @@ def test_filename_carries_run_id_step_sha8(tmp_path, tiny_net, optim_scaler_sche
 
 def test_cross_lineage_same_step_no_collision(tmp_path, tiny_net, optim_scaler_sched,
                                               valid_config, mk_meta, tiny_arch):
-    """T-CK-07 — PASS iff two distinct run_id at the SAME step produce distinct filenames.
-    Bites: a name that omits run_id (intricacy #4)."""
+    """T-CK-07 — two distinct run_id at the SAME step produce distinct filenames, so the name cannot omit run_id."""
     opt, scaler, sched = optim_scaler_sched
     p1 = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                     config=valid_config, meta=mk_meta(tiny_arch, run_id="runa"), step=100)
@@ -240,11 +216,9 @@ def test_cross_lineage_same_step_no_collision(tmp_path, tiny_net, optim_scaler_s
     assert p2.name.startswith("runb_00000100_")
 
 
-# ═══ Provenance re-verify at load ════════════════════════════════════════════════════════════
 def test_load_reverifies_run_id_and_step(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          mk_meta, tiny_arch):
-    """T-CK-08 — PASS iff loading a file whose embedded run_id/step disagree with the filename
-    raises a provenance error. Bites: a loader that trusts the filename and skips the re-check."""
+    """T-CK-08 — loading a file whose embedded run_id/step disagree with the filename raises: the loader never trusts the filename."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=mk_meta(tiny_arch, run_id="runa"), step=100)
@@ -257,8 +231,7 @@ def test_load_reverifies_run_id_and_step(tmp_path, tiny_net, optim_scaler_sched,
 
 def test_tampered_payload_fails_content_hash(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                              metadata_kwargs):
-    """T-CK-09 — PASS iff mutating one model_state element (sha8 unchanged in the name) makes
-    load raise a content-hash mismatch. Bites: no content-hash re-verification at load."""
+    """T-CK-09 — mutating one model_state element with sha8 unchanged in the name makes load raise a content-hash mismatch."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
@@ -272,13 +245,9 @@ def test_tampered_payload_fails_content_hash(tmp_path, tiny_net, optim_scaler_sc
         load_checkpoint(path)
 
 
-# ═══ Stamp immutability ══════════════════════════════════════════════════════════════════════
 def test_restamp_from_loaded_config_is_error(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                              metadata_kwargs):
-    """T-CK-10 — PASS iff re-saving a loaded envelope while re-deriving metadata (new created_utc/
-    commit_sha/run_id) FROM the loaded config raises. Bites: the self-perpetuating re-stamp
-    (F-12/LAW-12). Realized as: supplying immutable stamp fields (created_utc/commit_sha) in
-    metadata_kwargs is refused — stamps are minted ONCE by save (ORACLE_NOTES J5)."""
+    """T-CK-10 — re-saving a loaded envelope while re-deriving metadata from the loaded config raises: stamps are minted ONCE by save, so supplying created_utc/commit_sha is refused."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
@@ -295,11 +264,9 @@ def test_restamp_from_loaded_config_is_error(tmp_path, tiny_net, optim_scaler_sc
                    config=ck.config, meta=restamp)
 
 
-# ═══ Unstamped-write = failed save ═══════════════════════════════════════════════════════════
 def test_unstamped_save_fails_loud_and_writes_nothing(tmp_path, tiny_net, optim_scaler_sched,
                                                       valid_config, tiny_arch):
-    """T-CK-11 — PASS iff an unstampable save raises AND leaves no canonical file. Bites: a
-    silent unstamped save."""
+    """T-CK-11 — an unstampable save raises AND leaves no canonical file."""
     opt, scaler, sched = optim_scaler_sched
     unstampable = {"run_id": "runa", "arch": tiny_arch}  # no encoding_name → cannot stamp
     with pytest.raises(CheckpointStampError):
@@ -310,15 +277,7 @@ def test_unstamped_save_fails_loud_and_writes_nothing(tmp_path, tiny_net, optim_
 
 def test_quarantine_path_when_run_must_survive(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                                tiny_arch, monkeypatch):
-    """T-CK-12 — PASS iff, with the survive-run flag, an unstampable save writes <path>.quarantine
-    + increments the QUARANTINE counter and NOT the persist-fatal one, NEVER a canonical name.
-    Bites: a canonical unstamped artifact, and (post R-QUARANTINE-COUNTER, WPCLEAN Phase RES)
-    a survivable quarantine leaking into the watchdog's `> 0` persist-fatal rule — the exact
-    conflation the debt row recorded: the survive-run clause used to feed rc 43.
-
-    Both counters are process-wide module GLOBALS incremented via `global … += 1`, which no
-    assertion can undo. The monkeypatch pins them to 0 for the test AND RESTORES the pre-test
-    values at teardown, so a leak cannot reach another suite (WP13-A REVIEW-impl F-2)."""
+    """T-CK-12 — with the survive-run flag an unstampable save writes `<path>.quarantine` and increments the QUARANTINE counter, not the persist-fatal one, and never a canonical name."""
     monkeypatch.setattr(checkpoints, "persist_errors_total", 0)
     monkeypatch.setattr(checkpoints, "quarantine_writes_total", 0)
     opt, scaler, sched = optim_scaler_sched
@@ -335,11 +294,9 @@ def test_quarantine_path_when_run_must_survive(tmp_path, tiny_net, optim_scaler_
     )
 
 
-# ═══ weights_only on every load surface ══════════════════════════════════════════════════════
 def test_every_load_surface_uses_weights_only_true(tmp_path, tiny_net, optim_scaler_sched,
                                                    valid_config, metadata_kwargs):
-    """T-CK-13 — PASS iff (i) a checkpoint carrying a non-tensor picklable object fails to load
-    and (ii) a source census finds ZERO `weights_only=False`. Bites: any weights_only=False surface."""
+    """T-CK-13 — a checkpoint carrying a non-tensor picklable object fails to load, and a source census finds ZERO `weights_only=False` surfaces."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
@@ -358,23 +315,20 @@ def test_every_load_surface_uses_weights_only_true(tmp_path, tiny_net, optim_sca
         assert "weights_only=False" not in Path(anchor_spec.origin).read_text()
 
 
-# ═══ Resume precedence + frozen key set ══════════════════════════════════════════════════════
 def test_launch_config_wins_except_frozen_keys():
-    """T-CK-14 — PASS iff a non-frozen override is applied while a frozen key (encoding/arch/
-    optim/sched) defers to the checkpoint. Bites: the pre-E0 precedence inversion."""
-    from mantis.train.orchestrator import build_resume_config_overrides  # Slice 2 (lazy)
+    """T-CK-14 — a non-frozen override is applied while a frozen key (encoding/arch/optim/sched) defers to the checkpoint."""
+    from mantis.train.orchestrator import build_resume_config_overrides
     baked = {"lr": 0.001, "encoding": "gnn_axis_v1", "log_interval": 500}
     launch = {"lr": 0.002, "encoding": "gnn_axis_r8", "log_interval": 250}
     ov = _overrides(build_resume_config_overrides(baked, launch))
-    assert ov.get("log_interval") == 250      # non-frozen → launch wins
-    assert "lr" not in ov                       # frozen (checkpoint-owned) → excluded
-    assert "encoding" not in ov                 # frozen → excluded
+    assert ov.get("log_interval") == 250
+    assert "lr" not in ov
+    assert "encoding" not in ov
 
 
 def test_frozen_key_set_is_the_pinned_constant(resume_goldens):
-    """T-CK-15 — PASS iff RESUME_CHECKPOINT_OWNED_KEYS equals the exact 18-key set; mutating the
-    constant bites. Bites: a silent change to the checkpoint-owned set."""
-    from mantis.train.orchestrator import RESUME_CHECKPOINT_OWNED_KEYS  # Slice 2 (lazy)
+    """T-CK-15 — RESUME_CHECKPOINT_OWNED_KEYS equals the exact 18-key set, and mutating the constant bites."""
+    from mantis.train.orchestrator import RESUME_CHECKPOINT_OWNED_KEYS
     golden = resume_goldens["T-CK-15_frozen_key_set"]
     assert set(RESUME_CHECKPOINT_OWNED_KEYS) == set(golden["sorted_keys"])
     assert len(RESUME_CHECKPOINT_OWNED_KEYS) == golden["count"] == 18
@@ -382,8 +336,7 @@ def test_frozen_key_set_is_the_pinned_constant(resume_goldens):
 
 
 def test_declared_key_wins_base_inherited_defers(resume_goldens, spy_sink):
-    """T-CK-16 — PASS iff a declared key wins over baked, a base-inherited key defers to baked
-    (+ warns on differ), and a declared null travels. Bites: the F1(A) defer regression."""
+    """T-CK-16 — a declared key wins over baked, a base-inherited key defers to baked and warns on a difference, and a declared null travels."""
     g = resume_goldens["T-CK-16_declared_wins_base_defers"]
     inp, exp = g["inputs"], g["expected_output"]
     resolved, deferred = apply_config_overrides_f1(
@@ -399,11 +352,9 @@ def test_declared_key_wins_base_inherited_defers(resume_goldens, spy_sink):
     assert warns[-1]["checkpoint_baked"] == exp["warning_fields"]["checkpoint_baked"]
 
 
-# ═══ Scheduler / resume semantics ════════════════════════════════════════════════════════════
 def test_scheduler_horizon_gate(resume_goldens):
-    """T-CK-17 — PASS iff without the flag the horizon keys stay OWNED (excluded from overrides)
-    and with it total_steps/scheduler_t_max re-enter. Bites: a silent scheduler re-horizon."""
-    from mantis.train.orchestrator import build_resume_config_overrides  # Slice 2 (lazy)
+    """T-CK-17 — without the flag the horizon keys stay OWNED; with it, total_steps and scheduler_t_max re-enter the overrides."""
+    from mantis.train.orchestrator import build_resume_config_overrides
     g = resume_goldens["T-CK-17_scheduler_horizon_gate"]
     baked, launch = g["inputs"]["baked_config_A"], g["inputs"]["launch_variant_B"]
     exp = g["expected_output"]
@@ -420,9 +371,8 @@ def test_scheduler_horizon_gate(resume_goldens):
 def test_missing_scheduler_state_requires_allow_fresh(tmp_path, tiny_net, optim_scaler_sched,
                                                       valid_config, metadata_kwargs, spy_sink,
                                                       resume_goldens):
-    """T-CK-18 — PASS iff a full resume with scheduler_state None raises unless allow_fresh_scheduler
-    (then it warns). Bites: a silent fresh-scheduler start. (Slice 2: needs Trainer + resume_trainer.)"""
-    from mantis.train.trainer.core import Trainer  # Slice 2 (lazy)
+    """T-CK-18 — a full resume with scheduler_state None raises unless allow_fresh_scheduler, which warns instead."""
+    from mantis.train.trainer.core import Trainer
     opt, scaler, _sched = optim_scaler_sched
     path = save_checkpoint(model=tiny_net, optimizer=opt, scaler=scaler, scheduler=None,
                            step=750, config=valid_config, metadata_kwargs=metadata_kwargs,
@@ -438,10 +388,8 @@ def test_missing_scheduler_state_requires_allow_fresh(tmp_path, tiny_net, optim_
 
 def test_full_resume_restores_optimizer_scaler_step(tmp_path, tiny_net, optim_scaler_sched,
                                                     valid_config, metadata_kwargs, resume_goldens):
-    """T-CK-19 — PASS iff a full resume restores optimizer(param_groups==2)/scaler/step==750 and a
-    weights resume gets a fresh optimizer + step==500 (promoted-anchor recovery). Bites: dropping
-    optimizer/scaler restore or losing the promoted-anchor step. (Slice 2: needs Trainer.)"""
-    from mantis.train.trainer.core import Trainer  # Slice 2 (lazy)
+    """T-CK-19 — a full resume restores optimizer (param_groups==2), scaler and step==750, while a weights resume gets a fresh optimizer and step==500."""
+    from mantis.train.trainer.core import Trainer
     exp = resume_goldens["T-CK-19_full_vs_weights_restore"]["expected_output"]
     opt, scaler, sched = optim_scaler_sched
     full_path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
@@ -459,10 +407,7 @@ def test_full_resume_restores_optimizer_scaler_step(tmp_path, tiny_net, optim_sc
 
 
 def test_declared_lr_ignored_on_full_resume_is_loud(resume_goldens):
-    """T-CK-20 — PASS iff a declared lr differing from the baked lr on a full resume is IGNORED
-    (lr is resume-state-owned) with a loud warning. Bites: silent lr override / silent lr drop.
-    Unit-level via resolve_lr_provenance; the end-to-end warning event
-    `lr_declared_override_ignored_on_full_resume` is exercised by O-F1E0."""
+    """T-CK-20 — a declared lr differing from the baked lr on a full resume is IGNORED, since lr is resume-state-owned, and the ignore is loud."""
     g = resume_goldens["T-CK-20_lr_resume_owned"]["expected_output"]
     ign = g["resolve_lr_provenance_override_ignored_case"]
     prov = resolve_lr_provenance(declared=ign["declared"], baked=ign["baked"],
@@ -472,30 +417,24 @@ def test_declared_lr_ignored_on_full_resume_is_loud(resume_goldens):
     assert norm.override_ignored is g["resolve_lr_provenance_normal_case_declared_eq_baked"]["override_ignored"]
 
 
-# ═══ Weights-strip wire-signature gate ═══════════════════════════════════════════════════════
 def test_weights_strip_requires_wire_signature_equality(tmp_path, tiny_net, optim_scaler_sched,
                                                         valid_config, metadata_kwargs):
-    """T-CK-21 — PASS iff the weights-strip + re-stamp succeeds only on wire-signature equality;
-    a mismatch raises. Bites: an encoding change with no wire-signature check. (strip_and_restamp
-    is the inferred name for the DESIGN §6 'weights-only strip' path — ORACLE_NOTES J6.)"""
+    """T-CK-21 — the weights-strip and re-stamp succeeds only on wire-signature equality, and a mismatch raises."""
     opt, scaler, sched = optim_scaler_sched
     src = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
-                     config=valid_config, meta=metadata_kwargs)  # encoding gnn_axis_v1
+                     config=valid_config, meta=metadata_kwargs)
     same = strip_and_restamp(src, new_encoding="gnn_axis_v1", run_id="runc",
-                             checkpoint_dir=tmp_path)  # equal wire sig → OK
+                             checkpoint_dir=tmp_path)
     assert Path(same).exists()
-    # THE REFUSAL ARM HAS NO CONSTRUCTIBLE INPUT AT HEAD, and that is asserted rather than
-    # quietly dropped: with the grid rows deleted (R346(f)) every registered encoding shares
-    # one wire signature, so no `new_encoding` this repo knows can make the check fire. The
-    # row below reds the day a second signature is registered without a mismatch case being
-    # written back — which is exactly when the refusal stops being untested by accident.
+    # THE REFUSAL ARM HAS NO CONSTRUCTIBLE INPUT AT HEAD, asserted rather than quietly dropped:
+    # every registered encoding now shares one wire signature, so no `new_encoding` this repo knows
+    # can make the check fire. The row below reds the day a second signature is registered.
     signatures = {checkpoints._wire_signature(spec) for spec in all_specs()}
     assert len(signatures) == 1, (
         f"more than one registered wire signature ({signatures}) — the strip's mismatch "
         "refusal is now constructible and needs its arm back")
 
 
-# ═══ O3b — reject killed-branch prefixes ═════════════════════════════════════════════════════
 def _save_bare(state: dict, path: Path) -> None:
     torch.save(state, path)
 
@@ -508,10 +447,7 @@ def _inject(state: dict, prefix: str) -> dict:
 
 def _forge_v2_with_killed_prefix(tmp_path, *, net, opt, scaler, sched, config, meta,
                                  prefix: str) -> Path:
-    """Build a REAL stamped v2 envelope, then hand-forge a killed prefix into its model_state and
-    re-name to a valid {run_id}_{step}_{sha8}.ckpt (so the provenance/content-hash checks pass and
-    the O3b reject — not a hash mismatch — is what must fire). A stamped v2 can STRUCTURALLY carry a
-    killed key, so the mint-path 'build_net can't emit one' argument alone is insufficient."""
+    """Build a REAL stamped v2 envelope, hand-forge a killed prefix into its model_state, and re-name it so the provenance and content-hash checks pass and the killed-prefix reject is what fires."""
     good = _save_full(tmp_path, net=net, opt=opt, scaler=scaler, sched=sched, config=config,
                       meta=meta)
     payload = _load_raw(good)
@@ -521,9 +457,7 @@ def _forge_v2_with_killed_prefix(tmp_path, *, net, opt, scaler, sched, config, m
 
 def test_reject_cluster_pool_prefix(tmp_path, full_graph_state, tiny_net, optim_scaler_sched,
                                     valid_config, metadata_kwargs):
-    """T-CK-22 — PASS iff a synthetic cluster_pool. key makes BOTH loader surfaces raise
-    RepresentationMismatch (no PMA pool built): load_legacy_weights (bare) AND load_checkpoint
-    (hand-forged v2). Bites: resurrecting _build_min_max_model's PMA sniff-reconstruct (F-04)."""
+    """T-CK-22 — a synthetic `cluster_pool.` key makes BOTH loader surfaces raise RepresentationMismatch, so no PMA pool is sniff-reconstructed."""
     opt, scaler, sched = optim_scaler_sched
     p = tmp_path / "dirty_cluster.pt"
     _save_bare(_inject(full_graph_state, "cluster_pool."), p)
@@ -538,8 +472,7 @@ def test_reject_cluster_pool_prefix(tmp_path, full_graph_state, tiny_net, optim_
 
 def test_reject_global_encoder_prefix(tmp_path, full_graph_state, tiny_net, optim_scaler_sched,
                                       valid_config, metadata_kwargs):
-    """T-CK-23 — PASS iff a global_encoder. key raises on BOTH surfaces (bare load_legacy_weights
-    AND hand-forged v2 load_checkpoint). Bites: pma_global reconstruction."""
+    """T-CK-23 — a `global_encoder.` key raises on BOTH surfaces, so pma_global is never reconstructed."""
     opt, scaler, sched = optim_scaler_sched
     p = tmp_path / "dirty_global.pt"
     _save_bare(_inject(full_graph_state, "global_encoder."), p)
@@ -554,8 +487,7 @@ def test_reject_global_encoder_prefix(tmp_path, full_graph_state, tiny_net, opti
 
 def test_reject_gpool_bias_branch_prefix(tmp_path, full_graph_state, tiny_net, optim_scaler_sched,
                                          valid_config, metadata_kwargs):
-    """T-CK-24 — PASS iff a gpool_bias_branch. key raises on BOTH surfaces (bare load_legacy_weights
-    AND hand-forged v2 load_checkpoint). Bites: gpool-bias reconstruction (F-05)."""
+    """T-CK-24 — a `gpool_bias_branch.` key raises on BOTH surfaces, so the gpool bias is never reconstructed."""
     opt, scaler, sched = optim_scaler_sched
     p = tmp_path / "dirty_gpool.pt"
     _save_bare(_inject(full_graph_state, "gpool_bias_branch."), p)
@@ -569,63 +501,54 @@ def test_reject_gpool_bias_branch_prefix(tmp_path, full_graph_state, tiny_net, o
 
 
 def test_clean_anchor_loads(tmp_path, full_graph_net, full_graph_state, anchor_key_set):
-    """T-CK-25 — PASS iff the committed anchor key set (0 killed) ⊆ the stripped
-    build_net(arch_from_spec('gnn_axis_v1')) key set and loads clean. Bites: a false-positive
-    reject on a clean promoted anchor. (Fixture is the committed
-    `value_probes/statedict_keys/gnn_axis_v1.txt` — the v6_live2 anchor it used to read went
-    with the grid path, R346(f).)"""
+    """T-CK-25 — the committed anchor key set is a subset of the stripped `build_net` key set and loads clean, so a clean promoted anchor is never falsely rejected."""
     constructed = set(full_graph_net.state_dict().keys())
     assert anchor_key_set
     assert anchor_key_set <= constructed
     assert not any(k.startswith(KILLED_PREFIXES) for k in anchor_key_set)
     p = tmp_path / "clean_anchor.pt"
     _save_bare(full_graph_state, p)
-    ck = load_legacy_weights(p, declared_encoding="gnn_axis_v1")  # no RepresentationMismatch
+    ck = load_legacy_weights(p, declared_encoding="gnn_axis_v1")
     assert ck.model_state
 
 
 def test_killed_prefix_reject_mutation_selftest(tmp_path, full_graph_state):
-    """T-CK-26 (LAW-07) — PASS iff a clean state dict loads AND injecting a killed prefix makes
-    the loader reject. Bites: a guard wired but never firing."""
+    """T-CK-26 — a clean state dict loads AND injecting a killed prefix makes the loader reject, so the guard is wired and fires."""
     clean = tmp_path / "clean.pt"
     _save_bare(dict(full_graph_state), clean)
-    assert load_legacy_weights(clean, declared_encoding="gnn_axis_v1").model_state  # clean loads
+    assert load_legacy_weights(clean, declared_encoding="gnn_axis_v1").model_state
     dirty = tmp_path / "dirty.pt"
     _save_bare(_inject(full_graph_state, "cluster_pool."), dirty)
-    with pytest.raises(RepresentationMismatch):  # mutation → reject fires
+    with pytest.raises(RepresentationMismatch):
         load_legacy_weights(dirty, declared_encoding="gnn_axis_v1")
 
 
-# ═══ Declared-encoding-assert vs decode-override ═════════════════════════════════════════════
 def test_declared_encoding_mismatch_raises(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                            metadata_kwargs):
-    """T-CK-27 — PASS iff declared_encoding disagreeing with the stamp raises
-    DeclaredEncodingMismatchError naming both. Bites: a stamp silently overriding a declared name."""
+    """T-CK-27 — a declared_encoding disagreeing with the stamp raises DeclaredEncodingMismatchError naming both."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
-                      config=valid_config, meta=metadata_kwargs)  # stamp = gnn_axis_v1
+                      config=valid_config, meta=metadata_kwargs)
     with pytest.raises(DeclaredEncodingMismatchError):
         load_checkpoint(path, declared_encoding="gnn_axis_r8")
 
 
 def test_decode_override_wins_and_logs_never_raises(tmp_path, tiny_net, optim_scaler_sched,
                                                     valid_config, metadata_kwargs, caplog):
-    """T-CK-28 — PASS iff decode_override is authoritative + logs `encoding_decode_override` loudly
-    on disagreement but NEVER raises. Bites: override raising / overriding silently."""
+    """T-CK-28 — decode_override is authoritative and logs loudly on disagreement, but NEVER raises."""
     import logging
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
-                      config=valid_config, meta=metadata_kwargs)  # stamp = gnn_axis_v1
+                      config=valid_config, meta=metadata_kwargs)
     with caplog.at_level(logging.INFO):  # floor at INFO so a WARNING-or-INFO notice is captured
-        ck = load_checkpoint(path, decode_override="gnn_axis_r8")  # disagrees with stamp → no raise
+        ck = load_checkpoint(path, decode_override="gnn_axis_r8")
     assert ck is not None
     assert "encoding_decode_override" in caplog.text
 
 
 def test_declared_and_override_together_error(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                               metadata_kwargs):
-    """T-CK-29 — PASS iff passing both declared_encoding and decode_override raises ValueError
-    (mutually exclusive). Bites: allowing both."""
+    """T-CK-29 — passing both declared_encoding and decode_override raises ValueError: the two are mutually exclusive."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
                       config=valid_config, meta=metadata_kwargs)
@@ -635,11 +558,10 @@ def test_declared_and_override_together_error(tmp_path, tiny_net, optim_scaler_s
 
 def test_stamp_sources_disagree_raises(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                        metadata_kwargs):
-    """T-CK-30 — PASS iff a checkpoint whose metadata.encoding_name and config.encoding resolve to
-    DIFFERENT names raises 'stamp sources disagree'. Bites: silently picking one source."""
+    """T-CK-30 — a checkpoint whose metadata.encoding_name and config.encoding resolve to DIFFERENT names raises rather than silently picking one source."""
     opt, scaler, sched = optim_scaler_sched
     path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
-                      config=valid_config, meta=metadata_kwargs)  # both gnn_axis_v1
+                      config=valid_config, meta=metadata_kwargs)
     payload = _load_raw(path)
     payload["config"]["identity"]["encoding"] = "gnn_axis_r8"  # config and metadata now disagree
     bad = _resave_rehashed(payload, tmp_path)
@@ -647,15 +569,8 @@ def test_stamp_sources_disagree_raises(tmp_path, tiny_net, optim_scaler_sched, v
         load_checkpoint(bad)
 
 
-# ═══ Legacy read (anchor import path) — the THREE real old shapes ════════════════════════════
 def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_graph_state, legacy_shapes):
-    """T-CK-31 — PASS iff a full old envelope reads via the old→v2 field map (training_date→
-    created_utc, model_architecture/variant→arch, train_config_path dropped, config re-validated)
-    → resume-capable load. Bites: refusing a real pre-v2 full checkpoint / mis-mapping a field.
-
-    The captured encoding 'v6_live2' is UNREGISTERED in the new repo (J3) → the synthetic full-v1
-    envelope uses the registered 'gnn_axis_v1' for arch-resolvability while pinning the captured
-    field-map scalars (training_date value asserted verbatim)."""
+    """T-CK-31 — a full old envelope reads via the old→v2 field map (training_date→created_utc, model_architecture/variant→arch, train_config_path dropped, config re-validated) to a resume-capable load."""
     fv1 = legacy_shapes["full_v1_envelope"]
     md = fv1["metadata"]
     from mantis.model import arch_from_spec_and_config
@@ -665,14 +580,12 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
     valid_config = {
         "schema_version": 1, "run_id": "run5", "seed": 20260718,
         "eval_enabled": True,
-        # RECAL-PREP (R308(g)(i)): a REQUIRED top-level leaf. `null` is R119's
-        # placeholder — refused at boot on a cuda process, valued only by the
-        # re-calibration sitting under R282(b).
+        # A REQUIRED top-level leaf whose `null` is the placeholder: refused at boot on a cuda
+        # process, and valued only by the re-calibration sitting.
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _make_eval_block(),
-        # WPMINT Phase K-A stage 0: DERIVED from a MINTED config, not a twelfth restatement
-        # of the complete `train:` block (measured byte-identical to the census it replaces).
+        # DERIVED from a MINTED config, not a restatement of the complete `train:` block.
         "train": load_config(
             Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
         ).train.model_dump(),
@@ -693,8 +606,8 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         },
         "inference": {
             "inference_batch_size": 64, "inference_max_wait_ms": 10,
-            # ARCH-SCOPED to graph (R322(d)) and this envelope IS a graph one, so it is
-            # REQUIRED here. The pair is the template's non-binding value.
+            # ARCH-SCOPED to graph and this envelope IS a graph one, so it is REQUIRED here; the
+            # pair is the template's non-binding value.
             "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
         },
         "monitor": {
@@ -723,7 +636,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
                 "disk_guard": {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0},
         },
     }
-    # R322(d): every ARCH-SCOPED block that is not this envelope's arch is dropped through
+    # Every ARCH-SCOPED block that is not this envelope's arch is dropped through
     # `ARCH_SCOPED_KEYS` — the schema's own partition — rather than by name, so a third scoped
     # block needs no edit here.
     for _key in ARCH_SCOPED_KEYS:
@@ -750,38 +663,34 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
     legacy_path = tmp_path / "checkpoint_00272357.pt"  # NOT a v2 {run_id}_{step}_{sha8}.ckpt name
     torch.save(payload, legacy_path)
     ck = load_legacy_weights(legacy_path)
-    assert ck.kind == "full"                            # optimizer/scaler/scheduler present → resume-capable
+    assert ck.kind == "full"
     assert ck.optimizer_state is not None
     assert ck.scheduler_state is not None
-    assert ck.metadata.encoding_name == "gnn_axis_v1"   # verbatim
-    assert ck.metadata.commit_sha == md["commit_sha"]   # verbatim
+    assert ck.metadata.encoding_name == "gnn_axis_v1"
+    assert ck.metadata.commit_sha == md["commit_sha"]
     assert ck.metadata.created_utc == md["training_date"]  # training_date → created_utc, VERBATIM
     assert ck.metadata.corpus_sha256 is None
     assert not hasattr(ck.metadata, "train_config_path")   # dropped (not a v2 metadata field)
     assert not ck.metadata.run_id                        # SYNTHESIZED-NEVER on a legacy read
-    assert isinstance(ck.metadata.arch, GnnArch)  # resolved, not sniffed
+    assert isinstance(ck.metadata.arch, GnnArch)
 
 
 def test_reads_bare_state_dict_anchor_no_fake_provenance(tmp_path, full_graph_state, legacy_shapes):
-    """T-CK-32 — PASS iff a BARE state_dict anchor loads via load_legacy_weights (arch from the
-    declared/registry encoding), kind='weights', NO synthetic run_id/hash/created_utc. Bites:
-    minting fake v2 provenance for a legacy bare anchor (LAW-12) / refusing a bare anchor outright."""
+    """T-CK-32 — a BARE state_dict anchor loads via load_legacy_weights with the arch taken from the declared encoding, kind='weights', and NO synthetic run_id/hash/created_utc."""
     assert legacy_shapes["bare_state_dict"]["top_level_is_envelope"] is False
     bare = tmp_path / "bootstrap_model_v6_live2.pt"
     torch.save(full_graph_state, bare)  # the whole payload IS the state dict — no wrapper
     ck = load_legacy_weights(bare, declared_encoding="gnn_axis_v1")
     assert ck.kind == "weights"
     assert ck.model_state
-    assert ck.metadata.encoding_name == "gnn_axis_v1"   # from declared, not embedded
-    assert not ck.metadata.run_id                        # NO synthetic run_id
-    assert not getattr(ck.metadata, "created_utc", "")   # NO synthetic created_utc
-    assert ck.optimizer_state is None                    # weights-only
+    assert ck.metadata.encoding_name == "gnn_axis_v1"
+    assert not ck.metadata.run_id
+    assert not getattr(ck.metadata, "created_utc", "")
+    assert ck.optimizer_state is None
 
 
 def test_bare_anchor_to_v2_requires_explicit_strip(tmp_path, full_graph_state):
-    """T-CK-33 — PASS iff upgrading a legacy bare anchor to a stamped v2 envelope goes ONLY through
-    the wire-signature-gated weights-only strip + re-stamp (stamped once from declared encoding +
-    arch); an auto-restamp on read raises. Bites: an auto-restamp on read."""
+    """T-CK-33 — upgrading a legacy bare anchor to a stamped v2 envelope goes ONLY through the wire-signature-gated weights-only strip and re-stamp; an auto-restamp on read raises."""
     bare = tmp_path / "bootstrap_model_v6_live2.pt"
     torch.save(full_graph_state, bare)
     # sanctioned upgrade: strip + re-stamp → a proper v2 envelope with a FRESH single stamp.
@@ -789,20 +698,14 @@ def test_bare_anchor_to_v2_requires_explicit_strip(tmp_path, full_graph_state):
                                 checkpoint_dir=tmp_path, declared_encoding="gnn_axis_v1")
     ck = load_checkpoint(v2_path)
     assert ck.metadata.run_id == "runx"
-    assert ck.metadata.created_utc  # stamped ONCE at strip time
+    assert ck.metadata.created_utc
     # the v2 loader must NOT auto-upgrade a bare anchor (no provenance / not a v2 envelope).
     with pytest.raises(CheckpointStampError):
         load_checkpoint(bare)
 
 
-# ═══ Unregistered legacy encoding — loud raise, never shape-sniff ═════════════════════════════
 def test_unregistered_legacy_encoding_raises(tmp_path, full_graph_state):
-    """T-CK-34 — PASS iff a legacy read whose encoding_name is UNREGISTERED (the REAL full-v1 stamp
-    'v6_live2', verified: lookup('v6_live2') → EncodingRegistryError, distinct from the registered
-    'gnn_axis_v1') raises LOUDLY at the registry lookup and NEVER falls back to inferring an arch
-    from tensor shapes (the DELETED infer_*_hparams path). Bites: a silent shape-sniff fallback for
-    an unregistered legacy encoding (resurrecting infer_model_hparams — the single most important
-    untested KILL-resurrection surface)."""
+    """T-CK-34 — a legacy read whose encoding_name is UNREGISTERED raises LOUDLY at the registry lookup and NEVER falls back to inferring an arch from tensor shapes."""
     bare = tmp_path / "unregistered_legacy.pt"
     _save_bare(dict(full_graph_state), bare)  # a bare state dict that WOULD shape-sniff cleanly
     # 'v6_live2' is not in the registry → the ONLY correct behavior is a loud raise, never a sniff.

@@ -1,24 +1,11 @@
-"""Suite D (hparams + wire arms) — D-06 … D-14, D-18, and the `mcts.epsilon` pin.
+"""Suite D — the self-play hparams and the runner wire they feed.
 
->300 justify: ONE surface. Every row here binds `SelfPlayHParams.from_config` or the
-`build_runner_config` wire it feeds, and they share the recording proxy over the Rust
-config (which has no ctor getters, so the recorded kwarg dict is the only observable) plus
-the base config dicts the old-side capture used. Splitting the hard-error arms from the
-wire arms would duplicate both.
-
-WPSC Phase 2 SC-A2 (R-SELFPLAYCONFIG-SCHEMA closure) reshape: `SelfPlayHParams.from_config`
-no longer reads a flat legacy dict with top-level-namespace fallback — every config literal
-below is nested (`selfplay: {..., mcts: {...}, playout_cap: {...}}`, `train: {...}`) matching
-the schema shape. The four old hard-error arms (D-06/D-07/D-08 + the temperature-resolver
-key/spelling cases) are now `PlayoutCapConfig`/`MctsConfig` schema bounds/validators — their
-coverage moved to `tests/config/test_mcts_playout_cap_schema.py` and
-`tests/config/test_selfplay_playout_cap_mutual_exclusion.py` (DESIGN_P2.md §12); this file
-keeps only the arms that exercise the ACTUAL `from_config`/wire behavior. The
-`mcts.epsilon`-vs-`dirichlet_epsilon` spelling trap (`test_mcts_epsilon_key_wins`) and the
-`max_game_moves`/`max_moves_per_game` dual-alias chain (`test_max_moves_alias_chain`) are
-DELETED outright: the schema field IS the config key now, so there is no wrong spelling or
-alias fallback left to test (replaces `test_selfplay_schema.py::
-test_dirichlet_epsilon_field_name_equals_config_key`).
+>300 justify: ONE surface. Every row binds `SelfPlayHParams.from_config` or the
+`build_runner_config` wire it feeds, sharing the recording proxy over the Rust config (which has
+no ctor getters, so the recorded kwarg dict is the only observable) and the base config dicts;
+splitting the hard-error arms from the wire arms would duplicate both. The old hard-error arms
+are now schema bounds covered in tests/config/, and the spelling traps are gone because the
+schema field IS the config key.
 """
 from __future__ import annotations
 
@@ -56,13 +43,10 @@ BASE_PLAYOUT_CAP: dict[str, Any] = {
     "n_sims_quick": 0, "n_sims_full": 0,
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
-# WPMINT Phase K-A stage 0 left this block hand-written on purpose. It is NOT a `train:`
-# schema payload — `cfg()` below builds the LEGACY flat hparams dict the pool still reads, so
-# this block is deliberately INCOMPLETE (no `max_train_steps` / `actor_sync_cadence_steps` /
-# `draw_rate_abort`) and never reaches `RunConfig.model_validate`. A new `train.*` schema key
-# therefore costs this file nothing. Its values are also its subject: `draw_reward: -0.4` and
-# `ply_cap_value: -0.7` are DISTINGUISHABLE from the minted defaults precisely so the oracles
-# below can prove they arrived at the Rust runner rather than a coincidence.
+# NOT a `train:` schema payload — `cfg()` builds the LEGACY flat hparams dict the pool reads, so
+# this block is deliberately INCOMPLETE and never reaches `RunConfig.model_validate`; a new
+# `train.*` schema key costs this file nothing. `draw_reward: -0.4` and `ply_cap_value: -0.7` are
+# DISTINGUISHABLE from the minted defaults so the oracles can prove they reached the Rust runner.
 BASE_TRAIN: dict[str, Any] = {
     "lr": 1e-3, "weight_decay": 1e-4, "grad_clip": 1.0,
     "lr_schedule": "cosine", "total_steps": 1_000_000, "scheduler_t_max": None,
@@ -79,9 +63,7 @@ def cfg(
     search: dict | None = None,
 ) -> dict[str, Any]:
     """A nested, schema-shaped config: BASE_* plus per-section overrides. `encoding` stays a
-    top-level flat key — `resolve_pool_encoding`/`resolve_from_config` read it independently
-    of `identity.encoding` (a separate, pre-existing pool.py/hparams.py convention untouched
-    by SC-A2)."""
+    top-level flat key, read independently of `identity.encoding`."""
     sp = dict(BASE_SELFPLAY)
     sp.update(selfplay or {})
     sp["mcts"] = dict(BASE_MCTS, **(mcts or {}))
@@ -95,12 +77,9 @@ def cfg(
 
 
 class _RecordingRunnerConfig:
-    """Proxy over the REAL Rust config, recording ctor kwargs + post-ctor attribute sets.
-
-    Same instrument as the ⊕ D-15 golden uses, and for the same reason: the Rust config
-    exposes getters for its post-ctor attributes only, so the ctor-kwarg dict is the ONLY
-    observable of the config→runner wire. Constructing the real object underneath keeps
-    Rust-side validation live.
+    """Proxy over the REAL Rust config, recording ctor kwargs + post-ctor attribute sets: the
+    Rust config exposes getters for post-ctor attributes only, so the ctor-kwarg dict is the
+    ONLY observable of the config->runner wire.
     """
 
     def __init__(self, **kwargs: Any) -> None:
@@ -137,11 +116,10 @@ def assemble(monkeypatch):
     return build
 
 
-# ═══ D-09 — effective-sims resolution + the one hard error with no schema equivalent ═════
+# effective-sims resolution + the one hard error with no schema equivalent
 def test_effective_sims_zero_is_a_hard_error() -> None:
-    """D-09 — PASS iff a config resolving to zero effective per-move sims raises, naming
-    both escape routes. This check spans `mcts.n_simulations` AND `playout_cap.*`, so it has
-    no single-model schema equivalent and stays a `from_config` runtime check."""
+    """A config resolving to zero effective per-move sims raises, naming both escape routes; the
+    check spans two sections, so it has no single-model schema equivalent."""
     with pytest.raises(ValueError) as exc:
         SelfPlayHParams.from_config(cfg(mcts={"n_simulations": 0}))
     message = str(exc.value)
@@ -158,19 +136,14 @@ def test_effective_sims_zero_is_a_hard_error() -> None:
     ids=["flat_regime", "move_level_cap_regime"],
 )
 def test_effective_sims_per_move_resolution(playout_cap: dict, expected: int) -> None:
-    """D-09 (resolution arm) — PASS iff the effective per-move sim count equals the flat
-    `mcts.n_simulations` with no cap, the full-search ceiling `n_sims_full` under a
-    move-level cap."""
+    """Effective sims are flat `mcts.n_simulations`, or `n_sims_full` under a move-level cap."""
     hp = SelfPlayHParams.from_config(cfg(playout_cap=playout_cap))
     assert hp.effective_sims_per_move == expected
 
 
-# ═══ D-10 — the temperature schedule reaches the hparams AND the wire ═════════════════════
+# the temperature schedule reaches the hparams AND the wire
 def test_playout_cap_temperature_threshold_reaches_hparams_and_wire(assemble) -> None:
-    """D-10 (wire arm; RENAMED per R38 — ADJ-02/R38 disposition) — PASS iff a schedule-ON
-    `playout_cap` arrives at BOTH the hparams field and the runner ctor kwarg. The schema
-    field IS the config key now (`temperature_threshold_compound_moves`), so there is no
-    silently-disabled-schedule trap left to test — this asserts the wire, not a spelling."""
+    """A schedule-ON `playout_cap` reaches BOTH the hparams field and the runner ctor kwarg."""
     config = cfg(playout_cap={"temperature_threshold_compound_moves": 12, "temp_min": 0.35})
     hp = SelfPlayHParams.from_config(config)
     assert (hp.temp_threshold_compound_moves, hp.temp_min) == (12, 0.35)
@@ -181,25 +154,20 @@ def test_playout_cap_temperature_threshold_reaches_hparams_and_wire(assemble) ->
 
 
 def test_dirichlet_alpha_field_name_equals_its_key(assemble) -> None:
-    """PASS iff `mcts.dirichlet_alpha` reaches `dirichlet_alpha` on both the hparams and the
-    runner kwarg — a basic wiring-through check (the spelling-mismatch control this used to
-    pair with, `test_mcts_epsilon_key_wins`, is deleted: the schema retires the mismatch)."""
+    """`mcts.dirichlet_alpha` reaches the hparams field and the runner kwarg."""
     config = cfg(mcts={"dirichlet_alpha": 0.6})
     assert SelfPlayHParams.from_config(config).dirichlet_alpha == 0.6
     assert assemble(config).recorded_kwargs["dirichlet_alpha"] == 0.6
 
 
 def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:
-    """PASS iff `mcts.dirichlet_epsilon` reaches `dirichlet_epsilon` on both the hparams and
-    the runner kwarg (replaces the retired `mcts.epsilon`-spelling pin — the schema field IS
-    the config key now, `test_selfplay_schema.py::
-    test_dirichlet_epsilon_field_name_equals_config_key` pins the schema side)."""
+    """`mcts.dirichlet_epsilon` reaches the hparams field and the runner kwarg."""
     config = cfg(mcts={"dirichlet_epsilon": 0.9})
     assert SelfPlayHParams.from_config(config).dirichlet_epsilon == 0.9
     assert assemble(config).recorded_kwargs["dirichlet_epsilon"] == 0.9
 
 
-# ═══ D-11 — the ply-cap value chain and its wire site ════════════════════════════════════
+# the ply-cap value chain and its wire site
 @pytest.mark.parametrize(
     "train_over,expected_draw,expected_ply",
     [
@@ -209,9 +177,7 @@ def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:
     ids=["explicit_split", "explicit_equal"],
 )
 def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -> None:
-    """D-11 — PASS iff `train.draw_reward`/`train.ply_cap_value` land on the runner's
-    `draw_reward`/`ply_cap_value` kwargs (cross-section read, DESIGN_P2.md §2 note — no
-    fallback-to-sibling once both are required schema fields)."""
+    """`train.draw_reward`/`train.ply_cap_value` land on the runner kwargs of the same name."""
     config = cfg(train=train_over)
 
     hp = SelfPlayHParams.from_config(config)
@@ -223,14 +189,9 @@ def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -
     assert recorded.recorded_kwargs["ply_cap_value"] == expected_ply
 
 
-# ═══ D-14 — `search_kind` re-reads the LIVE config ═══════════════════════════════
+# `search_kind` re-reads the LIVE config
 def test_search_kind_property_reads_live_config() -> None:
-    """D-14 — PASS iff the `search_kind` property reflects a config mutated AFTER
-    construction, and REFUSES a config that declares no search at all.
-
-    Driven through a bare object carrying only `config` so no runner is needed:
-    `WorkerPool.search_kind` reads `self.config` and nothing else.
-    """
+    """`search_kind` reflects a config mutated AFTER construction and REFUSES an absent one."""
     holder = type("H", (), {"search_kind": WorkerPool.search_kind})()
     holder.config = {"search": {"kind": "puct"}}
     assert holder.search_kind == "puct"
@@ -238,11 +199,9 @@ def test_search_kind_property_reads_live_config() -> None:
     holder.config["search"]["kind"] = "gumbel"
     assert holder.search_kind == "gumbel", "the property must re-read the live config"
 
-    # NO FALLBACK. A pool that cannot say which search it ran must raise rather than
-    # answer "puct" — the emitter gates PUCT-only diagnostics on this, and a default
-    # would publish descent-rule statistics for a descent that never happened. The refusal
-    # is the RESOLVER's, which is the point: the pool reads the one selector rather than
-    # the mapping, so it cannot grow a fallback of its own.
+    # NO FALLBACK: a pool that cannot say which search it ran must raise rather than answer
+    # "puct", because the emitter gates PUCT-only diagnostics on this. The refusal is the
+    # RESOLVER's, so the pool cannot grow a fallback of its own.
     holder.config = {}
     with pytest.raises(MissingSearchKindError):
         _ = holder.search_kind
@@ -252,20 +211,15 @@ def test_search_kind_property_reads_live_config() -> None:
 
 
 
-# ═══ D-18 — the derived dense dims, and the FFI agreement ════════════════════════
+# the derived dense dims, and the FFI agreement
 @pytest.mark.parametrize(
     "encoding,expected",
     [("gnn_axis_v1", PoolDims(0, 0, 362)),
      ("gnn_axis_r8", PoolDims(0, 0, 362))],
 )
 def test_pool_dims_derivation_golden(assemble, encoding: str, expected: PoolDims) -> None:
-    """D-18 — PASS iff the derived dims equal the captured `pool_derived` block, which on a
-    graph encoding is the degenerate dense case (0/0/policy).
-
-    The dense dims sized the reshape the drain applied to every dense row; with the dense
-    path gone (R346(f)) the assertion that matters is that they stay ZERO and the policy
-    length still comes off the spec — a non-zero feat_len here would mean something is
-    re-deriving a dense geometry no wire carries."""
+    """The derived dims stay ZERO on a graph encoding with the policy length off the spec; a
+    non-zero feat_len would mean a dense geometry no wire carries is being re-derived."""
     config = cfg(encoding=encoding, playout_cap={"fast_sims": 100})
     hp = SelfPlayHParams.from_config(config)
     enc = resolve_pool_encoding(config, arch=None)
@@ -274,11 +228,7 @@ def test_pool_dims_derivation_golden(assemble, encoding: str, expected: PoolDims
 
 
 def test_killed_knobs_are_never_read(assemble) -> None:
-    """DV-6 pin — PASS iff a config carrying WP-KILLed self-play knobs assembles cleanly
-    and neither name reaches the Rust config. `from_config` only reads its own known keys
-    off the nested schema sections, so an extra key alongside them is simply never
-    consulted (schema-level rejection of unknown keys is a DIFFERENT, already-covered
-    concern — `test_selfplay_schema.py::test_selfplay_extra_key_rejected`)."""
+    """Killed self-play knobs assemble cleanly and neither name reaches the Rust config."""
     config = cfg(selfplay={"legal_move_radius_jitter": True})
     recorded = assemble(config)
     assert "legal_move_radius_jitter" not in recorded.recorded_kwargs
@@ -286,9 +236,7 @@ def test_killed_knobs_are_never_read(assemble) -> None:
 
 
 def test_hparams_round_trip_is_json_stable() -> None:
-    """Guard arm — PASS iff every resolved hparam is a plain Python scalar (or None), so
-    the whole knob set can be recorded into a run manifest. FAIL = a numpy scalar or a
-    config sub-dict leaked into the frozen snapshot and the manifest write dies mid-run."""
+    """Every resolved hparam is a plain scalar or None, so a run manifest can record them."""
     hp = SelfPlayHParams.from_config(cfg())
     payload = {f: getattr(hp, f) for f in hp.__dataclass_fields__}
     json.dumps(payload)  # raises TypeError on any non-JSON scalar

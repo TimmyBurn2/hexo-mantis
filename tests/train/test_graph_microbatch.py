@@ -1,82 +1,20 @@
-# >300 justify (R8). NO LINE COUNT is stated, per G-DFIX-4 and R192(e)'s derive-or-delete:
-# R8 asks for a one-line justification, not a tally, and a number that must be re-edited
-# whenever a row is added will eventually be wrong and then be read as evidence. (This
-# file's first version stated one and it was already false at submission.)
-# The fourteen rows are ONE claim — "the
-# `train.microbatch_caps` split is the un-split step, bounded" — and they share ONE rig: the
-# same real `HexgBuffer`, the same replayed wire, the same tiny `GnnNet` trainer and the same
-# caps arithmetic. Splitting them would fork that rig (the fork-and-drift failure
-# `tests/train/test_periodic_checkpoint.py:5-8` argues against) and would separate the
-# partition properties from the normalisation identity they are the precondition of. The
-# executable content is a minority: the rest is the per-row "what defect is this the ONLY
-# witness to" rationale LAW-07 asks of each row, and the reachability note R166 asks of each
-# drive.
-"""⊕ WP12-R dispatch 6 phase F2 — the config-typed edge/node cap + gradient-accumulating
-micro-batching (DESIGN_DFIX §3, PREREG_DFIX §4, CARD-RUN5-GPU-OOM).
+# >300 justify (R8): the rows are ONE claim — "the `train.microbatch_caps` split is the un-split
+# step, bounded" — and share ONE rig: the same real `HexgBuffer`, the same replayed wire, the same
+# tiny `GnnNet` trainer and the same caps arithmetic. Splitting them would fork that rig.
+"""The config-typed edge/node cap plus gradient-accumulating micro-batching.
 
-**R191 BINDS EVERY ROW HERE.** F1's median-form statistic reads **exactly 0.0** against a
-2.6e+3 defect confined to <=50% of graphs, and a micro-batch split produces precisely that
-minority-subset shape: a partition bug, a mis-weighted denominator or a dropped part corrupts
-the graphs in SOME parts and leaves the rest bit-identical. So no row below is a median, a
-mean, or any other majority statistic — grep-verified, none exists in this file.
+No row below is a median, a mean or any other majority statistic, and none exists in this file:
+the F1 median-form statistic reads exactly 0.0 against a defect confined to <=50% of graphs, which
+is precisely the shape a micro-batch split produces.
 
-Two kinds of row, named separately because they are not the same kind of evidence. **The exact
-rows** — OF2-1, OF2-2, OF2-3a/a', OF2-4, OF2-5's count, OF2-6, OF2-7, OF2-11, OF2-13, OF2-15,
-OF2-16 — are `torch.equal`, per-graph identities, exact counts or a pre-registered `rtol` on an
-EXACT-equivalence claim, and the ones whose exactness is numeric run under
-`_microbatch_harness.deterministic_algorithms()`, whose scope is the test and whose name says
-so. **The band rows** — OF2-3b/c/d and OF2-5's second limb — are pre-registered RELATIVE bands
-on quantities that are not exact (the split regroups floating-point sums), they do NOT run
-under determinism, and they carry three bands each. R191 is satisfied by both kinds; it is not
-satisfied by calling the second kind the first.
+The EXACT rows are `torch.equal`, per-graph identities, exact counts or a pre-registered `rtol` on
+an exact-equivalence claim, and the numerically exact ones run under
+`_microbatch_harness.deterministic_algorithms()`. The BAND rows are pre-registered RELATIVE bands
+on quantities that are not exact and carry three bands each.
 
-The defect each row is the ONLY witness to:
-
-- **OF2-1** — a partition that silently drops, duplicates or reorders graphs. Properties over
-  >=200 randomised `(ec, nc, caps)` inputs plus the enumerated boundary cases, because a
-  partition property is binary and a spot check is not a property.
-- **OF2-2** — corrupted rebasing or offset arithmetic in the slice, and an unsliced
-  `target_argmax_cells` (which makes `collate_graph_batch` raise on EVERY part,
-  `graph_collate.py:586-590`). The only row that reads the slice against the full batch.
-- **OF2-3a** — the naive-averaging trap: a split that trains on a DIFFERENT objective. The
-  configuration cross is mask VALUE x mask PRESENCE because `1/M` weighting is CORRECT when
-  every graph is full-search and every row is value-valid, and wrong otherwise — a
-  single-configuration oracle ships MB-4.
-- **OF2-3a'** — a SYMMETRIC `graph_loss_denominators`, which passes every other row here
-  while encoding a latent divergence: HEAD's two denominators are different quantities (a sum
-  of mask VALUES at `losses.py:101-102`, a count of TRUE at `dist65.py:58-62`) and they agree
-  only while the masks are strictly 0/1.
-- **OF2-3b/c/d** — the algebra right and the plumbing wrong.
-- **OF2-4** — M optimizer steps per training step, the R173/CS2 periodic-save seam firing M
-  times, and **a missing `grad_norm` key silently disarming `grad_norm_hard_abort` through
-  `coordinator/step.py`'s grad-norm gate reading `loss_info.get("grad_norm", 0.0)`**. Swept over M in {1, 2, 4} so the
-  key-presence guarantee is tested on the M=1 path production takes when the caps do not bind.
-- **OF2-5** — an armed gate's input rescaled by M. Clipping is NONLINEAR in the whole
-  gradient, so per-micro clipping feeds `grad_norm_hard_abort` the norm of a FRACTION.
-- **OF2-6** — a cap that fires with no in-run evidence (LAW-18, R164's rider).
-- **OF2-7** — a silent drop or truncation of an out-of-domain graph (R114's clause), and a
-  half-executed step.
-- **OF2-11** — a partition depending on host state.
-- **OF2-13** — RETIRED with R346(f): the `GRAPH_FORBIDDEN_NONZERO_WEIGHTS` ban had **NO producer
-  at HEAD**: `tests/config/test_train_entropy.py:73-81` only asserts the string is absent from
-  the schema module, a duplication guard (R4/LAW-07).
-- **OF2-15** — the route-scoped resolution. (a) is a REGRESSION pin against the fix's own
-  earlier defect — an eager `caps=self._microbatch_caps()` at `coordinator/step.py:930` would
-  resolve `full_config["train"]` on BOTH representations and break the four frozen grid
-  coordinators that carry no `train` key; (b) is the ⊕ half, a graph route with no
-  `train.microbatch_caps` failing BY NAME instead of defaulting to uncapped.
-- **OF2-16** — DEFENSIVE. A zero-graph step silently returning a no-op result dict, i.e. a run
-  reporting steps it never took. **Reachability through the coordinator's `min_buf_size` gate
-  is UNVERIFIED** (DESIGN_DFIX §3.3 names the settling measurement); this row is a producer
-  test for a GUARD, not for a live route, and may not be cited as evidence that `B == 0`
-  occurs.
-
-**What is real and what is not.** Real: the buffer, the wire, the partition, the slice,
-`collate_graph_batch` (`semantic="full"`, all 18 checks, on every part), the losses, the
-optimizer, the scheduler, the events, the filesystem. Fake: the ARCH (tiny `GnnNet`) and the
-SINK (a spy). **Nothing here fakes the caps, the split, the normalisation or the resolver** —
-and OF2-15 does not even fake the config: it uses the literal train-less `full_config` five
-frozen files construct.
+The buffer, the wire, the partition, the slice, the collate, the losses, the optimizer, the
+scheduler, the events and the filesystem are real; the ARCH and the SINK are not. Nothing here
+fakes the caps, the split, the normalisation or the resolver.
 """
 from __future__ import annotations
 
@@ -115,15 +53,14 @@ from mantis.train.trainer.core import Trainer
 _TRAINLESS_GRAPH = {"identity": {"encoding": H.GRAPH_ENCODING, "representation": "graph"}}
 
 
-# ═══ OF2-1 — partition properties ════════════════════════════════════════════════════════
 def _offsets(counts: np.ndarray) -> np.ndarray:
     return np.concatenate([[0], np.cumsum(counts)]).astype(np.int64)
 
 
 def _reference_plan(ec, nc, max_edges: int, max_nodes: int) -> list[tuple[int, int]]:
-    """An INDEPENDENT transcription of DESIGN_DFIX §3.3's greedy rule, written from the design
-    text rather than from the implementation. Two implementations of one stated rule disagree
-    exactly where the rule was misread."""
+    """An INDEPENDENT transcription of the design's greedy rule, written from the design text
+    rather than from the implementation: two implementations of one stated rule disagree exactly
+    where the rule was misread."""
     parts: list[tuple[int, int]] = []
     start, acc_e, acc_n = 0, 0, 0
     for i in range(len(ec)):
@@ -153,9 +90,8 @@ def _assert_partition_properties(ec, nc, max_edges: int, max_nodes: int,
     for g0, g1 in parts:
         assert int(ec[g0:g1].sum()) <= max_edges, f"part {(g0, g1)} breaches max_edges"
         assert int(nc[g0:g1].sum()) <= max_nodes, f"part {(g0, g1)} breaches max_nodes"
-    # (iv) M minimal for the STATED greedy rule: every part but the last is maximal — adding
-    # the next graph would breach a member. This is the property that makes the count minimal
-    # rather than merely legal; a partition that split early passes (i)-(iii) and fails here.
+    # (iv) M minimal for the STATED greedy rule: every part but the last is maximal, since adding
+    # the next graph would breach a member. A partition that split early passes (i)-(iii).
     for g0, g1 in parts[:-1]:
         assert (int(ec[g0:g1 + 1].sum()) > max_edges
                 or int(nc[g0:g1 + 1].sum()) > max_nodes), (
@@ -164,8 +100,8 @@ def _assert_partition_properties(ec, nc, max_edges: int, max_nodes: int,
 
 
 def test_of2_1_partition_properties_over_randomised_inputs() -> None:
-    """OF2-1 — the four properties on 100% of >=200 randomised inputs. A counter-example is a
-    HALT, not a rate: a partition property is binary."""
+    """The four properties on 100% of >=200 randomised inputs. A counter-example is a HALT, not a
+    rate: a partition property is binary."""
     rng = np.random.default_rng(H.SEED)
     checked = 0
     for _ in range(240):
@@ -183,9 +119,8 @@ def test_of2_1_partition_properties_over_randomised_inputs() -> None:
 @pytest.mark.parametrize("case", ["max", "sum", "b1", "all_equal", "one_dominant"])
 @pytest.mark.parametrize("member", ["edges", "nodes"])
 def test_of2_1_enumerated_boundary_cases(case: str, member: str) -> None:
-    """OF2-1 — the enumerated boundaries, for BOTH members. `cap == max(counts)` is where
-    MB-1's `>=`-for-`>` off-by-one lands, so it is a member of the bank rather than a value
-    the randomiser might happen to draw."""
+    """The enumerated boundaries, for BOTH members. `cap == max(counts)` is where the
+    `>=`-for-`>` off-by-one lands, so it is in the bank rather than left to the randomiser."""
     if case == "b1":
         ec, nc = np.array([7], dtype=np.int64), np.array([3], dtype=np.int64)
     elif case == "all_equal":
@@ -209,8 +144,8 @@ def test_of2_1_enumerated_boundary_cases(case: str, member: str) -> None:
 
 @pytest.mark.parametrize("member", ["edges", "nodes"])
 def test_of2_1_cap_one_below_the_largest_graph_raises(member: str) -> None:
-    """OF2-1/OF2-7 boundary — `cap == max(counts) - 1` is out of domain: no split rescues a
-    single graph, so it RAISES rather than producing a part that breaches its own bound."""
+    """`cap == max(counts) - 1` is out of domain: no split rescues a single graph, so it RAISES
+    rather than producing a part that breaches its own bound."""
     ec = np.array([5, 9, 3], dtype=np.int64)
     nc = np.array([4, 2, 7], dtype=np.int64)
     counts = ec if member == "edges" else nc
@@ -220,20 +155,14 @@ def test_of2_1_cap_one_below_the_largest_graph_raises(member: str) -> None:
         plan_microbatches(_offsets(ec), _offsets(nc), max_edges, max_nodes)
 
 
-# ═══ OF2-2 — slice fidelity ══════════════════════════════════════════════════════════════
 def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
-    """OF2-2 — bit-exact slice fidelity against the FULL collated batch, and every part
-    through the real `collate_graph_batch(semantic="full")`.
-
-    `torch.equal`, never a tolerance: this is index arithmetic and "close" is meaningless.
-    Reachability (R166): the wire, the payload conversion, the slice and the collate are the
-    production statements `dispatch.py::_graph_step` executes."""
+    """Bit-exact slice fidelity against the FULL collated batch, with every part through the real
+    `collate_graph_batch(semantic="full")`. `torch.equal`, never a tolerance: this is index
+    arithmetic and "close" is meaningless."""
     buf = H.ragged_graph_buffer(8)
     wire, targets = buf.sample_graph_batch(6, augment=False, recent_frac=0.0)
-    # ONE read of the wire, then everything off the payload: `take()` MOVES the buffers into
-    # numpy since PERF-TRANCHE-1 A2, so a second read of the pyclass raises. The payload
-    # carries the same arrays and is freely re-readable, which is what the production serve
-    # loop relies on too (it reads the wire once and slices the payload per part).
+    # ONE read of the wire, then everything off the payload: `take()` MOVES the buffers into numpy,
+    # so a second read of the pyclass raises. The payload is freely re-readable.
     payload = graph_wire_from_rust(wire)
     ec, nc = H.per_graph_counts(payload)
     b = int(payload.n_graphs)
@@ -245,8 +174,8 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
               win_length=H.GSPEC.win_length, node_feat_dim=H.GSPEC.node_feat_dim,
               edge_feat_dim=H.GSPEC.edge_feat_dim, device="cpu", semantic="full")
     with H.deterministic_algorithms():
-        # The PAYLOAD, not the pyclass: the wire was consumed by the read above, and this
-        # is what `_graph_step` collates too — it never hands the raw wire to the collate.
+        # The PAYLOAD, not the pyclass: the wire was consumed by the read above, and this is what
+        # `_graph_step` collates too — it never hands the raw wire to the collate.
         full = collate_graph_batch(payload, target_argmax_cells=targets.target_argmax_cells,
                                    **kw)
         no = payload.node_offsets
@@ -264,27 +193,19 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
             assert torch.equal(part.x, full.x[n0:n1])
             assert torch.equal(part.edge_attr, full.edge_attr[e0:e1])
             assert torch.equal(part.edge_index, full.edge_index[:, e0:e1] - n0)
-            # (was: `part.legal_mask == full.legal_mask[n0:n1]`.) `legal_mask` is retired by
-            # RQ-16 / R297(c). Its CONTENT here is the row two below — the gather split parity —
-            # and the one thing it added beyond that, namely that no legal node outside a graph's
-            # CSR slice lands inside that graph's node range, is now asserted globally and
-            # directly by `test_the_gather_and_the_CSR_agree_per_graph_segment`
-            # (tests/selfplay/test_graph_collate_masking_authority.py). Rebuilding both masks
-            # from gathers this block already asserts equal would be a tautology, not a check.
+            # `legal_mask` is retired; its content here is the gather split parity below, and the
+            # claim it added is asserted globally in the collate-masking authority suite.
             assert torch.equal(part.node_offsets, full.node_offsets[g0:g1 + 1] - n0)
             assert torch.equal(part.legal_offsets, full.legal_offsets[g0:g1 + 1] - l0)
             assert torch.equal(part.legal_node_gather,
                                full.legal_node_gather[l0:l1] - n0)
-            # (was: `part.policy_dst_slot == full.policy_dst_slot[l0:l1]`.) Retired from the
-            # batch by RQ-16 / R297(c) and re-expressed on the WIRE, which is where the bridge
-            # reads it from (`meta.policy_dst_slot`) — the split is `slice_graph_wire`'s job and
-            # the wire is where its correctness is consumed.
+            # `policy_dst_slot` is retired from the batch and re-expressed on the WIRE, which is
+            # where the bridge reads it and where the split's correctness is consumed.
             assert np.array_equal(np.asarray(sub.policy_dst_slot),
                                   np.asarray(payload.policy_dst_slot)[l0:l1])
             assert torch.equal(part.n_stones, full.n_stones[g0:g1])
-            # (was: the same two rows on `part.current_player` / `part.window_center`.) Both
-            # retired from the batch by RQ-16 / R297(c) and re-expressed on the WIRE, for the
-            # same reason: `verify_edge_geometry` and the assemble path read the flat arrays.
+            # `current_player` / `window_center` are likewise re-expressed on the WIRE, which is
+            # where the assemble path reads them.
             assert np.array_equal(np.asarray(sub.current_player),
                                   np.asarray(payload.current_player)[g0:g1])
             assert np.array_equal(np.asarray(sub.window_center),
@@ -305,7 +226,6 @@ def test_of2_2_slice_fidelity_deterministic_mode_exact() -> None:
     assert seen == b, "the parts did not cover every graph exactly once"
 
 
-# ═══ OF2-3a / OF2-3a' — the normalisation algebra ════════════════════════════════════════
 def _algebra_fixture(b: int = 12, per_graph_legal: int = 5):
     rng = np.random.default_rng(H.SEED)
     counts = np.full(b, per_graph_legal, dtype=np.int64)
@@ -321,11 +241,10 @@ def _algebra_fixture(b: int = 12, per_graph_legal: int = 5):
     return logits, target, offsets, bin_logits, outcomes, counts
 
 
-#: The MIXED masks are deliberately UNBALANCED across every split boundary this row uses.
-#: MEASURED at HEAD before the fix: with a mask alternating `[1,0,1,0,...]` the `1/M` and
-#: `B_m/B` weightings are correct to 7.3e-08 at k=2 — every micro-batch then carries the same
-#: mask count, so the wrong denominator cancels. A balanced mask would have made the k=2 cell
-#: GREEN against MB-4 and MB-5 and the row would have reported coverage it did not have.
+#: The MIXED masks are deliberately UNBALANCED across every split boundary this row uses. Measured
+#: at HEAD before the fix: with a mask alternating `[1,0,1,0,...]` the `1/M` and `B_m/B` weightings
+#: agree to 7.3e-08 at k=2, because every micro-batch then carries the same mask count and the
+#: wrong denominator cancels — so a balanced mask would report coverage this row does not have.
 _IFS = {"ones": lambda b: torch.ones(b, dtype=torch.uint8),
         "mixed": lambda b: torch.tensor([1] * (b - 4) + [0] * 4, dtype=torch.uint8),
         "zeros": lambda b: torch.zeros(b, dtype=torch.uint8),
@@ -340,13 +259,9 @@ _VV = {"mixed": lambda b: torch.tensor([1, 1] + [0] * (b - 5) + [1, 1, 1], dtype
 @pytest.mark.parametrize("ifs_name", sorted(_IFS))
 def test_of2_3a_split_normalisation_equals_unsplit_deterministic_mode(
         ifs_name: str, vv_name: str, k: int) -> None:
-    """OF2-3a — un-split vs the sum of split-and-denominator-weighted parts, fp32, NO model,
-    across mask VALUE x mask PRESENCE.
-
-    This is the exact-equivalence claim, so the tolerance is `rtol=1e-6 / atol=1e-8` on a
-    quantity that is algebraically identical — it is a floating-point-associativity bound, not
-    a discrepancy budget. MB-4 (`1/M` weighting) and MB-5 (`B_m/B` weighting) are GREEN on the
-    all-ones cell and RED on every mixed cell, which is why the cross exists."""
+    """Un-split vs the sum of split-and-denominator-weighted parts, fp32, NO model, across mask
+    VALUE x mask PRESENCE. `rtol=1e-6 / atol=1e-8` is a floating-point associativity bound on an
+    algebraically identical quantity, not a discrepancy budget."""
     b = 12
     logits, target, offsets, bin_logits, outcomes, counts = _algebra_fixture(b)
     ifs = _IFS[ifs_name](b)
@@ -378,15 +293,9 @@ def test_of2_3a_split_normalisation_equals_unsplit_deterministic_mode(
 
 
 def test_of2_3a_prime_the_denominator_asymmetry_is_pinned_on_a_non_binary_mask() -> None:
-    """OF2-3a' — the two denominators are DIFFERENT quantities and the implementation says so.
-
-    HEAD's policy denominator is a sum of mask VALUES (`losses.py:101-102` casts the mask to
-    the loss dtype and sums it); HEAD's value denominator is a COUNT of TRUE entries
-    (`dist65.py:58-62` divides by `kept.numel()`). They agree only while the masks are
-    strictly 0/1 — which they are in production (uint8 at `dispatch.py:126-128`) — so a
-    SYMMETRIC implementation passes every other row in this file while encoding a latent
-    divergence. The mask here is deliberately NOT 0/1, which is the only input on which the
-    two expressions can be told apart."""
+    """The two denominators are DIFFERENT quantities and the implementation says so: the policy
+    denominator sums mask VALUES, the value denominator COUNTS true entries. They agree only while
+    the masks are strictly 0/1, so the mask used here is deliberately NOT 0/1."""
     ifs = torch.tensor([2, 0, 3], dtype=torch.float32)     # sum of VALUES = 5
     vv = torch.tensor([2, 0, 3], dtype=torch.float32)      # count of TRUE  = 2
     p_den, v_den = graph_loss_denominators(ifs, vv, n_graphs=3)
@@ -400,8 +309,8 @@ def test_of2_3a_prime_the_denominator_asymmetry_is_pinned_on_a_non_binary_mask()
 
 
 def test_of2_3a_prime_bin_logits_row_count_is_asserted_at_the_call(tmp_path) -> None:
-    """OF2-3a' second limb — `bin_logits.shape[0] == n_graphs` is CHECKED at the call, not
-    assumed. The `value_valid is None` arm sets the value denominator to the graph count while
+    """`bin_logits.shape[0] == n_graphs` is CHECKED at the call, not assumed: the
+    `value_valid is None` arm sets the value denominator to the graph count while
     `binned_value_loss` reduces over `bin_logits` ROWS, so an unchecked mismatch would make
     `graph_loss_denominators` a second authority over a count it does not own."""
     trainer = H.tiny_graph_trainer(tmp_path)
@@ -424,66 +333,21 @@ def test_of2_3a_prime_bin_logits_row_count_is_asserted_at_the_call(tmp_path) -> 
             caps_provider=lambda: MicrobatchCapsSpec(max_edges=caps[0], max_nodes=caps[1]))
 
 
-# ═══ OF2-3b/c/d — end to end through the real Trainer ════════════════════════════════════
 #: Warm-up steps taken on BOTH arms, with identical non-binding caps, before the measured step.
 #:
-#: **WHY THIS EXISTS, IN ONE LINE: at a COLD AdamW the per-parameter difference between the
-#: arms is DOMINATED BY {~0, 2*lr}, so OF2-3d's <=1.0e-4 envelope is unreachable in that
-#: regime — the readings that fire its ABORT are all at exactly 2*lr, which is 200% of the
-#: update the envelope's own justification calls O(lr) and asks a 10% bound on.** The warm-up
-#: is not a convenience that makes a number pass and must never be read as one: it puts the
-#: optimizer in the regime the envelope was written for, and the regime run5 occupies after its
-#: first few steps. Deleting it does not make this row stricter; it makes the row measure a
-#: statistic that cannot express the property (RULED: conformance, not amendment — the envelope
-#: is PREREG_DFIX §4's and is UNCHANGED).
-#:
-#: **CORRECTION 1, from REVIEW-impl, applied here because this is the artifact readers read
-#: (R96): the quantisation is NOT to exactly two values.** An earlier version of this comment
-#: said "SIGN-QUANTISED to {0, 2*lr}" and then, four lines later, reported three discrete
-#: measured values — the middle one, 6.588e-04, is 0.66*lr and lands in the PASS-WITH-
-#: DISCLOSURE band, so the cold statistic CAN take an intermediate value. The sentence
-#: contradicted its own measurement one paragraph apart. "Dominated by {~0, 2*lr}, with an
-#: intermediate value observed" is what the numbers support, and the ruling survives it
-#: because every ABORT firing sat at exactly 2*lr.
-#:
-#: **CORRECTION 2: what warming gives up, ARGUED rather than assumed.** Warming does remove one
-#: sensitivity — an isolated sign flip on a near-zero-gradient parameter reads 2*lr cold and
-#: reads small warm. That is not lost DEFECT coverage, and the same measurement is why: those
-#: flips occur between arms whose loss is BIT-IDENTICAL and whose gradient cosine is 0.999993,
-#: i.e. they are the noise channel, not the defect channel. The defect channel is carried by
-#: OF2-3b (loss), OF2-3c (cosine) and OF2-5 (the clip COUNT, which no numeric regime can
-#: absorb) — none of which the warm-up touches. MB-4 and MB-6 are measured RED with it in
-#: place.
-#:
-#: Not a tolerance and not an envelope — it is the OPTIMIZER STATE the pre-registered
-#: statistic presumes.
-#:
-#: MEASURED, at a COLD optimizer, over 20 trials: `max|dtheta|` takes three discrete values —
-#: 1.5e-08, 6.588e-04 and 2.000e-03 — and lands PASS 7 / DISCLOSE 9 / ABORT 4. The mechanism
-#: was measured, not guessed: AdamW's FIRST step has `v_hat ~ g^2`, so the update collapses to
-#: `lr * sign(g)` and discards gradient magnitude entirely. The 2.000e-03 reading is one
-#: parameter of 2834 whose gradient flipped sign between the arms (+5.259e-04 vs -5.500e-04,
-#: on a parameter whose |g| is 3.1x BELOW the median |g|), giving |dtheta| = 2*lr = 1.999963e-03
-#: to five significant figures. Only 2 of 2834 parameters exceeded 1e-4 at all.
-#:
-#: So at step 1 the statistic has no resolution: it reads ~0 or ~2*lr depending on whether any
-#: single near-zero-gradient parameter flips, and it would ship a 20%-flaky ABORT that fires
-#: for a reason which is NOT the split. PREREG's own registered justification for the 1.0e-4
-#: bound is *"updates are O(lr) = O(1e-3), so this is a 10% bound on the update"* — which
-#: presumes an update PROPORTIONAL to the gradient, exactly what AdamW's first step is not.
-#: Three warm-up steps populate the second moment and restore that proportionality: measured
-#: over 20 trials, `max|dtheta|` becomes 1.371e-05 .. 3.523e-05, PASS 20/20.
-#:
-#: **NO ENVELOPE IS MOVED.** All three bands below are PREREG_DFIX §4's, unchanged. What
-#: changed is the instrument's optimizer state (R61: the threshold is not tuned; the
-#: measurement is made to measure what it says it measures).
+#: At a COLD AdamW the per-parameter difference between the arms is dominated by {~0, 2*lr}, so
+#: OF2-3d's <=1.0e-4 envelope is unreachable there: every reading that fires its ABORT sits at
+#: exactly 2*lr, 200% of the update the envelope asks a 10% bound on. Measured cold over 20 trials,
+#: `max|dtheta|` takes three values — 1.5e-08, 6.588e-04, 2.000e-03 — landing PASS 7 / DISCLOSE 9 /
+#: ABORT 4, because AdamW's first step collapses to `lr * sign(g)`. Three warm-up steps restore
+#: proportionality: over 20 trials `max|dtheta|` becomes 1.371e-05 .. 3.523e-05, PASS 20/20. NO
+#: ENVELOPE IS MOVED — what changed is the instrument's optimizer state.
 _WARMUP_STEPS = 3
 
 
 def _two_arm_step(tmp_path, m: int):
-    """One M=1 step and one M=k step over the SAME wire, from the SAME weights AND the same
-    warmed optimizer state. Both arms take the identical warm-up sequence, so the ONLY
-    difference between them at the measured step is the micro-batch partition."""
+    """One M=1 step and one M=k step over the SAME wire, from the SAME weights and the same warmed
+    optimizer state, so the only difference at the measured step is the micro-batch partition."""
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
     non_binding = H.non_binding_caps(replay.wire)
@@ -508,23 +372,10 @@ def _two_arm_step(tmp_path, m: int):
 
 @pytest.mark.parametrize("m", [2, 4])
 def test_of2_3bcd_split_step_matches_the_unsplit_step(tmp_path, m: int) -> None:
-    """OF2-3b/c/d — loss and grad-norm relative deltas, gradient cosine and post-step
-    parameter deltas, against PREREG_DFIX §4's envelopes, THREE BANDS each.
-
-    The middle band is a PASS-WITH-DISCLOSURE and is reported, not failed: asserting only the
-    PASS band would fire a HALT on a result the prereg explicitly accepts with disclosure.
-
-    Both arms are WARMED first (`_WARMUP_STEPS`) because a COLD AdamW's first step is
-    `lr*sign(g)`: the per-parameter arm difference is then dominated by `{~0, 2*lr}` (with an
-    intermediate value observed), and every reading that fires OF2-3d's ABORT sits at exactly
-    `2*lr` — 200% of the update its `<=1.0e-4` envelope asks a 10% bound on. See
-    `_WARMUP_STEPS` for the measurement, for what warming gives up, and for why that residue
-    is the noise channel rather than the defect channel. **No envelope here was moved** — all
-    three bands are PREREG_DFIX §4's.
-
-    DISCLOSED (PREREG §4, finding 6): this harness is where the split's summation-regrouping
-    and bf16-accumulation effects are SMALLEST. BF2-5 is the production-scale instrument; if
-    it cannot run, the production-scale claim is UNVERIFIED and may not be made."""
+    """Loss and grad-norm relative deltas, gradient cosine and post-step parameter deltas against
+    the pre-registered envelopes, THREE BANDS each: the middle band is a PASS-WITH-DISCLOSURE and
+    is reported, not failed. Both arms are WARMED first (see `_WARMUP_STEPS`), no envelope was
+    moved, and DISCLOSED: this harness is where the split's regrouping effects are SMALLEST."""
     (one, g1, p1), (split, gk, pk) = _two_arm_step(tmp_path, m)
     d_loss = abs(split["loss"] - one["loss"]) / max(abs(one["loss"]), 1e-12)
     d_gn = abs(split["grad_norm"] - one["grad_norm"]) / max(abs(one["grad_norm"]), 1e-12)
@@ -547,7 +398,6 @@ def test_of2_3bcd_split_step_matches_the_unsplit_step(tmp_path, m: int) -> None:
                   "threshold but outside its PASS band (PREREG_DFIX §4)")
 
 
-# ═══ OF2-4 / OF2-5 — cadence and clip-once ═══════════════════════════════════════════════
 def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
@@ -581,14 +431,10 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
 
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> None:
-    """OF2-4 — ONE of everything per training step, at M in {1, 2, 4}, **and the returned dict
-    carries all five keys at every M**.
-
-    The key-presence half is not decoration. `coordinator/step.py`'s grad-norm gate reads
-    `float(loss_info.get("grad_norm", 0.0))` and fires `grad_norm_hard_abort` off it, so a branch that returns a dict WITHOUT `grad_norm` silently feeds an armed
-    run-safety abort a `0.0` that always passes its threshold — and nothing else in this
-    repository notices (MB-22). Sweeping M includes M=1, the path production takes whenever
-    the caps do not bind, so the guarantee is not tested only on the exotic branch."""
+    """ONE of everything per training step, at M in {1, 2, 4}, and the returned dict carries all
+    five keys at every M. The key-presence half is not decoration: the coordinator's grad-norm gate
+    reads `float(loss_info.get("grad_norm", 0.0))`, so a branch returning a dict without
+    `grad_norm` silently feeds an armed abort a `0.0` that always passes its threshold."""
     r = _drive_with_spies(tmp_path, m)
     assert r.opt.zero_grads == 1, f"M={m}: {r.opt.zero_grads} zero_grad calls, want 1"
     assert r.opt.steps == 1, f"M={m}: {r.opt.steps} optimizer.step calls, want 1 (MB-7)"
@@ -610,17 +456,9 @@ def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> 
 
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: int) -> None:
-    """OF2-4's SEVENTH count — the EMA update, which the row's registered PASS column names
-    (`1 / 1 / 1 / 1 / 1 / +1 / 1`) and which the sibling row above cannot reach.
-
-    MEASURED, and this is why the leg exists separately: `tiny_graph_trainer` builds from
-    `configs/dev_example.yaml`, which declares no `ema` block, so `ema_model is None` and
-    `trainer/core.py`'s EMA branch NEVER EXECUTES in any default-fixture row — at any M. An
-    EMA update moved inside the accumulation loop (the MB-8 shape, one row over) would have
-    fired M times per training step and reded nothing behaviourally. This drive enables EMA
-    for real and counts the updates; `update_parameters` is additionally named in OF2-9 leg
-    2's `_FORBIDDEN_IN_LOOP`, so the same mutation dies structurally too, at any M and
-    whatever the fixture's EMA posture."""
+    """The SEVENTH count — the EMA update, which the sibling row above cannot reach: the default
+    fixture declares no `ema` block, so `ema_model is None` and the EMA branch never executes at
+    any M. This drive enables EMA for real and counts the updates."""
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
     trainer = H.ema_graph_trainer(tmp_path, update_every=1)
@@ -650,36 +488,29 @@ def test_of2_4_the_ema_update_fires_exactly_once_per_training_step(tmp_path, m: 
 
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_5_clip_grad_norm_is_called_exactly_once_for_any_m(tmp_path, m: int) -> None:
-    """OF2-5 — clipping is NONLINEAR in the whole gradient, so it happens ONCE, after the
-    accumulation. Per-micro clipping would feed `grad_norm_hard_abort` the norm of a FRACTION
-    of the gradient and rescale a live abort threshold by an operator-invisible M (MB-6).
-
-    A call COUNT cannot be absorbed by variance, which is why it is the primary assertion and
-    the numeric comparison below is the second detector rather than the only one."""
+    """Clipping is NONLINEAR in the whole gradient, so it happens ONCE, after the accumulation:
+    per-micro clipping would feed `grad_norm_hard_abort` the norm of a FRACTION of the gradient.
+    A call COUNT cannot be absorbed by variance, which is why it is the primary assertion."""
     r = _drive_with_spies(tmp_path, m)
     assert r.clips == 1, f"M={m}: clip_grad_norm_ called {r.clips} times, want exactly 1"
 
 
 def test_of2_5_grad_norm_matches_the_unsplit_steps_norm(tmp_path) -> None:
-    """OF2-5 second limb — the reported `grad_norm` is the norm of the ACCUMULATED gradient,
-    within PREREG's 5.0e-2. Compared against the UN-SPLIT step on the SAME wire, never against
-    a self-consistent value: MB-10 (return the last micro-batch's own norm) reads
-    approximately `1 - 1/M` off that comparison and exactly 0 off a self-comparison."""
+    """The reported `grad_norm` is the norm of the ACCUMULATED gradient, within the prereg's
+    5.0e-2 of the UN-SPLIT step on the SAME wire and never of a self-consistent value: the
+    last-micro-batch defect reads about `1 - 1/M` off that comparison and exactly 0 off a
+    self-comparison."""
     (one, _, _), (split, _, _) = _two_arm_step(tmp_path, 4)
     rel = abs(split["grad_norm"] - one["grad_norm"]) / max(abs(one["grad_norm"]), 1e-12)
     assert rel <= 5.0e-2, f"|dgrad_norm|/grad_norm = {rel:.3e} > 5.0e-2 (MB-10's surface)"
 
 
-# ═══ OF2-6 — the LAW-18 counter ══════════════════════════════════════════════════════════
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_6_graph_trainer_step_event_carries_the_counter_and_its_caps(tmp_path,
                                                                          m: int) -> None:
-    """OF2-6 — LAW-18: the lever logs its own fire-rate in-run, and the CAPS travel beside it.
-
-    A fire-rate of 1 is uninterpretable without the bound that produced it, and an event
-    carrying the numerator without the denominator is the shape R164 rejected. `M` is
-    computed HERE from the wire's own per-graph counts (MB-11's kill surface: a hard-coded
-    `microbatches: 1` in the payload), never read back out of the event."""
+    """LAW-18: the lever logs its own fire-rate in-run and the CAPS travel beside it, since a
+    fire-rate of 1 is uninterpretable without the bound that produced it. `M` is computed HERE from
+    the wire's own per-graph counts and never read back out of the event."""
     r = _drive_with_spies(tmp_path, m)
     ev = r.sink.named("trainer_step")[0]
     assert ev["representation"] == "graph"
@@ -695,15 +526,11 @@ def test_of2_6_graph_trainer_step_event_carries_the_counter_and_its_caps(tmp_pat
     assert (ev["caps_max_edges"], ev["caps_max_nodes"]) == caps
 
 
-# ═══ OF2-7 — the out-of-domain graph ═════════════════════════════════════════════════════
 @pytest.mark.parametrize("member", ["max_edges", "max_nodes"])
 def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_path,
                                                                          member: str) -> None:
-    """OF2-7 — R114's clause: never a silent truncation, never a silent drop.
-
-    Run for BOTH members, because an edges-only check passes the edge arm and leaves the node
-    arm unguarded. The absence assertions are the second half and they are not redundant:
-    MB-14 moves the check AFTER `optimizer.zero_grad()`, which still raises and still corrupts
+    """Never a silent truncation, never a silent drop, for BOTH members. The absence assertions are
+    not redundant: moving the check after `optimizer.zero_grad()` still raises and still corrupts
     the step, and only an ABSENCE assertion sees it."""
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
@@ -735,13 +562,10 @@ def test_of2_7_a_single_over_cap_graph_raises_and_nothing_partial_happens(tmp_pa
     assert sorted((tmp_path / "ckpt").glob("*.ckpt")) == []
 
 
-# ═══ OF2-11 — determinism ════════════════════════════════════════════════════════════════
 def test_of2_11_partition_boundaries_are_identical_over_100_repeats() -> None:
-    """OF2-11 — the partition is a pure function of `(ec, nc, caps)`. Byte-identical
-    boundaries over 100 repeats; a host-state dependence shows as a single differing tuple.
-
-    Disclosed asymmetry (MB-2): a bin-packing reorder is still DETERMINISTIC, so this row
-    cannot see it. Only OF2-1's ordered-cover property can."""
+    """The partition is a pure function of `(ec, nc, caps)`: byte-identical boundaries over 100
+    repeats, so a host-state dependence shows as a single differing tuple. Disclosed asymmetry: a
+    bin-packing reorder is still DETERMINISTIC, so only the ordered-cover property can see it."""
     ec = np.array([5, 9, 3, 9, 2, 11, 4], dtype=np.int64)
     nc = np.array([4, 2, 7, 1, 7, 3, 5], dtype=np.int64)
     first = plan_microbatches(_offsets(ec), _offsets(nc), 16, 12)
@@ -751,10 +575,9 @@ def test_of2_11_partition_boundaries_are_identical_over_100_repeats() -> None:
 
 
 def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, capsys) -> None:
-    """OF2-11 second limb — RECORDED, NOT GATED. `index_add_`'s CUDA backward is an atomic
-    scatter-add that torch documents as nondeterministic; whether THIS build rejects it under
-    `use_deterministic_algorithms(True)` is data this phase prints rather than a property it
-    asserts. Asserting it would gate on a torch implementation detail."""
+    """RECORDED, NOT GATED. `index_add_`'s CUDA backward is an atomic scatter-add torch documents
+    as nondeterministic; whether THIS build rejects it under determinism is data this phase prints
+    rather than a property it asserts, since asserting it would gate on a torch detail."""
     buf = H.uniform_graph_buffer(8)
     replay = H.ReplayWireBuffer(buf, 4)
     caps = H.non_binding_caps(replay.wire)
@@ -774,13 +597,10 @@ def test_of2_11_records_whether_deterministic_mode_rejects_index_add(tmp_path, c
     assert outcome  # the row's content is the RECORD; there is nothing here to gate
 
 
-# ═══ OF2-15 — the ROUTE-SCOPED resolution ════════════════════════════════════════════════
 def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinator:
-    """A real `StepCoordinator` over the given `full_config`. The collaborators this row does
-    not exercise are `None`; the ONE fake beside them is the step config (a namespace rather
-    than the frozen `StepCoordinatorConfig`, whose every field is required by invariant —
-    `coordinator/config.py:283`). `_run_training_step` reads only `batch_size`, `augment` and
-    `recency_weight` off it, and none of the three is this row's subject."""
+    """A real `StepCoordinator` over the given `full_config`. The collaborators this row does not
+    exercise are `None`; the ONE fake is the step config, a namespace rather than the frozen
+    `StepCoordinatorConfig`, and `_run_training_step` reads only three fields off it."""
     return StepCoordinator(
         monitor_cfg=MonitorConfig(),
         trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
@@ -791,10 +611,9 @@ def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinato
 
 
 def test_of2_15b_a_graph_route_without_the_block_raises_by_name() -> None:
-    """OF2-15(b) — the ⊕ half. An absent cap on the graph route is a NAMED raise, never a
-    default. MB-27's mutation is `full_config.get("train", {})`: a cap that silently becomes
-    absent-and-unbounded REPORTS AS PRESENT, which is the phantom-gate class (R4/LAW-07) and
-    the exit the dispatcher ruled out in advance (F2-ABORT-5)."""
+    """An absent cap on the graph route is a NAMED raise, never a default: a cap that silently
+    becomes absent-and-unbounded REPORTS AS PRESENT, which is the phantom-gate class and the exit
+    ruled out in advance."""
     for cfg, level in ((dict(_TRAINLESS_GRAPH), "train"),
                        ({"identity": _TRAINLESS_GRAPH["identity"], "train": {}},
                         "microbatch_caps"),
@@ -808,8 +627,8 @@ def test_of2_15b_a_graph_route_without_the_block_raises_by_name() -> None:
 
 
 def test_of2_15b_the_graph_route_propagates_the_named_absence(tmp_path) -> None:
-    """OF2-15(b) second limb — `_graph_step` does not wrap it, does not catch it and has no
-    fallback arm, so the named error reaches the caller of `run_declared_train_step`."""
+    """`_graph_step` does not wrap it, does not catch it and has no fallback arm, so the named
+    error reaches the caller of `run_declared_train_step`."""
     coord = _coordinator(dict(_TRAINLESS_GRAPH), None, None)
     trainer = H.tiny_graph_trainer(tmp_path)
     replay = H.ReplayWireBuffer(H.uniform_graph_buffer(8), 4)
@@ -821,8 +640,8 @@ def test_of2_15b_the_graph_route_propagates_the_named_absence(tmp_path) -> None:
 
 
 def test_of2_15_the_resolver_is_memoised_and_reads_the_config_once() -> None:
-    """OF2-15 third limb — `_microbatch_caps` mirrors `_step_spec` (`step.py:936-942`) in
-    MEMOISATION, so the resolver runs once per coordinator however many steps a burst takes."""
+    """`_microbatch_caps` mirrors `_step_spec` in MEMOISATION, so the resolver runs once per
+    coordinator however many steps a burst takes."""
     cfg = {"identity": _TRAINLESS_GRAPH["identity"],
            "train": {"microbatch_caps": {"max_edges": 11, "max_nodes": 7}}}
     coord = _coordinator(cfg, None, None)
@@ -831,24 +650,18 @@ def test_of2_15_the_resolver_is_memoised_and_reads_the_config_once() -> None:
     assert (first.max_edges, first.max_nodes) == (11, 7)
 
 
-# ═══ OF2-16 — the empty batch (DEFENSIVE) ════════════════════════════════════════════════
 def test_of2_16_zero_graphs_plan_to_zero_parts() -> None:
-    """OF2-16 — `plan_microbatches` returns `()` at `B == 0`. A naive reading of the greedy
-    loop appends a trailing part unconditionally and yields `[(0, 0)]`: one EMPTY part, which
-    would then collate a zero-graph batch and produce a gradient-free loss."""
+    """`plan_microbatches` returns `()` at `B == 0`. A naive reading of the greedy loop appends a
+    trailing part unconditionally and yields `[(0, 0)]`: one EMPTY part, which would then collate
+    a zero-graph batch and produce a gradient-free loss."""
     empty = np.array([0], dtype=np.int64)
     assert plan_microbatches(empty, empty, 10, 10) == ()
 
 
 def test_of2_16_a_zero_part_step_raises_before_zero_grad(tmp_path) -> None:
-    """OF2-16 — a step with no graphs cannot produce a gradient, so the only honest outcomes
-    are a raise or a silent no-op, and a silent no-op would let a run report steps it never
-    took (LAW-14's posture, MB-28).
-
-    **DECLARED DEFENSIVE.** Whether `sample_graph_batch` can return `n_graphs == 0` through
-    the coordinator's `min_buf_size` gate is UNVERIFIED — DESIGN_DFIX §3.3 names the settling
-    measurement and this row does not stand in for it. This is a producer test for a GUARD,
-    and it may not be cited as evidence that `B == 0` occurs."""
+    """A step with no graphs cannot produce a gradient, so the only honest outcomes are a raise or
+    a silent no-op, and a silent no-op would let a run report steps it never took. DECLARED
+    DEFENSIVE: reachability through the coordinator's `min_buf_size` gate is UNVERIFIED."""
     sink = H.SpySink()
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=1)
     spy = H.OptimizerSpy(trainer.optimizer)

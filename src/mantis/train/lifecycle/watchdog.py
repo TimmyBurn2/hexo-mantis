@@ -1,15 +1,9 @@
-"""Self-play stall watchdog (repo_design §11; WP10 §a.2 / §c.3).
+"""Self-play stall watchdog: fire when self-play stops completing games.
 
-Extracted from the old `training/step_coordinator.py` stall-watchdog slice (L193-198,
-435-448, 678-716, 842-850) into a standalone armable/fireable unit so the ⊕ lifecycle
-suite tests it without a full StepCoordinator; the coordinator drives it via
-``watchdog.tick(...)`` (Slice-2 wiring). Behaviour byte-identical: always armed
-(arm-log unconditional), ``tick`` resets the stall clock on new games, fire → loud log +
-best-effort snapshot to a DISTINCT ``.watchdog`` path + ``exit_fn(SELFPLAY_STALL_EXIT_CODE)``.
-
-Origin (2026-07-11 run2 eval-boundary wedge): a wedged self-play/eval GPU deadlock froze
-games for ~45h while the main loop looped forever. 30 min ≫ any legitimate zero-games gap.
-``timeout_sec <= 0`` disables the fire (documented off switch); the arm-log still emits.
+Always armed (the arm-log is unconditional); ``tick`` resets the stall clock on new games, and
+a fire is a loud log plus a best-effort snapshot to a DISTINCT ``.watchdog`` path plus
+``exit_fn``. Origin: a wedged self-play/eval GPU deadlock froze games for ~45 h while the main
+loop looped forever. ``timeout_sec <= 0`` disables the fire; the arm-log still emits.
 """
 from __future__ import annotations
 
@@ -32,23 +26,16 @@ SELFPLAY_STALL_EXIT_CODE: int = 42
 
 
 def watchdog_snapshot_path(canonical: Path) -> Path:
-    """The fire-time buffer-snapshot path: ``<canonical>.watchdog``.
-
-    The watchdog NEVER writes the canonical resume buffer — its non-atomic save fires
-    exactly in the abnormal-exit regime where a mid-write kill is most likely, and a
-    separate path can never truncate the known-good ``replay_buffer.bin``.
-    """
+    """The fire-time buffer-snapshot path: ``<canonical>.watchdog``. The watchdog never writes
+    the canonical resume buffer, whose non-atomic save could be killed mid-write."""
     return Path(str(canonical) + ".watchdog")
 
 
 class StallWatchdog:
-    """Fail-fast watchdog: fire when ``games_completed`` stops advancing for
-    ``timeout_sec``.
+    """Fail-fast watchdog: fire when ``games_completed`` stops advancing for ``timeout_sec``.
 
-    Collaborators are injected (repo_design §11): ``clock`` (a callable returning the
-    current monotonic time), ``sink`` (the EventSink), ``exit_fn`` (defaults to
-    ``os._exit`` so a wedged clean-shutdown attempt is avoided), ``save_snapshot`` (the
-    best-effort buffer snapshot closure).
+    Collaborators are injected, and ``exit_fn`` defaults to ``os._exit`` so a wedged
+    clean-shutdown attempt is avoided.
     """
 
     def __init__(
@@ -67,42 +54,26 @@ class StallWatchdog:
         self._sink = sink
         self._exit_fn = exit_fn
         self._save_snapshot = save_snapshot
-        # `save_model` is what makes a stall abort SURVIVABLE. The fire path used to save the
-        # replay buffer and nothing else, so a run wedged at step N exited with its positions
-        # preserved and its WEIGHTS GONE back to the last periodic checkpoint — and
-        # `train.checkpoint_interval` is 0 in most shipped configs (nonzero only on
-        # `shakedown_20260807.yaml`), so "the last periodic checkpoint" is routinely NONE on
-        # the rest. The buffer is the cheap half to regenerate; the weights are the expensive
-        # half, and they were the half being dropped.
-        #
-        # Optional (`None`) rather than required because the lifecycle ⊕ suite constructs
-        # this unit without a trainer; a production wiring that omits it loses the weights
-        # save, which is why both production call sites pass it.
+        # `save_model` is what makes a stall abort SURVIVABLE: the fire path saved the replay
+        # buffer and nothing else, so a wedged run kept its positions and lost its WEIGHTS.
         self._save_model = save_model
-        # LAW-14: an optional effect in a fire path is COUNTED, never swallowed. Owned here
-        # when not injected, mirroring `HeartbeatWatchdog`, so the count always exists and is
-        # readable via `.counters` even in a harness that injects nothing.
+        # An optional effect in a fire path is COUNTED, never swallowed. Owned here when not
+        # injected, so the count is readable via `.counters` even in a harness.
         self._counters = counters if counters is not None else BestEffortCounters()
         self._last_games = 0
         self._last_progress_time = 0.0
 
     @property
     def counters(self) -> BestEffortCounters:
-        """Best-effort failure counts for the fire path (`watchdog_snapshot`,
-        `watchdog_model_save`). Reads 0 for a label that never failed."""
+        """Best-effort failure counts for the fire path; 0 for a label that never failed."""
         return self._counters
 
     def arm(self, games_completed: int) -> None:
-        """Seed the stall clock + games count and emit ``selfplay_stall_watchdog_armed``.
-
-        Always armed (context law): the arm-log fires regardless of config so a
-        disabled/misconfigured watchdog (``timeout_sec <= 0`` or a non-finite value that
-        silently never fires) is VISIBLE, not silent.
-        """
+        """Seed the stall clock + games count and emit ``selfplay_stall_watchdog_armed``, which
+        fires regardless of config so a disabled watchdog is VISIBLE rather than silent."""
         self._last_games = games_completed
         self._last_progress_time = self._clock()
-        # None-sink tolerant (house emit convention): a harness coordinator built with
-        # sink=None must still construct/arm; a real run always injects the JSONL sink.
+        # None-sink tolerant: a harness coordinator built with sink=None must still arm.
         emit_via(
             self._sink,
             {
@@ -113,12 +84,7 @@ class StallWatchdog:
         )
 
     def tick(self, games_completed: int, now: float) -> None:
-        """Advance the watchdog: reset the stall clock on new games, else fire on stall.
-
-        A new game (``games_completed`` increased) resets ``_last_games`` +
-        ``_last_progress_time`` to ``now``. Otherwise, when ``timeout_sec > 0`` and the
-        stall has reached the timeout, fire.
-        """
+        """Advance the watchdog: reset the stall clock on new games, else fire on stall."""
         if games_completed > self._last_games:
             self._last_games = games_completed
             self._last_progress_time = now
@@ -128,8 +94,8 @@ class StallWatchdog:
                 self._fire(stalled)
 
     def _fire(self, stalled_for: float) -> None:
-        """LOUD log → best-effort snapshot → exit with a distinct code. A clean shutdown
-        is avoided on purpose (it would hang on the wedged GPU)."""
+        """LOUD log → best-effort snapshot → exit with a distinct code; a clean shutdown would
+        hang on the wedged GPU."""
         emit_via(
             self._sink,
             {
@@ -145,14 +111,9 @@ class StallWatchdog:
             stalled_for,
             self._timeout,
         )
-        # MODEL FIRST, then buffer. Both are best-effort — a fire path must not be blocked
-        # by a save — but they are no longer SILENT: `except Exception: pass` swallowed the
-        # failure uncounted, which is precisely what LAW-14 bans and what made a stall abort
-        # that also failed to save look identical to one that saved fine.
-        #
-        # The ordering is deliberate and is the whole point of item 4(b): the weights are the
-        # expensive half to regenerate and the half that was being dropped, so they are
-        # written before the buffer gets a chance to consume the remaining time or disk.
+        # MODEL FIRST, then buffer: the weights are the expensive half to regenerate, so they
+        # are written before the buffer can consume the remaining time or disk. Both are
+        # best-effort but COUNTED, never swallowed.
         if self._save_model is not None:
             best_effort("watchdog_model_save", self._save_model, counters=self._counters)
         best_effort("watchdog_snapshot", self._save_snapshot, counters=self._counters)

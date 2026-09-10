@@ -2,15 +2,12 @@
 // the three module fns that feed the import-time registry handshake are ONE surface —
 // splitting the per-field getters from the sha functions they are read beside would
 // scatter the registry's whole Python face across files.
-//! Python-visible `RegistrySpec` — wraps `&'static mantis_encoding::RegistrySpec`
-//! (`Copy`, read-only) — plus the NEW-BUILD module fns `all_specs()`,
-//! `registry_sha()`, `registry_sha_hex()` over the existing Rust primitives.
+//! Python-visible `RegistrySpec` (a read-only `Copy` wrapper over the `&'static` spec) plus the
+//! module fns `all_specs()`, `registry_sha()` and `registry_sha_hex()`.
 //!
-//! `all_specs()` returns the full spec set in ONE call (kills the Python shim's
-//! per-name `_load` loop + `_REGISTERED_NAMES`); `registry_sha()`/`registry_sha_hex()`
-//! feed the import-time on-disk-vs-compiled registry handshake. F-42: every
-//! pyclass sets `module = "mantis._engine"` explicitly (PyO3's default is the
-//! `'builtins'` wart).
+//! `all_specs()` returns the full spec set in ONE call; the two sha fns feed the import-time
+//! on-disk-vs-compiled registry handshake. Every pyclass sets `module = "mantis._engine"`
+//! explicitly, because PyO3 otherwise reports `'builtins'`.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -18,15 +15,11 @@ use pyo3::types::{PyBytes, PyType};
 
 use mantis_encoding::{PolicyPool, RegistrySpec as RustRegistrySpec, ValuePool};
 
-/// Python-visible RegistrySpec — wraps `&'static mantis_encoding::RegistrySpec`.
-/// Returned by `RegistrySpec.from_registry(name)` and `all_specs()`. Carries
-/// derived shape accessors (`state_stride()`, `policy_stride()`) so PyO3 callers
-/// constructing `SelfPlayRunner` / `InferenceBatcher` can derive
-/// `feature_len` / `policy_len` from the canonical registry instead of
-/// duplicating the per-encoding shape table.
+/// Python-visible RegistrySpec, returned by `RegistrySpec.from_registry(name)` and
+/// `all_specs()`. Its derived shape accessors let PyO3 callers read `feature_len` /
+/// `policy_len` off the canonical registry instead of duplicating the shape table.
 ///
-/// Read-only — clone is `Copy` (just the &'static pointer). `from_py_object`
-/// opts into pyo3 0.28's `FromPyObject` derivation for a `Clone` pyclass.
+/// Read-only — clone is `Copy`, just the `&'static` pointer.
 #[pyclass(name = "RegistrySpec", module = "mantis._engine", from_py_object)]
 #[derive(Clone, Copy)]
 pub struct PyRegistrySpec {
@@ -79,8 +72,7 @@ impl PyRegistrySpec {
     pub fn is_multi_window(&self) -> bool {
         self.inner.is_multi_window
     }
-    /// Wire-format pool enums exposed as strings (matches the Python `Literal`
-    /// shape returned by the retired @dataclass `value_pool` / `policy_pool` fields).
+    /// Wire-format pool enums exposed as strings, matching the Python `Literal` shape.
     #[getter]
     pub fn value_pool(&self) -> &'static str {
         match self.inner.value_pool {
@@ -128,9 +120,7 @@ impl PyRegistrySpec {
         self.inner.k_max
     }
 
-    // ── GNN-integration schema — representation discriminant + graph geom.
-    /// "grid" (dense CNN planes) | "graph" (axis-graph GNN). Grid for every
-    /// pre-graph encoding.
+    /// The representation discriminant, as a string.
     #[getter]
     pub fn representation(&self) -> &'static str {
         self.inner.representation.as_str()
@@ -176,8 +166,7 @@ impl PyRegistrySpec {
         self.inner.builder_impl_required
     }
 
-    /// Alias for `policy_logit_count` — matches the retired Python @dataclass
-    /// `n_actions` @property.
+    /// Alias for `policy_logit_count`.
     #[getter]
     pub fn n_actions(&self) -> usize {
         self.inner.policy_logit_count
@@ -216,9 +205,7 @@ impl PyRegistrySpec {
         )
     }
 
-    /// Registry-backed lookup. Returns a `PyRegistrySpec` (full-schema record
-    /// incl. policy_logit_count + n_planes). Raises `ValueError` on an unknown
-    /// name (listing the registered set).
+    /// Registry-backed lookup; raises `ValueError` on an unknown name, listing the registered set.
     #[classmethod]
     pub fn from_registry(_cls: &Bound<'_, PyType>, name: &str) -> PyResult<Self> {
         if let Some(spec) = mantis_encoding::lookup(name) {
@@ -234,23 +221,18 @@ impl PyRegistrySpec {
 }
 
 impl PyRegistrySpec {
-    /// Crate-internal accessor — used by `SelfPlayRunner::new` /
-    /// `InferenceBatcher::new` (Slice R2) to read the static pointer.
+    /// Crate-internal accessor for the static pointer.
     pub(crate) fn inner(&self) -> &'static RustRegistrySpec {
         self.inner
     }
 
-    /// Construct from a `&'static RegistrySpec` — lets Rust integration tests
-    /// (and R2 bindings) pass a `PyRegistrySpec` without going through the
-    /// Python boundary.
+    /// Construct from a `&'static RegistrySpec`, so Rust callers need no Python boundary.
     pub(crate) fn from_static(spec: &'static RustRegistrySpec) -> Self {
         PyRegistrySpec { inner: spec }
     }
 }
 
-/// Every registered encoding spec, as a list of `RegistrySpec` pyclasses, from
-/// ONE call over `mantis_encoding::all_specs()`. The Python shim builds its cache
-/// from this (replacing the per-name `_load` loop + the killed `_REGISTERED_NAMES`).
+/// Every registered encoding spec in ONE call; the Python shim builds its cache from this.
 #[pyfunction]
 pub(crate) fn all_specs() -> Vec<PyRegistrySpec> {
     mantis_encoding::all_specs()
@@ -258,9 +240,8 @@ pub(crate) fn all_specs() -> Vec<PyRegistrySpec> {
         .collect()
 }
 
-/// The 32 raw bytes of `sha256(embedded registry.toml)`. The Python import-time
-/// handshake hashes the on-disk `registry.toml` and compares to this, hard-
-/// erroring on drift (a stale `.so` / stale registry cannot silently serve).
+/// The 32 raw bytes of `sha256(embedded registry.toml)`. The Python import-time handshake
+/// compares the on-disk file against this, so a stale `.so` cannot silently serve.
 #[pyfunction]
 pub(crate) fn registry_sha<'py>(py: Python<'py>) -> Bound<'py, PyBytes> {
     PyBytes::new(py, &mantis_encoding::registry_sha())
@@ -272,15 +253,9 @@ pub(crate) fn registry_sha_hex() -> &'static str {
     mantis_encoding::registry_sha_hex()
 }
 
-/// Register the `RegistrySpec` pyclass + the NEW-BUILD module fns and the wire-format
-/// constants into `_engine`. Called by Slice ASM's `#[pymodule]` assembly.
-///
-/// AUDIT-1 F-42, the module constants. The v6 source-plane indices, the hex axis table and
-/// the win length were each typed on BOTH sides of the FFI with nothing pinning across it:
-/// `encoding/resolvers.py` carried `_CUR_STONE_SRC_PLANE = 0 … _PLY_PARITY_SRC_PLANE = 17`
-/// beside `mantis_encoding::encode::{MY_STONE_PLANE … PLY_PARITY_PLANE}`, and the three axes
-/// were typed in three Python modules beside `mantis_core::board::HEX_AXES`. Python pinned
-/// Python and Rust pinned a literal. These exports are what a cross-FFI pin can read.
+/// Register the `RegistrySpec` pyclass, the module fns and the wire-format constants into
+/// `_engine`. The constants are exported so a cross-FFI pin has one authority to read, rather
+/// than the same literals typed on both sides with nothing pinning across.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyRegistrySpec>()?;
     m.add_function(wrap_pyfunction!(all_specs, m)?)?;
@@ -313,8 +288,7 @@ mod tests {
             v
         };
         assert_eq!(via_fn, registered_names());
-        // Pin the registered set by NAME (registry.toml authority; gnn_axis_r8 = R328(b)).
-        // The three grid rows went with the dense path (R346(f)).
+        // Pin the registered set by NAME, with registry.toml as the authority.
         assert_eq!(
             via_fn,
             vec!["gnn_axis_r8", "gnn_axis_v1"],

@@ -1,18 +1,7 @@
-"""⊕ WP11-A — eval schema extension + config remint (CI gate 7 adjunct; O15 registry).
+"""The eval schema extension and the config remint that must carry it (CI gate 7 adjunct).
 
-RED-at-import: NONE of the fields below (`eval.gate`, `eval.ladder`,
-`eval.random_floor_games`, `eval.worker_device`,
-`eval.round_timeout_sec`, `eval.worker_kill_grace_sec`) exist on today's `EvalConfig`
-(src/mantis/config/schema.py, already read — today's EvalConfig has exactly
-`random_model_sims` + `sealbot_model_sims`). Every config file at HEAD (configs/*.yaml,
-tools/config_templates/{dev,grid}.yaml) also lacks them. `mantis.config.loader.load_config`
-and `mantis.config.schema.RunConfig` ALREADY EXIST and import fine — every test here is
-RED-BY-ASSERTION (a `pydantic.ValidationError` on load, or an equality/membership assertion
-that is false today), never a collection-time ModuleNotFoundError. `configs/run6.yaml` is
-the run3-PARITY config (its ladder is asserted verbatim against the six STATE §5 rungs
-elsewhere in this WP — design §b); `dev_example.yaml` / `smoke_preflight_armed.yaml` /
-`smoke_radius_curriculum.yaml` / `sustained_kcluster.yaml` are the dev/smoke templates
-(adjudication A-2: parity mints `random_floor_games=0`, dev/smoke mint `4`).
+Every committed config and template must validate with a populated `eval.ladder`, and the
+new leaf keys must each have a named consumer.
 """
 from __future__ import annotations
 
@@ -32,17 +21,15 @@ _TEMPLATES_DIR = _REPO / "tools" / "config_templates"
 _PARITY_CONFIG = _CONFIGS_DIR / "run6.yaml"
 _DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 
-# The run3-parity gate recipe (deploy_strength_eval.py:249-274, round_robin.py:168; adjudication
-# A-3 for seed_base). NO screen_confirm_hi key (MUST-FIX 1 — inert in run3, non-ported).
+# The gate recipe. NO screen_confirm_hi key — it was inert and deliberately not ported.
 _PARITY_GATE = {
     "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
     "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
     "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625,
 }
 
-# The minted ladder (design §c.1 — verbatim, order binding). R346(f) deleted five of the six
-# rungs: four belonged to two bot kinds that could never resolve, and the fifth was a second
-# sealbot depth R326(e) excluded from the battery on arithmetic.
+# The minted ladder, order binding. One rung: the others named bot kinds that could never
+# resolve, or a second sealbot depth excluded from the battery on arithmetic.
 _PARITY_RUNGS = [
     {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
      "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
@@ -59,9 +46,7 @@ _PARITY_LADDER = {
 
 
 def _config_paths() -> list[Path]:
-    # ADJ-13 F-1 corrective pass (recheck R-5): the ONE discovery authority, not a
-    # sixth flat glob. A flat `*.yaml` census is blind to `configs/prod/run6.yaml`,
-    # which gate 7 and gate 12 both now make legal.
+    # the ONE discovery authority: a flat `*.yaml` census is blind to `configs/prod/`
     paths = discover_configs(_CONFIGS_DIR)
     for name in ("dev.yaml", "grid.yaml"):
         p = _TEMPLATES_DIR / name
@@ -72,9 +57,7 @@ def _config_paths() -> list[Path]:
 
 
 def test_all_configs_and_templates_carry_the_new_eval_block_and_validate() -> None:
-    """CI gate 7 adjunct: every committed config + template must validate with `eval.ladder`
-    present. RED today: none carry `eval.gate`/`eval.ladder`, so every load raises
-    ValidationError (missing required fields)."""
+    """Every committed config and template validates with a populated `eval.ladder`."""
     failures: list[str] = []
     for path in _config_paths():
         try:
@@ -91,10 +74,7 @@ def test_all_configs_and_templates_carry_the_new_eval_block_and_validate() -> No
 
 
 def test_run3_parity_values_pinned() -> None:
-    """96/128 sims verbatim + the full run3-parity gate recipe, pinned against
-    `configs/run6.yaml` — including seed_base=20260625 (run3's ACTUAL gate default,
-    deploy_strength_eval.py:272 — adjudication A-3; NOT 42, the legacy evaluator's default,
-    eval/defaults.py:31)."""
+    """Pin the sims pair and the full gate recipe against the production config."""
     cfg = load_config(_PARITY_CONFIG)
     assert cfg.eval.random_model_sims == 96
     assert cfg.eval.sealbot_model_sims == 128
@@ -115,10 +95,8 @@ def test_run3_parity_values_pinned() -> None:
 
 
 def test_screen_confirm_hi_key_is_rejected_everywhere() -> None:
-    """A minted config carrying `screen_confirm_hi` (the inert, non-ported run3 knob) must
-    be REJECTED by `extra="forbid"` — constructed directly against a GateConfig-shaped
-    payload (schema-level; no need for a full RunConfig round trip)."""
-    from mantis.config.schema import GateConfig  # RED-at-import: not yet defined
+    """A config carrying the non-ported `screen_confirm_hi` must be REJECTED by the schema."""
+    from mantis.config.schema import GateConfig
 
     payload = dict(_PARITY_GATE)
     payload["screen_confirm_hi"] = 1.0
@@ -127,9 +105,8 @@ def test_screen_confirm_hi_key_is_rejected_everywhere() -> None:
 
 
 def test_minted_configs_carry_the_ladder_verbatim() -> None:
-    """`configs/run6.yaml`'s ladder must equal the minted rungs, in order, verbatim;
-    0.75/0.65/3 must appear ONLY as field VALUES, never as source-code literals under
-    src/mantis/eval (rule 4 — schema fields, not literals)."""
+    """The ladder equals the minted rungs in order, and its thresholds are field VALUES only,
+    never source-code literals under src/mantis/eval."""
     cfg = load_config(_PARITY_CONFIG)
     ladder = cfg.eval.ladder
     assert [r.name for r in ladder.rungs] == [r["name"] for r in _PARITY_RUNGS], (
@@ -153,11 +130,8 @@ def test_minted_configs_carry_the_ladder_verbatim() -> None:
 
 
 def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> None:
-    """Adjudication A-2: the run3-parity config mints `random_floor_games=0` (run3 disabled
-    random); dev/smoke templates mint a small non-zero n (4) so the headless end-to-end
-    round exercises a REAL bot and the resolver key has a live EXERCISED consumer."""
-    # R346(f) deleted the run3-parity config with the rest of the prune; run6 is the one
-    # production config left and it mints the OPERATOR-OWED 20 (R147/R272(d)), not run3's 0.
+    """The production config mints the operator-owed `random_floor_games=20`; dev/smoke mint 4,
+    so the headless round exercises a REAL bot and the key has a live EXERCISED consumer."""
     parity_cfg = load_config(_PARITY_CONFIG)
     assert parity_cfg.eval.random_floor_games == 20, (
         "run6 mints the operator-owed random_floor_games=20 (R147/R272(d))"
@@ -171,8 +145,7 @@ def test_parity_config_mints_random_floor_disabled_and_dev_smoke_enabled() -> No
         )
 
 
-# The NEW leaf keys this WP's schema extension must introduce (forward-looking pin: asserted
-# against the FUTURE schema's leaf-set, which has since landed).
+# The eval leaf keys the schema must carry, each against its named consumer.
 _NEW_LEAF_CONSUMERS = {
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",
@@ -204,12 +177,11 @@ _NEW_LEAF_CONSUMERS = {
 
 
 def test_new_keys_all_have_consumers_in_o15_registry() -> None:
-    """Forward-looking pin: once the schema extension lands, every new EvalConfig/
-    GateConfig/LadderConfig leaf must be present — no more, no fewer than the registry this
-    test defines. Historically RED: when this oracle was written none of these leaves existed.
-    The walker is `mantis.config.schema.leaf_paths` — this file used to carry a pre-DR-6 copy
-    that stopped at `Block | None` and therefore walked to 182 where the gate walked to 191
-    (AUDIT-1 F-44), while its own docstring claimed to mirror the others."""
+    """Every registered eval leaf is present in the live schema.
+
+    The walker is the schema's own `leaf_paths`: a local copy once stopped at `Block | None`
+    and walked to a different leaf count than the gate did.
+    """
     leaves = set(leaf_paths(RunConfig))
     missing = set(_NEW_LEAF_CONSUMERS) - leaves
     assert missing == set(), (
@@ -219,9 +191,7 @@ def test_new_keys_all_have_consumers_in_o15_registry() -> None:
 
 
 def test_configs_have_no_unminted_manual_edits_signature() -> None:
-    """Every re-minted config keeps the `minted-by: tools/mint_config.py` header stamp
-    (repo_design §5 — configs are minted, never hand-varied) even after the eval-block
-    remint; a config missing the stamp would indicate a manual edit slipped past minting."""
+    """Every config keeps its mint-provenance stamp; a missing one means a hand edit."""
     for path in _config_paths():
         if path.parent == _TEMPLATES_DIR:
             continue  # templates are hand-authored sources, not minted outputs

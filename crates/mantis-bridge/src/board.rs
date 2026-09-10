@@ -1,18 +1,8 @@
-// Exceeds the 300-line soft cap (R8): the full PyBoard surface (~40 methods)
-// plus the inlined threat-viewer scanner (dropped from mantis-core — it is a
-// viewer-only pure function with no core/search/selfplay consumer) port as one
-// line-auditable unit; splitting them would need one more module file than the crate
-// already carries (AUDIT-1 F-52: this said "a 7th" over eleven — a count in a design
-// argument that had gone stale without the argument changing)
-// R1 write scope) for one private helper.
-//! Python-visible Board wrapper over `mantis_core::Board`.
-//!
-//! The new `mantis_core::Board` carries plain geometry and NO encoding ref (the
-//! DAG severed spec resolution from core), so this wrapper HOLDS the encoding
-//! binding itself (`Option<&'static RegistrySpec>`): `with_encoding_name` sets it
-//! via `mantis_encoding::lookup`; `to_tensor` routes through it +
-//! `Board` is `Send + !Sync` (deliberately no `unsafe impl Sync`) — the bridge
-//! brings single-thread Python ownership via `#[pyclass(unsendable)]` (LOCKED #3).
+// Exceeds the 300-line soft cap (R8): the PyBoard surface plus the inlined threat-viewer
+// scanner are one auditable unit; splitting them adds a module file for one private helper.
+//! Python-visible Board wrapper over `mantis_core::Board`, which carries plain geometry and NO
+//! encoding ref — so this wrapper HOLDS the encoding binding and `with_encoding_name` sets it.
+//! `Board` is `Send + !Sync`; single-thread Python ownership is the bridge's synchronization.
 
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
@@ -21,8 +11,7 @@ use mantis_core::board::{BOARD_SIZE, DEFAULT_CLUSTER_THRESHOLD, HALF};
 use mantis_core::{Board as RustBoard, BoardGeometry, Cell, Player};
 use mantis_encoding::RegistrySpec;
 
-/// Map a Python player id (1 = P1, -1 = P2) to the Rust `Player` enum.
-/// Used by the forcing-move primitive bindings. `ValueError` on any other value.
+/// Map a Python player id (1 = P1, -1 = P2) to the Rust `Player` enum; `ValueError` otherwise.
 fn player_from_i8(player: i8) -> PyResult<Player> {
     match player {
         1 => Ok(Player::One),
@@ -33,27 +22,15 @@ fn player_from_i8(player: i8) -> PyResult<Player> {
     }
 }
 
-/// A Hex Tac Toe board.
-///
-/// Coordinate system: axial (q, r) with -9 ≤ q, r ≤ 9 for a 19×19 grid.
-///
-/// Turn structure:
-///   - Player 1 opens with exactly 1 move (ply 0).
-///   - After that, each player places 2 stones per turn.
-///
-/// `unsendable` (LOCKED #3): `Board` is `Send + !Sync` (UnsafeCell legal-cache +
-/// Cell dirty-flag, no `unsafe impl Sync`); single-thread Python ownership is the
-/// bridge's synchronization. F-42: `module = "mantis._engine"`.
+/// A Hex Tac Toe board in axial (q, r). Player 1 opens with one move; then 2 stones per turn.
 #[pyclass(name = "Board", module = "mantis._engine", unsendable)]
 pub struct PyBoard {
     inner: RustBoard,
-    /// Bridge-held encoding binding (relocated from core — see the module doc).
-    /// `None` = a deliberately encoding-less board (`Board.new()`).
+    /// Bridge-held encoding binding; `None` = a deliberately encoding-less board.
     encoding: Option<&'static RegistrySpec>,
 }
 
 impl Default for PyBoard {
-    /// Equivalent to `PyBoard::new()` — empty board, no encoding bound.
     fn default() -> Self {
         Self::new()
     }
@@ -61,7 +38,6 @@ impl Default for PyBoard {
 
 #[pymethods]
 impl PyBoard {
-    /// Create a new empty board (no encoding bound).
     #[new]
     pub fn new() -> Self {
         PyBoard {
@@ -70,13 +46,8 @@ impl PyBoard {
         }
     }
 
-    /// Registry-resolved Board ctor. Looks the encoding up by name in
-    /// `crates/mantis-encoding/src/registry.toml` and binds the resulting
-    /// `RegistrySpec` (its geometry drives the Board; the spec ref is held by
-    /// the wrapper for `to_tensor`/`size`/guards). The registry path is the
-    /// single supported entry point for non-default encoding construction.
-    ///
-    /// Raises `ValueError` if `name` is not a registered encoding.
+    /// Registry-resolved Board ctor: binds the named spec, whose geometry drives the Board.
+    /// `ValueError` on an unregistered name.
     #[staticmethod]
     pub fn with_encoding_name(name: &str) -> PyResult<Self> {
         let spec = mantis_encoding::lookup(name).ok_or_else(|| {
@@ -98,8 +69,7 @@ impl PyBoard {
         })
     }
 
-    /// Place a stone at (q, r) for the current player.
-    /// Raises ValueError if the move is illegal.
+    /// Place a stone at (q, r) for the current player; `ValueError` if the move is illegal.
     pub fn apply_move(&mut self, q: i32, r: i32) -> PyResult<()> {
         self.inner
             .apply_move(q, r)
@@ -119,38 +89,27 @@ impl PyBoard {
         })
     }
 
-    /// Returns the 6 cells forming the winning line, or empty list if no win.
-    ///
-    /// Scans all stones when last_move doesn't yield a 6-line, so a win found
-    /// by `winner()`'s fallback path (HTT 2-moves-per-turn shifting last_move
-    /// off the line) still surfaces the winning cells.
+    /// The 6 cells forming the winning line, or an empty list, including the all-stones fallback
+    /// `winner()` uses when last_move does not lie on the line.
     pub fn find_winning_line(&self) -> Vec<(i32, i32)> {
         self.inner.find_winning_line()
     }
 
-    /// CF-1 terminal value from the side-to-move's perspective, valid at a
-    /// `check_win()` leaf: `+1.0` when `moves_remaining == 1` (first-stone win,
-    /// winner still to move), `-1.0` when `moves_remaining == 2` (turn-final
-    /// win, flipped to the loser).
+    /// CF-1 terminal value from the side-to-move's perspective at a `check_win()` leaf: `+1.0`
+    /// when `moves_remaining == 1` (winner still to move), `-1.0` when it is 2 (flipped to loser).
     pub fn terminal_value_to_move(&self) -> f32 {
         self.inner.terminal_value_to_move()
     }
 
-    // ── Forcing-move primitives (offline TSS/minimax oracle) ────────────────────
-    // Read-only queries over the tested Rust win-detection logic. Exposed for an
-    // offline tactical-search probe: a threat-space search / shallow MCTS-Solver
-    // minimax needs the engine's OWN winning-move oracle to enumerate threats +
-    // defenses and prove forced losses. `player`: 1 = P1, -1 = P2.
+    // Forcing-move primitives over the tested win-detection logic. `player`: 1 = P1, -1 = P2.
 
-    /// Count empty legal cells that complete a 6-in-a-row for `player` (1 / -1).
-    /// `>= 3` ⇒ provably forced win next turn (opponent blocks at most 2/turn).
+    /// Count empty legal cells completing a 6 for `player`; `>= 3` is a forced win next turn.
     pub fn count_winning_moves(&self, player: i8) -> PyResult<u32> {
         Ok(self.inner.count_winning_moves(player_from_i8(player)?))
     }
 
-    /// All empty legal cells that complete a 6-in-a-row for `player`, sorted.
-    /// The threat/defense enumeration primitive: own-threats (player) and the
-    /// cells the opponent must block (call with the opponent's id).
+    /// All empty legal cells completing a 6 for `player`, sorted — own threats, or the
+    /// opponent's must-block cells when called with the opponent's id.
     pub fn winning_moves(&self, player: i8) -> PyResult<Vec<(i32, i32)>> {
         Ok(self.inner.winning_moves(player_from_i8(player)?))
     }
@@ -167,17 +126,14 @@ impl PyBoard {
             .has_player_long_run(player_from_i8(player)?, min_len))
     }
 
-    /// Cells that, if `player` plays them, create ≥1 immediate winning move (an
-    /// open-4 → win-in-1) — the threat-creating move set for a threat-space search.
-    /// Computed in-engine so a Python caller pays ONE FFI hop, not a clone per cell.
+    /// Cells that, if `player` plays them, create ≥1 immediate winning move. In-engine, so a
+    /// Python caller pays ONE FFI hop.
     pub fn threat_moves(&self, player: i8) -> PyResult<Vec<(i32, i32)>> {
         Ok(self.inner.threat_moves(player_from_i8(player)?))
     }
 
-    /// The immediate move for the SIDE TO MOVE that proves a within-turn forced
-    /// win, or None. depth≥1: a 6-completing move now; depth≥2 (only at
-    /// moves_remaining==2): a first placement that wins on the same turn's 2nd
-    /// stone. Reads turn-phase from moves_remaining (CF-1 discipline).
+    /// The immediate move for the SIDE TO MOVE that proves a within-turn forced win, or None.
+    /// depth≥1 completes a 6 now; depth≥2 (only at `moves_remaining == 2`) wins on the 2nd stone.
     pub fn forced_win_move(&self, depth: u8) -> Option<(i32, i32)> {
         self.inner.forced_win_move(depth)
     }
@@ -187,23 +143,13 @@ impl PyBoard {
         self.inner.legal_moves()
     }
 
-    /// Number of legal moves (number of empty cells).
     pub fn legal_move_count(&self) -> usize {
         self.inner.legal_move_count()
     }
 
-    /// Is `(q, r)` in the board's authoritative legal-move set?
-    ///
-    /// R345(b)(2): the O(1) membership test the arena's legality boundary needs. It reads the
-    /// SAME `FxHashSet` `legal_moves` collects from, so there is one authority over the rules
-    /// rather than a second radius arithmetic in Python. Cheap where the arena uses it: the
-    /// game loop already calls `legal_move_count` each iteration, which is what rebuilds the
-    /// cache, so this is a hash lookup on an already-clean cache.
-    ///
-    /// `apply_move` is deliberately NOT changed to consult this. It rejects an occupied cell
-    /// and nothing more, and it is the search's inner-loop primitive — traversal replays moves
-    /// already known legal, and a set membership test per `apply_move` would be paid millions
-    /// of times per search to catch a defect that cannot occur there.
+    /// Is `(q, r)` in the board's authoritative legal-move set? Reads the SAME `FxHashSet`
+    /// `legal_moves` collects from. `apply_move` deliberately does NOT consult it: it replays
+    /// moves already known legal.
     pub fn is_legal(&self, q: i32, r: i32) -> bool {
         self.inner.legal_moves_set().contains(&(q, r))
     }
@@ -238,11 +184,7 @@ impl PyBoard {
         self.inner.ply.index()
     }
 
-    /// Override the per-Board legal-move radius cap.
-    ///
-    /// Raises `ValueError` when the board was constructed via
-    /// `Board.with_encoding_name` (encoding bound). Callers should use the
-    /// registry entry instead of overriding post-construction.
+    /// Override the per-Board legal-move radius cap; `ValueError` on an encoding-bound board.
     pub fn set_legal_move_radius(&mut self, radius: i32) -> PyResult<()> {
         if self.encoding.is_some() {
             return Err(PyValueError::new_err(
@@ -254,7 +196,6 @@ impl PyBoard {
         Ok(())
     }
 
-    /// Read the current per-Board legal-move radius cap.
     pub fn legal_move_radius(&self) -> i32 {
         self.inner.legal_move_radius()
     }
@@ -264,25 +205,19 @@ impl PyBoard {
         self.inner.zobrist_hash
     }
 
-    /// Encode the board as a flat list of floats for the 18 tensor planes
-    /// (shape conceptually [18, board_size, board_size] where board_size comes
-    /// from the bound encoding — default v6 wire geometry, 19 → flat 18×361=6498).
-    /// Window-relative flat index for axial (q, r).
-    /// Used by selfplay workers to convert legal-move coords to policy indices.
+    /// Window-relative flat index for axial (q, r), converting coords to policy indices.
     pub fn to_flat(&self, q: i32, r: i32) -> usize {
         self.inner.window_flat_idx(q, r)
     }
 
-    /// Board size (cells per axis). Default 19; honors the encoding bound at construction
-    /// via `with_encoding_name`. A raw geometry default on a deliberately encoding-less
-    /// board — NOT the identity-resolution path (that hard-errors on an unknown name).
+    /// Board size (cells per axis), honouring the encoding bound; the default is raw geometry on
+    /// an encoding-less board, NOT the identity-resolution path.
     #[getter]
     pub fn size(&self) -> usize {
         self.encoding.map_or(BOARD_SIZE, |s| s.board_size)
     }
 
-    /// Returns threat cells as list of (q, r, level, player) tuples.
-    /// Threats are EMPTY cells within threatening windows. Viewer only.
+    /// Threat cells as (q, r, level, player) tuples — EMPTY cells within threatening windows.
     pub fn get_threats(&self) -> Vec<(i32, i32, u8, u8)> {
         let mut stones = std::collections::HashMap::new();
         for (&(q, r), &cell) in self.inner.cells_iter() {
@@ -322,7 +257,6 @@ impl PyBoard {
         }
     }
 
-    /// Python copy.copy() support.
     pub fn __copy__(&self) -> PyBoard {
         PyBoard {
             inner: self.inner.clone(),
@@ -330,7 +264,6 @@ impl PyBoard {
         }
     }
 
-    /// Python copy.deepcopy() support.
     pub fn __deepcopy__(&self, _memo: Py<PyAny>) -> PyBoard {
         PyBoard {
             inner: self.inner.clone(),
@@ -369,10 +302,8 @@ impl PyBoard {
 }
 
 impl PyBoard {
-    /// Construct a PyBoard directly from a Rust Board (used by PyMCTSTree
-    /// leaf marshaling). The new `mantis_core::Board` carries no encoding ref, so
-    /// the wrapper's encoding is `None` — leaf boards are pure geometry (the
-    /// encoding is a bridge-only concern bound solely via `with_encoding_name`).
+    /// Construct a PyBoard from a Rust Board (leaf marshaling); encoding is `None`, because leaf
+    /// boards are pure geometry.
     pub(crate) fn from_inner(inner: RustBoard) -> Self {
         PyBoard {
             inner,
@@ -380,27 +311,19 @@ impl PyBoard {
         }
     }
 
-    /// Crate-internal accessor for the wrapped Rust Board. Used by PyMCTSTree /
-    /// PyTacticalSolver (sibling modules) to read the underlying board across
-    /// the PyO3 boundary — `inner` is private.
+    /// Crate-internal accessor for the wrapped Rust Board, since `inner` is private.
     pub(crate) fn inner_ref(&self) -> &RustBoard {
         &self.inner
     }
 }
 
-// ── Threat-viewer scanner (inlined; dropped from mantis-core) ────────────────
-//
-// Scans all three hex axes for length-6 windows where one player has N stones
-// (N >= 3) and the rest are empty (no opponent blocking). The highlighted cells
-// are the EMPTY cells within the window. Never called from MCTS or training —
-// viewer only. Ported verbatim from the predecessor's `board::threats`, which
-// the new mantis-core omits (no core/search/selfplay consumer).
+// Threat-viewer scanner (inlined; dropped from mantis-core): scans all three hex axes for
+// length-6 windows where one player has N >= 3 stones and the rest are empty. Viewer only.
 mod threats {
     use std::collections::HashMap;
 
-    // AUDIT-1 F-42. The threat scan's window length IS the game's win length, and the axis
-    // set IS the board's; a literal 6 or a re-typed axis table here drifts from the rule
-    // `Board::player_wins` enforces.
+    // The window length IS the game's win length and the axis set IS the board's, so a literal
+    // here would drift from the rule `Board::player_wins` enforces.
     use mantis_core::board::{HEX_AXES, WIN_LENGTH as WIN_LEN};
 
     /// Endpoint-bounded line for `scan_line` (axes (1,0) and (0,1)).
@@ -437,7 +360,6 @@ mod threats {
             return Vec::new();
         }
 
-        // Compute bounding box, extended by WIN_LEN in each direction.
         let mut min_q = i32::MAX;
         let mut max_q = i32::MIN;
         let mut min_r = i32::MAX;
@@ -462,12 +384,10 @@ mod threats {
         min_r -= margin;
         max_r += margin;
 
-        // Track best threat level per (q, r, player).
         let mut best: HashMap<(i32, i32, u8), u8> = HashMap::new();
 
         for &(dq, dr) in &HEX_AXES {
             if dq == 1 && dr == 0 {
-                // Lines indexed by r. For each r, slide window over q.
                 for r in min_r..=max_r {
                     scan_line(
                         stones,
@@ -480,7 +400,6 @@ mod threats {
                     );
                 }
             } else if dq == 0 && dr == 1 {
-                // Lines indexed by q. For each q, slide window over r.
                 for q in min_q..=max_q {
                     scan_line(
                         stones,
@@ -493,8 +412,7 @@ mod threats {
                     );
                 }
             } else {
-                // (1, -1): lines indexed by q+r. For constant s = q+r,
-                // q ranges and r = s - q.
+                // (1, -1): lines indexed by s = q+r, with q ranging and r = s - q.
                 let min_s = min_q + min_r;
                 let max_s = max_q + max_r;
                 for s in min_s..=max_s {
@@ -524,7 +442,6 @@ mod threats {
             .collect()
     }
 
-    /// Scan a line along direction (dq, dr) starting at (start_q, start_r).
     fn scan_line<S: ::std::hash::BuildHasher>(
         stones: &HashMap<(i32, i32), u8, S>,
         best: &mut HashMap<(i32, i32, u8), u8>,
@@ -553,7 +470,6 @@ mod threats {
         }
     }
 
-    /// General line scanner for the (1,-1) direction.
     fn scan_line_general<S: ::std::hash::BuildHasher>(
         stones: &HashMap<(i32, i32), u8, S>,
         best: &mut HashMap<(i32, i32, u8), u8>,
@@ -566,8 +482,6 @@ mod threats {
             bbox_max: (max_q, max_r),
         } = params;
 
-        // Count how many steps we can take from start in direction (dq, dr)
-        // while staying within bounds.
         let mut steps = 0usize;
         loop {
             let q = start_q + (steps as i32) * dq;
@@ -589,7 +503,6 @@ mod threats {
         }
     }
 
-    /// Check a single window of WIN_LEN cells starting at (wq, wr) in direction (dq, dr).
     fn check_window<S: ::std::hash::BuildHasher>(
         stones: &HashMap<(i32, i32), u8, S>,
         best: &mut HashMap<(i32, i32, u8), u8>,
@@ -617,7 +530,6 @@ mod threats {
             }
         }
 
-        // Threat for player 0.
         if p1_count == 0 && p0_count >= 3 {
             let level = p0_count; // 3=warning, 4=forced, 5=critical
             for &(eq, er) in empties.iter().take(n_empties) {
@@ -628,7 +540,6 @@ mod threats {
             }
         }
 
-        // Threat for player 1.
         if p0_count == 0 && p1_count >= 3 {
             let level = p1_count;
             for &(eq, er) in empties.iter().take(n_empties) {
@@ -730,9 +641,7 @@ mod tests {
 
     #[test]
     fn with_encoding_name_binds_geometry_and_size() {
-        // Both registered rows share the 19-cell action space and differ only in radius
-        // (R328(b)), so the RADIUS is what proves the spec's geometry reached the Board.
-        // Read from the registry rather than transcribed, so a moved row reds here.
+        // The two registered rows differ only in RADIUS, read from the registry, so a move reds.
         for name in ["gnn_axis_v1", "gnn_axis_r8"] {
             let spec = mantis_encoding::lookup_or_panic(name);
             let b = PyBoard::with_encoding_name(name).expect("a registered encoding");
@@ -757,8 +666,7 @@ mod tests {
 
     #[test]
     fn a_deleted_grid_encoding_name_is_refused() {
-        // R346(f): the three grid rows are gone from the registry, so binding one is the
-        // unknown-encoding error rather than a silent fall-through to graph geometry.
+        // The grid rows are gone from the registry, so binding one is the unknown-encoding error.
         for name in ["v6", "v6w25", "v6_live2_ls"] {
             assert!(
                 PyBoard::with_encoding_name(name).is_err(),
@@ -774,8 +682,7 @@ mod tests {
 
     #[test]
     fn radius_guard_fires_when_bound() {
-        // The two cluster setters this also drove went with the dense path (R346(f)); the
-        // radius override is the guard that remains, and the encoding-bound board refuses it.
+        // The radius override is the guard that remains, and an encoding-bound board refuses it.
         let mut b = PyBoard::with_encoding_name("gnn_axis_v1").expect("registered");
         assert!(b.set_legal_move_radius(4).is_err());
         let mut free = PyBoard::new();
@@ -793,7 +700,6 @@ mod tests {
         assert_eq!(b.current_player(), -1);
         assert!(!b.check_win());
         assert_eq!(b.winner(), None);
-        // get_stones reflects the single placed stone.
         let stones = b.get_stones();
         assert_eq!(stones, vec![(0, 0, 1)]);
     }
@@ -821,17 +727,14 @@ mod tests {
 
     #[test]
     fn get_threats_surfaces_open_line() {
-        // Build a clean P1 3-in-a-row along E via the 2-stone-turn cadence
-        // (apply_move is the unconditional cell-write primitive — P2 fillers
-        // placed far off the E line so they never share a length-6 window).
+        // A clean P1 3-in-a-row along E, with P2 fillers far off the line.
         let mut b = PyBoard::new();
         b.apply_move(0, 0).unwrap(); // P1 opening single -> P2 turn (mr 2)
         b.apply_move(0, 12).unwrap(); // P2 filler
         b.apply_move(1, 12).unwrap(); // P2 filler -> P1 turn (mr 2)
         b.apply_move(1, 0).unwrap(); // P1
         b.apply_move(2, 0).unwrap(); // P1 -> P1 now has (0,0),(1,0),(2,0)
-                                     // get_threats maps the viewer scan; P1 is player id 0. A 3-in-a-row in
-                                     // an open length-6 window is at least a level-3 warning.
+                                     // P1 is player id 0; an open-window 3-in-a-row is level 3+.
         let empty = PyBoard::new();
         assert!(empty.get_threats().is_empty(), "empty board has no threats");
         let threats = b.get_threats();
@@ -841,7 +744,6 @@ mod tests {
                 .any(|&(_, _, level, player)| level >= 3 && player == 0),
             "expected a P1 (id 0) warning/forced threat, got {threats:?}"
         );
-        // Every returned threat cell must be EMPTY (viewer contract).
         for &(q, r, _, _) in &threats {
             assert_eq!(b.get(q, r), 0, "threat cell ({q},{r}) must be empty");
         }

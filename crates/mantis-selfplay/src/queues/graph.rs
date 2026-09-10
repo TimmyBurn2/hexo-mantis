@@ -1,23 +1,14 @@
-//! R8-justify: the graph queue + its D6 `build_leaf_graph` (with the verbatim
-//! WP-1 seam-guard messages) are one cohesive port unit — splitting the builder
-//! from the queue it feeds would scatter the D6 reason-travels story across files.
+//! R8-justify: the graph queue and its `build_leaf_graph` (with the verbatim seam-guard
+//! messages) are one cohesive port unit — splitting the builder from the queue it feeds would
+//! scatter the reason-travels story across files.
 //!
-//! Graph inference queue — the pure-Rust half of the frozen `inference_bridge.rs`
-//! parallel graph seam (WP6 D4/D6), pyo3/numpy STRIPPED.
+//! Graph inference queue — the pure-Rust half of the parallel graph seam, pyo3/numpy stripped.
+//! A DISJOINT structure from the dense queue: its own queue, `Condvar` and waiter map, whose
+//! payload is the ragged `(LegalSetPolicy, f32)`; it never touches the dense pool.
 //!
-//! A DISJOINT structure from the dense queue (`queues::dense`): its own
-//! `Mutex<VecDeque<PendingGraphRequest>>` + `Condvar` + waiter map
-//! (`inference_bridge.rs:152-155`). The graph batcher NEVER touches the dense
-//! pool. The waiter payload is the ragged `(LegalSetPolicy, f32)`
-//! (`inference_bridge.rs:48`).
-//!
-//! D6 (reason-travels) is honoured in TWO places the frozen code dropped a
-//! reason: (1) `build_leaf_graph` returns `Result<AxisGraph, String>` — the
-//! build error REASON is preserved, NOT `.ok()`-swallowed to `None`
-//! (`inference_bridge.rs:530`); (2) `submit_graph_and_wait` returns the waiter's
-//! `Err(reason)` verbatim instead of the frozen `Err(())` collapse
-//! (`inference_bridge.rs:453`). The dense path stays PORT-EXACT (reason not
-//! required — the old worker never consumed it). This asymmetry is intentional.
+//! Reason-travels is honoured where the frozen code dropped a reason: `build_leaf_graph`
+//! returns `Result<AxisGraph, String>` rather than `.ok()`-swallowing to `None`, and
+//! `submit_graph_and_wait` returns the waiter's `Err(reason)` verbatim instead of `Err(())`.
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -28,14 +19,13 @@ use fxhash::FxBuildHasher;
 use mantis_graph::{build_axis_graph, AxisGraph, BuildParams, StoneList, BUILDER_IMPL_NATIVE};
 use mantis_search::LegalSetPolicy;
 
-/// One queued graph inference request (the once-per-leaf `AxisGraph` payload,
-/// `inference_bridge.rs:32`).
+/// One queued graph inference request (the once-per-leaf `AxisGraph` payload).
 struct PendingGraphRequest {
     id: u64,
     graph: AxisGraph,
 }
 
-/// Graph waiter payload — the ragged `(LegalSetPolicy, value)` (`:48`).
+/// Graph waiter payload — the ragged `(LegalSetPolicy, value)`.
 type GraphWaiterPayload = Result<(LegalSetPolicy, f32), String>;
 
 #[derive(Default)]
@@ -50,10 +40,8 @@ struct GraphInner {
     waiters: Mutex<HashMap<u64, Arc<GraphWaiter>, FxBuildHasher>>,
     next_id: AtomicU64,
     closed: AtomicBool,
-    /// Graph-wire contract version this batcher speaks (spec-sourced; the amended
-    /// ragged contract is version 1, the only supported value). The frozen
-    /// `submit_batch_and_wait_graph_rust` rejects the whole batch on a non-1 value
-    /// (`inference_bridge.rs:425`).
+    /// Graph-wire contract version this batcher speaks (spec-sourced; 1 is the only supported
+    /// value). A non-1 value rejects the whole batch.
     contract_version: u32,
     /// The most graphs that can EVER be queued at once: `n_workers x leaf_batch_size`,
     /// because a worker blocks on its whole submitted batch. `0` means "not declared" and
@@ -64,24 +52,11 @@ struct GraphInner {
 /// The queue depth at which [`GraphInner::pop_graph_batch_blocking`] returns BEFORE its
 /// deadline — the collector's saturation threshold, DERIVED from what the run can supply.
 ///
-/// The frozen threshold was `batch_size / 2` alone, a number with no relation to what the
-/// configured workers can put in flight. Ledger F-1 measured the consequence: at
-/// `inference_batch_size = 64` the threshold is 32, `dev`'s minted `n_workers = 1 x
-/// leaf_batch_size = 8` supplies at most 8, so the threshold was structurally unreachable
-/// and EVERY pop ran to the 10 ms deadline — `queue_pop_wait` a measured mean of 10.064 ms
-/// over 8 116 pops, 16 % of the card's cost and 40 % of the round trip uncontended, and
-/// 33 % of the single-stream eval path.
-///
-/// This is R263's mechanism one level up. R263 fixed "one leaf in flight per worker" so the
-/// threshold COULD be reached; the threshold itself was still free to sit above the ceiling.
-/// Deriving it from `max_in_flight` closes the class rather than the instance: a threshold
-/// clamped to the supply is reachable on every config by construction, so there is no
-/// configuration left for a schema rule to refuse.
-///
-/// Clamping can only LOWER the threshold, and never below what is achievable — a worker
-/// blocks until its whole batch is answered, so `n_workers x leaf_batch_size` is a hard cap
-/// on queue depth. A pop that returns at the cap returns with the largest batch that could
-/// ever have been there, having waited less for it.
+/// The frozen `batch_size / 2` was unrelated to what the configured workers can put in flight:
+/// at `inference_batch_size = 64` the threshold is 32 while a minted `n_workers = 1 x
+/// leaf_batch_size = 8` supplies at most 8, so EVERY pop ran to the 10 ms deadline — a mean of
+/// 10.064 ms over 8 116 pops, 33 % of the single-stream eval path. Clamping to `max_in_flight`
+/// can only LOWER it, never below what is achievable.
 #[must_use]
 pub fn saturation_threshold(batch_size: usize, max_in_flight: usize) -> usize {
     let half = batch_size / 2;
@@ -105,8 +80,8 @@ impl GraphInner {
         }
     }
 
-    /// Graph counterpart of the dense pop (`pop_graph_batch_blocking:179`) — same
-    /// saturation threshold / timeout, on the parallel graph queue.
+    /// Graph counterpart of the dense pop — same saturation threshold and timeout, on the
+    /// parallel graph queue.
     fn pop_graph_batch_blocking(
         &self,
         batch_size: usize,
@@ -141,8 +116,7 @@ impl GraphInner {
     }
 }
 
-/// Rust-owned blocking graph inference queue (the WP-3 parallel seam, pyo3
-/// stripped). Clone shares one `Arc<GraphInner>`.
+/// Rust-owned blocking graph inference queue. Clone shares one `Arc<GraphInner>`.
 #[derive(Clone)]
 pub struct GraphQueue {
     inner: Arc<GraphInner>,
@@ -155,27 +129,23 @@ impl Default for GraphQueue {
 }
 
 impl GraphQueue {
-    /// A queue speaking the sole supported graph-wire contract version (1). Used by
-    /// tests and any caller with no spec in hand; the runner sources the version from
-    /// the spec via [`GraphQueue::with_contract_version`].
+    /// A queue speaking the sole supported graph-wire contract version (1). Used by tests and
+    /// any caller with no spec in hand; the runner sources the version from the spec.
     #[must_use]
     pub fn new() -> Self {
         Self::with_contract_version(1)
     }
 
-    /// A queue speaking `contract_version` (spec-sourced). A non-1 value makes every
-    /// `submit_graph_and_wait` reject its graph loud — the batch-level die-loud
-    /// handshake the frozen `submit_batch_and_wait_graph_rust` runs
-    /// (`inference_bridge.rs:425`).
+    /// A queue speaking `contract_version`. A non-1 value makes every `submit_graph_and_wait`
+    /// reject its graph loud — the batch-level die-loud handshake.
     #[must_use]
     pub fn with_contract_version(contract_version: u32) -> Self {
         Self::with_contract_version_and_supply(contract_version, 0)
     }
 
     /// A queue that also knows the run's achievable supply (`n_workers x leaf_batch_size`),
-    /// from which the collector's saturation threshold is DERIVED. `max_in_flight = 0`
-    /// declares no supply and keeps the raw half-batch threshold; the production runner
-    /// always declares one.
+    /// from which the collector's saturation threshold is DERIVED. `max_in_flight = 0` declares
+    /// no supply and keeps the raw half-batch threshold; the production runner always declares one.
     #[must_use]
     pub fn with_contract_version_and_supply(contract_version: u32, max_in_flight: usize) -> Self {
         Self {
@@ -190,15 +160,13 @@ impl GraphQueue {
         self.inner.max_in_flight
     }
 
-    /// CONSUMER (worker): enqueue one pre-built leaf graph, block on its waiter,
-    /// and return the assembled `(LegalSetPolicy, value)`. The waiter's
-    /// `Err(reason)` travels back VERBATIM (D6) — no `Err(())` collapse.
+    /// CONSUMER (worker): enqueue one pre-built leaf graph, block on its waiter, and return
+    /// the assembled `(LegalSetPolicy, value)`. The waiter's `Err(reason)` travels back VERBATIM.
     ///
     /// # Errors
     /// Returns `Err(reason)` if the queue is closed, this batcher speaks a non-1
-    /// `graph_contract_version`, the graph's `builder_impl` is non-native, or
-    /// inference for this leaf failed (the reason set by the producer via
-    /// `submit_graph_results` / `fail_remaining`).
+    /// `graph_contract_version`, the graph's `builder_impl` is non-native, or inference for
+    /// this leaf failed.
     pub fn submit_graph_and_wait(&self, graph: AxisGraph) -> Result<(LegalSetPolicy, f32), String> {
         if let Some(reason) = self.handshake_reject_reason(&graph) {
             return Err(reason);
@@ -225,34 +193,19 @@ impl GraphQueue {
         self.wait_for(&waiter)
     }
 
-    /// CONSUMER (worker): enqueue a WHOLE leaf batch in one shot, then block on
-    /// every waiter in submission order. Returns one result per submitted graph,
-    /// `Vec`-indexed by SUBMISSION ORDER — the index alignment
-    /// `expand_and_backup_ls_at` requires against `centers` / `leaves`. A map-keyed
-    /// return would not carry it.
+    /// CONSUMER (worker): enqueue a WHOLE leaf batch in one shot, then block on every waiter in
+    /// submission order. Returns one result per submitted graph, `Vec`-indexed by SUBMISSION
+    /// ORDER — the alignment `expand_and_backup_ls_at` requires and a map-keyed return would not.
     ///
-    /// Why this exists (Q-FIND-1 / R263): the per-graph `submit_graph_and_wait` puts
-    /// exactly ONE graph in flight per worker, so the collector's saturation
-    /// threshold (`pop_graph_batch_blocking`'s `batch_size / 2`) can never be
-    /// reached and every forward runs to its `max_wait_ms` deadline carrying a
-    /// single leaf. Here all N are enqueued under ONE queue-lock hold and announced
-    /// by ONE `notify_all`, so the collector wakes once and re-evaluates
-    /// `queue.len()` seeing all N rather than being woken N times and seeing 1 each
-    /// time. One notify per push would restore the starved read.
+    /// The per-graph path puts exactly ONE graph in flight per worker, so the saturation
+    /// threshold can never be reached and every forward runs to its deadline carrying a single
+    /// leaf. Here all N are enqueued under ONE queue-lock hold and announced by ONE `notify_all`.
     ///
-    /// The three handshakes (`closed`, non-1 `contract_version`, non-native
-    /// `builder_impl`) run as a PRE-PASS over the whole batch, before ANY enqueue.
-    /// A rejected graph never touches the queue, and the batch is rejected WHOLE:
-    /// half-enqueuing would strand the surviving waiters behind a caller that has
-    /// already been handed a reason. The offending graph's slot carries its own
-    /// frozen reason VERBATIM (D6); the rest name the offender.
-    ///
-    /// COLLECT-ALL-THEN-DECIDE: unlike the serial caller this replaces, every graph
-    /// is already enqueued when the first wait begins, so this returns only after
-    /// EVERY waiter has resolved. Bailing on the first `Err` would drop a waiter
-    /// `Arc` while the producer still holds its id — survivable (the producer
-    /// tolerantly drops an unknown id) but it voids the no-orphan invariant
-    /// `fail_remaining` is built on. Callers scan the returned `Vec` AFTER it lands.
+    /// The three handshakes run as a PRE-PASS over the whole batch, and the batch is rejected
+    /// WHOLE: half-enqueuing would strand the surviving waiters behind a caller already handed a
+    /// reason. Every graph is enqueued before the first wait, so this returns only after EVERY
+    /// waiter has resolved — bailing on the first `Err` would drop a waiter `Arc` while the
+    /// producer still holds its id, voiding `fail_remaining`'s no-orphan invariant.
     #[must_use]
     pub fn submit_graphs_and_wait(&self, graphs: Vec<AxisGraph>) -> Vec<GraphWaiterPayload> {
         let n = graphs.len();
@@ -279,9 +232,9 @@ impl GraphQueue {
                 .collect();
         }
 
-        // Phase 1b — allocate every id + waiter, register the waiters BEFORE any
-        // enqueue (the ordering the per-graph path relies on so a producer that pops
-        // an id can never miss its waiter), then push all N and notify ONCE.
+        // Phase 1b — allocate every id + waiter and register the waiters BEFORE any enqueue
+        // (the ordering that keeps a producer from popping an id whose waiter is not yet
+        // there), then push all N and notify ONCE.
         let mut waiters: Vec<Arc<GraphWaiter>> = Vec::with_capacity(n);
         let mut requests: Vec<PendingGraphRequest> = Vec::with_capacity(n);
         for graph in graphs {
@@ -315,11 +268,10 @@ impl GraphQueue {
         waiters.iter().map(|w| self.wait_for(w)).collect()
     }
 
-    /// The pre-enqueue handshake pre-pass, ONE authority for both submit paths:
-    /// closed queue, non-1 `graph_contract_version` (frozen `inference_bridge.rs:425`
-    /// — a batcher speaking a non-1 version rejects loud, BEFORE the per-graph
-    /// `builder_impl` check), and the N5 non-native `builder_impl` tag. `None` ⇒ the
-    /// graph may be enqueued. The reason strings are the frozen ones, verbatim.
+    /// The pre-enqueue handshake pre-pass, ONE authority for both submit paths: closed queue,
+    /// non-1 `graph_contract_version` (checked BEFORE the per-graph `builder_impl` tag), and a
+    /// non-native `builder_impl`. `None` means the graph may be enqueued, and the reason
+    /// strings are the frozen ones, verbatim.
     fn handshake_reject_reason(&self, graph: &AxisGraph) -> Option<String> {
         if self.inner.closed.load(Ordering::SeqCst) {
             return Some("graph batcher is closed".to_string());
@@ -339,9 +291,9 @@ impl GraphQueue {
         None
     }
 
-    /// Block on one registered waiter until its payload lands. Spurious wakeups and
-    /// close are re-checked on EVERY wake; the payload is a single read via
-    /// `guard.take()` (`inference_bridge.rs:447`) and the reason travels (D6).
+    /// Block on one registered waiter until its payload lands. Spurious wakeups and close are
+    /// re-checked on EVERY wake; the payload is a single `guard.take()` read and the reason
+    /// travels with it.
     fn wait_for(&self, waiter: &Arc<GraphWaiter>) -> GraphWaiterPayload {
         let mut guard = waiter.result.lock().expect("graph waiter lock poisoned");
         loop {
@@ -355,9 +307,8 @@ impl GraphQueue {
         }
     }
 
-    /// PRODUCER: pop up to `max` queued graph requests as `(id, AxisGraph)`
-    /// (pure-Rust replacement for `next_graph_batch`). Empty on timeout /
-    /// closed-empty queue.
+    /// PRODUCER: pop up to `max` queued graph requests as `(id, AxisGraph)`. Empty on timeout
+    /// or a closed, empty queue.
     #[must_use]
     pub fn pop_graph_batch(&self, max: usize, timeout_ms: u64) -> Vec<(u64, AxisGraph)> {
         self.inner
@@ -367,11 +318,9 @@ impl GraphQueue {
             .collect()
     }
 
-    /// PRODUCER: wake each `ids[i]` waiter with its assembled result (ragged
-    /// `(LegalSetPolicy, value)` on `Ok`, a reason `String` on `Err`). The
-    /// pure-Rust producer assembles the `LegalSetPolicy` itself (the numpy segment
-    /// scatter + `assemble_ls_from_gnn_probs` marshaling is WP7). An `id` with no
-    /// waiter is tolerantly dropped.
+    /// PRODUCER: wake each `ids[i]` waiter with its assembled result — the ragged
+    /// `(LegalSetPolicy, value)` on `Ok`, a reason `String` on `Err`. An `id` with no waiter is
+    /// tolerantly dropped.
     pub fn submit_graph_results(&self, ids: &[u64], results: Vec<GraphWaiterPayload>) {
         for (&id, res) in ids.iter().zip(results) {
             let removed = {
@@ -390,11 +339,10 @@ impl GraphQueue {
         }
     }
 
-    /// PRODUCER: wake + drop every still-pending waiter in `ids` with `reason`
-    /// (`fail_remaining_graph_ids:537`) so a mid-loop error return never orphans a
-    /// blocked worker. A waiter whose result is already set is left untouched
-    /// (tolerant, idempotent). This is the vehicle the D6 build-error reason rides
-    /// to the failed waiter.
+    /// PRODUCER: wake and drop every still-pending waiter in `ids` with `reason`, so a
+    /// mid-loop error return never orphans a blocked worker. A waiter whose result is already
+    /// set is left untouched, so this is idempotent; it is the vehicle the build-error reason
+    /// rides to the failed waiter.
     pub fn fail_remaining(&self, ids: &[u64], reason: &str) {
         for &id in ids {
             let removed = {
@@ -415,8 +363,8 @@ impl GraphQueue {
         }
     }
 
-    /// Close the graph queue and wake all blocked waiters (`close_rust:394`, graph
-    /// half). Disjoint from the dense queue — closing one leaves the other open.
+    /// Close the graph queue and wake all blocked waiters. Disjoint from the dense queue —
+    /// closing one leaves the other open.
     pub fn close(&self) {
         self.inner.closed.store(true, Ordering::SeqCst);
         self.inner.queue_cv.notify_all();
@@ -436,18 +384,12 @@ impl GraphQueue {
     }
 }
 
-/// Build one leaf's axis graph from its stones, running the WP-1 red-team seam
-/// guards (`build_graph_from_request:70` + `build_leaf_graph:516`).
+/// Build one leaf's axis graph from its stones, running the seam guards.
 ///
-/// D6 FIX: returns `Result<AxisGraph, String>` — the build error REASON is
-/// preserved and can travel to the failed waiter, replacing the frozen
-/// `.ok()`-swallow to `None` (`inference_bridge.rs:530`) that dropped the reason.
-/// The guard messages are ported VERBATIM (only the `PyValueError::new_err`
-/// wrapper is stripped):
-///   - `current_player ∈ {-1, +1}` (range-validate before the `i8` cast);
-///   - `moves_remaining ∈ [0, 255]` (before the `u8` cast — Attack-4);
-///   - each stone `|q|,|r|` bounded below `i32::MAX - radius` (Attack-2);
-///   - each stone player ∈ {-1, +1}; and the native-`builder_impl` handshake.
+/// Returns `Result<AxisGraph, String>` so the build error REASON can travel to the failed waiter,
+/// replacing a `.ok()`-swallow to `None` that dropped it. The guard messages are ported VERBATIM:
+/// `current_player` and each stone player in {-1, +1}; `moves_remaining` in [0, 255] before the
+/// `u8` cast; each stone's `|q|,|r|` below `i32::MAX - radius`.
 ///
 /// # Errors
 /// Returns `Err(reason)` on any seam-guard violation or a non-native builder tag.
@@ -508,28 +450,18 @@ pub fn build_leaf_graph(
 /// which `i64` is which.
 pub type LeafRequest = (Vec<(i64, i64, i64)>, i64, i64);
 
-/// Build one leaf graph per position across at most `n_threads` OS threads, returning them
-/// IN INDEX ORDER.
+/// Build one leaf graph per position across at most `n_threads` OS threads, IN INDEX ORDER.
 ///
-/// NIGHTRUN-1 E1, against the eval profile's own 95 %. `submit_graphs_and_wait_ls` built its
-/// leaves in a serial loop on the calling thread while holding the GIL; the measured split at
-/// a 64-move board is a slope of 5.2 ms per leaf against a 2.4 ms round-trip intercept, so
-/// the whole of the eval path's cost is this loop. Each leaf touches only its own stone list,
-/// so nothing had to move for this to be safe.
-///
-/// The idiom is `build_and_align_batch`'s, deliberately identical (`replay/hexg/sample.rs`,
-/// tranche-1 B1): `std::thread::scope` with static chunking rather than a work-stealing pool,
-/// because rayon is absent from this workspace and adding it is a `vendor/pins.toml` event.
-/// Leaves in one expansion are near-uniform in size (one position each), so static chunking
-/// loses little to imbalance.
-///
-/// `n_threads <= 1` runs the serial path IN THIS THREAD — the exact-parity control, and the
-/// posture for any caller with no threads to spare.
+/// The serial loop this replaces built its leaves on the calling thread while holding the GIL;
+/// the measured split at a 64-move board is a slope of 5.2 ms per leaf against a 2.4 ms
+/// round-trip intercept, so the whole of the eval path's cost is this loop. Each leaf touches
+/// only its own stone list. `std::thread::scope` with static chunking rather than a work-stealing
+/// pool, because rayon is absent from this workspace; `n_threads <= 1` runs the serial path IN
+/// THIS THREAD, the exact-parity control.
 ///
 /// # Errors
-/// Returns the FIRST error in index order, so a build failure names the same position it
-/// named on the serial path. A panicking worker becomes a named error rather than a panic
-/// crossing the FFI (R2/LAW-13).
+/// Returns the FIRST error in index order, so a build failure names the same position it named on
+/// the serial path. A panicking worker becomes a named error rather than a panic crossing the FFI.
 pub fn build_leaf_graphs_batch(
     positions: &[LeafRequest],
     win_length: u8,

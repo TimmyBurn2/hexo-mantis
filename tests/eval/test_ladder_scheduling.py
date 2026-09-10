@@ -1,46 +1,12 @@
-"""⊕ WP11-A — opponent-ladder scheduling + CI-hysteresis graduation (mantis.eval.ladder).
+"""Opponent-ladder scheduling and CI-hysteresis graduation (mantis.eval.ladder).
 
-RED-at-import until IMPL writes `mantis.eval.ladder`. STATE §5 verbatim (binding design,
-not re-derived here): rung SATURATED when the pair-bootstrap LOWER CI of WR >=
-`graduation_wr_lower_ci` (0.75) for `graduation_consec_rounds` (3) CONSECUTIVE rounds;
-next rung activates at predecessor lower-CI >= `activation_wr_lower_ci` (0.65); every
-threshold/cadence is a schema field (`mantis.config.schema.LadderConfig`), never a code
-literal (rule 4) — this suite never hardcodes 0.75/0.65/3 as the value under test, it
-always reads them off the `LadderConfig` fixture and asserts behavior AT that configured
-value, so a value-literal drift in IMPL would still make bookkeeping tests pass while only
-the (separate) `tests/eval/test_ladder_config_schema.py::test_minted_configs_carry_the_
-ladder_verbatim` source-grep oracle pins the literal absence.
+Every threshold and cadence is read off the `LadderConfig` fixture rather than hardcoded,
+so literal drift in the implementation shows up in the source-grep oracle in
+tests/eval/test_ladder_config_schema.py, not here.
 
-IMPL API constraints introduced by this oracle (design §a.3/§c describes ladder.py's
-STATE MACHINE in prose, not literal pseudocode — the concrete surface below is this
-suite's pin; IMPL must satisfy it, not redesign it; record any conflict as ADJUDICATE):
-  * `LadderState.initial(ladder_cfg) -> LadderState` — rung 0 in `ladder_cfg.rungs`
-    (ladder order) starts status "active"; every other rung starts "dormant".
-  * `LadderState.status(rung: str) -> str` ("dormant"|"active"|"saturated").
-  * `LadderState.consec(rung: str) -> int` — the graduation streak counter.
-  * `LadderState.record_round(round_idx: int, results: dict[str, dict], *, sink=None) -> None`
-    — `results` maps rung name -> {"games": int, "wr": float|None, "ci_lo": float|None}
-    for every rung that recorded >=1 game this round. A rung ABSENT from `results` played
-    zero games and is untouched (streak HELD, MUST-FIX 5 — the transparent case). A rung
-    PRESENT with `games=0` is the explicit "recorded a zero-game round" case (also HELD,
-    also loud via `sink`, distinguished from "absent" only for bookkeeping/history
-    completeness). Applies activation (self→active on ci_lo >= activation threshold,
-    sticky) and graduation (self→saturated on `graduation_consec_rounds` consecutive
-    measured qualifying rounds) transitions, and appends one history entry per rung
-    touched.
-  * `LadderState.allocate_games(round_idx: int, bt_probs: dict[str, float]) -> dict[str, int]`
-    — active rungs split `round_games` proportional to `p*(1-p)` (largest-remainder
-    rounding), each floored at `min_games_per_active_rung`, then CLAMPED at `games_max`
-    (excess NOT redistributed — deterministic, total may undershoot). Saturated rungs get
-    `calibration_games` exactly every `calibration_every_k_rounds`-th round (`round_idx %
-    calibration_every_k_rounds == 0`), else 0 — forever (never retired).
-  * `LadderState.save(path)` / `LadderState.load(path) -> LadderState` (classmethod) — JSON
-    round-trip; a persistence failure raises `mantis.eval.errors.LadderStateError`.
-
->300 justify: one state machine (activation/graduation/scheduling/persistence) under test
-via one shared fixture ladder — splitting by behavior would duplicate the LadderConfig/rung
-fixtures across files and let the scheduling and hysteresis halves drift out of sync with
-each other, which is exactly the STATE §5 binding-design risk this suite exists to pin.
+>300 justify: one state machine (activation/graduation/scheduling/persistence) under one
+shared fixture ladder; splitting it by behavior would duplicate the LadderConfig/rung
+fixtures and let the scheduling and hysteresis halves drift apart.
 """
 from __future__ import annotations
 
@@ -89,13 +55,9 @@ def _round(games: int, wr: float | None, ci_lo: float | None) -> dict:
     return {"games": games, "wr": wr, "ci_lo": ci_lo}
 
 
-# ── scheduling: proportional-to-variance allocation ──────────────────────────────────
 def test_allocation_proportional_to_p_hat_variance() -> None:
-    # Hand-verified worked example: round_games=100, 3 active rungs, p_hat = [0.5, 0.9, 0.3].
-    # variance weights w = p(1-p) = [0.25, 0.09, 0.21], sum(w) = 0.55.
-    # ideal shares = 100 * w / sum(w) = [45.4545..., 16.3636..., 38.1818...]
-    # floor = [45, 16, 38] (sum 99, remainder 1); fractional parts = [0.4545, 0.3636, 0.1818]
-    # -> largest-remainder rung is index 0 -> final = [46, 16, 38] (sum 100).
+    # w = p(1-p) = [0.25, 0.09, 0.21]; 100*w/sum(w) floors to [45, 16, 38] with remainder 1,
+    # whose largest fractional part is rung "a" -> [46, 16, 38].
     cfg = _cfg([_rung("a"), _rung("b"), _rung("c")], round_games=100, min_games_per_active_rung=0)
     state = LadderState.initial(cfg)
     state.record_round(0, {"b": _round(10, 0.7, 0.66), "c": _round(10, 0.7, 0.66)})
@@ -108,8 +70,7 @@ def test_allocation_proportional_to_p_hat_variance() -> None:
 
 
 def test_min_games_floor_applies_to_active_rungs() -> None:
-    # Extremely skewed p_hat: unconstrained proportional allocation would starve rung "b"
-    # to 0 games. min_games_per_active_rung=4 must guarantee every ACTIVE rung >= 4.
+    # Skew that would starve "b" to 0 under pure proportional allocation.
     cfg = _cfg([_rung("a"), _rung("b")], round_games=10, min_games_per_active_rung=4)
     state = LadderState.initial(cfg)
     state.record_round(0, {"b": _round(10, 0.99, 0.66)})
@@ -128,8 +89,7 @@ def test_single_active_rung_takes_all_round_games() -> None:
 
 
 def test_allocation_clamps_at_rung_games_max() -> None:
-    # Two active, equal-weight rungs; "a" has a low games_max. The clamped excess is NOT
-    # redistributed to "b" — total allocation undershoots round_games, deterministically.
+    # Clamped excess is not redistributed: the total undershoots round_games deterministically.
     cfg = _cfg([_rung("a", games_max=5), _rung("b", games_max=1_000_000)], round_games=50)
     state = LadderState.initial(cfg)
     state.record_round(0, {"b": _round(10, 0.7, 0.66)})
@@ -141,7 +101,6 @@ def test_allocation_clamps_at_rung_games_max() -> None:
     assert sum(alloc.values()) < 50  # excess not redistributed
 
 
-# ── activation (overlap law) ──────────────────────────────────────────────────────────
 def test_rung_activates_when_predecessor_lower_ci_reaches_threshold() -> None:
     cfg = _cfg([_rung("a"), _rung("b")], activation_wr_lower_ci=0.65)
     state = LadderState.initial(cfg)
@@ -154,12 +113,11 @@ def test_rung_activates_when_predecessor_lower_ci_reaches_threshold() -> None:
     state.record_round(1, {"a": _round(20, 0.7, 0.65)})   # at threshold -> activates
     assert state.status("b") == "active"
 
-    # sticky: a later drop in "a"'s ci_lo does not de-activate "b".
+    # Sticky: a later drop in "a"'s ci_lo does not de-activate "b".
     state.record_round(2, {"a": _round(20, 0.5, 0.40)})
     assert state.status("b") == "active"
 
 
-# ── graduation hysteresis ──────────────────────────────────────────────────────────────
 def test_graduation_requires_three_consecutive_measured_qualifying_rounds() -> None:
     cfg = _cfg([_rung("a")], graduation_wr_lower_ci=0.75, graduation_consec_rounds=3)
     state = LadderState.initial(cfg)
@@ -185,9 +143,8 @@ def test_flapping_around_threshold_resets_consecutive_counter() -> None:
 
 
 def test_zero_game_round_holds_streak_without_advancing() -> None:
-    # MUST-FIX 5 pin. measured sequence: [qualify, ZERO-GAMES, qualify, qualify]
-    # -> counter reads 1, 1, 2, 3 -> graduates on the 3rd MEASURED qualifying round. A
-    # zero-game round is transparent: it neither advances nor resets the streak.
+    # A zero-game round is transparent: it neither advances nor resets the streak, so
+    # [qualify, ZERO, qualify, qualify] reads 1, 1, 2, 3.
     cfg = _cfg([_rung("a")], graduation_wr_lower_ci=0.75, graduation_consec_rounds=3)
     state = LadderState.initial(cfg)
     state.record_round(0, {"a": _round(10, 0.9, 0.80)})
@@ -261,7 +218,6 @@ def test_saturated_rung_drops_to_calibration_cadence_and_never_retires() -> None
     assert any(h == 0 for h in hits), "off-cadence rounds must allocate zero, not every round"
 
 
-# ── persistence ─────────────────────────────────────────────────────────────────────────
 def test_ladder_state_roundtrips_json(tmp_path) -> None:
     cfg = _cfg([_rung("a"), _rung("b")])
     state = LadderState.initial(cfg)

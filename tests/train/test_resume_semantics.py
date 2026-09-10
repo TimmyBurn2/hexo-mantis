@@ -27,7 +27,7 @@ def _overrides(result):
     return dict(getattr(result, "overrides", result))
 
 
-# ── declared-wins / base-defers (composed through the reconciler) ────────────────────────
+# declared-wins / base-defers (composed through the reconciler)
 def test_declared_wins_base_defers(resume_goldens, spy_sink):
     """O-F1E0(a) — a DECLARED key wins over the checkpoint-baked value; a base-INHERITED key
     defers to baked + warns; a declared null travels (F1(A)/E0/B3)."""
@@ -42,7 +42,7 @@ def test_declared_wins_base_defers(resume_goldens, spy_sink):
     assert spy_sink.has(exp["warning_event"])
 
 
-# ── frozen-owned keys never enter the launch overrides ───────────────────────────────────
+# frozen-owned keys never enter the launch overrides
 def test_frozen_owned_keys_excluded_from_overrides():
     """O-F1E0(b) — the launch config wins for non-frozen knobs, but every
     RESUME_CHECKPOINT_OWNED_KEY (encoding/arch/optim/scheduler/lr) is EXCLUDED from the
@@ -56,7 +56,7 @@ def test_frozen_owned_keys_excluded_from_overrides():
         assert frozen not in ov, f"frozen key {frozen} leaked into the resume overrides"
 
 
-# ── scheduler-horizon gate ───────────────────────────────────────────────────────────────
+# scheduler-horizon gate
 def test_scheduler_horizon_gate(resume_goldens):
     """O-F1E0(c) — without --override-scheduler-horizon the horizon keys stay owned (excluded);
     with it, total_steps/scheduler_t_max re-enter and re-horizon the anneal."""
@@ -72,7 +72,7 @@ def test_scheduler_horizon_gate(resume_goldens):
     assert on.get("scheduler_t_max") == exp["override_scheduler_horizon_TRUE"]["overrides_scheduler_t_max"]
 
 
-# ── lr resume-owned (loud on an ignored declared override) ────────────────────────────────
+# lr resume-owned (loud on an ignored declared override)
 def test_lr_resume_owned_is_loud(resume_goldens):
     """O-F1E0(d) — a declared lr differing from the baked lr on a full resume is IGNORED
     (resume-state-owned) and flagged loud; a matching declared lr is not flagged."""

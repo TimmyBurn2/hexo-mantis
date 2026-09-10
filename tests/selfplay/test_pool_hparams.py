@@ -1,21 +1,12 @@
-"""⊕ D-15 — the `SelfPlayRunnerConfig` assembly golden (WP-SP).
+"""The `SelfPlayRunnerConfig` assembly golden.
 
-Written oracle-first against the dispatcher's old-side capture (#C3d, wp/WPSP/CAPTURE_LOG.md)
-BEFORE any port code. RED at import until IMPL writes `mantis.selfplay.hparams`.
+The Rust config exposes getters for its post-ctor attributes only — no ctor kwarg is readable
+back — so the golden IS the ctor-kwarg dict, recorded by a proxy that captures kwargs and
+attribute sets while still constructing the real Rust object, so Rust-side validation fires.
 
-This file carries D-15 ONLY; the rest of Suite D is IMPL-written.
-
-Method (forced by the surface, not chosen): the Rust `SelfPlayRunnerConfig` exposes getters
-for only its 10 post-ctor `#[pyo3(get,set)]` attributes — none of the ctor kwargs is readable
-back. So the golden IS the ctor-kwarg dict, and the oracle records it the same way the capture
-did: a proxy that records kwargs + attribute sets while still constructing the REAL Rust
-object underneath, so any Rust-side validation still fires.
-
-THREE captured ctor kwargs do NOT cross (see ORACLE_NOTES §gaps):
-  * `legal_move_radius_jitter` — DV-6 / WP6 KILL, declared in DESIGN;
-  * `feature_len`, `policy_len`  — NOT declared anywhere; the committed new Rust ctor REJECTS
-    both (they moved onto `InferenceBatcher` in WP7). Verified against `mantis._engine`.
-All three are asserted ABSENT here, and their captured values live only in CAPTURE_LOG.
+Three captured ctor kwargs deliberately do not cross and are asserted absent: the retired
+`legal_move_radius_jitter`, and `feature_len` / `policy_len`, which moved onto
+`InferenceBatcher` and are rejected by the current ctor.
 """
 from __future__ import annotations
 
@@ -43,7 +34,7 @@ NOT_CROSSING_POST_CTOR_ATTRS = {
 
 
 class RecordingRunnerConfig:
-    """Proxy over the REAL Rust config: records ctor kwargs + post-ctor attribute sets."""
+    """Proxy over the real Rust config, recording ctor kwargs and post-ctor attribute sets."""
 
     def __init__(self, **kwargs: Any) -> None:
         object.__setattr__(self, "recorded_kwargs", dict(kwargs))
@@ -60,7 +51,7 @@ class RecordingRunnerConfig:
 
 @pytest.fixture
 def record_runner_config(monkeypatch):
-    """Factory → the RecordingRunnerConfig produced by assembling `config`."""
+    """Return a factory building the RecordingRunnerConfig for an assembled `config`."""
     built: list[RecordingRunnerConfig] = []
 
     class _Factory(RecordingRunnerConfig):
@@ -74,8 +65,7 @@ def record_runner_config(monkeypatch):
         before = len(built)
         hp = SelfPlayHParams.from_config(config)
         enc = resolve_pool_encoding(config, arch=None)
-        # DESIGN §a.1 names these parameters; the oracle calls them by KEYWORD and hands the
-        # ResolvedPoolEncoding as `spec_dims` (ORACLE_NOTES §J3 — fixed here, before IMPL).
+        # Called by KEYWORD, with the ResolvedPoolEncoding handed over as `spec_dims`.
         build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
         assert len(built) == before + 1, (
             "expected exactly ONE SelfPlayRunnerConfig construction per assembly"
@@ -87,13 +77,11 @@ def record_runner_config(monkeypatch):
 
 @pytest.mark.parametrize("case", ["full_config", "minimal_config"])
 def test_runner_config_assembly_golden(runner_config_goldens, record_runner_config, case):
-    """D-15 — PASS iff assembling each captured config dict hands the Rust
-    `SelfPlayRunnerConfig` EXACTLY the captured ctor kwargs and post-ctor attributes (the
-    WP6-KILLed / WP7-relocated names absent), and the real Rust ctor accepts them.
+    """Assembling a captured config hands the Rust ctor exactly the captured kwargs and attrs.
 
-    FAIL = the config→runner wire drifted. That wire is the whole self-play behaviour surface
-    and it is write-only from Python (no getters), so a silently wrong kwarg here changes what
-    the runner does for an entire run with nothing to read back."""
+    That wire is the whole self-play behaviour surface and is write-only from Python, so a
+    wrong kwarg changes what the runner does for a whole run with nothing to read back.
+    """
     golden = runner_config_goldens["cases"][case]
     recorded = record_runner_config(golden["config"])
 
@@ -125,10 +113,7 @@ def test_runner_config_assembly_golden(runner_config_goldens, record_runner_conf
 @pytest.mark.parametrize("case", ["full_config", "minimal_config"])
 def test_killed_and_relocated_fields_never_reach_the_runner(
         runner_config_goldens, record_runner_config, case):
-    """D-15 (KILL arm) — PASS iff none of `legal_move_radius_jitter`, `feature_len`,
-    `policy_len` appears in the ctor kwargs and `interior_selector` is never set post-ctor.
-    FAIL = a WP6-KILLed knob was resurrected, or a WP7-relocated length was passed to a ctor
-    that rejects it (which would be a hard TypeError at run start, not a silent drift)."""
+    """The retired and relocated names never reach the runner, in kwargs or post-ctor attrs."""
     recorded = record_runner_config(runner_config_goldens["cases"][case]["config"])
 
     for name, why in NOT_CROSSING_CTOR_KWARGS.items():
@@ -143,10 +128,8 @@ def test_killed_and_relocated_fields_never_reach_the_runner(
 
 def test_playout_cap_temperature_threshold_reaches_the_runner(
         runner_config_goldens, record_runner_config):
-    """D-15 — PASS iff the FULL config's `playout_cap.
-    temperature_threshold_compound_moves`/`temp_min` arrive at the runner as
-    `temp_threshold_compound_moves=12`, `temp_min=0.35`, and the minimal config's absence of
-    a schedule resolves to the cosine-OFF `(0, 0.5)` fallback."""
+    """The playout-cap temperature schedule reaches the runner under its ctor-kwarg spelling,
+    and a config with no schedule resolves to the off `(0, 0.5)` pair."""
     recorded = record_runner_config(runner_config_goldens["cases"]["full_config"]["config"])
     assert recorded.recorded_kwargs["temp_threshold_compound_moves"] == 12, (
         "temperature schedule was NOT read — the config key is "

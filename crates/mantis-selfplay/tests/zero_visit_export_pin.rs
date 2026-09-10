@@ -1,48 +1,25 @@
-// R8 justify: one pin, and the legs only mean anything together — the direct call proves it
-// bites, the positive control proves it does not bite everything, and the end-to-end drive
-// proves the predicate holds with every inference healthy. Split them and a reader can green
-// the refusal while its positive control lives in another file.
-//! ⊕ F-816-9 Phase C — the EXPORTER conjunct pin (R275(b) conjunct 2, LAW-14).
+// R8 justify: one pin whose legs only mean anything together — the direct call proves it bites,
+// the positive control proves it does not bite everything, and the end-to-end drive proves the
+// predicate holds with every inference healthy. Split, a reader can green the refusal while its
+// positive control lives in another file.
+//! The EXPORTER conjunct pin over `records::refuse_zero_visit_export`.
 //!
-//! Subject: `records::refuse_zero_visit_export`. A search that backed up ZERO child visits
-//! has no visit distribution to export; every exporter falls back to the (ε-noise-mixed)
-//! priors, and the result is indistinguishable in the replay buffer from a real target.
-//! On the shakedown regime that prior dump busts the derived visit slot and dies loud —
-//! but capacity is derived from the sims regime, so at the prereg PCR 600/75 regime
-//! capacity is 674, 192 < 674, and the SAME corrupt target is RECORDED SILENTLY
-//! (Phase A §7.1). The refusal below does not depend on capacity at all.
+//! A search that backed up ZERO child visits has no visit distribution to export: every exporter
+//! falls back to the ε-noise-mixed priors, and the replay buffer cannot tell the result from a
+//! real target. That prior dump busts the derived visit slot only where capacity is small
+//! enough — at the prereg 600/75 regime capacity is 674 and 192 < 674, so the SAME corrupt
+//! target is RECORDED SILENTLY. This refusal does not depend on capacity at all.
 //!
-//! FLIP-SET (b): a zero-visit search result handed DIRECTLY to the exporter is refused
-//! loud. This bypasses the seam pin entirely — no queue, no inference, no failure — which
-//! is what proves the exporter pin bites ALONE.
+//! Handing a zero-visit result DIRECTLY to the exporter bypasses the seam, which proves the pin
+//! bites ALONE; `sims = 1` then reaches the same state with every inference HEALTHY. But
+//! independence is NOT equivalence: a failure landing LATER leaves a TRUNCATED search with
+//! nonzero visits, which passes this pin and is caught only at the seam. The seam is the
+//! primary; this is the backstop.
 //!
-//! PIN INDEPENDENCE, without a scratch build. `sims = 1` reaches the zero-visit state with
-//! every inference HEALTHY: the single sim is consumed by the root expansion and no child
-//! is ever visited. The end-to-end legs drive exactly that and assert the run dies with
-//! `target_integrity_defects == 1` and `inference_failures_total == 0` — the seam never
-//! fired, so the exporter pin is the only thing that stopped it. Its mirror image lives in
-//! `search_seam_fatal.rs`, where the seam fires and the target counter stays 0.
-//!
-//! WHAT THAT DOES **NOT** SHOW (cross-model RED-TEAM correction, kept because the loose
-//! claim is the tempting one): independence is not equivalence. Either pin alone stops
-//! F-816-9's OBSERVED death — a 192-cell prior dump is the full child set, so the failure
-//! had to land on the first post-root batch and leave zero visits. A failure landing LATER
-//! leaves a TRUNCATED search with nonzero visits, which passes this pin and is caught only
-//! at the seam. The seam is the primary; this is the backstop. See `records.rs`'s
-//! `refuse_zero_visit_export` doc for the same statement at the fix site.
-//!
-//! FLIP-SET (d) — the capacity boundary — is deliberately NOT re-tested here. It is owned
-//! by the frozen `target_integrity_postfix.rs::s2b_admits_exactly_128_mass_cells` /
-//! `::s2b_refuses_129_mass_cells_with_the_typed_error`, which call `record_position_graph`
-//! directly and are therefore untouched by this pin. Duplicating them would put a second
-//! authority on a guard the packet requires to stay exactly as it is.
-//!
-//! Killers: M-ZV-1 (`refuse_zero_visit_export` returns `Ok` unconditionally — the direct
-//! and end-to-end legs go RED); M-ZV-2 (sum ROOT visits instead of CHILD visits — the root
-//! backs up one visit to itself during its own expansion, so the refusal never fires and
-//! both legs go RED; this is the exact off-by-one the defect lived in); M-ZV-3 (call the
-//! refusal AFTER the record dispatch — the "nothing reaches the buffer" assert survives but
-//! the positive-control leg's ordering claim does not).
+//! Killers: `refuse_zero_visit_export` returning `Ok` unconditionally (both legs RED); summing
+//! ROOT visits instead of CHILD visits — the exact off-by-one the defect lived in, since the
+//! root backs up one visit to itself during expansion (both legs RED); calling the refusal AFTER
+//! the record dispatch (the positive control's ordering claim goes RED).
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -83,8 +60,8 @@ fn uniform_prior(board: &Board) -> LegalSetPolicy {
     ls
 }
 
-/// A tree whose root is expanded and whose children carry ZERO visits — the state a
-/// `sims = 1` search and a mid-search inference failure both land in.
+/// A tree whose root is expanded and whose children carry ZERO visits — where a `sims = 1`
+/// search and a mid-search inference failure both land.
 fn zero_visit_tree(board: &Board) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
@@ -96,15 +73,14 @@ fn zero_visit_tree(board: &Board) -> MCTSTree {
     tree
 }
 
-// ── FLIP-SET (b): the exporter pin, called directly ──────────────────────────────────
+// FLIP-SET (b): the exporter pin, called directly
 
 #[test]
 fn a_zero_visit_search_handed_to_the_exporter_is_refused_loud() {
     let board = wide_board();
     let tree = zero_visit_tree(&board);
 
-    // PRECONDITION, asserted rather than assumed: the root IS expanded and DOES hold
-    // children. Without this the refusal below could be passing for the wrong reason.
+    // PRECONDITION, asserted not assumed: the root IS expanded and DOES hold children.
     let n_children = tree.pool[0].n_children as usize;
     assert!(tree.pool[0].is_expanded() && n_children > 0, "construction: root must be expanded");
     assert!(
@@ -131,8 +107,8 @@ fn a_zero_visit_search_handed_to_the_exporter_is_refused_loud() {
 
 #[test]
 fn a_search_that_backed_up_visits_is_exportable() {
-    // The positive control. Without it, `Err(..)` unconditionally would pass the row above
-    // and take every self-play run down with it.
+    // The positive control: an unconditional `Err(..)` would pass the row above and take every
+    // self-play run down with it.
     let board = wide_board();
     let mut tree = zero_visit_tree(&board);
     let prior = uniform_prior(&board);
@@ -156,10 +132,7 @@ fn a_search_that_backed_up_visits_is_exportable() {
 
 #[test]
 fn an_unexpanded_root_is_refused_with_zero_children() {
-    // The degenerate edge: no expansion at all. Unreachable through `play_one_move` (a root
-    // that will not expand returns RootExpansionFailed before the exporter), so this is the
-    // function's own contract rather than a production drive — stated so the coverage claim
-    // is not read as wider than it is.
+    // The degenerate edge, unreachable through `play_one_move`: the function's own contract.
     let board = wide_board();
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
@@ -171,7 +144,7 @@ fn an_unexpanded_root_is_refused_with_zero_children() {
     }
 }
 
-// ── PIN INDEPENDENCE: the end-to-end drive, with every inference HEALTHY ─────────────
+// PIN INDEPENDENCE: the end-to-end drive, with every inference HEALTHY
 
 fn spawn_healthy_graph_producer(
     queue: GraphQueue,
@@ -212,12 +185,8 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     let spec = lookup_or_panic("gnn_axis_v1");
     let n_actions = spec.policy_logit_count;
 
-    // sims=1 + batch=1: the single sim is the root expansion, every child carries 0 visits,
-    // and EVERY inference succeeds. Nothing at the seam is wrong — which is the point.
-    // The 8 random opening plies stand in for the dispersed seed prefix this drive used to
-    // plant through `seed_fraction` / `seed_corpus`; those keys went with the seed-corpus
-    // lever at R346(f) and the runner has no start-position seeding left. The refusal does
-    // not depend on the position, so what is lost is the realism of the root, not the pin.
+    // sims=1 + batch=1: the single sim is the root expansion, every child carries 0 visits, and
+    // EVERY inference succeeds — nothing at the seam is wrong, which is the point.
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: 20,
@@ -277,7 +246,5 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     );
 }
 
-// R346(f): the DENSE arm's end-to-end leg is gone with the dense recorder. It existed to
-// drive the pin's arm-independence claim rather than assert it; there is one arm now, and
-// `refuse_zero_visit_export` is still called ungated in `play_one_move`, so the claim has
-// nothing left to be independent OF.
+// The dense arm's leg went with the dense recorder; with one arm left the arm-independence
+// claim has nothing to be independent OF.

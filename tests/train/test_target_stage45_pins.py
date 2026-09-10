@@ -33,7 +33,7 @@ GRAPH_ENCODING = "gnn_axis_v1"
 _GSPEC = lookup(GRAPH_ENCODING)
 
 
-# ── S4: dispatch pass-through, value-intact ──────────────────────────────────────────
+# S4: dispatch pass-through, value-intact
 def _graph_buffer(n_records: int = 6, capacity: int = 64) -> HexgBuffer:
     hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
@@ -113,7 +113,7 @@ def test_dispatch_forwards_policy_target_value_intact() -> None:
     )
 
 
-# ── S5: ragged CE carries sub-unity mass LINEARLY (no renorm) ────────────────────────
+# S5: ragged CE carries sub-unity mass LINEARLY (no renorm)
 def _toy_segments() -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     torch.manual_seed(20260731)
     counts = [5, 7]

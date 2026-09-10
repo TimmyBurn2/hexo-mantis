@@ -8,16 +8,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_the_makefile_dispatches_exactly_the_declared_target_set():
-    """The set stays EXACT so a stray target still reds this pin.
-
-    `lint` joined at WPCLEAN Phase LG as CI gate 14's local runner (R98); `vendor.sealbot`
-    joined at R324(c), because a vendor BUILD step reachable only by hand is a second
-    vendoring mechanism beside `make vendor`, which CLAUDE.md declares to be the one.
-
-    THE COUNT LEFT THIS NAME at R324(c) and the reason is the repo's own (R192(e),
-    derive-or-delete): a name that transcribes a tally must be re-edited on every change to
-    the thing it counts, and is then read as evidence by someone who did not re-derive it.
-    The SET below is the authority; nothing states its size."""
+    """The set stays EXACT so a stray target still reds this pin, and nothing states its SIZE:
+    a transcribed tally must be re-edited on every change to the thing it counts."""
     text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     targets = {
         m.group(1) for m in re.finditer(r"^([A-Za-z][A-Za-z0-9_.]*):", text, flags=re.MULTILINE)
@@ -25,7 +17,7 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
     assert targets == {
         "build", "build.native", "test", "test.integration", "lint", "lint.rust",
         # `gates` is the everyday set; `gates.exit` adds the slow tier, which BOTH pytest
-        # tiers deselect (R333(b)); `dashboard` renders a run record (R333(d)).
+        # tiers deselect; `dashboard` renders a run record.
         "gates", "gates.exit", "dashboard",
         "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "clean",
     }
@@ -43,9 +35,8 @@ def test_ci_yaml_pins_tiers_and_gate_scripts():
     for needle in (
         'pytest -m "not integration and not slow"',
         "pytest -m integration",
-        # The python job's workspace must still be built from the lockfile. Gate 1 syncs
-        # only inside its own temp clone, so without this the later steps' bare `uv run`
-        # would re-lock — an existing CI property REVIEW-impl caught being dropped.
+        # The python job's workspace must still be built from the lockfile: gate 1 syncs only
+        # inside its own temp clone, so without this a later bare `uv run` would re-lock.
         "uv sync --locked",
         "cargo test --workspace --locked",
         "cargo clippy --workspace --all-targets --locked -- -D clippy::all",
@@ -63,12 +54,8 @@ def test_ci_yaml_pins_tiers_and_gate_scripts():
 
 
 def _ci_run_commands() -> list[str]:
-    """Every `run:` body in ci.yml, across all jobs and steps.
-
-    Parsed, not grepped: a substring search over the raw file cannot tell a command
-    that EXECUTES a script from a step *name*, a comment, or a `with:` value that
-    merely mentions its path. That distinction is the whole point of this pin.
-    """
+    """Every `run:` body in ci.yml. Parsed, not grepped: a substring search cannot tell a
+    command that EXECUTES a script from a step name or a `with:` value naming its path."""
     spec = yaml.safe_load((REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text())
     return [
         step["run"]
@@ -81,13 +68,8 @@ def _ci_run_commands() -> list[str]:
 def _is_invocable(path: Path) -> bool:
     """A file CI can INVOKE: every .sh, and any .py with a `__main__` guard or a shebang.
 
-    WPBOX Phase Q: the preflight split leaves a LIBRARY module beside its gate
-    (`preflight_mint_parent.py`, loaded by `preflight_mint.py` off its own directory).
-    A library has no meaningful "invoked by ci.yml" obligation — its executable half is
-    the gate that loads it, and THAT file stays censused. The discrimination is derived
-    from file content, never a hand list (this test's own R44 lesson), so a real gate
-    script written tomorrow — which needs a `__main__` guard or shebang to be a gate at
-    all — cannot use this arm to hide.
+    Derived from file content, never a hand list, so a library module beside a gate is exempt
+    and a real gate script written tomorrow cannot use this arm to hide.
     """
     if path.suffix == ".sh":
         return True
@@ -96,11 +78,8 @@ def _is_invocable(path: Path) -> bool:
 
 
 def _gate_scripts() -> list[str]:
-    """Repo-relative paths of every gate script whose logic CI must invoke.
-
-    `tools/ci_gates/` recursively (so a script tucked in a subdirectory cannot hide),
-    plus gate 9, whose script is the one that lives directly under `tools/`.
-    """
+    """Repo-relative paths of every gate script CI must invoke: `tools/ci_gates/` recursively,
+    so a script in a subdirectory cannot hide, plus gate 9's script under `tools/`."""
     gate_dir = REPO_ROOT / "tools" / "ci_gates"
     found = {
         str(p.relative_to(REPO_ROOT))
@@ -112,34 +91,15 @@ def _gate_scripts() -> list[str]:
 
 
 def test_every_ci_gate_script_is_invoked_by_ci_yaml():
-    """No orphaned gate scripts (R44 / LAW-07).
-
-    The hand-written needle list above enumerated nine of the ten gate scripts and
-    silently omitted `gate_01_fresh_sync.sh`. That omission is why gate 1 could sit
-    unreferenced by any workflow step, any make target, and any test from WP0 until
-    WPUF-2 — while `ci.yml` ran a divergent inline reimplementation under gate 1's name
-    that never exercised the stale symbol the real script asserted. A hand-maintained
-    list cannot catch the gate it forgot, so this derives the expectation from the
-    filesystem instead.
-
-    Invocation, not mention: REVIEW-impl rebuilt the original bug against an earlier
-    version of this test — a step *named* for the script but with an inline `run:` body
-    passed, and so did commenting the `run:` line out. Both now fail, because only
-    executed `run:` bodies are searched.
+    """No orphaned gate scripts, derived from the filesystem rather than a hand list, and by
+    INVOCATION: only executed `run:` bodies are searched, so a step merely named for a script
+    fails.
     """
     scripts = _gate_scripts()
     assert scripts, "no gate scripts found — the census itself is broken"
 
-    # AUDIT-1 F-09 WIDENED WHAT "INVOKED" MEANS, and the widening is forced by the finding.
-    # `ci.yml` was the only place a gate could be invoked from, which is exactly the state
-    # F-09 measured as the defect: remote CI is SUSPENDED (R311(b)) and local green is the
-    # gate, so a script reachable only from a workflow file is a script nothing runs. Three
-    # invocation sites now count, and all three are executed things rather than mentions:
-    #   * a `run:` body in `ci.yml`;
-    #   * a recipe line in the `Makefile` (`make gates` runs the local gate set);
-    #   * another gate SCRIPT (gate 3c shells out to `tier_census.py`, and a gate invoked by
-    #     a gate is invoked).
-    # The original subject is untouched: a script no executed line names is still an orphan.
+    # Three invocation sites count, all executed rather than mentioned: a `run:` body in
+    # `ci.yml`, a `Makefile` recipe line, and another gate SCRIPT.
     commands = _ci_run_commands()
     makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
     gate_bodies = "\n".join(
@@ -160,15 +120,8 @@ def test_every_ci_gate_script_is_invoked_by_ci_yaml():
 
 
 def test_lint_and_type_gate_is_blocking_and_self_tested():
-    """The R57 advisory pin, RE-POINTED by its own designed path (WPCLEAN Phase LG, R98).
-
-    The old pin's docstring said re-blocking "must happen by burning the findings down, not
-    by flipping the flag" — Phase LT burned the configured surface to zero (CENSUS_LT), so
-    the flip is now legal and this pin inverts to guard the NEW posture: exactly one
-    lint/type step, running the gate script (invocation, not mention), with NO `|| true`
-    escape and the self-test armed on every run. An advisory `|| true` creeping back is
-    what this test now reds on — a permanently-advisory green is the fog R98 ended.
-    """
+    """Exactly one lint/type step, running the gate script, with NO `|| true` escape and the
+    self-test armed on every run — a permanently-advisory green is fog."""
     commands = _ci_run_commands()
     gate_steps = [c for c in commands if "lint_gate.sh" in c]
     assert len(gate_steps) == 1, (
@@ -177,24 +130,20 @@ def test_lint_and_type_gate_is_blocking_and_self_tested():
     step = gate_steps[0]
     assert "--self-test" in step, "gate 14 must arm its own trigger on every CI run"
     assert "|| true" not in step, "gate 14 is a GATE (R98); an advisory escape defeats it"
-    # The old standalone advisory invocations must not linger beside the gate — one
-    # authority for the lint verdict, not a gate plus a shadow report.
+    # One authority for the lint verdict: no standalone advisory invocation beside the gate.
     strays = [c for c in commands
               if ("ruff check" in c or "pyright" in c) and "lint_gate.sh" not in c]
     assert not strays, f"standalone ruff/pyright steps beside the gate: {strays}"
 
 
 def test_gate_01_script_actually_fresh_clones_and_syncs():
-    """repo_design §9.1: 'clone-and-run is the product', so gate 1 must CLONE.
-
-    Pins the two behaviours that `ci.yml` previously inlined incorrectly — it synced the
-    existing checkout, which cannot prove a fresh clone builds.
-    """
+    """Gate 1 must CLONE: `ci.yml` previously inlined a sync of the existing checkout, which
+    cannot prove that a fresh clone builds."""
     text = (REPO_ROOT / "tools" / "ci_gates" / "gate_01_fresh_sync.sh").read_text()
     assert "git clone" in text, "gate 1 must clone; syncing the checkout proves nothing"
     assert "uv sync --locked" in text, "gate 1 must build the extension from the lockfile"
-    # The call form, not the bare word: the script's own header comment explains the
-    # hello() rot, and a substring check for "hello()" would flag that explanation.
+    # The call form, not the bare word: a substring check for "hello()" would flag the
+    # script's own header comment explaining the rot.
     assert "_engine.hello" not in text, (
         "hello() was deleted at WP7 (8198016); gate 1 must not assert it"
     )

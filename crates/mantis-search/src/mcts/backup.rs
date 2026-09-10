@@ -9,65 +9,38 @@ use fxhash::FxHashSet;
 use mantis_core::board::{Board, WIN_LENGTH};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-/// Output of `pick_topk_children`: `(chosen, sort_used)` where `chosen` is a
-/// vector of `((q, r), prior)` entries and `sort_used` flags whether the
-/// slow sort path ran (vs the fast no-sort path).
-/// One expansion's Top-K pick: the children, whether the cap truncated, and the PRIOR MASS
-/// the truncation dropped.
-///
-/// The dropped mass is RETURNED rather than recorded into a static (R347). It used to go
-/// straight into process-global atomics, which made the measurement window shared by every
-/// search in the process: under a parallel `cargo test` any other test that expanded a node
-/// landed inside another test's bracket, and the witness then read a wrong number rather than
-/// a flaky one. A returned value has one owner — the tree whose expansion produced it.
+/// One expansion's Top-K pick: the children, whether the cap truncated, and the PRIOR MASS the
+/// truncation dropped. The mass is RETURNED rather than recorded into a static, so its
+/// measurement window has one owner instead of every search in the process.
 pub(crate) struct TopKPick {
     pub children: Vec<((i32, i32), f32)>,
-    /// Read by the pickers' own oracles only; production asks the counters instead, because
-    /// a truncation that dropped only zero-prior children costs nothing and this bool cannot
-    /// say so.
+    /// Read by the pickers' own oracles only: a truncation of zero-prior children costs nothing
+    /// and this bool cannot say so, so production asks the counters.
     #[allow(dead_code)]
     pub truncated: bool,
     pub dropped_prior_mass: f32,
 }
 
-/// Process-wide counter of pool-overflow events.
-///
-/// Should always read 0 in production: `MAX_CHILDREN_PER_NODE` caps children
-/// per node, and `MAX_NODES` is sized so `n_sims × leaf_batch × K` fits with
-/// headroom. Any non-zero value indicates either a hand-crafted small pool
-/// (test fixtures) or a configuration outside the design envelope.
-///
-/// On overflow the leaf expansion **panics** rather than fabricate a
-/// terminal value; this counter increments immediately before the panic so
-/// telemetry can attribute the crash. Earlier behaviour (silently marking
-/// the leaf terminal with a quiescence-corrected value) was removed because
-/// it corrupted training targets without surfacing the issue.
+/// Process-wide counter of pool-overflow events. Reads 0 in production; non-zero means a
+/// hand-crafted small pool or a config outside the design envelope. On overflow the expansion
+/// PANICS rather than fabricate a terminal value, incrementing this first for attribution.
 pub static POOL_OVERFLOW_COUNT: AtomicU64 = AtomicU64::new(0);
 
-/// Read-and-reset the global overflow counter atomically. Returns the
-/// previous value. Used by bench to bracket measurement windows.
+/// Read-and-reset the global overflow counter atomically, returning the previous value.
 pub fn take_pool_overflow_count() -> u64 {
     POOL_OVERFLOW_COUNT.swap(0, Ordering::Relaxed)
 }
 
-/// Read the current overflow count without resetting. Used by training
-/// loops that want a running tally rather than a per-window delta.
+/// Read the current overflow count without resetting, for a running tally.
 pub fn pool_overflow_count() -> u64 {
     POOL_OVERFLOW_COUNT.load(Ordering::Relaxed)
 }
 
-/// R345(b)(5) — the OMITTED PRIOR MASS the Top-K cap has dropped, and how many expansions
-/// dropped any. Fixed-point (mass x 1e6) because there is no atomic f32 and a float sum across
-/// threads would not be reproducible anyway.
-///
-/// WHY MASS AND NOT A COUNT. `topk_truncated` — the boolean the cap already returned — says
-/// only that SOME legal move was dropped, and at radius 8 that is true on essentially every
-/// ply (measured: the legal set exceeds 192 on 98% of plies even under clustered play). A
-/// boolean that is always true carries no information. What decides whether the cap costs
-/// anything is how much PRIOR the dropped moves held: a policy concentrated on a handful of
-/// moves loses nothing by dropping the 193rd, while a flat one loses most of its distribution.
-/// This is the quantity the clause's witness reads, and the quantity a decision to raise the
-/// cap has to be made against.
+/// The OMITTED PRIOR MASS the Top-K cap has dropped, and how many expansions dropped any, in
+/// fixed point (x 1e6) because there is no atomic f32 and a cross-thread float sum would not be
+/// reproducible. MASS AND NOT A COUNT: `topk_truncated` is true on essentially every ply at
+/// radius 8 (measured: the legal set exceeds 192 on 98% of plies even under clustered play), so
+/// what decides whether the cap costs anything is how much PRIOR the dropped moves held.
 pub static OMITTED_PRIOR_MASS_MICROS: AtomicU64 = AtomicU64::new(0);
 pub static OMITTED_PRIOR_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
 pub static TOTAL_EXPANSIONS: AtomicU64 = AtomicU64::new(0);
@@ -90,19 +63,15 @@ pub fn take_omitted_prior_stats() -> (u64, u64, u64) {
     )
 }
 
-/// Fixed-point encoding of a prior mass, shared by the per-tree and process-wide counters so
-/// the two cannot drift onto different scales.
+/// Fixed-point encoding of a prior mass, shared by the per-tree and process-wide counters.
 #[inline]
 #[must_use]
 pub(crate) fn mass_micros(mass: f32) -> u64 {
     (f64::from(mass) * 1e6) as u64
 }
 
-/// Accumulate one expansion's dropped prior into the PROCESS-WIDE totals.
-///
-/// Called from `MCTSTree::record_omitted_prior`, never from the pickers: the per-search
-/// counters are the primary and this is the run-wide aggregate the bridge face publishes, so
-/// one call site feeds both and an expansion cannot be counted in one and missed in the other.
+/// Accumulate one expansion's dropped prior into the PROCESS-WIDE totals, called only from
+/// `MCTSTree::record_omitted_prior` so an expansion cannot be in one set and missed in the other.
 #[inline]
 fn record_omitted_prior_global(dropped_mass: f32) {
     TOTAL_EXPANSIONS.fetch_add(1, Ordering::Relaxed);
@@ -112,35 +81,16 @@ fn record_omitted_prior_global(dropped_mass: f32) {
     }
 }
 
-/// Pick up to `MAX_CHILDREN_PER_NODE` children for a leaf expansion.
+/// Pick up to `MAX_CHILDREN_PER_NODE` children for a leaf expansion, returning `chosen` and
+/// whether the Top-K cap truncated.
 ///
-/// Returns `(chosen, topk_truncated)`:
-/// * `chosen` — `Vec<((q, r), prior)>`, length `min(legal_moves.len(), K)`,
-///   ALWAYS ordered by `(prior desc, window_flat_idx asc)`.
-/// * `topk_truncated` — `true` when `n_legal > K` and the Top-K cap dropped
-///   the lowest-prior moves; `false` otherwise. (`false` for `n_legal <= K`,
-///   so unit tests asserting the no-truncation case still hold.)
+/// Children are ALWAYS ordered by `(prior desc, window_flat_idx asc)`, independent of
+/// `FxHashSet` iteration order — a hashbrown table-layout artifact that leaked into
+/// `pick_best_puct`'s "first equal score wins" tie-breaking, where a capacity-reserve once
+/// shifted search silently (mcts_mean_depth 3.4 -> 2.5 from the bootstrap anchor).
 ///
-/// Canonical order — independent of `FxHashSet` iteration order. `legal_moves`
-/// is an `FxHashSet`; its iteration order is a hashbrown table-layout artifact
-/// (capacity + insertion order), NOT a semantic move order. Emitting children
-/// in raw iteration order leaked that layout into the MCTS child array and
-/// hence into `pick_best_puct` tie-breaking ("first equal score wins"). A prior
-/// `legal_moves_set` capacity-reserve changed the layout and silently shifted
-/// search behaviour (mcts_mean_depth 3.4 -> 2.5 from the bootstrap anchor).
-/// Both the small-set and the truncated case now sort by
-/// `(prior desc, window_flat_idx asc)`; the flat-index tie-break makes the
-/// child array fully deterministic regardless of `FxHashSet` capacity.
-///
-/// Out-of-window cells (`window_flat_idx == usize::MAX`) get sort prior
-/// `0.0` so they sink to the bottom of the slow path; in the fast path
-/// they keep the legacy `1/n_ch` fallback prior. Out-of-window legal cells
-/// are vanishingly rare given the centred 19×19 view + radius-8 hex ball.
-///
-/// `trunk_sz` + `half` are pre-extracted scalars matching the NN-input frame
-/// geometry (`Board::cluster_window_size`). For 19-window callers pass 19 / 9;
-/// for a 25-window pass 25 / 12. Per-MCTS-sim hot path — the kernel call is
-/// `#[inline]` to fold the bounds check + index math into this function.
+/// Out-of-window cells get sort prior `0.0` on the slow path and the `1/n_ch` fallback on the
+/// fast one. `trunk_sz`/`half` are the NN-input frame geometry: 19 / 9, or 25 / 12.
 #[inline]
 pub(crate) fn pick_topk_children(
     legal_moves: &FxHashSet<(i32, i32)>,
@@ -154,15 +104,8 @@ pub(crate) fn pick_topk_children(
     let n_legal = legal_moves.len();
     let n_ch = n_legal.min(cap);
 
-    // Single canonical path for every node size. Collect `((q,r), sort_prior,
-    // flat)` triples, sort by `(prior desc, flat asc)`, truncate to the Top-K
-    // cap (a no-op when `n_legal <= MAX_CHILDREN_PER_NODE`), then drain in
-    // order into the final `chosen` Vec. Sorting unconditionally is what makes
-    // the child array independent of `FxHashSet` iteration order — see the
-    // fn-doc: the previous `n_legal <= K` fast path emitted children in raw
-    // hash order, so the capacity-reserve perturbed search behaviour.
-    // The sort is O(K log K), K <= MAX_CHILDREN_PER_NODE — negligible beside
-    // the per-leaf NN forward that dominates expansion cost.
+    // One canonical path for every node size: the previous `n_legal <= K` fast path emitted
+    // children in raw hash order. O(K log K) is negligible beside the per-leaf NN forward.
     let mut all: Vec<((i32, i32), f32, usize, u32)> = legal_moves
         .iter()
         .map(|&(q, r)| {
@@ -172,14 +115,8 @@ pub(crate) fn pick_topk_children(
             } else {
                 0.0
             };
-            // The packed (q, r) key is the FINAL tie-break, and it exists because `flat` is
-            // `usize::MAX` for EVERY off-window cell — so on ties between two off-window
-            // cells the `flat` comparison is equal and `sort_unstable` leaves their order
-            // unspecified, which is the FxHashSet-iteration-order leak this function's doc
-            // says it closed. It never mattered while the cap sat below the window's cell
-            // count, because a zero-prior off-window child was always truncated away; R347(c)
-            // raised the cap past it. In-window cells have unique `flat`, so this changes no
-            // order that was already total.
+            // The packed (q, r) key is the FINAL tie-break: `flat` is `usize::MAX` for EVERY
+            // off-window cell, so `sort_unstable` would leave two of them unordered.
             let key = (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF);
             ((q, r), sort_prior, flat, key)
         })
@@ -215,14 +152,10 @@ pub(crate) fn pick_topk_children(
     }
 }
 
-/// Legal-set counterpart of `pick_topk_children`: reads each child's prior from
-/// the ragged `ls` BY COORD (in-window cells from `ls.dense`, the fast array
-/// path identical to the dense variant; covered off-window cells from
-/// `ls.overflow`; no-coverage cells from the `1/n_ch` floor). Tie-break is
-/// the packed (q,r) key — `window_flat_idx` is `usize::MAX` for ALL off-window
-/// cells so it is not a stable tiebreak here. Truncates by TRUE prior.
-/// `cq`/`cr` are the leaf's global window centre (the centre `ls.dense` was
-/// indexed with), passed through to `ls.get`.
+/// Legal-set counterpart of `pick_topk_children`: priors are read from the ragged `ls` BY COORD
+/// (in-window from `ls.dense`, covered off-window from `ls.overflow`, else the `1/n_ch` floor)
+/// and truncated by TRUE prior, tie-broken on the packed (q,r) key. `cq`/`cr` are the leaf's
+/// global window centre, the one `ls.dense` was indexed with.
 #[inline]
 pub(crate) fn pick_topk_children_ls(
     legal_moves: &FxHashSet<(i32, i32)>,
@@ -266,10 +199,7 @@ pub(crate) fn pick_topk_children_ls(
     }
 }
 
-/// R347 — the per-search omitted-prior counters, one set per `MCTSTree`.
-///
-/// Fixed-point mass (x 1e6) for the reason the process-wide statics carry it: there is no
-/// atomic f32, and a float sum across threads would not be reproducible anyway.
+/// The per-search omitted-prior counters, one set per `MCTSTree`, in the statics' fixed point.
 #[derive(Debug, Default)]
 pub struct OmittedPriorStats {
     mass_micros: AtomicU64,
@@ -315,9 +245,7 @@ impl OmittedPriorStats {
 }
 
 impl MCTSTree {
-    /// Count one expansion's dropped prior into BOTH this search's counters and the
-    /// process-wide totals — one call site, so an expansion cannot be in one and not the
-    /// other.
+    /// Count one expansion's dropped prior into both this search's counters and the totals.
     pub(crate) fn record_omitted_prior(&self, dropped_mass: f32) {
         self.omitted_prior.record(dropped_mass);
         record_omitted_prior_global(dropped_mass);
@@ -325,42 +253,23 @@ impl MCTSTree {
 
     /// Apply quiescence correction to a NN value at a non-terminal leaf.
     ///
-    /// Game theorem: each turn places 2 stones, so the opponent can block at most 2
-    /// winning cells per response.  If the current player has ≥3 winning moves,
-    /// the win is forced regardless of opponent play → override to +1.0.
-    /// Conversely, if the opponent has ≥3 winning moves the current player cannot
-    /// prevent a loss on the next turn → override to -1.0.
-    ///
-    /// The 2-winning-moves case is strong but unproven; we blend the NN value
-    /// toward the win/loss boundary by `quiescence_blend_2` (clamped to ±1.0).
-    ///
-    /// This check runs ONLY at leaf evaluation (value correction only).
-    /// The NN policy is still used for MCTS expansion so the network continues
-    /// to learn about these positions.
+    /// Each turn places 2 stones, so the opponent blocks at most 2 winning cells per response:
+    /// ≥3 winning moves is a forced win (+1.0), ≥3 for the opponent a forced loss (-1.0), and
+    /// the unproven 2-move case blends toward the boundary by `quiescence_blend_2`. Value
+    /// correction ONLY — the NN policy still drives expansion.
     #[inline]
     pub(crate) fn apply_quiescence(&self, board: &Board, value: f32) -> f32 {
         if !self.quiescence_enabled {
             return value;
         }
 
-        // Cheap pre-checks — two tiers, ordered by cost:
-        //
-        // Tier 1 (free): ply gate.
-        //   P1 places stones at ply 0, 3-4, 7-8, …; P1 first reaches 5 stones
-        //   at ply=8. P2 at ply=9.  With < 8 total half-moves on the board no
-        //   player can have 5 consecutive stones → count_winning_moves = 0.
-        //   Benchmarks start from an empty board, so this single comparison
-        //   eliminates quiescence overhead for virtually all MCTS benchmark
-        //   leaves and for early-game leaves during self-play.
+        // Tier 1 (free): the ply gate. P1 first reaches 5 stones at ply 8 and P2 at ply 9, so
+        // below 8 half-moves `count_winning_moves` is necessarily 0.
         if board.ply.index() < 8 {
             return value;
         }
 
-        // Tier 2 (O(stones × 3 × avg_run)): long-run check.
-        //   A winning move requires ≥5 consecutive stones.  Skip the expensive
-        //   count_winning_moves (O(legal_moves) with hex-ball-8 rules) for any
-        //   player that has no such run.  stone_count << legal_move_count so
-        //   this check is much cheaper than count_winning_moves.
+        // Tier 2: a winning move needs ≥5 consecutive stones, so skip the O(legal_moves) count.
         let current_player = board.current_player;
         let opponent = current_player.other();
         // A winning move needs a run of WIN_LENGTH - 1 (C1: no bare 5).
@@ -371,11 +280,7 @@ impl MCTSTree {
             return value;
         }
 
-        // §P32: consolidate 4 fetch_add(1) sites into a single fetch_add at
-        // function end. Bit-equivalent final counter value; saves 3 atomic ops
-        // per quiescence fire. No concurrent reader of quiescence_fire_count
-        // mid-apply_quiescence — all loads are telemetry/test-side after
-        // game/search completion.
+        // One `fetch_add` at function end rather than four sites; no reader loads it mid-call.
         let mut fired: u64 = 0;
         let current_wins = if current_may_threat {
             board.count_winning_moves(current_player)
@@ -411,8 +316,7 @@ impl MCTSTree {
         result
     }
 
-    /// Children `leaf_idx` may expand: the dialect's root cap at the root, the per-node
-    /// cap everywhere else.
+    /// Children `leaf_idx` may expand: the dialect's root cap at the root, per-node elsewhere.
     #[inline]
     fn expansion_cap(&self, leaf_idx: u32) -> usize {
         if leaf_idx == 0 {
@@ -436,21 +340,15 @@ impl MCTSTree {
             return;
         }
         if self.pool[leaf_idx as usize].is_expanded() {
-            // TT-hit path: node already expanded by a previous leaf visit.
-            // Still apply quiescence so repeated TT-backed values are corrected.
+            // TT-hit: already expanded, but still quiesce so repeated TT values are corrected.
             let corrected = self.apply_quiescence(board, value);
             self.backup(leaf_idx, corrected);
             return;
         }
 
         if board.check_win() {
-            // CF-1: derive the terminal sign from the leaf's side-to-move, not
-            // a hardcoded -1.0. `apply_move` flips the player only on a
-            // turn-final stone (mr 1→0→flip→2); a stone-1 win keeps the same
-            // player (mr 2→1, no flip). So `mr==1` ⇒ the winner is still to
-            // move ⇒ +1.0; `mr==2` ⇒ the player flipped to the loser ⇒ -1.0.
-            // The old hardcode scored a first-stone win as a loss, biasing the
-            // policy target toward filler-first move orders.
+            // CF-1: the terminal sign comes from the leaf's side-to-move — `mr==1` means the
+            // winner is still to move (+1.0), `mr==2` that the player flipped to the loser.
             let tv = if board.moves_remaining == 1 {
                 1.0
             } else {
@@ -470,27 +368,20 @@ impl MCTSTree {
             return;
         }
 
-        // Top-K cap on leaf children (see MAX_CHILDREN_PER_NODE doc).
-        // Read trunk_sz from Board's cached cluster_window_size (set at Board
-        // construction from the encoding's window for multi-window encodings;
-        // falls back to BOARD_SIZE for single-window). One field access.
+        // Top-K cap on leaf children; `trunk_sz` is Board's cached `cluster_window_size`.
         let (cq, cr) = board.window_center();
         let trunk_sz = board.cluster_window_size() as i32;
         let half = (trunk_sz - 1) / 2;
-        // The ROOT's cap is the dialect's (`MAX_CHILDREN_PER_NODE` under legacy, the full
-        // legal set under Mctx); every other node keeps the per-node cap. `leaf_idx == 0`
-        // IS the root by the pool's own convention — slot 0 is never reallocated.
+        // The ROOT's cap is the dialect's; `leaf_idx == 0` IS the root, since slot 0 is never
+        // reallocated.
         let cap = self.expansion_cap(leaf_idx);
         let pick = pick_topk_children(legal_moves, cq, cr, policy, trunk_sz, half, cap);
         self.record_omitted_prior(pick.dropped_prior_mass);
         self.finish_expansion(leaf_idx, board, pick.children, value);
     }
 
-    /// Shared tail of `expand_and_backup_single`[`_ls`]: materialise the chosen
-    /// children into the pool, apply quiescence to the leaf value, and backup.
-    /// Policy-representation-agnostic (operates on the already-picked `chosen`
-    /// list), so the dense and legal-set expansion paths share it verbatim —
-    /// keeping the dense path's behaviour byte-identical.
+    /// Shared tail of `expand_and_backup_single`[`_ls`]: materialise the children, quiesce and
+    /// backup. Representation-agnostic, so both paths share it.
     fn finish_expansion(
         &mut self,
         leaf_idx: u32,
@@ -502,11 +393,8 @@ impl MCTSTree {
         let first_child = self.next_free;
 
         if first_child as usize + n_ch > self.pool.len() {
-            // Should be unreachable in production: pool is sized for
-            // n_simulations × leaf_batch × MAX_CHILDREN_PER_NODE. Increment
-            // the counter for telemetry attribution, then panic — never
-            // fabricate a terminal value here, that silently corrupts
-            // training targets (the prior `is_terminal=true` shortcut).
+            // Unreachable in production: count for attribution, then panic — never fabricate a
+            // terminal value, which silently corrupts training targets.
             POOL_OVERFLOW_COUNT.fetch_add(1, Ordering::Relaxed);
             panic!(
                 "MCTS pool overflow: next_free={} n_ch={} pool_len={} K={}. \
@@ -546,21 +434,15 @@ impl MCTSTree {
         }
 
         let corrected = self.apply_quiescence(board, value);
-        // Mctx's `raw_values[node]`: captured HERE, at the one point this node's own
-        // network value is in hand, because `backup` immediately folds it into the
-        // running mean and it is unrecoverable from `w_value` afterwards. Empty vec
-        // under the legacy dialect, which reads the mean instead.
+        // Mctx's `raw_values[node]`, captured HERE because `backup` folds it into the mean.
         if let Some(slot) = self.raw_values.get_mut(leaf_idx as usize) {
             *slot = corrected;
         }
         self.backup(leaf_idx, corrected);
     }
 
-    /// Legal-set counterpart of `expand_and_backup_single`. Pre-checks identical
-    /// (terminal / TT-hit / win / no-legal); the only difference is the prior
-    /// source — `pick_topk_children_ls` reads the ragged `ls` by coord
-    /// (off-window covered cells get real priors, no uniform sink). Shares
-    /// `finish_expansion`.
+    /// Legal-set counterpart of `expand_and_backup_single`: identical pre-checks, priors from
+    /// the ragged `ls` by coord.
     pub(crate) fn expand_and_backup_single_ls(
         &mut self,
         leaf_idx: u32,
@@ -568,26 +450,15 @@ impl MCTSTree {
         ls: &LegalSetPolicy,
         value: f32,
     ) {
-        // Board-frame variant: read the ragged priors back in the SAME window
-        // frame the CNN legal-set producer indexed `ls.dense` with
-        // (`board.window_center()` / `board.cluster_window_size()`).
+        // Board-frame variant: read the priors in the frame the producer indexed `ls.dense` with.
         let (cq, cr) = board.window_center();
         let trunk_sz = board.cluster_window_size() as i32;
         self.expand_and_backup_single_ls_framed(leaf_idx, board, ls, value, cq, cr, trunk_sz);
     }
 
-    /// Frame-explicit `expand_and_backup_single_ls`. The caller supplies the
-    /// window centre `(cq, cr)` + `trunk_sz` that `ls.dense` was BAKED against,
-    /// instead of re-deriving them from `board`. Byte-identical to the
-    /// board-frame variant when passed `board.window_center()` /
-    /// `board.cluster_window_size()` (the CNN legal-set path).
-    ///
-    /// The graph seam assembles `ls.dense` slots from the builder's per-leaf
-    /// `window_center`, so it threads that same centre here — the builder's
-    /// bbox-midpoint `window_center(stones)` and `Board::window_center()` are
-    /// the identical formula over the same stones, but this makes the read frame
-    /// the SAME object the slots were baked with rather than a coincident
-    /// re-derivation.
+    /// Frame-explicit `expand_and_backup_single_ls`: the caller supplies the window centre and
+    /// `trunk_sz` that `ls.dense` was BAKED against, so the read frame is the SAME object the
+    /// slots were baked with rather than a coincident re-derivation.
     #[allow(clippy::too_many_arguments)] // frame (cq, cr, trunk_sz) is passed by value on the expand path (a struct bundle would re-pack per leaf)
     pub(crate) fn expand_and_backup_single_ls_framed(
         &mut self,
@@ -636,26 +507,16 @@ impl MCTSTree {
 
     /// Expand all pending leaves and backup values to the root.
     pub fn expand_and_backup(&mut self, policies: &[Vec<f32>], values: &[f32]) {
-        // §P9: pending now owns the leaf `Board` (§P6 tuple shape change).
-        // Per-leaf `root_board.clone() + N × apply_move` re-walk eliminated;
-        // each leaf board is consumed directly.
+        // `pending` owns the leaf `Board`, so each leaf board is consumed without a re-walk.
         let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
         let n = pending.len().min(policies.len()).min(values.len());
-        // AUDIT-1 F-22. `pending` is already `mem::take`n, so any leaf past `n` is DROPPED —
-        // and `select_one_leaf` incremented its virtual loss on the way down, which nothing
-        // else ever decrements. Those nodes stay permanently penalised for the rest of the
-        // search: their PUCT score is depressed by a loss that will never be backed up.
-        // The clamp itself stays (a short batch must not index out of bounds), but the leaves
-        // it discards get their virtual loss back, so a short return degrades the BATCH
-        // rather than the TREE.
+        // `pending` is already `mem::take`n, so any leaf past `n` is DROPPED carrying the
+        // virtual loss `select_one_leaf` added. Returning it degrades the BATCH, not the TREE.
         for (leaf_idx, _board) in &pending[n..] {
             self.undo_virtual_loss(*leaf_idx);
         }
 
-        // §P7: TTEntry.policy is `Arc<Vec<f32>>`. We allocate one Arc per
-        // first-touch insertion (cheaper than the prior per-hit clone path
-        // because hits dominate at high TT-hit rate); the policy slice is
-        // still threaded through `expand_and_backup_single` as `&[f32]`.
+        // One `Arc<Vec<f32>>` per first-touch insertion, cheaper than a per-hit clone.
         for i in 0..n {
             let (leaf_idx, board) = &pending[i];
             let policy = &policies[i];
@@ -673,19 +534,12 @@ impl MCTSTree {
         }
     }
 
-    /// Legal-set counterpart of `expand_and_backup`. Caches the ragged
-    /// `LegalSetPolicy` in the TT (`CachedPolicy::Ls`) so a TT-hit re-expansion
-    /// (selection.rs) replays the same ragged prior.
+    /// Legal-set counterpart of `expand_and_backup`, caching the ragged policy in the TT.
     pub fn expand_and_backup_ls(&mut self, policies: &[LegalSetPolicy], values: &[f32]) {
         let pending: Vec<(u32, Board)> = std::mem::take(&mut self.pending);
         let n = pending.len().min(policies.len()).min(values.len());
-        // AUDIT-1 F-22. `pending` is already `mem::take`n, so any leaf past `n` is DROPPED —
-        // and `select_one_leaf` incremented its virtual loss on the way down, which nothing
-        // else ever decrements. Those nodes stay permanently penalised for the rest of the
-        // search: their PUCT score is depressed by a loss that will never be backed up.
-        // The clamp itself stays (a short batch must not index out of bounds), but the leaves
-        // it discards get their virtual loss back, so a short return degrades the BATCH
-        // rather than the TREE.
+        // `pending` is already `mem::take`n, so any leaf past `n` is DROPPED carrying the
+        // virtual loss `select_one_leaf` added. Returning it degrades the BATCH, not the TREE.
         for (leaf_idx, _board) in &pending[n..] {
             self.undo_virtual_loss(*leaf_idx);
         }
@@ -706,13 +560,8 @@ impl MCTSTree {
         }
     }
 
-    /// Frame-explicit `expand_and_backup_ls` for the graph seam. `centers[i]` is
-    /// the builder's per-leaf `window_center` that `policies[i]` baked its
-    /// `dense` slots against; `trunk_sz` is the builder's slot-window trunk.
-    /// Threading the builder centre makes the prior read frame the same object
-    /// the slots were baked with. Pairing must line up with `self.pending`
-    /// order — `select_leaves` pushes `boards[i]`/`pending[i]` in lockstep, and
-    /// the caller builds `centers` from those same `boards`.
+    /// Frame-explicit `expand_and_backup_ls` for the graph seam: `centers[i]` is the builder's
+    /// centre that `policies[i]` baked against, and must line up with `self.pending` order.
     pub fn expand_and_backup_ls_at(
         &mut self,
         policies: &[LegalSetPolicy],
@@ -731,9 +580,7 @@ impl MCTSTree {
             let ls = &policies[i];
             let value = values[i];
             let (cq, cr) = centers[i];
-            // The builder's bbox-midpoint centre is the identical formula to
-            // `Board::window_center()` over the same stones; guard the invariant
-            // the cached-LS (TT-hit) re-read path also relies on.
+            // Guard the centre invariant the TT-hit re-read path also relies on.
             debug_assert_eq!(
                 board.window_center(),
                 (cq, cr),
@@ -781,8 +628,7 @@ mod ls_prior_tests {
 
     #[test]
     fn test_pick_topk_children_ls_reads_dense_and_overflow() {
-        // window centre (0,0), trunk 19, half 9. In-window cells read ls.dense;
-        // the off-window (28,0) reads ls.overflow; chosen is sorted by TRUE prior.
+        // In-window cells read ls.dense, off-window (28,0) reads ls.overflow, sorted by prior.
         let mut legal: FxHashSet<(i32, i32)> = FxHashSet::default();
         legal.insert((0, 0)); // wq=9,wr=9 → flat 9*19+9 = 180 (in-window)
         legal.insert((1, 0)); // wq=10,wr=9 → flat 10*19+9 = 199 (in-window)

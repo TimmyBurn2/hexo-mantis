@@ -1,19 +1,11 @@
-"""Suite E — the replay-buffer facade (`mantis.selfplay.buffers`).
+"""The replay-buffer facade (`mantis.selfplay.buffers`).
 
-The kind resolution (E-01/E-02), the zero-copy identity verdict (E-03) and the passthrough
-surface (E-05) all bind the SAME module and share the recording stub. The dense arms —
-the `ReplayBuffer` half of the kind cross-check, the `push_dense_many` identity verdict,
-the `#C3e` outcome-band capture and the HEXB/HEXG cross-magic rejection — went with the
-dense path (R346(f)); `BufferKind` now has one member.
+Kind resolution, the zero-copy identity verdict and the passthrough surface all bind the SAME
+module and share the recording stub; `BufferKind` now has one member.
 
-The per-buffer-kind rule this suite still holds: the graph `HexgBuffer` genuinely has no
-`outcome_in_range_count` on EITHER side, so the missing attribute must PROPAGATE and keep
-the caller's NaN fallback reachable. A fabricated number here is a FAIL (an undeclared
-behaviour change).
-
-E-07 (`test_pool_pushes_through_the_facade`) is NOT in this file: it asserts on
-`WorkerPool` construction, and `pool.py` is a later slice. Recorded as owed in
-`wp/WPSP/IMPL_NOTES_S2.md` so it is not silently dropped.
+The per-buffer-kind rule this suite holds: the graph `HexgBuffer` genuinely has no
+`outcome_in_range_count` on EITHER side, so the missing attribute must PROPAGATE and keep the
+caller's NaN fallback reachable. A fabricated number here is a FAIL.
 """
 from __future__ import annotations
 
@@ -68,19 +60,17 @@ class _RecordingBuffer:
         self.other.append(("set_weight_schedule", (thresholds, weights, default_weight)))
 
 
-# ── E-01 — closed match, no wildcard arm ─────────────────────────────────────────
 def test_kind_from_spec_closed_match() -> None:
     assert BufferKind.from_spec(_GRAPH_SPEC) is BufferKind.GRAPH
 
 
 @pytest.mark.parametrize("rep", ["grid", "dense", "GRAPH", "", None, "hex", "canvas"])
 def test_kind_from_spec_unknown_representation_raises(rep) -> None:
-    """LAW-11: an unknown/absent representation is an ERROR, never a silent default.
+    """An unknown or absent representation is an ERROR, never a silent default.
 
-    `"grid"` leads the list and is the sharpest member: it is the one value that USED to be
-    answered, and answering it now would hand a graph buffer back for a dense declaration —
-    the inverted dense-by-default arm. `"dense"` and the mis-cased `"GRAPH"` are near-misses,
-    which must not be coerced either."""
+    `"grid"` is the sharpest member: it is the one value that USED to be answered, and answering
+    it now would hand a graph buffer back for a dense declaration. `"dense"` and the mis-cased
+    `"GRAPH"` are near-misses, which must not be coerced either."""
     with pytest.raises(RepresentationMismatch):
         BufferKind.from_spec(_FakeSpec(representation=rep))
 
@@ -91,7 +81,7 @@ def test_kind_from_spec_no_attribute_raises() -> None:
 
 
 def test_matched_kind_raw_pairs_construct() -> None:
-    """LAW-07 clean twin: the guard must not reject the CORRECT pairing."""
+    """The clean twin: the guard must not reject the CORRECT pairing."""
     graph = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
     assert graph.kind is BufferKind.GRAPH
     # The raw handle is held, not copied or re-wrapped.
@@ -123,9 +113,8 @@ def test_zero_copy_passthrough_graph_arm() -> None:
 
 
 def test_facade_module_imports_no_numpy() -> None:
-    """The zero-copy grep, made mechanical: the facade module performs no array
-    operations at all, so it CANNOT copy. A `numpy` import appearing here is the first
-    sign the veneer grew a body."""
+    """The zero-copy grep made mechanical: the facade module performs no array operations at all,
+    so it CANNOT copy. A `numpy` import here is the first sign the veneer grew a body."""
     import ast
     import inspect
 
@@ -144,7 +133,6 @@ def test_facade_module_imports_no_numpy() -> None:
     assert "np" not in names, "the facade references `np` — it is no longer copy-free"
 
 
-# ── E-05 — passthrough surface + per-buffer-kind composition parity ──────────────
 def test_passthrough_surface_forwards() -> None:
     rec = _RecordingBuffer()
     facade = ReplayFacade(_GRAPH_SPEC, rec)
@@ -163,9 +151,8 @@ def test_passthrough_surface_forwards() -> None:
 
 
 def test_graph_arm_missing_getter_propagates() -> None:
-    """E-05(iii): the graph buffer genuinely has no `outcome_in_range_count` on EITHER
-    side. The facade must let the `AttributeError` out so the caller's NaN fallback stays
-    reachable — fabricating a number here is an undeclared behaviour change."""
+    """The graph buffer genuinely has no `outcome_in_range_count` on EITHER side, so the facade
+    must let the `AttributeError` out and keep the caller's NaN fallback reachable."""
     facade = ReplayFacade(_GRAPH_SPEC, HexgBuffer(capacity=8, encoding="gnn_axis_v1", visit_capacity=128))
     assert not hasattr(facade.raw, "outcome_in_range_count")
     with pytest.raises(AttributeError):

@@ -1,43 +1,13 @@
 # >300 justify (R8): the union reader, the per-member resolver that finds each member where it
-# is DEFINED, and the controls that show each of them can reject are ONE unit. A resolver whose
-# controls live in another file can be narrowed back to a single-file walk with nothing in the
-# same file going red — which is exactly how a member in another module went uninspected while
-# an aggregate vacuity guard reported the walk as measuring something.
-"""T2a — no member of the `ModelArch` union declares a symmetry claim, of any type.
+# is DEFINED, and the controls that show each of them can reject are ONE unit.
+"""No member of the `ModelArch` union declares a symmetry claim, of any type.
 
-AUTHORITY AND SCOPE. R307(b) DELETED `caps.exact_symmetries`; this tier is the PARTIAL
-implementation of `plan/DESIGN_ARCHCAPS.md` exit criterion 5(a). It is partial because 5(a)
-also covers `ArchCaps`' own fields, which do not exist at HEAD — when `ArchCaps` lands the same
-AST walk extends to it with NO rule change. **Criterion 5 is therefore recorded as PARTIALLY
-discharged with its residue named**, never as discharged: a criterion recorded as satisfied by
-a check that cannot see part of its subject is the overclaiming class.
+PARTIAL: `ArchCaps`' own fields do not exist at HEAD, and the same AST walk extends to them.
 
-ONE PRODUCER. One subject (`ModelArch`), one structural predicate. A green means "no symmetry
-claim has appeared", which is exactly what the module name says and not one word more.
-
-EVERY MEMBER IS INSPECTED WHERE IT IS DEFINED, AND THE VACUITY GUARD IS PER-MEMBER. The walk
-used to parse the union's own file and match a `ClassDef` by name there, so a member imported
-from another module contributed ZERO inspected declarations while the aggregate `inspected > 0`
-guard was satisfied by its siblings — a member carrying `exact_symmetries` passed. A new arch
-in its own module imported into the union is the ordinary way this file grows, so the resolver
-follows the import edge (`from … import X`, relative or absolute, re-export chains, and the
-`module.X` spelling of a union operand) to the file that defines the member and walks the
-`ClassDef` THERE. A member that cannot be located as a class definition is refused BY NAME
-rather than silently contributing nothing. What the per-member guard asserts is that each
-member's body was WALKED — not that it declared at least one name: a genuinely empty member
-declares no claim, and refusing it would be a false red rather than a stronger check.
-
-MECHANISM IS AST, NEVER REGEX (R296(f)). The adjacent `tests/model/test_arch_ban.py` guards a
-DIFFERENT subject (the arch-off-module sniff) with a regex; this tier shares no subject with it
-and deliberately does not inherit its mechanism.
-
-CASE POSTURE, STATED (R297(b)): matching is CASE-INSENSITIVE over the declared name, so
-`D6_MAP` and `Symmetries` fire. The family is ENUMERATED and NON-EXHAUSTIVE — `symmetr*`,
-`automorphism*`, `equivarian*`, `d6`, `p6m`, `sym_*` — and it is a NAME family, so a
-value-level claim on an innocuously named field (`augmentation_policy: Literal["d6", …]`) is
-outside this mechanism. That residue is real and is not papered over; the near-miss negative
-control below exists to stop the family being quietly widened until it fires on ordinary
-fields.
+Every member is inspected WHERE IT IS DEFINED and the vacuity guard is PER-MEMBER: matching a
+`ClassDef` by name in the union's own file inspected nothing for an imported member while an
+aggregate guard was satisfied by its siblings. Matching is CASE-INSENSITIVE and the name family
+is ENUMERATED and NON-EXHAUSTIVE, so a value-level claim on a benign name is out of scope.
 """
 from __future__ import annotations
 
@@ -51,8 +21,8 @@ from _corpus import ConformanceRefusal
 
 ARCH_MODULE = Path(__file__).resolve().parents[3] / "src" / "mantis" / "model" / "arch.py"
 UNION_NAME = "ModelArch"
-#: Import-edge hops followed while locating a member. A re-export chain is finite; a cycle is
-#: broken by the visited set below, and this only bounds pathological depth.
+#: Import-edge hops followed while locating a member; a cycle is broken by the visited set, so
+#: this only bounds pathological depth.
 _MAX_IMPORT_HOPS = 8
 
 #: The enumerated, non-exhaustive symmetry-name family. Case-folded before matching.
@@ -75,8 +45,7 @@ class ArchUnionUnresolved(ConformanceRefusal):
 
 
 class ArchMemberNotLocated(ConformanceRefusal):
-    """A resolved union member was never found as a class definition, so nothing on it was
-    inspected — while the other members satisfied an aggregate vacuity guard."""
+    """A resolved union member was never found as a class definition, so nothing was inspected."""
 
 
 def is_symmetry_named(name: str) -> bool:
@@ -85,12 +54,7 @@ def is_symmetry_named(name: str) -> bool:
 
 
 def union_members(path: Path) -> tuple[str, ...]:
-    """The member class names of `ModelArch`, READ off the PEP-604 `BinOp`, never transcribed.
-
-    `ModelArch = CnnArch | GnnArch` (`src/mantis/model/arch.py:73`) is a `BinOp(BitOr)`. A walk
-    that fails to resolve it inspects zero classes and passes — which is why the member set is
-    returned and asserted rather than used silently.
-    """
+    """The member class names of `ModelArch`, READ off the PEP-604 `BinOp`, never transcribed."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     members: list[str] = []
     for node in ast.walk(tree):
@@ -108,9 +72,8 @@ def union_members(path: Path) -> tuple[str, ...]:
             elif isinstance(item, ast.Name):
                 members.append(item.id)
             elif isinstance(item, ast.Attribute):
-                # `orbit.OrbitArch` — recorded with its dotted prefix rather than DROPPED, which
-                # is what an operand-shape the reader ignores does: it removes a member from the
-                # subject without removing it from the union.
+                # Recorded with its dotted prefix rather than DROPPED: an ignored operand shape
+                # removes a member from the subject, not from the union.
                 dotted = _dotted(item)
                 if dotted:
                     members.append(dotted)
@@ -137,12 +100,8 @@ def _dotted(node: ast.expr) -> str:
 
 
 def package_root(path: Path) -> tuple[Path, str]:
-    """`(import root, dotted package)` for a module, derived by walking `__init__.py` upwards.
-
-    Derived rather than typed so every control below can drive the resolver against a temp tree
-    with its own package layout — a resolver whose root is hard-coded is one no planted break
-    can reach.
-    """
+    """`(import root, dotted package)`, derived by walking `__init__.py` upwards so the controls
+    can drive the resolver against a temp tree."""
     parts: list[str] = []
     directory = path.parent
     while (directory / "__init__.py").is_file():
@@ -162,8 +121,7 @@ def _module_file(root: Path, dotted: str) -> Path | None:
 
 
 def _absolute_module(node: ast.ImportFrom, package: str) -> str:
-    """The dotted module an `ImportFrom` names, with a relative import resolved against its
-    own package — `from .orbit import X` inside `mantis.model` is `mantis.model.orbit`."""
+    """The dotted module an `ImportFrom` names, relative imports resolved against their package."""
     if not node.level:
         return node.module or ""
     parts = package.split(".") if package else []
@@ -176,10 +134,9 @@ def locate_member(path: Path, member: str, _seen: frozenset[Path] = frozenset())
 ):
     """`(defining file, its ClassDef)` for one union member, or `None` if it cannot be located.
 
-    Resolution order: a `ClassDef` of that name in `path`; else the import edge in `path` that
-    binds the name, followed into the file it names; else, for a dotted member, the module that
-    its prefix binds. THE POINT IS THAT THE SECOND CASE EXISTS: matching a `ClassDef` by name in
-    the union's own file returns nothing for an imported member, and returning nothing is
+    Resolution order: a `ClassDef` of that name in `path`; else the import edge that binds the
+    name; else, for a dotted member, the module its prefix binds. The second case is the point:
+    matching by name in the union's own file returns nothing for an imported member, which is
     indistinguishable from "declares no symmetry claim".
     """
     if path in _seen or len(_seen) > _MAX_IMPORT_HOPS or not path.is_file():
@@ -224,12 +181,8 @@ def _module_alias_target(tree: ast.AST, prefix: str) -> str:
 
 
 def declared_names(path: Path, member: str) -> tuple[str, ...]:
-    """Every field, `ClassVar`, property and method name declared on one member class.
-
-    `path` is the union's file; the member is walked at the file that DEFINES it, which is not
-    the same file in general. An unlocatable member returns `()` here and is refused by name at
-    the gate — never treated as a member that declares nothing.
-    """
+    """Every name declared on one member class, walked at the file that DEFINES it; an
+    unlocatable member returns `()` and is refused by name at the gate."""
     located = locate_member(path, member)
     return () if located is None else declarations_of(located[1])
 
@@ -268,11 +221,8 @@ def require_union_resolved(members: tuple[str, ...], path: Path) -> int:
 def require_every_member_located(path: Path, members: tuple[str, ...]) -> dict[str, str]:
     """THE PER-MEMBER VACUITY GUARD. Returns `member -> defining file`; refuses by name.
 
-    The guard it replaces was `sum(len(declared_names(...)) for member in members) > 0`, an
-    AGGREGATE: two members with fields satisfied it while a third contributed nothing because
-    the walk could not see its file at all. An aggregate vacuity guard over a subject whose
-    members are inspected independently reports "this measured something" when it measured a
-    proper subset — the overclaiming class, inside the tier written to refuse it.
+    The aggregate guard it replaces was satisfied by two members with fields while a third
+    contributed nothing because the walk could not see its file at all.
     """
     sites: dict[str, str] = {}
     unlocated: list[str] = []
@@ -314,7 +264,7 @@ def test_no_member_of_the_arch_union_declares_a_symmetry_claim(derived):
 
 
 def test_an_UNRESOLVED_union_is_refused(tmp_path):
-    """PB-11. The walk reports the member set it inspected, and an empty one FAILS."""
+    """The walk reports the member set it inspected, and an empty one FAILS."""
     stub = tmp_path / "arch.py"
     stub.write_text("CnnArch = object\nModelArch = 3\n", encoding="utf-8")
     assert union_members(stub) == ()
@@ -323,7 +273,7 @@ def test_an_UNRESOLVED_union_is_refused(tmp_path):
 
 
 def test_a_THIRD_union_member_carrying_a_symmetry_field_is_caught(tmp_path):
-    """PB-12. Proves the union is READ, not transcribed: a hard-coded two-member walk passes."""
+    """The union is READ, not transcribed: a hard-coded two-member walk passes this."""
     stub = tmp_path / "arch.py"
     stub.write_text(
         "class CnnArch:\n    board_size: int\n\n"
@@ -339,8 +289,7 @@ def test_a_THIRD_union_member_carrying_a_symmetry_field_is_caught(tmp_path):
 
 
 def _package(tmp_path: Path, modules: dict[str, str]) -> Path:
-    """A temp import tree — `dotted module name -> source` — under a package root, so the
-    resolver is driven over a real import edge rather than a stubbed one. Returns `arch.py`."""
+    """A temp import tree under a package root, so the resolver runs over a real import edge."""
     root = tmp_path / "src"
     for dotted, body in modules.items():
         target = root.joinpath(*dotted.split("."))
@@ -354,9 +303,8 @@ def _package(tmp_path: Path, modules: dict[str, str]) -> Path:
 
 
 def test_a_member_defined_in_ANOTHER_MODULE_is_inspected_where_it_is_DEFINED(tmp_path):
-    """F-RT-1. The member is correctly resolved INTO the union and its declarations were
-    inspected zero times, so a `exact_symmetries` on it passed. This is the ordinary shape of a
-    new arch: its own module, imported into the union."""
+    """A member defined in another module is inspected there — the ordinary shape of a new arch,
+    and the one whose declarations used to be inspected zero times."""
     arch = _package(
         tmp_path,
         {
@@ -380,9 +328,8 @@ def test_a_member_defined_in_ANOTHER_MODULE_is_inspected_where_it_is_DEFINED(tmp
 
 
 def test_a_RELATIVE_import_and_a_DOTTED_operand_resolve_to_the_same_definition(tmp_path):
-    """The two other spellings of the same edge. `from .orbit import X` and `orbit.OrbitArch`
-    as a union operand both have to reach `orbit.py`; the dotted operand additionally has to
-    survive the union reader, which used to drop a non-`Name` operand without a word."""
+    """Both other spellings of the edge reach `orbit.py`; the dotted operand must also survive
+    the union reader, which used to drop a non-`Name` operand without a word."""
     arch = _package(
         tmp_path,
         {
@@ -405,9 +352,7 @@ def test_a_RELATIVE_import_and_a_DOTTED_operand_resolve_to_the_same_definition(t
 
 
 def test_a_member_that_cannot_be_LOCATED_is_refused_BY_NAME(tmp_path):
-    """The per-member vacuity guard, driven where the aggregate one is satisfied: two members
-    with fields and one whose module does not exist. The old aggregate `inspected > 0` passes
-    on this input, which is the whole finding."""
+    """The per-member guard driven where the aggregate one is satisfied."""
     arch = _package(
         tmp_path,
         {
@@ -428,10 +373,8 @@ def test_a_member_that_cannot_be_LOCATED_is_refused_BY_NAME(tmp_path):
 
 
 def test_the_LOCATOR_does_NOT_fire_on_the_real_union():
-    """Negative control. A locator that cannot find the shipped union's members would red the
-    tier for its own reason rather than for its subject's. It asserts that every member was
-    LOCATED — not WHERE: which file a member lives in is the thing this tier stopped caring
-    about, and pinning it here would red on the ordinary refactor the fix exists to follow."""
+    """Negative control: every member was LOCATED, not WHERE — pinning the file would red on the
+    ordinary refactor this resolver exists to follow."""
     members = union_members(ARCH_MODULE)
     sites = require_every_member_located(ARCH_MODULE, members)
     assert set(sites) == set(members)
@@ -439,7 +382,7 @@ def test_the_LOCATOR_does_NOT_fire_on_the_real_union():
 
 
 def test_a_symmetry_claim_fires_as_a_VALUE_a_CALLABLE_and_a_GATE_POINTER(tmp_path):
-    """PB-13. R307(b) bars the claim of ANY type, so all three spellings must fire."""
+    """The claim is barred whatever its type, so all three spellings must fire."""
     stub = tmp_path / "arch.py"
     stub.write_text(
         "class CnnArch:\n"
@@ -459,8 +402,7 @@ def test_a_symmetry_claim_fires_as_a_VALUE_a_CALLABLE_and_a_GATE_POINTER(tmp_pat
 
 
 def test_the_stated_CASE_posture_is_pinned_by_its_own_control():
-    """PB-14. Case-insensitive is a POSTURE, not an accident: `D6_ORBIT: ClassVar[int]` walks
-    straight through a case-sensitive `d6` match, and that is the shape the family is for."""
+    """Case-insensitive is a POSTURE: `D6_ORBIT` walks straight through a case-sensitive match."""
     assert is_symmetry_named("D6_MAP")
     assert is_symmetry_named("Symmetries")
     assert is_symmetry_named("EQUIVARIANCE_TOL")
@@ -468,8 +410,7 @@ def test_the_stated_CASE_posture_is_pinned_by_its_own_control():
 
 
 def test_the_family_does_NOT_fire_on_a_NEAR_MISS():
-    """PB-15, a negative control and as binding as any positive one. A tier that fires on the
-    near miss is measuring a proxy, and the family would then be widened until it flagged
-    ordinary fields — which is how a guard's green stops meaning its name."""
+    """A negative control, as binding as any positive one: firing on the near miss measures a
+    proxy."""
     for benign in ("dihedral_order", "res_blocks", "policy_hidden", "n_value_bins", "system"):
         assert not is_symmetry_named(benign), benign

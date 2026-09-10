@@ -1,67 +1,38 @@
-// Exceeds the 300-line soft cap (R8): the plain-slice edge-geometry validator
-// and its full mutation-oracle test suite (the ADV-8 producer's self-tests)
-// port as one line-auditable unit.
-//! `verify_edge_geometry` — the ragged graph-wire contract's
-//! `EdgeAttrGeometryMismatch` semantic check (contract §2.5, check 14 of 18),
-//! ported onto the fused multi-graph wire as a single Rust pass over the SAME
-//! post-marshal fused-wire arrays, read as zero-copy readonly views
-//! (`numpy::PyReadonlyArray1`). Mirrors the per-edge geometry re-derivation the
-//! native builder already runs in `mantis_graph::verify_contract`, adapted to
-//! the fused wire: global edge ids, per-graph `current_player`/dummy-node
-//! identity looked up via a `node_offsets`-derived ownership map instead of a
-//! single graph's fields.
+// Exceeds the 300-line soft cap (R8): the plain-slice edge-geometry validator and its full
+// mutation-oracle test suite port as one line-auditable unit.
+//! `verify_edge_geometry` — the ragged graph-wire contract's `EdgeAttrGeometryMismatch` semantic
+//! check, ported onto the fused multi-graph wire as a single Rust pass over the SAME post-marshal
+//! arrays, read as zero-copy readonly views. It mirrors `mantis_graph::verify_contract`'s
+//! per-edge re-derivation, adapted to global edge ids and a `node_offsets`-derived ownership map.
 //!
-//! Every sub-assertion moves verbatim: dummy-edge all-zero attrs, clean axis
-//! one-hot, integral + bounded `signed_dist`, `src_player` == stone own/opp
-//! identity × `current_player`. None sampled, skipped, or debug-gated. On
-//! mismatch this raises a generic `ValueError`; the Python call site catches it
-//! and re-raises the NAMED `EdgeAttrGeometryMismatch` (same exception type, same
-//! post-marshal catching boundary — the ADV-8 test injects its corruption into
-//! the Python payload *before* this call, so it still fires).
+//! Every sub-assertion moves verbatim — dummy-edge all-zero attrs, clean axis one-hot, an
+//! integral and bounded `signed_dist`, `src_player` identity — none sampled, skipped or
+//! debug-gated, and a mismatch raises the generic error the Python call site re-raises as the
+//! NAMED exception.
 //!
-//! Deliberately NOT in the `mantis-graph` crate (which stays wasm32-clean and
-//! Python-optional) — this is bridge-crate PyO3 glue only, matching the
-//! `apply_symmetries_batch` pattern in `utils.rs`.
-//!
-//! Never panics on malformed input (defensive bounds/shape checks return an
-//! `Err` instead of indexing out of range): this is the externally-injectable
-//! ADV-8 producer, so hostile input must surface as a catchable `PyValueError`
-//! ("die loud but recoverable"), never a panic.
-//!
-//! Logic lives in the plain-slice `verify_edge_geometry_impl` (no PyO3 types) so
-//! `cargo test` can drive it directly without an attached Python interpreter.
-//! The `#[pyfunction]` is a thin shim: extract zero-copy slices, delegate, map
-//! `Err(String)` to `PyValueError`.
+//! Deliberately NOT in `mantis-graph`, which stays wasm32-clean: this is bridge-crate PyO3 glue.
+//! It never panics on malformed input, and the logic lives in the plain-slice impl so
+//! `cargo test` can drive it without an interpreter.
 
 use numpy::PyReadonlyArray1;
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
 use mantis_graph::WIN_AXES;
-
-/// Recompute + verify every real (non-dummy) edge's `edge_attr` row against
-/// the geometry implied by its endpoints' `node_coords` and the owning
-/// graph's `current_player`. Pure Rust over plain slices — no PyO3 types.
-///
-/// Arrays are the exact post-marshal flat layout the semantic check already
-/// holds (contract §2.1): `node_feat` row-major `(N, node_feat_dim)` (col 0
-/// = own, col 1 = opp), `node_coords` flat `(N, 2)` axial `(q, r)`,
-/// `edge_index` flat `(2, E)`, `edge_attr` row-major `(E, edge_feat_dim)`
-/// with columns `[onehot0, onehot1, onehot2, signed_dist, src_player]`,
-/// `node_offsets` CSR `(B+1,)` (last row of each graph's range is its dummy
-/// node), `current_player` per-graph `(B,)` in `{+1, -1}`.
+/// Recompute + verify every real (non-dummy) edge's `edge_attr` row against the geometry implied
+/// by its endpoints' `node_coords` and the owning graph's `current_player`. Pure Rust over plain
+/// slices, on the post-marshal flat layout: `node_feat` row-major `(N, node_feat_dim)` (col 0
+/// own, col 1 opp), `node_coords` flat `(N, 2)`, `edge_index` flat `(2, E)`, `edge_attr`
+/// row-major `[onehot0, onehot1, onehot2, signed_dist, src_player]`, `node_offsets` CSR whose
+/// last row per graph is its dummy node, `current_player` per-graph in `{+1, -1}`.
 ///
 /// # Errors
-/// Returns `Err(message)` on the first geometry violation found, or on a
-/// malformed-shape input. The structural layer always runs before this and
-/// already guarantees consistent shapes/dtypes, but this function never trusts
-/// that blindly — see the module doc's panic note: every index is range-checked
-/// before use.
-// `float_cmp` allowed: the compared floats are EXACT constants the builder
-// itself wrote (one-hot 0.0/1.0, integral signed_dist, ±1.0 src_player) —
-// approximate comparison would WEAKEN the check. Same justification as
-// `mantis_graph::verify_contract`'s `#[allow(clippy::float_cmp)]`, which this
-// function mirrors for the fused wire.
+/// Returns `Err(message)` on the first geometry violation or malformed-shape input. Every index
+/// is range-checked before use rather than trusting the structural layer.
+/// Returns `Err(message)` on the first geometry violation or malformed-shape input. Every index
+/// is range-checked before use rather than trusting the structural layer.
+// `float_cmp` allowed: the compared floats are EXACT constants the builder itself wrote, so
+// approximation would WEAKEN the check.
 #[allow(
     clippy::too_many_arguments,
     clippy::similar_names,
@@ -79,14 +50,8 @@ fn verify_edge_geometry_impl(
     edge_feat_dim: usize,
     win_length: i64,
 ) -> Result<(), String> {
-    // --- shape guards (defensive; structural layer already enforces these
-    // upstream, but this fn must never index out of range on a corrupt
-    // input — this is the ADV-8 producer). ---
-    // AUDIT-1 F-22(d). The bound was `node_feat_dim == 0`, but this function reads
-    // `node_feat[s * node_feat_dim + 1]` — the opponent-stone channel — so a dim of ONE
-    // passed the guard and then indexed one past the last element of the final node's row.
-    // The docstring promises this function "never indexes out of range on a corrupt input",
-    // and it is the ADV-8 producer, so the guard must cover every offset the body uses.
+    // Shape guards: this is the externally injectable producer, so it must never index out of
+    // range on a corrupt input. The dim bound is >= 2 because the body reads channel 1.
     if node_feat_dim < 2 || edge_feat_dim < 5 {
         return Err(format!(
             "verify_edge_geometry: degenerate dims node_feat_dim={node_feat_dim} \
@@ -136,8 +101,7 @@ fn verify_edge_geometry_impl(
         ));
     }
 
-    // node_is_dummy[i] / node_graph[i]: single O(N) pass over node_offsets,
-    // shared prep for every edge.
+    // node_is_dummy/node_graph: one O(N) pass over node_offsets, shared prep per edge.
     let mut node_is_dummy = vec![false; n];
     let mut node_graph = vec![0u32; n];
     for g in 0..b {
@@ -179,8 +143,7 @@ fn verify_edge_geometry_impl(
             continue;
         }
 
-        // exactly one of the 3 axis one-hots is 1.0, rest 0.0 (first-max
-        // tie-break, matching np.argmax).
+        // exactly one of the 3 axis one-hots is 1.0 (first-max tie-break, matching np.argmax).
         let onehot = [a[0], a[1], a[2]];
         let mut axis = 0usize;
         for k in 1..3 {
@@ -195,10 +158,7 @@ fn verify_edge_geometry_impl(
             ));
         }
 
-        // signed_dist must be integral (compare the original f32 against its
-        // round-tripped value — any fractional part fails this regardless of
-        // rounding convention, since a genuinely fractional value can never
-        // equal an integer once rounded).
+        // signed_dist must be integral: a fractional value never equals its own rounded form.
         let dist = a[3]; // edge_attr col 3 = signed_dist (contract §2.1, not a state plane)
         let di = dist.round() as i64;
         if dist != di as f32 {
@@ -239,15 +199,12 @@ fn verify_edge_geometry_impl(
     Ok(())
 }
 
-/// PyO3 shim: extract zero-copy readonly slices, delegate to
-/// `verify_edge_geometry_impl`, map `Err(String)` to `PyValueError`. The Python
-/// call site re-raises into the named `EdgeAttrGeometryMismatch`.
+/// PyO3 shim: extract zero-copy readonly slices, delegate, map `Err(String)` to `PyValueError`,
+/// which the Python call site re-raises as the named `EdgeAttrGeometryMismatch`.
 ///
 /// # Errors
-/// `PyValueError` on any geometry violation or malformed-shape input; also
-/// propagates `AsSliceError` (via `?`) if a caller passes a non-contiguous
-/// numpy view (never happens on the real wire — the arrays are always
-/// contiguous flat vectors — but not assumed).
+/// `PyValueError` on any geometry violation or malformed-shape input; also propagates
+/// `AsSliceError` if a caller passes a non-contiguous numpy view.
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn verify_edge_geometry(
@@ -275,8 +232,7 @@ pub(crate) fn verify_edge_geometry(
     .map_err(PyValueError::new_err)
 }
 
-/// Register the `verify_edge_geometry` free fn into `_engine`. Called by Slice
-/// ASM's `#[pymodule]` assembly.
+/// Register the `verify_edge_geometry` free fn into `_engine`.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(verify_edge_geometry, m)?)?;
     Ok(())
@@ -290,10 +246,8 @@ mod tests {
     const EDGE_FEAT_DIM: usize = 5;
     const WIN_LENGTH: i64 = 6;
 
-    /// One graph: 2 stones (own=+1 at (0,0), opp at (1,0)) + 1 legal node
-    /// (2,0) + 1 dummy node (row 3). current_player = +1. One clean axis-0
-    /// edge from stone 0 (0,0) to legal node 2 (2,0): signed_dist=2,
-    /// src_player = (own-opp)*cp = (1-0)*1 = 1.
+    /// One graph: 2 stones (own at (0,0), opp at (1,0)), 1 legal node (2,0), 1 dummy (row 3),
+    /// current_player = +1, one clean axis-0 edge with signed_dist=2, src_player=1.
     #[allow(clippy::type_complexity)] // 6-array flat-wire fixture tuple
     fn clean_fixture() -> (Vec<f32>, Vec<i32>, Vec<i64>, Vec<f32>, Vec<i64>, Vec<i8>) {
         let mut node_feat = vec![0.0f32; 4 * NODE_FEAT_DIM];
@@ -351,10 +305,7 @@ mod tests {
         .is_ok());
     }
 
-    /// ADV-8-equivalent: flip the signed_dist column (`edge_attr[3]`) sign —
-    /// the same corruption `test_adv_8_edge_attr_permuted` injects into the
-    /// post-marshal payload (`p.edge_attr[3] = -p.edge_attr[3]`). Must raise:
-    /// the flipped delta no longer matches `coords[d] - coords[s]`.
+    /// The ADV-8 corruption: a flipped `signed_dist` sign no longer matches the coord delta.
     #[test]
     fn flipped_signed_dist_raises() {
         let (nf, nc, ei, mut ea, no, cp) = clean_fixture();
@@ -550,8 +501,7 @@ mod tests {
         assert!(err.contains("current_player"), "got: {err}");
     }
 
-    /// Distance out of [1, win_length-1] must raise even when the one-hot
-    /// and delta arithmetic are internally consistent (di=6 > win_max=5).
+    /// A distance outside [1, win_length-1] raises even when one-hot and delta agree.
     #[test]
     fn out_of_window_distance_raises() {
         let node_feat = vec![0.0f32; 4 * NODE_FEAT_DIM];

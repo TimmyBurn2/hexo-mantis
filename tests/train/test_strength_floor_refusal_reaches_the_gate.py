@@ -1,33 +1,14 @@
-# >300 justify: producer, seam and consumer are ONE claim here — the defect was that the
-# worker's verdict reached the gate through NOTHING, so a file that split at any of the
-# three joins would assert a key it also invented and pass over the gap (R69).
-"""R324(d) — a round the strength floor REFUSED is NAMED at LAW-15's gate.
+# >300 justify: producer, seam and consumer are ONE claim here — the worker's verdict reached
+# the gate through NOTHING, so a file split at any of the three joins would assert a key it
+# also invented and pass over the gap.
+"""A round the strength floor REFUSED is NAMED at LAW-15's gate.
 
-**F-RESIT-14'S HOLE, IN A THIRD FORM.** That hole was that a round which BROKE and a healthy
-round that simply carried no sealbot number reached `on_eval_round_complete` as the SAME
-observable: one skip event, one reason string, `wr_sealbot_absent`. It was closed by giving
-the broken round its own reason.
-
-A round the strength floor refused is a THIRD thing, and before this file it was reported as
-the first: not broken (`eval_broken_reason is None`), not healthy-but-metric-less (the floor
-DID measure something and it failed a bar), but deliberately not played. `worker.run_round`
-returns at PHASE 0 with no gate result, so `wr_sealbot` is `None`, so the gate emitted
-`wr_sealbot_absent` — indistinguishable from a quiet healthy round. The same defect, a new
-cause.
-
-**THE PRODUCER HALF IS HERE BECAUSE THE ROUTE IS THE DEFECT.** The floor's verdict was
-produced by the worker and read by `_emit_posture_events` for the event channel, and it
-reached the gate through NOTHING — `build_round_result` did not carry it. So this file drives
-the production producer and the production consumer, and the row that would have caught the
-original gap is `test_the_producer_carries_the_verdict_the_gate_reads`: assert the reason
-string alone and the file passes over a mapping the gate can never see.
-
-**PRESENCE IS THE ARMING EVIDENCE, and the disarmed arm is the load-bearing row.** Every
-committed config mints `eval.strength_floor: null`, so the worker payload carries no
-`strength_floor` key, so neither does the routed mapping, so this gate behaves exactly as it
-did before the floor existed. Without that row, a branch that named every metric-less round
-`strength_floor_refused` would satisfy the other rows while destroying the distinction they
-exist to draw — which is precisely how the hole this file closes was opened.
+A refused round is a THIRD thing and was reported as the first: not broken, not
+healthy-but-metric-less, but deliberately not played, so the gate emitted `wr_sealbot_absent`.
+The producer half is here because THE ROUTE IS THE DEFECT — the verdict was produced by the
+worker, read by `_emit_posture_events`, and reached the gate through nothing. PRESENCE IS THE
+ARMING EVIDENCE: every committed config mints `eval.strength_floor: null`, so a disarmed round
+carries no key and this gate behaves as it did before the floor existed.
 """
 from __future__ import annotations
 
@@ -48,13 +29,9 @@ _REPO = Path(__file__).resolve().parents[2]
 
 
 def _make_coordinator():
-    """A minimal coordinator, harness PRIVATE to this file — the house convention.
-
-    Not imported from a sibling test module: `tests` is not a package (R5), so a
-    `from tests.train... import` resolves under one pytest invocation and raises
-    `ModuleNotFoundError` under another. The config is DERIVED from the production builder
-    rather than hand-written as a kwarg census, so a new coordinator knob costs no edit here.
-    """
+    """A minimal coordinator, harness PRIVATE to this file: `tests` is not a package (R5), so a
+    cross-test import resolves under one pytest invocation and raises under another. The config
+    is DERIVED from the production builder, so a new coordinator knob costs no edit here."""
     from mantis.config.loader import load_config
     from mantis.config.resolve.coordinator import resolve_coordinator_knobs
     from mantis.config.resolve.drain import resolve_drain_caps
@@ -121,20 +98,16 @@ def _make_coordinator():
 
 
 class _Rec:
-    """The two `GameRecord` fields `probe_measurements` reads. Nothing else is touched, so
-    this cannot drift out of agreement with the production rule by carrying a stale field."""
+    """The two `GameRecord` fields `probe_measurements` reads, and nothing else, so it cannot
+    drift by carrying a stale field."""
 
     def __init__(self, *, terminal: str, winner: int | None) -> None:
         self.terminal, self.winner = terminal, winner
 
 
 def _verdict_payload(*, decisive: int, games: int) -> dict[str, Any]:
-    """A REAL floor verdict from the production rule, never a hand-written dict.
-
-    `evaluate_strength_floor` decides unpatched; only the probe's RECORDS are planted, for
-    the reason `tests/eval/test_strength_floor_refuses_the_round.py` states — no checkpoint
-    that exists off-box produces a controlled decisive rate.
-    """
+    """A REAL floor verdict from the production rule, never a hand-written dict; only the
+    probe's RECORDS are planted, since no off-box checkpoint gives a controlled decisive rate."""
     from mantis.arena.adjudicate import TERMINAL_PLY_CAP, TERMINAL_WIN
     from mantis.config.resolve.eval_posture import StrengthFloorSpec
 
@@ -146,8 +119,7 @@ def _verdict_payload(*, decisive: int, games: int) -> dict[str, Any]:
 
 def _round(*, floor: dict[str, Any] | None, reason: EvalBrokenReason | None = None,
            step: int = 5000) -> dict[str, Any]:
-    """A round result built by the PRODUCTION producer, floor payload threaded as the
-    pipeline threads it (`_success_result` passes `raw.get("strength_floor")`)."""
+    """A round result built by the PRODUCTION producer, floor payload threaded as it is live."""
     return build_round_result(
         step=step, round_id=f"r000001_{step}", rungs_config=[], rung_results={},
         gate_result=None, skipped_rungs=[], bt={}, schedule_next={},
@@ -164,15 +136,9 @@ def _skip_event(result: dict[str, Any]) -> dict[str, Any]:
     return dict(events[0])
 
 
-# ── the producer half ────────────────────────────────────────────────────────────────────
 def test_the_producer_carries_the_verdict_the_gate_reads() -> None:
-    """`build_round_result` must put the floor verdict on the routed mapping.
-
-    THE ROUTE IS THE DEFECT. Before R324(d) the worker produced this payload and only
-    `_emit_posture_events` consumed it; the mapping the gate reads never carried it, so no
-    branch on `strength_floor` in `step.py` could ever have fired. A file that asserted the
-    reason string alone would pass over that.
-    """
+    """`build_round_result` must put the floor verdict on the routed mapping — before this, no
+    branch on `strength_floor` in `step.py` could ever have fired."""
     floor = _verdict_payload(decisive=0, games=4)
     result = _round(floor=floor)
     assert result["strength_floor"] == floor
@@ -189,18 +155,14 @@ def test_the_producer_carries_the_verdict_the_gate_reads() -> None:
 
 
 def test_the_disarmed_posture_puts_NO_floor_key_on_the_routed_mapping() -> None:
-    """Every committed config mints `eval.strength_floor: null`. Presence IS the arming
-    evidence, so a disarmed round's mapping must be byte-identical to a pre-floor one."""
+    """Presence IS the arming evidence: a disarmed round's mapping is byte-identical to a
+    pre-floor one."""
     assert "strength_floor" not in _round(floor=None)
 
 
 class _FakePipeline:
-    """`EvalPipeline._success_result` lifted off the class, collaborators stubbed.
-
-    The unbound production method is invoked against this stand-in, exactly as
-    `tests/eval/test_eval_posture_inert.py` does for `_emit_posture_events`, so the code
-    exercised is production and only the ladder/config collaborators are stubs.
-    """
+    """`EvalPipeline._success_result` lifted off the class, ladder/config collaborators stubbed
+    so the code exercised is production."""
 
     class _Ladder:
         rungs: tuple = ()
@@ -212,8 +174,7 @@ class _FakePipeline:
 
     class _State:
         def status(self, rung: str) -> str:
-            """AUDIT-1 F-28/B02: `_success_result` now stamps each rung's REAL ladder status
-            (the child has none), so the stand-in has to answer for the rungs it is given."""
+            """`_success_result` stamps each rung's REAL ladder status, so this must answer."""
             return "active"
 
         def record_round(self, *a, **k) -> None: ...
@@ -228,10 +189,8 @@ class _FakePipeline:
         self._eval_cfg = SimpleNamespace(ladder=self._Ladder())
         self._ladder_state_path = Path("/nonexistent/ladder.json")
         self._last_p_hat: dict = {}
-        # R343(b)(iii)/(iv): `_finalize_round` also drives the external-channel assessment now.
-        # The stand-in carries the REAL method rather than a stub, for this file's own stated
-        # reason — "the code exercised is production". A stub here would keep these rows green
-        # while the producer went unexercised.
+        # `_finalize_round` also drives the external-channel assessment, so the stand-in
+        # carries the REAL method: a stub would keep these rows green with the producer unrun.
         from functools import partial
 
         from mantis.eval.pipeline import EvalPipeline as _EP
@@ -251,18 +210,15 @@ class _FakePipeline:
         return self._last_p_hat
 
     def _check_the_sealbot_rung_identity(self, rungs_raw, result, *, round_id):
-        """The PRODUCTION method, bound through the class — not a stub (AUDIT-1 F-14). It
-        walks `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
+        """The PRODUCTION method — it walks the `rungs` this stand-in supplies."""
         from mantis.eval.pipeline import EvalPipeline
 
         return EvalPipeline._check_the_sealbot_rung_identity(
             self, rungs_raw, result, round_id=round_id)
 
     def _emit_posture_events(self, inflight, raw) -> None:
-        """The PRODUCTION method, bound through the class — not a stub. Its own witness is
-        `tests/eval/test_eval_posture_inert.py`; what matters here is that the event channel
-        and the routed mapping read the SAME `raw` key, so a payload that stops arriving
-        silences both rather than leaving one reporting a stale verdict."""
+        """The PRODUCTION method: the event channel and the routed mapping read the SAME `raw`
+        key, so a payload that stops arriving silences both rather than staling one."""
         from mantis.eval.pipeline import EvalPipeline
 
         EvalPipeline._emit_posture_events(self, inflight, raw)
@@ -272,11 +228,8 @@ class _FakePipeline:
 def test_the_PIPELINE_carries_the_workers_floor_payload_onto_the_routed_mapping(
     armed: bool,
 ) -> None:
-    """THE SEAM ROW. `_success_result` is the ONLY place the worker child's floor verdict can
-    enter the mapping the gate reads, and it is a single keyword argument — the exact shape
-    that goes missing without a witness. Driven, not asserted structurally: a break planted
-    by deleting that keyword left every other row in this file green.
-    """
+    """THE SEAM ROW. `_success_result` is the only place the child's verdict can enter the
+    mapping the gate reads, and deleting that keyword left every other row here green."""
     from mantis.eval.pipeline import EvalPipeline
 
     class _Sink:
@@ -306,7 +259,6 @@ def test_the_PIPELINE_carries_the_workers_floor_payload_onto_the_routed_mapping(
         assert _skip_event(result)["reason"] == "wr_sealbot_absent"
 
 
-# ── the consumer half ────────────────────────────────────────────────────────────────────
 def test_a_floor_refused_round_is_NAMED_at_the_gate() -> None:
     floor = _verdict_payload(decisive=0, games=4)
     event = _skip_event(_round(floor=floor))
@@ -321,9 +273,7 @@ def test_a_floor_refused_round_is_NAMED_at_the_gate() -> None:
 
 
 def test_a_floor_that_PASSED_is_not_a_refusal() -> None:
-    """The arm that stops the branch reading "the floor ran" as "the floor refused". A round
-    whose probe passed and whose gate block then produced no sealbot number is the ORIGINAL
-    healthy-but-metric-less case and must keep its own reason."""
+    """A round whose probe PASSED but produced no sealbot number keeps its own reason."""
     floor = _verdict_payload(decisive=4, games=4)
     assert floor["passed"] is True
     event = _skip_event(_round(floor=floor))
@@ -332,7 +282,7 @@ def test_a_floor_that_PASSED_is_not_a_refusal() -> None:
 
 
 def test_the_disarmed_round_still_says_wr_sealbot_absent() -> None:
-    """THE LOAD-BEARING ROW. Without it, a branch that named every metric-less round
+    """THE LOAD-BEARING ROW: without it, a branch naming every metric-less round
     `strength_floor_refused` would satisfy every row above while re-opening the hole."""
     event = _skip_event(_round(floor=None))
     assert event["reason"] == "wr_sealbot_absent", event
@@ -341,9 +291,8 @@ def test_the_disarmed_round_still_says_wr_sealbot_absent() -> None:
 
 @pytest.mark.parametrize("reason", tuple(EvalBrokenReason), ids=[r.value for r in EvalBrokenReason])
 def test_broken_OUTRANKS_refused_and_the_precedence_is_pinned(reason: EvalBrokenReason) -> None:
-    """Stated precedence, driven. A round that broke may still carry a floor payload from
-    before the break, and "this round could not run" is the stronger fact about why the gate
-    has no number. Pinned so the ordering is a decision rather than a line position."""
+    """A broken round may still carry a floor payload from before the break, and "this round
+    could not run" is the stronger fact; pinned so the ordering is a decision."""
     event = _skip_event(_round(floor=_verdict_payload(decisive=0, games=4), reason=reason))
     assert event["reason"] == "eval_round_broken", event
     assert event["eval_broken_reason"] is reason, event
@@ -357,16 +306,9 @@ def test_the_three_reasons_are_PAIRWISE_DISTINCT() -> None:
     assert len({refused, absent, broken}) == 3, (refused, absent, broken)
 
 
-# ── AUDIT-1 F-05: the games the refused round PLAYED ─────────────────────────────────────
-#
-# `_success_result` summed rung games + random games + the gate's pooled/screen count. On a
-# refused floor the worker returns from PHASE 0 with `gate=None`, `rungs={}` and
-# `random.games = 0`, so all three terms are zero and `eval_round_complete.games_total`
-# read 0 for a round that had just played `probe_games` real games — while
-# `eval_strength_floor.games` beside it reported N. The 0 was COMPUTED, not literal, so the
-# AST sentinel that bans a literal `0` at the call site never saw it, and RECAL §8.1 is a
-# sitting that was misread on exactly this field. run5 and shakedown_20260807 both ARM the
-# floor, so the path is live.
+# `_success_result` sums rung + random + gate games, all zero on a refused floor, so
+# `eval_round_complete.games_total` read 0 for a round that had just played `probe_games` real
+# games. The 0 was COMPUTED, so the sentinel banning a literal `0` at the call site never saw it.
 
 def _round_complete_event(sink_events: list[dict[str, Any]]) -> dict[str, Any]:
     matches = [e for e in sink_events if e.get("event") == "eval_round_complete"]
@@ -394,8 +336,7 @@ def _drive_success_result(raw: dict[str, Any]) -> tuple[dict[str, Any], list[dic
 
 
 def test_a_floor_refused_round_reports_the_games_its_probe_PLAYED() -> None:
-    """THE PIN (F-05). Sixteen probe games, every other phase empty: `games_total` is 16.
-    Before the repair it was 0 — a round that played sixteen games reported none."""
+    """Sixteen probe games, every other phase empty: `games_total` is 16, not the 0 it read."""
     floor = _verdict_payload(decisive=0, games=16)
     raw: dict[str, Any] = {
         "rungs": {}, "gate": None, "random": {"games": 0, "wr": None},
@@ -410,8 +351,7 @@ def test_a_floor_refused_round_reports_the_games_its_probe_PLAYED() -> None:
 
 
 def test_the_two_events_AGREE_about_the_probe_games() -> None:
-    """The audit's own criterion: `eval_round_complete` and `eval_strength_floor` are emitted
-    for the same round and must not disagree about how many games the probe played."""
+    """`eval_round_complete` and `eval_strength_floor` must agree on the probe's game count."""
     floor = _verdict_payload(decisive=0, games=16)
     raw: dict[str, Any] = {
         "rungs": {}, "gate": None, "random": {"games": 0, "wr": None},
@@ -424,8 +364,7 @@ def test_the_two_events_AGREE_about_the_probe_games() -> None:
 
 
 def test_a_PASSING_floor_adds_its_probe_games_to_the_rounds_total() -> None:
-    """The probe is played on the passing path too, and those games are equally real. A sum
-    that counted them only on refusal would make `games_total` mean two different things."""
+    """The probe's games count on the passing path too, or `games_total` means two things."""
     floor = _verdict_payload(decisive=4, games=4)
     assert floor["passed"] is True
     raw: dict[str, Any] = {
@@ -438,9 +377,7 @@ def test_a_PASSING_floor_adds_its_probe_games_to_the_rounds_total() -> None:
 
 
 def test_the_DISARMED_round_total_is_byte_identical_to_the_pre_floor_sum() -> None:
-    """The load-bearing control. Every other committed config mints `strength_floor: null`;
-    with no floor key the sum must be exactly what it always was, or the repair changed the
-    number on runs that have no floor at all."""
+    """With no floor key the round total must be exactly what it always was."""
     raw: dict[str, Any] = {
         "rungs": {"sealbot_d5": {"games": 8, "wr": 0.5, "wr_ci_lower": 0.2}},
         "gate": None, "random": {"games": 6, "wr": 0.5}, "skipped_rungs": [],

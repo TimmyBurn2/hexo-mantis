@@ -1,42 +1,8 @@
-"""⊕ WP12-R Phase O / O-12 (R152/LAW-11) — `apply_gate_decision` reads the reason FIRST and
-UNCONDITIONALLY, and an ABSENT reason is an error rather than "assume clean".
+"""Prove `apply_gate_decision` reads the broken-reason first and unconditionally.
 
-RED-at-HEAD on its own mechanism for three of four arms (⊕): no module-level import anchor
-is used, so the reds below are evidence about the guard, not about a missing module. The one
-arm that needs an `EvalBrokenReason` member imports it inside its own body, so a missing
-enum reds THAT arm and no other.
-
-`promote.py:43` is the ONLY production consumer of "was this round broken?" in all of `src/`
-(DESIGN_O §a.3, verified). At HEAD it reads `result.get("eval_broken")` — a silent-`None`-is
--falsy read, so a result mapping that never carried the key at all is indistinguishable from
-one that carried `False`. That is the stale-fixture class: a hand-built or half-migrated
-round mapping promotes, and nothing anywhere says a decision was taken on an absent fact.
-
-Two things must therefore hold, and they are DIFFERENT things:
-
-  1. The read is a SUBSCRIPT, not a `.get` — an absent `eval_broken_reason` raises
-     `KeyError`. This is LAW-11's posture one layer over: absent is an ERROR, never a
-     default.
-  2. The read comes FIRST in the `or`. This is not style. With
-     `if not result.get("promoted") or result["eval_broken_reason"] is not None:` Python's
-     `or` short-circuits on a NON-promoted mapping and the reason is never read — so exactly
-     the stale fixture the guard claims to catch sails through. The promoted arm alone
-     cannot see that (`not True` is False, so the second operand IS evaluated); only the
-     non-promoted arm can.
-
-The four arms, and what each is the ONLY witness to:
-
-- arm (a) `..._absent_reason_on_a_promoted_result_raises` — sole witness to the `.get` →
-  subscript change on the path that would actually have promoted. MUTATION (M-O12).
-- arm (b) `..._absent_reason_on_a_NON_promoted_result_also_raises` — sole witness to the
-  OPERAND ORDER. MUTATION (M-O12b): reorder the two operands; arm (a) stays GREEN and only
-  this arm reds. A promoted-only oracle is blind to it.
-- arm (c) `..._a_present_reason_refuses_to_promote` — the guard still does its original job.
-  Sole witness that the reason (not the deleted `eval_broken` bool) is what vetoes.
-- arm (d) `..._a_clean_round_still_promotes_and_the_reason_was_actually_read` — the
-  over-fire direction, plus the ACCESS assertion that makes arm (d) mean something: a guard
-  that never reads the reason at all also promotes a clean round, so without the access
-  record this arm would pass at HEAD for precisely the wrong reason.
+Two separate things must hold: the read is a SUBSCRIPT, so an absent reason raises rather than
+reading as clean; and it is the FIRST operand of the `or`, because otherwise a non-promoted
+mapping short-circuits and the stale fixture the guard exists to catch sails through.
 """
 from __future__ import annotations
 
@@ -50,13 +16,10 @@ from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 
 
 class _RecordingResult(dict):
-    """A round-result mapping that records WHICH keys the guard actually looked at.
+    """Record which keys the guard actually looked at.
 
-    The access log is what turns "a clean round promotes" from a statement that is true of
-    a guard which reads nothing into a statement about a guard which read the reason and
-    then promoted (R81: the assertion must not be satisfiable by the absence of the thing
-    under test). `get` is overridden alongside `__getitem__` so a `.get`-shaped read is
-    recorded too — otherwise M-O12 would restore the silent read and leave this file green.
+    Without the log, "a clean round promotes" is also true of a guard that reads nothing. `get`
+    is overridden beside `__getitem__` so a restored `.get`-shaped silent read is recorded too.
     """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -73,9 +36,8 @@ class _RecordingResult(dict):
 
 
 class _RecordingHooks:
-    """The deploy-tag collaborators, recording. A promotion is observable ONLY as a
-    `save_anchor` call plus the returned step — nothing else in this module has a side
-    effect a test can read."""
+    """Record the deploy-tag collaborators; a promotion is observable only as a `save_anchor`
+    call plus the returned step."""
 
     def __init__(self, tmp_path: Path) -> None:
         self.saved: list[dict] = []
@@ -98,22 +60,19 @@ class _RecordingHooks:
 
 
 def _result(**fields: Any) -> _RecordingResult:
-    """A round-result mapping with the fields the guard and the promotion path read. No
-    `eval_broken_reason` unless the caller supplies one — its ABSENCE is the subject of two
-    of the four arms, so it is never defaulted in here."""
+    """Build a round-result mapping; `eval_broken_reason` is never defaulted in, because its
+    absence is the subject of two arms."""
     base = {"step": 7, "round_id": "r000001_7", "wr_sealbot": 0.6}
     base.update(fields)
     return _RecordingResult(base)
 
 
-# ══ arm (a) — absent reason, promoted ══════════════════════════════════════════════════
 def test_an_absent_reason_on_a_promoted_result_raises(tmp_path) -> None:
-    """O-12 arm (a). The promoted path is the one with consequences: a stale mapping that
-    never carried the reason must not advance the deploy tag off a fact nobody supplied.
+    """Prove an absent reason on a promoted result raises instead of advancing the deploy tag.
 
-    MUTATION THAT REDS IT (M-O12): restore `result.get("eval_broken_reason")`. The guard
-    then reads `None`, treats it as clean, and promotes — silently, which is the whole
-    defect."""
+    Killer: restore `result.get("eval_broken_reason")` — the guard then reads `None`, treats it
+    as clean, and promotes silently.
+    """
     rig = _RecordingHooks(tmp_path)
     result = _result(promoted=True)
 
@@ -126,18 +85,12 @@ def test_an_absent_reason_on_a_promoted_result_raises(tmp_path) -> None:
     )
 
 
-# ══ arm (b) — absent reason, NOT promoted (the operand-order arm) ══════════════════════
 def test_an_absent_reason_on_a_NON_promoted_result_also_raises(tmp_path) -> None:
-    """O-12 arm (b) — the arm a promoted-only oracle cannot see (REVIEW note N3).
+    """Prove an absent reason raises on a NON-promoted result too — the only observation that
+    separates "read unconditionally" from "read when Python gets that far".
 
-    Behaviourally this round was not going to promote either way, so it looks harmless. It
-    is not: it is the ONLY observation that distinguishes "the reason is read
-    unconditionally" from "the reason is read when Python happens to get that far". If the
-    guard is written `if not result.get("promoted") or result["eval_broken_reason"] is not
-    None:` then `or` short-circuits here and the stale mapping passes through in silence —
-    and the next stale mapping, the one that DOES carry `promoted=True`, is arm (a)'s.
-
-    MUTATION THAT REDS IT (M-O12b): that exact reorder. Arm (a) stays GREEN under it."""
+    Killer: put the `promoted` test first in the `or`. The promoted-only arm stays green.
+    """
     rig = _RecordingHooks(tmp_path)
     result = _result(promoted=False)
 
@@ -150,15 +103,11 @@ def test_an_absent_reason_on_a_NON_promoted_result_also_raises(tmp_path) -> None
     )
 
 
-# ══ arm (c) — a present reason vetoes ══════════════════════════════════════════════════
 def test_a_present_reason_refuses_to_promote(tmp_path) -> None:
-    """O-12 arm (c). The guard's original job, re-pointed onto the one authority: a round
-    that broke does not advance the deploy tag, and what says it broke is the REASON, not a
-    boolean beside it.
+    """Prove a present reason vetoes promotion, with the reason as the one authority.
 
-    The enum is imported HERE rather than at module scope on purpose: this is the only arm
-    that needs a member, so a missing `EvalBrokenReason` reds this node alone and leaves the
-    other three reddening (or passing) on their own mechanism."""
+    The enum is imported in-body so a missing member reds this arm alone.
+    """
     from mantis.eval.errors import EvalBrokenReason
 
     rig = _RecordingHooks(tmp_path)
@@ -173,17 +122,11 @@ def test_a_present_reason_refuses_to_promote(tmp_path) -> None:
     )
 
 
-# ══ arm (d) — a clean round still promotes, and the reason WAS read ════════════════════
 def test_a_clean_round_still_promotes_and_the_reason_was_actually_read(tmp_path) -> None:
-    """O-12 arm (d) — the over-fire direction, with the anti-vacuity assertion that makes it
-    an oracle instead of a tautology.
+    """Prove a clean round still promotes AND that the reason was actually looked at.
 
-    "A clean round promotes" is also true of a guard that reads nothing at all, which is
-    exactly the state of the tree before this phase. The access record is what separates the
-    two: the reason must have been LOOKED AT and found to be `None`.
-
-    MUTATION THAT REDS IT: veto on `reason is None` (inverted sense), or drop the reason
-    read entirely (the access assertion catches the second one; nothing else here would).
+    Killer: invert the veto sense, or drop the reason read entirely — only the access assertion
+    catches the second.
     """
     rig = _RecordingHooks(tmp_path)
     result = _result(promoted=True, eval_broken_reason=None)

@@ -1,37 +1,20 @@
-"""⊕ WPMINT Phase DS ORACLE — the draw-rate abort's STATISTIC (R92), and the two permanent
-regression oracles the operator mandated by name.
+"""ORACLE — the draw-rate abort's STATISTIC, and the two permanent regression oracles.
 
-RED-at-import until IMPL lands the R92 delta: `PoolInstrumentation.pooled_draw_counts` and
-`mantis.train.coordinator.config.pooled_draw_rate` do not exist at HEAD.
+Every drive is on the REAL `PoolInstrumentation`, the window constant is asserted against the
+deque itself and never a literal, and nothing here writes a file.
 
-This file replaces `test_drawrate_min_samples_inclusion.py` (R73 name-truth: its whole
-subject — the per-worker `min_samples` inclusion bar and its 51-counterexample — is what R92
-DELETES). What survives from it is the discipline, not the assertions: every drive is on the
-REAL `PoolInstrumentation`, the window constant is asserted against the deque itself and never
-against the literal 50, and nothing here writes a file (R7 / gate 6).
+The statistic is `Sum(draws) / Sum(completed)` over the UNION of worker windows, replacing an
+unweighted mean over a *filtered* set that was measured firing at a true pool draw rate of
+0.0319 and staying silent at 0.968; both counterexamples are preserved below as permanent
+regression oracles, and being 32-worker rigs they pin a STATISTIC, not run5's `n_workers: 1`
+posture. Below `N_pool_min` there is NO OBSERVATION — `None`, never a healthy `0.0` appended to
+the abort history as a real measurement. And `Sum(completed)` cannot exceed
+`DRAW_RATE_WINDOW * n_workers`, so a bar above that ceiling makes the gate structurally unable
+to observe while auditing ARMED; the schema half lives in `test_drawrate_schema_range.py`.
 
-WHAT R92 CHANGED, and what each oracle below is the sole witness to.
-
-* **The statistic.** `Σ draws / Σ completed` over the UNION of worker windows, replacing an
-  unweighted mean over a *filtered* set. WPMINT Phase DR measured the old metric firing at a
-  true pool draw rate of 0.0319 and staying silent at 0.968 (RECHECK_D findings DR-3/DR-4).
-  R92 ordered both counterexamples preserved as PERMANENT regression oracles — `DS-1` and
-  `DS-2` below. They are MULTI-WORKER rigs (32 workers, DR's own construction). **run5 ships
-  `n_workers: 1`**, so these rigs are not run5's posture and must not be read as one: they pin
-  a STATISTIC, not a config.
-* **The empty case, answered by TYPE.** Below `N_pool_min` there is NO OBSERVATION — `None`,
-  never a healthy `0.0` appended to the abort history as a real measurement (DR-4). `DS-3`
-  drives the exact rig where the old estimator fabricated that `0.0`.
-* **The ceiling `N_pool_min` must respect.** `Σ completed` cannot exceed
-  `DRAW_RATE_WINDOW × n_workers`, so a bar above it makes the gate structurally unable to
-  observe while auditing ARMED — "armed in the config, absent in effect", the FOURTH axis of
-  that defect and the one R92 creates. `DS-4` measures the ceiling; the schema half that makes
-  it unrepresentable lives in `tests/config/test_drawrate_schema_range.py`.
-
->300 justify (R8): four measured rigs (two of them the operator-mandated regression oracles,
-each ~32 workers × ~50 games of real telemetry state) plus the transport/no-default census, in
-ONE file because they share one construction helper and one real subject. Splitting them would
-fork `_play` into copies free to drift apart in exactly the direction the statistic moves.
+>300 justify (R8): four measured rigs plus the transport and no-default census in ONE file,
+because they share one construction helper and one real subject — splitting them would fork
+`_play` into copies free to drift in exactly the direction the statistic moves.
 """
 from __future__ import annotations
 
@@ -50,8 +33,7 @@ from mantis.train.coordinator.config import (  # RED anchor (R92) — replaces r
     pooled_draw_rate,
 )
 
-#: run5's pre-registered terms (R82 threshold, R85 min_step, R92/DESIGN_DS N_pool_min) and the
-#: coordinator's own `consec`, which R80 left with CARD-COORD-KNOBS. Written here so the two
+#: run5's pre-registered terms and the coordinator's own `consec`, written here so the two
 #: mandated oracles fire the REAL rule against the REAL numbers rather than a convenient pair.
 RUN5_THRESHOLD = 0.25
 RUN5_MIN_STEP = 25000
@@ -64,12 +46,10 @@ def _instr() -> tuple[PoolInstrumentation, threading.Lock]:
 
 
 def _play(instr, lock, *, worker_id: int, games: int, draws: int) -> None:
-    """`draws` drawn games then `games - draws` decisive ones, on `worker_id`.
-
-    A draw is `winner_code == 0` (`instrumentation.py:322`), spanning terminal reasons
-    `2 = ply_cap` AND `3 = other_draw` — R82's "ply-cap truncations only" characterises the
-    HEALTHY regime, while the metric itself is wider.
-    """
+    """`draws` drawn games then `games - draws` decisive ones, on `worker_id`. A draw is
+    `winner_code == 0`, spanning terminal reasons `2 = ply_cap` AND `3 = other_draw`: the
+    "ply-cap truncations only" characterisation is of the HEALTHY regime, and the metric is
+    wider."""
     for index in range(games):
         drawn = index < draws
         instr.on_game_complete(lock, 0 if drawn else 1, [], worker_id,
@@ -86,20 +66,15 @@ def _fires(rate: float | None, *, at_step: int = RUN5_MIN_STEP) -> bool:
                                     consec=CONSEC, min_step=RUN5_MIN_STEP) is not None
 
 
-# ── DS-1 — MANDATED BY R92: true pooled rate 0.968 MUST FIRE ──────────────────────────
+# MANDATED: true pooled rate 0.968 MUST FIRE
 def test_a_true_pool_draw_rate_of_0968_fires_the_abort() -> None:
-    """PERMANENT REGRESSION ORACLE (R92), from WPMINT Phase DR's measured counterexample.
+    """PERMANENT REGRESSION ORACLE, from the measured counterexample.
 
-    RIG: **32 workers** — 31 of them drawing 100% at 49 completed games each, one healthy
-    worker at 50 decisive games. **This is NOT run5's posture** (`n_workers: 1`); it is DR's
-    own construction and it pins the statistic, not the config.
-
-    True pooled draw rate = 1519 / 1569 = 0.9681325685149776. **The shipped-at-`d0b3974`
-    statistic reported 0.0** on this input — an unweighted mean over the *included* set, where
-    the ONE worker past `min_samples=50` was the only healthy one and the 31 collapsing
-    workers were excluded into invisibility. A near-total draw collapse read as perfectly
-    healthy and the abort could not fire. R92's count-weighted rate cannot exclude anyone,
-    because there is no per-worker inclusion bar left.
+    RIG: 32 workers — 31 drawing 100% at 49 completed games each, one healthy worker at 50
+    decisive games. True pooled draw rate = 1519 / 1569 = 0.9681325685149776, on which the
+    shipped statistic reported 0.0: an unweighted mean over the *included* set, where the ONE
+    worker past `min_samples=50` was the only healthy one and the 31 collapsing workers were
+    excluded into invisibility. The count-weighted rate cannot exclude anyone.
     """
     instr, lock = _instr()
     for worker in range(1, 32):
@@ -124,18 +99,14 @@ def test_a_true_pool_draw_rate_of_0968_fires_the_abort() -> None:
     )
 
 
-# ── DS-2 — MANDATED BY R92: true pooled rate 0.0319 must stay SILENT ──────────────────
+# MANDATED: true pooled rate 0.0319 must stay SILENT
 def test_a_true_pool_draw_rate_of_00319_stays_silent() -> None:
-    """PERMANENT REGRESSION ORACLE (R92), the other half of DR's counterexample pair.
+    """PERMANENT REGRESSION ORACLE, the other half of the counterexample pair.
 
-    RIG: **32 workers** — one at 50 completed games all drawn, 31 healthy workers at 49
-    decisive games each. **Again not run5's posture** (`n_workers: 1`).
-
+    RIG: 32 workers — one at 50 completed games all drawn, 31 healthy at 49 decisive games each.
     True pooled draw rate = 50 / 1569 = 0.03186743148502231, an order of magnitude BELOW the
-    threshold. **The shipped statistic reported 1.0** and fired: the single fully-drawn worker
-    was the only one past `min_samples=50`, so the unweighted mean over the included set was
-    its rate alone, and 31 healthy workers could not dilute it. That is a hard abort of a
-    healthy run — the direction `rules.py` records as the EXPENSIVE error.
+    threshold, on which the shipped statistic reported 1.0 and fired: the single fully-drawn
+    worker was the only one past `min_samples=50`, and 31 healthy workers could not dilute it.
     """
     instr, lock = _instr()
     _play(instr, lock, worker_id=0, games=50, draws=50)
@@ -160,19 +131,13 @@ def test_a_true_pool_draw_rate_of_00319_stays_silent() -> None:
     )
 
 
-# ── DS-3 — the fabricated healthy 0.0 (DR-4) is unrepresentable ───────────────────────
+# the fabricated healthy 0.0 is unrepresentable
 def test_total_collapse_below_the_old_bar_reports_collapse_and_never_a_healthy_zero() -> None:
-    """DR-4's rig, verbatim: **32 workers x 49 DRAWN games** — total collapse, and nobody has
-    reached the retired per-worker bar of 50.
-
-    At `d0b3974` this returned `per_worker_draw_rates(min_samples=50) == {}` and
-    `recent_pool_draw_rate({}) == 0.0`, which was APPENDED to the abort history as a real
-    measurement. A fabricated healthy reading, at the moment of total collapse.
-
-    R92 answers it by TYPE, and both halves are asserted here: with the evidence in hand the
-    statistic reports the truth (1.0, fires), and with the evidence WITHHELD the answer is
-    `None` — no observation — never a number the rule can read as healthy.
-    """
+    """The rig verbatim: 32 workers x 49 DRAWN games — total collapse, nobody past the retired
+    per-worker bar of 50. That returned an empty per-worker map whose pooled rate was `0.0`,
+    APPENDED to the abort history as a real measurement. Both halves of the type answer are
+    asserted: with the evidence in hand the statistic reports 1.0 and fires, and with it
+    WITHHELD the answer is `None`."""
     instr, lock = _instr()
     for worker in range(32):
         _play(instr, lock, worker_id=worker, games=49, draws=49)
@@ -200,23 +165,15 @@ def test_total_collapse_below_the_old_bar_reports_collapse_and_never_a_healthy_z
     )
 
 
-# ── DS-4 — the ceiling `N_pool_min` must respect, measured ────────────────────────────
+# the ceiling `N_pool_min` must respect, measured
 def test_the_pooled_evidence_ceiling_is_the_window_times_the_worker_count() -> None:
-    """The FOURTH "armed in the config, absent in effect" axis, and the one R92 creates.
+    """The fourth "armed in the config, absent in effect" axis.
 
-    `Σ completed` is `Σ_w len(dq_w)`, and each deque's `maxlen` IS `_DRAW_RATE_WINDOW`. So no
-    pool can ever bank more than `_DRAW_RATE_WINDOW × n_workers` completed games in the
-    window, and an `N_pool_min` above that is a condition no history can satisfy: the gate
-    makes NO observation for the entire run while gate 12 audits the row ARMED.
-
-    This is the behavioural half. The type half — the cross-section validator that makes such
-    a config unloadable — is `tests/config/test_drawrate_schema_range.py`. The old
-    `min_samples` bound (`le=_DRAW_RATE_WINDOW`) died with the key it bounded; this pair is
-    what re-establishes it, generalised to the worker count it actually depends on.
-
-    The window is asserted AGAINST THE DEQUE ITSELF, never against the literal 50: a named
-    constant that drifted from the container it names would re-open the dead zone with every
-    assertion here still green.
+    `Sum(completed)` is `Sum_w len(dq_w)` and each deque's `maxlen` IS `_DRAW_RATE_WINDOW`, so an
+    `N_pool_min` above `_DRAW_RATE_WINDOW * n_workers` is a condition no history can satisfy: no
+    observation for the entire run while the audit reports the row ARMED. The window is asserted
+    AGAINST THE DEQUE ITSELF — a named constant that drifted from the container it names would
+    re-open the dead zone with every assertion here still green.
     """
     for n_workers in (1, 2, 8, 32):
         instr, lock = _instr()
@@ -245,20 +202,14 @@ def test_the_pooled_evidence_ceiling_is_the_window_times_the_worker_count() -> N
         )
 
 
-# ── DS-5 — transport: the bar has NO default, and the counts are not transposable ─────
+# transport: the bar has NO default, and the counts are not transposable
 def test_N_pool_min_has_no_default_on_the_one_layer_that_takes_it() -> None:
-    """R1, and MF-2's lesson carried across R92's re-shaping of the seam.
-
-    Under the retired design the inclusion bar was threaded config -> pool -> estimator, so
-    THREE signatures could hold a second authority over it and all three were pinned. R92
-    makes the metric unconditional (`Σ/Σ`) and leaves the bar as an EVIDENCE-SUFFICIENCY rule
-    on the abort decision, so exactly ONE signature takes it now. Fewer authorities, same pin:
-    no default, keyword-only.
-
-    The pool-side surfaces are pinned in the OTHER direction — they must NOT take the bar,
-    because a telemetry object that knows the abort's evidence rule is the second authority
-    this change removed.
-    """
+    """One authority for the evidence bar, and no default. The retired design threaded the
+    inclusion bar config to pool to estimator, so THREE signatures could hold a second authority
+    over it; the metric is unconditional now and the bar is an evidence-sufficiency rule on the
+    abort decision, so exactly ONE signature takes it, keyword-only. The pool-side surfaces are
+    pinned in the OTHER direction, because a telemetry object that knew the abort's evidence
+    rule would be the second authority this removed."""
     params = inspect.signature(pooled_draw_rate).parameters
     assert "N_pool_min" in params, (
         "`pooled_draw_rate` must TAKE the bar. A function that decided it would be a second "
@@ -287,13 +238,9 @@ def test_N_pool_min_has_no_default_on_the_one_layer_that_takes_it() -> None:
 
 def test_the_counts_are_draws_then_completed_and_a_transposition_is_visible() -> None:
     """The bare `tuple[int, int]` is transposable at both ends, so the order is a pin rather
-    than a comment. `(1, 4)` is one draw in four games = 0.25; the transposed reading is
-    `4/1 = 4.0`, outside the metric's own `[0, 1]` range and above every legal threshold.
-
-    DS-1/DS-2 pin the same fact end-to-end through the real instrumentation (neither
-    0.968… nor 0.0319… is producible by a transposed chain); this arm states it locally so a
-    reader of `pooled_draw_rate` alone can see which slot is which.
-    """
+    than a comment: `(1, 4)` is one draw in four games = 0.25, where the transposed reading is
+    `4.0`, outside the metric's own range and above every legal threshold. The two mandated
+    oracles pin the same fact end to end; this arm states it locally."""
     assert pooled_draw_rate((1, 4), N_pool_min=4) == 0.25, (
         "counts are (draws, completed): one draw in four games is 0.25, not 4.0"
     )

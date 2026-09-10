@@ -1,16 +1,11 @@
-"""F-816-20 item 1 — the eval spawn site refuses an off-main-thread kick.
+"""The eval spawn site refuses an off-main-thread kick.
 
-`_worker_entry` arms `PR_SET_PDEATHSIG` (F-816-14) and the kernel signals on the death of
-the THREAD that created the child. So a round kicked from a worker thread would be SIGKILLed
-the moment that thread returned — a premature kill of a LIVE eval round, strictly worse than
-the orphan the arming prevents. `compose_run` already declares the main-thread precondition
-in prose (it calls `signal.signal`, which raises off the main thread) and nothing asserted
-it; a prose precondition no test can cross is the class R71 names.
+`_worker_entry` arms `PR_SET_PDEATHSIG` and the kernel signals on the death of the THREAD that
+created the child, so a round kicked from a worker thread would be SIGKILLed the moment that
+thread returned — a premature kill of a live round, worse than the orphan the arming prevents.
 
-`RuntimeError` and not `assert`: `python -O` strips asserts, and this is a production safety
-invariant rather than a test aid. Its sibling refusal — the `mp_ctx_name` whitelist, which
-raises `ValueError` because it answers a different question (a bad argument VALUE, not a
-violated invariant) — lives in `test_eval_mp_context_whitelist.py`.
+`RuntimeError`, not `assert`: `python -O` strips asserts, and this is a production safety
+invariant. The sibling `mp_ctx_name` whitelist lives in `test_eval_mp_context_whitelist.py`.
 """
 from __future__ import annotations
 
@@ -31,14 +26,11 @@ _PIPELINE_SRC = (
 _DEADLINE_SEC = 20.0
 
 
-# ── fixtures, self-contained (R5 bars importing another test module) ─────────────────────
 def _bare_pipeline(tmp_path: Path) -> Any:
-    """A pipeline with ONLY the two attributes `_spawn_worker` reads.
+    """Build a pipeline carrying only the two attributes `_spawn_worker` reads.
 
-    `__new__` without `__init__` is the established house shape for driving one method of this
-    class (its written justification lives at `tests/eval/test_promotion_integrity.py`, cited
-    for the technique — nothing is imported from it). Booting a full pipeline would start a
-    poller thread and a ladder file that the refusal under test never touches.
+    `__new__` without `__init__`: booting a full pipeline would start a poller thread and a
+    ladder file the refusal under test never touches.
     """
     pipe = EvalPipeline.__new__(EvalPipeline)
     work = tmp_path / "work"
@@ -56,14 +48,11 @@ def _spec(round_id: str = "r000001_1000") -> Any:
     )
 
 
-# ── item 1: the main-thread refusal ──────────────────────────────────────────────────────
 def test_spawning_an_eval_worker_off_the_main_thread_is_REFUSED(tmp_path) -> None:
-    """The refusal, driven from a real thread rather than by faking `main_thread()`.
+    """The refusal fires from a real thread, and its message names `PR_SET_PDEATHSIG`.
 
-    The message must NAME `PR_SET_PDEATHSIG` (R73 — the row's claim is the message, and the
-    message is the only route an operator has to the reason). `RuntimeError` and not
-    `AssertionError`: a bare `assert` vanishes under `python -O`, which would leave the
-    invariant unenforced in exactly the long-running production process it protects."""
+    The message is the only route an operator has to the reason, so it is part of the claim.
+    """
     pipe = _bare_pipeline(tmp_path)
     box: dict[str, Any] = {}
 
@@ -93,12 +82,11 @@ def test_spawning_an_eval_worker_off_the_main_thread_is_REFUSED(tmp_path) -> Non
 def test_spawning_from_the_main_thread_is_allowed(
     tmp_path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE POSITIVE CONTROL. Without it the refusal could be "always raise" and this file
-    would stay green while the eval pipeline could no longer kick a round at all.
+    """Positive control: without it, an "always raise" guard would keep this file green.
 
-    `multiprocessing.get_context` is patched to a fake whose `Process` is a stub, so no real
-    process starts: the claim under test is that the guard LETS THE PATH THROUGH, not anything
-    about a real worker."""
+    `get_context` is stubbed so no real process starts — the claim is that the guard lets the
+    path through, not anything about a real worker.
+    """
     pipe = _bare_pipeline(tmp_path)
     started: list[str] = []
 
@@ -129,12 +117,11 @@ def test_spawning_from_the_main_thread_is_allowed(
 
 
 def test_both_spawn_call_sites_run_under_the_guarded_method(tmp_path) -> None:
-    """A STATIC row: `ctx.Process(` appears in `pipeline.py` ONLY inside `_spawn_worker`.
+    """`ctx.Process(` appears in `pipeline.py` ONLY inside `_spawn_worker`.
 
-    The refusal is a choke point, and a choke point is only worth what its exclusivity is
-    worth. A future second spawn path added elsewhere in the file would bypass the guard
-    silently — no test would red, and the first symptom would be a round SIGKILLed mid-flight
-    on a production box."""
+    The refusal is a choke point, and a second spawn path elsewhere in the file would bypass
+    it silently.
+    """
     tree = ast.parse(_PIPELINE_SRC.read_text(encoding="utf-8"), filename=str(_PIPELINE_SRC))
     guarded: set[int] = set()
     for node in ast.walk(tree):

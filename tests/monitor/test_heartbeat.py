@@ -1,17 +1,9 @@
-"""O-13 (registry + file-codec facets) — heartbeat registry monotonicity, atomic file
-codec, clock-injection immunity.
+"""Heartbeat registry monotonicity, atomic file codec, clock-injection immunity.
 
-RED-at-import until IMPL writes `mantis.monitor.heartbeat`. Asserts the §c.4 public API:
-`HEARTBEAT_SOURCES`, `WATCHDOG_STALL_EXIT_CODE=42`, `PERSIST_FATAL_EXIT_CODE=43`,
-`HeartbeatRegistry(*, clock, sources)` with `.beat/.arm/.ages`, and the file codec
-`write_heartbeat_file(path, *, seq, pid, ages, wall_ts)` / `read_heartbeat_file(path)`.
-
-Facets covered here (the supervisor-side seq/mtime/pid staleness edges are O-13(ii/iii) in
-test_supervisor.py):
-  * registry `beat` on an unknown source ⇒ ValueError; `arm` grace-resets all sources;
-  * ages() use the INJECTED monotonic clock only — a wall-clock jump changes nothing (O-13 i);
-  * the file codec round-trips seq/pid, is tolerant of an absent OR torn file (→ None), and
-    a re-write with a higher seq reads back the higher seq (monotone progression carrier).
+The supervisor-side seq/mtime/pid staleness edges live in test_supervisor.py. Covered here:
+`beat` on an unknown source raises; `arm` grace-resets all sources; ages() use the INJECTED
+monotonic clock only, so a wall-clock jump changes nothing; the file codec round-trips
+seq/pid, tolerates an absent OR torn file, and carries a monotone seq progression.
 """
 from __future__ import annotations
 
@@ -39,14 +31,12 @@ def test_exit_code_constants_are_pinned() -> None:
 
 
 def test_heartbeat_sources_name_pins() -> None:
-    """The pipeline stages are name-pinned (the watchdog + manifest key on these).
-    WP11-A adds "eval_round" as the 4th source (the eval pipeline's poller thread)."""
+    """The pipeline stages are name-pinned — the watchdog and manifest key on these."""
     assert HEARTBEAT_SOURCES == (
         "train_step", "inference_dispatch", "selfplay_drain", "eval_round",
     )
 
 
-# ── registry ──────────────────────────────────────────────────────────────────────────
 def _clock():
     box = [0.0]
 
@@ -89,8 +79,8 @@ def test_beat_unknown_source_raises() -> None:
 
 
 def test_ages_use_injected_clock_not_wall_clock(monkeypatch) -> None:
-    """O-13(i) — staleness is measured on the INJECTED monotonic clock; a wall-clock jump
-    (time.time / a system clock change) never moves an age. Bites NTP-skew false fires."""
+    """Staleness is measured on the INJECTED monotonic clock, so a wall-clock jump never moves
+    an age. Bites NTP-skew false fires."""
     clock = _clock()
     reg = HeartbeatRegistry(clock=clock)
     reg.arm()
@@ -104,7 +94,6 @@ def test_ages_use_injected_clock_not_wall_clock(monkeypatch) -> None:
     assert all(a == pytest.approx(5.0) for a in reg.ages().values())
 
 
-# ── file codec ────────────────────────────────────────────────────────────────────────
 def test_file_codec_round_trips_seq_and_pid(tmp_path: Path) -> None:
     path = tmp_path / "heartbeat.json"
     write_heartbeat_file(path, seq=7, pid=4321, ages={"train_step": 1.5}, wall_ts=12.0)
@@ -125,13 +114,13 @@ def test_file_codec_higher_seq_is_read_back(tmp_path: Path) -> None:
 
 
 def test_read_absent_file_is_none(tmp_path: Path) -> None:
-    """A missing heartbeat file is tolerated (→ None) — the reader never raises (R6)."""
+    """A missing heartbeat file is tolerated (-> None) — the reader never raises."""
     assert read_heartbeat_file(tmp_path / "does_not_exist.json") is None
 
 
 def test_read_torn_file_is_none(tmp_path: Path) -> None:
-    """A torn/garbage file (partial write on an exotic FS) reads as None, never an exception —
-    the supervisor treats that as no-progress, which only ever errs toward a relaunch (R6)."""
+    """A torn/garbage file reads as None, never an exception — the supervisor treats that as
+    no-progress, which only ever errs toward a relaunch."""
     path = tmp_path / "heartbeat.json"
     path.write_text("{ this is not valid json")
     assert read_heartbeat_file(path) is None
@@ -147,7 +136,7 @@ def test_write_is_atomic_no_partial_left_behind(tmp_path: Path) -> None:
     assert read_heartbeat_file(path) is not None
 
 
-# ══ RED-TEAM F4 — the reader NEVER raises, on the whole hostile corpus ════════════════
+# The reader NEVER raises, on the whole hostile corpus.
 _HOSTILE_FILES = {
     "empty": "",
     "whitespace": "   \n",
@@ -179,13 +168,12 @@ _HOSTILE_FILES = {
 
 @pytest.mark.parametrize("name", sorted(_HOSTILE_FILES))
 def test_read_heartbeat_file_never_raises_on_hostile_content(tmp_path: Path, name: str) -> None:
-    """RED-TEAM F4 — `read_heartbeat_file` contracts to NEVER raise; the red team broke that
-    with `Infinity` / `1e400` / `pid: Infinity` (`int(inf)` → `OverflowError`), which kills the
-    supervisor's unguarded poll loop and leaves the child running unsupervised.
+    """`read_heartbeat_file` contracts to NEVER raise; `Infinity` / `1e400` / `pid: Infinity`
+    broke that through `int(inf)` -> `OverflowError`, which kills the supervisor's unguarded
+    poll loop and leaves the child running unsupervised.
 
-    Every hostile file must yield either `None` (no progress observable — the safe side, which
-    only ever errs toward a relaunch) or a WELL-FORMED state with finite, non-negative,
-    in-range counters. Nothing may propagate."""
+    Every hostile file must yield either `None` (no progress observable, the safe side) or a
+    WELL-FORMED state with finite, non-negative, in-range counters. Nothing may propagate."""
     path = tmp_path / "hb.json"
     path.write_text(_HOSTILE_FILES[name])
     state = read_heartbeat_file(path)          # must not raise, whatever the content
@@ -197,8 +185,8 @@ def test_read_heartbeat_file_never_raises_on_hostile_content(tmp_path: Path, nam
 
 
 def test_read_heartbeat_file_rejects_non_finite_counters(tmp_path: Path) -> None:
-    """F4 — the specific three the red team used must read as NO STATE, never as progress:
-    a forged `Infinity` seq must not look like the largest possible advance."""
+    """The three that broke the reader must read as NO STATE, never as progress: a forged
+    `Infinity` seq must not look like the largest possible advance."""
     for body in ('{"seq": Infinity, "pid": 1}', '{"seq": 1e400, "pid": 1}',
                  '{"seq": 1, "pid": Infinity}'):
         path = tmp_path / "hb.json"
@@ -207,9 +195,9 @@ def test_read_heartbeat_file_rejects_non_finite_counters(tmp_path: Path) -> None
 
 
 def test_write_heartbeat_file_uses_a_unique_tmp_sibling(tmp_path: Path) -> None:
-    """RED-TEAM F17 — two writers on ONE path must not race each other's temp file. A fixed
-    `<name>.tmp` produced `FileNotFoundError` out of `os.replace` on ~30% of writes (invisible
-    inside the watchdog, because the mirror is best_effort-wrapped)."""
+    """Two writers on ONE path must not race each other's temp file. A fixed `<name>.tmp`
+    produced `FileNotFoundError` out of `os.replace` on ~30% of writes, invisible inside the
+    watchdog because the mirror is best_effort-wrapped."""
     path = tmp_path / "hb.json"
     errors: list[BaseException] = []
 
@@ -235,18 +223,11 @@ def test_write_heartbeat_file_uses_a_unique_tmp_sibling(tmp_path: Path) -> None:
 def test_write_heartbeat_file_does_not_advance_the_global_random_stream(tmp_path: Path) -> None:
     """The tmp suffix must not draw from the PROCESS-GLOBAL stdlib `random` stream.
 
-    Measured defect: the suffix used `random.getrandbits(32)`, and the watchdog calls this
-    on its OWN thread on a timer for the life of the process. So every beat advanced a
-    stream other code seeds and reads, making "how many heartbeats have fired" an input to
-    that stream's position — a hidden global-state coupling with no owner. It surfaced as a
-    rare full-tier failure of the seeded-reproducibility suite (a beat landing between a
-    `seed()` and a `random()` shifts the read by exactly one draw) and was invisible in
-    isolation, because the leaked watchdog threads only exist once the whole tier has run.
-
-    A temp-file suffix needs UNIQUENESS, never reproducibility, so the correct source is
-    `os.urandom`. This pins the property directly rather than the implementation: seed, draw
-    the reference value, then seed again, write many heartbeats, and require the next draw
-    to be unchanged.
+    Measured defect: the suffix used `random.getrandbits(32)` and the watchdog calls this on a
+    timer for the life of the process, so every beat advanced a stream other code seeds and
+    reads. It surfaced as a rare full-tier failure of the seeded-reproducibility suite and was
+    invisible in isolation. A temp-file suffix needs UNIQUENESS, never reproducibility, so the
+    property is pinned directly: seed, draw a reference, seed again, write many, draw again.
     """
     path = tmp_path / "hb.json"
 

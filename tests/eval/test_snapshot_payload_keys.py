@@ -82,7 +82,7 @@ def test_roundtrip_still_rebuilds_the_identical_net(tmp_path: Path) -> None:
         assert torch.equal(got[key], want[key]), f"weight {key} changed across roundtrip"
 
 
-# ── R330(e): the snapshot speaks the ONE arch-kind vocabulary ────────────────────────────
+# R330(e): the snapshot speaks the ONE arch-kind vocabulary
 _TINY = {
     GnnArch: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8, value_hidden=8),
     GnnArchV2: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,

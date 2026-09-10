@@ -1,36 +1,14 @@
-"""⊕ O-06 (+ O-22, O-03 wiring, LAW-18 monitor_gates) — the coordinator gate seam.
+"""ORACLE — the coordinator gate seam.
 
-RED-at-import until IMPL writes `mantis.monitor.rules` + `mantis.monitor.config`. ORACLE-FIRST
-(⊕): the top-level `import mantis.monitor.rules` raises ModuleNotFoundError before any port
-code exists; the file goes GREEN only when IMPL wires the coordinator seam.
+The centrepiece: the sealbot-WR consumer lives at the ASYNC eval-RESULT seam
+`on_eval_round_complete(result)`, NEVER the eval kick return. The fake pipeline's kick returns an
+ack WITHOUT `wr_sealbot`, and the tests assert step() consumes NOTHING from it and makes ZERO
+blocking calls. Also covered: draw-rate gate wiring on the LIVE producer, the emission wiring,
+and the `train_step` heartbeat beats. The default `MonitorConfig` ships warn-only, so a sustained
+collapse emits a visible `sealbot_wr_warn` and does not stop the run.
 
-The centrepiece (MUST-1, O-06 / P-06): the sealbot-WR consumer lives at the ASYNC eval-RESULT
-seam `StepCoordinator.on_eval_round_complete(result)` — the new-side twin of old
-`step_coordinator.py` L1168-1200 (the `_pending_eval_result` drain), NEVER the eval kick
-return. The fake eval pipeline's `run_evaluation` (kick) returns an ack WITHOUT `wr_sealbot`;
-the test asserts step() consumes NOTHING from the kick and makes ZERO blocking calls
-(`drain_pending` spy == 0). Completed results are delivered ONLY via a direct
-`on_eval_round_complete(...)` call (simulating WP11-A's non-blocking drain callback).
-
-Also covered: O-03 draw-rate gate wiring at log_interval cadence (fires on the LIVE
-producer), O-22 emission wiring (`training_step` + `iteration_complete` + `monitor_gates`
-once per log_interval boundary), and the `train_step` heartbeat beats. (O-04 stride5-spam was
-REMOVED at close-out per operator directive B.)
-
-Sealbot posture (operator G-3): the default `MonitorConfig` ships `wr_hard_abort_enabled=False`
-= WARN-ONLY — a sustained collapse emits a visible `sealbot_wr_warn` and does NOT stop the
-run; the one-field flip `wr_hard_abort_enabled=True` restores the A/B/C hard-abort as a
-CAPABILITY (test_sealbot_hard_abort_capability_when_enabled).
-
-IMPL API constraints (see ORACLE_NOTES): StepCoordinator.__init__ gains `heartbeat`,
-`monitor_cfg`, and (for close-out) `heartbeat_watchdog` kwargs; `on_eval_round_complete` and
-`_wr_history` are added; a hard-abort gate emits a `hard_abort` event naming its rule.
-
->300 justify: one coordinator seam, one set of fakes (pool / trainer / buffer / async eval
-pipeline / beat + sink spies) shared by every gate row — splitting the file would duplicate
-the harness and let the two halves drift apart, which is the failure this suite exists to
-catch. Added post-review (F-3/F-4): the non-degenerate cadence rows (`log_interval > 1` AND
-`max_train_burst > 1`) and the grad-norm decision row.
+>300 justify: one coordinator seam, one set of fakes shared by every gate row; splitting the file
+would duplicate the harness and let the two halves drift apart.
 """
 from __future__ import annotations
 
@@ -64,10 +42,8 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+        # The `WorkerPoolLike` surface serves RAW COUNTS `(draws, completed)` and takes no
+        # evidence bar — the bar is applied at the abort decision.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -76,9 +52,8 @@ _GRAPH_FULL_CONFIG: dict = {
 }
 
 
-#: WPMINT Phase K-A stage 0: the four drain caps are `monitor.drain.*` (R93/DR-11), so a
-#: harness reads them from a MINTED config rather than restating them — the same rule the
-#: rest of this file's coordinator config now follows (see `_make_config`).
+        # DELEGATED to a real `HexgBuffer` rather than faked: the dispatcher collates the wire
+        # for real, so a hand-built payload would be a second wire format to disagree with.
 _DRAIN_CAPS = resolve_drain_caps(
     load_config(Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor)
 #: WPMINT Phase K-B: the builder's fourth config-authored parameter, from the same minted
@@ -120,10 +95,8 @@ class FakePool:
         return None
 
     def pooled_draw_counts(self) -> tuple[int, int]:
-        # WPMINT Phase DS (R92): the `WorkerPoolLike` surface serves RAW COUNTS
-        # `(draws, completed)` and takes no evidence bar — the bar is applied at the abort
-        # decision (`pooled_draw_rate`). The statistic's own oracle is
-        # tests/selfplay/test_drawrate_pooled_statistic.py.
+        # step()'s non-blocking poll at the top of every iteration. This fixture never has a
+        # completed round ready — the invariant pinned here is entirely about the KICK ack.
         self.counts_calls += 1
         return self._draw_counts
 
@@ -232,25 +205,11 @@ class SpySink:
 
 
 def _make_config(**overrides) -> StepCoordinatorConfig:
-    """DERIVED from the production builder, never a hand-written 24-kwarg census.
-
-    WPMINT Phase K-A stage 0. This used to restate every field; ten test files restated the
-    same ones, so they agreed with `StepCoordinatorConfig` by maintenance rather than by
-    construction and every new coordinator knob cost ten edits. The shape here is the one
-    `tests/train/test_drawrate_abort_threading.py` and
-    `tests/config/test_drawrate_arming_authority.py` already used and the census named as
-    the in-repo precedent: build with the shipped builder, state only this file's deltas.
-    `stop_step`/`draw_rate_abort` are passed EXPLICITLY (`None` is the disarmed posture,
-    and this harness is not about the draw-rate abort) because the builder gives them no
-    default and neither does this factory.
-
-    R242 (ADJ-D12): `gate_interval` MIRRORS whatever `log_interval` the drive asks for, unless
-    the drive names it. That is not a convenience — it is the SHIPPED posture stated once:
-    every committed config mints `monitor.gate_interval` equal to its own
-    `train.log_interval`, so a drive that only moves `log_interval` keeps exactly the cadence
-    it had before the split. The rows that pin the DECOUPLING state the two knobs apart,
-    explicitly, and are the only ones that should.
-    """
+    """DERIVED from the production builder, never a hand-written kwarg census: restating every
+    field made ten test files agree with `StepCoordinatorConfig` by maintenance rather than
+    construction. `stop_step`/`draw_rate_abort` are passed EXPLICITLY because neither the
+    builder nor this factory gives them a default, and `gate_interval` MIRRORS `log_interval`
+    unless a drive names it — the SHIPPED posture stated once."""
     settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
     settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
@@ -298,10 +257,9 @@ def _drive_until_stopped(h, *, games_per_step=5, cap=12):
 
 # ══ O-06 — sealbot at the ASYNC RESULT seam ══════════════════════════════════════════
 def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
-    """O-06 / P-06 — the eval KICK returns a collapse `wr_sealbot=0.01` that WOULD fire if
-    (wrongly) consumed; step() must NOT append it to `_wr_history`, must NOT fire, and must
-    make ZERO blocking calls (`drain_pending` spy == 0). Bites a gate wired to the kick return
-    and a blocking eval re-entering the step path (the run3 wedge)."""
+    """The eval KICK returns a collapse `wr_sealbot=0.01` that WOULD fire if wrongly consumed;
+    step() must NOT append it to `_wr_history`, must NOT fire, and must make ZERO blocking
+    calls. Bites a gate wired to the kick return, and a blocking eval re-entering step()."""
     pipe = FakeEvalPipeline(kick_result={"step": 30000, "wr_sealbot": 0.01})
     h = _make_coordinator(eval_pipeline=pipe)
     h.pool.games_completed = 5
@@ -315,12 +273,10 @@ def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
 
 
 def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
-    """O-06 / P-06 (operator G-3) — the manifest `sealbot_wr_warn` producer test, the SHIPPED
-    DEFAULT posture. Delivering N consecutive low-WR results via `on_eval_round_complete`
-    (WP11-A's drain callback) on a run whose `MonitorConfig` ships `wr_hard_abort_enabled=False`
-    emits a VISIBLE `sealbot_wr_warn` carrying the de-diagnosed trajectory fact (Objective-A
-    off-distribution OR Objective-B strength regression — never asserting one) and does NOT
-    stop the run. Warn-only that emits NOTHING would be the silently-disabled class."""
+    """The `sealbot_wr_warn` producer test on the SHIPPED DEFAULT posture: N consecutive
+    low-WR results delivered through the drain callback emit a VISIBLE warn carrying the
+    de-diagnosed trajectory fact and do NOT stop the run. Warn-only that emitted NOTHING would
+    be the silently-disabled class."""
     h = _make_coordinator()                          # default MonitorConfig() = warn-only
     assert h.coord.monitor_cfg.wr_hard_abort_enabled is False, "shipped default is warn-only"
     for _ in range(3):                              # 3 consecutive < 0.05 past min_step 15000
@@ -339,10 +295,9 @@ def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
 
 
 def test_sealbot_hard_abort_capability_when_enabled() -> None:
-    """O-06 / P-06 — the DECISION-PARITY CAPABILITY. With the one-field operator flip
-    `wr_hard_abort_enabled=True`, the SAME N consecutive low-WR results fire the hard-abort
-    exactly as before: running=False + a de-diagnosed `hard_abort` event. The A/B/C triggers
-    are unchanged — only the DEFAULT disposition moved (operator G-3)."""
+    """DECISION-PARITY CAPABILITY: with the one-field flip the SAME results fire the hard abort
+    exactly as before — running=False plus a de-diagnosed `hard_abort` event. The triggers are
+    unchanged; only the DEFAULT disposition moved."""
     h = _make_coordinator(monitor_cfg=MonitorConfig(wr_hard_abort_enabled=True))
     for _ in range(3):
         h.coord.on_eval_round_complete({"step": 30000, "wr_sealbot": 0.01})
@@ -366,9 +321,9 @@ def test_sealbot_single_low_result_does_not_fire_or_warn() -> None:
 
 
 def test_sealbot_absent_key_skips_and_counts() -> None:
-    """O-06 / P-06 — a result with `wr_sealbot` absent/None ⇒ exactly one
-    `sealbot_wr_gate_skipped` event per delivered round + a counter, and ZERO fires (LAW-18: the
-    inert gate is loud, never silently dead until WP11-A lands the producer)."""
+    """A result with `wr_sealbot` absent/None gives exactly one `sealbot_wr_gate_skipped` event
+    per delivered round plus a counter, and ZERO fires: the inert gate is loud, never silently
+    dead."""
     h = _make_coordinator()
     h.coord.on_eval_round_complete({"step": 30000})                 # no wr_sealbot
     h.coord.on_eval_round_complete({"step": 31000, "wr_sealbot": None})
@@ -380,10 +335,9 @@ def test_sealbot_absent_key_skips_and_counts() -> None:
 # ══ O-03 — draw-rate gate WIRING (LIVE producer, log_interval cadence) ════════════════
 # (O-04 stride5-spam gate REMOVED at close-out per operator directive B.)
 def test_draw_rate_gate_fires_on_live_producer() -> None:
-    """O-03 — the manifest `draw_rate_collapse` producer test. Keyed on the LIVE
-    `pooled_draw_rate(pooled_draw_counts(), N_pool_min=…)` (never the NaN
-    `draw_target_fraction`): a sustained 0.9 pooled draw rate over sufficient evidence, past
-    min_step, fires. Grad-norm is quiet, so the fire is draw-rate."""
+    """The `draw_rate_collapse` producer test, keyed on the LIVE pooled rate and never on a NaN
+    draw-target phantom: a sustained 0.9 pooled rate over sufficient evidence, past min_step,
+    fires. Grad-norm is quiet, so the fire is draw-rate."""
     pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(draw_rate_abort=DrawRateAbortSpec(threshold=0.4, min_step=0,
                                                         N_pool_min=10, consec=3))
@@ -397,9 +351,8 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
 
 
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
-    """O-03 — on the EXPLICITLY disarmed posture (`train.draw_rate_abort: null`, WPAX Phase
-    D — it used to be the code-side `threshold 0.0`), a high draw rate NEVER fires. Bites a
-    gate that ships hot against the config the operator actually wrote."""
+    """On the EXPLICITLY disarmed posture a high draw rate NEVER fires. Bites a gate that ships
+    hot against the config the operator actually wrote."""
     pool = FakePool(draw_counts=(99, 100))
     cfg = _make_config()  # draw_rate_abort is None — EXPLICITLY off
     h = _make_coordinator(pool=pool, config=cfg)
@@ -411,9 +364,9 @@ def test_draw_rate_gate_default_off_does_not_fire() -> None:
 
 # ══ O-22 — emission wiring + heartbeat beats + monitor_gates ══════════════════════════
 def test_log_interval_emits_training_step() -> None:
-    """O-22 / P-22 — the manifest `warn.training_step_alerts` producer test. One step() crossing
-    a log_interval boundary emits exactly one `training_step` + one `iteration_complete` + one
-    `monitor_gates` summary. Bites alert rules with no live payload producer (LAW-07)."""
+    """One step() crossing a log_interval boundary emits exactly one `training_step`, one
+    `iteration_complete` and one `monitor_gates` summary. Bites alert rules with no live
+    payload producer."""
     beat = BeatSpy()
     h = _make_coordinator(heartbeat=beat)
     h.pool.games_completed = 5
@@ -426,17 +379,13 @@ def test_log_interval_emits_training_step() -> None:
 
 
 def test_iteration_complete_carries_both_rate_gap_metrics() -> None:
-    """R29 gap metrics (a) games/hr + (b) steps/hr share ONE hook — `iteration_complete` —
-    and both come from the coordinator's OWN counters over the same run clock (WPBOX CB-3
-    wiring). Producer-tested so the cutover floors have a live emitter, and the two rates
-    are cross-pinned: sph/gph must equal steps/games (same elapsed, tolerance for the two
-    now() reads) — which bites a hardcoded value, a wrong counter, and a dropped injection
-    (None = NOT MEASURED would fail the float assert here, where the producer IS injected).
-    """
+    """The two rate gap metrics share ONE hook and both come from the coordinator's OWN
+    counters over the same run clock. Producer-tested so the cutover floors have a live
+    emitter, and cross-pinned: sph/gph must equal steps/games, which bites a hardcoded value, a
+    wrong counter and a dropped injection."""
     h = _make_coordinator()
-    # Pin the run clock 60 s after start: real elapsed in this rig is MICROSECONDS, so the
-    # two now() reads inside one emission would dominate the rates; a frozen clock makes
-    # the cross-identity exact (modulo the emitter's 1-decimal rounding).
+    # Pin the run clock 60 s after start: real elapsed here is MICROSECONDS, so the two now()
+    # reads inside one emission would dominate the rates.
     started = h.coord._run_started
     h.coord._clock = SimpleNamespace(now=lambda: started + 60.0,
                                      sleep=lambda _s: None)
@@ -460,21 +409,11 @@ def test_iteration_complete_carries_both_rate_gap_metrics() -> None:
 
 
 def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
-    """O-22 (F-3 regression) — with `log_interval=5` and a burst of 4 TRAINING steps per
-    outer iteration, 20 training steps must produce EXACTLY 4 `training_step` + `monitor_gates`
-    emissions, at steps 5/10/15/20.
-
-    Bites the once-per-burst boundary test: evaluating `step % log_interval` only after the
-    burst (when `_train_step` has already advanced by up to `max_train_burst`) hits a boundary
-    only when the post-burst step happens to be an exact multiple — here just step 20, i.e. 1
-    emission instead of 4, thinning the LAW-18 stream and both gates' sampling by ~the burst.
-
-    WP12R Step 3 narration (R210, DESIGN §3.6): `iteration_complete` was DECOUPLED from
-    `log_interval` — it now emits per coordinator step (per burst), NOT per `log_interval`
-    boundary. So with 5 outer iterations × burst 4, `iteration_complete` emits 5 times at the
-    post-burst step values `[4, 8, 12, 16, 20]` (the `_train_step` value at the O6 return),
-    while `training_step`/`monitor_gates` stay `log_interval`-gated at `[5, 10, 15, 20]`.
-    """
+    """With `log_interval=5` and a burst of 4, 20 training steps must produce EXACTLY 4
+    `training_step` + `monitor_gates` emissions at 5/10/15/20. Bites the once-per-burst
+    boundary test, which hits a boundary only when the post-burst step is an exact multiple —
+    here just step 20, thinning the stream and both gates' sampling by roughly the burst.
+    `iteration_complete` is decoupled and emits per burst, at `[4, 8, 12, 16, 20]`."""
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
                        draw_rate_abort=None)
     h = _make_coordinator(config=cfg)
@@ -497,15 +436,10 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
 
 
 def test_gate_interval_boundaries_are_evaluated_per_training_step() -> None:
-    """R242 (ADJ-D12) — the GATE-INTERVAL twin of the row above, and the reason both are
-    needed: the per-training-step evaluation property has to hold SEPARATELY on each knob now.
-
-    `gate_interval=5` with `log_interval=1000` and a burst of 4: 20 training steps must
-    produce EXACTLY 4 `monitor_gates` summaries, at steps 5/10/15/20, and ZERO `training_step`
-    events. Testing the gate boundary once per burst instead would hit only step 20 — one
-    summary instead of four — thinning the LAW-18 stream and stretching the draw-rate gate's
-    `consec` window by ~the mean burst, which is the F-3 defect restated on the new knob.
-    """
+    """The GATE-INTERVAL twin of the row above: the per-training-step evaluation property has
+    to hold SEPARATELY on each knob. `gate_interval=5` with `log_interval=1000` and a burst of
+    4 must give EXACTLY 4 summaries at 5/10/15/20 and ZERO `training_step` events; testing once
+    per burst would hit only step 20 and stretch the `consec` window by the mean burst."""
     cfg = _make_config(log_interval=1000, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0, draw_rate_abort=None)
     h = _make_coordinator(config=cfg)
@@ -523,19 +457,10 @@ def test_gate_interval_boundaries_are_evaluated_per_training_step() -> None:
 
 
 def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
-    """O-03 (F-3 regression) — the live-producer gate must sample once per GATE-INTERVAL
-    BOUNDARY, not once per outer iteration. With `gate_interval=5`, burst 4 and a sustained
-    draw rate of 0.9 (>= 0.4, consec 3), the draw-rate gate collects its 3rd sample at step 15
-    and fires THERE. A once-per-burst implementation would sample at most at step 20 and could
-    not have fired yet — the `consec` window silently stretched by the burst factor.
-
-    RENAMED AND RE-POINTED by R242 (ADJ-D12), which authorises it in scope: the subject was
-    `log_interval` because arming rode the narration knob, and that identity was the defect
-    (at run5's `log_interval: 1000` this gate could not sample at all before step 1000). The
-    BURST claim — the thing this row actually exists to catch — is untouched, and the numbers
-    are identical because the harness mirrors the two knobs. The row is stated on
-    `gate_interval` now, which is the knob that really decides it.
-    """
+    """The live-producer gate must sample once per GATE-INTERVAL BOUNDARY, not once per outer
+    iteration: with `gate_interval=5`, burst 4 and a sustained 0.9 draw rate it collects its
+    3rd sample at step 15 and fires THERE, where a once-per-burst implementation could not have
+    fired yet. The subject used to be `log_interval`, and that identity was the defect."""
     pool = FakePool(draw_counts=(90, 100))
     cfg = _make_config(log_interval=5, gate_interval=5, max_train_burst=4,
                        training_steps_per_game=4.0,
@@ -563,11 +488,10 @@ def test_gate_sampling_cadence_follows_gate_interval_not_the_burst() -> None:
 
 
 def test_grad_norm_gate_fires_with_the_uniform_contract() -> None:
-    """The manifest `grad_norm_hard_abort` producer test (F-4) — the KEPT WP10 gate's
-    DECISION: a sustained grad norm above `hard_gn_threshold` for `hard_gn_min_steps`
-    consecutive training steps stops the run AND emits ONE `hard_abort` event naming the rule,
-    exactly like every WP13-A gate (before F-4 it only wrote a log line, so the one
-    unconditionally-active hard-abort was invisible in the ONE channel)."""
+    """The `grad_norm_hard_abort` producer test — the kept gate's DECISION: a sustained grad
+    norm above the threshold for `hard_gn_min_steps` consecutive steps stops the run AND emits
+    ONE `hard_abort` event naming the rule. It only wrote a log line before, so the one
+    unconditionally-active hard abort was invisible in the ONE channel."""
     cfg = _make_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
     h = _make_coordinator(config=cfg)
     h.trainer._gn = 10.0                              # sustained instability
@@ -582,9 +506,8 @@ def test_grad_norm_gate_fires_with_the_uniform_contract() -> None:
 
 
 def test_grad_norm_gate_does_not_fire_below_the_consecutive_count() -> None:
-    """F-4 companion — a single high-gn step (the consecutive counter reset by a healthy
-    step) must NOT fire; only a sustained run of `hard_gn_min_steps` does. Bites a gate that
-    aborts on one spike."""
+    """A single high-gn step (the consecutive counter reset by a healthy step) must NOT fire;
+    only a sustained run of `hard_gn_min_steps` does. Bites a gate that aborts on one spike."""
     cfg = _make_config(hard_gn_threshold=0.5, hard_gn_min_steps=3)
     h = _make_coordinator(config=cfg)
     for gn in (10.0, 0.1, 10.0, 0.1):
@@ -596,9 +519,8 @@ def test_grad_norm_gate_does_not_fire_below_the_consecutive_count() -> None:
 
 
 def test_step_loop_beats() -> None:
-    """O-22 — the manifest `heartbeat.train_step` producer test. The step loop beats `train_step`
-    at step() entry AND once per burst training step (entry + burst iterations). Bites a step
-    loop the watchdog cannot see."""
+    """The `heartbeat.train_step` producer test: the step loop beats at step() entry AND once
+    per burst training step. Bites a step loop the watchdog cannot see."""
     beat = BeatSpy()
     h = _make_coordinator(heartbeat=beat)
     h.pool.games_completed = 5
@@ -611,9 +533,8 @@ def test_step_loop_beats() -> None:
 
 # ══ RED-TEAM F12 / F9 — the result seam's step stamping + the watchdog counter consumer ═
 def test_sealbot_result_at_step_zero_is_not_rewritten() -> None:
-    """RED-TEAM F12 — `payload.get("step") or self._train_step` rewrote a legitimate step 0
-    (falsy!) to the current train step, mis-stamping the WR ring. Absence, not falsiness,
-    selects the fallback."""
+    """`payload.get("step") or self._train_step` rewrote a legitimate step 0 (falsy) to the
+    current train step, mis-stamping the WR ring. Absence, not falsiness, selects the fallback."""
     h = _make_coordinator()
     h.coord._train_step = 777
     h.coord.on_eval_round_complete({"step": 0, "wr_sealbot": 0.25})
@@ -623,10 +544,9 @@ def test_sealbot_result_at_step_zero_is_not_rewritten() -> None:
 
 
 def test_monitor_gates_publishes_the_watchdog_best_effort_counters() -> None:
-    """RED-TEAM F9 — `BestEffortCounters` had ZERO consumers despite documenting `snapshot()`
-    as 'what the LAW-18 in-run summary events publish' (a LAW-08 dead surface). The
-    `monitor_gates` summary now carries it, so a degraded fire-path effect is readable IN RUN
-    and not only in the fire's own event."""
+    """`BestEffortCounters` had ZERO consumers despite documenting `snapshot()` as what the
+    in-run summary events publish — a dead surface. The `monitor_gates` summary carries it now,
+    so a degraded fire-path effect is readable IN RUN and not only in the fire's own event."""
     watchdog = SimpleNamespace(counters=SimpleNamespace(
         snapshot=lambda: {"watchdog_file_mirror": 3}))
     h = _make_coordinator()

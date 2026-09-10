@@ -1,72 +1,19 @@
-# >300 justify (R8). WPMAIN made this
-# module the ONE composition authority in fact and not only in name: the collaborator
-# builder (`build_run_collaborators` + `_select_buffer`), the launcher (`launch_run`,
-# `main`, `UnregisteredAbortExitError`) and LAW-16's three legs (signals, watchdog, disk
-# guard) all landed here, lifted out of a CI GATE (`tools/ci_gates/preflight_mint.py`),
-# which is the one-authority violation CARD-RUN-MAIN existed to end. The original R8
-# argument extends verbatim to that layer and is the reason a split is argued AGAINST, not
-# merely skipped: this module is the only one importing both `mantis.train` and `mantis.eval`
-# at top level (§a.4/§c.6), `build_run_collaborators` was the only module-external consumer of
-# `resolve_coordinator_knobs(...).capacity` until WORKER-SWEEP (R309(g)) gave
-# `mantis.diagnostics.worker_sweep.build_sweep_pool` the same read — corrected here in the same
-# act that made it false, because a load-bearing reason that has quietly stopped being true is
-# worse than none (SF-7). The reason SURVIVES the correction and is narrower: the second reader
-# is a diagnostics instrument that composes no run (no trainer, no composer, no coordinator),
-# so there is still exactly one consumer ON A BOOT PATH — and moving the builder out would
-# either put a `mantis.run -> sibling` import in the one place the DAG forbids new edges or create a
-# SECOND place a `StepCoordinatorConfig` / a collaborator set can be built — which is
-# precisely the two-surfaces shape `tests/test_run_one_authority.py`,
-# `tests/config/test_drawrate_arming_authority.py` and `test_coordinator_knobs_wiring.py`
-# exist to forbid. The honest alternative (a `mantis.launch` sibling plus a repo_design §2
-# amendment) is recorded as REJECTED for that reason. Executable content stays a minority of
-# the file; the rest is the per-decision rationale R8's clause protects (R64, MF-1/MF-2,
-# S-4/Phase D/K-A/K-B, R120/R121/R122/R125/R126).
-# Every later addition landed here for the SAME one-authority reason and is unchanged in
-# kind: the RED-TEAM close reopened the teardown ladder at the sink instead of at
-# `pool.start()` and gave eleven composition steps a seam name (RT-3/RT-4); the R132 fix
-# pass added the disk-guard abort's rc seam, because the rule NAME is a manifest fact and
-# `mantis.train` may not import the manifest while this root already does for the launcher's
-# own rc; WP12R Step 3 R208 added the `_DeferredHeartbeat` adapter and the
-# `_assert_pool_producers_live` conjunct, because the pool's heartbeat is injected at `:381`
-# inside `build_run_collaborators` (the ONE builder) and the conjunct gates the SAME
-# `watchdog.start()` at `:761`. Each of those splits would create a second site touching the
-# path it names, which is precisely the two-surfaces shape the one-authority tests forbid.
+# >300 justify (R8). This module is the ONE composition authority: the collaborator builder,
+# the launcher and LAW-16's three legs (signals, watchdog, disk guard) live here together,
+# and it is the only module importing both `mantis.train` and `mantis.eval` at top level.
+# Splitting any layer out would create a SECOND site where a collaborator set or a
+# `StepCoordinatorConfig` can be built, which is the two-surfaces shape the one-authority
+# tests forbid; the per-decision rationale is the file's bulk and is what R8's clause protects.
 """mantis.run — the run composition root AND the run launcher (design §a.4/§c.6).
 
-TOP-LEVEL module, ABOVE both `mantis.train` and `mantis.eval` — the ONE module that
-imports both at module top level (no lazy-import loophole); nothing imports `mantis.run`,
-so it is a source-only DAG node and the §2 "train -> all above except eval" ban stays
-verbatim (census-tested: tests/test_run_composition.py::
-test_no_train_module_imports_eval_even_lazily).
-
-`python -m mantis.run --config <path> --out-dir <path>` is the entry point (CLAUDE.md
-`python -m mantis.*` law). It is a REAL launcher: it loads the config through the one
-loader, builds the collaborators, composes the run, drives the live loop and maps a fired
-hard abort to a process rc through `mantis.config.armed_aborts.exit_code_for_abort` — the
-same resolver the mint preflight's child reads. Until WPMAIN it validated the config,
-printed a readiness line and returned 0 — which is what made "the preflight boots what run5
-boots" a claim with no producer on either side. That readiness print is DELETED, not
-demoted: a boot record that is a stdout line nobody parses is not a boot record, and the
-run's own event stream (`run_boot_identity`, `resolved_config`) is the record now.
-
-The composition is TWO shared functions plus one composed entry, and that shape is forced:
-`build_run_collaborators` builds the collaborator set, `compose_run` composes and drives,
-`launch_run` is exactly the pass-through between them. The preflight child calls the SAME
-two functions with its two sanctioned instruments wrapped AROUND them (a config-level burst
-override before, a read-only resumed-trainer refusal between) — so there is no opaque
-`boot()` with a preflight hook smuggled inside it, which would be the divergence seam the
-whole card is about.
-
-`compose_run` stays INJECTION-FIRST: every collaborator (trainer/pool/buffer) arrives via a
-kwarg and is never built inside it (R-10) — the builder layer sits AROUND it, so the
-fakes-testable seam survives. But no parameter may carry a CONFIG FACT: `eval_enabled`
-(R120), `run_id` (R123) and the device (R126) are all read from the validated config, and
-their parameters are DELETED rather than merely stripped of defaults — a required parameter
-is a forcing route with the default removed, not a closed one. The pool still builds only
-via the legacy hparams dict path elsewhere (R-SELFPLAYCONFIG-SCHEMA, unchanged debt, now
-cited from the builder). WP-UNFREEZE lives here: this root builds the continuous actor-sync
-engine (`mantis.train.actor_sync.ActorSync`) UNCONDITIONALLY and wires the actor-lag
-watchdog callables (`actor_ckpt_step` / learner step) into `build_run_safety`.
+The ONE module importing both `mantis.train` and `mantis.eval` at module top level; nothing
+imports it, so it is a source-only DAG node. `python -m mantis.run --config <path>
+--out-dir <path>` loads the config through the one loader, composes the run, drives the live
+loop, and maps a fired hard abort to a process rc through the same `exit_code_for_abort` the
+mint preflight's child reads. The preflight child calls the SAME `build_run_collaborators` and
+`compose_run`, so no divergent boot path exists. `compose_run` is INJECTION-FIRST, but no
+parameter may carry a CONFIG FACT: `eval_enabled`, `run_id` and the device are read from the
+validated config. The actor-sync engine is built UNCONDITIONALLY here.
 """
 from __future__ import annotations
 
@@ -158,25 +105,13 @@ from mantis.util.determinism import seed_everything
 #: eval pipeline is actually built (the caller DECLARES what it handed `heartbeat=` to).
 _BASE_WIRED_SOURCES: tuple[str, ...] = ("train_step", "inference_dispatch", "selfplay_drain")
 
-#: `DiskGuard.keep_all` gets NO config key (R122): it is a PRUNING knob the safety
-#: thresholds deliberately ignore (`disk_guard.py`'s own verbatim invariant), and its only
-#: consumer is the "thresholds ignore it" pin. Passing it explicitly here rather than
-#: leaving it to a constructor default is the MF-2 posture — a parameter default is a
-#: MIGRATED authority, not an absent one — and this constant is the disclosure.
+#: `DiskGuard.keep_all` gets NO config key: it is a PRUNING knob the safety thresholds
+#: deliberately ignore, and passing it explicitly here is the disclosure of that.
 _DISK_GUARD_KEEP_ALL = False
 
 
 class UnregisteredAbortExitError(RuntimeError):
-    """A hard-abort rule FIRED and the manifest authors no exit code for it.
-
-    The launcher's three outcomes are the child's three, by design (D-6): `abort_rule is
-    None` is the ONLY thing that means a clean run; a rule with an authored code exits with
-    the code the manifest row carries, resolved and never written here; a rule with NO
-    authored code is a NAMED failure. `grad_norm_hard_abort` and `sealbot_wr_abort` share
-    `_fire_hard_abort` and neither is pre-registered — R84 declined to invent codes for
-    them, and inventing one here would be that same class one layer up. Reporting an
-    aborted run as rc 0 is strictly worse: the supervisor above relaunches into the wall.
-    """
+    """A hard-abort rule FIRED and the manifest authors no exit code for it."""
 
 
 class RunHandles(NamedTuple):
@@ -189,25 +124,7 @@ class RunHandles(NamedTuple):
 
 
 class _DeferredSink:
-    """Late-binding sink adapter (WP12R Step 3 narration, R216): satisfies BOTH `EventSink`
-    Protocols (selfplay-local `pool_hooks.EventSink` and train-local `mantis.train.emit.EventSink`)
-    via the single structural `emit(Mapping) -> None` method.
-
-    The pool is constructed at `run.py:349` inside `build_run_collaborators`, which runs BEFORE
-    `compose_run`. `run_safety.sink` (the real `JsonlEventSink`) is created at `run.py:499`
-    inside `compose_run`, AFTER the pool object exists. `pool.start()` (which spawns the drain
-    thread that calls `_emit`) runs at `run.py:624`, AFTER `run_safety.sink` exists — so the
-    sink exists before any event is emitted, but NOT at the pool's construction site.
-
-    This adapter is injected at `run.py:349` BEFORE `run_safety.sink` exists; `bind()` is called
-    in `compose_run` after `build_run_safety` returns and before `pool.start()`. Pre-bind,
-    events drop via `NullEventSink` (== `sink=None` behaviour); the pool is not started until
-    after `bind()`, so the pre-bind no-op is never exercised in production.
-
-    R217 grant boundary: this adapter is sink-ONLY. The `heartbeat=` keyword at the same
-    construction site (`run.py:349`) is R208's (CARD-PHANTOM-BEAT) and is left at `None`
-    untouched. The adapter does NOT touch the heartbeat path.
-    """
+    """Late-binding sink adapter: satisfies both `EventSink` Protocols via `emit(Mapping)`."""
 
     def __init__(self) -> None:
         self._inner: Any = NullEventSink()
@@ -220,36 +137,11 @@ class _DeferredSink:
 
 
 class _DeferredHeartbeat:
-    """Late-binding heartbeat adapter (WP12R Step 3, CARD-PHANTOM-BEAT / R208/R225).
+    """Late-binding heartbeat adapter for the pool, bound in `compose_run`.
 
-    The production WorkerPool is constructed at run.py:381 inside
-    `build_run_collaborators`, BEFORE `run_safety.heartbeat` exists (`run_safety` is
-    built at run.py:531 inside `compose_run`). `pool.start()` (which spawns the drain
-    thread + inference server that call `pool._heartbeat`) runs at run.py:669, AFTER
-    `run_safety.heartbeat` exists — so the real heartbeat fn exists before any producer
-    ticks, but NOT at the pool's construction site.
-
-    This adapter is injected at run.py:381 BEFORE `run_safety.heartbeat` exists; `bind()`
-    is called in `compose_run` after `build_run_safety` returns and before `pool.start()`.
-    Pre-bind, `__call__` is a no-op (the pool is not started, so no producer ticks);
-    post-bind, `__call__` delegates to the real `registry.beat`.
-
-    R217 grant boundary: this adapter is heartbeat-ONLY. The `sink=` keyword at the same
-    construction site (run.py:380) is the narration chunk's (`_DeferredSink`) and is left
-    untouched. This class is a SEPARATE class from `_DeferredSink` (R217: separate class,
-    `sink=`/`_DeferredSink` untouched) and does NOT touch the sink path.
-
-    R208 producer-liveness conjunct: the `bound` flag is the composition root's
-    verification surface — before `watchdog.start()` (run.py:671), the root asserts the
-    pool's `_DeferredHeartbeat` is bound (`_assert_pool_producers_live`), so a pool that
-    got `heartbeat=None` (the rc-34 phantom-beat mutation) cannot arm the watchdog.
-
-    The defect this closes: `_BASE_WIRED_SOURCES` (run.py:113) declares
-    `inference_dispatch` + `selfplay_drain` as wired unconditionally, but `heartbeat=None`
-    at :381 made the pool's producers dead (pool_drain.py:57-59, inference_server.py:528-529
-    guard on `if pool._heartbeat is not None`). The watchdog armed on a lie and fired 42
-    at 1800 s on every healthy run5 — the rc-34 false-positive abort class (LAW-07's
-    founding class: a phantom gate input arming an abort chain).
+    Heartbeat-ONLY, a separate class from `_DeferredSink`. The `bound` flag is the composition
+    root's verification surface: a pool that got `heartbeat=None` has dead producers, so the
+    watchdog arms on sources nothing feeds and fires rc 42 at 1800 s on every healthy run.
     """
 
     def __init__(self) -> None:
@@ -265,19 +157,11 @@ class _DeferredHeartbeat:
 
 
 def _assert_pool_producers_live(pool: Any) -> None:
-    """R208/R225 producer-liveness conjunct at the composition root (CARD-PHANTOM-BEAT).
+    """Refuse to arm the watchdog unless the pool's `_DeferredHeartbeat` is bound.
 
-    Called before `run_safety.watchdog.start()` at run.py:671. `_BASE_WIRED_SOURCES`
-    (run.py:113) declares `inference_dispatch` + `selfplay_drain` as wired unconditionally;
-    their producers live in the pool (pool_drain.py:55-59, inference_server.py:528-529) and
-    beat via `pool._heartbeat`. A real `WorkerPool` ALWAYS sets `self._heartbeat` at
-    pool.py:160 — if it got `heartbeat=None` (the rc-34 mutation at :381), the producers
-    are dead and the watchdog arms on phantom sources. This conjunct rejects that.
-
-    A test fake WITHOUT a `_heartbeat` attribute (FakePoolNeverStarted in
-    test_run_composition.py) is SKIPPED — the conjunct targets real WorkerPools, not
-    harness doubles, so the existing composition-root tests stay GREEN (R225: the watchdog
-    itself is correct as written; the conjunct lives HERE, not inside `arm()`).
+    `_BASE_WIRED_SOURCES` declares `inference_dispatch` + `selfplay_drain` wired
+    unconditionally and their producers beat via `pool._heartbeat`, so a pool built with
+    `heartbeat=None` arms the watchdog on phantom sources. A fake without one is SKIPPED.
     """
     if not hasattr(pool, "_heartbeat"):
         return  # test fake — no producer surface; skip (harness, not subject)
@@ -295,71 +179,32 @@ def _assert_pool_producers_live(pool: Any) -> None:
 
 
 class RunCollaborators(NamedTuple):
-    """What `build_run_collaborators` hands back: the three injected collaborators plus the
-    ONE derivation of the run's two output directories INSIDE THE BOOT (D-8).
+    """The three injected collaborators plus the ONE in-boot derivation of the output dirs.
 
-    Stated at its measured scope, because the wider claim is false. Before WPMAIN the
-    launcher and the preflight child each derived `logs/` and `checkpoints/` themselves;
-    both now read them off this tuple, so no BOOT can derive them differently. What survives
-    is one derivation OUTSIDE the boot: `tools/ci_gates/preflight_mint.py:1000` writes its
-    own `log_dir = out_dir / "logs"` in the preflight PARENT and uses it for the
-    `PreflightOutDirReusedError` stale-segment refusal and for `_read_segment`. Repo-wide the
-    expression has exactly two producers — `run.py:269` and that line.
-
-    Not folded in here, and the residue is named rather than papered over (REVIEW-impl F-3,
-    queued as Q-D8-PARENT-DERIVATION): the parent half must stay importable WITHOUT torch,
-    which is why the child imports `mantis.run` function-locally at all (DESIGN §1.4) — this
-    module imports `torch` at line 68. Sharing the derivation therefore means a new
-    torch-free module and a new exported symbol, i.e. a live-consumer row and a DAG row, for
-    a two-line expression; that is materially wider than a truth-correction and is not this
-    condition's scope. The consequence a future reader must know: rename the child's
-    directory and the parent's reuse guard silently stops guarding while the segment read
-    goes empty."""
+    One derivation survives OUTSIDE the boot, in the preflight PARENT, so renaming the child's
+    directory silently stops that parent's stale-segment guard guarding.
+    """
 
     trainer: Any
     pool: Any
     buffer: Any
     log_dir: Path
     checkpoint_dir: Path
-    #: The resume sidecar this boot restored FROM, or None on a fresh run (R343(c)). It rides
-    #: the tuple rather than being re-read in `compose_run` for the reason every other field
-    #: here does: the ring is loaded in the builder, and a second read of the same sidecar
-    #: would be a second authority for what this boot resumed from — free to disagree the
-    #: first time the two reads race a rewritten file.
+    #: The resume sidecar this boot restored FROM, or None on a fresh run. It rides the
+    #: tuple rather than being re-read in `compose_run`: a second read of the same sidecar
+    #: is a second authority for what this boot resumed from.
     resume_state: Any = None
 
 
 @contextmanager
 def _seam(name: str) -> Iterator[None]:
-    """NAME a composition seam without catching anything (R64/LAW-14).
+    """NAME a composition seam without catching anything (LAW-14).
 
-    A collaborator wall stays BARE: no wrapping class, no except arm that decides what the
-    failure means, because a wall is a TREE DEFECT and must look like one. What a bare wall
-    lacks is WHERE it happened, so this annotates the in-flight exception with a PEP 678
-    note and re-raises it unchanged — same type, same traceback, nothing swallowed. The
-    preflight's rc-32 sniff is unaffected: notes append BELOW the traceback whose final
-    exception line still carries the `object has no attribute` text the classifier reads.
-
-    COVERAGE, STATED EXACTLY (RED-TEAM RT-4; SF-7 — a coverage claim that is not true is
-    worse than none). DESIGN §8 claimed "every builder call in `build_run_collaborators` and
-    every construction step in `compose_run`" and RED-TEAM measured 5 of ~10 seam sites, with
-    the eval-pipeline wall reaching the process boundary unnamed. Seamed now, and this list
-    is the claim:
-
-    - builder: `resolved_config record`, `init_trainer`, `_select_buffer`, `WorkerPool` (4 —
-      the record is FIRST, so the run's own account of what it was configured with exists
-      before any collaborator can wedge, R347/CONFIG-1);
-    - composer: `_resolve_monitor_cfg`, `build_run_safety`, `run_boot_identity emit`,
-      `resolved_config emit`, `ActorSync`, `_step_coordinator_config`, `build_eval_pipeline`,
-      `pool.start`, `watchdog.start`, `DiskGuard`, `StepCoordinator` (11).
-
-    DELIBERATELY NOT SEAMED, and why each: `require_run_config` / `revalidate_run_config`
-    (their own named refusals, and the seam name would add nothing to a message that already
-    names the caller); the `Path(...)` / `mkdir` lines and the `wired_sources` list (no
-    collaborator, no resolver — a failure there is an OS error naming its own path);
-    `run_training_loop` and `close_out` (the DRIVE and its epilogue, not composition — a
-    seam note on a training-step failure would mislabel it as a boot wall). A seam added to
-    any of those is fine; a construction step added WITHOUT one contradicts this list.
+    Annotates the in-flight exception with a PEP 678 note and re-raises it unchanged, so the
+    preflight's rc-32 sniff still reads the original final line. Seamed: the four builder
+    steps and the eleven composer steps. NOT seamed, deliberately: the two config validators
+    and the `Path`/`mkdir` lines (their own named refusals), and `run_training_loop`/`close_out`
+    (the DRIVE — a seam note there would mislabel a step failure as a boot wall).
     """
     try:
         yield
@@ -369,23 +214,11 @@ def _seam(name: str) -> Iterator[None]:
 
 
 def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callable[[], None]:
-    """The item-11 closure (§c.7), at the predicate RED-TEAM RT-3 measured it needs.
+    """Stop the pool iff `start()` was CALLED, not iff it returned.
 
-    The ORIGINAL hazard is unchanged and still closed: an unstarted pool's
-    `InferenceServer.join(timeout=5.0)` raises on a never-started thread (pool.py:335), so
-    `.stop()` must not be called on a pool this run never touched — which is the state on
-    every raise BEFORE the start call (an `ActorSync` wall, an eval-pipeline wall).
-
-    What changed is the predicate's meaning, from "start RETURNED" to "start was CALLED".
-    `WorkerPool.start()` (pool.py:308-329) is three sub-starts — the inference server, the
-    Rust runner, then the stats thread — and RT-3 drove the middle case: a raise in #2 or #3
-    leaves #1 alive while a `pool_started` set AFTER the call is still `False`, so the
-    teardown ladder was a NO-OP over a half-started pool and the workers leaked. A leaked
-    worker set is silent and unbounded; that is strictly worse than the one case this
-    widening admits — a `start()` that raises before bringing ANYTHING up, whose `stop()` may
-    then raise the never-started `join` error out of the `finally` with the original wall
-    chained as its `__context__` (DESIGN §8 already states teardown failures chain). Loud and
-    chained beats silent and leaked, and R64 forbids designing around the wall instead.
+    An unstarted pool's `InferenceServer.join(timeout=5.0)` raises on a never-started thread.
+    "Called" and not "returned" because `start()` is three sub-starts: a raise in #2 or #3 left
+    a half-started pool that a set-after flag reported as never started, and its workers leaked.
     """
     def _stop() -> None:
         if start_attempted:
@@ -394,73 +227,47 @@ def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callab
 
 
 def _resolve_monitor_cfg(config: RunConfig) -> MonitorConfig:
-    """WPAX S-1/S-2: a plain typed section read through the monitor section's ONE resolver.
+    """Read the monitor section through its ONE resolver, requiring it to be present.
 
-    This used to be a member of the duck-typed config-section family, whose absent-section
-    arm returned a bare `MonitorConfig()` — and a bare one carries
-    `actor_lag_abort_enabled=False`, so it silently DISARMED the hard abort `configs/run5.yaml`
-    ships armed (ADJ-07). `compose_run`'s gate makes the section typed and present, so there
-    is no absent arm left to take."""
+    The retired absent-section arm returned a bare `MonitorConfig()`, which carries
+    `actor_lag_abort_enabled=False` and so silently disarmed a hard abort the config arms.
+    """
     return resolve_monitor_config(config.monitor)
 
 
 def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
-    """The train-section twin of `_resolve_monitor_cfg`: `train.actor_sync_cadence_steps`
-    through its ONE resolver (K1). Its retired smoke arm substituted cadence 1 for any
-    config object without a train section — a test-only value on a production axis."""
+    """Read `train.actor_sync_cadence_steps` through its ONE resolver, requiring the section.
+
+    The retired smoke arm substituted cadence 1 for any config without a train section — a
+    test-only value on a production axis.
+    """
     return resolve_actor_sync_cadence(config.train)
 
 
 def _select_buffer(config: Any, capacity: int) -> Any:
-    """Select the replay buffer off `config.identity.representation` — never sniffed off a
-    live module, never defaulted (LAW-11). An unknown or absent representation RAISES.
+    """Select the replay buffer off `config.identity.representation`; an unknown or absent
+    representation RAISES (LAW-11) — never sniffed off a live module, never defaulted.
 
-    LIFTED out of `tools/ci_gates/preflight_mint.py::_build_buffer` (D-1/D-2). The move is
-    not tidiness: the raise below is the boot's one LAW-11 refusal, and while it sat in
-    `tools/` CI gate 11 could not see it at all (`silent_encoding_gate.py`'s
-    `SCAN_ROOTS = ("src", "crates")`). It is now inside the scan, and measured quiet there —
-    gate 11's patterns all require a REGISTERED-ENCODING literal in a default position, and
-    this function contains no encoding literal at all: it passes `config.identity.encoding`
-    affirmatively. The name loses the tool-side `_build_` residue with the move (R73).
+    This raise is the boot's one LAW-11 refusal, and it lives under `src/` so CI gate 11 can
+    see it. `RepresentationRouteError` is REUSED from the train-step route — one error family
+    per axis — and carries no `rc`: a `src/` exception carrying a CI tool's exit code is the
+    layering defect this closes. (That tool error class is named by description and never
+    spelled, because `tests/test_run_buffer_route.py` scans this function's source.)
 
-    `RepresentationRouteError` is REUSED, not invented: the SAME axis already raises it for
-    the train-step route (`mantis.train.coordinator.dispatch`, whose own docstring cites
-    "the `_build_buffer` posture" by name). One error family per axis. It carries no `rc` and
-    correctly should not — a `src/` exception carrying a CI tool's exit code is the layering
-    defect this WP ends, and R125 ruled the child-seam mapping of this error onto the CI
-    tool's rc-10 config-error class REJECTED rather than kept alive to feed a test (R116).
-    (The tool class is named by DESCRIPTION and not spelled, because the oracle for this
-    rule scans this very docstring — see `tests/test_run_buffer_route.py`.)
-
-    R344(a) — BOTH ARMS SEED THE RING'S SAMPLER FROM `config.seed`, here rather than at the
-    caller. `seed_everything(config.seed)` cannot reach it: the sampler is a Rust `StdRng`
-    seeded from OS entropy at construction, so two launches of the same config drew different
-    batch sequences and R343(c)'s determinism-seam witness was comparing against a
-    counterfactual that was never true. The call sits INSIDE this function because this is the
-    run's ONE buffer construction site — a caller-side call is a call that can be forgotten,
-    and the failure it would leave behind is silent. It does NOT make a resumed run continue
-    the pre-stop stream; that needs rand's private backend and is refused with grounds in
-    `CARD-RING-SAMPLER-SEED`.
-
-    RIDER, recorded here so the next reader finds it in-tree (R125): the third arm is
-    UNREACHABLE from a validated `RunConfig` today — `Literal["grid","graph"]` plus the
-    registry cross-check make an unknown representation unrepresentable. LAW-11 makes
-    widening the representation enum a deliberate design act, and whoever widens it re-opens
-    child-seam routing in that same design; until then this error propagates through the
-    preflight child as an UNCAUGHT loud failure with a full named traceback (LAW-14), never
-    a silent arm.
+    BOTH ARMS SEED THE RING'S SAMPLER FROM `config.seed` here, not at the caller: the sampler
+    is a Rust `StdRng` seeded from OS entropy at construction, so without this two launches of
+    one config drew different batch sequences. It does not resume the pre-stop stream.
     """
     representation = config.identity.representation
     if representation == "graph":
-        # Lazy, with a STATED reason (repo_design §87): `mantis._engine` is not an edge on
-        # §2's `run` row, and the extension module is the one import this root must not
-        # make unconditional.
+        # Lazy with a stated reason: `mantis._engine` is not an edge on the design's `run`
+        # row, and the extension module is the one import this root must not make
+        # unconditional.
         from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
 
-        # R255/ADJ-D34: the ring's visit-slot geometry is DERIVED here, at
-        # composition, from the config's sims regime — the same Rust authority the
-        # schema validator already ran at load, so this call cannot raise on a
-        # validated config; it exists so no literal can reappear on this path.
+        # The ring's visit-slot geometry is DERIVED at composition from the config's sims
+        # regime, through the same Rust authority the schema validator ran at load — so it
+        # cannot raise on a validated config, and no literal can reappear on this path.
         sp = config.selfplay
         pc = sp.playout_cap
         visit_capacity = derived_hexg_visit_capacity(
@@ -487,33 +294,14 @@ def _select_buffer(config: Any, capacity: int) -> Any:
 def _restore_resume_state(buffer: Any, checkpoint_path: str) -> Any:
     """Load the sidecar beside `checkpoint_path`, verify the ring, and reload it into `buffer`.
 
-    THE ORDER IS THE MECHANISM (R343(c) witnesses 1 and 5): the sidecar is read, the ring's
-    sha256 is RE-DERIVED and compared, and only then is the file loaded. Verifying after
-    loading would mean the corrupt bytes are already in the ring when the refusal fires, which
-    is the phantom-gate shape LAW-07 forbids — the check has to be able to prevent the thing it
-    reports.
-
-    The reloaded position count is cross-checked against the sidecar's own record, because the
-    two come from different places (the engine's return value against a number written at the
-    stop) and a disagreement means the file is not the ring the sidecar describes.
-
-    Returns the loaded `ResumeState`, or None when there is no sidecar — see the body: that
-    absence is a WARM START, not a failure, and it is announced.
-
     Raises:
         ResumeStateError: the sidecar exists but is malformed, or names another checkpoint.
         RingIdentityError: the persisted ring hashes differently than recorded, or reloads a
-            different number of positions.
-    """
+            different number of positions."""
     # THE SIDECAR'S PRESENCE IS WHAT DISCRIMINATES A RESUME FROM A WARM START, and nothing
-    # else at HEAD can. `--resume-from` carries BOTH meanings — `resolve_bootstrap` returns the
-    # same `source="cli"` for "continue this run" and for "start from these weights" — which is
-    # the conflation R178(c) named as the owed S-2 work. A checkpoint WITH a sidecar was written
-    # by a stop of this machinery and is a continuation; one WITHOUT was not, and refusing it
-    # would refuse run6's own launch, whose anchor is a BC warm-start checkpoint (R343(d)).
-    # So the absence is not an error — it is a different mode, and it is announced rather than
-    # inferred, because the one thing that must never happen quietly is a CONTINUATION that
-    # refills its ring from empty.
+    # else at HEAD can: `--resume-from` carries both meanings, and refusing a sidecar-less
+    # checkpoint would refuse a BC warm-start launch. The absence is announced, never inferred:
+    # the one thing that must not happen quietly is a CONTINUATION refilling from empty.
     if not sidecar_path_for(checkpoint_path).exists():
         _LOG.warning(
             "resume_state_absent checkpoint=%s — no sidecar beside this checkpoint, so it is "
@@ -550,42 +338,16 @@ def build_run_collaborators(
 ) -> RunCollaborators:
     """Build the three injected collaborators and derive the run's output directories.
 
-    Lifted VERBATIM IN SEQUENCE from the preflight child's own boot (D-1): seed, derive
-    dirs, trainer, capacity, buffer, pool. The child now calls this function instead of
-    re-implementing it, which is the whole of success criterion 2 — every composition step
-    both callers take is one of these two functions.
+    Lifted verbatim in sequence from the preflight child's own boot, so every composition step
+    both callers take is one of this module's two functions.
 
-    NO `device` PARAMETER (R126/MF-1). The device is a CONFIG FACT — `config.train.device`,
-    typed and required — and `torch.device(...)` is applied ONCE here and threaded to both
-    consumers. `init_trainer` and `WorkerPool` keep their own `device` constructor
-    parameters: those are collaborator threading BELOW the composition surface, not
-    config-fact carriers. What must be unrepresentable is a CALLER that can point the boot
-    at a different device than the config declares — which is exactly how a `--device cpu`
-    preflight false-cleared a cuda-minted run's 16 GiB GPU wall (CARD-RUN5-GPU-OOM).
-
-    `checkpoint_path` IS now threaded to `init_trainer` (item 4(a); this paragraph used to
-    say it deliberately never was, and that the threading was owed S-2 work). Until it was
-    wired, `init_trainer`'s resume branch — which fires only on an explicit
-    `checkpoint_path`, `orchestrator.py:97,113` — was UNREACHABLE from the production
-    launcher: the code existed, was unit-tested, and no run could ever enter it. A run that
-    died therefore had no way back in, which is the other half of the survivability defect
-    whose first half was the watchdog saving positions but not weights.
-
-    It is a LAUNCH fact, not a config fact, so it comes in as a parameter and not as a
-    schema key — the same reasoning R126 applies to `device` in reverse. A resume target is
-    a property of THIS invocation ("continue from that artifact"), not of the run's identity;
-    two runs from one minted config, one fresh and one resumed, are the same config. It
-    defaults to `None` meaning "fresh run": that is the ABSENCE of an action, not a code-side
-    default choosing a value for the operator (R1), and the preflight's §4.2 resumed-trainer
-    refusal stays a meaningful read because the preflight passes nothing.
-
-    `capacity` comes from `resolve_coordinator_knobs(config.train).capacity` — the sanctioned
-    one-authority read of the 19 coordinator knobs. The throwaway `StepCoordinatorConfig`
-    the child used to build just to read `.capacity` DIES with this (D-3): the real one is
-    built exactly once, inside `compose_run`, so no second construction site exists.
+    NO `device` PARAMETER: the device is the config fact `config.train.device`. What must be
+    unrepresentable is a caller pointing the boot at a different device than the config
+    declares — how a `--device cpu` preflight false-cleared a cuda-minted run's GPU wall.
+    `checkpoint_path` is a LAUNCH fact, so it is a parameter and not a schema key: two runs
+    from one minted config, one fresh and one resumed, are the same config.
     """
-    # R30a — the ONE determinism boot site: seed before any RNG-consuming object exists.
-    # Both callers used to seed at their own site; there is one site now.
+    # The ONE determinism boot site: seed before any RNG-consuming object exists.
     seed_everything(config.seed)
 
     out_dir = Path(out_dir)
@@ -593,58 +355,45 @@ def build_run_collaborators(
     checkpoint_dir = out_dir / "checkpoints"
     log_dir.mkdir(parents=True, exist_ok=True)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-    # R347/CONFIG-1: the run records its COMPLETE resolved config, including every leaf the
-    # shipped file left to a schema default, BEFORE anything can wedge. Persistence-fatal by
-    # LAW-14 — a run whose own record cannot be written is a run nobody can reconstruct.
+    # The run records its COMPLETE resolved config, including every leaf the shipped file
+    # left to a schema default, BEFORE anything can wedge. Persistence-fatal by LAW-14.
     with _seam("resolved_config record"):
         write_resolved_config(config, out_dir)
 
     device = torch.device(config.train.device)
-    # RECAL-PREP / R308(g)(i): the allocator-posture assertion, BEFORE the first CUDA
-    # allocation and therefore before `init_trainer`. A cap is fitted under ONE allocator
-    # regime; running the same cap under the other is a memory partition measured for a
-    # machine state this process is not in, and the 2026-08-22 sitting measured that
-    # difference at 3.62 GiB of card high-water. It is placed HERE, at the composition root's
-    # one device site, for `seed_everything`'s reason one line up: both callers would
-    # otherwise have their own assertion site, and there is one site now. Non-cuda runs are
-    # not enforced and say so — no CUDA device, no CUDA caching allocator, no regime.
+    # The allocator-posture assertion, BEFORE the first CUDA allocation and therefore before
+    # `init_trainer`: a cap fitted under one allocator regime and run under the other is a
+    # partition measured for a machine state this process is not in, and that difference
+    # measured 3.62 GiB of card high-water on 2026-08-22. Non-cuda runs are not enforced.
     _assert_allocator_posture(config.model_dump(), device_type=device.type)
     with _seam("init_trainer"):
-        # F-R-P2B-2: the trainer gets the SAME late-binding adapter shape the WorkerPool
-        # below gets — `sink=None` here meant every trainer-side emission
-        # (`periodic_checkpoint_save`, `trainer_step`, `aux_chain_loss`) was authored,
-        # unit-tested, and DROPPED in every production run (NullEventSink semantics). The
-        # adapter is bound to `run_safety.sink` in `compose_run`, beside the pool's bind;
-        # pre-bind emissions (resume-time events fire in THIS builder) still drop — the
-        # adapter's documented pre-bind semantics, unchanged by this threading.
+        # The trainer gets the SAME late-binding adapter shape the WorkerPool below gets;
+        # `sink=None` here meant every trainer-side emission was authored, unit-tested and
+        # DROPPED in every production run. Pre-bind emissions (resume-time events fire in
+        # this builder) still drop, which is the adapter's documented semantics.
         trainer = init_trainer(config=config.model_dump(), checkpoint_dir=str(checkpoint_dir),
                                device=device, sink=_DeferredSink(),
                                checkpoint_path=checkpoint_path)
     capacity = int(resolve_coordinator_knobs(config.train).capacity)
     with _seam("_select_buffer"):
         buffer = _select_buffer(config, capacity)
-    # R343(c) — THE RING IS A RESUME INPUT, NOT A BUFFER THAT REFILLS FROM EMPTY. Placed HERE,
-    # immediately after construction and before `WorkerPool` can push into it, because a load
-    # into a ring self-play has already written is a load into a ring whose contents nobody
-    # declared. On a fresh run this is a no-op; on a resume a failure PROPAGATES (LAW-14) —
-    # a resume that cannot restore its ring must not quietly become a fresh run.
+    # THE RING IS A RESUME INPUT, NOT A BUFFER THAT REFILLS FROM EMPTY. Placed immediately
+    # after construction and before `WorkerPool` can push, because a load into a ring
+    # self-play has already written is a load into a ring whose contents nobody declared. On
+    # a resume a failure PROPAGATES (LAW-14) — it must not quietly become a fresh run.
     resume_state = None
     if checkpoint_path is not None:
         with _seam("restore_resume_state"):
             resume_state = _restore_resume_state(buffer, checkpoint_path)
-    # R344(b) — THE GAME RECORD'S SELF-PLAY PRODUCER, CONSTRUCTED BEFORE THE POOL THAT FEEDS
-    # IT. `RecorderLike` has been injected and defaulted to `NullRecorder` since WP13-A; this
-    # is its first concrete implementation, so from step 0 every self-play game is written.
-    # Construction here rather than lazily on the first game because an un-openable store is a
-    # loud STARTUP failure — the `JsonlEventSink` posture — and a run that cannot write its
-    # games should say so before it plays 25 000 of them.
+    # The game record's self-play producer, constructed before the pool that feeds it, so
+    # from step 0 every self-play game is written. Constructed here rather than lazily on the
+    # first game because an un-openable store must be a loud STARTUP failure.
     with _seam("GameRecorder"):
         recorder = GameRecorder(record_dir=log_dir / "games", run_id=config.run_id,
                                 seed=config.seed)
     with _seam("WorkerPool"):
-        # R-SELFPLAYCONFIG-SCHEMA (unchanged debt, now cited from the builder rather than
-        # from an injection-first disclaimer): the pool still builds only via the legacy
-        # hparams dict path elsewhere, so it is handed `config.model_dump()`.
+        # Unchanged debt: the pool still builds only via the legacy hparams dict path
+        # elsewhere, so it is handed `config.model_dump()`.
         pool = WorkerPool(model=trainer.model, config=config.model_dump(), device=device,
                           replay_buffer=buffer, arch=trainer.arch, sink=_DeferredSink(),
                           recorder=recorder, heartbeat=_DeferredHeartbeat())
@@ -660,43 +409,13 @@ def _step_coordinator_config(
     gate_interval: int,
     knobs: CoordinatorKnobsSpec,
 ) -> StepCoordinatorConfig:
-    """Assemble `StepCoordinatorConfig` from RESOLVED CONFIG FACTS ONLY — zero literals
-    (WPMINT Phase K-B closes `CARD-COORD-KNOBS`, R78 as clarified by R80).
+    """Assemble `StepCoordinatorConfig` from RESOLVED CONFIG FACTS ONLY — zero literals.
 
-    This function's own docstring used to open "Smoke-grade defaults … for the ~22 knobs
-    R-TRAINCONFIG-SCHEMA / CARD-COORD-KNOBS (R78) still owns", and the literal below carried
-    them: `eval_interval`, `log_interval`, `batch_size`, `hard_gn_threshold`,
-    `selfplay_stall_timeout_sec` and fourteen more decided what every run WAS from a number
-    no config could see and no mint record published. R78 named the deadline (pre-run5-mint);
-    `knobs` is it. Six further fields had no reader at all and are DELETED rather than
-    authored (call K-a) — see `mantis.config.resolve.coordinator`.
-
-    The CONFIG-AUTHORED values are PARAMETERS **with no default of their own**. That is not
-    style: a literal the caller always replaces is a second default authority (R1), and so
-    is a parameter default — the authority would merely MIGRATE from the dataclass field to
-    this signature, leaving every `dataclasses.fields()` assertion green while a caller that
-    omits the argument silently inherits a posture (MF-2 Attack B). `tests/config/
-    test_drawrate_arming_authority.py` pins `stop_step`/`draw_rate_abort`'s
-    `Parameter.empty` for exactly that reason (R83),
-    `tests/config/test_drain_caps_wiring.py` pins `drain_caps`' and
-    `tests/config/test_coordinator_knobs_wiring.py` pins `knobs`'; the renamed function is
-    the name-truth half (R73): it no longer DEFAULTS the facts the config authors.
-
-    WPMINT Phase K-A (R93): `drain_caps` was the third such fact. The `900.0` that used to
-    sit in the literal below, and the three `StepCoordinatorConfig` terminal defaults beside
-    it, were the run's REAL drain caps while the minted, schema-validated,
-    registry-claimed `monitor.drain.*` block was popped and discarded by
-    `resolve_monitor_config` (the DR-11 finding). The four values now arrive whole, through
-    `resolve_drain_caps`, or this call raises.
-
-    R242 (ADJ-D12): `gate_interval` is the FIFTH such fact and it arrives the same way — a
-    required keyword-only parameter with no default, named by `compose_run` off
-    `config.monitor.gate_interval`. A scalar needs no `resolve_*` module of its own (there is
-    exactly one leaf and no shape to resolve), but the no-default rule is the same and the
-    reason is sharper here than anywhere else on this signature: a default would let a caller
-    silently inherit an ARMING cadence, and the defect R242 closes is the arming cadence
-    having been an inherited property of `train.log_interval` all along. There is deliberately
-    NO fallback to `log_interval` on this path — the value arrives whole or the call raises.
+    The config-authored values are PARAMETERS **with no default of their own**: a parameter
+    default would merely MIGRATE the authority from the dataclass field to this signature,
+    leaving every `dataclasses.fields()` assertion green while a caller that omits the argument
+    silently inherits a posture. `gate_interval` in particular has deliberately NO fallback to
+    `log_interval` — the arming cadence having been an inherited property of it IS the defect.
     """
     return StepCoordinatorConfig(
         eval_interval=knobs.eval_interval,
@@ -726,26 +445,9 @@ def _step_coordinator_config(
 def _parent_death_event(decision: ParentDeathDecision | None) -> dict[str, Any] | None:
     """The LAW-18 payload for the parent-death arming decision — or None if there is none.
 
-    THE DEFECT THIS CLOSES (Q3 red-team A6). The arming is a LEVER, and its only record used to
-    be a log line on the run's INHERITED stderr — which is the SUPERVISOR's stderr, the stream
-    that dies with the supervisor. After a real orphan no artifact anywhere said whether the run
-    had ever been armed, which is precisely the case where the answer matters.
-
-    THE PAYLOAD IS BUILT FROM THE GATE'S OWN RECORD and never re-derived. The gate runs at
-    `main`'s first statement, long before a sink, an out-dir or a run id exists, so it latches
-    its decision and the composition root reads that latch back. A hand-assembled copy here
-    would be a second authority for a decision only the gate can take.
-
-    `None` IN MEANS `None` OUT, and that is the LAW-07 half. A None latch means the gate never
-    ran — this composition was entered directly rather than through `main`, which is what
-    happens in `tests/test_run_launcher.py`'s five in-process boots — and manufacturing a
-    comfortable `armed=false` for that case would be the emitter inventing its own producer.
-    Absence is the honest record of "nobody decided".
-
-    UNCONDITIONAL otherwise, `armed=false` included. That is the sibling pattern verbatim:
-    `HeartbeatWatchdog.arm` and `StallWatchdog.arm` both log on every branch so that a disabled
-    or misconfigured watchdog is VISIBLE rather than silent. A lever that announced itself only
-    when it fired would leave the wrapper case — the one that matters — invisible.
+    Built from the GATE'S OWN LATCH and never re-derived, because the gate runs at `main`'s
+    first statement. `None` in means `None` out: a None latch means the gate never ran, and
+    manufacturing an `armed=false` there would be the emitter inventing its own producer.
     """
     if decision is None:
         return None
@@ -762,22 +464,13 @@ def _parent_death_event(decision: ParentDeathDecision | None) -> dict[str, Any] 
     }
 
 
-#: This root's logger. It had none until R334(b) needed one, which is itself the shape
-#: AUDIT-1 F-08 describes: the composition root emitted diagnostics only through the JSONL
-#: sink, so anything happening before the sink exists, or after it closes, had no channel at
-#: all. `main` installs THE one mantis handler (`configure_logging`, F-08), so this logger has
-#: somewhere to go.
+#: This root's logger; `main` installs THE one mantis handler so it has somewhere to go.
 _LOG = logging.getLogger(__name__)
 
 
 def _emit_live_arming_audit(config: Any, sink: Any, *,
                             probes: Mapping[str, Callable[[], bool]]) -> None:
-    """Publish the LIVE arming verdict for this run (AUDIT-1 F-11 / R334(b)).
-
-    Best-effort by construction and that is deliberate: this runs inside the teardown
-    ladder, after the run's outcome is already decided, and an audit that could raise there
-    would replace a real failure with its own. The `except` is narrow — the two named
-    failures `audit_arming_live` documents — so a genuine programming error still surfaces.
+    """Publish the LIVE arming verdict for this run.
 
     Args:
         config: the validated `RunConfig` this run was composed from.
@@ -786,9 +479,7 @@ def _emit_live_arming_audit(config: Any, sink: Any, *,
 
     Raises:
         Nothing. `ProducerProbeMissingError` and `ArmingSurfaceMissingError` are caught and
-        emitted as the audit's own failure, because a teardown-time diagnostic must never be
-        the thing that ends the run.
-    """
+        emitted as the audit's own failure — a teardown-time diagnostic must never end the run."""
     try:
         result = audit_arming_live(config, probes=probes)
     except (ProducerProbeMissingError, ArmingSurfaceMissingError) as exc:
@@ -820,63 +511,36 @@ def compose_run(
     checkpoint_dir: str | Path,
     resume_state: Any = None,
 ) -> RunHandles:
-    """The run composition root (§c.6). Injection-first: every COLLABORATOR arrives via a
-    kwarg, never built here (R-10) — but no parameter may carry a CONFIG FACT: the gate on
-    the first line below is the ONE authority for what this root may be composed from, and
-    the parameter list is pinned by a signature census so a re-add cannot be silent (WPAX
-    S-1/S-2, MF-1).
+    """The run composition root (§c.6).
 
-    `eval_enabled` (R120) and `run_id` (R123) were the last two parameters carrying config
-    facts and are DELETED, not merely stripped of defaults. R64's "the preflight may never
-    force False" is only structurally unrepresentable once there is no route to force
-    anything through; and a caller-supplied `run_id != config.run_id` would split the JSONL
-    segment identity from the config identity, which is the F-B1 class `run_boot_identity`
-    exists to kill.
-
-    MAIN-THREAD CALL, stated because it is a real precondition: `signal.signal` raises off
-    the main thread, and this root installs LAW-16's handlers. Both production callers and
-    every in-process pytest drive are on the main thread.
+    Injection-first: every COLLABORATOR arrives via a kwarg, never built here — but no
+    parameter may carry a CONFIG FACT, and the parameter list is pinned by a signature census
+    so a re-add cannot be silent. MAIN-THREAD CALL, a real precondition: `signal.signal` raises
+    off the main thread, and this root installs LAW-16's handlers.
     """
     config = require_run_config(config, caller="compose_run")
-    # RED-TEAM F-3: the gate above answers "is this the class?"; this answers "is this a
-    # config the loader would accept?". `model_copy(update=…)` builds a genuine RunConfig
-    # whose CROSS-FIELD validators never re-ran, and one such copy drove a 20-step run with
-    # a single actor sync — run3's frozen actor — past the gate. Re-validating the dump
-    # closes that route, `model_construct`, and post-gate mutation together. It stays a
-    # SECOND statement because the gate must remain compose_run's first (pinned) and because
-    # the two rules have different contracts: the gate is identity-preserving, this is not.
+    # The gate above answers "is this the class?"; this answers "is this a config the loader
+    # would accept?". `model_copy(update=…)` builds a genuine RunConfig whose CROSS-FIELD
+    # validators never re-ran, and one such copy drove a 20-step run with a single actor sync.
+    # A second statement, because the gate must remain compose_run's first and the two rules
+    # have different contracts: the gate is identity-preserving, this is not.
     config = revalidate_run_config(config, caller="compose_run")
 
-    # LAW-16 leg 1 (F-1-SIGNALS). HOISTED to the top of the composition, before anything
-    # starts. `install_signal_handlers` used to fire ONLY on `run_training_loop`'s
-    # self-construct branch — and this root always injects its own state, so the branch never
-    # ran: a probe over 19 real composed drives found SIGINT at `default_int_handler` and
-    # SIGTERM at `SIG_DFL` on ALL 19. Save-then-exit was dead in every composed run,
-    # including the preflight child's.
-    #
-    # THE WINDOW IS DEFINED, NOT GLOSSED: "signal-covered" during composition means the
-    # STATE IS SET, not that save-then-exit fires mid-compose. Nothing between this install
-    # and `run_training_loop` polls the state, so a signal in that window lets composition
-    # COMPLETE (eval pipeline, `pool.start()`, watchdog, disk guard, coordinator) and the
-    # save happens at the loop's entry-set arm, after which `close_out` drains and the
-    # teardown ladder below leaves nothing half-alive. A pre-`pool.start()` `if not
-    # shutdown.running:` bail-out was argued against and NOT added: a rarely-exercised extra
-    # branch in the one composer is worse than a bounded, pinned window. A signal arriving
-    # BEFORE this line (during `build_run_collaborators`) takes the default disposition —
-    # defined and clean, because nothing has started yet.
+    # LAW-16 leg 1, HOISTED to the top of the composition: `install_signal_handlers` used to
+    # fire only on `run_training_loop`'s self-construct branch, which this root never takes, so
+    # save-then-exit was dead in every composed run (probed at 19/19). "Signal-covered" here
+    # means the STATE IS SET, not that save-then-exit fires mid-compose: nothing between this
+    # line and `run_training_loop` polls the state, so a signal in that window lets composition
+    # COMPLETE and the save happens at the loop's entry-set arm.
     shutdown = ShutdownState()
     install_signal_handlers(shutdown)
 
     log_dir = Path(log_dir)
     checkpoint_dir = Path(checkpoint_dir)
-    # The DERIVATION of these two paths lives once in the BOOT, in `build_run_collaborators`
-    # (D-8, at the scope `RunCollaborators` states it and no wider) — this
-    # is not a second derivation, it is the root making the directory it was HANDED usable.
-    # It is load-bearing for LAW-16 leg 3: the disk guard stats `watch_path`, and its poll
-    # thread swallows its own errors by design (a monitor thread must not kill the run), so a
-    # checkpoint dir that does not exist yet buys a guard that runs, logs, and publishes
-    # NOTHING — armed in the composition, absent in effect. `build_run_safety` already
-    # creates `log_dir` for the same reason; this is its twin.
+    # Not a second derivation (that lives in `build_run_collaborators`) — the root making the
+    # directory it was HANDED usable. Load-bearing for LAW-16 leg 3: the disk guard stats
+    # `watch_path` and its poll thread swallows its own errors, so a checkpoint dir that does
+    # not exist yet buys a guard that runs, logs and publishes NOTHING.
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
     with _seam("_resolve_monitor_cfg"):
         monitor_cfg = _resolve_monitor_cfg(config)
@@ -886,23 +550,14 @@ def compose_run(
     if config.eval_enabled:
         wired_sources.append("eval_round")
 
-    # AUDIT-1 F-11 / R334(b). HOISTED above `build_run_safety` — it used to be initialised
-    # beside `coordinator` and `eval_pipeline` below — because `_disk_guard_sample` closes
-    # over this name and the watchdog polls it from its own thread. The order the composition
-    # is PINNED to is pool -> watchdog -> guard, so the watchdog's first polls run while the
-    # guard genuinely does not exist; a closure over an unassigned local would raise
-    # `NameError` on that thread instead of reading "not yet". The teardown ladder reads the
-    # same `None`-or-guard and is unaffected.
+    # HOISTED above `build_run_safety` because `_disk_guard_sample` closes over this name and
+    # the watchdog polls it from its own thread. The pinned order is pool -> watchdog -> guard,
+    # so a closure over an unassigned local would raise `NameError` on that thread instead of
+    # reading "not yet".
     disk_guard = None
 
     def _disk_guard_sample() -> MonitorSample | None:
-        """The disk guard's own counters, read LIVE at poll time (the O-28 discipline).
-
-        `None` while the guard does not exist yet — a real state, not an error. `interval_sec`
-        travels WITH the counters rather than being captured, so the stall deadline is always
-        denominated in the guard's own minted period and this root never holds a second copy
-        of it.
-        """
+        """Read the disk guard's own counters LIVE at poll time."""
         guard = disk_guard
         if guard is None:
             return None
@@ -910,9 +565,8 @@ def compose_run(
                              errors_total=guard.errors_total,
                              interval_sec=guard.interval_sec)
 
-    # WP-UNFREEZE §4.3: the lag-watchdog callables are read LIVE at poll time, never at
-    # build time — `actor_sync` is assigned immediately below, before anything can start
-    # (this root owns both the assignment and `watchdog.start()`). DESIGN §4.3's
+    # The lag-watchdog callables are read LIVE at poll time, never at build time —
+    # `actor_sync` is assigned immediately below, before anything can start. The design's
     # "ActorSync first" ordering is inverted here because the engine's LAW-18 sink IS
     # `run_safety.sink`, which only exists after this call.
     with _seam("build_run_safety"):
@@ -926,43 +580,25 @@ def compose_run(
                                                   sample_fn=_disk_guard_sample),),
         )
 
-    # WP12R Step 3 narration (R216): bind the pool's `_DeferredSink` to the real sink now
-    # that it exists. The adapter was injected at `run.py:349` (inside
-    # `build_run_collaborators`) BEFORE `run_safety.sink` existed; `pool.start()` (which
-    # spawns the drain thread that calls `_emit`) runs below, AFTER this bind, so events are
-    # delivered from the first emit. `bind()` is not a resource-claiming step (no file, no
-    # thread, no segment), so it sits OUTSIDE the teardown ladder (which opens at the sink
-    # at `:522-530`). R217: `heartbeat=` is untouched here — this is sink-only. The
-    # `isinstance` guard keeps test harnesses that inject a bare fake pool (no `_sink`)
-    # working — production always passes a real `WorkerPool` with a `_DeferredSink`.
+    # Bind the pool's `_DeferredSink` to the real sink now that it exists; `pool.start()`
+    # runs below, so events are delivered from the first emit. `bind()` claims no resource,
+    # so it sits OUTSIDE the teardown ladder. Sink-only — `heartbeat=` is untouched here. The
+    # `isinstance` guard keeps test harnesses injecting a bare fake pool working.
     deferred = getattr(pool, "_sink", None)
     if isinstance(deferred, _DeferredSink):
         deferred.bind(run_safety.sink)
 
-    # F-R-P2B-2: bind the TRAINER's `_DeferredSink` the same way — a SEPARATE bind for a
-    # SEPARATE adapter (the R217 pattern: neither bind covers for the other, so neither can
-    # silently unbind the other's surface). The trainer was built at `build_run_collaborators`
-    # BEFORE `run_safety.sink` existed; the first trainer-side emission
-    # (`trainer_step`/`periodic_checkpoint_save`, trainer/core.py) fires inside
-    # `run_training_loop`, AFTER this bind, so in-run events are delivered from the first
-    # step. The `isinstance` guard keeps test harnesses that inject a bare fake trainer
-    # (no `_sink`, or a spy sink) working — production always passes a real `Trainer`
-    # carrying the `_DeferredSink` injected at `build_run_collaborators`.
+    # Bind the TRAINER's `_DeferredSink` the same way — a SEPARATE bind for a SEPARATE
+    # adapter, so neither can silently unbind the other's surface. The first trainer-side
+    # emission fires inside `run_training_loop`, after this bind. The `isinstance` guard keeps
+    # test harnesses injecting a bare fake trainer working.
     deferred_tr = getattr(trainer, "_sink", None)
     if isinstance(deferred_tr, _DeferredSink):
         deferred_tr.bind(run_safety.sink)
 
-    # WP12R Step 3 R208 (CARD-PHANTOM-BEAT): bind the pool's `_DeferredHeartbeat` to the
-    # real heartbeat fn now that it exists. The adapter was injected at `run.py:381`
-    # (inside `build_run_collaborators`) BEFORE `run_safety.heartbeat` existed;
-    # `pool.start()` (which spawns the drain thread + inference server that call
-    # `pool._heartbeat`) runs below, AFTER this bind, so beats are forwarded from the
-    # first tick. R217: `sink=`/`_DeferredSink` are UNTOUCHED here — this is heartbeat-
-    # only, a SEPARATE bind for a SEPARATE adapter. The `isinstance` guard keeps test
-    # harnesses that inject a bare fake pool (no `_heartbeat` attr, or a non-deferred
-    # heartbeat) working — production always passes a real `WorkerPool` with a
-    # `_DeferredHeartbeat`. The `bound` flag is the conjunct's verification surface at
-    # :744 (before `watchdog.start()`).
+    # Bind the pool's `_DeferredHeartbeat` now that the real fn exists; `pool.start()` runs
+    # below, so beats are forwarded from the first tick. Heartbeat-only, a SEPARATE bind from
+    # the sink's. The `isinstance` guard keeps bare fake pools in test harnesses working.
     deferred_hb = getattr(pool, "_heartbeat", None)
     if isinstance(deferred_hb, _DeferredHeartbeat):
         deferred_hb.bind(run_safety.heartbeat)
@@ -971,66 +607,46 @@ def compose_run(
     coordinator = None
     eval_pipeline = None
     resolved_anchor = SimpleNamespace(best_model=None, best_model_step=None)
-    # TEARDOWN LADDER (§8, the pre-registered RED-TEAM lens: builder N succeeds, builder N+1
-    # raises). By the time `StepCoordinator` is constructed the pool is started, the watchdog
-    # thread is polling and the disk-guard thread is running; if a raise merely propagated,
-    # all three would survive the failed compose — worker processes, a watchdog whose
-    # `exit_fn` is `os._exit`, and a daemon guard that will SIGTERM a process no longer
-    # running a run. The contract is: no worker process and no non-daemon thread survives a
-    # failed compose, nothing is half-alive, and the failure that propagates is the ORIGINAL
-    # (nothing here catches anything — the `finally` runs and the exception continues; a
-    # teardown failure would chain as its `__context__`).
+    # TEARDOWN LADDER. By the time `StepCoordinator` is constructed the pool is started and
+    # the watchdog and disk-guard threads are running; a bare propagation would leave all
+    # three alive after a failed compose. The contract: nothing is half-alive, and the
+    # ORIGINAL failure propagates (nothing here catches; a teardown failure chains).
     #
-    # THE LADDER OPENS AT THE SINK, not at `pool.start()` (RED-TEAM RT-4). `build_run_safety`
-    # OPENS the run's JSONL segment file; the five construction steps that used to sit
-    # between that call and the old `try:` — the two boot emits, `ActorSync`,
-    # `_step_coordinator_config` and `build_eval_pipeline` — were outside BOTH the ladder and
-    # (bar the first two) any seam, so an eval-pipeline wall on an `eval_enabled: true`
-    # config reached the process boundary with the segment file still open and with no seam
-    # name for the preflight's rc-32/33 classifier to read. Driven and measured by RED-TEAM
-    # probe B2. Everything after the sink exists is now inside the ladder, and the
-    # `coordinator is None` arm — which already closes the sink — is what makes that true.
+    # THE LADDER OPENS AT THE SINK, not at `pool.start()`: `build_run_safety` OPENS the run's
+    # JSONL segment file, and the steps that used to sit between it and the old `try:` were
+    # outside both the ladder and any seam — so an eval-pipeline wall reached the process
+    # boundary with the segment file still open and no seam name for the rc-32/33 classifier.
     #
-    # `coordinator is None` is the discriminator, not a second flag: once the coordinator
-    # exists, `close_out` is the epilogue that owns the drain, the buffer save and the
-    # guarded pool stop, and re-stopping the pool after it would be a second authority for
-    # the same teardown. Before it exists, nothing else will ever stop what this root
-    # started, so this ladder does.
+    # `coordinator is None` is the discriminator, not a second flag: once it exists,
+    # `close_out` owns the drain, the buffer save and the guarded pool stop.
     try:
         with _seam("run_boot_identity emit"):
-            # F-B1 closure (WPCLEAN Phase RES): the booted process publishes ITS OWN
-            # post-revalidation config identity into the run's event stream, first thing
-            # after the sink exists — before anything can wedge. One authority
-            # (`config_identity_sha256`) on both sides: the mint preflight's parent hashes
-            # the config IT loaded with the same function and compares, so a child that read
-            # a different file is a NAMED preflight failure instead of invisible.
+            # The booted process publishes ITS OWN post-revalidation config identity, first
+            # thing after the sink exists. One authority on both sides: the mint preflight's
+            # parent hashes the config IT loaded with the same function and compares, so a
+            # child that read a different file is a NAMED failure instead of invisible.
             emit_via(run_safety.sink, {
                 "event": "run_boot_identity",
                 "run_id": run_id,
                 "config_sha256": config_identity_sha256(config),
             })
         with _seam("resolved_config emit"):
-            # §5.4 (LAW-08): `resolve_config` / `to_event_payload` had ZERO production call
-            # sites — a resolved-config surface with no emitter, i.e. a payload nobody had
-            # ever published. The run now publishes its own resolved posture into its own
-            # stream, immediately after the identity witness (which must land FIRST: it is
-            # the F-B1 closure and has to exist even if the boot later wedges). Exactly once
-            # per segment, and the payload IS `to_event_payload(resolve_config(config))` — a
-            # hand-assembled copy would be a second authority for the run's resolved
-            # posture. Producer-manifest row: `resolved_config`.
+            # The run's own resolved posture, immediately after the identity witness — which
+            # must land FIRST because it has to exist even if the boot later wedges. Exactly
+            # once per segment, and the payload IS `to_event_payload(resolve_config(config))`:
+            # a hand-assembled copy would be a second authority for it.
             emit_via(run_safety.sink, resolve_config(config).to_event_payload())
 
         with _seam("parent_death_signal_armed emit"):
-            # LAW-18 (Q3 red-team A6): the arming lever announces itself in the run's OWN
-            # stream. Payload and None-guard both live in `_parent_death_event` — see there.
+            # LAW-18: the arming lever announces itself in the run's OWN stream. Payload
+            # and None-guard both live in `_parent_death_event`.
             parent_death_event = _parent_death_event(last_parent_death_decision())
             if parent_death_event is not None:
                 emit_via(run_safety.sink, parent_death_event)
 
-        # WP-UNFREEZE (R49): the continuous-sync engine is built UNCONDITIONALLY — no config
-        # or eval state may make actor sync conditional (pinned by
-        # tests/train/test_actor_sync_isolation.py). The actor's weights come from the
-        # learner on a cadence and NEVER from a gate decision.
+        # The continuous-sync engine is built UNCONDITIONALLY — no config or eval state may
+        # make actor sync conditional. The actor's weights come from the learner on a cadence
+        # and NEVER from a gate decision.
         with _seam("ActorSync"):
             actor_sync = ActorSync(
                 target=pool,
@@ -1041,27 +657,18 @@ def compose_run(
                 run_id=run_id,
             )
 
-        # M-4: the StepCoordinatorConfig instance is built FIRST — DrainCaps is LIFTED from
-        # its own 4 fields, never a second, independently-hardcoded set of literals. The two
-        # used to duplicate config.py's own defaults (900.0/3.0/14400.0/14400.0) by
-        # coincidence; a future default change there would have silently diverged the two
-        # (R1: duplicated default authority).
-        # WPAX S-4 + Phase D + WPMINT Phase K-A/K-B: `stop_step` (train.max_train_steps),
-        # `draw_rate_abort` (train.draw_rate_abort), `drain_caps` (monitor.drain) and `knobs`
-        # (the 19 `train.*` step-coordinator keys) are the facts the CONFIG authors, and they
-        # are PASSED IN through their own resolvers rather than replaced afterwards — a
-        # `dataclass_replace` over a defaulted object requires a complete object first, i.e. a
-        # literal, and a literal that is always overwritten is still a second default
-        # authority (R1). With `knobs` there are no unauthored knobs left:
-        # `_step_coordinator_config` holds zero literals and R78's card is closed.
+        # The StepCoordinatorConfig is built FIRST and DrainCaps is LIFTED from its own 4
+        # fields, never a second independently-hardcoded set of literals. `stop_step`,
+        # `draw_rate_abort`, `drain_caps` and `knobs` are PASSED IN through their own
+        # resolvers rather than replaced afterwards: a literal that is always overwritten is
+        # still a second default authority.
         with _seam("_step_coordinator_config"):
             step_coordinator_cfg = _step_coordinator_config(
                 stop_step=resolve_max_train_steps(config.train),
                 draw_rate_abort=resolve_draw_rate_abort(config.train),
                 drain_caps=resolve_drain_caps(config.monitor),
-                # R242 (ADJ-D12): the ARMING cadence, named directly off the validated
-                # monitor section — the same shape `config.train.device` takes above. It is
-                # NOT `knobs.log_interval` and must never become it: that identity IS the
+                # The ARMING cadence, named directly off the validated monitor section. It
+                # is NOT `knobs.log_interval` and must never become it: that identity IS the
                 # defect (armed aborts with a blind first `log_interval` steps).
                 gate_interval=config.monitor.gate_interval,
                 knobs=resolve_coordinator_knobs(config.train),
@@ -1078,80 +685,63 @@ def compose_run(
                         terminal_eval_hard_cap_sec=step_coordinator_cfg.terminal_eval_hard_cap_sec,
                     ),
                     encoding=config.identity.encoding,
-                    # F-816-10 D-1: the fused-forward memory bound, resolved through its ONE
-                    # read path HERE (the parent) and carried to every round's `RoundSpec`.
-                    # Resolved only on the GRAPH route — the grid branch never reads the block
-                    # (the dense batch is a fixed-shape tensor already bounded by
-                    # `inference_batch_size`), and reading it on a grid run would make a
-                    # graph-only key a grid dependency.
+                    # The fused-forward memory bound, resolved through its ONE read path
+                    # here and carried to every round's `RoundSpec`. GRAPH-only: the dense
+                    # batch is already bounded by `inference_batch_size`, and reading the
+                    # block on a grid run would make a graph-only key a grid dependency.
                     fused_graph_caps=(
                         resolve_fused_graph_caps(config.model_dump())
                         if config.identity.representation == "graph"
                         else None
                     ),
-                    # PERF-TRANCHE-1 G-2 (ledger F-2): the collector's pop width and pop
-                    # deadline, resolved through their ONE read path here and carried to the
-                    # child, whose `LocalInferenceEngine` used to write both as literals.
-                    # Graph-only for `fused_graph_caps`' reason: a grid round builds no graph
-                    # server, so there is no collector geometry to carry.
+                    # The collector's pop width and pop deadline, resolved through their ONE
+                    # read path here and carried to the child, which used to write both as
+                    # literals. Graph-only: a grid round builds no graph server.
                     inference_batching=(
                         resolve_inference_batching(config.model_dump())
                         if config.identity.representation == "graph"
                         else None
                     ),
-                    # R318(b): the deploy head's MCTS leaf-batch width, read from the SAME
-                    # `selfplay.leaf_batch_size` the self-play worker reads — one knob, one
-                    # regime. The net's policy/value targets are generated by leaf-batched
-                    # search, so a deploy head searching at a different width is a train/deploy
-                    # mismatch; threading the config's own value is what makes eval
-                    # deploy-matched by construction rather than by assertion.
+                    # The deploy head's MCTS leaf-batch width, read from the SAME
+                    # `selfplay.leaf_batch_size` the self-play worker reads. The net's targets
+                    # are generated by leaf-batched search, so a deploy head searching at a
+                    # different width is a train/deploy mismatch.
                     leaf_batch_size=config.selfplay.leaf_batch_size,
-                    # NIGHTRUN-1 E1: the eval leaf-graph build's WIDTH, derived here through
-                    # its ONE read path and carried to the child, which has no `RunConfig` to
-                    # derive a host reservation from. Graph-only for `fused_graph_caps`'
-                    # reason: a grid round builds no leaf graphs at all. The Leg 1 profile put
-                    # 95.3 % of the eval game loop inside the serial build this widens; the
-                    # derivation RESERVES `selfplay.n_workers` threads plus the server thread,
-                    # so it takes only what the run has not already promised.
+                    # The eval leaf-graph build's WIDTH, derived through its ONE read path
+                    # and carried to the child, which has no `RunConfig`. Graph-only. A
+                    # profile put 95.3 % of the eval game loop inside the serial build this
+                    # widens; the derivation RESERVES `selfplay.n_workers` threads plus the
+                    # server thread, so it takes only what the run has not promised.
                     leaf_build_threads=(
                         resolve_leaf_build_threads(config.model_dump())
                         if config.identity.representation == "graph"
                         else 1
                     ),
-                    # RECAL-PREP / R308(g)(i): the eval child is a SECOND allocator on the same
-                    # card, in its own process with its own CUDA context, so it asserts the
-                    # posture FOR ITSELF at round start — the parent's verdict says nothing
-                    # about the environment a hand-launched `python -m mantis.eval.worker`
-                    # runs in. THREADED here, not judged here: `declared_allocator_posture`
-                    # refuses a token outside the closed regime set and passes the R119
-                    # placeholder through, because this seam does not know the child's device
-                    # and the child does. `None` on the not-cuda arm, where there is no
-                    # caching allocator to govern.
+                    # The eval child is a SECOND allocator on the same card, in its own
+                    # process with its own CUDA context, so it asserts the posture FOR ITSELF
+                    # at round start. THREADED here, not judged here: this seam does not know
+                    # the child's device and the child does. `None` on the not-cuda arm.
                     allocator_posture=(
                         _declared_allocator_posture(config.model_dump())
                         if _posture_governs_device(config.eval.worker_device)
                         else None
                     ),
-                    # AUDIT-1 F-31: the run's declared autocast dtype, resolved ONCE here
-                    # and carried to every round — the eval child has no RunConfig, and
-                    # its dense forward had no dtype at all.
-                    # AUDIT-1 F-15: the eval arena's ply cap is the RUN's, not a module
-                    # constant. `DEFAULT_MAX_PLIES = 128` was a copy of a copy of this key.
+                    # The run's declared autocast dtype, resolved ONCE here and carried to
+                    # every round — the eval child has no RunConfig, and its dense forward had
+                    # no dtype at all. The arena's ply cap is likewise the RUN's, not a module
+                    # constant that was a copy of a copy of this key.
                     max_plies=config.selfplay.max_game_moves,
-                    # AUDIT-1 F-39: the deploy head's sigma terms are the RUN's minted keys,
-                    # not the player's signature defaults.
+                    # The deploy head's sigma terms are the RUN's minted keys, not the
+                    # player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
-                    # The deploy head searches with the RUN'S OWN KIND, read through the
-                    # SAME resolver `SelfPlayHParams.from_config` reads. LAW-15's
-                    # deploy-matched bar is a construction here, not a coincidence between
-                    # two call sites — before this the eval head's regime came from
-                    # `DeployHeadPlayer`'s own body and appeared in no config at all.
+                    # The deploy head searches with the RUN'S OWN KIND, through the SAME
+                    # resolver `SelfPlayHParams.from_config` reads. LAW-15's deploy-matched
+                    # bar is a construction here, not a coincidence between two call sites.
                     search_kind=resolve_search_kind(config),
                     gumbel_m=config.selfplay.gumbel_m,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
-                    # R344(b): the SAME directory the self-play recorder writes into, named
-                    # once here. The eval child claims its own shard segment inside it, so
-                    # one run's four channels land in one store a viewer reads as one run.
+                    # The SAME directory the self-play recorder writes into, named once
+                    # here, so one run's four channels land in one store.
                     game_record_dir=log_dir / "games",
                     ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(
@@ -1163,12 +753,10 @@ def compose_run(
                     sink=run_safety.sink, heartbeat=run_safety.heartbeat,
                 )
 
-        # R343(c) WITNESS 2 — the round counter and `p_hat` a stopped process left behind.
-        # HERE, immediately after the pipeline is built and strictly before `pool.start()`, so
-        # no round can be kicked against a counter that restarted at zero. `LadderState`
-        # already survives on disk; these two did not, and `_build_round_spec` gates the
-        # promotion channel on `round_idx % gate.stride` — so without this a resumed run's
-        # promotion cadence silently realigns to the restart instead of to the run.
+        # The round counter and `p_hat` a stopped process left behind, restored before
+        # `pool.start()` so no round is kicked against a counter that restarted at zero:
+        # `_build_round_spec` gates the promotion channel on `round_idx % gate.stride`, so
+        # without this a resumed run's promotion cadence realigns to the restart.
         if resume_state is not None and eval_pipeline is not None:
             with _seam("restore_round_state"):
                 eval_pipeline.restore_round_state(
@@ -1176,32 +764,25 @@ def compose_run(
                     last_p_hat=resume_state.last_p_hat,
                 )
 
-        # ORDER PINNED (subsystems.py:213-215 contract): pool starts, THEN the watchdog.
-        # The flag is set BEFORE the call and not after (RED-TEAM RT-3): `WorkerPool.start()`
-        # is three sub-starts, so a raise inside it leaves a HALF-started pool that a
-        # set-after flag reports as never started — see `_stop_pool_if_start_attempted`.
+        # ORDER PINNED: pool starts, THEN the watchdog. The flag is set BEFORE the call, not
+        # after: `WorkerPool.start()` is three sub-starts, so a raise inside it leaves a
+        # HALF-started pool that a set-after flag reports as never started.
         with _seam("pool.start"):
             pool_start_attempted = True
             pool.start()
-        # R208/R225 producer-liveness conjunct (CARD-PHANTOM-BEAT): before the watchdog
-        # arms, assert the pool's heartbeat is a bound _DeferredHeartbeat. A pool that got
-        # heartbeat=None (the rc-34 mutation) has dead producers (pool_drain.py:57-59,
-        # inference_server.py:528-529 guard on `if pool._heartbeat is not None`) — the
-        # watchdog would arm on phantom sources and fire 42 at 1800 s on every healthy
-        # run5. The conjunct lives HERE (R225), not inside HeartbeatWatchdog.arm(); a
-        # test fake without _heartbeat is skipped (harness, not subject).
+        # Before the watchdog arms, assert the pool's heartbeat is a bound
+        # `_DeferredHeartbeat`: a pool that got `heartbeat=None` has dead producers, so the
+        # watchdog would arm on phantom sources and fire rc 42 at 1800 s on every healthy run.
+        # The conjunct lives HERE, not inside `HeartbeatWatchdog.arm()`.
         with _seam("producer_liveness_conjunct"):
             _assert_pool_producers_live(pool)
         with _seam("watchdog.start"):
             run_safety.watchdog.start()
 
-        # LAW-16 leg 3 (F-2-DISKGUARD). At HEAD the guard was constructed at exactly one
-        # site — `build_subsystems`, which had ZERO callers — from `dict.get` defaults over
-        # a key no schema carried. R121(b) mandates the root construct it; R1 forbids the
-        # values being literals; R122 grants the config family and its ONE resolver, so the
-        # root reads no `config.monitor.disk_guard` attribute of its own. Its critical arm
-        # SIGTERMs the process, which now lands on the handlers installed above — F-1 and
-        # F-2 were coupled defects and they close together.
+        # LAW-16 leg 3. The guard's only prior construction site had ZERO callers and read
+        # `dict.get` defaults over a key no schema carried; the root constructs it now from
+        # the config family's ONE resolver. Its critical arm SIGTERMs the process, which lands
+        # on the handlers installed above.
         with _seam("DiskGuard"):
             guard_spec = resolve_disk_guard(config.monitor)
             disk_guard = DiskGuard(
@@ -1211,26 +792,19 @@ def compose_run(
             )
             disk_guard.start()
 
-        # ── RESERVED, NOT DEAD: the mixed-batch / pretrained-buffer path (R289(q)) ──────────
-        # `pretrained_buffer`, `recent_buffer` and `bufs` are passed None here, so the
-        # mixed-batch assembly in `train/batch_assembly.py` contributes nothing at run5 while
-        # its config keys and resolver stamps stay live. That is a WIRING gap, not dead code.
-        #
-        # **This path MUST NOT be deleted.** R289(q) rules it RESERVED: it is the corpus-mix
-        # candidate MECHANISM of the bootstrap prereg row (`RUN5_MINT_PREREG.md` row 18,
-        # BOOTSTRAP-CORPUS posture — BC pretrain / corpus-mix vs no warm start, an
-        # operator-owed, MINT-CRITICAL decision). Deleting it as "unreferenced" would remove
-        # one of the two arms the mint is still choosing between, and would do it on a hygiene
-        # mandate rather than a design one. Queue: RQ-19.
+        # RESERVED, NOT DEAD — the mixed-batch / pretrained-buffer path. `pretrained_buffer`,
+        # `recent_buffer` and `bufs` are None here, so `train/batch_assembly.py` contributes
+        # nothing while its config keys and resolver stamps stay live: a WIRING gap, not dead
+        # code. **This path MUST NOT be deleted** — it is the corpus-mix candidate mechanism
+        # of the bootstrap prereg row, one of the two arms the mint is still choosing between.
         with _seam("StepCoordinator"):
             coordinator = StepCoordinator(
                 trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
                 pool=pool, eval_pipeline=eval_pipeline,
-                # `disk_guard` rides the EXISTING subsystems carrier (no signature change):
-                # the O3 arm persists the ring, which is a LARGE write, and the one abort
-                # that reaches O3 with `abort_rule` still unrecorded is the disk guard's —
-                # it latches `critical_fired` BEFORE it signals, so this is the only term
-                # that can see it in time. Built at `:1174`, above this call.
+                # `disk_guard` rides the EXISTING subsystems carrier: the O3 arm persists
+                # the ring, and the one abort reaching O3 with `abort_rule` still unrecorded
+                # is the disk guard's — it latches `critical_fired` BEFORE it signals, so this
+                # is the only term that can see it in time.
                 subsystems=SimpleNamespace(gpu_monitor=None, disk_guard=disk_guard),
                 anchor_state=resolved_anchor, shutdown=shutdown,
                 eval_model=getattr(trainer, "model", None), bufs=None,
@@ -1240,34 +814,18 @@ def compose_run(
                 heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync,
             )
 
-        # WPAX S-5: NOTHING is swallowed. The old blanket `except Exception -> log -> return`
-        # existed so a fakes harness could not crash this root; that is the same defect as the
-        # smoke resolver arm (accommodating test doubles in production code), and it also
-        # swallowed actor-SYNC failures into an exit-0 return — a run that looks launched and
-        # never syncs, which is run3's silent freeze with the backstop routed around it.
-        # Fail-loud law wins: the loop's failure propagates, and `close_out` still runs in a
-        # `finally` so the buffer save and the guarded pool stop are not lost. If `close_out`
-        # also raises, Python chains the loop failure as its `__context__`.
-        # AUDIT-1 F-32 / R334(c) SHAPE A, ARMED AT THE RUN6 MINT (R338). The launch pin DERIVES
-        # from `identity.warm_start` — ONE source, no hand-synced twin and no second key: the row
-        # already names the artifact and its `net_param_hash`, and `checkpoint_state_sha256` is
-        # the SAME denomination since F-32 collapsed the two (`model/identity.py`). An absent
-        # row is `None`, which is the no-pin posture every run before the row had.
+        # NOTHING is swallowed. The old blanket `except Exception -> log -> return` swallowed
+        # actor-SYNC failures into an exit-0 return — a run that looks launched and never
+        # syncs. The loop's failure propagates and `close_out` still runs in a `finally`.
+        # The launch pin DERIVES from `identity.warm_start` — ONE source, no hand-synced twin;
+        # an absent row is `None`.
         declared_warm_start = resolve_bc_warm_start(config.model_dump())
-        # R343(d) SAYS "AT STEP 0", AND A LIVE BOX RUN SHOWED WHY THAT QUALIFIER IS LOAD-BEARING.
-        # The config pin is the WARM-START artifact's hash — the anchor a FRESH launch must have.
-        # A RESUMED run's anchor has legitimately moved: run6 promotes, `best_model.pt` is
-        # rewritten, and asserting the step-0 pin against it refuses the launch. Measured: a
-        # resume after ONE promotion died with `anchor sha256 mismatch … Refusing to launch`,
-        # which would make a run unresumable from its first promotion onward — and RESUME-1
-        # exists so a 12 h block can be EXTENDED, i.e. exactly for runs that promote.
-        #
-        # So the pin's SOURCE follows the launch mode, and neither mode is unpinned: a fresh
-        # launch asserts the config's warm-start hash (R343(d)'s halt, unchanged); a resume
-        # asserts the anchor THE STOP RECORDED, carried on the sidecar in the guard's own
-        # `checkpoint_state_sha256` denomination. That is strictly stronger than clearing the pin,
-        # which is what `resolve_anchor`'s own error message offers a human ("update the pin or
-        # clear it") and what an unattended resume cannot do.
+        # THE PIN HOLDS AT STEP 0 ONLY, and that qualifier is load-bearing: the config pin is
+        # the WARM-START artifact's hash, the anchor a FRESH launch must have, but a RESUMED
+        # run's anchor has legitimately moved (a promotion rewrites `best_model.pt`) and
+        # asserting the step-0 pin against it refused a resume after ONE promotion.
+        # So the pin's SOURCE follows the launch mode and neither mode is unpinned: a resume
+        # asserts the anchor THE STOP RECORDED, carried on the sidecar.
         resumed_anchor_sha = getattr(resume_state, "anchor_sha256", None)
         expected_anchor = (
             resumed_anchor_sha if resumed_anchor_sha is not None
@@ -1280,15 +838,11 @@ def compose_run(
                               best_model_path=canonical_anchor_path(checkpoint_dir),
                               expected_anchor_sha256=expected_anchor)
         finally:
-            # R343(c) — THE RESUMABLE-STOP DECISION, taken HERE because this is the only
-            # scope holding all three terms. `shutdown_save` says a signal arrived; the guard's
-            # LATCHED `critical_fired` says whether that signal was the disk guard's own
-            # (`disk_guard.py` latches it BEFORE it signals, which is what makes it readable
-            # here at all); and `abort_rule` catches every rule that recorded before the
-            # epilogue. The teardown below records the disk rule AFTER this call by design, so
-            # `abort_rule` alone cannot see a disk abort — the guard's flag is the term that
-            # can. Anything short of all three saying "operator stop" runs the terminal
-            # battery, because an aborted run is being diagnosed, not resumed.
+            # THE RESUMABLE-STOP DECISION, taken HERE because this is the only scope holding
+            # all three terms: `shutdown_save`, the guard's LATCHED `critical_fired`, and
+            # `abort_rule`. The teardown below records the disk rule AFTER this call, so
+            # `abort_rule` alone cannot see a disk abort. Anything short of all three saying
+            # "operator stop" runs the terminal battery.
             resumable_stop = bool(
                 shutdown.shutdown_save
                 and shutdown.abort_rule is None
@@ -1299,119 +853,67 @@ def compose_run(
                     pool, start_attempted=pool_start_attempted),
                 resumable_stop=resumable_stop)
     finally:
-        # AUDIT-1 F-11 / R334(b) — THE LIVE ARMING AUDIT, and this is its ONE production
-        # consumer. CI gate 12 audits the `disk_space_exhausted` row against a CONFIG NUMBER,
-        # with no process to ask, so it cannot tell a guard that ran from a guard whose
-        # `check_once` raised on every tick — the second emits no `disk_free`, and an absence
-        # of disk alerts reads as "plenty of space". `audit_arming_live` asks the same manifest
-        # the same question with the guard's own `checks_total` as the row's liveness operand.
-        # It REPORTS and does not refuse: the run is over, and the value is that the run's own
-        # record says whether its disk abort was ever live. The refusal half belongs at the
-        # mint preflight, which boots a real run.
+        # THE LIVE ARMING AUDIT, and this is its ONE production consumer. CI gate 12 audits
+        # the `disk_space_exhausted` row against a CONFIG NUMBER with no process to ask, so it
+        # cannot tell a guard that ran from one whose `check_once` raised on every tick. This
+        # REPORTS and does not refuse; the refusal half belongs at the mint preflight.
         #
-        # WHY IT SITS AT THE TOP OF THE LADDER AND NOT BESIDE THE GUARD'S OWN TEARDOWN, which
-        # is where it was first written and where it broke the tier: `run_safety.sink.close()`
-        # runs on the PARTIAL path, and `disk_guard.stop()` runs AFTER it. An emit there hits a
-        # closed file, `JsonlEventSink` COUNTS that as a persistence failure (LAW-14: count,
-        # never raise) — and the heartbeat watchdog turns a non-zero persist counter into
-        # `os._exit(43)`. A diagnostic emitted one line too late took the process down. THIS is
-        # the only point in the ladder where the sink is open on BOTH paths.
-        #
-        # WHAT THE EARLY READ COSTS, stated rather than hidden: the counters are read BEFORE
-        # `disk_guard.stop()` joins the thread, so a check completing during teardown is not
-        # counted. `checks_total` only ever RISES, so the reading can under-report and never
-        # over-report — and the under-report is the truthful one: a run shorter than a single
-        # guard interval reports DISARMED, which is exactly what `checks_total == 0` means.
-        # A composition that failed before the guard existed answers False for the same reason.
+        # It sits at the TOP of the ladder because `run_safety.sink.close()` runs on the
+        # PARTIAL path and `disk_guard.stop()` after it — an emit there hits a closed file,
+        # which `JsonlEventSink` counts as a persistence failure and the heartbeat watchdog
+        # turns into `os._exit(43)`. This is the only point where the sink is open on BOTH
+        # paths. The counters are read before the thread is joined, but `checks_total` only
+        # ever RISES, so the reading can under-report and never over-report.
         _emit_live_arming_audit(
             config, run_safety.sink,
             probes={DISK_GUARD_LIVENESS_PROBE:
                     lambda: disk_guard is not None and disk_guard.checks_total > 0},
         )
         if coordinator is None:
-            # PARTIAL COMPOSITION. `close_out` — the epilogue that owns the drain, the
-            # buffer save, the staleness DISARM and the guarded pool stop — never ran and
-            # never will, so this is the only place the run-safety threads and the pool get
-            # stopped.
+            # PARTIAL COMPOSITION: `close_out` never ran and never will, so this is the only
+            # place the run-safety threads and the pool get stopped.
             #
-            # Why the arm restriction, stated TRUE (REVIEW-impl F-2 measured the previous
-            # sentence here FALSE and SF-7 makes a false justification worse than none):
-            # `close_out` (`train/coordinator/drain.py:140-171`) does NOT own either call.
-            # It disarms staleness, flushes the eval, runs `on_drained` and runs the terminal
-            # eval — it never touches the watchdog thread and never touches the sink.
-            # Repo-wide, `watchdog.stop()` and `sink.close()` have EXACTLY ONE call site each
-            # in all of `src/`, and it is the two lines below. So on the COMPLETED path
-            # neither runs and nothing else runs them: both are left to process exit, which
-            # is bounded but is not a teardown anybody owns.
-            #
-            # The forcing cause is not a principle, it is DEBT: seven off-list suites stand
-            # in `SimpleNamespace` sinks and watchdogs that implement no `close`/`stop`, so an
-            # unconditional teardown here reds them. R131 countersigned the deviation and
-            # REFUSED to accept it as shape — "production code contorting around
-            # under-implemented test fakes is the tail wagging the dog" — and routed the fix
-            # to CARD-PROTOCOL-COMPLETE (R106): complete the sink/watchdog protocol against
-            # concretes, THEN lift this restriction so teardown runs unconditionally. That
-            # card is the condition under which these two lines move out of the `if`; nothing
-            # here is a reason to close it as a no-op.
-            #
-            # Bounded, meanwhile, and measured rather than assumed: the sink is line-buffered
-            # (`monitor/sink.py:120`), the watchdog thread is a daemon
-            # (`train/lifecycle/heartbeat_watchdog.py:234-239`), and both production callers
-            # exit the process immediately after this returns.
+            # Why the arm restriction: `close_out` owns neither call — repo-wide,
+            # `watchdog.stop()` and `sink.close()` have EXACTLY ONE call site each in all of
+            # `src/`, the two lines below, so on the COMPLETED path both are left to process
+            # exit. The forcing cause is DEBT, not principle: seven off-list suites stand in
+            # `SimpleNamespace` sinks and watchdogs implementing no `close`/`stop`, so an
+            # unconditional teardown here reds them; completing that protocol against
+            # concretes is the condition under which these two lines move out of the `if`.
+            # Bounded meanwhile: the sink is line-buffered, the watchdog thread is a daemon,
+            # and both production callers exit the process immediately after this returns.
             _stop_pool_if_start_attempted(pool, start_attempted=pool_start_attempted)()
             run_safety.watchdog.stop()
             run_safety.sink.close()
         # The eval pipeline's poller thread and any in-flight spawn child need explicit
-        # teardown on BOTH paths (CARD-ORPHAN-WORKERS, R230). `close_out` drains the
-        # in-flight round via `drain_pending` on the completed path, but the poller thread
-        # is never joined there; and on the PARTIAL path `close_out` never ran at all.
-        # `pipeline.stop()` joins the poller and terminates/kills any residual child.
+        # teardown on BOTH paths: `close_out` drains the in-flight round on the completed path
+        # but never joins the poller, and on the PARTIAL path it never ran at all.
         if eval_pipeline is not None:
             eval_pipeline.stop()
-        # The disk guard is this root's on BOTH paths — `close_out` has never heard of it
-        # (it is composed here for the first time in this WP), and a daemon guard that
-        # outlives its run will SIGTERM a process that is no longer running one.
+        # The disk guard is this root's on BOTH paths — `close_out` has never heard of it, and
+        # a daemon guard that outlives its run will SIGTERM a process no longer running one.
         if disk_guard is not None:
             disk_guard.stop()
-            # RT-2 / R132 — THE SEAM. A guard that fired stopped this run, and until this
-            # line said so the run exited 0: the handler writes `shutdown_save`/`running` and
-            # never `abort_rule`, so `main` below read "clean" off a run the guard killed and
-            # the supervisor relaunched into the same full volume (R44's class). The rule is
-            # named HERE and not in the guard because the name is a `MANIFEST` row's and
-            # `mantis.train` may not import that module — the guard publishes the FACT, this
-            # root (which already imports the manifest for its own rc) does the naming, and
-            # the string is imported rather than typed so one rename moves both readers.
-            # ORDER IS THE ARGUMENT, not a convenience: the read happens AFTER `stop()` has
-            # joined the guard thread, so the latch is final and no thread but this one ever
-            # writes the run's stop state. `record_abort` is set-once, so a coordinator abort
-            # that already fired keeps its rule — first fire wins, and a disk-full event
-            # during a draw-rate collapse does not re-label the collapse.
+            # THE SEAM: a guard that fired stopped this run, and until this line said so the
+            # run exited 0 — the handler writes `shutdown_save`/`running` and never
+            # `abort_rule`, so a supervisor relaunched into the same full volume. Named HERE
+            # and not in the guard because the name is a MANIFEST row's and `mantis.train` may
+            # not import that module. The read happens AFTER `stop()` joined the guard thread,
+            # so the latch is final; `record_abort` is set-once, so first fire wins.
             if disk_guard.critical_fired:
                 shutdown.record_abort(DISK_SPACE_ABORT_RULE)
-        # WP12-R Phase O / R152 — THE TERMINAL-EVAL SEAM, and it closes R133's measured
-        # caveat "rc 0 does not certify eval health". `close_out` computed the terminal
-        # round's result, routed it, and then DISCARDED it one frame below `ShutdownState`
-        # — the only object that can carry an outcome to `main` — so a run whose terminal
-        # battery was killed, returned garbage or could not persist its ladder state exited
-        # 0 and the supervisor above recorded a clean finish (LAW-15: no promotion decision
-        # = deliverable incomplete). The coordinator now latches the routed round's OWN
-        # reason set-once; this names the rule, exactly as the disk-guard leg above does
-        # and for the same reason (the name is a `MANIFEST` row's and `mantis.train` may
-        # not import that module).
+        # THE TERMINAL-EVAL SEAM. `close_out` computed the terminal round's result and then
+        # DISCARDED it one frame below `ShutdownState` — the only object that can carry an
+        # outcome to `main` — so a run whose terminal battery was killed or could not persist
+        # its ladder state exited 0 and the supervisor recorded a clean finish.
         #
-        # ORDER IS THE ARGUMENT, not a convenience: this read sits AFTER the disk-guard
-        # read so `record_abort`'s first-fire-wins keeps the ROOT CAUSE — a disk-full run
-        # whose terminal eval then breaks BECAUSE the volume is full reports 47, not 48,
-        # and a draw-rate collapse recorded mid-loop keeps 46. A supervisor told "terminal
-        # eval degraded" would go looking at the eval ladder instead of at the disk.
+        # This read sits AFTER the disk-guard read so first-fire-wins keeps the ROOT CAUSE: a
+        # disk-full run whose terminal eval then breaks BECAUSE the volume is full reports 47.
         #
-        # The bare `EvalBrokenReason(raw)` is not decoration: it is the RUNTIME half of the
-        # unrepresentability claim. The three typed chokepoints make a bare string a
-        # pyright error and gate 14 is held at ZERO, but a `# type: ignore` slips past a
-        # type checker and the reason crosses a JSON boundary where types do not travel at
-        # all. A spelling no member spells is therefore a loud `ValueError` here rather
-        # than a silent rc 0 — LAW-11's posture (absent/unknown is an error, never a
-        # default) applied to the taxonomy.
+        # The bare `EvalBrokenReason(raw)` is the RUNTIME half of the unrepresentability claim
+        # — a `# type: ignore` slips past the typed chokepoints, and the reason crosses a JSON
+        # boundary where types do not travel. A spelling no member spells is a loud
+        # `ValueError` here rather than a silent rc 0.
         if coordinator is not None:
             terminal_reason = coordinator.terminal_eval_reason
             if terminal_reason is not None:
@@ -1425,21 +927,7 @@ def compose_run(
 def launch_run(
     *, config: RunConfig, out_dir: str | Path, checkpoint_path: str | None = None,
 ) -> RunHandles:
-    """THE launch path: build the collaborators, compose the run. Nothing else.
-
-    The body is EXACTLY those two calls, pass-through, and it is censused as such (O-A2): a
-    third step here — a config transform, a device coercion, an `if resume:` branch — or a
-    DIFFERENT config object handed to the composer than the collaborators were built from
-    would be a divergent boot path wearing the one-authority name, and both mutations are
-    behaviourally invisible on a green tier.
-
-    `checkpoint_path` (item 4(a)) is FORWARDED, never branched on: the resume decision lives
-    in `init_trainer`, which already dispatches fresh-vs-resume on this value being `None`.
-    That is exactly why it may ride this pass-through without violating O-A2 — the census
-    forbids a third STATEMENT here, and adding a `if resume:` branch is precisely the
-    mutation it names. There is none; the parameter rides the existing builder call.
-
-    """
+    """THE launch path: build the collaborators, compose the run. Nothing else."""
     collaborators = build_run_collaborators(
         config=config, out_dir=out_dir, checkpoint_path=checkpoint_path)
     return compose_run(config=config, trainer=collaborators.trainer, pool=collaborators.pool,
@@ -1463,61 +951,28 @@ def _lazy_guarded_load(model: Any, state_dict: Any) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     """`python -m mantis.run --config <path> --out-dir <path>` — the production launcher.
 
-    R1 posture at the CLI boundary: `--config` and `--out-dir` are required and NEITHER has
-    a `default=`. A defaulted `--out-dir` in particular is a run input the code decides, and
-    every run that forgets the flag then writes into one shared directory — which is how two
-    runs' checkpoints end up in one lineage. A usage error is argparse's own rc 2.
+    `--config` and `--out-dir` are required and NEITHER has a `default=`: a defaulted
+    `--out-dir` is a run input the code decides, and every run that forgets the flag then
+    writes into one shared directory. `--resume-from` is the one OPTIONAL flag, and its
+    `default=None` selects no action rather than picking a value; it is a flag rather than a
+    schema key because a resume target is a property of THIS invocation. There is NO `--device`
+    flag and no eval switch — `config.train.device` and `config.eval_enabled` are the only
+    routes. The preflight's in-repo `--out-dir` refusal is deliberately not mirrored here: that
+    guard exists because a CI gate must not dirty the tree it gates.
 
-    `--resume-from` (item 4(a)) is the one OPTIONAL flag, and its `default=None` is not the
-    thing R1 bans. R1 bans a default that picks a VALUE on the operator's behalf; `None` here
-    selects no action at all — `init_trainer` resumes only on an explicit path and otherwise
-    builds fresh, which is the same dispatch it already had. It is a flag rather than a
-    schema key because a resume target is a property of THIS invocation, not of the run's
-    identity: the same minted config launched fresh and launched resumed is the same config,
-    so putting it in the config would make two runs differ by an identity key that describes
-    neither. Until this flag existed the resume branch was unreachable from production — a
-    run that died had no supported way back in.
-
-    There is NO `--device` flag (R126): the device is `config.train.device`, so preflighting
-    or launching run5 uses run5's own minted device and no invocation can point either
-    caller somewhere else. There is no eval switch either (R64/O-10): `config.eval_enabled`
-    is the only route.
-
-    There is deliberately no in-repo `--out-dir` refusal here, unlike the preflight's
-    `_checked_out_dir`: that guard exists because a CI GATE must not dirty the tree it
-    gates. A production launch writing untracked `logs/`/`checkpoints/` is what R7 already
-    anticipates ("never tracked", not "never written"), so the refusal stays preflight-only
-    policy, parent-side in the tool.
-
-    rc policy, through THE resolver (D-6 — the `repo_design.md` OWED paragraph, discharged):
-    the launcher reads the SAME `exit_code_for_abort` the preflight child's `_abort_rc`
-    reads, so the abort-to-rc mapping has one authority and is never re-derived. Three rules
-    reach it with an authored code today — `draw_rate_collapse` (46); since RT-2/R132,
-    `disk_space_exhausted` (47), recorded by `compose_run`'s teardown off the guard's own
-    latch; and since WP12-R Phase O / R152, `terminal_eval_broken` (48), recorded by the
-    same teardown off the coordinator's set-once terminal-eval latch, AFTER the disk-guard
-    read so first-fire-wins keeps the root cause. NOT covered, and stated because a
-    supervisor depends on the difference: a signal
-    this process did NOT send itself — an operator's SIGTERM, a supervisor's own stop — still
-    resolves to 0, since nothing records a rule for it. R132's scope is the guard.
-
-    WHAT rc 1 MEANS HERE, disclosed rather than implied (RED-TEAM RT-8, SF-7). rc 1 is not an
-    AUTHORED code: it is CPython's rc for any exception that leaves `main`, so at least two
-    distinct outcomes share it — `UnregisteredAbortExitError` (a rule fired, the manifest
-    authors no code) and any composition wall (a collaborator raised; the seam name is in the
-    stderr tail, not in the rc). A supervisor reads the rc, so those two are indistinguishable
-    to it. No code is invented for either here: R84 declined to author one for a rule nobody
-    pre-registered, and minting an "aborted, no code" number at the launcher would be that
-    same class one layer up — so this paragraph is the disclosure, and the decision is queued
-    (`Q-RT-RC1-COLLISION`), not taken.
+    rc policy goes through the SAME `exit_code_for_abort` the preflight child reads. Three
+    rules reach it with an authored code: `draw_rate_collapse` (46), `disk_space_exhausted`
+    (47) off the guard's latch, and `terminal_eval_broken` (48) off the coordinator's set-once
+    latch, read AFTER the disk-guard read so first-fire-wins keeps the root cause. A signal
+    this process did NOT send itself still resolves to 0. rc 1 is not an AUTHORED code but
+    CPython's rc for any exception leaving `main`, so `UnregisteredAbortExitError` and any
+    composition wall are indistinguishable to a supervisor; no code is invented for either.
     """
-    # F-816-19 (R285(h)). THE FIRST STATEMENT, before argparse and before any collaborator
-    # exists: the window this closes is exactly "the supervisor was killed while the run was
-    # still coming up", and everything after this line either allocates the GPU or starts a
-    # thread. It is a NO-OP unless a mantis supervisor stamped its pid in the environment —
-    # an unconditional arm here would SIGKILL every unattended run the moment its launching
-    # shell exited, and would arm the pytest process through this function's in-process
-    # callers. Never at import time, for the same reason, categorically.
+    # THE FIRST STATEMENT, before argparse and before any collaborator exists: the window this
+    # closes is exactly "the supervisor was killed while the run was still coming up". A NO-OP
+    # unless a mantis supervisor stamped its pid in the environment — an unconditional arm
+    # would SIGKILL every unattended run the moment its launching shell exited, and would arm
+    # the pytest process through this function's in-process callers. Never at import time.
     arm_parent_death_if_supervised()
     parser = argparse.ArgumentParser(
         prog="python -m mantis.run",
@@ -1531,19 +986,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="checkpoint to resume the trainer from; omit for a fresh run")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
-    # AUDIT-1 F-08. THE ONE mantis stderr handler, installed at the process entry. Until this
-    # call `monitor/logging_setup.configure_logging` had ZERO callers: `run`, `supervise`, the
-    # eval child and every diagnostic installed no root handler, so Python's lastResort dropped
-    # every `logger.info` and printed WARNING+ unformatted. Everything INFO a run emits was
-    # unobservable on stderr — including the registry-sha handshake's SKIP reason, whose own
-    # docstring says it is "NEVER a silent pass", and REPAIR-1's new `disk_guard_error`
-    # warning. Installed BEFORE the launch so the boot path's own diagnostics are covered.
+    # THE ONE mantis stderr handler, installed at the process entry. Until this call
+    # `configure_logging` had ZERO callers, so Python's lastResort dropped every `logger.info`
+    # and printed WARNING+ unformatted. Installed BEFORE the launch so the boot path's own
+    # diagnostics are covered.
     configure_logging()
 
-    # AUDIT-1 F-47. `resolve_bootstrap` exists to fail a stale `--resume-from` AT LAUNCH,
-    # before `torch.load`, and had zero callers — so a mistyped path surfaced as a torch error
-    # deep inside `init_trainer`'s resume branch, after the composition root had built a run.
-    # A guard and the flag it guards, in the same process, joined by nothing.
+    # `resolve_bootstrap` exists to fail a stale `--resume-from` AT LAUNCH, before
+    # `torch.load`, and had zero callers — so a mistyped path surfaced as a torch error deep
+    # inside `init_trainer`'s resume branch, after the composition root had built a run.
     bootstrap = resolve_bootstrap(args.resume_from)
     handles = launch_run(config=load_config(args.config), out_dir=args.out_dir,
                          checkpoint_path=bootstrap.path)

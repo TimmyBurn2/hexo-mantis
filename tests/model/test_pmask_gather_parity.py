@@ -1,25 +1,13 @@
-"""P-MASK output-parity oracle (R284(b)) — the sync-free gather is BYTE-IDENTICAL.
+"""P-MASK output-parity oracle — the sync-free gather is BYTE-IDENTICAL.
 
-`GnnNet.forward_batch` gathers the legal-node rows with `emb.index_select(0, legal_index)`
-instead of the boolean-mask `emb[legal_mask]` it used before. The two are pure row copies that
-perform no arithmetic, so the correct assertion is `torch.equal`, NOT `allclose`: a tolerance
-is the weaker claim and would pass through the one failure that can actually occur here — a row
-REORDERING, which changes no value and every prior-to-cell pairing.
+`forward_batch` gathers the legal-node rows with `index_select` instead of a boolean mask. Both
+are pure row copies, so the assertion is `torch.equal` and NOT `allclose`: a tolerance passes
+through the one failure that can occur here, a row REORDERING. The reference arm re-expresses
+the OLD formulation through the net's public parts, and `forward_single`, still on the mask
+form, is a second cross-formulation reference at B=1.
 
-The reference arm is the OLD FORMULATION re-expressed through the net's own public parts
-(`node_embeddings` -> `policy_head.mlp(emb[legal_mask])`), so this compares two formulations
-rather than one implementation with itself. `forward_single` is deliberately left on the
-boolean-mask form in production code for the same reason and is exercised here as the second,
-independent cross-formulation reference at B=1.
-
-Both autocast arms run, and the bf16 arm is LAW-06's regime (graph path = bf16, pinned). The
-gather is dtype-agnostic — it copies whatever dtype `emb` carries — so byte-equality is the
-claim in every arm, not merely in fp32.
-
-MUTATION (LAW-07, and the dispatch's "RED-verified against a deliberately wrong gather"): the
-`_wrong_gather_*` rows drive the SAME production `forward_batch` with a deliberately corrupted
-index — reversed, rolled, and one row replaced — and assert the oracle SEES it. A parity oracle
-that cannot fail on a wrong gather is not evidence for a right one.
+MUTATION: the wrong-gather rows drive the SAME production forward with a corrupted index and
+assert the oracle SEES it — an oracle that cannot fail on a wrong gather is not evidence.
 """
 from __future__ import annotations
 
@@ -39,20 +27,16 @@ from mantis.selfplay.graph_collate import (
 
 _ENC = "gnn_axis_v1"
 
-#: The committed collate payload bank. `tests/selfplay/conftest.py` exposes the same files
-#: through a session fixture, but R5 bars cross-test imports and a conftest fixture does not
-#: reach a sibling directory — so the two-line loader is DUPLICATED here rather than shared,
-#: on the precedent `tests/eval/test_rung_seat_off_window.py` states in terms ("duplicated from
-#: the frozen file rather than imported — R5 bars cross-test imports"). The files are the
-#: authority; this is a `np.load`, not a second copy of the data.
+#: The committed collate payload bank. The selfplay conftest exposes the same files through a
+#: session fixture, but cross-test imports are barred and a conftest fixture does not reach a
+#: sibling directory, so the two-line loader is duplicated. The files are the authority.
 _COLLATE = Path(__file__).resolve().parents[1] / "fixtures" / "selfplay" / "collate"
 
 
 @pytest.fixture(scope="module")
 def payload_fields():
-    """Factory -> a FRESH `GraphWirePayload` ctor-kwarg dict. Arrays are copied per call for
-    the reason the selfplay conftest states: the mutation rows below corrupt their payload in
-    place and a shared buffer would leak one row's corruption into the next."""
+    """Factory -> a FRESH `GraphWirePayload` ctor-kwarg dict; arrays are copied per call because
+    the mutation rows corrupt their payload in place."""
     import json
     scalars_all = json.loads(
         (_COLLATE / "collate_expectations.json").read_text(encoding="utf-8")
@@ -89,23 +73,9 @@ def _batch(payload_fields, stem: str):
 
 
 def _legal_mask(batch) -> torch.Tensor:
-    """The dense boolean view of the legal set, built HERE from the gather.
-
-    It used to be `batch.legal_mask`, a field `collate_graph_batch` produced. RQ-16's per-tensor
-    census found no production path read it and R297(c) retired it, so this oracle builds it.
-
-    THE ORACLE'S INDEPENDENCE IS UNCHANGED, and the reason is worth stating because "the reference
-    is now derived from the thing under test" sounds fatal and is not. The collate built this mask
-    the same way — `legal_mask_np[legal_node_gather] = True`, a scatter of the very same gather —
-    so the mask was NEVER independent of the gather. What these rows compare, and all they ever
-    compared, is two INDEXING FORMULATIONS over one index set: boolean-mask selection
-    (`emb[mask]`) against index selection (`emb[gather]`). That comparison is exactly as strong
-    from a locally-built mask as from a collate-built one.
-
-    The proof is in this file already: `test_a_wrong_gather_is_SEEN_by_this_oracle` corrupts the
-    gather three ways and requires each corruption to be caught. Those rows still fire — if the
-    reference had collapsed into the thing under test, they could not.
-    """
+    """The dense boolean view of the legal set, built HERE from the gather — which does not cost
+    independence, because the collate built the same mask by scattering that same gather. What
+    these rows compare is two INDEXING FORMULATIONS over one index set."""
     mask = torch.zeros(batch.x.shape[0], dtype=torch.bool)
     mask[batch.legal_node_gather.to(torch.int64)] = True
     return mask
@@ -141,9 +111,8 @@ def test_gather_is_byte_identical_to_the_boolean_mask(payload_fields, stem, auto
 
 @pytest.mark.parametrize("stem", ["b1", "b6"])
 def test_value_and_bin_logits_are_untouched_by_the_gather_change(payload_fields, stem) -> None:
-    """The value head reads `stone_mask`, not the legal gather. Pinned so a future edit that
-    routes the value head through the legal path is caught by THIS oracle rather than by a
-    strength number six weeks later."""
+    """The value head reads `stone_mask`, not the legal gather; pinned so a future edit routing
+    the value head through the legal path is caught here rather than by a strength number."""
     spec, batch = _batch(payload_fields, stem)
     net = _net(spec)
     stone_mask = stone_mask_from_batch(batch)
@@ -162,13 +131,9 @@ def test_value_and_bin_logits_are_untouched_by_the_gather_change(payload_fields,
 
 
 def test_forward_single_is_the_independent_cross_formulation_reference(payload_fields) -> None:
-    """`forward_single` still gathers with the BOOLEAN MASK (production, unchanged). At B=1 it
-    must agree with the batched index gather to the batched path's own pooling tolerance —
-    `allclose`, not `equal`, and the reason is stated rather than assumed: `forward_single`
-    pools with `emb[stone_mask].mean(0)` while `forward_batch` uses segment pooling, a
-    documented ~5e-7 accumulation-order difference (`gnn.py` module docstring). The POLICY
-    logits, which are what the gather produces, are byte-identical — asserted separately and
-    exactly."""
+    """`forward_single` still gathers with the BOOLEAN MASK, so at B=1 it must agree with the
+    batched gather to the batched path's pooling tolerance — a ~5e-7 accumulation-order
+    difference. The POLICY logits are byte-identical and asserted exactly."""
     spec, batch = _batch(payload_fields, "b1")
     assert batch.n_graphs == 1
     net = _net(spec)
@@ -190,17 +155,15 @@ def test_forward_single_is_the_independent_cross_formulation_reference(payload_f
     [
         (lambda g: torch.flip(g, dims=(0,)), "reversed"),
         (lambda g: torch.roll(g, 1, dims=0), "rolled-by-one"),
-        # R73 name-truth: the label says exactly what the lambda does. Written as
-        # `[g[:-1], g[:1]]` — the FIRST row replacing the last. The obvious-looking
-        # `[g[:-1], g[-1:]]` is the IDENTITY and would be a mutation that can never fail.
+        # The label says exactly what the lambda does: `[g[:-1], g[:1]]` puts the FIRST row last.
+        # The obvious-looking `[g[:-1], g[-1:]]` is the IDENTITY — a mutation that cannot fail.
         (lambda g: torch.cat([g[:-1], g[:1]]), "last-row-replaced-by-the-first"),
     ],
 )
 def test_a_wrong_gather_is_SEEN_by_this_oracle(payload_fields, corrupt, label) -> None:
-    """MUTATION. The production forward is driven with a deliberately wrong index; the oracle's
-    own assertion must fail. Corruptions are order-only or membership-only, so a length check
-    or a set check would NOT catch them — only the byte-exact ordered comparison does, which is
-    the reason the oracle asserts `torch.equal`."""
+    """MUTATION: the production forward is driven with a deliberately wrong index and the
+    oracle's own assertion must fail. The corruptions are order-only or membership-only, so only
+    the byte-exact ordered comparison catches them."""
     spec, batch = _batch(payload_fields, "b6")
     net = _net(spec)
     stone_mask = stone_mask_from_batch(batch)
@@ -218,9 +181,9 @@ def test_a_wrong_gather_is_SEEN_by_this_oracle(payload_fields, corrupt, label) -
 
 
 def test_the_gather_is_strictly_increasing_on_every_committed_fixture(payload_fields) -> None:
-    """The invariant P-MASK's byte-equality rests on, asserted against the fixtures rather than
-    argued from the producer. `emb[bool]` returns rows in ascending row index; `index_select`
-    returns them in the index's order; the two agree exactly when this holds."""
+    """The invariant byte-equality rests on, asserted against the fixtures rather than argued
+    from the producer: `emb[bool]` returns rows in ascending row index and `index_select` in the
+    index's order, and the two agree exactly when the gather is strictly increasing."""
     for stem in ("b0", "b1", "b6", "empty_legal"):
         g = np.asarray(payload_fields(stem)["legal_node_gather"])
         assert g.size == 0 or bool(np.all(np.diff(g) > 0)), f"{stem}: gather not increasing"

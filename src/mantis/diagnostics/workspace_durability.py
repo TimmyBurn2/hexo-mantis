@@ -1,12 +1,9 @@
-"""START pre-flight: refuse a run directory that a reboot would erase (R347(d)).
+"""START pre-flight: refuse a run directory that a reboot would erase.
 
-R347(d) turned `workspace_is_volume = false` from a noted risk into a HALT: the run dir sits on
-a persistent volume, or every bundle and shard rsyncs off-box hash-verified within one
-checkpoint interval, proven before START. Only the first arm is decidable in this repository.
-The mirror arm's evidence would have to come from off-box tooling that lives in the migration
-workspace, and a gate input with no in-repo producer is the phantom-input class LAW-07 exists
-to refuse — so this module arms the volume arm and NAMES the mirror arm in its refusal rather
-than accepting an unverifiable flag for it.
+The rule has two arms — the run dir sits on a persistent volume, or every bundle and shard
+rsyncs off-box hash-verified within one checkpoint interval. Only the volume arm is decidable
+here: the mirror arm's evidence comes from off-box tooling, and a gate input with no in-repo
+producer is refused, so the refusal names that arm instead of accepting a flag for it.
 """
 
 from __future__ import annotations
@@ -16,8 +13,8 @@ import json
 import sys
 from pathlib import Path
 
-#: Filesystems whose contents do not survive the machine. `overlay` is here because a
-#: container's writable layer dies with the container even when the image is durable.
+#: Filesystems whose contents do not survive the machine; `overlay` is a container's writable
+#: layer, which dies with the container even when the image is durable.
 EPHEMERAL_FSTYPES = frozenset(
     {"tmpfs", "ramfs", "devtmpfs", "overlay", "overlayfs", "aufs", "squashfs", "ramdisk"}
 )
@@ -31,11 +28,11 @@ class WorkspaceNotDurableError(RuntimeError):
 
 
 def _mount_table(mounts: Path | None = None) -> list[tuple[str, str]]:
-    """`(mount_point, fstype)` for every mount, longest mount point first.
+    """Return `(mount_point, fstype)` for every mount, longest mount point first.
 
     Args:
-        mounts: the mount table to parse; `None` reads `MOUNTS` AT CALL TIME, so the module
-            constant stays the one authority and a test that rebinds it is actually obeyed.
+        mounts: the mount table to parse; `None` reads `MOUNTS` at call time, so a rebound
+            module constant is obeyed.
 
     Returns:
         Mount points paired with their filesystem type, ordered so the first entry whose path
@@ -63,7 +60,7 @@ def _mount_table(mounts: Path | None = None) -> list[tuple[str, str]]:
 
 
 def backing_mount(path: Path, mounts: Path | None = None) -> tuple[str, str]:
-    """The mount point and filesystem type that back `path`.
+    """Return the mount point and filesystem type that back `path`.
 
     Args:
         path: any path, existing or not; it is resolved first.

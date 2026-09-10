@@ -1,26 +1,17 @@
-"""Resume-precedence layer + fresh/resume trainer dispatch (WP10 §a.4/§c.2).
+"""Resume-precedence layer + fresh/resume trainer dispatch.
 
-The PURE loader-adjacent config-dict functions land in Slice 1 (T-CK-14/15/17 import
-`RESUME_CHECKPOINT_OWNED_KEYS` + `build_resume_config_overrides` from here): the frozen
-`RESUME_CHECKPOINT_OWNED_KEYS` set and the launch-wins override builder.
-`init_trainer` (fresh-vs-resume dispatch) also lives here
-but LAZILY imports `Trainer` (Slice 2) inside its body — no top-level `orchestrator → trainer`
-edge, so this module imports clean at Slice 1.
-
-What the frozen set + reconciler reconcile is the LEGACY flat training-config shape (a
-pre-v2/migration-resume concern): on the pure new side arch/optimizer/scheduler ownership
-is STRUCTURAL (build from `metadata.arch`; restore from state) and encoding-ownership is
-the baked `identity.encoding`. Its LAW-08 live consumer is the conformance suite
-(T-CK-14..20) + the legacy-resume path.
+The frozen `RESUME_CHECKPOINT_OWNED_KEYS` set and the launch-wins override builder are pure
+config-dict functions; `init_trainer` lives here too but LAZILY imports `Trainer`, so there is
+no top-level `orchestrator → trainer` edge. What the frozen set reconciles is the LEGACY flat
+training-config shape — on the new side arch/optimizer/scheduler ownership is STRUCTURAL and
+encoding ownership is the baked `identity.encoding`.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
 from typing import Any
 
-# ── The checkpoint-owned frozen key set — SINGLE source of truth (repo_design §c.2) ────
-# Keys that MUST come from the CHECKPOINT on resume, never from the launch variant; the
-# launch config wins for every OTHER key. Imported by T-CK-15 (mutating add/remove bites).
+# Keys that MUST come from the CHECKPOINT on resume; the launch config wins for every other key.
 RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
     # encoding pins
     "encoding", "cluster_window_size", "cluster_threshold", "legal_move_radius", "board_size",
@@ -39,18 +30,12 @@ def build_resume_config_overrides(
     allow_fresh_scheduler: bool = False,
     declared_keys: frozenset | set | None = None,
 ) -> dict[str, Any]:
-    """Build the resume `config_overrides` so the launch variant WINS (D-FULLSPEC E0).
+    """Build the resume `config_overrides` so the launch variant WINS.
 
-    Seeds the overrides from `launch_config` (operator intent) minus
-    `RESUME_CHECKPOINT_OWNED_KEYS` (encoding/arch pins + optimizer/scheduler/step state). The
-    `--override-scheduler-horizon` gate is preserved verbatim: `total_steps`/`scheduler_t_max`
-    re-enter the overrides (re-horizoning the LR scheduler on load) ONLY when the flag is set;
-    without it the restored scheduler `T_max` is untouched. `baked_config` is accepted for the
-    resume round-trip (the F1 defer against it runs in `apply_config_overrides_f1`); the
-    override set itself is a function of `launch_config`.
-
-    B3 null semantics: a `None` the operator EXPLICITLY declared travels; a `None` merely
-    inherited is SKIPPED so a stray null cannot nuke a real checkpoint value.
+    Seeded from `launch_config` minus `RESUME_CHECKPOINT_OWNED_KEYS`.
+    `total_steps`/`scheduler_t_max` re-enter — re-horizoning the LR scheduler on load — ONLY
+    under `--override-scheduler-horizon`. A `None` the operator EXPLICITLY declared travels; a
+    `None` merely inherited is SKIPPED, so a stray null cannot nuke a real checkpoint value.
     """
     declared: frozenset = frozenset(declared_keys or ())
     overrides: dict[str, Any] = {
@@ -58,15 +43,8 @@ def build_resume_config_overrides(
         for key, val in launch_config.items()
         if key not in RESUME_CHECKPOINT_OWNED_KEYS and (val is not None or key in declared)
     }
-    # F-R-P4-1 (J13): the unconditional `torch_compile[_mode]` injection that sat here
-    # ("pre-E0 default path") is DELETED, not conditioned. The knob is a LEGACY training
-    # knob with ZERO consumers on the new side (`TrainHParams.from_config` reads nested
-    # `train.*` only) and no RunConfig key, so injecting it poisoned the carried config on
-    # EVERY production resume: the ONE writer's write-time validation (R1 `extra="forbid"`)
-    # correctly rejected the first post-resume periodic save. A launch config that itself
-    # carries the flat key still travels through the generic loop above; the carried-config
-    # boundary strip in `resume_trainer` (`RESUME_DIRECTIVE_KEYS`, checkpoints.py) keeps
-    # every resume-mechanism key out of the persisted config on both loader surfaces.
+    # No `torch_compile[_mode]` injection: a LEGACY key with no consumer poisoned the carried
+    # config, and write-time validation correctly rejected the first post-resume save.
     # Scheduler-horizon gate: only --override-scheduler-horizon re-horizons the LR anneal.
     if override_scheduler_horizon:
         if launch_config.get("total_steps") is not None:
@@ -89,23 +67,12 @@ def init_trainer(
     declared_keys: frozenset | set | None = None,
     sink: Any = None,
 ) -> Any:
-    """Fresh-run vs resume dispatch, rebuilt thin against the typed config + `build_net(arch)`.
+    """Fresh-run vs resume dispatch, thin against the typed config + `build_net(arch)`.
 
-    Lazily imports `Trainer` (Slice 2) inside the body so there is no top-level
-    `orchestrator → trainer` import edge (the module imports clean at Slice 1; this function
-    is exercised only at Slice 2 / O-SMOKE).
-
-    `device` is REQUIRED and keyword-only, with NO default (RED-TEAM RT-7b, MF-2 Attack B).
-    It carried `= None` until then, and `Trainer.__init__` turns a `None` into
-    `torch.device("cpu")` — so a caller that simply omitted the argument trained on CPU
-    silently, with no exception and no event. R126 made the device a CONFIG FACT
-    (`train.device`, closed Literal, no schema default) precisely because a cpu/cuda
-    posture divergence false-clears the GPU-memory wall that killed the WPBOX burst
-    (CARD-RUN5-GPU-OOM); a parameter default here is that authority MIGRATED, not absent —
-    the identical edit this WP already made to `DiskGuard.__init__`'s five defaults.
-    Removing it is behaviour-preserving on the one production caller
-    (`mantis.run.build_run_collaborators`, which passes `torch.device(config.train.device)`)
-    and makes the omission a `TypeError` at the call, not a wrong device at step 1.
+    `Trainer` is imported lazily inside the body, so there is no top-level
+    `orchestrator → trainer` edge. `device` is REQUIRED and keyword-only with NO default:
+    `Trainer.__init__` turns a `None` into CPU, so a caller that omitted it trained on CPU
+    silently. The device is a config fact, and omitting it must be a `TypeError` at the call.
     """
     from mantis.train.trainer.core import Trainer  # lazy (Slice 2) — no top-level edge.
 
@@ -127,24 +94,15 @@ def init_trainer(
     from mantis.encoding import resolve_from_config
     from mantis.model import arch_from_spec_and_config, build_net
 
-    # `resolve_from_config` reads the WP8 nested `identity.encoding` shape as well as the legacy
-    # flat one (TD-4 / CARD-POOL-ENCODING-BRIDGE), so a fresh Trainer builds the DECLARED arch
-    # without this site carrying its own copy of that knowledge.
+    # `resolve_from_config` reads the nested `identity.encoding` shape as well as the legacy flat
+    # one, so this site carries no copy of that knowledge.
     cfg = dict(config)
     spec = resolve_from_config(cfg)
     arch = arch_from_spec_and_config(spec, cfg)
     model = build_net(arch)
 
-    # AUDIT-1 F-19 / R332(d) — THE BC WARM-START ENTRY, and this call is the whole point of the
-    # row. `train/warmstart.py` was imported by NOTHING in `src/`: the module that moves a BC
-    # checkpoint's representation+policy weights into a fresh run's net had no production
-    # caller, no config key, and two `.get(key, default)` reads against keys the schema does not
-    # have. So BC-EXEC could produce a checkpoint and nothing could consume it.
-    #
-    # It sits HERE, on the FRESH branch only, because that is what a warm start is: a resume
-    # (`checkpoint_path is not None`, returned above) already restored trained weights and
-    # seeding over them would destroy them. An absent `identity.warm_start` row returns False
-    # and this is a no-op, which is what every run before the row did.
+    # THE BC WARM-START ENTRY, on the FRESH branch only: a resume already restored trained
+    # weights and seeding over them would destroy them. An absent row makes this a no-op.
     from mantis.train.warmstart import maybe_warmstart_gnn_from_bc, resolve_bc_warm_start
 
     maybe_warmstart_gnn_from_bc(model, cfg, spec=spec)
@@ -154,16 +112,9 @@ def init_trainer(
     trainer = Trainer(model, dict(config), arch=arch, checkpoint_dir=checkpoint_dir,
                       device=device, sink=sink)
 
-    # AUDIT-1 F-32 / R338 — THE FRESH-INIT PIN'S SOURCE, and it is why arming the pin does not
-    # turn `resolve_anchor` into a launch refusal. `verify_launch_anchor_pin` reads
-    # `getattr(trainer, "checkpoint_source", None)` and FAILS CLOSED when a pin is set and no
-    # source is readable; before this line NOTHING in the tree ever set that attribute, so an
-    # armed pin refused every fresh launch — a guard nobody could reach becoming one nobody
-    # could pass. On this branch the fresh anchor is seeded from `trainer.model`, and what
-    # seeded THAT is the warm-start artifact (R336(d): "the step-0 anchor IS the warm_start
-    # artifact"), so the artifact the row names is exactly the file the guard should hash.
-    # `resolve_bc_warm_start` is the SAME resolver the call above reads the row through — a
-    # second READ of one authority, never a second authority.
+    # The fresh branch's anchor pin source: `verify_launch_anchor_pin` FAILS CLOSED when a pin is
+    # set and no `checkpoint_source` is readable, and the step-0 anchor IS the warm-start
+    # artifact. Reading the row through the same resolver is a second READ, not a second authority.
     declared = resolve_bc_warm_start(cfg)
     trainer.checkpoint_source = None if declared is None else declared.checkpoint
     return trainer

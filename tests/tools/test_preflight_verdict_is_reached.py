@@ -1,19 +1,14 @@
-"""AUDIT-1 F-03 — the preflight evidence report never publishes a verdict it did not reach.
+"""The preflight evidence report never publishes a verdict it did not reach.
 
-THE DEFECT. `_new_report` constructs the report already saying `verdict: "pass", rc: 0`, and
-nothing on the success path ever SETS that verdict — `main`'s two `except` arms only overwrite
-it on failure. A `BaseException` (a `KeyboardInterrupt` during a long burst, a callee's
-`SystemExit`) unwinds through both arms into the `finally` that writes the report, and the
-artifact a mint sign-off reads then says PASS while every assertion block says `not_run`.
+The skeleton report is born saying `verdict: "pass", rc: 0` and nothing on the success path
+sets it, so a `BaseException` unwinding into the `finally` that writes the report published a
+PASS while every assertion block said `not_run`. `_finalise_verdict` is the converse of the
+tool's "a reached verdict is never overwritten" rule, and it runs inside `_write_report` so no
+write path can forget it.
 
-The tool's contract #10 already says "a verdict that was REACHED is never overwritten". It had
-no CONVERSE. `_finalise_verdict` is that converse, and it runs in `_write_report` beside
-`_finalise_not_run` and `_finalise_tier` so no future write path can forget it.
-
-SECOND HALF. If the interrupt lands inside `_run_child`'s `proc.communicate` — the ordinary
-place, since that is where the burst is waited on — `report["child"]` was never assigned, so
-`_not_run_reason` read `child is None` and published "NO boot was spawned" for a child that
-was spawned and might still be holding the card. The record is now written BEFORE the wait.
+Second half: an interrupt inside `_run_child`'s `proc.communicate` left `report["child"]`
+unassigned, so the artifact claimed no boot was spawned for a child that was. The child record
+is now written BEFORE the wait.
 """
 from __future__ import annotations
 
@@ -29,8 +24,7 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 
 
 def _load_tool() -> Any:
-    """By absolute path — `tools/` is not an importable package (the house convention every
-    other gate test in this directory follows)."""
+    """Load the tool by absolute path; `tools/` is not an importable package."""
     spec = importlib.util.spec_from_file_location("_pfm_verdict_probe", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -41,12 +35,12 @@ def _load_tool() -> Any:
 TOOL = _load_tool()
 
 
-# ── the finaliser, driven on the tool's OWN skeleton ──────────────────────────────────
-
 def test_the_skeleton_report_is_born_claiming_a_pass_it_has_not_earned() -> None:
-    """The finding's premise, re-derived rather than asserted. If this ever reds because the
-    skeleton stops saying `pass`, the defect was fixed upstream and `_finalise_verdict`
-    becomes belt-and-braces rather than the load-bearing guard."""
+    """Prove the skeleton report is born claiming a pass it has not earned.
+
+    If this reds because the skeleton stopped saying `pass`, the defect moved upstream and
+    `_finalise_verdict` is belt-and-braces rather than the load-bearing guard.
+    """
     skeleton = TOOL._new_report("preflight")
     assert skeleton["verdict"] == "pass" and skeleton["rc"] == 0
     for name in ("a_sync", "b_lag", "c_arming"):
@@ -55,7 +49,7 @@ def test_the_skeleton_report_is_born_claiming_a_pass_it_has_not_earned() -> None
 
 @pytest.mark.parametrize("mode", ["preflight", "audit"])
 def test_an_unearned_pass_is_DOWNGRADED_at_write_time(mode: str) -> None:
-    """THE PIN. A report whose assertions never reached a verdict cannot be written as one."""
+    """Prove an unearned pass is downgraded at write time."""
     report = TOOL._new_report(mode)
     TOOL._finalise_verdict(report)
     assert report["verdict"] == "not_reached", report
@@ -67,8 +61,7 @@ def test_an_unearned_pass_is_DOWNGRADED_at_write_time(mode: str) -> None:
 
 
 def test_a_mode_whose_assertions_ALL_passed_keeps_its_pass() -> None:
-    """The control. The finaliser downgrades only — it must not red a genuinely green run,
-    which is what `tests/tools/test_preflight_armed_smoke.py` measures end to end."""
+    """Prove the finaliser downgrades only, and keeps a genuinely earned pass."""
     report = TOOL._new_report("preflight")
     for name in TOOL.MODE_REQUIRED_ASSERTIONS["preflight"]:
         report["assertions"][name] = {"verdict": "pass"}
@@ -77,9 +70,7 @@ def test_a_mode_whose_assertions_ALL_passed_keeps_its_pass() -> None:
 
 
 def test_audit_mode_does_NOT_require_the_two_boot_assertions() -> None:
-    """Audit mode spawns no child, so (a) and (b) are `not_run` BY CONSTRUCTION. Requiring
-    them would red gate 12 on every commit — the table is what keeps the two modes' verdicts
-    derived from their own subjects."""
+    """Prove audit mode does not require the two boot assertions: it spawns no child."""
     report = TOOL._new_report("audit")
     report["assertions"]["c_arming"] = {"verdict": "pass"}
     TOOL._finalise_verdict(report)
@@ -89,8 +80,7 @@ def test_audit_mode_does_NOT_require_the_two_boot_assertions() -> None:
 
 
 def test_a_RECORDED_failure_is_never_rewritten_by_the_finaliser() -> None:
-    """Contract #10's own half, still standing: the finaliser touches nothing that already
-    reached a verdict, so a raising arm's `failure` name and rc survive verbatim."""
+    """Prove the finaliser rewrites nothing that already reached a verdict."""
     report = TOOL._new_report("preflight")
     report.update(verdict="fail", rc=34, failure="PreflightWatchdogFiredError")
     TOOL._finalise_verdict(report)
@@ -99,19 +89,15 @@ def test_a_RECORDED_failure_is_never_rewritten_by_the_finaliser() -> None:
 
 
 def test_an_unknown_mode_is_a_NAMED_internal_failure_not_a_fallback() -> None:
-    """R1 at the derivation: a mode with no entry must refuse, never borrow another mode's
-    requirements — the ADJ-13 F-3 class one field over."""
+    """Prove an unknown mode is a named internal failure, never a borrowed requirement set."""
     report = TOOL._new_report("audit")
     report["mode"] = "sideways"
     with pytest.raises(TOOL.PreflightInternalError, match="sideways"):
         TOOL._finalise_verdict(report)
 
 
-# ── the write path carries it (no future writer can forget) ───────────────────────────
-
 def test_the_WRITE_path_downgrades_so_no_call_site_can_skip_it(tmp_path: Path) -> None:
-    """`_finalise_verdict` lives in `_write_report`, not at a call site, for the reason its
-    two siblings do: the invariant must hold for every write path there will ever be."""
+    """Prove the downgrade happens in the write path, so no call site can skip it."""
     report = TOOL._new_report("preflight")
     TOOL._write_report(tmp_path, report)
     written = sorted(tmp_path.glob("preflight_*.json"))
@@ -121,13 +107,10 @@ def test_the_WRITE_path_downgrades_so_no_call_site_can_skip_it(tmp_path: Path) -
     assert on_disk["rc"] != 0
 
 
-# ── the interrupt path: what an operator's Ctrl-C actually lands ──────────────────────
-
 def test_an_interrupt_inside_the_run_stamps_the_report_and_RERAISES(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The audit's PIN, at `main`. The interrupt keeps its own semantics at the shell — this
-    arm changes what the report SAYS, never what the process does."""
+    """Prove an interrupt stamps the report and reraises, so the shell semantics are unchanged."""
     def _boom(*_a: Any, **_k: Any) -> None:
         raise KeyboardInterrupt
 
@@ -145,21 +128,24 @@ def test_an_interrupt_inside_the_run_stamps_the_report_and_RERAISES(
 
 
 def test_the_interrupt_rc_stays_out_of_the_bands_the_run_reserves() -> None:
-    """36/37 sit in the parent-side band. 42-47 belong to the run's own machinery, and a
-    preflight failure wearing one of those would be read as a watchdog or an armed abort."""
+    """Prove the preflight rcs stay out of the run's reserved bands.
+
+    A preflight failure wearing 42-47 would be read as a watchdog or an armed abort.
+    """
     for err in (TOOL.PreflightInterruptedError, TOOL.PreflightVerdictUnreachedError):
         assert err.rc not in TOOL.RESERVED_CODES, err
         assert err.rc not in TOOL.WATCHDOG_CODES, err
         assert err.rc != TOOL.RELAUNCH_BUDGET_CODE, err
 
 
-# ── the child record exists before the blocking wait ──────────────────────────────────
-
 def test_the_child_record_is_assigned_BEFORE_the_blocking_wait(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """F-03's second half. An interrupt in `proc.communicate` used to leave `child` None, so
-    `_not_run_reason` said "NO boot was spawned" about a child that was."""
+    """Prove the child record is assigned before the blocking wait.
+
+    An interrupt in `proc.communicate` used to leave it None, so the report claimed no boot
+    was spawned about a child that was.
+    """
     report = TOOL._new_report("preflight")
     seen: dict[str, Any] = {}
 
@@ -168,7 +154,7 @@ def test_the_child_record_is_assigned_BEFORE_the_blocking_wait(
         returncode = 0
 
         def communicate(self, timeout: float | None = None) -> tuple[str, str]:
-            # the ordinary place for an interrupt to land: record what the report says HERE
+            # The ordinary place for an interrupt to land: record what the report says here.
             seen["child_at_wait"] = report.get("child")
             raise KeyboardInterrupt
 
@@ -188,7 +174,7 @@ def test_the_child_record_is_assigned_BEFORE_the_blocking_wait(
 
 
 def test_the_not_run_reason_no_longer_claims_no_boot_for_a_spawned_child() -> None:
-    """The consequence, read off the sentence the artifact actually carries."""
+    """Prove the not-run reason no longer claims no boot for a spawned child."""
     report = TOOL._new_report("preflight")
     assert TOOL.NOT_BOOTED_REASON in TOOL._not_run_reason(report)
     report["child"] = {"spawned": True, "pid": 4242, "rc": None, "outcome": "in_flight"}

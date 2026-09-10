@@ -145,9 +145,7 @@ def test_nested_block_refuses_an_ambiguous_union_in_both_modes():
     assert nested_block(list[_Inner], descend_containers=True) is _Inner
 
 
-# --------------------------------------------------------------------------------------- #
 # The structural census — the arm that would have found the fifth copy
-# --------------------------------------------------------------------------------------- #
 def _walker_shaped_functions(root: Path) -> list[str]:
     """Every function that iterates `.model_fields` AND recurses into itself.
 

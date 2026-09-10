@@ -1,54 +1,19 @@
-"""⊕ WP12-R Phase EVALDECODE (operator ruling R138) — the eval leg of the parity class.
+"""The eval leg of the eval-vs-self-play parity class: eval consumes what the producer returns.
 
-Oracle-first (PREREG_EVALDECODE §1), byte-frozen through IMPL. R138 adopts Option A —
-**eval consumes what the shared producer already returns**, and **self-play semantics is
-THE authority**. The defect at HEAD is `inference_local.py:260`,
-`policies = [dense for dense, _overflow, _value in results]`: the eval graph leg keeps the
-dense half of `assemble_ls_from_gnn_probs`'s `LegalSetPolicy` and throws the `overflow` half
-away, then expands through `expand_and_backup` (the dense rule) instead of the
-`expand_and_backup_ls_at` self-play expands through. Measured at HEAD over the four fixture
-positions: **0 off-window root children out of 768**, while 27%-97% of the self-play child
-budget goes to moves eval cannot see (PREREG §4).
+Self-play semantics is THE authority. The defect this file bounds is an eval graph leg that kept
+the dense half of the producer's `LegalSetPolicy`, threw the `overflow` half away, and expanded
+through the dense rule. Measured over the four fixture positions: 0 off-window root children out
+of 768, while 27%-97% of the self-play child budget went to moves eval could not see.
 
-This file binds to the SAME two committed fixtures the Rust leg binds to
-(`crates/mantis-selfplay/tests/graph_child_parity.rs`) — one file, both sides of the FFI.
-`expected_children` is a **self-play-authored golden**; it is not independent of the
-production code and no mutation can make it so. What the mutations show is sensitivity
-(M6', DESIGN §b.3).
+This file binds to the SAME two committed fixtures the Rust leg binds to — one file, both sides of
+the FFI. `expected_children` is a self-play-authored golden, not independent of the production
+code; what the mutations show is sensitivity.
 
-Pre-registered HEAD verdicts (PREREG §1). The RED rows here fail because the fix's
-production surfaces (`LocalInferenceEngine.infer_batch_ls` / `infer_ls`,
-`MCTSTree.expand_and_backup_ls_graph`, `InferenceBatcher.submit_graphs_and_wait_ls`,
-`DeployHeadPlayer(expand_fn=..., c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)`, `build_candidate_player(..., spec=..., c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)`) do not exist
-yet — a frozen oracle must bind to the POST-FIX surface, so "the measured 0-off-window
-child set" is the *reason* these are red, not their HEAD traceback.
-
-    RED   P-1   test_eval_child_set_equals_the_fixture
-    RED   P-1b  test_deploy_head_entrance_reaches_the_same_children
-    RED   P-1c  test_both_legs_agree_on_priors_to_1e_5
-    RED   P-1d  test_overflow_order_does_not_change_the_child_set
-    GREEN P-2a  test_fixture_positions_are_in_the_over_361_regime
-    RED   P-2b  test_eval_root_children_include_off_window_moves
-    RED   P-2c  test_eval_consumes_both_halves
-    RED   P-2d  test_eval_child_set_equals_the_rust_leg_on_dispersed_positions
-    GREEN P-2e  test_every_off_window_legal_coord_is_in_overflow
-    RED   P-3a  test_head_children_are_drawn_from_the_full_legal_set
-    RED   P-3b  test_head_plays_an_off_window_move_against_random_bot
-    GREEN P-3c  test_there_is_exactly_one_child_cap_authority
-    RED   C-1a-d, C-2, C-3, C-4, C-5a/b, C-6, C-7, C-10
-    GREEN C-8   test_no_drop_pooling_encoding_is_still_refused   (CONTROL, not a flip)
-
-R8 >300 justify: ONE class boundary — eval-vs-self-play
-consumption of one producer — and R72 requires every conjunct of every predicate the card
-ships to be flipped in the same flip-set. Splitting the P-rows from the C-rows would put
-the flip-set in a different file from the behaviour it bounds, and would duplicate the
-fixture reader, the deterministic stub net and the production expand adapter that every row
-below shares. Every helper here is used by both halves.
-
-P-2a/b/d/e and P-1..P-1d loop over their fixture's positions INTERNALLY and are NOT
-`@pytest.mark.parametrize`d over them: PREREG §5 counts ONE collected test per id, with
-`C-1(x4)` and `C-5(x2)` the only multipliers. Parametrising over positions would break the
-pre-registered delta by 12 or more with no defect having occurred.
+>300 justify (R8): ONE class boundary, and every conjunct of every predicate the card ships must
+be flipped in the same flip-set. Splitting the parity rows from the conjunct rows would put the
+flip-set in a different file from the behaviour it bounds and duplicate the fixture reader, the
+deterministic stub net and the production expand adapter every row shares. The parity rows loop
+over positions INTERNALLY rather than parametrising, because the prereg counts one test per id.
 """
 from __future__ import annotations
 
@@ -71,10 +36,9 @@ from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.selfplay.inference_local import LocalInferenceEngine
 
 _ENC = "gnn_axis_v1"
-#: F-816-10 D-1: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED
-#: keyword — it hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is
-#: THREADED from a parent resolver and never hardcoded at the site. Non-binding by
-#: construction here: nothing in this file exercises a split.
+#: `LocalInferenceEngine` takes the fused-forward memory bound as a REQUIRED keyword — it
+#: hand-builds its `InferenceServer` config with no `RunConfig`, so the spec is THREADED from a
+#: parent resolver and never hardcoded at the site. Nothing here exercises a split.
 _CAPS = FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921)
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "eval_selfplay_parity"
 _P1_FIXTURE = _FIXTURES / "child_parity_v1.json"
@@ -83,42 +47,32 @@ _P2_FIXTURE = _FIXTURES / "dispersed_r6_v1.json"
 #: `policy_logit_count` is 362 and `Board.to_flat` returns a sentinel above the window, so
 #: `to_flat(q, r) >= 361` is exactly "off-window" — the same test the Rust leg applies.
 _OFF_WINDOW_FLAT = 361
-#: `MAX_CHILDREN_PER_NODE`, read here as a literal ON PURPOSE: P-3c parses the Rust source
-#: for the constant and asserts that Python owns no second authority for it. Raised from 192
-#: with the constant itself (R347(c)).
+#: `MAX_CHILDREN_PER_NODE`, read here as a literal ON PURPOSE: the cap-authority row parses the
+#: Rust source for the constant and asserts Python owns no second authority for it.
 _CHILD_CAP = 1024
 
 
 def _expected_children(board: Board) -> int:
-    """How many root children a position must produce: `min(n_legal, K)`.
-
-    A LITERAL was correct while every fixture position sat above the cap, and R347(c)
-    raised the cap past two of them — so a fixture whose legal set is 364 wide now takes
-    ALL of it and a bare `_CHILD_CAP` would assert a count no position can reach. The
-    relation is what the oracle always meant; the literal was that relation collapsed at
-    a cap that has since moved.
-    """
+    """How many root children a position must produce: `min(n_legal, K)`. A literal was correct
+    while every fixture position sat above the cap; raising the cap past two of them would make a
+    bare `_CHILD_CAP` assert a count no position can reach."""
     return min(len(board.legal_moves()), _CHILD_CAP)
-#: DESIGN §b.3 P-1c. Measured at mint over up to 1294 terms: the largest cross-language
-#: disagreement between the torch-f32 softmax and the Rust-f32 softmax is 7.3e-10.
+#: Measured at mint over up to 1294 terms: the largest cross-language disagreement between the
+#: torch-f32 softmax and the Rust-f32 softmax is 7.3e-10.
 _PRIOR_TOL = 1e-5
-#: DESIGN §b.3 P-2 / PREREG §2 gate 6: the two fixtures together, enforced not asserted.
-#: RE-DERIVED at R347(c), not loosened: a position's frozen child set is `min(n_legal, K)`
-#: coords, so raising the per-node cap from 192 to 1024 widens every capped position's row
-#: by the same factor and the fixtures grew with it. The budget's job is R7 hygiene — keep a
-#: committed fixture small enough to read — and it still holds them two orders of magnitude
-#: under R7's own ceiling.
+#: The two fixtures together, enforced not asserted. RE-DERIVED when the per-node cap was raised,
+#: not loosened: a position's frozen child set is `min(n_legal, K)` coords, so the fixtures grew by
+#: the same factor. The budget's job is R7 hygiene — keep a committed fixture small enough to read.
 _FIXTURE_BYTE_BUDGET = 131072
 
 
-# ── fixture access ───────────────────────────────────────────────────────────────────
 def _load(path: Path) -> dict:
     return json.loads(path.read_text())
 
 
 def _positions(fx: dict) -> list[dict]:
-    """The fixture is minted FLAT (`p0_*`, `p1_*`, ...) so the Rust leg can read it without
-    a JSON dependency; this re-nests it. A missing key is a KeyError, never a default."""
+    """Re-nest the fixture, which is minted FLAT (`p0_*`, `p1_*`, ...) so the Rust leg can read it
+    without a JSON dependency. A missing key is a KeyError, never a default."""
     out = []
     for i in range(fx["n_positions"]):
         prefix = f"p{i}_"
@@ -127,8 +81,7 @@ def _positions(fx: dict) -> list[dict]:
 
 
 def _board(pos: dict) -> Board:
-    """Replay the recorded move sequence — the identical construction the Rust leg performs
-    (`Board::with_geometry` at the spec's geometry, then `apply_move`)."""
+    """Replay the recorded move sequence — the identical construction the Rust leg performs."""
     board = Board.with_encoding_name(_ENC)
     flat = pos["moves"]
     for i in range(0, len(flat), 2):
@@ -141,25 +94,23 @@ def _coords(flat: list[int]) -> list[tuple[int, int]]:
 
 
 def _packed(coord: tuple[int, int]) -> int:
-    """`backup.rs:148`'s tie-break key — also the fixture's canonical ordering."""
+    """The backup tie-break key, which is also the fixture's canonical ordering."""
     q, r = coord
     return ((q + 32768) << 16) | ((r + 32768) & 0xFFFF)
 
 
-# ── the deterministic stub net (the ONE stand-in; everything else is production) ──────
 def _rule_logit(i: int) -> float:
     """The fixture's `logit_rule`, over the BUILDER's per-graph legal-node index."""
     return ((i * 37) % 101) / 20.0
 
 
 class _RuleNet(torch.nn.Module):
-    """`GnnNet.forward_batch`'s contract with a deterministic policy head.
+    """`GnnNet.forward_batch`'s contract with a deterministic policy head — the ONE stand-in.
 
-    Cross-language byte-parity needs determinism, so the net is the only stand-in in the
-    chain: `InferenceServer`'s graph loop, `collate_graph_batch`, `segment_softmax`,
-    `assemble_ls_from_gnn_probs` and the expand are all production. The legal rows of each
-    graph are contiguous and in builder order (`[stones | legal | dummy]`), which is the
-    order `legal_offsets` segments and `assemble` zips against.
+    Cross-language byte-parity needs determinism; the graph loop, `collate_graph_batch`,
+    `segment_softmax`, `assemble_ls_from_gnn_probs` and the expand are all production. The legal
+    rows of each graph are contiguous and in builder order, which is the order `legal_offsets`
+    segments and `assemble` zips against.
     """
 
     def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
@@ -167,11 +118,9 @@ class _RuleNet(torch.nn.Module):
         logits: list[float] = []
         for g in range(n_graphs):
             lo, hi = int(node_offsets[g]), int(node_offsets[g + 1])
-            # `legal_index` is the wire's `legal_node_gather` (R284 P-MASK): the ROWS of the
-            # legal nodes, not a dense mask. Counting index entries that fall in this graph's
-            # `[lo, hi)` row range is the same count as summing the mask's bits over it, for
-            # every payload the contract admits — the gather is strictly ascending, hence
-            # unique (wire check 13). The stub's OUTPUT is unchanged; nothing it asserts moves.
+            # `legal_index` is the wire's `legal_node_gather`: the ROWS of the legal nodes, not a
+            # dense mask. The gather is strictly ascending, hence unique, so counting entries in
+            # this graph's `[lo, hi)` row range equals summing a mask's bits over it.
             n_legal = int(((legal_index >= lo) & (legal_index < hi)).sum().item())
             logits.extend(_rule_logit(i) for i in range(n_legal))
         return (
@@ -197,7 +146,6 @@ def graph_engine():
         engine.close()
 
 
-# ── the production eval decode, in ONE place ─────────────────────────────────────────
 def _expand(engine, spec, tree, leaves, *, overflows=None) -> None:
     """The post-fix eval expand: the producer's BOTH halves into the self-play expand."""
     dense, overflow, values, centers = engine.infer_batch_ls(leaves)
@@ -225,11 +173,9 @@ def _eval_children(engine, spec, board) -> list[tuple[tuple[int, int], float]]:
     )
 
 
-# ── ⊕ P-1 ────────────────────────────────────────────────────────────────────────────
 def test_eval_child_set_equals_the_fixture(graph_engine) -> None:
-    """The eval decode's root children equal the self-play-authored golden, at every
-    position of the P-1 fixture. Killing mutations: M1 (the set differs at 4/4, executed),
-    M2, M6'."""
+    """The eval decode's root children equal the self-play-authored golden at every position of
+    the parity fixture."""
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     for pos in _positions(fx):
@@ -239,11 +185,9 @@ def test_eval_child_set_equals_the_fixture(graph_engine) -> None:
         assert got == want, f"{pos['id']}: eval child set != the frozen self-play golden"
 
 
-# ── ⊕ P-1b ───────────────────────────────────────────────────────────────────────────
 def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
-    """The PRODUCTION entrance reaches the same children: `build_candidate_player`'s closed
-    match on `spec.representation` must take the graph arm and hand the deploy head an
-    `expand_fn`. This is the graph arm of C-7's closed match. Killing mutation: M2."""
+    """The PRODUCTION entrance reaches the same children: `build_candidate_player`'s closed match
+    on `spec.representation` must take the graph arm and hand the deploy head an `expand_fn`."""
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     pos = _positions(fx)[0]
@@ -263,15 +207,10 @@ def test_deploy_head_entrance_reaches_the_same_children(graph_engine) -> None:
     )
 
 
-# ── ⊕ P-1c ───────────────────────────────────────────────────────────────────────────
 def test_both_legs_agree_on_priors_to_1e_5(graph_engine) -> None:
-    """Cross-language exactness: the priors the eval leg computes (torch f32 segment
-    softmax) equal the Rust leg's frozen priors to 1e-5 over up to 1294 terms.
-
-    LAW-06 is not weakened: autocast is CUDA-gated (`inference_server.py:447-451`) and the
-    segment softmax is forced to f32 (`:462-464`), so a CPU run is float32 end to end and
-    the bf16 graph pin is not engaged here. Killing mutations: M1, M2.
-    """
+    """The priors the eval leg computes equal the Rust leg's frozen priors to 1e-5 over up to 1294
+    terms. LAW-06 is not weakened: autocast is CUDA-gated and the segment softmax is forced to f32,
+    so a CPU run is float32 end to end."""
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     for pos in _positions(fx):
@@ -285,11 +224,9 @@ def test_both_legs_agree_on_priors_to_1e_5(graph_engine) -> None:
             )
 
 
-# ── ⊕ P-1d ───────────────────────────────────────────────────────────────────────────
 def test_overflow_order_does_not_change_the_child_set(graph_engine) -> None:
-    """D-22: the overflow half crosses the FFI as a Vec materialised from map iteration, so
-    ORDER enters Python. The bridge must rebuild a map, never scan the vector in order.
-    Killing mutation: replace the bridge's map rebuild with an order-honouring scan."""
+    """The overflow half crosses the FFI as a Vec materialised from map iteration, so ORDER enters
+    Python. The bridge must rebuild a map, never scan the vector in order."""
     engine, spec = graph_engine
     fx = _load(_P1_FIXTURE)
     pos = _positions(fx)[0]
@@ -320,13 +257,10 @@ def test_overflow_order_does_not_change_the_child_set(graph_engine) -> None:
     )
 
 
-# ── ⊕ P-2a ───────────────────────────────────────────────────────────────────────────
 def test_fixture_positions_are_in_the_over_361_regime() -> None:
-    """The dispersed fixture's PRECONDITION, re-derived from the replayed board rather than
-    trusted: >361 legal moves and at least one off-window legal move at every position, so
-    the regression oracles cannot silently drift into a regime where they cannot fail. The
-    R7 byte budget is enforced here too. Killing mutation: M7 (an in-window-only position).
-    """
+    """The dispersed fixture's PRECONDITION, re-derived from the replayed board rather than trusted:
+    >361 legal moves and at least one off-window legal move at every position, so the oracles cannot
+    drift into a regime where they cannot fail. The R7 byte budget is enforced here too."""
     total = 0
     for path in (_P1_FIXTURE, _P2_FIXTURE):
         size = path.stat().st_size
@@ -346,11 +280,9 @@ def test_fixture_positions_are_in_the_over_361_regime() -> None:
         assert n_off > 0, f"{pos['id']}: no off-window legal move"
 
 
-# ── ⊕ P-2b ───────────────────────────────────────────────────────────────────────────
 def test_eval_root_children_include_off_window_moves(graph_engine) -> None:
-    """Measured at HEAD: 0 off-window children of 192 at 4/4 positions. Post-fix at least
-    one, and EXACTLY the count self-play produces. M2 reds both conjuncts; M1 reds the count
-    conjunct only — not "count -> 0", which is the opposite of what M1 does."""
+    """At least one off-window root child, and EXACTLY the count self-play produces. Measured
+    before the fix: 0 off-window children of 192 at 4/4 positions."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
         board = _board(pos)
@@ -363,13 +295,9 @@ def test_eval_root_children_include_off_window_moves(graph_engine) -> None:
         )
 
 
-# ── ⊕ P-2c ───────────────────────────────────────────────────────────────────────────
 def test_eval_consumes_both_halves(graph_engine) -> None:
-    """A "did eval keep BOTH halves" sentinel — not coverage of a defect survivor-counts are
-    blind to (REV 1's framing rested on the withdrawn D-2; every in-window child's prior is
-    byte-identical between the two consumers at HEAD). Sigma dense alone measures
-    0.7155 / 0.4356 / 0.3086 / 0.2363; both halves together sum to 1 because the producer
-    validates it always-on (`records.rs:455-463`). Killing mutation: M1."""
+    """A "did eval keep BOTH halves" sentinel: the two halves sum to 1, because the producer
+    validates that always-on. Dense alone measures 0.7155 / 0.4356 / 0.3086 / 0.2363."""
     engine, _spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
         dense, overflow, _values, _centers = engine.infer_batch_ls([_board(pos)])
@@ -377,11 +305,9 @@ def test_eval_consumes_both_halves(graph_engine) -> None:
         assert abs(total - 1.0) <= 1e-3, f"{pos['id']}: eval consumes mass {total!r}, not 1"
 
 
-# ── ⊕ P-2d ───────────────────────────────────────────────────────────────────────────
 def test_eval_child_set_equals_the_rust_leg_on_dispersed_positions(graph_engine) -> None:
-    """The cross-FFI parity claim on the dispersed positions: the eval child set equals the
-    set `crates/mantis-selfplay/tests/graph_child_parity.rs` produces from the same file.
-    Killing mutations: M1, M2."""
+    """The cross-FFI parity claim on the dispersed positions: the eval child set equals the set
+    `crates/mantis-selfplay/tests/graph_child_parity.rs` produces from the same file."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
         got = [coord for coord, _prior in _eval_children(engine, spec, _board(pos))]
@@ -390,17 +316,13 @@ def test_eval_child_set_equals_the_rust_leg_on_dispersed_positions(graph_engine)
         )
 
 
-# ── ⊕ P-2e ───────────────────────────────────────────────────────────────────────────
 def test_every_off_window_legal_coord_is_in_overflow(graph_engine) -> None:
-    """The assumption that keeps the legal-set floor unreachable, pinned.
+    """Every off-window legal coord appears in the overflow half — the assumption that keeps the
+    legal-set floor unreachable.
 
-    `pick_topk_children_ls` reads a coord absent from BOTH halves at
-    `1/min(n_legal, 192) = 0.00521` (`legal_set.rs:35`) — about 7x the mean in-window prior
-    — so any coverage gap between the builder's legal-node emission and `board.legal_moves()`
-    would silently promote the uncovered cells to the TOP of the child list. Measured at
-    HEAD: 0 absent coords at 4/4. Driven through `submit_graphs_and_wait`, the producer
-    surface that exists at HEAD and is unchanged by the fix, because this row is
-    pre-registered GREEN on both sides. Killing mutation: M11.
+    A coord absent from BOTH halves reads the floor at `1/min(n_legal, 192)`, about 7x the mean
+    in-window prior, so any coverage gap between the builder's legal-node emission and
+    `board.legal_moves()` would silently promote the uncovered cells to the TOP of the child list.
     """
     engine, _spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
@@ -417,12 +339,10 @@ def test_every_off_window_legal_coord_is_in_overflow(graph_engine) -> None:
         assert not absent, f"{pos['id']}: {len(absent)} off-window coords read the floor"
 
 
-# ── ⊕ P-3a ───────────────────────────────────────────────────────────────────────────
 def test_head_children_are_drawn_from_the_full_legal_set(graph_engine) -> None:
-    """Oracle (iii), tree form: the head's candidates are the top-K of the FULL legal set by
-    true prior, not the top-K of a 361-cell window. The cap survives and is SHARED with
-    self-play (P-3c), so the residual asymmetry is symmetric. Killing mutation: M2 —
-    M1 leaves this GREEN, measured, and that is the prediction."""
+    """The head's candidates are the top-K of the FULL legal set by true prior, not the top-K of a
+    361-cell window. The cap survives and is SHARED with self-play, so the residual asymmetry is
+    symmetric."""
     engine, spec = graph_engine
     for pos in _positions(_load(_P2_FIXTURE)):
         board = _board(pos)
@@ -434,17 +354,13 @@ def test_head_children_are_drawn_from_the_full_legal_set(graph_engine) -> None:
         )
 
 
-# ── ⊕ P-3b ───────────────────────────────────────────────────────────────────────────
 def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
-    """Oracle (iii), in play: the ladder asymmetry is dead at the head's own seat.
+    """The ladder asymmetry is dead at the head's own seat, in play.
 
-    `RandomBot` samples the FULL legal set (`random_bot.py:24-26`) while a window-confined
-    head cannot answer off-window at all. Under R147 the RandomBot floor is ARMED for run5,
-    so this oracle's subject is a production rung (`_play_random_floor` reaches the same
-    `DeployHeadPlayer`); the armed VALUE is mint-prereg and is set nowhere here. At HEAD
-    this is structurally impossible: `_drive_puct` answers with `MCTSTree.get_top_visits(1)`,
-    which ranks the ROOT'S OWN CHILDREN, and none of those is off-window. Killing mutation:
-    M2.
+    `RandomBot` samples the FULL legal set while a window-confined head cannot answer off-window at
+    all, and the RandomBot floor is an armed production rung reaching this same player. Before the
+    fix this was structurally impossible: the answer came from `get_top_visits(1)`, which ranks the
+    root's own children, and none of those was off-window.
     """
     engine, spec = graph_engine
     pos = _positions(_load(_P2_FIXTURE))[3]
@@ -471,15 +387,10 @@ def test_head_plays_an_off_window_move_against_random_bot(graph_engine) -> None:
     )
 
 
-# ── ⊕ P-3c ───────────────────────────────────────────────────────────────────────────
 def test_there_is_exactly_one_child_cap_authority() -> None:
-    """The per-node child cap has ONE definition and Python owns no second one.
-
-    The `^pub const` anchor is load-bearing: it stops the `pub` re-export at
-    `mantis-search/src/lib.rs:21` and the uses in `tests/pool_overflow.rs` / `mcts/tests.rs`
-    being miscounted as further authorities. Killing mutation: M9 — add
-    `MAX_CHILDREN = 192` under `src/mantis/eval/`.
-    """
+    """The per-node child cap has ONE definition and Python owns no second one. The `^pub const`
+    anchor is load-bearing: it stops the crate's `pub` re-export and its own test uses being
+    miscounted as further authorities."""
     root = Path(__file__).resolve().parents[2]
     named = re.compile(r"\b(MAX_CHILDREN|max_children|CHILD_CAP|child_cap|n_children_cap)\b")
     bare = re.compile(r"(?<![\w.])192(?![\w.])")
@@ -491,12 +402,9 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
                     hits.append(f"{path.relative_to(root)}:{lineno}: {line.strip()}")
     assert not hits, "a second child-cap authority appeared in Python:\n" + "\n".join(hits)
 
-    # The subject is "exactly ONE definition, and it is in the search crate" — the FILE and
-    # the COUNT, never the LINE. This assertion pinned `…/mod.rs:47`, and AUDIT-1 F-21 added a
-    # doc comment above the constant, which moved it to 48 and reddened a test that has no
-    # opinion about doc comments. A line number is a transcribed position: it must be
-    # re-edited on every edit above it, will eventually be wrong, and is then read as evidence
-    # (R192(e), derive-or-delete — the same rule gate 15 enforces on R8 headers).
+    # The subject is "exactly ONE definition, and it is in the search crate" — the FILE and the
+    # COUNT, never the LINE. This once pinned a line number, and a doc comment added above the
+    # constant moved it and reddened a test with no opinion about doc comments (derive-or-delete).
     definitions = [
         str(path.relative_to(root))
         for path in sorted((root / "crates").rglob("*.rs"))
@@ -506,12 +414,11 @@ def test_there_is_exactly_one_child_cap_authority() -> None:
     assert definitions == ["crates/mantis-search/src/mcts/mod.rs"], definitions
 
 
-# ── ⊕ C-1a-d ─────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("short_arg", ["policies", "overflows", "values", "centers"])
 def test_expand_ls_graph_arity_conjuncts_are_enforced(graph_engine, short_arg) -> None:
-    """Each of the four arity conjuncts on the new tree surface, flipped one at a time. The
-    inner `expand_and_backup_ls_at` takes the MIN of every length and silently expands
-    fewer leaves, so the bridge guard must be always-on."""
+    """Each of the four arity conjuncts on the tree surface, flipped one at a time. The inner
+    `expand_and_backup_ls_at` takes the MIN of every length and silently expands fewer leaves, so
+    the bridge guard must be always-on."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
@@ -530,11 +437,10 @@ def test_expand_ls_graph_arity_conjuncts_are_enforced(graph_engine, short_arg) -
         )
 
 
-# ── ⊕ C-2 ────────────────────────────────────────────────────────────────────────────
 def test_expand_ls_graph_refuses_a_centre_the_board_disagrees_with(graph_engine) -> None:
-    """D-7: self-play frames its expand on the BUILDER's `g.window_center`; eval re-derives
-    from `board.window_center()`. The producer now returns its own centre and the bridge
-    cross-checks it — a pairing/drift tripwire, expected always-equal. Mutation M3."""
+    """Self-play frames its expand on the BUILDER's `g.window_center` while eval re-derives from
+    `board.window_center()`, so the producer returns its own centre and the bridge cross-checks it.
+    A pairing/drift tripwire, expected always-equal."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
@@ -551,11 +457,9 @@ def test_expand_ls_graph_refuses_a_centre_the_board_disagrees_with(graph_engine)
         )
 
 
-# ── ⊕ C-3 ────────────────────────────────────────────────────────────────────────────
 def test_expand_ls_graph_refuses_a_trunk_the_board_disagrees_with(graph_engine) -> None:
-    """D-8: self-play asserts `agg_trunk_sz == spec.trunk_size` always-on
-    (`search_drive.rs:415-419`); eval read `board.cluster_window_size()`. Both are 19 at
-    run5 (measured), so this guard is a drift tripwire. Mutation M4."""
+    """Self-play asserts `agg_trunk_sz == spec.trunk_size` always-on while eval read
+    `board.cluster_window_size()`. Both measure 19 here, so this guard is a drift tripwire."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
@@ -571,10 +475,9 @@ def test_expand_ls_graph_refuses_a_trunk_the_board_disagrees_with(graph_engine) 
         )
 
 
-# ── ⊕ C-4 ────────────────────────────────────────────────────────────────────────────
 def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) -> None:
-    """A 361-long dense half against a 362-wide policy stride is the v6w25 class of silent
-    wrong-width decode Phase B killed on the grid seam; it must be loud here too."""
+    """A 361-long dense half against a 362-wide policy stride is the silent wrong-width decode
+    class; it must be loud here too."""
     engine, spec = graph_engine
     board = _board(_positions(_load(_P1_FIXTURE))[0])
     assert len(_eval_children(engine, spec, board)) == _expected_children(board), (
@@ -591,12 +494,11 @@ def test_expand_ls_graph_refuses_a_dense_half_of_the_wrong_stride(graph_engine) 
         )
 
 
-# ── ⊕ C-5a/b ─────────────────────────────────────────────────────────────────────────
 @pytest.mark.parametrize("case", ["neither", "both"])
 def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
-    """`DeployHeadPlayer` takes EXACTLY one of `infer_fn=` (dense, unchanged) or
-    `expand_fn=` (graph). Neither and both are named `ValueError`s — no default arm, no
-    silent pick, which is the whole reason a second player class was rejected."""
+    """`DeployHeadPlayer` takes EXACTLY one of `infer_fn=` (dense) or `expand_fn=` (graph).
+    Neither and both are named `ValueError`s — no default arm and no silent pick, which is the
+    whole reason a second player class was rejected."""
     def _infer(_leaf):
         raise AssertionError("the guard must fire before any inference")
 
@@ -608,11 +510,9 @@ def test_deploy_head_takes_exactly_one_collaborator(case) -> None:
         DeployHeadPlayer(n_sims=1, **kwargs, leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, gumbel_seed=0)
 
 
-# ── ⊕ C-7 ────────────────────────────────────────────────────────────────────────────
 def test_build_candidate_player_closed_match_refuses_an_unknown_representation() -> None:
     """`build_candidate_player` matches CLOSED on `spec.representation`: an unregistered
-    representation raises by name and NEVER falls back to the dense arm. A silent dense
-    fallback here is exactly the class R138 ruled on."""
+    representation raises by name and NEVER falls back to the dense arm."""
     class _SpecWithRepresentation:
         def __init__(self, base, representation):
             self._base = base
@@ -635,16 +535,10 @@ def test_build_candidate_player_closed_match_refuses_an_unknown_representation()
         engine.close()
 
 
-# ── ⊕ C-10 ───────────────────────────────────────────────────────────────────────────
 def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) -> None:
     """ONE predicate with TWO entry points, asserted as a delegation rather than duplicated:
     `infer_ls` is a one-line delegation to `infer_batch_ls`, so a future edit cannot give the
-    single-board door a different (or absent) guard.
-
-    The refusal half this row used to carry beside the delegation drove a DENSE spec through
-    both doors and compared the two `NotImplementedError` messages; R346(f) deleted the dense
-    arm and with it the refusal, so what remains — and what the row was always about — is that
-    the two doors are one code path."""
+    single-board door a different (or absent) guard."""
     engine, _spec = graph_engine
     calls = []
 
@@ -659,15 +553,10 @@ def test_infer_ls_is_the_same_refusal_predicate_as_infer_batch_ls(graph_engine) 
     assert result == ([0.0], [], 0.0, (0, 0)), "infer_ls did not project the batch result"
 
 
-# ── ⊕ᶜ C-8 (CONTROL — an unchanged predicate still fires; NOT an R72 flip) ────────────
 def test_no_drop_pooling_encoding_is_still_refused() -> None:
-    """R20 boundary: a spec declaring the no-drop pool stays REFUSED, and the refusal set
-    `{"none", "scatter_max"}` is unchanged. It used to be driven on `v6_live2_ls`, which
-    declared that pool; R346(f) deleted the grid rows and no registered encoding declares an
-    unimplemented pool any more, so the case is SYNTHESISED from a registered spec — the same
-    way the value-channel arm in `tests/eval/test_value_pool_guard.py` does. The full-round
-    form of this control is O-8 (`tests/eval/test_graph_round_encoding.py`); the guard entrance
-    is asserted here so the control costs no round."""
+    """A spec declaring the no-drop pool stays REFUSED, and the refusal set is unchanged. No
+    registered encoding declares an unimplemented pool any more, so the case is SYNTHESISED from a
+    registered spec; the guard entrance is asserted here so the control costs no round."""
     import dataclasses
 
     base = lookup("gnn_axis_v1")

@@ -1,54 +1,21 @@
-"""⊕ WPAX Phase D ORACLE — `CARD-DRAWRATE-KEY`: who is allowed to say the draw-rate abort
-is armed, and on what terms (DESIGN_D §1, §5, §6; R65 re-scoped by R80, shaped by R79/R83).
+"""Who is allowed to say the draw-rate abort is armed, and on what terms.
 
-RED-at-import until IMPL lands the delta. Three anchors, in the order they fire:
+The fact under single authority has three inseparable components (`threshold`, `min_step`,
+`N_pool_min`) and therefore one nested block, `train.draw_rate_abort`, whose `None` is the
+EXPLICIT off state. No boolean sits beside it, because a boolean could contradict it.
 
-1. `mantis.config.resolve.draw_rate` — the ONE read path (R80: one block, one resolver).
-2. `mantis.run._step_coordinator_config` — the builder MF-2's Attack B migrates into;
-   its rename from `_default_step_coordinator_config` is the name-truth half (R73).
-3. `mantis.config.armed_aborts.ArmingSurfaceMissingError` — F-4's named arm, written to
-   the class (R71). Its own oracle is `tests/tools/test_drawrate_arming_surface_named_
-   failure.py`; it is imported here so this file cannot go green against a half-landed delta.
+The defect each oracle is the ONLY witness to: a default authority surviving at ANY of three
+layers — the dataclass field, the BUILDER SIGNATURE, or a `__post_init__` / `object.__setattr__`
+resurrection on a frozen dataclass, extended to the family's other frozen dataclass where both
+shapes survived the full tier; a `config_path` that does not resolve on a real `RunConfig`; and the
+threading deleted / renamed / reordered with the source pin dying at the flip.
 
-The fact under single authority is *"is the draw-rate collapse abort armed, and on what
-terms"*. It has three inseparable components (`threshold`, `min_step`, `N_pool_min`) and
-therefore one nested block, `train.draw_rate_abort`, whose `None` is the EXPLICIT off state
-(R79(1) as amended by R83). No boolean sits beside it, because a boolean could contradict it.
+The SCHEMA half of the same block is `tests/config/test_drawrate_schema_range.py`: this file
+asserts who has AUTHORITY over the value, that one what values are EXPRESSIBLE.
 
-The oracles, and the defect each is the ONLY witness to:
-
-- O-D1 `test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_config_is_
-  its_only_one` — **THE NAMED RED**. A default authority surviving at ANY of three layers:
-  the dataclass field, the BUILDER SIGNATURE (MF-2 Attack B — the route this delta's own
-  change list creates at `preflight_mint.py:990`), or a `__post_init__` /
-  `object.__setattr__` resurrection on a frozen dataclass (Attack A). Not caught by O-D2
-  (a threading line can exist beside any of the three) or by O-D3 (a config that sets the
-  key flows correctly anyway). WPMINT DR-5 extends the same two shapes to the family's
-  OTHER frozen dataclass, `DrawRateAbortSpec` — R83 named them, but the RED pinned them on
-  `StepCoordinatorConfig` only, and BOTH survived the full tier on the sibling.
-- O-D3 `test_the_required_row_is_audited_against_a_REAL_RunConfig` — F-4's class: a
-  `config_path` that does not resolve on a real `RunConfig`. The ancestor O-7 built its stub
-  FROM `config_path` and so could not disagree with it.
-- O-D5 `test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site` — the
-  threading deleted / renamed / reordered, and the pin dying at the flip (N-1). Also the
-  sole witness that the flipped row keeps the manifest's ONLY pin, which is the subject
-  `test_the_source_pin_scan_runs_inside_the_live_audit_path` and
-  `test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered` both stand on (R83).
-
-The SCHEMA half of the same block — MF-1's out-of-range class (O-D6) and the per-config
-posture census (O-D7) — is `tests/config/test_drawrate_schema_range.py`. The seam is real:
-this file asserts who has AUTHORITY over the value, that one asserts what values are
-EXPRESSIBLE and what each committed config actually says.
-
-R7 / gate 6: nothing here writes a `*.jsonl`; O-D5's tamper rig is built under `tmp_path`.
-R5: the tool is loaded by absolute path; ZERO `sys.path` mutation.
-
->300 justify (R8): three oracles over ONE manifest row. O-D1, O-D3 and O-D5 read the same
-row through its three surfaces (the dataclass/builder that consumes the value, the audit
-predicate that judges it, the source pin that keeps the threading tamper-evident); the "not
-caught by" column above is only checkable while they sit together, and splitting further
-would fork the row lookup and the run5 load across files (R5 bars cross-test imports).
-Roughly half the length is the per-oracle LAW-07 rationale and the R69 producer citations.
+>300 justify (R8): three oracles over ONE manifest row, read through its three surfaces. The "not
+caught by" column is only checkable while they sit together, and splitting would fork the row
+lookup and the config load (R5 bars cross-test imports).
 """
 from __future__ import annotations
 
@@ -60,9 +27,8 @@ from pathlib import Path
 
 import pytest
 
-# NOTE (ORACLE-WRITE): `ruff --fix` at HEAD re-sorts the `resolve.draw_rate` import into the
-# third-party block, because the module it names does not exist yet. It is placed here, with
-# its `mantis.*` siblings, which is where it belongs the moment IMPL lands it.
+# `ruff --fix` re-sorts the `resolve.draw_rate` import into the third-party block while that
+# module does not exist; it is placed here, with its `mantis.*` siblings, where it belongs.
 from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissingError (F-4)
     MANIFEST,
     ArmedAbort,
@@ -87,28 +53,25 @@ CONFIGS_DIR = REPO_ROOT / "configs"
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 ROW_NAME = "draw_rate_collapse"
 
-#: WPMINT Phase K-A (R93): the builder's third config-authored parameter, from a MINTED
-#: block. This file is about THRESHOLD authority, so the drain caps arrive derived rather
-#: than as four more literals to keep in step.
+#: The builder's third config-authored parameter, from a MINTED block. This file is about
+#: THRESHOLD authority, so the drain caps arrive derived rather than as four more literals.
 _MINTED_DRAIN_CAPS = resolve_drain_caps(load_config(CONFIGS_DIR / "dev_example.yaml").monitor)
 
-#: WPMINT Phase K-B (R78/R80): the builder's FOURTH config-authored parameter, from the same
-#: minted config, for the same reason — this file is about THRESHOLD authority, so the 19
-#: coordinator knobs arrive derived rather than as eighteen more literals to keep in step.
+#: The builder's FOURTH config-authored parameter, from the same minted config and for the same
+#: reason: the coordinator knobs arrive derived rather than as eighteen more literals.
 _MINTED_KNOBS = resolve_coordinator_knobs(load_config(CONFIGS_DIR / "dev_example.yaml").train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config.
+#: The builder's FIFTH config-authored parameter — `monitor.gate_interval`, the ARMING cadence.
 _MINTED_GATE_INTERVAL = load_config(
     CONFIGS_DIR / "dev_example.yaml").monitor.gate_interval
 
-#: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is the only place
-#: they may change, so they are written here as the pin that makes an in-place edit visible.
+#: Pre-registered run-scoped constants. NOT tunables: mint prereg is the only place they may
+#: change, so they are written here as the pin that makes an in-place edit visible.
 RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
 def _load_tool():
-    """`tests/tools/test_silent_encoding_gate.py:21-29`'s precedent — absolute path, no
-    `sys.path` write (R5 / LAW-17). `tools/` is not a package."""
+    """Load the tool by absolute path — `tools/` is not a package and R5/LAW-17 bar a `sys.path`
+    write."""
     spec = importlib.util.spec_from_file_location("preflight_mint_for_wpax_d", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -126,9 +89,8 @@ def _row(name: str = ROW_NAME) -> ArmedAbort:
 
 
 def _walk(obj, path: str):
-    """Walk a dotted path with plain `getattr`. Deliberately NOT `armed_aborts._dotted`: an
-    oracle that navigates with the code under test cannot witness a navigation bug (the
-    frozen manifest oracle states the same reason at `:94-100`)."""
+    """Walk a dotted path with plain `getattr`. Deliberately NOT the module's own `_dotted`: an
+    oracle that navigates with the code under test cannot witness a navigation bug."""
     for part in path.split("."):
         obj = getattr(obj, part)
     return obj
@@ -136,16 +98,8 @@ def _walk(obj, path: str):
 
 def _complete_kwargs(spec) -> dict:
     """Every `StepCoordinatorConfig` field, read off an object the SHIPPED builder produced.
-
-    Derived, never hand-written: a literal census here would have to be edited by the same
-    change that adds or drops a field, so it would agree with the dataclass by maintenance
-    rather than by construction and O-D1's `TypeError` arm could go vacuous silently.
-
-    WPMINT Phase K-A (R93): `drain_caps` joined `stop_step`/`draw_rate_abort` as a
-    config-authored builder parameter with no default, so it arrives from a MINTED
-    `monitor.drain` block — a literal here would be a second authority over the very keys
-    that phase wired.
-    """
+    Derived, never hand-written: a literal census would agree with the dataclass by maintenance
+    rather than by construction, and the `TypeError` arm could go vacuous silently."""
     built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec,
                                      drain_caps=_MINTED_DRAIN_CAPS,
                                      gate_interval=_MINTED_GATE_INTERVAL,
@@ -157,13 +111,9 @@ def _complete_kwargs(spec) -> dict:
 def _source_without_comments_or_strings(path: Path) -> str:
     """`path`'s source with every COMMENT / STRING token blanked to spaces, geometry kept.
 
-    The frozen manifest oracle's `_code_text` joins tokens with newlines, which destroys
-    contiguity — a multi-token pin can never be a substring of that. Blanking in place keeps
-    the file's exact shape, so a pin genuinely IN THE CODE is still a substring while a pin
-    retained only inside a comment or a docstring is not. That closes, for this one pin, the
-    comment-retention defeat SF-2 discloses as inherited (`REDTEAM_P.md:505-520`: keep the
-    pinned text in a comment, change the real value, and `verify_source_pins`' whole-file
-    `in` scan still returns rc 0).
+    Joining tokens with newlines destroys contiguity, so a multi-token pin could never be a
+    substring. Blanking in place keeps the file's shape, so a pin genuinely IN THE CODE is still a
+    substring while one retained only in a comment or docstring is not.
     """
     lines = path.read_text().splitlines(keepends=True)
     blank = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
@@ -181,33 +131,16 @@ def _source_without_comments_or_strings(path: Path) -> str:
     return "".join(lines)
 
 
-# ── O-D1 — THE NAMED RED (R79(3), extended by R83) ────────────────────────────────────
 def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_config_is_its_only_one() -> None:  # noqa: E501 — DESIGN_D §7's name verbatim; the named RED is operator-binding
-    """R65's literal must DIE, not MIGRATE. The danger the named RED exists for: the config
-    says `0.25` while the runtime uses something else, so the audit reads the config, goes
-    green, and the run is disarmed.
+    """The literal must DIE, not MIGRATE: the config says `0.25` while the runtime uses something
+    else, so the audit reads the config, goes green, and the run is disarmed.
 
-    Loop 0's closure was defeatable two ways and R83 names both, so three layers are asserted
-    and each has its own defeat:
-
-    * the **field** — `dataclasses.fields()` says MISSING. Defeated by a parameter default;
-    * the **builder signature** — MF-2 Attack B. The throwaway zero-arg call in
-      `preflight_mint.py` that consumed only `.capacity` is GONE (WPMAIN D-3): capacity now
-      comes from `resolve_coordinator_knobs(config.train).capacity` inside
-      `mantis.run.build_run_collaborators`, and the real `StepCoordinatorConfig` is built
-      exactly once, inside `compose_run`. The token `StepCoordinatorConfig(` stays banned
-      from the tool, which now cannot construct one at all. The pressure this bullet names
-      is therefore weaker but NOT gone — any future caller that wants a partial config is
-      live pressure for `draw_rate_abort=None` on the signature, at which point the
-      authority has simply moved and every other assertion here stays green;
-    * **no resurrection** — Attack A. `StepCoordinatorConfig` is `frozen=True`
-      (`coordinator/config.py:149`) and `object.__setattr__` inside `__post_init__` is legal
-      on a frozen dataclass, so a code-side default can be restored AFTER construction with
-      `dataclasses.fields()` still reporting MISSING.
-
-    The transport arm is the last one: the builder must hand ON the object it was given. A
-    builder that accepts the parameter and then ignores it satisfies every signature and
-    field assertion above while the config reaches nothing.
+    Three layers, each with its own defeat: the FIELD (`dataclasses.fields()` says MISSING,
+    defeated by a parameter default); the BUILDER SIGNATURE, where the authority simply moves while
+    every other assertion stays green; and NO RESURRECTION, since `object.__setattr__` inside
+    `__post_init__` is legal on a frozen dataclass. The transport arm is last: a builder that
+    accepts the parameter and then ignores it satisfies every signature and field assertion above
+    while the config reaches nothing.
     """
     fields = {field.name: field for field in dataclasses.fields(StepCoordinatorConfig)}
 
@@ -217,16 +150,9 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "train.draw_rate_abort even when every caller replaces them (R1). Still present: "
         f"{sorted(set(fields) & {'draw_rate_threshold', 'draw_rate_min_step'})}"
     )
-    # WPMINT Phase K-B (adjudication call K-b) RE-POINTS this arm, and it is the same
-    # boundary marker read from the other side. It used to assert that `draw_rate_consec`
-    # REMAINED a code-side default on `StepCoordinatorConfig` — correctly, because R80 bound
-    # PHASE D to three keys and assigned the fourth term to `CARD-COORD-KNOBS`. K-B IS
-    # `CARD-COORD-KNOBS`, so authoring it here is that assignment being discharged, not the
-    # scope creep R78 foreclosed. The marker survives because the defect it guards survives:
-    # a coordinator field that carries the term as well would be a SECOND authority beside
-    # `train.draw_rate_abort.consec`, exactly the shape `draw_rate_threshold: float = 0.0`
-    # had. So the assertion inverts — the field must be GONE — and the term is asserted at
-    # its new home in the same breath, where it has no default either.
+    # The field must be GONE and the term asserted at its new home. A coordinator field carrying
+    # the term as well would be a SECOND authority beside `train.draw_rate_abort.consec`, exactly
+    # the shape the dead `draw_rate_threshold: float = 0.0` had.
     assert "draw_rate_consec" not in fields, (
         "`draw_rate_consec` must be DELETED from StepCoordinatorConfig, not left beside the "
         "authored key: with `train.draw_rate_abort.consec` live, a same-fact field here is "
@@ -284,12 +210,10 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "assertion above while the config reaches nothing — this is the transport arm"
     )
 
-    # ── the family's OTHER frozen dataclass (WPMINT DR-5) ─────────────────────────────
-    # R83 named the two resurrection shapes for the draw-rate family; the arms above pinned
-    # them on `StepCoordinatorConfig` alone. `DrawRateAbortSpec` is where the three VALUES
-    # actually live, so a default authority resurrected there defeats every assertion above:
-    # the coordinator would faithfully carry a spec whose terms the config never wrote.
-    # Measured at WPMINT Phase DR: field defaults on all three keys, and a `__post_init__` +
+    # ── the family's OTHER frozen dataclass ──────────────────────────────────────────
+    # `DrawRateAbortSpec` is where the three VALUES live, so a default authority resurrected there
+    # defeats every assertion above: the coordinator would faithfully carry a spec whose terms the
+    # config never wrote. MEASURED: field defaults on all three keys, and a `__post_init__` +
     # `object.__setattr__` normalisation, BOTH left the full tier green.
     spec_fields = {field.name: field for field in dataclasses.fields(DrawRateAbortSpec)}
     assert set(spec_fields) == {"threshold", "min_step", "N_pool_min", "consec"}, (
@@ -322,22 +246,13 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
     )
 
 
-# ── O-D3 — F-4's class: the row is audited against a REAL RunConfig ───────────────────
 def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) -> None:
-    """F-4, reproduced at HEAD (DESIGN_D §0): flipping the shipped row to REQUIRED raises
-    `AttributeError: 'TrainConfig' object has no attribute 'step_coordinator'`, which `main`
-    collapses to rc 1 `PreflightInternalError` — the one outcome `preflight_mint.py:79`'s
-    docstring says cannot exist.
+    """The row is audited against a REAL `RunConfig`, in both directions.
 
-    O-7's ancestor could not have caught it: it built `_future_config` as a `SimpleNamespace`
-    whose attribute chain was constructed FROM the row's own `config_path`
-    (`test_armed_abort_manifest.py:308-316`), so the stub could not disagree with the
-    manifest — resolvability was assumed by construction. This one loads the committed file
-    through the ONE loader and runs the SHIPPED manifest.
-
-    Both directions, because a gate that only ever says PASS is as useless as one that only
-    ever says FAIL: run5 armed audits green, and the same config with the block set to `null`
-    names this row and only this row.
+    Flipping the row to REQUIRED once raised an `AttributeError` that `main` collapses to rc 1 —
+    the one outcome the tool's own docstring says cannot exist — and the ancestor could not catch
+    it, having built its stub FROM the row's own `config_path`. Both directions, because a gate
+    that only ever says PASS is as useless as one that only ever says FAIL.
     """
     row = _row()
     assert row.status is Status.REQUIRED, (
@@ -350,14 +265,9 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "`train.step_coordinator.*` was RULED AGAINST (§2): it is named after a dataclass "
         "and invites the ~24 coordinator knobs R78 forecloses"
     )
-    # WPMINT Phase X (CARD-ABORT-EXIT / R84) — THE authorized flip this assertion existed to
-    # make unforgettable. It used to read `row.exit_code is None` with the grounds "the gate
-    # stops the run cooperatively and NO distinct process exit code exists". The first half is
-    # still true (delivery is still cooperative, deliberately — LAW-16); the second is not, so
-    # the assertion is re-pointed rather than deleted. It is now pinned to the CONSTANT, not to
-    # the literal 46: a row carrying its own number would be the second authority the
-    # rule-name carrier exists to prevent, and an equality against `46` here would pass just as
-    # happily against a hand-typed one.
+    # Pinned to the CONSTANT, not to the literal 46: a row carrying its own number would be the
+    # second authority the rule-name carrier exists to prevent, and an equality against `46` here
+    # would pass just as happily against a hand-typed one.
     assert row.exit_code == DRAW_RATE_COLLAPSE_EXIT_CODE, (
         f"the row must carry the family's own authored constant, not a literal; got "
         f"{row.exit_code!r} against {DRAW_RATE_COLLAPSE_EXIT_CODE!r}"
@@ -377,14 +287,9 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
         "the flipped row must be in the audit's REQUIRED list — that list is what the "
         "evidence report publishes as `required_armed`"
     )
-    # WPMINT Phase K-B (adjudication call K-c) RE-POINTS this arm. It used to assert ZERO
-    # deferred rows — true at Phase D, and the fact that forced the R81 hunk. K-B feeds the
-    # deferred mechanism the row R81's own text anticipated ("CARD-COORD-KNOBS will feed it
-    # rows", `preflight_mint._print_deferred_rows`): `grad_norm_hard_abort`, a live gate whose
-    # threshold nobody has pre-registered. What the arm actually protects is unchanged and is
-    # now stated positively — THIS row must not be among the deferred, because a draw-rate row
-    # quietly demoted back to DEFERRED would stop gating run5's mint while every other
-    # assertion here stayed green.
+    # Stated positively: THIS row must not be among the deferred, because a draw-rate row quietly
+    # demoted back to DEFERRED would stop gating the mint while every other assertion stayed green.
+    # Other rows MAY be deferred — a live gate whose threshold nobody has pre-registered is.
     assert ROW_NAME not in [r.name for r in audit.deferred], (
         "the draw-rate row must never appear in the DEFERRED list: a deferred row prints and "
         "does not gate, so demoting this one un-does R65's whole flip silently. Other rows "
@@ -410,34 +315,18 @@ def test_the_required_row_is_audited_against_a_REAL_RunConfig(smoke_run_config) 
     )
 
 
-# ── O-D5 — the pin, re-bound to the live threading (N-1 / RED-1) ──────────────────────
 def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_path) -> None:
-    """At HEAD the pin points at the literal `draw_rate_threshold: float = 0.0` and fires on
-    its DELETION — so at the flip, when the literal is gone, the pin's subject stops
-    existing. Dropping it (§8.5/O-7's shape) would leave the newly-REQUIRED row with no
-    tamper-evidence at all, precisely as it starts gating a production mint.
+    """The newly-REQUIRED row keeps a source pin bound to the live construction site.
 
-    It would also gut two live tests SILENTLY. `test_the_source_pin_scan_runs_inside_the_live_
-    audit_path` (`test_preflight_mint_process.py:322`) and `test_the_report_publishes_the_
-    pins_the_scan_ACTUALLY_covered` (`:355`) both open with `assert pinned, "no pinned row
-    means this test has no subject"`, and the draw-rate row is the manifest's ONLY pinned row
-    — so the first assertion below is what keeps those two non-vacuous (R83).
-
-    What this proves, and all it proves (SF-2's correction, taken): deletion / rename /
-    reorder tamper-evidence over the SOURCE TEXT. `verify_source_pins` ends in
-    `if text not in pinned.read_text(...)` — a whole-file substring scan, not a statement
-    about a value. **O-D2 is the sole witness for "pinned text present, wrong value
-    flowing."** The comment-retention defeat is inherited and out of scope for the scan
-    itself; the code-text arm below closes it for this one pin.
+    The pin used to point at a literal and fire on its DELETION, so at the flip its subject stops
+    existing; dropping it would leave the row with no tamper-evidence precisely as it starts gating
+    a production mint, and would silently gut two live tests that open with "no pinned row means
+    this test has no subject". What it proves is deletion / rename / reorder tamper-evidence over
+    the SOURCE TEXT; the code-text arm closes the comment-retention defeat for this one pin.
     """
-    # WPMINT Phase K-B: this arm used to assert the draw-rate row was the manifest's ONLY
-    # pinned row. K-B's `grad_norm_hard_abort` row carries a pin of its own (a DEFERRED row
-    # MUST — `__post_init__` requires it, because a deferred row that is not tamper-evident
-    # rots into the status quo), so "only" is no longer the fact. The fact that was ever
-    # load-bearing is that THIS row keeps ITS pin: that is what stops
-    # `test_the_source_pin_scan_runs_inside_the_live_audit_path` and
-    # `test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered` — both of which open
-    # with `assert pinned, "no pinned row means this test has no subject"` — going vacuous.
+    # The load-bearing fact is that THIS row keeps ITS pin — not that it is the only pinned row,
+    # since a DEFERRED row MUST carry one too. Keeping it is what stops the two tests that open
+    # with "no pinned row means this test has no subject" going vacuous.
     pinned = [row for row in MANIFEST if row.source_pin is not None]
     assert ROW_NAME in [row.name for row in pinned], (
         "the flipped row must KEEP its pin: "
@@ -471,11 +360,10 @@ def test_the_required_row_keeps_a_source_pin_bound_to_the_construction_site(tmp_
         "rotted at oracle-write time is a manifest bug, not a Phase D signal"
     )
 
-    # The two tamper drives run against a manifest holding ONLY this row, so they still
-    # report an exact list (WPMINT K-B): with the whole MANIFEST the grad-norm row's own pin
-    # would also break in a tree that holds one file, and "exactly this row" — the property
-    # under test — would be unassertable. The scan is fed data, so restricting the data is
-    # the same instrument, not a weaker one.
+    # The two tamper drives run against a manifest holding ONLY this row, so they still report an
+    # exact list: with the whole manifest another row's pin would also break in a tree that holds
+    # one file, and "exactly this row" would be unassertable. Restricting the data is the same
+    # instrument, not a weaker one.
     only_this_row = (row,)
     tampered = tmp_path / "tampered"
     (tampered / rel).parent.mkdir(parents=True)

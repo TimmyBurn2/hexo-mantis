@@ -1,22 +1,10 @@
-# Exceeds the 300-line soft cap (R8): one harness for the micro-batch legs, and its
-# pieces are load-bearing on each other — the fixed-pair buffer exists so two arms see
-# ONE sample, and the caps helpers derive their bounds from that same wire. Split up,
-# an arm could silently be compared against a different draw.
-"""Shared rig for the WP12-R F2 micro-batch oracles (OF2-*, DESIGN_DFIX §5.2).
+# >300 justify (R8): the fixed-pair buffer exists so two arms see ONE sample and the caps
+# helpers bound that same wire; split up, an arm could be compared against a different draw.
+"""Shared rig for the micro-batch oracles: one buffer, one trainer, one wire-replay double.
 
-Not a test module (leading underscore, no `test_` prefix): pytest does not collect it, and
-the three F2 suites import it the way `tests/model/test_gine_bf16_drift.py:120` imports
-`_bf16_parity`. It exists so the graph harness — a real `HexgBuffer`, a tiny real `GnnNet`
-`Trainer`, and the wire-replay buffer the two-arm parity legs need — has ONE definition:
-three copies of a harness that drift while all three stay green is the fork-and-drift failure
-`tests/train/test_periodic_checkpoint.py:5-8` argues against, and R5 bars importing it from a
-sibling TEST module, which is why it lives here rather than in one of the suites.
-
-WHAT IS REAL AND WHAT IS NOT (disclosed once, for all three suites): real everywhere are the
-buffer, the wire, `collate_graph_batch`, the partition, the losses, the optimizer, the
-scheduler, the event sink protocol and the filesystem. Fake: the ARCH (a tiny `GnnNet`,
-hidden=16/num_layers=1) and, where a suite says so, the SINK (a recording spy). Nothing here
-fakes the caps, the split, or the normalisation.
+Real: the buffer, the wire, `collate_graph_batch`, the partition, the losses, the optimizer,
+the scheduler, the sink protocol and the filesystem. Fake: the ARCH and, where a suite says so,
+the SINK. Nothing here fakes the caps, the split, or the normalisation.
 """
 from __future__ import annotations
 
@@ -40,19 +28,10 @@ SEED = 20260803
 
 @contextlib.contextmanager
 def deterministic_algorithms():
-    """**TEST SCOPE ONLY.** `torch.use_deterministic_algorithms(True)` for the block, then
-    the ambient setting restored exactly (including `CUBLAS_WORKSPACE_CONFIG` back to ABSENT).
+    """Enable deterministic algorithms for the block, restoring the ambient setting exactly.
 
-    Copied — not imported — from `tests/model/_bf16_parity.py:95-127`, the established
-    pattern; R5 bars a cross-directory test import and duplicating fifteen stdlib lines is
-    cheaper than inventing a second mechanism.
-
-    **PRODUCTION KEEPS ITS KERNELS (R191).** Nothing in `src/mantis/` calls this. Every leg
-    that uses it carries `deterministic_mode` in its own NAME, so no reader can conclude a
-    production run is deterministic. R191 is why F2's exact legs run here at all: the median
-    statistic F1 used reads exactly 0.0 against a defect confined to <=50% of graphs, and a
-    micro-batch split produces precisely that minority-subset shape — so F2 asserts EXACT
-    equality and per-graph identities and inherits no statistic from F1.
+    TEST SCOPE ONLY — nothing in `src/mantis/` calls this, and every leg that uses it says so
+    in its own name, so no reader concludes a production run is deterministic.
     """
     was_enabled = torch.are_deterministic_algorithms_enabled()
     had_cublas = "CUBLAS_WORKSPACE_CONFIG" in os.environ
@@ -70,15 +49,9 @@ def deterministic_algorithms():
             os.environ.pop("CUBLAS_WORKSPACE_CONFIG", None)
 
 
-# ── buffers ──────────────────────────────────────────────────────────────────────────────
 def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real `HexgBuffer` whose records are IDENTICAL in shape, so every sampled graph has
-    the same edge and node count.
-
-    That uniformity is load-bearing for the cadence legs: with a constant per-graph edge
-    count `c` and `B` graphs, `max_edges = c * (B // M)` yields EXACTLY `M` micro-batches for
-    any `M` dividing `B`. A ragged fixture would make the requested M a search rather than an
-    identity, and OF2-4/OF2-5 sweep M as an exact quantity."""
+    """Build a real `HexgBuffer` whose records are IDENTICAL in shape, so a constant per-graph
+    edge count makes `max_edges = c * (B // M)` yield exactly `M` micro-batches."""
     hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
@@ -89,8 +62,7 @@ def uniform_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 def ragged_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real `HexgBuffer` whose records differ in stone count, so per-graph (N, E) varies —
-    the fixture the slice-fidelity and over-cap legs want."""
+    """Build a real `HexgBuffer` whose records differ in stone count, so (N, E) varies."""
     hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1), (2, 1, -1), (1, 2, 1)][: 2 + (i % 4)]
@@ -101,21 +73,11 @@ def ragged_graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 class ReplayWireBuffer:
-    """A buffer double that samples the REAL buffer ONCE and then returns that same
-    `(payload, targets)` pair on every later call.
+    """A buffer double that samples the REAL buffer ONCE and replays that pair thereafter.
 
-    The two-arm parity legs (OF2-3b/c/d) compare an M=1 step against an M=k step and the
-    comparison is only meaningful if BOTH arms see the same graphs; `sample_graph_batch`
-    draws randomly through the Rust RNG, which `torch.manual_seed` does not reach. Nothing
-    else is faked — the arrays, the targets and every downstream call are the real ones.
-
-    THE PAIR HOLDS A PAYLOAD, NOT THE PYCLASS, and that is required rather than tidy since
-    PERF-TRANCHE-1 A2: `GraphWire.take()` now MOVES its buffers into numpy, so a wire can be
-    read exactly once and handing the same pyclass to two arms raises `WireAlreadyConsumed`
-    on the second. Reading it into a `GraphWirePayload` here — through the same
-    `graph_wire_from_rust` the dispatcher uses — makes the pair repeatable, and the
-    dispatcher then reads the payload through the duck-typed getter path. Both arms still
-    see one sample of the real buffer, which is the whole point of the double.
+    The parity legs need both arms to see the same graphs, and `sample_graph_batch` draws
+    through the Rust RNG, which `torch.manual_seed` does not reach. The pair holds a PAYLOAD,
+    not the pyclass: `GraphWire.take()` MOVES its buffers, so a wire reads exactly once.
     """
 
     def __init__(self, real: HexgBuffer, batch_size: int, augment: bool = False) -> None:
@@ -130,8 +92,8 @@ class ReplayWireBuffer:
 
     def sample_graph_batch(self, batch_size: int, augment: bool = False,
                            recent_frac: float = 0.0, n_threads: int = 1):
-        # `n_threads` is B1's rebuild width. The double accepts it because the dispatcher
-        # now passes it on every graph step; it has no rebuild of its own to widen.
+        # `n_threads` is the rebuild width: accepted because the dispatcher passes it on
+        # every graph step, ignored because the double has no rebuild of its own.
         self.calls += 1
         return self._pair
 
@@ -144,20 +106,16 @@ class ReplayWireBuffer:
         return self._pair[1]
 
 
-# ── per-graph counts, read off the wire ──────────────────────────────────────────────────
 def per_graph_counts(wire: Any) -> tuple[np.ndarray, np.ndarray]:
-    """`(edge_counts, node_counts)` per graph, from the wire's CSR offsets."""
+    """Return `(edge_counts, node_counts)` per graph, from the wire's CSR offsets."""
     eo = np.asarray(wire.edge_offsets)
     no = np.asarray(wire.node_offsets)
     return np.diff(eo), np.diff(no)
 
 
 def caps_for_exactly(wire: Any, m: int) -> tuple[int, int]:
-    """`(max_edges, max_nodes)` that split THIS wire into exactly `m` micro-batches.
-
-    Derived, never guessed: with a uniform fixture every `ec[i]` is equal, so the edge member
-    is `c * (B // m)` and the node member is set past the whole batch so the split is
-    edge-driven and `m` is an identity rather than a coincidence."""
+    """Return the caps that split THIS wire into exactly `m` micro-batches — the node member
+    is set past the whole batch, so the split is edge-driven and `m` is an identity."""
     ec, nc = per_graph_counts(wire)
     b = len(ec)
     if b % m != 0 or len(set(ec.tolist())) != 1:
@@ -174,7 +132,6 @@ def non_binding_caps(wire: Any) -> tuple[int, int]:
     return int(ec.sum()) + 1, int(nc.sum()) + 1
 
 
-# ── trainer ──────────────────────────────────────────────────────────────────────────────
 def tiny_graph_arch() -> GnnArch:
     return GnnArch(in_dim=GSPEC.node_feat_dim, edge_dim=GSPEC.edge_feat_dim, hidden=16,
                    num_layers=1, policy_hidden=16, value_hidden=16)
@@ -192,15 +149,11 @@ def graph_hparams(**over: Any) -> TrainHParams:
 
 
 def minted_config(name: str) -> dict[str, Any]:
-    """A REAL minted `configs/*.yaml`, loaded through the real loader and dumped to a dict.
+    """Load a REAL minted `configs/*.yaml` through the real loader and dump it to a dict.
 
-    Not a hand-built stub: `Trainer.save_checkpoint` schema-validates its config on write
-    (`train/checkpoints.py`, repo_design §6), so any leg that lets the periodic-checkpoint
-    seam fire needs a complete `RunConfig`. Using the shipped config also means the CAPS the
-    trainer's config carries are the minted ones — which is a useful accident: the caps the
-    step actually uses arrive through `caps_provider`, never through the trainer's config, so
-    a leg that binds the caps and still sees the minted values in the checkpoint is evidence
-    the two paths are separate."""
+    `save_checkpoint` schema-validates its config on write, so any leg that lets the
+    periodic-checkpoint seam fire needs a complete `RunConfig`.
+    """
     from mantis.config.loader import load_config
     repo = Path(__file__).resolve().parents[2]
     return load_config(repo / "configs" / name).model_dump()
@@ -222,20 +175,8 @@ def tiny_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
 
 def ema_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
                       update_every: int = 1, **hp_over: Any) -> Trainer:
-    """A tiny graph `Trainer` with EMA ACTUALLY ENABLED.
-
-    `tiny_graph_trainer` above builds from `configs/dev_example.yaml`, which since R332(d)
-    MINTS `train.ema.enabled: false` explicitly — so `resolve_ema_config` returns
-    `enabled=False` and `ema_model is None` because the config SAYS SO, not because the key was
-    missing. Before AUDIT-1 F-06 there was no key at all, and the two states were
-    indistinguishable.
-    That means the EMA branch of the graph step's tail never executes in a default-fixture row,
-    and an EMA update moved into the accumulation loop would be invisible to it. This builder
-    exists so OF2-4 can assert the EMA count the row's registered PASS column names.
-
-    `train.ema` IS a `RunConfig` field since R332(d)/AUDIT-1 F-06, so overriding it here keeps
-    the config schema-valid — but every leg using this helper still sets
-    `checkpoint_interval=0`, because that was never the only reason not to write."""
+    """Build a tiny graph `Trainer` with EMA ACTUALLY ENABLED — the shipped config mints it
+    false, so the EMA branch never executes on a default fixture."""
     torch.manual_seed(seed)
     arch = tiny_graph_arch()
     config = graph_config()
@@ -247,7 +188,7 @@ def ema_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
 
 
 class SpySink:
-    """Records every emitted event mapping (the structural `EventSink` protocol)."""
+    """Record every emitted event mapping, as the structural `EventSink` protocol."""
 
     def __init__(self) -> None:
         self.events: list[dict[str, Any]] = []
@@ -260,9 +201,8 @@ class SpySink:
 
 
 class OptimizerSpy:
-    """Counts `zero_grad` / `step` on the REAL optimizer object by wrapping its bound
-    methods in place — a spy on the object the trainer actually drives, not a stub that
-    replaces it (MB-7's kill surface: `optimizer.step()` moved inside the loop)."""
+    """Count `zero_grad` / `step` by wrapping the REAL optimizer's bound methods in place —
+    a spy on the object the trainer drives, not a stub that replaces it."""
 
     def __init__(self, optimizer: Any) -> None:
         self.zero_grads = 0
@@ -294,7 +234,7 @@ class SchedulerSpy:
 
 
 def grad_vector(model: torch.nn.Module) -> torch.Tensor:
-    """The flattened parameter-gradient vector (zeros for a parameter with no grad)."""
+    """Return the flattened parameter-gradient vector, zeros where there is no grad."""
     return torch.cat([
         (p.grad if p.grad is not None else torch.zeros_like(p)).reshape(-1)
         for p in model.parameters()

@@ -104,9 +104,7 @@ class CorpusMetrics:
             for s, m in self._sources.items()
         }
 
-    # ------------------------------------------------------------------
     # Private helpers
-    # ------------------------------------------------------------------
 
     def _emit_throughput(self, source: str, m: SourceMetrics) -> None:
         log.info(

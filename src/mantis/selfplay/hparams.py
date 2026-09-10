@@ -1,27 +1,11 @@
-"""Self-play knob resolution: validated `SelfplayConfig`/`InferenceConfig` → typed hparams →
+"""Self-play knob resolution: validated `SelfplayConfig`/`InferenceConfig` -> typed hparams ->
 `SelfPlayRunnerConfig`.
 
->300 justify: ONE concern — everything the pool/server constructors used to read out of the
-config used to be read inline. Keeping the two hparam dataclasses, the encoding resolve, the
-seed-corpus parse and the runner-config assembly in one file means the config→runner wire
-(write-only from Python: the Rust config exposes no ctor getters) is greppable in one place;
-splitting it would scatter the very reads R-SELFPLAYCONFIG-SCHEMA inventoried.
-
-**R-SELFPLAYCONFIG-SCHEMA closure (WPSC Phase 2 SC-A2).** `SelfPlayHParams.from_config` /
-`InferenceHParams.from_config` now read a validated `RunConfig`-shaped mapping's `selfplay`/
-`mcts`/`playout_cap`/`inference` sections (a `SelfplayConfig`/`InferenceConfig`
-`.model_dump()`-shaped dict, or an equivalent explicit mapping) directly — no raw flat/legacy
-dict, no top-level namespace fallback, no code-side `.get(k, default)`. The schema (`mantis.
-config.schema.selfplay`) is the sole default authority (R1); the two hard-error checks that
-used to live here (`fast_sims` required, `fast_prob`/`full_search_prob` mutual exclusion)
-are now `PlayoutCapConfig` schema bounds/validators — not duplicated here (LAW-07: single
-authority). `legal_move_radius_schedule` is gone from the schema entirely (DESIGN_P2.md §5);
-nothing in this module ever read it.
-
-`_resolve_playout_cap_temperature`'s key/field-spelling shim is RETIRED: the schema field IS
-`temperature_threshold_compound_moves` (matching the config key one-to-one), so there is
-nothing left to resolve — `from_config` reads `pc["temperature_threshold_compound_moves"]`/
-`pc["temp_min"]` directly.
+>300 justify: ONE concern — everything the pool/server constructors used to read inline out of
+the config. Keeping the hparam dataclasses, the encoding resolve, the seed-corpus parse and the
+runner-config assembly together makes the config->runner wire greppable in one place, and that
+wire is write-only from Python. `from_config` reads a validated mapping's sections directly: no
+namespace fallback, no code-side default, the schema being the sole default authority.
 """
 from __future__ import annotations
 
@@ -34,19 +18,9 @@ from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
 
 
-# ---------------------------------------------------------------------------
-# Encoding resolve
-# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class ResolvedPoolEncoding:
-    """Every encoding-derived value the pool wires through the Rust runner.
-
-      - ``registry_spec`` — canonical `mantis.encoding.EncodingSpec`.
-      - ``encoding_name`` — registry name (e.g. "v6", "v6w25"), wired to the Rust
-        `SelfPlayRunner` via ``encoding_name=``.
-      - ``board_size`` / ``trunk_size`` / ``n_kept_planes`` — scalar dims reused for the
-        buffer + reshape geometry.
-    """
+    """Every encoding-derived value the pool wires through the Rust runner."""
 
     registry_spec: Any  # EncodingSpec (full schema)
     encoding_name: str
@@ -56,13 +30,9 @@ class ResolvedPoolEncoding:
 
 
 def is_graph_representation(spec: Any) -> bool:
-    """Closed match on ``spec.representation`` — no dense-by-default arm (LAW-11 / AM-1).
-
-    The frozen original defaulted an absent attribute to the DENSE kind, so an unknown or
-    absent representation silently routed down the dense path. `"grid"` is now REFUSED BY
-    NAME rather than answered `False`: R346(f) deleted the dense path, so a spec still
-    declaring it would otherwise be handed a graph buffer by a caller that only asks "is
-    this graph?" — the dense-by-default class inverted (LAW-11 / AM-1).
+    """Closed match on ``spec.representation`` — no dense-by-default arm (LAW-11). `"grid"` is
+    REFUSED BY NAME rather than answered `False`, because a spec still declaring the deleted
+    dense path would otherwise be handed a graph buffer.
 
     Args:
         spec: an encoding spec, or anything carrying a ``representation`` attribute.
@@ -92,19 +62,9 @@ def is_graph_representation(spec: Any) -> bool:
 def resolve_pool_encoding(
     config: dict[str, Any], arch: Any | None = None
 ) -> ResolvedPoolEncoding:
-    """Resolve every encoding-derived value the pool needs.
-
-    ``board_size`` is canvas geometry (physical hex grid extent); ``trunk_size`` is the
-    per-cluster NN-input window (== board_size for single-window encodings). All NN-input /
-    buffer / reshape dims use ``trunk_size``; only the arch cross-check uses the canvas
-    value.
-
-    When ``arch`` is supplied, cross-checks its DECLARED ``board_size`` against the resolved
-    canvas geometry — a mis-paired arch+config loud-fails with ``ValueError`` before any
-    Rust runner is built. `GnnArch` declares no ``board_size`` and therefore passes
-    vacuously, which is exactly the frozen behaviour for a graph net. Nothing is sniffed off
-    a live `nn.Module`.
-    """
+    """Resolve every encoding-derived value the pool needs: ``board_size`` is canvas geometry and
+    ``trunk_size`` the per-cluster NN-input window that all buffer and reshape dims use. Only the
+    arch cross-check reads the canvas value, so a mis-paired arch loud-fails before any runner."""
     registry_spec: EncodingSpec = resolve_from_config(config)
     spec = registry_spec
     if arch is not None:
@@ -125,22 +85,16 @@ def resolve_pool_encoding(
     )
 
 
-# ---------------------------------------------------------------------------
-# Hparam dataclasses (R-SELFPLAYCONFIG-SCHEMA — see the module header)
-# ---------------------------------------------------------------------------
 @dataclass(frozen=True, kw_only=True)
 class SelfPlayHParams:
-    """Every ctor-time self-play knob, resolved once. `kw_only` so the REQUIRED
-    `fast_sims` (no default — a missing key is a hard error) can sit in its own namespace
-    block rather than being hoisted above the defaulted fields."""
+    """Every ctor-time self-play knob, resolved once; `kw_only` so REQUIRED `fast_sims` fits."""
 
     # selfplay ns
     n_workers: int = 1
     leaf_batch_size: int = 8
     max_moves_per_game: int = 128
-    #: `search.kind`, REQUIRED with no default (R1/LAW-11): it selects the root mechanism,
-    #: the interior selector AND the exported target's semantics, and a code-side default
-    #: here would let a config that never declared its search regime still boot one.
+    #: `search.kind`, REQUIRED with no default: it selects the root mechanism, the interior
+    #: selector AND the exported target's semantics, so a default would boot an undeclared regime.
     search_kind: str
     c_visit: float = 50.0
     c_scale: float = 1.0
@@ -164,9 +118,7 @@ class SelfPlayHParams:
     full_search_prob: float = 0.0
     n_sims_quick: int = 0
     n_sims_full: int = 0
-    # Runner ctor kwarg spelling differs from the schema field name
-    # (`PlayoutCapConfig.temperature_threshold_compound_moves`); `from_config` reads the
-    # schema field directly (no resolver shim — retired, R-SELFPLAYCONFIG-SCHEMA closure).
+    # The runner ctor kwarg spelling differs from the schema field name.
     temp_threshold_compound_moves: int = 0
     temp_min: float = 0.5                 # field name == config key
     # training ns
@@ -177,14 +129,8 @@ class SelfPlayHParams:
 
     @property
     def effective_sims_per_move(self) -> int:
-        """Effective per-MOVE sim count for the sims/sec bill.
-
-        Under a move-level playout cap, full-search moves cost ``n_sims_full`` and quick
-        moves cost ``n_sims_quick``; we bill at ``n_sims_full`` per move (the full-search
-        ceiling — quick moves are cheaper, so the running estimate is an over-bill bounded
-        by ``n_sims_full``, never the falsified per-GAME under-bill). With no playout cap
-        every move runs the flat ``n_simulations``. Both branches read existing config.
-        """
+        """Effective per-MOVE sim count for the sims/sec bill: under a playout cap it bills at
+        the full-search ceiling, an over-bill, never the falsified per-GAME under-bill."""
         if self.full_search_prob > 0.0:
             return self.n_sims_full
         return self.n_simulations
@@ -193,14 +139,9 @@ class SelfPlayHParams:
     def from_config(
         cls, config: dict[str, Any], n_workers: int | None = None
     ) -> SelfPlayHParams:
-        """Resolve every ctor-time knob off a validated `RunConfig`-shaped mapping's
-        `selfplay`/`train` sections (R-SELFPLAYCONFIG-SCHEMA closure) — direct nested reads,
-        no top-level namespace fallback, no code-side default. `fast_sims`-required and the
-        `fast_prob`/`full_search_prob` mutual-exclusion checks are now `PlayoutCapConfig`
-        schema bounds/validators (not duplicated here, LAW-07); `effective_sims_per_move==0`
-        has no schema equivalent (it spans `mcts.n_simulations` AND `playout_cap.*`), so it
-        stays the one runtime hard error this resolver still raises.
-        """
+        """Resolve every ctor-time knob off a validated mapping's `selfplay`/`train` sections.
+        `effective_sims_per_move == 0` has no schema equivalent, since it spans
+        `mcts.n_simulations` AND `playout_cap.*`, so it stays the one runtime hard error here."""
         sp = config["selfplay"]
         mcts_cfg = sp["mcts"]
         pc = sp["playout_cap"]
@@ -210,9 +151,8 @@ class SelfPlayHParams:
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
             leaf_batch_size=int(sp["leaf_batch_size"]),
             max_moves_per_game=int(sp["max_game_moves"]),
-            # THE ONE SELECTOR (R1/LAW-15). `mantis.run` hands the SAME function's answer
-            # to `build_eval_pipeline`, so the deploy-matched bar and the workers cannot
-            # be reading two call sites that happen to agree.
+            # THE ONE SELECTOR, shared with `build_eval_pipeline`, so the bar and the workers
+            # cannot read two call sites that happen to agree.
             search_kind=resolve_search_kind(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
@@ -236,8 +176,7 @@ class SelfPlayHParams:
             n_sims_full=int(pc["n_sims_full"]),
             temp_threshold_compound_moves=int(pc["temperature_threshold_compound_moves"]),
             temp_min=float(pc["temp_min"]),
-            # Cross-section read (DESIGN_P2.md §2 note): draw_reward/ply_cap_value are part
-            # of `pure_outcome_z`'s definition and live on TrainConfig, not SelfplayConfig.
+            # Cross-section read: draw_reward/ply_cap_value define `pure_outcome_z`.
             draw_value=float(train["draw_reward"]),
             ply_cap_value=float(train["ply_cap_value"]),
             log_investigation_metrics=bool(sp["log_investigation_metrics"]),
@@ -263,9 +202,7 @@ class InferenceHParams:
 
     @classmethod
     def from_config(cls, config: dict[str, Any]) -> InferenceHParams:
-        """Resolve every ctor-time knob off a validated `RunConfig`-shaped mapping's
-        `inference` section (R-SELFPLAYCONFIG-SCHEMA closure) — direct nested reads, no
-        top-level namespace fallback."""
+        """Resolve every ctor-time knob off a validated mapping's `inference` section."""
         inf = config["inference"]
         return cls(
             inference_batch_size=int(inf["inference_batch_size"]),
@@ -273,17 +210,9 @@ class InferenceHParams:
         )
 
 
-# ---------------------------------------------------------------------------
-# Runner-config assembly (the config→Rust wire; write-only from Python)
-# ---------------------------------------------------------------------------
 @dataclass(frozen=True)
 class PoolDims:
-    """Dense NN-input / buffer dims derived from the resolved encoding.
-
-    A graph spec has `n_planes=0` / `kept_plane_indices=[]`, so the dense feat/chain
-    derivation is degenerate (not meaningful) and both are 0 — the graph drain branch never
-    reads them.
-    """
+    """Dense NN-input and buffer dims from the resolved encoding; both 0 on a graph spec."""
 
     feat_len: int
     chain_len: int
@@ -296,18 +225,9 @@ def build_runner_config(
     spec_dims: ResolvedPoolEncoding,
     encoding_name: str,
 ) -> tuple[SelfPlayRunnerConfig, PoolDims]:
-    """Assemble the Rust `SelfPlayRunnerConfig` and the dense pool dims.
-
-    `feature_len` / `policy_len` are NOT passed: both are spec-derived Rust-side (the runner
-    derives them from ``encoding_name``) and the committed ctor rejects them. The two
-    WP4/WP6-KILLed self-play knobs (the per-game radius jitter ctor kwarg and the interior
-    selection-rule post-ctor attr) are likewise neither read nor set — the committed Rust
-    config has neither field, and the census keeps both names dead.
-
-    Dims are returned rather than assigned so the caller keeps a single source: grid →
-    ``(n_kept_planes·trunk², 6·trunk², policy_logit_count)``; graph → ``(0, 0,
-    policy_logit_count)``.
-    """
+    """Assemble the Rust `SelfPlayRunnerConfig` and the dense pool dims. `feature_len`/
+    `policy_len` are NOT passed: both are spec-derived Rust-side and the committed ctor rejects
+    them, as it has no field for the two KILLed knobs either."""
     spec = spec_dims.registry_spec
     trunk_size = spec_dims.trunk_size
     if is_graph_representation(spec):
@@ -349,9 +269,7 @@ def build_runner_config(
         random_opening_plies=hp.random_opening_plies,
         encoding_name=encoding_name,
     )
-    # The search kind. Same posture as the knobs below — a config attribute, not a ctor
-    # kwarg. The Rust setter REFUSES an unknown kind rather than defaulting, so a typo
-    # reaches the operator as a boot error instead of a silently PUCT search.
+    # The Rust setter REFUSES an unknown search kind, so a typo is a boot error, not a PUCT search.
     cfg.search_kind = hp.search_kind
     return cfg, dims
 

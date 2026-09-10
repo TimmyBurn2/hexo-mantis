@@ -1,32 +1,18 @@
-"""⊕ WP12-R Phase A / O-A5 (DESIGN_A §2.3, PREREG_A §1) — the pin, in R139's format.
+"""The vendor pin is a commit sha, never a branch name.
 
-R139's rider is *a pin is a COMMIT SHA, never a branch name*, and R145 records the exact
-sha. `tools/vendor_fetch.sh` reads only `url`/`sha`/`patch` (`:17`, `:24`), so `branch` and
-`as_of` can be carried as DATA without ever becoming the thing that is fetched — that is
-the rider satisfied structurally rather than by convention, and these rows are what make it
-falsifiable.
+`tools/vendor_fetch.sh` reads only `url`/`sha`/`patch`, so `branch` and `as_of` are carried as
+data that can never become the thing fetched. One defect per row:
 
-The defect each row is the ONLY witness to:
+- a pin table that only looks pinned — `sha = "master"` is valid TOML and fetches a moving
+  target, and the non-emptiness conjunct stops the regex passing over zero rows;
+- a pin that drifted from the recorded sha, which arm 1 cannot see and which changes which
+  engine plays;
+- a patch declared and not tracked — the fetcher's one-argument `.get` skips it SILENTLY and
+  the build quietly regains `-march=native`;
+- the fetcher learning to read a branch, which nothing else in the repo would notice.
 
-- **arm 1** — a pin table that looks pinned. The regex is not decorative and M-A10b is what
-  proves it: `sha = "master"` is a perfectly valid TOML string and would fetch a moving
-  target. The non-emptiness conjunct is what stops the row passing vacuously over today's
-  empty table — a regex over zero rows is `assert True` wearing a loop.
-- **arm 2** — a pin that drifted from the ruling. R145 recorded the sha with grounds; a
-  single changed hex digit (M-A10a) is invisible to arm 1 and changes which engine plays.
-- **arm 3 (patch)** — a patch declared and not tracked. `vendor_fetch.sh:24` reads it with
-  a one-argument `.get`, so an untracked or renamed patch is skipped SILENTLY and the build
-  quietly regains `-march=native` — the FP-contraction surface DESIGN_A §2.6 removes on
-  LAW-15 grounds.
-- **arm 4** — the fetcher learning to read a branch. This is the row that keeps `branch`
-  and `as_of` data: the moment the fetcher reads either, R139's rider is dead and no other
-  row in this repo notices.
-
-**Arm 3 of DESIGN_A §5 (the upstream `git ls-remote` re-check) is deliberately NOT a pytest
-row.** It needs the network; a network-conditional oracle degrades to a pass on a box
-without one, and "verification that degrades to a pass is worse than none" (PREREG_A §8
-abort 3). It is an IMPL-stage manual command whose raw output is pasted into
-`IMPL_NOTES_A.md`; unavailable ⇒ `not_run` + HALT.
+The upstream `git ls-remote` re-check is deliberately not a pytest row: it needs the network,
+and a network-conditional oracle degrades to a pass on a box without one.
 """
 from __future__ import annotations
 
@@ -41,24 +27,21 @@ _FETCHER = _REPO / "tools" / "vendor_fetch.sh"
 
 _SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
-#: R145's recorded sha, verified upstream at DESIGN_A §0.3 by `git ls-remote`. Written in
-#: full: an elided tail cannot be compared, and DESIGN_A rev-2 shipped one that was not even
-#: the real tail (C-13).
+#: The recorded sha, verified upstream by `git ls-remote`. Written in full: an elided tail
+#: cannot be compared.
 _SEALBOT_SHA = "c94749c21c16c3b072fff6da49762dd5f92f3986"
 
-#: Keys a FETCHER may never read. `branch`/`as_of` live in the pin as R139 data.
+#: Keys a fetcher may never read; `branch`/`as_of` live in the pin as data only.
 _FORBIDDEN_FETCH_KEYS = ("branch", "ref", "tag")
 
 
 def _pins() -> dict:
-    """The pin table. A missing `[pins]` header is a KeyError here, never an empty default —
-    the file's own contract puts `[pins]` at `:10` and an absent table is a malformed pin
-    file, not an empty one."""
+    """Return the pin table; an absent `[pins]` header is a KeyError, never an empty default."""
     return tomllib.loads(_PINS.read_text())["pins"]
 
 
 def test_every_pin_is_a_forty_hex_commit_sha_and_the_table_is_not_empty() -> None:
-    """O-A5 arm 1."""
+    """Prove every pin is a forty-hex commit sha and the table is not empty."""
     assert _SHA_RE.match(_SEALBOT_SHA) is not None, "the detector itself must fire"
     assert _SHA_RE.match("master") is None, "the detector must REJECT a branch name"
 
@@ -74,8 +57,10 @@ def test_every_pin_is_a_forty_hex_commit_sha_and_the_table_is_not_empty() -> Non
 
 
 def test_the_sealbot_pin_carries_r145s_exact_sha_and_a_public_url() -> None:
-    """O-A5 arm 2. The URL is asserted by SHAPE, not by value: Rule 7 keeps provider names
-    out of `tests/`, and `vendor/pins.toml` is the ONE place R139 puts the string."""
+    """Prove the sealbot pin carries the recorded sha and a public URL.
+
+    The URL is asserted by shape, not value: provider names stay out of `tests/`.
+    """
     spec = _pins()["sealbot"]
     assert spec["sha"] == _SEALBOT_SHA, (
         "the sealbot pin does not carry R145's recorded sha. A different sha means upstream "
@@ -87,8 +72,7 @@ def test_the_sealbot_pin_carries_r145s_exact_sha_and_a_public_url() -> None:
 
 
 def test_the_sealbot_pin_declares_a_tracked_patch_file() -> None:
-    """O-A5 arm 4 (PREREG_A numbering). The patch removes `-march=native` from the vendored
-    build (DESIGN_A §2.6); `vendor_fetch.sh:24` skips a missing one SILENTLY."""
+    """Prove the declared patch is tracked: the fetcher skips a missing one silently."""
     spec = _pins()["sealbot"]
     patch = spec["patch"]
 
@@ -108,8 +92,7 @@ def test_the_sealbot_pin_declares_a_tracked_patch_file() -> None:
 
 
 def test_the_fetcher_reads_no_branch_ref_or_tag_key() -> None:
-    """O-A5 arm 4 (DESIGN_A §5 numbering) — R139's rider made structural. `branch`/`as_of`
-    are carried as data precisely BECAUSE the fetcher cannot reach them."""
+    """Prove the fetcher reads no branch, ref or tag key from the pin table."""
     source = _FETCHER.read_text()
     probe = 'url, sha = spec["url"], spec["branch"]'
     assert any(f'"{k}"' in probe for k in _FORBIDDEN_FETCH_KEYS), "the detector must fire"

@@ -1,54 +1,20 @@
-# >300 justify (R8). NO LINE COUNT is stated, per G-DFIX-4 and R192(e)'s derive-or-delete:
-# R8 asks for a one-line justification, not a tally, and a number that must be re-edited
-# whenever a row is added will eventually be wrong and then be read as evidence.
-# The rows here are ONE claim — "the split forward IS the un-split forward, positionally" —
-# and every one of them, including the three mutation self-tests, binds the SAME comparison
-# helper. The helper is the oracle; the rows are the drives and the proofs that the helper has
-# teeth. Separating the self-tests into another file would let the helper be weakened without
-# the file that proves it detects a transposition ever being opened.
-"""⊕ F-816-10 F3 — the concat-then-submit round trip (dispatcher ruling D-3).
+# >300 justify (R8): the rows here are ONE claim — the split forward IS the un-split forward,
+# positionally — and every one of them, including the three mutation self-tests, binds the SAME
+# comparison helper. Separating the self-tests would let the oracle be weakened without the file
+# that proves it detects a transposition ever being opened.
+"""The concat-then-submit round trip for a split fused forward.
 
-Written by ORACLE-WRITE **before** the feature exists. THE HIGHEST-RISK ORACLE IN THE PACKET,
-and the reasons are on the record rather than asserted:
+THE HIGHEST-RISK ORACLE IN THE PACKET. There is ZERO in-repo precedent — the train-side split
+accumulates GRADIENTS and never concatenates per-part OUTPUT ARRAYS back into one
+positionally-ordered result. The failure mode is sharper than the trainer's: a transposition
+assigns a POLICY TO THE WRONG GAME STATE. And the FFI covers half of it — its per-id
+`policy_dst_slot.len() != leaf_probs.len()` check is defeated by two same-length graphs and
+there is NO check on `values[i]` ordering, so on the value axis this suite is the only
+instrument that exists.
 
-1. **Zero in-repo precedent.** The train-side split (`train/coordinator/dispatch.py`) splits
-   and ACCUMULATES GRADIENTS against a whole-step denominator; it never concatenates per-part
-   OUTPUT ARRAYS back into one positionally-ordered result (review Finding 6). The inference
-   side must concatenate the parts in plan order and submit ONCE against the UNSLICED
-   `legal_offsets`. That is new code with no shape to copy.
-2. **The failure mode is sharper than the trainer's.** A gradient-accumulation bug degrades
-   training quietly; a transposition here assigns a POLICY TO THE WRONG GAME STATE, and the
-   search then expands the wrong move with full confidence.
-3. **The FFI covers half of it and none of the other half.** `submit_graph_inference_results`
-   (`crates/mantis-bridge/src/inference.rs`) checks `meta.policy_dst_slot.len() !=
-   leaf_probs.len()` per id — a PARTIAL defence on probs, defeated by two same-length graphs —
-   and has NO check whatsoever on `values[i]` ordering (review Finding 9). On the value axis
-   this suite is the only instrument that exists.
-
-So the rig uses UNEQUAL per-graph legal-node counts across parts AND distinct per-graph value
-sentinels (D-3), and asserts the two axes SEPARATELY, so a probs transposition and a values
-transposition cannot be confused for one another or hidden behind one another.
-
-POSITIONALLY EXACT, NOT BIT-EXACT (D-6). GPU reductions are not reduction-order-invariant
-across batch shapes, so numeric bit-exactness is neither claimed nor needed; the comparison is
-a tight tolerance, and `test_fg3_07_...` asserts the sentinel separation is many orders above
-it, which is what makes the tolerance safe rather than convenient.
-
-The defect each row is the ONLY witness to:
-
-- **FG3-01** — a plan applied in the wrong order, a part's output dropped, or a part's probs
-  concatenated at the wrong offset. Driven from BOTH members, because an edges-only split and
-  a nodes-driven split produce different part boundaries over the same wire.
-- **FG3-02** — a values transposition. Nothing downstream checks it; see (3) above.
-- **FG3-03** — a per-part submit (which would break the FFI's `lo[n] == probs.len()`
-  self-consistency check), a re-based `legal_offsets` submitted in place of the unsliced one,
-  or `request_ids` re-ordered to match the plan.
-- **FG3-04/05/06** — the ORACLE going blind. Each is a LAW-07 mutation self-test on the
-  comparison helper itself: it feeds the helper a deliberately corrupted result and requires
-  it to raise. These are GREEN at authorship BY DESIGN — they test the oracle's detection
-  power, which exists before the feature does.
-- **FG3-07** — a rig whose sentinels are not separable, which would make FG3-01/02 pass
-  vacuously under any transposition.
+The rig therefore uses UNEQUAL per-graph legal counts AND distinct value sentinels, and asserts
+the two axes SEPARATELY. POSITIONALLY EXACT, NOT BIT-EXACT, because GPU reductions are not
+order-invariant across batch shapes.
 """
 from __future__ import annotations
 
@@ -67,13 +33,9 @@ _RAGGED_LEGAL = [2, 5, 3, 7, 4, 6, 1, 8]
 
 
 def assert_positional_round_trip(expected: _Result, actual: _Result) -> None:
-    """The oracle. `actual` (split) must reproduce `expected` (un-split) POSITION FOR POSITION.
-
-    Four separable claims, asserted separately so a failure names which one moved:
-    the request ids, the segment structure, the probs, and the values. `rtol=1e-6` is the
-    D-6 wording applied numerically — positional exactness, not bit-exactness — and
-    `test_fg3_07_...` pins that the rig's sentinel separation is orders above it.
-    """
+    """The oracle: `actual` (split) must reproduce `expected` (un-split) POSITION FOR POSITION.
+    Four separable claims — ids, segment structure, probs, values — asserted separately so a
+    failure names which one moved. `rtol=1e-6` is positional exactness, not bit-exactness."""
     exp_ids, exp_probs, exp_offsets, exp_values = expected
     act_ids, act_probs, act_offsets, act_values = actual
 
@@ -111,15 +73,12 @@ def _drive(monkeypatch: Any, payload: Any, cap_e: int, cap_n: int) -> tuple[_Res
     return batcher.results[0], server
 
 
-# ═══ FG3-01/02 — the round trip ══════════════════════════════════════════════════════════
 @pytest.mark.parametrize("member", ["edges", "nodes"])
 def test_fg3_01_the_split_forward_is_the_unsplit_forward_positionally(
     monkeypatch, member: str
 ) -> None:
-    """FG3-01 — split == un-split, position for position, driven from BOTH members.
-
-    The two drives differ ONLY in the caps: same wire, same net, same loop. Any difference in
-    the submitted arrays is therefore attributable to the split and to nothing else."""
+    """Split == un-split, position for position, driven from BOTH members. The two drives differ
+    ONLY in the caps, so any difference is attributable to the split and nothing else."""
     payload = H.build_payload(_RAGGED_LEGAL)
     ec, nc = H.per_graph_counts(payload)
     whole, whole_server = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
@@ -137,9 +96,8 @@ def test_fg3_01_the_split_forward_is_the_unsplit_forward_positionally(
 
 
 def test_fg3_01_a_maximally_split_pop_still_round_trips(monkeypatch) -> None:
-    """FG3-01 second limb — `M == B`, one graph per forward. The concatenation does the most
-    work it can ever do, and every part is a single-graph batch whose own `legal_offsets` are
-    `[0, L_g]` — the shape a re-based-offset bug looks most correct in."""
+    """Second limb — `M == B`, one graph per forward, where every part is a single-graph batch
+    whose own `legal_offsets` are `[0, L_g]`: the shape a re-based-offset bug looks correct in."""
     payload = H.build_payload(_RAGGED_LEGAL)
     ec, nc = H.per_graph_counts(payload)
     whole, _ = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
@@ -150,17 +108,10 @@ def test_fg3_01_a_maximally_split_pop_still_round_trips(monkeypatch) -> None:
 
 
 def test_fg3_02_each_graphs_value_survives_the_split_in_its_own_slot(monkeypatch) -> None:
-    """FG3-02 — the value axis, asserted on its own and against the ids.
-
-    Read separately from FG3-01 because the two axes fail independently: a bug that
-    concatenates `values_parts` in plan order but `probs_parts` in reverse reds only the probs
-    assertion, and the inverse bug reds only this one. Folding them into one comparison would
-    let either failure be reported as the other.
-
-    DISCLOSED RESIDUAL: a differential row cannot see a defect that corrupts BOTH sides
-    identically (a global `values.reshape` transposition, say). That class is a HEAD defect
-    rather than a split defect and is not what this packet introduces; FG3-05's mutation
-    self-test is what covers the helper's own detection power independently of any drive."""
+    """The value axis, asserted on its own and against the ids, because the two axes fail
+    independently: a bug that concatenates `values_parts` in plan order but `probs_parts` in
+    reverse reds only the probs assertion. DISCLOSED: a differential row cannot see a defect that
+    corrupts BOTH sides identically, which is a HEAD defect rather than a split defect."""
     payload = H.build_payload(_RAGGED_LEGAL)
     ec, _nc = H.per_graph_counts(payload)
     (_ids_w, _p_w, _o_w, values_whole), _ = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
@@ -176,32 +127,16 @@ def test_fg3_02_each_graphs_value_survives_the_split_in_its_own_slot(monkeypatch
             "search would back up another position's evaluation")
 
 
-# ═══ FG3-08 — the EQUAL-LENGTH shape, where every length check is blind ══════════════════
-#: Two graphs with the SAME legal-node count, and a third of a different count so the split
-#: is forced between them. `_RAGGED_LEGAL` is deliberately all-distinct, which is the right
-#: default for most rows and the exact blind spot for this one.
+#: Two graphs with the SAME legal-node count, and a third of a different count so the split is
+#: forced between them. `_RAGGED_LEGAL` is all-distinct, which is this row's exact blind spot.
 _EQUAL_LEGAL = [3, 5, 5]
 
 
 def test_fg3_08_two_graphs_of_EQUAL_legal_count_cannot_be_transposed(monkeypatch) -> None:
-    """FG3-08 — the transposition that every length check in the stack is blind to.
-
-    WHY THIS ROW EXISTS, AND WHY THE REST OF THE FILE DOES NOT COVER IT. The FFI's only
-    per-id defence against a mis-assigned policy is
-    `meta.policy_dst_slot.len() != leaf_probs.len()` (`crates/mantis-bridge/src/inference.rs`),
-    which is defeated outright when two graphs carry the SAME legal-node count — and there is
-    no per-id check on `values[i]` ordering at all (REVIEW-design Finding 9, D-3). Every other
-    payload in this file uses mutually distinct legal counts, so a swap of two parts is caught
-    by a length mismatch rather than by the ordering assertion, and the ordering assertion is
-    the thing this file exists to make. RED-TEAM proved the gap was real rather than
-    theoretical: it injected a swap of two same-length parts into `_run_graph_loop` and the
-    whole 69-row fused-forward family stayed GREEN while a genuine per-graph transposition
-    occurred (F816_10_REDTEAM.md, H4).
-
-    So: equal legal counts on graphs 1 and 2, a split forced between them, and BOTH axes
-    compared positionally against the un-split reference. Under the injected swap this row is
-    the one that reds.
-    """
+    """The transposition every length check in the stack is blind to: the FFI's only per-id
+    defence is `meta.policy_dst_slot.len() != leaf_probs.len()`, defeated when two graphs carry
+    the SAME legal-node count, and there is no per-id check on `values[i]`. RED-TEAM injected such
+    a swap and the whole fused-forward family stayed GREEN, so this row is the one that reds."""
     payload = H.build_payload(_EQUAL_LEGAL)
     ec, nc = H.per_graph_counts(payload)
     assert nc[1] == nc[2] and ec[1] == ec[2], (
@@ -220,9 +155,8 @@ def test_fg3_08_two_graphs_of_EQUAL_legal_count_cannot_be_transposed(monkeypatch
 
     assert_positional_round_trip(whole, split)
 
-    # The value axis again, explicitly and per-slot: `assert_positional_round_trip` compares
-    # the arrays, but a reader of this row must see that the EQUAL-LENGTH pair specifically
-    # kept its own sentinels, because that is the pair no length check protects.
+    # The value axis again, per-slot: a reader must see that the EQUAL-LENGTH pair kept its own
+    # sentinels, because that is the pair no length check protects.
     values_whole, values_split = whole[3], split[3]
     for i in (1, 2):
         assert values_whole[i] == pytest.approx(values_split[i], rel=1e-6, abs=1e-7), (
@@ -234,15 +168,9 @@ def test_fg3_08_two_graphs_of_EQUAL_legal_count_cannot_be_transposed(monkeypatch
         "is green under a swap by construction")
 
 
-# ═══ FG3-03 — one submit, unsliced offsets ═══════════════════════════════════════════════
 def test_fg3_03_one_submit_per_pop_against_the_unsliced_legal_offsets(monkeypatch) -> None:
-    """FG3-03 — the FFI's four self-consistency checks are satisfied by the ONE submit.
-
-    `values.len() == n`, `legal_offsets.len() == n + 1`, `lo[0] == 0`,
-    `lo[n] == probs.len()` (`crates/mantis-bridge/src/inference.rs`). Asserted here on the
-    PYTHON side because the fake batcher stands in for Rust: if these four hold, the real
-    batcher accepts the submit; if any fails, the run dies at the FFI with a message about
-    lengths rather than about the split."""
+    """The FFI's four self-consistency checks are satisfied by the ONE submit: `values.len() == n`,
+    `legal_offsets.len() == n + 1`, `lo[0] == 0`, `lo[n] == probs.len()`."""
     payload = H.build_payload(_RAGGED_LEGAL)
     ec, _nc = H.per_graph_counts(payload)
     (ids, probs, offsets, values), server = _drive(
@@ -262,10 +190,8 @@ def test_fg3_03_one_submit_per_pop_against_the_unsliced_legal_offsets(monkeypatc
 
 
 def test_fg3_03_a_pop_that_fits_submits_exactly_as_head_does(monkeypatch) -> None:
-    """FG3-03 second limb — the M == 1 path production takes when the caps do not bind is
-    unchanged: one collate, one forward, one submit, probs summing to 1 per segment. The
-    non-binding path is the one every smoke config runs (FG5-07), so a regression there is
-    invisible to every splitting row."""
+    """Second limb — the M == 1 path production takes when the caps do not bind is unchanged, and
+    it is the path every smoke config runs, so a regression there is invisible to splitting rows."""
     payload = H.build_payload([3, 4])
     (ids, probs, offsets, values), server = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
     assert ids == [1, 2]
@@ -278,12 +204,9 @@ def test_fg3_03_a_pop_that_fits_submits_exactly_as_head_does(monkeypatch) -> Non
     assert np.isfinite(values).all()
 
 
-# ═══ FG3-04/05/06 — the oracle's own teeth (LAW-07 mutation self-tests) ══════════════════
 def _synthetic_pair() -> tuple[_Result, list[np.ndarray], list[np.ndarray]]:
-    """A hand-built un-split result plus the per-part pieces a two-part plan would produce.
-
-    Deliberately NOT produced by the server: these three rows must hold before the feature
-    exists, because they are about the comparison helper and not about the implementation."""
+    """Return a hand-built un-split result plus the per-part pieces a two-part plan would produce.
+    Deliberately NOT produced by the server: these rows are about the comparison helper."""
     part_a_probs = np.array([0.4, 0.6, 0.1, 0.2, 0.3, 0.4], dtype=np.float32)
     part_b_probs = np.array([0.7, 0.3, 0.25, 0.25, 0.25, 0.25, 0.5], dtype=np.float32)
     part_a_values = np.array([-0.10, -0.20], dtype=np.float32)
@@ -299,12 +222,9 @@ def _synthetic_pair() -> tuple[_Result, list[np.ndarray], list[np.ndarray]]:
 
 
 def test_fg3_04_reversing_the_parts_before_concatenation_is_detected() -> None:
-    """FG3-04 — the mutation D-3 names first: `probs_parts[::-1]` before `np.concatenate`.
-
-    Every part still ran, every graph still got a policy, the array is still the right length
-    and the FFI's `lo[n] == probs.len()` check still passes. Only a positional comparison sees
-    it, and only if the parts have UNEQUAL lengths or unequal contents — which is why the rig
-    is ragged."""
+    """`probs_parts[::-1]` before `np.concatenate` is detected: every part still ran, the array is
+    the right length and `lo[n] == probs.len()` still passes, so only a positional comparison
+    sees it — and only on a ragged rig."""
     whole, probs_parts, values_parts = _synthetic_pair()
     corrupted = (whole[0], np.concatenate(probs_parts[::-1]), whole[2], whole[3])
     with pytest.raises(AssertionError):
@@ -312,11 +232,8 @@ def test_fg3_04_reversing_the_parts_before_concatenation_is_detected() -> None:
 
 
 def test_fg3_05_swapping_two_graphs_values_is_detected() -> None:
-    """FG3-05 — the mutation NOTHING else in the stack can see (review Finding 9).
-
-    The FFI checks a per-id probs SEGMENT LENGTH and nothing about `values[i]`. Two graphs'
-    values swapped is a legal-looking submit that backs up the wrong evaluation at two leaves,
-    forever, silently."""
+    """Swapping two graphs' values is detected — the mutation nothing else in the stack can see,
+    since the FFI checks a per-id probs SEGMENT LENGTH and nothing about `values[i]`."""
     whole, _probs_parts, values_parts = _synthetic_pair()
     values = np.concatenate(values_parts).copy()
     values[0], values[1] = values[1], values[0]
@@ -326,12 +243,9 @@ def test_fg3_05_swapping_two_graphs_values_is_detected() -> None:
 
 
 def test_fg3_06_submitting_a_parts_own_rebased_offsets_is_detected() -> None:
-    """FG3-06 — the third mutation D-3 names: the LAST part's own re-based `legal_offsets`
-    submitted in place of the wire's unsliced ones.
-
-    `slice_graph_wire` re-bases every offset array so each part is a valid wire ON ITS OWN;
-    submitting that re-based array is a one-character mistake (`sub.legal_offsets` for
-    `payload.legal_offsets`) that still satisfies `lo[0] == 0` for a single-part plan."""
+    """The LAST part's own re-based `legal_offsets` submitted in place of the unsliced ones is
+    detected: `slice_graph_wire` re-bases every offset array, so this is a one-character mistake
+    that still satisfies `lo[0] == 0`."""
     whole, _probs_parts, _values_parts = _synthetic_pair()
     rebased = whole[2] - whole[2][2]
     corrupted = (whole[0], whole[1], rebased, whole[3])
@@ -340,23 +254,18 @@ def test_fg3_06_submitting_a_parts_own_rebased_offsets_is_detected() -> None:
 
 
 def test_fg3_06_a_dropped_part_is_detected() -> None:
-    """FG3-06 second limb — a plan whose last part never ran (an early `break`, a `continue`
-    in the part loop). The concatenation is shorter and the FFI's length check would catch it
-    at the seam; the oracle must catch it HERE, where the message names the split."""
+    """Second limb — a plan whose last part never ran. The FFI's length check would catch it at
+    the seam; the oracle must catch it HERE, where the message names the split."""
     whole, probs_parts, values_parts = _synthetic_pair()
     corrupted = (whole[0], probs_parts[0], whole[2], values_parts[0])
     with pytest.raises(AssertionError):
         assert_positional_round_trip(whole, corrupted)
 
 
-# ═══ FG3-07 — the rig's own separability ═════════════════════════════════════════════════
 def test_fg3_07_the_per_graph_sentinels_are_pairwise_separable(monkeypatch) -> None:
-    """FG3-07 — the precondition FG3-01/02 rest on, asserted rather than assumed.
-
-    If two graphs produced identical prob segments and identical values, a swap between them
-    would be undetectable and FG3-01/02 would pass VACUOUSLY. The separation is also required
-    to be many orders above the `rtol=1e-6` the helper uses, which is what makes the D-6
-    tolerance safe rather than convenient."""
+    """The precondition FG3-01/02 rest on: if two graphs produced identical prob segments and
+    values, a swap would be undetectable and those rows would pass VACUOUSLY. The separation must
+    also be orders above the helper's `rtol`."""
     payload = H.build_payload(_RAGGED_LEGAL)
     (ids, probs, offsets, values), _ = _drive(monkeypatch, payload, 10 ** 9, 10 ** 9)
 

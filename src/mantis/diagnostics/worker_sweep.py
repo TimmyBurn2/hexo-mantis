@@ -1,124 +1,31 @@
-# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete): a
-# transcribed tally must be re-edited on every edit, will eventually be wrong, and is then read
-# as evidence. This module is ONE CLAIM — "here is the worker count this card wants, here is the
-# rule that picked it, and here is every number the rule ran on". The ladder walk, the per-round
-# throughput and memory readings, the per-rung verdict and the knee arithmetic are the halves of
-# that one claim and are not separable: a pick reported away from the series that produced it is
-# a number without its mechanism (R69), and a pick whose selection rule lives in another file is
-# a rule a reader must go and trust. `fusion_calibrate.py` carries the identical argument for the
-# identical reason, and this tool is its sibling in the same sitting.
+# >300 justify (R8): ONE claim — the worker count this card wants, the rule that picked it, and
+# every number the rule ran on; the walk, the readings, the verdicts and the knee are not separable.
 """`python -m mantis.diagnostics.worker_sweep` — what should `selfplay.n_workers` BE on this box?
 
-PHASE W of the re-calibration re-sit (R309(g)), and it exists because of a measured finding —
-**the UNBITEABLE CAP**, and not the one it is easy to confuse it with.
+Walks a pre-registered worker ladder, verdicts each rung's memory series, and picks the knee.
+SELF-PLAY ONLY, and that is structural: no trainer step may execute, so this module builds its
+own collaborators and never imports `mantis.run`.
 
-`RECAL_EXIT_2026-08-22.md` §11.6: `configs/run5.yaml` mints `selfplay.n_workers: 1`, *"which no
-prereg row and no ruling records… at that supply the minted cap can never bite"*. §8 (the STEP 4
-burst) had to be run at `n_workers: 4` **for that reason, disclosed with its number** — "run5
-mints `n_workers: 1`, and at that supply the cap CANNOT bite… Four workers give supply 32 and the
-cap bites". So the caps were fitted at one geometry and validated at another, and neither is the
-geometry `configs/run5.yaml` would run.
+THE RULE IS NOT IN THIS FILE. Every threshold is read from an explicit plan file
+(`tools/worker_sweep_plan.toml`); missing and unknown keys both raise. The stopping rule is
+`eval_child_memory.classify` imported, not re-written, and REFUSED is never a verdict.
 
-**WHAT PHASE W IS NOT A CURE FOR, stated so the next reader does not inherit the error.** STEP 4's
-falsifier failed on three clauses — the pre-first-step phase peak, the eval-child term at 2.98x,
-and the joint peak — and §8.5 attributes the mechanism to inference-phase reservation
-fragmentation. **None of them is attributed to `n_workers`, and raising `n_workers` makes the
-joint peak WORSE.** Phase W cures the fit-geometry mismatch and the unbiteable cap; it does not
-cure the partition, and a reader who believes otherwise will mis-read every number below.
+TWO SINKS, LARGER GOVERNS, AND THE REPORT SAYS WHICH ONE DID: `card` is a LEVEL, `allocator` a
+per-round DEMAND peak. They disagreed by 3.62 GiB at matched config on one host, and the
+disagreement is a finding.
 
-R309(g) states the cure it IS in one line: **caps fit at the config that will run, or they are
-stale at birth.** So the worker count is picked FIRST, written into the config on the sitting's
-branch, and STEP 1's four terms are measured at that geometry.
+Game counts come from the Rust runner's counters, never events (falsified F-43: `game_complete`
+is dropped in production). `moves` is `positions_generated`, one per APPLIED COMPOUND TURN, not
+per ply. Every figure carries its sampling limit; unmeasured rounds are excluded BY NAME.
 
-**SELF-PLAY ONLY, AND THAT IS STRUCTURAL.** No trainer step may execute before the mint — the
-caps are VOID on this host and a training step would cross the voided-caps row. This module
-therefore builds its own collaborators and never imports `mantis.run`, which it could not import
-anyway: `mantis.run` pulls `mantis.train.orchestrator` at module top level. **The unimportability
-and the guarantee are the same fact**, and `tests/diagnostics/test_worker_sweep_reachability.py`
-checks it two ways — a whole-closure import walk that counts imports at EVERY scope (a
-function-body import is the loophole a top-level-only walk misses) and a fresh-subprocess witness
-over `sys.modules`. A subprocess of `python -m mantis.run` was rejected for the opposite reason:
-the driver's own closure would read clean while a trainer stepped in the child, which is
-structure-not-text (R296(f)) failing while wearing the check's own uniform.
-
-**THE RULE IS NOT IN THIS FILE.** Every threshold — the ladder, the round budget, the window, the
-band, the knee percent, and which throughput ranks the rungs — is read from an explicit plan file
-(`tools/worker_sweep_plan.toml`). There is no default anywhere here: a missing key raises
-`ValueError` naming it and an unknown key raises rather than being ignored. That is R1's shape
-applied to a tool, and it is the difference between a pre-registration and a preference — the
-plan is committed before the sitting, so `git log` dates the rule against the numbers.
-
-**THE STOPPING RULE IS IMPORTED, NOT RE-WRITTEN.** `eval_child_memory.classify` decides
-PLATEAU / GROWING on this tool's series exactly as it decides the eval child's. One stopping rule
-in this tree, one place it can be wrong. Its `--plateau-rounds`/`--band-pct` are this tool's
-`[stopping_rule]` block, and its refusal semantics carry over whole: **REFUSED is never a
-verdict.** Fewer measured rounds than the window needs is a named refusal, never "0 rounds,
-plateau".
-
-**TWO SINKS, LARGER GOVERNS — AND THE REPORT SAYS WHICH ONE DID.** Per round the tool records
-the CARD's own high-water (sampled every `sampler_interval_sec` through
-`mantis.util.device.cuda_device_used_bytes`) AND the caching allocator's
-(`torch.cuda.max_memory_allocated`, through the eval child's own probe). These are different
-instruments, not two views of one: on the 2026-08-22 host they disagreed by 3.62 GiB of
-high-water at matched config across allocator postures. The box block's standing rule is that
-the LARGER GOVERNS and the disagreement is a finding; both numbers, their difference and the
-WINNER are printed. The winner matters because the two are different KINDS of quantity — `card`
-is a LEVEL (context, retained reserve, any co-resident process; unmoved by a peak reset),
-`allocator` is a per-round DEMAND peak — so a PLATEAU on a card-governed series means "the
-card's committed bytes stopped rising", which is a different sentence from the demand one and
-must not be read as it.
-
-**WHERE THE GAME COUNT COMES FROM, AND WHY IT IS NOT AN EVENT.** `runner_stats(pool)` reads the
-Rust runner's own counters. The event stream is NOT usable here and the register says why:
-`docs/governance/falsified.md` **F-43** — `game_complete` is emitted but DROPPED in production
-(the pool is built with `sink=None`) and `iteration_complete.games_total` is gated by
-`log_interval`, so neither is a games signal. A sweep that counted games off events would count
-zero on a healthy drive. The register was read before this instrument was designed and no other
-row transfers.
-
-**EVERY FIGURE CARRIES ITS SAMPLING LIMIT AND ITS PRODUCING RUN** (R287(a)): rounds measured,
-wall seconds, card samples taken, and the invocation label, beside the number and not in a
-footnote. **Unmeasured rounds are listed, counted, named and excluded BY NAME** — the RECAL-PREP
-convention, because silently dropping them biases a series without saying so.
-
-**WHAT A "MOVE" IS, VERIFIED AND NOT ASSUMED (LAW-03).** `moves` is the engine's
-`positions_generated`, which increments once per APPLIED COMPOUND TURN — two stones —
-immediately after `board.apply_move(move_idx.0, move_idx.1)`
-(`crates/mantis-selfplay/src/runner/search_drive.rs:1002`). It is not a ply count. The repo's own
-vocabulary already calls this a move (`selfplay/pool_drain.py:105`) and this tool keeps that word
-while naming the unit beside every figure.
-
-**TWO MODES, AND THE EXIT CODES BELONG TO BOTH.** `--config` + `--plan` DRIVES; `--select-only`
-re-derives a pick from a report this tool already wrote and drives nothing. Neither mode's inputs
-are defaulted and the two sets are disjoint — naming an input a mode does not read is itself a
-refusal, because it describes a run that did not happen.
+`--config` + `--plan` DRIVES; `--select-only` re-derives a pick from a written report and drives
+nothing. Naming an input a mode does not read is itself a refusal.
 
     0   a pick was made
     1   no rung PASSED — every measurable rung was GROWING or OOM
     2   REFUSED — the plan, the config, the report or the ladder cannot be answered about
 
-**`rc 1` IS "NO PICK", NOT "THE SITTING FAILED."** R309(f) ends *"never a sitting failure"*, and
-that clause governs what a reader may conclude from an OOM. What follows a pickless sweep is the
-box block's own pre-registered consequence, and it is the block's to state — not this tool's, and
-not a reading anyone takes after seeing the number.
-
-`2` is `eval_child_memory.RC_REFUSED` imported, not re-spelled: a refusal is "you did not give me
-something I can answer about", and there is one such code in this family.
-
-**IT NEVER MINTS AND NEVER WRITES A CONFIG.** It measures, it selects under the pre-registered
-rule, and it prints the arithmetic with its inputs so the sitting record carries the derivation
-rather than the answer alone. Minting is the operator's act (R119) on the sitting's branch
-(R308(b)).
-
-**PER-RUNG NOISE (R330(d)), and the mode it retired.** R317(d) measured ONE coefficient of
-variation at a reference rung (`--noise-floor N`, four same-seed drives) and carried it to every
-rung as the knee rule's 3-sigma widening; R326(a) measured that carry FALSE. Every rung now states
-its own noise — `RungResult.spread` writes `rel_se`, the relative standard error of the rung's own
-scored rounds — and `select_knee` widens by the MAX rel-SE over the passing set (see its docstring
-for why the passing set is the candidate set). The scalar mode, its reader and `--noise-floor-report`
-are DELETED rather than kept beside the new term: two noise authorities over one threshold is the
-duplicate-authority class, and the retired one's only consumer was the rule that no longer reads it.
-A report written before this mechanism is REFUSED at selection, by rung, never re-derived under 0.
+`rc 1` is "NO PICK", not "the sitting failed". It NEVER MINTS AND NEVER WRITES A CONFIG.
 """
 from __future__ import annotations
 
@@ -172,25 +79,19 @@ TOOL = "mantis.diagnostics.worker_sweep"
 MARKER = "MANTIS_WORKER_SWEEP"
 GIB = 1024 ** 3
 
-#: Rung verdicts beyond the two `classify` returns. `REFUSED` keeps `eval_child_memory`'s
-#: meaning exactly — not a verdict, a statement that no verdict is available.
+#: Rung verdicts beyond the two `classify` returns. REFUSED keeps `eval_child_memory`'s meaning
+#: exactly — not a verdict, a statement that no verdict is available.
 REFUSED = "REFUSED"
 OOM = "OOM"
-#: A rung that failed for a reason this tool does not model. NOT a tool failure: the ladder is
-#: the expensive artifact, and `mantis-bridge` builds with `panic = "unwind"` (R2/LAW-13) exactly
-#: so a Rust panic crosses the FFI as an exception rather than aborting the process — which makes
-#: it a RUNG failure with a name, not a traceback that loses seventy minutes of box time.
+#: A rung that failed for a reason this tool does not model. NOT a tool failure: `panic = "unwind"`
+#: makes a Rust panic cross the FFI as an exception, so it is a named RUNG failure, not a lost ladder.
 RUNG_ERROR = "RUNG_ERROR"
-#: The pool's sole producer died. Its own fail-fast hook (`WorkerPool.check_producer_health`)
-#: raises this into view; without the call, the Rust counters keep climbing while nothing reaches
-#: the replay buffer, so the rung reports throughput AND a flat memory series — flat BECAUSE it is
-#: broken. There is no `SKIPPED_AFTER_OOM` here: R309(f) stops the EXTENSION at an OOM, so the base
-#: ladder is walked whole and no rung is ever skipped for one.
+#: The pool's sole producer died (`WorkerPool.check_producer_health` raises it into view). Without
+#: that call the Rust counters climb while nothing reaches the buffer: throughput plus a flat series.
 PRODUCER_DEAD = "PRODUCER_DEAD"
 
-#: The three series a rung is verdicted on. `governing` is the composite the box block's rule
-#: names ("the larger governs"); the other two are the instruments it resolves away, and they are
-#: verdicted SEPARATELY because `max()` runs before the stopping rule does.
+#: The three series a rung is verdicted on. The two instruments are verdicted SEPARATELY because
+#: `max()` resolves them into `governing` before the stopping rule ever runs.
 _SINK_FIELDS = {
     "governing": "governing_peak_bytes",
     "card": "sampled_peak_bytes",
@@ -201,61 +102,26 @@ _SINK_FIELDS = {
 #: whichever is chosen; only the RANKING is single-valued.
 METRICS = ("moves_per_min", "games_per_min")
 
-#: R309(f)/(g)'S OWN CONSTANTS, PINNED HERE AND NOT IN THE PLAN FILE. The plan STATES them so
-#: the report echoes what it ran under; the loader REFUSES any other value.
-#:
-#: The asymmetry this closes was a real hole. The plan already refused a rung below 2, citing
-#: R309(f)'s REJECTED-1 clause — and then left the OTHER constant from the same sentence ("the
-#: smallest rung within 95 percent of the best PASSING rung's throughput") fully editable,
-#: validated only for range. A sitting that disliked its pick could have re-run with
-#: `knee_pct = 90` and every check would have stayed green, with git history showing only a
-#: second plan file. The ruling closes with "No post-hoc movement of any of it"; a constant
-#: that can be edited between two runs of the same tool has moved.
-#:
-#: WHAT IS LEGITIMATELY THE PLAN'S, and the line is not arbitrary: the MEASUREMENT BUDGET
-#: (`round_sec`, `warmup_rounds`, `measured_rounds`, `sampler_interval_sec`) and this design's
-#: own OPERATIONALIZATIONS of the ruling's words (`band_pct` and `plateau_rounds` make "memory
-#: discipline holds" checkable; `min_gain_pct` and `extension_step` make "while gains persist"
-#: checkable; `extension_max` is a runaway stop). Those are the prep session's authorship and
-#: are amendable by the architect before the sitting. The ruling's own numbers are not.
+#: The ruling's own constants, pinned here and NOT plan knobs: the plan STATES them so the report
+#: echoes what it ran under, and the loader REFUSES any other value.
 RULED_RUNGS = (2, 4, 8, 12, 14)
 RULED_KNEE_PCT = 95.0
 
-#: THE RANKING METRIC IS ALSO PINNED, and for the same reason one layer down. It is not the
-#: ruling's — it is DESIGN AMENDMENT A1's, pre-registered on a measurement taken before any box
-#: number existed: on a CPU host at 2 workers a 20 s window produced 22 moves and ZERO completed
-#: games, because a game runs to `max_game_moves`. `games_per_min` therefore reads 0 for a HEALTHY
-#: rung whenever a round is shorter than a game, and a metric that can be 0 for a healthy rung
-#: cannot rank rungs.
-#:
-#: MEASURED, not argued: with `metric = "games_per_min"` and rounds shorter than a game, the whole
-#: ladder ranks identically zero, the knee picks the SMALLEST rung at rc 0, and the ladder-stop
-#: line reads "gains no longer persist" — while the moves column says the top rung is 3.7x faster.
-#: A pre-registration with a measured basis and no enforcement is a preference; one token in a
-#: plan file made the pick arbitrary with every check green.
+#: The ranking metric is pinned too: `games_per_min` reads 0 for a HEALTHY rung whenever a round
+#: is shorter than a game (measured, 22 moves and ZERO games at 2 workers over 20 s).
 PREREG_METRIC = "moves_per_min"
 
-#: THE DETERMINISM CONTROL'S FORMER BAND. **SUPERSEDED BY R317(c)** — kept only as a historical
-#: constant (old reports cite it, and `render_determinism_control`/the sitting record still print
-#: the spread beside it for continuity). R315(c)(i) pinned it at 1%, measured 0.5821% AGREE
-#: engine-side; RECAL-SITTING-3 measured the SAME check live on a box at 3.9258%, DIVERGED — the
-#: band was a cross-regime carry (R317(b)), not a property of the seeding. The GATE is now
-#: net-parameter-hash equality (`_hash_gate`), no band; this constant no longer gates anything.
+#: The determinism control's FORMER band, superseded and kept only because old reports cite it:
+#: 1% held engine-side at 0.5821%, then a live box measured 3.9258%. It gates nothing now.
 RULED_DETERMINISM_BAND_PCT = 1.0
 
-#: The band's UPPER bound. The plan file argues 1.0 at length (5.0 would permit 774 MiB of growth
-#: per round on this card, against a sitting whose falsifier fired on 343 MiB). A bound is what
-#: makes that argument load-bearing instead of decorative: at `band_pct = 500` every rung
-#: PLATEAUs and the memory gate is simply off, with nothing in the tree noticing. The architect's
-#: amendment right lives BELOW this bound, which is where the reasoning also lives.
+#: The band's UPPER bound: at `band_pct = 500` every rung PLATEAUs and the memory gate is off.
 MAX_BAND_PCT = 5.0
 #: A window of one round makes PLATEAU mean "the final round did not exceed the max of all before
-#: it", which is not a convergence test at all — the plan file's own words, now enforced.
+#: it", which is not a convergence test at all.
 MIN_PLATEAU_ROUNDS = 2
 
-#: The plan's exact shape. Missing section, missing key and unknown key are each a named
-#: `ValueError`: a silently-ignored key is how a rule someone believed was in force turns out
-#: never to have been read.
+#: The plan's exact shape; missing section, missing key and unknown key are each a named `ValueError`.
 PLAN_SHAPE: dict[str, tuple[str, ...]] = {
     "provenance": ("prereg_ruling", "prereg_recorded", "authored_by", "note"),
     "ladder": ("rungs", "extension_step", "extension_max", "min_gain_pct"),
@@ -266,23 +132,13 @@ PLAN_SHAPE: dict[str, tuple[str, ...]] = {
 
 
 class SweepRefusal(Exception):
-    """A named refusal that exits `RC_REFUSED` and emits no pick.
-
-    An exception rather than a `sys.exit` at the raise site so every refusal takes ONE exit
-    path with one code and one destination — `fusion_calibrate.CalibrationRefusal`'s reason: a
-    refusal that sometimes lands on stdout would be parsed as a report by whatever reads it.
-    """
+    """A named refusal that exits `RC_REFUSED` and emits no pick, so every refusal takes ONE exit
+    path with one code and one destination."""
 
 
 class _Discard:
-    """A sink for the eval probe's own marker channel.
-
-    The probe's counter reads, availability decision and running maxima are reused whole; its
-    `MANTIS_EVAL_MEM` line is NOT, and is discarded here rather than re-emitted. A sweep log
-    carrying eval markers would be read by `mantis.diagnostics.eval_child_memory` as an eval
-    drive, which it is not — and that reader is fail-closed precisely so it never reports about
-    a file it did not understand.
-    """
+    """Swallow the eval probe's own `MANTIS_EVAL_MEM` channel, reusing everything else it does: a
+    sweep log carrying eval markers would be read by `eval_child_memory` as an eval drive."""
 
     def write(self, _text: str) -> int:
         return 0
@@ -291,11 +147,10 @@ class _Discard:
         return None
 
 
-# ══ the plan ═════════════════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
 class SweepPlan:
-    """The pre-registered rule, whole. Frozen: a resolved run-scoped constant a consumer could
-    rebind is a second authority with extra steps."""
+    """The pre-registered rule, whole. Frozen: a run-scoped constant a consumer could rebind is a
+    second authority with extra steps."""
 
     rungs: tuple[int, ...]
     extension_step: int
@@ -346,10 +201,8 @@ def load_plan(path: str | Path) -> SweepPlan:
               for name, keys in PLAN_SHAPE.items()}
     ladder, rounds = blocks["ladder"], blocks["rounds"]
     rule, selection = blocks["stopping_rule"], blocks["selection"]
-    # TYPES ARE NOT COERCED. `float("95.0")` and `int(2.9)` both succeed, so a plan could STATE
-    # one thing and RUN another — `rungs = [2.9, ...]` truncating to the ruled ladder is the
-    # measured instance. A pre-registration whose printed form differs from its executed form is
-    # not a pre-registration.
+    # TYPES ARE NOT COERCED: `float("95.0")` and `int(2.9)` both succeed, so a plan could STATE one
+    # thing and RUN another — `rungs = [2.9, ...]` truncating to the ruled ladder is the instance.
     for section, key, value, want in (
         ("ladder", "rungs", tuple(ladder["rungs"]), int),
         ("ladder", "extension_step", ladder["extension_step"], int),
@@ -421,11 +274,8 @@ def load_plan(path: str | Path) -> SweepPlan:
     ):
         if float(value) <= 0:
             raise ValueError(f"{plan_path}: [{section}].{key} must be positive, got {value}")
-    # THE TWO KNOBS THAT DECIDE PASS/FAIL FOR EVERY RUNG, bounded on BOTH sides. The plan file
-    # argues both numbers at length and neither argument was enforced: `band_pct = 500` turns the
-    # memory gate off entirely and `plateau_rounds = 1` makes PLATEAU mean "the last round did not
-    # exceed the max of all before it". Range-checking only the sign is the exact asymmetry the
-    # `knee_pct` pin closed one level up.
+    # THE TWO KNOBS THAT DECIDE PASS/FAIL FOR EVERY RUNG, bounded on BOTH sides: `band_pct = 500`
+    # turns the memory gate off entirely and `plateau_rounds = 1` is not a convergence test.
     if not 0.0 <= float(rule["band_pct"]) <= MAX_BAND_PCT:
         raise ValueError(
             f"{plan_path}: [stopping_rule].band_pct must be in [0, {MAX_BAND_PCT:g}], got "
@@ -460,12 +310,8 @@ def load_plan(path: str | Path) -> SweepPlan:
         )
     if int(rounds["warmup_rounds"]) < 0:
         raise ValueError(f"{plan_path}: [rounds].warmup_rounds may not be negative")
-    # AUDIT-1 F-28/A03. The card sampler polls every `sampler_interval_sec` inside a round of
-    # `round_sec`. At an interval at or above the round length a round collects ZERO or ONE
-    # sample, so `sampled_peak_bytes` is absent or is a single instantaneous reading — and the
-    # rung PASSES on the allocator series alone while its card column reads `card_samples=0`.
-    # A plan that cannot produce the card series it declares is refused at LOAD, before the
-    # ladder spends an hour proving it.
+    # At a sampler interval at or above the round length a round collects zero or one card sample,
+    # so the rung would PASS on the allocator series alone. Refused at LOAD, not an hour in.
     if float(rounds["sampler_interval_sec"]) >= float(rounds["round_sec"]):
         raise ValueError(
             f"{plan_path}: [rounds].sampler_interval_sec "
@@ -491,19 +337,15 @@ def load_plan(path: str | Path) -> SweepPlan:
     )
 
 
-# ══ markers ══════════════════════════════════════════════════════════════════════════════
 def emit_marker(record: dict[str, Any], *, out: Any) -> None:
-    """Write one `MANTIS_WORKER_SWEEP` line. Flushed, because a sweep can be killed at a rung
-    and a buffered marker is a measurement that did not survive the thing it was measuring."""
+    """Write one `MANTIS_WORKER_SWEEP` line, flushed: a sweep can be killed at a rung, and a
+    buffered marker is a measurement that did not survive the thing it was measuring."""
     print(f"{MARKER} {json.dumps(record, sort_keys=True)}", file=out, flush=True)
 
 
 def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    """`json.loads` takes the LAST of duplicate keys, silently. This reader is the recovery path
-    for a sweep that was killed at a rung — i.e. exactly the situation where a log has been
-    concatenated or hand-repaired — so a payload carrying `{"n_workers": 2, "n_workers": 99}`
-    would yield a wrong record set with no refusal. Everything else in this function fails
-    closed; this is the hole in it."""
+    """Refuse a duplicate key rather than taking the last, which is what `json.loads` does. This
+    reader is the recovery path for a sweep killed at a rung — a hand-repaired log."""
     seen: dict[str, Any] = {}
     for key, value in pairs:
         if key in seen:
@@ -517,18 +359,14 @@ def _no_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _no_non_finite(token: str) -> Any:
-    """`NaN`, `Infinity` and `-Infinity` are values to `json.loads` by default. A peak of `NaN`
+    """Refuse `NaN`/`Infinity`/`-Infinity`, which `json.loads` accepts as values. A peak of `NaN`
     is not a measurement and must not travel as one."""
     raise ValueError(f"{MARKER} payload carries the non-finite constant {token!r}")
 
 
 def parse_sweep_markers(text: str) -> list[dict[str, Any]]:
-    """Recover the marker records from a captured sweep log. FAILS CLOSED.
-
-    No markers RAISES; a marker whose payload is not JSON RAISES. Both are the `peaks.py`
-    lesson: a reader that guesses at a shape it does not recognise produces a number nobody can
-    distinguish from a measurement, and that is how 1 392 GiB was once reported for a 16 GiB card.
-    """
+    """Recover the marker records from a captured sweep log, FAILING CLOSED on no markers and on
+    an unreadable payload: a reader that guesses produces a number indistinguishable from data."""
     records: list[dict[str, Any]] = []
     for raw in text.splitlines():
         line = raw.strip()
@@ -554,14 +392,9 @@ def parse_sweep_markers(text: str) -> list[dict[str, Any]]:
     return records
 
 
-# ══ the card-level sink ══════════════════════════════════════════════════════════════════
 class CardSampler:
-    """Background running-maximum of CARD used bytes. The second instrument, not a second view.
-
-    Runs only where the counters exist. `peak()` and `samples()` are per-WINDOW: `reset()` opens
-    a new one at a round boundary the driver owns and declares, which is the condition under
-    which a reset is legitimate at all (see `mantis.util.device.reset_cuda_peak_counters`).
-    """
+    """Background running-maximum of CARD used bytes — the second instrument, not a second view.
+    Runs only where the counters exist; `peak()`/`samples()` are per-WINDOW, opened by `reset()`."""
 
     def __init__(self, device: str, interval_sec: float) -> None:
         self._device = device
@@ -582,16 +415,8 @@ class CardSampler:
                     self._samples += 1
                 self._stop.wait(self._interval)
         except Exception as exc:  # noqa: BLE001 — recorded and surfaced, never swallowed
-            # A DAEMON THREAD THAT DIES SILENTLY IS A MEASUREMENT THAT STOPPED. Unguarded, the
-            # exception printed to stderr — into the same stream the markers go to — and the
-            # driver never learned: `window()` kept returning the last peak of the open window
-            # and, after the next `reset()`, `(None, 0)` forever. The rung's series then switched
-            # INSTRUMENT mid-flight, from card-governed to allocator-only, and a series that FELL
-            # by 9.3 GiB and then rose 47% verdicted PLATEAU. That is the exact hazard
-            # `reset_cuda_peak_counters` names — *a figure that FELL reads as memory released* —
-            # produced by the tool that docstring was written for. The death is recorded and the
-            # rung is refused BY NAME, which is this instrument's own convention for a round it
-            # could not measure.
+            # A DAEMON THREAD THAT DIES SILENTLY IS A MEASUREMENT THAT STOPPED: `window()` would keep
+            # returning the open window's last peak and then `(None, 0)`, switching instrument mid-flight.
             with self._lock:
                 self._error = exc
 
@@ -620,11 +445,10 @@ class CardSampler:
             self._thread = None
 
 
-# ══ readings ═════════════════════════════════════════════════════════════════════════════
 @dataclass(frozen=True)
 class RoundReading:
-    """One measurement round. `available` False means the host had no CUDA counters — the round
-    is still LISTED and COUNTED, and is excluded from the verdict by name."""
+    """One measurement round. `available` False means the host had no CUDA counters — the round is
+    still LISTED and COUNTED, and is excluded from the verdict by name."""
 
     index: int
     warmup: bool
@@ -646,14 +470,9 @@ class RoundReading:
     def governing_sink(self) -> str | None:
         """WHICH sink governed, reported because the two are different KINDS of quantity.
 
-        `card` is `total - free`: a LEVEL, including the ~0.26 GiB CUDA context, whatever the
-        caching allocator retains but has not handed out, and any co-resident process. It is
-        unaffected by `reset_peak_memory_stats`. `allocator` is a per-round DEMAND peak that the
-        round boundary zeroes. `max()` of the two is the block's standing rule and it is the
-        right GATE, but it silently changes what the series MEANS depending on which side wins —
-        so the report says which side won, per round and in aggregate, rather than leaving a
-        reader to infer that a PLATEAU on a card-level series means "the card's committed bytes
-        stopped rising" and not "per-round demand stopped rising".
+        `card` is `total - free`, a LEVEL unaffected by `reset_peak_memory_stats`; `allocator` is
+        a per-round DEMAND peak the round boundary zeroes. `max()` is the right GATE but silently
+        changes what the series MEANS depending on which side wins.
         """
         if self.governing_peak_bytes is None:
             return None
@@ -662,8 +481,8 @@ class RoundReading:
 
     @property
     def sink_disagreement_bytes(self) -> int | None:
-        """How far apart the two instruments were. The block's own rule ends "and the
-        disagreement is a finding", which needs the difference reported to be actionable."""
+        """How far apart the two instruments were — the block's rule ends "and the disagreement is
+        a finding", which needs the difference reported to be actionable."""
         if self.sampled_peak_bytes is None or self.allocator_peak_bytes is None:
             return None
         return abs(self.sampled_peak_bytes - self.allocator_peak_bytes)
@@ -700,19 +519,13 @@ class RungResult:
     rounds: tuple[RoundReading, ...]
     refusal: str | None
     produced_by: str
-    #: R317(c)(i): the constructed net's parameter hash, post-seed pre-play. `None` when the rung
-    #: never reached a built net (OOM/error during construction) — the gate excludes those rather
-    #: than treating an absence as an equality or an inequality.
+    #: The constructed net's parameter hash, post-seed pre-play. `None` when the rung never reached
+    #: a built net; the gate excludes those rather than reading an absence as agreement.
     net_param_hash: str | None = None
 
     def measured_peaks(self) -> list[int]:
-        """The governing peaks of the measured rounds, oldest first.
-
-        The narrowing lives HERE and not at each call site: `measured` already guarantees
-        `governing_peak_bytes is not None`, and re-deriving that guarantee three times is three
-        places it can be got wrong (and, as the type checker points out, three places where a
-        `None` can silently reach `max()` or the stopping rule).
-        """
+        """The governing peaks of the measured rounds, oldest first. The narrowing lives here, not
+        at each call site: re-deriving `measured`'s own guarantee is three places to get it wrong."""
         return [peak for r in self.measured if (peak := r.governing_peak_bytes) is not None]
 
     @property
@@ -722,8 +535,8 @@ class RungResult:
 
     @property
     def scored(self) -> tuple[RoundReading, ...]:
-        """Rounds a THROUGHPUT figure is taken over: non-warm-up, measured or not. Throughput
-        does not need CUDA counters and is not thrown away for want of them."""
+        """Rounds a THROUGHPUT figure is taken over: non-warm-up, measured or not. Throughput does
+        not need CUDA counters and is not thrown away for want of them."""
         return tuple(r for r in self.rounds if not r.warmup)
 
     def throughput(self, metric: str) -> float:
@@ -734,25 +547,16 @@ class RungResult:
         return (total / wall) * 60.0
 
     def spread(self, metric: str) -> dict[str, float | None]:
-        """Min / median / max of the per-round rate across the scored rounds.
-
-        A POINT ESTIMATE WITH NO DISPERSION IS THE OMISSION THE SITTING ALREADY RECORDED:
-        `RECAL_EXIT_2026-08-22.md` §11.9 — *"the A/B in STEP 1b carries no variance
-        information… it establishes a difference between postures and nothing about the
-        stability of either."* The knee band is 5 percent; a reader who cannot see the spread
-        cannot tell a 5 percent difference from the noise it may be, and LAW-09 carries the same
-        discipline for benches. Reported, never gating: the ruling's rule is the ruling's.
-        """
+        """Min / median / max of the per-round rate across the scored rounds. Reported, never
+        gating: the knee band is 5 percent and a reader who cannot see the spread cannot tell a
+        5 percent difference from noise."""
         values = sorted(getattr(r, metric) for r in self.scored)
         if not values:
             return {"min": None, "median": None, "max": None, "mean": None, "rel_se": None,
                     "n_rounds": 0}
         mean = fmean(values)
-        # R330(d): THIS RUNG'S OWN NOISE — the relative standard error of its per-round rate,
-        # sample std / sqrt(n) / mean. `None` when it cannot be stated (one scored round, or a
-        # non-positive mean), and `select_knee` REFUSES a rung that cannot state it rather than
-        # reading None as zero. R326(a) measured the carried-scalar assumption FALSE: one
-        # reference rung's coefficient of variation does not describe the others.
+        # THIS RUNG'S OWN NOISE. `None` when it cannot be stated (one scored round, or a non-positive
+        # mean); `select_knee` REFUSES such a rung rather than reading None as zero.
         rel_se = ((stdev(values) / sqrt(len(values))) / mean
                   if len(values) >= 2 and mean > 0 else None)
         return {"min": round(values[0], 4), "median": round(median(values), 4),
@@ -767,22 +571,9 @@ class RungResult:
     def sink_verdicts(self, *, plateau_rounds: int, band_pct: float) -> dict[str, str]:
         """The stopping rule applied to EACH sink independently, plus the governing composite.
 
-        WHY EACH SINK AND NOT ONLY THE COMPOSITE — the defect this closes, measured. `governing`
-        is `max(card, allocator)`, and `max()` resolves the pair BEFORE the stopping rule ever
-        runs. On a real box the card level RATCHETS: torch's caching allocator does not return
-        reserved blocks to the driver, so `total - free` climbs to its high-water and then sits
-        there. A rung whose allocator DEMAND grows 3.3x underneath a flat 15.4 GiB card level
-        therefore verdicts PLATEAU on the composite, passes, and enters the knee set — while
-        `classify` on the allocator series alone says GROWING.
-
-        That is `RECAL_EXIT_2026-08-22.md` §11b's own failure — *a term measured by watching
-        until it looks flat is not a bound* — reproduced inside the instrument built to end it,
-        and it is the direction the composite eats rather than the one an oracle first covered.
-
-        THE BLOCK'S RULE IS NOT CHANGED. "The larger governs" still decides the FIGURE. What
-        changes is that the rule is asked of each series rather than of the resolved pair, and
-        **growth on any sink fails the rung** — strictly more conservative, and it can only ever
-        refuse a rung the composite would have passed.
+        `max()` resolves the pair BEFORE the rule runs, and a card level RATCHETS, so a rung whose
+        allocator DEMAND grows 3.3x under a flat 15.4 GiB card level verdicts PLATEAU on the composite
+        while the allocator series says GROWING. Growth on ANY sink fails the rung.
         """
         verdicts: dict[str, str] = {}
         for sink in _SINK_FIELDS:
@@ -797,15 +588,9 @@ class RungResult:
         return verdicts
 
     def trailing_rise_pct(self, sink: str, plateau_rounds: int) -> float | None:
-        """Percentage change from the first to the last round of the trailing window.
-
-        A TREND TEST, replacing a strict round-on-round monotone check that a single repeated or
-        dipping value silenced — and real memory series are not strictly monotone, so the shape
-        the strict flag caught is the one a real series is least likely to have. DISCLOSED,
-        NEVER GATING: `classify` compares the window against the running maximum BEFORE it, so a
-        raised baseline can hide a climb underneath; this reports the climb the rule cannot see
-        rather than changing a rule the ruling names.
-        """
+        """Percentage change from the first to the last round of the trailing window. DISCLOSED,
+        NEVER GATING: `classify` compares against the running maximum BEFORE the window, so a
+        raised baseline can hide the climb this reports."""
         series = self.series(sink)
         if len(series) < plateau_rounds or plateau_rounds < 2 or series[-plateau_rounds] <= 0:
             return None
@@ -843,16 +628,9 @@ class RungResult:
         }
 
 
-# ══ the drive ════════════════════════════════════════════════════════════════════════════
 def thread_bound() -> tuple[int, str]:
-    """The box's MEASURED thread count and which call answered.
-
-    R309(f) bounds the ladder above by "the box's measured thread count". Measured, never
-    typed: `sched_getaffinity` is the honest one inside a container with a CPU mask, and
-    `cpu_count` is the fallback where the OS does not offer it. WHICH one answered is stamped,
-    because on a box the two can differ and a reader must not have to guess which bound stopped
-    the ladder.
-    """
+    """The box's MEASURED thread count and which call answered. `sched_getaffinity` is honest
+    inside a container with a CPU mask; WHICH one answered is stamped because the two can differ."""
     getter = getattr(os, "sched_getaffinity", None)
     if getter is not None:
         return len(getter(0)), "os.sched_getaffinity(0)"
@@ -860,28 +638,14 @@ def thread_bound() -> tuple[int, str]:
 
 
 def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
-    """The replay buffer for a trainer-free pool, dispatched through the buffer layer's ONE
-    authority (`BufferKind.from_spec`, repo_design §3) — a CLOSED match that raises on an
-    unknown representation, which is a stronger dispatch than the run root's string comparison.
+    """Select the replay buffer for a trainer-free pool through `BufferKind.from_spec`.
 
-    A SECOND SITE, DISCLOSED AND NOT TALKED PAST. The run's selector is `mantis.run::
-    _select_buffer`, unreachable from here for the same reason that makes this tool
-    trainer-free (`mantis.run` imports `mantis.train.orchestrator` at module top level). No
-    literal appears on this path — the graph ring's visit geometry is DERIVED by the engine's
-    own `derived_hexg_visit_capacity` from the config's sims regime, which is R255/ADJ-D34's
-    actual requirement — and no encoding literal sits in a default position, so CI gate 11
-    stays quiet for `_select_buffer`'s own measured reason. The honest repair is to move that
-    function into `mantis.selfplay.buffers` and re-point three shipped oracles; that is a
-    change to the production boot path and it is FILED (`WORKER_SWEEP_FINDINGS.md` F-WS-1),
-    not taken quietly here.
+    A CLOSED match that raises on an unknown representation. A SECOND SITE, disclosed: the run's
+    own `mantis.run::_select_buffer` is unreachable from here for the reason that makes this tool
+    trainer-free. No encoding literal sits in a default position; visit geometry is DERIVED.
     """
-    # WHICH REFUSAL, stated because it is NOT the boot's. `_select_buffer`'s third arm raises
-    # `RepresentationRouteError`; `BufferKind.from_spec` delegates to `is_graph_representation`
-    # and an unknown or absent representation raises `RepresentationMismatch`. Both are the same
-    # LAW-11 refusal — no dense-by-default arm — and they are deliberately not unified here: a
-    # diagnostics tool borrowing the BOOT's error family would put a run-fatal route's exception
-    # on a path no run takes. The reader of a sweep traceback should see the buffer layer's own
-    # error, and `tests/test_run_buffer_route.py` scans the boot's docstring, not this one.
+    # The refusal is the BUFFER LAYER's, not the boot's: a diagnostics tool must not put a
+    # run-fatal route's exception on a path no run takes.
     kind = BufferKind.from_spec(spec)
     if kind is BufferKind.GRAPH:
         from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
@@ -901,28 +665,11 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
 def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
     """SEED, then build this rung's network. The seeding is the point, and it is a REPAIR.
 
-    **F-RESIT-10, measured at the 2026-08-27 re-sit.** This tool built a fresh `build_net(arch)`
-    per rung from an UNSEEDED RNG, so every rung of the pre-registered ladder raced a DIFFERENT
-    random network. On an unbounded board a network's policy decides how far stones spread, which
-    decides the graph's node and edge counts, which decides what every fused forward costs — so
-    the ladder's ranking column was a function of `n_workers` **and an uncontrolled draw**. The
-    knee rule compares rungs, and a column carrying a term resampled between rungs cannot be
-    compared: on the measured ladder the pick moved six rungs depending on which net a rung drew.
-
-    **Size of the effect, measured rather than argued.** At a FIXED worker count, throughput
-    varied **1.60x** on the draw alone (277 seeded / 444 on a lucky unseeded draw at
-    `n_workers = 4`), against **2.39x** for the entire ladder from 2 workers to 16. The noise was
-    roughly 60 % of the signal, constant within a rung and resampled between them — the worst
-    possible shape for a rule that compares rungs.
-
-    **R30a's ONE-BOOT-SITE rule is not crossed, and the distinction is not a technicality.**
-    `mantis.run.build_run_collaborators` remains the only place a RUN seeds, once, before any
-    RNG-consuming object exists. This process is not a run: it builds MANY pools and its entire
-    output is a COMPARISON between them, so each one must start from the same RNG state or the
-    comparison is not one. `seed_everything` is documented idempotent and is called here per rung,
-    from the config's own `seed` — never a literal, so a re-minted seed follows without an edit.
-
-    Placed immediately before the ONE RNG consumer on this path, which is `build_net`.
+    An unseeded build raced a DIFFERENT random net per rung, and on an unbounded board the policy
+    decides how far stones spread, hence graph size, hence forward cost. Measured: at a FIXED
+    worker count throughput varied 1.60x on the draw alone against 2.39x for the whole ladder.
+    This process is not a run — it builds MANY pools and its output is a COMPARISON — so each
+    starts from the same RNG state, seeded from the config's own `seed` before `build_net`.
     """
     from mantis.model import build_net
 
@@ -931,11 +678,8 @@ def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
 
 
 def _hash_gate(pairs: list[tuple[str, str | None]]) -> dict[str, Any]:
-    """R317(c)(i), THE GATE: net-parameter hash equality, no band, over whichever drives built
-    a net. `pairs` is (label, hash-or-None) per drive; a drive that never reached a built net
-    (OOM/error during construction) is excluded rather than counted as an agreement or a
-    divergence — the gate answers "did the nets that exist agree", not "did every drive run".
-    """
+    """Gate on net-parameter hash equality, no band, over whichever drives built a net. A drive
+    that never reached a built net is excluded rather than counted as agreement or divergence."""
     present = {label: h for label, h in pairs if h is not None}
     if len(present) < 2:
         return {"verdict": REFUSED, "hashes": present,
@@ -955,10 +699,8 @@ def _hash_gate(pairs: list[tuple[str, str | None]]) -> dict[str, Any]:
 def build_sweep_pool(config: Any, *, n_workers: int, device: torch.device) -> WorkerPool:
     """Build the self-play collaborators for ONE rung — model, buffer, pool. No trainer.
 
-    `n_workers` arrives through `WorkerPool`'s own declared override seam
-    (`SelfPlayHParams.from_config(config, n_workers)`), never by editing a config on disk:
-    varying it is the measurement, and the config is otherwise the run's own, unchanged.
-    """
+    `n_workers` arrives through `WorkerPool`'s own override seam, never by editing a config on
+    disk: varying it is the measurement."""
     from mantis.model import arch_from_spec_and_config
 
     raw = config.model_dump()
@@ -972,18 +714,8 @@ def build_sweep_pool(config: Any, *, n_workers: int, device: torch.device) -> Wo
 
 
 def _verdict_for(rounds: tuple[RoundReading, ...], plan: SweepPlan) -> tuple[str, str | None]:
-    """Apply the IMPORTED stopping rule to EVERY sink, and fail the rung on growth in ANY of them.
-
-    REFUSED IS NEVER A VERDICT — `eval_child_memory`'s rule, carried whole. Too few measured
-    rounds is a named refusal about the drive, not a statement about the memory, and the message
-    is `classify`'s own.
-
-    GROWTH ON ANY SINK FAILS THE RUNG. `RungResult.sink_verdicts` carries the measured argument;
-    the short version is that `governing = max(card, allocator)` resolves the pair before the rule
-    runs, and on a card whose reserve has saturated the composite is the flat card level in nearly
-    every round. This gate is strictly more conservative than the composite alone: it can only
-    refuse a rung the composite would have passed, never pass one it would have failed.
-    """
+    """Apply the imported stopping rule to EVERY sink, failing the rung on growth in ANY of them.
+    REFUSED IS NEVER A VERDICT: too few measured rounds is a refusal about the drive."""
     stub = RungResult(n_workers=0, verdict="", rounds=rounds, refusal=None, produced_by="")
     peaks = stub.series("governing")
     try:
@@ -1007,17 +739,9 @@ def drive_rung(
 ) -> RungResult:
     """Run one rung: build a fresh pool, walk the rounds, verdict the series, tear down.
 
-    FRESH POOL PER RUNG, deliberately: a rung that inherited the previous rung's allocator
-    state would be measuring the ladder's history rather than its own worker count.
-
-    **EVERY FAILURE IS A RUNG VERDICT, NOT A TRACEBACK.** The ladder is the expensive artifact —
-    the base ladder alone is over an hour of rented box — so an exception this tool does not model
-    fails ITS RUNG and the walk continues. Only `torch.OutOfMemoryError` was caught at first, and
-    the failure surface is wider than that by construction: `mantis-bridge` builds with
-    `panic = "unwind"` (R2/LAW-13) exactly so a Rust panic crosses the FFI as an exception, and an
-    escaping `RuntimeError` reached the interpreter as **shell rc 1** — which this tool's own
-    contract reserves for "no rung PASSED". A crash must never be able to present as a measured
-    memory result.
+    FRESH POOL PER RUNG, or the rung measures the ladder's history. EVERY FAILURE IS A RUNG
+    VERDICT, NOT A TRACEBACK: an escaping exception reaches the interpreter as shell rc 1, which
+    this tool reserves for "no rung PASSED".
     """
     device_str = str(device)
     counters = cuda_counters_available(device_str)
@@ -1037,11 +761,11 @@ def drive_rung(
                  "produced_by": label}, out=out)
     try:
         try:
-            # The BUILD is inside the guard: a rung can OOM constructing the model or the ring,
-            # and that is the same data as a rung that OOMs mid-drive.
+            # The BUILD is inside the guard: a rung can OOM constructing the model or the ring, and
+            # that is the same data as a rung that OOMs mid-drive.
             pool = build_sweep_pool(config, n_workers=n_workers, device=device)
-            # R317(c)(i): hashed POST-SEED, PRE-PLAY — before `pool.start()` lets any worker
-            # touch the net, so a later divergence cannot be blamed on this read.
+            # Hashed POST-SEED, PRE-PLAY — before `pool.start()` lets any worker touch the net, so
+            # a later divergence cannot be blamed on this read.
             net_hash = net_param_hash(pool.model)
             sampler = CardSampler(device_str, plan.sampler_interval_sec) if counters else None
             pool.start()
@@ -1061,15 +785,9 @@ def drive_rung(
                              "warmup": warmup, "produced_by": label,
                              **probe.mark(f"round_start:{index}")}, out=out)
                 sleep(plan.round_sec)
-                # THE POOL'S OWN FAIL-FAST HOOK, at every round boundary. `WorkerPool._stats_loop`
-                # catches the drain loop's every exception, stores it in `_producer_exc` and does
-                # NOT raise; `check_producer_health` is the contract, and the trainer calls it
-                # each step. This sweep has no trainer, so nothing called it — and the two halves
-                # of that omission reinforce each other: with the feeder dead nothing reaches the
-                # replay buffer, so the memory series goes FLAT BECAUSE THE RUNG IS BROKEN, while
-                # `runner_stats` keeps reporting from the Rust counters, which climb regardless.
-                # A rung whose feeder died read as a clean PLATEAU with a plausible rate, and the
-                # knee rule compares rates ACROSS rungs, so one dead feeder moves the pick.
+                # THE POOL'S OWN FAIL-FAST HOOK, at every round boundary: `_stats_loop` stores the
+                # drain loop's exception and does NOT raise, so a dead feeder reads as a flat
+                # memory series while `runner_stats` keeps climbing off the Rust counters.
                 pool.check_producer_health()
                 if sampler is not None and (sampler_error := sampler.error()) is not None:
                     raise SweepRefusal(
@@ -1081,12 +799,8 @@ def drive_rung(
                 elapsed = time.monotonic() - start
                 end_mark = probe.mark(f"round_end:{index}")
                 sampled_peak, samples = sampler.window() if sampler is not None else (None, 0)
-                # AUDIT-1 F-28/A02. These were `max(0, after - before)`. The Rust counters
-                # are monotone, so a NEGATIVE delta is not a small number to round up — it
-                # means the counters were reset or the runner was replaced mid-rung, and the
-                # rung's rate is then measured over two different programs. Clamping it to 0
-                # published a rung that ran and did nothing, which the knee rule reads as a
-                # real rate. It is refused BY NAME instead.
+                # The Rust counters are monotone, so a NEGATIVE delta means they were reset or the
+                # runner replaced mid-rung and the rate spans two programs. Clamping to 0 hid that.
                 games_delta = after.games_completed - before.games_completed
                 moves_delta = after.positions_generated - before.positions_generated
                 if games_delta < 0 or moves_delta < 0:
@@ -1110,12 +824,9 @@ def drive_rung(
                 emit_marker({"phase": f"round_end:{index}", "n_workers": n_workers,
                              "produced_by": label, **reading.as_dict(), **end_mark}, out=out)
         finally:
-            # TEARDOWN IN ITS OWN GUARD. A raise here REPLACES the return value, so an
-            # `InferenceServer.join` failure — likeliest exactly when a rung has just OOM'd —
-            # erased the OOM finding, skipped the `rung_end` marker and killed the ladder with
-            # its own traceback. `started` is the predicate `mantis.run::
-            # _stop_pool_if_start_attempted` measured (an unstarted pool's join raises); the
-            # try/except is for every other cause.
+            # TEARDOWN IN ITS OWN GUARD: a raise here REPLACES the return value, so a join failure
+            # — likeliest exactly when a rung has just OOM'd — erased the OOM finding and killed
+            # the ladder. `started` is the predicate; the try/except is for every other cause.
             if sampler is not None:
                 sampler.stop()
             if started and pool is not None:
@@ -1126,16 +837,14 @@ def drive_rung(
             emit_marker({"phase": "rung_end", "n_workers": n_workers, "produced_by": label,
                          "teardown_note": teardown_note}, out=out)
     except torch.OutOfMemoryError as exc:
-        # DATA, not a sitting failure (R309(f)): the rung fails and the EXTENSION stops.
+        # DATA, not a sitting failure: the rung fails and the EXTENSION stops.
         emit_marker({"phase": "rung_oom", "n_workers": n_workers, "produced_by": label}, out=out)
         return _finish(OOM, f"CUDA out of memory at {n_workers} workers: {exc}")
     except SweepRefusal as exc:
         return _finish(REFUSED, str(exc))
     except KeyboardInterrupt:
-        # AN EXPLICIT DECISION, not a default. At ~70 minutes for the base ladder on a rented
-        # box, losing every measured rung to a Ctrl-C is the expensive outcome; the rung is named
-        # as interrupted and `walk_ladder` re-raises so the sitting stops, with the partial report
-        # written by `run_sweep`.
+        # AN EXPLICIT DECISION: at ~70 minutes for the base ladder on a rented box, losing every
+        # measured rung to a Ctrl-C is the expensive outcome. Named as interrupted and re-raised.
         emit_marker({"phase": "rung_interrupted", "n_workers": n_workers, "produced_by": label},
                     out=out)
         raise
@@ -1160,34 +869,13 @@ def drive_rung(
 def walk_ladder(plan: SweepPlan, *, runner: Any, label: str) -> tuple[list[RungResult], str]:
     """Walk the base ladder WHOLE, then extend while gains persist and discipline holds.
 
-    THE BASE BRACKET IS PRE-REGISTERED AND IS WALKED IN FULL. An earlier cut skipped any base
-    rung above the box's measured thread count, which on an 8-vCPU instance silently reduced
-    R309(g)'s `2, 4, 8, 12, 14` to `2, 4, 8` — half a pre-registered bracket unmeasured, on a
-    plausible physical argument nobody had granted. R309(f) attaches the thread bound to the
-    EXTENSION (*"extension past 14 permitted while gains persist and memory discipline holds,
-    bounded above by the box's measured thread count"*), and that is where it is applied. An
-    over-subscribed base rung produces its own verdict, which is data; the bound is reported
-    beside the ladder so a reader can see which rungs were over-subscribed.
+    THE BASE BRACKET IS PRE-REGISTERED AND IS WALKED IN FULL — skipping rungs above the measured
+    thread count once cut `2, 4, 8, 12, 14` to `2, 4, 8`; the bound attaches to the EXTENSION.
+    An OOM fails its own rung, the base rungs above it are STILL WALKED, and only the extension
+    closes. EXTENSION STARTS ABOVE THE LAST RUNG RUN, never above the best PASSING one, so the
+    walk terminates; keying on an enumerated verdict set re-drove one rung forever.
 
-    THE OOM CLAUSE IS IMPLEMENTED AS THE REGISTER WRITES IT, not as it reads more sensibly.
-    R309(f): *"an OOM at a rung is data that fails the rung and stops the ladder's EXTENSION,
-    never a sitting failure."* So an OOM fails its own rung, the base rungs above it are STILL
-    WALKED, and only the extension is closed off. The widening (stop the whole ladder) is a
-    PRE-REGISTRATION CHANGE, which a tool does not get to take; it is filed as an adjudication
-    (`WORKER_SWEEP_FINDINGS.md` F-WS-2) and if it comes back granted this is the one function
-    that changes.
-
-    EXTENSION STARTS ABOVE THE LAST RUNG RUN, never above the best PASSING one, and the walk
-    TERMINATES because that rung's `n_workers` strictly increases. An earlier cut chose the
-    highest rung whose verdict was in an enumerated set — and when a later verdict token was
-    added and not added to that set, the same extension rung was proposed and re-driven forever:
-    a fourteen-minute pool build and teardown per iteration, unbounded, with no report ever
-    written. The predicate is now "the last rung run", which needs no enumeration to stay
-    correct.
-
-    Returns the results and the STATED reason the walk stopped: a ladder that ends without
-    saying why invites the reader to assume it ran out of rungs when it ran out of card — and a
-    ladder that states the WRONG why is worse than one that states none.
+    Returns the results and the STATED reason the walk stopped.
     """
     bound, bound_source = thread_bound()
     ceiling = min(plan.extension_max, bound)
@@ -1230,7 +918,6 @@ def walk_ladder(plan: SweepPlan, *, runner: Any, label: str) -> tuple[list[RungR
             oom_at = nxt
 
 
-# ══ the knee ═════════════════════════════════════════════════════════════════════════════
 AGREE = "AGREE"
 DIVERGED = "DIVERGED"
 
@@ -1239,27 +926,10 @@ def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *,
                         metric: str) -> dict[str, Any]:
     """Two drives of the SAME rung under the SAME seed: did they build the SAME net?
 
-    **RE-SPECIFIED, R317(c). SUPERSEDES R315(c)(i)'s throughput band.** RECAL-SITTING-3 measured
-    this control live on a real box, on the SAME rung this docstring used to cite as evidence for
-    the band (n_workers=4): 3.9258% spread, DIVERGED against the 1% band, where RESIT-PREP-2's
-    engine-side measurement had come back 0.5821%, AGREE. **The defect was the check, not the
-    seeding**: `moves_per_min` conflates what a seed controls (the net, the game trajectories)
-    with what the machine controls (wall-clock scheduling), and the band was carried from one
-    quiet regime to certify a noisier one it was never measured against (R317(b)).
-
-    **THE GATE IS NOW NET-PARAMETER-HASH EQUALITY, NO BAND** (R317(c)(i)): this tests exactly
-    what F-RESIT-10's repair claimed — same seed, same net — with nothing about timing in it.
-    `_hash_gate` does the comparison; this function's job is to also carry the throughput spread
-    as a REPORTED, NON-GATING figure (R317(c)(iii)) so a reader sees both without either one
-    controlling the other's answer.
-
-    PURE, over the two rung rows, for `select_knee`'s reason — the sitting reads the arithmetic
-    and not an answer, and the same function is driven by its own oracle with rows it constructs.
-
-    **REFUSED IS NEVER A VERDICT** — the rule this tool carries everywhere. A drive that OOM'd,
-    errored, lost its producer or ranks at zero has no throughput to compare, and saying
-    "they agree" about two numbers that are not measurements is the failure mode the whole
-    instrument is built against.
+    THE GATE IS NET-PARAMETER-HASH EQUALITY, NO BAND. The former throughput band was measured
+    FALSE — 0.5821% AGREE engine-side against 3.9258% DIVERGED on a live box at the same rung —
+    because `moves_per_min` conflates what a seed controls with wall-clock scheduling. The spread
+    is still carried, REPORTED and NON-GATING. Pure over the two rung rows.
 
     Raises:
         ValueError: either row is missing `n_workers` or the ranking column, the two rows are
@@ -1304,25 +974,12 @@ def determinism_verdict(first: dict[str, Any], second: dict[str, Any], *,
 
 
 def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> dict[str, Any]:
-    """R309(f)'s knee rule, as a pure function over the report's own rung rows.
+    """Apply the ruled knee rule as a pure function over the report's own rung rows.
 
-    PURE, so `--select-only` re-derives the pick from a written report through THIS function
-    and not a second copy of it. The returned block carries every input the rule ran on, which
-    is the difference between a sitting record that carries the arithmetic and one that carries
-    the answer.
-
-    **R330(d): the noise term is PER-RUNG, and the widening uses the MAX over the candidate
-    set.** R317(d) widened `within` by `3 × rel_std × best` with ONE coefficient of variation
-    measured at a reference rung and carried to every other; R326(a) measured that carry FALSE.
-    Now every rung states its own noise — `<metric>_spread.rel_se`, the relative standard error
-    of its own scored rounds, written by `RungResult.spread` — and the widening is
-    `3 × max(rel_se over the PASSING rungs) × best`. The candidate set is the passing set
-    because that is the set the pick is drawn from; it is a superset of `within`, so its max is
-    at least `within`'s and this reading is the conservative one. The widening can still only
-    ADD rungs, and the pick is still the SMALLEST member of `within`, so the noise term can only
-    move the pick toward FEWER workers, never toward more. There is NO scalar to pass and NO
-    default to fall to: a passing rung whose row cannot state its own `rel_se` (one scored round,
-    or a report written before this mechanism) is REFUSED by name.
+    PURE, so `--select-only` re-derives the pick through THIS function and not a second copy, and
+    the returned block carries every input the rule ran on. THE NOISE TERM IS PER-RUNG: the
+    widening is `3 × max(rel_se over the PASSING rungs) × best`, which can only ADD rungs, and the
+    pick is the SMALLEST member of `within` — so noise can only move the pick toward FEWER workers.
 
     Raises:
         ValueError: a passing rung carries no finite, non-negative `rel_se`, in addition to
@@ -1344,9 +1001,8 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
     for row in rows:
         if row.get("verdict") != PLATEAU:
             continue
-        # THE ROWS ARE VALIDATED, because in `--select-only` they are whatever a file says. An
-        # earlier cut printed `PICK = 1` — the ONE value R309(f) REJECTS — from a three-key
-        # hand-written dict, at rc 0, in the tool's own arithmetic and with its own authority.
+        # THE ROWS ARE VALIDATED, because in `--select-only` they are whatever a file says: a
+        # three-key hand-written dict once printed `PICK = 1`, the one value the rule REJECTS.
         n_workers = row.get("n_workers")
         if not isinstance(n_workers, int) or isinstance(n_workers, bool) or n_workers < 2:
             raise ValueError(
@@ -1402,10 +1058,8 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
             "picking the smallest rung off an identically-zero table."
         )
     threshold = best["value"] * (knee_pct / 100.0)
-    # R330(d): the MAX rel-SE over the candidate (passing) set, and the ONLY safe post-hoc
-    # direction. Subtracting from the threshold can only ADD rungs to `within`, and the pick is
-    # still the SMALLEST member — so this can only pull the pick toward fewer workers, never
-    # toward more, whichever rung turns out to be the noisiest.
+    # The MAX rel-SE over the candidate (passing) set, and the ONLY safe post-hoc direction:
+    # subtracting from the threshold can only ADD rungs, and the pick is the SMALLEST member.
     noise_source = max(passing, key=lambda p: p["rel_se"])
     adjustment = 3.0 * noise_source["rel_se"] * best["value"]
     adjusted_threshold = threshold - adjustment
@@ -1426,13 +1080,10 @@ def select_knee(rows: list[dict[str, Any]], *, knee_pct: float, metric: str) -> 
     }
 
 
-# ══ provenance, report, render ═══════════════════════════════════════════════════════════
 def _sha256(path: Path | str) -> str | None:
-    """The config's REAL SHA-256. The first cut used `git hash-object`, which returns git's blob
-    hash — SHA-1 over `blob <len>\0<content>` — under a field named `config_sha256`. A later
-    reader verifying the config the caps were fitted against runs `sha256sum`, gets a mismatch,
-    and concludes the config changed. A label asserting a fact nobody re-derived is the
-    derive-or-delete class in a different costume."""
+    """The config's REAL SHA-256. `git hash-object` returns git's blob hash — SHA-1 over
+    `blob <len>\0<content>` — which under a field named `config_sha256` makes a later `sha256sum`
+    look like a changed config."""
     try:
         return hashlib.sha256(Path(path).read_bytes()).hexdigest()
     except OSError:
@@ -1448,13 +1099,11 @@ def _git(*args: str) -> str | None:
 
 
 def provenance(config: Any, config_path: Path, *, device: str, label: str) -> dict[str, Any]:
-    """What produced every figure in this report (R287(a)).
+    """Record what produced every figure in this report.
 
-    NO HOST IDENTIFIERS — R112 and CI gate 17. GPU model and CPU count are regime facts and are
-    carried; a hostname, a home path or a provider name is not and is never read here. The LIVE
-    allocator conf is read through the ONE authority and its SOURCE VARIABLE is stamped beside
-    it: RECAL-PREP found `fusion_calibrate` stamping `""` for a drive that was in the other
-    regime because it read one variable of the two c10 reads.
+    NO HOST IDENTIFIERS: GPU model and CPU count are regime facts; a hostname, home path or
+    provider name is never read here. The live allocator conf is read through the ONE authority
+    and its SOURCE VARIABLE is stamped beside it, since only one of the two c10 reads may be set.
     """
     live = read_live_allocator_conf()
     bound, bound_source = thread_bound()
@@ -1464,28 +1113,17 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
     return {
         "tool": TOOL,
         "produced_by": label,
-        # CAPTURE-TIME REDACTION (R301(d)), and it has to be here rather than in a later scan:
-        # this report lands in the governance workspace and in a sitting record, and CI gate 17
-        # scans neither. The operator's invocation on the box is an absolute path under a home or
-        # a provisioning directory; the BASENAME plus the digest carries every fact the report
-        # actually uses, and a later scan only ever catches what was already written down.
+        # CAPTURE-TIME REDACTION, and it has to be here rather than in a later scan: this report
+        # lands in a governance workspace and a sitting record, which CI gate 17 does not scan.
         "config_name": Path(config_path).name,
         "config_sha256": _sha256(config_path),
         "git_commit": commit,
-        # `None`, not `False`, when git could not answer. `bool(None)` is a POSITIVE CLAIM OF
-        # CLEANLINESS about a tree nobody looked at — and the tool will be launched from a
-        # scratch directory or a tarball with no `.git` on exactly the host that matters.
-        # AUDIT-1 F-28/A10: the guard discriminated on `commit`, which is the WRONG command.
-        # A tree where `rev-parse HEAD` succeeds and `status --porcelain` fails (an index
-        # lock, a permissions fault, an interrupted git) took the `else` arm and published
-        # `bool(None)` = clean. It now keys on the answer this field is actually derived from.
+        # `None`, not `False`, when git could not answer: `bool(None)` is a POSITIVE CLAIM OF
+        # CLEANLINESS. Keyed on `porcelain`, since keying on `commit` published clean when it failed.
         "git_dirty": None if porcelain is None else bool(porcelain),
         "run_id": getattr(config, "run_id", None),
-        # THE SEED EVERY RUNG'S NETWORK WAS BUILT FROM (F-RESIT-10). Carried because a ladder
-        # whose rungs are comparable is a CLAIM about how they were built, and R69 says a
-        # measurement travels with its mechanism: a reader of this report can now see that the
-        # ranking column is a function of `n_workers` alone, rather than having to trust it.
-        # Before the repair the honest value of this field would have been "unseeded".
+        # THE SEED EVERY RUNG'S NETWORK WAS BUILT FROM, carried so a reader can SEE that the
+        # ranking column is a function of `n_workers` alone rather than having to trust it.
         "seed": int(config.seed),
         "encoding": config.identity.encoding,
         "representation": config.identity.representation,
@@ -1495,9 +1133,8 @@ def provenance(config: Any, config_path: Path, *, device: str, label: str) -> di
         "cuda_available": cuda,
         "cuda_counters_available": cuda_counters_available(device),
         "gpu_name": torch.cuda.get_device_name(0) if cuda else None,
-        # The capacity every peak in this report is implicitly measured against. Without it a
-        # reader cannot size a figure, and the downstream partition is an inequality against
-        # exactly this number.
+        # The capacity every peak here is implicitly measured against: without it a reader cannot
+        # size a figure, and the downstream partition is an inequality against exactly this number.
         "card_total_bytes": (cuda_device_total_bytes(device)
                              if cuda_counters_available(device) else None),
         "thread_bound": bound,
@@ -1513,9 +1150,8 @@ def build_report(*, plan: SweepPlan, prov: dict[str, Any], results: list[RungRes
                  stopped: str) -> dict[str, Any]:
     rows = [r.as_dict(plan.metric, plateau_rounds=plan.plateau_rounds,
                       band_pct=plan.band_pct) for r in results]
-    # R317(c)(i): the ladder-wide gate. Every rung shares one seed and one config, so every net
-    # any rung built must hash equal — a divergence here means the ranking column this ladder
-    # exists to produce is not comparable, and no knee arithmetic on it can be trusted.
+    # The ladder-wide gate: every rung shares one seed and one config, so every net any rung built
+    # must hash equal — a divergence means the ranking column is not comparable across rungs.
     gate = _hash_gate([(str(r.n_workers), r.net_param_hash) for r in results])
     selection = select_knee(rows, knee_pct=plan.knee_pct, metric=plan.metric)
     if gate["verdict"] == DIVERGED:
@@ -1542,13 +1178,9 @@ def build_report(*, plan: SweepPlan, prov: dict[str, Any], results: list[RungRes
 
 
 def rc_for(report: dict[str, Any]) -> int:
-    """0 a pick · 1 measurable but nothing PASSED · 2 nothing was measurable at all.
-
-    R317(c)(i): a DIVERGED net_hash_gate is neither of the first two — it means the ranking
-    column itself is not comparable, which is a statement about the INSTRUMENT, not about the
-    card's memory or the ladder's throughput. It REFUSES (rc 2) rather than reporting "no pick"
-    the way an all-GROWING ladder does, because the latter is data and the former is not.
-    """
+    """0 a pick · 1 measurable but nothing PASSED · 2 nothing was measurable at all. A DIVERGED
+    net_hash_gate REFUSES: it is a statement about the INSTRUMENT, where an all-GROWING ladder is
+    data."""
     if report.get("net_hash_gate", {}).get("verdict") == DIVERGED:
         return RC_REFUSED
     if report["selection"]["picked"] is not None:
@@ -1640,8 +1272,8 @@ def render(report: dict[str, Any], out: Any) -> None:
 
 
 def render_determinism_control(control: dict[str, Any], out: Any) -> None:
-    """The control's own screen: the net-hash gate (R317(c)(i)), the reported spread with no
-    band (R317(c)(iii)), and the verdict."""
+    """The control's own screen: the net-hash gate, the reported spread with no band, and the
+    verdict."""
     spread = control["spread_pct"]
     shown = "unmeasurable" if spread is None else f"{spread:.4f}%"
     gate = control.get("net_hash_gate", {})
@@ -1661,10 +1293,8 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
     print(f"selection: knee_pct={selection['knee_pct']:g} on {selection['metric']}", file=out)
     if not selection["passing"]:
         print(f"  PICK = none — {selection['reason']}", file=out)
-        # THE NOTES PRINT HERE TOO, and this is the run where the reader most needs them: the
-        # line was added so "a reader who quotes the arithmetic alone would not otherwise see
-        # that the ladder had a failing rung", and it sat BELOW an early return, i.e. unreachable
-        # in exactly the case it was written for.
+        # THE NOTES PRINT HERE TOO, and this is the run where the reader most needs them; the line
+        # once sat BELOW an early return, unreachable in exactly the case it was written for.
         if selection.get("notes"):
             print(f"  what the ladder DID return: {', '.join(selection['notes'])}", file=out)
         return
@@ -1690,26 +1320,14 @@ def render_selection(selection: dict[str, Any], out: Any) -> None:
               file=out)
 
 
-# ══ entry ════════════════════════════════════════════════════════════════════════════════
 def run_determinism_control(*, config_path: Path, plan_path: Path, n_workers: int,
                             out: Any) -> dict[str, Any]:
     """Drive ONE rung TWICE in one process and report whether the two built the SAME net.
 
-    **The control R315(c)(i) orders and R317(c) RE-SPECIFIES, and it is the instrument that
-    makes the ladder's ranking column testable rather than trusted.** `build_sweep_net` seeds
-    from the config's own `seed` before every pool build, so two drives of the same rung must
-    build the SAME network; if they do, their net-parameter hashes are EQUAL — no band. If
-    seeding is removed or perturbed, they are not — which is what
-    `tests/diagnostics/test_worker_sweep_determinism.py` demonstrates rather than asserts.
-
-    It lives HERE, in the shipped tool, and not in a sitting's script: an instrument a sitting
-    authors on the box is an instrument nobody reviewed, and the 2026-08-27 re-sit had to write
-    three of them.
-
-    ONE PROCESS, deliberately — the same process the ladder walks in, so the control measures the
-    thing the ladder does. The 2026-08-27 discriminator established the residual is position-
-    independent (0.58 % apart, first drive against second, network held fixed), so a difference
-    here is about the seeding and not about where the drive sat.
+    `build_sweep_net` seeds from the config's own `seed` before every pool build, so two drives
+    must build the same network and hash equal. It lives in the shipped tool rather than a
+    sitting's script, and runs in ONE process — the residual was measured position-independent
+    (0.58% apart, network held fixed), so a difference here is about the seeding.
 
     Raises:
         AllocatorPostureMismatchError: the live allocator conf does not match the minted posture.
@@ -1740,10 +1358,8 @@ def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]
     plan = load_plan(plan_path)
     config = load_config(config_path)
     device = torch.device(config.train.device)
-    # The SAME authority `mantis.run` calls, imported and not copied: R308(g)(i) says a CUDA
-    # process boots on a MINTED regime or not at all, and this sweep is the re-sit's first CUDA
-    # process. On a non-CUDA device the resolution is skipped by the resolver's own route
-    # scoping, so a cpu drive is untouched.
+    # The SAME authority `mantis.run` calls, imported and not copied: a CUDA process boots on a
+    # MINTED regime or not at all. On a non-CUDA device the resolver's route scoping skips it.
     assert_allocator_posture(config.model_dump(), device_type=device.type)
     label = f"{getattr(config, 'run_id', 'run')}@{_git('rev-parse', '--short', 'HEAD') or 'no-git'}"
 
@@ -1756,14 +1372,9 @@ def run_sweep(*, config_path: Path, plan_path: Path, out: Any) -> dict[str, Any]
 
 
 def read_report(path: str | Path) -> dict[str, Any]:
-    """Load a report this tool wrote, and REFUSE anything else.
-
-    IDENTITY, NOT ONLY READABILITY. `parse_sweep_markers` invokes the `peaks.py` lesson — *a
-    reader that guesses at a shape it does not recognise produces a number nobody can distinguish
-    from a measurement* — and the first cut of this reader then required four keys and asked
-    nothing about whether the document was its own output. A three-key hand-written dict printed
-    `PICK = 1`, the one value R309(f) REJECTS, at rc 0.
-    """
+    """Load a report this tool wrote, and REFUSE anything else — identity, not only readability:
+    a reader that asks nothing about whose output a document is will print a pick off a
+    hand-written dict at rc 0."""
     report = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(report, dict):
         raise ValueError(f"{path}: not a report object ({type(report).__name__})")
@@ -1800,9 +1411,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.determinism_control is not None:
-        # Same discipline --select-only carries: an input this mode does not read is refused BY
-        # NAME rather than ignored, because naming an input a mode does not read describes a run
-        # that did not happen.
+        # Same discipline `--select-only` carries: naming an input a mode does not read describes
+        # a run that did not happen, so it is refused BY NAME rather than ignored.
         if args.select_only:
             print("REFUSED: --determinism-control drives a rung and --select-only reads a written "
                   "report; they are different modes and naming both describes neither",
@@ -1840,10 +1450,8 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if verdict == AGREE else (1 if verdict == DIVERGED else RC_REFUSED)
 
     if args.select_only:
-        # EVERY input the mode does not read is refused BY NAME. `--out` was silently ignored
-        # here while `--config`/`--plan` were refused — one of the two behaviours is wrong, and
-        # the docstring already says which: naming an input a mode does not read describes a run
-        # that did not happen.
+        # EVERY input the mode does not read is refused BY NAME. `--out` was silently ignored here
+        # while `--config`/`--plan` were refused; one of the two behaviours had to be wrong.
         unread = [name for name, value in (("--config", args.config), ("--plan", args.plan),
                                            ("--out", args.out)) if value]
         if unread:
@@ -1852,8 +1460,8 @@ def main(argv: list[str] | None = None) -> int:
             return RC_REFUSED
         try:
             report = read_report(args.select_only)
-            # R330(d): the noise term is read off each rung's OWN row; a report that predates
-            # the mechanism refuses inside select_knee by rung, never re-derives under a zero.
+            # The noise term is read off each rung's OWN row; a report predating the mechanism
+            # refuses inside `select_knee` by rung, never re-derives under a zero.
             selection = select_knee(report["rungs"], knee_pct=RULED_KNEE_PCT,
                                     metric=PREREG_METRIC)
             produced_by = report["provenance"].get("produced_by", "<unstated>")
@@ -1873,9 +1481,8 @@ def main(argv: list[str] | None = None) -> int:
               "picked would be a pre-registration nobody wrote.", file=sys.stderr)
         return RC_REFUSED
     if args.out is not None:
-        # PROBED BEFORE THE FIRST RUNG, because the destination used to be validated at the moment
-        # it is least recoverable: the write sat outside the guard and BEFORE the render, so an
-        # unwritable path after a seventy-minute ladder produced a traceback, rc 1, and no screen.
+        # PROBED BEFORE THE FIRST RUNG: the write used to sit outside the guard and BEFORE the
+        # render, so an unwritable path after a seventy-minute ladder lost the whole screen.
         try:
             Path(args.out).parent.mkdir(parents=True, exist_ok=True)
             Path(args.out).write_text("", encoding="utf-8")
@@ -1890,10 +1497,8 @@ def main(argv: list[str] | None = None) -> int:
         print("REFUSED: interrupted; no complete ladder was measured", file=sys.stderr)
         return RC_REFUSED
     except Exception as exc:  # noqa: BLE001 — ONE refusal path, and rc 1 is not it
-        # An escaping exception exits the interpreter with rc 1, which this tool's contract
-        # reserves for "no rung PASSED — every measurable rung was GROWING or OOM". A malformed
-        # input or an unmodelled failure must never be able to present as a measured memory
-        # result, because the block's Phase W posture branches on exactly that distinction.
+        # An escaping exception exits rc 1, which this tool reserves for "no rung PASSED". A
+        # malformed input must never present as a measured memory result.
         print(f"REFUSED: {exc!r}", file=sys.stderr)
         return RC_REFUSED
 

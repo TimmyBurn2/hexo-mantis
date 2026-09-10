@@ -1,47 +1,18 @@
-""">300 justify (R8): it is R93's evidence
-for EIGHTEEN registry citations, and R93's condition is one demonstration PER KEY — "set the
-knob, observe the consumer", never a shared arm a sibling could ride. Roughly half the length
-is one `_DISTINGUISHABLE` row and one behavioural drive per knob; the rest is the shared
-fakes harness that BOTH halves use (a real `compose_run` drive and a real `StepCoordinator`
-drive). Splitting it would fork that harness into two copies free to drift apart, which is the
-exact failure `tests/config/test_drain_caps_wiring.py`'s own justify names, and R5 bars the
-cross-test import that would prevent it.
+""">300 justify (R8): one demonstration PER KEY — "set the knob, observe the consumer" — for
+eighteen registry citations, so half the length is one row and one behavioural drive per knob.
+The rest is the shared fakes harness BOTH halves use; splitting it would fork that harness into
+copies free to drift apart, and cross-test imports are barred.
 
-The 18 `train.*` step-coordinator knobs reach the consumers their registry entries NAME —
-proved by MUTATION. (19 at Phase K-B; `buffer_save_interval` was deleted by R178(a) under
-R116/LAW-08 — F-CS-2 measured its `_try_save_buffer` consumer production-dead on every leg,
-so the one demonstration this file could not honestly give is the one it no longer owes.)
+The 18 `train.*` step-coordinator knobs reach the consumers their registry entries NAME, proved
+by MUTATION rather than by grep: four keys once reached nothing while both copies of the registry
+cited a real function, because the resolver did `data.pop("drain")` and a grep cannot tell a
+reader from a `pop`.
 
-WPMINT Phase K-B, `CARD-COORD-KNOBS` (R78 as clarified by R80), method bound by R93.
-
-WHY MUTATION AND NOT GREP. R93 exists because DR-11 found four keys — minted,
-schema-validated, and claimed by BOTH copies of `CONSUMER_REGISTRY` with a citation naming a
-REAL function — that reached nothing, because `resolve_monitor_config` did `data.pop("drain")`
-and a grep cannot tell a reader from a `pop`. Every citation Phase K touches is therefore owed
-a demonstration that the VALUE MOVES THE CONSUMER. A test that asserted
-`resolve_coordinator_knobs` returns what the config says would be green under exactly that
-defect: the resolver is not the consumer.
-
-TWO HALVES, and neither is asserted from the other's side.
-
-* **Transport** (`test_each_knob_reaches_the_coordinator_the_composition_root_builds`) drives
-  the REAL `compose_run` on a REAL minted config with ONE key set to a distinguishable value
-  and reads the field off `handles.coordinator.config` — the object the running coordinator
-  holds. Loader, `resolve_coordinator_knobs`, `_step_coordinator_config` and
-  `StepCoordinatorConfig` all run unpatched; `_step_coordinator_config` in particular is NOT
-  monkeypatched here, unlike the five composition drives that suppress terminal eval through
-  it, because it is the subject.
-* **Behaviour** — one test per knob below, driving a real `StepCoordinator.step()` (or
-  `close_out`) and observing the thing the registry entry names: an event, a call, a count, a
-  fire. Transport alone would pass on a coordinator that carried the value and never read it,
-  which is the dead-field half of the same finding (`batch_size` was a live-looking
-  `StepCoordinatorConfig` field with no reader at all until this phase).
-
-`train.replay_capacity_schedule` is ONE registry leaf under NIT-3 (a `list[SubModel]`, like
-`eval.ladder.rungs`), so it gets one row and one behavioural drive covering both inner names.
-
-R7 / gate 6: nothing here writes a `*.jsonl`; every drive writes under `tmp_path`.
-R5: zero `sys.path` mutation; configs are loaded through the ONE loader by absolute path.
+TWO HALVES, neither asserted from the other's side. TRANSPORT drives the REAL `compose_run` with
+ONE key set to a distinguishable value and reads the field off the running coordinator, with
+`_step_coordinator_config` deliberately NOT monkeypatched because it is the subject. BEHAVIOUR
+drives a real `StepCoordinator` and observes the event, call, count or fire the registry entry
+names — transport alone would pass on a coordinator that carried the value and never read it.
 """
 from __future__ import annotations
 
@@ -67,18 +38,16 @@ _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _DEV = load_config(_CONFIGS / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV.train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config.
+#: The builder's FIFTH config-authored parameter — `monitor.gate_interval`, the ARMING cadence.
 _GATE_INTERVAL = _DEV.monitor.gate_interval
 
-#: The drive is bounded so `compose_run` terminates; the three step-clock knobs move together
-#: because the reachability validator spans them (DESIGN_S §6.6 MF-3).
+#: Bounded so `compose_run` terminates; the three step-clock knobs move together because the
+#: reachability validator spans them.
 _DRIVE_STEPS = 4
 
-#: ONE distinguishable value per schema key. Every value differs from the minted one, and
-#: none is a value another knob also carries, so a coordinator field that reported a stale,
-#: defaulted or NEIGHBOURING number cannot accidentally match. The map is also the key
-#: census: `_SCHEMA_TO_FIELD` below must cover exactly these.
+#: ONE distinguishable value per schema key: every value differs from the minted one and from
+#: every other knob's, so a field reporting a stale, defaulted or NEIGHBOURING number cannot
+#: accidentally match. Also the key census — `_SCHEMA_TO_FIELD` must cover exactly these.
 _DISTINGUISHABLE: dict[str, Any] = {
     "eval_interval": 37,
     "log_interval": 17,
@@ -96,12 +65,8 @@ _DISTINGUISHABLE: dict[str, Any] = {
     "selfplay_stall_timeout_sec": 67.0,
 }
 
-#: schema leaf -> `StepCoordinatorConfig` field. Two names differ, and the rename is the
-#: point: a bare `train.capacity` names nothing on its own. A THIRD row stood here,
-#: `buffer_save_interval` -> `checkpoint_interval`, and R178(a) deleted both sides of it —
-#: the coordinator's buffer-save cadence had no reachable consumer (F-CS-2), so the key that
-#: had to be renamed away from `train.checkpoint_interval` (the TRAINER's periodic save, a
-#: different authored key that is untouched) no longer exists to collide.
+#: schema leaf -> `StepCoordinatorConfig` field. Two names differ, and the rename is the point:
+#: a bare `train.capacity` names nothing on its own.
 _SCHEMA_TO_FIELD = {
     "replay_capacity": "capacity",
     "replay_capacity_schedule": "buffer_schedule",
@@ -109,7 +74,6 @@ _SCHEMA_TO_FIELD = {
 _KNOB_KEYS = tuple(_DISTINGUISHABLE)
 
 
-# ── fakes (the `tests/train/test_coordinator_gates.py` harness shape) ──────────────────
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -125,7 +89,7 @@ class _Pool:
         self.avg_game_length = 20.0
         self.x_winrate = 0.5
         self.o_winrate = 0.45
-        self.draw_rate = 0.05  # F-816-2: the third outcome share.
+        self.draw_rate = 0.05  # the third outcome share.
         self.draws = 1
         self.sims_per_sec = 100.0
         self.batch_fill_pct = 0.9
@@ -159,10 +123,8 @@ class _ComposePool(_Pool):
 
 
 class _Trainer:
-    """WPTS/TD-1 re-point (R90a; the straight arm's subject deliberately changed): the dead
-    `train_step` fake is GONE — the double conforms to the DECLARED seam (typed entry points
-    + `device`), and augment observation moved to the sampler the dispatcher actually
-    threads it to (`_Buffer.augment_seen`)."""
+    """The double conforms to the DECLARED seam (typed entry points + `device`); augment
+    observation lives on the sampler the dispatcher threads it to."""
 
     def __init__(self, grad_norm: float = 0.1) -> None:
         self.step = 0
@@ -221,12 +183,9 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        """The graph route's sampler, RECORDED and then delegated to a real `HexgBuffer`.
-
-        The dispatcher refuses a shapeless fake by design (`RepresentationRouteError`), and
-        everything downstream of the sampler — the wire payload, the microbatch plan, the
-        collate — needs real bytes. So the fake records WHAT THE DISPATCHER ASKED FOR (which
-        is the whole subject of these citations) and hands back a real ring's answer."""
+        """The graph route's sampler, RECORDED and then delegated to a real `HexgBuffer`: the
+        dispatcher refuses a shapeless fake by design and everything downstream needs real bytes,
+        so the fake records WHAT THE DISPATCHER ASKED FOR."""
         self.sampled.append(int(n))
         self.augment_seen.append(bool(augment))
         self.recent_frac_seen.append(float(recent_frac))
@@ -254,22 +213,16 @@ def _fake_run_safety(**_kwargs):
     )
 
 
-# ══ HALF ONE — transport, through the REAL composition root ════════════════════════════
+# HALF ONE — transport, through the REAL composition root.
 def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
                                  monitor_over=None, **train_over):
     """The `StepCoordinatorConfig` a REAL `compose_run` hands the running coordinator.
 
-    WPTS/TD-1: the drive's buffer is a REAL preloaded `HexgBuffer` — smoke_gnn declares
-    `graph`, and the declared route runs real sampling+collate; a shapeless fake buffer is
-    refused at dispatch by design.
-
-    R242 (ADJ-D12): `monitor_over` is the SECOND override axis. It exists because the fifth
-    config-authored fact this builder threads is a `monitor.*` key, and the `train.*` census
-    below cannot carry it (see
-    `test_the_composition_root_threads_monitor_gate_interval_and_never_log_interval`). It
-    merges INTO the drive's own monitor deltas rather than replacing them — `smoke_run_config`
-    is section-wise, so replacing the block would drop `actor_lag_threshold_steps` and wedge
-    the drive on the actor-lag abort."""
+    The buffer is a REAL preloaded `HexgBuffer`, since a shapeless fake is refused at dispatch.
+    `monitor_over` is the SECOND override axis and MERGES into the drive's monitor deltas rather
+    than replacing them, because `smoke_run_config` is section-wise and replacing the block would
+    drop `actor_lag_threshold_steps` and wedge the drive on the actor-lag abort.
+    """
     import mantis.train.anchor as _anchor
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
@@ -280,18 +233,16 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
     )
     config = smoke_run_config(
         train={"actor_sync_cadence_steps": 1, "max_train_steps": _DRIVE_STEPS,
-               # WPTS/TD-1: the drive now runs the REAL graph route (sample + collate) per
-               # step; the minted 256 batch is pure drag here, so the baseline drives at 8.
-               # The batch_size transport assertion stays honest: baseline(8) != mutated(41).
+               # The drive runs the REAL graph route per step, so the minted 256 batch is pure
+               # drag; baseline(8) != mutated(41) keeps the transport assertion honest.
                "batch_size": 8,
-               # `mixing_min_w` cannot be mutated alone against a minted `mixing_initial_w`
-               # of 0.0 — `_mixing_floor_is_below_its_start` rejects a floor above the start,
-               # by design. Both drives (baseline and mutated) therefore share a raised start,
-               # so the comparison stays one-key-at-a-time.
+               # `mixing_min_w` cannot be mutated alone against a minted `mixing_initial_w` of
+               # 0.0 — a floor above the start is rejected by design — so both drives share a
+               # raised start and the comparison stays one-key-at-a-time.
                **train_over},
         monitor={"actor_lag_threshold_steps": _DRIVE_STEPS - 1, **(monitor_over or {})},
-        # WPMAIN/R120+R123: `eval_enabled` and `run_id` are CONFIG facts now — `compose_run`
-        # has no parameter for either, so the drive's posture is declared where the config is.
+        # `eval_enabled` and `run_id` are CONFIG facts: `compose_run` has no parameter for
+        # either, so the drive's posture is declared where the config is.
         eval_enabled=False, run_id="knob_wiring",
     )
     handles = mantis.run.compose_run(
@@ -309,14 +260,10 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
     key, tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
 ) -> None:
     """Set ONE `train.*` knob to a distinguishable value; the coordinator the run holds must
-    carry it, and NO sibling may move with it.
-
-    Parametrized per key on purpose: with the eighteen folded into one drive they would share
-    one failure signature, and a knob that reached nothing would be masked by the eighteen
-    that did. The independence arm is the other half — before this phase every one of these
-    was a literal in `_step_coordinator_config`, so a wire that fed the whole spec from one
-    field would satisfy any single-key assertion.
-    """
+    carry it, and NO sibling may move with it. Parametrized per key on purpose: folded into one
+    drive the eighteen would share one failure signature, and every one of these was once a
+    literal in the builder, so a wire feeding the whole spec from one field would satisfy any
+    single-key assertion."""
     field = _SCHEMA_TO_FIELD.get(key, key)
     baseline = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
                                             mk_graph_buffer)
@@ -346,11 +293,9 @@ def test_each_knob_reaches_the_coordinator_the_composition_root_builds(
     )
 
 
-#: The ONE distinguishable ARMING cadence, held apart from `_DISTINGUISHABLE` for the reason
-#: the test below states: it is a `monitor.*` key and the census above is `train.*`-only. It
-#: is no value any config mints and no value another knob carries, so a field reporting a
-#: stale, defaulted or NEIGHBOURING number cannot match — and the drive ASSERTS that against
-#: the loaded config rather than trusting this comment (R192(e), derive-or-delete).
+#: The ONE distinguishable ARMING cadence, held apart from `_DISTINGUISHABLE` because it is a
+#: `monitor.*` key and that census is `train.*`-only. No config mints it and no other knob
+#: carries it; the drive ASSERTS that against the loaded config rather than trusting this line.
 _GATE_INTERVAL_MUTATED = 23
 
 
@@ -360,41 +305,13 @@ def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interv
     """`monitor.gate_interval` reaches `StepCoordinatorConfig.gate_interval` through the REAL
     `compose_run`, and it is THAT key which arrives — never `train.log_interval`.
 
-    A SIBLING TEST, NOT A `_DISTINGUISHABLE` ROW, and the reason is structural rather than
-    stylistic. The census above is `train.*`-ONLY by construction: its drive passes every row
-    through `smoke_run_config(train={...})` and `TrainConfig` is `extra="forbid"`, so a
-    `monitor.*` name in that map is a LOAD FAILURE, not a mutation. And
-    `test_the_resolver_is_the_only_read_of_the_eighteen_keys` asserts that
-    `CoordinatorKnobsSpec`'s field set EQUALS `_DISTINGUISHABLE`'s key set, while
-    `gate_interval` is deliberately NOT a `CoordinatorKnobsSpec` field — it does not travel
-    through `resolve_coordinator_knobs` at all (R242: `compose_run` names
-    `config.monitor.gate_interval` directly, and `resolve_monitor_config` pops it). Folding it
-    into the census would therefore either red that test or push the key into the one resolver
-    it must stay out of. It shares this file because it shares the harness: the transport claim
-    is the same claim, taken on the fifth config-authored fact.
-
-    WHY THE MUTATED VALUE IS SYNTHETIC. Every committed config mints `monitor.gate_interval`
-    EQUAL to its own `train.log_interval` (`tests/train/test_gate_interval_decoupling.py::
-    test_p6b`), so NO config-derived drive can tell the two apart — a composition root reading
-    `resolve_coordinator_knobs(config.train).log_interval` would carry the RIGHT NUMBER on all
-    six. The number below is invented for exactly that reason, and the baseline assertion
-    below records the equality that forces it.
-
-    DR-11's class on a new axis, in the sharpest form it has taken here: the mutation that
-    reds this test is ONE line in `run.py` — `gate_interval=resolve_coordinator_knobs(
-    config.train).log_interval` — and it RE-INTRODUCES THE DEFECT R242 EXISTS TO CLOSE (the
-    armed hard-abort gates riding the narration cadence, blind for run5's first 1000 training
-    steps) while `run.py`'s own docstring goes on claiming "There is deliberately NO fallback
-    to `log_interval` on this path". A docstring is not a pin. The RED-TEAM measured that
-    mutation over the FULL tier before this test existed: 1267 collected, 0 failures. Re-run
-    here with this pin in place, over the five suites that touch the split, it reds exactly
-    this test and nothing else — `assert 1000 == 23`, arm 1 below.
-
-    BOTH DIRECTIONS, because the mutation has two signatures. Arm 1 moves the ARMING key and
-    requires the coordinator to follow it; arm 2 moves the NARRATION key and requires the
-    coordinator's arming cadence NOT to follow. Arm 2 is not covered by the census's own
-    `moved` check — `gate_interval` is not in `_KNOB_KEYS`, so a `log_interval` drive that
-    dragged it along would be invisible there.
+    A sibling test rather than a census row for a structural reason: the census drive passes
+    every row through `smoke_run_config(train={...})`, so a `monitor.*` name there is a LOAD
+    FAILURE rather than a mutation. The mutated value is SYNTHETIC because every committed config
+    mints the two keys EQUAL, so no config-derived drive can tell them apart; the mutation that
+    reds this is ONE line reading `log_interval` for the gate cadence, which produced 0 failures
+    over the full tier before this test existed. Both directions are driven, because the mutation
+    has two signatures and the second is invisible to the census.
     """
     baseline = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
                                             mk_graph_buffer)
@@ -408,7 +325,7 @@ def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interv
         "on a gate_interval that reached nothing"
     )
 
-    # ── arm 1: the ARMING key moves, the coordinator follows it ──────────────────────────
+    # arm 1: the ARMING key moves, the coordinator follows it.
     armed = _composed_coordinator_config(
         tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer,
         monitor_over={"gate_interval": _GATE_INTERVAL_MUTATED},
@@ -424,7 +341,7 @@ def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interv
         "cadence change, or one key's citation is really the other's"
     )
 
-    # ── arm 2: the NARRATION key moves, the arming cadence must NOT follow ───────────────
+    # arm 2: the NARRATION key moves, the arming cadence must NOT follow.
     narrated = _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config,
                                             mk_graph_buffer,
                                             log_interval=_DISTINGUISHABLE["log_interval"])
@@ -436,13 +353,12 @@ def test_the_composition_root_threads_monitor_gate_interval_and_never_log_interv
     )
 
 
-# ══ HALF TWO — behaviour, at the consumer each registry entry NAMES ════════════════════
+# HALF TWO — behaviour, at the consumer each registry entry NAMES.
 def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
                  mixing_cfg=None, **knob_over):
     """A real `StepCoordinator` whose config is DERIVED from the production builder."""
-    # R242 (ADJ-D12): the GATE cadence mirrors the NARRATION cadence unless a drive names
-    # it — the shipped posture (every committed config mints the two equal), so a drive
-    # that moves only `log_interval` keeps the cadence it had before the split.
+    # The GATE cadence mirrors the NARRATION cadence unless a drive names it — the shipped
+    # posture — so a drive that moves only `log_interval` keeps the cadence it had.
     settings = {"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over}
     settings.setdefault("gate_interval", settings["log_interval"])
     config = dataclasses.replace(
@@ -458,14 +374,12 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
-        # WPTS/TD-1: the straight arm resolves its route from the DECLARED identity
-        # (LAW-11) — an identity-less full_config now raises MissingEncodingError, so the
-        # unit drives declare the grid identity their `_Buffer` fake serves.
+        # The straight arm resolves its route from the DECLARED identity: an identity-less
+        # full_config raises MissingEncodingError.
         full_config={
             "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-            # The graph route resolves its microbatch caps and its fast-policy weight from
-            # the run's own `train` section; a `train`-less full_config is a NAMED refusal
-            # (LAW-11), so the unit drives declare the block their route needs.
+            # The graph route resolves microbatch caps and fast-policy weight from the run's
+            # own `train` section, and a `train`-less full_config is a NAMED refusal.
             "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
                       "fast_policy_weight": 0.0},
             "search": {"kind": "puct"},
@@ -512,22 +426,10 @@ def test_eval_interval_decides_when_a_promotion_round_is_kicked() -> None:
 
 def test_log_interval_decides_when_the_run_emits_and_when_the_gates_run() -> None:
     """`train.log_interval` -> `step.py::_run_log_interval`: the payload events and the WARN
-    rules hang off this boundary. WPMINT DR-7 measured that `<= 0` kills the family; the
-    schema's `ge=1` makes that unwritable, and this is the arm that shows the value DECIDES.
-
-    R242 (ADJ-D12) NARROWED WHAT THIS KNOB DECIDES, and this test's second half is where that
-    shows. It used to assert "the LAW-18 gate summary rides the SAME boundary — DR-7's
-    finding is that these two cannot be separated", which was a true reading of the code and
-    a FALSE reading of DR-7: DR-7 measured that `log_interval <= 0` killed both, which is an
-    argument for the `ge=1` bound, never a rule that arming must ride narration. That coupling
-    was the defect — at run5's `log_interval: 1000` the hard aborts had a blind first
-    kilometre — so the gates now ride `monitor.gate_interval` (`_run_gate_interval`).
-
-    The count below is UNCHANGED because `_coordinator` mirrors the two knobs, which is the
-    shipped posture (every committed config mints them equal). It is asserted here against an
-    EXPLICIT `gate_interval`, so the line now says what it means; the decoupling itself is
-    pinned by `tests/train/test_gate_interval_decoupling.py`.
-    """
+    rules hang off this boundary, and `<= 0` kills the family — what the schema's `ge=1` makes
+    unwritable and this arm shows the value DECIDES. It does NOT decide the gate summary any
+    more, that coupling having given run5's hard aborts a blind first kilometre; the count is
+    unchanged because `_coordinator` mirrors the two knobs, the shipped posture."""
     every = _coordinator(log_interval=1)
     _drive(every, steps=4, games=1)
     rare = _coordinator(log_interval=3)
@@ -566,9 +468,8 @@ def test_min_buf_size_decides_the_warmup_floor() -> None:
 
 
 def test_replay_capacity_is_the_window_the_run_publishes_and_the_preflight_sizes() -> None:
-    """`train.replay_capacity` -> `StepCoordinatorConfig.capacity` -> the `buffer_capacity`
-    the warmup event publishes (and, through `mantis.run.build_run_collaborators`, the size
-    of the REAL engine buffer every boot — launcher and preflight alike — constructs)."""
+    """`train.replay_capacity` -> `StepCoordinatorConfig.capacity` -> the `buffer_capacity` the
+    warmup event publishes, and the size of the REAL engine buffer every boot constructs."""
     h = _coordinator(capacity=31_337, min_buf_size=10**6)
     _drive(h, steps=1)
     stats = h.sink.named("system_stats")
@@ -578,8 +479,8 @@ def test_replay_capacity_is_the_window_the_run_publishes_and_the_preflight_sizes
 
 
 def test_the_capacity_schedule_ramps_the_buffer_at_its_own_step() -> None:
-    """`train.replay_capacity_schedule` -> `step.py` D1. One registry leaf (NIT-3), so both
-    inner names are demonstrated here: the STEP decides when, the CAPACITY decides what."""
+    """`train.replay_capacity_schedule` -> `step.py` D1. One registry leaf, so both inner names
+    are demonstrated here: the STEP decides when, the CAPACITY decides what."""
     h = _coordinator(buffer_schedule=({"step": 2, "capacity": 555_555},))
     _drive(h, steps=1, games=1)
     assert h.buffer.resizes == [], "the ramp must not fire before its own step"
@@ -590,10 +491,9 @@ def test_the_capacity_schedule_ramps_the_buffer_at_its_own_step() -> None:
 
 
 def test_training_steps_per_game_and_max_train_burst_set_the_step_budget() -> None:
-    """Both -> `step.py` O6 `_steps_budget(new_games, per_game, burst)`. Driven together
-    because the budget is `min(max(1, games*per_game), burst)` and each knob is the binding
-    term in exactly one of the two drives — a wire that fed one from the other would show up
-    as the wrong drive being clamped."""
+    """Both -> `step.py` O6 `_steps_budget`. Driven together because the budget is
+    `min(max(1, games*per_game), burst)` and each knob is the binding term in exactly one of the
+    two drives — a wire feeding one from the other shows up as the wrong drive being clamped."""
     ratio_bound = _coordinator(training_steps_per_game=2.0, max_train_burst=100)
     assert _drive(ratio_bound, steps=1, games=3)[0].steps_run == 6
 
@@ -604,16 +504,11 @@ def test_training_steps_per_game_and_max_train_burst_set_the_step_budget() -> No
 
 
 def test_batch_size_is_the_batch_the_sampler_is_asked_for() -> None:
-    """`train.batch_size` -> `step.py::_run_training_step` -> the route's sampler. THE finding
-    this key closes: the line read `train_cfg.get("batch_size", full_config.get("batch_size",
-    256))`, both lookups missed on the production path, and the run's real batch size was the
-    literal 256 while `StepCoordinatorConfig.batch_size` sat beside it unread (WPMINT K-A).
-    The minted value is 256 for that reason; the drive below uses 41 so a surviving literal is
-    visible.
-
-    The MIXED arm this used to drive went with the dense path (R346(f)) — `assemble_mixed_batch`
-    and the `mixing_*` / `bot_batch_share` knobs it read are deleted — so the citation is now
-    demonstrated where the graph route actually reads it."""
+    """`train.batch_size` -> `step.py::_run_training_step` -> the route's sampler. The lookup was
+    `train_cfg.get("batch_size", full_config.get("batch_size", 256))`, both lookups missed on the
+    production path, and the run's real batch size was the literal 256 while
+    `StepCoordinatorConfig.batch_size` sat beside it unread. The drive uses 41 so a surviving
+    literal is visible."""
     h = _coordinator(batch_size=41)
     _drive(h, steps=3, games=1)
     assert set(h.buffer.sampled) == {41}, (
@@ -625,10 +520,9 @@ def test_batch_size_is_the_batch_the_sampler_is_asked_for() -> None:
 
 
 def test_augment_reaches_the_training_path() -> None:
-    """`train.augment` -> the dispatcher's sampler (`sample_graph_batch(augment=)`): augment is
-    a SAMPLING knob and travels to the buffer draw, not to the trainer (WPTS/TD-1). The second
-    read this test used to check — `assemble_mixed_batch(augment=)` — went with the dense mixed
-    arm (R346(f)), so there is ONE reader left and this is it."""
+    """`train.augment` -> the dispatcher's sampler (`sample_graph_batch(augment=)`): augment is a
+    SAMPLING knob and travels to the buffer draw, not to the trainer. There is ONE reader
+    left."""
     plain = _coordinator(augment=True)
     _drive(plain, steps=2, games=1)
     assert plain.buffer.augment_seen and all(plain.buffer.augment_seen)
@@ -642,9 +536,7 @@ def test_augment_reaches_the_training_path() -> None:
 
 
 def test_recency_weight_reaches_the_samplers_recency_window() -> None:
-    """`train.recency_weight` -> `sample_graph_batch(recent_frac=)`. The dense assembler's
-    recency window it used to name is deleted with the mixed arm (R346(f)); the graph sampler
-    takes the same fraction as `recent_frac` and that is the one live reader."""
+    """`train.recency_weight` -> `sample_graph_batch(recent_frac=)`, the one live reader."""
     h = _coordinator(recency_weight=0.43)
     _drive(h, steps=2, games=1)
     assert set(h.buffer.recent_frac_seen) == {0.43}, (
@@ -654,15 +546,11 @@ def test_recency_weight_reaches_the_samplers_recency_window() -> None:
 
 
 def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:
-    """`train.hard_gn_threshold` / `train.hard_gn_min_steps` -> `step.py` D3. Three drives:
+    """`train.hard_gn_threshold` / `train.hard_gn_min_steps` -> `step.py` D3, in three drives:
     below the threshold nothing fires, above it the run stops after exactly `min_steps`
-    consecutive breaches, and a `min_steps` beyond the drive keeps it silent — so each knob
-    is the binding term in one drive and not the other.
-
-    This is also the gate WPMINT Phase K-B registered as a DEFERRED armed-abort row: shipped
-    at `1e9` it can never fire, and `Mechanism.CONFIG_THRESHOLD_BELOW_CEILING` is what says so
-    against `monitor.alert_grad_norm_max`.
-    """
+    consecutive breaches, and a `min_steps` beyond the drive keeps it silent — so each knob is
+    the binding term in one drive and not the other. Shipped at `1e9` this gate can never fire,
+    which is why it is a DEFERRED armed-abort row."""
     quiet = _coordinator(trainer=_Trainer(grad_norm=0.5), hard_gn_threshold=1.0,
                          hard_gn_min_steps=1)
     _drive(quiet, steps=4, games=1)
@@ -687,17 +575,14 @@ def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:
 
 
 def test_terminal_eval_enabled_decides_whether_close_out_runs_a_terminal_round() -> None:
-    """`train.terminal_eval_enabled` -> `coordinator/drain.py::run_terminal_eval`. Until
-    WPMINT Phase K-A this fact had THREE authorities (no key, a dataclass `= True`, and a
-    `getattr(cfg, ..., True)` fallback); K-A retired the fallback and this key retires the
-    dataclass default, which is why five composition tests could stop monkeypatching the
-    production builder to turn it off."""
+    """`train.terminal_eval_enabled` -> `coordinator/drain.py::run_terminal_eval`. This fact
+    once had THREE authorities (no key, a dataclass `= True`, and a fallback); the key retires
+    the last of them, which is why five composition tests stopped monkeypatching the builder."""
     from mantis.train.coordinator import drain
 
     calls: list[str] = []
     pipeline = SimpleNamespace(
-        # WP12-R Phase O: a terminal round returns a ROUND RESULT whose
-        # `eval_broken_reason` the seam now reads (it used to be discarded).
+        # A terminal round returns a ROUND RESULT whose `eval_broken_reason` the seam reads.
         run_evaluation=lambda *a, **k: calls.append("terminal") or {"eval_broken_reason": None},
         poll_completed=lambda: None, drain_pending=lambda: None, stop=lambda: None,
     )
@@ -716,10 +601,8 @@ def test_terminal_eval_enabled_decides_whether_close_out_runs_a_terminal_round()
 
 def test_selfplay_stall_timeout_is_the_budget_the_watchdog_arms_with() -> None:
     """`train.selfplay_stall_timeout_sec` -> `StallWatchdog(timeout_sec=)`, whose arm event
-    publishes the value. LAW-16 calls this guard always-armed while `watchdog.py`'s own
-    contract lets `<= 0` disable the fire AND still emit the arm log — the schema's `gt=0` is
-    what makes that posture unwritable, so the arm below shows the value the config really
-    sets."""
+    publishes the value. The watchdog's own contract lets `<= 0` disable the fire while still
+    emitting the arm log; the schema's `gt=0` makes that posture unwritable."""
     h = _coordinator(selfplay_stall_timeout_sec=67.0)
     _drive(h, steps=1, games=1)
     armed = h.sink.named("selfplay_stall_watchdog_armed")
@@ -729,12 +612,11 @@ def test_selfplay_stall_timeout_is_the_budget_the_watchdog_arms_with() -> None:
     assert armed[-1]["enabled"] is True
 
 
-# ══ no second authority survives anywhere on the path (R1/LAW-08/R83) ══════════════════
+# No second authority survives anywhere on the path.
 def test_the_builder_takes_knobs_as_a_required_keyword_only_parameter() -> None:
-    """MF-2 Attack B on the fourth config-authored fact: a parameter DEFAULT would move the
-    authority from the builder BODY to the builder SIGNATURE, leaving every
-    `dataclasses.fields()` assertion green while a caller that omitted the argument silently
-    inherited eighteen postures."""
+    """A parameter DEFAULT would move the authority from the builder BODY to its SIGNATURE,
+    leaving every `dataclasses.fields()` assertion green while a caller that omitted the
+    argument silently inherited eighteen postures."""
     param = inspect.signature(_step_coordinator_config).parameters.get("knobs")
     assert param is not None, (
         "`_step_coordinator_config` must take `knobs`: the eighteen are `train.*` keys and "
@@ -749,15 +631,8 @@ def test_the_builder_takes_knobs_as_a_required_keyword_only_parameter() -> None:
 
 def test_no_coordinator_field_carries_a_code_side_default_and_the_dead_six_are_gone() -> None:
     """EVERY `StepCoordinatorConfig` field must be MISSING-defaulted, and the six dead ones
-    must be deleted rather than authored.
-
-    Both halves are the same rule seen from two sides. A surviving default is a second
-    authority a caller inherits (R1/R83). A surviving DEAD field would have to become a config
-    key to satisfy this class's "every field is config-authored" invariant, and a config key
-    with no live consumer is the R1/LAW-08 violation the bijection exists to catch — which is
-    why adjudication call K-a deleted them (re-verified at HEAD by grep AND by recording every
-    attribute read on a live instance across the whole tier).
-    """
+    deleted rather than authored: a surviving default is a second authority a caller inherits,
+    and a surviving DEAD field would have to become a config key with no live consumer."""
     fields = {f.name: f for f in dataclasses.fields(StepCoordinatorConfig)}
     for name, field in fields.items():
         assert (field.default is dataclasses.MISSING
@@ -774,10 +649,9 @@ def test_no_coordinator_field_carries_a_code_side_default_and_the_dead_six_are_g
 
 
 def test_the_resolver_is_the_only_read_of_the_eighteen_keys(smoke_run_config) -> None:
-    """`resolve_coordinator_knobs` returns exactly what the loaded config holds, key for key —
-    the transport arm at the resolver. A resolver that dropped, defaulted or CROSSED two
-    fields would still satisfy the per-key mutations above for whichever key it happened to
-    carry, and the schema->field rename is exactly where a crossing would be easiest."""
+    """`resolve_coordinator_knobs` returns exactly what the loaded config holds, key for key. A
+    resolver that dropped, defaulted or CROSSED two fields would still satisfy the per-key
+    mutations above, and the schema->field rename is where a crossing would be easiest."""
     config = smoke_run_config(train=dict(_DISTINGUISHABLE))
     spec = resolve_coordinator_knobs(config.train)
     assert isinstance(spec, CoordinatorKnobsSpec)
@@ -807,14 +681,9 @@ def test_the_resolver_is_the_only_read_of_the_eighteen_keys(smoke_run_config) ->
 
 
 def test_the_builder_holds_no_literal_for_any_authored_knob() -> None:
-    """The card's closing claim, asserted rather than described: with `stop_step`,
-    `draw_rate_abort`, `drain_caps` and `knobs` all arriving as parameters, EVERY
-    `StepCoordinatorConfig` field the builder sets comes from one of them.
-
-    Driven by construction, not by reading source: build with a spec whose every value is
-    distinguishable and assert the built object carries them. A surviving literal for any knob
-    would show up as that field disagreeing with the spec.
-    """
+    """With `stop_step`, `draw_rate_abort`, `drain_caps` and `knobs` all arriving as parameters,
+    EVERY field the builder sets comes from one of them. Driven by construction rather than by
+    reading source: a surviving literal shows up as that field disagreeing with the spec."""
     distinguishable = CoordinatorKnobsSpec(**{
         _SCHEMA_TO_FIELD.get(key, key): (
             tuple({"step": s["step"], "capacity": s["capacity"]} for s in value)

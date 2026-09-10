@@ -61,41 +61,20 @@ _LOG = logging.getLogger(__name__)
 
 _THREAD_NAME = "heartbeat-watchdog"
 
-#: Teardown budget armed by `disarm_staleness()` in place of the per-source deadlines. It
-#: matches the drain/terminal-eval hard caps the close-out path is SUPPOSED to enforce
-#: (`StepCoordinatorConfig.eval_final_drain_hard_cap_sec` / `terminal_eval_hard_cap_sec`,
-#: 14400 s) — generous enough that no legitimate close-out is killed, finite so an
-#: unbounded teardown wedge cannot leave BOTH watchdog levels blind. See the
-#: R-DRAIN-HARDCAP-CONSUMERS debt: those config fields have no consumer, so this deadline
-#: is currently the ONLY bound on a teardown wedge.
+#: Teardown budget armed by `disarm_staleness()` in place of the per-source deadlines: it matches
+#: the drain/terminal-eval hard caps (14400 s), generous enough that no legitimate close-out is
+#: killed and finite so an unbounded teardown wedge cannot leave BOTH watchdog levels blind.
 DEFAULT_CLOSE_OUT_DEADLINE_SEC: float = 14400.0
 
-#: Hard time budget for ONE optional effect inside the fire path (snapshot, sink close).
-#: `best_effort` catches exceptions, NOT hangs — without a bound, a wedged filesystem
-#: suspends the fire before `exit_fn` and the process never dies.
+#: Hard time budget for ONE optional effect inside the fire path. `best_effort` catches exceptions,
+#: NOT hangs — without a bound, a wedged filesystem suspends the fire before `exit_fn`.
 DEFAULT_FIRE_EFFECT_TIMEOUT_SEC: float = 30.0
 
-#: How many of a monitor's OWN poll intervals may pass with no completed check before the
-#: monitor is called stalled (AUDIT-1 F-11 / R334(b)).
-#:
-#: WHY THIS EXISTS. A monitor thread that swallows its own errors — which every one of them
-#: must, or a transient `statvfs` kills the run — is indistinguishable from a healthy one on
-#: every observable it publishes, because the thing it stops publishing is the evidence. The
-#: disk guard is the measured case: `check_once` raising on every tick emits no `disk_free`,
-#: so absence-of-alert reads as "plenty of space", and the rc-47 abort stays armed in the
-#: config for the whole run while the volume fills.
-#:
-#: WHY 3, and the grounds are that it separates SLOW from DEAD. One missed tick is a busy
-#: volume; three consecutive missed ticks is a mechanism, and the guard's own counters say
-#: which — `errors_total` advancing with `checks_total` frozen is a raising `check_once`,
-#: both frozen is a thread that is gone. The bound is in the monitor's OWN interval, so a
-#: 60 s guard is judged at 180 s and a 5 s one at 15 s; nothing here assumes a period.
-#:
-#: WHY IT IS NOT A CONFIG KEY, and this is `EARLIEST_FIRE_FRACTION`'s argument verbatim
-#: (`mantis.config.armed_aborts`): a config that could set its own liveness deadline could
-#: disable the check that says its monitors are dead, and the disarm this constant exists to
-#: refuse would be re-spellable as a large number nobody read. It is also NOT a fire — see
-#: `_check_monitor_liveness` — so it decides an OBSERVABLE, never a process exit.
+#: How many of a monitor's OWN poll intervals may pass with no completed check before the monitor
+#: is called stalled. 3 separates SLOW from DEAD — one missed tick is a busy volume, three is a
+#: mechanism — and the bound is in the monitor's own interval, so a 60 s guard is judged at 180 s.
+#: Not a config key, because a config that set its own liveness deadline could disable the check
+#: that says its monitors are dead; and not a fire — it decides an OBSERVABLE, never an exit.
 MONITOR_STALL_INTERVALS: int = 3
 
 
@@ -111,17 +90,11 @@ class MonitorSample:
 
 @dataclass(frozen=True)
 class MonitorLivenessSpec:
-    """A monitor this watchdog reports the liveness of (AUDIT-1 F-11 / R334(b)).
+    """A monitor this watchdog reports the liveness of.
 
-    `sample_fn` returns `None` while the monitor does not exist yet, which is a REAL state
-    and not an error: the composition root starts this watchdog BEFORE it builds the disk
-    guard (the pinned order is pool → watchdog, and the guard follows), so the first polls of
-    every run legitimately have nothing to read. `None` is therefore "not known yet" and is
-    silent; a monitor that appears and then stops advancing is the reportable thing.
-
-    Read LIVE at poll time, never at build time — the O-28 discipline `ActorLagSpec` states
-    one class up, and for the same reason: a value captured at construction would report the
-    monitor's birth forever.
+    `sample_fn` returns `None` while the monitor does not exist yet, a REAL state and not an error:
+    the composition root starts this watchdog BEFORE it builds the disk guard. Read LIVE at poll
+    time — a value captured at construction would report the monitor's birth forever.
     """
 
     name: str
@@ -130,11 +103,9 @@ class MonitorLivenessSpec:
 
 @dataclass(frozen=True)
 class ActorLagSpec:
-    """The actor-lag invariant's inputs (WP-UNFREEZE §4): `learner_step_fn() −
-    actor_ckpt_step_fn() > threshold_steps` → escalation when `abort_enabled`, else ONE
-    loud event per exceedance episode. The QUANTITIES are step-clock; the SAMPLING rides
-    the watchdog's existing seconds poll — deliberately NOT a fifth `HEARTBEAT_SOURCES`
-    entry (a step-delta threshold in a seconds-deadline dict is a type lie)."""
+    """The actor-lag invariant's inputs: `learner_step_fn() − actor_ckpt_step_fn() >
+    threshold_steps`. The QUANTITIES are step-clock while the SAMPLING rides the watchdog's seconds
+    poll — deliberately NOT a fifth `HEARTBEAT_SOURCES` entry, which would be a type lie."""
 
     learner_step_fn: Callable[[], int]     # lambda: int(trainer.step)
     actor_ckpt_step_fn: Callable[[], int]  # actor_sync.actor_ckpt_step
@@ -143,12 +114,9 @@ class ActorLagSpec:
 
 
 class HeartbeatWatchdog:
-    """Poll `registry` staleness + the persist counters on an independent daemon thread.
-
-    Every collaborator is injected (clock / sink / snapshot / exit_fn) so the whole fire
-    path is deterministically testable: `arm()` and `poll_once()` are factored OUT of
-    `start()`, so a fake clock drives exact staleness units with no sleeps.
-    """
+    """Poll `registry` staleness and the persist counters on an independent daemon thread. Every
+    collaborator is injected and `arm()`/`poll_once()` are factored OUT of `start()`, so a fake
+    clock drives exact staleness units with no sleeps."""
 
     def __init__(
         self,
@@ -181,13 +149,9 @@ class HeartbeatWatchdog:
         self._exit_fn = exit_fn
         self._close_out_deadline = float(close_out_deadline_sec)
         self._snapshot_timeout = float(snapshot_timeout_sec)
-        # AUDIT-1 F-11 / R334(b). The default is `()` and NOT the required-with-no-default
-        # posture `wired_sources` takes, because the two failure modes are different: an
-        # undeclared heartbeat source makes a HEALTHY run fire 42, so it may never be
-        # inferred; an undeclared monitor makes this watchdog quiet about a monitor it was
-        # never told about, which costs an observable and no run. It is also not silent —
-        # `arm()` emits `monitor_liveness_unwired` when the tuple is empty, and production's
-        # wiring is pinned structurally rather than by anyone remembering the kwarg.
+        # The default is `()` and not the required-with-no-default posture `wired_sources` takes:
+        # an undeclared heartbeat source makes a HEALTHY run fire 42, while an undeclared monitor
+        # only costs an observable — and the empty tuple still emits `monitor_liveness_unwired`.
         self._monitor_liveness = tuple(monitor_liveness)
         #: name -> (clock at the last OBSERVED advance, checks_total at that advance).
         self._monitor_seen: dict[str, tuple[float, int]] = {}
@@ -196,10 +160,8 @@ class HeartbeatWatchdog:
 
         sources = getattr(registry, "sources", None)
         self._sources: tuple[str, ...] = tuple(sources) if sources else tuple(self._deadlines)
-        # A registry source with NO deadline entry is a WIRING BUG, not a default: silently
-        # reading it as 0.0 (= disabled) would blind the watchdog to a whole pipeline stage
-        # while it keeps mirroring a fresh `seq`, so the supervisor backstop would not fire
-        # either. Fail LOUD at construction instead (R1: no code-side defaults).
+        # A registry source with NO deadline entry is a WIRING BUG, not a default: reading it as
+        # 0.0 would blind the watchdog to a whole stage while it keeps mirroring a fresh `seq`.
         missing = [source for source in self._sources if source not in self._deadlines]
         if missing:
             raise ValueError(
@@ -207,13 +169,10 @@ class HeartbeatWatchdog:
                 f"every registry source needs an explicit deadline "
                 f"(use <= 0 to disable that source's staleness fire)"
             )
-        # The composition root DECLARES which sources it actually handed `registry.beat` to.
-        # A declared source is staleness-eligible from arm time (so a stage that dies before
-        # its FIRST beat is still caught — the wedge coverage O-10/O-11 pin); an UNDECLARED
-        # source that has never beaten is a WIRING GAP, not a wedge, and gets a loud
-        # `heartbeat_source_unwired` event instead of a 42 that would kill a healthy run and
-        # send the supervisor relaunching into the same missing kwarg until the budget dies.
-        # Default None = "every registry source is wired", the conservative reading.
+        # The composition root DECLARES which sources it handed `registry.beat` to. A declared
+        # source is staleness-eligible from arm time, so a stage that dies before its FIRST beat is
+        # caught; an UNDECLARED source that never beat is a wiring gap and gets a loud
+        # `heartbeat_source_unwired` instead of a 42. Default None = "every source is wired".
         self._wired: frozenset[str] = (
             frozenset(self._sources) if wired_sources is None else frozenset(wired_sources)
         )
@@ -223,8 +182,7 @@ class HeartbeatWatchdog:
                 f"HeartbeatWatchdog: wired_sources names unknown heartbeat source(s) "
                 f"{unknown}; known sources: {list(self._sources)}"
             )
-        # None = no lag surveillance (direct-ctor tests / non-run contexts) — LOUD as
-        # "absent" in the arm event, never silent.
+        # None = no lag surveillance — LOUD as "absent" in the arm event, never silent.
         self._actor_lag = actor_lag
         self._lag_exceeded_latched = False
         self._lag_negative_reported = False
@@ -235,14 +193,12 @@ class HeartbeatWatchdog:
         self._fired = False
         self._seq = 0
         self._last_file_write: float | None = None
-        # LAW-18 (WPAX P / TD-6): the lag SAMPLE's own gate. Derived from `_file_interval`
-        # above — no new ctor parameter, so one config fact never enters this constructor
-        # twice under two names (LAW-08) and no construction site changes.
+        # LAW-18: the lag SAMPLE's own gate, derived from `_file_interval` so one config fact never
+        # enters this constructor twice under two names and no construction site changes.
         self._last_lag_sample: float | None = None
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
 
-    # ── public surface ────────────────────────────────────────────────────────────────
     @property
     def fired(self) -> bool:
         return self._fired
@@ -258,15 +214,10 @@ class HeartbeatWatchdog:
     def arm(self) -> None:
         """Grace-reset the registry and emit `heartbeat_watchdog_armed`. Spawns NO thread.
 
-        The arm-log is UNCONDITIONAL and names every source with its deadline — including a
-        source whose ``deadline <= 0`` disables its fire (the WP10 visibility law: a
-        disabled or misconfigured watchdog must be loud, never silent).
-
-        ``enabled`` is per-source AND honest: it reads ``False`` for a source that can NOT
-        fire — a non-positive deadline, or an UNDECLARED source nothing has beaten (which is
-        a wiring gap, not a watched stage). ``unwired_sources`` names exactly the latter and
-        ``awaiting_first_beat`` names declared sources that have not beaten yet, so an
-        incomplete wiring is readable at arm time instead of surfacing later as a false 42.
+        The arm-log is UNCONDITIONAL and names every source with its deadline, including one whose
+        ``deadline <= 0`` disables its fire: a disabled or misconfigured watchdog must be loud.
+        ``unwired_sources`` and ``awaiting_first_beat`` make an incomplete wiring readable at arm
+        time instead of surfacing later as a false 42.
         """
         arm = getattr(self._registry, "arm", None)
         if arm is not None:
@@ -282,16 +233,14 @@ class HeartbeatWatchdog:
             "wired_sources": sorted(self._wired),
             "unwired_sources": [s for s in self._sources if s not in watched],
             "awaiting_first_beat": [s for s in self._sources if s in watched and s not in beaten],
-            # WP-UNFREEZE §4.3 visibility: a disabled or unwired lag check is loud at
-            # arm time, never silent.
+            # A disabled or unwired lag check is loud at arm time, never silent.
             "actor_lag": (
                 {"armed": bool(self._actor_lag.abort_enabled),
                  "threshold_steps": int(self._actor_lag.threshold_steps)}
                 if self._actor_lag is not None else "absent"
             ),
-            # AUDIT-1 F-11 / R334(b): the monitors whose liveness this watchdog reports, and
-            # the empty case named rather than absent — an unwired monitor is a gap somebody
-            # must be able to see at arm time, exactly as an unwired heartbeat source is.
+        # The monitors whose liveness this watchdog reports, with the empty case NAMED rather than
+        # absent: an unwired monitor is a gap somebody must be able to see at arm time.
             "monitor_liveness": ([m.name for m in self._monitor_liveness]
                                  or "monitor_liveness_unwired"),
             "monitor_stall_intervals": MONITOR_STALL_INTERVALS,
@@ -319,11 +268,9 @@ class HeartbeatWatchdog:
     def disarm_staleness(self) -> None:
         """Clean-shutdown entry: SWAP the per-source deadlines for ONE close-out deadline.
 
-        Not an off switch. Teardown legitimately stops every heartbeat (the pool is stopped,
-        no training step runs) and legitimately takes far longer than a per-source deadline —
-        but an UNBOUNDED teardown left both watchdog levels blind, because the file mirror
-        keeps advancing `seq` and the supervisor therefore reads a wedged child as healthy.
-        Persist-fatal and the file mirror are untouched.
+        Not an off switch. Teardown legitimately stops every heartbeat and outlasts a per-source
+        deadline, but an UNBOUNDED teardown left both watchdog levels blind, because the file
+        mirror keeps advancing `seq`. Persist-fatal and the file mirror are untouched.
         """
         if not self._staleness_armed:
             return
@@ -334,13 +281,11 @@ class HeartbeatWatchdog:
                     "close_out_deadline_sec": self._close_out_deadline})
 
     def poll_once(self) -> None:
-        """ONE poll cycle: persist-fatal → actor-lag → staleness → file mirror (that order).
+        """ONE poll cycle: persist-fatal → actor-lag → staleness → file mirror, in that order.
 
-        Persist first: a storage fault is already fatal and its diagnosis is unambiguous,
-        so it must not be masked by a staleness fire it probably caused. The actor-lag
-        check runs iff staleness is armed (WP-UNFREEZE §4.2): during close-out training
-        has stopped, both step counters freeze, and a teardown must never die to a stale
-        lag reading.
+        Persist first, because a storage fault is already fatal and must not be masked by a
+        staleness fire it probably caused. The actor-lag check runs iff staleness is armed, since
+        during close-out both step counters freeze.
         """
         if self._fired:
             return
@@ -350,25 +295,10 @@ class HeartbeatWatchdog:
                        detail={"persist_errors_total": count})
             return
         if self._staleness_armed:
-            # AUDIT-1 F-11 / R334(b). Gated on `_staleness_armed`, INSIDE the armed branch,
-            # for a reason this leg learned by breaking the tier with the other placement.
-            #
-            # This check was first written to run on EVERY poll — armed or not — on the
-            # argument that a monitor's death is not a pipeline stall and close-out does not
-            # excuse it. That argument is about WHEN the reading is interesting. It ignored
-            # WHO takes the reading: this watchdog's OWN thread, which emits through the sink
-            # it also polices. A run tearing down closes its sink; an emit after that is a
-            # failed write; `JsonlEventSink` COUNTS a failed write rather than raising
-            # (LAW-14) — and the counter it increments is `counters_fn`, which is the FIRST
-            # thing `poll_once` reads and which it answers with `os._exit(43)`. **A periodic
-            # diagnostic emitted from the watchdog thread is self-fatal**, and it was measured
-            # so: `monitor_liveness_sample` into a closed sink, then rc 43 on the next poll,
-            # taking the whole test tier down from a leaked watchdog three files later.
-            #
-            # `_check_actor_lag` has always sat behind this same gate and
-            # `test_no_sample_during_close_out_and_none_without_a_spec` says why in as many
-            # words — the emission "inherits the two structural gates instead of becoming a
-            # third, independently-wrong one". This is that third one, corrected.
+            # Gated on `_staleness_armed`, INSIDE the armed branch: a run tearing down closes its
+            # sink, `JsonlEventSink` COUNTS a failed write rather than raising, and that counter is
+            # `counters_fn` — the first thing `poll_once` reads and answers with `os._exit(43)`. A
+            # periodic diagnostic emitted from this thread after close-out is self-fatal, measured.
             self._check_monitor_liveness()
             if self._check_actor_lag():
                 return
@@ -379,22 +309,13 @@ class HeartbeatWatchdog:
         self._mirror_file()
 
     def _check_monitor_liveness(self) -> None:
-        """Report a monitor whose own counter has stopped advancing. NEVER fires (R334(b)).
+        """Report a monitor whose own counter has stopped advancing. NEVER fires.
 
-        The shape is deliberate and it is the ruling's, not a preference. Making the disk
-        guard a fifth `HEARTBEAT_SOURCES` member would put a monitor thread on an instrument
-        whose stall code is **42, the TRANSIENT class the supervisor RELAUNCHES on** — so a
-        guard raising every tick would stall-abort and be relaunched into the same broken
-        state, a crash loop into a filling volume, on the leg whose whole purpose is stopping
-        a run before the volume fills. It would also need a fifth REQUIRED schema key and a
-        re-mint of all seven configs. This reads the counters the guard already publishes and
-        says so out loud.
-
-        LAW-18: the reading is emitted on a healthy run too, bounded by the same file
-        interval `_mirror_file` and the lag sample use, so an observer can tell a live
-        reading from a frozen one. The stall event itself is LATCHED per monitor and clears
-        when the counter advances again, so a long outage is one event and a recovery is
-        visible.
+        Making the disk guard a fifth `HEARTBEAT_SOURCES` member would put a monitor thread on an
+        instrument whose stall code is 42, the TRANSIENT class the supervisor RELAUNCHES on — a
+        crash loop into a filling volume. This reads the counters the guard already publishes.
+        The reading is emitted on a healthy run too (LAW-18) and the stall event is LATCHED per
+        monitor, so a long outage is one event and a recovery is visible.
         """
         if not self._monitor_liveness:
             return
@@ -403,8 +324,7 @@ class HeartbeatWatchdog:
         for spec in self._monitor_liveness:
             sample = spec.sample_fn()
             if sample is None:
-                # Not built yet. A real state, not an error: the root starts this watchdog
-                # before it constructs the guard.
+                # Not built yet — a real state, not an error: the root starts this watchdog first.
                 continue
             seen = self._monitor_seen.get(spec.name)
             if seen is None or sample.checks_total > seen[1]:
@@ -448,12 +368,11 @@ class HeartbeatWatchdog:
                         "monitors": readings})
 
     def _check_actor_lag(self) -> bool:
-        """The WP-UNFREEZE lag invariant. Returns True when a fire was issued.
+        """The actor-lag invariant. Returns True when a fire was issued.
 
-        Both callables are read LIVE on every poll (the O-28 discipline — a value
-        captured at ctor/arm would read a frozen delta forever). Disarmed exceedance is
-        ONE loud event per episode (latched; the latch resets once lag re-enters the
-        threshold). A negative lag is a wiring bug being reported honestly, never a fire.
+        Both callables are read LIVE on every poll, since a value captured at ctor would read a
+        frozen delta forever. Disarmed exceedance is ONE loud event per episode, latched until lag
+        re-enters the threshold; a negative lag is a wiring bug reported, never a fire.
         """
         spec = self._actor_lag
         if spec is None:
@@ -463,17 +382,10 @@ class HeartbeatWatchdog:
         lag = learner_step - actor_step
         detail = {"learner_step": learner_step, "actor_ckpt_step": actor_step,
                   "lag_steps": lag, "threshold_steps": int(spec.threshold_steps)}
-        # LAW-18: the lag invariant is a lever under test, so it logs its own reading
-        # in-run, not only when it fires. Before this, a healthy run emitted NOTHING from
-        # this check (`actor_lag_negative` / `actor_lag_exceeded` are the only two arms), so
-        # no observer could tell a live reading from a frozen 0 — the exact discrimination
-        # the mint preflight (R61 assertion (b)) has to make. It is the SAME `detail` dict
-        # the fire path uses, so a sample can never disagree with the reading that fires.
-        # Emitted BEFORE the `lag < 0` arm on purpose: b5a reads `lag_steps < 0` off the
-        # SAMPLE, and a sample placed after that arm is silenced on exactly the wiring
-        # defect it exists to expose. Bounded by the interval ALREADY in this object — the
-        # same one `_mirror_file` uses (one rule, two consumers) — so a 5 s poll cannot
-        # flood the segment.
+        # LAW-18: the lever logs its own reading in-run, not only when it fires, using the SAME
+        # `detail` dict the fire path uses so a sample cannot disagree with the reading that fires.
+        # Emitted BEFORE the `lag < 0` arm on purpose, or it is silenced on exactly the wiring
+        # defect it exists to expose, and bounded by the interval already in this object.
         now = float(self._clock())
         if (self._last_lag_sample is None
                 or (now - self._last_lag_sample) >= self._file_interval):
@@ -504,15 +416,13 @@ class HeartbeatWatchdog:
         ages = self._registry.ages()
         beaten = self._beaten_sources()
         for source in self._sources:
-            # PER-SOURCE off switch: `deadline <= 0` disables THAT source's fire and
-            # nothing else — the other sources stay armed (DESIGN §c.4, PREREG P-16,
-            # repo_design §11 "per-source"). A global kill-switch must never be an
-            # emergent property of one zeroed field.
+            # PER-SOURCE off switch: `deadline <= 0` disables THAT source's fire and nothing else.
+            # A global kill-switch must never be an emergent property of one zeroed field.
             deadline = float(self._deadlines[source])
             if deadline <= 0.0:
                 continue
-            # UNDECLARED-and-never-beaten is a wiring gap, not a wedge (see `_wired`): it
-            # gets a loud non-fatal signal, never a 42 that would kill a healthy run.
+            # UNDECLARED-and-never-beaten is a wiring gap, not a wedge: a loud non-fatal signal,
+            # never a 42 that would kill a healthy run.
             if source not in self._wired and source not in beaten:
                 self._warn_unwired(source, float(ages.get(source, 0.0)), deadline)
                 continue
@@ -543,19 +453,16 @@ class HeartbeatWatchdog:
         return False
 
     def _beaten_sources(self) -> frozenset[str]:
-        """Sources that have been beaten at least once. A registry without the capability
-        (a duck-typed stub) is treated as all-beaten — the conservative reading, since the
-        never-beaten carve-out may only ever SUPPRESS a fire on a source we know is unwired.
-        """
+        """Sources beaten at least once. A registry without the capability is treated as
+        all-beaten, the conservative reading, since the carve-out may only ever SUPPRESS a fire."""
         beaten = getattr(self._registry, "beaten_sources", None)
         if not callable(beaten):
             return frozenset(self._sources)
         return frozenset(cast("Iterable[str]", beaten()))
 
     def _warn_unwired(self, source: str, age: float, deadline: float) -> None:
-        """Emit ONCE per source: this source has never beaten past its own deadline, so the
-        wiring is incomplete. Loud and actionable, but NOT a fire (killing a healthy run
-        because a `heartbeat=` kwarg was forgotten is the worse failure)."""
+        """Emit ONCE per source: this source has never beaten past its own deadline, so the wiring
+        is incomplete. Loud and actionable, but NOT a fire."""
         if age < deadline or source in self._unwired_warned:
             return
         self._unwired_warned.add(source)
@@ -571,11 +478,9 @@ class HeartbeatWatchdog:
             "detail": "never beaten since arm; staleness fire suppressed for this source",
         })
 
-    # ── internals ─────────────────────────────────────────────────────────────────────
     def _run(self) -> None:
-        """The poll loop. An unexpected exception HERE fires 42 `watchdog_error` — a dead
-        watchdog must never be silent (a silent one is indistinguishable from a healthy
-        run right up to the moment it was needed)."""
+        """The poll loop. An unexpected exception HERE fires 42 `watchdog_error`: a dead watchdog
+        must never be silent, being indistinguishable from a healthy run until it was needed."""
         while not self._stop.is_set() and not self._fired:
             try:
                 self.poll_once()
@@ -587,12 +492,9 @@ class HeartbeatWatchdog:
             self._stop.wait(max(self._poll_interval, 0.0))
 
     def _mirror_file(self) -> None:
-        """Publish the freshest ages to the heartbeat FILE with a monotonic ``seq``.
-
-        The `seq` is the supervisor's liveness signal: it advances iff THIS thread still
-        runs. The write is best-effort — a transient FS failure must not kill a healthy
-        run; a persistent one freezes `seq`, which is the supervisor's cue.
-        """
+        """Publish the freshest ages to the heartbeat FILE with a monotonic ``seq``, which advances
+        iff THIS thread still runs. The write is best-effort: a persistent failure freezes `seq`,
+        which is the supervisor's cue."""
         now = float(self._clock())
         if self._last_file_write is not None and self._file_interval > 0.0 \
                 and (now - self._last_file_write) < self._file_interval:
@@ -610,23 +512,15 @@ class HeartbeatWatchdog:
     def _fire(self, code: int, *, reason: str, detail: Mapping[str, Any] | None = None) -> None:
         """LOUD event → BOUNDED snapshot → outcome event → BOUNDED sink close → exit.
 
-        Guarantee, stated exactly (restated at WPCLEAN Phase RES — the WP13-A N3 row): the
-        fire runs ENTIRELY on the watchdog thread (O-10/O-14 — the wedged main thread is
-        never asked to cooperate) and reaches ``exit_fn`` even when an optional effect
-        RAISES (`best_effort` counts it). The HANG bound is narrower and holds for exactly
-        TWO of the four effects: the snapshot and the sink close run under `_bounded`'s hard
-        `snapshot_timeout_sec` budget on their own worker threads; the two `_emit` calls are
-        exception-safe but NOT time-bounded — a sink whose ``emit`` wedges (hung log
-        filesystem) still suspends the fire. That residual is deliberate here (bounding the
-        emits is a fire-path timing change carded with N1's cross-check, not a docstring
-        fix) and its backstop is external: a suspended fire stops the heartbeat-file writer
-        with it, which is exactly the staleness the process-level supervisor acts on (N3's
-        own row: "supervisor backstop covers").
+        The fire runs ENTIRELY on the watchdog thread — the wedged main thread is never asked to
+        cooperate — and reaches ``exit_fn`` even when an optional effect RAISES. The HANG bound
+        holds for exactly TWO of the four effects: the snapshot and the sink close run under
+        `_bounded`'s hard budget on their own worker threads, while the two `_emit` calls are
+        exception-safe but NOT time-bounded, so a wedged sink still suspends the fire. That
+        residual's backstop is external: a suspended fire stops the heartbeat-file writer with it,
+        and that staleness is what the process-level supervisor acts on.
 
-        Order note: the `.watchdog` snapshot now runs BEFORE the sink close so its OUTCOME can
-        be recorded in the ONE channel (`heartbeat_watchdog_fire_complete`). Previously a
-        failed or skipped snapshot left no JSONL trace at all — only a stderr WARN moments
-        before `os._exit`. The sink is line-buffered, so nothing already emitted is at risk.
+        The `.watchdog` snapshot runs BEFORE the sink close so its OUTCOME reaches the ONE channel.
         """
         if self._fired:
             return
@@ -661,8 +555,8 @@ class HeartbeatWatchdog:
         """Run ONE optional fire-path effect under a hard time budget on its own thread.
 
         Returns True iff it completed without raising. A TIMEOUT is counted under
-        ``<label>_timeout`` and abandoned (the worker is a daemon): the fire must reach
-        ``exit_fn`` even on a wedged filesystem, so waiting forever is not an option.
+        ``<label>_timeout`` and abandoned, because the fire must reach ``exit_fn`` even on a wedged
+        filesystem.
         """
         outcome: list[bool] = []
 

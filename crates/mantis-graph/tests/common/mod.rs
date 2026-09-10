@@ -40,7 +40,7 @@ pub const CLASS_BASE: u8 = 2;
 
 const DTYPE_NAMES: [&str; 6] = ["f32", "i32", "u32", "u16", "u8", "i8"];
 
-// ── SHA-256 (FIPS 180-4, dep-free) ───────────────────────────────────────────
+// SHA-256 (FIPS 180-4, dep-free)
 
 const K: [u32; 64] = [
     0x428a_2f98, 0x7137_4491, 0xb5c0_fbcf, 0xe9b5_dba5, 0x3956_c25b, 0x59f1_11f1, 0x923f_82a4,
@@ -142,7 +142,7 @@ pub fn first_diff_offset(a: &[u8], b: &[u8]) -> Option<usize> {
     None
 }
 
-// ── fixture root ─────────────────────────────────────────────────────────────
+// fixture root
 
 /// The repo's graph-parity fixture root (path computation only).
 #[must_use]
@@ -171,7 +171,7 @@ pub fn verify_fixture_root(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-// ── manifest.tsv ─────────────────────────────────────────────────────────────
+// manifest.tsv
 
 #[derive(Debug)]
 pub struct FileRow {
@@ -324,7 +324,7 @@ pub fn verify_file_row(root: &Path, row: &FileRow) -> Result<(), String> {
     Ok(())
 }
 
-// ── binary readers ───────────────────────────────────────────────────────────
+// binary readers
 
 struct Cur<'a> {
     b: &'a [u8],
@@ -574,7 +574,7 @@ pub fn check_blob_against_case_rows(blob: &Blob, rows: &[&CaseRow]) -> Result<()
     Ok(())
 }
 
-// ── canonical serializer (mirror of the capture writer) ──────────────────────
+// canonical serializer (mirror of the capture writer)
 
 #[derive(Debug)]
 pub struct BuiltField {

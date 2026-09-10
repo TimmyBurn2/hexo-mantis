@@ -1,36 +1,14 @@
-//! ⊕ R347(a) WITNESS: what the SPARSE Gumbel row costs against Mctx's exact target.
+//! What the SPARSE Gumbel row costs against Mctx's exact target.
 //!
-//! R8: >300 LOC by design — the driven game, the two target constructions it compares, and
-//! the divergence it reports are one measurement. Splitting the reconstruction away from the
-//! drive that produced the row it reconstructs would let one be changed without the other,
-//! and the whole content of this file is that the two agree.
+//! R8 justify: the driven game, the two target constructions and the divergence are one
+//! measurement; split, the reconstruction could change without the drive that produced the row.
 //!
-//! THE CLAIM UNDER TEST. R347(a) rules that a Gumbel row is stored as the m sampled
-//! candidates' exact `(action, target)` entries plus ONE scalar, the tail mass alpha. The
-//! grounds are arithmetic: under Sequential Halving every UNVISITED root child completes to
-//! the same mixed value, so its improved-policy mass is `prior * exp(c) / Z` — the recording
-//! prior times one scalar shared by the whole tail. The trainer therefore rebuilds the tail
-//! as `alpha * its own current prior, renormalized over the unstored legal set`.
-//!
-//! THE DEVIATION, AND WHY IT IS NOT ZERO IN PRODUCTION. The reconstruction uses the
-//! TRAINER'S current prior, which is not the prior that recorded the row. This file measures
-//! both halves and reports both, because they answer different questions:
-//!
-//!   (A) THE ALGEBRA. Reconstructed with the ROW'S OWN recording prior, the sparse row must
-//!       reproduce Mctx's exact target to floating-point noise. If it does not, the tail is
-//!       not proportional to the prior and the whole representation is wrong. Bar: median
-//!       KL below `EXACT_BAR` nats, which is a numerical-noise bar and not a tolerance.
-//!
-//!   (B) THE DRIFT. Reconstructed with a MOVED prior, KL grows with how far the prior moved.
-//!       The move is modelled as the one training does: a mix of the recording prior toward
-//!       the improved-policy target, `(1-lambda) * prior + lambda * target`. `lambda` is a
-//!       declared drift and the reading is reported across a whole ladder of it, so a reader
-//!       gets the CURVE rather than one point. R347(a)'s bar — median KL < 0.01 nats — is
-//!       asserted at `DRIFT_BAR_LAMBDA`, which is far larger than one consumption of one row
-//!       moves a prior, so the reading is conservative.
-//!
-//! BOTH FORMS ARE HELD ONLY HERE. The exact target is recomputed in this test from the tree;
-//! no production row carries it, which is the "test-only recording mode" R347(a) names.
+//! A row stores the m sampled candidates' exact entries plus ONE scalar, the tail mass alpha:
+//! under Sequential Halving every UNVISITED root child completes to the same mixed value, so the
+//! tail is the recording prior times one shared scalar. THE ALGEBRA: with the row's OWN prior the
+//! reconstruction must reproduce the exact target to floating-point noise. THE DRIFT: with a
+//! MOVED prior, KL grows with the move, over a ladder so a reader gets the curve. The exact
+//! target is recomputed here from the tree; no production row carries it.
 
 use mantis_core::Board;
 use mantis_search::{MCTSTree, MctxRootState, SearchKind};
@@ -39,33 +17,21 @@ use mantis_search::{MCTSTree, MctxRootState, SearchKind};
 const N_ACTIONS: usize = 19 * 19 + 1;
 /// The minted candidate count (R347(b)); it is also the sparse row's slot bound.
 const GUMBEL_M: usize = 16;
-/// Small on purpose: the divergence being measured does not depend on the budget, and a
-/// debug-build r8 game at the minted 320 would take many minutes to say the same thing. It
-/// is large enough for Sequential Halving to run several phases at m = 16.
+/// Small on purpose: the divergence does not depend on the budget.
 const SIMS: usize = 64;
 const PLIES: usize = 10;
-/// The minted Q-scale (R347(b): `value_scale = 1.0`, App. F's board-game setting) and the
-/// value it replaced (mctx's Atari default). BOTH are driven: at 1.0 the improved policy is
-/// so peaked that the tail mass is numerically zero and the sparse row loses nothing at all,
-/// which makes the minted regime a WEAK test of the reconstruction. 0.1 is where the tail
-/// carries real mass, so it is the regime in which the reconstruction could actually be
-/// wrong — and a witness that only ran the easy one would not have seen it.
+/// The minted Q-scale 1.0 and the value it replaced, 0.1, BOTH driven: at 1.0 the tail mass is
+/// numerically zero, so only 0.1 is a regime in which the reconstruction could be wrong.
 const C_VISIT: f32 = 50.0;
 const C_SCALES: [f32; 2] = [1.0, 0.1];
 
-/// (A)'s bar: floating-point noise, not a tolerance. The reconstruction is the same
-/// arithmetic in a different order, so anything above this is a real disagreement.
+/// The algebra bar: floating-point noise, not a tolerance — the same arithmetic reordered.
 const EXACT_BAR: f64 = 1e-6;
-/// (B)'s bar and the drift it is read at — R347(a)'s "median < 0.01 nats".
+/// The drift bar: median KL below 0.01 nats.
 const DRIFT_BAR: f64 = 0.01;
-/// The rung R347(a)'s bar is read at: a TENTH OF A NAT of per-action logit drift. Stated as a
-/// choice, with its grounds and with the margin measured rather than assumed — the test
-/// prints the largest rung still under the bar for every regime it drives, so a reader sees
-/// where the bar is crossed instead of only that this rung clears it.
+/// The rung the bar is read at: a tenth of a nat of per-action logit drift.
 const DRIFT_BAR_LAMBDA: f64 = 0.10;
-/// The reported drift ladder, in NATS of per-action logit displacement. `0.0` is (A)
-/// re-derived through the same code path, which is what makes the ladder's first rung a
-/// control rather than a separate implementation.
+/// The drift ladder in NATS of logit displacement; `0.0` re-derives the algebra as a control.
 const DRIFT_LADDER: [f64; 6] = [0.0, 0.05, 0.10, 0.25, 0.50, 1.00];
 
 fn r8_board() -> Board {
@@ -77,8 +43,7 @@ fn r8_board() -> Board {
     board
 }
 
-/// A skewed but everywhere-positive prior: a uniform one would make the tail's shape
-/// indistinguishable from a flat fallback, which is the defect this witness has to see.
+/// A skewed but everywhere-positive prior: a uniform one hides a flat fallback.
 fn stub_policy() -> Vec<f32> {
     let raw: Vec<f32> = (0..N_ACTIONS)
         .map(|i| 1.0 + (i % 13) as f32 * 0.25)
@@ -87,8 +52,7 @@ fn stub_policy() -> Vec<f32> {
     raw.into_iter().map(|x| x / total).collect()
 }
 
-/// One Gumbel search over `board`, driven exactly as the self-play drive does — the root's
-/// own evaluation charged against the budget, then one leaf batch per halving round.
+/// One Gumbel search over `board`, driven exactly as the self-play drive does.
 fn search(board: &Board, policy: &[f32], seed: u64, c_scale: f32) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
@@ -124,11 +88,8 @@ fn search(board: &Board, policy: &[f32], seed: u64, c_scale: f32) -> MCTSTree {
     tree
 }
 
-/// `((q, r), recording prior, visits)` for every root child, read off the pool.
-///
-/// Read here rather than through a getter because the getter that would return it is a
-/// public API with a single test consumer; the pool's fields are already public and this
-/// keeps the tree's surface from growing for one measurement.
+/// `((q, r), recording prior, visits)` per root child, read off the pool rather than through a
+/// getter that would grow the tree's public surface for one measurement.
 fn root_children(tree: &MCTSTree) -> Vec<((i32, i32), f32, u32)> {
     let root = &tree.pool[0];
     if !root.is_expanded() {
@@ -145,7 +106,6 @@ fn root_children(tree: &MCTSTree) -> Vec<((i32, i32), f32, u32)> {
         .collect()
 }
 
-/// One row's measurement.
 struct Row {
     ply: usize,
     n_legal: usize,
@@ -153,23 +113,16 @@ struct Row {
     alpha: f64,
     /// KL(exact || reconstructed) at each rung of [`DRIFT_LADDER`], in order.
     kl: Vec<f64>,
-    /// Exact mass the reconstruction could only represent at [`RECON_FLOOR`], at the bar's
-    /// drift rung. This is the mass the sparse row genuinely loses.
+    /// Exact mass representable only at [`RECON_FLOOR`] — what the sparse row truly loses.
     floored: f64,
 }
 
-/// The floor a reconstructed probability is read at.
-///
-/// IT IS THE f32 SMALLEST NORMAL, and it is not a fudge. The row's alpha is an `f32` field,
-/// so a tail whose true mass is below this cannot be stored at all and the reconstruction is
-/// a hard zero there. `KL` against a hard zero is `+inf` for any positive exact mass however
-/// small, which reports an infinite divergence for a difference of order 1e-20 that no CE
-/// loss can observe (a zero target contributes nothing to `-sum target * log q`). Flooring
-/// makes the statistic finite; the mass that had to be floored is reported alongside it, so
-/// the floor cannot hide a real hole in the support.
+/// The floor a reconstructed probability is read at: the f32 smallest normal, since alpha is an
+/// `f32` and a tail below it cannot be stored. KL against a hard zero is `+inf` for a difference
+/// no CE loss observes; the floored mass is reported alongside, so the floor hides no hole.
 const RECON_FLOOR: f64 = f32::MIN_POSITIVE as f64;
 
-/// `(KL(p || q), exact mass that had to be floored)` over aligned distributions.
+/// `(KL(p || q), exact mass floored)` over aligned distributions.
 fn kl_divergence(p: &[f64], q: &[f64]) -> (f64, f64) {
     let mut acc = 0.0;
     let mut floored = 0.0;
@@ -188,8 +141,7 @@ fn kl_divergence(p: &[f64], q: &[f64]) -> (f64, f64) {
     (acc, floored)
 }
 
-/// Rebuild the row: the explicit entries verbatim, plus `alpha` spread over the remaining
-/// legal set in proportion to `prior`.
+/// Rebuild the row: explicit entries verbatim, `alpha` spread over the rest by `prior`.
 fn reconstruct(exact: &[f64], explicit: &[bool], prior: &[f64], alpha: f64) -> Vec<f64> {
     let tail_prior_total: f64 = prior
         .iter()
@@ -215,22 +167,14 @@ fn reconstruct(exact: &[f64], explicit: &[bool], prior: &[f64], alpha: f64) -> V
 
 /// The prior a trainer holds after its logits have drifted `lambda` NATS per action.
 ///
-/// THE DRIFT IS IN LOGIT SPACE AND IT IS NOT ALIGNED WITH THE TARGET, and both halves are
-/// load-bearing. Logit space because that is where a trained net's parameters move it, so
-/// `lambda` reads directly as "this prior's logits have moved by lambda nats". Unaligned
-/// because a drift TOWARD the improved-policy target measures nothing here: on the tail the
-/// exact target IS the prior times a constant, so mixing the two leaves the tail's shape
-/// unchanged after renormalization and every rung of the ladder reports the same number.
-/// That was the first form this function took, and the ladder it produced was flat.
-///
-/// The per-action displacement is a deterministic function of the action's index, so the
-/// reading is reproducible; its mean is removed so `lambda` moves the SHAPE and not the
-/// normalizer.
+/// LOGIT space, and NOT aligned with the target: on the tail the exact target IS the prior times
+/// a constant, so a drift toward it leaves the shape unchanged and the ladder goes flat. The mean
+/// displacement is removed so `lambda` moves the SHAPE, not the normalizer.
 fn drifted_prior(prior: &[f64], lambda: f64) -> Vec<f64> {
     let n = prior.len();
     let disp: Vec<f64> = (0..n)
         .map(|i| {
-            // A cheap deterministic hash into [-1, 1]; no RNG dependency and no seed to lose.
+            // A deterministic hash into [-1, 1]: no RNG dependency and no seed to lose.
             let h = (i as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
             ((h >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
         })
@@ -248,7 +192,6 @@ fn drifted_prior(prior: &[f64], lambda: f64) -> Vec<f64> {
     raw.into_iter().map(|r| r / total).collect()
 }
 
-/// The rung of [`DRIFT_LADDER`] the bar is read at.
 fn bar_rung() -> usize {
     DRIFT_LADDER
         .iter()
@@ -284,24 +227,20 @@ fn measure_game(c_scale: f32) -> Vec<Row> {
         let trunk = board.cluster_window_size() as i32;
         let half = (trunk - 1) / 2;
 
-        // The three aligned vectors, in root-child order: Mctx's exact target, the recording
-        // prior, and whether Sequential Halving actually visited that child.
+        // Aligned in root-child order: exact target, recording prior, visited-or-not.
         let exact: Vec<f64> = children
             .iter()
             .map(|&((q, r), _, _)| f64::from(target.get(q, r, bcq, bcr, trunk, half, 0.0)))
             .collect();
-        // NORMALIZED before anything is measured off it. `exact` is read back through an
-        // f32 ragged container, so its sum misses 1 by f32 noise over a legal set of
-        // hundreds; an un-normalized read makes KL negative by that noise and turns the
-        // algebra bar into a test of the container's precision rather than of the tail.
+        // Normalized first: `exact` returns through an f32 container whose sum misses 1 by
+        // noise, which would make KL negative and test precision, not the tail.
         let exact_sum: f64 = exact.iter().sum();
         let exact: Vec<f64> = exact.iter().map(|&x| x / exact_sum).collect();
         let prior: Vec<f64> = children.iter().map(|&(_, p, _)| f64::from(p)).collect();
         let explicit: Vec<bool> = children.iter().map(|&(_, _, v)| v > 0).collect();
 
         let n_explicit = explicit.iter().filter(|&&e| e).count();
-        // THE SLOT BOUND, on real data: Sequential Halving cannot visit more than m
-        // candidates, so the row cannot claim more than m explicit entries.
+        // Sequential Halving visits at most m candidates, so the row claims at most m.
         assert!(
             n_explicit <= GUMBEL_M,
             "ply {ply}: {n_explicit} visited root children against m={GUMBEL_M} — the sparse \
@@ -356,8 +295,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
             rows.len()
         );
 
-        // PRINTED, not merely asserted: the QUANTITY is what a re-mint reads, and a witness
-        // that only says "under the bar" cannot be quoted (LAW-01, measurement mandatory).
+        // Printed, not merely asserted: "under the bar" cannot be quoted at a re-mint.
         println!("\n  c_scale = {c_scale} ({} rows)", rows.len());
         println!("    ply  n_legal  m_explicit  alpha         floored       KL by drift lambda");
         for r in &rows {
@@ -395,9 +333,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
             None => println!("    R347(a) bar ({DRIFT_BAR} nats) is crossed at every rung"),
         }
 
-        // (A) THE ALGEBRA. At zero drift the reconstruction IS the exact target, and this is
-        // the claim the whole representation rests on: every UNVISITED legal action's
-        // completed-Q target is the recording prior times ONE scalar.
+        // At zero drift the reconstruction IS the exact target.
         let exact_median = median(rows.iter().map(|r| r.kl[0]).collect());
         assert!(
             exact_median.abs() < EXACT_BAR,
@@ -407,7 +343,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
              arithmetic the sparse row rests on"
         );
 
-        // (B) THE DRIFT. R347(a)'s bar, at a declared drift.
+        // The drift bar, at a declared drift.
         let drift_median = median(rows.iter().map(|r| r.kl[bar_rung()]).collect());
         assert!(
             drift_median < DRIFT_BAR,
@@ -416,7 +352,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
              (current prior vs recording prior) costs more than the ruling admits here"
         );
 
-        // THE SLOT BOUND, over the whole game: no row claimed more than m explicit entries.
+        // The slot bound over the whole game.
         assert!(
             rows.iter().all(|r| r.n_explicit <= GUMBEL_M),
             "c_scale {c_scale}: a row claimed more than m={GUMBEL_M} explicit entries"
@@ -424,7 +360,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
 
         if alphas.iter().any(|&a| a > 0.01) {
             saw_a_real_tail = true;
-            // THE LADDER MUST ACTUALLY MEASURE DRIFT where there is a tail to drift.
+            // The ladder must actually measure drift where there is a tail to drift.
             let top = median(rows.iter().map(|r| r.kl[DRIFT_LADDER.len() - 1]).collect());
             assert!(
                 top > drift_median,
@@ -436,10 +372,7 @@ fn the_sparse_row_reproduces_mctxs_exact_target_and_its_drift_is_bounded() {
         }
     }
 
-    // THE WITNESS MUST NOT BE VACUOUS. At the minted c_scale the improved policy is so
-    // peaked that alpha is numerically zero and the reconstruction has nothing to rebuild —
-    // which is a finding about the minted regime, not a measurement of the reconstruction.
-    // At least one driven regime has to carry a real tail, or every KL above is trivially 0.
+    // Anti-vacuity: at the minted c_scale alpha is zero, so one regime must carry a tail.
     assert!(
         saw_a_real_tail,
         "no driven c_scale produced a row with tail mass above 0.01, so the reconstruction \

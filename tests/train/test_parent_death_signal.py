@@ -1,24 +1,7 @@
-"""F-816-14 (R284(f)) — a child must not outlive its parent, even when the parent runs NOTHING.
+"""Prove a child does not outlive its parent, even when the parent runs NOTHING.
 
-THE DEFECT, MEASURED not hypothesised. Every teardown in this tree — `force_teardown_all`, the
-eval pipeline's `terminate → join → kill`, the preflight tool's `os.killpg` — requires the parent
-to EXECUTE. A parent killed outright (harness timeout, OOM kill, `kill -9`, an interrupted
-session) runs none of them, and a child in its own session receives nothing, because a new
-session is exactly what puts it beyond signals aimed at the parent's group. The kernel reparents
-it to init and it runs without bound.
-
-Found live on the development host 2026-08-18: a `preflight_mint.py --_boot` child spawned by a
-test with `--timeout-sec 45.0`, at **PPID 1, 4 h 06 m old, 682% CPU, `VmHWM` 13.8 GB**. It
-reproduced immediately when a pytest tier carrying a preflight row was killed. On the migration
-box the same class held **458 MiB of a GPU** whose minted partition has 0.514 GiB of headroom.
-
-THE TEST. A real grandchild process is started, armed, and then its parent is **SIGKILLed** —
-the case no cooperative path can cover, because SIGKILL is precisely the signal a process cannot
-handle. The assertion is that the grandchild is GONE and its memory with it.
-
-The kill is `SIGKILL` and not `SIGTERM` deliberately: a SIGTERM'd parent could plausibly be
-credited to Python's `atexit`/`daemon=True` machinery, and the row would then pass while proving
-nothing about the mechanism it is named for.
+Every teardown here needs the parent to EXECUTE, and a child in its own session is beyond signals
+aimed at the parent's group. Measured live: an orphan at PPID 1, 4 h 06 m old, 682% CPU, 13.8 GB.
 """
 from __future__ import annotations
 
@@ -36,9 +19,8 @@ _DEADLINE_SEC = 20.0
 
 
 def _alive(pid: int) -> bool:
-    """True iff `pid` names a live, non-zombie process. A reaped-but-unwaited child stays in
-    the table as a zombie; counting one as alive would make this test fail for the wrong reason
-    (and counting one as dead would make it PASS for the wrong reason, which is worse)."""
+    """Report whether `pid` names a live, non-zombie process; counting a zombie as dead would
+    make these rows pass for the wrong reason."""
     try:
         with open(f"/proc/{pid}/stat", encoding="utf-8") as fh:
             return fh.read().rsplit(")", 1)[-1].split()[0] != "Z"
@@ -47,17 +29,11 @@ def _alive(pid: int) -> bool:
 
 
 def test_arming_reports_true_on_linux_and_false_elsewhere(tmp_path) -> None:
-    """The contract of the return value, so a caller can log it truthfully (R169: a liveness
-    claim ties to its instrument).
+    """Prove the arming call reports true on Linux and false elsewhere.
 
-    RUN IN A SUBPROCESS, and that is not fastidiousness. The first version called
-    `arm_parent_death_signal()` **in the pytest process**, which permanently armed the RUNNER
-    with `PR_SET_PDEATHSIG = SIGKILL` and never disarmed it. Measured A/B by the review, same
-    launcher, same suite, only this call differing: without it, `2 passed`; with it, the whole
-    tier was SIGKILLed the instant the launcher exited — one test, no summary, no completion
-    marker. Any detached tier (one started in the background and then disowned, a CI helper that starts pytest and
-    exits, any wrapper that hands off) would die mid-run. This suite has a history of unattended
-    burns, so that is a live failure mode, not a theoretical one."""
+    Driven IN A SUBPROCESS: calling it in the pytest process permanently arms the RUNNER, and a
+    detached tier then dies the instant its launcher exits (measured A/B).
+    """
     probe = tmp_path / "probe.py"
     probe.write_text(
         "from mantis.train.lifecycle.signals import arm_parent_death_signal\n"
@@ -71,30 +47,19 @@ def test_arming_reports_true_on_linux_and_false_elsewhere(tmp_path) -> None:
 
 
 def _write_scripts(tmp_path, marker, *, arm: bool, cooperative_sigterm: bool = False):
-    """The two-generation harness as REAL FILES, not nested `-c` strings.
-
-    Written this way after the string version produced an `IndentationError` inside the
-    grandchild and both rows failed for a quoting reason rather than a process reason — which is
-    exactly the failure mode a process test must not have, because it looks identical to the
-    defect (no grandchild, no marker file).
-    """
+    """Write the two-generation harness as real files: a quoting error inside a nested `-c`
+    string looks identical to the defect, no grandchild and no marker file."""
     stem = ("armed" if arm else "unarmed") + ("_coop" if cooperative_sigterm else "")
     child = tmp_path / f"child_{stem}.py"
     child.write_text(
         "import os, signal, time\n"
-        # The production shape: a run installs a COOPERATIVE SIGTERM handler (save-then-exit),
-        # so a SIGTERM does not end it. This is what made the first version of the fix fail.
+        # The production shape: a cooperative SIGTERM handler, so a SIGTERM does not end it.
         + ("signal.signal(signal.SIGTERM, lambda *a: None)\n" if cooperative_sigterm else "")
         + ("from mantis.train.lifecycle.signals import arm_parent_death_signal\n"
            "arm_parent_death_signal()\n" if arm else "")
         + f"open({str(marker)!r}, 'w', encoding='utf-8').write(str(os.getpid()))\n"
-        # SELF-LIMITED, deliberately. The unarmed row below MUST produce a process that outlives
-        # its parent — that is the negative control — and its only reaper is that test's
-        # `finally`. If the pytest process itself dies first, the survivor is permanent: this
-        # file would then manufacture the very defect it exists to detect. The review observed
-        # exactly that (PID 780150, PPID 1237, sleeping forever) after the runner was killed by
-        # the arming defect fixed above. A bounded sleep is longer than any assertion here needs
-        # and short enough that the worst case is litter with an expiry.
+        # Self-limited deliberately: the unarmed row's survivor is reaped only by that test's
+        # `finally`, so an unbounded sleep would manufacture the defect this file detects.
         "time.sleep(90)\n",
         encoding="utf-8",
     )
@@ -118,12 +83,8 @@ def _await_marker(marker, deadline_sec: float = _DEADLINE_SEC) -> int:
 
 @pytest.mark.skipif(not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; no equivalent here")
 def test_a_SIGKILLED_parent_takes_its_armed_child_with_it(tmp_path) -> None:
-    """THE producer test. Parent spawns a grandchild that arms and then sleeps; the parent is
-    SIGKILLed; the grandchild must be gone.
-
-    SIGKILL and not SIGTERM, deliberately: a SIGTERM'd parent could be credited to Python's
-    `atexit` / `daemon=True` machinery, and the row would pass while proving nothing about the
-    mechanism it is named for. SIGKILL is precisely the signal no cooperative path can cover."""
+    """Prove a SIGKILLed parent takes its armed grandchild with it — SIGTERM would be creditable
+    to Python's own `atexit` machinery, and no cooperative path can cover SIGKILL."""
     marker = tmp_path / "grandchild.pid"
     parent_script = _write_scripts(tmp_path, marker, arm=True)
     parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())
@@ -152,15 +113,8 @@ def test_a_SIGKILLED_parent_takes_its_armed_child_with_it(tmp_path) -> None:
 
 @pytest.mark.skipif(not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; no equivalent here")
 def test_an_UNARMED_child_survives_the_same_kill(tmp_path) -> None:
-    """THE MUTATION, and the load-bearing half of this file (LAW-07).
-
-    Identical to the row above except the grandchild does NOT arm. It must SURVIVE — if it dies
-    anyway, something else in the environment is reaping it and the row above is green without
-    the mechanism it claims to test. A producer test whose negative control also passes is not a
-    producer test.
-
-    It reaps its own survivor, because leaving one would be this file writing the very defect it
-    exists to detect."""
+    """Prove an UNARMED child survives the same kill: if it dies anyway, something else is
+    reaping it and the armed row is green without the mechanism it claims to test."""
     marker = tmp_path / "unarmed.pid"
     parent_script = _write_scripts(tmp_path, marker, arm=False)
     parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())
@@ -184,17 +138,11 @@ def test_an_UNARMED_child_survives_the_same_kill(tmp_path) -> None:
 
 @pytest.mark.skipif(not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; no equivalent here")
 def test_a_child_that_HANDLES_sigterm_is_still_taken_down(tmp_path) -> None:
-    """THE REGRESSION ROW, and it exists because the first version of the fix failed here.
+    """Prove a child that HANDLES SIGTERM is still taken down.
 
-    `arm_parent_death_signal` originally defaulted to `SIGTERM`. Driven against a real
-    `preflight_mint.py --_boot` child — which installs the cooperative save-then-exit handler —
-    the signal ARRIVED and the child converted it into a PARK: `%CPU` decaying 408 → 133 over
-    two minutes in state `Ssl`, still alive, still holding its memory. The orphan survived the
-    fix that was supposed to end it.
-
-    So this row gives the grandchild a SIGTERM handler that swallows the signal — the production
-    shape — and asserts it dies anyway. It fails against the SIGTERM default and passes against
-    the SIGKILL one, which is precisely the discrimination the first version lacked."""
+    A SIGTERM-based arming was measured arriving at a real boot child and being converted into a
+    park: %CPU decaying 408 to 133 over two minutes, still holding its memory.
+    """
     marker = tmp_path / "coop.pid"
     parent_script = _write_scripts(tmp_path, marker, arm=True, cooperative_sigterm=True)
     parent = subprocess.Popen([sys.executable, str(parent_script)], cwd=os.getcwd())

@@ -1,64 +1,25 @@
-# >300 justify (R8). The seven eval-failure routes are ONE claim (each route yields its OWN typed
-# reason, its own phase, one emitted event that agrees with the routed result, and a
-# traceback where an exception was in flight) driven over ONE harness. The fake-process /
-# fake-context / spy-sink rig plus the seven-route driver is the majority of the file and
-# every row needs all of it; R5 bars cross-test imports, so a split forks that rig into two
-# copies which then drift while both stay green. Executable content is a minority — the
-# rest is the per-oracle "what defect is this the only witness to" rationale LAW-07 asks
-# each row to carry.
-"""⊕ WP12-R Phase O / O-02, O-03, O-04, O-15, O-30, O-31 (R152) — every eval-failure route
-produces its OWN typed reason, and the stream says which.
+# >300 justify (R8). The seven eval-failure routes are ONE claim — each route yields its OWN
+# typed reason, its own phase, one emitted event agreeing with the routed result, and a
+# traceback where an exception was in flight — driven over ONE harness. The fake-process /
+# fake-context / spy-sink rig plus the seven-route driver is the majority of the file and every
+# row needs all of it; R5 bars cross-test imports, so a split forks that rig into two copies
+# which drift while both stay green.
+"""Every eval-failure route produces its OWN typed reason, and the stream says which.
 
-RED-at-import until IMPL writes `EvalBrokenReason` into `src/mantis/eval/errors.py`.
-ORACLE-FIRST (⊕): the top-level import raises ImportError before any port code exists.
+The defect: every broken round used to route a bare `str` reason that nothing in `src/` read,
+so the seven failures were indistinguishable to anything but a human reading a log line — and
+the LAW-14 `ladder_persist_failed` route had ZERO tests and ZERO doc mentions in the tree.
 
-The defect this file exists to close, stated once: at HEAD every broken round routes a bare
-`str` reason and NOTHING in `src/` reads it (`DESIGN_O §a.3` — the routed `error` key has
-zero production consumers). A broken round is safe today only because `rounds.py:195` forces
-`promoted=False`. So the seven failures are indistinguishable to anything but a human
-reading a log line, and one of them — `ladder_persist_failed`, a LAW-14 persistence-fatal
-route — has ZERO tests and ZERO doc mentions anywhere in the tree.
+Per-oracle mutations: M-O2 swap two reasons; M-O3 collapse two members onto one value; M-O4
+emit `phase="drain"` for `result_missing`; M-O15 `except LadderStateError: pass`; M-O30a/b
+downgrade `_LOG.exception` to `_LOG.error`; M-O31 derive the event's `reason` from a second
+local. Each row names the one it is the only witness to.
 
-The oracles, and the defect each is the ONLY witness to:
-
-- O-02 `test_each_route_yields_its_own_typed_reason` (7 sub-cases) — each censused route
-  produces its OWN member, read off the ROUTED RESULT (never the emitted event: O-31 is
-  what pins the two agree, and an O-02 that read the event could not tell them apart).
-  Sole witness to two routes being cross-wired. MUTATION (M-O2): swap the reasons at
-  `pipeline.py:475-480` → both sub-cases red.
-- O-03 `test_the_seven_emitted_reasons_are_pairwise_distinct` — 21/21 pairs distinct in the
-  EMITTED events. This is the "distinguishable from each other" leg of R84's template, and
-  it is taken in the ONE channel because the rc taxonomy is deliberately many-to-one
-  (`PREREG_O §0a`). MUTATION (M-O3): collapse two members onto one value → red.
-- O-04 `test_the_reason_to_phase_map_is_fixed` — `phase` stays on the payload and is a
-  FUNCTION of the reason, never an independent axis that can contradict it. Sole witness:
-  nothing else reads `phase` at all. MUTATION (M-O4): emit `phase="drain"` for
-  `result_missing` → red naming the pair.
-- O-15 `test_a_ladder_persist_failure_is_a_named_broken_round_and_is_never_swallowed` — the
-  LAW-14 route with zero coverage at HEAD gains its first oracle. Sole witness that the
-  `LadderStateError` catch at `pipeline.py:521` still ROUTES a broken round rather than
-  degrading to a log line. MUTATION (M-O15): `except LadderStateError: pass` → red.
-- O-30 `test_..._logs_a_traceback` (2 arms) — the two routes that carry an exception
-  (`round_completion_error`, `ladder_persist_failed`) must log with `_LOG.exception`, i.e.
-  a record with POPULATED `exc_info`. On the round-completion route the in-tree contract is
-  "never a swallowed exception, never a bare log line (isolation law 2)"
-  (`pipeline.py:438-441`), and `repr(exc)` alone does not say WHERE the exception came from.
-  Sole witness: no existing test in the tree carries a `caplog` assertion over either
-  route. MUTATIONS (M-O30a / M-O30b): downgrade either `_LOG.exception` to `_LOG.error`.
-- O-31 `test_the_emitted_event_reason_equals_the_routed_result_reason` — the event and the
-  result are read by DIFFERENT consumers (a supervisor reads the stream; `promote.py` reads
-  the mapping), so a divergence between them is invisible to every other oracle here.
-  MUTATION (M-O31): derive the event's `reason` from a second local → red on that route.
-
-**What is real here and what is not.** Real: the shipped `EvalPipeline`, its real
-`_finalize_round` / `_read_worker_result` / `_broken_result` / `_success_result` chain, a
-real `LadderState`, real event emission and a real round-result mapping. Fake: the worker
-SUBPROCESS (an injected fake `multiprocessing` context — the house rig from
-`tests/eval/test_eval_broken.py` / `test_round_completion_error.py`, kept as a private copy
-per those files' own docstrings) and, on two routes, a monkeypatched raise standing in for
-a persistence fault and for an uncaught completion crash. Spawning real OS subprocesses for
-seven routes would trade determinism for nothing: the subject is the reason assembly, not
-the spawn mechanics, which `test_pipeline_isolation.py` already owns.
+REAL: the shipped `EvalPipeline`, its `_finalize_round` / `_read_worker_result` /
+`_broken_result` / `_success_result` chain, a real `LadderState`, real emission and a real
+round-result mapping. FAKE: the worker SUBPROCESS (an injected fake `multiprocessing` context,
+the house rig kept as a private copy) and, on two routes, a monkeypatched raise — spawning real
+subprocesses would trade determinism for nothing, since the subject is the reason assembly.
 """
 from __future__ import annotations
 
@@ -82,8 +43,8 @@ from mantis.model import GnnArch, build_net
 _GSPEC = lookup("gnn_axis_v1")
 
 #: The seven routes, each with the member it must produce and the phase that member forces.
-#: Stated here rather than derived from the enum: an oracle that read its expectation out of
-#: the object under test would be satisfied by any consistent renaming (R81).
+#: Stated here rather than derived from the enum under test, which any consistent renaming
+#: would satisfy.
 _ROUTE_REASON = {
     "join_timeout": "join_timeout",
     "killed": "killed",
@@ -112,7 +73,6 @@ _VALID_WORKER_RESULT = {
 }
 
 
-# ── harness (private copy; house convention, see this file's docstring) ─────────────────
 def _tiny_model():
     arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
                    hidden=8, num_layers=1, policy_hidden=8, value_hidden=8)
@@ -158,9 +118,9 @@ class _SpySink:
 
 
 class _FakeProcess:
-    """A spawn-context child stand-in. `terminate()`/`kill()` set the POSIX-signed exit
-    code the real `multiprocessing.Process` would report; the drive sets `exitcode`
-    directly for the routes whose subject is the exit code itself."""
+    """A spawn-context child stand-in. `terminate()`/`kill()` set the POSIX-signed exit code the
+    real `multiprocessing.Process` would report; the drive sets `exitcode` directly for the
+    routes whose subject is the exit code itself."""
 
     def __init__(self, *, target=None, args=(), kwargs=None, daemon=None) -> None:
         self._target = target
@@ -224,14 +184,9 @@ class _Drive:
 
 
 def _quiesce_poller(pipeline: Any) -> None:
-    """Stop the persistent poller BEFORE the round is driven.
-
-    Not a weakening: the poller's own exception-proofing and its heartbeat are
-    `tests/eval/test_round_completion_error.py`'s and `test_eval_heartbeat.py`'s subjects.
-    Here it is a RACE — the poller finalizes any round whose process stops looking alive,
-    so leaving it running would make which code path assembled the reason nondeterministic,
-    and a flaky oracle proves nothing about a taxonomy.
-    """
+    """Stop the persistent poller BEFORE the round is driven — a RACE, not a weakening: the
+    poller finalizes any round whose process stops looking alive, so leaving it running would
+    make which path assembled the reason nondeterministic."""
     pipeline._stop_event.set()          # noqa: SLF001 -- deliberate, test-only quiescing
     pipeline._poller.join(5.0)          # noqa: SLF001
     assert not pipeline._poller.is_alive(), (  # noqa: SLF001
@@ -240,9 +195,9 @@ def _quiesce_poller(pipeline: Any) -> None:
 
 
 def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Drive:
-    """Drive ONE censused failure route through the real `EvalPipeline` and return what it
-    routed and emitted. Every branch below reproduces a real production condition; none of
-    them reaches into the reason assembly itself."""
+    """Drive ONE censused failure route through the real `EvalPipeline` and return what it routed
+    and emitted. Every branch reproduces a real production condition; none reaches into the
+    reason assembly itself."""
     assert route in _ROUTE_REASON, f"unknown route {route!r}"
     ctx = _FakeCtx()
     monkeypatch.setattr(multiprocessing, "get_context", lambda name=None: ctx)
@@ -258,10 +213,9 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
         ),
         encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
-        # F-816-10 D-1: the pipeline resolves the fused-forward memory bound ONCE in the
-        # parent and carries it to every `RoundSpec` — the eval child is a SECOND
-        # allocator on the same card that no in-process bound can see. `None` is the
-        # GRID arm, written out rather than omitted.
+        # The pipeline resolves the fused-forward memory bound ONCE in the parent and carries
+        # it to every `RoundSpec` — the eval child is a SECOND allocator on the same card that
+        # no in-process bound can see. `None` is the GRID arm, written out rather than omitted.
         fused_graph_caps=None,
         inference_batching=None,
         promotion=DeployTagHooks(
@@ -317,16 +271,11 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
         pipeline.stop()
 
 
-# ══ O-02 — each route yields its OWN member, read off the ROUTED RESULT ════════════════
 @pytest.mark.parametrize("route", _ROUTES)
 def test_each_route_yields_its_own_typed_reason(route, tmp_path, monkeypatch) -> None:
-    """O-02. The routed result carries a typed `eval_broken_reason`, and it is the member
-    THIS route owns.
-
-    Read off the ROUTED RESULT and not off the emitted event, deliberately: `promote.py` is
-    the production consumer of the mapping, and pairing this oracle with the event would
-    make M-O31 (an event that disagrees with the result) invisible to the whole file.
-    """
+    """O-02. The routed result carries a typed `eval_broken_reason`, the member THIS route owns.
+    Read off the ROUTED RESULT and not the emitted event, since `promote.py` consumes the
+    mapping and pairing this with the event would make M-O31 invisible to the whole file."""
     drive = _drive(route, tmp_path, monkeypatch)
     reason = drive.result["eval_broken_reason"]
     assert isinstance(reason, EvalBrokenReason), (
@@ -342,16 +291,11 @@ def test_each_route_yields_its_own_typed_reason(route, tmp_path, monkeypatch) ->
     )
 
 
-# ══ O-03 — 21/21 pairs distinct in the ONE channel ═════════════════════════════════════
 def test_the_seven_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) -> None:
-    """O-03. R84's "distinguishable from each other" leg, taken where the design says it is
-    taken: the EVENT STREAM. The rc taxonomy is many-to-one by decision
-    (`PREREG_O §0a`, all seven map to 48), so if the seven emitted `reason` values ever
-    collide there is NOTHING left that separates a killed worker from a garbage result.
-
-    Reads the EMITTED values (O-02 reads the routed ones) so a collision introduced on the
-    emit side alone is still caught.
-    """
+    """O-03. The "distinguishable from each other" leg, taken in the EVENT STREAM. The rc
+    taxonomy is many-to-one by decision — all seven map to 48 — so if the emitted `reason`
+    values ever collide, nothing separates a killed worker from a garbage result. Reads the
+    EMITTED values, so a collision introduced on the emit side alone is still caught."""
     emitted = {}
     for route in _ROUTES:
         drive = _drive(route, tmp_path / route, monkeypatch)
@@ -368,13 +312,11 @@ def test_the_seven_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) 
     )
 
 
-# ══ O-04 — reason → phase is a fixed map, never an independent axis ════════════════════
 def test_the_reason_to_phase_map_is_fixed(tmp_path, monkeypatch) -> None:
-    """O-04. `phase` stays on the payload (it is not folded into the enum) precisely because
-    it is a FUNCTION of the reason. Nothing else in the tree reads `phase`, so without this
-    pin a mislabelled phase is invisible: a supervisor triaging `result_missing` under
-    `phase=drain` would go looking at the drain budget for a missing sidecar file.
-    """
+    """O-04. `phase` stays on the payload precisely because it is a FUNCTION of the reason, and
+    nothing else in the tree reads it — so without this pin a mislabelled phase is invisible,
+    and a supervisor triaging `result_missing` under `phase=drain` would go looking at the
+    drain budget for a missing sidecar file."""
     observed = {}
     for route in _ROUTES:
         drive = _drive(route, tmp_path / route, monkeypatch)
@@ -388,14 +330,10 @@ def test_the_reason_to_phase_map_is_fixed(tmp_path, monkeypatch) -> None:
     )
 
 
-# ══ O-31 — the emitted event and the routed result agree, on every route ═══════════════
 def test_the_emitted_event_reason_equals_the_routed_result_reason(tmp_path, monkeypatch) -> None:
     """O-31. Two consumers read two different objects: a supervisor reads the `eval_broken`
-    EVENT, `promote.py` reads the round-result MAPPING. Nothing else here compares them, so
-    a second local feeding the event (M-O31) would leave O-02 green (the routed result is
-    still right) and O-03 green (the values are still 7 and distinct) while the stream told
-    an operator the wrong story about which failure happened.
-    """
+    EVENT, `promote.py` reads the round-result MAPPING. A second local feeding the event would
+    leave O-02 and O-03 green while the stream told an operator the wrong story."""
     for route in _ROUTES:
         drive = _drive(route, tmp_path / route, monkeypatch)
         event_reason = drive.broken_event()["reason"]
@@ -406,23 +344,15 @@ def test_the_emitted_event_reason_equals_the_routed_result_reason(tmp_path, monk
         )
 
 
-# ══ O-15 — the LAW-14 route that had no oracle at all ══════════════════════════════════
 def test_a_ladder_persist_failure_is_a_named_broken_round_and_is_never_swallowed(
     tmp_path, monkeypatch
 ) -> None:
-    """O-15. `ladder_persist_failed` (`pipeline.py:530`) is a LAW-14 persistence-fatal route
-    with ZERO tests and ZERO doc mentions anywhere in the tree at HEAD — DESIGN_O §a.2's
-    census found it and `PREREG_O §0b` armed an escalation in case it turned out to be
-    unreachable. It is reachable: `LadderState.save` wraps `OSError` into `LadderStateError`
-    and `pipeline.py:521` catches it.
+    """O-15. `ladder_persist_failed` is a LAW-14 persistence-fatal route that had ZERO tests at
+    HEAD, and it is reachable: `LadderState.save` wraps `OSError` into `LadderStateError`.
 
-    What must hold: the failure is NAMED (its own member), it ROUTES a broken round, and the
-    games already played are NOT reported as a success — the on-disk ladder state did not
-    durably advance, so a "success" here silently drifts the in-memory state ahead of the
-    persisted one.
-
-    MUTATION THAT REDS IT (M-O15): wrap the save in `except LadderStateError: pass`. The
-    round then reports a clean success and LAW-14 is a log line.
+    The failure must be NAMED, must ROUTE a broken round, and the games already played must not
+    be reported as a success — the on-disk ladder state did not durably advance, so a success
+    drifts memory ahead of disk. MUTATION (M-O15): `except LadderStateError: pass`.
     """
     drive = _drive("ladder_persist_failed", tmp_path, monkeypatch)
 
@@ -442,23 +372,16 @@ def test_a_ladder_persist_failure_is_a_named_broken_round_and_is_never_swallowed
     )
 
 
-# ══ O-30 — the two exception-bearing routes keep their traceback ═══════════════════════
 def test_the_round_completion_route_logs_a_traceback_and_the_detail(
     tmp_path, monkeypatch, caplog
 ) -> None:
-    """O-30, arm 1 (round_completion_error).
+    """O-30, arm 1 (round_completion_error). The route's contract is "never a swallowed
+    exception, NEVER A BARE LOG LINE": `repr(exc)` says WHAT was raised, only the traceback says
+    WHERE. The emitter it collapses into logs with `_LOG.error` and no traceback, so without
+    this oracle the collapse silently deletes the stack.
 
-    `_round_completion_error_result`'s own contract is "never a swallowed exception, NEVER A
-    BARE LOG LINE (isolation law 2)" (`pipeline.py:438-441`) — the surface RED-TEAM's F1
-    created. `repr(exc)` says WHAT was raised; only the traceback says WHERE, and on a
-    catch-all that is the entire diagnostic value. Phase O collapses this route's emitter
-    into `_broken_result` (whose own logging is `_LOG.error`, no traceback), so without this
-    oracle the collapse silently deletes the stack. Nothing at HEAD stands under it:
-    `grep -n caplog tests/eval/test_round_completion_error.py` returns nothing.
-
-    MUTATION THAT REDS IT (M-O30a): downgrade the raising site's `_LOG.exception` to
-    `_LOG.error`. Every payload assertion in this file stays green — the mechanism is the
-    LOG RECORD and only the log record.
+    MUTATION (M-O30a): downgrade the raising site's `_LOG.exception`. Every payload assertion
+    stays green — the mechanism is the LOG RECORD alone.
     """
     with caplog.at_level(logging.ERROR, logger="mantis.eval.pipeline"):
         drive = _drive("round_completion_error", tmp_path, monkeypatch)
@@ -490,16 +413,9 @@ def test_the_round_completion_route_logs_a_traceback_and_the_detail(
 def test_the_ladder_persist_route_logs_a_traceback_and_the_detail(
     tmp_path, monkeypatch, caplog
 ) -> None:
-    """O-30, arm 2 (ladder_persist_failed).
-
-    The sibling exception-bearing route, and the SHAPE Phase O adopts for both: log with
-    `_LOG.exception` at the RAISING site, then call the one emitter. Pinned because the
-    collapse's whole argument is that the two routes converge — if this arm is allowed to
-    drift, "convergence" stops being a claim anybody checks.
-
-    MUTATION THAT REDS IT (M-O30b): `_LOG.exception` → `_LOG.error` at `pipeline.py:528`.
-    O-15 stays green (the reason still routes), which is exactly why this arm is separate.
-    """
+    """O-30, arm 2 (ladder_persist_failed). The sibling route, and the shape both adopt: log
+    with `_LOG.exception` at the RAISING site, then call the one emitter. MUTATION (M-O30b):
+    downgrade it. O-15 stays green, which is why this arm is separate."""
     with caplog.at_level(logging.ERROR, logger="mantis.eval.pipeline"):
         drive = _drive("ladder_persist_failed", tmp_path, monkeypatch)
 

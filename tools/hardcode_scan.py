@@ -1,17 +1,15 @@
-# >300 lines: the §5 hardcode-literal scanner is one cohesive rule engine —
-# allowlists, strip transforms, per-file scanner, and the _section_hardcode entry
-# point kept together; loaded dynamically by mantis/encoding/audit.py (§5).
-"""Hardcode-scan section of `python -m mantis.encoding audit` (§5).
+# >300 justify (R8): the hardcode-literal scanner is one cohesive rule engine — allowlists, strip
+# transforms, per-file scanner and the section entry point kept together; loaded dynamically by
+# the encoding audit.
+"""Hardcode-scan section of `python -m mantis.encoding audit`.
 
-Owns §5 (Hardcoded literals) — the rules, allowlists, strip transforms, per-file
-scanner, and the `_section_hardcode` entry point. Scans the Rust (`crates/`) and
-Python (`src/`) source trees for bare encoding-geometry literals (`19`, `25`,
-`361`, `5`, `8`) outside an allowlist, so a new hardcoded board-size / plane
-count surfaces instead of silently drifting from the registry.
+Owns the hardcoded-literal rules, allowlists, strip transforms, per-file scanner and the
+`_section_hardcode` entry point. Scans the Rust and Python source trees for bare
+encoding-geometry literals outside an allowlist, so a new hardcoded board-size or plane count
+surfaces instead of silently drifting from the registry.
 
-Relocated from the encoding package to `tools/` (it is a dev-only CI-gate
-scanner, not part of the shipped package). The CLI loads it by file path
-(no sys.path mutation, LAW-17).
+It lives in `tools/` because it is a dev-only CI-gate scanner, not part of the shipped package,
+and the CLI loads it by file path — no sys.path mutation (LAW-17).
 """
 from __future__ import annotations
 
@@ -23,26 +21,23 @@ if TYPE_CHECKING:
     from mantis.encoding.audit import AuditReport, Severity
 
 
-#: AUDIT-1 F-43. The dump path is a PARAMETER now. It was a fixed `/tmp/...` name — a
-#: world-shared filename written under `except OSError: pass`, so two users on one host raced
-#: for it and a failure to write was silent. `None` means "do not dump"; the CLI supplies one.
+#: The dump path is a PARAMETER. It was a fixed `/tmp/...` name — a world-shared filename written
+#: under `except OSError: pass`, so two users on one host raced for it and a failed write was
+#: silent. `None` means "do not dump"; the CLI supplies one.
 _DEFAULT_HITS_DUMP: Path | None = None
 
 
 def _registry_targets() -> tuple[str, ...]:
-    """The values this scanner looks for, DERIVED from the live registry (AUDIT-1 F-43).
+    """The values this scanner looks for, DERIVED from the live registry.
 
-    THE DEFECT. This was a frozen dense-era literal list — `19`, `25`, `361`, `5`, `8` — so the
-    graph-era values were never scanned at all: `6` (graph_radius, win_length, n_chain_planes),
-    `11` (node_feat_dim), `362` (policy_logit_count), `3` (win_axes). The one copy-detector in
-    the repo could not see the
-    numbers the graph seam is built from, while `8` had quietly acquired a second meaning
-    (`graph_radius`) that the list still read as a plane count.
+    A frozen dense-era literal list meant the graph-era values were never scanned at all, so the
+    one copy-detector in the repo could not see the numbers the graph seam is built from — while
+    one of the listed values had quietly acquired a second meaning the list still read as the old
+    one.
 
-    Every registry value >= 3 is a target, plus the `mantis_graph` schema constants the
-    registry validates against. `< 3` is excluded because `0`/`1`/`2` are arithmetic, not
-    geometry, and scanning them would drown the signal — which is a judgement stated here
-    rather than a silence.
+    Every registry value >= 3 is a target, plus the graph schema constants the registry validates
+    against. `< 3` is excluded because `0`/`1`/`2` are arithmetic, not geometry, and scanning them
+    would drown the signal — a judgement stated here rather than a silence.
     """
     values: set[int] = set()
     try:
@@ -85,44 +80,41 @@ _TEST_FILE_HINTS: tuple[str, ...] = ("test", "fixtures", "fixture")
 # Patterns that look like version tokens or in-string literals; allow.
 _VERSION_RE = re.compile(r"v\d+\b")
 
-# ---------------------------------------------------------------------------
-# Allowlist constants (rules 1–10)
-# ---------------------------------------------------------------------------
+# ── allowlist constants (rules 1–10) ──────────────────────────────────────────────────
 
 # Rule 5 — tunable hyperparameter tokens: skip any line containing these names.
 _TUNABLE_TOKENS: frozenset[str] = frozenset({
     "c_puct", "fpu_reduction", "dirichlet_alpha", "dirichlet_epsilon",
     "temp_min", "eta_min", "timeout", "interval", "poll_interval",
     "figsize", "linewidth", "weight_for",
-    "leaf_batch_size",     # MCTS batch size (tuned per host via sweep)
-    "zoi_margin",          # zone-of-interest search margin (tunable)
-    "max_train_burst",     # training throughput cap (tunable)
-    "hard_abort_grad_norm_steps",  # gradient-norm abort window (tunable)
-    "backup_count",        # log-rotation file count (infra, not geometry)
-    "batch_size",          # generic inference batch (tunable unless guarded)
-    "max_frames",          # animation/display frame count (not geometry)
-    "fail_gb",             # disk-guard threshold (not geometry)
-    "gn_groups",           # GroupNorm groups (NN arch knob, not encoding)
+    "leaf_batch_size",
+    "zoi_margin",
+    "max_train_burst",
+    "hard_abort_grad_norm_steps",
+    "backup_count",        # log rotation, infra not geometry
+    "batch_size",
+    "max_frames",          # display frame count, not geometry
+    "fail_gb",             # disk-guard threshold, not geometry
+    "gn_groups",           # NN arch knob, not encoding geometry
     "gn_group",
-    "epochs",              # training epoch count (tunable CLI arg)
-    "n_workers",           # worker pool count (tunable, used in CPU budget)
-    "budget",              # CPU thread budget expression
-    "divisor",             # CPU budget divisor expression
-    "skipped_nonfinite",   # error counter (training loop)
-    "len(batch)",          # batch accumulator size check
-    "len(wdr)",            # display worker count for terminal UI
-    "board.ply",           # game-ply threshold (not encoding geometry)
-    "human_seeding_max_move",  # corpus opening-move seeding param (not encoding)
-    "max_move",            # opening game length limit (not encoding geometry)
-    "has_player_long_run", # game-rule threat probe (run-length != encoding geometry)
-    "hex_distance",        # game-coordinate distance function (not encoding geometry)
-    "max_pages",           # scraper page limit (infra, not geometry)
-    "jitter",              # MCTS jitter radii (tunable)
-    "stride5",             # stride-5 detector step (game-rule constant)
-    "pages",               # CLI page argument (infra)
+    "epochs",
+    "n_workers",
+    "budget",
+    "divisor",
+    "skipped_nonfinite",
+    "len(batch)",
+    "len(wdr)",            # terminal-UI worker count
+    "board.ply",           # game-ply threshold, not geometry
+    "human_seeding_max_move",  # corpus seeding param, not encoding
+    "max_move",            # opening length limit, not geometry
+    "has_player_long_run", # run-length is a game rule, not geometry
+    "hex_distance",        # game coordinates, not encoding geometry
+    "max_pages",
+    "jitter",
+    "stride5",             # game-rule constant
+    "pages",
 })
-# Guard: if a line also contains these tokens, do NOT suppress even if a
-# _TUNABLE_TOKEN hit — high-risk encoding constants that must still flag.
+# Guard: a line carrying these high-risk encoding constants still flags, even on a tunable hit.
 _TUNABLE_SKIP_GUARD_TOKENS: frozenset[str] = frozenset({
     "feature_len", "policy_len",
 })
@@ -134,31 +126,30 @@ _FLOAT_TOL_RE = re.compile(r"\d+(?:\.\d+)?[eE]-\d+")
 _DECIMAL_FRAC_RE = re.compile(r"\d+\.\d+")
 
 # Rule 10 — display / infra context patterns: strip before scanning.
-_SLICE_RE     = re.compile(r"\[:\s*\d+\s*\]")                    # 10a
-_WITH_CAP_RE  = re.compile(r"\bwith_capacity\s*\(\s*\d+\s*\)")   # 10b
-_DISPLAY_KW_RE = re.compile(                                       # 10c
+_SLICE_RE     = re.compile(r"\[:\s*\d+\s*\]")
+_WITH_CAP_RE  = re.compile(r"\bwith_capacity\s*\(\s*\d+\s*\)")
+_DISPLAY_KW_RE = re.compile(
     r"\b(?:fontsize|dpi|alpha|linewidth|markersize|rotation|zorder"
     r"|s=|edgelinewidth)\s*=\s*\d+"
 )
-_ROUND_PREC_RE = re.compile(r"\bround\s*\([^,]+,\s*\d+\s*\)")    # 10d
-_TOP_N_RE      = re.compile(r"\bmost_common\s*\(\s*\d+\s*\)")     # 10e
-_BYTE_BUF_RE  = re.compile(r"\[\s*0[ui]\d+\s*;\s*\d+\s*\]")      # 10f
-_RUST_STR_CONT_RE = re.compile(r"\\\s*$")                          # 10g
-_STR_REPEAT_RE = re.compile(r"\"\s*-*\s*\"\s*\*\s*\d+")           # 10h
-_ROW_IDX_RE = re.compile(r"\b(?:row|p)\[(\d+)\]")                 # 10i
-_RUST_MATCH_ARM_RE = re.compile(r"^\s*\d+\s*=>\s*\{")             # 10j
-_SECTION_REF_RE = re.compile(r"§\d+")                              # 10k
-_ENTRY_BYTES_RE = re.compile(r"\bpolicy_bytes\s*\+")               # 10l
-_MIXED_COLLECTION_RE = re.compile(                                 # 10m
+_ROUND_PREC_RE = re.compile(r"\bround\s*\([^,]+,\s*\d+\s*\)")
+_TOP_N_RE      = re.compile(r"\bmost_common\s*\(\s*\d+\s*\)")
+_BYTE_BUF_RE  = re.compile(r"\[\s*0[ui]\d+\s*;\s*\d+\s*\]")
+_RUST_STR_CONT_RE = re.compile(r"\\\s*$")
+_STR_REPEAT_RE = re.compile(r"\"\s*-*\s*\"\s*\*\s*\d+")
+_ROW_IDX_RE = re.compile(r"\b(?:row|p)\[(\d+)\]")
+_RUST_MATCH_ARM_RE = re.compile(r"^\s*\d+\s*=>\s*\{")
+_SECTION_REF_RE = re.compile(r"§\d+")
+_ENTRY_BYTES_RE = re.compile(r"\bpolicy_bytes\s*\+")
+_MIXED_COLLECTION_RE = re.compile(
     r"[\(\[]\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*\d+(?:\s*,\s*\d+)*\s*[\)\]]"
 )
 
 # Rule 4 — range bounds like `0..5`, `0..=8`, `0..19`.
 _RANGE_BOUND_RE = re.compile(r"\b\d+\s*\.\.\s*=?\s*\d+\b")
 
-# Rule 9 — whole-file allowlist (these ARE the sources of truth). Re-anchored to
-# the new tree: the Python constants module + the crate that owns the canonical
-# registry/spec definitions. registry.toml itself is TOML (not scanned).
+# Rule 9 — whole-file allowlist: these ARE the sources of truth (the Python constants module and
+# the crate that owns the canonical registry/spec definitions). registry.toml is TOML, not scanned.
 _FULL_FILE_ALLOWLIST: frozenset[str] = frozenset({
     "src/mantis/util/constants.py",
 })
@@ -220,16 +211,14 @@ def _line_is_allowlisted(line: str, suffix: str) -> bool:
 
 
 def _hits_outside_strings(line: str) -> list[str]:
-    """Find target literals in `line` that are NOT inside string-quoted spans
-    and not preceded by `v` (version tokens like v6, v8 → skip)."""
+    """Find target literals in `line` that are NOT inside string-quoted spans and not preceded by
+    `v` (version tokens like v6, v8)."""
     cleaned = re.sub(r"\"[^\"]*\"|'[^']*'", "", line)
     cleaned = _VERSION_RE.sub("", cleaned)
     return _NUM_PATTERN.findall(cleaned)
 
 
-# ---------------------------------------------------------------------------
-# Rule 1 — test-range helpers
-# ---------------------------------------------------------------------------
+# ── rule 1: test-range helpers ────────────────────────────────────────────────────────
 
 
 def _test_ranges_rust(lines: list[str]) -> frozenset[int]:
@@ -301,9 +290,7 @@ def _test_and_docstring_ranges_python(lines: list[str]) -> frozenset[int]:
     return frozenset(skip)
 
 
-# ---------------------------------------------------------------------------
-# Line-level transform helpers (rules 2, 3, 4, 7)
-# ---------------------------------------------------------------------------
+# ── line-level transform helpers (rules 2, 3, 4, 7) ───────────────────────────────────
 
 
 def _strip_trailing_comment_rust(line: str) -> str:
@@ -355,36 +342,33 @@ def _apply_line_transforms(line: str, suffix: str) -> str:
     line = _FLOAT_TOL_RE.sub("", line)          # rule 2
     line = _DECIMAL_FRAC_RE.sub("", line)       # rule 2b
     line = _RANGE_BOUND_RE.sub("", line)        # rule 4
-    line = _SLICE_RE.sub("[]", line)            # 10a
-    line = _WITH_CAP_RE.sub("", line)           # 10b
-    line = _DISPLAY_KW_RE.sub("", line)         # 10c
-    line = _ROUND_PREC_RE.sub("", line)         # 10d
-    line = _TOP_N_RE.sub("", line)              # 10e
-    line = _BYTE_BUF_RE.sub("", line)           # 10f
-    if _RUST_STR_CONT_RE.search(line):          # 10g
+    line = _SLICE_RE.sub("[]", line)
+    line = _WITH_CAP_RE.sub("", line)
+    line = _DISPLAY_KW_RE.sub("", line)
+    line = _ROUND_PREC_RE.sub("", line)
+    line = _TOP_N_RE.sub("", line)
+    line = _BYTE_BUF_RE.sub("", line)
+    if _RUST_STR_CONT_RE.search(line):
         return ""
-    line = _STR_REPEAT_RE.sub("", line)         # 10h
-    line = _ROW_IDX_RE.sub("", line)            # 10i
-    if _RUST_MATCH_ARM_RE.match(line):          # 10j
+    line = _STR_REPEAT_RE.sub("", line)
+    line = _ROW_IDX_RE.sub("", line)
+    if _RUST_MATCH_ARM_RE.match(line):
         return ""
-    line = _SECTION_REF_RE.sub("", line)        # 10k
-    if _ENTRY_BYTES_RE.search(line):            # 10l
+    line = _SECTION_REF_RE.sub("", line)
+    if _ENTRY_BYTES_RE.search(line):
         return ""
-    if _MIXED_COLLECTION_RE.search(line):       # 10m
+    if _MIXED_COLLECTION_RE.search(line):
         return ""
     return line
 
 
 def _is_the_owning_file(path: Path, line: str) -> bool:
-    """True when `line` defines a canonical name IN the file that owns it (AUDIT-1 F-43).
+    """True when `line` defines a canonical name IN the file that owns it.
 
-    THE DEFECT this closes: `_CANONICAL_DEFINE_RE` exempted ANY line defining a name in the
-    canonical set, anywhere. So a COPY that reused the canonical spelling was exempt BY NAME —
-    the exact inverse of a copy detector, and the shape F-42 found six times over.
-
-    The owner is derived from the name, not listed per file: a canonical constant is owned by
-    the module or crate whose own name the definition sits under. Anything else redefining it
-    is a copy and is scanned.
+    The previous rule exempted ANY line defining a name in the canonical set, anywhere, so a COPY
+    that reused the canonical spelling was exempt BY NAME — the exact inverse of a copy detector.
+    The owner is derived from the name rather than listed per file: a canonical constant is owned
+    by the module or crate whose own name the definition sits under.
     """
     stem = path.stem
     m = _CANONICAL_DEFINE_RE.match(line)
@@ -393,14 +377,14 @@ def _is_the_owning_file(path: Path, line: str) -> bool:
     name = m.group(1)
     owners = _CANONICAL_OWNERS.get(name)
     if owners is None:
-        # A name with no declared owner keeps the old exemption — narrowing is done by adding
-        # an owner row, never by guessing one here.
+        # A name with no declared owner keeps the old exemption — narrowing is done by adding an
+        # owner row, never by guessing one here.
         return True
     return stem in owners
 
 
-#: Which file owns each canonical constant. A definition anywhere else is a COPY and is
-#: scanned (AUDIT-1 F-43). Keyed by stem so a crate move does not silently widen the exemption.
+#: Which file owns each canonical constant; a definition anywhere else is a COPY and is scanned.
+#: Keyed by stem so a crate move does not silently widen the exemption.
 _CANONICAL_OWNERS: dict[str, tuple[str, ...]] = {
     "NODE_FEAT_DIM": ("lib",), "EDGE_FEAT_DIM": ("lib",), "WIN_AXES": ("lib",),
     "WIN_LENGTH": ("moves",), "BOARD_SIZE": ("core",), "TOTAL_CELLS": ("core",),
@@ -498,9 +482,8 @@ def _section_hardcode(report: AuditReport, repo_root: Path, *, collect_raw: bool
                     {"file": rel, "line": lineno, "content": line, "hits": hits}
                 )
     elif hits_dump is not None:
-        # AUDIT-1 F-43. NO `except OSError: pass` — a dump the operator asked for and did not
-        # get is a fact, not a silence, and this used to swallow it on a fixed world-shared
-        # `/tmp` name that two users on one host raced for.
+        # NO `except OSError: pass` — a dump the operator asked for and did not get is a fact,
+        # not a silence, and this used to swallow it on a fixed world-shared `/tmp` name.
         with Path(hits_dump).open("w", encoding="utf-8") as fh:
             for p in sorted(file_hits):
                 fh.write(f"# {p}\n")

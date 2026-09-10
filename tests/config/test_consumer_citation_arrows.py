@@ -1,50 +1,30 @@
-""">300 justify (R8): ONE rule and the evidence that it is the RIGHT rule. The discriminator
-below was chosen over a simpler one only because the simpler one was measured and found to be a
-false-positive generator, and the tests that record that measurement — the in-process negative
-control, the two prose/vacuity attacks, the resolution precondition and its self-test — are what
-stop the rule being "simplified" back into the version that does not work. Split, the rule would
-live in one file and the reason it is shaped that way in another, and the second file is the one
-that gets deleted.
+""">300 justify (R8): ONE rule and the evidence that it is the RIGHT rule. The discriminator below
+was chosen over a simpler one only because the simpler one was measured and found to be a
+false-positive generator, and the tests that record that measurement are what stop the rule being
+"simplified" back into the version that does not work.
 
-LAW-08 citation arrows are checked BY SYMBOL REFERENCE, never by prose (R291(c), R244).
+Citation arrows are checked BY SYMBOL REFERENCE, never by prose. All four `monitor.supervisor_*`
+keys were cited as `"resolve_monitor_config -> monitor/supervise.py <flag>"`, but
+`resolve_monitor_config` runs in the RUN process while `supervise.py::main` runs in the SUPERVISOR
+process and built its own bare `MonitorConfig()`. The arrow crossed a process boundary no code
+crossed, and every existing check passed, because the registry is verified only for BIJECTION
+against schema leaves — so the citation STRINGS were unverified prose.
 
-WHAT WENT WRONG, AND WHY NOTHING CAUGHT IT. All four `monitor.supervisor_*` keys were cited as
-`"resolve_monitor_config -> monitor/supervise.py <flag>"`. `resolve_monitor_config` runs in the
-RUN process; `supervise.py::main` runs in the SUPERVISOR process and built its own bare
-`MonitorConfig()`. The arrow crossed a process boundary no code crossed. Every existing check
-passed: the registry is verified only for BIJECTION against schema leaves — a key-SET diff — so
-the citation STRINGS are unverified prose and a false arrow stays green forever. That is
-F-816-24's second evidence leg, and it is the SECOND instance of this class in the same file
-(the `drain` block was the first, WPMINT Phase K-A / R93).
+THE DISCRIMINATOR. The naive check — the cited file must reference the cited symbol — was measured
+first: it flags 17 of the 21 citations that name a file, of which 4 are the real defect and 13 are
+TRUTHFUL arrows. A multi-hop data-flow arrow is the normal shape here, so a check that treats every
+hop as an import edge is a false-positive generator, and a check whose failures are usually wrong
+teaches its own suppression.
 
-THE DISCRIMINATOR, AND WHY IT IS THIS ONE. The naive check — "the cited file must reference the
-cited symbol" — was tried first and MEASURED: it flags 17 of the 21 citations that name a file,
-of which **4 are the real defect and 13 are TRUTHFUL arrows**. (An earlier draft of this
-paragraph said all 17 were truthful, which was wrong in the direction that flatters the argument
-— and writing a wrong number into prose that no test derives is this file's own subject. It is
-corrected rather than deleted, because the corrected figure is still decisive: a rule whose
-failures are wrong three times in four teaches its own suppression.)
-`resolve_monitor_config -> monitor/rules.py` is correct precisely
-because rules.py does NOT import the resolver: the run process builds a `MonitorConfig` and
-PASSES it in. A multi-hop data-flow arrow is the normal shape here, so a check that treats every
-hop as an import edge is a false-positive generator, and a check whose failures are usually
-wrong teaches its own suppression.
-
-What separates the defect from the 17 is a fact about PROCESSES, and it is derivable: an object
-cannot be passed into a program that runs as its OWN process. So the rule is narrow and exact:
+What separates the defect is a derivable fact about PROCESSES — an object cannot be passed into a
+program that runs as its OWN process — so the rule is narrow and exact:
 
     if a citation names a file that is ITSELF a process entry point, that file must reference
     the symbols the citation says deliver the value to it.
 
-Measured over the live registry: exactly ONE cited file is its own entry point — `supervise.py`,
-the defect — and the other eight are in-process consumers the rule never touches. The check
-therefore fires on the class and on nothing else, which is the difference between a gate and a
-nuisance.
-
-SYMBOLS ARE DERIVED, NEVER GUESSED (R244). A token in a citation counts as a symbol reference
-only if it is a real top-level `def`/`class` name somewhere under `src/mantis` — the index is
-built from the tree at run time, so English prose in a citation cannot be mistaken for a symbol
-and a renamed symbol stops being one on the same commit that renames it.
+Measured over the live registry, exactly ONE cited file is its own entry point, so the check fires
+on the class and on nothing else. Symbols are DERIVED, never guessed: a token counts only if it is
+a real top-level `def`/`class` name under `src/mantis`, indexed from the tree at run time.
 """
 from __future__ import annotations
 
@@ -89,8 +69,7 @@ def _files_by_suffix() -> dict[str, Path]:
 
 
 def _resolve_cited_file(rel: str) -> Path | None:
-    """Resolve a cited path by SUFFIX match against the tree — the citations write
-    `trainer/core.py` for `src/mantis/train/trainer/core.py`, so no root may be assumed."""
+    """Resolve a cited path by SUFFIX match against the tree — the citations write `trainer/core.py` for `src/mantis/train/trainer/core.py`, so no root may be assumed."""
     hits = [p for key, p in _files_by_suffix().items() if key == rel or key.endswith("/" + rel)]
     return hits[0] if len(hits) == 1 else None
 
@@ -114,10 +93,7 @@ def _cited_symbols(citation: str, cited_file: str) -> list[str]:
 
 
 def _unresolvable_citations(registry: dict[str, str]) -> list[str]:
-    """Cited paths that match no file, or more than one. A checker that cannot resolve its own
-    input must SAY SO: skipping them silently would report green over a citation nobody checked,
-    which is the phantom class this file exists to close, reappearing inside the closer
-    (REVIEW(impl) #2)."""
+    """Cited paths that match no file, or more than one."""
     bad: list[str] = []
     for key, citation in sorted(registry.items()):
         for rel in _FILE_RE.findall(citation):
@@ -129,31 +105,18 @@ def _unresolvable_citations(registry: dict[str, str]) -> list[str]:
 
 @lru_cache(maxsize=None)
 def _referenced_names(path: Path) -> frozenset[str]:
-    """Names this module actually REFERENCES in code — imports, calls, attributes, plain loads.
-
-    Derived from the AST, never from the file's text. An earlier version asked `symbol in
-    source`, which is a substring test over the WHOLE FILE — comments and docstrings included.
-    RED-TEAM defeated it with a citation naming `force_teardown_all`, a real top-level function
-    from an unrelated module that appears in `supervise.py` only inside an English sentence in a
-    docstring: a wholly false arrow, verified clean. A rule that accepts prose as evidence of
-    delivery is the very thing R291(c) ordered replaced, rebuilt inside its replacement.
-    """
+    """Names this module actually REFERENCES in code — imports, calls, attributes, plain loads."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     names: set[str] = set()
     for node in ast.walk(tree):
-        # LOAD CONTEXT ONLY. A binding is not a reference: `resolve_drain_caps = None` is a
-        # STORE, and counting it made the checker verify an arrow into a module that receives
-        # nothing — RED-TEAM's bypass, and it revived this file's own historical false arrow
-        # while staying ruff-clean, so nothing else in CI would have caught it. An unused
-        # `import` is likewise not a delivery, and dropping the import special-case is what
-        # makes it not count: only a name the module actually READS survives this filter.
+        # LOAD CONTEXT ONLY. A binding is not a reference: `resolve_drain_caps = None` is a STORE,
+        # and counting it verified an arrow into a module that receives nothing while staying
+        # ruff-clean. An unused import is likewise not a delivery, so only a name the module
+        # actually READS survives this filter.
         #
-        # THE LIMIT OF THIS RULE, STATED RATHER THAN LEFT TO BE FOUND. A Load inside code that
-        # never executes — `if False: resolve_drain_caps()` — is still a Load, so it counts.
-        # That is a real residual and it is accepted rather than chased: reachability analysis is
-        # a different instrument, and the two shapes that reach it (an undefined name, an unused
-        # import) are already caught by ruff F821/F401 at gate 14. The bare assignment was the
-        # one variant with NO second line of defence, which is why it is the one closed here.
+        # THE LIMIT, STATED RATHER THAN LEFT TO BE FOUND: a Load inside code that never executes is
+        # still a Load, so it counts. That residual is accepted — reachability is a different
+        # instrument, and the two shapes that reach it are already caught by ruff F821/F401.
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
         elif isinstance(node, ast.Attribute) and isinstance(node.ctx, ast.Load):
@@ -171,10 +134,9 @@ def _arrow_violations(registry: dict[str, str]) -> list[str]:
                 continue
             cited = _cited_symbols(citation, rel)
             if not cited:
-                # A CITATION WITH NOTHING VERIFIABLE IN IT IS NOT A PASS. Naming an entry point
-                # as a destination while naming no symbol that carries the value there asserts a
-                # delivery and offers no way to check it — it passed VACUOUSLY before, which is
-                # the phantom class stated as an absence rather than as a lie (RED-TEAM #2).
+                # A CITATION WITH NOTHING VERIFIABLE IN IT IS NOT A PASS: naming an entry point as
+                # a destination while naming no symbol that carries the value there asserts a
+                # delivery and offers no way to check it, so it used to pass VACUOUSLY.
                 bad.append(
                     f"{key}: {rel} is its own process and the citation names no symbol at all, "
                     "so the arrow asserts a delivery nothing can verify"
@@ -199,14 +161,7 @@ def test_no_citation_sends_a_value_into_a_separate_process_that_cannot_see_it():
 
 
 def test_every_cited_path_resolves_to_exactly_one_file():
-    """The checker's own precondition, asserted rather than assumed.
-
-    `_resolve_cited_file` returns `None` for a path matching zero files or several, and the arrow
-    loop treats `None` the same as "not an entry point" — it moves on. That is correct control
-    flow and a silent hole: an ambiguous citation would be reported as checked-and-clean when it
-    was never checked at all. This test makes the unresolvable case LOUD, so the arrow rule's
-    green means "every cited path was examined" rather than "every cited path I could find was".
-    """
+    """The checker's own precondition, asserted rather than assumed."""
     for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
         unresolvable = _unresolvable_citations(_load_registry(name))
         assert not unresolvable, (
@@ -216,15 +171,7 @@ def test_every_cited_path_resolves_to_exactly_one_file():
 
 
 def test_the_resolution_check_bites_on_a_path_the_tree_cannot_resolve():
-    """LAW-07 self-test for the precondition above.
-
-    The planted path names no file, which is the ZERO half of `len(hits) != 1`; the MANY half
-    (an ambiguous suffix) shares the same branch and has no collision in the tree today to plant,
-    which is itself worth recording — the hole is currently unreachable, and the test exists so
-    that it stays reported rather than becoming reachable unnoticed. A single-segment path is
-    deliberately not used: `_FILE_RE` requires a directory segment, so `config.py` alone is never
-    even recognised as a cited path and would test the regex rather than the resolver.
-    """
+    """LAW-07 self-test for the precondition above."""
     planted = {"planted.key": "resolve_monitor_config -> monitor/no_such_module.py something"}
     assert _unresolvable_citations(planted), (
         "a cited path matching no file was treated as resolved; the precondition test above is "
@@ -233,18 +180,7 @@ def test_the_resolution_check_bites_on_a_path_the_tree_cannot_resolve():
 
 
 def test_the_arrow_check_bites_on_a_planted_false_arrow():
-    """LAW-07 mutation self-test: a checker that cannot fail is a phantom gate.
-
-    THE HISTORICAL ARROW CANNOT BE USED AS THE PLANTED CASE ANY MORE, AND THAT IS THE POINT.
-    The obvious mutation is the defect verbatim — `resolve_monitor_config -> monitor/supervise.py`
-    — but F-816-24's fix makes `supervise.py` reference `resolve_monitor_config`, so that arrow is
-    now TRUE and the check correctly declines to flag it. Written down because it is a small proof
-    the fix landed: the citation that was false is false no longer, measured by the same rule that
-    would have caught it.
-
-    So the planted arrow names a symbol this entry point genuinely does not touch. It stays false
-    however the supervisor evolves, unless someone wires the drain resolver into it.
-    """
+    """LAW-07 mutation self-test: a checker that cannot fail is a phantom gate."""
     planted = {
         "monitor.drain.terminal_eval_hard_cap_sec":
             "resolve_drain_caps -> monitor/supervise.py terminal cap",
@@ -257,13 +193,7 @@ def test_the_arrow_check_bites_on_a_planted_false_arrow():
 
 
 def test_a_symbol_mentioned_only_in_PROSE_is_not_accepted_as_a_reference():
-    """RED-TEAM #2's attack, kept as a regression.
-
-    `force_teardown_all` is a real top-level function in `train/lifecycle/signals.py` and it
-    appears in `monitor/supervise.py` exactly once — inside an English sentence in
-    `stop_child_cooperatively`'s docstring. It is never imported and never called there. Under
-    the old substring rule this wholly false arrow into an entry point verified CLEAN.
-    """
+    """RED-TEAM #2's attack, kept as a regression."""
     planted = {
         "planted.prose_only": "force_teardown_all -> monitor/supervise.py stop ladder",
     }
@@ -278,13 +208,7 @@ def test_a_symbol_mentioned_only_in_PROSE_is_not_accepted_as_a_reference():
 
 
 def test_a_bare_BINDING_is_not_accepted_as_a_reference(tmp_path):
-    """RED-TEAM's bypass of the AST rule, kept as a regression.
-
-    A module-level `resolve_drain_caps = None` — no import, no call, nothing delivered — made the
-    checker verify the exact planted arrow its own self-test uses to prove it still bites. The
-    variant is invisible to ruff (unlike an unused import, F401, or a dead call, F821), so it was
-    the one shape with no second line of defence. A binding is not a reference.
-    """
+    """RED-TEAM's bypass of the AST rule, kept as a regression."""
     mutated = tmp_path / "supervise.py"
     mutated.write_text(
         (SRC / "monitor" / "supervise.py").read_text(encoding="utf-8")
@@ -307,12 +231,7 @@ def test_a_citation_naming_NO_symbol_does_not_pass_vacuously():
 
 
 def test_the_check_does_not_fire_on_in_process_multi_hop_arrows():
-    """The negative control, and the reason the discriminator is process-shaped.
-
-    `resolve_monitor_config -> monitor/rules.py` is TRUE and rules.py imports no resolver: the
-    run process builds the object and passes it in. A check that flagged this would be wrong 17
-    times out of 21 on the live registry — measured — and would be suppressed within a week.
-    """
+    """The negative control, and the reason the discriminator is process-shaped."""
     in_process = {
         "monitor.alert_entropy_min": "resolve_monitor_config -> monitor/rules.py entropy WARN",
     }
@@ -320,12 +239,7 @@ def test_the_check_does_not_fire_on_in_process_multi_hop_arrows():
 
 
 def test_exactly_the_expected_cited_files_are_process_entry_points():
-    """Derived, not asserted: the rule's REACH is measured at HEAD rather than transcribed.
-
-    This is the line that would go stale if it stated a count, so it states a SET and derives it
-    (R192(e)). If a future citation names a new entry point, this test names it and the rule
-    starts applying to it — which is the intended behaviour, not a regression.
-    """
+    """Derived, not asserted: the rule's REACH is measured at HEAD rather than transcribed."""
     cited: dict[str, bool] = {}
     for name in ("test_every_key_has_consumer.py", "test_every_key_has_consumer_p2.py"):
         for citation in _load_registry(name).values():

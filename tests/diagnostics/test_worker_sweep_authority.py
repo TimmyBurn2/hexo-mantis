@@ -1,28 +1,11 @@
 """The rows the first cut of the PREREG left out, each for something load-bearing.
 
 >300 justify (R8): ONE SUBJECT — the properties that gate the mint and were checked by nothing.
-Each row here pairs a claim with the mutation that survives without it, and the rows are kept
-together because the mutations OVERLAP: the posture assertion, the verdict's composition across
-both sinks, the pool's fail-fast hook, the sampler's death, the rung-failure taxonomy and the
-`--select-only` identity checks are all forms of the same defect — an instrument that produces a
-plausible number for a drive that did not happen. Splitting them by subject would let one be
-deleted without the argument for the others having to be re-made, and the argument is what this
-file is for. The two AST helpers (`_func`, `_called_line`) are shared by the structural rows for
-`0bb4381`'s reason: a predicate and the proof it can fire must move together or the proof rots.
-
-
-Every row here exists because a driver that PASSED every other row in this suite could still be
-wrong in the way the row names. That is the test for whether an oracle is worth writing: not "does
-it check something", but "what mutation survives without it".
-
-  * THE ALLOCATOR-POSTURE ASSERTION is mint-critical (R308(g)(i)) and had no falsifier at all.
-  * THE VERDICT'S COMPOSITION — `governing = max(card, allocator)` — is the one rule the box
-    block calls its standing rule, and a driver that silently dropped the card sink passed every
-    verdict row in `test_worker_sweep_verdicts.py`.
-  * NEVER WRITES A CONFIG is the strongest safety claim made about a tool that runs on the box
-    during a mint sitting, and it had no producer. `fusion_calibrate`'s equivalent property is
-    stated in prose there too; here it is a census.
-  * WARM-UP EXCLUSION: a driver that fed warm-up rounds into the stopping rule passed everything.
+Each row pairs a claim with the mutation that survives without it, and they are kept together
+because the mutations OVERLAP: posture, verdict composition across both sinks, the pool's
+fail-fast hook, the sampler's death, the rung-failure taxonomy and the `--select-only` identity
+checks are all forms of one defect — an instrument that produces a plausible number for a drive
+that did not happen.
 """
 from __future__ import annotations
 
@@ -65,13 +48,9 @@ def _called_line(fn: ast.FunctionDef, symbol: str) -> int:
     return min(lines)
 
 
-# ══ the allocator posture ════════════════════════════════════════════════════════════════
 def test_the_posture_is_asserted_before_the_ladder_is_walked() -> None:
-    """STRUCTURAL, on the tree's own precedent (`tests/config/test_allocator_posture_authority
-    .py` reads the AST and pins that the assert precedes `init_trainer`). Here the subject is
-    `walk_ladder`, because that is what builds the first pool and therefore takes the first CUDA
-    allocation. A posture check after the first allocation is a check of a regime the process is
-    already in."""
+    """STRUCTURAL: the posture assert must precede `walk_ladder`, which takes the first CUDA
+    allocation — a check after it checks a regime the process is already in."""
     fn = _func("run_sweep")
     assert _called_line(fn, "assert_allocator_posture") < _called_line(fn, "walk_ladder"), (
         "the allocator-posture assertion must precede the ladder walk — a cap fitted under one "
@@ -91,16 +70,8 @@ class _StopAfterPosture(Exception):
 
 
 def _null_posture_twin(tmp_path: Path) -> Path:
-    """`configs/run6.yaml` with its posture returned to the R119 `null` placeholder.
-
-    WHY A TWIN AND NOT THE COMMITTED FILE. These rows used to point straight at
-    `configs/run6.yaml`, on the stated premise that *"every config on this tree carries the
-    R119 `null` placeholder"*. RECAL-SITTING-5's mint (R326) made that premise FALSE — all
-    seven now mint a measured posture — so the rows would have gone quietly green against a
-    config that no longer exercises the refusal at all. **The property is the refusal, not the
-    state of the committed tree**, so the null is CONSTRUCTED rather than borrowed and these
-    rows stay live through any future re-mint.
-    """
+    """`configs/run6.yaml` with its posture returned to the `null` placeholder, CONSTRUCTED rather
+    than borrowed: the property is the REFUSAL, not the state of the committed tree."""
     import yaml
 
     raw = yaml.safe_load(Path("configs/run6.yaml").read_text(encoding="utf-8"))
@@ -114,9 +85,7 @@ def _null_posture_twin(tmp_path: Path) -> Path:
 def test_a_cuda_config_with_a_null_posture_refuses_before_any_pool_is_built(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """BEHAVIOURAL half. This is what Phase W does on the box if the posture has not been
-    decided — and discovering it HERE costs nothing, while discovering it at the box costs a
-    sitting."""
+    """BEHAVIOURAL half: discovering this here costs nothing, at the box it costs a sitting."""
     def explode(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("a pool was built despite an unminted allocator posture")
 
@@ -138,21 +107,11 @@ def test_the_null_posture_refusal_reaches_the_exit_code_as_a_named_refusal(
 def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The other direction, and the reason the two rows above could be repaired safely.
-
-    A twin-based refusal row proves the refusal fires on a null. It does NOT prove the
-    committed tree has stopped tripping it — and a repair that only moved the subject could
-    hide a config still carrying the placeholder. This asserts the complement directly:
-    `configs/run6.yaml` AS MINTED gets past the posture check and reaches pool construction.
-
-    AND IT CARRIES THE MINT'S SECOND CONSEQUENCE, which is the one that will surprise people:
-    a minted posture is a CONTRACT ON THE LAUNCH ENVIRONMENT. With `expandable_segments` minted,
-    a cuda process started WITHOUT `PYTORCH_CUDA_ALLOC_CONF` no longer refuses for a missing
-    posture — it refuses for a MISMATCHED one, and says so by name. This row therefore launches
-    the way the box launches, and the required conf is DERIVED from the resolver rather than
-    transcribed, so a third regime cannot leave a stale literal here.
-
-    MUTATION THAT REDS IT: run5 reverting to `null`."""
+    """The other direction: `configs/run6.yaml` AS MINTED gets past the posture check and reaches
+    pool construction, which a twin-based refusal row cannot show. It also carries the mint's
+    second consequence — a minted posture is a CONTRACT ON THE LAUNCH ENVIRONMENT, so a cuda
+    process started without `PYTORCH_CUDA_ALLOC_CONF` refuses for a MISMATCHED posture. The
+    required conf is DERIVED from the resolver, so a third regime leaves no stale literal."""
     from mantis.config.resolve.allocator_posture import resolve_allocator_posture
 
     spec = resolve_allocator_posture({"allocator_posture": "expandable_segments"})
@@ -165,10 +124,8 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
         reached.append(True)
         raise _StopAfterPosture
 
-    # `walk_ladder` is the step the STRUCTURAL row above names as the one the assertion must
-    # precede, so it is the right witness for "the assertion passed": reaching it means the
-    # posture check ran and did not refuse. Patched here rather than `build_sweep_pool`, which
-    # `run_sweep` reaches only through the ladder's own runner.
+    # `walk_ladder` is the step the STRUCTURAL row names as the one the assertion must precede,
+    # so reaching it means the posture check ran and did not refuse.
     monkeypatch.setattr(ws, "walk_ladder", record)
     sink = io.StringIO()
     with pytest.raises(_StopAfterPosture):
@@ -176,13 +133,9 @@ def test_the_MINTED_posture_no_longer_refuses_and_that_is_the_mints_own_witness(
     assert reached, "run5's minted posture must reach the ladder, not refuse before it"
 
 
-# ══ the verdict's composition — the card sink actually reaches the rule ══════════════════
 def test_growth_visible_ONLY_on_the_card_sink_still_verdicts_growing(plan: ws.SweepPlan) -> None:
-    """THE MUTATION THIS CATCHES: a driver that verdicts on `allocator_peak_bytes` alone. Every
-    row in `test_worker_sweep_verdicts.py` passes under it, because those series move together.
-    Here they do not: the allocator's per-round demand is flat while the CARD's committed level
-    climbs — which is exactly the shape the 2026-08-22 host produced (§8.3, the sawtooth against
-    a rising high-water), and exactly the reason the block's rule is "the larger governs"."""
+    """THE MUTATION THIS CATCHES: verdicting on `allocator_peak_bytes` alone, which every verdict
+    row passes because those series move together. Here the allocator is flat and the card climbs."""
     flat_alloc = 400 * _MIB
     card = [900, 1000, 1000, 1400, 1900, 2600]
     rounds = tuple(
@@ -202,8 +155,7 @@ def test_growth_visible_ONLY_on_the_card_sink_still_verdicts_growing(plan: ws.Sw
 def test_the_sink_disagreement_is_reported_as_a_number_not_only_resolved(
     plan: ws.SweepPlan,
 ) -> None:
-    """"The larger governs AND the disagreement is a finding" — a rule whose second half needs
-    the difference on the record to be actionable at all."""
+    """The rule's second half — the disagreement is a finding — needs the number on the record."""
     rounds = tuple(
         ws.RoundReading(index=i, warmup=(i == 0), wall_sec=120.0, games=3, moves=1000,
                         available=True, sampled_peak_bytes=3000 * _MIB,
@@ -220,11 +172,9 @@ def test_the_sink_disagreement_is_reported_as_a_number_not_only_resolved(
 def test_the_masked_rise_flag_fires_on_a_window_the_stopping_rule_cannot_see(
     plan: ws.SweepPlan,
 ) -> None:
-    """`classify` compares the trailing window against the running maximum BEFORE it, so a
-    start-up spike in an early measured round raises the baseline and a strictly rising window
-    under it still verdicts PLATEAU. That is right for the eval child (fresh process per round)
-    and not obviously right for a long-lived pool. The rule is the ruling's and is not changed;
-    the SHAPE it cannot see is reported instead."""
+    """`classify` compares the trailing window against the running maximum BEFORE it, so an early
+    spike raises the baseline and a rising window under it verdicts PLATEAU. The rule is not
+    changed; the SHAPE it cannot see is reported instead."""
     peaks = [900, 8000, 1000, 5000, 5200, 5400]
     rounds = tuple(
         ws.RoundReading(index=i, warmup=(i == 0), wall_sec=120.0, games=3, moves=1000,
@@ -244,10 +194,8 @@ def test_the_masked_rise_flag_fires_on_a_window_the_stopping_rule_cannot_see(
 
 
 def test_the_trend_flag_is_not_a_strict_monotone_check(plan: ws.SweepPlan) -> None:
-    """THE MUTATION THIS CATCHES: `all(b > a for a, b in zip(window, window[1:]))`, which was the
-    first cut. A single REPEATED or DIPPING value anywhere in the window silences a strict check
-    while the window climbs by the same total — and real memory series are not strictly monotone,
-    so the shape a strict flag catches is the one a real series is least likely to have."""
+    """THE MUTATION THIS CATCHES: a strict monotone check, which one repeated or dipping value
+    silences while the window climbs by the same total."""
     for peaks in ([900, 8000, 1000, 5000, 5000, 5400],      # one equal step
                   [900, 8000, 1000, 5000, 4800, 5400]):     # one dip
         rounds = tuple(
@@ -263,13 +211,10 @@ def test_the_trend_flag_is_not_a_strict_monotone_check(plan: ws.SweepPlan) -> No
         )
 
 
-# ══ warm-up rounds are excluded, from the verdict AND from the throughput ════════════════
 def test_a_warmup_round_reaches_neither_the_verdict_nor_the_throughput(
     plan: ws.SweepPlan,
 ) -> None:
-    """A driver that fed the warm-up round in passes every other row in this suite. The warm-up
-    exists because pool start-up is not throughput — and, on the memory side, because a
-    start-up transient inside the stopping rule's baseline is the masked-rise shape above."""
+    """A driver that fed the warm-up round in passes every other row here."""
     rounds = (
         ws.RoundReading(index=0, warmup=True, wall_sec=120.0, games=0, moves=0, available=True,
                         sampled_peak_bytes=9999 * _MIB, allocator_peak_bytes=9999 * _MIB,
@@ -289,13 +234,10 @@ def test_a_warmup_round_reaches_neither_the_verdict_nor_the_throughput(
     )
 
 
-# ══ the tool never writes a config ═══════════════════════════════════════════════════════
 def test_the_tool_writes_exactly_one_thing_and_it_is_the_report(  # noqa: D401
 ) -> None:
-    """THE SAFETY CLAIM, MECHANIZED. This tool runs on the box during a mint sitting. Minting is
-    the operator's act (R119) and the pick lands through `tools/mint_config.py` on the sitting's
-    branch (R308(b)); a diagnostics tool that could write a config is one editor slip from
-    minting a value nobody recorded."""
+    """THE SAFETY CLAIM, MECHANIZED: a diagnostics tool that could write a config is one slip
+    from minting a value nobody recorded."""
     tree = ast.parse(_MODULE.read_text(encoding="utf-8"))
 
     def _writes(node: ast.AST) -> list[str]:
@@ -315,10 +257,8 @@ def test_the_tool_writes_exactly_one_thing_and_it_is_the_report(  # noqa: D401
                     found.append("open(w)")
         return found
 
-    # THE PREDICATE, and it is about the DESTINATION rather than the count: every write in this
-    # module must sit in a STATEMENT that also names `args.out`. A count would have to be edited
-    # every time a write moved (the probe-then-write shape already made it three), and a count
-    # nobody re-derives is the class gate 15's second half governs.
+    # THE PREDICATE is about the DESTINATION, not the count: every write in this module must sit
+    # in a STATEMENT that also names `args.out`. A count would need editing whenever a write moved.
     offenders: list[str] = []
     for func in ast.walk(tree):
         if not isinstance(func, ast.FunctionDef):
@@ -351,7 +291,6 @@ def test_the_tool_writes_exactly_one_thing_and_it_is_the_report(  # noqa: D401
         assert banned not in called, f"the sweep calls {banned!r}"
 
 
-# ══ P9, strengthened: produced_by is per-row, not a constant the renderer supplies ═══════
 def test_two_rungs_with_different_producers_print_both(plan: ws.SweepPlan, capsys) -> None:
     """The census this replaces passed on a renderer that printed one constant for every rung."""
     def rung(n: int, label: str) -> ws.RungResult:
@@ -378,8 +317,7 @@ def test_two_rungs_with_different_producers_print_both(plan: ws.SweepPlan, capsy
 
 
 def test_the_cpu_device_helpers_refuse_rather_than_return_zero() -> None:
-    """`cuda_device_total_bytes` joins the pair `cuda_device_used_bytes` belongs to; a total of
-    zero would make every peak in the report look like 100% of the card."""
+    """`cuda_device_total_bytes` joins its pair: a zero total makes every peak look like 100%."""
     from mantis.util.device import cuda_device_total_bytes
 
     with pytest.raises(ValueError):
@@ -388,19 +326,12 @@ def test_the_cpu_device_helpers_refuse_rather_than_return_zero() -> None:
 
 
 
-# ══ RED-TEAM rows — each closes a probe that produced a wrong answer looking right ════════
 def test_growth_visible_ONLY_on_the_allocator_sink_still_fails_the_rung(
     plan: ws.SweepPlan,
 ) -> None:
-    """THE DIRECTION `max()` ACTUALLY EATS, and the one the first oracle did not cover.
-
-    On a real box the card level RATCHETS — torch's caching allocator does not return reserved
-    blocks to the driver, so `total - free` climbs to its high-water and sits there. A rung whose
-    allocator DEMAND grows 3.3x underneath a flat 15.4 GiB card level therefore verdicted PLATEAU
-    on the composite, passed, and entered the knee set, while `classify` on the allocator series
-    alone said GROWING. That is `RECAL_EXIT_2026-08-22.md` §11b's own failure — *a term measured
-    by watching until it looks flat is not a bound* — reproduced inside the instrument built to
-    end it."""
+    """THE DIRECTION `max()` ACTUALLY EATS: the card level RATCHETS, because torch's caching
+    allocator does not return reserved blocks, so a rung whose allocator DEMAND grows 3.3x under a
+    flat 15.4 GiB card level verdicts PLATEAU while the allocator series alone says GROWING."""
     flat_card = 15400 * _MIB
     demand = [3000, 3200, 3400, 6000, 8000, 10000]
     rounds = tuple(
@@ -425,15 +356,10 @@ def test_growth_visible_ONLY_on_the_allocator_sink_still_fails_the_rung(
 def test_a_rung_whose_sole_producer_died_does_not_report_a_plateau(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """THE SHARPEST WRONG-ANSWER-THAT-LOOKS-RIGHT the red team found, and the two halves
-    reinforce each other: with the drain dead nothing reaches the replay buffer, so the memory
-    series goes FLAT BECAUSE THE RUNG IS BROKEN, while `runner_stats` keeps reporting from the
-    RUST counters, which climb regardless. The knee rule compares rates ACROSS rungs, so one dead
-    feeder moves the pick.
-
-    `WorkerPool._stats_loop` stores the feeder's death in `_producer_exc` and does NOT raise;
-    `check_producer_health` is the pool's own fail-fast hook and the trainer calls it every step.
-    This sweep has no trainer, so nothing called it."""
+    """THE SHARPEST WRONG-ANSWER-THAT-LOOKS-RIGHT: with the drain dead the memory series goes FLAT
+    BECAUSE THE RUNG IS BROKEN while `runner_stats` keeps climbing off the Rust counters, and the
+    knee rule compares rates ACROSS rungs. `_stats_loop` stores the death and does NOT raise; the
+    pool's `check_producer_health` is the fail-fast hook, and this sweep has no trainer to call it."""
     class _DeadFeeder:
         _producer_exc = RuntimeError("selfplay_producer_died")
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
@@ -463,8 +389,7 @@ def test_a_rung_whose_sole_producer_died_does_not_report_a_plateau(
 
 def test_the_sweep_calls_the_pools_own_fail_fast_hook(
 ) -> None:
-    """The structural half: `check_producer_health` appeared in `mantis.train` and in four test
-    doubles, and in no consumer that actually drives a pool without a trainer."""
+    """The structural half: `check_producer_health` had no consumer that drives a pool untrained."""
     assert "check_producer_health" in _MODULE.read_text(encoding="utf-8")
     assert _called_line(_func("drive_rung"), "check_producer_health") > 0
 
@@ -472,9 +397,8 @@ def test_the_sweep_calls_the_pools_own_fail_fast_hook(
 def test_a_dead_card_sampler_refuses_the_rung_instead_of_switching_instrument(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A daemon thread that dies silently is a MEASUREMENT THAT STOPPED. Unguarded, the rung's
-    series switched instrument mid-flight and a series that FELL by 9.3 GiB then rose 47%
-    verdicted PLATEAU — the exact hazard `reset_cuda_peak_counters`' own docstring names."""
+    """A daemon thread that dies silently is a MEASUREMENT THAT STOPPED: unguarded, a series that
+    FELL 9.3 GiB then rose 47% verdicted PLATEAU."""
     class _Pool:
         _producer_exc = None
         # R317(c)(i): drive_rung hashes `pool.model` right after the build; a mock pool needs one.
@@ -509,11 +433,9 @@ def test_a_dead_card_sampler_refuses_the_rung_instead_of_switching_instrument(
 def test_an_unmodelled_rung_failure_is_a_named_verdict_and_not_a_lost_ladder(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch, exc: Exception,
 ) -> None:
-    """`mantis-bridge` builds with `panic = "unwind"` (R2/LAW-13) precisely so a Rust panic
-    crosses the FFI as an exception. Only `torch.OutOfMemoryError` was caught, so an escaping
-    `RuntimeError` reached the interpreter as SHELL RC 1 — which this tool's contract reserves
-    for "no rung PASSED". A crash must never present as a measured memory result, and the ladder
-    is the expensive artifact."""
+    """`panic = "unwind"` makes a Rust panic cross as an exception, and only
+    `torch.OutOfMemoryError` was caught — so an escaping `RuntimeError` exited SHELL RC 1, which
+    this tool reserves for "no rung PASSED"."""
     def explode(*_a: Any, **_k: Any) -> Any:
         raise exc
 
@@ -528,10 +450,7 @@ def test_an_unmodelled_rung_failure_is_a_named_verdict_and_not_a_lost_ladder(
 def test_a_teardown_failure_does_not_erase_the_oom_finding_it_was_teardown_for(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The plausible pairing: an OOM is exactly when an inference-server join is likeliest to
-    fail. A raise in `finally` REPLACES the return value, so the OOM verdict never left the
-    function, the `rung_end` marker was never written, and the ladder died with the teardown's
-    traceback."""
+    """A raise in `finally` REPLACES the return value, so the OOM verdict never left."""
     class _Exploding:
         _producer_exc = None
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
@@ -557,9 +476,7 @@ def test_a_teardown_failure_does_not_erase_the_oom_finding_it_was_teardown_for(
 
 
 def test_select_only_refuses_a_document_that_is_not_this_tools_output(tmp_path: Path) -> None:
-    """A three-key hand-written dict used to yield `PICK = 1` — the value R309(f) REJECTS — at
-    rc 0. The marker reader invokes the `peaks.py` lesson; this reader is the one that then never
-    asked whether the shape was its own."""
+    """A three-key hand-written dict used to yield `PICK = 1` at rc 0."""
     path = tmp_path / "not-ours.json"
     path.write_text(json.dumps({
         "provenance": {"produced_by": "handwritten"},
@@ -590,9 +507,8 @@ def test_select_only_refuses_a_report_whose_stated_rule_is_not_the_ruling_s(
 
 
 def test_a_malformed_report_refuses_at_rc_2_and_never_presents_as_rc_1(tmp_path: Path) -> None:
-    """rc 1 is "no rung PASSED", and the Phase W block's failure posture BRANCHES on rc 1 vs
-    rc 2. An unhandled `KeyError` used to exit 1 — a malformed artifact presenting as a measured
-    memory result."""
+    """The box block BRANCHES on rc 1 vs rc 2, so a `KeyError` exiting 1 presented a malformed
+    artifact as a measured memory result."""
     path = tmp_path / "no-produced-by.json"
     path.write_text(json.dumps({"tool": ws.TOOL, "provenance": {},
                                 "plan": {"knee_pct": 95.0, "metric": "moves_per_min"},
@@ -603,14 +519,9 @@ def test_a_malformed_report_refuses_at_rc_2_and_never_presents_as_rc_1(tmp_path:
 def test_a_NEGATIVE_counter_delta_refuses_instead_of_clamping_to_zero(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """AUDIT-1 F-28/A02. The rung's `games` and `moves` were `max(0, after - before)`.
-
-    The runner's counters are MONOTONE, so a negative delta cannot mean "no work happened" —
-    it means they were reset or the runner was replaced, and the rung's rate is then taken
-    across two different programs. Clamping published a rung that ran and did nothing, and
-    the knee rule compares rates ACROSS rungs, so one such rung moves the pick. It is the
-    same shape as the dead-feeder case the guard above it already refuses by name.
-    """
+    """`games` and `moves` were `max(0, after - before)`, but the runner's counters are MONOTONE:
+    a negative delta means they were reset or the runner replaced, so the rung's rate spans two
+    programs — and the knee rule compares rates ACROSS rungs."""
     class _Healthy:
         _producer_exc = None
         model = type("_NoParams", (), {"state_dict": lambda self: {}})()
@@ -639,18 +550,9 @@ def test_a_NEGATIVE_counter_delta_refuses_instead_of_clamping_to_zero(
 
 
 def test_select_only_REFUSES_a_report_whose_net_hash_gate_DIVERGED(tmp_path: Path) -> None:
-    """AUDIT-1 F-04's reader half, which survives R330(d).
-
-    R330(d) deleted the scalar noise-floor mode, its `--noise-floor-report` reader and the
-    write-before-refuse ordering, so two of F-04's three halves are closed at HEAD. The third
-    was that the READER was gate-blind: a report whose `net_hash_gate` DIVERGED means the
-    rungs were not all measuring the same net, so the RANKING is not comparable and no pick
-    may be re-derived from it. `rc_for` implements that refusal; nothing drove it through
-    `--select-only`, so the arm was correct with no witness.
-
-    A DIVERGED report must refuse at rc 2 and never at rc 0 — an operator re-deriving a pick
-    at a sitting reads the rc, and rc 0 beside a printed PICK is an answer.
-    """
+    """The reader half of the net-hash gate: a DIVERGED report means the rungs were not measuring
+    the same net, so no pick may be re-derived from it. `rc_for` implements that refusal and
+    nothing drove it through `--select-only`, and rc 0 beside a printed PICK is an answer."""
     base = {"tool": ws.TOOL, "provenance": {"produced_by": "run5@abc"},
             "plan": {"knee_pct": 95.0, "metric": "moves_per_min"},
             "rungs": [{"n_workers": 2, "verdict": "PLATEAU", "moves_per_min": 900.0,
@@ -670,21 +572,14 @@ def test_select_only_REFUSES_a_report_whose_net_hash_gate_DIVERGED(tmp_path: Pat
 
 
 def test_the_scalar_noise_floor_mode_and_its_gate_blind_reader_are_GONE(tmp_path: Path) -> None:
-    """AUDIT-1 F-04's other two halves, pinned as ABSENT so they cannot come back.
-
-    The deleted mode wrote its report to disk BEFORE checking the net-hash gate, and its
-    reader kept only `rel_std` — discarding `n_workers`, `net_hash_gate`, the config sha and
-    the seed — so a DIVERGED report with a numeric `rel_std` was read as a usable float.
-    R330(d) deleted all of it. Named here so a re-introduction has to argue with a test.
-    """
+    """The deleted mode wrote its report BEFORE checking the gate; pinned ABSENT so it argues here."""
     for gone in ("run_noise_floor", "read_noise_floor_report", "render_noise_floor",
                  "NoiseFloor"):
         assert not hasattr(ws, gone), (
             f"{gone} is back: the scalar noise authority was deleted by R330(d) because two "
             "noise authorities over one threshold is the duplicate-authority class"
         )
-    # the flag itself is gone from the parser, so argparse refuses it rather than the tool
-    # accepting it and measuring something under a retired name
+    # argparse refuses the retired flag rather than the tool measuring under a retired name
     with pytest.raises(SystemExit) as exc:
         ws.main(["--noise-floor", "4"])
     assert exc.value.code != 0
@@ -702,9 +597,7 @@ def test_select_only_refuses_an_out_it_would_silently_ignore(tmp_path: Path) -> 
 def test_an_unwritable_out_is_refused_BEFORE_the_ladder_not_after_it(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path,
 ) -> None:
-    """The destination used to be validated at the moment it is least recoverable — after a
-    seventy-minute ladder, outside the guard, and BEFORE the render, so neither the file nor the
-    screen survived."""
+    """The destination used to be validated after a seventy-minute ladder and before the render."""
     def explode(*_a: Any, **_k: Any) -> Any:
         raise AssertionError("the ladder was walked before --out was probed")
 
@@ -716,20 +609,13 @@ def test_an_unwritable_out_is_refused_BEFORE_the_ladder_not_after_it(
                     "--out", str(unwritable)]) == ws.RC_REFUSED
 
 
-# ══ I-3 — the per-round memory-instrument WIRING, on the counters-PRESENT path ═══════════
 def test_one_probe_and_one_counter_reset_per_round_on_a_counters_present_host(
     plan: ws.SweepPlan, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """THE MUTATION THIS CATCHES: hoisting the probe out of the round loop, or dropping the
-    per-round `reset_cuda_peak_counters`. Both passed every other row in this packet, because
-    every other `drive_rung` row monkeypatches `cuda_counters_available -> False` and never
-    enters the counters branch at all.
-
-    The two mechanisms are what make the memory series MEAN what the report says it means: one
-    probe per round is what keeps `DeviceMemoryProbe`'s running maxima per-round rather than
-    per-rung (it never resets them itself — `eval/child_memory.py` says so, and says why), and
-    the reset is the window boundary the "independent per-round peaks" claim rests on. Asserted
-    in prose is not asserted."""
+    per-round `reset_cuda_peak_counters` — both pass every other row, which patches
+    `cuda_counters_available -> False`. One probe per round keeps `DeviceMemoryProbe`'s maxima
+    per-round, and the reset is the window boundary the per-round claim rests on."""
     probes: list[str] = []
     resets: list[str] = []
     cards = iter(range(1_000_000_000, 9_000_000_000, 1_000_000_000))
@@ -793,14 +679,10 @@ def test_one_probe_and_one_counter_reset_per_round_on_a_counters_present_host(
     assert len(set(peaks)) == rounds, f"the card windows are not per-round: {peaks}"
 
 
-# ══ I-7 — the row that replaces a name claiming more than its assertion ══════════════════
 def test_the_report_carries_the_card_total_every_peak_is_measured_against(
     plan: ws.SweepPlan, capsys,
 ) -> None:
-    """D-10's answer and F-WS-6's *"so a reader can do the headroom arithmetic against the report
-    itself"*. The row this replaces asserted `torch is not None` and text-scanned a DOCSTRING —
-    it never touched the report. That is the overclaiming class this file's own module docstring
-    cites."""
+    """The report carries the card total, so headroom arithmetic works against the report itself."""
     prov = {
         "tool": ws.TOOL, "produced_by": "run5@abc", "config_name": "run6.yaml",
         "config_sha256": "d" * 64, "git_commit": "abc1234", "git_dirty": False,
@@ -826,25 +708,18 @@ def test_the_report_carries_the_card_total_every_peak_is_measured_against(
 
 
 def test_the_provenance_docstring_still_states_the_no_host_identifiers_rule() -> None:
-    """Kept as its own row, at its own width: this is a claim about the DOCSTRING, and the claim
-    about the report is `test_the_report_carries_no_host_identifier_fields`."""
+    """A claim about the DOCSTRING; the claim about the report is its own row."""
     assert "NO HOST IDENTIFIERS" in (ws.provenance.__doc__ or "")
 
 
 def test_the_report_carries_the_config_basename_and_never_its_path(
     plan: ws.SweepPlan, tmp_path: Path,
 ) -> None:
-    """R301(d) capture-time redaction, on the report rather than in the docstring. CI gate 17
-    cannot see this artifact — it scans the engine tree, and the report lands in the governance
-    workspace and in a sitting record — so the redaction has to be in the producer."""
+    """Capture-time redaction in the PRODUCER, because CI gate 17 cannot see this artifact."""
     cfg = tmp_path / "deeply" / "nested" / "run5_local.yaml"
     cfg.parent.mkdir(parents=True)
     cfg.write_text("x: 1\n", encoding="utf-8")
-    # `seed` joins the stub because `provenance` now carries it: F-RESIT-10's repair makes the
-    # ladder's rungs comparable only if they are seeded, and R69 says the report travels with
-    # that mechanism rather than leaving a reader to trust it. A stub omitting a field the
-    # production path reads raises `AttributeError` — correctly, and it is the same maintenance
-    # every new surface has needed here.
+    # a stub omitting a field the production path reads raises `AttributeError`, correctly
     prov = ws.provenance(SimpleNamespace(run_id="r", seed=20260718, identity=SimpleNamespace(
         encoding="gnn_axis_v1", representation="graph"),
         model_dump=lambda: {"allocator_posture": None}),
@@ -861,12 +736,9 @@ def test_the_report_carries_the_config_basename_and_never_its_path(
     )
 
 
-# ══ I-11 — the provenance helpers have VALUE rows, not only refusal rows ═════════════════
 def test_the_config_digest_is_hashlib_sha256_of_the_bytes(tmp_path: Path) -> None:
-    """The field NAMES an algorithm. The first cut used `git hash-object`, which is SHA-1 over
-    `blob <len>\\0<content>`; a reader verifying with `sha256sum` gets a mismatch and concludes
-    the config changed. A label asserting a fact nobody re-derived is derive-or-delete in a
-    different costume."""
+    """The field NAMES an algorithm: the first cut used `git hash-object`, which is SHA-1, so a
+    reader verifying with `sha256sum` gets a mismatch and concludes the config changed."""
     path = tmp_path / "c.yaml"
     path.write_bytes(b"identity:\n  encoding: gnn_axis_v1\n")
     assert ws._sha256(path) == hashlib.sha256(path.read_bytes()).hexdigest()
@@ -877,8 +749,7 @@ def test_the_config_digest_is_hashlib_sha256_of_the_bytes(tmp_path: Path) -> Non
 
 
 def test_git_degrades_to_none_rather_than_to_a_positive_claim() -> None:
-    """`git_dirty` used to read `False` when git could not answer at all — a positive claim of
-    cleanliness about a tree nobody looked at, on exactly the host where the tool is launched
-    from a scratch directory or a tarball with no `.git`."""
+    """`git_dirty` used to read `False` when git could not answer — a positive claim about a
+    tree nobody looked at."""
     assert ws._git("rev-parse", "HEAD") is not None, "this repo IS a git tree"
     assert ws._git("this-is-not-a-git-subcommand") is None

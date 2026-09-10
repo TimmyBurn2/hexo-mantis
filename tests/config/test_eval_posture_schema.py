@@ -1,19 +1,14 @@
-"""Bounds census for the two `Block | None` eval postures (F-R-P2B-5).
+"""Bounds census for the two `Block | None` eval postures.
 
-`tests/config/test_eval_schema_bounds.py` cannot cover these: its payload mints both postures
-disarmed, and a field inside a `null` block has no value to put out of domain. So the census
-for the five inner leaves lives here, on an ARMED fixture, with the same shape as its sibling
-— one out-of-domain rejection and one in-domain boundary acceptance per field.
+The sibling bounds suite cannot cover these: its payload mints both postures disarmed, and a
+field inside a `null` block has no value to put out of domain. So the census for the inner
+leaves lives here on an armed fixture, one out-of-domain rejection and one in-domain boundary
+acceptance per field.
 
-Two claims beyond the bounds:
-
-  * the DISJOINT-TYPES posture (R79) — `null` and a block are the two representable states,
-    and there is no third spelling. In particular there is no `enabled:` boolean beside
-    either block and no numeric disable sentinel inside one, because either would be a
-    second authority over "is this armed" that can contradict the first.
-  * NO CODE-SIDE DEFAULT (R1) — an absent key is an error that NAMES the key, not a silently
-    disarmed posture. That distinction is the whole reason the shipped configs state `null`
-    explicitly rather than omitting the key.
+Two claims beyond the bounds: `null` and a block are the only two representable states, with
+no `enabled:` boolean and no numeric disable sentinel that could be a second authority over
+"is this armed"; and an absent key is an error that NAMES the key, never a silently disarmed
+posture, which is why the shipped configs state `null` explicitly.
 """
 from __future__ import annotations
 
@@ -35,11 +30,10 @@ _ARMED_FLOOR = {"probe_games": 4, "min_decisive_rate": 0.5, "min_winrate": 0.5}
 
 
 def _payload(*, ply: Any = None, floor: Any = None) -> dict:
-    """A committed config's own raw payload, with the two postures substituted.
+    """Return a committed config's own raw payload with the two postures substituted.
 
-    Derived from `configs/dev_example.yaml` rather than hand-written so this file cannot
-    drift out of schema-completeness the way a transcribed payload does — a new required leaf
-    anywhere in `RunConfig` arrives here for free.
+    Derived rather than hand-written, so a new required leaf anywhere in `RunConfig` arrives
+    here for free instead of leaving this file out of schema-completeness.
     """
     raw = yaml.safe_load(_DEV.read_text(encoding="utf-8"))
     raw = copy.deepcopy(raw)
@@ -49,13 +43,11 @@ def _payload(*, ply: Any = None, floor: Any = None) -> dict:
 
 
 def test_the_baseline_payload_is_still_valid_disarmed_and_armed() -> None:
-    """Guard the premise: neither posture may reject a healthy minted config, and the armed
-    shapes this file mutates must themselves be legal or every rejection below is vacuous."""
+    """Guard the premise: the disarmed and armed baseline payloads must both validate."""
     RunConfig.model_validate(_payload())
     RunConfig.model_validate(_payload(ply=_ARMED_PLY, floor=_ARMED_FLOOR))
 
 
-# ── the disjoint-types posture (R79) ───────────────────────────────────────────────────
 def test_null_and_a_block_are_the_two_states_and_null_is_what_ships() -> None:
     cfg = RunConfig.model_validate(_payload())
     assert cfg.eval.ply_cap_adjudication is None
@@ -68,8 +60,7 @@ def test_null_and_a_block_are_the_two_states_and_null_is_what_ships() -> None:
 
 @pytest.mark.parametrize("key", ["ply_cap_adjudication", "strength_floor"])
 def test_an_absent_posture_key_is_an_error_that_NAMES_it(key: str) -> None:
-    """R1: missing key = error. `None` is a STATED posture; silence is not a posture at all,
-    and a code-side default would be the duplicated-authority class R1 exists to kill."""
+    """Prove an absent posture key is an error naming it: `None` is stated, silence is not a posture."""
     raw = _payload()
     del raw["eval"][key]
     with pytest.raises(ValidationError) as ei:
@@ -83,9 +74,7 @@ def test_an_absent_posture_key_is_an_error_that_NAMES_it(key: str) -> None:
     ("strength_floor", {**_ARMED_FLOOR, "enabled": True}),
 ])
 def test_no_enable_flag_may_be_smuggled_in_beside_the_terms(block: str, extra: dict) -> None:
-    """A boolean beside the terms is a second authority over "is this armed" and can
-    contradict the first. `extra="forbid"` makes it unrepresentable; this pins that it is the
-    POSTURE blocks it is unrepresentable on, not merely somewhere in the tree."""
+    """Prove no `enabled` flag may sit beside the terms: it would be a second authority over arming."""
     raw = _payload()
     raw["eval"][block] = extra
     with pytest.raises(ValidationError) as ei:
@@ -98,15 +87,13 @@ def test_no_enable_flag_may_be_smuggled_in_beside_the_terms(block: str, extra: d
     ("strength_floor", {"probe_games": 4}),
 ])
 def test_the_terms_travel_together_or_not_at_all(block: str, partial: dict) -> None:
-    """R80's rule, on this fact. A criterion with no margin cannot be evaluated and a probe
-    size with no bar measures nothing, so a HALF-armed block must not load."""
+    """Prove a half-armed block does not load: a criterion with no margin cannot be evaluated."""
     raw = _payload()
     raw["eval"][block] = partial
     with pytest.raises(ValidationError):
         RunConfig.model_validate(raw)
 
 
-# ── the bounds census ──────────────────────────────────────────────────────────────────
 _OUT_OF_DOMAIN = [
     ("ply_cap_adjudication", "criterion", "centre_control"),
     ("ply_cap_adjudication", "criterion", "draw"),
@@ -124,11 +111,11 @@ _OUT_OF_DOMAIN = [
 @pytest.mark.parametrize("block,field,value", _OUT_OF_DOMAIN,
                          ids=[f"{b}.{f}={v}" for b, f, v in _OUT_OF_DOMAIN])
 def test_an_out_of_domain_posture_value_is_rejected_by_name(block, field, value) -> None:
-    """A value outside the mechanism's own range must be a NAMED load-time error, never a
-    downstream surprise. `min_margin=0` is the load-bearing row: the margin is a signed
-    difference between two equally-measured sides, so 0 means "measured equal" and a rule
-    that awarded on it would award every capped game to whichever side the comparison
-    happened to test first."""
+    """Prove an out-of-domain posture value is rejected by name at load time.
+
+    `min_margin=0` is the load-bearing row: the margin is a signed difference, so 0 means
+    "measured equal" and awarding on it would award by comparison order.
+    """
     armed = {"ply_cap_adjudication": _ARMED_PLY, "strength_floor": _ARMED_FLOOR}
     raw = _payload(ply=_ARMED_PLY, floor=_ARMED_FLOOR)
     block_value = dict(armed[block])
@@ -153,9 +140,7 @@ _IN_DOMAIN_BOUNDARY = [
 @pytest.mark.parametrize("block,field,value", _IN_DOMAIN_BOUNDARY,
                          ids=[f"{b}.{f}={v}" for b, f, v in _IN_DOMAIN_BOUNDARY])
 def test_the_boundary_values_of_each_field_LOAD(block, field, value) -> None:
-    """The other half of the census: a bound that also rejects legal values is a bug of its
-    own. `min_winrate: 0.0` in particular must load — it is the explicit "no win-rate bar"
-    posture, said out loud in the config rather than by an absent key."""
+    """Prove each field's boundary values load; `min_winrate: 0.0` is the stated no-bar posture."""
     armed = {"ply_cap_adjudication": _ARMED_PLY, "strength_floor": _ARMED_FLOOR}
     raw = _payload(ply=_ARMED_PLY, floor=_ARMED_FLOOR)
     block_value = dict(armed[block])

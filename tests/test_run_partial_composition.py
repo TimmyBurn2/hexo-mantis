@@ -1,49 +1,20 @@
-# >300 justify (R8). The three oracles are
-# one claim — "a composition that fails partway leaks nothing and says WHERE" — driven
-# through ONE real composed boot (real `build_run_safety`, real `JsonlEventSink`, real
-# `HeartbeatWatchdog`, real `DiskGuard`, real signal handlers). R5 bars cross-test imports
-# and `tests/test_run_root_lifecycle.py` is BYTE-FROZEN (`7c28536`), so the drivable
-# pool/trainer harness cannot be shared from either side; splitting these three would fork it
-# a second time instead of once. One harness, one boot shape, three RED-TEAM findings that
-# are all "what DESIGN §8 owes at the seams O-D2 does not reach".
-"""⊕ WPMAIN — the teardown ladder's own boundary conditions (RED-TEAM RT-3 / RT-4 / RT-7).
+# >300 justify (R8): the three oracles are one claim — "a composition that fails partway leaks
+# nothing and says WHERE" — driven through ONE real composed boot. Cross-test imports are barred
+# and the sibling lifecycle file is BYTE-FROZEN, so splitting these would fork the drivable
+# pool/trainer harness a second time instead of once.
+"""The teardown ladder's own boundary conditions — the seams BEFORE the coordinator, where the
+ladder did not reach.
 
-`tests/test_run_root_lifecycle.py`'s O-D2 pins the LAST seam — `StepCoordinator`, where the
-pool, the watchdog and the guard are all already up. RED-TEAM drove the seams BEFORE it and
-found the ladder does not reach them:
+The `pool_started` flag was set AFTER `start()` returned, so a raise in its second or third
+sub-start left the first alive with the flag `False` and the conditional stop a NO-OP. The five
+construction steps between `build_run_safety` — which OPENS the run's JSONL segment — and the
+old `try:` were outside both the ladder and any seam. And transposing `warn_gb`/`fail_gb` at the
+guard construction site was FULL TIER GREEN, because the resolver test pins the transposition
+where it cannot happen and the config model rule guards the CONFIG layer only.
 
-- **RT-3 — the `pool_started` window.** `WorkerPool.start()` (`selfplay/pool.py:308-329`) is
-  three sub-starts: the inference server, the Rust runner, then the stats thread. The flag
-  was set AFTER the call returned, so a raise in sub-start #2 or #3 left #1 alive with the
-  flag still `False` — and `_stop_pool_if_started(pool, pool_started=False)()` is a NO-OP.
-  Driven: `partial_resource_still_live: TRUE`, `pool.stopped: false`. Silent worker leak.
-- **RT-4 — the gap above the ladder.** `build_run_safety` OPENS the run's JSONL segment; the
-  five construction steps between it and the old `try:` were outside both the ladder and (bar
-  two) any seam. Driven at `build_eval_pipeline` on an eval-enabled minted config:
-  `leaked_open_files: ["…/logs/events_smoke_gnn_seg0001.jsonl"]`, `notes: []` — the largest
-  construction step in the composer, the one every `eval_enabled: true` config walks into,
-  reaching the process boundary with the sink open and NO seam name for the preflight's
-  rc-32/33 classifier to read.
-- **RT-7 — the guard threading nobody reads.** Transposing `warn_gb`/`fail_gb` at the
-  construction site (`run.py`'s six-line hand-off) was **FULL TIER GREEN: 2278 passed, 2
-  skipped**. `tests/config/test_disk_guard_keys.py:166-171` names that exact defect — *"a
-  transposed `warn_gb`/`fail_gb` is a guard that kills the run at the warning threshold"* —
-  and pins it AT THE RESOLVER, where three independent values go in and three named fields
-  come out and the transposition cannot happen. The place it CAN happen is the hand-off, and
-  `DiskGuardConfig`'s `fail_gb < warn_gb` model rule guards the CONFIG layer only. Under the
-  mutation a run5 minted 10/5 SIGTERMs itself at 10 GB free and never warns.
-
-Fakes, disclosed in full (R121(b): oracles fake nothing on the asserted path):
-
-- `trainer` / `pool` are drivable COLLABORATORS, injected by `compose_run`'s own pinned
-  contract (Q-INJECTION) — the same posture every wiring oracle in `tests/` uses. The buffer
-  is the REAL `HexgBuffer` (the graph route refuses a shapeless fake at dispatch, by design).
-- `build_run_safety` is called FOR REAL; the wrapper only records the real object it returned
-  and installs recording delegates over `watchdog.stop` / `sink.close`.
-- `DiskGuard` is the REAL class, subclassed to record its construction kwargs; `super()` on
-  every path.
-- The RT-3 pool's `start()` and the RT-4 `build_eval_pipeline` raiser ARE the subjects: there
-  is no other way to make a partial start or an eval-pipeline wall happen.
+Fakes, disclosed: `trainer` and `pool` are drivable collaborators injected through the composer's
+own pinned contract, the buffer is a REAL `HexgBuffer`, `build_run_safety` is called FOR REAL and
+only wrapped to record, and `DiskGuard` is the REAL class subclassed to record kwargs.
 """
 from __future__ import annotations
 
@@ -57,22 +28,19 @@ import mantis.run as mantis_run
 from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.train.lifecycle.disk_guard import DiskGuard
 
-#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1 (the
-#: reachability validator spans cadence < actor_lag_threshold < max_train_steps).
+#: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
 
-#: Disk-guard values for the drives. Deliberately three DISTINCT numbers: an assertion that
-#: the guard received the resolver's values is vacuous if two of them are equal, and the
-#: transposition RT-7 found is exactly a swap of two. Low enough that the critical arm can
-#: NEVER fire on a real filesystem (it SIGTERMs the pytest process).
+#: Disk-guard values, deliberately three DISTINCT numbers: an assertion that the guard received
+#: the resolver's values is vacuous if two are equal, and the transposition is exactly a swap of
+#: two. Low enough that the critical arm can NEVER fire on a real filesystem.
 _DRIVE_DISK_GUARD = {"interval_sec": 0.02, "warn_gb": 0.001, "fail_gb": 0.0005}
 
 
 @pytest.fixture(autouse=True)
 def restore_signal_dispositions():
-    """Every drive here installs process-global SIGINT/SIGTERM handlers (the root does, by
-    design). Save and restore around each test so one drive's handlers cannot decide
-    another test's fate."""
+    """Save and restore the process-global SIGINT/SIGTERM handlers around each test, so one
+    drive's handlers cannot decide another test's fate."""
     saved = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     yield
     for sig, handler in saved.items():
@@ -94,7 +62,7 @@ class _Pool:
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
+    draw_rate = 0.05  # the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9
@@ -144,7 +112,7 @@ class _Pool:
 
 
 class _PartiallyStartingPool(_Pool):
-    """The RT-3 subject: `start()` brings a resource UP and then raises — `WorkerPool`'s
+    """The partial-start subject: `start()` brings a resource UP and then raises — `WorkerPool`'s
     real shape, where the inference server is live before the runner is asked to start."""
 
     def __init__(self) -> None:
@@ -206,16 +174,8 @@ class _Recorders:
 
 
 def _install_recorders(monkeypatch, request) -> _Recorders:
-    """N4 (dispatcher-ownable backlog): on the COMPLETED compose_run path `close_out` never
-    touches `run_safety.sink` — `run.py:899-920`'s own comment records this as deliberate
-    debt (CARD-PROTOCOL-COMPLETE, R106), bounded in PRODUCTION because both real callers
-    exit the process right after `compose_run` returns. This pytest process does not exit
-    between tests, so a suite of in-process composed drives accumulates open write fds to
-    completed segment files for the rest of the session — harness hygiene, not a production
-    defect (RT-3/RT-4 above already close on the PARTIAL path; RT-7 is the one that completes
-    and, unfixed, leaked). `request.addfinalizer` closes the REAL sink (idempotent,
-    `sink.py:205-206`) after every drive through this recorder, regardless of which teardown
-    path the run itself took or whether the test's own assertions raise."""
+    """Close the REAL sink after every drive: on the COMPLETED path `close_out` never touches it,
+    which is bounded in production because both real callers exit the process right after."""
     rec = _Recorders()
     real_build = mantis_run.build_run_safety
     _RecordedDiskGuard.instances = rec.disk_guards
@@ -244,8 +204,8 @@ def _install_recorders(monkeypatch, request) -> _Recorders:
 
 
 def _bounded(smoke_run_config, **over):
-    """A REAL minted graph config, bounded so the drive terminates. `eval_enabled` is the
-    CONFIG's own value (R120: no parameter can force it, so the config is the only route)."""
+    """A REAL minted graph config, bounded so the drive terminates; `eval_enabled` is the
+    CONFIG's own value, no parameter being able to force it."""
     monitor = {"actor_lag_threshold_steps": _DRIVE_STEPS - 1,
                "disk_guard": dict(_DRIVE_DISK_GUARD)}
     monitor.update(over.pop("monitor", {}))
@@ -265,25 +225,14 @@ def _seam_names(exc: BaseException) -> list[str]:
             if note.startswith(prefix)]
 
 
-# ══ RT-3 — a partial `pool.start()` is still torn down ════════════════════════════════
+# A partial `pool.start()` is still torn down.
 def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """RT-3. The ladder's own boundary condition, which O-D2 (the coordinator seam, where
-    everything is already up) cannot reach.
-
-    The contract DESIGN §8 states — *"no worker process and no non-daemon thread survives a
-    failed compose, nothing is half-alive"* — is asserted against the pool's OWN resource
-    flag, not against the fact that `stop()` was called: a `stop()` that runs on a pool the
-    ladder believes never started is the no-op this finding is about.
-
-    MUTATION THAT REDS IT (driven, RED-TEAM probe B1): restore `pool_started = True` to its
-    position AFTER `pool.start()`. `partial_resource_still_live` goes TRUE and `pool.stopped`
-    goes False, with every other oracle in the tree green — including O-D2, whose pool starts
-    cleanly.
-
-    The other three halves of the ladder are asserted here too, because a widening of the
-    flag that dropped one of them would be a different leak at the same seam."""
+    """A pool that came up halfway is stopped, asserted against the pool's OWN resource flag
+    rather than the fact that `stop()` was called — a `stop()` on a pool the ladder believes
+    never started is the no-op this is about. Mutation: put `pool_started = True` back AFTER
+    `pool.start()`. The other three halves of the ladder are asserted here too."""
     rec = _install_recorders(monkeypatch, request)
     pool = _PartiallyStartingPool()
 
@@ -308,28 +257,16 @@ def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
     )
 
 
-# ══ RT-4 — the eval-pipeline wall is inside the ladder AND named ══════════════════════
+# The eval-pipeline wall is inside the ladder AND named.
 def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """RT-4. `build_eval_pipeline` is the largest construction step in the composer and the
-    one every `eval_enabled: true` config walks into — and it used to sit ABOVE the `try:`,
-    outside the ladder, unseamed.
+    """`build_eval_pipeline` fails inside the ladder, with its seam named.
 
-    Two independent assertions, because the finding is two defects at one site: the segment
-    file the run's own sink opened was left OPEN (measured by RED-TEAM's probe B2 as a live
-    file descriptor), and the failure reached the process boundary with `notes: []`, so the
-    preflight's rc-32/33 classifier reads a stderr tail with no seam in it.
-
-    MUTATION THAT REDS IT: move the `try:` back down to `pool.start()` (the sink-close
-    recorder stays at 0), or drop the `with _seam("build_eval_pipeline"):` (the note list
-    empties). Both are invisible to every other oracle: this is the only drive in the tree
-    that fails at this seam.
-
-    The pool assertion is the third leg — a wall ABOVE `pool.start()` must NOT call
-    `pool.stop()`, which is the ORIGINAL hazard `_stop_pool_if_start_attempted` guards
-    (`InferenceServer.join(timeout=5.0)` raises on a never-started thread). RT-3's widening
-    kept it closed and this row is what says so."""
+    Two assertions, because the finding is two defects at one site: the segment the run's own
+    sink opened was left OPEN, and the failure reached the process boundary with `notes: []`. The
+    third leg is that a wall ABOVE `pool.start()` must NOT call `pool.stop()`.
+    """
     rec = _install_recorders(monkeypatch, request)
 
     def _raising_eval_pipeline(**_kwargs):
@@ -362,28 +299,17 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
     assert rec.disk_guards == [], "…and nothing downstream of the wall may have been armed"
 
 
-# ══ RT-7 — the guard gets the resolver's OWN values, in the resolver's OWN slots ══════
+# The guard gets the resolver's OWN values, in the resolver's OWN slots.
 def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, request
 ) -> None:
-    """RT-7 — the DR-11 question at the END of the path nobody reads.
+    """The hand-off from the resolver to `DiskGuard(...)` — three floats, by keyword, in the one
+    place a transposition is typeable — passes the resolver's values into its own slots.
 
-    `tests/config/test_disk_guard_keys.py` closes the resolver end: the `data.pop
-    ("disk_guard")` in `resolve_monitor_config` is legitimate BECAUSE another reader exists,
-    and the generalised-pop form is banned by source census. What no test read is the
-    six-line hand-off from that reader to `DiskGuard(...)` — three floats, by keyword, in
-    the one place a transposition is typeable.
-
-    MUTATION THAT REDS IT (driven, RED-TEAM M6): swap the two kwargs at the construction
-    site — `warn_gb=guard_spec.fail_gb, fail_gb=guard_spec.warn_gb`. FULL TIER GREEN before
-    this row: 2278 passed, 2 skipped, and 44/44 on the four focused suites, because
-    `DiskGuardConfig`'s `fail_gb < warn_gb` model rule constrains the CONFIG's own leaves and
-    nothing constrains what reaches the guard. Under it a run5 minted 10/5 SIGTERMs itself at
-    10 GB free and never warns once.
-
-    Asserted against the RESOLVER's output, never against the literals this drive minted: a
-    row that restates the test's own input is the self-satisfying species, and it would go
-    green again the moment the resolver started lying."""
+    Swapping the two kwargs was FULL TIER GREEN, because the config model rule constrains the
+    CONFIG's leaves and nothing constrained what reached the guard. Asserted against the
+    RESOLVER's output, never the literals this drive minted.
+    """
     rec = _install_recorders(monkeypatch, request)
     config = _bounded(smoke_run_config)
     expected = resolve_disk_guard(config.monitor)

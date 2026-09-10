@@ -1,45 +1,9 @@
-//! R153 characterization: does the EXPORTED training target drop visit mass?
+//! Regression oracle: the exported training target must drop no visit mass.
 //!
-//! Pre-registered instrument. The verdict rule was frozen in
-//! `wp/WP12R/PREREG_R153.md` BEFORE this file was first executed; nothing here was
-//! authored with knowledge of the outcome.
-//! COMMITTED with the WP12-R Phase T fix as a PERMANENT regression oracle (R92,
-//! DESIGN_T §5 O-5): the prereg + measurement artifacts are committed VERBATIM at
-//! `docs/design/measurements/PREREG_R153.md` and
-//! `docs/design/measurements/MEASUREMENT_R153.md` (the in-repo citation chain).
-//!
-//! [T-2 ORACLE-WRITE] Report arms FLIPPED TO ASSERTIONS per O-5 — measurement
-//! semantics (generators, seeds, dense expand, TOL) UNCHANGED: every sampled row must
-//! now satisfy `dropped_mass <= 1e-6` on every encoding (post-§3.1 the export sums to
-//! 1 by construction on EVERY expand path). Instrument abort conditions retained
-//! as-is. PRE-FIX this test is RED (leg-1 measured drops at the 150-sim deploy
-//! reference; `MEASUREMENT_R153.md` §2).
-//!
-//! ## The subject
-//!
-//! Two in-tree documents disagree about the same export:
-//!   - `runner/records.rs:481` — training targets deliberately do NOT inherit the
-//!     off-window skip; the policy target is the raw visit distribution (R34).
-//!   - `mcts/policy.rs:166-168` — "Off-window children with NO cluster coverage are
-//!     dropped (today's `get_policy` behaviour)."
-//!
-//! R153 ruled the AUTHORITY is the documented target semantics. This measures only whether
-//! the export diverges from it, and characterises by how much.
-//!
-//! ## Why the invariant needs no reference implementation
-//!
-//! `get_policy_ls` normalises by the total visit count over ALL children (`v / total`), so a
-//! no-drop export sums to exactly 1.0. Any deficit IS the dropped mass. Re-deriving a
-//! "correct" target here would just add a second thing that can be wrong.
-//!
-//! ## What R346(f) removed from this instrument
-//!
-//! The original file ALSO attributed each drop to the K-cluster coverage gate, recomputing
-//! `is_covered` over `Board::get_cluster_views`' centres. That producer went with the dense
-//! path, and `get_policy_ls` is coverage-free, so there is no gate left for a drop to be
-//! attributable to. The mass law below is unchanged and is now the whole verdict; the two
-//! grid arms are replaced by the second graph row (`gnn_axis_r8`), which reaches a wider
-//! legal set than `gnn_axis_v1` and so probes the same >361 regime harder.
+//! No reference implementation is needed — `get_policy_ls` normalises by the total visit
+//! count over ALL children, so a no-drop export sums to exactly 1.0 and any deficit IS the
+//! dropped mass. Prereg and measurement records live at
+//! `docs/design/measurements/{PREREG,MEASUREMENT}_R153.md`.
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
@@ -48,7 +12,7 @@ use mantis_search::MCTSTree;
 const N_SIMS: usize = 150; // run5's deploy_sims
 const LEAF_BATCH: usize = 8;
 const TEMPERATURE: f32 = 1.0; // the training export's branch
-const TOL: f64 = 1e-6; // §4 verdict threshold
+const TOL: f64 = 1e-6; // verdict threshold
 
 /// One position's measurement.
 struct Row {
@@ -75,8 +39,9 @@ fn run_uniform_search(tree: &mut MCTSTree, n_actions: usize) {
     let mut done = 0;
     while done < N_SIMS {
         let take = LEAF_BATCH.min(N_SIMS - done);
-        let boards = tree.select_leaves(take)
-        .expect("select_leaves: no desync in this fixture");
+        let boards = tree
+            .select_leaves(take)
+            .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }
@@ -103,12 +68,11 @@ fn measure(board: &Board, n_actions: usize, ply: u32) -> Option<Row> {
     }
 
     let policy = tree.get_policy_ls(TEMPERATURE, n_actions);
-    let exported: f64 =
-        policy.dense.iter().map(|&p| p as f64).sum::<f64>()
-            + policy.overflow.values().map(|&p| p as f64).sum::<f64>();
+    let exported: f64 = policy.dense.iter().map(|&p| p as f64).sum::<f64>()
+        + policy.overflow.values().map(|&p| p as f64).sum::<f64>();
     let dropped_mass = 1.0 - exported;
 
-    // Abort condition 2 (PREREG §6): a surplus is a double-count, not a drop.
+    // A surplus is a double-count, not a drop.
     assert!(
         exported <= 1.0 + TOL,
         "ply {ply}: exported mass {exported} EXCEEDS 1.0 — double-count, not a drop; \
@@ -123,10 +87,8 @@ fn measure(board: &Board, n_actions: usize, ply: u32) -> Option<Row> {
     })
 }
 
-/// DISPERSED tail probe (PREREG §3): drive stones apart so the legal set grows past the
-/// 361-cell in-window ceiling. A game-only sample cannot reach the regime where the
-/// coverage gate's exposure actually lives, and PREREG §6 abort 1 refuses a sample that
-/// never gets there.
+/// Dispersed tail probe: drive stones apart so the legal set grows past the 361-cell
+/// in-window ceiling, a regime a game-only sample never reaches.
 fn dispersed_and_measure(enc: &str, max_plies: u32) -> Vec<Row> {
     let (geom, n_actions) = geometry_for(enc);
     let mut board = Board::with_geometry(geom);
@@ -139,8 +101,7 @@ fn dispersed_and_measure(enc: &str, max_plies: u32) -> Vec<Row> {
         if let Some(row) = measure(&board, n_actions, ply) {
             rows.push(row);
         }
-        // Farthest from the board's WINDOW CENTRE — deterministic, and it disperses
-        // monotonically, which is what grows the legal set past the in-window ceiling.
+        // Farthest from the window centre: deterministic, and disperses monotonically.
         let (cq, cr) = board.window_center();
         let &(q, r) = legal
             .iter()
@@ -171,7 +132,7 @@ fn play_and_measure(enc: &str, seed: u64, max_plies: u32) -> Vec<Row> {
         if let Some(row) = measure(&board, n_actions, ply) {
             rows.push(row);
         }
-        // Deterministic LCG playout — reproducible at a fixed seed (PREREG §6 abort 3).
+        // Deterministic LCG playout — reproducible at a fixed seed.
         state = state
             .wrapping_mul(6_364_136_223_846_793_005)
             .wrapping_add(1_442_695_040_888_963_407);
@@ -187,11 +148,18 @@ fn report(enc: &str, rows: &[Row]) -> (usize, f64, f64, usize) {
     let affected = rows.iter().filter(|r| r.dropped_mass > TOL).count();
     let mut masses: Vec<f64> = rows.iter().map(|r| r.dropped_mass).collect();
     masses.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let median = if masses.is_empty() { 0.0 } else { masses[masses.len() / 2] };
+    let median = if masses.is_empty() {
+        0.0
+    } else {
+        masses[masses.len() / 2]
+    };
     let max = masses.last().copied().unwrap_or(0.0);
 
     let max_legal = rows.iter().map(|r| r.n_legal).max().unwrap_or(0);
-    println!("\n=== {enc} — {} positions, {affected} affected ===", rows.len());
+    println!(
+        "\n=== {enc} — {} positions, {affected} affected ===",
+        rows.len()
+    );
     println!("  dropped_mass: median {median:.6}  max {max:.6}");
     println!("  max n_legal reached: {max_legal}  (PREREG abort 1 needs >361)");
     for r in rows.iter().filter(|r| r.dropped_mass > TOL).take(12) {
@@ -205,8 +173,7 @@ fn report(enc: &str, rows: &[Row]) -> (usize, f64, f64, usize) {
 
 #[test]
 fn r153_characterize_exported_target_dropped_mass() {
-    // PRIMARY: run5's own encoding. SECONDARY: run6's identity row at the wider radius —
-    // the surviving registered set after R346(f).
+    // run5's own encoding, then run6's identity row at the wider radius.
     let encodings = ["gnn_axis_v1", "gnn_axis_r8"];
     let seeds = [20_260_731_u64, 8_675_309, 42]; // 3 distinct games (LAW-04)
 
@@ -218,10 +185,11 @@ fn r153_characterize_exported_target_dropped_mass() {
         for seed in seeds {
             rows.extend(play_and_measure(enc, seed, 128));
         }
-        // PREREG §3 tail probe — the regime a game-only sample misses.
+        // Tail probe — the regime a game-only sample misses.
         let tail = dispersed_and_measure(enc, 96);
         println!("  --- dispersed tail ---");
-        let (tail_affected, _tm, tail_max, tail_max_legal) = report(&format!("{enc}/dispersed"), &tail);
+        let (tail_affected, _tm, tail_max, tail_max_legal) =
+            report(&format!("{enc}/dispersed"), &tail);
         rows.extend(tail);
 
         total_positions += rows.len();
@@ -229,38 +197,47 @@ fn r153_characterize_exported_target_dropped_mass() {
         if affected > 0 || tail_affected > 0 {
             any_drop = true;
         }
-        // [T-2, R92/O-5] Flipped report arm — the permanent regression assertion.
+        // The permanent regression assertion.
         for r in &rows {
             assert!(
                 r.dropped_mass <= TOL,
                 "{enc}: ply {} (n_legal {}, n_children {}) drops {:.6} target mass \
                  (> {TOL}) — the no-drop export law (records.rs:468-479, R34/R153) is \
                  violated",
-                r.ply, r.n_legal, r.n_children, r.dropped_mass
+                r.ply,
+                r.n_legal,
+                r.n_children,
+                r.dropped_mass
             );
         }
-        // PREREG §6 abort 1: the sample MUST reach the >361-legal regime.
+        // Abort 1: the sample MUST reach the >361-legal regime.
         assert!(
             max_legal > 361 || tail_max_legal > 361,
             "{enc}: sample never reached the >361-legal regime (max {max_legal}, tail \
              {tail_max_legal}) — PREREG abort 1: HOLD, this sample is not representative"
         );
-        // Reproducibility (PREREG §6 abort 3): same seed must give the same numbers.
-        let a: Vec<f64> = play_and_measure(enc, seeds[0], 64).iter().map(|r| r.dropped_mass).collect();
-        let b: Vec<f64> = play_and_measure(enc, seeds[0], 64).iter().map(|r| r.dropped_mass).collect();
-        assert_eq!(a, b, "{enc}: instrument is NOT deterministic at a fixed seed");
+        // Abort 3: the same seed must give the same numbers.
+        let a: Vec<f64> = play_and_measure(enc, seeds[0], 64)
+            .iter()
+            .map(|r| r.dropped_mass)
+            .collect();
+        let b: Vec<f64> = play_and_measure(enc, seeds[0], 64)
+            .iter()
+            .map(|r| r.dropped_mass)
+            .collect();
+        assert_eq!(
+            a, b,
+            "{enc}: instrument is NOT deterministic at a fixed seed"
+        );
         println!("  tail max dropped_mass {tail_max:.6}");
     }
 
-    assert!(total_positions > 0, "the instrument measured nothing — sample is empty");
+    assert!(
+        total_positions > 0,
+        "the instrument measured nothing — sample is empty"
+    );
     println!(
         "\n=== R153 VERDICT INPUTS ===\n  any position with dropped_mass > {TOL}: {any_drop}\
          \n  total positions measured: {total_positions}"
     );
-
-    // [T-2, R92/O-5] HISTORY: this test originally CHARACTERISED (the verdict was read
-    // off the printed distribution into the measurement document). It now ALSO asserts
-    // the post-fix law per row (the flipped report arm above); the instrument's own
-    // abort conditions (surplus mass, determinism, non-empty sample) are retained
-    // verbatim and must never be satisfied by a broken probe.
 }

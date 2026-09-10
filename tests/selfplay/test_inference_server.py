@@ -1,22 +1,9 @@
-"""Suite F — the ONE inference server (`mantis.selfplay.inference_server`).
+"""Cover the one inference server: dispatch, the graph loop's failures and heartbeats, the wire
+seam obligations and the production collate call site.
 
->300 justify: one server, one loop, one seam. The representation dispatch (F-08/F-09), the
-graph-loop failure + heartbeat + collate call-site pins (F-10/F-11/F-15) and the wire/seam
-obligations (F-13/F-14) all bind the SAME class and share the fakes; splitting them would
-duplicate the fakes and separate the dispatch pin from the thing it dispatches to.
-
-IMPL-written (non-⊕) per DESIGN §b: ports of the old server suites, rewritten
-public-surface against `build_net`-built nets. The dense-loop assertions (F-01..F-05), the
-TorchScript-trace and compile paths, and the dense halves of F-08/F-09/F-11 went with the
-grid path (R346(f)) — `run()` now delegates to `_run_graph_loop` and there is no second arm.
-
-F-15 is the sharpest pin in the file. `gnn_axis_v1` is the ONLY registered graph
-encoding and it happens to be exactly trunk 19 / win 6 / node-feat 11 / edge-feat 5, so a
-test driven by a real registry spec cannot tell spec-derived dims from hard-coded
-literals. The non-default-spec arm therefore swaps `server.encoding_spec` for a stub with
-DIFFERENT dims after construction (the loop binds `spec = self.encoding_spec` at loop
-entry and reads the four dims inline at the collate call, so the swap is observable).
-Dropping or weakening that arm silently reopens the hard-coded-dims escape.
+>300 justify: one server, one loop, one seam — every pin binds the SAME class and shares the fakes,
+so splitting would separate the dispatch pin from what it dispatches to. The sharpest is the
+anti-hard-coding arm: the one registered graph encoding carries exactly the collate defaults.
 """
 from __future__ import annotations
 
@@ -54,22 +41,17 @@ _GPU_ONLY = pytest.mark.skipif(
 )
 
 
-# ── shared helpers ───────────────────────────────────────────────────────────────
 @pytest.fixture(scope="module")
 def device() -> torch.device:
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def _cfg(**over: Any) -> dict[str, Any]:
-    # `InferenceHParams.from_config` reads `config["inference"]`, and `resolve_from_config`
-    # requires an explicit `encoding` key (R28, no default).
+    # `from_config` reads `config["inference"]` and requires an explicit `encoding` key.
     base = {
         "inference_batch_size": 8, "inference_max_wait_ms": 20.0,
-        # F-816-10 (R276(f)): the GRAPH arm resolves `inference.fused_graph_caps`
-        # EAGERLY at construction, so every graph-route site built from this base needs
-        # it. The pair is the template's NON-BINDING-BY-CONSTRUCTION value — nothing in
-        # this file splits, and the split's own coverage lives in the F-816-10 oracles
-        # where its M is asserted. Inert on the grid route, which never reads the block.
+        # The graph arm resolves this EAGERLY at construction, so every site built from this
+        # base needs it; the pair is non-binding by construction, so nothing here splits.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     base.update(over)
@@ -78,8 +60,8 @@ def _cfg(**over: Any) -> dict[str, Any]:
 
 @dataclass
 class _SpecStub:
-    """A NON-default graph spec: every dim differs from `gnn_axis_v1`'s 19/6/11/5, so a
-    hard-coded literal at the collate call site cannot pass."""
+    """A non-default graph spec whose every dim differs from the registered one's 19/6/11/5, so
+    a hard-coded literal at the collate call site cannot pass."""
 
     trunk_size: int = 21
     win_length: int = 7
@@ -91,7 +73,7 @@ class _SpecStub:
 
 
 class _FakeGraphBatcher:
-    """Drives `_run_graph_loop` for exactly `n_batches` iterations, then stops the loop."""
+    """Drive `_run_graph_loop` for exactly `n_batches` iterations, then stop the loop."""
 
     def __init__(self, wire: Any, n_batches: int = 1, n_requests: int = 2) -> None:
         self._wire = wire
@@ -147,7 +129,7 @@ def _graph_server(
 
 
 class _FiniteGraphNet(torch.nn.Module):
-    """Stub graph net: finite per-legal-node logits + per-graph values."""
+    """Serve finite per-legal-node logits and per-graph values."""
 
     def __init__(self, *, nonfinite: bool = False) -> None:
         super().__init__()
@@ -157,7 +139,7 @@ class _FiniteGraphNet(torch.nn.Module):
 
     def forward_batch(self, x, edge_index, edge_attr, legal_index, stone_mask, node_offsets):
         self.calls.append(tuple(x.shape))
-        n_legal = int(legal_index.numel())  # R284 P-MASK: rows, not a dense mask
+        n_legal = int(legal_index.numel())  # rows, not a dense mask
         b = int(node_offsets.shape[0]) - 1
         logits = torch.zeros(n_legal, dtype=torch.float32)
         value = torch.zeros(b, 1, dtype=torch.float32)
@@ -167,9 +149,7 @@ class _FiniteGraphNet(torch.nn.Module):
 
 
 def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch:
-    """A minimal, VALID collated batch — enough for `stone_mask_from_batch`,
-    `segment_softmax` and the finiteness gate. Built by hand so the loop can be driven
-    without a live Rust queue."""
+    """Build a minimal valid collated batch by hand, so the loop runs without a live queue."""
     n = n_graphs * nodes_per_graph
     node_offsets = torch.arange(0, n + 1, nodes_per_graph, dtype=torch.int64)
     legal_mask = torch.zeros(n, dtype=torch.bool)
@@ -182,10 +162,8 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
         edge_index=torch.zeros((2, 0), dtype=torch.int64),
         edge_attr=torch.zeros((0, 5), dtype=torch.float32),
         legal_offsets=legal_offsets,
-        # The REAL gather for the mask above: rows 1 and 2 of each graph, ascending
-        # across the fuse (wire check 13). It used to be all zeros, which worked only
-        # because the stub reads `.numel()` — a stub that counted PER GRAPH would have
-        # put every legal node in graph 0 and the fixture would not have said so.
+        # The REAL gather for the mask above — rows 1 and 2 of each graph, ascending across the
+        # fuse; all zeros would pass only because the stub reads `.numel()`.
         legal_node_gather=torch.tensor(
             [g * nodes_per_graph + k for g in range(n_graphs) for k in (1, 2)],
             dtype=torch.int64,
@@ -199,15 +177,8 @@ def _hand_built_batch(n_graphs: int = 2, nodes_per_graph: int = 3) -> GraphBatch
 
 def _wire_for(n_graphs: int = 2, nodes_per_graph: int = 3, legal_per_graph: int = 2
               ) -> GraphWirePayload:
-    """A REAL `GraphWirePayload` whose CSR offsets match `_hand_built_batch`'s shape.
-
-    F-816-10: `_run_graph_loop` reads the wire's own offsets ONCE per pop to PLAN its bounded
-    forwards, before any collate runs, so an opaque `object()` sentinel no longer reaches the
-    loop. The collate itself stays monkeypatched in the rows below — those rows are about the
-    call's kwargs, the finiteness gate and the heartbeat, not about the wire contract, which
-    has its own suites. Only the offsets have to be real, and the caps these servers carry are
-    non-binding, so every drive here is the M == 1 path.
-    """
+    """Build a real `GraphWirePayload` whose CSR offsets match `_hand_built_batch`'s shape; the
+    loop reads those offsets before any collate runs, so only they have to be real."""
     nodes = n_graphs * nodes_per_graph
     return GraphWirePayload(
         contract_version=1, builder_impl=1, n_graphs=n_graphs,
@@ -238,8 +209,7 @@ def test_run_dispatches_to_the_graph_loop_for_a_graph_spec(device) -> None:
 
 
 def test_unknown_representation_raises_at_construction(device) -> None:
-    """AM-1 / LAW-11: there is no dense-by-default arm. A spec whose representation is
-    unknown must raise, not quietly take the grid path."""
+    """Prove an unknown representation raises at construction, with no dense-by-default arm."""
 
     @dataclass
     class _BadSpec:
@@ -259,12 +229,9 @@ def test_non_spec_encoding_spec_type_rejected(device) -> None:
                         encoding_spec={"representation": "graph"})
 
 
-# ══ F-09 — LAW-06 autocast-dtype wiring ══════════════════════════════════════════
 def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
-    """LAW-06: bf16 on the graph path is pinned in CODE (fp16 GINE sum-aggregation overflows
-    on production-scale graphs). R346(f) deleted `train.amp_dtype`, so there is no longer a
-    declared value that could disagree — the pin is now that the server resolves bf16 from
-    the representation alone, with nothing in the config to consult."""
+    """Prove the server resolves bf16 from the representation alone: fp16 GINE sum-aggregation
+    overflows on production-scale graphs, and a config row would be a second authority."""
     cfg = _cfg()
     assert "amp_dtype" not in cfg.get("train", {}), (
         "a config row for the autocast dtype is the second authority LAW-06 refuses"
@@ -279,7 +246,6 @@ def test_graph_amp_dtype_is_bf16_unconditionally(device) -> None:
     server.stop()
 
 
-# ══ F-10 — NaN/Inf on the graph path dies loud ═══════════════════════════════════
 def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
     device, monkeypatch
 ) -> None:
@@ -300,8 +266,7 @@ def test_nonfinite_graph_output_submits_failure_and_releases_waiters(
 
 
 def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
-    """LAW-07 clean twin for F-10: the same harness with finite outputs submits RESULTS
-    and no failure — the gate is not rejecting everything."""
+    """Prove the clean twin: the same harness with finite outputs submits results, no failure."""
     batch = _hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
 
@@ -324,7 +289,6 @@ def test_finite_graph_output_submits_results(device, monkeypatch) -> None:
     assert server.total_requests == 2
 
 
-# ══ F-11 — heartbeat emission at dispatch (behaviour-neutral by default) ═════════
 def test_graph_loop_emits_one_heartbeat_per_batch(device, monkeypatch) -> None:
     batch = _hand_built_batch()
     monkeypatch.setattr(collate_mod, "collate_graph_batch", lambda *a, **kw: batch)
@@ -349,8 +313,7 @@ def test_graph_loop_default_heartbeat_none_emits_nothing(device, monkeypatch) ->
 
 
 def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
-    """Emission sits after a SUCCESSFUL submit, so a failing batch does not beat — the
-    watchdog's liveness signal must track dispatch, not loop spins."""
+    """Prove a failed batch emits no heartbeat: liveness tracks dispatch, not loop spins."""
     def _boom(*_a, **_kw):
         raise RuntimeError("collate exploded")
 
@@ -364,7 +327,6 @@ def test_heartbeat_not_emitted_for_a_failed_batch(device, monkeypatch) -> None:
     assert beats == []
 
 
-# ══ F-12 — model_version bump attribution ════════════════════════════════════════
 def test_load_state_dict_safe_bumps_model_version(device) -> None:
     net = _FiniteGraphNet()
     batcher = _FakeGraphBatcher(_wire_for(), n_batches=0)
@@ -383,7 +345,6 @@ def test_load_state_dict_safe_bumps_model_version(device) -> None:
     assert after_two == before + 2
 
 
-# ══ F-13 / F-14 — the wire seam obligations ══════════════════════════════════════
 def test_wire_round_trips_to_assemble_and_completes() -> None:
     batcher = InferenceBatcher(encoding_spec=_GRAPH_SPEC)
     try:
@@ -438,7 +399,6 @@ def test_check_graph_request_seam_obligations() -> None:
         b.close()
 
 
-# ══ F-15 — the production collate call site (M5 / A-1) ═══════════════════════════
 class _CollateSpy:
     def __init__(self, batch: GraphBatch) -> None:
         self.batch = batch
@@ -457,12 +417,8 @@ def _run_graph_loop_with_spy(
     batch_size: int,
     n_batches: int,
 ) -> tuple[_CollateSpy, list[int], InferenceServer]:
-    """Drive the REAL graph loop with the collate call spied at its import site.
-
-    The loop takes a function-local `from mantis.selfplay.graph_collate import …`, so the
-    spy must replace the attribute on the SOURCE module — which is what makes the call
-    site observable at all.
-    """
+    """Drive the real graph loop with the collate spied on its SOURCE module — the loop imports
+    it function-locally, so nothing else makes the call site observable."""
     batch = _hand_built_batch()
     spy = _CollateSpy(batch)
     resets: list[int] = []
@@ -471,23 +427,16 @@ def _run_graph_loop_with_spy(
 
     batcher = _FakeGraphBatcher(_wire_for(), n_batches=n_batches)
     server = _graph_server(device, batcher, batch_size=batch_size)
-    # Post-ctor spec swap: the ctor only accepts a real registry spec, and the loop binds
-    # `spec = self.encoding_spec` at loop entry, reading the four dims inline at each
-    # collate call — so a swapped spec is observable exactly where it matters.
+    # Post-ctor swap: the ctor accepts only a real registry spec, and the loop reads the four
+    # dims inline at each collate call, so the swap is observable exactly where it matters.
     server.encoding_spec = spec
     server.run()
     return spy, resets, server
 
 
 def test_graph_loop_collate_call_pinned_production_kwargs(device, monkeypatch) -> None:
-    """The production semantic mode is `"canary"`, with `canary_period == batch_size` and
-    exactly ONE `reset_semantic_canary()` before the first batch.
-
-    `"off"` would silently remove the geometric checks (ADV-7/8/9) from live self-play —
-    the exact silent-corruption class this WP exists to kill — while every ⊕ oracle stayed
-    green. `"full"` is the symmetric failure: a permanent per-batch geometry recompute on
-    the hot path.
-    """
+    """Pin the production collate kwargs: `"canary"`, `canary_period == batch_size`, one reset
+    before the first batch. `"off"` drops the geometric checks with every other row green."""
     spy, resets, server = _run_graph_loop_with_spy(
         device, monkeypatch, _GRAPH_SPEC, batch_size=8, n_batches=3
     )
@@ -502,14 +451,7 @@ def test_graph_loop_collate_call_pinned_production_kwargs(device, monkeypatch) -
 
 
 def test_graph_loop_collate_dims_flow_from_the_spec(device, monkeypatch) -> None:
-    """The anti-hard-coding arm.
-
-    `gnn_axis_v1` is the only registered graph encoding and it is exactly 19/6/11/5 — the
-    same values as `collate_graph_batch`'s own defaults — so a call site that ignored the
-    spec and passed literals would pass every fixture-driven test. A NON-default
-    spec-shaped stub makes the difference observable: the four dims must equal the STUB's
-    values, which appear nowhere in the registry or in any default.
-    """
+    """Prove the collate dims flow from the spec, using values in no registry row or default."""
     stub = _SpecStub()
     assert (stub.trunk_size, stub.win_length, stub.node_feat_dim, stub.edge_feat_dim) != (
         _GRAPH_SPEC.trunk_size,
@@ -531,8 +473,7 @@ def test_graph_loop_collate_dims_flow_from_the_spec(device, monkeypatch) -> None
 
 
 def test_graph_loop_canary_period_tracks_batch_size(device, monkeypatch) -> None:
-    """`canary_period` is `int(batch_size)`, not a constant: a hard-coded 64 would change
-    the geometric-check cadence on every non-64 batch size."""
+    """Prove `canary_period` tracks the batch size rather than a constant."""
     spy, _resets, server = _run_graph_loop_with_spy(
         device, monkeypatch, _GRAPH_SPEC, batch_size=13, n_batches=1
     )

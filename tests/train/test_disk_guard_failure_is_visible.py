@@ -1,33 +1,12 @@
-"""AUDIT-1 F-11 — a disk guard whose every tick raises is no longer indistinguishable from a
-healthy one.
+"""A disk guard whose every tick raises is distinguishable from a healthy one.
 
-THE DEFECT, and it is three facts reinforcing each other. `DiskGuard._loop` wrapped
-`check_once` in `except Exception → _LOG.warning("disk_guard_error…")` and continued. A
-`check_once` that raises on every tick therefore:
+The loop swallowed every `check_once` failure into a `logger.warning` and continued, so a guard
+failing on every tick emitted no `disk_free` and no `disk_alert` — and an ABSENCE of disk alerts
+reads as plenty of space, the exact state the guard exists to deny. The warning itself was
+invisible, because the run installs no logging handler.
 
-* emitted no `disk_free` and no `disk_alert` — and an ABSENCE of disk alerts reads as "plenty
-  of space", which is exactly the state the guard exists to deny;
-* incremented no counter and never set `_critical_fired`;
-* left the guard outside `HEARTBEAT_SOURCES`, so the stall watchdog had nothing to notice;
-* and the warning itself was invisible, because `mantis.run` installs no logging handler at
-  all (F-08), so Python's lastResort handler prints WARNING+ unformatted or not at all.
-
-Meanwhile gate 12's REQUIRED `disk_space_exhausted` row audits ARMED off `monitor.disk_guard.
-fail_gb > 0` — a CONFIG NUMBER — so every instrument reported the guard armed. The rc-47
-abort R132 closed could be dead for a whole run while the volume filled and the supervisor
-relaunched into it.
-
-WHAT IS AND IS NOT CLOSED HERE. The event and the counters are: a monitor reading the ONE
-channel can now tell a failing guard from a quiet one. The ARMING mechanism is not — gate 12
-still reads a config number for this row, and changing that is a mint-affecting decision
-about `armed_aborts.MANIFEST`, not a repair. Registering the guard as a heartbeat source would
-need a new collaborator threaded through the composition root and is likewise not this.
-
-THE ARMING HALF IS NOW CLOSED, by R334(b), in
-`tests/train/test_monitor_liveness_arming.py` — the paragraph above is kept as the record of
-what this file's scope WAS. The row's mechanism carries a producer-liveness operand and gate 12
-stays byte-untouched; the heartbeat-source route was REJECTED on the mechanism this paragraph
-only guessed at, namely that the stall code is 42, the class the supervisor relaunches on.
+This file closes the event and the counters. The ARMING half is closed separately, in
+`tests/train/test_monitor_liveness_arming.py`.
 """
 from __future__ import annotations
 
@@ -62,7 +41,7 @@ def test_a_fresh_guard_has_measured_nothing_and_says_so(tmp_path: Path) -> None:
 
 
 def test_a_healthy_check_counts_itself(tmp_path: Path) -> None:
-    """The control. `checks_total` is the denominator every other reading is taken over."""
+    """`checks_total` is the denominator every other reading is taken over."""
     sink = _Sink()
     guard = _guard(tmp_path, sink)
     guard.check_once()
@@ -75,7 +54,7 @@ def test_a_healthy_check_counts_itself(tmp_path: Path) -> None:
 def test_a_tick_that_RAISES_emits_a_named_event_and_counts(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """THE PIN. Before this, the only trace was a `logger.warning` into a run with no handler."""
+    """Before this, the only trace was a `logger.warning` into a run with no handler."""
     import mantis.train.lifecycle.disk_guard as dg
 
     sink = _Sink()
@@ -108,8 +87,7 @@ def test_a_tick_that_RAISES_emits_a_named_event_and_counts(
 def test_the_guard_keeps_running_after_a_failed_tick(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The other half of the original design, preserved: a monitor thread must not crash the
-    run. The repair makes the failure LOUD, not fatal."""
+    """A monitor thread must not crash the run: the failure is LOUD, not fatal."""
     import mantis.train.lifecycle.disk_guard as dg
 
     calls = {"n": 0}

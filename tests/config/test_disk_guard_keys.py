@@ -1,39 +1,21 @@
 # >300 justify (R8, and only just): O-D3 and O-D4 are two instruments on ONE config family and
-# share its minted values (`_MINTED` = 60/10/5), the injected-sink spy and the rigged
-# filesystem. R5 bars cross-test imports, so splitting them writes R122's three minted
-# numbers into a second file — a duplicated value authority, which is the shape R1 exists to
-# kill and a poor trade for the handful of lines it would save.
-"""⊕ WPMAIN ORACLE — the `monitor.disk_guard` family (DESIGN §5.5/§7/§9, O-D3 + O-D4).
+# share its minted values, the injected-sink spy and the rigged filesystem. R5 bars cross-test
+# imports, so splitting them writes the three minted numbers into a second file — a duplicated
+# value authority, for the handful of lines it would save.
+"""The `monitor.disk_guard` family — O-D3 (liveness) and O-D4 (structure).
 
-RED-at-import until IMPL lands `mantis.config.schema.DiskGuardConfig` +
-`mantis.config.resolve.disk_guard.resolve_disk_guard` (R122's grant: ONE config block, ONE
-resolver, THREE typed leaves, minted 60/10/5).
+`DiskGuard` was constructed at exactly one site, `build_subsystems`, which had ZERO callers,
+and its `60.0/10.0/5.0` arrived as `dict.get`-shaped code-side defaults over a key that existed
+in no schema and no config: four dead numbers and LAW-16's third leg unarmed. R121(b) mandates
+the root construct the guard and R1 forbids literal or `dict.get` values.
 
-What this file exists to stop, measured at `b482243`:
+O-D3 is LIVENESS — set the knob through the ONE loader, observe the consumer. O-D4 is
+STRUCTURE — a live key can grow a pydantic default tomorrow, and a defaulted key is a second
+authority no liveness drive sees, because the drive supplies the value either way.
 
-- `DiskGuard` is constructed at exactly one site in the tree — `build_subsystems`
-  (`subsystems.py:150`) — which has ZERO callers. Its `60.0/10.0/5.0` arrive as
-  `config.get("disk_guard", {}).get("interval_sec", 60.0)`-shaped code-side defaults over a
-  key that exists in no schema and no config. Four dead numbers, an unconstructed guard, and
-  LAW-16's third leg unarmed.
-- R121(b) MANDATES the root construct the guard; R1 FORBIDS the construction values being
-  literals or `dict.get` defaults. R122 rules the only disposition that satisfies both.
-
-The two oracles are deliberately different instruments and neither substitutes for the other:
-
-- **O-D3 is LIVENESS** — each key, set through the ONE loader, changes something a run can
-  observe. That is R93's house standard verbatim: set the knob, observe the consumer. It is
-  what the DR-11 finding (four minted keys read by nothing) proves a citation cannot do.
-- **O-D4 is STRUCTURE** — the SC-A pair every schema block in this repo carries. A key that
-  is live today can grow a pydantic default tomorrow, and a defaulted key is a second
-  authority that no liveness drive sees (the drive supplies the value either way).
-
-Fakes: the filesystem, and only the filesystem. `shutil.disk_usage` is replaced so the
-thresholds can be crossed on demand — the house precedent is
-`tests/train/test_lifecycle_contract.py`'s `_fake_disk_usage`, for the same reason: the
-alternative is filling a real volume. The GUARD is the real `DiskGuard`, the SCHEMA is the
-real schema, the RESOLVER is the real resolver, and every config comes from a minted file
-through the ONE loader.
+Fakes: the filesystem and only the filesystem, so the thresholds can be crossed on demand. The
+guard, the schema and the resolver are real, and every config is a minted file through the ONE
+loader.
 """
 from __future__ import annotations
 
@@ -58,9 +40,9 @@ from mantis.train.lifecycle.disk_guard import DiskGuard
 
 _GB = 1_000_000_000  # decimal GB — the divisor `disk_guard.py` calibrates against
 
-#: R122's minted family. Stated here so a re-mint that quietly moves them is loud; the values
-#: themselves are revisable at mint prereg (R85 pattern — the literals were dead, so nothing
-#: has ever measured them), and THAT is a mint decision, not an IMPL edit.
+#: R122's minted family, stated here so a re-mint that quietly moves them is loud. The values
+#: are revisable at mint prereg — the literals were dead, so nothing has ever measured them —
+#: and that is a mint decision, not an IMPL edit.
 _MINTED = {"interval_sec": 60.0, "warn_gb": 10.0, "fail_gb": 5.0}
 _FIELDS = sorted(_MINTED)
 
@@ -94,7 +76,6 @@ def _fake_disk_usage(free_gb: float):
     return _fn
 
 
-# ══ O-D4 — the SC-A structural pair ═══════════════════════════════════════════════════
 def test_disk_guard_valid_payload_constructs_clean() -> None:
     """O-D4, premise. The minted family validates as itself."""
     cfg = DiskGuardConfig.model_validate(_payload())
@@ -103,12 +84,9 @@ def test_disk_guard_valid_payload_constructs_clean() -> None:
 
 @pytest.mark.parametrize("field", _FIELDS)
 def test_an_omitted_disk_guard_key_lands_on_its_declared_default(field: str) -> None:
-    """O-D4 arm 1, INVERTED by R347/CONFIG-1. It used to assert that a missing key is an ERROR
-    naming the key; all three thresholds are now declared operational constants, so a missing
-    key is legal and the claim moves to the VALUE — which is the half that actually protects
-    R122. The shape R122 forbade was `.get(name, 60.0)` at a CALL SITE: a second authority
-    that no config could override. A schema field is the first authority, and the assertion
-    below is what proves the resolved config really carries it."""
+    """O-D4 arm 1, INVERTED: all three thresholds are declared operational constants now, so a
+    missing key is legal and the claim moves to the VALUE. What R122 forbade was `.get(name,
+    60.0)` at a CALL SITE — a second authority no config could override."""
     payload = _payload()
     del payload[field]
     cfg = DiskGuardConfig.model_validate(payload)
@@ -119,31 +97,22 @@ def test_an_omitted_disk_guard_key_lands_on_its_declared_default(field: str) -> 
 
 
 def test_disk_guard_extra_key_rejected() -> None:
-    """O-D4, arm 2 — `extra="forbid"`: `keep_all` gets NO key (an inert carried knob; the
-    root passes `False` with a disclosure comment), so writing one must be refused rather
-    than silently ignored."""
+    """O-D4, arm 2 — `extra="forbid"`: `keep_all` gets NO key (the root passes `False` with a
+    disclosure comment), so writing one must be refused rather than silently ignored."""
     with pytest.raises(ValidationError, match="keep_all"):
         DiskGuardConfig.model_validate(_payload(keep_all=True))
 
 
 def test_disk_guard_has_no_pydantic_level_default() -> None:
-    """O-D4, arm 3 — the census `test_o16_all_fields_required_no_code_side_defaults`
-    (`tests/config/test_schema.py:247-251`) performs for every OTHER schema block, and which
-    `DiskGuardConfig` would otherwise be the one block in the tree to lack (§3.1 MISS-9).
+    """O-D4, arm 3 — the no-code-side-defaults census every OTHER schema block gets.
 
-    MUTATION THAT REDS IT: `interval_sec: float = 60.0`. Nothing else sees that — the
-    liveness drives below supply a value on every path, so a default is invisible to them,
-    and this is the direct structural guard on R122's "not literals, not `dict.get`
-    defaults". IMPL additionally extends the shared `test_o16` tuple (MISS-9, an R50 row);
-    this assertion stands whether or not that edit lands, on purpose — one census that can
-    be forgotten is one census."""
-    # R347/CONFIG-1 INVERTED this arm rather than deleting it. All three thresholds are
-    # operational constants — a poll cadence and two disk levels — so they now carry schema
-    # defaults and leave the YAML, and what MISS-9's guard becomes is the equality: every
-    # field of this block is DECLARED in `OPERATIONAL_DEFAULT_KEYS`, so a fourth leaf added
-    # without a registry row is still the red R122 asked for. The "not literals, not
-    # `dict.get` defaults" half of R122 is untouched — a `dict.get` at a call site is a SECOND
-    # authority, which is what R1 forbids; a schema field is the first one.
+    MUTATION THAT REDS IT: `interval_sec: float = 60.0`. The liveness drives supply a value on
+    every path, so a default is invisible to them. Asserted here as well as in the shared
+    census, on purpose: one census that can be forgotten is one census.
+    """
+    # INVERTED rather than deleted: the thresholds are operational constants, so they carry
+    # schema defaults and leave the YAML, and the guard becomes the equality — every field is
+    # DECLARED in `OPERATIONAL_DEFAULT_KEYS`, so a fourth leaf without a registry row reds.
     assert set(DiskGuardConfig.model_fields) == operational_default_fields(
         "monitor.disk_guard"), (
         "a DiskGuardConfig field is not declared in OPERATIONAL_DEFAULT_KEYS (or a declared "
@@ -156,28 +125,21 @@ def test_disk_guard_has_no_pydantic_level_default() -> None:
 
 
 def test_a_fail_threshold_at_or_above_the_warn_threshold_is_refused() -> None:
-    """O-D3's validator arm. `fail_gb >= warn_gb` means the run SIGTERMs itself before it
-    ever warns — a guard that skips its own warning stage, which is a misconfiguration no
-    operator intends and which reads as normal in a config diff.
+    """O-D3's validator arm: `fail_gb >= warn_gb` SIGTERMs the run before it ever warns, which
+    reads as normal in a config diff. Inert at the minted 60/10/5 deliberately, on the
+    `_policy_target_completed_q_consistency` precedent.
 
-    Inert at the minted 60/10/5 (5 < 10 holds), deliberately: the house precedent for an
-    inert-at-mint validator is `RunConfig._policy_target_completed_q_consistency`
-    (`schema/core.py:253+`), cited so this is not mistaken for R116 dead weight.
-
-    MUTATION THAT REDS IT: drop the model validator — the equal case in particular reads
-    perfectly legal to every field-level `gt=0` bound."""
+    MUTATION THAT REDS IT: drop the model validator — the equal case reads legal to every
+    field-level `gt=0` bound."""
     for fail_gb in (10.0, 12.0):
         with pytest.raises(ValidationError):
             DiskGuardConfig.model_validate(_payload(fail_gb=fail_gb))
 
 
-# ══ O-D3 — liveness: set the knob, observe the consumer (R93) ═════════════════════════
 def _minted(smoke_run_config, **disk_guard) -> RunConfig:
     """A REAL minted config with the disk-guard block overridden, through the ONE loader.
-
-    `smoke_run_config` is the root conftest's factory (R5: no cross-test import exists or is
-    wanted — the fixture IS the shared surface). Overrides are re-validated, so a value this
-    file writes is a value the loader would accept."""
+    `smoke_run_config` is the root conftest's factory, and overrides are re-validated so a value
+    this file writes is one the loader would accept."""
     return smoke_run_config("smoke_preflight_armed.yaml", monitor={"disk_guard": dict(disk_guard)})
 
 
@@ -189,15 +151,12 @@ def test_each_disk_guard_key_arrives_whole_at_its_one_resolver(
 ) -> None:
     """O-D3, arm 1 — the per-key mutation, through the resolver R122 mandates.
 
-    MUTATION THAT REDS IT: a resolver that reads a constant, or reads the wrong leaf (a
-    transposed `warn_gb`/`fail_gb` is a guard that kills the run at the warning threshold —
-    and every field-level bound still passes). Three keys, three independent values, so a
-    transposition cannot alias into a green.
-
-    Why a resolver at all rather than a direct attribute read at the root: `disk_guard` would
-    otherwise be the ONE `monitor.*` sub-block without one, and — measured, A.1.2 — the pop
-    in `resolve_monitor_config` is legitimate ONLY because a second reader exists. Without
-    this function that pop is the DR-11 defect verbatim."""
+    MUTATION THAT REDS IT: a resolver that reads a constant or the wrong leaf — a transposed
+    `warn_gb`/`fail_gb` kills the run at the warning threshold while every field bound passes.
+    Three keys, three independent values, so a transposition cannot alias into a green. A
+    resolver at all because the pop in `resolve_monitor_config` is legitimate ONLY while a
+    second reader exists.
+    """
     spec = resolve_disk_guard(_minted(smoke_run_config, **_payload(**{field: value})).monitor)
     assert isinstance(spec, DiskGuardSpec)
     assert getattr(spec, field) == value, (
@@ -211,25 +170,17 @@ def test_each_disk_guard_key_arrives_whole_at_its_one_resolver(
 
 
 def test_the_monitor_resolver_drops_disk_guard_by_name_never_by_a_filter(smoke_run_config) -> None:
-    """O-D3, arm 2 — the MEASURED BLOCKER (A.1.2) and the F-10 constraint on how it is fixed.
+    """O-D3, arm 2 — the MEASURED BLOCKER and the constraint on how it is fixed.
 
-    `resolve_monitor_config` is `data = cfg.model_dump(); data.pop("drain");
-    MonitorConfig(**data)`, and `MonitorConfig` is a frozen dataclass with no `disk_guard`
-    field — so adding the block breaks it on an unexpected kwarg unless `disk_guard` is
-    popped too.
-
-    The pop must be ENUMERATED. MUTATION THAT REDS IT: generalise it to a comprehension over
-    `MonitorConfig.__dataclass_fields__` — which fixes today's break and silently swallows
-    EVERY future unmatched key, i.e. re-creates the DR-11 defect the file's own docstring
-    (`monitor.py:13-14`) says this line becomes the moment its second reader disappears.
-    That is a weaken-class change, and it is exactly the kind P-11 already forbids on the
-    sibling census."""
+    `resolve_monitor_config` dumps, pops `drain`, and rebuilds a frozen `MonitorConfig` with no
+    `disk_guard` field, so the block breaks on an unexpected kwarg unless it is popped too — and
+    the pop must be ENUMERATED. MUTATION THAT REDS IT: generalise it to a comprehension over
+    `__dataclass_fields__`, which fixes today's break and silently swallows every future
+    unmatched key.
+    """
     source = Path(resolve_monitor_config.__globals__["__file__"]).read_text(encoding="utf-8")
-    # R242 (ADJ-D12) adds the THIRD drop, `gate_interval` — a schema-only scalar whose reader
-    # is `mantis.run.compose_run` -> `StepCoordinatorConfig.gate_interval`. It is asserted in
-    # the SAME enumerated list, deliberately: a third member is exactly the pressure that
-    # tempts a reviewer to collapse the three pops into a filter, which is the move this
-    # test exists to red.
+    # The THIRD drop, `gate_interval`, is asserted in the SAME enumerated list: a third member
+    # is exactly the pressure that tempts a reviewer to collapse the pops into a filter.
     for key in ('pop("gate_interval")', 'pop("drain")', 'pop("disk_guard")'):
         assert key in source, (
             f"the drop must name the block: `data.{key}` — an enumerated pop is auditable, a "
@@ -249,18 +200,13 @@ def test_the_monitor_resolver_drops_disk_guard_by_name_never_by_a_filter(smoke_r
 def test_the_warn_and_fail_thresholds_each_govern_the_guards_real_behaviour(
     monkeypatch, smoke_run_config
 ) -> None:
-    """O-D3, arm 3 — the config values reach the REAL guard and decide what it does.
+    """O-D3, arm 3 — the config values reach the REAL guard and decide what it does. Three rigged
+    readings against one resolved spec (warn 10, fail 5): 20 GB quiet, 8 GB warns, 3 GB critical
+    and SIGTERMs, with `os.kill` captured rather than delivered.
 
-    Three rigged free-space readings against one resolved spec (warn 10, fail 5): 20 GB is
-    quiet, 8 GB warns, 3 GB is critical and SIGTERMs. `os.kill` is captured rather than
-    delivered — a real critical alert during the test suite would send SIGTERM to pytest,
-    which is the guard working correctly and is not something to demonstrate on the box the
-    suite runs on.
-
-    MUTATION THAT REDS IT: build the guard from literals instead of the resolved spec (the
-    R1 breach) — a config that moves warn_gb to 42 then changes nothing, which is the
-    dead-value state at HEAD. The fourth assertion drives exactly that: a 42 GB warn
-    threshold must make a 20 GB reading WARN."""
+    MUTATION THAT REDS IT: build the guard from literals instead of the resolved spec — a config
+    that moves warn_gb to 42 then changes nothing, which the fourth assertion drives.
+    """
     kills: list = []
     monkeypatch.setattr(os, "kill", lambda pid, sig: kills.append((pid, sig)))
     spec = resolve_disk_guard(_minted(smoke_run_config, **_payload()).monitor)
@@ -303,15 +249,12 @@ def test_the_warn_and_fail_thresholds_each_govern_the_guards_real_behaviour(
 def test_the_interval_key_governs_the_guard_thread_not_just_the_constructor(
     monkeypatch, smoke_run_config
 ) -> None:
-    """O-D3, arm 4 — `interval_sec`'s observable, which is neither of the thresholds'.
+    """O-D3, arm 4 — `interval_sec`'s observable, which is neither threshold's. It reaches only
+    `self._stop_event.wait(timeout=self._interval)` inside the guard's thread, so a ctor-kwarg
+    assertion cannot tell a live interval from a dead one: two real guards over the same rigged
+    filesystem and window, a short interval publishing and a long one not.
 
-    `interval_sec` reaches only `self._stop_event.wait(timeout=self._interval)` inside the
-    guard's own thread, so a constructor-kwarg assertion alone cannot tell a live interval
-    from a dead one. Two real guards over the same rigged filesystem and the same wall-clock
-    window: a short interval publishes, a long one does not.
-
-    MUTATION THAT REDS IT: hardcode the loop's sleep (`wait(timeout=60.0)`) — every ctor
-    assertion in the repo stays green while the operator's cadence does nothing."""
+    MUTATION THAT REDS IT: hardcode the loop's sleep — every ctor assertion stays green."""
     monkeypatch.setattr(shutil, "disk_usage", _fake_disk_usage(50))
     fast_sink, slow_sink = _SpySink(), _SpySink()
     fast = resolve_disk_guard(_minted(smoke_run_config, **_payload(interval_sec=0.02)).monitor)

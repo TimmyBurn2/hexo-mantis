@@ -1,22 +1,17 @@
-"""T2-1 (R334(e), AUDIT-1 F-51 HOT-04) — three collate checks rewritten, VERDICTS UNCHANGED.
+"""Three collate checks rewritten, verdicts unchanged.
 
-The three are `_graph_of` (a repeat instead of `count` binary searches), checks 7+8 folded into
-ONE segmented pass, and check 11's duplicate test (a bounded count instead of a sort). All three
+`_graph_of` uses a repeat instead of `count` binary searches, checks 7+8 fold into one
+segmented pass, and check 11's duplicate test is a bounded count instead of a sort. All three
 are pure-cost changes: same inputs, same verdicts, same named errors, same precedence.
 
-WHY THIS FILE EXISTS BESIDE THE SUITES THAT ALREADY DRIVE THOSE CHECKS.
-`test_graph_collate_adv.py` and `test_graph_collate_edge_containment.py` prove the checks REFUSE
-what they must refuse; they were written against the previous formulations and they still pass,
-which is necessary and not sufficient. What a rewrite additionally has to show is that it did not
-move a verdict on any input — including the ones no existing row constructs: an empty edge
-segment, a payload violating BOTH bound checks at once, a slot alias that is also off-window.
-Each of those is a case where the old and new forms could plausibly disagree, so each is driven.
+The existing collate suites prove the checks refuse what they must, but were written against
+the previous formulations. What a rewrite must additionally show is that no verdict moved on
+inputs no existing row constructs: an empty edge segment, a payload violating both bound
+checks at once, a slot alias that is also off-window.
 
-THE PRECEDENCE ROW IS THE LOAD-BEARING ONE. Check 7 used to run before check 8, so a payload
-that is out of `[0, N)` reported `EdgeIndexOutOfBounds` rather than `EdgeCrossesGraphBoundary`.
-The fold computes the segment extrema first and could easily have inverted that; the operator
-consequence is real — "this row is in no graph at all" is a different diagnosis from "this row is
-in the wrong graph" — so the order is pinned, not left to the implementation.
+The precedence row is load-bearing: check 7 ran before check 8, so a payload outside `[0, N)`
+reports `EdgeIndexOutOfBounds`, not `EdgeCrossesGraphBoundary`. "In no graph at all" is a
+different diagnosis from "in the wrong graph", so the order is pinned.
 """
 from __future__ import annotations
 
@@ -36,7 +31,7 @@ from _wire_geometry import COLLATE_FIXTURE_ENCODING, geometry_kwargs
 
 
 def _searchsorted_graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
-    """The PREVIOUS formulation, kept here as the oracle the new one is judged against."""
+    """The previous formulation, kept as the oracle the new one is judged against."""
     return np.searchsorted(offsets, np.arange(count), side="right") - 1
 
 
@@ -53,19 +48,20 @@ def _searchsorted_graph_of(offsets: np.ndarray, count: int) -> np.ndarray:
     ],
 )
 def test_graph_of_agrees_with_the_searchsorted_form_on_every_csr_shape(offsets) -> None:
-    """Including the empty-segment shapes, which are where the two forms could differ: the
-    search maps an index to the LAST graph sharing its boundary, and the repeat skips a
-    zero-length graph entirely. They are the same answer, and that is asserted rather than
-    reasoned about."""
+    """Prove `_graph_of` agrees with the searchsorted form on every CSR shape.
+
+    The empty-segment shapes are where the two could differ: the search maps an index to the
+    last graph sharing its boundary, and the repeat skips a zero-length graph entirely.
+    """
     off = np.array(offsets, dtype=np.int64)
     count = int(off[-1])
     assert np.array_equal(_graph_of(off, count), _searchsorted_graph_of(off, count))
 
 
 def _wire(**over) -> GraphWirePayload:
-    """A two-graph payload that PASSES every check, as the base for each corruption.
+    """Build a two-graph payload that passes every check, as the base for each corruption.
 
-    Geometry comes from the registry row (F-41), never from literals here.
+    Geometry comes from the registry row, never from literals here.
     """
     node_feat = np.zeros(6 * 11, dtype=np.float32)
     node_coords = np.zeros(6 * 2, dtype=np.int32)
@@ -102,8 +98,7 @@ def _collate(wire: GraphWirePayload):
 
 
 def test_the_clean_payload_still_collates() -> None:
-    """The control. Without it every refusal row below is satisfied by a collate that refuses
-    everything."""
+    """Control: a clean payload still collates, so the refusal rows below are not vacuous."""
     batch = _collate(_wire())
     assert batch.n_graphs == 2
     assert batch.edge_index.shape == (2, 4)
@@ -116,7 +111,7 @@ def test_a_row_outside_the_global_range_still_raises_EdgeIndexOutOfBounds() -> N
 
 
 def test_a_NEGATIVE_row_still_raises_EdgeIndexOutOfBounds() -> None:
-    """The other side of the global bound, and the one a `reduceat` maximum cannot see."""
+    """Prove a negative row still raises: the side of the bound a `reduceat` maximum cannot see."""
     ei = np.array([0, 1, 3, -1, 1, 0, 4, 3], dtype=np.int64)
     with pytest.raises(EdgeIndexOutOfBounds):
         _collate(_wire(edge_index=ei))
@@ -129,17 +124,14 @@ def test_a_row_in_range_but_in_the_WRONG_graph_still_raises_EdgeCrossesGraphBoun
 
 
 def test_THE_PRECEDENCE_a_payload_violating_BOTH_reports_the_GLOBAL_error_first() -> None:
-    """Check 7 ran before check 8, so the out-of-range diagnosis won. The fold computes the
-    segment extrema first and must NOT invert that: "in no graph at all" is the stronger
-    statement and the one an operator needs before "in the wrong graph"."""
+    """Prove a payload violating both checks reports the global error first, as before the fold."""
     ei = np.array([0, 1, 3, 99, 1, 0, 4, 3], dtype=np.int64)
     with pytest.raises(EdgeIndexOutOfBounds):
         _collate(_wire(edge_index=ei))
 
 
 def test_an_EMPTY_edge_segment_is_still_dropped_and_still_checked() -> None:
-    """Graph 0 owns no edges. The segment partition must still cover every edge, so graph 1's
-    cross-boundary row is still caught."""
+    """Prove an empty edge segment still leaves every edge covered by the partition."""
     clean = _wire(edge_offsets=np.array([0, 0, 4], dtype=np.int64),
                   edge_index=np.array([3, 4, 3, 5, 4, 3, 5, 3], dtype=np.int64))
     assert _collate(clean).n_graphs == 2
@@ -156,24 +148,20 @@ def test_a_slot_alias_inside_ONE_graph_still_raises_ScatterSlotAliasing() -> Non
 
 
 def test_the_SAME_slot_in_DIFFERENT_graphs_is_still_legal() -> None:
-    """The half a bincount over a flat key space could silently break: the key must keep the
-    graph id, or two graphs reusing slot 10 would read as an alias."""
+    """Prove the same slot in different graphs is legal: the count key must keep the graph id."""
     slots = np.array([10, 11, 10, 13], dtype=np.int32)
     assert _collate(_wire(policy_dst_slot=slots)).n_graphs == 2
 
 
 def test_repeated_OFF_WINDOW_slots_are_still_exempt_from_the_alias_check() -> None:
-    """`-1` is the off-window sentinel and many legal nodes carry it; counting those as
-    duplicates would refuse every wide position. The old form dropped them before `unique`
-    and the new one must drop them before the count."""
+    """Prove repeated off-window `-1` slots are exempt: counting them would refuse every wide position."""
     slots = np.array([-1, -1, -1, -1], dtype=np.int32)
     assert _collate(_wire(policy_dst_slot=slots)).n_graphs == 2
 
 
 def test_the_alias_check_reaches_the_TOP_of_the_slot_range() -> None:
-    """`361` is the largest legal slot and the key is `graph * 400 + slot`, so the count's
-    length must cover `B * 400` — a `minlength` short by one graph would index out of range or,
-    worse, silently miss an alias in the last graph."""
+    """Prove the alias check reaches the top slot: the key is `graph * 400 + slot`, so the
+    count must cover `B * 400` or it misses an alias in the last graph."""
     slots = np.array([10, 11, 361, 361], dtype=np.int32)
     with pytest.raises(ScatterSlotAliasing):
         _collate(_wire(policy_dst_slot=slots))

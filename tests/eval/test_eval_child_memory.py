@@ -1,34 +1,10 @@
-"""⊕ RECAL-PREP item 2 — the eval child's device-memory readout (R308(g)(ii)).
+"""Pin the eval child's per-phase device-memory readout.
 
-Written by ORACLE **before** the feature exists; every row below was red first.
-
-WHAT THE SITTING MEASURED, AND WHY A ROUND-BOUNDARY READING CANNOT SEE IT. The `eval_child`
-budget term was measured three times and grew every time: 0.881 GiB (41 samples), 1.1855 (709
-samples), 3.5293 (rounds allowed to complete). `RECAL_EXIT_2026-08-22.md` §11b states the
-consequence — *a term measured by watching until it looks flat is not a bound*. This suite
-pins the instrument that replaces the watching.
-
-THE STRUCTURE THE INSTRUMENT IS SHAPED BY, and each half is asserted here rather than assumed:
-
-  * the eval child is ONE SPAWN-CONTEXT PROCESS PER ROUND (`eval/pipeline.py::_spawn_worker`),
-    so nothing accumulates ACROSS rounds inside it — across-round growth is growth in what a
-    round DOES, which is why the readout is per PHASE and not per round boundary;
-  * the GATE BLOCK is the only phase that puts a SECOND model and a SECOND
-    `LocalInferenceEngine` on the card (`eval/worker.py::_play_gate_block`), and it is skipped
-    whole while there is no anchor — so the term is POSTURE-dependent, and the readout carries
-    the posture beside the numbers or a reader cannot attribute a peak.
-
-The defect each row is the ONLY witness to:
-
-- **CM-01** — a readout that exists but is never taken at the phase that moves the number.
-- **CM-02** — "absent" and "unmeasured" looking the same to a reader. On a device with no
-  counters the payload is PRESENT with `available: false` and every counter `null`.
-- **CM-03** — a peak that is reset between phases, so no figure is the round's peak.
-- **CM-04** — the marker channel drifting from the structured one, or a marker line that a
-  reader has to guess the shape of (the sitting's `peaks.py`: a whole run collapsed into one
-  poll and produced 1 392 GiB on a 16 GiB card).
-- **CM-05** — the claim "the gate block is the second-engine phase" being prose. It is derived
-  from the tree by an `ast` census, with a positive control.
+The budget term grew every time it was measured — 0.881 GiB at 41 samples, 1.1855 at 709, 3.5293
+once rounds were allowed to complete — because a term measured by watching until it looks flat is
+not a bound. The readout is per PHASE and carries the posture beside the numbers: the child is one
+process per round, and the GATE BLOCK, the only phase that puts a second engine on the card, is
+skipped whole while there is no anchor.
 """
 from __future__ import annotations
 
@@ -49,14 +25,8 @@ WORKER_SRC = REPO_ROOT / "src" / "mantis" / "eval" / "worker.py"
 
 
 class _FakeCounters:
-    """A deterministic stand-in for `torch.cuda`'s four counters.
-
-    A FAKE and not a monkeypatch of torch: the probe's contract is "read these four numbers
-    at a phase boundary and keep the running maxima", and that contract is testable on any
-    host. Whether CUDA reports the right bytes is torch's business, and asserting it here
-    would need a GPU the CI tier does not have — the GPU-side reading is the RE-SIT's
-    measurement, and this suite must not pretend to take it.
-    """
+    """Stand in deterministically for the four device counters: the probe's contract is testable
+    on any host, while whether the device reports the right bytes needs a GPU."""
 
     def __init__(self, series: list[tuple[int, int]]) -> None:
         self._series = list(series)
@@ -78,9 +48,8 @@ def _probe(series, *, out=None):
 
     def _read():
         counters.step()
-        # The fake reports its instantaneous pair as the high-water too, so the probe's own
-        # running maximum is what the rows below observe. A real `torch.cuda` reader supplies
-        # a genuine high-water; the probe's guard is what keeps a figure from ever falling.
+        # The fake reports its instantaneous pair as the high-water too, so what the rows below
+        # observe is the probe's OWN running maximum.
         return {
             "max_memory_allocated_bytes": counters.allocated(),
             "max_memory_reserved_bytes": counters.reserved(),
@@ -94,7 +63,6 @@ def _probe(series, *, out=None):
     )
 
 
-# ── CM-03: running maxima, never reset ───────────────────────────────────────────────────
 def test_cm03_the_round_peak_is_a_running_maximum_across_phases():
     probe = _probe([(10, 100), (50, 500), (20, 200)])
     probe.mark("round_start")
@@ -106,7 +74,7 @@ def test_cm03_the_round_peak_is_a_running_maximum_across_phases():
 
 
 def test_cm03_each_phase_carries_the_running_max_at_that_boundary():
-    """A phase whose figure fell would mean the counters were reset under the reader."""
+    """Prove each phase carries the running max: a figure that fell means a reset."""
     probe = _probe([(10, 100), (50, 500), (20, 200)])
     for phase in ("round_start", "gate_block", "round_end"):
         probe.mark(phase)
@@ -116,8 +84,8 @@ def test_cm03_each_phase_carries_the_running_max_at_that_boundary():
 
 
 def test_cm03_the_instantaneous_pair_is_recorded_beside_the_maxima():
-    """Both readings, because the block's rule is that where they disagree the larger
-    governs — and a reader cannot apply that rule against one number."""
+    """Prove the instantaneous pair sits beside the maxima: where they disagree the larger
+    governs, and a reader cannot apply that rule against one number."""
     probe = _probe([(10, 100), (50, 500), (20, 200)])
     for phase in ("round_start", "gate_block", "round_end"):
         probe.mark(phase)
@@ -126,7 +94,6 @@ def test_cm03_the_instantaneous_pair_is_recorded_beside_the_maxima():
     assert last["max_memory_allocated_bytes"] == 50
 
 
-# ── CM-01: every phase is marked, in order ───────────────────────────────────────────────
 def test_cm01_phases_are_recorded_in_the_order_they_were_marked():
     probe = _probe([(1, 1)] * 5)
     for phase in ("round_start", "gate_block", "rung:sealbot_d5", "random_floor", "round_end"):
@@ -137,8 +104,8 @@ def test_cm01_phases_are_recorded_in_the_order_they_were_marked():
 
 
 def test_cm01_the_monotonic_clock_is_recorded_so_an_external_sampler_can_be_aligned():
-    """The one thing an in-process counter cannot give the sitting is WHICH PHASE a sampled
-    spike belonged to. The timestamps are what join the two records."""
+    """Prove the monotonic clock is recorded, so an external sampler's spikes can be joined to
+    the phase they belonged to."""
     probe = _probe([(1, 1)] * 3)
     for phase in ("round_start", "gate_block", "round_end"):
         probe.mark(phase)
@@ -147,7 +114,6 @@ def test_cm01_the_monotonic_clock_is_recorded_so_an_external_sampler_can_be_alig
     assert len(set(stamps)) == 3
 
 
-# ── CM-02: absent and unmeasured are distinguishable ─────────────────────────────────────
 def test_cm02_an_unavailable_device_still_emits_the_payload_with_every_counter_null():
     probe = DeviceMemoryProbe(
         device="cpu", round_id="r1", available=False,
@@ -166,7 +132,8 @@ def test_cm02_an_unavailable_device_still_emits_the_payload_with_every_counter_n
 
 
 def test_cm02_the_payload_key_set_is_the_same_on_both_arms():
-    """A reader that has to branch on which keys exist will eventually branch wrong."""
+    """Prove the payload key set is the same on both arms; a reader that has to branch on which
+    keys exist will eventually branch wrong."""
     available = _probe([(1, 1)])
     available.mark("round_start")
     unavailable = DeviceMemoryProbe(device="cpu", round_id="r1", available=False,
@@ -177,7 +144,6 @@ def test_cm02_the_payload_key_set_is_the_same_on_both_arms():
             == unavailable.payload()["phases"][0].keys())
 
 
-# ── CM-04: the marker channel ────────────────────────────────────────────────────────────
 def test_cm04_each_mark_writes_one_marker_line_of_json(capsys):
     import sys
 
@@ -193,8 +159,8 @@ def test_cm04_each_mark_writes_one_marker_line_of_json(capsys):
 
 
 def test_cm04_the_reader_refuses_a_file_with_no_markers(tmp_path):
-    """The `peaks.py` lesson, made structural: a reader that guesses at a file's shape
-    produced 1 392 GiB on a 16 GiB card and would have been minted against."""
+    """Prove the reader refuses a file with no markers; one that guessed at a file's shape once
+    produced 1 392 GiB on a 16 GiB card."""
     victim = tmp_path / "nothing.log"
     victim.write_text("some ordinary run output\nwith no markers at all\n", encoding="utf-8")
     with pytest.raises(ValueError) as exc:
@@ -219,13 +185,8 @@ def test_cm04_a_marker_line_with_unparsable_json_is_a_named_refusal_not_a_skip()
     assert "json" in str(exc.value).lower()
 
 
-# ── CM-05: the gate block is the second-engine phase, DERIVED from the tree ──────────────
 def _engine_constructions_per_function(source: str) -> dict[str, int]:
-    """Count `LocalInferenceEngine(...)` constructions inside each top-level function.
-
-    STRUCTURE, not text: a call through an alias or an attribute is still a `Call` whose
-    callee name is what this reads, and a docstring naming the class is not a construction.
-    """
+    """Count engine constructions inside each top-level function, from structure not text."""
     tree = ast.parse(source)
     counts: dict[str, int] = {}
     for node in tree.body:
@@ -243,13 +204,8 @@ def _engine_constructions_per_function(source: str) -> dict[str, int]:
 
 
 def test_cm05_the_gate_block_is_the_only_phase_that_builds_a_second_engine():
-    """The posture-dependence of the eval-child term, derived rather than asserted.
-
-    `run_round` builds the candidate engine once; `_play_gate_block` builds a SECOND one for
-    the anchor. Every other phase helper builds none. If a future change adds an engine to
-    another phase, the instrument's phase attribution silently stops being complete — and
-    this row is what says so.
-    """
+    """Prove the gate block is the only phase that builds a second engine; one added elsewhere
+    would silently make the instrument's phase attribution incomplete."""
     counts = _engine_constructions_per_function(WORKER_SRC.read_text(encoding="utf-8"))
     builders = {name: n for name, n in counts.items() if n}
     assert builders == {"run_round": 1, "_play_gate_block": 1}, builders
@@ -265,9 +221,8 @@ def test_cm05_the_census_has_a_positive_control():
 
 
 def test_cm05_the_gate_block_is_skipped_whole_when_there_is_no_anchor():
-    """The other half of the posture: with no anchor the second engine is never built, so a
-    round before the first promotion measures a strictly smaller term than one after it.
-    This is why STEP 1d's "any burst that reaches one eval round" cannot bound the term."""
+    """Prove the gate block is skipped whole with no anchor, so a round before the first
+    promotion measures a strictly smaller term and cannot bound the one after it."""
     from mantis.eval import worker
 
     source = ast.parse(WORKER_SRC.read_text(encoding="utf-8"))

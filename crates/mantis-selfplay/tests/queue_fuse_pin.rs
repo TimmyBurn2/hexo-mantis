@@ -20,7 +20,7 @@ const EXPECT_NODE_OFFSETS: [i64; 4] = [0, 148, 507, 674];
 const EXPECT_EDGE_OFFSETS: [i64; 4] = [0, 3316, 11552, 15310];
 const EXPECT_LEGAL_OFFSETS: [i64; 4] = [0, 144, 492, 654];
 
-// ── fixture reader (CAPTURE_LOG §C g8 byte layout, little-endian) ────────────
+// fixture reader (CAPTURE_LOG §C g8 byte layout, little-endian)
 
 /// A per-graph slice's LOCAL arrays, retained alongside the built `AxisGraph`
 /// so the fused output can be reconstructed against them.
@@ -199,7 +199,7 @@ fn reconstruct_ok(a: &GraphWireArrays, graphs: &[AxisGraph], locals: &[Local]) -
     Ok(())
 }
 
-// ── P-09 positive pins ───────────────────────────────────────────────────────
+// P-09 positive pins
 
 #[test]
 fn fuse_offsets_match_frozen_prefix_sums() {
@@ -271,7 +271,7 @@ fn take_is_single_read() {
     assert_eq!(second, Err(WireAlreadyConsumed), "second take is the named error");
 }
 
-// ── P-09 LAW-07 mutation self-test (mandatory) ───────────────────────────────
+// P-09 LAW-07 mutation self-test (mandatory)
 
 #[test]
 fn corrupt_node_offset_fires_reconstruction() {

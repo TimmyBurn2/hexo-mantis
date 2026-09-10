@@ -1,87 +1,36 @@
 # >300 justify (R8): the two gate halves, their controls and their planted breaks are ONE unit
 # because a control that lives apart from the check it controls can be deleted without the
-# check going red — which is precisely the failure mode this tier exists to refuse. The census
-# lexer sits beside the pin it produces for the same reason: a matcher and the set it certifies
-# must move together or the certificate outlives the instrument.
+# check going red. The census lexer sits beside the pin it produces for the same reason.
 """T1 — the window-frame translation-equivariance CHARACTERIZATION, on all three frames.
 
-WHAT A GREEN MEANS, AND IT IS NOT "THE FRAME IS TRANSLATION-EQUIVARIANT". On a constructed
-third of these cases the frame is asserted to be NOT equivariant: the engine computes
-`(min + max) / 2` with i32 truncate-toward-zero, deliberately, for checkpoint anchor
-calibration and cross-arm byte-parity (`crates/mantis-core/src/board/state/cluster.rs:30-33`,
-`core.rs:369-376`, `crates/mantis-graph/src/lib.rs:230-238`). A green means "the truncating
-midpoint rule is unchanged on all three frames, and the set of midpoint constructions under
-`crates/*/src` is unchanged" — that, and not one word more. A FIX to the truncation REDS this
-tier, which is correct and is why the tier is named `_boundary` rather than `_equivariance`.
+A GREEN DOES NOT MEAN "THE FRAME IS TRANSLATION-EQUIVARIANT": on a third of these cases the
+frame is asserted NOT to be, because the engine computes `(min + max) / 2` with i32
+truncate-toward-zero, deliberately, for checkpoint anchor calibration and cross-arm
+byte-parity. A green means only that the truncating rule is unchanged on all three frames and
+the set of midpoint constructions under `crates/*/src` is unchanged. A FIX to the truncation
+REDS this tier, which is why it is named `_boundary`. The single-site VALUE rule is the inv18
+pins' subject, not this one's, and no tolerance appears anywhere here by construction.
 
-TWO HALVES COVERING DISJOINT FAILURE MODES, AND NEITHER SUFFICES ALONE.
-  * The CROSS-ARM half: `mantis-core` and `mantis-graph` compute the origin independently
-    (`crates/mantis-graph/Cargo.toml` has an empty `[dependencies]` table by contract, so it
-    cannot call `mantis-core`), and this tier makes them meet. It catches one arm drifting.
-  * The DERIVED SIGNED PREDICATE: one workspace-wide `cargo clippy --fix` for `manual_midpoint`
-    rewrites every site in both crates CONSISTENTLY and sails through the cross-arm half. That
-    is not hypothetical — it is the incident this repo's own oracles were written about
-    (`crates/mantis-core/tests/inv18_window_center_negative_bbox.rs:4`,
-    `inv18b_cluster_center_negative_bbox.rs:9`). `floor` gives a flat `t`; the truncating rule
-    gives `t + odd(a)·([a+2t<0] − [a<0])`, and only the predicate can tell them apart.
+TWO HALVES, DISJOINT FAILURE MODES, NEITHER SUFFICIENT. The CROSS-ARM half makes `mantis-core`
+and `mantis-graph` meet, since the graph crate is dep-free by contract and computes the origin
+independently. The DERIVED SIGNED PREDICATE catches what one workspace-wide
+`clippy --fix` for `manual_midpoint` would do: rewrite both crates CONSISTENTLY and sail
+through the cross-arm half. `floor` gives a flat `t`, the truncating rule gives
+`t + odd(a)·([a+2t<0] − [a<0])`, and only the predicate separates them.
 
-NOT THIS TIER'S SUBJECT: the single-site truncation VALUE rule and the negative-odd fixed
-cases, which are owned by `inv18_window_center_negative_bbox.rs` and
-`inv18b_cluster_center_negative_bbox.rs`. This tier does not restate them (R304(a)).
+CENSUS SCOPE: `crates/*/src/**/*.rs`, case-SENSITIVE, comments and string/char literals
+stripped by a lexer BEFORE matching (both decoy kinds are planted as controls). The matcher is
+a token SHAPE — a balanced group containing a `+`, divided by an integer `2` — with NO name
+requirement and NO operand grammar; both omissions were earned, an operand grammar having been
+measured letting five spellings past. The pin stores NORMALISED TOKEN TEXT and its unit is the
+CONSTRUCTION, since the same census has four defensible cardinalities. `tests/**`/`benches/**`
+are excluded as assertions ABOUT the rule, and the exclusion is asserted inert below.
 
-NO TOLERANCE APPEARS ANYWHERE IN THIS TIER, by construction: every assertion is exact-integer,
-and a tolerance here would be an armed value.
-
-CENSUS SCOPE AND CASE POSTURE (R297(b)), stated because a census is only as honest as its
-stated scope. Roots walked: `crates/*/src/**/*.rs`; how many files that is is a derived output
-of the run (`t1.census.files_walked`), not a number written here. Case-SENSITIVE. Comments
-(`//`, `///`, `//!`, nested `/* */`) and string/char literals are stripped by a lexer BEFORE
-any matching, so a decoy in either is invisible; both decoys are planted as controls below.
-The matcher is a token SHAPE — a balanced `(` group containing a `+`, divided by an integer
-`2` — with NO name requirement of any kind (no `min`/`max`, no `midpoint`, no `window`) and NO
-OPERAND GRAMMAR AT ALL. Both omissions are load-bearing and both were earned: a name
-requirement is a blind spot because the dangerous case is a new origin under different names,
-and an operand grammar is a blind spot because five spellings were measured walking past one —
-`2i32` and `2_i32` (the divisor lexes as a single token), `(*a + *b) / 2`,
-`((min_q + max_q) as i32) / 2` and `(v[0] + v[1]) / 2`, the last being an ordinary refactor
-for a bbox held as `[i32; 2]` in a crate that already works in coordinate arrays. What the
-matcher renders for the pin is therefore normalised token text, since it can render an operand
-shape it cannot parse. `crates/*/tests/**` and
-`crates/*/benches/**` are excluded by design (they hold the inv18 pins, which are assertions
-ABOUT the rule, not authorities OVER it) and the exclusion is inert: the same census over those
-roots returns zero constructions, asserted below rather than claimed.
-
-THE COUNTING UNIT IS THE CONSTRUCTION, and stating it is not pedantry: the same census has four
-defensible cardinalities — constructions, distinct `(file, line)` pairs, window-origin sites,
-and `#[allow]` markers — and they are four different numbers. Which unit this tier counts in is
-fixed here; WHAT it counts to is a derived output of the run (`t1.census.constructions`,
-`t1.census.distinct_lines`) and is deliberately absent from this sentence. A transcribed tally
-inside the very argument that a count needs its unit fixed is that same defect one level up: it
-must be re-edited on every edit, will eventually be wrong, and is then read as evidence
-(R192(e), SF-7, derive-or-delete). It already had been — this paragraph carried a line tally the
-instrument itself contradicted.
-
-THE `#[allow]` MARKER IS NOT THE CENSUS KEY, and the backstop that was supposed to excuse that
-does not exist. A marker-keyed census sees only sites that already DECLARE their own
-deliberateness — it is blind to exactly the dangerous case. The standing answer was to lean on
-clippy; measured on the pinned toolchain, `clippy::manual-midpoint` is `allow` by default and
-sits in `clippy::pedantic`, while CI gate 2 denies only `clippy::all`. An unmarked new origin
-produces a warning nobody denies. So the census catches the unmarked case ITSELF, and the
-unmarked planted break below is the load-bearing one.
-
-WHAT THE CENSUS DOES NOT CLAIM. It censuses midpoint CONSTRUCTIONS, not window ORIGINS: it
-cannot tell that `core.rs:381` is an origin and an unrelated average is not. That judgement is
-the pinned table's `frame` column, which is prose and is NOT what the assertion compares — the
-assertion compares triples. RESIDUE, named and unguarded, and MEASURED rather than imagined —
-every form named here was planted against the real crates tree and confirmed to walk past: an
-origin spelled `>> 1`, via `i32::midpoint`, through a `const`, with the sum more than one
-bracket deep, or re-implemented in Python, is outside this census, and there is no second
-instrument that would catch it. Three forms this paragraph USED to name are now inside, each
-because it was measured rather than imagined: the zero-argument accessor
-`(self.lo_q() + self.hi_q()) / 2`, which is what a field-to-getter refactor produces; the
-argument-bearing helper call, which the operand grammar excluded and the token shape does not;
-and the five spellings above. A residue that shrinks when it is measured is the only evidence
-that the paragraph was ever a scope statement rather than a hedge.
+The `#[allow]` marker is NOT the census key — a marker-keyed census sees only sites that
+already declare their own deliberateness — and the clippy backstop does not exist:
+`clippy::manual-midpoint` is allow-by-default in `pedantic` while gate 2 denies only
+`clippy::all`. Residue, measured rather than imagined: `>> 1`, `i32::midpoint`, a `const`, a
+sum more than one bracket deep, or a Python re-implementation, are outside this census.
 """
 from __future__ import annotations
 
@@ -134,12 +83,9 @@ class SecondWindowOriginAuthority(ConformanceRefusal):
     """The census returned a set of midpoint constructions different from the pinned one."""
 
 
-# --------------------------------------------------------------------------------------- #
-# GATE half 1 — the cross-arm translation-delta characterisation
-# --------------------------------------------------------------------------------------- #
-#: Base geometries, chosen so that every sign-class is REALISED under unit axial translation.
-#: A crossing needs `a = min+max` odd AND the translation to carry `a` across zero, which with
-#: unit vectors means `|a| = 1` on the moved axis — hence one shape per axis per sign.
+#: Base geometries, chosen so every sign-class is REALISED under unit axial translation: a
+#: crossing needs `a = min+max` odd AND the translation to carry `a` across zero, which with
+#: unit vectors means `|a| = 1` on the moved axis.
 SHAPES: dict[str, list[tuple[int, int]]] = {
     "aq_odd_positive": [(0, 0), (1, 0)],
     "aq_odd_negative": [(0, 0), (-1, 0)],
@@ -152,14 +98,12 @@ SHAPES: dict[str, list[tuple[int, int]]] = {
 def frames_for(spec) -> tuple[str, ...]:
     """The frames that EXIST for an encoding, derived from the spec, never from a name list.
 
-    `HexgBuffer::new` refuses a grid encoding by construction
-    (`crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`), so the graph frame exists for
-    exactly the encodings whose spec says `is_graph`. Read as a branch, a branch that silently
-    reduces three frames to two is invisible; the derived matrix below is what makes it neither
-    invisible nor red.
+    `HexgBuffer::new` refuses a grid encoding by construction, so the graph frame exists for
+    exactly the encodings whose spec says `is_graph`. Read as a branch, one that silently
+    reduced three frames to two would be invisible.
     """
-    # The CLUSTER frame went with the K-cluster window (R346(f)); the BOARD frame
-    # (`Board::window_center`) survives and is what the graph frame is compared against.
+    # The CLUSTER frame went with the K-cluster window; the BOARD frame survives and is what
+    # the graph frame is compared against.
     dense = (FRAME_DENSE_BOARD,)
     return dense + (FRAME_GRAPH,) if spec.is_graph else dense
 
@@ -199,17 +143,9 @@ def require_matrix(executed: frozenset, expected: frozenset) -> None:
 def require_every_declared_frame_executed(specs, executed: frozenset) -> int:
     """The matrix's SECOND side, and the only one `frames_for` does not produce.
 
-    `require_matrix` compares `derived_frame_matrix` against the pairs `run_frame_assertions`
-    executed, and BOTH enumerate `frames_for`: a branch there that drops a frame shrinks the
-    two sides together and the comparison stays green while the dropped frame's every
-    assertion silently stops running. That is a comparison whose two sides come from one
-    source — the failure class this suite exists to refuse, arriving inside it.
-
-    This side does not call `frames_for`. It states the claim where it is asserted: the board
-    frame exists for every registered encoding, and the graph frame exists exactly for the
-    encodings whose spec says `is_graph` (`HexgBuffer::new` refuses a grid encoding by
-    construction, `crates/mantis-selfplay/src/replay/hexg/mod.rs:246-252`). The CLUSTER frame
-    was the third and went with the K-cluster window (R346(f)).
+    If both sides enumerated `frames_for`, a branch dropping a frame would shrink them together
+    while every assertion for it silently stopped running — a comparison whose two sides come
+    from one source. So this side states the claim independently.
     """
     missing: list[tuple[str, str]] = []
     for spec in specs:
@@ -235,12 +171,9 @@ def require_cross_arm(enc: str, dense: tuple[int, int], graph: tuple[int, int]) 
 
 
 def run_frame_assertions(spec) -> tuple[frozenset[tuple[str, str]], dict[str, int]]:
-    """Every frame of one encoding against the COMPUTED signed correction, on q and r.
-
-    Returns the executed `(encoding, frame)` pairs and the per-sign-class assertion counters,
-    both as derived outputs. Pure: no module-level state, so it is shard-safe and the aggregate
-    tests below can re-run it rather than depend on collection order.
-    """
+    """Every frame of one encoding against the COMPUTED signed correction, on q and r. Returns
+    the executed pairs and per-sign-class counters as derived outputs; pure, so it is shard-safe
+    and the aggregate tests can re-run it."""
     enc = spec.name
     executed: set[tuple[str, str]] = set()
     counters: dict[str, int] = dict.fromkeys(SIGN_CLASSES, 0)
@@ -292,9 +225,9 @@ def test_the_executed_frame_matrix_equals_the_matrix_derived_from_the_specs(deri
 
 
 def test_a_DECLARED_frame_that_never_executes_is_refused():
-    """PB-X3. The break `require_matrix` structurally cannot see, driven through the gate's own
-    helper: with the graph pairs removed, the one-source comparison is still satisfiable while
-    the declared-frame side names exactly what stopped running."""
+    """PB-X3. The break `require_matrix` structurally cannot see: with the graph pairs removed
+    the one-source comparison is still satisfiable, while the declared-frame side names what
+    stopped running."""
     specs = roster()
     assert [s for s in specs if s.is_graph], "no graph encoding — this control has no subject"
     full = derived_frame_matrix(specs)
@@ -307,9 +240,8 @@ def test_a_DECLARED_frame_that_never_executes_is_refused():
 
 def test_the_dense_board_and_graph_arms_report_the_SAME_origin(derived):
     """The direct cross-arm equality. Asserting each frame against the shared predicate is NOT
-    the same as asserting the frames against each other: if one arm's read silently stops
-    executing, the survivors still agree with the predicate and the two-producer claim has
-    quietly evaporated."""
+    the same: if one arm's read silently stops executing, the survivors still agree with the
+    predicate and the two-producer claim has quietly evaporated."""
     graph_specs = [s for s in roster() if s.is_graph]
     assert graph_specs, "no registered graph encoding — the cross-arm claim has no subject"
     checked = 0
@@ -324,13 +256,9 @@ def test_the_dense_board_and_graph_arms_report_the_SAME_origin(derived):
     assert checked > 0
 
 
-# --------------------------------------------------------------------------------------- #
-# GATE half 1 — planted breaks
-# --------------------------------------------------------------------------------------- #
 def test_the_comparator_distinguishes_floor_from_truncation_in_BOTH_directions():
-    """PB-3. A stand-in whose midpoint uses `floor` must be reported as DISAGREEING — and in
-    both sign directions, since a comparator that only ever sees `+1` is the very defect this
-    tier's own first draft carried, in comparator form."""
+    """PB-3. A stand-in whose midpoint uses `floor` must be reported as DISAGREEING, in both
+    sign directions — a comparator that only ever sees `+1` is this tier's own first defect."""
     def floor_rule_delta(a: int, t: int) -> int:
         return t
 
@@ -345,8 +273,7 @@ def test_the_comparator_distinguishes_floor_from_truncation_in_BOTH_directions()
 
 def test_a_STONELESS_member_is_refused_rather_than_compared():
     """PB-2. `Board::window_center` returns a constant (0, 0) with no stones —
-    translation-invariant, and disagreeing with the predicate. The exclusion is deliberate and
-    named, not incidental."""
+    translation-invariant, and disagreeing with the predicate. The exclusion is named."""
     spec = roster()[0]
     from mantis._engine import Board
 
@@ -384,19 +311,12 @@ def test_a_SINGLE_ARM_perturbation_is_caught_by_the_cross_arm_equality():
         require_cross_arm(spec.name, (dense[0] + 1, dense[1]), graph)
 
 
-# --------------------------------------------------------------------------------------- #
-# GATE half 2 — the no-second-authority CENSUS
-# --------------------------------------------------------------------------------------- #
 _IDENT = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_")
 
 
 def lex_rust(src: str) -> list[tuple[str, int]]:
-    """`(token, line)` pairs with comments and string/char literals STRIPPED.
-
-    Lexing before matching is what defeats the failure the repo's own AST precedent names in
-    its docstring (`tests/config/test_monitor_config_single_authority.py:25-28`): a text search
-    hits comments and docstrings, and this repo has been bitten by both directions.
-    """
+    """`(token, line)` pairs with comments and string/char literals STRIPPED, because a text
+    search hits comments and docstrings and this repo has been bitten by both directions."""
     tokens: list[tuple[str, int]] = []
     i, n, line = 0, len(src), 1
     while i < n:
@@ -474,8 +394,7 @@ def lex_rust(src: str) -> list[tuple[str, int]]:
 #: token, so a matcher comparing the token to the string "2" walks past both.
 _DIVISOR_TWO = re.compile(r"^2(_?[iu](?:8|16|32|64|128|size))?$")
 #: How deep inside the parenthesised group the `+` may sit. Depth 0 is `(a + b) / 2`; depth 1
-#: admits the cast form `((min_q + max_q) as i32) / 2`, which is a second authority spelled
-#: through a conversion and was measured to walk past a depth-0 matcher.
+#: admits `((min_q + max_q) as i32) / 2`, measured walking past a depth-0 matcher.
 _MAX_SUM_DEPTH = 1
 
 
@@ -509,11 +428,8 @@ def _has_sum(tokens: list[tuple[str, int]], open_idx: int, close_idx: int) -> bo
 
 def _render(tokens: list[tuple[str, int]]) -> str:
     """The matched span as NORMALISED token text — one space between tokens, none around `.`.
-
-    Rendering from the tokens rather than from a reassembled operand grammar is what lets the
-    matcher accept any operand shape: `*a`, `v[0]`, `self.min_q()` and a cast all render without
-    the renderer knowing what any of them are.
-    """
+    Rendering from the tokens rather than a reassembled operand grammar is what lets the matcher
+    accept any operand shape without knowing what any of them are."""
     return (
         " ".join(token for token, _line in tokens).replace(" . ", ".").replace(" ( )", "()")
     )
@@ -522,20 +438,11 @@ def _render(tokens: list[tuple[str, int]]) -> str:
 def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[tuple[str, int, str]]:
     """Every `( … + … ) / 2` token SHAPE under `root`, as `(file, line, expression)`.
 
-    THE OPERANDS ARE NOT PARSED, WHICH IS THE POINT. The matcher used to require each operand
-    to be a dotted identifier run with an optional EMPTY argument list, so five spellings of a
-    new origin walked past it — measured, one plant per row, against a temp crates tree:
-    `2i32` and `2_i32` (the divisor lexes as one token), `(*a + *b) / 2`,
-    `((min_q + max_q) as i32) / 2`, and `(v[0] + v[1]) / 2`. The last is the one that matters:
-    a bbox held as `[i32; 2]` is an ordinary refactor and the graph crate already works in
-    coordinate arrays. Requiring only a balanced group containing a `+`, divided by a 2-literal,
-    removes the operand grammar as a place a new origin can hide.
-
-    `>> 1` remains outside, with the rest of the residue in the module docstring: it is a
-    different token shape, not a different operand shape.
-
-    Root-parameterised on purpose: a break that cannot be constructed because the walk hard-codes
-    its root is a failed obligation, and every temp-tree control below depends on this signature.
+    THE OPERANDS ARE NOT PARSED, WHICH IS THE POINT: an identifier-run grammar let five
+    spellings past, each measured with one plant per row — `2i32`/`2_i32` (the divisor lexes as
+    one token), `(*a + *b) / 2`, `((min_q + max_q) as i32) / 2`, and `(v[0] + v[1]) / 2`, the
+    last an ordinary refactor for a bbox held as `[i32; 2]`. Root-parameterised on purpose,
+    since every temp-tree control below depends on that signature.
     """
     found: list[tuple[str, int, str]] = []
     for path in sorted(root.glob(pattern)):
@@ -560,34 +467,21 @@ def midpoint_constructions(root: Path, pattern: str = "*/src/**/*.rs") -> list[t
     return sorted(found)
 
 
-#: THE PIN. A source-level literal of `(file, expression, count)` rows, compared for MULTISET
-#: equality in BOTH directions. It is never a regenerated golden and never a bare count: a pin
-#: the tier rewrites when it differs certifies its own breakage, and a bare cardinality pins none
-#: of the four ambiguous units this census could be measured in. The `frame` note beside each row
-#: is prose for the reader; the assertion compares the rows only.
+#: THE PIN. `(file, expression, count)` rows compared for MULTISET equality in BOTH directions:
+#: never a regenerated golden (a pin the tier rewrites certifies its own breakage) and never a
+#: bare count (which pins none of the four units this census could be measured in).
 #:
-#: THE LINE NUMBER IS NOT PART OF THE IDENTITY (AUDIT-1 F-49, caught by this suite going RED in
-#: REPAIR-3's own gate run). It was, and a NINE-LINE DOC COMMENT added above `window_center` in
-#: `mantis-graph/src/lib.rs` moved 252 to 261 and reddened a census about midpoint arithmetic
-#: with a message reading "a fifth origin?" — which was false, and is the exact misinformation
-#: R8/R192(e) forbids: a positional tally is re-edited on every edit above it, is eventually
-#: wrong, and is then read as evidence. The line is PROVENANCE and still travels in the failure
-#: message and in the derived outputs; what the assertion compares is which file constructs which
-#: midpoint expression, and how many times.
+#: THE LINE NUMBER IS NOT PART OF THE IDENTITY. It was, and a nine-line doc comment added above
+#: `window_center` moved the line and reddened a midpoint census with "a fifth origin?", which
+#: was false. The line is PROVENANCE and still travels in the failure message.
 #:
-#: THE EXPRESSION COLUMN IS NORMALISED TOKEN TEXT, which is what the matcher can render for an
-#: operand shape it does not parse. The rows were re-pinned once, when the operand grammar was
-#: removed; the census was IDENTICAL across that change except for `core.rs`'s `hex_distance`
-#: below, which the old matcher could not see at all — that is the check that distinguishes a
-#: renderer change from a tree change, and it was made before re-pinning.
+#: The expression column is NORMALISED TOKEN TEXT. Re-pinned once, when the operand grammar was
+#: removed; the census was IDENTICAL across that change except for `hex_distance`, which the old
+#: matcher could not see — the check that separates a renderer change from a tree change.
 _THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, str, int], ...] = (
-    # The two `cluster.rs` rows — the small-cluster centroid branch and the massive-cluster
-    # no-anchor fallback, one q-midpoint and one r-midpoint each — went with the file when
-    # R346(f) deleted the K-cluster window.
-    # NOT A WINDOW ORIGIN — `hex_distance`'s axial halving. It is in the pin because the census
-    # counts midpoint CONSTRUCTIONS and cannot tell an origin from an unrelated halving; that
-    # judgement is this prose column, which the assertion does not read. It was invisible to
-    # the operand grammar the matcher used to carry, so it arrived with the wider matcher.
+    # The two `cluster.rs` rows went with the file when the K-cluster window was deleted.
+    # NOT A WINDOW ORIGIN — `hex_distance`'s axial halving, in the pin because the census counts
+    # CONSTRUCTIONS and cannot tell an origin from an unrelated halving.
     (
         "mantis-core/src/board/state/core.rs",
         "( ( q1 - q2 ).abs() + ( q1 + r1 - q2 - r2 ).abs() + ( r1 - r2 ).abs() ) / 2",
@@ -605,8 +499,7 @@ _THE_MIDPOINT_CONSTRUCTIONS: tuple[tuple[str, str, int], ...] = (
 def require_census(observed: list[tuple[str, int, str]], pinned: tuple) -> int:
     """Multiset-equality on (file, expression) in BOTH directions, plus the empty refusal.
 
-    The LINE is deliberately not part of the identity — see the pin's own header. It travels in
-    the failure message so a reader can still find the site.
+    The LINE is deliberately not part of the identity, but travels in the failure message.
 
     Returns:
         The number of observed constructions.
@@ -690,11 +583,8 @@ def test_a_FIFTH_site_carrying_the_allow_marker_is_named(tmp_path):
 
 def test_a_FIFTH_site_with_NO_marker_and_DIFFERENT_names_is_named(tmp_path):
     """PB-9, the load-bearing control now that the clippy backstop is measured out of existence.
-
-    The planted site carries no `#[allow]`, uses names the matcher has never heard of, is
-    `self.`-prefixed — and sits beside a decoy in a comment and a decoy inside a string
-    literal, so the control proves the LEXER and not merely the matcher.
-    """
+    The planted site carries no `#[allow]`, uses names the matcher has never heard of, and sits
+    beside a decoy in a comment and one inside a string literal, so it proves the LEXER."""
     _plant(
         tmp_path,
         "impl Thing {\n"
@@ -712,10 +602,9 @@ def test_a_FIFTH_site_with_NO_marker_and_DIFFERENT_names_is_named(tmp_path):
 
 
 def test_a_fifth_site_whose_operands_are_ACCESSOR_or_HELPER_CALLS_is_named(tmp_path):
-    """PB-9b. The field-to-getter spelling, measured to walk past the identifier-only matcher —
-    and the ARGUMENT-BEARING helper call beside it, which used to be a stated residue and is
-    now inside, because removing the operand grammar removed the distinction that kept it out.
-    """
+    """PB-9b. The field-to-getter spelling, measured walking past the identifier-only matcher,
+    and the ARGUMENT-BEARING helper call beside it — a stated residue until removing the
+    operand grammar removed the distinction that kept it out."""
     _plant(
         tmp_path,
         "impl Thing {\n"
@@ -753,9 +642,7 @@ _EVASION_SPELLINGS: tuple[tuple[str, str], ...] = (
 )
 def test_each_MEASURED_evasion_spelling_is_SEEN_by_the_census(label, expr, tmp_path):
     """Every row here was planted against the real crates tree and confirmed to walk past the
-    identifier-run operand grammar. `(v[0] + v[1]) / 2` is the one that matters: a bbox held as
-    `[i32; 2]` is an ordinary refactor and the graph crate already works in coordinate arrays.
-    """
+    identifier-run operand grammar; `(v[0] + v[1]) / 2` is the one that matters."""
     _plant(tmp_path / label, f"pub fn origin(a: i32, b: i32) -> i32 {{\n    {expr}\n}}\n")
     found = midpoint_constructions(tmp_path / label)
     assert len(found) == 1, f"{label}: {expr} was not seen — {found}"
@@ -764,9 +651,8 @@ def test_each_MEASURED_evasion_spelling_is_SEEN_by_the_census(label, expr, tmp_p
 
 
 def test_the_SHIFT_spelling_remains_OUTSIDE_the_census(tmp_path):
-    """The residue, asserted rather than claimed. `>> 1` is a different token shape, not a
-    different operand shape, and no widening of the operand side reaches it — so a reader of
-    the residue paragraph can check the paragraph against this."""
+    """The residue, asserted rather than claimed: `>> 1` is a different token shape, so no
+    widening of the operand side reaches it."""
     _plant(tmp_path, "pub fn origin(a: i32, b: i32) -> i32 {\n    (a + b) >> 1\n}\n")
     assert midpoint_constructions(tmp_path) == []
 
@@ -779,21 +665,13 @@ def test_a_DELETED_pinned_site_is_named():
         require_census(observed, _THE_MIDPOINT_CONSTRUCTIONS)
 
 
-# --------------------------------------------------------------------------------------- #
-# REPORT (`slow`) — the float residual the integer gate cannot see. No threshold, no verdict.
-# --------------------------------------------------------------------------------------- #
 @pytest.mark.slow
 def test_report_the_graph_node_feature_translation_residual(derived):
-    """`norm_q`/`norm_r` (`crates/mantis-graph/src/lib.rs:547-548`) are CENTROID-relative and
-    computed in f64 before narrowing to f32, so their translation invariance is exact only up
-    to rounding. This half reports the max |Δ| over the corpus and asserts NOTHING about its
-    magnitude — a threshold here would be an armed value, and this is the one equivariance fact
-    the orbit probe does not cover because it is a property of the ENCODER, not of the weights.
-
-    Rows compared are the stone rows and the rows `legal_node_gather` names. The wire also
-    carries one ungathered node whose coordinate is a fixed (0, 0) in every position; it is
-    excluded by construction and its count is reported rather than silently dropped.
-    """
+    """`norm_q`/`norm_r` are CENTROID-relative and computed in f64 before narrowing to f32, so
+    their translation invariance is exact only up to rounding. This half reports the max |Δ| and
+    asserts NOTHING about its magnitude — a threshold would be an armed value — and it is the
+    one equivariance fact the orbit probe misses, being a property of the ENCODER. The wire's
+    one ungathered node is excluded by construction and its count reported."""
     import numpy as np
 
     graph_specs = [s for s in roster() if s.is_graph]

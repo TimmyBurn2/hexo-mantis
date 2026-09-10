@@ -1,18 +1,12 @@
 # pyright: basic
-# >300-line file (LAW-17): the cohesive corpus distribution-analysis module
-# (analyse_* + quality scores) relocated whole; zero behavior change. pyright is set
-# to `basic` here: this module wraps optional/untyped matplotlib + rich and returns
-# untyped numpy stat dicts; a full stat/plot typing split is the post-WP9 follow-up
-# (DESIGN §f N7). Every returned stats dict is exercised by O4d regardless.
+# >300-line file (LAW-17): the cohesive corpus distribution-analysis module (analyse_* plus
+# quality scores) relocated whole. pyright is `basic` here because this module wraps
+# optional/untyped matplotlib and rich and returns untyped numpy stat dicts.
 """Pure metric computation functions for corpus distribution analysis.
 
-Each `analyse_*` function returns a stats dict and (where matplotlib is present)
-writes a histogram to REPORT_DIR. CLI / argparse / file-I/O / rich console
-output live in the sibling modules corpus_analysis.py and corpus_reporter.py.
-
-matplotlib and rich are optional (not mantis runtime dependencies): the plotting
-and progress-bar side effects degrade to no-ops when they are absent; every
-returned stats dict is identical either way.
+Each `analyse_*` returns a stats dict and, where matplotlib is present, writes a histogram to
+REPORT_DIR; CLI, argparse, file I/O and rich console output live in the sibling modules.
+matplotlib and rich are optional, and their side effects degrade to no-ops when absent.
 """
 
 from __future__ import annotations
@@ -97,13 +91,9 @@ def _stratify(records: list[GameRecord]) -> dict[str, list[GameRecord]]:
     for r in records:
         src = r.source if r.source in ALL_SOURCES else SOURCE_HUMAN
         strata[src].append(r)
-    # Remove empty strata
     return {k: v for k, v in strata.items() if v}
 
 
-# ---------------------------------------------------------------------------
-# Analysis (a): Game length histogram
-# ---------------------------------------------------------------------------
 
 def analyse_game_lengths(records: list[GameRecord], label: str = "all") -> dict:
     """Compute game length stats and save histogram."""
@@ -142,9 +132,6 @@ def analyse_game_lengths(records: list[GameRecord], label: str = "all") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Analysis (b): P1 vs P2 win rate
-# ---------------------------------------------------------------------------
 
 def _elo_band(elo: int | None) -> str | None:
     if elo is None:
@@ -165,7 +152,6 @@ def analyse_win_rates(records: list[GameRecord], label: str = "all") -> dict:
     total = len(records)
     overall = p1_wins / total if total else 0.0
 
-    # Stratify by average Elo of the game
     band_wins: dict[str, int] = defaultdict(int)
     band_totals: dict[str, int] = defaultdict(int)
 
@@ -194,7 +180,6 @@ def analyse_win_rates(records: list[GameRecord], label: str = "all") -> dict:
 
     flag = overall > 0.60 or worst_band_rate > 0.60
 
-    # Plot (only for combined/human — bot games have no Elo bands)
     if plt is not None and any(band_totals.get(bl, 0) > 0 for bl in ELO_LABELS):
         labels_plot = ["Overall"] + [bl for bl in ELO_LABELS if band_totals.get(bl, 0) > 0]
         rates = [overall] + [by_band[bl]["p1_win_rate"] for bl in ELO_LABELS
@@ -230,9 +215,6 @@ def analyse_win_rates(records: list[GameRecord], label: str = "all") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Analysis (c): Move distribution entropy
-# ---------------------------------------------------------------------------
 
 def analyse_move_entropy(records: list[GameRecord], label: str = "all") -> dict:
     """Compute average move entropy per game."""
@@ -271,7 +253,6 @@ def analyse_move_entropy(records: list[GameRecord], label: str = "all") -> dict:
     mean_entropy = float(np.mean(game_entropies_arr))
     std_entropy = float(np.std(game_entropies_arr))
 
-    # Plot entropy by ply
     max_ply = max(ply_entropy.keys()) if ply_entropy else 0
     plies_range = list(range(max_ply + 1))
     entropies = [ply_entropy.get(p, 0.0) for p in plies_range]
@@ -304,25 +285,16 @@ def analyse_move_entropy(records: list[GameRecord], label: str = "all") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Analysis (d): Opening diversity
-# ---------------------------------------------------------------------------
 
 def analyse_opening_diversity(
     records: list[GameRecord], label: str = "all", *, encoding_name: str,
 ) -> dict:
-    """Count unique Zobrist hashes at move 3, 5, 10, 20 and compute dupe rate.
-
-    `encoding_name` is REQUIRED (AUDIT-1 F-34): the board these hashes are computed on used to
-    be an identity-blind `Board()` at the engine's default radius, so the diversity of a
-    corpus generated at any other geometry was measured under the wrong legal set.
-    """
+    """Count unique Zobrist hashes at move 3, 5, 10, 20 and compute the dupe rate. `encoding_name`
+    is REQUIRED: on an identity-blind `Board()` these were measured under the wrong legal set."""
     checkpoints = [3, 5, 10, 20]
     unique_hashes: dict[int, set] = {cp: set() for cp in checkpoints}
 
-    # Track first-10-move sequences for dupe rate
     first_10_seqs: list[tuple] = []
-    # Track first-move distribution for entropy
     first_moves: list[tuple] = []
 
     with _progress_ctx() as progress:
@@ -357,7 +329,6 @@ def analyse_opening_diversity(
     dupe_rate = n_duped / len(records) if records else 0.0
     result["dupe_rate_first_10"] = round(dupe_rate, 4)
 
-    # First-move entropy
     if first_moves:
         fm_counts = Counter(first_moves)
         total_fm = len(first_moves)
@@ -370,7 +341,6 @@ def analyse_opening_diversity(
     else:
         result["first_move_entropy"] = 0.0
 
-    # Plot
     if plt is not None:
         fig, ax = plt.subplots(figsize=(8, 5))
         cp_labels = [f"Move {cp}" for cp in checkpoints]
@@ -388,22 +358,16 @@ def analyse_opening_diversity(
     return result
 
 
-# ---------------------------------------------------------------------------
-# Analysis (f): Ply coverage
-# ---------------------------------------------------------------------------
 
 def analyse_ply_coverage(records: list[GameRecord], label: str = "all") -> dict:
-    """Count training positions at each ply depth.
-
-    Flags late-game underrepresentation when < 10 % of positions fall at
-    ply >= 40.
+    """Count training positions at each ply depth, flagging late-game underrepresentation when
+    fewer than 10 % of positions fall at ply >= 40.
 
     Returns:
         total_positions:    Total stone placements across all games.
         late_game_positions: Count of positions at ply >= 40.
         late_game_fraction: late_game_positions / total_positions.
         late_game_flag:     True if late_game_fraction < 0.10.
-        ply_histogram:      Dict of bucket label → position count (buckets of 10).
     """
     if not records:
         return {
@@ -423,14 +387,12 @@ def analyse_ply_coverage(records: list[GameRecord], label: str = "all") -> dict:
     late_game = sum(v for k, v in ply_counts.items() if k >= 40)
     late_frac = late_game / total if total else 0.0
 
-    # Bucket histogram (bins of 10 plies)
     hist: dict[str, int] = {}
     for ply, count in ply_counts.items():
         lo = (ply // 10) * 10
         key = f"{lo}-{lo + 9}"
         hist[key] = hist.get(key, 0) + count
 
-    # Plot
     if plt is not None and ply_counts:
         max_ply = max(ply_counts)
         plies_range = list(range(max_ply + 1))
@@ -461,24 +423,14 @@ def analyse_ply_coverage(records: list[GameRecord], label: str = "all") -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Quality scores
-# ---------------------------------------------------------------------------
 
 def compute_quality_scores(records: list[GameRecord],
                            entropy_by_game: dict[str, float],
                            config_path: Path | None = None,
                            ) -> dict[str, dict]:
-    """Compute per-game quality scores.
-
-    Quality formula:
-      score = w_elo * elo_comp + w_len * len_comp + w_ent * ent_comp
-
-    ``config_path`` is an optional YAML file supplying quality-weight overrides
-    (no code-side default path — CLAUDE.md R1); defaults are used when it is
-    None or absent.
-    """
-    # Load weights from config or use defaults
+    """Compute per-game quality scores as
+    `w_elo * elo_comp + w_len * len_comp + w_ent * ent_comp`. ``config_path`` is an optional YAML
+    file of quality-weight overrides, with no code-side default path (R1)."""
     weights = {"w_elo": 0.4, "w_len": 0.3, "w_ent": 0.3}
     bot_elo_components = {"bot_fast": 0.6, "bot_strong": 0.75, "injected": 0.65}
 
@@ -500,7 +452,6 @@ def compute_quality_scores(records: list[GameRecord],
         source = r.source if r.source in ALL_SOURCES else SOURCE_HUMAN
         game_length = len(r.moves)
 
-        # Elo component
         elo_p1 = r.metadata.get("elo_p1")
         elo_p2 = r.metadata.get("elo_p2")
         if elo_p1 is not None and elo_p2 is not None:
@@ -514,10 +465,8 @@ def compute_quality_scores(records: list[GameRecord],
             elo_comp = 0.5
             elo_val = None
 
-        # Length component
         len_comp = min(1.0, game_length / 60)
 
-        # Entropy component
         mean_ent = entropy_by_game.get(game_id, 0.0)
         ent_comp = min(1.0, mean_ent / 3.0)
 
@@ -537,11 +486,7 @@ def compute_quality_scores(records: list[GameRecord],
 
 
 def _compute_per_game_entropies(records: list[GameRecord]) -> dict[str, float]:
-    """Compute per-game mean entropy for quality scoring.
-
-    Uses within-game ply-level move frequency (across all games) to compute
-    entropy at each ply, then averages per game.
-    """
+    """Compute per-game mean entropy from within-game ply-level move frequency across games."""
     ply_move_counts: dict[int, Counter] = defaultdict(Counter)
     for r in records:
         for ply, move in enumerate(r.moves):
@@ -577,7 +522,6 @@ def analyse_quality_distribution(scores: dict[str, dict], label: str = "all") ->
         return {}
     arr = np.array(all_scores)
 
-    # Per-source means
     source_scores: dict[str, list] = defaultdict(list)
     for v in scores.values():
         source_scores[v["source"]].append(v["quality_score"])
@@ -609,12 +553,8 @@ def analyse_quality_distribution(scores: dict[str, dict], label: str = "all") ->
     }
 
 
-# ---------------------------------------------------------------------------
-# Analysis (g): Elo-stratified human game breakdown
-# ---------------------------------------------------------------------------
 
-# Manifest-style Elo band boundaries (different from ELO_BANDS above which
-# are used for P1 win-rate analysis via average Elo).
+# Manifest-style Elo band boundaries, distinct from the ELO_BANDS the win-rate analysis uses.
 MANIFEST_ELO_BANDS = {
     "sub_1000":  (0, 1000),
     "1000_1200": (1000, 1200),
@@ -648,10 +588,7 @@ def _game_max_elo(r: GameRecord) -> int | None:
 
 
 def _compound_move_count(moves: list) -> int:
-    """Convert raw stone placements to compound move count.
-
-    Turn structure: P1 plays 1, then alternating 2-stone turns.
-    """
+    """Convert raw stone placements to a compound move count: P1 plays 1, then 2-stone turns."""
     if not moves:
         return 0
     remaining = len(moves) - 1  # first stone is turn 1 (1 placement)
@@ -659,12 +596,8 @@ def _compound_move_count(moves: list) -> int:
 
 
 def _opening_key(moves: list, n_compound: int = 3) -> tuple | None:
-    """Extract the first n_compound compound moves as a hashable tuple.
-
-    Returns None if the game is too short.
-    """
-    # First compound move: 1 placement. Next: 2 each.
-    # Total stones for 3 compound moves: 1 + 2 + 2 = 5
+    """Return the first `n_compound` compound moves as a tuple, or None when the game is short."""
+    # First compound move is 1 placement and the next are 2 each, so 3 moves is 5 stones.
     stones_needed = 1 + 2 * (n_compound - 1) if n_compound > 0 else 0
     if len(moves) < stones_needed:
         return None
@@ -672,12 +605,7 @@ def _opening_key(moves: list, n_compound: int = 3) -> tuple | None:
 
 
 def analyse_elo_stratified(records: list[GameRecord]) -> dict:
-    """Produce Elo-band breakdown for human games.
-
-    For each band: game count, median game length (compound moves),
-    top 5 most common openings (first 3 compound moves).
-    """
-    # Bucket records by band
+    """Produce the Elo-band breakdown for human games: count, median length, top 5 openings."""
     buckets: dict[str, list[GameRecord]] = {b: [] for b in MANIFEST_BAND_ORDER}
     for r in records:
         if r.source != "human":
@@ -717,18 +645,11 @@ def analyse_elo_stratified(records: list[GameRecord]) -> dict:
     return result
 
 
-# ---------------------------------------------------------------------------
-# Run analysis for a single stratum
-# ---------------------------------------------------------------------------
 
 def run_analysis(records: list[GameRecord], label: str = "all",
                  *, encoding_name: str) -> dict:
-    """Run all five analyses on a set of records.
-
-    `encoding_name` is REQUIRED and threaded to the two analyses that build a `Board`
-    (AUDIT-1 F-34) — a corpus is measured under the geometry it was generated at, or the
-    numbers describe a board nobody played on.
-    """
+    """Run all five analyses on a set of records. `encoding_name` is REQUIRED and threaded to the
+    two analyses that build a `Board`, or the numbers describe a board nobody played on."""
     length_stats = analyse_game_lengths(records, label)
     log.info("game_lengths_done", label=label, **length_stats)
 

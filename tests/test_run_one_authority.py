@@ -1,49 +1,22 @@
 # >300 justify (R8): O-A1..O-A5 are ONE census family making ONE claim — that exactly one
-# composition path exists — and they share the instrument that makes the claim checkable
-# (`_call_sites` / `_enclosing_defs` / `_body_without_docstring` / `_root_name` /
-# `_code_text`). R5 bars cross-test imports, so a split forks that helper set into
-# two copies, and the helpers ARE the instrument: two copies is two instruments that drift
-# apart while both stay green. The src-side census (O-A2) and the child-side census (O-A4)
-# are also deliberately readable side by side — they are twins, and a reviewer checking that
-# the two halves say the same thing about the same shape has to see them together.
-"""⊕ WPMAIN ORACLE — the ONE composition authority (DESIGN §1/§9, oracles O-A1..O-A5).
+# composition path exists — and they share the instrument that makes it checkable. R5 bars
+# cross-test imports, so a split forks that helper set, and two instruments drift apart while
+# both stay green. The src-side census (O-A2) and the child-side census (O-A4) are twins and
+# have to be readable side by side.
+"""THE ONE COMPOSITION AUTHORITY — oracles O-A1..O-A5.
 
-RED-at-import until IMPL lands `mantis.run.build_run_collaborators` / `mantis.run.launch_run`
-(the import below is the RED anchor; every oracle in this file rides on it). Written
-ORACLE-FIRST: the boot path does not exist in `src/` yet — it lives in a CI GATE
-(`tools/ci_gates/preflight_mint.py::_boot_main`), which is the one-authority violation
-CARD-RUN-MAIN exists to end (R121(a)).
+What this file exists to stop: two boot paths. `python -m mantis.run` used to validate a config
+and exit while a CI tool owned the only real composition, so "the preflight boots what run5
+boots" was a claim with no producer on either side.
 
-What this file exists to stop, in one sentence: **two boot paths.** The audit headline is
-that `python -m mantis.run` validates a config and exits (`run.py:341`) while a CI tool owns
-the only real composition — so "the preflight boots what run5 boots" was a claim with no
-producer on EITHER side. These five oracles are that producer.
+O-A1 refuses a second composer or builder anywhere in `src/`/`tools/` and a child that binds its
+composer from elsewhere. O-A2 refuses `launch_run` growing a third step or transforming what it
+forwards. O-A3 refuses the builder that stops BUILDING — a token census was MEASURED
+insufficient (a silent-default mutation left 1773 tests green), so it asserts a bound CALL and
+is paired with behavioural drives. O-A4 is the CHILD side, which had no producer at all. O-A5
+catches the smuggled default in its one uncensused guise, `config.run_id or "run"`.
 
-The defect each one is the only witness to:
-
-- O-A1 — a SECOND composer, or a second builder, anywhere in `src/` or `tools/`; and a
-  child that binds its composer from somewhere other than `mantis.run`.
-- O-A2 — `launch_run` growing a third composition step, or transforming what it forwards
-  (a launcher that "adjusts" the config before composing is a divergent path wearing the
-  one-authority name).
-- O-A3 — the builder that stops BUILDING: O-9's token census over the tool asserted only
-  that `init_trainer`/`WorkerPool`/`HexgBuffer`/`ReplayBuffer` appear as tokens, and the
-  tree itself MEASURED that insufficient (`test_preflight_mint_process.py:894-898`: a
-  silent-default mutation left 1773 tests green). This is O-9's builder-token half at its
-  new home, strengthened from "token present" to "call, with the result bound", and paired
-  with the behavioural drives O-F1/O-B1 (DESIGN §4, C-1a: the pair is the equal-or-stronger
-  successor, never the census alone).
-- O-A4 — the CHILD side of one-authority, which REVIEW-design found had no producer at all.
-  Three mutation vectors are each RED here: a different config object handed to the composer
-  than the one the collaborators were built from; a `collab` mutated between the two calls;
-  a third composition step inserted in the child.
-- O-A5 — the smuggled default in its one uncensused guise: `config.run_id or "run"`, or
-  `config.model_dump().get("run_id", "run")`. The `getattr(config` census
-  (`test_run_strict_composition.py:445-465`), the consumer bijection and CI gate 11 all miss
-  an `or`/`.get` fallback (R123 check (c)).
-
-Fakes: NONE. Every oracle here is a static census over the shipped source, plus one identity
-read of live module objects.
+Fakes: NONE — static censuses over the shipped source, plus one identity read of live modules.
 """
 from __future__ import annotations
 
@@ -68,42 +41,22 @@ _SANCTIONED_SITES = {
     "tools/ci_gates/preflight_mint.py::_boot_main",
 }
 
-#: DESIGN §1.5 — the re-cut composer's parameter tuple, as the CHILD must pass it.
-#:
-#: `resume_state` joined it at R343(c) and the CHILD's inclusion is the point, not an
-#: afterthought: the preflight's whole claim is that it boots what the run boots, so a
-#: parameter the launcher passes and the child omits is a divergent boot wearing the
-#: one-authority name — exactly what this tuple is checked against at both call sites.
+#: The re-cut composer's parameter tuple, as the CHILD must pass it. `resume_state` joined it
+#: at R343(c) and the child's inclusion is the point: a parameter the launcher passes and the
+#: child omits is a divergent boot wearing the one-authority name.
 _COMPOSE_KWARGS = (
     "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
 )
 
-#: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries, and the second is
-#: argued rather than typed — an allowlist that grows by edit is not an allowlist.
+#: Where a `WorkerPool` may be CONSTRUCTED in shipped code. TWO entries, the second argued
+#: rather than typed — an allowlist that grows by edit is not an allowlist. The rule is one pool
+#: construction ON ANY BOOT PATH, weaker than the original claim, and the assertion message says
+#: the weaker thing.
 #:
-#: **What the rule was, and what it now is.** The original assertion was "one pool
-#: construction, in the composition root's builder", and its stated subject was
-#: `tools/ci_gates/preflight_mint.py::_boot_main` — a CI GATE that owned the only real
-#: collaborator build and could therefore drift from the boot it claimed to preflight. That is
-#: the D-1 inversion. The rule is now **one pool construction ON ANY BOOT PATH**, which is a
-#: weaker claim, and the test's assertion message says the weaker thing rather than the
-#: stronger one (the overclaiming class `0bb4381` was written for).
-#:
-#: **Why the second site is not a boot path, and why that is checkable rather than asserted.**
-#: `mantis.diagnostics.worker_sweep` is Phase W of the re-calibration re-sit (R309(g)): it
-#: measures self-play throughput and memory against `selfplay.n_workers` so the memory caps are
-#: fitted at the geometry the run will actually use. R309(g) requires that **no trainer step
-#: executes** in it — the caps are VOID on the host and a training step would cross the
-#: voided-caps row — so it composes no run at all: no trainer, no `compose_run`, no
-#: `StepCoordinator`, no run-safety triple, no lifecycle. Every one of those absences is
-#: asserted ABOVE by the same census (each of the three composer steps has exactly one call
-#: site, and `init_trainer` has exactly one), and the module's inability to reach the trainer at
-#: all is proved structurally by `tests/diagnostics/test_worker_sweep_reachability.py`. A future
-#: edit that turned the sweep into a boot path would therefore red one of those rows, not this
-#: one — which is what keeps this entry from being the hole it would otherwise be.
-#:
-#: A THIRD entry is a design decision that edits this set, never an edit that happens to pass;
-#: `test_the_pool_allowlist_BITES_on_a_third_construction_site` is the proof it can still say no.
+#: `mantis.diagnostics.worker_sweep` is not a boot path, and checkably so: it composes no
+#: trainer, no `compose_run`, no `StepCoordinator`, no run-safety triple and no lifecycle, and
+#: every one of those absences is asserted above by the same census. A third entry is a design
+#: decision that edits this set, and a planted-break row proves the allowlist can still say no.
 _SANCTIONED_POOL_SITES = {
     "src/mantis/run.py::build_run_collaborators",
     "src/mantis/diagnostics/worker_sweep.py::build_sweep_pool",
@@ -111,8 +64,8 @@ _SANCTIONED_POOL_SITES = {
 
 
 def _production_sources() -> list[Path]:
-    """Every shipped `.py` under `src/` and `tools/`. `tests/` is deliberately OUT: a test
-    may compose freely — the one-authority law is about what SHIPS."""
+    """Every shipped `.py` under `src/` and `tools/`. `tests/` is deliberately OUT: a test may
+    compose freely — the one-authority law is about what SHIPS."""
     return sorted([*(_SRC.rglob("*.py")), *(_TOOLS.rglob("*.py"))])
 
 
@@ -121,9 +74,8 @@ def _rel(path: Path) -> str:
 
 
 def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed — the house instrument
-    (`test_preflight_mint.py`'s `_code_text`), including its 3.11-floor guard: FSTRING_MIDDLE
-    is 3.12+ (PEP 701), and on 3.11 f-strings lex as STRING."""
+    """Source with COMMENT / STRING / f-string-literal tokens removed, including the 3.11-floor
+    guard: FSTRING_MIDDLE is 3.12+, and on 3.11 f-strings lex as STRING."""
     skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         return "\n".join(tok.string for tok in tokenize.tokenize(handle.readline)
@@ -204,12 +156,10 @@ def _root_name(node: ast.AST) -> str | None:
             return None
 
 
-# ══ O-A1 — one composer, one builder, one binding ═════════════════════════════════════
 def test_the_tree_holds_exactly_one_composer_and_exactly_one_collaborator_builder() -> None:
-    """O-A1, definition half. MUTATION THAT REDS IT: define a second `compose_run` (or a
-    second `build_run_collaborators`) anywhere under `src/` or `tools/` — which is precisely
-    how the preflight's approximate boot came to exist in the first place, one helper at a
-    time. A second definition is a second authority no signature census can see."""
+    """O-A1, definition half. MUTATION THAT REDS IT: define a second `compose_run` or
+    `build_run_collaborators` anywhere under `src/` or `tools/` — which is precisely how the
+    preflight's approximate boot came to exist, one helper at a time."""
     assert _definition_sites("compose_run") == {"src/mantis/run.py"}, (
         "exactly ONE `def compose_run` may exist in the shipped tree; found "
         f"{sorted(_definition_sites('compose_run'))}"
@@ -223,13 +173,9 @@ def test_the_tree_holds_exactly_one_composer_and_exactly_one_collaborator_builde
 
 def test_the_only_production_composition_call_sites_are_the_launcher_and_the_preflight_child(
 ) -> None:
-    """O-A1, call-site half — the repo census the dispatch's minimum set names.
-
-    MUTATION THAT REDS IT: any new production caller of the builder or the composer — a
-    `mantis.deploy` launcher, a second entry point, a convenience wrapper in `tools/`. Every
-    such caller is a boot path that can drift from run5's, which is the failure this WP is
-    named for. Adding one is a design decision that edits this set, never an edit that
-    happens to pass."""
+    """O-A1, call-site half. MUTATION THAT REDS IT: any new production caller of the builder or
+    composer — each is a boot path that can drift from run5's, so adding one is a design
+    decision that edits this set."""
     assert _call_sites("compose_run") == _SANCTIONED_SITES, (
         "compose_run may be called from exactly two production sites (DESIGN §1.1) — "
         f"got {sorted(_call_sites('compose_run'))}"
@@ -241,22 +187,12 @@ def test_the_only_production_composition_call_sites_are_the_launcher_and_the_pre
 
 
 def test_no_second_composer_exists_under_any_name() -> None:
-    """O-A1, the half a NAME census cannot cover — and the mutation that walks past every
-    other assertion in this file: a second composer called something else.
+    """O-A1, the half a NAME census cannot cover: a second composer called something else.
 
-    `def compose_run_v2(...)` defeats a definition census, a call-site census keyed on the
-    name, and the child's import census all at once. What it CANNOT do is compose a run
-    without driving the loop, building the run-safety triple and constructing the
-    coordinator. Those three calls are the boot's irreducible steps, so their call sites ARE
-    the composer, whatever it is named.
-
-    Measured at `b482243`: each of the three has exactly one call site in shipped code, and
-    it is `compose_run`. Green today, and load-bearing the moment a second boot path is
-    written.
-
-    The builder half is RED today for the reason the whole card exists: `init_trainer` and
-    `WorkerPool` are constructed in `tools/ci_gates/preflight_mint.py::_boot_main` — a CI
-    gate owning the only real collaborator build (D-1)."""
+    `def compose_run_v2(...)` defeats a definition census, a name-keyed call-site census and the
+    child's import census at once — but it cannot compose a run without driving the loop,
+    building the run-safety triple and constructing the coordinator, so those three call sites
+    ARE the composer whatever it is named."""
     for symbol in ("run_training_loop", "build_run_safety", "StepCoordinator"):
         assert _call_sites(symbol) == {"src/mantis/run.py::compose_run"}, (
             f"{symbol} is one of composition's irreducible steps: a second caller is a "
@@ -275,19 +211,11 @@ def test_no_second_composer_exists_under_any_name() -> None:
 
 
 def test_the_preflight_child_binds_its_composer_from_mantis_run_itself() -> None:
-    """O-A1, identity half. The child's `build_run_collaborators` / `compose_run` must BE
-    `mantis.run`'s objects — bound by an `ImportFrom` naming `mantis.run` exactly.
-
-    MUTATION THAT REDS IT: re-point the child's import at a shim module
-    (`from mantis.run_compat import compose_run`), or re-declare either function inside the
-    tool. Both keep every existing preflight assertion green while the child boots something
-    else — the divergence route RED-TEAM's "can any flag make preflight boot a different
-    path" lens is pre-registered against.
-
-    Why the binding is asserted at SOURCE level and not by attribute identity: DESIGN §1.4
-    keeps the import FUNCTION-LOCAL inside `_boot_main` (the tool must stay importable
-    without pulling torch), so there is no module attribute to compare. The `ImportFrom`
-    node IS the binding."""
+    """O-A1, identity half: the child's two functions must BE `mantis.run`'s objects, bound by an
+    `ImportFrom` naming `mantis.run` exactly. MUTATION THAT REDS IT: re-point the child's import
+    at a shim, or re-declare either function in the tool. Asserted at SOURCE level because the
+    import is function-local (the tool must import without torch), so the `ImportFrom` node IS
+    the binding."""
     tool_tree = ast.parse(_TOOL_PY.read_text(encoding="utf-8"))
     boot = _func(tool_tree, "_boot_main")
     imports = [node for node in ast.walk(boot) if isinstance(node, ast.ImportFrom)]
@@ -302,17 +230,11 @@ def test_the_preflight_child_binds_its_composer_from_mantis_run_itself() -> None
     )
 
 
-# ══ O-A2 — launch_run is build -> compose, pass-through ═══════════════════════════════
 def test_launch_run_is_exactly_build_then_compose_with_nothing_in_between() -> None:
-    """O-A2 (DESIGN §1.1): `launch_run`'s body is EXACTLY two statements — one builder call
-    whose result is bound, one `return compose_run(...)` forwarding that result's fields and
-    the SAME config object.
-
-    MUTATION THAT REDS IT: (i) insert any third step (a config transform, a device coercion,
-    an `if resume:` branch) — the statement count flips; (ii) pass a DIFFERENT config to the
-    composer than the builder got (`compose_run(config=adjusted, ...)`) — the `ast.Name`
-    equality flips. Both mutations are behaviourally invisible on a green CI tier, which is
-    why the instrument is structural. This is the SRC-side twin of O-A4."""
+    """O-A2: `launch_run`'s body is EXACTLY two statements — one bound builder call, one
+    `return compose_run(...)` forwarding its fields and the SAME config. MUTATION THAT REDS IT:
+    a third step flips the statement count; a different config to the composer flips the
+    `ast.Name` equality. Both are invisible on a green tier, hence a structural instrument."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     body = _body_without_docstring(_func(tree, "launch_run"))
     assert len(body) == 2, (
@@ -362,16 +284,10 @@ def test_launch_run_is_exactly_build_then_compose_with_nothing_in_between() -> N
         )
 
 
-# ══ O-A3 — the builder really builds (O-9's builder-token successor) ══════════════════
 def test_the_builder_calls_the_real_trainer_and_pool_constructors_and_binds_them() -> None:
-    """O-A3, half 1 (DESIGN §9, C-1a). `build_run_collaborators` must CALL `init_trainer(`
-    and `WorkerPool(` and bind each result to a name.
-
-    MUTATION THAT REDS IT: replace either construction with a stand-in, a `None`, or a
-    lazily-deferred handle. Token presence — what O-9 asserted over the tool — survives
-    exactly that mutation (measured, `test_preflight_mint_process.py:894-898`); a bound CALL
-    does not. Equal-or-stronger is claimed for the PAIR of this census and the behavioural
-    drives (O-B1 boots through it; O-F1 drives the selector), never for the census alone."""
+    """O-A3, half 1: `build_run_collaborators` must CALL `init_trainer(` and `WorkerPool(` and
+    bind each result. Token presence survives a stand-in mutation (measured); a bound CALL does
+    not. Equal-or-stronger is claimed for the PAIR with the behavioural drives."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     builder = _func(tree, "build_run_collaborators")
     bound: dict[str, str] = {}
@@ -389,15 +305,10 @@ def test_the_builder_calls_the_real_trainer_and_pool_constructors_and_binds_them
 
 
 def test_the_buffer_selector_routes_the_declared_representation_to_a_real_engine_buffer() -> None:
-    """O-A3, half 2. `_select_buffer` must name the real engine buffer and read the DECLARED
-    representation.
-
-    IT USED TO NAME TWO. The `ReplayBuffer` arm went with the dense path (R346(f)), so the
-    mutation this row was written for — collapsing two arms into `return ReplayBuffer(...)`,
-    the dense-by-default defect LAW-11 bans — has no second arm to collapse. What survives and
-    still matters is the THIRD arm: an absent or unknown representation RAISES rather than
-    falling through to the one buffer that is left. The behavioural producer is O-F1; this is
-    its structural half."""
+    """O-A3, half 2: `_select_buffer` must name the real engine buffer and read the DECLARED
+    representation. The `ReplayBuffer` arm went with the dense path, so what still matters is
+    the THIRD arm — an absent or unknown representation RAISES rather than falling through to
+    the one buffer left."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     selector = _func(tree, "_select_buffer")
     called = {_called_name(node) for node in ast.walk(selector) if isinstance(node, ast.Call)}
@@ -418,25 +329,13 @@ def test_the_buffer_selector_routes_the_declared_representation_to_a_real_engine
 
 
 def test_the_composition_root_contains_no_stand_in_for_a_production_object() -> None:
-    """O-A3, half 3 — O-2's stand-in ban, applied to the module that now owns the boot.
+    """O-A3, half 3 — the stand-in ban, applied to the module that owns the boot. MUTATION THAT
+    REDS IT: a `MagicMock`, a `monkeypatch` or a `setattr(` re-point smuggled in to get past a
+    wall, which is a TREE DEFECT and is fixed or queued instead.
 
-    MUTATION THAT REDS IT: a `MagicMock`, a `monkeypatch`, a `setattr(` re-point smuggled
-    into the root to get past a wall. R64: a wall the real boot hits is a TREE DEFECT and is
-    fixed or queued, never papered over in the composer.
-
-    Scanned over CODE with comment/string tokens removed — O-2's own instrument, for O-2's
-    own stated reason: a raw-text census flags the module's prose, which is the false
-    positive that teaches people to word comments around a gate. `run.py` is half rationale
-    by design (its R8 header says so), and that rationale must stay writable.
-
-    The `SimpleNamespace` carve-out is ENUMERATED, not waived (the P-11 trap): HEAD's own
-    root already CONSTRUCTS two — the `resolved_anchor` seed (`run.py:254`) and the
-    coordinator's `subsystems=` stand-in (`run.py:285`, disclosed in DESIGN §7 leg 3 as out
-    of scope). A blanket ban would red on shipped code, so the bound is a COUNT of
-    CONSTRUCTIONS: two, the two that exist. Constructions rather than textual occurrences,
-    because the `from types import SimpleNamespace` line is not a stand-in and counting it
-    would make the bound a lie. A third construction is a new stand-in and must be argued,
-    not typed."""
+    Scanned over CODE with comment/string tokens removed, because a raw-text census flags the
+    module's prose. The `SimpleNamespace` carve-out is ENUMERATED: HEAD's root already
+    constructs two, so the bound is a COUNT of CONSTRUCTIONS and a third must be argued."""
     code = _code_text(_RUN_PY)
     for token in ("MagicMock", "unittest.mock", "mock.patch", "monkeypatch", "setattr("):
         assert token not in code, (
@@ -451,20 +350,11 @@ def test_the_composition_root_contains_no_stand_in_for_a_production_object() -> 
     )
 
 
-# ══ O-A4 — the child-side twin (success criterion 2's producer) ═══════════════════════
 def test_the_preflight_child_boots_through_one_builder_and_one_composer_only() -> None:
-    """O-A4 (DESIGN §9, the O-A2 twin; REVIEW-design C-2/F-2 found the child side had NO
-    producer at all — this is it).
-
-    Three mutation vectors, each RED here:
-      (i)  hand `compose_run` a different config object than the builder got — the
-           `ast.Name` identity check flips (this is the two-config boot the burst override
-           makes reachable: `booted` vs `config`);
-      (ii) mutate `collab` between the two calls (`collab.trainer = something_else`) — the
-           attribute-assignment ban flips;
-      (iii) insert a third composition step between them — the between-statements check
-           flips (only the §4.2 refusal and the `mantis.run` import may sit there).
-    Every one of the three leaves rc 0 and every existing preflight assertion green."""
+    """O-A4, the O-A2 twin: the child side, which had NO producer at all. Three mutation vectors
+    are each RED — a different config object handed to the composer than the builder got, a
+    `collab` mutated between the two calls, and a third composition step inserted between them.
+    Every one leaves rc 0 and every existing preflight assertion green."""
     tree = ast.parse(_TOOL_PY.read_text(encoding="utf-8"))
     builder_calls = [node for node in ast.walk(tree)
                      if isinstance(node, ast.Call)
@@ -527,21 +417,13 @@ def test_the_preflight_child_boots_through_one_builder_and_one_composer_only() -
         )
 
 
-# ══ O-A5 — the guise no existing census sees ══════════════════════════════════════════
 def test_no_or_fallback_or_dict_get_stands_behind_a_config_fact_at_the_root() -> None:
-    """O-A5 / R123-O1. `compose_run`'s `run_id: str = "run"` default (`run.py:173`) dies with
-    the parameter (§1.5) — check (c) of R123 is that it does not survive the move in another
-    guise, and the guise is `config.run_id or "run"` or `dump.get("run_id", "run")`.
-
-    MUTATION THAT REDS IT: write either fallback. Nothing else in the tree sees it — the
-    `getattr(config` substring census reads a different idiom, the consumer bijection sees a
-    key that IS consumed, gate 11 requires a REGISTERED-ENCODING literal in a default
-    position, and the signature census sees a parameter that is genuinely gone. This oracle
-    is the only witness, which is why R123 made it a rider.
-
-    Also pinned: `config.run_id` appears as the EXACT expression in the composer, so the
-    identity the run publishes (`run_boot_identity`, `run.py:210-219`) and the identity the
-    config declares cannot be two things."""
+    """O-A5. `compose_run`'s `run_id: str = "run"` default dies with the parameter, and this is
+    the check that it does not survive in another guise: `config.run_id or "run"`, or
+    `dump.get("run_id", "run")`. Nothing else sees it — the `getattr(config` census reads a
+    different idiom, the consumer bijection sees a key that IS consumed, and gate 11 wants a
+    registered-encoding literal. Also pinned: `config.run_id` is the EXACT expression in the
+    composer, so the published identity and the declared one cannot be two things."""
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.BoolOp) and isinstance(node.op, ast.Or):
@@ -570,12 +452,10 @@ def test_no_or_fallback_or_dict_get_stands_behind_a_config_fact_at_the_root() ->
 
 
 def test_the_pool_allowlist_BITES_on_a_third_construction_site(tmp_path) -> None:
-    """LAW-07 self-test, on the `0bb4381` precedent: an allowlist rule that has never been
-    shown to reject anything is indistinguishable from a rule that accepts everything.
-
-    The plant is a THIRD construction site in a temp tree, and the row requires the census to
-    name it. It is the same shape the second entry above was granted for, so if the grant ever
-    becomes a blanket exemption this row is what fails first."""
+    """LAW-07 self-test: an allowlist rule never shown to reject anything is indistinguishable
+    from one that accepts everything. The plant is a THIRD construction site in a temp tree, the
+    same shape the second entry was granted for, so if that grant ever becomes a blanket
+    exemption this row fails first."""
     planted_src = tmp_path / "src" / "mantis" / "somewhere"
     planted_src.mkdir(parents=True)
     (planted_src / "new_booter.py").write_text(

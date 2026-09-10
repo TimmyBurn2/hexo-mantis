@@ -1,42 +1,13 @@
-# >300 justify (R8). The two halves are one
-# claim — "a minted config's header is replayable by its own minter" — and they cannot be split:
-# the behavioural half establishes what the renderer does and the census half asserts the
-# committed configs are in exactly that form, so a split leaves either half asserting a format
-# no test defines. Both share `_header_deltas` / `_stringified_none` / the domain table, and R5
-# bars cross-test imports, so splitting means duplicating the parser that IS the subject.
-"""R187 — the minted header is REPLAYABLE: every delta value round-trips through the tool.
+# >300 justify (R8): the behavioural half defines what the renderer does and the census half
+# asserts the committed configs are in that form; split, either half asserts a format no test
+# defines, and the parser under test is duplicated.
+"""A minted header is REPLAYABLE: every delta value round-trips through the tool.
 
-`tools/mint_config.py` stamped its `# delta:` lines with Python `str()`. That is neither total
-nor injective over the header's value domain, and the domain is not a guess: both slots come
-from `yaml.safe_load` (`mint_config.py:60` loads the template, `:74` parses the `--set` value),
-so the domain is exactly the image of PyYAML's `SafeLoader`. Over that image `str()` fails on
-`None` -> `None` (reads back as the STRING `"None"`), `inf`/`nan`, `set`, `bytes`, tuples from
-`!!omap`/`!!pairs`, and any string YAML would retype (`yes`, `0123`, `null`, `''`, `a: b`) --
-and it maps `None` and `"None"` onto the SAME text, so even a correct-looking header cannot be
-read back unambiguously.
-
-The measured consequence: `configs/smoke_preflight_armed.yaml`'s `eval.ladder.rungs` delta
-carries `opponent_sims: None` inside a list of dicts, and replaying that header through the
-tool that wrote it raises `Input should be a valid integer [input_value='None']`. **A minted
-config's own provenance was not replayable by its own minter** -- and R1's "configs are minted,
-never hand-varied" rests on precisely that replayability, so the defect sits under the rule.
-
-This file is the producer test the surface never had (LAW-07), in two halves:
-
-- **behavioural** — mint through the real CLI and read the header back, including the `None`
-  case, the injectivity case, and the loud-refusal case (a value the header cannot record
-  refuses the mint at rc 2 rather than writing an approximation; a serializer that swallows an
-  un-encodable value is the same class of defect).
-- **census** — every committed minted config's header, checked BOTH textually (is the slot the
-  canonical rendering?) and semantically (does the slot's value equal the config body's value
-  at that dotted path?). The second is the property that actually matters and the first is what
-  keeps it cheap to see.
-
-The `tests/fixtures/wpmain/config_baseline_b482243/` baselines are swept too, and they are the
-one place a stringified-`None` still lives: they are a byte-frozen snapshot of `b482243` whose
-sha256s sit in the FROZEN `tests/fixtures/manifest.toml`, so they cannot be re-minted -- a
-historical record is not a defect to fix, it is the record of one. They are pinned as a closed,
-named set instead of skipped, so a NEW bad header appearing there still reds.
+Both header slots come from `yaml.safe_load`, so the value domain is exactly the image of
+PyYAML's `SafeLoader`, and Python `str()` is neither total nor injective over that image — it
+maps `None` and the string `"None"` onto the same text. The census half checks every committed
+header both textually (is the slot the canonical rendering?) and semantically (does it equal
+the body's value at that dotted path?).
 """
 from __future__ import annotations
 
@@ -54,19 +25,14 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 MINT = REPO_ROOT / "tools" / "mint_config.py"
 BASELINE = REPO_ROOT / "tests" / "fixtures" / "wpmain" / "config_baseline_b482243"
 
-#: The mint tool loaded as a module, so the census can call the SAME renderer the tool stamps
-#: with. Importing it any other way would mean transcribing the format into the test, and a
-#: transcribed format is a second authority (R1).
+#: The mint tool as a module, so the census calls the SAME renderer the tool stamps with.
 _SPEC = importlib.util.spec_from_file_location("_mint_config_under_test", MINT)
 assert _SPEC is not None and _SPEC.loader is not None
 mint_config = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(mint_config)
 
-#: The header's value domain, by its generator: one source document per `SafeConstructor` tag
-#: plus the strings YAML would retype. Established from `yaml.constructor.SafeConstructor.
-#: yaml_constructors` (null, bool, int, float, binary, timestamp, str, seq, map, set, omap,
-#: pairs), not from imagination -- `test_the_domain_table_covers_every_safe_loader_tag` holds
-#: it to that.
+#: One source document per `SafeConstructor` tag plus the strings YAML would retype;
+#: `test_the_domain_table_covers_every_safe_loader_tag` holds the table to that domain.
 _DOMAIN_DOCS = (
     "null", "~", "true", "false", "42", "0x1f", "1.5", ".inf", "-.inf", ".nan",
     "!!binary 'AAEC'", "2026-08-03", "2026-08-03 11:22:33", "!!set {a, b}",
@@ -74,12 +40,10 @@ _DOMAIN_DOCS = (
     "[1, 2, 3]", "{a: 1, b: null}", "[{name: x, opponent_sims: null, deploy_matched: true}]",
 )
 
-#: The two `SafeLoader` tags `safe_dump` genuinely cannot invert: both construct a list of
-#: TUPLES and dump as a list of lists. The tool must refuse these, loudly.
+#: The two tags `safe_dump` cannot invert (list of TUPLES out, list of lists back).
 _UNRENDERABLE_DOCS = ("!!omap [{a: 1}]", "!!pairs [{a: 1}]")
 
-#: The one place a stringified-`None` header still lives, closed and named: a byte-frozen
-#: snapshot of `b482243` under a FROZEN manifest, which is a record, not a mintable config.
+#: A byte-frozen snapshot under a FROZEN manifest — a record, not a mintable config.
 _BASELINE_KNOWN_BAD = {
     ("run6.yaml", "train.draw_rate_abort"),
     ("smoke_preflight_armed.yaml", "train.draw_rate_abort"),
@@ -124,18 +88,9 @@ def _stringified_none(value: object) -> bool:
     return False
 
 
-# ── behavioural half ────────────────────────────────────────────────────────────────────────
 def test_a_None_bearing_delta_mints_a_header_that_replays_green(tmp_path: Path) -> None:
-    """The headline row: mint -> load -> validate green, with `None` inside the delta value.
-
-    `eval.ladder.rungs` is the real shape (`configs/smoke_preflight_armed.yaml:27`): a list of
-    dicts with `opponent_sims: null`. The replay is the whole point -- the header slot is fed
-    straight back to `--set` and the second mint must produce the SAME BYTES, which is what
-    "the provenance is replayable" means operationally.
-
-    MUTATION THAT REDS IT: `str()` in the delta line. The replayed `--set` then carries
-    `opponent_sims: 'None'` and the second mint exits 2 on `Input should be a valid integer`.
-    """
+    """A `None`-bearing delta mints a header whose slot replays to the SAME BYTES.
+    Killer: `str()` in the delta line, which replays `opponent_sims: 'None'` and exits 2."""
     rungs = ("[{name: sealbot_d1, bot: sealbot, variant: d1, depth: 1, opponent_sims: null, "
              "opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 1}]")
     first = tmp_path / "first.yaml"
@@ -163,12 +118,8 @@ def test_a_None_bearing_delta_mints_a_header_that_replays_green(tmp_path: Path) 
 
 
 def test_None_and_the_string_None_are_distinguishable_in_the_header(tmp_path: Path) -> None:
-    """Injectivity, the sharper half of the defect: `str()` maps `None` and `"None"` onto the
-    same six characters, so the header cannot say which was minted even when nothing else is
-    wrong. Two mints, two different values, two different headers.
-
-    MUTATION THAT REDS IT: any renderer that emits a bare `None` for either value.
-    """
+    """`None` and the string `"None"` mint distinguishable headers. Killer: any renderer that
+    emits a bare `None` for either, which cannot say which value was minted."""
     as_null = tmp_path / "null.yaml"
     as_text = tmp_path / "text.yaml"
     rung = ("[{{name: r, bot: sealbot, variant: d1, depth: 1, opponent_sims: null, "
@@ -192,13 +143,8 @@ def test_None_and_the_string_None_are_distinguishable_in_the_header(tmp_path: Pa
 
 
 def test_the_header_renders_every_value_the_set_parser_can_produce() -> None:
-    """Totality over the declared domain, checked at the renderer rather than asserted in
-    prose: load each source document with the SAME parser `--set` uses, render it, and require
-    the rendering to be one line, separator-free and structurally identical on the way back.
-
-    MUTATION THAT REDS IT: `str()` — measured, it fails 17 of these 26 rows — or a renderer that
-    drops the round-trip verification and starts emitting approximations.
-    """
+    """Every value the `--set` parser can produce renders one-line and round-trips.
+    Killer: `str()`, measured to fail 17 of these 26 rows."""
     for doc in _DOMAIN_DOCS:
         value = yaml.safe_load(doc)
         rendered = mint_config._render_value(value, where=doc)
@@ -209,9 +155,8 @@ def test_the_header_renders_every_value_the_set_parser_can_produce() -> None:
 
 
 def test_the_domain_table_covers_every_safe_loader_tag() -> None:
-    """Anti-vacuity: the totality row above is only meaningful if its table spans the domain,
-    and the domain's generators are enumerable -- `SafeConstructor.yaml_constructors`. A new
-    PyYAML tag (or a table quietly trimmed to the passing rows) reds this."""
+    """The domain table spans every `SafeConstructor` tag, so the totality row is not vacuous
+    — a new PyYAML tag, or a table trimmed to the passing rows, reds here."""
     from yaml.constructor import SafeConstructor
 
     tags = {tag.rsplit(":", 1)[1] for tag in SafeConstructor.yaml_constructors if tag}
@@ -226,14 +171,8 @@ def test_the_domain_table_covers_every_safe_loader_tag() -> None:
 @pytest.mark.parametrize("doc", _UNRENDERABLE_DOCS)
 def test_a_value_the_header_cannot_record_refuses_the_mint_loudly(doc: str,
                                                                   tmp_path: Path) -> None:
-    """No silent fallback. `!!omap`/`!!pairs` load as lists of tuples and `safe_dump` writes
-    them back as lists of lists, so the round-trip check fails -- and the tool must then exit
-    2 naming the value, not stamp the lossy text and carry on.
-
-    MUTATION THAT REDS IT: dropping the `_identical` check, or catching `HeaderRenderError` and
-    falling back to `str()`. Either turns an unrecordable value into a lying header, which is
-    the defect this file exists to close.
-    """
+    """A value the header cannot record refuses the mint at rc 2, with no file left behind.
+    Killer: drop the `_identical` check, or fall back to `str()` on `HeaderRenderError`."""
     value = yaml.safe_load(doc)
     with pytest.raises(mint_config.HeaderRenderError, match="does not round-trip"):
         mint_config._render_value(value, where="probe")
@@ -245,14 +184,9 @@ def test_a_value_the_header_cannot_record_refuses_the_mint_loudly(doc: str,
     assert not out.exists(), "a refused mint must leave no file behind"
 
 
-# ── census half ─────────────────────────────────────────────────────────────────────────────
 def test_no_committed_minted_config_carries_a_stringified_None_header() -> None:
-    """R187's census over the LIVE set, through the ONE discovery authority (the precedent is
-    `test_config_diff_from_header.py:121` -- a flat glob is blind to `configs/prod/`).
-
-    Both slots are swept, not just the replayed one: a reader cannot tell which side of a
-    delta line is load-bearing, so both must be honest.
-    """
+    """No committed header carries a stringified `None`, swept through the ONE discovery
+    authority — a flat glob is blind to `configs/prod/`, and both slots must be honest."""
     configs = discover_configs(REPO_ROOT / "configs")
     assert configs, "no committed configs found -- a vacuous census is not a census"
     offenders = [
@@ -269,12 +203,8 @@ def test_no_committed_minted_config_carries_a_stringified_None_header() -> None:
 
 
 def test_every_committed_minted_header_is_in_canonical_replayable_form() -> None:
-    """The textual half: each slot must be exactly what the tool would stamp today. This is
-    what makes a re-mint a no-op on the header and therefore reviewable.
-
-    MUTATION THAT REDS IT: a hand-edited header line (R1's "never hand-varied" -- the header is
-    part of the file), or the renderer changing without the configs being re-minted.
-    """
+    """Each committed slot is exactly what the tool would stamp today, which is what makes a
+    re-mint a no-op on the header and therefore reviewable."""
     drifted = [
         (path.name, key, slot, text, mint_config._render_value(yaml.safe_load(text), where=key))
         for path in discover_configs(REPO_ROOT / "configs")
@@ -286,14 +216,8 @@ def test_every_committed_minted_header_is_in_canonical_replayable_form() -> None
 
 
 def test_every_committed_header_delta_agrees_with_the_config_body() -> None:
-    """The semantic half, and the one that would have caught R187's defect at run5 and at
-    smoke_preflight_armed: the value the header RECORDS must be the value the config CARRIES.
-
-    A header slot is provenance for a body value; if the two disagree the provenance is
-    fiction, whether the cause is a lossy renderer, a hand-edit, or a drifted re-mint. Only the
-    new slot can be checked this way -- the old slot belongs to the template -- and that is
-    exactly the slot a replay feeds back to `--set`.
-    """
+    """The value a header RECORDS is the value the config CARRIES, or the provenance is
+    fiction. Only the new slot is checkable this way — the old slot belongs to the template."""
     mismatched = []
     for path in discover_configs(REPO_ROOT / "configs"):
         body = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -307,18 +231,8 @@ def test_every_committed_header_delta_agrees_with_the_config_body() -> None:
 
 
 def test_the_frozen_wpmain_baseline_set_is_gone_and_stays_gone() -> None:
-    """The `b482243` baselines are DELETED (R346(f)) and this row is their tombstone.
-
-    They were a byte-frozen snapshot of eight configs at the commit WPMAIN branched from,
-    swept here for three known-historical stringified-`None` deltas. R346(f) pruned `configs/`
-    to three files and deleted thirty-eight keys, so the snapshot is a record of a tree that
-    no longer exists and the instrument that read it — `test_minted_config_remint.py` — is
-    retired with it: that file's own §1 argues that re-cutting the baseline against a later
-    tree makes its directory name false and turns every assertion vacuous.
-
-    MUTATION THAT REDS IT: re-adding a baseline directory without also re-arming the remint
-    instrument, which would leave a frozen snapshot nothing reads.
-    """
+    """The `b482243` baseline set is deleted and stays deleted. Killer: re-add the directory
+    without re-arming the retired remint instrument, leaving a snapshot nothing reads."""
     assert not BASELINE.exists(), (
         f"{BASELINE} is back. It is a byte-frozen snapshot whose only reader was the retired "
         "remint instrument; a baseline nobody diffs is a golden that cannot go stale loudly. "

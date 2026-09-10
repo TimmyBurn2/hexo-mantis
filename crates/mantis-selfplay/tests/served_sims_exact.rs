@@ -1,51 +1,24 @@
-// R8 justify: one claim — "a search serves the budget its config states, under BOTH search
-// kinds" — measured through real `SelfPlayRunner` drives. The two kinds share the counting
-// producer that IS the measurement; split it and the numbers stop being comparable, which is
-// the whole point of reading the same property on both arms.
-//! ⊕ a search serves EXACTLY `n_simulations` leaves, never more and never fewer.
+// >300 justify (R8): one claim under BOTH search kinds, through drives sharing the counting
+// producer that IS the measurement; split, the two arms' numbers stop being comparable.
+//! A search serves EXACTLY `n_simulations` leaves, never more and never fewer.
 //!
-//! THE FINDING THIS EXISTS FOR. `PERF_TRANCHE2_RESULTS.md` §7/§20 measured **53.46 served
-//! sims/move against `mcts.n_simulations: 50`** — a ~7 % overshoot — and stated it rather
-//! than correcting it. The mechanism was the last batch of a search: the PUCT loop requested
-//! a full `leaf_batch_size` while fewer than that remained in the budget, so the budget was
-//! overrun by up to `leaf_batch_size − 1` on every move. The Gumbel side had the opposite
-//! defect: a phase allocator that dropped its integer-division remainder, measured at 49 of
-//! 50 and 599 of 600.
+//! The finding this exists for: 53.46 served sims/move against `n_simulations: 50`, because the
+//! PUCT loop requested a full `leaf_batch_size` while fewer than that remained in the budget.
+//! Gumbel had the opposite defect, a phase allocator dropping its integer-division remainder,
+//! at 49 of 50 and 599 of 600. `N` now means `N leaves of network work` on both arms, root
+//! evaluation included: a fixed-node witness is unstatable while the served count disagrees
+//! with the config, and every quantity derived from `n_simulations` is wrong by that factor.
 //!
-//! BOTH ARE NOW CLOSED, AND THE ROOT IS CHARGED ON BOTH ARMS. `N` means `N leaves of
-//! network work`: the root's own evaluation is one of the N under either kind, and no config
-//! key can move that. The deleted `gumbel_root_counts` made the charge a mint decision, which
-//! meant "equal NN work at a fixed budget" was a claim a config could quietly falsify.
+//! The budget arms hold the KIND fixed and vary the radius; the run6-regime arms hold the
+//! ENCODING fixed and vary the kind, so that comparison is of searches and nothing else.
 //!
-//! WHY IT IS A MINT PRECONDITION AND NOT A PERF ITEM. R334(f)(ii) pre-registers the run6
-//! success witness as *"beats `sealbot_d5` at FIXED NODES"*. A fixed-node claim is unstatable
-//! while the served node count disagrees with the number the config carries, and every g/h
-//! derived from `n_simulations` alone is wrong by the same factor.
-//!
-//! WHICH ENCODING EACH ARM DRIVES. Every arm now drives a GRAPH encoding, because after
-//! R346(f) there is exactly one representation and one recorder left. The four budget arms
-//! (50 / 600) hold the KIND fixed at `puct` and vary the radius, `gnn_axis_v1` against
-//! `gnn_axis_r8`, so a served-sims claim is not read off one geometry; the two run6-regime
-//! arms (64 / 320) hold the ENCODING fixed at `gnn_axis_r8` and vary the kind, so the
-//! comparison between `puct` and `gumbel` is a comparison of searches and of nothing else.
-//! That second half is what the arrangement was always for — this file used to hold the
-//! recorder fixed by driving the GRID encoding under both kinds, and holding one graph row
-//! fixed is the same control with the only representation that still exists.
-//!
-//! WHAT IS MEASURED. The mock producers count every leaf they serve. With `n_workers: 1` and
-//! `random_opening_plies: 0` exactly one search is in flight at a time.
-//!
-//! WHY THE PRIMARY ASSERTION IS A COUNTER AND NOT THE PRODUCER'S TALLY. The served tally is an
-//! AGGREGATE over the drive, and a worker that has begun the next game when `stop()` lands has
-//! already served leaves for a search no record will ever account for. Measured: the tally read
-//! 401 against an expected 400 AFTER the clamp — a harness residual of one in-flight search,
-//! not a defect. `max_sims_per_search` is exact because it advances with the search it
-//! measures, and it is a MAX rather than a mean because a mean hides one overshooting search
-//! among many.
+//! The primary assertion is `max_sims_per_search`, not the served tally: the tally is an
+//! AGGREGATE, and a worker that has begun the next game when `stop()` lands has already served
+//! leaves no record accounts for — 401 against an expected 400 after the clamp. The max is
+//! exact because it advances with the search it measures.
 //!
 //! Killer / PLANTED BREAK: revert the PUCT clamp in `search_drive::run_mcts_search` and the
-//! PUCT arms red — at HEAD before the fix they read 56 served against 50 at
-//! `leaf_batch_size 8`. Stop charging the root and every arm reads N−1 or N+1.
+//! PUCT arms red — before the fix they read 56 served against 50 at `leaf_batch_size 8`.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -99,8 +72,7 @@ fn spawn_counting_producer(
     })
 }
 
-/// Drive one worker on the GRAPH path until `want_records` searched plies have been
-/// recorded, returning `(served_leaves, records, max_sims_per_search)`.
+/// Drive one worker on the GRAPH path until `want_records` searched plies are recorded.
 fn drive_graph(
     encoding: &str,
     n_simulations: usize,
@@ -141,8 +113,7 @@ fn drive_graph(
     let defect = runner.fatal_defect();
     let snap = runner.stats_snapshot();
     runner.stop();
-    // Rows finalized between the break and `stop` are still this drive's searches; the
-    // producer keeps serving until the queue closes, so both halves must be read AFTER the
+    // The producer keeps serving until the queue closes, so both halves are read AFTER the
     // join or the ratio is taken across a moving denominator.
     producer.join().expect("producer exits");
     records.extend(runner.drain_graph_records());
@@ -164,9 +135,7 @@ fn drive_graph(
     )
 }
 
-/// Drive one worker under `kind` at the run6 identity row, returning
-/// `(served_leaves, records, max_sims_per_search)`. The ENCODING is held fixed here so the
-/// only thing that varies between the two calls is the search kind.
+/// Drive one worker under `kind` at the run6 identity row, ENCODING held fixed.
 fn drive_kind(
     kind: SearchKind,
     n_simulations: usize,
@@ -181,8 +150,8 @@ fn drive_kind(
         n_simulations,
         leaf_batch_size: LEAF_BATCH,
         random_opening_plies: 0,
-        // Dirichlet is a PUCT mechanism; leaving it armed keeps the PUCT arm honest and it
-        // is inert under Gumbel by construction.
+        // Dirichlet is a PUCT mechanism, armed to keep that arm honest and inert under
+        // Gumbel by construction.
         dirichlet_enabled: true,
         search_kind: kind,
         quiescence_enabled: false,
@@ -238,8 +207,7 @@ fn assert_exact_graph(encoding: &str, n_simulations: usize, ply_cap: usize, want
          search {max_sims}"
     );
 
-    // (1) THE PROPERTY, exactly: no search served more than its budget, and at least one
-    // search spent the whole of it (so a runner that silently searched less would also red).
+    // No search served more than its budget, and at least one spent the whole of it.
     assert_eq!(
         max_sims, n_simulations as u64,
         "{encoding} @ n_simulations={n_simulations}, leaf_batch_size={LEAF_BATCH}: the widest \
@@ -249,10 +217,8 @@ fn assert_exact_graph(encoding: &str, n_simulations: usize, ply_cap: usize, want
          53.46-vs-50 ledger line recorded; an undershoot means the budget is not being spent."
     );
 
-    // (2) THE LEDGER'S OWN DENOMINATOR, bounded. `served / records` is the served-sims figure
-    // §20 published. It cannot be asserted exactly — see the header — so it is bounded by one
-    // in-flight search, which is strictly tighter than the pre-clamp reading at every shape
-    // measured (r6@50 446, r8@50 443, both @600 1204).
+    // The published `served / records` figure, bounded by one in-flight search — tighter than
+    // the pre-clamp readings (r6@50 446, r8@50 443, both @600 1204).
     let expected = records * n_simulations;
     assert!(
         served >= expected && served < expected + n_simulations,
@@ -284,11 +250,8 @@ fn r8_at_six_hundred_sims_serves_exactly_six_hundred_per_search() {
     assert_exact_graph("gnn_axis_r8", 600, 2, 2);
 }
 
-// ── the run6 target regime's own two budgets, on BOTH kinds ─────────────────────
-//
-// 64 is the fast arm's budget and 320 the full arm's. They are asserted here because a
-// served-sims claim taken at 50 and 600 says nothing about the numbers a run will actually
-// be minted at, and "N means N leaves" is the property the fixed-node witness rests on.
+// The run6 regime's own budgets on BOTH kinds: a claim taken at 50 and 600 says nothing about
+// the numbers a run is actually minted at.
 
 #[test]
 fn both_kinds_serve_exactly_sixty_four() {

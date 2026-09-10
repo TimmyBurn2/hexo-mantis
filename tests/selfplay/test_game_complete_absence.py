@@ -1,23 +1,11 @@
-"""AUDIT-1 F-28 rows C04 and C05 — the `game_complete` payload distinguishes 0 from absent.
+"""The `game_complete` and `monitor_gates` payloads distinguish a measured 0 from an absence.
 
-TWO FABRICATIONS IN ONE PAYLOAD.
+Three places where they did not: the six investigation metrics read 0 when the lever was off or
+the game recorded no moves; an unrecognised winner code resolved to a measured DRAW; and
+`_watchdog_counters` returned `{}` for both "armed, nothing failed" and "no watchdog wired".
 
-* **The six investigation metrics** (`colony_extension_stone_count` / `_total` / `_fraction`,
-  `longest_line_fraction`, `n_components`) were `0`/`0.0` whenever
-  `log_investigation_metrics` was off OR the game recorded no moves. A zero longest line and
-  a zero component count are legitimate MEASUREMENTS for other games in the same run, so the
-  lever-off case and the measured-zero case were one observable.
-* **The winner map.** `{0: -1, 1: 0, 2: 1}.get(winner_code, -1)` sent an UNRECOGNISED code to
-  `-1`, i.e. reported it as a measured DRAW — while the log line emitted from the same block
-  printed `winner=unknown` off `_WINNER_NAMES[...] if winner_code < 3 else "unknown"`. Two
-  readings of one game, and the ONE channel carried the wrong one. The captured drain golden
-  had frozen exactly this: game 6 of `dense_5s_crossed` carries `winner_code = 3`.
-
-C05 is the same class in `monitor_gates`: `_watchdog_counters` returned `{}` for both "the
-watchdog is armed and nothing has failed" and "there is no watchdog wired at all". Its
-sibling `data_loss_counters` is NOT this defect and is deliberately left alone — its
-`BestEffortCounters` registry always exists and is always counting, so an empty snapshot from
-it is a true "nothing was lost".
+The `data_loss_counters` sibling is deliberately untouched: its registry always exists and is
+always counting, so an empty snapshot from it is a true "nothing was lost".
 """
 from __future__ import annotations
 
@@ -38,10 +26,8 @@ def _run(instr: PoolInstrumentation, *, moves: list[tuple[int, int]]) -> tuple:
     )
 
 
-# ── C04: the six investigation metrics ────────────────────────────────────────────────
-
 def test_the_investigation_metrics_are_absent_when_the_lever_is_OFF() -> None:
-    """THE PIN. Six zeros before the repair."""
+    """With the lever off, the six metrics are absent rather than six zeros."""
     ext_c, ext_t, ext_f, _p90, ll, ll_frac, n_comp = _run(
         PoolInstrumentation(log_investigation_metrics=False, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=_MOVES
     )
@@ -50,7 +36,7 @@ def test_the_investigation_metrics_are_absent_when_the_lever_is_OFF() -> None:
 
 
 def test_the_investigation_metrics_are_absent_when_the_game_recorded_no_moves() -> None:
-    """The other gate on the same block — and the one the drain golden had frozen."""
+    """The other gate on the same block: a game with no moves measures nothing."""
     ext_c, ext_t, ext_f, _p90, ll, ll_frac, n_comp = _run(
         PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=[]
     )
@@ -59,9 +45,7 @@ def test_the_investigation_metrics_are_absent_when_the_game_recorded_no_moves() 
 
 
 def test_a_MEASURED_zero_still_reads_as_zero() -> None:
-    """The load-bearing control. Two adjacent stones extend nothing, so the colony count is a
-    real 0 — and that number must survive, or the repair has replaced one collision with
-    another."""
+    """Control: two adjacent stones extend nothing, so that real 0 must survive."""
     adjacent = [(0, 0), (1, 0)]
     ext_c, ext_t, ext_f, _p90, _ll, _ll_frac, n_comp = _run(
         PoolInstrumentation(log_investigation_metrics=True, cluster_threshold=DEFAULT_CLUSTER_THRESHOLD), moves=adjacent
@@ -72,11 +56,8 @@ def test_a_MEASURED_zero_still_reads_as_zero() -> None:
     assert n_comp is not None
 
 
-# ── C04: the undecodable winner ───────────────────────────────────────────────────────
-
 def test_an_unrecognised_winner_code_is_absent_not_a_draw() -> None:
-    """THE PIN. `winner_code = 3` reached the event as `-1` — a measured draw — while the log
-    line beside it said `unknown`."""
+    """An unrecognised winner code must not resolve to one of the three real outcomes."""
     import mantis.selfplay.pool_drain as pd
 
     source = pd.__loader__.get_source("mantis.selfplay.pool_drain")
@@ -88,7 +69,7 @@ def test_an_unrecognised_winner_code_is_absent_not_a_draw() -> None:
 
 
 def test_the_captured_drain_golden_no_longer_freezes_either_fabrication() -> None:
-    """The fixture is the third witness, and it had both cells in it."""
+    """The captured drain golden carries both absences and the measured values beside them."""
     import json
     from pathlib import Path
 
@@ -102,18 +83,15 @@ def test_the_captured_drain_golden_no_longer_freezes_either_fabrication() -> Non
     assert events[5]["winner"] is None, "winner_code 3 is captured as a measured draw again"
     assert events[3]["colony_extension_stone_count"] is None
     assert events[3]["n_components"] is None
-    # and the games that DID measure still carry their numbers
+    # The games that DID measure still carry their numbers.
     assert events[0]["colony_extension_stone_count"] == 12
     assert events[1]["colony_extension_stone_count"] == 0, (
         "a measured zero in the very same capture — this is why absence cannot share its value"
     )
 
 
-# ── C05: the watchdog counters ────────────────────────────────────────────────────────
-
 class _Coord:
-    """`StepCoordinator._watchdog_counters` invoked against a stand-in carrying only the one
-    attribute it reads."""
+    """Stand-in carrying only the attribute `_watchdog_counters` reads."""
 
     def __init__(self, watchdog: Any) -> None:
         self.heartbeat_watchdog = watchdog
@@ -125,13 +103,13 @@ class _Coord:
 
 
 def test_no_watchdog_wired_reports_absence_not_a_clean_bill() -> None:
-    """THE PIN. `{}` used to mean both "armed, nothing failed" and "no fire path exists"."""
+    """No watchdog wired reports absence, not an empty clean bill."""
     assert _Coord(None).counters() is None
     assert _Coord(object()).counters() is None, "a watchdog with no counters is still absent"
 
 
 def test_an_ARMED_watchdog_with_nothing_to_report_still_reports_an_empty_mapping() -> None:
-    """The control: an empty snapshot from a LIVE watchdog is a real, good measurement."""
+    """Control: an empty snapshot from a LIVE watchdog is a real measurement."""
     from mantis.monitor.best_effort import BestEffortCounters
 
     live = type("W", (), {"counters": BestEffortCounters()})()
@@ -141,15 +119,9 @@ def test_an_ARMED_watchdog_with_nothing_to_report_still_reports_an_empty_mapping
 
 
 def test_the_data_loss_counters_sibling_is_deliberately_UNCHANGED() -> None:
-    """Stated so the asymmetry is a decision, not an oversight. `PIPELINE_COUNTERS` is a
-    module-level registry that always exists and is always counting, so `{}` from it is a
-    true "nothing was lost" — not the absence C05 is about.
-
-    Re-pointed off `REPLAY_COUNTERS`, which R346(f) deleted with the dense replayers that fed
-    it: a registry no producer feeds publishes an always-empty mapping, which is the phantom
-    input LAW-07 refuses and the opposite of what this row asserts. `PIPELINE_COUNTERS` keeps
-    the property because it keeps its producers.
-    """
+    """The asymmetry is a decision: `PIPELINE_COUNTERS` always exists and is always counting,
+    so `{}` from it is a true "nothing was lost" — and a registry no producer feeds would be
+    the opposite, an always-empty mapping reading as a measurement."""
     from mantis.data import loss_counters
 
     assert loss_counters.PIPELINE_COUNTERS.snapshot() is not None

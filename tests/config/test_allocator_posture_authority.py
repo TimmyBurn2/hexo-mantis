@@ -1,49 +1,21 @@
-# >300 justify (R8). NO LINE COUNT is stated (G-DFIX-4 / R192(e), derive-or-delete).
-# The rows here are ONE claim — "the allocator posture has exactly ONE authority, is explicit
-# in every config, cannot be silently absent, and cannot be read from the environment anywhere
-# else in `src/`" — and they share one apparatus: the real loader, `discover_configs` as the
-# ONE enumeration authority, one `ast` census over `src/`, and one env-precedence table taken
-# from c10's own source. Splitting the config sweep from the census would put "every config
-# carries it" in one file and "and it can never be read behind the resolver's back" in
-# another, and those two have to hold together for the knob to mean anything at all.
-"""⊕ RECAL-PREP item 1 — the allocator posture's config authority (R308(g)(i); R1, LAW-08,
-LAW-11, R119).
+# >300 justify (R8): the rows here are ONE claim — the allocator posture has exactly ONE
+# authority, is explicit in every config, cannot be silently absent, and cannot be read from the
+# environment anywhere else in `src/` — over one apparatus: the real loader, `discover_configs`,
+# one `ast` census over `src/`, and one env-precedence table taken from c10's own source.
+"""The allocator posture's config authority.
 
-Written by ORACLE **before** the feature exists; every row below was red first.
+THE MINT POSTURE, so the rows read correctly: `allocator_posture` is a CLOSED TOKEN SET
+(`default` | `expandable_segments`) or `null`, top-level, REQUIRED, with no schema default and
+no code-side default anywhere. `null` is a PLACEHOLDER, not an off state — schema-VALID so gate
+7 stays green, runtime-REFUSED so a CUDA run on an unminted posture cannot boot.
 
-THE MINT POSTURE, RESTATED SO THE ROWS READ CORRECTLY. `allocator_posture` is a CLOSED TOKEN
-SET (`default` | `expandable_segments`) or `null`, top-level, REQUIRED, with no schema default
-and no code-side default anywhere. `null` is R119's PLACEHOLDER, not an off state: schema-VALID
-so gate 7 stays green and the repo ships complete configs, and runtime-REFUSED so a CUDA run on
-an unminted posture cannot boot. **This dispatch mints no value** — R308(g)(i) reserves the
-posture VALUE for the re-calibration sitting, measurement-derived under R282(b) — so every
-committed config and both templates carry `null`, and these rows are what make that state
-honest rather than merely empty.
-
-The defect each row is the ONLY witness to:
-
-- **AP-01** — a key minted into some configs and not others. Gate 7 alone cannot see it: gate 7
-  validates each file against the schema, and it is the field being REQUIRED that turns absence
-  into an error. This row is what proves it is required rather than optional-with-a-default.
-- **AP-02** — a code-side default. The class R1 exists to kill, and the one with the worst
-  failure mode available here: a cap fitted under one posture, silently run under another.
-- **AP-03** — `null` quietly meaning "whatever the launch happens to be". That is a minted value
-  with an unminted precondition, which is what the sitting halted over.
-- **AP-04** — the assertion reading the WRONG environment variable. c10 reads
-  `PYTORCH_CUDA_ALLOC_CONF` FIRST and falls back to `PYTORCH_ALLOC_CONF`
-  (`c10/cuda/CUDAAllocatorConfig.h`), while torch's own prose calls the latter "the primary
-  environment variable". A check written from the prose is backwards, and a one-direction test
-  passes on a backwards implementation whenever only one variable is set — which is every
-  ordinary launch. Both directions are pinned.
-- **AP-05** — a FOREIGN conf reading as the minted one. `expandable_segments:True,
-  max_split_size_mb:128` is a regime nobody fitted; comparison is over the PARSED mapping, not
-  the string, and an extra key refuses.
-- **AP-06** — a second env reader in `src/`. An `ast` census with its own positive control, so
-  an empty census cannot pass for clean.
-- **AP-07** — the eval child skipping the assertion because its posture arrived as `None`. The
-  child is a SECOND allocator on the same card; a silent skip there is the whole hole.
-- **AP-08** — the armed-abort row reading a token as disarmed (or `null` as armed), which would
-  make gate 12's report of this knob a lie in either direction.
+The defect each row is the ONLY witness to: a key minted into some configs and not others; a
+code-side default, whose worst failure mode is a cap fitted under one posture and run under
+another; `null` quietly meaning "whatever the launch happens to be"; the assertion reading the
+WRONG variable, since c10 reads `PYTORCH_CUDA_ALLOC_CONF` FIRST and falls back to
+`PYTORCH_ALLOC_CONF`; a FOREIGN conf reading as the minted one; a second env reader in `src/`;
+the eval child skipping the assertion on a `None` posture; and the armed-abort row reading a
+token as disarmed or `null` as armed.
 """
 from __future__ import annotations
 
@@ -76,7 +48,6 @@ TEMPLATES_DIR = REPO_ROOT / "tools" / "config_templates"
 RESOLVER_REL = "mantis/config/resolve/allocator_posture.py"
 
 
-# ── AP-01 / AP-03: the key is explicit in every config, and it is the placeholder ────────
 def test_ap01_every_committed_config_declares_the_posture_key():
     """Every config `discover_configs` enumerates carries `allocator_posture` explicitly."""
     configs = discover_configs(CONFIGS_DIR)
@@ -87,8 +58,7 @@ def test_ap01_every_committed_config_declares_the_posture_key():
 
 
 def test_ap01_both_mint_templates_declare_the_posture_key():
-    """A template that omits it would mint configs that omit it (and then fail gate 7 —
-    loudly, but one layer later than the template that caused it)."""
+    """A template that omits it would mint configs that omit it, failing gate 7 one layer later."""
     import yaml
 
     templates = sorted(TEMPLATES_DIR.glob("*.yaml"))
@@ -99,25 +69,10 @@ def test_ap01_both_mint_templates_declare_the_posture_key():
 
 
 def test_ap03_every_committed_config_MINTS_A_MEASURED_POSTURE():
-    """The RE-SIT'S OWN MINT ACT, arriving. R326 / RECAL-SITTING-5, 2026-08-31.
-
-    THE ROW IS INVERTED, NOT RELAXED, and its own predecessor asked for exactly this: it read
-    *"every committed config mints the `null` placeholder"* and said in its docstring that it
-    *"is EXPECTED to be edited by the re-sit's own mint act — with a value beside it."* The
-    value is beside it now: **`expandable_segments`**, the regime the fragmentation ratio
-    1.2487863035511424 was measured under at the box, and the regime the fitted
-    `inference.fused_graph_caps` are therefore only valid under.
-
-    WHAT THIS STILL CATCHES, which is why inverting is not weakening: a config that reverts to
-    `null` reds (the run would refuse to boot and nobody would know until it did), and a config
-    that mints a token OUTSIDE the closed vocabulary reds (a regime nobody measured, which is
-    the original defect wearing a different value). The set is read off `AllocatorPosture`
-    itself, so a third regime added to the enum needs no edit here.
-
-    WHAT IT DELIBERATELY DOES NOT DO: pin WHICH member. R119 keeps the value the operator's,
-    and a row asserting `== "expandable_segments"` would make a future re-calibration edit this
-    file to change a measurement.
-    """
+    """Every committed config MINTS A MEASURED POSTURE — INVERTED from its placeholder-era
+    predecessor, not relaxed. It still catches a config reverting to `null` (the run would refuse
+    to boot and nobody would know until it did) and one minting a token OUTSIDE the closed
+    vocabulary, read off `AllocatorPosture` itself. It does NOT pin WHICH member."""
     vocabulary = {p.value for p in AllocatorPosture}
     for path in discover_configs(CONFIGS_DIR):
         posture = load_config(path).allocator_posture
@@ -133,14 +88,9 @@ def test_ap03_every_committed_config_MINTS_A_MEASURED_POSTURE():
         )
 
 
-# ── AP-01: absence is a load error, never a default ──────────────────────────────────────
 def test_ap01_a_config_missing_the_key_fails_to_load(tmp_path):
-    """Planted break: delete the key from a real minted config -> ValueError at load.
-
-    `pydantic.ValidationError` IS a `ValueError` (checked in this tree), so the packet's
-    "missing key = hard ValueError" is satisfied by the field being REQUIRED — not by a
-    hand-written check that could be skipped.
-    """
+    """PLANTED BREAK: delete the key from a real minted config -> ValueError at load, satisfied
+    by the field being REQUIRED rather than by a hand-written check that could be skipped."""
     import yaml
 
     raw = yaml.safe_load((CONFIGS_DIR / "run6.yaml").read_text(encoding="utf-8"))
@@ -163,14 +113,9 @@ def test_ap02_the_schema_field_carries_no_default():
 
 
 def _conf_strings_in_operative_position(tree: ast.AST) -> list[str]:
-    """String constants that look like an allocator conf AND sit where one would ACT.
-
-    Assignments, comparisons, dict keys/values and returns — never a docstring, never a
-    keyword-argument prose block, and (being an AST walk) never a `#` comment. That exclusion
-    is not a convenience: a raw-text census would flag this repo's own explanatory prose, and
-    the repo has already ruled on that shape — it "teaches people to word documents around a
-    gate", and the honest form is to look at where a value could take effect.
-    """
+    """Return string constants that look like an allocator conf AND sit where one would ACT —
+    assignments, comparisons, dict keys/values and returns, never a docstring and (being an AST
+    walk) never a `#` comment. A raw-text census would flag the repo's own explanatory prose."""
     hits: list[str] = []
 
     def _consider(node: ast.AST | None) -> None:
@@ -222,7 +167,6 @@ def test_ap02_the_operative_position_census_has_both_controls(tmp_path):
     assert _conf_strings_in_operative_position(prose_only) == []
 
 
-# ── AP-03: the resolver's refusals ───────────────────────────────────────────────────────
 def test_ap03_absent_section_raises_naming_the_level():
     with pytest.raises(MissingAllocatorPostureError) as exc:
         resolve_allocator_posture({"train": {}})
@@ -254,7 +198,6 @@ def test_ap03_every_token_resolves_and_names_its_required_conf(token):
     assert isinstance(spec.required_conf, dict)
 
 
-# ── AP-04: c10's environment precedence, in BOTH directions ──────────────────────────────
 def test_ap04_the_variable_pair_is_the_pair_c10_reads():
     assert ALLOC_CONF_VARS == ("PYTORCH_CUDA_ALLOC_CONF", "PYTORCH_ALLOC_CONF")
 
@@ -290,10 +233,8 @@ def test_ap04_an_empty_string_is_the_empty_conf_but_names_its_variable():
 
 
 def test_ap04_both_variables_set_and_disagreeing_is_AMBIGUOUS_not_a_guess():
-    """The one edge c10's shipped headers do not settle: whether an EMPTY value counts as
-    set. Reported ambiguous and REFUSED, rather than resolved by whichever answer is
-    convenient — guessing which variable the allocator honoured is how a cap gets certified
-    against a regime nobody was in."""
+    """Whether an EMPTY value counts as set is the one edge c10's headers do not settle, so it is
+    reported ambiguous and REFUSED rather than guessed."""
     live = read_live_allocator_conf(
         {"PYTORCH_CUDA_ALLOC_CONF": "", "PYTORCH_ALLOC_CONF": "expandable_segments:True"}
     )
@@ -319,8 +260,8 @@ def test_ap04_both_variables_set_and_AGREEING_is_not_ambiguous():
     ("raw", "expected"),
     [
         ("expandable_segments:True", {"expandable_segments": "True"}),
-        # c10's `ConfigTokenizer` skips EVERY isspace character, wherever it appears — not
-        # merely leading/trailing. So this is the same conf to torch and must be here too.
+        # c10's `ConfigTokenizer` skips EVERY isspace character, wherever it appears, so this is
+        # the same conf to torch and must be here too.
         ("  expandable_segments : True  ", {"expandable_segments": "True"}),
         ("expandable_ segments:Tr ue", {"expandable_segments": "True"}),
         ("a:1,b:2", {"a": "1", "b": "2"}),
@@ -333,14 +274,9 @@ def test_ap04_parse_follows_c10s_own_grammar(raw, expected):
 
 
 def test_ap04_case_is_LOAD_BEARING_and_is_not_normalised_away():
-    """`toBool` accepts EXACTLY `True`/`False` and `TORCH_CHECK_VALUE`s on anything else
-    (`c10/core/AllocatorConfig.h`), and keys are matched by exact token equality against
-    lower-case literals. So `expandable_segments:true` is NOT a spelling variant of the
-    regime — **torch refuses it** — and a check that lower-cased would bless an environment
-    the allocator will not accept, then print that spelling as the remedy.
-
-    An earlier cut of this module did exactly that. This row is the red-team finding, kept.
-    """
+    """`toBool` accepts EXACTLY `True`/`False` and keys match by exact token equality, so
+    `expandable_segments:true` is not a spelling variant — torch REFUSES it — and a check that
+    lower-cased would bless an environment the allocator will not accept."""
     assert parse_alloc_conf("expandable_segments:true") != parse_alloc_conf(
         "expandable_segments:True"
     )
@@ -352,7 +288,7 @@ def test_ap04_case_is_LOAD_BEARING_and_is_not_normalised_away():
 
 
 def test_ap04_the_launch_hint_is_a_spelling_torch_actually_accepts():
-    """The refusal names a launch line, and an operator will paste it. `toBool` accepts only
+    """The refusal names a launch line an operator will paste, and `toBool` accepts only
     `True`/`False`, so a hint carrying `true` would send them into a TORCH_CHECK_VALUE."""
     from mantis.config.resolve.allocator_posture import AllocatorPostureSpec
 
@@ -366,7 +302,6 @@ def test_ap04_the_launch_hint_is_a_spelling_torch_actually_accepts():
         assert var in default_hint
 
 
-# ── AP-05 / the boot assertion ───────────────────────────────────────────────────────────
 def test_ap05_matching_posture_passes_and_records_what_it_read():
     record = assert_posture_token(
         "expandable_segments", device_type="cuda",
@@ -438,32 +373,17 @@ def test_ap03_a_cpu_process_on_a_null_posture_boots():
     assert record["enforced"] is False
 
 
-# ── AP-07: the eval child does not trust a None it should never have received ────────────
 def test_ap07_a_cuda_child_with_no_posture_token_raises():
     with pytest.raises(AllocatorPostureMismatchError) as exc:
         assert_posture_token(None, device_type="cuda", environ={})
     assert "cuda" in str(exc.value).lower()
 
 
-# ── AP-06: ONE env reader in `src/`, by AST census, with a positive control ──────────
 def _alloc_conf_var_constants(tree: ast.AST) -> list[str]:
-    """Every string constant naming an allocator-conf ENVIRONMENT VARIABLE.
-
-    STRUCTURE, not text (R296(f)): a `#` comment mentioning the variable is not a read, and an
-    AST walk cannot be fooled by an aliased `import os as _o` or by an attribute call.
-
-    The census keys on the VARIABLE NAME rather than on the `os.environ` access, and that is
-    the deliberate choice: the one authority itself reads the pair through
-    `ALLOC_CONF_VARS`, so a census keyed on `os.environ["PYTORCH_..."]` subscripts would find
-    ZERO sites — including the authority — and an empty census that passes is the shape this
-    repo has already been bitten by. Keyed on the name, the authority is the ONE module that
-    names them and every would-be second reader has to name them too.
-
-    THE LIMIT, STATED: a module that assembled the variable name at runtime would evade this.
-    That is not a hole worth more machinery — the point of the row is that a second reader
-    cannot land by accident or by copy-paste, and a deliberately obfuscated one is not the
-    failure mode a config gate defends against.
-    """
+    """Return every string constant naming an allocator-conf ENVIRONMENT VARIABLE. STRUCTURE,
+    not text, so a `#` comment is not a read. Keyed on the VARIABLE NAME rather than the
+    `os.environ` access, because the authority reads the pair through `ALLOC_CONF_VARS` and a
+    subscript-keyed census would find ZERO sites. THE LIMIT: a name assembled at runtime evades it."""
     keys = set(ALLOC_CONF_VARS) | {"PYTORCH_HIP_ALLOC_CONF"}
     return [node.value for node in ast.walk(tree)
             if isinstance(node, ast.Constant) and node.value in keys]
@@ -486,8 +406,7 @@ def test_ap06_exactly_one_module_in_src_names_the_alloc_conf_environment_variabl
 
 
 def test_ap06_the_census_sees_an_aliased_env_read(tmp_path):
-    """An allowlist never shown to reject anything is indistinguishable from one that
-    accepts everything (0bb4381's lesson, paid for once already)."""
+    """An allowlist never shown to reject anything is indistinguishable from one accepting all."""
     planted = tmp_path / "smuggler.py"
     planted.write_text(
         "import os as _o\n"
@@ -509,15 +428,13 @@ def test_ap06_the_census_does_not_fire_on_a_comment(tmp_path):
 
 
 def test_ap06_the_one_authority_reads_the_pair_and_the_pair_is_c10s():
-    """The census above is only as good as the module it allows. This row is what says the
-    allowed module actually reads BOTH variables — an allowlist over a reader that reads one
-    of the two would pass while the other went unchecked."""
+    """The census is only as good as the module it allows: an allowlist over a reader that reads
+    one of the two variables would pass while the other went unchecked."""
     source = (REPO_ROOT / "src" / RESOLVER_REL).read_text(encoding="utf-8")
     named = set(_alloc_conf_var_constants(ast.parse(source)))
     assert set(ALLOC_CONF_VARS) <= named
 
 
-# ── AP-08: the armed-abort row ───────────────────────────────────────────────────────────
 def _row(name: str):
     matches = [r for r in MANIFEST if r.name == name]
     assert len(matches) == 1, f"expected exactly one {name!r} row, found {len(matches)}"
@@ -533,15 +450,9 @@ def test_ap08_the_row_exists_and_names_the_top_level_key():
 
 
 def test_ap08_the_row_is_REQUIRED_and_therefore_unowned_and_still_pinned():
-    """FLIPPED at RECAL-SITTING-5's mint (R326). The measurement the row was waiting for exists.
-
-    `owner` is **None, not absent** — F-RESIT-5: `ArmedAbort` takes it positionally, so dropping
-    the keyword is a `TypeError` at import rather than a green gate. This sitting rediscovered
-    that by doing it, exactly where Δ8 said it would happen.
-
-    The pin STAYS. A REQUIRED row is more tamper-sensitive than a deferred one, not less: it now
-    gates every push, so a resolver refusal that was deleted or renamed would turn this row into
-    the phantom gate input LAW-07 exists to prevent."""
+    """The row is REQUIRED and therefore unowned, and still pinned. `owner` is None, NOT ABSENT:
+    `ArmedAbort` takes it positionally, so dropping the keyword is a `TypeError` at import. The
+    pin stays, because a deleted refusal would make this the phantom gate input LAW-07 prevents."""
     row = _row("allocator_posture_minted")
     assert row.status is Status.REQUIRED
     assert row.owner is None, (
@@ -572,17 +483,9 @@ def test_ap08_the_token_predicate_is_real_in_both_directions(value, armed):
                                        if m is not Mechanism.CONFIG_ENUM_VALUED])
 @pytest.mark.parametrize("value", [None, 0, 1, -1, True, False])
 def test_ap08_the_existing_predicates_are_byte_unchanged_by_the_new_member(mechanism, value):
-    """A new enum member must change no other row's verdict. `CONFIG_THRESHOLD_BELOW_CEILING`
-    is exercised with no ceiling, which is its own documented DISARMED answer.
-
-    THIS CENSUS FIRED ON THE R334(b) MEMBER and that is it working: a `KeyError` on an
-    undeclared mechanism is what forces a new member's verdict to be STATED here rather than
-    inherited. `CONFIG_THRESHOLD_GT_ZERO_WITH_LIVE_PRODUCER`'s entry is not a copy of the
-    `> 0` row — it is the same OBJECT, which is the claim shape A rests on: with no probe
-    answer supplied the two mechanisms are one predicate, so CI gate 12's verdicts cannot
-    move. Spelling the expression out twice would let them drift apart silently, which is the
-    thing this test exists to catch.
-    """
+    """A new enum member must change no other row's verdict. A `KeyError` on an undeclared
+    mechanism forces a new member's verdict to be STATED here rather than inherited, and the
+    live-producer member's entry is the same OBJECT as the `> 0` row, not a copy of it."""
     gt_zero = (not isinstance(value, bool) and isinstance(value, (int, float))
                and float(value) > 0.0)
     expected = {
@@ -595,28 +498,19 @@ def test_ap08_the_existing_predicates_are_byte_unchanged_by_the_new_member(mecha
 
 
 def test_ap08_gate_12_audit_passes_with_the_row_now_REQUIRED(tmp_path):
-    """The row now GATES, and the gate must be green — measured by running it, not reasoned
-    about (`${PIPESTATUS[0]}` discipline: rc read directly, never through a pipe).
-
-    THE ASSERTION MOVED FROM "IT PRINTS" TO "IT PASSES", and that is the whole point of the
-    flip. While DEFERRED the row printed loudly and gated nothing, so the only thing worth
-    asserting was that it printed. REQUIRED means every production config must carry an armed
-    posture or this gate reds — so rc 0 is now a statement about the CONFIGS, and a config that
-    reverted to `null` would fail here rather than being announced."""
+    """The row now GATES, and the gate must be green — measured by running it, with rc read
+    directly rather than through a pipe. The assertion moved from "it prints" to "it passes":
+    while DEFERRED the row gated nothing, so rc 0 is now a statement about the CONFIGS."""
     proc = subprocess.run(
         [sys.executable, "tools/ci_gates/preflight_mint.py", "--audit-only"],
         cwd=REPO_ROOT, capture_output=True, text=True, check=False,
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
 
-# ── the boot sites, derived from the tree rather than asserted in prose ──────────────────
 def test_the_run_process_asserts_before_its_first_cuda_allocation():
-    """The assertion must precede `init_trainer` in `build_run_collaborators`.
-
-    Structural, not a comment: an assertion that lands after the trainer is built has already
-    let the allocator be constructed under the wrong regime, which is the entire failure it
-    exists to prevent. This reads the ORDER of the two statements out of the AST.
-    """
+    """The assertion must precede `init_trainer` in `build_run_collaborators`, read as statement
+    ORDER out of the AST: an assertion after the trainer is built has already let the allocator
+    be constructed under the wrong regime."""
     import ast as _ast
 
     source = (REPO_ROOT / "src" / "mantis" / "run.py").read_text(encoding="utf-8")
@@ -639,14 +533,9 @@ def test_the_run_process_asserts_before_its_first_cuda_allocation():
 
 
 def test_the_eval_seam_threads_the_declared_token_and_the_child_is_what_judges_it():
-    """`compose_run` THREADS the declared posture; the CHILD asserts it.
-
-    The split is where the device knowledge is: `compose_run` does not know the eval child's
-    device the way the child does, and `declared_allocator_posture` therefore refuses garbage
-    and passes the R119 placeholder through rather than pronouncing on runnability. The child
-    raises on a `None` token whenever its own `worker_device` is cuda, so the placeholder is
-    still refused — at the seam that can name what is wrong.
-    """
+    """`compose_run` THREADS the declared posture and the CHILD asserts it, because the child is
+    where the device knowledge is: the seam passes the placeholder through, and the child raises
+    on a `None` token whenever its own `worker_device` is cuda."""
     source = (REPO_ROOT / "src" / "mantis" / "run.py").read_text(encoding="utf-8")
     assert "_declared_allocator_posture(config.model_dump())" in source
     worker = (REPO_ROOT / "src" / "mantis" / "eval" / "worker.py").read_text(encoding="utf-8")
@@ -664,15 +553,9 @@ def test_the_declared_reader_passes_the_placeholder_but_refuses_garbage():
         declared_allocator_posture({})
 
 def test_the_device_token_is_spelled_once_and_the_root_asks_a_predicate():
-    """R126 / DESIGN §1.2 item 3: `mantis.run` may not hardcode a device string.
-
-    Found by RUNNING the tier, not by reading the diff: the first cut of the eval-seam
-    threading compared `worker_device.split(":")[0] == "cuda"` inside `compose_run` and tripped
-    `test_train_device_authority.py::test_the_composition_root_hardcodes_no_device_string`. The
-    token now lives once, beside the posture, and the root asks `governs_device(...)`. This row
-    is what keeps it there — and it is the reason the two consumers (the composition root and
-    the eval child) cannot drift about which devices the regime applies to.
-    """
+    """`mantis.run` may not hardcode a device string. The first cut compared
+    `worker_device.split(":")[0] == "cuda"` inside `compose_run` and tripped the device authority
+    test; the token now lives once beside the posture and the root asks a predicate."""
     from mantis.config.resolve.allocator_posture import governs_device
 
     assert governs_device("cuda") and governs_device("cuda:1")

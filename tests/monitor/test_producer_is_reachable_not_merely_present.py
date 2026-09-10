@@ -1,28 +1,12 @@
 """A manifest producer must be CALLABLE from production, not merely importable.
 
-AUDIT-1 F-33's PIN, landed on its own. `verify_manifest` resolves a `kind: symbol` row by
-importing the module and resolving the dotted attribute — an EXISTENCE check. It cannot tell a
-live producer from one whose every production call site has been deleted, and that is not
-hypothetical: `buffer_persist.try_save_buffer` is the only incrementer of
-`buffer_save_errors_total`, which `coordinator/step.py` publishes in the `monitor_gates`
-payload, while BOTH its call sites were removed by R178(a)/R116. The counter's own mutation
-self-test calls the function DIRECTLY, so it stays green for a field production cannot move.
+`verify_manifest` resolves a `kind: symbol` row by importing the module and resolving the
+dotted attribute — an existence check that cannot tell a live producer from one whose every
+production call site has been deleted. This census adds: every `kind: symbol` row's function
+has at least one caller outside `tests/`.
 
-**F-33's DELETION half is BANKED and that state stands** — `docs/design/repo_design.md`'s v5→v6
-amendment item 3 rules the helper survives on R178(c)'s ground ("buffer persistence returns, if
-at all, as ONE design under CARD-RESUME; nobody builds any piece of it separately") and DISCLOSES
-the consequence in as many words: the gauge "is now visibly, rather than invisibly, pinned at
-zero until CARD-RESUME lands." Overturning a recorded contract decision is the architect's call,
-not a repair leg's. So the pin lands and the deletion does not — and the pin is what stops the
-NEXT one of these being invisible. It does not fire on `buffer_save_errors_total`, which carries
-no manifest row.
-
-WHAT THIS ADDS: for every `kind: symbol` row, the named function must have at least one caller
-outside `tests/`. A row whose producer is only ever called by its own test is the shape above.
-
-WHAT IT DELIBERATELY DOES NOT DO: it does not check that the caller is REACHED at run time —
-that is a whole-program question no static census answers, and claiming it would be the wider
-false certainty this repo keeps closing. It checks the one thing that is checkable and was false.
+It deliberately does NOT check that the caller is REACHED at run time — a whole-program
+question no static census answers.
 """
 from __future__ import annotations
 
@@ -36,28 +20,22 @@ from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH, load_manifest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 #: Producer symbols whose only non-test caller is legitimately absent, with grounds. Asserted
-#: for EQUALITY, so a row that stops being true reds as loudly as a new offender.
+#: for equality, so a stale row reds as loudly as a new offender.
 DECLARED_CALLERLESS: dict[str, str] = {}
 
 
 def _leaf_name(symbol: str) -> str:
-    """The attribute a dotted producer symbol ends in — the name a caller would write."""
+    """Return the attribute a dotted producer symbol ends in: the name a caller would write."""
     return symbol.rsplit(".", 1)[-1]
 
 
 def _called_names(root: Path) -> set[str]:
-    """Every name REACHED as a callable anywhere under `root`, by three routes.
+    """Return every name reached as a callable under `root`, by three routes.
 
-    THREE, and each was found by this census firing on a live producer before it was widened —
-    which is the same shape as the audit's own name-scoped census missing a fifth walker:
-
-      1. CALL POSITION — `f(...)`, `obj.f(...)`.
-      2. AN IMPORT ALIAS — `from m import batch_fill_pct as _batch_fill_pct` then
-         `_batch_fill_pct(self)`. The manifest names the ORIGINAL; the call site writes the
-         alias, and a census that reads only call names calls a live producer dead.
-      3. A `getattr` STRING — `getattr(coord, "on_eval_round_complete", None)`. The seam that
-         routes eval results to the sealbot-WR consumer is reached exactly this way, so a
-         census blind to it would have retired the gate's only feed path.
+      1. Call position — `f(...)`, `obj.f(...)`.
+      2. An import alias — the manifest names the original, the call site writes the alias.
+      3. A `getattr` string — `getattr(coord, "on_eval_round_complete", None)` is how the
+         sealbot-WR consumer's only feed path is reached.
     """
     out: set[str] = set()
     for path in sorted(root.rglob("*.py")):
@@ -88,7 +66,7 @@ def _called_names(root: Path) -> set[str]:
 
 
 def _symbol_rows() -> list[tuple[str, str]]:
-    """`(row id, dotted symbol)` for every `kind: symbol` producer in the shipped manifest."""
+    """Return `(row id, dotted symbol)` for every `kind: symbol` producer in the manifest."""
     doc = load_manifest(DEFAULT_MANIFEST_PATH)
     rows: list[tuple[str, str]] = []
     for gate in doc.get("gates") or []:
@@ -113,8 +91,7 @@ def test_every_symbol_producer_has_a_caller_outside_tests():
     orphans = {
         f"{row_id}: {symbol}"
         for row_id, symbol in rows
-        # An ATTRIBUTE producer (`self.x`) is a value, not a callable — the leaf is the last
-        # segment either way, and a value that is never "called" is not evidence of anything.
+        # An attribute producer (`self.x`) is a value, not a callable, so never "called".
         if _leaf_name(symbol) not in production_calls
         and _leaf_name(symbol) in _called_names(REPO_ROOT / "tests")
     }
@@ -131,7 +108,7 @@ def test_every_symbol_producer_has_a_caller_outside_tests():
 
 
 def test_the_census_FIRES_on_a_producer_whose_only_caller_is_a_test(tmp_path: Path):
-    """LAW-07 positive control: build the exact shape F-33 found and prove it is caught."""
+    """Positive control: a producer whose only caller is a test is caught."""
     (tmp_path / "src").mkdir()
     (tmp_path / "tests").mkdir()
     (tmp_path / "src" / "prod.py").write_text(
@@ -146,12 +123,8 @@ def test_the_census_FIRES_on_a_producer_whose_only_caller_is_a_test(tmp_path: Pa
 
 
 def test_the_census_does_NOT_fire_on_a_producer_with_a_real_caller(tmp_path: Path):
-    """The negative control, driven on all THREE reach routes.
-
-    A census that fires on a live producer trains readers to skip it — and this one DID fire on
-    three live producers before it was widened, once per route. Each arm below is the exact
-    shape that made it fire.
-    """
+    """Negative control, driven on all three reach routes: each once made the census fire on a
+    live producer."""
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "direct.py").write_text(
         "def a_live_producer():\n    return 1\n\n\ndef caller():\n    return a_live_producer()\n",
@@ -179,7 +152,7 @@ def test_the_census_does_NOT_fire_on_a_producer_with_a_real_caller(tmp_path: Pat
 
 def test_the_call_census_refuses_to_report_clean_on_an_empty_tree(tmp_path: Path):
     """Vacuity control: an empty scan yields an empty set, which satisfies any subset test for
-    free. The real assertion carries a floor on the call count, and this records why."""
+    free, so the real assertion carries a floor on the call count."""
     assert _called_names(tmp_path) == set()
     with pytest.raises(AssertionError):
         assert len(_called_names(tmp_path)) > 100

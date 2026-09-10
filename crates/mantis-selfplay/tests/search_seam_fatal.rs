@@ -1,35 +1,16 @@
-// R8 justify: the legs are ONE claim with ONE construction — a seam failure and a
-// drain shutdown are the SAME `Err` arriving at the SAME line, and the only thing that
-// separates them is the discriminator under test. They share the mock producer, the
-// `ThenDo` switch that is the whole experiment, and the healthy-prefix constant; splitting
-// failure from shutdown across files would put the two halves of one flip-set where a
-// reader can green one and never run the other.
-//! ⊕ F-816-9 Phase C — the SEAM conjunct pin (R275(b) conjunct 1, LAW-14/LAW-18).
+// R8 justify: the legs are ONE claim with ONE construction — a seam failure and a drain shutdown
+// are the SAME `Err` arriving at the SAME line, separated only by the discriminator under test,
+// over one shared producer and switch.
+//! Pin the leaf-inference seam: a FAILED inference must never become a search reporting
+//! `Completed`, and a drain shutdown must not be mistaken for one.
 //!
-//! Subject: `search_drive::infer_and_expand{,_graph}` must never turn a FAILED leaf
-//! inference into a search that reports `Completed`. Pre-fix every failure arm was
-//! `return 0`: the waiter's reason string travelled back verbatim (D6) and was dropped,
-//! the sim loop broke on `n == 0`, `run_mcts_search` returned `Completed`, and a search
-//! that backed up zero visits reached the target exporter — which manufactured a policy
-//! target out of ε-noise-mixed priors. On the box that presented, 100+ plies later, as a
-//! `VisitSlotsExceeded` refusal naming neither the failure nor the leaf (Phase A §4).
+//! A failure arm that returns 0 lets a search that backed up zero visits reach the target
+//! exporter, which manufactures a policy target out of noise-mixed priors — surfacing 100+ plies
+//! later as an unrelated refusal. But `stop()` also wakes every in-flight waiter with `Err`, so a
+//! fix that made every `Err` run-fatal would report a defect on every clean stop.
 //!
-//! FLIP-SET (a): an injected inference failure mid-game dies LOUD at the seam and nothing
-//! reaches the exporter or the buffer. R346(f) deleted the dense arm and its queue, so the
-//! graph arm is the whole of the live path; the counter is still published arm-independently
-//! (R256), and the ARM name still rides the message, which is what would show if a second
-//! arm ever returned.
-//!
-//! THE DISCRIMINATOR IS THE OTHER HALF OF THE PIN. `stop()` flips `running=false` and then
-//! closes the queue, waking every in-flight waiter with `Err` — the §P22/D12
-//! drain-shutdown path. A seam fix that made every `Err` run-fatal would turn every clean
-//! stop into a reported defect, which is a worse failure than the one being fixed. The
-//! shutdown leg below is RED under that naive fix and GREEN under the shipped one.
-//!
-//! Killers: M-SEAM-1 (restore `Err(_) => return 0` in the seam arm — the failure leg times
-//! out RED); M-SEAM-2 (drop the `is_closed()` discriminator and fail unconditionally — the
-//! shutdown leg goes RED); M-SEAM-3 (tick `fires` instead of `inference_failures` in the
-//! latch — the conjunct-separation asserts go RED).
+//! Killers: restore `Err(_) => return 0` in the seam arm (the failure leg times out RED); drop the
+//! `is_closed()` discriminator (the shutdown leg goes RED); tick the wrong counter in the latch.
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -41,23 +22,17 @@ use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-/// Requests served OK before the injected failure begins. Non-zero so the failure lands
-/// MID-SEARCH rather than at the very first root expansion (which would exercise the
-/// RootExpansionFailed arm instead of the sim-loop arm).
+/// Requests served OK first, so the failure lands MID-SEARCH rather than at the root expansion.
 const SERVE_OK_BEFORE_FAILURE: usize = 6;
 const INJECTED_REASON: &str = "Graph inference failed: injected forward failure";
 
 /// What a mock producer does once it has served its healthy prefix.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ThenDo {
-    /// Fail every subsequent batch, the way the real inference server does on a forward
-    /// exception (`submit_graph_inference_failure`).
+    /// Fail every subsequent batch, as the real inference server does on a forward exception.
     Fail,
-    /// POP the batch and never answer it, then idle. This is what makes the shutdown legs
-    /// DETERMINISTIC rather than timing-hopeful: once a batch is popped and unanswered its
-    /// waiter is provably blocked, so `stop()`'s `close()` is guaranteed to wake a real
-    /// in-flight waiter with `Err`. A test that merely sleeps and stops may find no waiter
-    /// in flight at all and would then pass under the very mutation it exists to kill.
+    /// POP the batch and never answer it: a waiter is then provably blocked, which is what makes
+    /// the shutdown legs deterministic rather than timing-hopeful.
     ParkHoldingTheBatch,
 }
 
@@ -77,12 +52,7 @@ fn graph_runner() -> SelfPlayRunner {
     .expect("gnn runner constructs")
 }
 
-
-/// Mock graph producer (the target_wire_carry / target_latch_propagation pattern):
-/// uniform probs through the PRODUCTION `assemble_ls_from_gnn_probs`. Once
-/// `SERVE_OK_BEFORE_FAILURE` requests have been served it switches to `after` — for
-/// `ThenDo::Fail` that is the same `fail_remaining` path the real inference server uses on
-/// a forward exception (`inference_server.py` → `submit_graph_inference_failure`).
+/// Uniform probs through the PRODUCTION assembly, switching to `after` after the healthy prefix.
 fn spawn_graph_producer(
     queue: GraphQueue,
     n_actions: usize,
@@ -153,15 +123,13 @@ fn wait_for(secs: u64, mut done: impl FnMut() -> bool) -> bool {
     false
 }
 
-// ── FLIP-SET (a): the failure legs ───────────────────────────────────────────────────
-
 #[test]
 fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
     let spec = lookup_or_panic("gnn_axis_v1");
     let runner = graph_runner();
 
-    // LAW-18 idle posture: the counter is VISIBLE at 0 before anything runs, which is
-    // what distinguishes "no failures" from "no producer".
+    // The counter is VISIBLE at 0 before anything runs, which distinguishes "no failures"
+    // from "no producer".
     assert_eq!(runner.stats_snapshot().inference_failures_total, 0);
     assert!(runner.fatal_defect().is_none());
 
@@ -219,9 +187,6 @@ fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
     );
 }
 
-
-// ── The discriminator: a drain shutdown is NOT a defect ──────────────────────────────
-
 #[test]
 fn graph_drain_shutdown_is_not_an_inference_failure() {
     let spec = lookup_or_panic("gnn_axis_v1");
@@ -237,12 +202,8 @@ fn graph_drain_shutdown_is_not_an_inference_failure() {
     );
 
     runner.start();
-    // The §P22 drive, made DETERMINISTIC: wait until the producer has POPPED a batch it
-    // will never answer, so a waiter is provably blocked. `stop()` then closes both queues
-    // and that waiter wakes with `Err` — the exact arm the discriminator must not call a
-    // defect. Waiting on `served` instead would be timing-hopeful: the worker might have no
-    // batch in flight at close, and this oracle would then pass under M-SEAM-2. It did,
-    // when first written — measured, not supposed.
+    // Wait until a batch is POPPED and unanswered, so a waiter is provably blocked at close;
+    // waiting on `served` instead was measured leaving nothing in flight and passing the killer.
     let blocked = wait_for(120, || parked.load(Ordering::SeqCst));
     runner.stop();
     producer.join().expect("producer exits");
@@ -266,24 +227,12 @@ fn graph_drain_shutdown_is_not_an_inference_failure() {
     );
 }
 
-
-// ── The discriminator: a queue closed by ANYTHING BUT our own stop (R276(a)) ─────────
-
 #[test]
 fn an_inference_server_death_that_closes_the_queue_is_a_failure_not_a_shutdown() {
-    // THE MERGE-GATE SCENARIO (R276(a)), and the temporal sibling of the red-team's
-    // wrong-queue hole. `close()` carries NO reason: it is a bare `AtomicBool` and the
-    // Python inference server closes the batcher from a `finally` on ANY loop exit —
-    // `inference_server.py`'s own comment reads "Release blocked Rust waiters even if this
-    // thread exits unexpectedly." So a DYING server closes the queue, in-flight failures
-    // observe `closed`, and under an `is_closed()` discriminator every one of them
-    // re-enters through the shutdown door as a silent batch-skip: the exact degrade this
-    // pin exists to kill, arriving by the door the pin holds open.
-    //
-    // The drive closes a queue WITHOUT stopping the runner — which is what a server death
-    // looks like from the worker's side, and which `stop()` can never produce because it
-    // stores `running=false` first (`SelfPlayRunner::stop`; `WorkerPool.stop` calls
-    // `_runner.stop()` at pool.py:393 before `_inference_server.stop()` at :394).
+    // `close()` carries no reason and the server closes the batcher from a `finally` on ANY loop
+    // exit, so a DYING server would re-enter through the shutdown door as a silent batch-skip.
+    // Closing the queue WITHOUT stopping the runner is what that looks like from the worker's
+    // side, and is something `stop()` can never produce: it stores `running=false` first.
     let runner = graph_runner();
     let queue = runner.graph_producer();
     let served = Arc::new(AtomicUsize::new(0));

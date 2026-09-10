@@ -1,30 +1,11 @@
-"""ADV named-error suite (O1) — ACHIEVABLE subset + bridge single-graph guards.
+"""ADV named-error suite — the achievable subset plus the bridge single-graph guards.
 
-WP7 gates the 5 achievable payloads through a bridge-reachable producer, each
-with a LAW-07 clean-input self-test:
-
-  ACHIEVABLE from Python (externally injectable):
-    * ADV-8  EdgeAttrGeometryMismatch  -> verify_edge_geometry (permuted edge_attr)
-             — the guaranteed floor; the headline semantic check.
-    * WireAlreadyConsumed  -> GraphWire.take() called twice
-    * builder_impl handshake -> GraphWire.builder_impl == native code (1)
-
-  ACHIEVABLE only via a buggy BUILDER (NOT external input) — the live producer is
-  the EXISTING mantis-graph Rust `#[should_panic]` test, cited here, LAW-07
-  satisfied at the producer layer (crates/mantis-graph/src/lib.rs):
-    * ADV-1b NodeCountChecksum            -> verify_contract leaf (lib.rs:767)
-    * ADV-2b ScatterSlotAliasing          -> verify_contract_dies_loud_on_slot_aliasing
-                                             (lib.rs:1039, #[should_panic])
-    * ADV-7  ScatterSlotCanonicalMismatch -> verify_contract leaf (lib.rs:874/885)
-    * ADV-9  GatherNotLegalNode           -> verify_contract leaf (lib.rs:853/862)
-  These fire on a malformed builder, not on any Python-injectable payload, so they
-  are bridge-unreachable-by-external-input and rely on their Rust producers.
-
-DEFERRED to the collate-resolver WP (tracked-not-silent; NO producer in WP7 scope,
-mantis-graph/src/lib.rs:754): the 4 batch/wire-context payloads —
-  ADV-1a OffsetsNonMonotonic, ADV-2a ScatterGatherCrossesGraph,
-  ADV-3  EdgeCrossesGraphBoundary, ADV-4 DtypeMismatch.
-Their absence from O1 is not a WP7 FAIL (PREREG §Deferred).
+Achievable from Python, each with a clean-input self-test: `EdgeAttrGeometryMismatch` via a
+permuted `edge_attr` (the headline semantic check), `WireAlreadyConsumed` via a second `take()`,
+and the `builder_impl` handshake. Achievable only via a buggy BUILDER, never external input —
+node-count checksum, scatter-slot aliasing, scatter-slot canonical mismatch, gather-not-legal-node
+— rely on their existing Rust `#[should_panic]` producers. The four batch/wire-context payloads
+are DEFERRED to the collate-resolver work: tracked, not silent.
 """
 import numpy as np
 import pytest
@@ -32,12 +13,9 @@ import pytest
 from mantis import _engine
 from mantis.encoding.registry import lookup
 
-# --- verify_edge_geometry clean fixture (ports graph_contract.rs clean_fixture) --
-#: AUDIT-1 F-41: these were `11`, `5` and `6` typed here — the geometry of the row the fixture
-#: is built for, restated by hand in a suite whose subject is that the bridge REFUSES wrong
-#: geometry. `node_feat_dim`/`edge_feat_dim` come off the registry row; `win_length` comes off
-#: the ENGINE, which is where it is owned (`mantis_core::board::WIN_LENGTH`, exported through
-#: the bridge by REPAIR-2's F-42) — the registry's `win_length` is checked against it at parse.
+#: These dims were once typed here by hand, in a suite whose subject is that the bridge REFUSES
+#: wrong geometry. `node_feat_dim`/`edge_feat_dim` come off the registry row; `win_length` comes
+#: off the ENGINE, which owns it, and the registry's copy is checked against it at parse.
 _SPEC = lookup("gnn_axis_v1")
 NODE_FEAT_DIM = _SPEC.node_feat_dim
 EDGE_FEAT_DIM = _SPEC.edge_feat_dim
@@ -72,8 +50,8 @@ def test_adv8_clean_input_passes():
 
 
 def test_adv8_permuted_edge_attr_raises_geometry_mismatch():
-    """ADV-8 bites: flipping the signed_dist column (the EdgeAttrGeometryMismatch
-    corruption) raises ValueError from verify_edge_geometry."""
+    """ADV-8 bites: flipping the signed_dist column raises ValueError from
+    verify_edge_geometry."""
     nf, nc, ei, ea, no, cp = _clean_fixture()
     ea = ea.copy()
     ea[3] = -ea[3]  # permute edge geometry
@@ -94,8 +72,7 @@ def test_adv8_dirty_onehot_raises():
 
 
 def test_verify_edge_geometry_hostile_input_raises_not_panics():
-    """The never-panic contract: out-of-range endpoints raise ValueError, not a
-    process abort / PanicException."""
+    """The never-panic contract: out-of-range endpoints raise ValueError, not a process abort."""
     nf, nc, _ei, ea, no, cp = _clean_fixture()
     bad_edge = np.array([0, 99], dtype=np.int64)  # dst outside [0, N)
     with pytest.raises(ValueError, match="out of"):
@@ -104,7 +81,7 @@ def test_verify_edge_geometry_hostile_input_raises_not_panics():
         )
 
 
-# --- bridge single-graph structural guards ------------------------------------
+# bridge single-graph structural guards
 def _one_graph_wire():
     hb = _engine.HexgBuffer(8, "gnn_axis_v1", 128)
     hb.push_graph_position([(0, 0, 1), (1, 0, -1)], [(2, 0, 1.0)], 1, 100, 2, True, 0.0, True, 1)
@@ -129,14 +106,9 @@ def test_wire_getters_repeatable_until_take():
 
 
 def test_wire_getters_refuse_after_take():
-    """PERF-TRANCHE-1 A2 contract change: `take()` MOVES the buffers into numpy, so after
-    it there are none left to copy and every getter raises the NAMED error.
-
-    The old contract kept the getters readable after `take()` because `take()` copied.
-    Moving is the whole of A2 (ledger §10.1 #4, `wire_copyout` 12.43 ms/pop), and the
-    alternative to raising here is a getter that hands back an EMPTY array — a silent zero
-    a caller would read as a measurement.
-    """
+    """`take()` MOVES the buffers into numpy, so afterwards there are none left to copy and
+    every getter raises the NAMED error. The alternative to raising is a getter that hands back
+    an EMPTY array — a silent zero a caller would read as a measurement."""
     wire = _one_graph_wire()
     taken = wire.take()
     moved = np.asarray(taken["node_feat"])
@@ -147,18 +119,14 @@ def test_wire_getters_refuse_after_take():
 
 
 def test_take_moves_rather_than_copies():
-    """The moved array must carry the wire's own bytes — the move is not a truncation.
-
-    Compares the pre-take getter copy against the post-take moved array, on a wire built
-    twice from the same deterministic push, so a move that silently produced a fresh empty
-    or a differently-ordered buffer cannot pass.
-    """
+    """The moved array must carry the wire's own bytes, compared against a pre-take getter copy
+    on a wire built twice from the same deterministic push, so a fresh empty or a
+    differently-ordered buffer cannot pass."""
     copied = _one_graph_wire().node_feat
     moved = _one_graph_wire().take()["node_feat"]
     assert np.array_equal(np.asarray(copied), np.asarray(moved))
-    # The MECHANISM, not a proxy for it: `from_slice` makes numpy allocate and own the
-    # buffer (`base is None`); `into_pyarray` hands numpy Rust's own allocation behind a
-    # container base object. A regression to copying would flip both of these.
+    # The MECHANISM, not a proxy: `from_slice` makes numpy allocate and own the buffer
+    # (`base is None`); `into_pyarray` hands numpy Rust's own allocation behind a container base.
     assert copied.base is None and copied.flags["OWNDATA"], (
         "the getter still COPIES into a numpy-owned buffer")
     assert moved.base is not None and not moved.flags["OWNDATA"], (
@@ -172,15 +140,10 @@ def test_builder_impl_native_handshake():
     assert wire.n_graphs == 1
 
 
-# ── AUDIT-1 F-22(d): the shape guard must cover every offset the body reads ───────────
-#
-# `verify_edge_geometry_impl` guarded `node_feat_dim == 0`, then read
-# `node_feat[s * node_feat_dim + 1]` — channel 1, the opponent-stone plane — for every node.
-# A dim of ONE therefore passed the guard and indexed one past the end of the last node's row.
-# This function is the ADV-8 producer and its own docstring promises it "never indexes out of
-# range on a corrupt input", so an out-of-bounds read here is the guard failing at its stated
-# job. `panic = "unwind"` is what kept it from being process-fatal — a property of the worst
-# case, not a design.
+# The shape guard must cover every offset the body reads: `verify_edge_geometry_impl` guarded
+# `node_feat_dim == 0`, then read channel 1 of every node, so a dim of ONE passed the guard and
+# indexed one past the end of the last row. `panic = "unwind"` is what kept that from being
+# process-fatal — a property of the worst case, not a design.
 
 @pytest.mark.parametrize("dim", [1, 0], ids=["one-channel", "zero-channel"])
 def test_adv8_a_node_feat_dim_the_body_cannot_index_is_REFUSED(dim: int) -> None:

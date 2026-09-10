@@ -1,10 +1,9 @@
-//! Worker spawn loop (WP6 D1/D2) — `SelfPlayRunner::start_impl`, ported from the
-//! frozen `worker_loop/mod.rs`.
+//! Worker spawn loop — `SelfPlayRunner::start_impl`.
 //!
 //! Resolves the per-worker `WorkerGeometry` ONCE via the closed
-//! [`super::params::resolve_geometry`] match (D2 — no default fallback, no `_ =>` arm),
-//! Arc-clones the SHARED accumulators (never fresh-per-worker), gives each worker its
-//! graph inference-queue producer handle, and spawns a thread running
+//! [`super::params::resolve_geometry`] match (no default fallback, no `_ =>` arm), Arc-clones
+//! the SHARED accumulators (never fresh-per-worker), gives each worker its graph
+//! inference-queue producer handle, and spawns a thread running
 //! [`super::game::run_worker_thread`].
 
 use std::sync::atomic::Ordering;
@@ -18,23 +17,18 @@ use super::{game, SelfPlayRunner};
 /// Run one worker body, converting a panic into a COUNTED, run-halting event.
 ///
 /// A worker that panicked used to vanish silently: `thread::spawn` parks the panic in the
-/// `JoinHandle`, `SelfPlayRunner::stop()` threw that result away (`let _ = handle.join()`),
-/// and `running` stayed `true`. The pool therefore kept reporting healthy while producing
-/// nothing — the failure presented as "self-play is slow", which is the most expensive way
-/// for it to present.
+/// `JoinHandle`, `stop()` threw that result away, and `running` stayed `true`, so the pool kept
+/// reporting healthy while producing nothing.
 ///
-/// Catching HERE rather than reading join results at `stop()` is what makes the halt LIVE:
-/// the run stops at the panic, not whenever someone gets round to shutting down. It also
-/// leaves `join()` returning `Ok`, so `stop()`'s own join check counts only panics that
-/// ESCAPED this function and the counter never double-counts one death.
+/// Catching HERE rather than reading join results at `stop()` is what makes the halt LIVE, and
+/// leaves `join()` returning `Ok`, so `stop()`'s own join check counts only panics that ESCAPED
+/// this function and never double-counts one death.
 ///
-/// Store-then-halt, matching `store_fatal_defect`'s ordering: the count is visible BEFORE
-/// the flag flips, so a supervisor woken by `!is_running()` can always read a non-zero
-/// `worker_panics` and attribute the halt instead of guessing.
+/// Store-then-halt: the count is visible BEFORE the flag flips, so a supervisor woken by
+/// `!is_running()` can always read a non-zero `worker_panics` and attribute the halt.
 ///
-/// `AssertUnwindSafe` is the honest annotation and not a workaround: the worker bundles are
-/// moved in and dropped with the thread, and the only state touched after the catch is the
-/// two atomics. Nothing observes a half-updated worker, because the run halts.
+/// `AssertUnwindSafe` is honest here: the worker bundles are moved in and dropped with the
+/// thread, and the only state touched after the catch is the two atomics.
 pub(crate) fn guard_worker<F: FnOnce()>(
     worker_panics: &std::sync::atomic::AtomicU64,
     running: &std::sync::atomic::AtomicBool,
@@ -58,8 +52,8 @@ impl SelfPlayRunner {
             return;
         }
 
-        // §100 defense-in-depth: game-level (`fast_prob`) and move-level
-        // (`full_search_prob`) playout-cap randomisers must not both be active.
+        // Defense in depth: game-level (`fast_prob`) and move-level (`full_search_prob`)
+        // playout-cap randomisers must not both be active.
         assert!(
             !(self.config.fast_prob > 0.0 && self.config.full_search_prob > 0.0),
             "playout-cap mutex violated: fast_prob={} and full_search_prob={} \
@@ -69,8 +63,7 @@ impl SelfPlayRunner {
             self.config.full_search_prob,
         );
 
-        // D2: resolve the per-worker geometry ONCE via the closed-match resolver
-        // (`Copy`, ~32 B; copied into each spawned worker).
+        // Resolve the per-worker geometry ONCE via the closed-match resolver (`Copy`, ~32 B).
         let geometry = params::resolve_geometry(self.spec);
 
         let (stats_proto, atomics_proto, channels_proto, params_proto) =
@@ -82,9 +75,8 @@ impl SelfPlayRunner {
             let atomics = atomics_proto.clone();
             let channels = channels_proto.clone();
             let params = params_proto.clone();
-            // The two lifecycle Arcs the panic arm needs. Captured directly rather than
-            // through the runner because the worker closure is `'static` and the runner is
-            // borrowed here.
+            // The two lifecycle Arcs the panic arm needs, captured directly because the worker
+            // closure is `'static` and the runner is borrowed here.
             let worker_panics = self.worker_panics.clone();
             let running = self.running.clone();
             let handle = thread::spawn(move || {
@@ -96,8 +88,8 @@ impl SelfPlayRunner {
         }
     }
 
-    /// Build the per-worker capture prototype (4 bundles cloned once per worker
-    /// spawn). Extracted so `start_impl` stays under the clippy line threshold.
+    /// Build the per-worker capture prototype (4 bundles cloned once per worker spawn).
+    /// Extracted so `start_impl` stays under the clippy line threshold.
     fn build_worker_prototypes(
         &self,
     ) -> (WorkerStats, WorkerAtomics, WorkerChannels, WorkerParams) {

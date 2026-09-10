@@ -1,50 +1,12 @@
-# >300 justify (R8): the reachability derivation, the verdicts it produces, and the grave guard
-# that keeps a buried arch buried are one unit — a verdict list maintained apart from the
-# derivation that produced it is the transcribed-census defect this suite exists to refuse.
-"""T11 — ARCH REACHABILITY, derived structurally, and the graves it produced (R322(d) Leg 2).
+# >300 justify (R8): a verdict list maintained apart from the derivation that produced it is
+# the transcribed-census defect this suite exists to refuse.
+"""Arch reachability, derived structurally, and the graves that derivation produced.
 
-`SEAM_V1_DESIGN` §4's migration policy: "Migrate what we will ablate against. Archive the rest
-with their goldens and a one-line grave note. Every move suite-proven." R322(d) states the test
-this section executes: **an arch with no production config selecting it AND no non-test consumer
-reaching it is ARCHIVED; anything load-bearing is SURFACED with its consumers NAMED.**
-
-STRUCTURE, NOT TEXT. Reachability is derived three ways, each from a producer rather than from a
-list someone maintains:
-
-  * `build_net`'s DISPATCH — parsed out of the function's own AST (`ast.Call` on a `Name`), so a
-    branch that is added or deleted moves this census in the same commit.
-  * The SELECTION a shipped config makes — every `configs/*.yaml` loaded through the one loader
-    and run through `arch_from_spec_and_config`, so "which arch does this config build" is
-    answered by the production entry point and not by reading `identity.representation`.
-  * CONSUMERS — an AST name census over `src/` and `tools/`, counting a reference in any module
-    other than the class's own. A `grep` would count the word inside a docstring; this counts
-    `Name`, `Attribute` and `ImportFrom` nodes, which is the difference between "mentioned" and
-    "used". Tests are deliberately EXCLUDED from the consumer set: R322(d)'s archive test says
-    *non-test* consumer, and a class kept alive only by the tests that test it is exactly what
-    the policy is aimed at.
-
-THE VERDICTS THIS PRODUCED, and each is asserted below rather than recorded here:
-
-  * `HexTacToeNet` (the dense lineage) — **KEPT, SURFACED, consumers NAMED.** No PRODUCTION
-    config selects it (`run6.yaml` and `run6.yaml` are both graph), so the first
-    half of the archive test passes — and the second half FAILS: `build_net` dispatches to it
-    from the `CnnArch` branch, `mantis/train/pretrain/cli.py` requires it by `isinstance` on the
-    BC-pretrain path, and two SHIPPED configs select it. Load-bearing, so it is surfaced with
-    those consumers named and NOT archived. The ruling's conjunction is what saves it, and this
-    section is where that is visible.
-  * `GnnNet` — production. Both production configs select it.
-  * `GnnNetV2` — the proving tenant. Reached through `build_net`; selectable through
-    `select_arch` (T10).
-  * `HeXONet` — **ARCHIVED.** Zero dispatch branches, zero consumers in `src/`, `tools/` or
-    `tests/`, and the docstring's claimed downstream-bot consumer does not exist in
-    `src/mantis/bots/`. Buried with its goldens at
-    `tests/fixtures/model_graves/hexonet_grave_v1.json` and a grave note in `model/gine.py`.
-  * `ValueHead` — archived WITH it, and labelled a TRANSITIVE grave: it was reachable only from
-    `HeXONet`, so it is not an independent finding and is not claimed as one.
-
-WHAT THIS SECTION DOES NOT CLAIM. Nothing here is a strength claim about any arch, and no
-verdict is evidence that one net is better than another — F-01 is the standing fence. These are
-statements about who can REACH what.
+An arch with no production config selecting it AND no non-test consumer reaching it is ARCHIVED;
+anything load-bearing is SURFACED with its consumers NAMED. Reachability comes from three
+producers, never a maintained list: `build_net`'s dispatch AST, the selection each shipped config
+resolves to, and an AST name census that counts uses rather than mentions. Tests are excluded —
+a class kept alive only by the tests that test it is what the policy is aimed at.
 """
 from __future__ import annotations
 
@@ -67,8 +29,8 @@ REPO = Path(__file__).resolve().parents[3]
 MODEL_DIR = REPO / "src" / "mantis" / "model"
 GRAVE_GOODS = REPO / "tests" / "fixtures" / "model_graves" / "hexonet_grave_v1.json"
 
-#: The two `PRODUCTION_CONFIGS` rows, read from the manifest rather than named here — gate 12's
-#: own authority on what "production" means, so this section cannot disagree with it.
+#: Read from the manifest rather than named here, so this section cannot disagree with the
+#: gate's own authority on what "production" means.
 from mantis.config.armed_aborts import PRODUCTION_CONFIGS  # noqa: E402
 
 
@@ -81,11 +43,8 @@ class GraveDisturbed(ConformanceRefusal):
 
 
 def _names_used(tree: ast.AST) -> set[str]:
-    """Every identifier USED in a module: `Name`, `Attribute` and `ImportFrom` nodes.
-
-    Deliberately not a text search: a class named in a docstring or a comment is MENTIONED, not
-    used, and counting mentions is how a dead symbol keeps a consumer forever.
-    """
+    """Return every identifier USED in a module: `Name`, `Attribute` and `ImportFrom` nodes —
+    not a text search, because counting mentions is how a dead symbol keeps a consumer."""
     used: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name):
@@ -98,7 +57,7 @@ def _names_used(tree: ast.AST) -> set[str]:
 
 
 def net_classes() -> dict[str, str]:
-    """Every `nn.Module` subclass defined under `src/mantis/model/`, name → defining module."""
+    """Map every `nn.Module` subclass under `src/mantis/model/` to its defining module."""
     found: dict[str, str] = {}
     for path in sorted(MODEL_DIR.glob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -111,13 +70,8 @@ def net_classes() -> dict[str, str]:
 
 
 def dispatch_pairs() -> dict[str, str]:
-    """`build_net`'s ARCH-KIND → NET-CLASS map, parsed from the function's own if/elif chain.
-
-    Each branch is `isinstance(arch, <Kind>)` guarding `net = <Net>(arch)`, and reading the
-    PAIR rather than the two sides separately is what makes the census able to say "this kind
-    builds that net" — which is the link every verdict below needs and the one a flat list of
-    constructed names cannot supply.
-    """
+    """Parse `build_net`'s ARCH-KIND -> NET-CLASS map out of its own if/elif chain — the PAIR,
+    because "this kind builds that net" is the link every verdict below needs."""
     tree = ast.parse((MODEL_DIR / "build.py").read_text(encoding="utf-8"))
     fn = next(n for n in ast.walk(tree)
               if isinstance(n, ast.FunctionDef) and n.name == "build_net")
@@ -139,12 +93,12 @@ def dispatch_pairs() -> dict[str, str]:
 
 
 def dispatch_census() -> frozenset[str]:
-    """The NET classes `build_net` constructs — the right-hand side of `dispatch_pairs`."""
+    """Return the NET classes `build_net` constructs."""
     return frozenset(dispatch_pairs().values())
 
 
 def consumers_of(name: str, defining_module: str, roots: tuple[Path, ...]) -> tuple[str, ...]:
-    """Repo-relative paths, outside the class's own module, that USE `name`."""
+    """Return the repo-relative paths outside the class's own module that USE `name`."""
     own = f"src/mantis/model/{defining_module}"
     hits: list[str] = []
     for root in roots:
@@ -162,7 +116,7 @@ def consumers_of(name: str, defining_module: str, roots: tuple[Path, ...]) -> tu
 
 
 def selections() -> dict[str, str]:
-    """Every shipped config → the ARCH KIND the production entry point resolves it to."""
+    """Map every shipped config to the ARCH KIND the production entry point resolves."""
     out: dict[str, str] = {}
     for path in sorted(CONFIGS.glob("*.yaml")):
         config = load_config(path)
@@ -173,15 +127,14 @@ def selections() -> dict[str, str]:
 
 
 def nets_selected() -> dict[str, str]:
-    """Every shipped config → the NET CLASS its selected kind builds, through `build_net`'s
-    own dispatch. Two derivations composed, so neither side can drift alone."""
+    """Map every shipped config to the NET CLASS its kind builds — two derivations composed,
+    so neither side can drift alone."""
     pairs = dispatch_pairs()
     return {name: pairs[kind] for name, kind in selections().items() if kind in pairs}
 
 
-#: THE BURIED SET, and the ONLY place this file names a grave. Both directions are checked: the
-#: names must be gone from the tree, and the goods must still be on disk. A grave with no goods
-#: is a deletion wearing the word "archive".
+#: The buried set. Both directions are checked: the names gone from the tree, the goods still
+#: on disk — a grave with no goods is a deletion wearing the word "archive".
 GRAVES: dict[str, str] = {
     "HeXONet": "no build_net branch, no consumer in src/ or tools/ or tests/, and the "
                "downstream bot its docstring claimed does not exist in src/mantis/bots/",
@@ -193,9 +146,8 @@ GRAVES: dict[str, str] = {
 }
 
 
-# ── the census itself ────────────────────────────────────────────────────────────────────
 def test_the_census_has_a_subject(derived):
-    """Vacuity guard. Every verdict below is a statement about a set this must not find empty."""
+    """Vacuity guard: every verdict below is about a set this must not find empty."""
     classes = net_classes()
     dispatch = dispatch_census()
     derived("t11.net_classes", sorted(classes))
@@ -211,10 +163,8 @@ def test_the_census_has_a_subject(derived):
 
 
 def test_the_dispatch_census_and_the_arch_kind_registry_agree(derived):
-    """`ARCH_KINDS` names arch DATACLASSES and `build_net` dispatches on them, so this is set
-    equality over the dispatch's LEFT-hand side, plus a distinctness check on its right: a kind
-    whose branch was deleted stays namable by the selector and would then build nothing, and two
-    kinds pointing at ONE net is the isinstance-twin hazard B1 filed."""
+    """The dispatch's kinds equal `ARCH_KINDS` and its nets are distinct: a kind whose branch
+    was deleted stays namable and builds nothing, and two kinds on ONE net is silent."""
     pairs = dispatch_pairs()
     derived("t11.arch_kinds", sorted(ARCH_KINDS))
     derived("t11.dispatch_pairs", pairs)
@@ -230,7 +180,7 @@ def test_the_dispatch_census_and_the_arch_kind_registry_agree(derived):
 
 
 def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
-    """The selection half of the census — executed through the production entry point."""
+    """Every shipped config selects a net `build_net` can construct."""
     selected = selections()
     derived("t11.selections", selected)
     assert selected, "no shipped config was resolved; the selection census is empty"
@@ -243,13 +193,8 @@ def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
 
 @pytest.mark.parametrize("name", sorted(GRAVES))
 def test_a_GRAVE_stays_dead(name, derived):
-    """The fence. A buried arch must be absent from the model package, from `build_net`'s
-    dispatch, and from every module's USED names across `src/`, `tools/` and `tests/`.
-
-    Docstrings are exempt by construction — `_names_used` walks the AST, so the grave note in
-    `model/gine.py` and the prose in this file are mentions, not uses. That is the property that
-    lets a grave carry its own epitaph without resurrecting itself.
-    """
+    """A buried arch is absent from the package, the dispatch, and every module's USED names.
+    Docstrings are exempt by construction, so a grave can carry its own epitaph."""
     classes = net_classes()
     if name in classes:
         raise GraveDisturbed(
@@ -271,8 +216,8 @@ def test_a_GRAVE_stays_dead(name, derived):
 
 
 def test_the_GRAVE_GOODS_are_on_disk_and_describe_what_was_buried(derived):
-    """A grave with no goods is a deletion. The goods must name the burial, carry a parameter
-    count and both digests, and describe a net whose shapes are self-consistent."""
+    """The goods name the burial, carry a parameter count and both digests — a grave with no
+    goods is a deletion."""
     assert GRAVE_GOODS.is_file(), (
         f"{GRAVE_GOODS.relative_to(REPO)} is missing — the archive has no goldens, so a "
         "resurrection could not be proved bit-identical to what was buried"
@@ -291,11 +236,7 @@ def test_the_GRAVE_GOODS_are_on_disk_and_describe_what_was_buried(derived):
 
 
 def test_the_grave_guard_can_FIRE(derived):
-    """PB-T11a. LAW-07 applied to this section: a fence never shown to bite is a phantom.
-
-    Driven against a name that IS live — `GnnNet` — so the guard's own predicate is exercised
-    rather than a copy of it.
-    """
+    """The grave guard fires against a name that IS live, so the fence is shown to bite."""
     live = "GnnNet"
     assert live in net_classes(), "the control name is not live; this proves nothing"
     with pytest.raises(GraveDisturbed, match=live):
@@ -308,8 +249,8 @@ def test_the_grave_guard_can_FIRE(derived):
 
 
 def test_the_consumer_census_counts_USES_and_not_MENTIONS():
-    """The property the whole census rests on, executed. A grep-based census would count the
-    grave note in `model/gine.py` as a consumer of `HeXONet` and the burial would be invisible."""
+    """The census counts USES, not MENTIONS: a grep would read a grave note as a consumer and
+    the burial would be invisible."""
     source = "x = 1  # HeXONet lives here\n\"\"\"HeXONet in a docstring\"\"\"\n"
     assert "HeXONet" not in _names_used(ast.parse(source))
     assert "HeXONet" in _names_used(ast.parse("HeXONet()\n"))
@@ -317,8 +258,7 @@ def test_the_consumer_census_counts_USES_and_not_MENTIONS():
 
 
 def test_the_model_package_no_longer_EXPORTS_a_buried_name():
-    """The public surface is part of the fence: an exported grave is importable, and something
-    importable is something a future consumer will import."""
+    """The public surface is part of the fence: an exported grave is importable."""
     import mantis.model as package
 
     for name in GRAVES:
@@ -327,8 +267,7 @@ def test_the_model_package_no_longer_EXPORTS_a_buried_name():
 
 
 def test_RunConfig_cannot_select_a_buried_arch():
-    """The config surface, closed too: no shipped config resolves to a grave, and the closed
-    kind vocabulary does not name one."""
+    """The config surface is closed too: no shipped config resolves to a grave."""
     assert not set(nets_selected().values()) & set(GRAVES)
     assert not set(ARCH_KINDS) & set(GRAVES)
     assert RunConfig.model_fields, "the schema walk is empty; this assertion is free"

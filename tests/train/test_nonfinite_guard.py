@@ -1,25 +1,13 @@
-"""Item 6 pins — a NaN must not be able to destroy the model in silence.
+"""A NaN must not be able to destroy the model in silence.
 
-THE CASCADE (falsified row F-11, measured). A non-finite microbatch loss backwards into a
-non-finite clip coefficient, and `clip_and_step` then writes NaN into EVERY weight. One bad
-step and the model is gone; the run continues and keeps reporting numbers.
-
-WHAT WAS WRONG. The guard existed on the PRETRAIN path (`pretrain/trainer.py`) and not on
-the graph path that actually trains run5. Worse, every layer that could have reported the
-condition was filtering it out:
-
-  * `check_grad_norm_spike` carried a `gn == gn` filter — "a NaN must never trip the
-    instability alert" — so the alert was quietest exactly when the weights had just been
-    corrupted, while a merely large finite norm alerted;
-  * `emit_training_step_alerts` dropped a non-finite `loss_total` from the loss window
-    (correct: a NaN poisons every later comparison) and reported it nowhere (not correct);
-  * the `grad_norm_hard_abort` gate read `math.isfinite(gn) and gn > threshold`, EXCLUDING
-    NaN from the abort. Unbounded is above any threshold; it was treated as "unknown, so
-    assume fine".
-
-So the one condition that destroys a model outright was the one condition nothing reported.
-These pins drive the REAL trainer step and the REAL rules — the guard and its three
-reporting paths, each with the mutation half that proves it stays quiet on healthy training.
+The cascade, measured: a non-finite microbatch loss backwards into a non-finite clip
+coefficient, and `clip_and_step` writes NaN into EVERY weight — one bad step and the model is
+gone, while the run keeps reporting numbers. The guard existed on the pretrain path and not on
+the graph path that actually trains, and every reporting layer filtered the condition out: the
+spike check carried a `gn == gn` filter, so the alert was quietest exactly when the weights had
+just been corrupted; the alert emitter dropped a non-finite `loss_total` and reported it
+nowhere; and the hard-abort gate treated unbounded as "unknown, so assume fine". These pins
+drive the REAL trainer step and the REAL rules, each with its mutation half.
 """
 from __future__ import annotations
 
@@ -33,17 +21,12 @@ import torch
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import check_grad_norm_spike, check_nonfinite_loss
 
-import _microbatch_harness as H  # the shared graph-step harness (rootdir-relative, house convention)
+import _microbatch_harness as H  # the shared graph-step harness (rootdir-relative)
 
 
 def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
-    """One real graph training step, through the PRODUCTION dispatch.
-
-    `dispatch._graph_step` is what the coordinator calls: it samples the wire, plans the
-    microbatches, collates each part and calls `train_step_from_graph_batch`. Driving it
-    (rather than hand-building `parts`) keeps the guard under test on the path that actually
-    runs (R155: production path, production parameters).
-    """
+    """One real graph training step through the PRODUCTION dispatch: `dispatch._graph_step` is
+    what the coordinator calls, so driving it keeps the guard on the path that actually runs."""
     from mantis.config.resolve.microbatch import MicrobatchCapsSpec
     from mantis.train.coordinator.dispatch import _graph_step as production_graph_step
 
@@ -58,18 +41,11 @@ def _graph_step(trainer: Any, buffer: Any) -> dict[str, float]:
     )
 
 
-# ── the guard on the production graph step ─────────────────────────────────────────────
-
-
 def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The real step, with the real guard, against a genuinely non-finite loss.
-
-    The NaN is injected at `ragged_policy_ce` — the actual term that produced it in the F-11
-    incident (a 0x-inf in the aux CE) — so the guard is exercised where it sits rather than
-    through a stubbed `loss`.
-    """
+    """The real step, with the real guard, against a genuinely non-finite loss, injected at
+    `ragged_policy_ce` — the term that produced it in the incident — rather than a stubbed loss."""
     import mantis.train.trainer.core as core
 
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
@@ -99,12 +75,8 @@ def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
 
 
 def test_a_healthy_step_counts_nothing_and_does_move_the_weights(tmp_path: Path) -> None:
-    """Mutation half. Without it, `always skip` would pass the test above.
-
-    Mechanism: the guard fires only on `not torch.isfinite(loss)`, so a finite loss must
-    leave the counter at 0 AND must still take its optimizer step. A counter that always
-    increments, or a guard that always skips, reports nothing and trains nothing.
-    """
+    """Mutation half — without it, "always skip" would pass the test above: a finite loss must
+    leave the counter at 0 AND still take its optimizer step."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     buffer = H.uniform_graph_buffer()
     before = H.param_vector(trainer.model).clone()
@@ -120,11 +92,8 @@ def test_a_healthy_step_counts_nothing_and_does_move_the_weights(tmp_path: Path)
 
 
 def test_the_loss_info_contract_stays_five_keys(tmp_path: Path) -> None:
-    """OF2-9 is not broken by the counters: they ride the EVENT, not the return.
-
-    `loss_info` is read by the coordinator's gates and by checkpoint metadata, so widening
-    it would change a contract those readers pin. The counters belong on the event stream.
-    """
+    """The counters ride the EVENT, not the return: `loss_info` is a contract the coordinator's
+    gates and checkpoint metadata pin."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     result = _graph_step(trainer, H.uniform_graph_buffer())
     assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
@@ -141,12 +110,9 @@ def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:
     assert "nonfinite_grad_steps" in steps[-1]
 
 
-# ── the three reporting paths that used to filter NaN out ──────────────────────────────
-
-
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_a_nonfinite_grad_norm_fires_the_instability_alert(value: float) -> None:
-    """Reversed by item 6: this used to be pinned as `must never trip`."""
+    """Reversed: this used to be pinned as "must never trip"."""
     assert check_grad_norm_spike({"grad_norm": value}, MonitorConfig()) is not None
 
 
@@ -173,29 +139,13 @@ def test_a_finite_or_absent_loss_does_not_fire_the_nonfinite_rule() -> None:
 
 
 def test_the_hard_abort_gap_is_documented_and_pin_bound() -> None:
-    """KNOWN GAP, deliberately left open — and pinned so it cannot close by accident.
+    """KNOWN GAP, deliberately left open and pinned so it cannot close by accident.
 
-    Item 6's third path (make a non-finite grad norm trip `grad_norm_hard_abort`) was
-    implemented and then REVERTED. Two operator-owned reasons, both discovered by the
-    preflight rather than by reasoning:
-
-      1. R56 — `config/armed_aborts.py`'s `grad_norm_hard_abort` row SOURCE-PINS this exact
-         comparison. Changing it reds `tools/ci_gates/preflight_mint.py --audit-only` with
-         "source pin(s) no longer match their file — re-adjudicate the row rather than
-         editing the pin". The pin exists precisely so a change to the gate's decision forces
-         a re-adjudication instead of a quiet edit.
-      2. The row is DEFERRED and knowingly DISARMED: `train.hard_gn_threshold` is the
-         unauthored `1e9` that no finite gradient norm reaches, and the manifest records that
-         run5 mints with this abort off "knowingly and in writing". Firing on non-finite
-         REGARDLESS of the threshold would partially arm it — an armed-value change, which is
-         operator-only.
-
-    So this test asserts the CURRENT state and the reason for it, rather than the fix. A NaN
-    is still caught: the trainer guard stops the cascade and the alert rules report it. Only
-    the abort backstop stays gated. See ADJ-D13.
-
-    MUTATION THAT REDS IT: change the condition without re-adjudicating the manifest row —
-    which is exactly what the preflight would also catch, one layer up.
+    Making a non-finite grad norm trip `grad_norm_hard_abort` was implemented and REVERTED: the
+    manifest SOURCE-PINS this exact comparison, so a change to the gate's decision must force a
+    re-adjudication rather than a quiet edit, and the row is DEFERRED and knowingly DISARMED, so
+    firing regardless of the threshold would partially arm it — an operator-only change. A NaN
+    is still caught by the trainer guard and the alert rules; only the backstop stays gated.
     """
     src = (Path(__file__).resolve().parents[2]
            / "src" / "mantis" / "train" / "coordinator" / "step.py").read_text(encoding="utf-8")

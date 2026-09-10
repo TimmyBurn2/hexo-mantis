@@ -1,19 +1,14 @@
-"""The O-2/O-3 census EXTENSION over the preflight tool's parent half (WPBOX Phase Q).
+"""The banned-token and sys.path censuses, extended over the preflight tool's parent half.
 
-CARD-PREFLIGHT-SPLIT-PARENT-HALF's oracle-compatibility debt, named in GROUND_PFC §2.2:
-the byte-frozen oracle's banned-token census (O-2) and sys.path ban (O-3) sweep ONLY
-`preflight_mint.py` plus the four Phase-P test files, so every line that moved to
-`preflight_mint_parent.py` silently left the sweep. This file is the "census consciously
-extended" arm — the same bans, applied to the sibling, in a NON-frozen test so the split's
-own discipline never needs an R43 event to tighten.
+The byte-frozen oracle's censuses sweep only `preflight_mint.py` and its Phase-P test files,
+so every line that moved to `preflight_mint_parent.py` left the sweep. This is the same bans
+applied to the sibling, in a non-frozen test.
 
-Also pinned here, because the split's one-authority constraints are census-shaped:
-the sibling never imports the tool (no cycle), never spec-loads anything (the tool is the
-only loader), and defines NO `MANIFEST`/`PRODUCTION_CONFIGS`/`EXEMPT_CONFIGS` global —
-the audit read path must stay the tool module's, where the frozen ring-2 monkeypatch seam
-(`TOOL.MANIFEST = bad -> rc 31`) lives. And the re-export block is drift-pinned: every
-top-level name the sibling defines is bound on the tool module path AS THE SAME OBJECT,
-so a name added to the sibling without a re-export line goes red here, not in production.
+The split's one-authority constraints are pinned here too: the sibling never imports the tool
+(no cycle), never spec-loads anything (the tool is the only loader), and defines no
+`MANIFEST`/`PRODUCTION_CONFIGS`/`EXEMPT_CONFIGS` global, so the audit read path stays the
+tool module's. The re-export block is drift-pinned: every top-level name the sibling defines
+is bound on the tool module as the same object.
 """
 from __future__ import annotations
 
@@ -26,17 +21,17 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 PARENT_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint_parent.py"
 
-#: O-2's exact banned set, copied in VALUE from the frozen oracle (tests/tools/
-#: test_preflight_mint.py O-2) — copied, not imported, so this file cannot couple to the
-#: frozen file's internals; the frozen census is the authority and this is its extension.
+#: The banned set, copied by VALUE from the frozen oracle so this file cannot couple to its
+#: internals; the frozen census is the authority and this is its extension.
 BANNED_TOKENS = ("monkeypatch", "unittest.mock", "SimpleNamespace", "MagicMock",
                  "mock.patch", "setattr(", "pytest")
 
 
 def _code_text(path: Path) -> str:
-    """Source with COMMENT / STRING / f-string-literal tokens removed — the frozen
-    oracle's own census tokenizer, restated with the 3.11-floor guard idiom
-    (FSTRING_MIDDLE is 3.12+; on 3.11 f-strings lex as STRING)."""
+    """Return the source with comment, string and f-string-literal tokens removed.
+
+    `FSTRING_MIDDLE` is 3.12+; on the 3.11 floor f-strings lex as STRING.
+    """
     skip = {tokenize.COMMENT, tokenize.STRING, getattr(tokenize, "FSTRING_MIDDLE", -1)}
     with path.open("rb") as handle:
         return "\n".join(
@@ -50,7 +45,7 @@ PARENT_CODE = _code_text(PARENT_PATH)
 
 
 def test_the_parent_half_carries_no_banned_test_vocabulary() -> None:
-    """O-2, extended: the sibling is production surface exactly like the tool."""
+    """Prove the parent half carries no banned test vocabulary; it is production surface."""
     hits = [token for token in BANNED_TOKENS if token in PARENT_CODE]
     assert not hits, (
         f"banned token(s) {hits} in preflight_mint_parent.py code text — the O-2 census "
@@ -60,9 +55,7 @@ def test_the_parent_half_carries_no_banned_test_vocabulary() -> None:
 
 
 def test_the_parent_half_never_touches_syspath_or_pythonpath() -> None:
-    """O-3, extended — the frozen arm's own discipline: mutation tokens over the
-    comment-stripped code text, space-collapsed (prose may NAME sys.path; code may not
-    touch it)."""
+    """Prove the parent half never mutates sys.path or PYTHONPATH; prose may name it, code may not."""
     code = PARENT_CODE.replace(" ", "")
     for token in ("sys.path.append", "sys.path.insert", "sys.path.extend",
                   "sys.path=", "sys.path+=", "PYTHONPATH"):
@@ -73,7 +66,7 @@ def test_the_parent_half_never_touches_syspath_or_pythonpath() -> None:
 
 
 def test_the_parent_half_never_imports_the_tool_and_never_loads_modules() -> None:
-    """No cycle and no second loader: the tool loads the sibling, never the reverse."""
+    """Prove there is no cycle and no second loader: the tool loads the sibling, never the reverse."""
     for node in ast.walk(PARENT_TREE):
         if isinstance(node, ast.Import):
             names = [alias.name for alias in node.names]
@@ -92,8 +85,7 @@ def test_the_parent_half_never_imports_the_tool_and_never_loads_modules() -> Non
 
 
 def test_the_parent_half_defines_no_manifest_global() -> None:
-    """The frozen ring-2 monkeypatch seam requires the audit read path to see the TOOL
-    module's `MANIFEST` at call time; a sibling-side global would be a second read path."""
+    """Prove the parent half defines no manifest global; a sibling-side one is a second read path."""
     forbidden = {"MANIFEST", "PRODUCTION_CONFIGS", "EXEMPT_CONFIGS"}
     for node in PARENT_TREE.body:
         targets: list[str] = []
@@ -128,12 +120,10 @@ def _sibling_top_level_names() -> list[str]:
 
 
 def test_two_trees_in_one_process_each_get_their_own_sibling(tmp_path) -> None:
-    """The shim's path-keyed sys.modules guard, given a real producer (LAW-07).
+    """Prove the loader's path-keyed guard binds each tree to its own sibling, in both orders.
 
-    The byte-copy rig loads a COPIED tool from a scratch tree; if the loader reused the
-    real tree's cached sibling (the `getattr(cached, "__file__", …) == str(path)` conjunct
-    forced True), every rig perturbation of the copied sibling would silently test the
-    WRONG file. Drive both loads in ONE process, in both orders, and pin the binding.
+    Without it, a copied tool would reuse the real tree's cached sibling and every rig
+    perturbation would silently test the wrong file.
     """
     import shutil
 
@@ -158,10 +148,11 @@ def test_two_trees_in_one_process_each_get_their_own_sibling(tmp_path) -> None:
 
 
 def test_every_sibling_name_is_re_exported_as_the_same_object() -> None:
-    """The drift pin: the tool's re-export block must list EVERY name the sibling defines,
-    and bind the identical object, so `TOOL.<name>` stays the one authority the oracles
-    load. A sibling name added without a re-export line fails HERE, at the census, rather
-    than surfacing as a confusing AttributeError inside some later consumer."""
+    """Prove every sibling name is re-exported on the tool module and bound to the same object.
+
+    A sibling name added without a re-export line fails here rather than as a later
+    AttributeError inside a consumer.
+    """
     tool = _load_tool()
     sibling = tool._parent_half
     names = _sibling_top_level_names()

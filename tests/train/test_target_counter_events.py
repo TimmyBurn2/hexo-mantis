@@ -1,74 +1,30 @@
-# >300 justify (R8). The eight rows are ONE claim — the three Phase-T target-integrity counters reach the
-# run's OWN event stream with a fire-rate over a published denominator (LAW-18) — over ONE
-# harness: a real `StepCoordinator` driven past its `log_interval` boundary with a riggable
-# `runner_stats` snapshot. Every row needs the whole rig, R5 bars cross-test imports, and a
-# split would fork the rig into copies that drift while both stay green. Executable content
-# is a minority; the rest is the per-row mutation and the "what defect is this the only
-# witness to" rationale LAW-07 asks each row to carry.
-"""⊕ WP12-R Phase O / O-20..O-26, O-28 (R164/LAW-18) — the Phase-T counters reach the ONE
-channel, in-run, with their rate and their denominator.
+# >300 justify (R8): the eight rows are ONE claim — the three target-integrity counters reach
+# the run's OWN event stream with a fire-rate over a published denominator — over ONE harness,
+# a real `StepCoordinator` driven past its `log_interval` boundary with a riggable
+# `runner_stats` snapshot. Cross-test imports are barred, so a split would fork the rig into
+# copies that drift while both stay green.
+"""The target-integrity counters reach the ONE channel, in-run, with their rate and denominator.
 
-RED-at-HEAD on its own mechanism (⊕): no import anchor — every row below fails because the
-`iteration_complete` payload does not carry `target_integrity`, which is the defect itself.
+RED at HEAD on its own mechanism: every row fails because the `iteration_complete` payload does
+not carry `target_integrity`. The seam exists end to end and only the last stage is missing, so
+a live run cannot attribute its own game-shape drift.
 
-R164's finding, stated: `PREREG_T §0b` names `export_offwindow_mass_moves` as "the in-run
-witness attributing" the expected game-shape drift. At HEAD that counter is readable ONLY by
-a test that calls `runner_stats(pool)` — it is NOT in the run's own stream, so a live run
-cannot attribute its own drift, and LAW-18's text ("a lever under test must log its own
-fire-rate IN-RUN; a post-hoc offline probe cannot distinguish 'starved' from 'ineffective'")
-is unmet. The seam already exists end to end (Rust atomics → snapshot → bridge getters →
-`pool_hooks.runner_stats` → `events.py:266`, which ALREADY calls it); only the last stage is
-missing.
+The precedent this must not repeat is `solver_deltas` in the same function: a DEFAULTED
+parameter with zero callers passing it, no manifest row and no producer test, so eight fire-rate
+counters silently never reach the stream. This file is the emission and signature legs that make
+that impossible here; the third leg is the producer-manifest row.
 
-The precedent this landing must not repeat is in the same function: `solver_deltas`
-(`events.py:202,259-260`) is a DEFAULTED parameter with zero callers passing it, no manifest
-row and no producer test — so eight solver fire-rate counters silently never reach the
-stream and no test can tell. This file is two of the three legs that make that impossible
-here (emission and signature); the third — resolution — is the producer-manifest row, pinned
-in `tests/monitor/test_manifest_contract.py`.
+Each row is the only witness to one defect and names the mutation that reds it: the key reaching
+the stream at all; an advance being READABLE within one `log_interval`; `delta` and `total` not
+swapping slots; `per_position` being `None` rather than a fabricated `0.0`; an IDLE lever staying
+VISIBLE at 0; no crosswiring, proven with three DISTINCT values; the parameter being required
+with NO default, since a default is a MIGRATED authority rather than an absent one; and a
+DECREASE emitted as measured, since the atomics are monotonic and a clamp would hide a wiring
+bug rather than a real event.
 
-The rows, and the defect each is the ONLY witness to:
-
-- O-20 `test_iteration_complete_carries_the_target_integrity_fire_rates` — the emission leg,
-  and the node the `target_integrity_counters` manifest row cites as its producer test
-  (LAW-07). Sole witness that the key reaches the stream at all. MUTATION (M-O20): make
-  `_target_integrity_report` return `{}` → the key vanishes.
-- O-21 — the §0b WITNESS specifically: an advance in `export_offwindow_mass_moves` is
-  READABLE in the stream within one `log_interval`. A payload that carries the key but a
-  frozen number satisfies O-20 and tells a live run nothing. MUTATION (M-O21): snapshot the
-  counters once at construction and reuse.
-- O-22 — `delta` is the INTERVAL change and `total` is cumulative. They are different
-  numbers and a consumer reads them differently; publishing one in the other's slot is
-  invisible to every other row. MUTATION (M-O22).
-- O-23 — `per_position` is `None`, never `0.0`, when nothing was recorded.
-  `event_manifest.md:230-234` verbatim: "An unproduced field carries `None`, never a
-  fabricated value. A constant `0` in the ONE channel reads as a real measurement and is the
-  F-10 class in miniature." MUTATION (M-O23): `delta / max(1, positions_delta)`.
-- O-24 — an IDLE lever stays VISIBLE at 0 (the `chain_loss_with_fire_rate` posture,
-  `losses.py:224-238`). This is what makes "starved" distinguishable from "not firing", and
-  it is the row `target_integrity_defects` depends on: that latch is run-fatal, so it reads
-  0 in every run that lives to emit. MUTATION (M-O24): omit zero-valued counters.
-- O-25 — no crosswiring, proven with three DISTINCT values. Two counters that reached the
-  right payload in the wrong slots pass O-20, O-22 and O-24. MUTATION (M-O25): swap two.
-- O-26 — the anti-`solver_deltas` SIGNATURE leg: `target_integrity` is a required
-  keyword-only parameter with NO default. A parameter default is a MIGRATED authority, not
-  an absent one (`run.py:366-372`, MF-2 Attack B); with `= None` a caller that forgets it
-  emits nothing and no test can see the difference. MUTATION (M-O26): give it `= None` in
-  the CALLEE's signature — and that is the ONLY mutation that can red this row, because a
-  call-site edit cannot move a callee's signature.
-- O-28 — a DECREASE is emitted as measured, never clamped. The atomics are monotonic so it
-  cannot happen; a `max(0, …)` would therefore hide a wiring bug rather than a real event,
-  which is the `actor_lag_negative` precedent (`event_manifest.md:101`: "a negative lag is a
-  wiring bug reported loudly once, never a fire"). MUTATION (M-O28).
-
-**What is real here and what is not.** Real: the shipped `StepCoordinator`, its real
-`_run_log_interval` boundary, the real emit builders, the real event payloads and
-the real `RunnerStats` snapshot dataclass (so a field rename in `pool_hooks` reds this file
-rather than being papered over by a hand-shaped double). Fake: the pool, trainer and buffer —
-the injected seam every coordinator drive in this suite stands in — and the counter VALUES,
-which are rigged: a real advance would need a live Rust runner playing real games, which
-`tests/selfplay/test_target_law18_counters.py` already owns for the SURFACE half. This file's
-subject is the last stage, from the snapshot to the stream.
+Real here: the shipped `StepCoordinator`, its `_run_log_interval` boundary, the real emit
+builders and payloads, and the real `RunnerStats` dataclass. Fake: the pool, trainer, buffer and
+the counter VALUES.
 """
 from __future__ import annotations
 
@@ -91,8 +47,8 @@ from mantis.train.lifecycle.signals import ShutdownState
 from pathlib import Path
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
+    """A real graph ring the coordinator stubs sample through; cross-test imports are barred,
+    so each file that needs one builds it."""
     hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
     for i in range(n_records):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
@@ -102,10 +58,9 @@ def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
 
 
 
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches
-#: on plus the two sections the route's own resolvers read (`train.microbatch_caps` and
-#: `train.fast_policy_weight` for the step, `selfplay.n_workers` for the ring rebuild's
-#: width). The caps are the template's NON-BINDING pair — nothing here exercises a split.
+#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
+#: plus the sections the route's own resolvers read. The caps are the template's NON-BINDING
+#: pair — nothing here exercises a split.
 _GRAPH_FULL_CONFIG: dict = {
     "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
@@ -118,22 +73,14 @@ _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG = load_config(_REPO / "configs" / "dev_example.yaml")
 _DRAIN_CAPS = resolve_drain_caps(_DEV_CONFIG.monitor)
 _KNOBS = resolve_coordinator_knobs(_DEV_CONFIG.train)
-#: R242 (ADJ-D12): the builder's FIFTH config-authored parameter — `monitor.gate_interval`,
-#: the ARMING cadence, from the same minted config. Harnesses that set `log_interval` MIRROR
-#: it onto `gate_interval`, which is the shipped posture (every committed config mints the
-#: two equal), so these drives keep exactly the cadence they had before R242's split.
+#: Harnesses that set `log_interval` MIRROR it onto `gate_interval` — the shipped posture, since
+#: every committed config mints the two equal.
 _GATE_INTERVAL = _DEV_CONFIG.monitor.gate_interval
 
-#: The counters carried in the `target_integrity` block, plus the denominator the rate is
-#: taken over. Transcribed rather than derived from the payload under test: an oracle that
-#: read its own expectation off the subject would be satisfied by any consistent renaming
-#: (R81).
-#:
-#: `gridls_zero_policy_rows` was the second Phase-T counter and LEFT with R346(f) — it counted
-#: zero-row fills per recorded CLUSTER row and the engine getter is gone. R275(b)'s
-#: `inference_failures_total` takes its place in this set, which is not a substitution of
-#: convenience: it already rides this same block, and the three-distinct-values crosswire
-#: proof below needs three live counters to be a proof at all.
+#: The counters carried in the `target_integrity` block plus the denominator the rate is taken
+#: over. Transcribed rather than derived from the payload under test: an oracle that read its
+#: own expectation off the subject would be satisfied by any consistent renaming. Three live
+#: counters are needed for the crosswire proof below to be a proof at all.
 _COUNTERS = ("export_offwindow_mass_moves", "target_integrity_defects",
              "inference_failures_total")
 _DENOMINATOR = "positions_delta"
@@ -142,13 +89,8 @@ _PAYLOAD_KEY = "target_integrity"
 
 
 def _stats(*, positions: int, export_offwindow: int, seam: int, defects: int) -> RunnerStats:
-    """A REAL `RunnerStats` snapshot with the four load-bearing numbers supplied EXPLICITLY.
-
-    Every parameter is required and none has a default: the three counters and their
-    denominator are exactly what each assertion below rides on, so a row that forgot to state
-    one must fail loudly here rather than inherit a zero from the dataclass and then assert
-    against it. The remaining fields are scalars this payload does not read.
-    """
+    """Build a REAL `RunnerStats` snapshot with the four load-bearing numbers EXPLICIT: none has
+    a default, so a row that forgot one fails loudly rather than inheriting a zero."""
     return RunnerStats(
         games_completed=0, positions_generated=positions, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
@@ -160,15 +102,14 @@ def _stats(*, positions: int, export_offwindow: int, seam: int, defects: int) ->
 
 class _Pool:
     """A pool whose `runner_stats()` answer the drive sets EXPLICITLY before each step. No
-    internal call counter decides which snapshot is returned: `events.py` is free to read the
-    snapshot once or twice per emit, and an oracle whose rigging depended on that would be
-    measuring the reader's call pattern instead of the payload."""
+    internal call counter decides which snapshot is returned, so the oracle measures the payload
+    rather than the reader's call pattern."""
 
     search_kind = "gumbel"
     avg_game_length = 20.0
     x_winrate = 0.5
     o_winrate = 0.45
-    draw_rate = 0.05  # F-816-2: the third outcome share.
+    draw_rate = 0.05  # the third outcome share.
     draws = 1
     sims_per_sec = 100.0
     batch_fill_pct = 0.9
@@ -180,10 +121,8 @@ class _Pool:
 
     @property
     def games_completed(self) -> int:
-        # A step only runs when new games have arrived since the last one, so a CONSTANT
-        # game count drives exactly one `log_interval` boundary and every two-emit row here
-        # would silently degrade into a one-emit row. Incrementing on read is the house rig
-        # (`tests/test_run_disk_guard_abort_rc.py::_Pool`).
+        # A step only runs when new games have arrived, so a CONSTANT game count would drive
+        # exactly one boundary and silently degrade every two-emit row into a one-emit row.
         self._games += 1
         return self._games
 
@@ -239,9 +178,8 @@ class _Buffer:
 
     def sample_graph_batch(self, n: int, *, augment: bool = False, recent_frac: float = 0.0,
                            n_threads: int = 1):
-        # The graph route's sampler. DELEGATED to a real `HexgBuffer` rather than faked: the
-        # dispatcher collates the wire for real before the trainer stub ever sees it, so a
-        # hand-built payload would be a second wire format for the collate to disagree with.
+        # The graph route's sampler, DELEGATED to a real `HexgBuffer`: the dispatcher collates
+        # the wire for real, so a hand-built payload would be a second wire format.
         return self._hexg.sample_graph_batch(n, augment=augment, recent_frac=recent_frac,
                                              n_threads=n_threads)
 
@@ -254,25 +192,20 @@ class _SpySink:
         self.events.append(dict(event))
 
     def named(self, name: str) -> list[dict]:
-        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect
-        # and must be loud rather than silently filtered out of every assertion below.
+        # `event` is subscripted, not `.get`-ed: a payload without it is a producer defect.
         return [e for e in self.events if e["event"] == name]
 
 
 def _drive(*snapshots: RunnerStats) -> list[dict]:
-    """Drive a REAL `StepCoordinator` once per snapshot, at `log_interval=1`, and return the
-    `iteration_complete` payloads it emitted — one per step, in order.
-
-    `log_interval=1` is the smallest boundary that produces an emit per step; the production
-    cadence (run5 mints 1000) is the SAME guard line (`step.py:369`) with a bigger modulus,
-    so nothing about the payload under test depends on the number.
-    """
+    """Drive a REAL `StepCoordinator` once per snapshot at `log_interval=1` and return the
+    `iteration_complete` payloads, one per step, in order. The production cadence is the SAME
+    guard line with a bigger modulus."""
     assert snapshots, "a drive with no snapshot measures nothing"
     config = dataclasses.replace(
         _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
-        # R242: gate cadence mirrors narration cadence (the shipped posture).
+        # Gate cadence mirrors narration cadence, the shipped posture.
         **{"eval_interval": 10**9, "log_interval": 1, "gate_interval": 1,
            "min_buf_size": 10},
     )
@@ -298,25 +231,15 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
 
 
 def _integrity(payload: dict) -> dict:
-    """The nested block, subscripted so its absence is the loud failure this file exists to
-    produce."""
+    """Return the nested block, subscripted so its absence is loud."""
     return payload[_PAYLOAD_KEY]
 
 
-# ══ O-20 — the emission leg (this node id is cited by the producer-manifest row) ═══════
+# O-20 — the emission leg; this node id is cited by the producer-manifest row.
 def test_iteration_complete_carries_the_target_integrity_fire_rates() -> None:
-    """O-20 — the LAW-07 producer test the `target_integrity_counters` manifest row cites.
-
-    A live run's own stream must carry the three Phase-T counters, each with its cumulative
-    `total`, its interval `delta` and a `per_position` RATE, beside the `positions_delta`
-    denominator that rate is taken over. LAW-03: the unit is fires per RECORDED POSITION —
-    not per game, not per ply — which is why the denominator is published rather than left
-    for a consumer to guess.
-
-    MUTATION THAT REDS IT (M-O20): `_target_integrity_report` returns `{}` → the key is
-    absent from the emitted payload. O-26 stays green (the signature is untouched) and O-27
-    stays green (the producer symbol still resolves), which is why those two rows exist
-    separately."""
+    """The stream carries the three counters, each with `total`, `delta` and a `per_position`
+    rate, beside the `positions_delta` denominator that rate is taken over — fires per RECORDED
+    POSITION, published rather than left for a consumer to guess."""
     payload = _drive(
         _stats(positions=1200, export_offwindow=17, seam=3, defects=0),
         _stats(positions=2400, export_offwindow=41, seam=9, defects=0),
@@ -340,19 +263,10 @@ def test_iteration_complete_carries_the_target_integrity_fire_rates() -> None:
         )
 
 
-# ══ O-21 — the §0b drift witness is READABLE in-run ════════════════════════════════════
+# O-21 — the drift witness is READABLE in-run.
 def test_the_offwindow_witness_advance_is_readable_within_one_log_interval() -> None:
-    """O-21 — R164's premise, closed or not closed.
-
-    `PREREG_T §0b` names `export_offwindow_mass_moves` as THE in-run witness attributing the
-    expected game-shape drift. A witness a live run cannot read is not a witness. So an
-    advance between two `log_interval` boundaries must be visible as a NONZERO `delta` in the
-    stream at the next boundary — not merely as a bigger `total` a reader would have to
-    difference by hand across two log files.
-
-    MUTATION THAT REDS IT (M-O21): read the counters ONCE at coordinator construction and
-    reuse the snapshot — `total` freezes, `delta` stalls at 0, and O-24 (the idle case) stays
-    green throughout, which is exactly why this row rigs an ADVANCE."""
+    """An advance between two boundaries is visible as a NONZERO `delta` at the next one, not
+    merely as a bigger `total` a reader would have to difference by hand across two log files."""
     first, second = _drive(
         _stats(positions=1000, export_offwindow=100, seam=0, defects=0),
         _stats(positions=2000, export_offwindow=175, seam=0, defects=0),
@@ -376,17 +290,11 @@ def test_the_offwindow_witness_advance_is_readable_within_one_log_interval() -> 
     )
 
 
-# ══ O-22 — delta is the interval, total is cumulative ══════════════════════════════════
+# O-22 — delta is the interval, total is cumulative.
 def test_the_delta_is_the_interval_change_and_the_total_is_cumulative() -> None:
-    """O-22. Two numbers with two meanings, read by consumers who need them apart: `total`
-    answers "how much has this lever fired all run", `delta` answers "is it firing NOW".
-
-    Asserted on the SECOND emit so the claim is independent of whatever baseline the first
-    emit uses — a first-emit-only oracle would be measuring the constructor's convention
-    rather than the arithmetic.
-
-    MUTATION THAT REDS IT (M-O22): publish `total` in the `delta` slot. O-20 stays green (the
-    key and all three slots are still there), which is why this row is separate from it."""
+    """`total` answers "how much has this lever fired all run", `delta` answers "is it firing
+    NOW". Asserted on the SECOND emit, so the claim is independent of the first emit's baseline
+    convention."""
     payloads = _drive(
         _stats(positions=500, export_offwindow=10, seam=200, defects=0),
         _stats(positions=1500, export_offwindow=10, seam=260, defects=0),
@@ -410,17 +318,11 @@ def test_the_delta_is_the_interval_change_and_the_total_is_cumulative() -> None:
     )
 
 
-# ══ O-23 — an unmeasurable rate is None, never a fabricated 0.0 ════════════════════════
+# O-23 — an unmeasurable rate is None, never a fabricated 0.0.
 def test_per_position_is_None_when_no_position_was_recorded() -> None:
-    """O-23 — the F-10 class in miniature, and the repo's own stated convention.
-
-    `event_manifest.md:230-234` verbatim: "An unproduced field carries `None`, never a
-    fabricated value. A constant `0` in the ONE channel reads as a real measurement." With
-    zero positions recorded in the interval there is NO rate to publish: `0.0` would tell a
-    reader "this lever did not fire per position", which is a claim nobody measured.
-
-    MUTATION THAT REDS IT (M-O23): `per_position = delta / max(1, positions_delta)` — the
-    tempting divide-by-zero guard, which fabricates exactly the reading this row forbids."""
+    """With zero positions recorded there is NO rate to publish: an unproduced field carries
+    `None`, because a constant `0` in the ONE channel reads as a real measurement. The tempting
+    `delta / max(1, positions_delta)` guard fabricates exactly that reading."""
     payloads = _drive(
         _stats(positions=800, export_offwindow=5, seam=5, defects=0),
         _stats(positions=800, export_offwindow=9, seam=5, defects=0),
@@ -441,21 +343,11 @@ def test_per_position_is_None_when_no_position_was_recorded() -> None:
     )
 
 
-# ══ O-24 — an idle lever stays visible ═════════════════════════════════════════════════
+# O-24 — an idle lever stays visible.
 def test_an_idle_lever_stays_visible_at_zero() -> None:
-    """O-24 — LAW-18's "starved vs ineffective" distinction, which only a VISIBLE zero can
-    make. The `chain_loss_with_fire_rate` posture (`losses.py:224-238`) publishes
-    `fired: False, fire_rate: 0.0` rather than omitting the block, and
-    `tests/selfplay/test_target_law18_counters.py` already names that as the Phase-T posture
-    for these three counters on the surface half.
-
-    It is `target_integrity_defects` that most depends on this: that latch is run-FATAL
-    (`search_drive.rs:765-767` stores the typed message and breaks; the bridge drain face
-    raises), so it reads 0 in every run that survives to emit an `iteration_complete`. A
-    payload that omitted zero-valued counters would make that permanent 0 indistinguishable
-    from a field with no producer — which is F-10 exactly.
-
-    MUTATION THAT REDS IT (M-O24): omit counters whose `total == 0`."""
+    """A counter at zero is PUBLISHED at zero, which distinguishes "starved" from "not firing".
+    `target_integrity_defects` most depends on it: that latch is run-FATAL, so it reads 0 in
+    every run that survives to emit."""
     payloads = _drive(
         _stats(positions=1000, export_offwindow=0, seam=0, defects=0),
         _stats(positions=3000, export_offwindow=0, seam=0, defects=0),
@@ -479,17 +371,11 @@ def test_an_idle_lever_stays_visible_at_zero() -> None:
         )
 
 
-# ══ O-25 — no crosswiring ══════════════════════════════════════════════════════════════
+# O-25 — no crosswiring.
 def test_the_three_counters_do_not_crosswire() -> None:
-    """O-25. Three distinct rigged values thread 1:1 into three distinct slots.
-
-    Two counters that reached the right payload in each other's slots satisfy O-20 (the key
-    and the slots are there), O-22 (the arithmetic is still right, just about the wrong
-    lever) and O-24 (nothing is omitted). Only distinct values can see it, and the values
-    are chosen distinct-in-both-total-and-delta so a swap cannot alias.
-
-    MUTATION THAT REDS IT (M-O25): swap `inference_failures_total` and
-    `target_integrity_defects` in the report builder."""
+    """Three distinct rigged values thread 1:1 into three distinct slots — distinct in both
+    `total` and `delta`, so a swap cannot alias. Counters in each other's slots satisfy the
+    emission, arithmetic and idle rows alike."""
     payloads = _drive(
         _stats(positions=1000, export_offwindow=11, seam=22, defects=33),
         _stats(positions=2000, export_offwindow=111, seam=222, defects=333),
@@ -512,26 +398,16 @@ def test_the_three_counters_do_not_crosswire() -> None:
     )
 
 
-# ══ O-26 — the signature leg (the anti-`solver_deltas` pin) ════════════════════════════
+# O-26 — the signature leg.
 def test_the_target_integrity_parameter_has_no_default() -> None:
-    """O-26 — the leg no emission oracle can see, and the reason `solver_deltas` rotted.
+    """`target_integrity` is a required keyword-only parameter with NO default.
 
-    `solver_deltas: dict | None = None` (`events.py:202`) has ZERO callers passing it. The
-    payload key silently never appears and no test can tell, because every emission assertion
-    in the repo is written against payloads that were emitted WITHOUT it. A parameter default
-    is a MIGRATED authority, not an absent one (`run.py:366-372`, MF-2 Attack B): with no
-    default, a caller that omits `target_integrity` is a `TypeError` the first time the
-    coordinator crosses a `log_interval` boundary, in a test, loudly.
-
-    MUTATION THAT REDS IT (M-O26): give the parameter `= None` in the CALLEE's signature —
-    and this is the ONLY mutation that can red this row. Deleting the ARGUMENT at the call
-    site cannot move a callee's signature; it reds the emission rows instead. The two legs
-    are independent and each needs its own killer."""
-    # AUDIT-1 F-47: this read the signature of `emit_training_events`, the PRE-SPLIT wrapper
-    # that R210 retired and that production has not called since. A signature pin on a function
-    # nothing calls is a pin on a shape nothing produces — the wrapper's own docstring said it
-    # existed to keep THIS assertion green, which is the tail wagging the dog. The parameter
-    # lives on `emit_iteration_complete_event`, the builder that actually emits the block.
+    The leg no emission oracle can see, and the reason `solver_deltas` rotted: with a default, a
+    caller that omits it emits nothing and every assertion is written against payloads emitted
+    without it. With none, omitting it is a loud `TypeError` at the first boundary crossing.
+    """
+    # The pin reads the builder that actually emits the block, not the retired pre-split
+    # wrapper, whose own docstring said it existed to keep this assertion green.
     parameters = inspect.signature(emit_iteration_complete_event).parameters
     assert _PAYLOAD_KEY in parameters, (
         f"`emit_iteration_complete_event` must take `{_PAYLOAD_KEY}` — the payload cannot "
@@ -543,11 +419,9 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
         "`solver_deltas` shape verbatim: the one caller can then stop passing it and the "
         "counters leave the stream with every test still green"
     )
-    # THE KEYWORD-ONLY HALF IS BANKED, not silently dropped (AUDIT-1 F-47, REPAIR-3 Leg 2).
-    # It held on the retired WRAPPER and does NOT hold on the live builder: every one of the
-    # eight `emit_iteration_complete_event` call sites passes FOURTEEN positionals, which is
-    # precisely the hazard the clause named — and that is why converting it is a signature
-    # change across eight sites rather than an assertion. Banked with the count measured.
+    # THE KEYWORD-ONLY HALF IS BANKED, not silently dropped: it held on the retired WRAPPER and
+    # does not hold on the live builder, whose eight call sites each pass fourteen positionals —
+    # precisely the hazard the clause named, and a signature change rather than an assertion.
     solver = inspect.signature(emit_training_step_event).parameters["solver_deltas"]
     assert solver.default is None, (
         "premise (the CONTRAST this row is defined against): `solver_deltas` — which lives on "
@@ -559,17 +433,11 @@ def test_the_target_integrity_parameter_has_no_default() -> None:
     )
 
 
-# ══ O-28 — a decrease is emitted as measured ═══════════════════════════════════════════
+# O-28 — a decrease is emitted as measured.
 def test_a_counter_decrease_is_emitted_as_measured_and_never_clamped() -> None:
-    """O-28. The atomics are monotonic and the pool is not restarted mid-run, so a negative
-    delta CANNOT happen. That is precisely why it must not be clamped: a `max(0, …)` would
-    hide a wiring bug — a swapped snapshot, a re-created pool, a counter read off the wrong
-    runner — rather than suppress a real event. The repo already took this position once:
-    `event_manifest.md:101`, "a negative lag is a wiring bug reported loudly once, never a
-    fire".
-
-    MUTATION THAT REDS IT (M-O28): `delta = max(0, t2 - t1)`. Every other row here stays
-    green, because no other row ever drives a decrease."""
+    """A negative delta is published, never clamped: the atomics are monotonic, so a
+    `max(0, ...)` would hide a wiring bug — a swapped snapshot, a re-created pool, a counter read
+    off the wrong runner — rather than suppress a real event."""
     payloads = _drive(
         _stats(positions=1000, export_offwindow=100, seam=0, defects=0),
         _stats(positions=2000, export_offwindow=40, seam=0, defects=0),

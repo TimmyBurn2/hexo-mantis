@@ -1,15 +1,12 @@
-"""R328(d) — the BC stopping mechanism: forward-only held-out loss, and a patience stop.
+"""The BC stopping mechanism: forward-only held-out loss, and a patience stop.
 
-WHY THIS SUITE EXISTS AT ALL. The stopping rule is the ONE stated risk bound on bootstrap
-posture (A): the filed adjudication's §3(A) says the value head's over-fit risk *"is bounded by
-a knob the operator already controls — how long you pretrain"*. MINT-CLOSE Leg 2 then measured
-that the knob did not exist: `run_graph_pretrain` evaluated nothing and `run_declared_train_step`
-IS an optimizer step. R328(d) rules it BUILT and **suite-proven with planted breaks before any
-pretrain consumes it** — which is this file, written before the first BC run.
+The stopping rule is the ONE stated risk bound on the bootstrap posture — the value head's
+over-fit risk is bounded by how long you pretrain — and the knob did not exist until it was built
+here, before the first BC run.
 
-THE ROWS ARE THE BREAKS. Each names the mutation it exists to catch, because a stopping rule has
-two symmetric failure modes that both look healthy from outside: one that can never fire (the run
-silently becomes budget-bound) and one that fires on noise (the run stops before it learns).
+THE ROWS ARE THE BREAKS: a stopping rule has two symmetric failure modes that both look healthy
+from outside, one that can never fire (the run silently becomes budget-bound) and one that fires
+on noise (the run stops before it learns).
 """
 from __future__ import annotations
 
@@ -20,9 +17,8 @@ import pytest
 from mantis.train.pretrain.heldout import HeldOutError, HeldOutMonitor, PatienceStop
 
 
-# ═══ PB-6 / PB-7 — the patience rule's two symmetric deaths ══════════════════════════════
 def test_pb6_a_worse_reading_does_not_reset_patience() -> None:
-    """PB-6. If a WORSE loss reset the counter, the stop could never fire."""
+    """If a WORSE loss reset the counter, the stop could never fire."""
     stop = PatienceStop(patience=2, min_delta=0.0)
     assert not stop.observe(1.0, step=1)
     assert not stop.observe(2.0, step=2)          # worse — must COUNT, not reset
@@ -31,8 +27,7 @@ def test_pb6_a_worse_reading_does_not_reset_patience() -> None:
 
 
 def test_pb7_an_improvement_smaller_than_min_delta_is_NOT_progress() -> None:
-    """PB-7, the mirror of PB-6: with `>` alone, drift inside the estimator's own noise
-    resets patience forever and the stop can never fire either."""
+    """With `>` alone, drift inside the estimator's own noise resets patience forever."""
     stop = PatienceStop(patience=2, min_delta=0.01)
     assert not stop.observe(1.0, step=1)
     assert not stop.observe(0.999, step=2)        # improvement, but below min_delta
@@ -50,8 +45,8 @@ def test_a_real_improvement_DOES_reset_patience() -> None:
 
 
 def test_the_counters_report_enough_to_tell_the_two_endings_apart() -> None:
-    """LAW-18. A run that hit its ceiling and a run that stopped early must be
-    distinguishable without arithmetic on the logs."""
+    """A run that hit its ceiling and one that stopped early must be distinguishable without
+    arithmetic on the logs."""
     stop = PatienceStop(patience=1, min_delta=0.0)
     stop.observe(1.0, step=10)
     stop.observe(2.0, step=20)
@@ -67,7 +62,6 @@ def test_a_monitor_that_never_observed_reports_no_best_rather_than_a_sentinel() 
     assert PatienceStop(patience=1, min_delta=0.0).counters()["heldout_best_policy_loss"] is None
 
 
-# ═══ the monitor's construction refusals ═════════════════════════════════════════════════
 def _monitor(**kw):
     base = dict(ring=object(), spec=object(), plies=1000, batch_size=100, eval_every=10,
                 patience=2, min_delta=0.01, caps_provider=lambda: None,
@@ -84,8 +78,7 @@ def test_an_EMPTY_heldout_ring_is_REFUSED() -> None:
 
 
 def test_a_cadence_that_NEVER_FIRES_is_REFUSED() -> None:
-    """`eval_every <= 0` silently turns the budget into the only bound — the failure this
-    whole mechanism was built because of."""
+    """`eval_every <= 0` silently turns the budget into the only bound."""
     with pytest.raises(HeldOutError, match="never fires"):
         _monitor(eval_every=0)
 
@@ -121,23 +114,14 @@ def test_measure_noise_reports_the_SPREAD_of_repeated_readings(monkeypatch) -> N
     assert m.measure_noise(object(), repeats=3) == pytest.approx(0.03)
 
 
-# ═══ PB-8 — the break that would leave every other row green ═════════════════════════════
 def test_pb8_the_train_ring_hazard_is_DEFENDED_where_the_ring_is_CHOSEN() -> None:
-    """PB-8, and it is a POINTER now rather than the disclosure it was when written.
+    """A POINTER to where the train-ring hazard is actually defended.
 
-    A monitor handed the training ring reports a loss that falls forever, and every row above
-    still passes: patience arithmetic, cadence, derivation and refusals are all properties of
-    the monitor, not of WHICH ring it holds. So the defence cannot live here — it lives where
-    the ring is CHOSEN, and it now exists in two places:
-
-      * the ENCODER's partition, asserted disjoint and exhaustive by game-hash set in
-        `tests/data/test_bootstrap_split_and_truncation.py`; and
-      * the CLI's `split_part` guard, which reads the provenance sidecar and refuses a ring
-        that does not declare itself held-out — driven by
-        `tests/train/test_bc_pretrain_cli_stopflags.py`.
-
-    This row stays as the pointer between them, because a reader who finds the stopping rule
-    first will otherwise assume this file covers the hazard it names.
+    A monitor handed the training ring reports a loss that falls forever and every row above still
+    passes, because they are properties of the monitor and not of WHICH ring it holds. The defence
+    lives where the ring is CHOSEN: the encoder's partition, asserted disjoint and exhaustive in
+    `tests/data/test_bootstrap_split_and_truncation.py`, and the CLI's `split_part` guard, driven
+    by `tests/train/test_bc_pretrain_cli_stopflags.py`.
     """
     m = _monitor()
     assert m.ring is not None

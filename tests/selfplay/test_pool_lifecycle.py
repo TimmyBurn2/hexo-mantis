@@ -1,21 +1,10 @@
-"""Suite H (lifecycle) — H-02 … H-11 — plus D-16, the pool's representation dispatch.
+"""Suite H (lifecycle), plus the pool's representation dispatch.
 
->300 justify: one lifecycle, one set of collaborator stubs. The producer-death contract
-(H-02/H-04), the start/stop protocol (H-03), the four forwarders (H-05..H-08) and the
-dispatch arms (D-16) all drive the SAME constructed pool with the SAME stub runner and stub
-server; splitting them would duplicate both stubs and let the copies drift apart.
-
-IMPL-written (non-⊕) per DESIGN §b.
-
-The stubs replace the runner and inference server AFTER construction, so every assertion
-still runs against a real `WorkerPool` built by the real constructor — the thing under test
-is the pool's own wiring, not a re-implementation of it. H-09/H-10/H-11 are the integration
-tier and use the real Rust runner end to end.
-
-The load-bearing row is H-02. The feeder thread is the SOLE producer of training data: if
-it dies and nothing notices, training continues happily on a buffer that stops growing, and
-every metric except throughput looks healthy. `check_producer_health` exists so that
-failure is loud on the next step, and this file is what proves the wiring is intact.
+>300 justify: one lifecycle, one set of collaborator stubs. The producer-death contract, the
+start/stop protocol, the four forwarders and the dispatch arms all drive the SAME constructed
+pool with the SAME stub runner and stub server, so splitting them would duplicate both stubs and
+let the copies drift. The stubs replace the runner and inference server AFTER construction, so
+every assertion runs against a real `WorkerPool` built by the real constructor.
 """
 from __future__ import annotations
 
@@ -38,9 +27,8 @@ _INTEGRATION_TIMEOUT_S = 60.0
 
 
 def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
-    # WPSC Phase 2 SC-A2 reshape: `selfplay`/`inference`/`train` are nested schema-shaped
-    # sections now (no top-level `mcts`/flat-namespace fallback). `over` still layers onto
-    # `selfplay` (its historical target — no call site in this file uses it today).
+    # `selfplay`/`inference`/`train` are nested schema-shaped sections; `over` layers onto
+    # `selfplay`.
     selfplay: dict[str, Any] = {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
@@ -57,9 +45,8 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     selfplay.update(over)
     inference = {
         "inference_batch_size": 4, "inference_max_wait_ms": 10,
-            # F-816-10 (R276(f)): the graph arm resolves the fused-forward memory bound at
-        # construction. NON-BINDING BY CONSTRUCTION here — this fixture is about wiring, and
-        # a cap that bound would make it exercise a split with nothing asserting the M.
+        # The graph arm resolves the fused-forward memory bound at construction; NON-BINDING
+        # BY CONSTRUCTION here, since this fixture is about wiring and nothing asserts the M.
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
@@ -77,7 +64,6 @@ def _graph_pool(**kw: Any) -> WorkerPool:
     )
 
 
-# ── collaborator stubs, installed after construction ────────────────────────────
 class _StubRunner:
     """A runner that produces nothing: the loop spins and sleeps until it is stopped."""
 
@@ -169,16 +155,10 @@ def _stub_collaborators(pool: WorkerPool, **runner_kw: Any) -> tuple[_StubRunner
     return runner, server
 
 
-# ═══ H-02 — the sole-producer contract ═══════════════════════════════════════════
 def test_producer_death_is_re_raised_with_its_cause(monkeypatch) -> None:
-    """H-02 — PASS iff a drain-loop exception leaves the pool flagged, and the next
-    `check_producer_health()` raises `RuntimeError` with the original exception attached as
-    its `__cause__`.
-
-    The feeder is the only thing writing training data. If it dies quietly, training runs
-    on a buffer that has stopped growing while loss, throughput per step, and every eval
-    number stay plausible for hours. FAIL = exactly that silence. The cause must survive
-    because 'the feeder died' without the traceback is not actionable."""
+    """A drain-loop exception leaves the pool flagged and the next `check_producer_health()`
+    raises with the original as its `__cause__`. The feeder is the only thing writing training
+    data: if it dies quietly, loss and eval numbers stay plausible for hours."""
     pool = _graph_pool()
     boom = ZeroDivisionError("scripted drain failure")
 
@@ -197,12 +177,7 @@ def test_producer_death_is_re_raised_with_its_cause(monkeypatch) -> None:
 
 
 def test_healthy_and_cleanly_stopped_pools_do_not_raise(monkeypatch) -> None:
-    """H-02 (no-false-abort arm) — PASS iff `check_producer_health()` is silent on a fresh
-    pool AND after a clean `stop()`: a normal shutdown sets the stop event and the loop
-    returns without an exception, so nothing is flagged.
-
-    FAIL = every orderly shutdown aborts the run, which is how a fail-fast guard gets
-    disabled by whoever is on call that night."""
+    """`check_producer_health()` is silent on a fresh pool and after a clean `stop()`."""
     pool = _graph_pool()
     pool.check_producer_health()
 
@@ -213,12 +188,8 @@ def test_healthy_and_cleanly_stopped_pools_do_not_raise(monkeypatch) -> None:
 
 
 def test_stats_loop_guard_does_not_let_the_thread_die_silently(monkeypatch, caplog) -> None:
-    """H-04 — PASS iff the guard LOGS at error level and records the exception, rather than
-    letting the daemon thread unwind unobserved.
-
-    A daemon thread that raises prints to stderr at best and vanishes at worst; the log
-    line plus the flag are the two independent traces that make the death discoverable
-    from a run's own artefacts."""
+    """The guard LOGS at error level and records the exception: two independent traces of a
+    daemon thread that would otherwise unwind unobserved."""
     pool = _graph_pool()
 
     def _explode(_pool):
@@ -234,13 +205,9 @@ def test_stats_loop_guard_does_not_let_the_thread_die_silently(monkeypatch, capl
     )
 
 
-# ═══ H-03 — start / stop protocol ════════════════════════════════════════════════
 def test_start_is_idempotent_while_running() -> None:
-    """H-03 — PASS iff a second `start()` on a running pool is a no-op: no second runner
-    start, no second server start, no second feeder thread.
-
-    FAIL = two feeder threads draining the same Rust queue, which double-counts pushes and
-    interleaves two `system_stats` cadences."""
+    """A second `start()` on a running pool is a no-op; two feeder threads on one Rust queue
+    would double-count pushes and interleave two `system_stats` cadences."""
     pool = _graph_pool()
     runner, server = _stub_collaborators(pool)
 
@@ -258,12 +225,9 @@ def test_start_is_idempotent_while_running() -> None:
 
 
 def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
-    """H-03 (teardown arm) — PASS iff `stop()` sets the stop event, stops the runner and
-    the server, joins the server with a bounded timeout, joins and clears the feeder
-    thread, and stops the recorder.
-
-    The bounded join matters: an unbounded one turns a wedged inference thread into a
-    hung shutdown, and the run never writes its final checkpoint."""
+    """`stop()` sets the stop event, stops runner and server, joins the server with a BOUNDED
+    timeout, joins and clears the feeder thread, and stops the recorder. An unbounded join turns
+    a wedged inference thread into a hung shutdown with no final checkpoint."""
     recorder = _StubRecorder()
     pool = _graph_pool(recorder=recorder)
     runner, server = _stub_collaborators(pool)
@@ -279,9 +243,8 @@ def test_stop_joins_both_threads_and_stops_the_recorder() -> None:
 
 
 def test_stopped_feeder_thread_actually_exits() -> None:
-    """H-03 (liveness arm) — PASS iff the feeder thread is no longer alive after `stop()`.
-    Asserting only that `join` was called would pass on a loop that ignores its stop
-    event."""
+    """The feeder thread is no longer alive after `stop()`; asserting the `join` call alone
+    would pass on a loop that ignores its stop event."""
     pool = _graph_pool()
     _stub_collaborators(pool)
 
@@ -292,13 +255,9 @@ def test_stopped_feeder_thread_actually_exits() -> None:
     assert not thread.is_alive()
 
 
-# ═══ H-06 … H-08 — the forwarders ════════════════════════════════════════════════
 def test_sync_inference_weights_forwards_to_the_server() -> None:
-    """H-06 — PASS iff a promoted state_dict reaches the server's safe swap, by identity.
-
-    This is the promotion path's landing point: a pool that accepts the call and drops it
-    keeps serving the OLD weights while every promotion log line says the new ones are
-    live — the run then evaluates a model it is not actually playing."""
+    """A promoted state_dict reaches the server's safe swap by identity: a pool that drops the
+    call keeps serving OLD weights while promotion logs say otherwise."""
     pool = _graph_pool()
     _, server = _stub_collaborators(pool)
     state = {"layer.weight": torch.zeros(1)}
@@ -308,11 +267,8 @@ def test_sync_inference_weights_forwards_to_the_server() -> None:
 
 
 def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
-    """H-07 — PASS iff an injected recorder receives `set_step` and answers
-    `latest_replay_path`, and the DEFAULT recorder is inert (`None`, no error).
-
-    The concrete recorder is a display-surface concern that does not exist in this tree, so
-    the default has to be a working no-op rather than a missing attribute."""
+    """An injected recorder receives `set_step`; the DEFAULT recorder is inert, because the
+    concrete recorder does not exist in this tree."""
     recorder = _StubRecorder(path="replays/games_0001.jsonl")
     pool = _graph_pool(recorder=recorder)
     pool.update_checkpoint_step(42)
@@ -336,12 +292,7 @@ def test_recorder_seam_forwards_and_defaults_to_inert() -> None:
     ],
 )
 def test_batch_fill_pct_math(forward_count, total_requests, batch_size, expected) -> None:
-    """H-08 — PASS iff batch occupancy reproduces the frozen arithmetic across the edge
-    cases: zero forwards, exact fill, over-fill clamped at 100, and a zero batch size.
-
-    The metric drives a throughput panel; an unclamped value above 100 or a
-    ZeroDivisionError on the first read both make the panel useless at exactly the moment
-    someone is looking at it."""
+    """Batch occupancy reproduces the frozen arithmetic across its four edge cases."""
     pool = _graph_pool()
     pool._inference_server = _StubServer(forward_count=forward_count,
                                          total_requests=total_requests,
@@ -350,12 +301,7 @@ def test_batch_fill_pct_math(forward_count, total_requests, batch_size, expected
 
 
 def test_graph_pool_takes_the_graph_arm() -> None:
-    """D-16 (graph arm) — PASS iff a graph pool resolves to the graph branch, wraps a
-    GRAPH facade, has degenerate (zero) dense dims, and calls `collect_graph_data` and
-    never `collect_data`.
-
-    The two arms write DIFFERENT storage formats. Dispatching on anything other than the
-    resolved representation is how a graph run ends up writing dense rows."""
+    """A graph pool calls `collect_graph_data` and never `collect_data`: different formats."""
     pool = _graph_pool()
     runner, _ = _stub_collaborators(pool)
 
@@ -374,16 +320,10 @@ def test_graph_pool_takes_the_graph_arm() -> None:
     )
 
 
-# ═══ H-09 … H-11 — the real thing (integration tier) ════════════════════════════
 @pytest.mark.integration
 def test_worker_pool_produces_positions_threaded_smoke() -> None:
-    """H-09 — PASS iff a real pool with a real Rust runner and a tiny net actually
-    produces positions and drains them into the buffer within the timeout, then shuts down
-    cleanly with the producer still healthy.
-
-    Every other row in this file stubs one collaborator or the other. This is the only one
-    that proves the assembled thing runs: inference server, Rust workers, feeder thread and
-    replay buffer, all live at once."""
+    """A real pool with a real Rust runner produces positions and drains them into the buffer —
+    the only row that proves the assembled thing runs."""
     pool = _graph_pool()
     pool.start()
     try:
@@ -402,9 +342,7 @@ def test_worker_pool_produces_positions_threaded_smoke() -> None:
 
 @pytest.mark.integration
 def test_graph_pool_smoke_drains_without_producer_death() -> None:
-    """H-09 (graph arm) — PASS iff the graph pool runs the graph drain arm against the real
-    runner without killing the feeder. The dense smoke cannot cover it: the two arms share
-    no code below the branch, and the production identity is a graph encoding."""
+    """The graph drain arm runs against the real runner without killing the feeder."""
     pool = _graph_pool()
     pool.start()
     try:
@@ -418,10 +356,7 @@ def test_graph_pool_smoke_drains_without_producer_death() -> None:
 
 
 def test_pool_threads_are_not_leaked_by_construction() -> None:
-    """H-03 (hygiene arm) — PASS iff merely CONSTRUCTING a pool starts no thread. The
-    inference server is a `Thread` subclass, so an accidental `start()` in the constructor
-    would leave a live thread behind every time a pool is built and discarded — including
-    once per test in this file."""
+    """Constructing a pool starts no thread: the inference server is a `Thread` subclass."""
     before = threading.active_count()
     pool = _graph_pool()
     assert threading.active_count() == before, "construction must not start a thread"

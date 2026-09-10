@@ -1,21 +1,10 @@
-// Exceeds the 300-line soft cap (R8): the full PyMCTSTree pymethod surface
-// (ctor-compose, the GIL-release select/expand/expand_and_backup_ls +
-// expand_and_backup_ls_graph, policy getters, viewer accessors) ports as one
+// Exceeds the 300-line soft cap (R8): the full PyMCTSTree pymethod surface ports as one
 // line-auditable unit with its tests.
 //! Python-visible PUCT `MCTSTree` wrapper over `mantis_search::MCTSTree`.
 //!
-//! `unsendable` (LOCKED #3): the tree embeds a `Board` (Send + !Sync), so
-//! single-thread Python ownership is the synchronization. F-42:
-//! `module = "mantis._engine"`.
-//!
-//! Two new-side adaptations, both bridge-internal (no cross-crate seam):
-//! - `pending_boards`: the new `MCTSTree.pending` is `pub(crate)` (unreadable
-//!   from the bridge), so the wrapper keeps its OWN clones of the leaf boards
-//!   returned by `select_leaves` and drives the legal-set aggregation from them
-//!   (behaviour-exact: same leaf boards, centers recomputed in Rust).
-//! - `forced_root_child`: the new field is `pub(crate)` with a pub setter but NO
-//!   pub getter, so the wrapper mirrors it (reset to `None` on `new_game`/`reset`,
-//!   matching the tree's internal reset).
+//! `unsendable`: the tree embeds a `Board` (Send + !Sync), so single-thread Python ownership is
+//! the synchronization. `pending_boards` and `forced_root_child` are bridge-side mirrors of
+//! `pub(crate)` tree state, reset on `new_game`/`reset` to match the tree's own reset.
 
 use numpy::{IntoPyArray, PyArray1};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
@@ -36,54 +25,32 @@ pyo3::create_exception!(
 );
 
 /// Per-root-child info returned by `get_root_children_info`:
-/// `((q, r), pool_idx, prior, visits, q_value)`. Used by the policy viewer
-/// to drive Gumbel Sequential Halving from Python.
+/// `((q, r), pool_idx, prior, visits, q_value)`.
 type RootChildInfo = ((i32, i32), u32, f32, u32, f32);
 
-/// Single-threaded PUCT MCTS tree exposed to Python.
-///
-/// Usage (Python):
-///
-/// ```python
-/// tree = MCTSTree(c_puct=1.5)
-/// tree.new_game(board)
-/// for _ in range(n_simulations):
-///     boards = tree.select_leaves(1)
-///     policies = [[...]]   # list of float lists, length = board_size^2 + 1
-///     values   = [0.5]     # list of scalars
-///     tree.expand_and_backup(policies, values)
-/// policy = tree.get_policy(temperature=1.0, board_size=9)
-/// visits = tree.root_visits()
-/// ```
+/// Single-threaded PUCT MCTS tree exposed to Python: `new_game(board)`, then per simulation
+/// `select_leaves(n)` followed by `expand_and_backup(policies, values)`, then `get_policy()`.
 #[pyclass(name = "MCTSTree", module = "mantis._engine", unsendable)]
 pub struct PyMCTSTree {
     inner: MCTSTree,
     board_size: usize,
-    /// Bridge-held clones of the leaf boards from the last `select_leaves` — the
-    /// substitute for the tree's `pub(crate)` `pending` used by the ls path.
+    /// Bridge-held clones of the last `select_leaves` boards — the tree's `pending` is
+    /// `pub(crate)`.
     pending_boards: Vec<Board>,
-    /// Bridge mirror of the tree's `pub(crate)` `forced_root_child` (pub setter,
-    /// no pub getter). Kept in lockstep on set / new_game / reset.
+    /// Bridge mirror of the tree's `pub(crate)` `forced_root_child`, kept in lockstep.
     forced_root_child: Option<u32>,
-    /// The Gumbel root state of the search in progress, under `SearchKind::Gumbel`.
-    ///
-    /// HELD BY THE TREE rather than returned to Python as a handle, and that is the point:
-    /// the state is only meaningful against the tree it was drawn over, and a Python-side
-    /// handle could outlive a `new_game` and be driven against a different root. Cleared
-    /// by `new_game`/`reset` for exactly that reason.
+    /// The Gumbel root state of the search in progress. HELD BY THE TREE rather than handed to
+    /// Python: the state is only meaningful against the tree it was drawn over, and a
+    /// Python-side handle could outlive a `new_game`. Cleared by `new_game`/`reset`.
     gumbel_root: Option<MctxRootState>,
 }
 
 #[pymethods]
 impl PyMCTSTree {
-    /// Args:
-    ///     c_puct: exploration constant (default 1.5).
-    ///     virtual_loss: fixed penalty (default 1.0).
-    ///     fpu_reduction: KataGo-style dynamic FPU base (default 0.25).
-    ///         FPU for unvisited children = parent_q - fpu_reduction * sqrt(explored_mass).
-    ///         Set to 0.0 to disable (classical Q=0 for unvisited).
-    ///     quiescence_enabled: override leaf value when forced win/loss is proven (default True).
-    ///     quiescence_blend_2: blend amount for the 2-winning-moves case (default 0.3).
+    /// Args: `c_puct` exploration constant (1.5); `virtual_loss` fixed penalty (1.0);
+    ///     `fpu_reduction` KataGo dynamic FPU base (0.25), an unvisited child's FPU being
+    ///     `parent_q - fpu_reduction * sqrt(explored_mass)`; `quiescence_enabled` (True) and
+    ///     `quiescence_blend_2` (0.3) for the proven forced win/loss override.
     #[new]
     #[pyo3(signature = (c_puct = 1.5, virtual_loss = 1.0, fpu_reduction = 0.25, quiescence_enabled = true, quiescence_blend_2 = 0.3))]
     pub fn new(
@@ -104,16 +71,12 @@ impl PyMCTSTree {
         }
     }
 
-    /// Select the search kind once per player, exactly as the self-play worker does.
-    ///
-    /// THE DEPLOY HEAD AND THE SELF-PLAY WORKER CALL THE SAME SETTER, which is what makes
-    /// "the bar searches the way the run searched" a construction rather than a
-    /// coincidence. `c_visit`/`c_scale` are the config's own required keys, threaded from
-    /// the same section; nothing here defaults them.
+    /// Select the search kind once per player, through the SAME setter the self-play worker
+    /// calls — what makes "the bar searches the way the run searched" a construction.
+    /// `c_visit`/`c_scale` are the config's required keys; nothing here defaults them.
     ///
     /// # Errors
-    /// `ValueError` — `kind` is not a search kind this build knows. REFUSED, never
-    /// defaulted (LAW-11).
+    /// `ValueError` — `kind` is not a search kind this build knows. REFUSED, never defaulted.
     pub fn configure_search(&mut self, kind: &str, c_visit: f32, c_scale: f32) -> PyResult<()> {
         let parsed = SearchKind::from_config_str(kind).ok_or_else(|| {
             PyValueError::new_err(format!(
@@ -132,14 +95,9 @@ impl PyMCTSTree {
         self.inner.search_kind().as_config_str()
     }
 
-    /// Draw this search's Gumbel root state over the EXPANDED root, from an explicit seed.
-    ///
-    /// THE SEED IS REQUIRED AND EXPLICIT, not a thread RNG. A promotion bar has to be a
-    /// reproducible instrument (LAW-15), and the Gumbel draw is the one stochastic term in
-    /// the Gumbel head; a caller that seeds it per (game, ply) gets a bar that replays.
-    ///
-    /// `m` is Mctx's `max_num_considered_actions`, `budget` the simulations that will
-    /// descend from the already-evaluated root.
+    /// Draw this search's Gumbel root state over the EXPANDED root, from an explicit seed —
+    /// required rather than a thread RNG, because a promotion bar has to replay. `m` is Mctx's
+    /// `max_num_considered_actions`, `budget` the simulations descending from the root.
     ///
     /// # Errors
     /// `RuntimeError` — the root is not expanded, so there is nothing to draw over.
@@ -195,20 +153,14 @@ impl PyMCTSTree {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Search statistics accumulated since the last `new_game()`.
-    ///
-    /// Returns `(mean_depth, root_concentration)`:
-    /// - `mean_depth`: average leaf depth across all simulations this game/search
-    /// - `root_concentration`: max child visits / total root visits ∈ [0.0, 1.0]
-    ///
-    /// Both 0.0 before any simulations. Call after search completes, not during.
+    /// Search statistics since the last `new_game()`, as `(mean_depth, root_concentration)`:
+    /// average leaf depth across all simulations, and max child visits / total root visits in
+    /// [0.0, 1.0]. Both 0.0 before any simulations; call after search completes, not during.
     pub fn last_search_stats(&self) -> (f32, f32) {
         self.inner.last_search_stats()
     }
 
-    /// Reset the tree for a new game starting from `board`.
-    ///
-    /// This re-uses the pre-allocated pool — no heap allocation.
+    /// Reset the tree for a new game starting from `board`, re-using the pre-allocated pool.
     pub fn new_game(&mut self, board: &PyBoard) {
         self.board_size = BOARD_SIZE;
         self.pending_boards.clear();
@@ -217,17 +169,12 @@ impl PyMCTSTree {
         self.inner.new_game(board.inner_ref().clone());
     }
 
-    /// Select up to `n` distinct leaves for neural-network evaluation.
-    ///
-    /// Returns a list of Board objects (one per unique leaf).
-    /// Always call `expand_and_backup` with the same number of results
-    /// before the next call to `select_leaves`.
+    /// Select up to `n` distinct leaves for evaluation, one Board per unique leaf; always call
+    /// `expand_and_backup` with the same number of results before the next call.
     ///
     /// Raises:
-    ///     SelectionDesync: the tree and the board disagree about what has been played.
-    ///         AUDIT-1 F-02 — this was a `PanicException` crossing the FFI, recovered from in
-    ///         `selfplay/worker.py` by matching the panic's own message text, and only when
-    ///         the batch was larger than one.
+    ///     SelectionDesync: tree and board disagree about what has been played — once a
+    ///         `PanicException` recovered from by matching its message text.
     pub fn select_leaves(&mut self, py: Python<'_>, n: usize) -> PyResult<Vec<Py<PyBoard>>> {
         let boards = py
             .detach(|| self.inner.select_leaves(n))
@@ -240,22 +187,14 @@ impl PyMCTSTree {
             .collect()
     }
 
-    /// Expand leaves and backup values from the last `select_leaves` call.
-    ///
-    /// Args:
-    ///     policies: list of policy vectors (one per leaf).
-    ///               Each vector has length `board_size * board_size + 1`.
-    ///     values:   list of scalar values in [-1, 1] (one per leaf),
-    ///               from the current player's perspective at that leaf.
+    /// Expand leaves and backup values from the last `select_leaves` call: `policies` is one
+    /// vector per leaf of length `board_size * board_size + 1`, `values` one scalar in [-1, 1]
+    /// per leaf from the leaf's current player.
     ///
     /// Raises:
-    ///     ValueError: `policies` or `values` is not exactly as long as the leaf list the
-    ///         preceding `select_leaves` returned. AUDIT-1 F-22 — the inner call took
-    ///         `n = min(pending, policies, values)` and DROPPED the rest, so a short batch
-    ///         from the inference side silently expanded fewer leaves than were selected. The
-    ///         graph sibling `expand_and_backup_ls_graph` already carries C-1..C-4 guards for
-    ///         exactly this; the dense entry — used by `selfplay/worker.py` and
-    ///         `arena/deploy_head.py`, the deploy-strength path — had none.
+    ///     ValueError: the lengths do not match the preceding `select_leaves` list. The inner
+    ///         call took `min(pending, policies, values)` and DROPPED the rest, so a short
+    ///         batch silently expanded fewer leaves.
     pub fn expand_and_backup(
         &mut self,
         py: Python<'_>,
@@ -276,18 +215,13 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Graph counterpart of `expand_and_backup`: the deploy Gumbel-SH head expands children
-    /// over the FULL legal set — the action space the net already trains under in self-play.
+    /// Graph counterpart of `expand_and_backup`: the deploy Gumbel-SH head expands children over
+    /// the FULL legal set, the action space the net trains under in self-play.
     ///
-    /// Args:
-    ///     policies: per-leaf dense prob vectors (each `policy_stride` long).
-    ///     overflows: per-leaf off-window `((q, r), p)` entries the dense half cannot carry.
-    ///     values:   per-leaf scalar values.
-    ///     centers:  the BUILDER's own `(cq, cr)` window centre per leaf, threaded from the
-    ///               Python decode rather than recomputed here — the builder is the one
-    ///               authority for the frame the policy was decoded in.
-    ///     policy_stride: action-space size (= encoding `policy_logit_count`).
-    ///     trunk_sz: window side length used to frame the dense half.
+    /// Args: `policies` per-leaf dense prob vectors of `policy_stride`; `overflows` per-leaf
+    ///     off-window `((q, r), p)` entries; `values` per-leaf scalars; `centers` the BUILDER's
+    ///     own `(cq, cr)` per leaf, threaded from the Python decode because the builder is the
+    ///     one authority for the frame; `policy_stride` and `trunk_sz` the dense half's shape.
     #[pyo3(signature = (policies, overflows, values, centers, policy_stride, trunk_sz))]
     #[allow(clippy::too_many_arguments)] // Python-facing signature (7 params incl. py)
     #[allow(clippy::type_complexity)]
@@ -301,8 +235,7 @@ impl PyMCTSTree {
         policy_stride: usize,
         trunk_sz: i32,
     ) -> PyResult<()> {
-        // C-1a-d: the four arity conjuncts, each checked separately so a flip of
-        // one names the one that failed.
+        // The four arity conjuncts, checked separately so a flip names the one that failed.
         let n_pending = self.pending_boards.len();
         for (label, len) in [
             ("policies", policies.len()),
@@ -330,9 +263,8 @@ impl PyMCTSTree {
                     policies[i].len()
                 )));
             }
-            // C-2 (D-7): the producer's builder centre against the leaf board's own.
-            // Expected always-equal — both are the bbox midpoint over the same stones
-            // — so this is a pairing/drift tripwire, not a correction.
+            // The producer's builder centre against the leaf board's own. Expected
+            // always-equal, so this is a pairing/drift tripwire, not a correction.
             let board_center = board.window_center();
             if board_center != centers[i] {
                 return Err(PyValueError::new_err(format!(
@@ -342,8 +274,7 @@ impl PyMCTSTree {
                     centers[i]
                 )));
             }
-            // C-3 (D-8): mirrors the self-play always-on assert at
-            // `search_drive.rs:415-419` and the CNN sibling at `mcts.rs:216-222`.
+            // Mirrors the self-play always-on assert and the CNN sibling.
             if board.cluster_window_size() as i32 != trunk_sz {
                 return Err(PyValueError::new_err(format!(
                     "expand_and_backup_ls_graph leaf {i}: trunk_sz={trunk_sz} != \
@@ -368,13 +299,8 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Return the visit-count policy at the root.
-    ///
-    /// Args:
-    ///     temperature: sampling temperature (0 = argmax).
-    ///     board_size:  spatial dimension (default: size from last `new_game`).
-    ///
-    /// Returns a list of length `board_size * board_size + 1`.
+    /// The visit-count policy at the root, as a list of length `board_size * board_size + 1`.
+    /// `temperature` 0 is argmax; `board_size` defaults to the size from the last `new_game`.
     #[pyo3(signature = (temperature = 1.0, board_size = None))]
     pub fn get_policy<'py>(
         &self,
@@ -408,30 +334,22 @@ impl PyMCTSTree {
         self.inner.run_simulations_cpu_only(n);
     }
 
-    /// Mix Dirichlet noise into the root node's priors (self-play only).
-    ///
-    /// Call after the first expand_and_backup (which expands the root).
-    /// On the Python side, generate `noise` with:
-    ///     noise = np.random.dirichlet([alpha] * tree.root_n_children()).tolist()
-    ///
-    /// Args:
-    ///     noise:   list of floats, length == root_n_children().
-    ///     epsilon: mixing weight (default 0.25 per AlphaZero).
+    /// Mix Dirichlet noise into the root node's priors (self-play only), after the first
+    /// `expand_and_backup` has expanded the root. `noise` is a list of floats of length
+    /// `root_n_children()`; `epsilon` the mixing weight (default 0.25 per AlphaZero).
     #[pyo3(signature = (noise, epsilon = 0.25))]
     pub fn apply_dirichlet_to_root(&mut self, noise: Vec<f32>, epsilon: f32) {
         self.inner.apply_dirichlet_to_root(&noise, epsilon);
     }
 
-    /// Number of children at the root (0 if not yet expanded).
-    /// Use this to determine the noise vector length before calling
-    /// apply_dirichlet_to_root.
+    /// Number of children at the root (0 if not yet expanded) — the noise vector length for
+    /// `apply_dirichlet_to_root`.
     pub fn root_n_children(&self) -> usize {
         self.inner.root_n_children()
     }
 
-    /// Top-N children of root by visit count.
-    /// Returns list of ((q, r), visits, prior, q_value) sorted by visits descending.
-    /// `(q, r)` is a raw axial tuple; Python callers format at the call site.
+    /// Top-N children of root by visit count, as `((q, r), visits, prior, q_value)` sorted by
+    /// visits descending. `(q, r)` is a raw axial tuple; Python callers format it.
     pub fn get_top_visits(&self, n: usize) -> Vec<((i32, i32), u32, f32, f32)> {
         self.inner.get_top_visits(n)
     }
@@ -441,11 +359,8 @@ impl PyMCTSTree {
         self.inner.root_value()
     }
 
-    // ── Policy viewer accessors ──────────────────────────────────────────────
-
-    /// Get/set forced root child for Gumbel Sequential Halving.
-    /// Set to a child pool index to restrict select_leaves to that subtree.
-    /// Set to None to restore normal PUCT selection.
+    /// Get/set forced root child for Gumbel Sequential Halving: a child pool index restricts
+    /// `select_leaves` to that subtree, `None` restores normal PUCT selection.
     #[getter]
     pub fn forced_root_child(&self) -> Option<u32> {
         self.forced_root_child
@@ -454,9 +369,9 @@ impl PyMCTSTree {
     #[setter]
     ///
     /// Raises:
-    ///     ValueError: `val` is not one of the ROOT's children. AUDIT-1 F-02 — the store was
-    ///         unchecked, so an index at or beyond `MAX_NODES` index-panicked and any other
-    ///         foreign index descended into a node the root does not own.
+    ///     ValueError: `val` is not one of the ROOT's children. The store was unchecked, so an
+    ///         index at or beyond `MAX_NODES` index-panicked and any other foreign index
+    ///         descended into a node the root does not own.
     pub fn set_forced_root_child(&mut self, val: Option<u32>) -> PyResult<()> {
         self.inner
             .set_forced_root_child(val)
@@ -465,9 +380,8 @@ impl PyMCTSTree {
         Ok(())
     }
 
-    /// Returns list of ((q, r), pool_idx, prior, visits, q_value) for each root child.
-    /// Used by the policy viewer to drive Gumbel Sequential Halving from Python.
-    /// `(q, r)` is a raw axial tuple; Python callers format at the call site.
+    /// `((q, r), pool_idx, prior, visits, q_value)` for each root child, for the policy viewer's
+    /// Gumbel Sequential Halving. `(q, r)` is a raw axial tuple.
     pub fn get_root_children_info(&self) -> Vec<RootChildInfo> {
         let children = self.inner.get_root_children_info();
         let q_sign: f32 = if self.inner.pool[0].moves_remaining == 1 {
@@ -493,9 +407,8 @@ impl PyMCTSTree {
             .collect()
     }
 
-    /// Compute improved policy targets using Gumbel completed Q-values
-    /// (Danihelka et al., ICLR 2022). Used by the policy viewer for
-    /// Gumbel-mode analysis overlay.
+    /// Improved policy targets from Gumbel completed Q-values (Danihelka et al., ICLR 2022),
+    /// for the policy viewer's Gumbel-mode overlay.
     #[pyo3(signature = (board_size = None, c_visit = 50.0, c_scale = 1.0))]
     pub fn get_improved_policy<'py>(
         &self,
@@ -515,9 +428,8 @@ impl PyMCTSTree {
 /// Register the `MCTSTree` pyclass into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyMCTSTree>()?;
-    // The named face of the desync (AUDIT-1 F-02). Registered so a Python caller can name it
-    // in an `except` clause — the whole point of retiring the `PanicException` that
-    // `selfplay/worker.py` was matching by message text.
+    // The named face of the desync, registered so a Python caller can name it in an `except`
+    // clause — the point of retiring the `PanicException` matched by message text.
     m.add("SelectionDesync", m.py().get_type::<SelectionDesync>())?;
     Ok(())
 }
@@ -528,8 +440,8 @@ mod tests {
 
     #[test]
     fn forced_root_child_mirror_round_trips() {
-        // AUDIT-1 F-02: the setter validates against the ROOT's child range now, so the
-        // round-trip needs a root that HAS children and an index that is one of them.
+        // The setter validates against the ROOT's child range, so the round-trip needs a root
+        // that HAS children and an index that is one of them.
         let mut t = PyMCTSTree::new(1.5, 1.0, 0.25, true, 0.3);
         assert_eq!(t.forced_root_child(), None);
         assert!(
@@ -571,10 +483,8 @@ mod tests {
         assert_eq!(t.get_quiescence_fire_count(), 0);
     }
 
-    /// Numpy-free GIL round-trip: `select_leaves` caches the leaf boards for the
-    /// ls path, and the GIL-release `expand_and_backup` accumulates root visits.
-    /// (The numpy-marshaling legs — get_policy/get_improved_policy — are pinned by
-    /// the Python-side O20 tests, post-ASM.)
+    /// Numpy-free GIL round-trip: `select_leaves` caches the leaf boards for the ls path, and
+    /// the GIL-release `expand_and_backup` accumulates root visits.
     #[test]
     fn select_and_expand_round_trip_under_gil() {
         Python::initialize();

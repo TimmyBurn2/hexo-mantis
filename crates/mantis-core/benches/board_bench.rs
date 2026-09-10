@@ -12,23 +12,20 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mantis_core::board::Board;
 use std::hint::black_box;
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 
 /// Build a board with `n_stones` placed by always picking the lexicographic-minimum
 /// legal move.  Guaranteed collision-free and deterministic.
 fn board_with_n_stones(n_stones: usize) -> Board {
     let mut b = Board::new();
     for _ in 0..n_stones {
-        let mv = *b.legal_moves_set()
-            .iter()
-            .min()
-            .expect("no legal moves");
+        let mv = *b.legal_moves_set().iter().min().expect("no legal moves");
         b.apply_move(mv.0, mv.1).expect("apply failed");
     }
     b
 }
 
-// ── 1. Win detection: last-move-anchored HashMap scan ────────────────────────
+// 1. Win detection: last-move-anchored HashMap scan
 
 fn bench_win_detection(c: &mut Criterion) {
     let mut group = c.benchmark_group("win_detection");
@@ -65,7 +62,7 @@ fn bench_win_detection(c: &mut Criterion) {
     group.finish();
 }
 
-// ── 2. Board::clone() cost — the MCTS reconstruct_board bottleneck ────────────
+// 2. Board::clone() cost — the MCTS reconstruct_board bottleneck
 
 fn bench_board_clone(c: &mut Criterion) {
     let mut group = c.benchmark_group("board_clone");
@@ -103,16 +100,25 @@ fn bench_reconstruct_path_replay(c: &mut Criterion) {
     // Pre-compute a sequence of moves that can be applied from an empty board.
     // Interleave P1 and P2 moves to respect turn structure.
     let all_moves: Vec<(i32, i32)> = vec![
-        (0, 0),             // P1 single first move
-        (-1, -1), (-2, -2), // P2 turn
-        (1, 1), (2, 2),     // P1 turn
-        (-3, -3), (-4, -4), // P2 turn
-        (3, 3), (4, 4),     // P1 turn
-        (-5, -5), (-6, -6), // P2 turn
-        (5, 0), (6, 0),     // P1 turn
-        (-7, 1), (-8, 1),   // P2 turn
-        (0, 5), (0, 6),     // P1 turn
-        (1, -5), (1, -6),   // P2 turn
+        (0, 0), // P1 single first move
+        (-1, -1),
+        (-2, -2), // P2 turn
+        (1, 1),
+        (2, 2), // P1 turn
+        (-3, -3),
+        (-4, -4), // P2 turn
+        (3, 3),
+        (4, 4), // P1 turn
+        (-5, -5),
+        (-6, -6), // P2 turn
+        (5, 0),
+        (6, 0), // P1 turn
+        (-7, 1),
+        (-8, 1), // P2 turn
+        (0, 5),
+        (0, 6), // P1 turn
+        (1, -5),
+        (1, -6), // P2 turn
     ];
 
     for &depth in &[5usize, 10, 15, 20] {
@@ -128,7 +134,7 @@ fn bench_reconstruct_path_replay(c: &mut Criterion) {
     group.finish();
 }
 
-// ── 4. Zobrist: incremental XOR (confirms near-zero marginal cost) ────────────
+// 4. Zobrist: incremental XOR (confirms near-zero marginal cost)
 
 fn bench_zobrist_incremental(c: &mut Criterion) {
     // apply_move already XORs the Zobrist key inline.
@@ -146,7 +152,7 @@ fn bench_zobrist_incremental(c: &mut Criterion) {
     group.finish();
 }
 
-// ── 5. Legal-move generation: full rebuild (the cache-construct gate) ─────────
+// 5. Legal-move generation: full rebuild (the cache-construct gate)
 
 /// Invalidate + rebuild each iteration. `set_legal_move_radius` marks the cache
 /// dirty through the public API (same semantics both sides); the following
@@ -185,7 +191,7 @@ fn bench_legal_move_gen(c: &mut Criterion) {
     group.finish();
 }
 
-// ── Registration ──────────────────────────────────────────────────────────────
+// Registration
 
 criterion_group!(
     benches,

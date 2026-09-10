@@ -1,18 +1,10 @@
-"""R347(a)/(b) — the sparse Gumbel row's trainer side: the reconstructed tail and the
-fast-arm policy weight.
+"""The sparse Gumbel row's trainer side: the reconstructed tail and the fast-arm policy weight.
 
-WHAT THE ROW IS. Under Sequential Halving only `selfplay.gumbel_m` candidates are ever
-visited, so the completed-Q target is exact on those m entries and, on every unvisited legal
-action, is the recording prior times ONE scalar. The row therefore stores the m explicit
-entries plus the tail mass alpha, and the trainer rebuilds the tail as
-`alpha * its own DETACHED current prior, renormalized over the remaining legal set`.
-
-THE DETACH IS THE MECHANISM. Built from a live `probs`, the tail would be a function of the
-parameters and the CE gradient would pick up a second term pushing the prior toward whatever
-it already is — a self-referential objective on every unvisited action, which is most of the
-legal set. `test_the_tail_is_formed_from_the_detached_prior` is the planted break: it holds
-the detached reference and the non-detached one side by side and requires the shipped
-gradient to match the first and DIFFER from the second.
+Under Sequential Halving only `selfplay.gumbel_m` candidates are visited, so the row stores
+those m explicit entries plus the tail mass alpha, and the trainer rebuilds the tail as
+`alpha * its own DETACHED current prior, renormalized over the remaining legal set`. The
+detach is the mechanism: built from a live `probs`, the CE gradient would pick up a second
+term pushing the prior toward whatever it already is, on most of the legal set.
 """
 from __future__ import annotations
 
@@ -30,7 +22,7 @@ from mantis.train.losses import (
 
 
 def _fixture() -> dict[str, torch.Tensor]:
-    """Two graphs of 5 and 4 legal nodes; the first carries a real tail, the second none."""
+    """Build two graphs of 5 and 4 legal nodes; the first carries a real tail, the second none."""
     logits = torch.tensor(
         [0.4, -0.2, 1.1, 0.0, -0.7, 0.9, 0.3, -0.5, 0.2], dtype=torch.float32
     )
@@ -52,11 +44,10 @@ def _fixture() -> dict[str, torch.Tensor]:
 
 
 def _rebuilt_target(f: dict[str, torch.Tensor], *, detached: bool) -> torch.Tensor:
-    """The full target the reconstruction implies, built OUTSIDE `ragged_policy_ce`.
+    """Build the full target the reconstruction implies, outside `ragged_policy_ce`.
 
-    Deliberately a second expression of the rule rather than a call into the first: a
-    reference that reused the shipped code could not tell the detached form from the
-    non-detached one, which is the whole subject here.
+    Deliberately a second expression of the rule: a reference reusing the shipped code could
+    not tell the detached form from the non-detached one.
     """
     probs = _segment_softmax(f["logits"], f["legal_offsets"])
     prior = probs.detach() if detached else probs
@@ -79,8 +70,7 @@ def _grad_of(loss_fn) -> torch.Tensor:
 
 
 def test_the_tail_reconstruction_reproduces_the_full_target() -> None:
-    """The loss with `(explicit_mask, tail_mass)` equals the loss on the rebuilt full
-    target — the reconstruction is a target substitution and nothing else."""
+    """The sparse-row loss equals the loss on the rebuilt full target."""
     f = _fixture()
     sparse = ragged_policy_ce(
         f["logits"], f["policy_target"], f["legal_offsets"],
@@ -94,8 +84,7 @@ def test_the_tail_reconstruction_reproduces_the_full_target() -> None:
 
 
 def test_a_row_with_no_tail_is_byte_identical_to_the_stored_target() -> None:
-    """alpha == 0 must add exactly nothing: the PUCT arm stores no tail and its loss may not
-    move because the graph arm grew a reconstruction."""
+    """alpha == 0 adds exactly nothing, so the PUCT arm's loss cannot move."""
     f = _fixture()
     zero_tail = torch.zeros_like(f["tail_mass"])
     with_recon = ragged_policy_ce(
@@ -107,12 +96,10 @@ def test_a_row_with_no_tail_is_byte_identical_to_the_stored_target() -> None:
 
 
 def test_the_tail_is_formed_from_the_detached_prior() -> None:
-    """PLANTED BREAK. Remove `.detach()` in `ragged_policy_ce`'s tail and this reds.
+    """PLANTED BREAK: remove `.detach()` in `ragged_policy_ce`'s tail and this reds.
 
-    The shipped gradient must equal the one a DETACHED-target reference produces and must
-    NOT equal the one a live-target reference produces. Asserting only the first would pass
-    under a reference that was itself wrong; asserting only the second would pass under any
-    change at all. Both together name the mechanism.
+    The shipped gradient must match a detached-target reference and DIFFER from a live-target
+    one; either assertion alone would pass under a wrong reference or under any change at all.
     """
     shipped = _grad_of(lambda f: ragged_policy_ce(
         f["logits"], f["policy_target"], f["legal_offsets"],
@@ -150,7 +137,7 @@ def test_supplying_one_half_of_the_reconstruction_pair_raises() -> None:
 
 
 def test_a_graph_whose_legal_set_is_entirely_explicit_survives_a_positive_alpha() -> None:
-    """No tail to spread over is a finite, contribution-free case — not a divide by zero."""
+    """No tail to spread over is finite and contribution-free, not a divide by zero."""
     f = _fixture()
     all_explicit = torch.ones_like(f["explicit_mask"])
     loss = ragged_policy_ce(
@@ -160,7 +147,6 @@ def test_a_graph_whose_legal_set_is_entirely_explicit_survives_a_positive_alpha(
     assert torch.isfinite(loss)
 
 
-# ── R347(b): the fast-arm policy weight ───────────────────────────────────────────────
 def test_the_row_weight_at_zero_is_the_binary_gate() -> None:
     ifs = np.array([1, 0, 1, 0], dtype=np.uint8)
     w = graph_policy_row_weights(ifs, 0.0)
@@ -168,8 +154,7 @@ def test_the_row_weight_at_zero_is_the_binary_gate() -> None:
 
 
 def test_the_row_weight_lifts_the_fast_arm_and_the_denominator_follows() -> None:
-    """The numerator's vector and the denominator's sum come from ONE evaluation of the
-    rule; a second evaluation is how they would come to disagree."""
+    """The numerator's vector and the denominator's sum come from one evaluation of the rule."""
     ifs = np.array([1, 0, 1, 0], dtype=np.uint8)
     w = graph_policy_row_weights(ifs, 0.25)
     assert torch.equal(w, torch.tensor([1.0, 0.25, 1.0, 0.25]))
@@ -184,7 +169,6 @@ def test_a_negative_or_nonfinite_fast_policy_weight_is_refused(bad: float) -> No
         graph_policy_row_weights(np.array([1, 0], dtype=np.uint8), bad)
 
 
-# ── R347(a)/LAW-18: the in-run alpha reading ──────────────────────────────────────────
 def test_the_tail_mass_block_reports_the_steps_own_distribution() -> None:
     block = tail_mass_block([0.0, 0.25, 0.5, 0.75, 1.0])[GUMBEL_TAIL_MASS_KEY]
     print(f"tail-mass block: {block}")
@@ -196,8 +180,7 @@ def test_the_tail_mass_block_reports_the_steps_own_distribution() -> None:
 
 
 def test_a_step_with_no_graph_rows_omits_the_key_rather_than_keying_a_none() -> None:
-    """An absence must not read as a measured zero (R249): a step with no rows has no alpha
-    at all, so the key is omitted."""
+    """An absence must not read as a measured zero, so a step with no rows omits the key."""
     assert tail_mass_block([]) == {}
 
 
@@ -207,16 +190,9 @@ def test_a_puct_step_reports_a_measured_zero_rather_than_an_absence() -> None:
     assert block["max"] == 0.0
 
 
-# ── the LIVE producer, end to end ─────────────────────────────────────────────────────
 def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -> None:
-    """LAW-07/LAW-18 producer test: the alpha block reaches the emitted `trainer_step`, and
-    it carries what the ROWS carried.
-
-    A block builder that is only unit-tested proves the arithmetic and not the wiring; this
-    drives the production graph step and reads the event the sink actually received. The
-    fixture plants ONE row with a real tail, so a block that reported a constant or dropped
-    the per-row values would disagree with `max`.
-    """
+    """Producer test: the alpha block reaches the emitted `trainer_step` carrying the rows' own
+    values, driven through the production graph step rather than the block builder alone."""
     import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
     from mantis._engine import HexgBuffer
     from mantis.config.resolve.microbatch import MicrobatchCapsSpec
@@ -226,19 +202,16 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
     buf = HexgBuffer(64, H.GRAPH_ENCODING, 128)
     for i in range(8):
         stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
-        # The explicit half sums to 1 - alpha on the planted row: the bridge's own
-        # distribution check is over explicit mass PLUS the tail (R347(a)).
+        # The bridge's distribution check is over explicit mass PLUS the tail, so the explicit
+        # half sums to 1 - alpha.
         tail = planted if i == 0 else 0.0
         scale = 1.0 - tail
         policy = [(2, 0, 0.6 * scale), (1, 1, 0.4 * scale)]
         buf.push_graph_position(stones, policy, 1, 30, 2 + i, True,
                                 1.0 if i % 2 == 0 else -1.0, True, 10 + i, -1, tail)
 
-    # SEEDED, and the row this fixes is why. The ring samples WITH REPLACEMENT, so 8 draws
-    # over 8 rows miss the single planted row about a third of the time — the assertion below
-    # was a coin toss, and it lost one on a full-tier run. `H.SEED` is the harness's own seed
-    # and draws the planted row; a re-seed that stopped drawing it reds here, which is the
-    # right place for that to be noticed.
+    # Seeded because the ring samples WITH REPLACEMENT: 8 draws over 8 rows miss the single
+    # planted row about a third of the time. `H.SEED` is the harness's seed and draws it.
     buf.seed_sampler(H.SEED)
     replay = H.ReplayWireBuffer(buf, 8)
     sink = H.SpySink()
@@ -254,9 +227,7 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
     block = events[0][GUMBEL_TAIL_MASS_KEY]
     print(f"trainer_step {GUMBEL_TAIL_MASS_KEY}: {block}")
     assert block["n_rows"] == 8
-    # `>= 1`, not `== 1`: the ring samples WITH REPLACEMENT, so the planted row can be drawn
-    # more than once. The claim is that it reached the event at all, and that the reading is
-    # the ROWS' rather than a constant — which `max` is what pins.
+    # `>= 1`, not `== 1`: sampling with replacement can draw the planted row more than once.
     assert block["rows_with_tail"] >= 1, (
         "the planted tail did not reach the event — the reading is not the rows'")
     assert block["max"] == pytest.approx(planted, abs=1e-6)

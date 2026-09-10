@@ -1,30 +1,9 @@
-"""⊕ WP11-A — R-DRAIN-HARDCAP disposition: WIRE all four fields (PREREG P-1).
+"""All four drain-cap fields are wired as subprocess-join bounds.
 
-RED-at-import until IMPL writes `mantis.eval.pipeline`. ORACLE-FIRST (⊕): the top-level
-`import mantis.eval.pipeline` raises ModuleNotFoundError before any port code exists.
-
-All FOUR drain-cap fields on `StepCoordinatorConfig` (coordinator/config.py:176-180, ALREADY
-SHIPPED at HEAD — WP13-A) are consumed as subprocess-join bounds (isolation law 2): the
-mid-run/teardown `drain_pending` budget = `min(final_eval_drain_timeout_sec *
-eval_final_drain_safety_factor, eval_final_drain_hard_cap_sec)`; the terminal round join
-bound = `terminal_eval_hard_cap_sec` directly. Overrun on either bound => terminate => kill,
-each step bounded by `worker_kill_grace_sec`, and the round yields a named `eval_broken`.
-
-This suite pins TWO small pure seams the pipeline's join-bound arithmetic must expose (the
-design gives the formula/escalation in prose, not a named symbol — pinning them here as pure
-functions makes the arithmetic unit-testable in microseconds, with no real subprocess/wall
-sleep needed; full subprocess kill mechanics — SIGKILL, garbage JSON, hung child — are
-`tests/eval/test_eval_broken.py`'s and `tests/eval/test_pipeline_isolation.py`'s territory,
-not duplicated here):
-
-  * `DrainCaps` — the frozen 4-tuple lifted from `StepCoordinatorConfig` (design §c.3).
-  * `drain_budget_sec(caps: DrainCaps) -> float` — the P-1 formula.
-  * `drain_or_kill(proc, *, budget_sec: float, worker_kill_grace_sec: float, clock)
-    -> tuple[bool, str]` — join(budget) -> overrun? terminate -> join(grace) -> kill ->
-    join(grace); returns (broken, reason). Used for BOTH the mid-run/teardown drain budget
-    and the terminal round's `terminal_eval_hard_cap_sec` bound (same primitive, different
-    budget input) — this IS `test_all_four_drain_cap_fields_have_live_consumers`'s pin: all
-    four fields feed a live call to one of these two functions.
+The mid-run budget is `min(timeout * safety_factor, hard_cap)`; the terminal round's bound is
+`terminal_eval_hard_cap_sec` directly. Overrun escalates terminate -> kill, each step bounded,
+and names the failure. The seams are pinned as pure functions so the arithmetic is testable in
+microseconds; the kill mechanics belong to the isolation suites and are not duplicated.
 """
 from __future__ import annotations
 
@@ -46,11 +25,8 @@ class FakeClock:
 
 
 class FakeHangingProcess:
-    """Models a spawn-ctx child that never exits on its own: `join(timeout)` always times
-    out (never sets `.exitcode`); `terminate()`/`kill()` record their call but do NOT flip
-    `is_alive()` until `join` is called again post-signal (mirrors a slow-to-die child that
-    still needs its OWN bounded join after terminate/kill — isolation law 2: 'every join is
-    timeout-bounded')."""
+    """A child that never exits on its own: a signal flips `is_alive()` only on the NEXT join,
+    so a slow-to-die child still needs its own bounded join after terminate/kill."""
 
     def __init__(self, *, dies_after_terminate: bool = True, dies_after_kill: bool = True) -> None:
         self.exitcode: int | None = None
@@ -78,8 +54,8 @@ class FakeHangingProcess:
 
 
 def test_drain_pending_budget_formula() -> None:
-    """budget == min(final_eval_drain_timeout_sec * eval_final_drain_safety_factor,
-    eval_final_drain_hard_cap_sec) — both branches of the min()."""
+    """The drain budget is the min of the safety-factor product and the hard cap — both
+    branches driven."""
     safety_bound = DrainCaps(
         final_eval_drain_timeout_sec=10.0, eval_final_drain_safety_factor=2.0,
         eval_final_drain_hard_cap_sec=100.0, terminal_eval_hard_cap_sec=50.0,
@@ -92,7 +68,7 @@ def test_drain_pending_budget_formula() -> None:
     )
     assert drain_budget_sec(hard_cap_bound) == 5.0, "hard-cap branch: 1000*100=1e5 clamped to 5"
 
-    # WP13-A shipped defaults (coordinator/config.py:176-180) — sanity-pin the real numbers.
+    # The shipped defaults, pinned as real numbers.
     shipped = DrainCaps(
         final_eval_drain_timeout_sec=900.0, eval_final_drain_safety_factor=3.0,
         eval_final_drain_hard_cap_sec=14400.0, terminal_eval_hard_cap_sec=14400.0,
@@ -101,9 +77,8 @@ def test_drain_pending_budget_formula() -> None:
 
 
 def test_drain_overrun_kills_worker_and_yields_eval_broken() -> None:
-    """Isolation law 2: overrun the drain budget -> terminate -> kill, each bounded by
-    `worker_kill_grace_sec`, and the outcome is a named eval_broken (broken=True), never a
-    silent hang."""
+    """An overrun budget escalates terminate -> kill, each bounded, and names the failure
+    rather than hanging silently."""
     caps = DrainCaps(
         final_eval_drain_timeout_sec=0.05, eval_final_drain_safety_factor=2.0,
         eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0,
@@ -130,8 +105,8 @@ def test_drain_overrun_kills_worker_and_yields_eval_broken() -> None:
 
 
 def test_drain_within_budget_is_not_broken() -> None:
-    """A process that exits cleanly WITHIN the budget must not be reported broken (contrast
-    arm — proves the overrun test isn't vacuously always-broken)."""
+    """A clean exit within budget is not broken — the contrast arm that stops the overrun row
+    being vacuously always-broken."""
     caps = DrainCaps(
         final_eval_drain_timeout_sec=10.0, eval_final_drain_safety_factor=2.0,
         eval_final_drain_hard_cap_sec=100.0, terminal_eval_hard_cap_sec=100.0,
@@ -152,8 +127,8 @@ def test_drain_within_budget_is_not_broken() -> None:
 
 
 def test_terminal_round_bounded_by_terminal_eval_hard_cap_sec() -> None:
-    """The TERMINAL round's join bound is `terminal_eval_hard_cap_sec` directly (not the
-    mid-run drain formula) — same escalation primitive, a different budget input."""
+    """The terminal round's bound is `terminal_eval_hard_cap_sec` directly, not the mid-run
+    formula — same escalation primitive, different budget input."""
     caps = DrainCaps(
         final_eval_drain_timeout_sec=900.0, eval_final_drain_safety_factor=3.0,
         eval_final_drain_hard_cap_sec=14400.0, terminal_eval_hard_cap_sec=0.05,
@@ -175,8 +150,8 @@ def test_terminal_round_bounded_by_terminal_eval_hard_cap_sec() -> None:
 
 
 def test_all_four_drain_cap_fields_have_live_consumers() -> None:
-    """LAW-08 closure of R-DRAIN-HARDCAP-CONSUMERS: every one of the four fields feeds a
-    live read inside `mantis.eval.pipeline`'s own source (not merely carried, unread)."""
+    """Every one of the four fields feeds a live read in the pipeline's own source, rather
+    than being carried unread."""
     field_names = {f for f in DrainCaps.__dataclass_fields__} if hasattr(
         DrainCaps, "__dataclass_fields__"
     ) else set(DrainCaps._fields)  # tolerate either a frozen dataclass or a NamedTuple
@@ -195,27 +170,11 @@ def test_all_four_drain_cap_fields_have_live_consumers() -> None:
     )
 
 
-# ══ ⊕ WP12-R Phase O / O-14 (R152/R79) — `drain_or_kill` returns ONE typed value ═══════
-#
-# The `(bool, str)` tuple three rows above is an R79 shape: a boolean beside a value that can
-# contradict it. `(True, "clean_exit")` and `(False, "join_timeout")` are both constructible
-# today, and the reason half is a bare literal — the same free-form string R152 replaces
-# everywhere else. R152 collapses the pair into `EvalBrokenReason | None`, where `None` IS
-# the clean exit: there is no second field left to disagree, and `"clean_exit"` stops being a
-# spelling anybody can typo because it stops existing.
-#
-# The two rows below are ADDITIONS, not re-points: the three existing rows keep their subject
-# (the join-bound arithmetic and the escalation) and their `broken, reason = …` unpacking is
-# IMPL's own S-3 re-point.
+# `drain_or_kill` returns ONE typed value: a `(bool, str)` pair is a boolean beside a value
+# that can contradict it, and `None` as the clean state leaves no second field to disagree.
 def test_drain_or_kill_returns_a_typed_reason_or_none() -> None:
-    """O-14, behaviour half. Clean exit → `None`; overrun → `EvalBrokenReason.JOIN_TIMEOUT`.
-
-    The enum is imported INSIDE the body on purpose: this file's other rows have nothing to
-    do with the taxonomy, and a module-level anchor would red all five instead of these two.
-
-    MUTATION THAT REDS IT (M-O14): restore the `(bool, str)` tuple. The unpacking rows above
-    would go green again and nothing else in the suite would notice, which is precisely why
-    this row states the return shape rather than only the reason spelling."""
+    """Clean exit returns `None`; an overrun returns the typed `JOIN_TIMEOUT` member. Killer:
+    restore the `(bool, str)` tuple, which nothing else in the suite would notice."""
     from mantis.eval.errors import EvalBrokenReason
 
     clean = FakeHangingProcess()
@@ -242,15 +201,8 @@ def test_drain_or_kill_returns_a_typed_reason_or_none() -> None:
 
 
 def test_the_clean_exit_literal_is_gone_from_the_package() -> None:
-    """O-14, census half. `"clean_exit"` must not survive anywhere under `src/mantis`.
-
-    A literal that survives is a reason spelling with no member, which is exactly the state
-    R152 ends: it can be typed, compared against, or accidentally routed as a reason, and
-    nothing types-checks it. The return annotation is asserted alongside because the two can
-    drift apart — a function can be annotated `EvalBrokenReason | None` and still hand back a
-    tuple at one branch.
-
-    MUTATION THAT REDS IT (M-O14): re-add `return False, "clean_exit"`."""
+    """No `"clean_exit"` literal survives under `src/mantis`, and the annotation declares the
+    typed reason — a function can declare the union and still return a tuple at one branch."""
     from pathlib import Path
 
     package = Path(__file__).resolve().parents[2] / "src" / "mantis"

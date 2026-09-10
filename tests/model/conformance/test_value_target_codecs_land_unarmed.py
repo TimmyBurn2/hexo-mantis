@@ -1,31 +1,19 @@
 # >300 justify (R8): the two codecs' witnesses and the unarmedness checks are one unit — a
 # witness that proves a codec correct while the codec is quietly wired into a live path proves
 # the wrong thing, and the two halves are only meaningful read together.
-"""T12 — the two VALUE-TARGET CODECS land UNARMED behind the contract (R322(d) Leg 3).
+"""CONFORMANCE — the two VALUE-TARGET CODECS land UNARMED behind the contract.
 
-The witnesses were registered BEFORE any implementation line existed, in the governance
-workspace at `plan/SEAM_B2_LEG3_PREREG.md`, and this file is what reads them. The scout's
-sketched shapes are followed verbatim except where contact falsified a detail, and each such
-divergence is disclosed at its own site rather than smoothed over.
+The witnesses were registered BEFORE any implementation line existed; where contact falsified a
+sketched detail, the divergence is disclosed at its site.
 
-**LANDING IS NOT ARMING**, and that is asserted structurally in this file rather than promised
-in a docstring: no config key selects either codec, no live training or serving module imports
-them, and the trainer's loss assembly is untouched. Arming is the operator's run6 prereg.
-
-**NOTHING HERE IS A STRENGTH CLAIM in either direction, and neither codec attacks the value
-blind spot.** F-35/F-36/F-37 falsified *target* fixes on a *frozen dense representation*, and
-F-35's own conclusion is that the deficit is a FEATURE problem — so no row here may be cited as
-a blind-spot lever. F-01 is the standing fence on static probes generally.
-
-THE TWO COMPONENTS AND THEIR REGISTERED WITNESSES:
-
-  * `lambda_return_targets` — W-L1 the pure-function golden, W-L2 the mover-sign pair, W-L3 the
-    two known endpoints. The λ-return is a CODEC and not a loss term (SCOUT-1 §2), and W-L2 is
-    the row that matters for THIS game: a codec transcribed from a single-stone-per-turn source
-    fails the compound-turn sign test by construction (LAW-03).
-  * `scalar_to_hl_gauss` — W-H1 the σ → 0 identity against `scalar_to_two_hot`, W-H2 the
-    zero-bin mass table with its accept floor DEFERRED to run6 prereg. W-H3, the strength /
-    calibration arm, is NOT RUN here: it needs a trained arm and a box, both excluded.
+**LANDING IS NOT ARMING**, asserted structurally: no config key selects either codec, no live
+module imports them, and the trainer's loss assembly is untouched. **NOTHING HERE IS A STRENGTH
+CLAIM** — the falsified register's own conclusion is that the value deficit is a FEATURE
+problem, so no row here may be cited as a blind-spot lever. `lambda_return_targets` is a CODEC
+and not a loss term, and its mover-sign row is the one that matters for THIS game: a codec
+transcribed from a single-stone-per-turn source fails the compound-turn sign test by
+construction. `scalar_to_hl_gauss` gets the sigma-to-zero identity and the zero-bin mass table,
+whose accept floor is DEFERRED; the strength arm is not run here.
 """
 from __future__ import annotations
 
@@ -52,13 +40,12 @@ GOLDEN = REPO / "tests" / "fixtures" / "value_targets" / "lambda_return_golden_v
 #: import, not the object.
 CODEC_MODULE = "mantis.model.value_targets"
 
-#: The candidate kernel widths W-H2 tabulates. A GRID, not a choice: picking one is an arming
-#: decision and it is the operator's at run6 prereg. Spanning three orders of magnitude so the
-#: table shows the trade rather than a point.
+#: The candidate kernel widths the table tabulates. A GRID, not a choice: picking one is an
+#: arming decision, and it spans three orders of magnitude so the table shows the trade.
 _SIGMAS: tuple[float, ...] = (0.001, 0.005, 0.01, 0.02, 0.05, 0.1)
 
-#: `dist65`'s bin width on [-1, 1] with 65 bins — DERIVED from the imported support, never
-#: typed, so a support change moves it here too.
+#: `dist65`'s bin width on [-1, 1] — DERIVED from the imported support, so a support change
+#: moves it here too.
 _BIN_WIDTH = float((VALUE_SUPPORT[1] - VALUE_SUPPORT[0]).item())
 
 
@@ -66,14 +53,10 @@ class CodecIsArmed(ConformanceRefusal):
     """A codec that is supposed to be selected by nothing is reachable from a live path."""
 
 
-# ═══ W-L1 — the pure-function golden ═════════════════════════════════════════════════════
 def test_WL1_the_lambda_return_golden_reproduces_bit_for_bit(derived):
-    """W-L1, as registered: a fixed trajectory in, a fixed target vector out, byte-frozen.
-
-    NO TOLERANCE BAND, and that is the registered shape rather than strictness for its own
-    sake: a codec that needs one is not a pure function, which is the property that lets this
-    component be proven before the mint with no checkpoint, no strength gate and no box.
-    """
+    """A fixed trajectory in, a fixed target vector out, byte-frozen. NO TOLERANCE BAND, and
+    that is the registered shape rather than strictness for its own sake: a codec that needs one
+    is not a pure function, which is what lets this be proven with no checkpoint and no box."""
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     inputs = golden["inputs"]
     out = lambda_return_targets(
@@ -124,22 +107,14 @@ def test_WL1_the_trajectory_carries_a_COMPOUND_turn_and_an_odd_final_turn(derive
     )
 
 
-# ═══ W-L2 — the mover-sign pair ══════════════════════════════════════════════════════════
 def test_WL2_a_handover_at_k_flips_the_sign_after_k_and_nowhere_else(derived):
-    """W-L2, as registered and EXACTLY as registered: two trajectories identical except that one
-    has a turn handover at index `k` must produce targets differing in sign at exactly the
-    indices after `k`, and nowhere else.
+    """Two trajectories identical except for a turn handover at index `k` must produce targets
+    differing in sign at exactly the indices after `k`, and nowhere else.
 
-    THE CONSTRUCTION IS THE SUBTLE PART, and getting it wrong is how this witness first appeared
-    to falsify its own sketch. `values` and `terminal_z` are stated in each index's OWN mover's
-    frame. So "the same game, with the post-`k` positions attributed to the other mover" is not
-    "the same numbers with a different mover column": the bootstraps after `k` and the terminal
-    outcome are the SAME FACTS SEEN FROM THE OTHER SIDE, so they carry a minus sign too. Built
-    that way — one absolute game, two mover attributions — the registered claim holds exactly,
-    in both directions and with no tolerance. The first attempt held the numbers fixed and
-    flipped only the mover column, which silently described a DIFFERENT game (one where the
-    terminal outcome had changed hands), and it is recorded here because the near-miss is the
-    instructive half: the sketch was right and the construction was wrong.
+    THE CONSTRUCTION IS THE SUBTLE PART: `values` and `terminal_z` are stated in each index's OWN
+    mover's frame, so re-attributing the post-`k` positions is not "the same numbers with a
+    different mover column" — those facts are seen from the other side and carry a minus sign
+    too. The first attempt flipped only the column, silently describing a different game.
     """
     values = [0.10, -0.20, 0.35, 0.05, -0.45, 0.60, 0.15]
     k = 3
@@ -170,10 +145,10 @@ def test_WL2_a_handover_at_k_flips_the_sign_after_k_and_nowhere_else(derived):
 
 
 def test_WL2_an_implementation_that_IGNORES_the_compound_turn_FAILS_this(derived):
-    """The falsifier the registration names: *"A λ-return implementation that ignores the
-    compound turn fails this by construction."* Executed against a deliberate one — a
-    ply-alternating mover column, which is what a transcription from a single-stone-per-turn
-    source produces — so the witness is shown to BITE rather than asserted to."""
+    """The registered falsifier: a lambda-return implementation that ignores the compound turn
+    fails by construction. Executed against a deliberate one — a ply-alternating mover column,
+    which is what a transcription from a single-stone-per-turn source produces — so the witness
+    is shown to BITE rather than asserted to."""
     values = [0.10, -0.20, 0.35, 0.05, -0.45, 0.60, 0.15]
     compound = [0, 0, 1, 1, 0, 0, 1]
     alternating = [i % 2 for i in range(len(values))]
@@ -187,11 +162,10 @@ def test_WL2_an_implementation_that_IGNORES_the_compound_turn_FAILS_this(derived
     )
 
 
-# ═══ W-L3 — the two known endpoints ══════════════════════════════════════════════════════
 def test_WL3_lambda_one_is_the_pure_monte_carlo_return(derived):
-    """λ = 1: the target is the terminal outcome carried back through the handovers, so every
-    entry is ±|z| and the sign is the mover's. Computed independently of the recursion below —
-    by counting handovers — which is what makes it a check rather than a restatement."""
+    """At lambda = 1 the target is the terminal outcome carried back through the handovers, so
+    every entry is +/-|z| with the mover's sign. Computed independently of the recursion, by
+    counting handovers, which is what makes it a check rather than a restatement."""
     golden = json.loads(GOLDEN.read_text(encoding="utf-8"))
     inputs = golden["inputs"]
     movers, z = inputs["movers"], inputs["terminal_z"]
@@ -238,20 +212,12 @@ def test_the_codec_REFUSES_inputs_it_cannot_construct_a_target_from(kwargs, matc
                               lam=kwargs["lam"])
 
 
-# ═══ W-H1 — the σ → 0 identity ═══════════════════════════════════════════════════════════
 def test_WH1_hl_gauss_converges_to_TWO_HOT_as_the_kernel_narrows(derived):
-    """W-H1, as registered: for kernel width → 0 the HL-Gauss encoding must converge to the
-    two-hot encoding bin-for-bin. The structural witness, and the falsifier for a wrong
-    implementation.
-
-    DISCLOSED DIVERGENCE, one line: the registered wording says "converge bin-for-bin", and the
-    limit is EXACT only at a bin CENTRE — between two centres the two-hot encoding splits mass
-    linearly by distance while a narrowing Gaussian collapses onto the NEARER bin, so the two
-    disagree by construction off-centre no matter how small σ is. The witness is therefore
-    driven at bin centres for the identity claim, and the off-centre behaviour is asserted
-    separately as convergence to the NEAREST bin. Contact falsified the sketch's generality,
-    not its mechanism, and the correction narrows the claim rather than relaxing the test.
-    """
+    """For kernel width approaching 0 the HL-Gauss encoding must converge to the two-hot encoding
+    bin-for-bin. DISCLOSED DIVERGENCE: the limit is EXACT only at a bin CENTRE, because between
+    centres two-hot splits mass linearly by distance while a narrowing Gaussian collapses onto
+    the NEARER bin — so the identity claim is driven at centres and the off-centre behaviour
+    asserted separately, narrowing the claim rather than relaxing the test."""
     centres = VALUE_SUPPORT.clone()
     narrow = scalar_to_hl_gauss(centres, sigma=_BIN_WIDTH / 100.0)
     two_hot = scalar_to_two_hot(centres)
@@ -288,21 +254,14 @@ def test_WH1_every_encoding_is_a_DISTRIBUTION_at_every_width(derived):
         assert torch.allclose(enc.sum(dim=-1), torch.ones(41), atol=1e-6), sigma
 
 
-# ═══ W-H2 — the zero-bin mass table, floor DEFERRED ══════════════════════════════════════
 def test_WH2_the_zero_bin_mass_TABLE_is_produced_and_its_floor_is_DEFERRED(derived):
-    """W-H2, as registered — the instrument and its table, and NOT the accept floor.
+    """The instrument and its table, and NOT the accept floor.
 
-    `dist65` has an ODD bin count so that an EXACT-ZERO bin exists; a kernel wide enough to help
-    smears mass out of it. Choosing the floor is choosing a candidate width, which is an arming
-    decision and is a run6 prereg row (`SEAM_B2_LEG3_PREREG.md` W-H2). What this row asserts is
-    only what makes the table trustworthy: the mass is monotone DECREASING in σ, so the operator
-    is reading a trade and not noise, and the widest candidate has actually left the bin.
-
-    The −0.5 row is ours and not the scout's: the draw / ply-cap label sits at −0.5, which is
-    NOT a bin centre on a 65-bin support over [−1, 1], so the shipped two-hot codec already
-    splits it across two bins. A label that is already split is where a smearing kernel is least
-    visible, which is why it is tabulated beside the zero-bin row rather than assumed to behave
-    the same way.
+    `dist65` has an ODD bin count so an EXACT-ZERO bin exists, and a kernel wide enough to help
+    smears mass out of it; choosing the floor is an arming decision. What this asserts is what
+    makes the table trustworthy: the mass is monotone DECREASING in sigma. The -0.5 row is not
+    the scout's — the draw / ply-cap label is not a bin centre, so the shipped two-hot codec
+    already splits it, and an already-split label is where a smearing kernel is least visible.
     """
     zero_bin = int((VALUE_SUPPORT.abs()).argmin().item())
     assert float(VALUE_SUPPORT[zero_bin]) == 0.0, (
@@ -356,14 +315,10 @@ def test_the_hl_gauss_codec_REFUSES_a_non_positive_width(bad):
         scalar_to_hl_gauss(torch.tensor([0.0]), sigma=bad)
 
 
-# ═══ LANDING IS NOT ARMING — asserted structurally ═══════════════════════════════════════
 def test_NO_live_module_imports_either_codec(derived):
-    """The clause that governs this whole leg, executed rather than promised (R322(d)).
-
-    An AST import census over `src/` and `tools/`: nothing outside the codec module itself may
-    import it. Tests may — that is what proves it — and the conformance suite is where the proof
-    lives, which is the whole shape of "proven by the suite, selected by nothing".
-    """
+    """The clause that governs this whole leg, executed rather than promised: an AST import
+    census over `src/` and `tools/` where nothing outside the codec module may import it. Tests
+    may, which is what proves it — the shape of "proven by the suite, selected by nothing"."""
     importers: list[str] = []
     for root in (REPO / "src", REPO / "tools"):
         for path in sorted(root.rglob("*.py")):

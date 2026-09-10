@@ -1,26 +1,16 @@
-# >300 justify: the replay, the label stamp, the manifest handshake and the provenance are
-# ONE producer's contract, and the rows that would let a defect through are the ones that
-# span two of them (a desynchronised replay produces valid-looking labels). Split, each half
-# would pass over the seam the other owns.
-"""NIGHTRUN-1 Leg 3 — the bootstrap corpus encoder is CAPABILITY, and it refuses.
+# >300 justify: the replay, the label stamp, the manifest handshake and the provenance are ONE
+# producer's contract, and the defects that get through span two of them (a desynchronised
+# replay produces valid-looking labels). Split, each half would pass over the other's seam.
+"""The bootstrap corpus encoder: it replays, stamps, handshakes, and stays unarmed.
 
-WHAT THIS FILE IS THE ONLY WITNESS TO. SITTING4-PREP-1 §3.5 measured three gaps between the
-R279-CERTIFIED corpus and any bootstrap use of it, and the first was that **the encoder does
-not exist**. This is that encoder's oracle. Its rows fall into three groups and each group
-exists for a defect the others cannot see:
+Three groups of rows, each for a defect the others cannot see:
 
-  * **REPLAY FIDELITY** — a move list replayed through the production `Board` must produce
-    positions in step with their own labels. A skipped or coerced move desynchronises every
-    LATER position from its outcome, which is invisible downstream: the arrays are the right
-    shape, the values are in range, and the net learns a position/label pairing that never
-    occurred.
-  * **THE LABEL'S AUTHORITY** — `outcome` comes from `graph_row_outcome`, which IS
-    `finalize_graph_outcome`. The row that matters asserts the SIGN ALTERNATES with the side
-    to move, because a corpus encoder that stamped one sign for the whole game would train
-    the value head to predict the winner rather than the position's value.
-  * **UNARMEDNESS** — asserted STRUCTURALLY over the import graph (R296(f)), not by grep. The
-    module must be reachable from nothing in `src/` but its own package: capability, not
-    posture. Landing is not arming.
+  * REPLAY FIDELITY — a skipped or coerced move desynchronises every later position from its
+    outcome, and the arrays stay the right shape and in range.
+  * THE LABEL'S AUTHORITY — the outcome sign must ALTERNATE with the side to move, or the
+    value head learns to predict the winner rather than the position's value.
+  * UNARMEDNESS — asserted structurally over the import graph, not by grep: the module is
+    reachable from nothing in `src/` but its own package.
 """
 from __future__ import annotations
 
@@ -51,8 +41,7 @@ def _board_factory():
 
 
 def _legal_walk(n: int, *, seed: int = 20260831) -> list[tuple[int, int]]:
-    """`n` stones of REAL legal play — the encoder replays through the production rules, so
-    a synthetic coordinate list would be testing the refusal path, not the encode path."""
+    """Return `n` stones of real legal play; a synthetic list would exercise the refusal path."""
     import random
 
     from mantis._engine import Board
@@ -70,7 +59,6 @@ def _legal_walk(n: int, *, seed: int = 20260831) -> list[tuple[int, int]]:
     return out
 
 
-# ── replay fidelity ──────────────────────────────────────────────────────────────────────
 def test_one_row_per_ply_in_placement_order() -> None:
     moves = _legal_walk(24)
     rows = list(encode_game(moves, 1, board_factory=_board_factory()))
@@ -89,9 +77,7 @@ def test_one_row_per_ply_in_placement_order() -> None:
 
 
 def test_the_policy_target_is_a_DISTRIBUTION_the_engine_accepts() -> None:
-    """The ring refuses a `visits` row that is not a distribution
-    (`refuse_non_distribution_row`). This drives the real push rather than asserting about
-    the tuple, because "the engine accepts it" is the only claim that matters."""
+    """Prove the engine itself accepts every emitted policy target, by pushing them for real."""
     from mantis._engine import HexgBuffer
 
     moves = _legal_walk(12)
@@ -102,11 +88,8 @@ def test_the_policy_target_is_a_DISTRIBUTION_the_engine_accepts() -> None:
     assert size == len(moves)
 
 
-# ── the label's authority ────────────────────────────────────────────────────────────────
 def test_the_outcome_sign_ALTERNATES_with_the_side_to_move() -> None:
-    """THE ROW THAT MATTERS. A corpus encoder that stamped one sign for the whole game would
-    train the value head to predict the winner rather than the position's value, and every
-    array would still be in range."""
+    """Prove the outcome sign alternates with the side to move, not one sign per game."""
     moves = _legal_walk(20)
     rows = list(encode_game(moves, 1, board_factory=_board_factory()))
     by_player = {1: set(), -1: set()}
@@ -118,8 +101,7 @@ def test_the_outcome_sign_ALTERNATES_with_the_side_to_move() -> None:
 
 
 def test_the_outcome_comes_from_the_RUST_authority_not_a_transcription() -> None:
-    """One authority for the sign convention. If the module ever computes the value itself,
-    the §178 split is transcribed and will drift the first time it moves."""
+    """Prove the outcome is bound from `graph_row_outcome`, never transcribed beside it."""
     source = (_REPO / "src" / "mantis" / "data" / "bootstrap_encode.py").read_text(
         encoding="utf-8"
     )
@@ -130,7 +112,7 @@ def test_the_outcome_comes_from_the_RUST_authority_not_a_transcription() -> None
         and getattr(n.func, "id", getattr(n.func, "attr", None)) == "graph_row_outcome"
     ]
     assert calls, "the encoder no longer calls graph_row_outcome"
-    # and the value it yields must BE that call's result, never a literal beside it
+    # The yielded value must BE that call's result, never a literal beside it.
     assigns = [n for n in ast.walk(tree) if isinstance(n, ast.Assign)]
     assert any(
         isinstance(a.value, ast.Call)
@@ -147,7 +129,6 @@ def test_a_loss_flips_every_sign() -> None:
         assert w[6] == -l[6], "the same position under opposite winners must flip its value"
 
 
-# ── refusals: each one is a label that would otherwise be silently wrong ──────────────────
 def test_an_illegal_move_is_REFUSED_and_names_its_ply() -> None:
     moves = _legal_walk(8)
     moves[4] = (10_000, 10_000)
@@ -156,8 +137,7 @@ def test_an_illegal_move_is_REFUSED_and_names_its_ply() -> None:
 
 
 def test_a_repeated_cell_is_REFUSED_rather_than_skipped() -> None:
-    """The sharpest replay desync: a move on an occupied cell. Skipping it would keep every
-    later position one ply ahead of its own index and one behind its own stones."""
+    """Prove a move on an occupied cell is refused: skipping it desyncs every later position."""
     moves = _legal_walk(8)
     moves[5] = moves[0]
     with pytest.raises(CorpusEncodeError, match="not legal on the replayed board"):
@@ -187,7 +167,6 @@ def test_a_record_missing_its_contract_is_REFUSED(bad) -> None:
         _require_record(bad, 0)
 
 
-# ── the manifest handshake + provenance ──────────────────────────────────────────────────
 def _dataset(tmp_path: Path, records: list[dict], *, shape: str = "B",
              corrupt_sha: bool = False) -> Path:
     d = tmp_path / "ds"
@@ -215,8 +194,7 @@ def _records(n: int) -> list[dict]:
 
 @pytest.mark.parametrize("shape", ["A", "B"])
 def test_both_declared_manifest_shapes_are_accepted(tmp_path: Path, shape: str) -> None:
-    """The audit declares two shapes and requires exactly one. Accepting either here is the
-    audit's rule reused, not a widening invented at the encoder."""
+    """Prove both manifest shapes the audit declares are accepted, and neither is widened here."""
     d = _dataset(tmp_path, _records(3), shape=shape)
     prov = encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC, capacity=512,
                          visit_capacity=8)
@@ -233,8 +211,7 @@ def test_a_manifest_matching_BOTH_shapes_is_REFUSED(tmp_path: Path) -> None:
 
 
 def test_a_source_sha_MISMATCH_is_REFUSED(tmp_path: Path) -> None:
-    """R279's certification handshake. A corpus that does not match its pin is a DIFFERENT
-    corpus, and the certification is about the pinned bytes."""
+    """Prove a source-sha mismatch is refused: certification is about the pinned bytes."""
     d = _dataset(tmp_path, _records(2), corrupt_sha=True)
     with pytest.raises(CorpusEncodeError, match="certification handshake"):
         encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC, capacity=64, visit_capacity=8)
@@ -243,13 +220,9 @@ def test_a_source_sha_MISMATCH_is_REFUSED(tmp_path: Path) -> None:
 def test_a_HELD_OUT_corpus_is_REFUSED_even_though_it_matches_its_manifest(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """THE PRODUCER for the contamination gate re-homed here at R327(e) (LAW-07).
+    """Prove a corpus inside the evaluation hold-out set is refused despite a valid manifest.
 
-    The manifest handshake above proves the file is the file the manifest NAMES. This proves
-    the second property, which the handshake cannot: that the file is outside the evaluation
-    hold-out set. The distinction is the whole point — the dataset below has a PERFECTLY VALID
-    manifest and is still refused. Registered synthetically, because no fixture can be made to
-    hash to the real held-out sha.
+    The hold-out sha is registered synthetically: no fixture can be made to hash to the real one.
     """
     d = _dataset(tmp_path, _records(3))
     sha = json.loads((d / "dataset_metadata.json").read_text(encoding="utf-8"))["sha256"]
@@ -263,9 +236,10 @@ def test_a_HELD_OUT_corpus_is_REFUSED_even_though_it_matches_its_manifest(
 def test_the_hold_out_gate_is_the_thing_that_refuses_and_not_the_handshake(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """MUTATION SELF-TEST for the row above. The SAME dataset encodes cleanly with the hold-out
-    registry empty, so the refusal is attributable to the gate rather than to anything else the
-    encoder does with a sha — which is what a green run would otherwise leave ambiguous."""
+    """Prove the same dataset encodes cleanly with the hold-out registry empty.
+
+    Mutation self-test: it attributes the refusal above to the gate, not to some other sha check.
+    """
     d = _dataset(tmp_path, _records(3))
     monkeypatch.setattr(resolvers, "_HELDOUT_CORPUS_SHAS", {}, raising=True)
     prov = encode_corpus(d, tmp_path / "out.hexg", encoding=_ENC,
@@ -274,9 +248,7 @@ def test_the_hold_out_gate_is_the_thing_that_refuses_and_not_the_handshake(
 
 
 def test_the_gate_fires_BEFORE_a_single_record_is_read(tmp_path: Path, monkeypatch) -> None:
-    """Ordering, not just presence. `assert_not_heldout_sha`'s own docstring says to call it
-    BEFORE using the file's contents; a gate that runs after the encode has already happened
-    protects nothing it was written to protect."""
+    """Prove the hold-out gate fires before a single record is read or an artifact written."""
     d = _dataset(tmp_path, _records(3))
     sha = json.loads((d / "dataset_metadata.json").read_text(encoding="utf-8"))["sha256"]
     monkeypatch.setattr(
@@ -315,9 +287,7 @@ def test_the_provenance_sidecar_makes_the_artifact_checkable(tmp_path: Path) -> 
 
 
 def test_a_TRUNCATED_artifact_says_so_in_its_own_provenance(tmp_path: Path) -> None:
-    """A smoke-sized artifact must never read as a whole corpus. `truncated_at_max_games` is
-    `None` on a full encode and the cap on a partial one, so the distinction is a KEY rather
-    than an inference from a count nobody has the denominator for."""
+    """Prove a truncated artifact carries the cap in `truncated_at_max_games`, not just a count."""
     d = _dataset(tmp_path, _records(6))
     full = encode_corpus(d, tmp_path / "a.hexg", encoding=_ENC, capacity=512,
                          visit_capacity=8)
@@ -329,8 +299,7 @@ def test_a_TRUNCATED_artifact_says_so_in_its_own_provenance(tmp_path: Path) -> N
 
 
 def test_the_written_ring_LOADS_BACK_through_the_production_loader(tmp_path: Path) -> None:
-    """The artifact is only capability if the trainer's own loader can read it. No new format
-    is invented here: this is the ring `sample_graph_batch` samples."""
+    """Prove the written ring loads back through the production loader, not a new format."""
     from mantis._engine import HexgBuffer
 
     d = _dataset(tmp_path, _records(5))
@@ -343,10 +312,8 @@ def test_the_written_ring_LOADS_BACK_through_the_production_loader(tmp_path: Pat
     assert size == prov["plies"]
 
 
-# ── unarmedness, asserted structurally ───────────────────────────────────────────────────
 def test_NOTHING_under_src_imports_the_encoder() -> None:
-    """LANDING IS NOT ARMING. An `ast` import census, never a grep: a grep passes on a
-    commented-out import and fails on a docstring that names the module."""
+    """Prove nothing under src/ imports the encoder, by ast census rather than grep."""
     hits: list[str] = []
     for path in (_REPO / "src").rglob("*.py"):
         if path.name == "bootstrap_encode.py":
@@ -369,7 +336,7 @@ def test_NOTHING_under_src_imports_the_encoder() -> None:
 
 
 def test_no_config_key_selects_the_encoder() -> None:
-    """The other half of unarmedness: no shipped config may name this artifact producer."""
+    """Prove no shipped config names this artifact producer."""
     for cfg in sorted((_REPO / "configs").glob("*.yaml")):
         text = cfg.read_text(encoding="utf-8")
         assert "bootstrap_encode" not in text, f"{cfg.name} names the encoder"

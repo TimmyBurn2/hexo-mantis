@@ -91,7 +91,7 @@ def _assert_pairs(pos_id: str, got: dict, want: dict) -> None:
     assert abs(total - 1.0) <= 1e-4, f"{pos_id}: Python-side target mass {total} != 1"
 
 
-# ── O1p: the Python side consumes the FULL ragged target ─────────────────────────────
+# O1p: the Python side consumes the FULL ragged target
 def test_policy_target_round_trips_the_full_ragged_target() -> None:
     for pos in _positions("target_parity_v1.json"):
         hb = HexgBuffer(2, "gnn_axis_v1", 128)
@@ -131,7 +131,7 @@ def test_fixture_pairs_are_unit_mass_and_fit_the_slot() -> None:
     assert total_bytes <= budget, f"fixture family {total_bytes} B exceeds the {budget} B budget"
 
 
-# ── QA: the quick-arm row carries full mass; the flag rides independently ────────────
+# QA: the quick-arm row carries full mass; the flag rides independently
 def test_quick_arm_row_carries_full_mass_and_the_flag_rides() -> None:
     pos = next(iter(_positions("target_parity_v1.json")))
     maps = {}

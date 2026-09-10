@@ -1,27 +1,13 @@
-"""R345(b)(3) witness — a firing halt leaves the last bundle resumable, ring hash equal.
+"""A run-fatal halt leaves the last bundle resumable, ring hash equal.
 
-WHAT A FIRING HALT IS. `F-816-37` is a wire-corruption class whose detector raises a
-`GraphContractError` out of the collate path (`selfplay/inference_server.py::_dump_collate_
-failure` writes the offending batch and the caller re-raises). It is run-fatal by design: a
-corrupted wire must stop the run, not be trained on. What it must NOT do is take the resume
-point with it, and until this leg that was not a property the code had — it was a property the
-code happened to exhibit when the timing was kind.
+A wire-corruption detector raises out of the collate path and must stop the run — but it must
+not take the resume point with it. A bundle is published and its ring hash recorded, then a
+save is interrupted partway through writing the ring. The assertions are the resume contract
+exactly: the previous bundle still verifies, its ring is byte-identical, and the hash the
+manifest recorded is still the hash on disk.
 
-TWO WAYS IT DID NOT HAVE IT. The ring was written with `File::create`, which truncates the
-target before writing; a halt during a ring save therefore destroyed the previous ring rather
-than leaving it. And no manifest tied the ring to the checkpoint it belonged with, so even an
-intact ring could not be shown to BELONG to the artifact a resume would load.
-
-WHAT THIS WITNESS DRIVES. A real bundle is published and its ring hash recorded. A save is
-then interrupted the way a firing interrupts one — partway through writing the ring. The
-assertions are the resume contract exactly: the previous bundle still verifies, its ring is
-byte-identical, and the hash the manifest recorded is still the hash on disk.
-
-WHAT IT DOES NOT CLAIM. This drives the halt's SHAPE — an exception out of the ring write —
-not the corruption that produces it. F-816-37's own detection is instrumented elsewhere
-(`diagnostics/f816_37_rate_bar.py`) and reproducing bit-23 corruption is a box matter. The
-resume property under test is independent of which exception halts the run, which is why the
-planted failure is a plain raise and is labelled as one.
+This drives the halt's SHAPE — an exception out of the ring write — not the corruption that
+produces it, so the planted failure is a plain raise and is labelled as one.
 """
 from __future__ import annotations
 
@@ -52,7 +38,7 @@ def _publish(directory: Path, *, step: int, ring_bytes: bytes) -> Path:
 def test_a_firing_during_the_next_ring_write_leaves_the_previous_bundle_intact(
     tmp_path: Path,
 ) -> None:
-    """The witness. Planted firing → the step-10 bundle still resumes, ring hash equal."""
+    """Planted firing: the step-10 bundle still resumes, ring hash equal."""
     ring_bytes = b"the ring that must survive" * 512
     _publish(tmp_path, step=10, ring_bytes=ring_bytes)
     before = B.newest_complete_bundle(tmp_path)
@@ -97,11 +83,8 @@ def test_a_firing_during_the_next_ring_write_leaves_the_previous_bundle_intact(
 
 
 def test_the_torn_bundles_members_do_not_impersonate_a_resume_point(tmp_path: Path) -> None:
-    """A half-written ring on disk must not be reachable as anybody's ring.
-
-    It is left in place deliberately — sweeping unreferenced files is a separate operation
-    with its own failure mode — so what has to hold is that nothing OFFERS it.
-    """
+    """A half-written ring is left on disk deliberately, so what must hold is that nothing
+    OFFERS it as anybody's ring."""
     _publish(tmp_path, step=10, ring_bytes=b"good ring")
     next_ckpt = tmp_path / "run_00000020_abcd1234.ckpt"
     next_ckpt.write_bytes(b"checkpoint 20")
@@ -118,11 +101,8 @@ def test_the_torn_bundles_members_do_not_impersonate_a_resume_point(tmp_path: Pa
 
 
 def test_a_halt_after_the_manifest_commits_keeps_the_new_bundle(tmp_path: Path) -> None:
-    """Mutation half: the commit point must be the MANIFEST, not the attempt.
-
-    Without this, "always fall back to the older bundle" would satisfy every assertion above
-    while throwing away every completed save.
-    """
+    """Mutation half: the commit point is the MANIFEST, so an unconditional fall back to the
+    older bundle does not satisfy this row."""
     _publish(tmp_path, step=10, ring_bytes=b"old ring")
     _publish(tmp_path, step=20, ring_bytes=b"new ring")
     newest = B.newest_complete_bundle(tmp_path)

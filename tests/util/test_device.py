@@ -59,7 +59,7 @@ def test_best_device_falls_back_to_cpu(monkeypatch):
     assert devmod.best_device().type == "cpu"
 
 
-# ── WORKER-SWEEP (R309(g)) — the card-level sink and the per-round boundary ──────────────
+# WORKER-SWEEP (R309(g)) — the card-level sink and the per-round boundary
 # Two readings the caching-allocator counters do not carry, added HERE because
 # `mantis.util.device` owns `torch.cuda` for the paths `tests/eval/test_pipeline_isolation.py`
 # fences off — NOT for the whole repo, which is measurably false (`selfplay/graph_collate.py`,

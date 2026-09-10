@@ -1,24 +1,17 @@
 # R8 justify: the manifest checker's oracle is one suite because each row drives the SAME
-# `verify_manifest` entry over a mutated one-row manifest, and the mutations are meaningful
-# only against each other — a dead symbol, a missing producer test, a docstring-only literal
-# and a deselected producer are four ways the same checker can resolve against nothing, and
-# splitting them would let one file assert a shape another file's fixture no longer builds.
-"""⊕ O-01 / O-02 — the producer-manifest contract + the LAW-07 mutation self-tests.
+# `verify_manifest` entry over a mutated one-row manifest, and the mutations are meaningful only
+# against each other — a dead symbol, a missing producer test, a docstring-only literal and a
+# deselected producer are four ways the same checker can resolve against nothing.
+"""The producer-manifest contract plus the LAW-07 mutation self-tests.
 
-RED-at-import until IMPL writes `mantis.monitor.manifest`. ORACLE-FIRST (⊕): the top-level
-`import mantis.monitor.manifest` raises ModuleNotFoundError before any port code exists.
+ORACLE-FIRST: the top-level `import mantis.monitor.manifest` raises before any port code exists.
 
-O-01 (P-01): the SHIPPED `src/mantis/monitor/producer_manifest.yaml` loads and EVERY row
-resolves — its producer (importable dotted symbol, OR a quoted event-literal present in the
-named module's source, OR a `seam` attr whose row carries a `pending:` WP name) AND its
-`producer_test` node (file exists + ast-contains the named test function).
-
-O-02 (P-02): the checker BITES — a manifest with (i) a nonexistent producer symbol and one
-with (ii) a nonexistent producer_test each raise `ManifestError` naming the offending row.
-A checker that cannot bite is the phantom-gate class (F-10, LAW-07 provenance).
-
-Contract (§c.3): `verify_manifest(path, repo_root)` raising `ManifestError(row_id, reason)`;
-producer_test paths resolve relative to `repo_root`.
+The shipped `producer_manifest.yaml` must load with EVERY row resolving — its producer (an
+importable dotted symbol, a quoted event-literal present in the named module's source, or a `seam`
+attr on a row carrying a `pending:` WP name) AND its `producer_test` node (file exists and
+ast-contains the named test function). The checker must also BITE: a nonexistent producer symbol
+and a nonexistent producer_test each raise `ManifestError` naming the offending row, since a
+checker that cannot bite is the phantom-gate class.
 """
 from __future__ import annotations
 
@@ -35,8 +28,7 @@ _SHIPPED_MANIFEST = DEFAULT_MANIFEST_PATH
 
 
 def test_shipped_manifest_every_row_resolves() -> None:
-    """O-01 / P-01 — the shipped manifest loads and every gate row resolves (producer AND
-    producer_test). Any unresolved row is a dead/renamed producer feeding a gate."""
+    """O-01 / P-01 — the shipped manifest loads and every gate row resolves (producer AND producer_test)."""
     assert _SHIPPED_MANIFEST.exists(), (
         f"the seam-7 manifest must ship at {_SHIPPED_MANIFEST.relative_to(_REPO_ROOT)}"
     )
@@ -49,14 +41,13 @@ def _write_manifest(path: Path, rows: list[str]) -> Path:
     return path
 
 
-# A producer_test node that genuinely exists (this test function), so a mutation manifest
-# fails ONLY on the mutated field, never incidentally on the other.
+# A producer_test node that genuinely exists (this test function), so a mutation manifest fails
+# ONLY on the mutated field.
 _LIVE_TEST_NODE = "tests/monitor/test_manifest_contract.py::test_shipped_manifest_every_row_resolves"
 
 
 def test_dead_producer_symbol_bites(tmp_path: Path) -> None:
-    """O-02 / P-02 (arm 1) — a row whose producer symbol does not exist ⇒ ManifestError
-    naming that row. Proves the checker resolves symbols, not just parses yaml."""
+    """O-02 / P-02 (arm 1) — a row whose producer symbol does not exist ⇒ ManifestError naming that row."""
     manifest = _write_manifest(tmp_path / "m.yaml", [
         "  - id: dead_symbol_row\n"
         "    producer: {kind: symbol, module: mantis.train.checkpoints, symbol: no_such_symbol}\n"
@@ -68,8 +59,7 @@ def test_dead_producer_symbol_bites(tmp_path: Path) -> None:
 
 
 def test_missing_producer_test_bites(tmp_path: Path) -> None:
-    """O-02 / P-02 (arm 2) — a row whose producer_test node does not exist ⇒ ManifestError
-    naming that row. Proves the checker ast-verifies the producer test, not just the producer."""
+    """O-02 / P-02 (arm 2) — a row whose producer_test node does not exist ⇒ ManifestError naming that row."""
     manifest = _write_manifest(tmp_path / "m.yaml", [
         "  - id: missing_test_row\n"
         "    producer: {kind: symbol, module: mantis.train.checkpoints, symbol: persist_errors_total}\n"
@@ -81,11 +71,9 @@ def test_missing_producer_test_bites(tmp_path: Path) -> None:
 
 
 def test_event_literal_substring_does_not_falsely_resolve(tmp_path: Path) -> None:
-    """O-02 — a `kind: event_literal` row is satisfied ONLY by a QUOTED literal in the named
-    module, never by an identifier substring. `train_step` as a bare identifier (e.g.
-    `self._train_step`) must NOT satisfy a `train_step` literal row → ManifestError."""
-    # coordinator/step.py contains the identifier `_train_step` but (pre-wiring) not the
-    # quoted literal "train_step"; a substring-matching checker would wrongly pass.
+    """O-02 — a `kind: event_literal` row is satisfied ONLY by a QUOTED literal in the named module, never by an identifier substring."""
+    # coordinator/step.py contains the identifier `_train_step` but not the quoted literal
+    # "train_step"; a substring-matching checker would wrongly pass.
     manifest = _write_manifest(tmp_path / "m.yaml", [
         "  - id: literal_needs_quotes\n"
         "    producer: {kind: event_literal, module: mantis.train.coordinator.config, literal: train_step}\n"
@@ -97,8 +85,7 @@ def test_event_literal_substring_does_not_falsely_resolve(tmp_path: Path) -> Non
 
 
 def test_pending_seam_row_requires_a_wp_name(tmp_path: Path) -> None:
-    """O-02 — a `kind: seam` row that is `pending:` but names no WP is an error (a pending gate
-    with no owner is the silently-dead-forever class). Bites a pending row missing its WP tag."""
+    """O-02 — a `kind: seam` row that is `pending:` but names no WP is an error (a pending gate with no owner is the silently-dead-forever class)."""
     manifest = _write_manifest(tmp_path / "m.yaml", [
         "  - id: seam_no_wp\n"
         "    producer: {kind: seam, module: mantis.train.coordinator.step, symbol: StepCoordinator.on_eval_round_complete}\n"
@@ -111,44 +98,20 @@ def test_pending_seam_row_requires_a_wp_name(tmp_path: Path) -> None:
 
 
 def test_empty_manifest_is_a_failure(tmp_path: Path) -> None:
-    """O-01 — an empty manifest (no gate rows) is a FAIL, not a vacuous pass (R4: a gate
-    surface with zero producers is a phantom-armed abort chain waiting to happen)."""
+    """O-01 — an empty manifest (no gate rows) is a FAIL, not a vacuous pass (R4: a gate surface with zero producers is a phantom-armed abort chain waiting to happen)."""
     path = tmp_path / "empty.yaml"
     path.write_text("version: 1\nchannel: jsonl_event_sink\ngates: []\n")
     with pytest.raises(ManifestError):
         verify_manifest(path, _REPO_ROOT)
 
 
-# ── ⊕ WP12-R Phase O / O-29 (R164/LAW-07) — the two Phase-O rows EXIST ────────────────
-#: The rows Phase O authors, by id. Transcribed rather than derived from the shipped file:
-#: an oracle that read its expectation out of the document under test could not witness a
-#: deletion, which is the entire subject here (R81).
+#: The rows Phase O authors, by id. Transcribed rather than derived from the shipped file: an
+#: oracle that read its expectation out of the document under test could not witness a deletion.
 _PHASE_O_ROW_IDS = ("target_integrity_counters", "terminal_eval_broken")
 
 
 def test_the_shipped_manifest_contains_the_phase_O_rows() -> None:
-    """O-29 — PRESENCE, which is a different mechanism from RESOLUTION and is covered by
-    nothing else in this file.
-
-    `verify_manifest` iterates the rows it is HANDED. Only an EMPTY gate list is a failure
-    (`manifest.py:78-79`, and `docs/contracts/event_manifest.md:65` says so verbatim); every
-    row that is present is then resolved one at a time. So DELETING a row leaves
-    `test_shipped_manifest_every_row_resolves` GREEN — the checker has nothing left to
-    resolve and reports success over the smaller set. That hole is generic to all rows; this
-    oracle closes it for the two Phase O authors, which is the scope Phase O owns.
-
-    Why the two rows matter enough to pin their existence: they are the LAW-07 provenance for
-    the two things Phase O ships. `target_integrity_counters` is the anti-rot leg that
-    `solver_deltas` never had — a defaulted parameter with no row and no producer test, which
-    is exactly why eight solver counters silently never reached the stream and nothing
-    noticed. `terminal_eval_broken` cites the producer for exit code 48.
-
-    Read off the raw document, not through `verify_manifest`: presence must be observable
-    even when resolution would fail, otherwise the two mechanisms collapse into one and
-    M-O29's "O-27 stays green" asymmetry would be unobservable.
-
-    MUTATION THAT REDS IT (M-O29): delete either row from `producer_manifest.yaml`. The
-    resolution oracle above stays GREEN under it — that asymmetry is why this row exists."""
+    """O-29 — PRESENCE, which is a different mechanism from RESOLUTION and is covered by nothing else in this file."""
     document = load_manifest(_SHIPPED_MANIFEST)
     gates = document["gates"]
     assert isinstance(gates, list) and gates, (
@@ -166,32 +129,8 @@ def test_the_shipped_manifest_contains_the_phase_O_rows() -> None:
     )
 
 
-# ── item 9 (R4/LAW-07) — the heartbeat family is registered IN FULL ───────────────────
 def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
-    """Each member of `HEARTBEAT_SOURCES` carries a `heartbeat.<source>` row.
-
-    MEASURED GAP THIS CLOSES: three of the four sources had rows and `eval_round` — added
-    as the fourth at WP11-A — did not, while being armed identically (a deadline in
-    `MonitorConfig`, a `wired_sources` entry from `mantis.run`, and
-    `WATCHDOG_STALL_EXIT_CODE` on staleness). That is the F-10 shape: an input that can stop
-    a run, citing no producer and no producer test. Nothing could see it —
-    `test_shipped_manifest_every_row_resolves` resolves the rows it is HANDED and an absent
-    row is not a row (the O-29 asymmetry, argued in full above), and
-    `docs/contracts/event_manifest.md` tabulates `heartbeat.eval_round` among its shipped
-    rows, so the doc AGREED the row existed.
-
-    DERIVED, not transcribed (R192(e) / R8's derive-or-delete): the expectation comes from
-    `HEARTBEAT_SOURCES` — the tuple the registry, the watchdog deadlines and the arm event
-    all key on — so a FIFTH source added later without a row reds here on the commit that
-    adds it. A transcribed list of four would have to be re-edited to notice, which is the
-    same rot as an asserted line count. The naming convention `heartbeat.<source>` is the
-    shipped one for all four and is asserted, not guessed at: a row that registered the
-    source under some other id would satisfy no reader looking for it.
-
-    MUTATIONS THAT RED IT: (1) delete the `heartbeat.eval_round` row from
-    `producer_manifest.yaml` — `test_shipped_manifest_every_row_resolves` stays GREEN under
-    it; (2) append a source to `HEARTBEAT_SOURCES` without adding its row.
-    """
+    """Each member of `HEARTBEAT_SOURCES` carries a `heartbeat.<source>` row."""
     from mantis.monitor.heartbeat import HEARTBEAT_SOURCES
 
     assert HEARTBEAT_SOURCES, "premise: the watchdog declares heartbeat sources at all"
@@ -205,19 +144,8 @@ def test_every_armed_heartbeat_source_has_a_manifest_row() -> None:
     )
 
 
-# ── R346(f) — the K histogram's row went WITH its instrument, and stays gone ──────────
 def test_the_retired_dense_instruments_have_no_manifest_row() -> None:
-    """A manifest row outliving its instrument is a producer citation pointing at nothing.
-
-    The R250 absence family — the K-cluster histogram, the cluster-variance block, the
-    forced-win coverage-drop counter and the compact/spread symmetry gate — was every
-    instrument whose mechanism lived on the DENSE search arm. R346(f) deleted that arm, so
-    the rows are deleted too rather than left describing a field nothing publishes. This is
-    the inverse of the pin it replaces: that one refused a row's quiet deletion while the
-    instrument lived; this one refuses its quiet SURVIVAL now that the instrument does not.
-
-    MUTATIONS THAT RED IT: re-add any of the named rows to `producer_manifest.yaml`.
-    """
+    """A manifest row outliving its instrument is a producer citation pointing at nothing."""
     retired = {
         "k_cluster_histogram",
         "uncovered_forced_win",
@@ -239,18 +167,12 @@ def test_the_retired_dense_instruments_have_no_manifest_row() -> None:
         )
 
 
-# ── AUDIT-1 F-10 (+ its sibling GATE-C03): the two ways a row resolved against nothing ──
-#
-# `_verify_event_literal` was `re.search` over RAW MODULE SOURCE, so ANY occurrence of the
-# quoted literal satisfied the row — including one inside a docstring. `eval/pipeline.py`'s
-# module docstring contains `heartbeat("eval_round")` as PROSE while the live producer is
-# `EvalPipeline._poll_loop`'s `self._beat("eval_round")`: delete the call and the row still
-# resolved. That is precisely the class the manifest exists to make un-shippable — a producer
-# vanishing with the gate green.
-#
-# `_verify_producer_test` found a `test_*` FunctionDef and stopped there, so a cited test
-# carrying `@pytest.mark.slow` / `skip` / `skipif` / `integration` — or a module-level
-# `pytestmark` with one — satisfied the row while running in no default-tier invocation.
+# The two ways a row resolved against nothing. `_verify_event_literal` was `re.search` over RAW
+# MODULE SOURCE, so any occurrence of the quoted literal satisfied the row — including one inside
+# a docstring, while the live producer was a call that could be deleted with the row still
+# resolving. `_verify_producer_test` found a `test_*` FunctionDef and stopped there, so a cited
+# test carrying a deselecting marker (or a module-level `pytestmark` with one) satisfied the row
+# while running in no default-tier invocation.
 
 def _module_row(tmp_path: Path, module: str, literal: str) -> Path:
     return _write_manifest(tmp_path / "m.yaml", [
@@ -292,8 +214,7 @@ def beat() -> None:
 def test_a_literal_in_LIVE_code_still_satisfies_a_row(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The control, and it is the load-bearing one: the tightened check must not reject the
-    real producers. Same module, same literal, moved from prose into a call."""
+    """The control, and it is the load-bearing one: the tightened check must not reject the real producers."""
     import sys
 
     _fake_module(tmp_path, "_f10_live_literal", '''"""A module with a live beat."""
@@ -310,8 +231,7 @@ def beat(sink) -> None:
 def test_a_function_docstring_does_not_satisfy_a_row_either(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Docstrings are excluded STRUCTURALLY — module, class and function alike — rather than
-    by "is it near the top of the file"."""
+    """Docstrings are excluded STRUCTURALLY — module, class and function alike — rather than by "is it near the top of the file"."""
     import sys
 
     _fake_module(tmp_path, "_f10_func_docstring", '''"""Module."""
@@ -338,9 +258,8 @@ def test_a_producer_test_DESELECTED_from_the_tier_does_not_satisfy_a_row(
     suite = tmp_path / "tests" / "monitor"
     suite.mkdir(parents=True)
     module = suite / "test_f10_deselected.py"
-    # The decorator is assembled rather than written inline: a literal "\n" immediately
-    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
-    # trips a gate teaches the next reader to add a hatch reflexively.
+    # The decorator is assembled rather than written inline: a literal newline immediately before
+    # "@pytest.mark" matches CI gate 17's `user@host` class.
     mark = "@pytest.mark"
     module.write_text(
         f"import pytest\n\n\n{mark}.{marker}\ndef test_deselected_producer() -> None:\n"
@@ -360,8 +279,7 @@ def test_a_producer_test_DESELECTED_from_the_tier_does_not_satisfy_a_row(
 
 
 def test_a_module_level_pytestmark_is_caught_too(tmp_path: Path) -> None:
-    """The decorator is the obvious form; `pytestmark = [pytest.mark.slow]` deselects the
-    WHOLE module and is the one a reader scanning the function would miss."""
+    """The decorator is the obvious form; `pytestmark = [pytest.mark.slow]` deselects the WHOLE module and is the one a reader scanning the function would miss."""
     suite = tmp_path / "tests" / "monitor"
     suite.mkdir(parents=True)
     (suite / "test_f10_modmark.py").write_text(
@@ -381,13 +299,11 @@ def test_a_module_level_pytestmark_is_caught_too(tmp_path: Path) -> None:
 
 
 def test_an_UNMARKED_producer_test_still_satisfies_a_row(tmp_path: Path) -> None:
-    """The control for the sibling: only DESELECTING markers are refused. A test carrying, say,
-    `@pytest.mark.parametrize` runs in the default tier and is fine."""
+    """The control for the sibling: only DESELECTING markers are refused."""
     suite = tmp_path / "tests" / "monitor"
     suite.mkdir(parents=True)
-    # The decorator is assembled rather than written inline: a literal "\n" immediately
-    # before "@pytest.mark" matches CI gate 17's `user@host` class, and a fixture that
-    # trips a gate teaches the next reader to add a hatch reflexively.
+    # The decorator is assembled rather than written inline: a literal newline immediately before
+    # "@pytest.mark" matches CI gate 17's `user@host` class.
     mark = "@pytest.mark"
     (suite / "test_f10_ok.py").write_text(
         f"import pytest\n\n\n{mark}.parametrize(\"n\", [1, 2])\n"

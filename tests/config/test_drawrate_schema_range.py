@@ -1,43 +1,16 @@
-""">300 justify (R8). The file was already
-over the cap with NO justify at all (a pre-existing gap WPMINT Phase K-A flagged); WPMINT Phase
-K-B touches it to author `train.draw_rate_abort.consec`, so it is written now rather than left.
-One block, one rejection corpus: the rejected payloads and the per-config posture census are
-DATA whose reason text IS the assertion — each row names the defect the bound closes and the
-spelling an operator would actually write. Splitting them would separate a rejection from the
-prereg pin it is judged against, and R5 bars the cross-test import that would rejoin them.
+""">300 justify (R8): one block, one rejection corpus. The rejected payloads and the per-config
+posture census are DATA whose reason text IS the assertion, so splitting them would separate a
+rejection from the prereg pin it is judged against, and R5 bars the cross-test import that would
+rejoin them.
 
-⊕ WPAX Phase D ORACLE — `CARD-DRAWRATE-KEY`: what the draw-rate block can EXPRESS, and
-what each committed config actually says (DESIGN_D §1.1, §6.2, §6.3; MF-1 closed by R83).
+What the draw-rate block can EXPRESS, and what each committed config says. The sibling authority
+file asserts who may set the value; this one asserts what the type system ACCEPTS at all.
 
-RED-at-import until IMPL lands the delta: `mantis.config.resolve.draw_rate` is the ONE read
-path R80 orders, and it does not exist at HEAD.
-
-The sibling file `tests/config/test_drawrate_arming_authority.py` asserts who has AUTHORITY
-over the value. This one asserts the two things that file cannot see: which values the type
-system will ACCEPT at all, and what the five committed configs each declare.
-
-The oracles, and the defect each is the ONLY witness to:
-
-- O-D6 `test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range` — **MF-1's
-  class, in both directions, on all three keys**. A threshold `> 1.0` passes `gt=0`, audits
-  ARMED, and can NEVER fire; an `N_pool_min` above `DRAW_RATE_WINDOW * selfplay.n_workers`
-  is permanently unsatisfiable; a `min_step` at or past `train.max_train_steps` is a guard
-  the run never passes. All are "armed in the config, absent in effect" —
-  `schema/core.py`'s own words for the sibling defect it already forbids. Not caught by the
-  audit oracles, which only ever see values that already loaded.
-- **WPMINT Phase DS (R92) re-points the third key's arms.** `min_samples` is DELETED with the
-  filtered-mean statistic it guarded, and `N_pool_min` takes its place with the SAME defect
-  class on BOTH ends — `test_the_evidence_bar_must_be_reachable_within_the_pools_own_window`
-  (the ceiling, a cross-SECTION rule against `selfplay.n_workers`, which is why it is not an
-  `le=` on the field) and
-  `test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires` (the floor, DR-9's
-  class transferred). The behaviour those bounds describe is
-  `tests/selfplay/test_drawrate_pooled_statistic.py`.
-- O-D7 `test_every_config_states_its_draw_rate_posture_explicitly` — a config that INHERITS
-  its posture instead of stating it, and a newly added config skipping the requirement.
-  Enumerated through the ONE discovery authority (R71/R75), never a second glob.
-
-R7 / gate 6: nothing here writes a `*.jsonl` and nothing is written inside the tree.
+The defect each oracle is the ONLY witness to: a value outside the metric's own range in either
+direction, on every key — a threshold `> 1.0` passes `gt=0`, audits ARMED and can NEVER fire, and
+none of that is visible to the audit oracles, which only ever see values that already loaded; the
+evidence bar's CEILING, a cross-SECTION rule against `selfplay.n_workers`, and its FLOOR, where
+one drawn game would fire the abort; and a config that INHERITS its posture instead of stating it.
 """
 from __future__ import annotations
 
@@ -46,9 +19,8 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-# NOTE (ORACLE-WRITE): `ruff --fix` at HEAD re-sorts the `resolve.draw_rate` import into the
-# third-party block, because the module it names does not exist yet. It sits here, with its
-# `mantis.*` siblings, which is where it belongs the moment IMPL lands it.
+# `ruff --fix` re-sorts the `resolve.draw_rate` import into the third-party block while that
+# module does not exist; it sits here, with its `mantis.*` siblings, where it belongs.
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.draw_rate import resolve_draw_rate_abort  # RED anchor (R80)
 from mantis.config.schema import RunConfig
@@ -57,32 +29,24 @@ from mantis.util.constants import DRAW_RATE_WINDOW
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CONFIGS_DIR = REPO_ROOT / "configs"
 
-#: R82/R85's pre-registered run-scoped constants. NOT tunables: mint prereg is "the only
-#: place they may change", so they are written here as the pin that makes an in-place edit
-#: visible instead of silent.
-#: WPMINT Phase K-B (call K-b) adds `consec`, the FOURTH term. R92's prereg row already
-#: NAMED `consec=3` among the values that stand; this phase moves who SAYS it — from a
-#: `StepCoordinatorConfig` code-side default into the block the other three live in — so
-#: the number is unchanged and this pin now covers all four.
+#: Pre-registered run-scoped constants. NOT tunables: mint prereg is the only place they may
+#: change, so they are written here as the pin that makes an in-place edit visible.
 RUN5_PREREG = {"threshold": 0.25, "min_step": 25000, "N_pool_min": 50, "consec": 3}
 
 
-#: run5's OWN evidence ceiling, `DRAW_RATE_WINDOW * selfplay.n_workers`, read off the live
-#: config. Derived here once so every arm below follows a re-minted `n_workers` instead of
-#: asserting a literal that was only true at a particular pick (R192(e), and RECAL-SITTING-5's
-#: mint is the event that proved it).
+#: The production evidence ceiling, `DRAW_RATE_WINDOW * selfplay.n_workers`, read off the live
+#: config. Derived once so every arm below follows a re-minted `n_workers` instead of asserting a
+#: literal that was only true at a particular pick.
 _RUN5_EVIDENCE_CEILING = DRAW_RATE_WINDOW * load_config(
     CONFIGS_DIR / "run6.yaml").selfplay.n_workers
 
 
 def _with_block(payload):
-    """run5's own minted dump with `train.draw_rate_abort` REPLACED WHOLESALE, re-validated.
+    """The production config's own minted dump with `train.draw_rate_abort` REPLACED WHOLESALE.
 
-    Wholesale, not merged: the `smoke_run_config` factory deep-merges section dicts
-    (`tests/conftest.py:60-66`), so a deliberately PARTIAL block would silently inherit the
-    missing key from run5's own and the "the three are inseparable" arm would assert nothing.
-    Everything else in the payload is the committed file's, so each row below varies exactly
-    one thing.
+    Wholesale, not merged: the shared factory deep-merges section dicts, so a deliberately PARTIAL
+    block would silently inherit the missing key and the "the three are inseparable" arm would
+    assert nothing. Everything else in the payload is the committed file's.
     """
     dumped = load_config(CONFIGS_DIR / "run6.yaml").model_dump()
     dumped["train"]["draw_rate_abort"] = payload
@@ -90,37 +54,17 @@ def _with_block(payload):
 
 
 
-# ── O-D6 — MF-1's class, in both directions, on all three keys ────────────────────────
 def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> None:
-    """MF-1: loop 0 claimed "the schema cannot express a disarming number". FALSE — `gt=0`
-    forecloses only the `<= 0` half. `pooled_draw_rate` is `Sum(draws)/Sum(completed)`, i.e.
-    a fraction in `[0, 1]`, and the predicate is `all(value >= threshold)` — an UPPER bound
-    (`rules.py`). So ANY threshold `> 1.0` can never be met, is accepted by `gt=0`, and reads
-    ARMED to the manifest: "armed in the config, absent in effect", which is
-    `schema/core.py`'s own words for the sibling defect it already forbids. It is reachable
-    by the natural percent slip — an operator meaning 35% writes `35` — through the mint path.
+    """The schema cannot express a value outside the metric's own range, at either end.
 
-    R83 closes it at both ends, and R71's class-fix law puts the same bound on the other axes
-    of the same defect: `min_step >= train.max_train_steps` is a guard the run never passes,
-    and `N_pool_min > DRAW_RATE_WINDOW * selfplay.n_workers` is evidence the run can never
-    bank (the two tests below this one).
+    `gt=0` forecloses only the `<= 0` half. The pooled rate is a fraction in `[0, 1]` and the
+    predicate is an UPPER bound, so ANY threshold `> 1.0` can never be met, is accepted, and reads
+    ARMED — reachable by the natural percent slip, where an operator meaning 35% writes `35`.
 
-    THE MF-1 RESIDUAL IS NOW CLOSED — a measured side effect of R92, recorded here rather
-    than left for a reader to discover. Every earlier revision of this docstring disclosed
-    that `1e-300` STILL LOADS: a maximum-sensitivity hair-trigger that `le=1` does not
-    address, and (WPMINT DR-2, measured) that `min_samples` did not address either, because
-    `1/min_samples = 0.02` bounded ONE WORKER's rate while the compared value was an
-    unweighted MEAN over N included workers whose floor was `1/(min_samples * N)` —
-    0.000625 at N=32, 0.0003125 at N=64, understated by a factor of N.
-
-    Under R92 the compared value IS `Sum(draws)/Sum(completed)`, so its smallest non-zero
-    value at the bar is exactly `1/N_pool_min` at EVERY worker count — and
-    `_one_drawn_game_cannot_fire_the_abort` requires `1/N_pool_min < threshold`. On a
-    one-worker pool `N_pool_min <= 50`, so `1/N_pool_min >= 0.02`, so **any threshold at or
-    below 0.02 is now REJECTED AT LOAD**: it is a threshold a single drawn game would meet,
-    which is a hair-trigger and not a threshold. That is MF-1's residual closed at the type
-    on the axis DR-2 proved the old claim false on. The arm below asserts the REJECTION, and
-    the boundary is asserted on both sides so the bound is the arithmetic and not a literal.
+    The hair-trigger residual is closed as a side effect of the pooled statistic: the compared
+    value's smallest non-zero value at the bar is exactly `1/N_pool_min` at EVERY worker count, and
+    the block requires `1/N_pool_min < threshold`. Boundaries are asserted on both sides, so the
+    bound is the arithmetic and not a literal.
     """
     armed = dict(RUN5_PREREG)
     assert _with_block(armed).train.draw_rate_abort.threshold == 0.25
@@ -145,11 +89,9 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
         "threshold .inf — the same class at the limit":
             ({**armed, "threshold": float("inf")}, "threshold"),
         "threshold true — a bool is not a fraction": ({**armed, "threshold": True}, "threshold"),
-        # DERIVED, not transcribed. This read `51` while run5 was a one-worker pool; the
-        # RECAL-SITTING-5 mint took `selfplay.n_workers` to the Phase W pick and 51 became
-        # perfectly reachable, so the literal stopped describing the defect it names. The
-        # ceiling is `DRAW_RATE_WINDOW * n_workers` read off the LIVE config, so this arm
-        # follows any future pick instead of going quietly green (R192(e)).
+        # DERIVED, not transcribed: this read `51` while the pool was one worker, and a re-mint
+        # made 51 perfectly reachable. The ceiling comes off the LIVE config, so the arm follows
+        # any future pick instead of going quietly green.
         "N_pool_min one above the pool's OWN ceiling — unreachable evidence (R92's 4th axis)":
             ({**armed, "N_pool_min": _RUN5_EVIDENCE_CEILING + 1}, "N_pool_min"),
         "N_pool_min 0 — no pool ever banks fewer than zero games, so the bar is inert":
@@ -162,11 +104,9 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
             ({"threshold": 0.25, "min_step": 25000}, "N_pool_min"),
         "the RETIRED key — `min_samples` is gone (R92) and must not load silently":
             ({**armed, "min_samples": 50}, "min_samples"),
-        # WPMINT Phase K-B (call K-b) FLIPS this row: `consec` is an authored key now, so the
-        # `extra='forbid'` claim needs a key that is genuinely not in the block. It is
-        # re-pointed rather than deleted — the property (strictness reaches INSIDE the nested
-        # block, not just at the top level) is exactly as load-bearing as it was, and DS left
-        # this row named as the pin K would have to flip consciously.
+        # Re-pointed rather than deleted once `consec` became an authored key: the property —
+        # strictness reaches INSIDE the nested block, not just at the top level — is unchanged, so
+        # the row needs a key that is genuinely not in the block.
         "an unknown inner key — extra='forbid' reaches inside the block too":
             ({**armed, "consec_rounds": 3}, "consec_rounds"),
         "consec 0 — a rule that needs zero consecutive observations is not a rule":
@@ -201,31 +141,18 @@ def test_the_schema_cannot_express_a_value_OUTSIDE_the_metrics_own_range() -> No
     )
 
 
-# ── DS-7 — the evidence bar's CEILING (R92's fourth axis) ─────────────────────────────
 def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> None:
-    """WPMINT Phase DS (R92) — the bound that REPLACES `min_samples: le=DRAW_RATE_WINDOW`.
+    """The evidence bar must be reachable within the pool's own window.
 
-    `min_samples` carried a load-bearing `le=` (`util/constants.py`'s own words) and R92
-    deletes the key. Deleting it would have deleted the safety property with it, so the bound
-    moves — and it CANNOT move onto `N_pool_min` as a field bound, because the ceiling is
-    `DRAW_RATE_WINDOW * selfplay.n_workers` and `selfplay` is a different SECTION. It lives
-    in `schema/core.py::_draw_rate_evidence_bar_within_configured_capacity`, the twin of the actor-sync
-    rule, on the ONE model that sees both sections.
-
-    A bar above the ceiling is the FOURTH "armed in the config, absent in effect" axis and
-    the one R92's own change creates: `Sum(completed)` never reaches it, the gate makes NO
-    observation for the entire run, and gate 12 audits the row ARMED.
-
-    Three arms, because two of them alone are satisfied by a re-spelled `le=50`:
-    the boundary on both sides at `n_workers: 1`, and the SAME value ACCEPTED once the worker
-    count is raised. The behaviour the bound describes is
-    `tests/selfplay/test_drawrate_pooled_statistic.py`.
+    The ceiling is `DRAW_RATE_WINDOW * selfplay.n_workers`, and `selfplay` is a different SECTION,
+    so it cannot be an `le=` on the field and lives on the ONE model that sees both. A bar above it
+    is another "armed in the config, absent in effect" axis: the gate makes NO observation for the
+    entire run while the row audits ARMED. Three arms, because two alone are satisfied by a
+    re-spelled `le=`.
     """
-    # THE PRECONDITION IS DERIVED, NOT PINNED. It used to assert `n_workers == 1` and say "if
-    # this ever changes the two boundary arms below move with it". It changed — RECAL-SITTING-5
-    # minted the Phase W pick — so the arms move WITH the config instead of pinning the value
-    # that made the old arithmetic convenient. The property under test never depended on the
-    # pool being one worker; only the literals did.
+    # THE PRECONDITION IS DERIVED, NOT PINNED. It used to assert a one-worker pool; a re-mint
+    # changed that, so the arms move WITH the config. The property never depended on the pool
+    # being one worker — only the literals did.
     ceiling = _RUN5_EVIDENCE_CEILING
     assert ceiling == DRAW_RATE_WINDOW * load_config(
         CONFIGS_DIR / "run6.yaml").selfplay.n_workers, "the ceiling is derived, never assumed"
@@ -254,20 +181,13 @@ def test_the_evidence_bar_must_be_reachable_within_the_pools_own_window() -> Non
     )
 
 
-# ── DS-8 — the evidence bar's FLOOR (DR-9's class, transferred by R92) ────────────────
 def test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires() -> None:
-    """ADJ-14's own defect, re-expressed on R92's statistic. WPMINT DR-9 found `min_samples:
-    1` — "the exact ADJ-14 defect value" — accepted and reading ARMED; `min_samples` is gone,
-    but the class transfers verbatim.
+    """The evidence bar cannot be so small that one drawn game fires the abort.
 
-    The pooled rate's smallest non-zero value at the bar is `1/N_pool_min`, so at
-    `N_pool_min = 4` with `threshold = 0.25` a SINGLE drawn game meets the threshold. That is
-    the one-game saturation R80 ordered closed, one statistic later.
-    `DrawRateAbortConfig._one_drawn_game_cannot_fire_the_abort` closes it from values already
-    inside the block — no invented number.
-
-    Boundary on both sides at run5's own threshold, so the rule is the arithmetic
-    `1/N_pool_min < threshold` and not a literal floor.
+    The pooled rate's smallest non-zero value at the bar is `1/N_pool_min`, so at `N_pool_min = 4`
+    with `threshold = 0.25` a SINGLE drawn game meets the threshold. The block closes it from
+    values already inside it — no invented number — and the boundary is asserted on both sides, so
+    the rule is the arithmetic `1/N_pool_min < threshold` and not a literal floor.
     """
     with pytest.raises(ValidationError) as caught:
         _with_block({**RUN5_PREREG, "N_pool_min": 4})
@@ -285,25 +205,17 @@ def test_the_evidence_bar_cannot_be_so_small_that_one_drawn_game_fires() -> None
     )
 
 
-# ── O-D7 — every config STATES its posture; none inherits one ─────────────────────────
 def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
-    """R1: every config file is explicit and complete. A new required key means all five
-    configs must carry it or fail gate 7 and the loader — and R59 is explicit that
-    "deliberate disarming remains legal for smoke configs", which is what the `None`
-    spelling makes OBSERVABLE rather than inferable from absence.
+    """Every config STATES its draw-rate posture; none inherits one.
 
-    Enumerated through `mantis.config.loader.discover_configs`, the ONE discovery authority
-    both gate 7 and gate 12 consume (R71/R75). A second glob here would be exactly the
-    divergence ADJ-13 F-1 was: a config the audit never sees because this file counted it
-    differently.
-
-    Both directions are asserted, because "every config carries the key" is satisfied by a
-    tree where every config is disarmed, and "run5 is armed" is satisfied by a tree of one.
+    Deliberate disarming stays legal for smoke configs, which is what the `null` spelling makes
+    OBSERVABLE rather than inferable from absence. Enumerated through `discover_configs`, the ONE
+    authority both gate 7 and gate 12 consume. Both directions are asserted, because "every config
+    carries the key" is satisfied by a tree where every config is disarmed.
     """
     configs = discover_configs(CONFIGS_DIR)
-    # R346(f) pruned `configs/` from eight files to three (run6, the armed smoke and the
-    # disarmed dev template). The floor moves WITH the ruling and not below it: three is what
-    # the tree ships, so a fourth deletion still reds here.
+    # The vacuity floor moves WITH the ruling that pruned `configs/` and not below it: three is
+    # what the tree ships, so a fourth deletion still reds here.
     assert len(configs) >= 3, (
         f"the vacuity floor: {len(configs)} config(s) discovered. With none, every assertion "
         "below is true by having nothing to say (`silent_encoding_gate.py:70`'s "
@@ -328,13 +240,9 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
-    # The ONE armed production config. R346(f) pruned `configs/` to three files, so the three
-    # armed-production rows this block used to check (run5, the R259 shakedown and run6) are
-    # now one: run6, which CARRIES run5's four pre-registered constants rather than
-    # re-authoring them — `RUN6_MINT_PREREG.md` proposes no draw-rate row, and F-WS-4's
-    # `N_pool_min` DOES NOT MOVE is the same fact from the other side. The pin is on the
-    # MINTED file, so an in-place edit of run6's armed block reds here; gate 12 audits it by
-    # name (PRODUCTION_CONFIGS).
+    # The ONE armed production config, which CARRIES the four pre-registered constants rather than
+    # re-authoring them. The pin is on the MINTED file, so an in-place edit of its armed block reds
+    # here; gate 12 audits it by name.
     run6 = postures.pop("run6.yaml", None)
     assert run6 is not None, (
         "configs/run6.yaml is the ONE declared PRODUCTION config and must ARM the draw-rate "
@@ -350,12 +258,10 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
         "recorded delta or not at all"
     )
 
-    # WPTS Phase F re-point (R90a; the subject deliberately changed by R103): exactly ONE
-    # non-production config is ARMED — `smoke_preflight_armed.yaml`, the preflight-rehearsal
-    # target R103 granted, at its own minted burst-scale guard values (NOT run5's prereg
-    # constants — asserting the distinction keeps those run-scoped). Every OTHER
-    # non-production config still disarms DELIBERATELY (R59), and `null` is what makes that
-    # observable rather than forgotten.
+    # Exactly ONE non-production config is ARMED — the preflight-rehearsal target, at its OWN
+    # minted burst-scale guard values, NOT the production prereg constants; asserting the
+    # distinction is what keeps those run-scoped. Every other one disarms DELIBERATELY, and `null`
+    # is what makes that observable rather than forgotten.
     others = dict(postures)
     armed_smoke = others.pop("smoke_preflight_armed.yaml", None)
     assert armed_smoke is not None, (

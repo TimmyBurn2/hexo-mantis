@@ -1,47 +1,19 @@
-# >300 justify (R8). The four Tier-2 oracles are ONE claim — the
-# REAL vendored engine is the bar the rungs say it is — over one precondition ladder
-# (`_require_vendored_game` / `_require_built_extension`). A split forks that ladder into
-# copies, and the whole point of the file is that its skip is a RESULT with one reason
-# vocabulary, not four ad-hoc ones.
-"""⊕ WP12-R Phase A / O-A11, O-A12, O-A13, O-A14(real) — Tier 2, `not_run` in CI (R169).
+# >300 justify (R8): the four Tier-2 oracles are ONE claim — the REAL vendored engine is the bar
+# the rungs say it is — over one precondition ladder. A split forks that ladder into copies, and
+# the point of the file is that its skip is a RESULT with one reason vocabulary, not four.
+"""Tier-2 SealBot oracles: `not_run` in CI, by ruling rather than by gap.
 
-**These rows do not run in CI and that is the ruled outcome, not a gap.** R169 splits
-"RESOLVES" from "IS LIVE": resolution is a property of mantis code plus the local
-filesystem and is CI-verifiable; liveness is a property of a built C++/pybind11 extension
-executing, and it has no runnable producer in CI. Every row here reports **`not_run`** —
-which is a RESULT, never coverage — and names the box measurement that will produce a real
-one (DESIGN_A §3.5.4). Reporting one of these as `covered` without having executed it is
-PREREG_A §8 abort 6.
+Resolution is CI-verifiable; LIVENESS is a property of a built C++/pybind11 extension
+executing, which has no runnable producer in CI. Every row reports `not_run` — a RESULT, never
+coverage — and names the box measurement that will produce a real one: O-A13 (Tier 2a, box M-1)
+that mantis and the vendored engine agree on the GAME; O-A11 (2b, M-2) that `last_depth ==
+depth`; O-A12 (2b, M-3) that the bar is reproducible; O-A14 (2b, M-4) that the compound-turn
+buffer holds over a real game. O-A13 sits behind the CHEAPEST precondition because disagreement
+about the game means every SealBot number measures a different one.
 
-| oracle | tier | box counterpart | what it would prove |
-|---|---|---|---|
-| O-A13 | 2a — `make vendor` only | **M-1** | mantis and the vendored engine agree on the GAME |
-| O-A11 | 2b — vendor + build | **M-2** | `last_depth == depth`; the bar is the bar it claims |
-| O-A12 | 2b | **M-3** | same position + depth -> same move; the bar is reproducible |
-| O-A14 | 2b | **M-4** | the compound-turn buffer holds over a real game |
-
-The defect each row is the ONLY witness to:
-
-- **O-A13** — a rules mismatch. The MOST SERIOUS outcome in the whole rider (DESIGN_A
-  §3.5.5): if the two implementations disagree about the win condition, the legal set or
-  the turn structure, then every SealBot number measures a DIFFERENT GAME and no amount of
-  determinism or depth discipline rescues it. It runs one tier earlier than the extension
-  rows because it needs only the vendored `game.py` — deliberately putting the
-  highest-risk correctness surface behind the CHEAPEST precondition.
-- **O-A11** — F-20 reproduced against the real engine. The Tier-1 pin (O-A10) proves the
-  adapter CHECKS the receipt; only this row proves the receipt HOLDS when a real search
-  runs. Anything below 100% is a FAIL — and the failure is reported, never tuned by raising
-  the time limit or lowering the depth.
-- **O-A12** — an irreproducible bar. `_rng` is dead by grep (DESIGN_A §1.10), but a grep
-  over headers the design did not read is EVIDENCE, not proof; this row is the evidence,
-  and PREREG_A §1 says so explicitly.
-- **O-A14 real** — the buffer invariant over a real game rather than a scripted double.
-
-SR-7 (PREREG_A §0): the box rider selects these with `pytest -k`, so the substrings
-`rules_agreement`, `depth_receipt` and `determinism` are a CONTRACT on these function names.
-A `-k` string matching nothing exits **5** — neither a pass nor a fail — which DESIGN_A
-§3.5.5 maps to `not_run — selector matched nothing`, a RIDER defect wearing a SealBot
-defect's clothes.
+The box rider selects these with `pytest -k`, making the substrings `rules_agreement`,
+`depth_receipt` and `determinism` a CONTRACT on these function names: a `-k` matching nothing
+exits 5, neither pass nor fail.
 """
 from __future__ import annotations
 
@@ -68,9 +40,8 @@ _BOOK = "book_v1_s20260625_p4"
 _RULES_POSITIONS = 200
 _DEPTH_POSITIONS = 20
 
-#: The cross-process determinism probe, a module constant so the command the box pastes into
-#: its log is readable rather than assembled inline. It reaches the adapter through the SAME
-#: public entry points production uses.
+#: The cross-process determinism probe, a module constant so the command the box pastes into its
+#: log is readable. It reaches the adapter through the SAME public entry points production uses.
 _CROSS_PROCESS_PROBE = (
     "from mantis._engine import Board;"
     "from mantis.arena.books import paired_openings;"
@@ -98,12 +69,8 @@ def _require_vendored_game() -> Any:
 
 
 def _require_built_extension() -> Any:
-    """Tier 2b. LOUD skip naming the exact build command DESIGN_A §2.6 fixes.
-
-    Its OWN preconditions, not a call through `_require_vendored_game`: a Tier-2b row that
-    skipped with Tier 2a's reason would name box counterpart M-1 for a measurement that is
-    M-2/M-3/M-4, and the box would record the wrong row as `not_run`.
-    """
+    """Tier 2b. LOUD skip naming the exact build command, with its OWN preconditions rather than
+    a call through `_require_vendored_game`, which would name the wrong box counterpart."""
     tier_2b_boxes = "Box counterparts: M-2 (depth receipt), M-3 (determinism), M-4 (liveness)."
     if not _GAME_PY.is_file():
         pytest.skip(f"not_run (Tier 2b) — nothing vendored; run `make vendor`. {tier_2b_boxes}")
@@ -120,8 +87,7 @@ def _require_built_extension() -> Any:
 
 
 def _book_positions(n: int) -> list[Board]:
-    """`n` distinct positions replayed from the sha-pinned book — the same openings the
-    rungs actually play, never a synthetic corpus."""
+    """Return `n` distinct positions replayed from the sha-pinned book, never a synthetic corpus."""
     from mantis.arena.books import paired_openings
 
     openings = paired_openings(_BOOK, n_pairs=n, seed=20260625)
@@ -138,14 +104,12 @@ def _book_positions(n: int) -> list[Board]:
     return boards
 
 
-#: G-A1 re-point. The three hex axes, as `game.py:21` declares them — used ONLY to walk a
-#: position forward, never to decide a winner (deciding one here would be the vacuity this
-#: grant exists to remove).
+#: The three hex axes as `game.py` declares them — used ONLY to walk a position forward, never
+#: to decide a winner, which would be the vacuity this grant exists to remove.
 _HEX_DIRECTIONS = ((1, 0), (0, 1), (1, -1))
 
-#: Plies to drive a book opening forward before giving up on it. MEASURED at the re-point,
-#: not chosen: at 40 every one of the 200 openings is already decided, and 60 and 80 return
-#: the identical set, so the cap is well clear of the boundary rather than tuned to it.
+#: Plies to drive a book opening forward before giving up. MEASURED, not chosen: at 40 all 200
+#: openings are already decided and 60 and 80 return the identical set.
 _DRIVE_PLY_CAP = 40
 
 
@@ -162,31 +126,13 @@ def _line_extending_move(board: Board, mover: int) -> tuple[int, int]:
 
 
 def _decided_positions(n: int) -> list[Board]:
-    """`n` positions that actually have a WINNER, driven forward from the pinned book.
+    """Return `n` positions that actually have a WINNER, driven forward from the pinned book.
 
-    **G-A1 (WP12-R Phase A IMPL, granted): a DOMAIN correction, not a weakening.** Every
-    assertion in the two rows below is unchanged; only the set of positions they are applied
-    to moves. The subject — "the two implementations name the SAME winner under the declared
-    `+1 -> Player.A` map" — is identical.
-
-    Why it was owed, MEASURED rather than argued: the book's openings are all **4-ply**
-    (`paired_openings(...)` returns 200 openings, every one 4 moves), and six-in-a-row needs
-    six stones, so `_book_positions` cannot contain a decided position — **0 of 200**. Arm 3
-    therefore never incremented `checked`, and its own `assert checked > 0` guard fired: the
-    row asserted nothing and said so, which is the guard working exactly as R81/R86 intend.
-    Left alone it would have returned a **false `FAILED — rules mismatch`** at box
-    measurement M-1 and routed the decision line to STATE 3b on a falsehood.
-
-    The drive is deterministic and uses only mantis's own engine: take the winning move when
-    the engine offers one (`first_winning_move`), otherwise extend the mover's own line.
-    **Measured at the re-point: 200 of 200 openings reach a decided position within
-    `_DRIVE_PLY_CAP`, and BOTH winner identities occur (189 for `+1`, 11 for `-1`)** — so the
-    row discriminates an inverted map in both directions, which a single-winner sample could
-    not do. Positions carry 11-14 stones.
-
-    The `assert` below is deliberately kept: if a geometry or turn-structure change ever made
-    the drive stop producing decided positions, this row must go loud rather than quietly
-    shrink back to the vacuous sample it was rescued from.
+    The book's openings are all 4-ply while six-in-a-row needs six stones, so `_book_positions`
+    can contain NO decided position — 0 of 200 — and the winner-identity row's `checked > 0`
+    guard fired rather than certifying anything. The drive uses only mantis's engine: take the
+    winning move when one is offered, else extend the mover's line. Measured: 200 of 200 openings
+    decide within `_DRIVE_PLY_CAP` and both identities occur (189 for `+1`, 11 for `-1`).
     """
     decided: list[Board] = []
     for board in _book_positions(n):
@@ -212,17 +158,9 @@ def _shadow_game(game_module: Any, board: Board) -> Any:
     return build_shadow_game(board, game_module=game_module)
 
 
-# ── O-A13 (Tier 2a) -> box M-1 ──────────────────────────────────────────────────────────
 def test_rules_agreement_win_and_legality_differential() -> None:
-    """O-A13 arm 1. The axial basis and the three win directions must coincide, measured
-    over the book rather than argued from `game.py:21`.
-
-    **G-A1 re-point (domain only, assertions untouched):** the sample is now the 200 book
-    positions **plus** 200 driven-to-decided ones. The legality half was always real over the
-    book; the WIN half was vacuous there — 0 of 200 book positions is decided, so `mantis_win`
-    and `vendored_win` were both `False` on every row and the comparison could not disagree.
-    Adding decided positions is what makes the win half able to fail at all.
-    """
+    """O-A13 arm 1: the axial basis and the three win directions must coincide, measured over the
+    book plus 200 driven-to-decided positions — the WIN half was vacuous over the book alone."""
     game_module = _require_vendored_game()
     disagreements: list[str] = []
     for board in [*_book_positions(_RULES_POSITIONS), *_decided_positions(_RULES_POSITIONS)]:
@@ -243,9 +181,8 @@ def test_rules_agreement_win_and_legality_differential() -> None:
 
 
 def test_rules_agreement_turn_structure_parity_over_a_replayed_opening() -> None:
-    """O-A13 arm 2. `moves_remaining` and `moves_left_in_turn` must agree at EVERY ply: the
-    compound-turn structure is what the adapter's buffer depends on, and a one-ply offset
-    would make the adapter play the wrong side's half."""
+    """O-A13 arm 2: `moves_remaining` and `moves_left_in_turn` must agree at EVERY ply, because
+    a one-ply offset would make the adapter play the wrong side's half."""
     game_module = _require_vendored_game()
     board = _book_positions(1)[0]
     offsets: list[str] = []
@@ -263,17 +200,9 @@ def test_rules_agreement_turn_structure_parity_over_a_replayed_opening() -> None
 
 
 def test_rules_agreement_winner_identity_under_the_declared_player_map() -> None:
-    """O-A13 arm 3. Agreeing that SOMEONE won is not agreement: the `+1 -> Player.A` map has
-    to make the two implementations name the SAME winner, or every rung's win rate is the
-    opponent's.
-
-    **G-A1 re-point (domain only, assertions untouched):** `_decided_positions` replaces
-    `_book_positions`. See that helper for the measurement — 0 of 200 book positions can be
-    decided, so this row's `checked > 0` guard fired and the row certified nothing. Both
-    winner identities occur in the new sample, so an inverted map is caught in either
-    direction. The guard below is retained deliberately: it is the reason the defect was
-    visible rather than silent, and it must stay able to fire.
-    """
+    """O-A13 arm 3: agreeing that SOMEONE won is not agreement — the `+1 -> Player.A` map must
+    make both implementations name the SAME winner, or every rung's win rate is the opponent's.
+    The `checked > 0` guard is retained, because it is what made the earlier vacuity visible."""
     game_module = _require_vendored_game()
     checked = 0
     mismatches: list[str] = []
@@ -293,12 +222,10 @@ def test_rules_agreement_winner_identity_under_the_declared_player_map() -> None
     assert mismatches == [], "winner identity disagrees:\n" + "\n".join(mismatches[:20])
 
 
-# ── O-A11 (Tier 2b) -> box M-2 ──────────────────────────────────────────────────────────
 @pytest.mark.parametrize("depth", [5, 6])
 def test_depth_receipt_holds_on_every_move_at_the_configured_depth(depth: int) -> None:
-    """O-A11 -> box M-2. Parametrized over run5's two minted sealbot depths, because a
-    receipt that holds at 5 and truncates at 6 is precisely the failure a single-depth row
-    would report as a pass."""
+    """O-A11 -> box M-2, parametrized over run5's two minted sealbot depths: a receipt that holds
+    at 5 and truncates at 6 is what a single-depth row would report as a pass."""
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.sealbot import SealBotAdapter
 
@@ -321,38 +248,17 @@ def test_depth_receipt_holds_on_every_move_at_the_configured_depth(depth: int) -
 
 
 class _TimeCutRestored:
-    """The REAL vendored engine, with the wall-clock cut PUT BACK — for one row only.
+    """The REAL vendored engine with the wall-clock cut PUT BACK, for one row only.
 
-    **G-A2 (WP12-R Phase A IMPL, granted): a DOMAIN correction, not a weakening.** The
-    assertions below are byte-for-byte what they were; what moves is the condition under
-    which the receipt is asked to fire.
+    The row asks for `depth=99` against an adapter whose required contract sets an unreachable
+    time limit; `search.h` then loops to depth 99 with its only other exits the `TimeUp` catch
+    that contract removes and a proven-win break that cannot fire on a four-ply opening — so the
+    sealed call had NO terminating path and would have HUNG at the box, not raised.
 
-    Why it was owed, DERIVED at source: the row asked for `depth=99` against an adapter whose
-    REQUIRED contract (DESIGN_A §2.4) sets a time limit that provably cannot be reached inside
-    a game. `search.h:157` then loops `for depth = 1; depth <= 99; depth++` and its only other
-    exits are the `TimeUp` catch — which that contract removes, deliberately — and the
-    proven-win break at `:178`, which cannot fire on a four-ply book opening. So the call had
-    no terminating path at all: the row would have HUNG at the box, not raised.
-
-    What this wrapper does NOT do: stub the search, fake `last_depth`, or touch a private
-    attribute of the adapter. `get_move` is the real C++ search and `last_depth` is the real
-    receipt. It is injected through `minimax_module`, the same SR-1 seam the Tier-1 rows use,
-    and it intercepts exactly one write — `time_limit` — restoring the cut the adapter
-    neutralises. That makes the domain **F-20's actual failure mode**: a time-truncated search
-    returning the last completed depth's move while the rung claims a deeper bar. Which is the
-    condition the receipt exists to catch, so the re-pointed row tests the receipt on the case
-    that motivated it rather than on an unreachable one.
-
-    Why the raise is guaranteed rather than hoped for, stated so RED-TEAM can check it: 0.05 s
-    cannot complete 99 plies of alpha-beta on an unbounded board, so `last_depth < 99`; and a
-    four-ply opening cannot contain an immediate win, so the adapter's proven-win exemption
-    (`move in board.winning_moves(seat)`) cannot apply. Both conjuncts of `_check_receipt`'s
-    "do not raise" path therefore fail, and it raises. **If that derivation is ever wrong the
-    row fails LOUD** — `pytest.raises` reports `DID NOT RAISE`; it cannot pass quietly.
-
-    Honest limit: unlike G-A1, this re-point is **derived, not measured**. The extension is not
-    built in the environment this phase ran in (MS-4 is `not_run`), so the first execution of
-    this row is the box's. That is stated rather than glossed.
+    Nothing is stubbed: `get_move` is the real C++ search, `last_depth` the real receipt, and
+    exactly one write (`time_limit`) is intercepted through the seam the Tier-1 rows use. The
+    raise is derived, not measured — 0.05 s cannot complete 99 plies and a four-ply opening holds
+    no immediate win — and if that is wrong the row reports DID NOT RAISE.
     """
 
     def __init__(self, real_module: Any, seconds: float) -> None:
@@ -363,13 +269,8 @@ class _TimeCutRestored:
         return _TimeCutBot(self._real_module.MinimaxBot(), self._seconds)
 
     def __getattr__(self, name: str) -> Any:
-        """Everything else is the REAL module's, `WIN_THRESHOLD` above all.
-
-        Without this the wrapper hides the patch-exported mate-distance constant and the
-        adapter refuses to construct — correctly, since a score channel with no threshold is a
-        mis-built vendor tree. Measured: this row was the single failure in an otherwise green
-        Tier-2 battery, and the adapter's own guard is what caught it.
-        """
+        """Everything else is the REAL module's, `WIN_THRESHOLD` above all: hiding the
+        patch-exported mate-distance constant makes the adapter refuse to construct."""
         return getattr(object.__getattribute__(self, "_real_module"), name)
 
 
@@ -390,23 +291,17 @@ class _TimeCutBot:
         return self._engine.get_move(game)
 
 
-#: A depth the engine cannot reach inside the bounded search below. Unchanged from the sealed
-#: row: what changed is that the search now terminates.
+#: A depth the engine cannot reach inside the bounded search below.
 _UNREACHABLE_DEPTH = 99
 
-#: The vendored default (`minimax_bot.cpp:82`) — the cut the adapter neutralises in production
-#: and this row restores, so the truncation the receipt guards against actually happens.
+#: The vendored default — the cut the adapter neutralises in production and this row restores,
+#: so the truncation the receipt guards against actually happens.
 _BINDING_TIME_LIMIT_SEC = 0.05
 
 
 def test_depth_receipt_raises_rather_than_reporting_a_shallower_bar() -> None:
-    """O-A11's second half. A receipt that is READ but not ACTED ON is an assurance, and the
-    whole of DESIGN_A §2.4 is that the adapter carries a receipt instead.
-
-    **G-A2 re-point:** the engine is handed to the adapter through `_TimeCutRestored`, which
-    puts the wall-clock cut back. See that class for why the sealed form could not terminate
-    and why this one must raise. Assertions unchanged.
-    """
+    """O-A11's second half: a receipt that is READ but not ACTED ON is an assurance. The engine
+    reaches the adapter through `_TimeCutRestored`, which puts the wall-clock cut back."""
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.sealbot import SealBotAdapter, SealBotDepthError
 
@@ -432,10 +327,8 @@ def test_depth_receipt_raises_rather_than_reporting_a_shallower_bar() -> None:
     )
 
 
-# ── O-A12 (Tier 2b) -> box M-3 ──────────────────────────────────────────────────────────
 def test_determinism_across_five_fresh_instances_in_one_process() -> None:
-    """O-A12 -> box M-3, in-process half. The `_rng`-is-dead grep is NOT the evidence; this
-    row is (PREREG_A §1)."""
+    """O-A12 -> box M-3, in-process half. The `_rng`-is-dead grep is not the evidence; this is."""
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.sealbot import SealBotAdapter
 
@@ -453,9 +346,8 @@ def test_determinism_across_five_fresh_instances_in_one_process() -> None:
 
 
 def test_determinism_across_two_processes() -> None:
-    """O-A12's cross-process half. In-process determinism can be an artefact of warm state
-    inside one loaded extension; only a second interpreter distinguishes a deterministic
-    ENGINE from a cached one."""
+    """O-A12's cross-process half: in-process determinism can be an artefact of warm state inside
+    one loaded extension, and only a second interpreter distinguishes deterministic from cached."""
     _require_built_extension()
     runs = [
         subprocess.run(
@@ -470,11 +362,9 @@ def test_determinism_across_two_processes() -> None:
     )
 
 
-# ── O-A14 real arm (Tier 2b) -> box M-4 ─────────────────────────────────────────────────
 def test_the_compound_turn_buffer_holds_over_a_real_game() -> None:
-    """O-A14's real arm -> box M-4 item (f). The Tier-1 arms drive a SCRIPTED double; only a
-    real game exercises the assumption that no opponent stone can be placed between the two
-    halves of one turn."""
+    """O-A14's real arm -> box M-4(f): the Tier-1 arms drive a SCRIPTED double, and only a real
+    game exercises the assumption that no opponent stone lands between the halves of one turn."""
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.random_bot import RandomBot
     from mantis.bots.sealbot import SealBotAdapter
@@ -500,30 +390,15 @@ def test_the_compound_turn_buffer_holds_over_a_real_game() -> None:
 
 
 def test_a_book_opening_leaves_no_stale_half_buffered() -> None:
-    """⊕ G-A4 / RED-TEAM F-RT-2 — the `moves_remaining > 1` invariant, from a BOOK OPENING.
+    """The `moves_remaining > 1` invariant, from a BOOK OPENING — the producer it did not have.
 
-    **The producer this invariant did not have.** O-A14's two real arms start from
-    `Board.with_encoding_name(_ENC)` — an empty board with no book — and from there the
-    wrapper short-circuits (`minimax_bot.cpp:47-50`) and returns ONE move, so nothing is ever
-    buffered on a turn with one half due and the defect's condition never arises. Measured by
-    RED-TEAM: delete the invariant and the entire suite, both tiers, stays green.
-
-    That is the same shape as the defect it guards — *a condition arising only from a book
-    opening, tested only from an empty board* — so this row reaches it the way the defect was
-    actually found: through the sha-pinned book the rungs really play.
-
-    **The precondition is asserted, not assumed.** A four-ply opening leaves the first mover
-    exactly ONE half due; measured across the first four openings, `moves_remaining == 1` on
-    every one. If a future book changed that, this row would stop reaching its subject, and it
-    must say so rather than pass.
-
-    **The observation is a determinism differential, and that is deliberate.** Asserting only
-    `illegal_buffer_discards == 0` would catch just the loud half: measured with the invariant
-    deleted, 2 of 4 openings put the stale half on an occupied cell (counted) while the other 2
-    played it silently onto a legal one — and the silent half is the dangerous one, since the
-    adapter would be answering a position it never searched. SealBot is deterministic at a
-    fixed depth (O-A12), so a fresh adapter on the same position is an exact reference: if the
-    live adapter agrees with it, it searched; if it consumed a stale half, it cannot.
+    O-A14's other real arms start from an empty board, where the wrapper short-circuits and
+    returns ONE move, so the defect's condition never arises: measured, deleting the invariant
+    leaves both tiers green. The precondition is asserted, not assumed — a four-ply opening
+    leaves the first mover exactly ONE half due, measured on all four openings. The observation
+    is a determinism differential deliberately: with the invariant deleted, 2 of 4 openings put
+    the stale half on an occupied cell and 2 played it silently onto a legal one, and the silent
+    half is the dangerous one.
     """
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.random_bot import RandomBot
@@ -568,10 +443,7 @@ def test_a_book_opening_leaves_no_stale_half_buffered() -> None:
 
 
 def test_the_illegal_buffer_counter_reads_zero_over_a_real_game() -> None:
-    """O-A14's real arm -> box M-4 item (f), the counter half. A non-zero count means the
-    invariant broke and the adapter re-searched: no illegal move was played, but the
-    assumption the buffer rests on is false and DESIGN_A §3.5.5 records it as
-    `FAILED — compound-turn buffer defect`."""
+    """O-A14's counter half: a non-zero count means the invariant broke and the adapter re-searched."""
     minimax_module, game_module = _require_built_extension()
     from mantis.bots.random_bot import RandomBot
     from mantis.bots.sealbot import SealBotAdapter

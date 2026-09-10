@@ -3,48 +3,20 @@
 # falsifier lives in another file is a probe nobody re-runs against its own break.
 """T9 — the config partition: SHARED keys vs ARCH-SCOPED keys, and who can reach the latter.
 
-SEAM_V1_DESIGN §3: "The schema splits shared vs arch-scoped. **An arch-scoped key reachable
-outside its arch is a red row.** This kills the config-blind class structurally — the defect we
-have paid for four times."
+An arch-scoped key reachable outside its arch is a red row, which kills the config-blind class
+structurally. B1 declared eight red rows because the shipped grid configs carried both
+graph-only cap blocks — `RunConfig` is `extra="forbid"` with every key required, so a grid run
+was REQUIRED to carry them — and B2's repair DELETES those rows rather than widening them.
 
-WHAT B1 FOUND AND B2 REPAIRED (R322(d)). B1 declared eight red rows — four arch-scoped keys
-(`train.microbatch_caps.{max_edges,max_nodes}`, `inference.fused_graph_caps.{max_fused_edges,
-max_fused_nodes}`) times two reachability classes — because the two grid configs the repo ships
-carried both graph-only cap blocks, counted in EDGES and NODES, at byte-identical values. That
-was not laxity: `RunConfig` is `extra="forbid"` with every key required, so a grid run was
-REQUIRED to carry them and `tools/mint_config.py` had to write a number for a quantity that run
-has none of. B2 repaired it in the two places the two classes name, and **the eight rows are
-DELETED here by that repair rather than widened** — a ratchet that only ever grows is a list.
+The repair is executed here rather than read off the source. SCHEMA: `ARCH_SCOPED_KEYS` is the
+ONE authority, and each block is REQUIRED on its own arch and REFUSED on any other, with
+presence read off `model_fields_set` so an explicit `null` counts. READ PATH: each block's ONE
+resolver calls `refuse_outside_its_arch` BEFORE it looks for the block, since a resolver that
+refuses only on ABSENCE is green because the key happens not to be there.
 
-THE REPAIR, and this file executes both halves rather than reading them off the source:
-
-  * SCHEMA — `mantis.config.schema.core.ARCH_SCOPED_KEYS` is the ONE authority on which block
-    belongs to which representation, and `RunConfig._arch_scoped_keys_are_present_iff_their_arch`
-    makes each block REQUIRED on its own arch and REFUSED on any other. Presence is read off
-    `model_fields_set`, so an explicit `null` is carrying the key, not omitting it.
-  * READ PATH — each block's ONE resolver calls `refuse_outside_its_arch` BEFORE it looks for
-    the block, so it refuses a foreign config BY NAME instead of by accident. A resolver that
-    refuses only on ABSENCE is green because the key happens not to be there, and turns red the
-    moment anyone re-adds it.
-
-WHAT WAS ALREADY CLEAN, said precisely so the finding above reads as a finding and not a smear.
-The CALL SITES were arch-gated before B2 and were gated deliberately: `run.py` resolves
-`fused_graph_caps` only `if config.identity.representation == "graph"`, with the reason written
-beside it, and `coordinator/step.py` hands `microbatch_caps` to the GRAPH arm as a lazy thunk
-for the same reason. The gate was one `if` at one call site; the class this tier exists for is
-the one where the NEXT call site forgets it, and that is the half B2 moved into the schema.
-
-TWO RED CLASSES, both EXECUTED against real minted files, never inferred from source text:
-
-  * `schema_requires_outside_arch` — a config that selects the OTHER representation validates,
-    through the one loader, carrying this key.
-  * `read_path_serves_outside_arch` — the key's ONE read path, handed that same config, RETURNS
-    a value instead of refusing.
-
-The declared set is now EMPTY, and the ratchet is still asserted in BOTH directions: a new red
-row fails, and a declared row that has gone green ALSO fails. An empty expectation is the one
-place a set-equality check can go vacuous, so this file adds the guard that shape needs — the
-probes must be shown to still EXECUTE, and each one is driven against a planted break.
+Both red classes are EXECUTED against real minted files. The declared set is now EMPTY and the
+ratchet is asserted in BOTH directions, so the probes must be shown to still EXECUTE — an empty
+expectation is the one place a set-equality check can go vacuous.
 """
 from __future__ import annotations
 
@@ -107,11 +79,9 @@ class ArchScopedLeaf:
     read_path: Any
 
 
-#: THE READ PATH PER ARCH-SCOPED BLOCK. The only thing this file still declares about the
-#: partition, because a resolver is not discoverable from a pydantic model: the block-to-arch
-#: judgment now has a producer (`ARCH_SCOPED_KEYS`) and is READ from it, while "which function
-#: is this block's one read path" has none. Both directions are checked below — every registry
-#: entry must appear here, and every entry here must be in the registry.
+#: THE READ PATH PER ARCH-SCOPED BLOCK — the only thing this file still declares, because a
+#: resolver is not discoverable from a pydantic model while the block-to-arch judgment now has a
+#: producer. Both directions are checked below.
 READ_PATHS: dict[tuple[str, str], Any] = {
     ("train", "microbatch_caps"): resolve_microbatch_caps,
     ("inference", "fused_graph_caps"): resolve_fused_graph_caps,
@@ -119,13 +89,9 @@ READ_PATHS: dict[tuple[str, str], Any] = {
 
 
 def arch_scoped_leaves() -> tuple[ArchScopedLeaf, ...]:
-    """Every arch-scoped LEAF, DERIVED from the schema registry and the live block models.
-
-    B1 declared these four leaves by hand and argued the declaration, because there was no
-    producer in the tree to read the block-to-arch judgment off. B2's repair creates that
-    producer — `ARCH_SCOPED_KEYS` is what the schema itself enforces against — so the
-    declaration becomes a derivation and the suite can no longer disagree with the schema
-    about which keys are scoped.
+    """Every arch-scoped LEAF, DERIVED from the schema registry and the live block models — a
+    derivation now that `ARCH_SCOPED_KEYS` exists, so this suite can no longer disagree with the
+    schema about which keys are scoped.
 
     Raises:
         PartitionKeyRetired: a registry entry names a section or field `RunConfig` does not
@@ -152,12 +118,10 @@ def arch_scoped_leaves() -> tuple[ArchScopedLeaf, ...]:
     return tuple(out)
 
 
-#: The arch vocabulary a key name can carry. Matched on the leaf path so a NEW key called
-#: `train.gnn_hidden` or `inference.max_graph_batch` cannot slip into the shared half silently.
-#: This is a PROMPT, not a verdict: a match means the key must be placed on one side or the
-#: other, and the placement is what says which. It stays an INDEPENDENT instrument after the
-#: repair — `ARCH_SCOPED_KEYS` is a declaration too, and a key missing from it would be
-#: invisible to the schema and to this suite alike if the probe did not fire on the name.
+#: The arch vocabulary a key name can carry, matched on the leaf path so a new
+#: `train.gnn_hidden` cannot slip into the shared half silently. A PROMPT, not a verdict, and an
+#: INDEPENDENT one: a key missing from `ARCH_SCOPED_KEYS` would otherwise be invisible to the
+#: schema and this suite alike.
 _ARCH_VOCABULARY = re.compile(
     r"(gnn|graph|edge|node|cluster|plane|filters|res_block|se_reduction|window|augment|"
     r"representation|encoding)",
@@ -179,26 +143,19 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
                                           "window; the K-cluster window is a different word",
 }
 
-#: THE RED ROWS. **EMPTY, and emptied BY THE REPAIR** (R322(d)) — B1's eight rows were
-#: `{(leaf, class) for leaf in the four leaves for class in the two classes}` and every one of
-#: them is now green, so the declaration goes with the defect. Ratcheted in BOTH directions
-#: below; the vacuity guard is what keeps an empty expectation from being a free pass.
+#: THE RED ROWS. EMPTY, and emptied BY THE REPAIR — B1's eight rows are all green now, so the
+#: declaration goes with the defect. Ratcheted in BOTH directions below, with a vacuity guard
+#: keeping an empty expectation from being a free pass.
 DECLARED_RED_ROWS: frozenset[tuple[str, str]] = frozenset()
 
 
 def live_leaf_paths(model: type[BaseModel] = RunConfig) -> tuple[str, ...]:
     """Every field NAME the live schema reaches, as dotted paths, for the vocabulary probe.
 
-    THE ONE WALKER, in `descend_containers` mode (AUDIT-1 F-44). This was the FIFTH hand copy
-    of the schema walk and the audit's census could not see it, because that census was scoped
-    to the name `_leaf_paths` and this one is called `live_leaf_paths`. It walked to 199 where
-    gate 13 and the consumer bijection walked to 191, and nothing compared the two.
-
-    THE DIFFERENCE IS DELIBERATE AND IS NOW AN ARGUMENT, not an implementation. The other
-    consumers want key-paths a config file can WRITE, so `eval.ladder.rungs` is one leaf. This
-    probe wants every field name a future key could hide an architecture in — including inside
-    a ladder rung — so it descends the container. A rung field named `graph_depth` must fire the
-    vocabulary probe, and under the writable-path walk it would not exist to fire it.
+    THE ONE WALKER, in `descend_containers` mode. This was the FIFTH hand copy of the schema
+    walk, invisible to the audit's census because that was scoped to the name `_leaf_paths`.
+    The difference is deliberate: other consumers want key-paths a config can WRITE, this probe
+    wants every field name a future key could hide an architecture in.
     """
     return leaf_paths(model, descend_containers=True)
 
@@ -219,16 +176,10 @@ def other_arch(arch: str) -> str:
 
 
 def foreign_dump(arch: str) -> dict:
-    """A config mapping that DECLARES the arch `arch` does not have, for the READ PATHS.
-
-    R346(f) left one registered representation, so no shipped file selects a foreign arch and
-    `config_for` cannot answer for one. The read paths take a plain mapping and dispatch on
-    `identity.representation`, so a foreign declaration is still constructible — and the block
-    is CARRIED, which is what makes the probe a test of the arch refusal rather than of absence.
-
-    The SCHEMA half has no such construction and is not faked: see
-    `test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why`.
-    """
+    """A config mapping that DECLARES the arch `arch` does not have, for the READ PATHS. Only one
+    representation is registered, so no shipped file selects a foreign arch, but the read paths
+    take a plain mapping and dispatch on `identity.representation`. The block is CARRIED, which
+    makes this a test of the arch refusal rather than of absence."""
     dump = load_config(config_for(arch)).model_dump()
     dump["identity"]["representation"] = other_arch(arch)
     return dump
@@ -246,14 +197,9 @@ def leaf_present(config_dump: dict, path: str) -> bool:
 def observed_red_rows() -> frozenset[tuple[str, str]]:
     """EXECUTE both red classes for every arch-scoped leaf. Nothing here reads source text.
 
-    `schema_requires_outside_arch` loads a real minted config of the OTHER representation
-    through the one loader and asks whether the leaf came through validation.
-    `read_path_serves_outside_arch` hands that same config to the leaf's ONE read path and asks
-    whether it answered.
-
     Raises:
-        ProbeWentVacuous: there is no arch-scoped leaf to probe, or a foreign config that
-            declares no representation — either makes an empty result meaningless.
+        ProbeWentVacuous: no arch-scoped leaf to probe, or a foreign config declaring no
+            representation.
     """
     leaves = arch_scoped_leaves()
     if not leaves:
@@ -262,12 +208,9 @@ def observed_red_rows() -> frozenset[tuple[str, str]]:
         )
     rows: set[tuple[str, str]] = set()
     for leaf in leaves:
-        # SCHEMA_REQUIRES IS NOT PROBED HERE ANY MORE. It asked whether a real minted config of
-        # the OTHER representation carries the leaf, and R346(f) left one representation, so
-        # there is no such file and no synthetic stands in for one — a hand-built "foreign
-        # config" would be probing this file's own construction. The class's absence is
-        # asserted, with its reason, by
-        # `test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why`.
+    # SCHEMA_REQUIRES IS NOT PROBED HERE: only one representation is registered, so there is
+    # no OTHER-representation file and no synthetic stands in for one. The class's absence is
+    # asserted with its reason by the UNREACHABLE row below.
         dump = foreign_dump(leaf.arch)
         if declared_representation(dump) is None:
             raise ProbeWentVacuous(
@@ -334,9 +277,6 @@ def check_partition_covers_the_live_schema(
     return flagged
 
 
-# --------------------------------------------------------------------------------------- #
-# Coverage — the partition against the live schema
-# --------------------------------------------------------------------------------------- #
 def test_the_partition_covers_every_live_key_that_carries_arch_vocabulary(derived):
     live = live_leaf_paths()
     scoped = tuple(leaf.path for leaf in arch_scoped_leaves())
@@ -349,11 +289,9 @@ def test_the_partition_covers_every_live_key_that_carries_arch_vocabulary(derive
 
 
 def test_the_read_path_table_and_the_schema_registry_agree_in_BOTH_directions(derived):
-    """The one declaration this file still makes, pinned against the one the schema makes.
-
-    A read path table that outlives its registry entry would keep probing a key nobody scopes;
-    a registry entry with no read path would silently drop a block out of the second red class.
-    """
+    """The one declaration this file still makes, pinned against the one the schema makes: a
+    read-path table outliving its registry entry would keep probing a key nobody scopes, and a
+    registry entry with no read path would silently drop a block out of the second red class."""
     registry = {(key.section, key.field) for key in ARCH_SCOPED_KEYS}
     derived("t9.registry_blocks", sorted(registry))
     assert registry == set(READ_PATHS), (
@@ -364,11 +302,9 @@ def test_the_read_path_table_and_the_schema_registry_agree_in_BOTH_directions(de
 
 
 def test_a_NEW_arch_vocabulary_key_lands_UNPLACED_rather_than_shared():
-    """PB-T9a. The generalisation this section exists for: GnnNetV2's own config keys.
-
-    A key named `train.gnn_v2_hidden` must not become a shared key by arriving. It is refused
-    until someone says which half it is in, which is the only moment anyone will think about it.
-    """
+    """PB-T9a. A key named `train.gnn_v2_hidden` must not become a shared key by arriving: it is
+    refused until someone says which half it is in, which is the only moment anyone will think
+    about it."""
     live = (*live_leaf_paths(), "train.gnn_v2_hidden")
     with pytest.raises(ArchVocabularyKeyUnplaced, match="gnn_v2_hidden"):
         check_partition_covers_the_live_schema(
@@ -419,9 +355,6 @@ def test_every_ARCH_SCOPED_KEYS_row_states_its_grounds():
         )
 
 
-# --------------------------------------------------------------------------------------- #
-# Reachability — the two red classes, executed
-# --------------------------------------------------------------------------------------- #
 def test_the_red_row_set_matches_what_B2_declared(derived):
     """The ratchet. GREEN at HEAD: B1 landed the enforcement, B2 landed the repair (R322(d))."""
     observed = observed_red_rows()
@@ -431,14 +364,9 @@ def test_the_red_row_set_matches_what_B2_declared(derived):
 
 
 def test_the_probes_are_still_EXECUTING_and_not_merely_empty(derived):
-    """The guard an EMPTY expectation needs, and the one B1 did not need.
-
-    While red rows were declared, the ratchet could not pass vacuously: an empty observation
-    would have failed the shrink direction. With the declaration empty, "no red rows" and "the
-    probe never ran" produce the identical result, so the probe's own subject is asserted
-    here — leaves exist, both red classes are named, and each leaf's foreign declaration really
-    reads as foreign for the arch refusal to bite on.
-    """
+    """The guard an EMPTY expectation needs. While red rows were declared the ratchet could not
+    pass vacuously; with the declaration empty, "no red rows" and "the probe never ran" are the
+    same result, so leaves, both classes and each foreign declaration are asserted here."""
     leaves = arch_scoped_leaves()
     derived("t9.arch_scoped_leaf_count", len(leaves))
     assert leaves, "no arch-scoped leaf: the ratchet above is empty for free"
@@ -456,10 +384,9 @@ def test_a_NEW_red_row_is_refused():
 
 
 def test_a_REPAIRED_row_that_is_still_declared_is_refused():
-    """PB-T9d. The shrink direction, and the half a one-sided ratchet cannot give: a fix must
-    delete its row, or the declaration keeps asserting a defect that no longer exists. This is
-    the half that emptied `DECLARED_RED_ROWS` at B2 — it is driven against a synthetic row now
-    that the live set is empty, because a check with nothing to remove proves nothing."""
+    """PB-T9d. The shrink direction a one-sided ratchet cannot give: a fix must delete its row,
+    or the declaration keeps asserting a defect that no longer exists. Driven against a
+    synthetic row now that the live set is empty."""
     stale = ("train.microbatch_caps.max_edges", SCHEMA_REQUIRES)
     with pytest.raises(RedRowRepairedButStillDeclared, match=re.escape(stale[0])):
         check_red_row_ratchet(frozenset(), frozenset({stale}))
@@ -471,11 +398,8 @@ def test_the_ratchet_does_NOT_fire_on_the_declared_set():
 
 
 def test_an_EMPTY_probe_subject_is_refused_rather_than_reported_GREEN(monkeypatch):
-    """PB-T9e. The vacuity break the empty declaration makes possible.
-
-    With `DECLARED_RED_ROWS` empty, deleting every arch-scoped key would make this section
-    report GREEN while checking nothing. `observed_red_rows` refuses that by name.
-    """
+    """PB-T9e. With `DECLARED_RED_ROWS` empty, deleting every arch-scoped key would make this
+    section report GREEN while checking nothing. `observed_red_rows` refuses that by name."""
     monkeypatch.setattr(
         "test_config_partition_shared_vs_arch_scoped.arch_scoped_leaves", lambda: ()
     )
@@ -508,19 +432,11 @@ def test_the_READ_PATH_refuses_by_ARCH_and_not_merely_by_ABSENCE(key, derived):
 
 
 def test_the_SCHEMAS_foreign_arch_refusal_is_UNREACHABLE_and_says_why(derived):
-    """Red class 1 has NO CONSTRUCTIBLE INPUT since R346(f), and that is asserted rather than
-    quietly dropped.
-
-    The schema's arch rule (`RunConfig._arch_scoped_keys_are_present_iff_their_arch`) refuses a
-    block carried on a foreign arch. Reaching it needs a config that DECLARES a foreign
-    representation — and `identity.representation` is now a one-member `Literal`, with the
-    identity-consistency validator refusing a value that disagrees with the encoding's registry
-    row BEFORE the arch rule runs. So the refusal cannot fire, and the rows that drove it are
-    deleted rather than faked.
-
-    This row reds the day a second representation is registered, which is exactly when the
-    schema half needs its positive tests written back.
-    """
+    """Red class 1 has NO CONSTRUCTIBLE INPUT since only one representation is registered, and
+    that is asserted rather than quietly dropped: `identity.representation` is a one-member
+    `Literal` and the identity-consistency validator refuses a mismatch BEFORE the arch rule
+    runs, so the refusal cannot fire and the rows that drove it are deleted rather than faked.
+    This reds the day a second representation is registered."""
     dump = load_config(config_for("graph")).model_dump()
     dump["identity"]["representation"] = other_arch("graph")
     with pytest.raises(ValidationError) as excinfo:
@@ -553,11 +469,9 @@ def test_the_arch_guard_does_NOT_fire_on_its_OWN_arch():
 @pytest.mark.parametrize("key", ARCH_SCOPED_KEYS, ids=[f"{k.section}.{k.field}"
                                                        for k in ARCH_SCOPED_KEYS])
 def test_the_read_path_ANSWERS_for_its_OWN_arch(key, derived):
-    """The control that keeps the finding above precise: the read path is LIVE for its own arch.
-
-    A repair that made both resolvers refuse everything would turn every red row green and
-    break every graph run, and the ratchet alone cannot tell the two apart.
-    """
+    """The control that keeps the finding precise: the read path is LIVE for its own arch. A
+    repair that made both resolvers refuse everything would turn every red row green and break
+    every graph run, and the ratchet alone cannot tell the two apart."""
     native = load_config(config_for(key.arch)).model_dump()
     resolved = READ_PATHS[(key.section, key.field)](native)
     derived(f"t9.native_resolve.{key.section}.{key.field}", repr(resolved))

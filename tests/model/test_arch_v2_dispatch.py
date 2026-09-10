@@ -1,16 +1,14 @@
-"""`GnnArchV2` reaches its own net and its own rehydration — the two hazards filed against it.
+"""`GnnArchV2` reaches its own net and its own rehydration.
 
-Both were found by the WP-AXIS2 design review, filed, and never closed until V2 landed. Both are
-SILENT failures: nothing raises, the wrong net is built, and every downstream number is a
-measurement of V1 wearing a V2 label.
+Both hazards are SILENT: nothing raises, the wrong net is built, and every downstream number is
+a measurement of V1 wearing a V2 label.
 
-  * **The `build_net` isinstance twin.** A `GnnArchV2` that subclassed `GnnArch` would satisfy
-    `isinstance(arch, GnnArch)` and build V1's net. Two independent guards below: V2 is not a
-    subclass, AND its dispatch branch precedes V1's, so either one alone would hold.
-  * **The rehydration discriminator.** `_arch_from_dict` dispatched on `representation` alone,
-    and V2 declares `representation="graph"` because it consumes the same wire — so a V2 stamp
-    rehydrated as `GnnArch` and the loader rebuilt V1 for a V2 checkpoint. LAW-12 is about
-    exactly this: one loader, and a stamp that means what it says.
+  * A `GnnArchV2` that subclassed `GnnArch` would satisfy `isinstance(arch, GnnArch)` and build
+    V1's net. Two independent guards below: V2 is not a subclass, AND its dispatch branch
+    precedes V1's.
+  * `_arch_from_dict` dispatched on `representation` alone, and V2 declares
+    `representation="graph"` because it consumes the same wire, so a V2 stamp rehydrated as
+    `GnnArch` and the loader rebuilt V1 for a V2 checkpoint.
 """
 from __future__ import annotations
 
@@ -28,8 +26,7 @@ _V1 = GnnArch(in_dim=11, edge_dim=5, hidden=8, num_layers=2, policy_hidden=8, va
 
 
 def test_GnnArchV2_is_a_SIBLING_of_GnnArch_and_not_a_subclass() -> None:
-    """The first guard, and the one that makes the second a second line rather than the only
-    line. `issubclass` here is not pedantry: it is the exact predicate `build_net` runs."""
+    """The first guard. `issubclass` here is the exact predicate `build_net` runs."""
     assert not issubclass(GnnArchV2, GnnArch)
     assert not issubclass(GnnArch, GnnArchV2)
     assert not isinstance(_V2, GnnArch), (
@@ -39,16 +36,15 @@ def test_GnnArchV2_is_a_SIBLING_of_GnnArch_and_not_a_subclass() -> None:
 
 
 def test_build_net_gives_each_graph_arch_its_OWN_net() -> None:
-    """The behavioural half. `type(...) is` and not `isinstance`, deliberately — `GnnNetV2`
-    subclasses `GnnNet`, so an isinstance assertion here would pass on the wrong net."""
+    """`type(...) is` and not `isinstance`, deliberately: `GnnNetV2` subclasses `GnnNet`, so an
+    isinstance assertion would pass on the wrong net."""
     assert type(build_net(_V2)) is GnnNetV2
     assert type(build_net(_V1)) is GnnNet
 
 
 def test_the_V2_branch_PRECEDES_the_V1_branch_in_the_dispatch() -> None:
-    """The second guard, checked structurally rather than by comment. If V2 were ever made a
-    subclass, branch order is what would still route it correctly — so the order is a property
-    worth pinning, not a formatting accident."""
+    """The second guard, checked structurally: if V2 were ever made a subclass, branch order is
+    what would still route it correctly."""
     import ast
     import inspect
 
@@ -72,8 +68,8 @@ def test_the_V2_branch_PRECEDES_the_V1_branch_in_the_dispatch() -> None:
 
 
 def test_the_declared_arch_is_the_HANDLE_the_built_net_carries() -> None:
-    """PK1 — the witness stamp as a CONSTRUCTION PRECONDITION. `is`, not `==`: a copy would be a
-    second authority for the run's identity, which is what `build_net`'s own comment says."""
+    """The witness stamp as a CONSTRUCTION PRECONDITION. `is`, not `==`: a copy would be a second
+    authority for the run's identity."""
     net = build_net(_V2)
     assert net.arch is _V2
     assert "arch" not in net.state_dict(), (
@@ -83,14 +79,13 @@ def test_the_declared_arch_is_the_HANDLE_the_built_net_carries() -> None:
 
 @pytest.mark.parametrize("arch", [_V1, _V2])
 def test_every_arch_ROUND_TRIPS_through_the_checkpoint_serializer(arch) -> None:
-    """LAW-12's core claim for the widened union: what goes in comes back as itself."""
+    """What goes into the checkpoint serializer comes back as itself, for every arch."""
     assert _arch_from_dict(_arch_to_dict(arch)) == arch
 
 
 def test_a_V2_STAMP_does_NOT_rehydrate_as_V1() -> None:
-    """The filed hazard, driven. Before the discriminator landed this returned a `GnnArch` whose
-    fields all matched, so nothing downstream could tell — the loader then built V1's net for a
-    V2 checkpoint and every reading taken from it was mislabelled."""
+    """Before the discriminator landed this returned a `GnnArch` whose fields all matched, so the
+    loader built V1's net for a V2 checkpoint and every reading from it was mislabelled."""
     payload = _arch_to_dict(_V2)
     assert payload["representation"] == "graph", (
         "the premise of the hazard: V2 shares V1's representation because it shares the wire"
@@ -102,8 +97,8 @@ def test_a_V2_STAMP_does_NOT_rehydrate_as_V1() -> None:
 
 
 def test_the_REPRESENTATION_alone_no_longer_separates_the_two_graph_arches() -> None:
-    """The negative control that keeps the test above honest: it must be the discriminator doing
-    the work, not some incidental difference in the serialized fields."""
+    """The negative control: it must be the discriminator doing the work, not some incidental
+    difference in the serialized fields."""
     v1_fields = dataclasses.asdict(_V1)
     v2_fields = dataclasses.asdict(_V2)
     assert v1_fields == v2_fields, (
@@ -114,9 +109,8 @@ def test_the_REPRESENTATION_alone_no_longer_separates_the_two_graph_arches() -> 
 
 
 def test_a_LEGACY_stamp_with_no_arch_kind_rehydrates_as_V1() -> None:
-    """A stamp written before the discriminator existed IS a V1 stamp — at the time it was
-    written, no other graph arch existed. That is a fact about history, which is what makes it a
-    sound fallback rather than a default."""
+    """A stamp written before the discriminator existed IS a V1 stamp, because at the time no
+    other graph arch existed. That history is what makes it a sound fallback, not a default."""
     legacy = dataclasses.asdict(_V1)
     assert "arch_kind" not in legacy
     assert type(_arch_from_dict(legacy)) is GnnArch
@@ -130,8 +124,8 @@ def test_an_UNKNOWN_arch_kind_is_REFUSED_rather_than_approximated() -> None:
 
 
 def test_a_LEGACY_dict_that_does_NOT_FIT_its_arch_is_refused() -> None:
-    """The other half of the fallback: `representation` names the class, and if the fields do
-    not fit that class the answer is a named refusal, never a coercion (LAW-11's shape)."""
+    """The other half of the fallback: `representation` names the class, and if the fields do not
+    fit that class the answer is a named refusal, never a coercion."""
     legacy = dataclasses.asdict(_V1) | {"a_field_that_never_existed": 1}
     with pytest.raises(RepresentationMismatch, match="never coerced"):
         _arch_from_dict(legacy)
@@ -143,9 +137,9 @@ def test_a_stamp_with_NEITHER_discriminator_is_refused() -> None:
 
 
 def test_the_two_graph_nets_have_DIFFERENT_state_dict_shapes_at_the_value_head() -> None:
-    """W-ID1's structural half: V2 pools two statistics, so its value head is twice as wide.
-    A V2 checkpoint loaded into a V1 net would therefore fail loudly on shape — which is worth
-    knowing, because it means the rehydration hazard was silent only at the ARCH layer."""
+    """V2 pools two statistics, so its value head is twice as wide and a V2 checkpoint loaded
+    into a V1 net fails loudly on shape — the rehydration hazard was silent only at the ARCH
+    layer."""
     torch.manual_seed(0)
     v1_sd = build_net(_V1).state_dict()
     torch.manual_seed(0)
@@ -154,10 +148,9 @@ def test_the_two_graph_nets_have_DIFFERENT_state_dict_shapes_at_the_value_head()
 
 
 def test_the_REPRESENTATION_keys_are_IDENTICAL_so_BC_warmstart_survives() -> None:
-    """The property that separates candidates A/C(i) from candidate B, asserted rather than
-    asserted-in-prose. `load_representation_policy_from_bc` raises on ANY key mismatch under
-    `representation.` / `policy_head.`, so a V2 whose trunk keys had moved would have silently
-    cost the warmstart path its subject."""
+    """`load_representation_policy_from_bc` raises on ANY key mismatch under `representation.` /
+    `policy_head.`, so a V2 whose trunk keys had moved would silently cost the warmstart path its
+    subject."""
     torch.manual_seed(0)
     v1_sd = build_net(_V1).state_dict()
     torch.manual_seed(0)

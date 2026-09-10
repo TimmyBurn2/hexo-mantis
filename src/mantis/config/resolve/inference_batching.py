@@ -1,24 +1,14 @@
-"""`resolve_inference_batching` — THE one read path for the graph collector's two batching
-knobs, `inference.inference_batch_size` and `inference.inference_max_wait_ms`.
+"""THE one read path for the graph collector's two batching knobs.
 
-WHY THIS MODULE EXISTS (PERF-TRANCHE-1 G-2, ledger F-2). `LocalInferenceEngine` hand-builds
-its `InferenceServer` from a dict literal because it is the ONE graph-server construction
-site with no `RunConfig` to resolve against — and that literal carried
-`inference_batch_size: 64` and `inference_max_wait_ms: 10` as HARDCODED numbers. The literal
-already states the argument against exactly this, for the cap it does thread: *"a cap
-written here would be a SECOND authority over one byte budget, on the one construction path
-with no config to be the first."* The identical argument covers these two, and the ledger
-measured what they cost when they are wrong for the route: at the single-stream deploy head,
-supply 8 against a collector threshold of 32 put **1.76 of the eval path's 5.30 ms/sim —
-33 %** into the collector's own deadline, set by a code literal, on the one path LAW-15 reads
-a promotion bar off.
+`LocalInferenceEngine` is the ONE graph-server construction site with no `RunConfig` to resolve
+against, and its dict literal carried both knobs as HARDCODED numbers — a second authority
+over a geometry the config already owns. Measured cost of the wrong values for a route: supply
+8 against a collector threshold of 32 spent 1.76 of the eval path's 5.30 ms/sim inside the
+collector's own deadline.
 
-ABSENCE IS A NAMED RAISE, NEVER A DEFAULT (LAW-11, R1), and the levels are named separately
-for `resolve_fused_graph_caps`' reason: a missing `inference` section and a missing member
-are two different edits, so one message would be a refusal an operator cannot act on.
-
-There is no `.get(...)`, no `or`-default and no `except` on this path — a defaulting read
-here is precisely the defect the module closes.
+ABSENCE IS A NAMED RAISE, NEVER A DEFAULT, and the levels are named separately because a
+missing `inference` section and a missing member are two different edits. There is no
+`.get(...)`, no `or`-default and no `except` on this path.
 """
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -36,13 +26,9 @@ class MissingInferenceBatchingError(ValueError):
 class InferenceBatchingSpec:
     """The resolved graph-collector batching geometry: pop width and pop deadline.
 
-    FROZEN for `FusedGraphCapsSpec`'s reason — a resolved run-scoped constant a consumer
-    could rebind is a second authority with extra steps, and this one crosses the eval
-    process seam on `RoundSpec`, where a rebind in the child is invisible to the parent.
-
-    BOTH MEMBERS, because they are one geometry: the width sets the collector's saturation
-    threshold and the deadline sets what a pop pays when that threshold is not reached. A
-    caller given one and left to invent the other is the hardcode this module removes.
+    FROZEN because it crosses the eval process seam on `RoundSpec`, where a rebind in the child
+    is invisible to the parent. BOTH MEMBERS, because they are one geometry: the width sets the
+    saturation threshold and the deadline what a pop pays when it is not reached.
     """
 
     inference_batch_size: int

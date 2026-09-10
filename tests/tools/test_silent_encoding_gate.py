@@ -1,17 +1,11 @@
-# >300 justify (R8). The file grew at WP12-R with
-# the KNOWN_DEBT register's three-way split, O-7a/b/c, which gave the gate's
-# stale and reporting branches the producers they never had. It is ONE gate's producer
-# suite over ONE loaded module object (`GATE`) plus ONE corpus fixture, and R5 bars
-# cross-test imports — a split forks the loader and the `_fires` helper into two copies that
-# drift apart while both stay green, which is this gate's own defect class.
-"""Producer test + mutation self-test for CI gate 11 (LAW-07, R4, R45).
+# >300 justify (R8): ONE gate's producer suite over ONE loaded module object plus ONE corpus
+# fixture; a split forks the loader and the `_fires` helper into two copies that drift apart
+# while both stay green, which is this gate's own defect class.
+"""Producer test + mutation self-test for CI gate 11.
 
-R4: no gate input without a producer test. A grep gate that cannot be shown to BITE is
-decoration — and gate 11 exists precisely because a guard that reported green while the
-thing it guarded was absent is how the gate-1 rot survived the whole migration.
-
-The mutation probes run the gate's own matching logic over synthetic lines rather than
-mutating the real tree, so the suite is order-independent and leaves nothing behind.
+No gate input without a producer test: a grep gate that cannot be shown to BITE is decoration.
+The mutation probes run the gate's own matching logic over synthetic lines rather than mutating
+the real tree, so the suite is order-independent and leaves nothing behind.
 """
 from __future__ import annotations
 
@@ -36,12 +30,8 @@ GATE = _load_gate()
 
 
 def _fires(line: str, prev: str = "", suffix: str = ".py") -> bool:
-    """True if the gate would flag `line` (with `prev` as the line above it).
-
-    Routes through `_logical_lines` rather than matching the raw text, so this mirrors the
-    real scan path — comment stripping and continuation joining included. An earlier
-    version matched raw lines and so could not see the `return "v6"  # comment` evasion
-    that the gate itself handles correctly.
+    """True if the gate would flag `line` (with `prev` as the line above it), routed through
+    `_logical_lines` so comment stripping and continuation joining are exercised.
     """
     lines = [prev, line] if prev else [line]
     for idx, logical in GATE._logical_lines(lines, suffix):
@@ -56,12 +46,7 @@ def test_gate_is_green_on_the_current_tree():
 
 
 def test_gate_actually_scanned_something():
-    """A gate that scans nothing finds nothing.
-
-    `find_violations() == []` is satisfied just as well by a broken file walk, which is
-    precisely the rot this gate family exists to prevent — so the floor is asserted, not
-    assumed.
-    """
+    """A gate that scans nothing finds nothing, so the scanned-file floor is asserted."""
     _violations, _debt, files_scanned, _matched = GATE.scan()
     assert files_scanned >= GATE.MIN_SCANNED_FILES
 
@@ -70,13 +55,9 @@ _SYNTHETIC_FALLBACK = 'spec = declared if declared is not None else lookup("v6")
 
 
 def _synthetic_tree(tmp_path: Path, *, body: str) -> Path:
-    """A one-file `src/` tree for the register tests to scan instead of the real repo.
-
-    The gate's own `test_skip_dirs_are_matched_on_the_relative_path_only` already relies on
-    `REPO_ROOT` being redirectable. Redirecting it here is what makes these two oracles
-    INDEPENDENT of the real tree: the whole repo contains exactly one line that is both
-    pattern-hit and unjustified (arm 8's ternary), and WP12-R Phase C deletes it, so a
-    register test written against real source could not be green both before and after.
+    """A one-file `src/` tree for the register tests to scan instead of the real repo, which is
+    what makes these oracles INDEPENDENT of a tree whose one pattern-hit line is itself
+    scheduled for deletion.
     """
     (tmp_path / "src").mkdir()
     (tmp_path / "src" / "probe_module.py").write_text(
@@ -86,15 +67,8 @@ def _synthetic_tree(tmp_path: Path, *, body: str) -> Path:
 
 
 def test_known_debt_register_is_empty():
-    """⊕ O-7a. Arm 8 was the last registered-open arm, and it is CLOSED.
-
-    HEAD: RED — one entry (`inference_local.py`'s ternary), which WP12-R Phase C deletes.
-
-    The two assertions carried over from the tamper-evidence test this replaces are VACUOUS
-    against an empty register (`0 == 0`; a loop over nothing) and are NOT counted as
-    coverage — they are future-proofing for the next owned arm. The gate's two debt
-    branches are held by O-7b and O-7c below, which is where `assert debt_hits`'s real
-    coverage went rather than being dropped.
+    """The KNOWN_DEBT register is empty: no registered-open arm remains. The two assertions
+    below are VACUOUS against an empty register and are future-proofing, not coverage.
     """
     _v, _debt_hits, _f, matched = GATE.scan()
     assert GATE.KNOWN_DEBT == (), (
@@ -107,16 +81,9 @@ def test_known_debt_register_is_empty():
 
 
 def test_a_stale_debt_entry_fails_the_gate(tmp_path, monkeypatch, capsys):
-    """⊕ O-7b. An entry that matches nothing must FAIL the gate.
-
-    Producer for `silent_encoding_gate.py:338-344`, which had NO producer test at HEAD. The
-    register asserts "this IS a real arm, here, now"; if the code moves out from under an
-    entry the gate must fail so the exemption is re-adjudicated rather than silently
-    inherited by whatever replaced that line.
-
-    The synthetic tree is CLEAN (no fallback shape at all), so rc 1 is attributable to the
-    stale branch alone. Over the real tree the same rc is produced by any unrelated
-    violation, and the assertion would not be an oracle for this branch.
+    """An entry that matches nothing must FAIL the gate, so an exemption whose code moved out
+    from under it is re-adjudicated rather than inherited. The synthetic tree is CLEAN, so rc 1
+    is attributable to the stale branch alone.
     """
     monkeypatch.setattr(
         GATE, "REPO_ROOT", _synthetic_tree(tmp_path, body="spec = lookup(declared)")
@@ -133,16 +100,11 @@ def test_a_stale_debt_entry_fails_the_gate(tmp_path, monkeypatch, capsys):
 
 
 def test_a_matching_debt_entry_is_reported_and_passes(tmp_path, monkeypatch, capsys):
-    """⊕ O-7c. A matching entry is REPORTED on every run, and does not fail the gate.
+    """A matching entry is REPORTED on every run and does not fail the gate.
 
-    Producer for BOTH halves of what `assert debt_hits` used to hold: `scan()`'s debt
-    matching (`:304-314`) and `main()`'s reporting branch (`:346-351`). Deleting the
-    reporting branch loses `REGISTERED-OPEN`; deleting the matching turns the line into a
-    hard violation and rc 1. Registered debt that stops being visible stops being debt and
-    starts being the status quo.
-
-    `files_scanned == 1` is the load-bearing number: the real `src/`/`crates/` trees are
-    never walked, so this oracle's verdict cannot depend on the arm-8 line Phase C deletes.
+    Deleting the reporting branch loses `REGISTERED-OPEN`; deleting the matching turns the line
+    into a hard violation. `files_scanned == 1` is load-bearing: the real trees are never walked,
+    so the verdict cannot depend on a line the tree may or may not still carry.
     """
     monkeypatch.setattr(
         GATE, "REPO_ROOT", _synthetic_tree(tmp_path, body=_SYNTHETIC_FALLBACK)
@@ -193,7 +155,7 @@ def test_main_returns_zero_on_the_real_tree(capsys):
         'enc = declared or "v6"',
         'let name = declared.unwrap_or("v6");',
         'let name = declared.unwrap_or_else(|| "v6_live2_ls");',
-        # ── shapes REVIEW-impl used to defeat the first draft (27 of 31 evaded) ──
+        # shapes that defeated the first draft (27 of 31 evaded)
         '    return "v6"  # a trailing comment used to walk straight through',
         'spec = declared if declared is not None else lookup("v6")',   # arm 8's shape
         'def make_collate(augment: bool, encoding: str = "v6"):',      # arm 7's shape
@@ -211,11 +173,8 @@ def test_gate_bites_on_every_known_fallback_shape(line):
 
 
 def test_gate_sees_rust_attributes_as_code_not_comments():
-    """`#[pyo3(...)]` is an attribute, not a comment.
-
-    An earlier draft blanked every line starting with `#`, which hid arms 9 and 10 (the
-    pyo3 signature defaults on ReplayBuffer/HexgBuffer) and reported green over both.
-    """
+    """`#[pyo3(...)]` is an attribute, not a comment: blanking every line starting with `#` hid
+    the pyo3 signature defaults and reported green over both."""
     lines = ['    #[pyo3(signature = (capacity, encoding = "v6"))]']
     assert GATE._logical_lines(lines, ".rs")[0][1] != ""
     assert _fires(lines[0], suffix=".rs")
@@ -232,11 +191,8 @@ def test_multiline_call_is_joined_before_matching():
 
 
 def test_skip_dirs_are_matched_on_the_relative_path_only():
-    """A checkout living under a directory named `target`/`tests` must still be scanned.
-
-    Matching skip parts against the ABSOLUTE path made the gate vacuously green depending
-    on where the repo happened to sit — and this project uses git worktrees.
-    """
+    """A checkout under a directory named `target`/`tests` must still be scanned: matching skip
+    parts against the ABSOLUTE path made the gate vacuously green."""
     assert GATE.REPO_ROOT.is_absolute()
     scanned = list(GATE._iter_files())
     assert len(scanned) >= GATE.MIN_SCANNED_FILES
@@ -269,11 +225,8 @@ def test_escape_hatch_requires_an_actual_reason():
 
 
 def test_escape_hatch_reads_the_whole_comment_block_not_just_one_line():
-    """A justification worth writing usually needs a sentence.
-
-    The first draft only looked one line back, so a two-line justification did not
-    silence the site it justified — caught when the real audit_sections.py escape failed.
-    """
+    """The escape hatch reads the whole comment block: looking one line back left a two-line
+    justification silencing nothing."""
     lines = [
         "# silent-encoding-gate: ok -- diagnostic-only guess, compared against the",
         "# declared sidecar value to raise a warning; never resolves for real work.",
@@ -293,11 +246,8 @@ CORPUS = _load_corpus()
 
 
 def test_the_evasion_corpus_is_the_one_review_impl_built():
-    """Guards the fixture itself against quiet shrinkage.
-
-    The corpus is only worth committing if it cannot be trimmed when a case becomes
-    inconvenient — the failure mode that let the first draft claim coverage it never had.
-    """
+    """Guards the fixture against quiet shrinkage — a trimmable corpus is how the first draft
+    claimed coverage it never had."""
     import tomllib
 
     path = REPO_ROOT / "tests" / "fixtures" / "silent_encoding_evasions.toml"
@@ -329,11 +279,7 @@ def test_corpus_shapes_the_gate_must_ignore(case):
     "case", [c for c in CORPUS if c["expect"] == "gap"], ids=lambda c: c["id"]
 )
 def test_corpus_accepted_gaps_are_still_gaps(case):
-    """Pins the ADMITTED limits, so the gate's real power stays honestly stated.
-
-    If one of these starts firing, that is good news — but the fixture is then lying about
-    this gate's coverage, and the claim must be re-derived rather than left stale.
-    """
+    """Pins the ADMITTED limits: if one starts firing, the coverage claim must be re-derived."""
     assert not _fires(case["code"], suffix=f".{case['lang']}"), (
         f"{case['id']} now fires — the accepted-residue claim in the fixture is stale"
     )

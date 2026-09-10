@@ -1,47 +1,20 @@
 # >300 justify (R8): the instrument and the self-tests that show it measures what its docstring
-# names are one unit — a timer whose exclusion of graph construction is asserted in a different
-# file can be widened silently, and the whole point of this tier is that its self-tests are the
-# only thing making it non-vacuous.
-"""T6 — the leaf-forward throughput INSTRUMENT. It measures; it never judges.
+# names are one unit — a timer whose exclusion of graph construction is asserted in another file
+# can be widened silently, and the self-tests are the only thing making this tier non-vacuous.
+"""The leaf-forward throughput INSTRUMENT. It measures; it never judges.
 
-WHAT IT MEASURES: wall-clock microseconds per leaf of the MODEL FORWARD ONLY, at a ladder of
-candidate counts, batched as at MCTS leaves. Not FLOPs, not steps/sec, not end-to-end. The timer
-is `time.perf_counter_ns` around the forward, with `torch.cuda.synchronize()` before and after
-when the device is CUDA — without which the number is queue-submission time, not compute.
-Warm-up repeats are discarded and the statistic is the MEDIAN with IQR, matching what the
-repo's IQR-gated bench discipline expects. THERE IS NO FLOOR, NO THRESHOLD AND NO PASS/FAIL.
+Wall-clock microseconds per leaf of the MODEL FORWARD ONLY, at a ladder of candidate counts,
+batched as at MCTS leaves, with `torch.cuda.synchronize()` around the timed region on CUDA —
+without which the number is queue-submission time, not compute. MEDIAN with IQR after discarded
+warm-ups. THERE IS NO FLOOR, NO THRESHOLD AND NO PASS/FAIL, and no number lands in a tracked path.
 
-WHAT DOES NOT LAND: any number, from any host. A µs/leaf figure is host-attested or it is
-mechanism evidence, never a verdict, and the verdict-bearing number is operator-forwarded only.
-Nothing here is written into `tools/bench_floors.toml` — that file carries criterion/Rust floors
-attested against a pinned rustc, and a Python/torch figure would break the attestation it
-exists to carry.
+The ladder is DERIVED from `Board.legal_move_count()`; points above the reachable ceiling are a
+SYNTHETIC block, LABELLED, never mixed with the reachable one.
 
-THE LADDER IS DERIVED, NOT TRANSCRIBED. Its reachable block comes from
-`Board.legal_move_count()` on constructed positions; a `10^4` point does not exist on any real
-position, so points above the reachable ceiling are built as a SYNTHETIC block, LABELLED, and
-never mixed with the reachable one — a number from a position no game can produce is mechanism
-evidence about the kernel, not about the system.
-
-TIER PLACEMENT IS THE THING THAT NEARLY DISARMED THIS TIER, so it is stated: only the
-MEASUREMENT carries `slow`. Every self-test and every planted break below is DEFAULT tier,
-because CI's default gate runs `-m "not integration and not slow"` and a `slow`-marked control
-is green-by-never-executing — the same vacuous pass one layer out.
-
-BOTH SELF-TESTS WERE UNFALSIFIABLE IN THE ORIGINAL SPECIFICATION, and the remedy commits no
-number. "Excludes graph construction" and "syncs on CUDA" are not structurally observable — you
-can only see them in a duration or a call — while any magnitude assertion here is RED. So the
-first self-test asserts a RELATION BETWEEN TWO MEASUREMENTS TAKEN IN THE SAME PROCESS (which is
-host-independent and is not a µs/leaf figure) and the second COUNTS CALLS. The fixed sleep the
-differential uses is an instrument parameter, not a threshold on any subject.
-
-THE GRAVES THIS TIER IS NOT RE-DIGGING (read at HEAD, `docs/governance/falsified.md`): F-21, a
-sibling-project CUDA-kernel borrow, falsified and red-teamed, whose stated fallback order is
-torch.compile → smaller net → quantized eval; F-17/F-18/F-19, bench-falsified legal-move-set
-perf ideas, with F-19's build-once-per-leaf corollary as standing doctrine; F-01, static probes
-cannot validate dynamic equivariance. **T6 proposes NO optimization.** It changes no hot path,
-adds no kernel, touches no builder. The rows are cited because the moment a T6 number tempts
-someone toward a fix, they are the fence that fix has to clear first.
+TIER PLACEMENT NEARLY DISARMED THIS TIER, so only the MEASUREMENT carries `slow`: a `slow`-marked
+control is green-by-never-executing under CI's default `-m "not integration and not slow"`. Both
+self-tests would be unfalsifiable stated structurally, and any magnitude assertion here is RED, so
+one asserts a RELATION BETWEEN TWO MEASUREMENTS IN THE SAME PROCESS and the other COUNTS CALLS.
 """
 from __future__ import annotations
 
@@ -61,8 +34,7 @@ from _corpus import ConformanceRefusal, build_board, roster
 REPO_ROOT = Path(__file__).resolve().parents[3]
 LADDER_REACHABLE = "reachable"
 LADDER_SYNTHETIC = "synthetic"
-#: Instrument parameter for the within-process differential. NOT a threshold on any subject:
-#: it exists only to make a relation between two measurements observable.
+#: Instrument parameter for the within-process differential, not a threshold on any subject.
 _DIFFERENTIAL_SLEEP_S = 0.005
 
 
@@ -112,11 +84,8 @@ def require_labelled_ladder(points: list[LadderPoint]) -> int:
 
 
 def reachable_ladder(enc: str, spans: tuple[int, ...], counter=None) -> list[LadderPoint]:
-    """Candidate counts READ from the engine, one per constructed position.
-
-    `counter` is the seam the derivation control below stubs: pass a callable taking a Board
-    and returning its legal-move count, and the ladder must follow it.
-    """
+    """Candidate counts READ from the engine, one per constructed position. `counter` is the seam
+    the derivation control stubs: pass a callable taking a Board and the ladder must follow it."""
     read = counter if counter is not None else (lambda board: board.legal_move_count())
     points: list[LadderPoint] = []
     for span in spans:
@@ -156,12 +125,8 @@ def _timed_once(
     device_type: str,
     sync: Callable[[], None] | None,
 ) -> tuple[int, int]:
-    """One `(elapsed_ns, sync_calls)` sample, `build_input` OUTSIDE the timed region.
-
-    THE one timing primitive: both public timers below drive this, so "the timed region
-    excludes input construction" is a property of a single function rather than a coincidence
-    holding between two copies of a loop.
-    """
+    """One `(elapsed_ns, sync_calls)` sample. THE one timing primitive, so "the timed region
+    excludes input construction" is a property of a single function, not a coincidence."""
     payload = build_input()
     syncs = 0
     if device_type == "cuda" and sync is not None:
@@ -195,11 +160,8 @@ def measure_forward(
     device_type: str,
     sync: Callable[[], None] | None = None,
 ) -> Measurement:
-    """Time `forward` only. `build_input` runs OUTSIDE the timed region, every repeat.
-
-    The sync callable is invoked before and after the timed region when the device reports
-    CUDA, and the call count is returned so the branch is observable without a GPU.
-    """
+    """Time `forward` only, `build_input` OUTSIDE the timed region every repeat. The sync call
+    count is returned so the CUDA branch is observable without a GPU."""
     samples: list[int] = []
     syncs = 0
     for index in range(warmup + repeats):
@@ -223,17 +185,9 @@ def measure_forward_paired(
 ) -> tuple[Measurement, Measurement]:
     """The same timer, over TWO arms ALTERNATELY, so both meet the same machine state.
 
-    `measure_forward` called twice hands each arm its own window of whatever else the host is
-    doing, and those are not the same window. When the host is busy the difference between the
-    two windows exceeds the difference between the two arms, and the CALL ORDER — not the work
-    — decides which arm reads faster: measured on this tree at load ~19 on 16 cores, the same
-    (arch, encoding) pair read 163.588 ms and 0.309 ms for the SAME arm, and reversing the
-    order of the two calls moved rows in and out of inversion. Alternating within one loop
-    makes host contention COMMON-MODE to both arms, which is the only part of it an instrument
-    can do anything about; what remains is reported as IQR and judged by the caller.
-
-    Each arm gets its own sample list and its own sync count, so the two Measurements are
-    separate readings and never a sum — asserted by this module's own paired self-tests.
+    Two `measure_forward` calls hand each arm its own window of host noise: measured at load ~19 on
+    16 cores, the same pair read 163.588 ms and 0.309 ms for the SAME arm, and reversing the call
+    order moved rows in and out of inversion. Each arm keeps its own samples, never a sum.
     """
     first: list[int] = []
     second: list[int] = []
@@ -250,12 +204,9 @@ def measure_forward_paired(
     return _summarise(first, first_syncs), _summarise(second, second_syncs)
 
 
-# --------------------------------------------------------------------------------------- #
-# Self-tests and planted breaks — ALL DEFAULT TIER
-# --------------------------------------------------------------------------------------- #
 def test_the_timer_EXCLUDES_input_construction_and_INCLUDES_the_forward(derived):
-    """Self-test 1 — the within-process differential, two-sided. Neither half commits a
-    number: both are relations between measurements taken in this same process."""
+    """The within-process differential, two-sided. Neither half commits a number: both are
+    relations between measurements taken in this same process."""
     sleep_ns = int(_DIFFERENTIAL_SLEEP_S * 1e9)
 
     outside = measure_forward(
@@ -285,10 +236,9 @@ def test_the_timer_EXCLUDES_input_construction_and_INCLUDES_the_forward(derived)
 
 
 def test_the_PAIRED_timer_reads_its_two_arms_SEPARATELY_and_never_as_a_sum(derived):
-    """Self-test 1b — the differential again, through the paired timer. A paired timer that
-    returned one reading twice, or the SUM of the two arms in both slots, would satisfy every
-    caller's type and silently make `second / first` a constant. The sleep is in the second
-    arm alone, so the relation is the same one self-test 1 asserts and commits no number."""
+    """A paired timer returning one reading twice, or the SUM of the two arms in both slots, would
+    satisfy every caller's type and silently make `second / first` a constant. The sleep is in the
+    second arm alone, so the relation commits no number."""
     sleep_ns = int(_DIFFERENTIAL_SLEEP_S * 1e9)
 
     first, second = measure_forward_paired(
@@ -309,13 +259,8 @@ def test_the_PAIRED_timer_reads_its_two_arms_SEPARATELY_and_never_as_a_sum(deriv
 
 
 def test_the_PAIRED_timer_ALTERNATES_rather_than_running_one_arm_to_COMPLETION(derived):
-    """Self-test 1c — the interleave itself, COUNTED, in the style self-test 2 uses for sync.
-
-    Alternation is the whole reason this timer exists and it is not observable in a duration:
-    a paired timer that ran arm one to completion and then arm two would return two readings
-    of two different moments, which is exactly the sequential shape it replaces. Recording
-    stubs make the order observable with no host assumption at all.
-    """
+    """The interleave itself, COUNTED: it is not observable in a duration, and a timer that ran
+    one arm to completion then the other would return two readings of two different moments."""
     order: list[str] = []
     repeats, warmup = 3, 1
     measure_forward_paired(
@@ -331,9 +276,8 @@ def test_the_PAIRED_timer_ALTERNATES_rather_than_running_one_arm_to_COMPLETION(d
 
 
 def test_the_CUDA_sync_branch_fires_on_cuda_and_NOT_on_cpu(derived):
-    """Self-test 2 — the counting stub with its required negative control. Constructible with
-    no GPU, which matters: the CUDA branch otherwise never executes where CI actually runs, so
-    "sync is applied when CUDA" would be vacuous everywhere it is evaluated."""
+    """The counting stub with its required negative control, constructible with no GPU — the CUDA
+    branch otherwise never executes where CI runs."""
     calls = {"n": 0}
 
     def counting_sync() -> None:
@@ -359,8 +303,8 @@ def test_the_CUDA_sync_branch_fires_on_cuda_and_NOT_on_cpu(derived):
 
 
 def test_the_reachable_ladder_FOLLOWS_a_stubbed_legal_move_count(derived):
-    """Self-test 3 / PB-44. A ladder that does not move when the engine's count moves is a
-    transcribed literal wearing a derivation."""
+    """A ladder that does not move when the engine's count moves is a transcribed literal wearing
+    a derivation."""
     spec = roster()[0]
     spans = (1, 3, 5)
     real = reachable_ladder(spec.name, spans)
@@ -374,7 +318,7 @@ def test_the_reachable_ladder_FOLLOWS_a_stubbed_legal_move_count(derived):
 
 
 def test_an_UNLABELLED_synthetic_point_is_refused():
-    """PB-45. The label is a required field, so the refusal is what makes it one."""
+    """The label is a required field, so the refusal is what makes it one."""
     good = synthetic_ladder(100, (2, 4))
     assert require_labelled_ladder(good) == 2
     with pytest.raises(UnlabelledLadderPoint, match="required field"):
@@ -382,17 +326,16 @@ def test_an_UNLABELLED_synthetic_point_is_refused():
 
 
 def test_a_CLOSED_hardware_gate_FAILS_rather_than_skips():
-    """PB-46. The only admissible conditional in this suite is a hardware gate, and it must
-    fail loudly with a named reason when it is asked to run."""
+    """The only admissible conditional in this suite is a hardware gate, and it must fail loudly
+    with a named reason when it is asked to run."""
     assert require_device_available("cpu", True) == "cpu"
     with pytest.raises(HardwareGateClosed, match="does not skip"):
         require_device_available("cuda", False)
 
 
-#: THE MARKER FAMILY THAT REMOVES A TEST FROM THE RUN, enumerated and NON-EXHAUSTIVE, and
-#: matched only as an attribute of `pytest.mark` / `mark` so an unrelated field named `skip`
-#: is not a hit. `xfail` is in the family because a test whose failure is swallowed has stopped
-#: asserting as surely as one that never runs.
+#: THE MARKER FAMILY THAT REMOVES A TEST FROM THE RUN, enumerated and NON-EXHAUSTIVE, matched only
+#: as an attribute of `pytest.mark` / `mark` so a field named `skip` is not a hit. `xfail` is in
+#: the family because a swallowed failure has stopped asserting.
 _DISARMING_MARKS = frozenset({"skip", "skipif", "xfail"})
 #: The call spellings. `importorskip` is the one that arrives disguised as an import.
 _DISARMING_CALLS = frozenset({"skip", "importorskip", "xfail"})
@@ -415,7 +358,7 @@ def _pytest_callee(func: ast.expr) -> str:
 
 def _empty_parametrize(node: ast.Call) -> bool:
     """`parametrize(..., [])`. Under pytest's default `empty_parameter_set_mark` an empty
-    argvalues collects one SKIPPED item — a disarm that contains no skip word at all."""
+    argvalues collects one SKIPPED item — a disarm containing no skip word at all."""
     func = node.func
     named = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
     if named != "parametrize" or len(node.args) < 2:
@@ -427,15 +370,9 @@ def _empty_parametrize(node: ast.Call) -> bool:
 def disarming_forms(tree: ast.AST) -> list[tuple[int, str]]:
     """`(line, form)` for every construct in one module that removes a test from the run.
 
-    MECHANISM, NOT SCOPE, IS WHAT WAS WRONG. The control this replaces matched `ast.Call` nodes
-    whose func was `pytest.skip`, so one `@pytest.mark.skipif(True, reason=...)` line above any
-    gate in this suite produced a green run with one silent skip, `rc 0`, and a collected-test
-    floor gate that also returned `rc 0` — because a skipped test is still COLLECTED. The prior
-    fix widened this census from one module to every module of the suite and left the single
-    spelling in place; nine modules times one spelling of six is still one spelling of six.
-
-    Matched on the AST, so this very docstring — which necessarily contains the words — is not
-    a hit, and so is the family declaration above.
+    MECHANISM, NOT SCOPE, WAS THE DEFECT: matching only `pytest.skip` calls let one
+    `@pytest.mark.skipif(True, ...)` produce a green run, rc 0, past a collected-test floor gate —
+    a skipped test is still COLLECTED. Matched on the AST, so this docstring is not itself a hit.
     """
     found: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -460,18 +397,11 @@ def suite_modules() -> list[Path]:
 
 
 def test_NO_MODULE_of_the_conformance_suite_DISARMS_a_TEST(derived):
-    """PB-46's other half, over EVERY module of this suite and every form that disarms one.
+    """No module of this suite disarms a test, in any form that removes one from the run.
 
-    SCOPE WAS THE FIRST FINDING HERE and MECHANISM was the second. Parsing `Path(__file__)`
-    asserted the discipline over one module of eight; matching only `pytest.skip(...)` asserted
-    it over one spelling of six, and a `skipif` DECORATOR on T1's cross-arm gate — the half of
-    T1 no other instrument makes — produced `104 passed, 1 skipped`, `rc 0`, with every gate in
-    the repo green. A silent skip is this suite's headline failure mode.
-
-    It stays in this module because PB-46's two halves — a hardware gate that FAILS rather than
-    skips, and no module that disarms a test at all — are one claim, and a control that lives
-    apart from its check can be deleted without the check going red. The census cardinality is
-    a derived output, so an empty glob cannot pass for a clean census.
+    SCOPE was the first finding and MECHANISM the second: a `skipif` decorator on a cross-arm gate
+    produced `104 passed, 1 skipped`, rc 0, with every gate in the repo green. The census
+    cardinality is a derived output, so an empty glob cannot pass for a clean census.
     """
     modules = suite_modules()
     offenders = [
@@ -488,9 +418,8 @@ def test_NO_MODULE_of_the_conformance_suite_DISARMS_a_TEST(derived):
     assert not offenders, f"a test in this suite is disarmed at {offenders}"
 
 
-#: One planted line per disarming spelling, each written the way a hurried commit writes it.
-#: A census that names a family and is only ever shown to catch one member of it is a family
-#: claim resting on one measurement.
+#: One planted line per disarming spelling. A census that names a family and is only ever shown to
+#: catch one member is a family claim resting on one measurement.
 _DISARM_PLANTS: tuple[tuple[str, str], ...] = (
     ("decorator-skipif", '@pytest.mark.skipif(True, reason="flaky")\ndef test_x(): pass\n'),
     ("decorator-skip", "@pytest.mark.skip\ndef test_x(): pass\n"),
@@ -507,7 +436,7 @@ _DISARM_PLANTS: tuple[tuple[str, str], ...] = (
 
 @pytest.mark.parametrize("label,body", _DISARM_PLANTS, ids=[p[0] for p in _DISARM_PLANTS])
 def test_EVERY_disarming_spelling_is_seen_by_the_census(label, body, tmp_path):
-    """PB-46b. Each row is a line that produces a green run with one fewer assertion."""
+    """Each row is a line that produces a green run with one fewer assertion."""
     module = tmp_path / f"test_{label.replace('-', '_')}.py"
     module.write_text(body, encoding="utf-8")
     found = disarming_forms(ast.parse(module.read_text(encoding="utf-8")))
@@ -515,9 +444,8 @@ def test_EVERY_disarming_spelling_is_seen_by_the_census(label, body, tmp_path):
 
 
 def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
-    """Negative control, and as binding as the positive rows. A census that flags `parametrize`
-    with real argvalues, a fixture, or a field that happens to be named `skip` would be widened
-    until it fired on ordinary code, and its green would stop meaning its name."""
+    """Negative control, as binding as the positive rows: a census that fired on ordinary code
+    would be widened until its green stopped meaning its name."""
     module = tmp_path / "test_ordinary.py"
     module.write_text(
         "import pytest\n\n"
@@ -531,20 +459,13 @@ def test_the_census_does_NOT_fire_on_an_ORDINARY_test_module(tmp_path):
     assert disarming_forms(ast.parse(module.read_text(encoding="utf-8"))) == []
 
 
-#: TIER PLACEMENT, DECLARED. `(module, test)` for every test in this suite that may carry
-#: `slow`. This is a DECLARATION of which of this suite's tests are measurements and reports
-#: rather than gates — not a threshold, not a tunable, and not a number: there is nothing here
-#: to raise or lower, and the only way to change it is to say in a diff which gate stopped
-#: running in CI. That is exactly what was missing. Everything else in this suite is derived
-#: because a derivation exists; a tier assignment has no producer to derive it from, and the
-#: alternative on offer — deriving the CI tier from the marker source itself — is the
-#: one-source comparison this suite refuses everywhere else.
+#: TIER PLACEMENT, DECLARED: `(module, test)` for every test here that may carry `slow`. Not a
+#: threshold and not a number, so the only way to change it is to say in a diff which gate stopped
+#: running in CI. Deriving it from the marker source would be a one-source comparison.
 _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
     {
         ("test_leaf_forward_throughput_harness.py", "test_leaf_forward_throughput_ladder"),
-        # `test_legal_move_coverage_boundary.py`'s uncovered-legal-move report and
-        # `test_construction_path_determinism_centroid_branch.py` (the whole module) went with
-        # the K-cluster window at R346(f); both were dense-arm measurements.
+        # The dense-arm measurements went with the K-cluster window.
         (
             "test_window_frame_midpoint_translation_boundary.py",
             "test_report_the_graph_node_feature_translation_residual",
@@ -560,14 +481,12 @@ _SLOW_TIER_MEMBERS: frozenset[tuple[str, str]] = frozenset(
     }
 )
 
-#: Markers a test in this suite may carry AT ALL. CI's default gate is
-#: `-m "not integration and not slow"`, so those two words are what can move a test out of the
-#: run; an unknown marker is refused outright rather than reasoned about, because a marker this
-#: census does not know is one whose tier effect it cannot predict.
+#: Markers a test here may carry AT ALL. CI's default gate selects on markers, so an unknown one
+#: is refused outright: its effect on tier membership cannot be predicted.
 _ALLOWED_MARKERS = frozenset({"parametrize", "slow"})
 
-#: The module-wide spelling. `pytestmark = pytest.mark.slow` deselects every test in a file at
-#: once and appears in no decorator list.
+#: `pytestmark = pytest.mark.slow` deselects every test in a file at once and appears in no
+#: decorator list.
 _MODULE_LEVEL = "<module-level pytestmark>"
 
 
@@ -580,11 +499,8 @@ class TierPlacementChanged(ConformanceRefusal):
 
 
 def marker_census(path: Path) -> list[tuple[str, str, str]]:
-    """`(module, test, marker)` for every `pytest.mark.X` on a test in one module.
-
-    Both spellings: the decorator on a test function, and the module-level `pytestmark`, which
-    carries no decorator and takes a whole file out of the tier in one line.
-    """
+    """`(module, test, marker)` for every `pytest.mark.X` on a test — both the decorator and the
+    module-level `pytestmark`, which takes a whole file out of the tier in one line."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
     rows: list[tuple[str, str, str]] = []
     for node in ast.walk(tree):
@@ -609,12 +525,9 @@ def require_declared_tier_placement(
 ) -> frozenset[tuple[str, str]]:
     """Refuse an unknown marker, and refuse tier placement drifting from the declaration.
 
-    BOTH DIRECTIONS ARE REFUSED. A gate moved OUT of the CI default tier is the attack — one
-    `slow` line on T4's graph arm removed the cross-crate legal-set claim from CI while the
-    suite reported `96 passed, 5 deselected` and every gate in the repo, the collected-test
-    floor included, stayed rc 0, because a DESELECTED test is still COLLECTED. A measurement
-    moved INTO the default tier is refused too: a wall-clock ladder in the CI tier is how a
-    magnitude becomes a verdict by accident.
+    BOTH DIRECTIONS. One `slow` line removed a cross-crate claim from CI while the suite reported
+    `96 passed, 5 deselected` and every gate stayed rc 0, because a DESELECTED test is still
+    COLLECTED; a measurement moved IN makes a magnitude a verdict by accident.
     """
     unknown = [row for row in census if row[2] not in _ALLOWED_MARKERS]
     if unknown:
@@ -635,8 +548,8 @@ def require_declared_tier_placement(
 
 
 def test_the_TIER_PLACEMENT_of_every_test_in_this_suite_matches_the_declaration(derived):
-    """The guard F-RT-3 found missing, and this module's docstring already called tier
-    placement "the thing that nearly disarmed this tier" before anything asserted it."""
+    """Every test's tier placement matches the declaration — the guard this module's own docstring
+    called "the thing that nearly disarmed this tier" before anything asserted it."""
     modules = suite_modules()
     census = [row for path in modules for row in marker_census(path)]
     derived("t6.tier.marker_census", census)
@@ -648,8 +561,8 @@ def test_the_TIER_PLACEMENT_of_every_test_in_this_suite_matches_the_declaration(
 
 
 def test_a_GATE_moved_OUT_of_the_CI_default_tier_is_refused():
-    """PB-46c. RED-TEAM's exact plant, driven through the gate's own helper: one `slow` line
-    above T4's graph arm, which no other instrument in the repo would report."""
+    """The red-team plant, driven through the gate's own helper: one `slow` line above a cross-arm
+    gate, which no other instrument in the repo would report."""
     census = [row for path in suite_modules() for row in marker_census(path)]
     planted = [
         *census,
@@ -664,8 +577,8 @@ def test_a_GATE_moved_OUT_of_the_CI_default_tier_is_refused():
 
 
 def test_a_MEASUREMENT_moved_INTO_the_CI_default_tier_is_refused():
-    """The other direction, and it is not symmetry for its own sake: the ladder in the default
-    tier puts a host-dependent wall-clock number on every CI run."""
+    """The other direction, and not symmetry for its own sake: the ladder in the default tier puts
+    a host-dependent wall-clock number on every CI run."""
     census = [row for path in suite_modules() for row in marker_census(path)]
     without_ladder = [row for row in census if row[1] != "test_leaf_forward_throughput_ladder"]
     with pytest.raises(TierPlacementChanged, match="moved IN"):
@@ -673,8 +586,8 @@ def test_a_MEASUREMENT_moved_INTO_the_CI_default_tier_is_refused():
 
 
 def test_a_MODULE_LEVEL_pytestmark_is_seen_by_the_tier_census(tmp_path):
-    """PB-46d. `pytestmark = pytest.mark.slow` takes a whole file out of the tier in one line
-    and appears in no decorator list, so a decorator-only census cannot see it."""
+    """`pytestmark = pytest.mark.slow` takes a whole file out of the tier in one line and appears
+    in no decorator list, so a decorator-only census cannot see it."""
     module = tmp_path / "test_planted.py"
     module.write_text(
         "import pytest\n\npytestmark = pytest.mark.slow\n\ndef test_x(): assert True\n",
@@ -686,8 +599,8 @@ def test_a_MODULE_LEVEL_pytestmark_is_seen_by_the_tier_census(tmp_path):
 
 
 def test_an_UNKNOWN_marker_is_refused_rather_than_ignored(tmp_path):
-    """A marker the census does not know is a marker whose tier effect it cannot predict, and
-    ignoring it is how a new `-m` expression silently deselects a gate."""
+    """A marker the census does not know is one whose tier effect it cannot predict, and ignoring
+    it is how a new `-m` expression silently deselects a gate."""
     module = tmp_path / "test_planted.py"
     # rule7-gate: ok -- the `\n@pytest.mark.flaky` in this planted source reads as user@host to
     # the ssh-userhost pattern: the "user" is the n of an escaped newline and the "domain" is a
@@ -699,15 +612,12 @@ def test_an_UNKNOWN_marker_is_refused_rather_than_ignored(tmp_path):
 
 
 def test_a_MAGNITUDE_cannot_be_written_into_a_tracked_path(tmp_path):
-    """PB-47. Keeps "what does NOT land" enforceable rather than aspirational, by attempting it."""
+    """Keeps "what does NOT land" enforceable rather than aspirational, by attempting it."""
     assert require_no_magnitude_lands(tmp_path / "block.md") == tmp_path / "block.md"
     with pytest.raises(MagnitudeWouldLand, match="tracked tree"):
         require_no_magnitude_lands(REPO_ROOT / "tools" / "bench_floors.toml")
 
 
-# --------------------------------------------------------------------------------------- #
-# The MEASUREMENT (`slow`) — tables only, no magnitude asserted anywhere
-# --------------------------------------------------------------------------------------- #
 def _tiny_graph_forward(spec):
     """The production surfaces, at the smallest net the repo's own precedent uses."""
     import torch
@@ -754,17 +664,11 @@ def _tiny_graph_forward(spec):
 
 @pytest.mark.slow
 def test_leaf_forward_throughput_ladder(derived):
-    """The measurement. Returns a TABLE — encoding, candidate count, block label, repeats,
-    median, IQR, device — and asserts nothing about any magnitude in it.
+    """The measurement: a TABLE, asserting nothing about any magnitude in it.
 
-    COVERAGE, STATED, because the table is narrower than the design asks and a table is read as
-    its own scope. MEASURED: the reachable block of the ONE registered graph encoding, on CPU.
-    NOT MEASURED, and named rather than implied: the registered GRID encodings, because this
-    harness builds a GNN forward and a dense arm is a different net rather than a different
-    parameter of this one; and the SYNTHETIC block, which is a projection point with no board
-    that produces it — it is reported as a candidate count and carries no timing. The row set is
-    asserted to contain no synthetic label below, so a projection cannot later drift into the
-    measured table wearing a reachable figure.
+    COVERAGE, STATED: the reachable block of the ONE registered graph encoding, on CPU. NOT the
+    grid encodings (a dense arm is a different net) and NOT the synthetic block, which is a
+    projection point with no board that produces it.
     """
     spec = next(s for s in roster() if s.is_graph)
     build, forward = _tiny_graph_forward(spec)

@@ -1,37 +1,14 @@
-"""⊕ WPAX Phase D ORACLE — O-D4: an unresolvable `config_path` is a NAMED failure, for ANY
-row, not an unnamed rc 1 (DESIGN_D §5.4, §5.5; RED-TEAM_P's F-4, fixed to its class per R71).
+"""An unresolvable `config_path` is a NAMED failure, for ANY row, not an unnamed rc 1.
 
-RED-at-import until IMPL lands `ArmingSurfaceMissingError`.
-
-**F-4, reproduced at HEAD (DESIGN_D §0, re-driven this stage).** Flip the shipped
-`draw_rate_collapse` row to REQUIRED and audit a real `configs/run6.yaml` and `_dotted`
-raises `AttributeError: 'TrainConfig' object has no attribute 'step_coordinator'`, which
-`main`'s bare `except Exception` collapses into **rc 1 `PreflightInternalError`** — the one
-outcome `preflight_mint.py:79` ("every outcome NAMED") and `:1270` ("the tool's own failure
-is NAMED, never bare") both say cannot exist. Two shipped claims, falsified by one route.
-This route has NO producer at HEAD.
-
-**Written to the CLASS, not to this row (R71).** F-4's own words are *"the same route swallows
-a typo in any row's `config_path`"*, so the arms below drive a typo on the ACTOR-LAG row as
-well — a fix fitted to the draw-rate row alone would pass every draw-rate arm and leave the
-next row's typo landing on rc 1 exactly as before. That is MF-7's failure shape, and R71 is
-the law written from it.
-
-**§5.5's asymmetry, both arms, pinned rather than discovered later.** The block shape makes
-`_dotted`'s behaviour on an EXPLICITLY DISARMED config load-bearing: the shipped walker
-raises `AttributeError: 'NoneType' object has no attribute 'threshold'` on
-`train.draw_rate_abort: null` (measured), so a legitimately disarmed config would rc-31
-rather than report "disarmed". A `None` met mid-walk must therefore short-circuit to `None`
-while a MISSING attribute still raises. The residual is disclosed by the last arm: a typo
-*after* a legitimately-`None` segment reports "disarmed" rather than raising. It is caught
-where it gates — `PRODUCTION_CONFIGS` includes `"configs/run6.yaml"` and run5 is ARMED, so
-the walk reaches the leaf and the typo raises.
-
-Everything below drives `audit_arming`, the walker's only consumer, rather than `_dotted`
-directly: the row identity in the message comes from the row, so pinning `_dotted`'s own
-parameter list here would constrain IMPL's shape without adding a witness.
-
-R7 / gate 6: the tool's report goes to `tmp_path`, never inside the tree.
+Flip the shipped `draw_rate_collapse` row to REQUIRED, audit a real config, and `_dotted` raises
+`AttributeError`, which `main`'s bare `except Exception` collapses into rc 1
+`PreflightInternalError` — the one outcome the tool twice claims cannot exist. Written to the
+CLASS: the arms drive a typo on the ACTOR-LAG row too, since a fix fitted to the draw-rate row
+alone would leave the next row's typo on rc 1 exactly as before. The disarmed asymmetry is
+pinned both ways — a `None` met mid-walk short-circuits, a MISSING attribute still raises — and
+the residual, a typo AFTER a legitimately-`None` segment reporting "disarmed", is caught where
+it gates, since run5 is ARMED and the walk reaches the leaf. Everything drives `audit_arming`,
+the walker's only consumer; the tool's report goes to `tmp_path`, never inside the tree.
 """
 from __future__ import annotations
 
@@ -45,7 +22,7 @@ from mantis.config.armed_aborts import (
     MANIFEST,
     PRODUCTION_CONFIGS,
     ArmedAbort,
-    ArmingSurfaceMissingError,  # RED anchor — F-4's named arm (R71 class fix)
+    ArmingSurfaceMissingError,
     Status,
     audit_arming,
 )
@@ -57,8 +34,7 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 
 
 def _load_tool():
-    """`tests/tools/test_preflight_mint_process.py:80-92`'s precedent — absolute path, no
-    `sys.path` write (R5 / LAW-17)."""
+    """Load the tool from its absolute path, with no `sys.path` write."""
     spec = importlib.util.spec_from_file_location("preflight_mint_for_wpax_d4", TOOL_PATH)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
@@ -70,8 +46,8 @@ TOOL = _load_tool()
 
 
 def _retyped(name: str, config_path: str) -> tuple[ArmedAbort, ...]:
-    """The shipped manifest with ONE row's `config_path` replaced. Every other field is the
-    row's own, so the only variable is resolvability."""
+    """The shipped manifest with ONE row's `config_path` replaced; the only variable is
+    resolvability."""
     out = []
     for row in MANIFEST:
         out.append(row if row.name != name else ArmedAbort(
@@ -93,16 +69,9 @@ def _disarmed_run5() -> RunConfig:
 
 
 def test_an_unresolvable_config_path_is_a_NAMED_failure_not_an_unnamed_rc_1() -> None:
-    """The module half. Every arm names the same three things, because each answers a
-    different operator question: WHICH ROW is broken, WHAT PATH it declared, and WHICH
-    SEGMENT of that path does not exist. An `AttributeError` from pydantic's
-    `BaseModel.__getattr__` carries only the last one, and `main` then loses even that.
-
-    MF-2 note (c), taken: the walk must be wrapped in `try/except AttributeError` PER SEGMENT
-    rather than pre-checked with `hasattr` — only the former can name which segment failed,
-    and `_dotted`'s AttributeError comes from `BaseModel.__getattr__`, not from a plain
-    lookup.
-    """
+    """The module half: each arm names WHICH ROW is broken, WHAT PATH it declared and WHICH
+    SEGMENT does not exist — pydantic's `AttributeError` carries only the last, and `main` loses
+    even that. Hence `try/except AttributeError` PER SEGMENT rather than a `hasattr` pre-check."""
     assert issubclass(ArmingSurfaceMissingError, AttributeError), (
         "subclassing AttributeError preserves every existing caller's behaviour — a caller "
         "that catches AttributeError today must not start leaking this one"
@@ -136,17 +105,10 @@ def test_an_unresolvable_config_path_is_a_NAMED_failure_not_an_unnamed_rc_1() ->
 
 
 def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> None:
-    """§5.5, measured on the shipped walker: `_dotted` on `train.draw_rate_abort: null`
-    raises `AttributeError: 'NoneType' object has no attribute 'threshold'` today. Left as
-    is, a legitimately disarmed config — the posture R59 explicitly permits for smoke runs,
-    and the posture four of the five committed configs will carry — would fail gate 12 at
-    rc 31 instead of being reported disarmed.
-
-    So the F-4 fix carries one more conjunct: a `None` met MID-WALK is an explicitly disarmed
-    block and short-circuits to `None`; a MISSING attribute still raises. Both arms are here
-    because a walker that short-circuits on ANY failure would satisfy this arm and silently
-    convert every typo above into "disarmed".
-    """
+    """`_dotted` on `train.draw_rate_abort: null` raises `'NoneType' object has no attribute
+    'threshold'`, so a legitimately disarmed config would fail gate 12 at rc 31 rather than be
+    reported disarmed: a `None` met MID-WALK short-circuits, a MISSING attribute still raises.
+    Both arms, because a walker short-circuiting on ANY failure would satisfy just one."""
     disarmed = _disarmed_run5()
     result = audit_arming(disarmed)
     assert [row.name for row in result.disarmed] == ["draw_rate_collapse"], (
@@ -175,19 +137,11 @@ def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> Non
 def test_the_tool_maps_the_named_arm_to_rc_31_and_never_to_the_unnamed_rc_1(
     tmp_path, monkeypatch, capsys,
 ) -> None:
-    """The tool half, and the whole point of F-4. `preflight_mint.py:1270`'s bare
-    `except Exception` turns any AttributeError from the walk into rc 1
-    `PreflightInternalError`, a code whose own docstring says it cannot happen. The fix maps
-    `ArmingSurfaceMissingError` onto the already-defined `PreflightManifestError` — rc 31,
-    the code every other manifest-integrity failure already uses — so gate 12's operator sees
-    a manifest problem rather than "the tool broke".
-
-    Driven through `main()`, not through the helper, because the rc is produced by main's
-    handler chain and that chain is what F-4 defeats. `audit_arming`'s `manifest=` default is
-    bound at DEF time, so the tool's `audit_arming(_load(path))` call reads the default rather
-    than `TOOL.MANIFEST` — DESIGN §8.4 measured that exact trap on its own plugin. Both are
-    therefore rebound, and the assertion below is on rc, not on a mocked call.
-    """
+    """The tool half: a bare `except Exception` turns any AttributeError from the walk into rc 1
+    `PreflightInternalError`, a code whose own docstring says it cannot happen; the named arm maps
+    onto `PreflightManifestError`, rc 31. Driven through `main()` because the rc comes from its
+    handler chain, and `audit_arming`'s DEF-time `manifest=` default is rebound alongside
+    `TOOL.MANIFEST` so the tool cannot read the unperturbed one."""
     assert TOOL.PreflightManifestError.rc == 31 and TOOL.PreflightInternalError.rc == 1, (
         "harness precondition: the two codes this test distinguishes must be the shipped ones"
     )
@@ -223,27 +177,16 @@ def test_the_tool_maps_the_named_arm_to_rc_31_and_never_to_the_unnamed_rc_1(
 def test_the_shipped_manifest_still_audits_green_so_the_rc_31_arm_is_not_vacuous(
     tmp_path,
 ) -> None:
-    """The control. Every arm above reads a NON-zero outcome off a perturbed manifest; if the
-    UNPERTURBED tool were already red, all of them would pass for the wrong reason. This is
-    `test_the_mini_tree_rig_is_green_before_it_is_perturbed`'s discipline applied to the
-    monkeypatch rig.
-
-    It also states the post-flip fact plainly: with `draw_rate_collapse` REQUIRED and armed on
-    run5 at R82's 0.25, gate 12's audit mode is GREEN — the flip does not need a waiver.
+    """The control: every arm above reads a NON-zero outcome off a PERTURBED manifest, so if the
+    unperturbed tool were already red they would all pass for the wrong reason. It also states
+    the post-flip fact plainly — with `draw_rate_collapse` REQUIRED and armed, the audit is GREEN.
     """
     assert TOOL.main(["--audit-only", "--out-dir", str(tmp_path / "control")]) == 0, (
         "the SHIPPED manifest must audit the real tree green after the flip: run5 arms both "
         "required rows, so rc 0 here is the state Phase D lands in"
     )
-    # WPMINT Phase K-B (call K-c): the shipped manifest no longer holds zero deferred rows —
-    # `grad_norm_hard_abort` is one, which is the deferred mechanism finally being fed the
-    # kind of row R81 kept it alive for. The CONTROL's real subject is unchanged: rc 0 above
-    # is the whole point, and a DEFERRED row cannot change it because deferred rows print and
-    # do not gate. That is asserted directly here rather than inferred from an empty list.
-    # R265 / ADJ-D38 adds `sealbot_wr_abort` to that set and the transcribed row list here
-    # became a tally that had to be re-edited for a change it has no opinion about (R192(e)).
-    # DERIVED now, and stating the claim the control actually rests on: the deferred set is
-    # non-empty (so "deferred rows do not gate" has a subject) and rc 0 above held anyway.
+    # Derived, not transcribed: the deferred set must be non-empty so "deferred rows print and
+    # do not gate" has a subject, and rc 0 above must hold anyway.
     deferred = [row for row in MANIFEST if row.status is Status.DEFERRED]
     assert deferred, (
         "…the control needs at least one deferred row, or 'a deferred row prints loudly and "

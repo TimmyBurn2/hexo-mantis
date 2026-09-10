@@ -1,18 +1,11 @@
-"""AUDIT-1 F-09 — every CI gate has a local equivalent, and the runner enumerates them all.
+"""Every CI gate has a local equivalent, and the runner enumerates them all.
 
-THE DEFECT. R311(b) suspended remote CI and made LOCAL GREEN the gate. There was no local
-runner. `make test` runs the default tier plus `cargo test --workspace --locked`, which does
-NOT compile `[[bench]]` targets; `make bench` compiles exactly one of them. And
-`cargo clippy --workspace --all-targets --locked -- -D clippy::all` appeared ONLY in
-`.github/workflows/ci.yml`. So every "full local gate set" since the suspension excluded
-`-D clippy::all` — including `incompatible_msrv`, the guard on the `rust-version = "1.87"`
-floor — and never compiled the bench targets standing behind the floors in
-`tools/bench_floors.toml`. CLAUDE.md's own rule: "nothing lives only in workflow YAML".
+Remote CI is suspended and local green is the gate, so a gate that lives only in the workflow
+is a gate nothing runs. `make test` does not compile `[[bench]]` targets and `make bench`
+compiles one, so `cargo clippy --all-targets -- -D clippy::all` is what stands behind the rest.
 
-WHAT THESE ROWS ARE. Not a second copy of what each gate checks — they assert the SET. The
-workflow is parsed for its `gate N:` steps and every one must have a local invocation in
-`tools/ci_gates/run_all.sh`. A gate added to CI and not to the runner reds here, which is the
-only way "local green" can keep meaning what R311(b) says it means.
+These rows assert the SET, not what each gate checks: the workflow is parsed for its `gate N:`
+steps and every one must have an invocation in `tools/ci_gates/run_all.sh`.
 """
 from __future__ import annotations
 
@@ -47,15 +40,14 @@ def test_the_runner_exists_and_is_executable() -> None:
 
 
 def test_the_parse_finds_a_plausible_number_of_gates() -> None:
-    """The non-vacuity floor. A regex that matched nothing would make every row below pass —
-    the phantom-gate class this file exists to close, one layer up."""
+    """Prove the parse finds a plausible number of gates; a regex matching nothing passes all rows."""
     gates = _workflow_gates()
     assert len(gates) >= 17, f"only {len(gates)} gate steps parsed out of ci.yml: {sorted(gates)}"
     assert len(_runner_gates()) >= 17, sorted(_runner_gates())
 
 
 def test_every_CI_gate_has_a_local_invocation() -> None:
-    """THE PIN. A gate that lives only in the workflow is a gate local green does not run."""
+    """Prove every CI gate has a local invocation."""
     missing = _workflow_gates() - _runner_gates()
     assert not missing, (
         f"gate(s) {sorted(missing)} run in CI and in no local command. R311(b) makes local "
@@ -64,15 +56,13 @@ def test_every_CI_gate_has_a_local_invocation() -> None:
 
 
 def test_the_runner_invents_no_gate_CI_does_not_have() -> None:
-    """The converse: the runner is a roster of the real gates, not a second authority that
-    could drift into checking something the workflow never agreed to."""
+    """Prove the runner is a roster of the real gates, not a second authority that can drift."""
     extra = _runner_gates() - _workflow_gates()
     assert not extra, f"the runner runs gate(s) {sorted(extra)} that ci.yml does not define"
 
 
 def test_clippy_is_reachable_from_a_make_target_not_only_from_the_workflow() -> None:
-    """The specific gate F-09 measured: `-D clippy::all` was in ci.yml and nowhere under
-    `Makefile`/`tools/`."""
+    """Prove clippy is reachable from a make target, not only from the workflow."""
     makefile = MAKEFILE.read_text(encoding="utf-8")
     assert "cargo clippy" in makefile, "no make target runs clippy"
     assert "--all-targets" in makefile, (
@@ -84,10 +74,10 @@ def test_clippy_is_reachable_from_a_make_target_not_only_from_the_workflow() -> 
 
 
 def test_the_all_targets_flag_is_what_compiles_the_bench_targets() -> None:
-    """The mechanism, named against the tree: several `[[bench]]` targets exist, `make bench`
-    builds ONE, and `cargo test` builds none of them. The count is DERIVED and bounded from
-    below rather than transcribed (R192(e)) — R346(f) deleted two bench targets with the dense
-    path, and a stated tally would now be evidence of nothing."""
+    """Prove `--all-targets` is what compiles the bench targets `make bench` and `cargo test` skip.
+
+    The bench count is derived and bounded from below; a transcribed tally would go stale.
+    """
     benches = set()
     for manifest in sorted((REPO_ROOT / "crates").glob("*/Cargo.toml")):
         text = manifest.read_text(encoding="utf-8")
@@ -104,8 +94,7 @@ def test_the_all_targets_flag_is_what_compiles_the_bench_targets() -> None:
 
 
 def test_gate_1_is_declared_opt_in_rather_than_silently_absent() -> None:
-    """The one gate the runner does not run by default must SAY it does not, or the summary
-    line is a claim about a set that is one short."""
+    """Prove the one opt-in gate declares itself, so the summary is not short by a gate."""
     body = RUNNER.read_text(encoding="utf-8")
     assert "--with-fresh-sync" in body
     assert "gate 1" in body
@@ -116,8 +105,7 @@ def test_gate_1_is_declared_opt_in_rather_than_silently_absent() -> None:
 
 
 def test_the_runner_runs_every_gate_even_after_one_reds() -> None:
-    """`set -e` would stop at the first failure and report one gate when seventeen were
-    asked about."""
+    """Prove the runner runs every gate after one reds; `set -e` would stop at the first."""
     body = RUNNER.read_text(encoding="utf-8")
     assert "set -uo pipefail" in body and "set -euo pipefail" not in body
 
@@ -138,8 +126,7 @@ def test_an_unknown_argument_is_refused_rather_than_ignored() -> None:
 
 
 def test_the_only_filter_can_select_a_single_gate() -> None:
-    """The seam that makes the runner usable while iterating — and it must still be the
-    production runner, not a second path."""
+    """Prove `--only` selects a single gate, through the production runner rather than a second path."""
     proc = subprocess.run(
         ["bash", str(RUNNER), "--only", "gate 16"], capture_output=True, text=True,
         cwd=REPO_ROOT,
@@ -150,12 +137,12 @@ def test_the_only_filter_can_select_a_single_gate() -> None:
     assert "green: 1" in proc.stdout
 
 
-# ── the slow tier: the last place a tier-scoped defect can hide (R333(b)) ──────────────────
 def test_the_slow_tier_is_reachable_from_the_runner_and_declares_itself() -> None:
-    """R333(b)'s instrument. A `slow`-marked test is deselected from BOTH tiers, so before the
-    flag those tests were executed by NO gate — and REPAIR-2 shipped a red into its own exit
-    run for exactly the tier-scoped reason. The omission must be PRINTED, like gate 1's, or the
-    summary is a claim about a set that is short by a whole tier."""
+    """Prove the slow tier is reachable from the runner and declares itself either way.
+
+    A `slow`-marked test is deselected from BOTH pytest tiers, so without this flag nothing in
+    the repo executes it.
+    """
     body = RUNNER.read_text(encoding="utf-8")
     assert "--with-slow" in body
     assert "SLOW TIER NOT RUN" in body, (
@@ -170,8 +157,7 @@ def test_the_slow_tier_is_reachable_from_the_runner_and_declares_itself() -> Non
 
 
 def test_the_slow_tier_is_NOT_run_by_default() -> None:
-    """The other half: opt-in means opt-in. A tier that costs seconds today could cost minutes
-    tomorrow, and gate 1's precedent is that the expensive one is chosen, never inherited."""
+    """Prove the slow tier is not run by default: the expensive tier is chosen, never inherited."""
     body = RUNNER.read_text(encoding="utf-8")
     guard = "[ $WITH_SLOW -eq 1 ] &&"
     assert guard in body, f"the slow row must sit behind {guard!r}"
@@ -186,8 +172,7 @@ def test_the_runner_help_names_the_slow_flag() -> None:
 
 
 def test_the_slow_tier_actually_selects_the_slow_tests() -> None:
-    """Not a claim about the flag — a run of it. The tier is small and fast, so this drives the
-    real runner rather than asserting on its source."""
+    """Prove the slow tier really selects the slow tests, by driving the runner rather than its source."""
     proc = subprocess.run(
         ["bash", str(RUNNER), "--with-slow", "--only", "slow tier"],
         capture_output=True, text=True, cwd=REPO_ROOT,
@@ -201,8 +186,7 @@ def test_the_slow_tier_actually_selects_the_slow_tests() -> None:
 
 
 def test_the_summary_states_the_slow_tier_either_way() -> None:
-    """The property that makes the flag honest: a reader of ANY run's summary can tell whether
-    the tier was covered, without knowing what was typed."""
+    """Prove any run's summary says whether the slow tier was covered, whatever was typed."""
     for args, expected in (([], "SLOW TIER NOT RUN"), (["--with-slow"], "slow tier RAN")):
         proc = subprocess.run(
             ["bash", str(RUNNER), *args, "--only", "gate 4"],

@@ -1,33 +1,25 @@
-//! P-01 — inv19 re-anchor: native `SelfPlayRunnerConfig` field→slot one-to-one +
-//! distinct-sentinel round-trip (RE-ANCHOR of
-//! `inv19_selfplayrunner_config_builder_byte_equivalence.rs`).
+//! `SelfPlayRunnerConfig` field→slot one-to-one, by distinct-sentinel round-trip.
 //!
-//! The frozen inv19 pinned the 38-positional pyo3 ctor. WP6 drops that ctor to
-//! WP7 and the config is now a plain-Rust struct; this re-anchor pins the SURVIVING
-//! surface:
-//!   1. every field maps to exactly one slot — a full struct literal + an
-//!      EXHAUSTIVE destructure (no `..`) means a dropped / added / renamed field
-//!      fails to COMPILE, and distinct per-field sentinels catch any cross-wire;
-//!   2. **NO per-game radius-jitter field** (D7 KILL) and **NO
-//!      `feature_len`/`policy_len` override fields** (C-1) — the exhaustive
-//!      binding set names exactly the live fields, so a resurrected jitter knob
-//!      (or a caller-supplied shape) would break this test loudly;
-//!   3. the `Default` impl is TEST-SCAFFOLDING, NOT the config authority (R1 — the
-//!      authoritative defaults live in the WP8 Python schema). This file does NOT
-//!      assert Default's values are "the" defaults; it asserts the opposite — a
-//!      bare `Default` is not a usable config authority (LAW-11).
+//!   1. Every field maps to exactly one slot: a full struct literal plus an exhaustive
+//!      destructure (no `..`) makes a dropped, added or renamed field fail to COMPILE, and
+//!      distinct per-field sentinels catch any cross-wire.
+//!   2. There is no per-game radius-jitter field and no `feature_len`/`policy_len` override,
+//!      so a resurrected knob or a caller-supplied shape breaks this test loudly.
+//!   3. The `Default` impl is test scaffolding, not the config authority: a bare `Default`
+//!      leaves the identity key unset and cannot construct a runner.
 
 use mantis_search::SearchKind;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-/// f32 approx-equality (dodges `clippy::float_cmp`; exact for a literal round-trip).
+/// f32 approx-equality, exact for a literal round-trip.
 fn feq(a: f32, b: f32) -> bool {
     (a - b).abs() < 1e-9
 }
 
-/// Every field set to a distinct, non-default sentinel so a swap / alias / drop
-/// manifests as a field-equality failure. Constructed as a FULL struct literal (no
-/// `..Default::default()`) so a field addition / removal fails to compile.
+/// Build a config whose every field is a distinct, non-default sentinel, so a swap, alias
+/// or drop manifests as a field-equality failure.
+///
+/// A full struct literal with no `..Default::default()`, so a field change fails to compile.
 fn distinct_sentinels() -> SelfPlayRunnerConfig {
     SelfPlayRunnerConfig {
         n_workers: 7,
@@ -41,7 +33,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         standard_sims: 42,
         temp_threshold_compound_moves: 21,
         draw_reward: -0.75,
-        ply_cap_value: -0.875, // §178 — DISTINCT from draw_reward sentinel
+        ply_cap_value: -0.875, // distinct from the draw_reward sentinel
         quiescence_enabled: false,
         quiescence_blend_2: 0.625,
         temp_min: 0.0625,
@@ -62,17 +54,15 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
     }
 }
 
-/// Test 1 — every field → exactly one slot; the field surface is EXACTLY the live
-/// fields (no jitter, no feature_len/policy_len — and no count stated here, since a
-/// transcribed tally goes stale the first time a knob lands, R192(e)). The exhaustive
-/// destructure (no `..`) is the compile-time completeness guard; the sentinel asserts are
-/// the no-cross-wire guard.
+/// Prove every field maps to exactly one slot and no killed field is back.
+///
+/// The exhaustive destructure is the compile-time completeness guard; the sentinel
+/// assertions are the no-cross-wire guard.
 #[test]
 fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     let cfg = distinct_sentinels();
-    // EXHAUSTIVE destructure — a `..` is DELIBERATELY absent. A resurrected
-    // per-game radius-jitter field, a re-added `feature_len`/`policy_len`, or any
-    // dropped field breaks this line at COMPILE time.
+    // A `..` is deliberately absent: any added, re-added or dropped field breaks this
+    // destructure at compile time.
     let SelfPlayRunnerConfig {
         n_workers,
         max_moves_per_game,
@@ -136,34 +126,31 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
 }
 
-/// Test 2 — `SelfPlayRunner::new(config)` accepts the distinct-sentinel config and
-/// exposes SPEC-DERIVED shapes (no caller-supplied feature_len/policy_len exists,
-/// C-1). Validation order matches the frozen ctor: fast_prob>0 + full_search_prob>0
-/// is rejected only at `start()` (the §100 mutex), not at `new()`; with all the
-/// sim budgets > 0 the ctor accepts. `start()` is NOT called here.
+/// Prove the ctor accepts the sentinel config and exposes spec-derived shapes.
+///
+/// `fast_prob > 0` with `full_search_prob > 0` is rejected at `start()`, not `new()`, and
+/// `start()` is not called here.
 #[test]
 fn distinct_config_constructs_and_exposes_spec_derived_shapes() {
     let runner = SelfPlayRunner::new(distinct_sentinels())
         .expect("ctor must accept the distinct-sentinel config");
-    // DERIVED from the same spec the runner resolved, never transcribed: a graph row carries
-    // no dense planes, so `state_stride` is 0 and the assertion still bites — it is the SPEC
-    // that decides both numbers, and a caller-supplied shape override (C-1) would make them
-    // disagree with it.
+    // Derived from the same spec the runner resolved, never transcribed: the spec decides
+    // both numbers, and a caller-supplied shape override would make them disagree with it.
     let spec = mantis_encoding::lookup_or_panic("gnn_axis_r8");
     assert_eq!(runner.feature_len(), spec.state_stride());
     assert_eq!(runner.policy_len(), spec.policy_stride());
-    assert_eq!(runner.policy_len(), 362, "the graph action space is 19*19 + 1");
+    assert_eq!(
+        runner.policy_len(),
+        362,
+        "the graph action space is 19*19 + 1"
+    );
     assert!(!runner.is_running());
 }
 
-/// Test 3 — the `Default` impl is TEST-SCAFFOLDING, not the config authority.
+/// Prove `Default` is test scaffolding, not the config authority.
 ///
-/// We do NOT pin Default's field values as "the" defaults (R1 forbids code-side
-/// config authority; the authoritative, minted defaults live in the WP8 Python
-/// schema). We assert the CONTRAPOSITIVE: a bare `Default::default()` leaves the
-/// identity key unset, so it is NOT a usable config on its own — constructing a
-/// runner from it is a native `Err` (LAW-11). That is what "scaffolding, not
-/// authority" means operationally.
+/// Its field values are deliberately not pinned as "the" defaults; what is asserted is the
+/// contrapositive, that a bare `Default::default()` cannot construct a runner.
 #[test]
 fn default_is_test_scaffolding_not_config_authority() {
     let cfg = SelfPlayRunnerConfig::default();
