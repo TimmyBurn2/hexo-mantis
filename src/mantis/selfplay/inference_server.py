@@ -807,7 +807,9 @@ class InferenceServer(threading.Thread):
         )
         on_cuda = self.device.type == "cuda"
         for g0, g1 in plan:
-            sub = slice_graph_wire(payload, g0, g1)
+            # A one-part plan IS the payload: the slice would copy `edge_index` (7 MB at B = 50)
+            # and re-base every offset array to subtract zero, on the pipeline's bound stage.
+            sub = payload if len(plan) == 1 else slice_graph_wire(payload, g0, g1)
             _t_collate_start = time.perf_counter()
             sink: list[Any] | None = [] if geometry.capture_checks else None
             try:
