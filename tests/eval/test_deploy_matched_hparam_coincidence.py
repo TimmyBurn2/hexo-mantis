@@ -112,11 +112,10 @@ def test_deploy_head_mcts_default_equals_run5(ctor_key: str, config_key: str) ->
 # the dense path, so the coverage row below is what keeps a NEW literal from appearing unwatched.
 _INFERENCE_KEYS: list[str] = []
 
-#: Keys run5 declares that the inline literal DELIBERATELY does not mirror; a CLOSED set of one,
-#: since a second unmirrored key reds the coverage row. `inference.fused_graph_caps` is threaded
-#: in as a resolver-produced frozen dataclass, so a cap hardcoded here would be a SECOND
-#: AUTHORITY over one byte budget; an AST census in tests/selfplay makes writing one impossible.
-_DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps"}
+#: Keys run5 declares that the literal DELIBERATELY does not mirror, a CLOSED set: the caps are
+#: threaded (F-816-10 D-1); the two serving postures the eval child does not take — eager
+#: forward, inline dump-on-fire check 14 (F-816-37; PERF-A4 §4, CARD-A4-MINT).
+_DELIBERATELY_NOT_IN_THE_LITERAL = {"fused_graph_caps", "compile_trunk", "edge_geometry_check"}
 
 #: Keys in the inline dict that are THREADED rather than written, so there is no literal to
 #: drift; the coverage row proves the move STRUCTURALLY, not on this comment. Un-threaded,
