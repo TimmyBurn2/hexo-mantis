@@ -101,6 +101,17 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
 - **CARD-ALPHA-MAX-ROWS — the architect's reading.** Under the Gumbel regime 98.9% of rows carry a
   tail (mean 0.0006) and rows with **α = 1.0** exist — no target mass on any of the 16 explicit
   entries. Not adjudicated; read against R347(a)'s "exact on the m sampled entries".
+- **CARD-GATES-ON-CUDA-VENV — the gate set had never gated a CUDA venv.** Every `$UV run` in
+  `run_all.sh` re-synced to the default groups, so every box gate run in history silently ran
+  on the CPU wheel; fixed at `8dfa8b5f` (`UV_NO_SYNC=1`, torch build printed). Gated as built
+  on `+cu128`, gate 3a shows rows whose expectations assume a CPU torch: the model puts itself
+  on CUDA while the test's tensors stay on CPU ("Expected all tensors to be on the same
+  device") in `tests/model/conformance/test_arch_states_its_memory_envelope.py` (8),
+  `tests/model/test_gnn_v2_witnesses.py::test_both_arches_FORWARD_on_a_real_wire_position` (2),
+  the `slow` tier's harness rows through `test_local_gate_runner`, and the ten-row control in
+  `test_preflight_start_halts` (fixed in place). The model rows are the tests' device
+  assumptions, not the run's; they are a leg of their own before "gates.exit green on the box"
+  can be claimed on a CUDA venv.
 - **CARD-CHECKER-THREAD-LEVER — OWED behind the lever.** R347(e)'s "verify_edge_geometry leaves
   the server's critical path" is not in code; `_check_semantic` still runs it inline, so the
   PERF-3b A/B could not be taken. A lever on a protected 1-in-1 check needs LAW-18's own fire-rate.

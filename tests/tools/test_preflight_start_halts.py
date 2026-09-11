@@ -66,8 +66,15 @@ def test_a_durable_run_directory_records_its_evidence_and_does_not_halt(tmp_path
     workspace_durability.MOUNTS = mounts
     report: dict = {}
     try:
-        with pytest.raises(TOOL.PreflightCudaBuildError):
+        # run6 declares cuda, so past the workspace halt the CUDA halt is decided next: it
+        # fires on a CPU-only torch and passes on a real CUDA build. Either way the workspace
+        # evidence below was recorded first, which is this row's subject.
+        if torch.version.cuda is None:
+            with pytest.raises(TOOL.PreflightCudaBuildError):
+                TOOL._assert_start_halts(config, tmp_path / "run", report)
+        else:
             TOOL._assert_start_halts(config, tmp_path / "run", report)
+            assert report["cuda_build"]["cuda_available"] is True
     finally:
         workspace_durability.MOUNTS = original
     assert report["workspace"]["verdict"] == "DURABLE"
