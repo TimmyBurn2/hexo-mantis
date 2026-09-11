@@ -144,23 +144,23 @@ def test_a_clean_round_dumps_nothing(tmp_path: Path) -> None:
 
 
 def _plant_one_hot_corruption(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
-    """Corrupt ONE edge's axis one-hot in the FIRST wire slice the server collates: the plant
-    sits on the object the check reads, and `[0.0, 0.0, 0.5]` is the observed signature."""
-    from mantis.selfplay import graph_wire_split
+    """Corrupt ONE edge's axis one-hot in the FIRST wire payload the server collates (the object
+    the check reads since a one-part plan collates the payload itself); `[0, 0, 0.5]` is the signature."""
+    from mantis.selfplay import graph_collate
 
     state: dict[str, Any] = {"planted": 0}
-    real = graph_wire_split.slice_graph_wire
+    real = graph_collate.graph_wire_from_rust
 
-    def _spy(payload, g0, g1):
-        sub = real(payload, g0, g1)
+    def _spy(wire):
+        payload = real(wire)
         if state["planted"] == 0:
-            attr = np.asarray(sub.edge_attr)
+            attr = np.asarray(payload.edge_attr)
             if attr.size >= 5:
                 attr[0:3] = [0.0, 0.0, 0.5]
                 state["planted"] = 1
-        return sub
+        return payload
 
-    monkeypatch.setattr(graph_wire_split, "slice_graph_wire", _spy)
+    monkeypatch.setattr(graph_collate, "graph_wire_from_rust", _spy)
     return state
 
 
