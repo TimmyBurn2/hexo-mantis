@@ -207,10 +207,9 @@ _verdict_exit = _parent_half._verdict_exit
 child_config_identity = _parent_half.child_config_identity
 
 
-#: The burst override writes exactly ONE dotted key and reads nothing, so `stop_step` keeps
-#: one source. The report's `override.keys` is emitted from this same constant. A second entry
-#: would make the preflight a second run-length authority.
-OVERRIDE_KEYS: tuple[str, ...] = ("train.max_train_steps",)
+#: The burst mutates NO config key: it is a stop bound over the minted identity
+#: (`compose_run(burst_stop_step=)`), so the stamp certifies the config that will run.
+OVERRIDE_KEYS: tuple[str, ...] = ()
 
 REPORT_SCHEMA = "preflight-mint-v1"
 #: Printed at the TOP of `_run_audit`, before `_audit_manifest_and_configs` can raise, so it
@@ -307,7 +306,7 @@ def _resolve_config_path(raw: str) -> Path:
 
 
 def _load(path: Path) -> RunConfig:
-    """The ONE loader — `yaml.load` -> `RunConfig.model_validate` and nothing else."""
+    """The ONE loader — `load_config`, the schema's own final step included, and nothing else."""
     try:
         return load_config(path)
     except PreflightError:
@@ -332,51 +331,52 @@ def _burst_floors(config: RunConfig) -> list[tuple[str, int, int]]:
     return floors
 
 
+def _refusing_floors(config: RunConfig) -> list[tuple[str, int, int]]:
+    """The floors a burst must clear to RUN: the actor-sync rows (the draw-rate row is the TIER's)."""
+    return [row for row in _burst_floors(config) if row[0] != DRAW_RATE_FLOOR_KEY]
+
+
 def _minimum_legal_burst(config: RunConfig) -> int:
-    """The floor the cross-field validators impose (`config/schema/core.py:280,307,314,321`)."""
-    return max(floor for _key, _value, floor in _burst_floors(config))
+    """The shortest burst that proves (a) sync and (b) lag on this config."""
+    return max(floor for _key, _value, floor in _refusing_floors(config))
 
 
 def _burst_tier(config: RunConfig, burst_steps: int) -> str:
     """Which mint tier a burst of this length on this config IS, read off `_burst_floors` so the
     tier a report claims and the floor arithmetic an operator was shown cannot drift apart.
 
-    The `sync_lag` arm is why the tier is not just "cleared the max": on
-    `train.draw_rate_abort: null` the max floor is 101 and clearing it says nothing whatever
-    about draw-rate reachability.
+    `sync_lag` is every burst that clears the actor floors but not the draw-rate floor.
     """
-    floors = _burst_floors(config)
-    if int(burst_steps) < max(floor for _key, _value, floor in floors):
+    if int(burst_steps) < _minimum_legal_burst(config):
         return TIER_NONE
-    draw = [floor for key, _value, floor in floors if key == DRAW_RATE_FLOOR_KEY]
-    return TIER_FULL if draw else TIER_SYNC_LAG
+    draw = [floor for key, _value, floor in _burst_floors(config) if key == DRAW_RATE_FLOOR_KEY]
+    return TIER_FULL if draw and int(burst_steps) >= draw[0] else TIER_SYNC_LAG
 
 
-def _apply_burst_override(config: RunConfig, burst_steps: int) -> RunConfig:
-    """`dump -> mutate ONE key -> model_validate` — byte-for-byte the loader's own final step,
-    so every cross-field validator re-runs rather than being skipped."""
-    raw = config.model_dump()
-    for dotted in OVERRIDE_KEYS:
-        section, key = dotted.split(".")
-        raw[section][key] = int(burst_steps)
-    try:
-        return RunConfig.model_validate(raw)
-    except Exception as exc:
-        minimum = _minimum_legal_burst(config)
+def _burst_bound(config: RunConfig, burst_steps: int) -> int:
+    """The child's stop step: `burst_steps` inside the refusing floors and the minted run length.
+
+    Raises:
+        PreflightBurstTooShortError: below the actor-sync floors or above `train.max_train_steps`.
+    """
+    requested = int(burst_steps)
+    minimum = _minimum_legal_burst(config)
+    ceiling = int(config.train.max_train_steps)
+    if requested < minimum or requested > ceiling:
         rules = "".join(
-            f"    {key} ({value}) must be < train.max_train_steps, so its floor is {floor}\n"
-            for key, value, floor in _burst_floors(config)
+            f"    {key} ({value}) must be < the burst, so its floor is {floor}\n"
+            for key, value, floor in _refusing_floors(config)
         )
         raise PreflightBurstTooShortError(
-            f"--burst-steps {int(burst_steps)} does not survive the config's own cross-field "
-            f"validators. The MINIMUM legal burst for this config is {minimum}.\n"
+            f"--burst-steps {requested} cannot run on this config. The MINIMUM legal burst for "
+            f"this config is {minimum} and the ceiling is train.max_train_steps ({ceiling}).\n"
             f"  The binding rules — 'a threshold the run never reaches is an invariant that "
-            f"can never fire' (config/schema/core.py:307,314,321):\n"
+            f"can never fire' (config/schema/core.py):\n"
             f"{rules}"
-            f"  Re-run with --burst-steps {minimum} or more.\n"
-            f"  Validator said: {exc}",
-            minimum=minimum, requested=int(burst_steps),
-        ) from exc
+            f"  Re-run with --burst-steps between {minimum} and {ceiling}.",
+            minimum=minimum, requested=requested,
+        )
+    return requested
 
 
 def _print_deferred_rows(*, manifest: tuple[ArmedAbort, ...] = MANIFEST) -> None:
@@ -751,10 +751,10 @@ def _boot_main(args) -> int:
 
     Every build step lives at `mantis.run.build_run_collaborators`, which `launch_run` calls too.
     What survives here is the CONTAINMENT mechanism and two instruments that wrap AROUND the
-    composer: `_apply_burst_override`, a CONFIG-level transform before the boot, and the
-    resumed-trainer refusal, a READ-ONLY check between builder and composer — which is why the
-    authority is a PAIR of functions rather than one opaque `boot()`. Nothing may be assigned onto
-    `collab`. The DEVICE and EVAL posture are the config's own.
+    composer: `_burst_bound`, the stop step handed to the composer over the MINTED config, and
+    the resumed-trainer refusal, a READ-ONLY check between builder and composer — which is why
+    the authority is a PAIR of functions rather than one opaque `boot()`. Nothing may be
+    assigned onto `collab`. The DEVICE and EVAL posture are the config's own.
 
     The child is spawned with `start_new_session=True` so the parent's timeout `killpg` reaches
     every grandchild, which also makes it unreachable by any signal aimed at the parent: MEASURED
@@ -767,10 +767,10 @@ def _boot_main(args) -> int:
     arm_parent_death_signal()
 
     config = _load(_resolve_config_path(args.config))
-    booted = _apply_burst_override(config, args.burst_steps)
+    bound = _burst_bound(config, args.burst_steps)
     from mantis.run import build_run_collaborators, compose_run
 
-    collab = build_run_collaborators(config=booted, out_dir=args.out_dir)
+    collab = build_run_collaborators(config=config, out_dir=args.out_dir)
     # A run RESUMED past its ceiling terminates having performed zero syncs, which looks
     # EXACTLY like the frozen actor this preflight exists to find. The builder never passes
     # `checkpoint_path`, and a nonzero step here is a named refusal, not a warning.
@@ -780,10 +780,10 @@ def _boot_main(args) -> int:
             "preflight over a resumed trainer measures nothing while looking like the defect "
             "it exists to find (§4.2)"
         )
-    handles = compose_run(config=booted, trainer=collab.trainer, pool=collab.pool,
+    handles = compose_run(config=config, trainer=collab.trainer, pool=collab.pool,
                           buffer=collab.buffer, log_dir=collab.log_dir,
                           checkpoint_dir=collab.checkpoint_dir,
-                          resume_state=collab.resume_state)
+                          resume_state=collab.resume_state, burst_stop_step=bound)
     return _abort_rc(handles.shutdown.abort_rule)
 
 
@@ -909,7 +909,8 @@ def _stamp_pass(config: RunConfig, path: Path, args, report: dict, out_dir: Path
         config=config, config_path=path, tree_root=REPO_ROOT,
         halts={"workspace": report["workspace"], "cuda_build": report["cuda_build"]},
         booted_config_sha256=str(report["override"]["booted_config_sha256"]),
-        burst_steps=int(args.burst_steps), report_path=out_dir / _report_name(report))
+        burst_steps=int(args.burst_steps), report_path=out_dir / _report_name(report),
+        tier=str(report["tier"]["tier"]))
     report["preflight_stamp"] = str(stamp_path)
     print(f"preflight: stamp written {stamp_path}")
 
@@ -924,15 +925,15 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["manifest"] = _audit_manifest_and_configs(_audit_paths(path))
     report["assertions"]["c_arming"] = {"verdict": "pass", "disarmed": [],
                                         "required_armed": report["manifest"]["required"]}
-    booted = _apply_burst_override(config, args.burst_steps)
-    # Stamped only once the validators have ACCEPTED the burst, so a rc-11 refusal leaves
-    # `tier: none` — the truth, not a placeholder.
-    report["tier"] = _tier_block(config, int(args.burst_steps))
+    bound = _burst_bound(config, args.burst_steps)
+    booted = config
+    # Stamped only once the bound is ACCEPTED, so a rc-11 refusal leaves `tier: none`.
+    report["tier"] = _tier_block(config, bound)
     report["override"] = {"keys": list(OVERRIDE_KEYS),
                           "from": int(config.train.max_train_steps),
-                          "to": int(args.burst_steps),
-                          # THE one identity authority: the same function the child's
-                          # compose_run hashes its own loaded config with.
+                          "to": bound,
+                          # THE one identity authority, the same function the child's boot
+                          # hashes with; no key moved, so the two hashes are one.
                           "booted_config_sha256": config_identity_sha256(booted)}
     log_dir = out_dir / "logs"
     # Refuse a dirty out-dir BEFORE the boot, scoped to pre-existing segments under THIS

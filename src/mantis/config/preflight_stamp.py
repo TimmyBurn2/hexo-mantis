@@ -50,9 +50,9 @@ def stamp_path(config_sha256: str) -> Path:
 
 def write_stamp(
     *, config: RunConfig, config_path: Path, tree_root: Path, halts: dict[str, Any],
-    booted_config_sha256: str, burst_steps: int, report_path: Path,
+    booted_config_sha256: str, burst_steps: int, report_path: Path, tier: str,
 ) -> Path:
-    """Write the stamp for `config` (the minted identity `mantis.run` hashes) and return its path.
+    """Write the stamp for `config` (the minted identity) and return its path; `tier` is what the burst PROVED.
 
     Raises:
         PreflightStampMalformedError: a START halt reading is absent from `halts`.
@@ -71,6 +71,7 @@ def write_stamp(
         "run_id": config.run_id,
         "booted_config_sha256": booted_config_sha256,
         "burst_steps": int(burst_steps),
+        "tier": str(tier),
         "tree_sha": head_sha(tree_root),
         "tree_dirty": is_dirty(tree_root),
         "preflight_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

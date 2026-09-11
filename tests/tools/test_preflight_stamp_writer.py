@@ -44,6 +44,7 @@ def state_home(monkeypatch, tmp_path) -> Path:
 def _report(**halts) -> dict:
     report = TOOL._new_report("preflight")
     report["override"] = {"booted_config_sha256": "booted-sha"}
+    report["tier"] = {**report["tier"], "tier": "sync_lag"}
     report.update(halts)
     return report
 
@@ -62,6 +63,7 @@ def test_the_stamp_the_tool_writes_is_the_stamp_the_launcher_accepts(
     stamp = require_preflight_stamp(config, tree_root=REPO_ROOT)
     assert stamp["halts"] == {"workspace": report["workspace"], "cuda_build": report["cuda_build"]}
     assert stamp["booted_config_sha256"] == "booted-sha" and stamp["burst_steps"] == 16
+    assert stamp["tier"] == "sync_lag", "the stamp records what its burst PROVED"
     assert stamp["report"].startswith(str(tmp_path / "out"))
     assert report["preflight_stamp"] == str(stamp_path(config_identity_sha256(config)))
 
@@ -78,7 +80,7 @@ def test_a_report_missing_a_start_halt_reading_writes_no_stamp(
     with pytest.raises(PreflightStampMalformedError):
         TOOL.write_stamp(config=config, config_path=_CONFIG_PATH, tree_root=REPO_ROOT,
                          halts={"workspace": {}}, booted_config_sha256="x", burst_steps=1,
-                         report_path=tmp_path)
+                         report_path=tmp_path, tier="sync_lag")
 
 
 def _statement_index(body: list[ast.stmt], callee: str) -> int:

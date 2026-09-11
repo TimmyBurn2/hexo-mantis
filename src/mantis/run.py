@@ -502,6 +502,27 @@ def _emit_live_arming_audit(config: Any, sink: Any, *,
                "probes": sorted(probes)})
 
 
+class BurstBoundError(ValueError):
+    """A preflight burst bound outside 1..`train.max_train_steps`."""
+
+
+def _resolve_stop_step(config: RunConfig, burst_stop_step: int | None) -> int:
+    """The coordinator's stop step: `train.max_train_steps`, or the PREFLIGHT's bound below it.
+
+    Raises:
+        BurstBoundError: the bound is below 1 or above the minted run length.
+    """
+    ceiling = resolve_max_train_steps(config.train)
+    if burst_stop_step is None:
+        return ceiling
+    bound = int(burst_stop_step)
+    if bound < 1 or bound > ceiling:
+        raise BurstBoundError(
+            f"burst_stop_step {bound} is not inside 1..train.max_train_steps ({ceiling}): a "
+            "preflight burst runs a PREFIX of the minted run, never past it and never nothing")
+    return bound
+
+
 def compose_run(
     *,
     config: RunConfig | Any,
@@ -511,13 +532,16 @@ def compose_run(
     log_dir: str | Path,
     checkpoint_dir: str | Path,
     resume_state: Any = None,
+    burst_stop_step: int | None = None,
 ) -> RunHandles:
     """The run composition root (§c.6).
 
-    Injection-first: every COLLABORATOR arrives via a kwarg, never built here — but no
-    parameter may carry a CONFIG FACT, and the parameter list is pinned by a signature census
-    so a re-add cannot be silent. MAIN-THREAD CALL, a real precondition: `signal.signal` raises
-    off the main thread, and this root installs LAW-16's handlers.
+    Injection-first: every COLLABORATOR arrives via a kwarg, never built here — no parameter
+    may carry a CONFIG FACT (the census pins the list; `burst_stop_step` is the preflight's bound,
+    a prefix of the run with no launcher route). MAIN-THREAD CALL: `signal.signal` needs it.
+
+    Raises:
+        BurstBoundError: `burst_stop_step` is outside the minted run length.
     """
     config = require_run_config(config, caller="compose_run")
     # The gate above answers "is this the class?"; this answers "is this a config the loader
@@ -665,7 +689,7 @@ def compose_run(
         # still a second default authority.
         with _seam("_step_coordinator_config"):
             step_coordinator_cfg = _step_coordinator_config(
-                stop_step=resolve_max_train_steps(config.train),
+                stop_step=_resolve_stop_step(config, burst_stop_step),
                 draw_rate_abort=resolve_draw_rate_abort(config.train),
                 drain_caps=resolve_drain_caps(config.monitor),
                 # The ARMING cadence, named directly off the validated monitor section. It

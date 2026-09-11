@@ -332,6 +332,7 @@ def test_compose_runs_parameter_list_is_pinned_so_no_re_add_can_be_silent():
     """
     assert tuple(inspect.signature(mantis.run.compose_run).parameters) == (
         "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
+        "burst_stop_step",
     ), (
         "compose_run's parameter list is pinned: no parameter may carry a CONFIG FACT into "
         "this root (WPAX MF-1 — monitor_cfg bypassed the gate and silently disarmed the "
@@ -349,8 +350,30 @@ def test_compose_runs_parameter_list_is_pinned_so_no_re_add_can_be_silent():
         "sidecar inside this root would be a second authority for what the boot resumed from, "
         "and smuggling it through `trainer` is the invisible route this docstring already "
         "names as the census's blind spot. Adding it is a design decision and it is recorded "
-        "as one, which is what this tuple exists to force."
+        "as one, which is what this tuple exists to force. The EIGHTH, `burst_stop_step`, is "
+        "the mint preflight's burst bound (the START-path packet, decided by matrix under "
+        "operator delegation, CARD-STAMP-FLOOR): it carries no config fact — a PREFIX of the "
+        "minted run length, refused outside it — so the config the child boots is the minted "
+        "identity and every cross-field validator judged the real run. Its only producer is "
+        "`preflight_mint.py`'s child; `launch_run` and `main` have no route to it, which "
+        "`test_the_launcher_has_no_route_to_the_burst_bound` pins."
     )
+
+
+def test_the_launcher_has_no_route_to_the_burst_bound():
+    """`burst_stop_step` reaches `compose_run` from the preflight child ONLY — no launcher route."""
+    launch_src = inspect.getsource(mantis.run.launch_run)
+    assert "burst_stop_step" not in launch_src, "launch_run grew a route to the burst bound"
+    parser_src = inspect.getsource(mantis.run.main)
+    assert "burst" not in parser_src and "stop-step" not in parser_src, (
+        "mantis.run's parser must declare no burst/stop option — the bound is the preflight's"
+    )
+    with pytest.raises(mantis.run.BurstBoundError):
+        mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 0)
+    with pytest.raises(mantis.run.BurstBoundError):
+        mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 10**9)
+    assert mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), None) == 1_000_000
+    assert mantis.run._resolve_stop_step(load_config(_CONFIGS_DIR / "run6.yaml"), 101) == 101
 
 
 def test_the_composition_root_contains_no_duck_typed_config_getattr():

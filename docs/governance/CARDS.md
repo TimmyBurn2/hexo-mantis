@@ -83,23 +83,43 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsified.md F-44/F-45.
 
-- **CARD-STAMP-FLOOR — BLOCKING START; a ruling, not code.** R348(c)'s trap (`mantis.run`
-  refuses a config with no passing stamp) meets the schema's own reachability rule: run6 mints
-  `train.draw_rate_abort.min_step 25000`, so `_apply_burst_override` refuses every burst below
-  25 001 steps (rc 11, as on 2026-09-08) and the only stamp-writing preflight of run6 is the
-  block itself (≈ 22.6 h at 1 105 steps/h). The shakedown config (R259's run class) carries the
-  same floor. Options (STATE.md, Hold 1): a `sync_lag`-tier stamp for production configs whose
-  full tier exceeds the shakedown length, with draw-rate reachability proven by the schema rule;
-  an in-process shakedown plus a ruled START bypass; or paying the 22.6 h. Phase W and the
-  post-rebuild cap calibration wait on the same launch path.
-- **CARD-ALPHA-TARGET-FORM — the architect's (R349(c)'s D2).** In decided positions the
-  completed-Q improved policy is rescaled noise: `c_scale 1.0` on top of Mctx's per-node min-max
-  maps a `< 0.06` Q spread onto 55–150 logits, so ~1 row per 1,000 (rising with value
-  saturation) trains "none of the 16 searched moves". Options, each a regime change needing the
-  PERF-3b re-measure and a new parity vector: the paper's σ(q̂) without min-max; `c_scale 0.1`
-  (Mctx's default with the rescale); a span floor. Not a hold on run6 — the trainer's cost of
-  such a row is a zero-gradient self-target — but a target-quality question the count on the
-  dashboard now measures.
+- **CARD-STAMP-FLOOR — DECIDED by matrix under operator delegation (2026-09-11), landed.**
+  R348(c)'s trap met the schema's reachability rule: run6 mints `train.draw_rate_abort.min_step
+  25000`, so `_apply_burst_override` refused every burst below 25 001 steps and the only
+  stamp-writing preflight of run6 was the block itself (≈ 22.6 h). The matrix — keeps the trap's
+  intent / time to a stamp / code / governance: **(i) the burst as a STOP-STEP BOUND over the
+  minted config**: yes / ≈ 12 min / small / a tool design, not a ruling; (ii) an in-process
+  shakedown plus a trap bypass: no / 0 / small / contradicts R348(c); (iii) pay the 25 001-step
+  burst: yes / 22.6 h twice / 0 / —; (iv) lower `min_step` for the tool: formally / 12 min / a
+  mint row / moves an armed abort's pre-registered value to suit a tool. **(i) selected.** As
+  landed: `compose_run(burst_stop_step=)` is the eighth census parameter (a prefix of the run,
+  refused outside it, no launcher route), the preflight child boots the MINTED identity with the
+  bound, the refusing floors are the two actor-sync rows, the draw-rate row decides the TIER, and
+  the stamp RECORDS the tier so it never implies a demonstration its burst did not make. A
+  production config therefore stamps at `sync_lag` from a ≈ 100-step burst; tier `full` is
+  unchanged in meaning and needs a burst past `min_step`. The old pin ("a production config can
+  never be preflighted in the short tier") is reversed in place with these grounds.
+- **CARD-PHASE-W-AT-GUMBEL — DECIDED by matrix: not re-run before START.** The rider named the
+  n_workers sweep at the Gumbel regime as part of the mint. Measured instead by the investigation
+  (F-47): 16 → 32 workers buys +5 % leaves/s with the server thread at 90.6 % → 99 %, so the knee
+  rule (the smallest rung within 95 % of the plateau) lands at or below the minted 16 — the sweep's
+  answer is inside the noise of its own instrument (± 5 % per 150-step arm) and costs ≈ 2–3 h of
+  box. Falsifier: the shakedown's `positions_per_hour` against the burst's 46,800; a reading
+  ≥ 5 % below re-opens the sweep. The post-rebuild cap term was measured by PERF-3b on the rebuilt
+  box (GPU 7.66 GB max, RSS 4.70 GiB max at the minted caps) and the shakedown reads it again.
+- **CARD-ALPHA-TARGET-FORM — DECIDED by matrix for the START: keep the form, count it, decide at
+  block end.** In decided positions the completed-Q improved policy is rescaled noise: `c_scale
+  1.0` on top of Mctx's per-node min-max maps a `< 0.06` Q spread onto 55–150 logits, so ~1 row
+  per 1,000 (rising with value saturation) trains "none of the 16 searched moves". The matrix —
+  learning impact / cost / risk to the measured regime: (a) the paper's σ(q̂) without min-max:
+  unknown / new parity vectors + a re-mint / voids PERF-3b's Gumbel numbers and R347(a)'s target
+  semantics; (b) `c_scale 0.1` (Mctx's default with the rescale): unknown / a mint row + re-measure
+  / voids the same; (c) a span floor: unknown / small code + parity vector / a third transform
+  nobody has run; **(d) keep, count, decide on data: ≤ 0.1 % of rows, each now a correct
+  "not these 16" target after `cc5bf14f` / 0 / none.** (d) selected for run6's start;
+  `iteration_complete.gumbel_alpha_full` and the dashboard count it from step 0, and the block-end
+  reading (rate, its trend with saturation, any strength signature) decides among (a)–(c) as a
+  pre-registered experiment.
 - **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
   1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle. The block is ≈ 22.6 h
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime

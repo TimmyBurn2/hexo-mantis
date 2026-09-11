@@ -42,6 +42,7 @@ def _write(tmp_path: Path, **over: Any):
     config = load_config(_CONFIG)
     kwargs: dict[str, Any] = dict(config=config, config_path=_CONFIG, tree_root=_REPO,
                                   halts=_HALTS, booted_config_sha256="booted", burst_steps=16,
+                                  tier="sync_lag",
                                   report_path=tmp_path / "report.json")
     kwargs.update(over)
     return config, write_stamp(**kwargs)

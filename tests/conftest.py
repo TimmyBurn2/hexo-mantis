@@ -136,7 +136,7 @@ def preflight_stamped(monkeypatch, tmp_path):
                                  "shard": {"name": "fixture", "sha256": ""}},
                    "cuda_build": {"verdict": "not_run"}},
             booted_config_sha256="fixture", burst_steps=0,
-            report_path=tmp_path / "preflight_fixture.json")
+            report_path=tmp_path / "preflight_fixture.json", tier="sync_lag")
 
     return stamp
 

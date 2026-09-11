@@ -41,9 +41,9 @@ _SANCTIONED_SITES = {
     "tools/ci_gates/preflight_mint.py::_boot_main",
 }
 
-#: The re-cut composer's parameter tuple, as the CHILD must pass it. `resume_state` joined it
-#: at R343(c) and the child's inclusion is the point: a parameter the launcher passes and the
-#: child omits is a divergent boot wearing the one-authority name.
+#: The re-cut composer's parameter tuple, as the LAUNCHER passes it. `resume_state` joined it
+#: at R343(c); the CHILD passes the same tuple plus `burst_stop_step`, its burst bound over the
+#: minted config — the one parameter the launcher must NOT have a route to.
 _COMPOSE_KWARGS = (
     "config", "trainer", "pool", "buffer", "log_dir", "checkpoint_dir", "resume_state",
 )
@@ -372,9 +372,10 @@ def test_the_preflight_child_boots_through_one_builder_and_one_composer_only() -
         "second name here is exactly how a burst-overridden boot and an un-overridden "
         f"compose diverge; got {compose_kwargs['config'].id!r} vs {build_config.id!r}"
     )
-    assert set(compose_kwargs) == set(_COMPOSE_KWARGS), (
-        "the child passes the 6-tuple and nothing else — no `eval_enabled=`, no `run_id=`: "
-        f"the CONFIG governs both (R120/R123); got {sorted(compose_kwargs)}"
+    assert set(compose_kwargs) == set(_COMPOSE_KWARGS) | {"burst_stop_step"}, (
+        "the child passes the launcher's tuple plus ONLY `burst_stop_step` — the preflight's "
+        "burst bound over the minted config (CARD-STAMP-FLOOR) — no `eval_enabled=`, no "
+        f"`run_id=`: the CONFIG governs both (R120/R123); got {sorted(compose_kwargs)}"
     )
 
     boot = _func(tree, "_boot_main")

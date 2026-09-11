@@ -795,26 +795,22 @@ def test_no_sys_path_mutation_in_the_tool_or_its_tests() -> None:
             )
 
 
-def test_the_override_map_carries_exactly_one_key() -> None:
-    """`stop_step` keeps exactly ONE source; a second entry in the override tuple would make the
-    preflight a second run-length authority. `override.keys` is emitted from this same
-    constant."""
-    assert tuple(TOOL.OVERRIDE_KEYS) == ("train.max_train_steps",), (
-        "the burst override writes exactly one dotted key and reads nothing; got "
-        f"{TOOL.OVERRIDE_KEYS!r}"
+def test_the_override_map_carries_no_key() -> None:
+    """The burst mutates NO config key: a bound over the minted identity; `override.keys` is this."""
+    assert tuple(TOOL.OVERRIDE_KEYS) == (), (
+        f"the burst is a bound, not an override; got {TOOL.OVERRIDE_KEYS!r}"
     )
 
 
 def test_the_tool_never_constructs_a_config_by_a_validator_skipping_route() -> None:
-    """The override's route is `dump -> mutate -> model_validate`, which IS the validator, never
-    a construction that SKIPS the cross-field validators."""
-    for token in ("model_copy", "model_construct"):
+    """The tool constructs NO config — the burst is a bound; killer: a `model_*` round trip."""
+    for token in ("model_copy", "model_construct", "model_dump(", "model_validate"):
         assert token not in TOOL_CODE, (
-            f"{token} skips every @model_validator — the preflight must construct configs "
-            "only via load_config / RunConfig.model_validate"
+            f"{token} — the preflight must not construct or re-shape a config; the burst is a "
+            "bound, never a mutation"
         )
     assert "load_config" in TOOL_CODE, "the tool must use the ONE loader"
-    assert "model_validate" in TOOL_CODE, "…and the loader's own final step for the override"
+    assert "burst_stop_step" in TOOL_CODE, "…and hand the burst to compose_run as a bound"
 
 
 def test_compose_run_is_driven_with_the_four_real_collaborators() -> None:

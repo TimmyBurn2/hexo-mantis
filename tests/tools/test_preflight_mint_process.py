@@ -50,9 +50,7 @@ PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 #: run5's own constants, read from the file rather than restated.
 RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 _N = 101
-#: The burst floor for `configs/run6.yaml`: `max(100, 1, 25000) + 1`, measured not assumed —
-#: run5 arms the draw-rate abort at `min_step: 25000`, so a shorter burst is refused at rc 11.
-#: `_N` stays 101 for every drive that is about the a/b assertion arithmetic.
+#: run6's `full`-tier floor, the draw-rate abort's `min_step + 1`; shorter is a `sync_lag` prefix.
 _RUN5_BURST = 25001
 
 
@@ -1739,7 +1737,8 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
                                          "bundle": {"step": 0, "files": {}},
                                          "shard": {"name": "drive", "sha256": ""}},
                            "cuda_build": {"verdict": "not_run"}},
-                    booted_config_sha256="drive", burst_steps=0, report_path=tmp_path / "r.json")
+                    booted_config_sha256="drive", burst_steps=0, report_path=tmp_path / "r.json",
+                    tier="sync_lag")
 
     launched = _launch_until_boot_identity(odd, tmp_path / "odd_shape", env=env)
     assert "ConfigSuffixError" not in launched.stderr, (
@@ -2227,7 +2226,7 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
         "preflight_run6_"), (
-        "the rc-11 route populates `config` before `_apply_burst_override` raises, so the "
+        "the rc-11 route populates `config` before `_burst_bound` raises, so the "
         f"real artefact is run6-named; got {sorted(path.name for path in out.glob('*.json'))}"
     )
 
@@ -2852,15 +2851,18 @@ def test_every_mint_tier_has_a_NOT_PROVEN_entry_and_there_is_NO_default() -> Non
 
 
 def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
-    """The burst tier is DERIVED from the config's OWN floor rows, so a config that arms no
-    draw-rate abort can never be called `full` merely for clearing every floor it has."""
+    """The tier is DERIVED from the config's OWN floor rows; no draw-rate row, no `full`."""
     run5 = _tier_config(RUN5)
     minimum = TOOL._minimum_legal_burst(run5)
-    assert minimum == _RUN5_BURST, f"run5's floor moved: {minimum}"
-    assert TOOL._burst_tier(run5, minimum) == TOOL.TIER_FULL
+    assert minimum == _N, f"run5's refusing floor moved: {minimum}"
+    assert TOOL._burst_tier(run5, minimum) == TOOL.TIER_SYNC_LAG, (
+        "the shortest legal burst on a production config proves sync and lag, not draw-rate "
+        "reachability — the tier must say so")
+    assert TOOL._burst_tier(run5, _RUN5_BURST) == TOOL.TIER_FULL
+    assert TOOL._burst_tier(run5, _RUN5_BURST - 1) == TOOL.TIER_SYNC_LAG
     assert TOOL._burst_tier(run5, minimum - 1) == TOOL.TIER_NONE, (
-        "a burst below the max floor is not a shorter tier — it is a burst the validators "
-        "refuse, and no tier ran at all"
+        "a burst below the actor floors is not a shorter tier — it is a burst the tool "
+        "refuses, and no tier ran at all"
     )
     unarmed = [path for path in discover_configs(REPO_ROOT / "configs")
                if _tier_config(path).train.draw_rate_abort is None]
@@ -2875,27 +2877,24 @@ def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
         )
 
 
-def test_a_PRODUCTION_config_can_never_be_preflighted_in_the_SHORT_tier() -> None:
-    """A PRODUCTION config can never be preflighted in the SHORT tier: the required draw-rate row
-    puts `min_step + 1` into the floors and a shorter burst is refused at rc 11."""
+def test_a_PRODUCTION_config_stamps_at_sync_lag_and_its_burst_is_a_PREFIX_of_the_run() -> None:
+    """REVERSES the old pin (CARD-STAMP-FLOOR): the shortest legal burst is a `sync_lag` PREFIX."""
     assert PRODUCTION_CONFIGS, "vacuous unless something is declared production"
     required = [row.name for row in MANIFEST if row.status is Status.REQUIRED]
-    assert "draw_rate_collapse" in required, (
-        "link 1: if the draw-rate row stops being REQUIRED, a production config may be minted "
-        "with it disarmed and the short tier becomes reachable again"
-    )
+    assert "draw_rate_collapse" in required, "the draw-rate row must still be REQUIRED"
+    assert TOOL.OVERRIDE_KEYS == (), "the burst mutates no config key"
     for rel in PRODUCTION_CONFIGS:
         config = _tier_config(REPO_ROOT / rel)
         keys = [key for key, _value, _floor in TOOL._burst_floors(config)]
-        assert TOOL.DRAW_RATE_FLOOR_KEY in keys, f"link 2 broken for {rel}: {keys}"
+        assert TOOL.DRAW_RATE_FLOOR_KEY in keys, f"the tier still reads the draw-rate row: {keys}"
         minimum = TOOL._minimum_legal_burst(config)
-        assert TOOL._burst_tier(config, minimum) == TOOL.TIER_FULL
+        assert TOOL._burst_tier(config, minimum) == TOOL.TIER_SYNC_LAG
+        assert TOOL._burst_bound(config, minimum) == minimum
         with pytest.raises(TOOL.PreflightBurstTooShortError) as caught:
-            TOOL._apply_burst_override(config, minimum - 1)
-        assert int(caught.value.rc) == 11 and "MINIMUM legal burst" in str(caught.value), (
-            "link 3: the only burst that would tier as `sync_lag` on a production config is "
-            "one the config's own cross-field validators refuse"
-        )
+            TOOL._burst_bound(config, minimum - 1)
+        assert int(caught.value.rc) == 11 and "MINIMUM legal burst" in str(caught.value)
+        with pytest.raises(TOOL.PreflightBurstTooShortError):
+            TOOL._burst_bound(config, int(config.train.max_train_steps) + 1)
 
 
 #: The two answers to "did this run actually cover a tier". Not two tiers — a tier is REQUESTED
@@ -2971,9 +2970,9 @@ def test_the_none_tier_disclaimer_is_TRUE_in_mode_AUDIT_and_not_only_at_rc_11() 
 
 
 def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> None:
-    """A refused burst publishes tier `none` and owes BOTH tiers."""
+    """A refused burst (below `_N`) publishes tier `none` and owes BOTH tiers."""
     out_dir = tmp_path / "refused"
-    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_RUN5_BURST - 1),
+    result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N - 1),
                        "--out-dir", str(out_dir), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())

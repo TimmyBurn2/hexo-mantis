@@ -18,7 +18,6 @@ from pathlib import Path
 import pytest
 
 from mantis.config.loader import config_identity_sha256, load_config
-from mantis.config.schema import RunConfig
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_puller")]
 
@@ -104,18 +103,12 @@ def test_the_child_process_left_the_composition_roots_own_boot_events(preflight_
 def test_the_childs_published_identity_is_the_config_it_actually_composed(
     preflight_child,
 ) -> None:
-    """The identity the child publishes is of the config it actually composed.
-
-    The hash is recomputed from the config the child was ASKED to boot, with the burst
-    override applied the way the child applies it, so a child that read a different file is a
-    named mismatch. The run id must be the MINTED one, never a default a log cannot attribute.
-
-    Killer: publish the pre-override config's hash, or compose a second config.
+    """The identity the child publishes is the MINTED config's own — the burst is a stop bound
+    over it, never a mutation (CARD-STAMP-FLOOR) — so a child that read a different file, or a
+    tool that shaped a burst config, is a named mismatch. Killer: a `max_train_steps` override.
     """
     _proc, out_dir = preflight_child
-    raw = load_config(_CONFIG).model_dump()
-    raw["train"]["max_train_steps"] = _BURST_STEPS
-    booted = RunConfig.model_validate(raw)
+    booted = load_config(_CONFIG)
 
     identity = next(event for event in _child_events(out_dir)
                     if event.get("event") == "run_boot_identity")

@@ -51,15 +51,17 @@ TIER_NOT_PROVEN: dict[str, str] = {
     # the fact (`tier.burst_steps` is null) rather than to a story about how it got that way.
     TIER_NONE: ("NO burst was accepted — `tier.burst_steps` is null, whether because none was "
                 "requested (mode AUDIT) or because the run stopped at or before "
-                "`_apply_burst_override` (rc 10 / 11 / 30 / 31) — so this report proves "
+                "`_burst_bound` (rc 10 / 11 / 30 / 31) — so this report proves "
                 "nothing about any tier: not (a) sync-cadence, not (b) lag-transport, and not "
                 "that the run reaches the step at which train.draw_rate_abort can fire"),
-    TIER_SYNC_LAG: ("the accepted burst clears the actor-lag and sync-cadence floors ONLY. "
-                    "This config declares no " + DRAW_RATE_FLOOR_KEY + " floor, so NO burst "
-                    "length on it can show the run reaching the draw-rate abort's first "
-                    "firing step — tier `full` is UNAVAILABLE on this config, not merely "
-                    "unrun, and a config that cannot reach tier `full` is not a config this "
-                    "tool can preflight for a mint"),
+    TIER_SYNC_LAG: ("the accepted burst clears the actor-lag and sync-cadence floors ONLY: it "
+                    "proves (a) sync and (b) lag and NOT that the run reaches the draw-rate "
+                    "abort's first firing step. On a config that arms " + DRAW_RATE_FLOOR_KEY
+                    + " that reachability is the schema's own `min_step < max_train_steps` on "
+                    "the minted run length — the burst is a PREFIX of that run, never a "
+                    "mutation of it (CARD-STAMP-FLOOR) — and tier `full` needs a burst past "
+                    "the floor. On a config that arms no draw-rate row, tier `full` is "
+                    "UNAVAILABLE, not merely unrun"),
     TIER_FULL: ("the accepted burst clears " + DRAW_RATE_FLOOR_KEY + ", so a run that "
                 "COMPLETES it reaches the first step at which the draw-rate abort can fire. "
                 "That is REACHABILITY and nothing else: it does not show the abort firing, it "
