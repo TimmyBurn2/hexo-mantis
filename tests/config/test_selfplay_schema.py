@@ -195,10 +195,11 @@ def test_inference_has_no_pydantic_level_default_EXCEPT_the_arch_scoped_ones():
     assert _ARCH_SCOPED_INFERENCE_FIELDS, (
         "no inference key is arch-scoped, so this exemption is unused and should go"
     )
+    operational = operational_default_fields("inference")
     for name, field in InferenceConfig.model_fields.items():
-        if name in _ARCH_SCOPED_INFERENCE_FIELDS:
+        if name in _ARCH_SCOPED_INFERENCE_FIELDS or name in operational:
             assert not field.is_required(), (
-                f"InferenceConfig.{name} is arch-scoped, so it must be omittable"
+                f"InferenceConfig.{name} is arch-scoped or operational, so it must be omittable"
             )
             continue
         assert field.is_required(), f"InferenceConfig.{name} has a code-side default"

@@ -208,6 +208,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     # inference.*
     "inference.inference_batch_size": "InferenceHParams.inference_batch_size -> inference_server.py:74 ctor",
     "inference.inference_max_wait_ms": "InferenceHParams.inference_max_wait_ms -> inference_server.py:74 ctor",
+    "inference.edge_geometry_check":
+        "pool.py ctor -> resolve_edge_geometry_check -> InferenceServer._edge_geometry_check -> "
+        "_run_graph_loop's checker thread or the inline check 14",
     # The GRAPH forward's memory bound, route-scoped: the resolve happens inside the graph
     # branch of the ctor. This copy states the chain independently of its twin.
     "inference.fused_graph_caps.max_fused_edges":

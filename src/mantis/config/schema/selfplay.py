@@ -5,6 +5,8 @@ alone is the radius authority, and nothing in the build path reads a config-leve
 schema field for it would be a consumer-less knob (R1/LAW-08).
 """
 
+from typing import Literal
+
 from pydantic import Field, model_validator
 
 from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_gumbel
@@ -153,6 +155,9 @@ class InferenceConfig(StrictModel):
 
     inference_batch_size: int = Field(ge=1)
     inference_max_wait_ms: int = Field(ge=0)
+    # R347(e)'s lever: check 14 (`verify_edge_geometry`) runs inline on the server's critical path
+    # or on a checker thread after the batch is served; it runs on EVERY batch either way.
+    edge_geometry_check: Literal["inline", "checker_thread"] = Field(default="inline")
     # ARCH-SCOPED: `None` is the ABSENCE of the key, never a value. It does NOT collide with the
     # `null` PLACEHOLDER on the two MEMBERS, which means "minted but uncalibrated"; absence of the
     # BLOCK means "this arch has no such key", and the two are distinguished by `model_fields_set`.

@@ -19,6 +19,7 @@ from typing import Any
 import torch
 
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
+from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
 from mantis.config.resolve.search import resolve_search_kind
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
@@ -139,6 +140,8 @@ class WorkerPool:
             # 63 chances in 64 of passing through untouched.
             collate_check_period=1,
             collate_dump=_collate_dump_target(config),
+            # R347(e): where check 14 runs, read through its one resolver, never a literal.
+            edge_geometry_check=resolve_edge_geometry_check(config),
         )
 
         self._stop_event = threading.Event()
@@ -319,6 +322,15 @@ class WorkerPool:
                 "self-play buffer feeder died — training cannot continue on a "
                 "stale buffer (see the selfplay_producer_died log for the cause)"
             ) from self._producer_exc
+        # R347(e): a check-14 failure found after its batch was served is run-fatal on the
+        # NEXT step whether or not another pop ever arrives to carry it to the runner's latch.
+        server = getattr(self, "_inference_server", None)
+        deferred = getattr(server, "deferred_contract_failure", None)
+        if deferred is not None:
+            raise RuntimeError(
+                "graph wire contract failed on a served batch (checker thread, F-816-37 "
+                "dump written) — the run halts rather than train on it"
+            ) from deferred
         # `guard_worker` catches a worker panic, counts it and halts the runner — and nothing in
         # Python read the count, so the failure presented as a healthy pool draining nothing until
         # the 1800 s stall timeout noticed. `worker_panics` and NOT `is_running()`, because
