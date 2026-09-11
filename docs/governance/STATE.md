@@ -6,8 +6,8 @@ the tree won and the disagreement is recorded in the last section.
 
 ## Current phase
 
-**run6 is RE-MINTED at the Gumbel regime and HELD on two things the START path found, neither
-of which is code any more.** R349 (the START-path packet, forwarded 2026-09-12) is landed on this
+**run6 is RE-MINTED at the Gumbel regime; the two holds the START path found are DECIDED by
+matrix under operator delegation and the mint procedure is next.** R349 (the START-path packet, forwarded 2026-09-12) is landed on this
 line through its order (e) up to and including (d): the two re-mint merges, the LAW-06 carve-out,
 the puller and receipts in place of the deleted overlay halt, the α = 1.0 rows reconstructed and
 their run-fatal half fixed, the trainer step profiled. What stands in front of the mint now is in
@@ -22,25 +22,24 @@ quick at p 0.25, deploy 160/m16, grace 30 s, sealbot-only rungs) and
 net hash `2e72abd4…` unchanged). The default tier's one true red (the warm-start hash row) is
 green wherever the strip exists.
 
-## Hold 1 — the stamp trap and run6's own burst floor do not meet (a ruling, not code)
+## Hold 1 — the stamp trap and run6's burst floor: DECIDED by matrix, landed at `652b9f02`
 
-R348(c)'s trap is live: `mantis.run` refuses a config with no passing preflight stamp on this
-tree, and the stamp is written only after a burst whose length survives the config's own
-validators. run6 mints `train.draw_rate_abort.min_step: 25000`, so its minimum legal burst is
-**25 001 steps** (`preflight_mint.py::_minimum_legal_burst`; the 2026-09-08 attempt at
-`--burst-steps 30` was rc 11 for exactly this). At the measured 1 105 steps/h that preflight
-is **≈ 22.6 h — the block itself** — and the shakedown config (run6 with `run_id: shakedown`,
-R259's run class) carries the same floor. So neither the 4 h shakedown nor START can launch
-through `mantis.run` today. Options for the operator, in the order this session would take
-them: (i) rule that a production config whose full tier exceeds the shakedown length stamps at
-tier `sync_lag` — a ≈ 10-min burst proving (a) sync and (b) lag, with the draw-rate abort's
-reachability proven by the schema's own `min_step < max_train_steps` rather than by a burst
-(an amendment to R348(c) and `_apply_burst_override`); (ii) run the shakedown in-process as
-PERF-3b did and START through a ruled bypass; (iii) pay the 22.6 h. The full mint procedure the
-rider named — caps re-calibrated after the rebuild, Phase W (the n_workers sweep) at the Gumbel
-regime — is also not yet run; the sweep needs the same launch path.
+R348(c)'s trap met the schema's reachability rule: run6 mints `train.draw_rate_abort.min_step
+25000`, so the old `_apply_burst_override` refused every burst below **25 001 steps** and the
+only stamp-writing preflight of run6 was the block itself (≈ 22.6 h); the shakedown twin carried
+the same floor. The operator delegated the decision to a matrix (2026-09-11) and it selected
+**the burst as a stop-step bound over the MINTED config**: `compose_run(burst_stop_step=)` is
+the eighth census parameter (a prefix of the run, refused outside it, no launcher route); the
+preflight child boots the minted identity with the bound, so the child's published hash IS the
+stamp's; the refusing floors are the two actor-sync rows; the draw-rate row decides the TIER; and
+the stamp records the tier it proved. A production config therefore stamps at `sync_lag` from a
+≈ 100-step burst (≈ 12 min on the box); tier `full` keeps its meaning. The rejected options and
+their grounds are in `CARD-STAMP-FLOOR`. Two companion decisions by the same matrix: Phase W (the
+n_workers sweep) is NOT re-run before START (F-47 measured 16 → 32 at +5 %, inside the sweep's
+own noise; `CARD-PHASE-W-AT-GUMBEL` carries the falsifier), and the completed-Q target form is
+KEPT for the start and decided on the block's count (`CARD-ALPHA-TARGET-FORM`).
 
-## Hold 2 — the completed-Q target in decided positions (the architect's, D2)
+## Hold 2 — the completed-Q target in decided positions: KEPT for the start, decided on data
 
 R349(c)'s question is answered in `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`
 §B and falsified.md F-45: all 25 α = 1.0 rows sit at `moves_remaining == 1` in LOST positions;
