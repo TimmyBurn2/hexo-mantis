@@ -8,6 +8,8 @@ term pushing the prior toward whatever it already is, on most of the legal set.
 """
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pytest
 import torch
@@ -232,3 +234,34 @@ def test_the_real_graph_trainer_step_publishes_the_tail_mass_reading(tmp_path) -
         "the planted tail did not reach the event — the reading is not the rows'")
     assert block["max"] == pytest.approx(planted, abs=1e-6)
     assert block["p50"] == 0.0
+
+
+def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp_path) -> None:
+    """R349(c)'s parity vector (Rust twin `a_sparse_row_stores_every_support_cell_even_at_zero_mass`)."""
+    import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
+    from mantis._engine import HexgBuffer
+    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
+    from mantis.train.coordinator.dispatch import run_declared_train_step
+
+    buf = HexgBuffer(64, H.GRAPH_ENCODING, 128)
+    stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)]
+    for i in range(8):
+        buf.push_graph_position(stones, [(2, 0, 0.0), (1, 1, 0.0)], 1, 1, 2 + i, True,
+                                -1.0, True, 10 + i, -1, 1.0)
+    _wire, targets = buf.sample_graph_batch(4, augment=False, recent_frac=0.0)
+    mask = targets.explicit_mask.reshape(-1)
+    assert int(mask.sum()) == 8, "each sampled row must mark its two zero-mass cells explicit"
+    assert float(targets.policy_target.reshape(-1).sum()) == 0.0
+    assert all(float(t) == pytest.approx(1.0) for t in targets.tail_mass.reshape(-1))
+
+    buf.seed_sampler(H.SEED)
+    replay = H.ReplayWireBuffer(buf, 8)
+    sink = H.SpySink()
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
+    result = run_declared_train_step(
+        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
+        recent_buffer=None,
+        caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
+        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+    assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
+    assert sink.named("trainer_step")[0][GUMBEL_TAIL_MASS_KEY]["max"] == pytest.approx(1.0)

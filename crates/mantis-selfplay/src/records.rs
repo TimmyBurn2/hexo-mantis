@@ -227,9 +227,8 @@ pub fn record_position_graph(
     let (bcq, bcr) = board.window_center();
     let half = (trunk_sz - 1) / 2;
 
-    // Visit target: read the ragged mass at each legal coord (no floor — a cell absent from `ls`
-    // is truly 0-visit), accumulating on the RAW read, PRE-filter. With an `explicit_support` the
-    // row is SPARSE: a positive-mass cell outside that set is summed into α instead of a slot.
+    // Visit target: the ragged mass at each legal coord, accumulated on the RAW read. A SPARSE row
+    // stores every support cell, at zero mass too (the explicit mask is MEMBERSHIP, R349(c)).
     let legal = board.legal_moves();
     let mut visits: Vec<(i16, i16, f32)> = Vec::with_capacity(legal.len());
     let mut sum: f64 = 0.0;
@@ -238,12 +237,21 @@ pub fn record_position_graph(
     for &(q, r) in &legal {
         let p = ls.get(q, r, bcq, bcr, trunk_sz, half, 0.0);
         sum += f64::from(p);
-        if p > 0.0 {
-            if explicit_support.is_some_and(|set| !set.contains(&(q, r))) {
-                tail += f64::from(p);
-            } else {
+        match explicit_support {
+            Some(set) if set.contains(&(q, r)) => {
                 visits.push((q as i16, r as i16, p));
                 stored += f64::from(p);
+            }
+            Some(_) => {
+                if p > 0.0 {
+                    tail += f64::from(p);
+                }
+            }
+            None => {
+                if p > 0.0 {
+                    visits.push((q as i16, r as i16, p));
+                    stored += f64::from(p);
+                }
             }
         }
     }
@@ -651,6 +659,55 @@ mod gnn_assemble_tests {
         );
         assert_eq!(rec.outcome, 0.0, "outcome is a placeholder at record time");
         assert!(rec.is_full_search);
+    }
+
+    #[test]
+    fn a_sparse_row_stores_every_support_cell_even_at_zero_mass() {
+        // R349(c)'s parity vector: every sampled candidate underflowed to zero mass, so the row
+        // stores the m cells AT ZERO with alpha = 1.0 — never the empty set the ring refuses.
+        let b = small_board();
+        let (bcq, bcr) = b.window_center();
+        let (trunk, half) = (19i32, 9i32);
+        let legal = b.legal_moves();
+        let (c0, c1, c2, c3) = (legal[0], legal[1], legal[2], legal[3]);
+        let mut dense = vec![0.0f32; 362];
+        dense[Board::window_flat_idx_at_geom(c2.0, c2.1, bcq, bcr, trunk, half)] = 0.7;
+        dense[Board::window_flat_idx_at_geom(c3.0, c3.1, bcq, bcr, trunk, half)] = 0.3;
+        let ls = LegalSetPolicy {
+            dense,
+            overflow: FxHashMap::default(),
+        };
+        let support: FxHashSet<(i32, i32)> = [c0, c1].into_iter().collect();
+
+        let rec = super::record_position_graph(
+            &b,
+            &ls,
+            trunk,
+            b.current_player as i8,
+            b.moves_remaining,
+            b.ply.index() as u16,
+            true,
+            128,
+            Some(&support),
+        )
+        .expect("an all-tail sparse row must record");
+
+        let stored: Vec<((i16, i16), f32)> =
+            rec.visits.iter().map(|&(q, r, p)| ((q, r), p)).collect();
+        assert_eq!(
+            stored,
+            vec![
+                ((c0.0 as i16, c0.1 as i16), 0.0),
+                ((c1.0 as i16, c1.1 as i16), 0.0)
+            ],
+            "the explicit set is MEMBERSHIP: both sampled cells stored, at zero"
+        );
+        assert!(
+            (rec.tail_mass - 1.0).abs() < 1e-6,
+            "alpha carries the whole mass"
+        );
+        // And a cell outside the support with mass is tail, not a slot (unchanged).
+        assert!(!stored.iter().any(|&(c, _)| c == (c2.0 as i16, c2.1 as i16)));
     }
 
     #[test]
