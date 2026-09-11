@@ -12,6 +12,7 @@ from collections.abc import Mapping
 from typing import Any
 
 # Keys that MUST come from the CHECKPOINT on resume; the launch config wins for every other key.
+# This is the LEGACY flat shape's set (pinned by T-CK-15); the nested shape's is the PATHS below.
 RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
     # encoding pins
     "encoding", "cluster_window_size", "cluster_threshold", "legal_move_radius", "board_size",
@@ -20,6 +21,39 @@ RESUME_CHECKPOINT_OWNED_KEYS: frozenset[str] = frozenset({
     # optimizer / scheduler / step state
     "total_steps", "scheduler_t_max", "eta_min", "min_lr", "lr", "weight_decay", "lr_schedule",
 })
+
+#: The same ownership on the nested `RunConfig` shape production resumes with: the identity the
+#: stamp carries and the optimizer/scheduler values the restored state carries.
+RESUME_CHECKPOINT_OWNED_PATHS: frozenset[str] = frozenset({
+    "identity.encoding", "identity.representation", "identity.arch_kind",
+    "train.lr", "train.weight_decay", "train.lr_schedule",
+    "train.total_steps", "train.scheduler_t_max", "train.eta_min",
+})
+
+#: The override key carrying the owned launch values the builder dropped, so the resume can say
+#: LOUDLY which declared values it ignored. A directive: stripped before the config is carried.
+RESUME_OWNED_LAUNCH_VALUES_KEY = "resume_owned_launch_values"
+
+
+def _split_owned_section(section: str, value: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Return (kept leaves, dropped owned leaves keyed by dotted path) for one nested section."""
+    kept: dict[str, Any] = {}
+    dropped: dict[str, Any] = {}
+    for leaf, leaf_val in value.items():
+        path = f"{section}.{leaf}"
+        if path in RESUME_CHECKPOINT_OWNED_PATHS:
+            dropped[path] = leaf_val
+        else:
+            kept[leaf] = leaf_val
+    return kept, dropped
+
+
+def _horizon_value(launch_config: Mapping[str, Any], key: str) -> Any:
+    """The scheduler-horizon key off either shape: flat `key`, else nested `train.key`."""
+    if launch_config.get(key) is not None:
+        return launch_config[key]
+    train = launch_config.get("train")
+    return train.get(key) if isinstance(train, Mapping) else None
 
 
 def build_resume_config_overrides(
@@ -38,19 +72,29 @@ def build_resume_config_overrides(
     `None` merely inherited is SKIPPED, so a stray null cannot nuke a real checkpoint value.
     """
     declared: frozenset = frozenset(declared_keys or ())
-    overrides: dict[str, Any] = {
-        key: val
-        for key, val in launch_config.items()
-        if key not in RESUME_CHECKPOINT_OWNED_KEYS and (val is not None or key in declared)
-    }
+    overrides: dict[str, Any] = {}
+    owned_launch: dict[str, Any] = {}
+    for key, val in launch_config.items():
+        if key in RESUME_CHECKPOINT_OWNED_KEYS:
+            continue
+        if isinstance(val, Mapping):
+            # A nested section: its owned leaves stay with the checkpoint, the rest travel and
+            # are merged LEAF-WISE onto the baked section by `apply_config_overrides_f1`.
+            kept, dropped = _split_owned_section(key, val)
+            owned_launch.update(dropped)
+            overrides[key] = kept
+        elif val is not None or key in declared:
+            overrides[key] = val
+    if owned_launch:
+        overrides[RESUME_OWNED_LAUNCH_VALUES_KEY] = owned_launch
     # No `torch_compile[_mode]` injection: a LEGACY key with no consumer poisoned the carried
     # config, and write-time validation correctly rejected the first post-resume save.
     # Scheduler-horizon gate: only --override-scheduler-horizon re-horizons the LR anneal.
     if override_scheduler_horizon:
-        if launch_config.get("total_steps") is not None:
-            overrides["total_steps"] = int(launch_config["total_steps"])
-        if launch_config.get("scheduler_t_max") is not None:
-            overrides["scheduler_t_max"] = int(launch_config["scheduler_t_max"])
+        for horizon in ("total_steps", "scheduler_t_max"):
+            value = _horizon_value(launch_config, horizon)
+            if value is not None:
+                overrides[horizon] = int(value)
     if allow_fresh_scheduler:
         overrides["allow_fresh_scheduler"] = True
     return overrides

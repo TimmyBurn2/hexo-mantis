@@ -92,12 +92,12 @@ def test_resumed_carried_config_is_exactly_the_runconfig_key_set(
 
 
 def test_override_builder_injects_no_directive_keys_for_a_nested_launch_config(mk_config):
-    """A nested launch config yields overrides with ZERO resume-directive keys — RED on a
-    re-added injection, independently of the strip — while a flagged call still carries its
-    directive in the OVERRIDES."""
+    """A nested launch config yields overrides with no SPURIOUS resume-directive key — RED on a
+    re-added `torch_compile`-class injection — while a flagged call still carries its directive;
+    the owned-values record is the one legitimate directive (its consumer is the loud ignore)."""
     cfg = mk_config()
     plain = build_resume_config_overrides(cfg, cfg)
-    assert not (set(plain) & RESUME_DIRECTIVE_KEYS), (
+    assert set(plain) & RESUME_DIRECTIVE_KEYS <= {"resume_owned_launch_values"}, (
         f"spurious directive injection: {sorted(set(plain) & RESUME_DIRECTIVE_KEYS)}"
     )
     flagged = build_resume_config_overrides(cfg, cfg, allow_fresh_scheduler=True)

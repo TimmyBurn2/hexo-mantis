@@ -180,9 +180,11 @@ def test_base_inherited_train_section_defers_to_baked_and_emits_deferred_event(
     tr = resume_trainer(Trainer, path, config_overrides=overrides,
                         declared_keys=frozenset(), sink=spy_sink)
     assert tr.hp.lr == 1e-3, "a base-inherited (non-declared) key must DEFER to baked"
-    assert tr.f1_deferred_keys == frozenset({"train"})
+    # Leaf-wise since the nested shape merges per leaf: the deferred knob is `train.lr`, not the
+    # whole section, so the rest of the launch's train block still travels.
+    assert tr.f1_deferred_keys == frozenset({"train.lr"})
     events = spy_sink.named("resume_base_default_deferred_to_baked")
-    assert events and events[-1]["knob"] == "train"
+    assert events and events[-1]["knob"] == "train.lr"
 
 
 def test_matching_base_inherited_train_section_does_not_defer(

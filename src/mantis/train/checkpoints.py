@@ -868,7 +868,7 @@ def strip_and_restamp(
 # an unknown key from anywhere else must still reach the writer and raise there.
 RESUME_DIRECTIVE_KEYS: frozenset[str] = frozenset({
     "allow_fresh_scheduler", "scheduler_t_max", "torch_compile", "torch_compile_mode",
-    "total_steps",
+    "total_steps", "resume_owned_launch_values",
 })
 
 
@@ -880,38 +880,73 @@ def apply_config_overrides_f1(
     sink: Any = None,
 ) -> tuple[dict[str, Any], frozenset[str]]:
     """Apply `overrides` onto the checkpoint-baked config under the defer rule: a DECLARED key
-    wins, including an explicit `null`, while a non-declared key the checkpoint BAKED defers to
-    the baked value and emits an event when they differ. Weights-only or legacy calls update
-    verbatim and defer nothing."""
+    wins, including an explicit `null`, while a non-declared baked key defers to the baked value
+    and emits an event when they differ; weights-only or legacy calls update verbatim."""
     if baked is None or declared_keys is None:
         resolved = dict(baked or {})
-        resolved.update(overrides)
+        _update_leafwise(resolved, overrides)
         return resolved, frozenset()
 
     resolved = dict(baked)
     # The keys that force-declare themselves into the merge ARE the resume directives — one authority.
     declared = frozenset(declared_keys) | {k for k in RESUME_DIRECTIVE_KEYS if k in overrides}
     deferred: set[str] = set()
+    _merge_leafwise(resolved, overrides, "", declared, deferred, sink)
+    return resolved, frozenset(deferred)
+
+
+def _update_leafwise(target: dict[str, Any], overrides: Mapping[str, Any]) -> None:
+    """Verbatim update recursing into sections, so an owned leaf the builder dropped stays baked."""
     for key, override_val in overrides.items():
-        if key in declared:
+        current = target.get(key)
+        if isinstance(override_val, Mapping) and isinstance(current, Mapping):
+            merged = dict(current)
+            _update_leafwise(merged, override_val)
+            target[key] = merged
+        else:
+            target[key] = override_val
+
+
+def _merge_leafwise(
+    resolved: dict[str, Any], overrides: Mapping[str, Any], prefix: str,
+    declared: frozenset[str], deferred: set[str], sink: Any,
+) -> None:
+    """The F1 rule per leaf, dotted: declared wins, a differing baked leaf defers, absent is set."""
+    for key, override_val in overrides.items():
+        path = f"{prefix}{key}"
+        current = resolved.get(key)
+        if path in declared or key in declared:
             resolved[key] = override_val
             continue
-        if key in baked:
-            baked_val = baked[key]
-            if override_val != baked_val:
-                deferred.add(key)
+        if isinstance(override_val, Mapping) and isinstance(current, Mapping):
+            merged = dict(current)
+            _merge_leafwise(merged, override_val, f"{path}.", declared, deferred, sink)
+            resolved[key] = merged
+            continue
+        if key in resolved:
+            if override_val != current:
+                deferred.add(path)
                 emit_via(
                     sink,
                     {
                         "event": "resume_base_default_deferred_to_baked",
-                        "knob": key,
+                        "knob": path,
                         "base_default": override_val,
-                        "checkpoint_baked": baked_val,
+                        "checkpoint_baked": current,
                     },
                 )
         else:
             resolved[key] = override_val
-    return resolved, frozenset(deferred)
+
+
+def _leaf(config: Mapping[str, Any] | None, dotted: str) -> Any:
+    """Read a dotted path off a nested mapping; None when any segment is absent."""
+    node: Any = config
+    for part in dotted.split("."):
+        if not isinstance(node, Mapping) or part not in node:
+            return None
+        node = node[part]
+    return node
 
 
 def resolve_lr_provenance(
@@ -1102,6 +1137,16 @@ def resume_trainer(
             "event": "resume_lr_override_ignored",
             "declared": lr_prov.declared, "baked": lr_prov.baked, "effective": lr_prov.effective,
         })
+    # The nested shape's owned leaves: every launch value the builder dropped that differs from
+    # the baked one is said out loud, since the baked value is what this resume runs on.
+    owned = (config_overrides or {}).get("resume_owned_launch_values") or {}
+    for dotted, launch_val in owned.items():
+        baked_val = _leaf(baked_config, dotted)
+        if baked_val is not None and launch_val != baked_val:
+            emit_via(sink, {
+                "event": "resume_owned_launch_value_ignored", "knob": dotted,
+                "declared": launch_val, "baked": baked_val,
+            })
 
     is_full = ck.kind == "full"
     trainer.loaded_from_full_checkpoint = is_full
