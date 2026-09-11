@@ -36,14 +36,33 @@ def test_save_best_model_atomic_roundtrip_and_bak_rotation(tmp_path: Path) -> No
     net = _full_net()
     path = tmp_path / "best_model.pt"
 
-    save_best_model_atomic(net, path)  # bare state_dict
+    save_best_model_atomic(net, path)  # a launch-time initialisation: stamped, step None
     assert path.exists()
     assert not path.with_suffix(path.suffix + ".bak").exists()  # first save, no bak yet
     reloaded = torch.load(path, map_location="cpu", weights_only=True)
-    assert isinstance(reloaded, dict) and "representation.input_proj.weight" in reloaded
+    assert "representation.input_proj.weight" in reloaded["model_state"]
+    assert reloaded["step"] is None and reloaded["promoted"] is False
+    assert reloaded["metadata"]["arch"]["arch_kind"] == "GnnArch"
 
     save_best_model_atomic(net, path)  # the second save rotates the prior into .bak
     assert path.with_suffix(path.suffix + ".bak").exists()
+
+
+def test_a_launch_time_anchor_of_a_V2_lineage_round_trips_through_the_resilient_loader(
+    tmp_path: Path,
+) -> None:
+    """Killer: the launch-time bare state dict — read back as the incumbent kind, a V2 size mismatch."""
+    spec = lookup(_ENC)
+    net = build_net(arch_from_spec_and_config(spec, {"identity": {"arch_kind": "GnnArchV2"}}))
+    assert type(net.arch).__name__ == "GnnArchV2", "premise: a V2 lineage"
+    path = tmp_path / "best_model.pt"
+    save_best_model_atomic(net, path, run_id="r6", encoding=_ENC)
+    ref = load_best_model_resilient(path, declared_encoding=_ENC, device=_CPU, bootstrap_candidates=())
+    assert ref is not None, "the launch-time anchor did not load back"
+    model, source_path, step, representation = ref
+    assert source_path == path and step is None and representation == "graph"
+    assert type(model.arch).__name__ == "GnnArchV2"
+    assert not path.with_suffix(path.suffix + ".quarantine").exists()
 
 
 def test_save_best_model_atomic_provenance_sidecar(tmp_path: Path) -> None:

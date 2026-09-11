@@ -99,42 +99,39 @@ def save_best_model_atomic(
         encoding: the encoding name the anchor plays under — carried, never inferred.
 
     Raises:
-        AttributeError: ``step`` is supplied but ``model`` carries no declared ``.arch``.
+        AttributeError: ``model`` carries no declared ``.arch``.
     """
     path = Path(path)
     base = getattr(model, "_orig_mod", model)
     tmp = path.with_suffix(path.suffix + ".tmp")
     bak = path.with_suffix(path.suffix + ".bak")
     sd = base.state_dict()
-    payload: Any
-    if step is None:
-        payload = sd
-    else:
-        arch = getattr(base, "arch", None)
-        if arch is None:
-            raise AttributeError(
-                "save_best_model_atomic: the model carries no declared '.arch' attribute, so a "
-                "promoted anchor cannot name the arch that built it (AUDIT-1 F-17). Without it "
-                "the read side rebuilds the representation's INCUMBENT kind, which for any "
-                "non-incumbent lineage fails the shape load and quarantines a good anchor on "
-                "every relaunch. `build_net` sets this handle; the same read and the same "
-                "refusal are in `eval.snapshot.write_model_snapshot`."
-            )
-        from mantis.train.checkpoints import _arch_to_dict
+    # EVERY anchor is stamped, the launch-time initialisation included: its bare state dict was
+    # the kind-less shape whose read rebuilt the incumbent kind, a size mismatch for V2 on resume.
+    arch = getattr(base, "arch", None)
+    if arch is None:
+        raise AttributeError(
+            "save_best_model_atomic: the model carries no declared '.arch' attribute, so the "
+            "anchor cannot name the arch that built it (AUDIT-1 F-17). Without it the read "
+            "side rebuilds the representation's INCUMBENT kind, which for any non-incumbent "
+            "lineage fails the shape load. `build_net` sets this handle; the same read and the "
+            "same refusal are in `eval.snapshot.write_model_snapshot`."
+        )
+    from mantis.train.checkpoints import _arch_to_dict
 
-        payload = {
-            "model_state": sd,
-            "step": int(step),
-            "run_id": run_id,
-            "promoted": True,
-            "encoding": encoding,
-            "metadata": {
-                "encoding_name": encoding,
-                # The DECLARED dataclass, `arch_kind` included — read back by
-                # `checkpoints.stamped_arch_kind`, the ONE authority for an artifact's kind.
-                "arch": _arch_to_dict(arch),
-            } if encoding is not None else {"arch": _arch_to_dict(arch)},
-        }
+    payload: Any = {
+        "model_state": sd,
+        "step": None if step is None else int(step),
+        "run_id": run_id,
+        "promoted": step is not None,
+        "encoding": encoding,
+        "metadata": {
+            "encoding_name": encoding,
+            # The DECLARED dataclass, `arch_kind` included — read back by
+            # `checkpoints.stamped_arch_kind`, the ONE authority for an artifact's kind.
+            "arch": _arch_to_dict(arch),
+        } if encoding is not None else {"arch": _arch_to_dict(arch)},
+    }
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(payload, tmp)
     # Round-trip verify: torch.save is not atomic on some filesystems and a mid-write kill
@@ -510,7 +507,7 @@ def resolve_anchor(
     best_model = build_net(trainer.arch).to(resolved_device)
     best_model.load_state_dict(trainer.inference_state_dict())
     best_model.eval()
-    save_best_model_atomic(best_model, bmp)
+    save_best_model_atomic(best_model, bmp, run_id=run_id, encoding=declared_encoding)
     best_model_step = getattr(trainer, "step", None)
     _LOG.info("best_model_initialized path=%s step=%s", str(bmp), best_model_step)
     return AnchorState(best_model, best_model_step, bmp, inf_representation)
