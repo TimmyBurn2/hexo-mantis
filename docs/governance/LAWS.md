@@ -16,6 +16,8 @@ amendment commit and operator sign-off.
   game count; argmax/temp-0 regimes collapse to ~2 distinct games per pairing.
 - LAW-05 Falsified-register-first. Read docs/governance/falsified.md before proposing any optimization or experiment, and apply LAW-02 when citing a row from it.
 - LAW-06 bf16-graph. Graph-path autocast dtype is bf16, pinned in code and by a parity test.
+  R349(a): fp32 on `train.device: cpu` is the ONE carve-out (the autocast context, never the
+  dtype pin), pinned by its own parity test; it applies to no production path.
 - LAW-07 Producer-test. No gate or monitor input without a live producer test, and the checker
   carries a mutation self-test proving it bites.
 - LAW-08 Live-consumer. Every config key and every registered encoding has a live consumer; a dead knob dies with its freeze-tests in one commit.
