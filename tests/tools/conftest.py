@@ -98,8 +98,14 @@ def _load_puller():
 
 
 def _run_dirs_under(base: Path) -> list[tuple[Path, str]]:
-    """`(run dir, run_id)` for every directory under `base` holding a resume-bundle manifest."""
+    """`(run dir, run_id)` for every preflight run dir under `base`, by checkpoint or manifest."""
+    from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE
+
     found: dict[Path, str] = {}
+    for ckpt in base.rglob("checkpoints/*.ckpt"):
+        match = CHECKPOINT_NAME_RE.match(ckpt.name)
+        if match is not None:
+            found.setdefault(ckpt.parents[1], match.group("run_id"))
     for manifest in base.rglob("checkpoints/*.bundle.json"):
         try:
             run_id = str(json.loads(manifest.read_text(encoding="utf-8"))["run_id"])

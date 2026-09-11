@@ -82,7 +82,11 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert stamp["halts"]["cuda_build"] == report["cuda_build"]
     workspace = stamp["halts"]["workspace"]
     assert workspace["verdict"] == "MIRRORED"
-    assert workspace["bundle"]["step"] == BURST_STEPS, workspace
+    # A clean completion writes a checkpoint and NO bundle (R137's third leg), so the artefact
+    # the loop was proven on is the burst's checkpoint of record, at the burst's own step.
+    assert "bundle" not in workspace, workspace
+    assert workspace["checkpoint"]["name"].startswith(
+        f"smoke_preflight_armed_{BURST_STEPS:08d}_"), workspace
     assert workspace["shard"]["name"].startswith("games_smoke_preflight_armed_seg")
     accepted = require_preflight_stamp(config, tree_root=REPO_ROOT)
     assert accepted["config_sha256"] == stamp["config_sha256"]
