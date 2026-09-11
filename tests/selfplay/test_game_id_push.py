@@ -28,6 +28,9 @@ class _Pool:
         self._lock = threading.Lock()
         self.positions_pushed = 0
         self.self_play_positions_pushed = 0
+        self.graph_rows_pushed = 0
+        self.alpha_full_rows = 0
+        self.alpha_full_rows_emitted = 0
         self.config: dict[str, Any] = {}
 
 

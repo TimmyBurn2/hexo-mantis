@@ -214,6 +214,9 @@ def _build_pool(golden, collect_rows, graph_rows, *, is_graph, clock,
     pool._lock = threading.Lock()
     pool.positions_pushed = 0
     pool.self_play_positions_pushed = 0
+    pool.graph_rows_pushed = 0
+    pool.alpha_full_rows = 0
+    pool.alpha_full_rows_emitted = 0
     pool._feat_len = 0 if is_graph else consts["feat_len"]
     pool._chain_len = 0 if is_graph else consts["chain_len"]
     pool._trunk_size = consts["trunk_size"]

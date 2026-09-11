@@ -44,6 +44,8 @@ class PoolTelemetryLike(Protocol):
     # not on the payload: a source that does not produce it publishes `None`, which means "no
     # producer" and which a consumer must never read as zero.
     inference_batch_timing: Mapping[str, Any] | None
+    # R349(c): `{rows, graph_rows, per_1000}` — the alpha = 1.0 count over graph rows pushed.
+    alpha_full: Mapping[str, Any]
     recent_move_histories: list[list[tuple[int, int]]]
 
     def runner_stats(self) -> Any: ...  # RunnerStats — Any keeps the no-`train → selfplay` edge
@@ -328,6 +330,9 @@ def emit_iteration_complete_event(
         # inference-server stats and because it emits on neither interval knob. `None` = the
         # source has no producer for it, never a fabricated zero block.
         "inference_batching": getattr(pool, "inference_batch_timing", None),
+        # R349(c): rows whose explicit entries carry no target mass, per 1,000 graph rows
+        # pushed since boot. `None` = the source has no producer for it, never a zero.
+        "gumbel_alpha_full": getattr(pool, "alpha_full", None),
         "mcts_mean_depth": rstats.mcts_mean_depth,
         # The target-integrity counters plus the SEAM conjunct of the same class reach the ONE
         # channel here, each as {total, delta, per_position} beside the `positions_delta`

@@ -19,6 +19,32 @@ def _draw_outcome_band(
     return lo, hi
 
 
+#: A sparse Gumbel row whose explicit entries carry NO target mass (R349(c)): alpha within one
+#: f32 ULP of unity. Counted per row pushed and published on `iteration_complete`.
+ALPHA_FULL_THRESHOLD = 1.0 - 1e-6
+#: The `alpha_full_row` events a run publishes at most: enough rows to reconstruct, bounded so a
+#: pathological regime cannot turn the event stream into a second ring.
+ALPHA_FULL_ROW_EVENT_CAP = 256
+
+
+def _alpha_full_row_event(rec: tuple[Any, ...], tail_mass: float,
+                          runner_game_id: int) -> dict[str, Any]:
+    """The row, as the reconstruction needs it: the position, whose stone it was, and the
+    explicit cells the target left empty. Field order is `GraphRecord`'s drain tuple."""
+    stones, visits, current_player, moves_remaining, ply_index, is_full_search = rec[:6]
+    return {
+        "event": "alpha_full_row",
+        "tail_mass": tail_mass,
+        "stones": [[int(q), int(r), int(c)] for q, r, c in stones],
+        "explicit_cells": [[int(q), int(r), float(p)] for q, r, p in visits],
+        "current_player": int(current_player),
+        "moves_remaining": int(moves_remaining),
+        "ply_index": int(ply_index),
+        "is_full_search": bool(is_full_search),
+        "runner_game_id": int(runner_game_id),
+    }
+
+
 def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     """Push one drained batch of graph records, one row per position, with its game id.
 
@@ -28,11 +54,18 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     entirely and let one game's positions count as independent samples.
     """
     allocated: dict[int, int] = {}
+    alpha_full = 0
     for rec in rows:
         # `(…nine positional fields…, tail_mass, runner_game_id)`: the tail mass rides by keyword
         # because the push signature carries `game_id` before it.
         runner_game_id = int(rec[-1])
         tail_mass = float(rec[-2])
+        if tail_mass >= ALPHA_FULL_THRESHOLD:
+            alpha_full += 1
+            sink = getattr(pool, "_sink", None)
+            if sink is not None and pool.alpha_full_rows_emitted < ALPHA_FULL_ROW_EVENT_CAP:
+                pool.alpha_full_rows_emitted += 1
+                sink.emit(_alpha_full_row_event(rec, tail_mass, runner_game_id))
         if runner_game_id < 0:
             # A genuinely untagged row: inventing an id would make unrelated positions look like
             # one game and thin a batch for no reason.
@@ -48,6 +81,8 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     with pool._lock:
         pool.positions_pushed += n
         pool.self_play_positions_pushed += n
+        pool.graph_rows_pushed += n
+        pool.alpha_full_rows += alpha_full
 
 
 def push_dense(pool: Any, collected: tuple[np.ndarray, ...]) -> None:
@@ -135,4 +170,5 @@ def buffer_composition(pool: Any) -> dict[str, float]:
     }
 
 
-__all__ = ["buffer_composition", "push_dense", "push_graph"]
+__all__ = ["ALPHA_FULL_ROW_EVENT_CAP", "ALPHA_FULL_THRESHOLD", "buffer_composition",
+           "push_dense", "push_graph"]

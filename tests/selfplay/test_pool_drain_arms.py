@@ -126,6 +126,9 @@ def _build_pool(golden, rows, *, sink, iterations: int, clock) -> _Pool:
     pool._lock = threading.Lock()
     pool.positions_pushed = 0
     pool.self_play_positions_pushed = 0
+    pool.graph_rows_pushed = 0
+    pool.alpha_full_rows = 0
+    pool.alpha_full_rows_emitted = 0
     pool._feat_len = consts["feat_len"]
     pool._chain_len = consts["chain_len"]
     pool._trunk_size = consts["trunk_size"]

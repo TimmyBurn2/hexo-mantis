@@ -359,6 +359,13 @@ impl PyMCTSTree {
         self.inner.root_value()
     }
 
+    /// The network's RAW value for the root before any child statistic entered it — the
+    /// `raw_value` term of Mctx's `v_mix` (R349(c): the reconstruction reads it beside the
+    /// visited children's Q, so the completed-Q arithmetic can be replayed off the tree).
+    pub fn root_raw_value(&self) -> f32 {
+        self.inner.root_raw_value()
+    }
+
     /// Get/set forced root child for Gumbel Sequential Halving: a child pool index restricts
     /// `select_leaves` to that subtree, `None` restores normal PUCT selection.
     #[getter]

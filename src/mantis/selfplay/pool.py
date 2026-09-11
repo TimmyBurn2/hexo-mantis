@@ -154,6 +154,11 @@ class WorkerPool:
         self.games_completed = 0
         self.positions_pushed = 0
         self.self_play_positions_pushed = 0
+        # R349(c): graph rows pushed and, of those, the sparse rows whose explicit entries carry
+        # no target mass (alpha = 1.0); `iteration_complete` publishes the pair as a rate.
+        self.graph_rows_pushed = 0
+        self.alpha_full_rows = 0
+        self.alpha_full_rows_emitted = 0
         self.x_wins = 0
         self.o_wins = 0
         self.draws = 0
@@ -260,6 +265,15 @@ class WorkerPool:
     def avg_game_length(self) -> float | None:
         """Mean completed-game length, or `None` before any game has completed."""
         return self._avg_game_length
+
+    @property
+    def alpha_full(self) -> dict[str, Any]:
+        """R349(c)'s LAW-18 reading: sparse rows with alpha = 1.0 over graph rows pushed, as
+        `{rows, graph_rows, per_1000}`; `per_1000` is `None` before the first graph row."""
+        with self._lock:
+            rows, total = self.alpha_full_rows, self.graph_rows_pushed
+        return {"rows": int(rows), "graph_rows": int(total),
+                "per_1000": (round(1000.0 * rows / total, 4) if total > 0 else None)}
 
     @property
     def recent_move_histories(self) -> list[list[tuple[int, int]]]:
