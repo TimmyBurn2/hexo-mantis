@@ -29,7 +29,10 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
     """
     allocated: dict[int, int] = {}
     for rec in rows:
+        # `(…nine positional fields…, tail_mass, runner_game_id)`: the tail mass rides by keyword
+        # because the push signature carries `game_id` before it.
         runner_game_id = int(rec[-1])
+        tail_mass = float(rec[-2])
         if runner_game_id < 0:
             # A genuinely untagged row: inventing an id would make unrelated positions look like
             # one game and thin a batch for no reason.
@@ -39,7 +42,8 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
             if buffer_game_id < 0:
                 buffer_game_id = int(pool.replay_buffer.next_game_id())
                 allocated[runner_game_id] = buffer_game_id
-        pool.replay_buffer.push_graph_position(*rec[:-1], game_id=buffer_game_id)
+        pool.replay_buffer.push_graph_position(*rec[:-2], game_id=buffer_game_id,
+                                               tail_mass=tail_mass)
     n = len(rows)
     with pool._lock:
         pool.positions_pushed += n

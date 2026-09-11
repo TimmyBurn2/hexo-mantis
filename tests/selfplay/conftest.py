@@ -167,14 +167,11 @@ def graph_pushed() -> dict[str, np.ndarray]:
 def graph_rows_input() -> list[tuple[Any, ...]]:
     """The scripted `collect_graph_data()` rows, rebuilt from the capture recipe.
 
-    Each row is opaque tuple data the pool forwards verbatim plus a TRAILING runner game id, the
-    one field the drain reads and translates. The first two rows share game 100 and the third is
-    game 101, so two positions of one game must land under ONE allocated buffer id — a fixture
-    where every row had its own game would pass a per-ROW allocator. Rebuilt rather than loaded
-    so the input identity objects are ours to assert on.
+    Opaque fields forwarded verbatim, then the TAIL MASS (forwarded by keyword), then the runner
+    game id the drain translates; rows 0-1 share game 100 so one game must land under ONE id.
     """
     return [
-        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 100),
-        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0, 100),
-        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0, 101),
+        (np.arange(6, dtype=np.float32), np.arange(4, dtype=np.int64), 3, 0.5, 0.0, 100),
+        (np.arange(6, dtype=np.float32) + 10.0, np.arange(4, dtype=np.int64) + 1, 4, -1.0, 0.25, 100),
+        (np.arange(6, dtype=np.float32) + 20.0, np.arange(4, dtype=np.int64) + 2, 5, 0.0, 0.0, 101),
     ]

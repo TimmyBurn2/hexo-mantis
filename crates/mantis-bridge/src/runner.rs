@@ -31,6 +31,7 @@ type GraphRecordRow = (
     f32,
     bool,
     u16,
+    f32,
     i64,
 );
 
@@ -262,6 +263,9 @@ impl PySelfPlayRunner {
                     r.outcome,
                     r.value_valid,
                     r.game_length,
+                    // R347(a)'s alpha: a sparse Gumbel row is its explicit entries PLUS this
+                    // scalar, and a drain that dropped it pushed every such row as alpha = 0.
+                    r.tail_mass,
                     // Appended LAST so the leading nine stay exactly
                     // `HexgBuffer.push_graph_position`'s positional signature.
                     r.game_id,

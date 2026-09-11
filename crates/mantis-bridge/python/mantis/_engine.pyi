@@ -388,6 +388,8 @@ class SelfPlayRunner:
             float,
             bool,
             int,
+            float,
+            int,
         ]
     ]: ...
     @property

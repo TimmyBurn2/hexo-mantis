@@ -56,9 +56,9 @@ class ReplayFacade:
     def __repr__(self) -> str:
         return f"ReplayFacade(kind={self.kind.value!r}, raw={type(self.raw).__name__})"
 
-    def push_graph_position(self, *record: Any, game_id: int = -1) -> None:
+    def push_graph_position(self, *record: Any, game_id: int = -1, tail_mass: float = 0.0) -> None:
         """Forward one graph row. The record tuple travels verbatim and is not inspected."""
-        self.raw.push_graph_position(*record, game_id=game_id)
+        self.raw.push_graph_position(*record, game_id=game_id, tail_mass=tail_mass)
 
     # passthrough surface
     @property

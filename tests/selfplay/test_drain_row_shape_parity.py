@@ -134,3 +134,41 @@ def test_a_missing_declaration_refuses_rather_than_reporting_zero(bad: str) -> N
     """Vacuity guard: no declaration is a refusal, never an arity of 0 that matches nothing."""
     with pytest.raises(AssertionError):
         rust_row_arity(bad)
+
+
+_BRIDGE_RUNNER = _REPO / "crates" / "mantis-bridge" / "src" / "runner.rs"
+_POOL_PUSH = _REPO / "src" / "mantis" / "selfplay" / "pool_push.py"
+_ROW_ALIAS_RE = re.compile(r"type GraphRecordRow\s*=\s*\((?P<fields>.*?)\);", re.S)
+
+
+def graph_row_arity(source: str) -> int:
+    """Field count of the bridge's `type GraphRecordRow = (...)` — what `collect_graph_data` hands over."""
+    match = _ROW_ALIAS_RE.search(source)
+    assert match, "no `type GraphRecordRow = (...)` in the bridge runner source"
+    return len([f for f in _split_top_level(match.group("fields")) if f.strip()])
+
+
+def stub_graph_row_arity(source: str) -> int:
+    """Element count of the tuple inside `collect_graph_data`'s `list[tuple[...]]` return."""
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.FunctionDef) and node.name == "collect_graph_data":
+            ret = node.returns
+            assert isinstance(ret, ast.Subscript) and isinstance(ret.slice, ast.Subscript)
+            elts = ret.slice.slice
+            assert isinstance(elts, ast.Tuple)
+            return len(elts.elts)
+    raise AssertionError("no `collect_graph_data` in the stub")
+
+
+def test_the_graph_row_carries_its_tail_mass_from_the_bridge_to_the_push() -> None:
+    """GUMBEL-3's drain dropped the tail mass and the push defaulted it to 0, so the first sparse
+    row with a real alpha was refused at insert: bridge alias, stub and push slots must agree."""
+    bridge = graph_row_arity(_BRIDGE_RUNNER.read_text(encoding="utf-8"))
+    stub = stub_graph_row_arity(_STUB.read_text(encoding="utf-8"))
+    assert bridge == stub == 11, f"GraphRecordRow: bridge={bridge} stub={stub}"
+    push = _POOL_PUSH.read_text(encoding="utf-8")
+    assert "tail_mass = float(rec[-2])" in push and "runner_game_id = int(rec[-1])" in push
+    assert "push_graph_position(*rec[:-2]" in push and "tail_mass=tail_mass" in push
+    bridge_src = _BRIDGE_RUNNER.read_text(encoding="utf-8")
+    body = bridge_src[bridge_src.index("fn collect_graph_data"):]
+    assert body.index("r.tail_mass,") < body.index("r.game_id,"), "the tail rides before the id"
