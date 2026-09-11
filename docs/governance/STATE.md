@@ -4,23 +4,53 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase
+## Current phase — THE SHAKEDOWN IS RUNNING; START follows it on the operator's approval
 
-**run6 is RE-MINTED, PERF-A4's four serving levers are merged, and run6 is STAMPED** (preflight
-`4c43bae2…`, tier `sync_lag`, tree `0f20896e`, 21:36 UTC); the shakedown twin's preflight is
-next, then the 4 h shakedown, then START — the operator approved the START behind a clean
-shakedown ("with those perf improvements I approve"). `dev` and `origin/dev` are one line at
-`d7ea3481`; the box runs `0f20896e`, which differs from it by ONE test-file edit (the
-deploy-matched oracle's exemption set), so the stamp's tree and `dev` are code-identical.
+**run6 is RE-MINTED, PERF-A4's four serving levers are merged, run6 and its shakedown twin are
+STAMPED, and the 4 h shakedown is RUNNING on the box** (launched 21:56 UTC 2026-09-11 through
+`/workspace/run_shakedown.sh`, config `/workspace/oc7/shakedown.yaml` = run6 with `run_id:
+shakedown`, out-dir `/workspace/runs/shakedown`, time-box 14 400 s → ends ≈ 01:56 UTC; the
+launcher reports rc 124 as its success path). The operator approved START behind a clean
+shakedown ("with those perf improvements I approve"). `dev` = `origin/dev`; the box runs
+`0f20896e`, code-identical to `dev` (the commits above it are docs and one test-file edit).
+
+**Live readings at 23:44 UTC (1 h 47 min in):** 3 411 steps in 105 min = **1 945 steps/h**
+whole-window with two eval rounds inside it, steps/game **0.997**; last 30 min 1 301 steps/h
+(a third round running, games lengthening 39 → 68 plies as the net learns); positions/h 68 100
+from boot; batch fill 75 %; GPU 90 % / 9.4 GB; eval rounds at 1000/2000/3000, each ≈ 8–9 min;
+0 F-816-37 dumps; bundles receipted through step 3000 by the puller; `compile` 1 graph, 2/2
+frames; checker thread 468 992 checks, 1 053 inline fallbacks (0.2 %), 0 failures. **α = 1.0
+rows 750 of 174 714 = 4.3 per 1 000 and RISING** (1 per 1 000 at step 500) — the D2 question,
+decided "count and decide at block end", is growing faster than expected; the architect should
+read it before the block ends. Block ETA at these rates: 25 001 steps ≈ **13–19 h**, not the
+A4 estimate's 10 h (that assumed the burst's short games).
+
+**Dispatcher state for a fresh session (this one's context is near its limit).** Waiters and
+pullers die with the session; what survives is the box and these files. To finish the packet:
+1. Read the shakedown close-out: `/workspace/oc7/shakedown_launch.out` (`RC=`, card peak, any
+   `DUMP` line is a HALT per R340(c), the orphan sweep) and the run's events under
+   `/workspace/runs/shakedown/logs/`; write the readings here.
+2. If clean, START run6 from the box at `0f20896e` (its stamp `4c43bae2…` binds that tree):
+   `cd /workspace/hexo-mantis && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True &&
+   setsid nohup .venv/bin/python -m mantis.monitor.supervise --config configs/run6.yaml
+   --heartbeat-file /workspace/runs/run6/logs/heartbeat_run6.json -- .venv/bin/python -m
+   mantis.run --config configs/run6.yaml --out-dir /workspace/runs/run6 > /workspace/runs/
+   run6.supervise.log 2>&1 < /dev/null &` (export PATH with `~/.cargo/bin:~/.local/bin` first).
+3. Run the puller DURABLY on the operator's machine (tmux/systemd, not a session task):
+   `uv run python tools/mirror_pull.py --source <alias>:/workspace/runs/run6 --mirror
+   ~/Work/HeXO/mantis-mirror/run6 --run-id run6 --interval-sec 600`. The mirror root is
+   `~/Work/HeXO/mantis-mirror/<run_id>`; the shakedown's mirror is already there.
+4. Then the block's own work: TEST-1 and INVESTIGATION-1 (re-aimed by the cards),
+   STRENGTH-FRONTIER-1 at block end, REPAIR-A4's remaining levers (the codebook as a keyed lever,
+   the cadence and eval-interval regime notes, the α target form).
 
 **`configs/run6.yaml` mints** (header deltas replay): `search.kind gumbel` /
 `completed_improved_policy`, 320 full / 64 quick at p 0.25, deploy 160/m16, grace 30 s, the
 LAW-12 strip as warm start, **`train.actor_sync_cadence_steps 2`** (CARD-PREFLIGHT-CADENCE),
 and PERF-A4's rows **`selfplay.n_workers 32`, `inference.edge_geometry_check checker_thread`,
-`inference.compile_trunk true`, `train.max_train_burst 2`** (CARD-A4-MINT). The run6 preflight
-burst under this mint: steps/game **1.000**, batch fill 75.8 %, `compile` 1 graph (2/2 frames,
-fail-loud on the recompile limit), the checker thread 24,672 checks / 0 failures, α = 1.0 rows
-1 of 8,251.
+`inference.compile_trunk true`, `train.max_train_burst 2`** (CARD-A4-MINT). Stamps on the box
+(`~/.local/state/mantis/preflight/`): run6 `4c43bae2…` and shakedown `40b30eda…`, both tier
+`sync_lag` at tree `0f20896e`, each proven on its burst's checkpoint and first shard.
 
 ## PERF-A4 — the serving levers, merged at `41a5fea8` (branch `perf-a4`, red-teamed)
 
