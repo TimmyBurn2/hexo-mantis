@@ -113,9 +113,8 @@ PATTERNS: dict[str, tuple[str, str]] = {
 #: than exempted, so this gate has never been green over a dirty tree.
 EXEMPT: tuple[tuple[str, str, str, str], ...] = ()
 
-#: Generated lock files carry four-part package versions (`12.8.4.1` is a CUDA library, not a
-#: machine) that the octet ranges cannot tell from an address; in a lock the only host position
-#: is a URL host, so `ipv4` counts there only immediately after `://`.
+#: A lock's four-part package versions (`12.8.4.1` is a CUDA library) pass the octet ranges;
+#: its only host position is a URL host, so `ipv4` counts there only right after `://`.
 LOCK_FILES = frozenset({"uv.lock"})
 
 #: Non-vacuity floor for --full-tree: a gate that scans nothing finds nothing. Set well below the

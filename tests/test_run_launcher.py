@@ -231,29 +231,13 @@ def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invente
 def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     monkeypatch, tmp_path, smoke_run_config, preflight_stamped
 ) -> None:
-    """A minted config boots through the one composer into the live run loop, bounded, clean stop.
+    """A minted config boots through the one composer into the live loop and stops clean.
 
-    Nothing about the RUN is routed around: real `init_trainer` -> `build_net`, real `WorkerPool`
-    self-play on CPU, real graph replay buffer, real `build_run_safety`, real coordinator config.
-    The config is the minted armed smoke, the one config whose values make a burst-scale CPU boot
-    legal, bounded to a 16-step burst.
-
-    THE CHECKPOINT CLAUSE WAS RE-POINTED TWICE, and the history is the argument. A clean bounded
-    stop originally saved NOTHING: the O2 arm returned without saving, `_final_save()` fires only
-    on `shutdown_save`, and the periodic save is guarded by a positive interval against a
-    `checkpoint_interval` every minted config mints at 0. The clean-completion leg then landed in
-    the O2 arm, so the clause returns as EXACTLY ONE — 0 means the leg is absent or unreached, 2 a
-    second write authority or the signal-inside-the-write window re-opened.
-
-    THE ORACLE MUST NOT GO VACUOUS: `residents == []` is a state a run that never booted also
-    produces, and it now FAILS. The positive truths carry the row — `running is False` (born True,
-    so the flip IS the O2 arm having fired), `trainer.step` at the bound exactly, the boot and
-    armed-watchdog witnesses in the segment, `abort_rule is None` with rc 0. The checkpoint and
-    rc 0 are asserted together and NEITHER implies the other: a run whose disk guard trips in the
-    epilogue records that rule strictly AFTER the save, so it exits non-zero with its product.
-
-    DISCLOSED FAKE, the ONLY one: the rc assertion re-enters `main` with `launch_run` monkeypatched
-    to hand back the handles this real boot just produced, so no second 30 s boot reads one integer.
+    Everything on the RUN is real (trainer, CPU self-play pool, graph replay, run safety) on the
+    armed smoke config, bounded to a 16-step burst. The checkpoint clause is EXACTLY ONE: 0 is the
+    clean-completion leg absent, 2 a second write authority. The positive truths carry the row so
+    an empty run dir cannot pass. The ONE fake: the rc assertion re-enters `main` with
+    `launch_run` patched to hand back these handles, so no second boot reads one integer.
     """
     config = smoke_run_config(_SMOKE_CONFIG, train={"max_train_steps": _BURST_STEPS})
     assert int(config.train.checkpoint_interval) == 0, (

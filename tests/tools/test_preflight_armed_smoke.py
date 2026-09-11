@@ -1,24 +1,9 @@
-"""WPTS Phase F — the armed-smoke burst oracle (ADJ-24 / R103), and TD-1's end-to-end proof.
+"""The armed-smoke burst oracle: the LIVE CONSUMER of `configs/smoke_preflight_armed.yaml`.
 
-THE LIVE CONSUMER of `configs/smoke_preflight_armed.yaml` (LAW-08; the config's
-`EXEMPT_CONFIGS` row names this file). One drive, everything real (R64 posture): the REAL
-`tools/ci_gates/preflight_mint.py` as a subprocess boots the REAL tree off the minted armed
-smoke config — real `Trainer` (GnnNet), real `WorkerPool` self-play on CPU, real graph
-replay buffer — clears every arming floor, fills the buffer with REAL games, runs a REAL
-16-step graph training burst through the coordinator's declared dispatcher, and exits GREEN.
-
-Why this is TD-1's end-to-end proof (R103's closing clause): the burst cannot complete
-without a working training step. Before WPTS Phase T, `step.py`'s straight arm called a
-`trainer.train_step` that did not exist — this exact drive would die at the first
-post-warmup step. rc 0 with `tier.covered == ["sync_lag", "full"]` is therefore the whole
-learner half executing, not a boot smoke.
-
-Why rc 0 is reachable off-run5 at all: every other non-run5 config deliberately disarms the
-REQUIRED abort rows (R59) and is refused at the arming audit (rc 30, measured by WPBRIDGE).
-`smoke_preflight_armed.yaml` arms BOTH required rows at burst-scale guard values (R103's
-grant), which is what makes a fast preflight rehearsal target exist.
-
-INTEGRATION tier: a real ~30 s CPU boot + burst + terminal-eval witness.
+The real preflight tool, as a subprocess, boots the real tree off the minted armed smoke and
+runs a real 16-step burst; rc 0 with `tier.covered == ["sync_lag", "full"]` is the whole learner
+half executing. It is the one non-run config that arms BOTH required abort rows, which is what
+makes a fast preflight rehearsal target exist. Integration tier.
 """
 from __future__ import annotations
 

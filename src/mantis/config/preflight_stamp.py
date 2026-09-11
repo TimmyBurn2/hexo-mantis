@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -68,7 +68,7 @@ def write_stamp(
         "burst_steps": int(burst_steps),
         "tree_sha": head_sha(tree_root),
         "tree_dirty": is_dirty(tree_root),
-        "preflight_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "preflight_utc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "halts": {name: halts[name] for name in START_HALT_READINGS},
         "report": str(report_path),
     }

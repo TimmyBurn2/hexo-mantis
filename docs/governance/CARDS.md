@@ -13,8 +13,9 @@ with no date; **OWED** is a text or a value someone must supply.
 All four came out of the CLEANUP ERA move and are now CLOSED, by wave 2. Kept as one line each
 because a card leaves this file by being closed, not by going quiet.
 
-- **CARD-CLAUDEMD-REPOINT — CLOSED.** `CLAUDE.md` names `docs/governance/falsified.md`,
-  `docs/governance/LAWS.md` and `docs/governance/archive/laws.md`; gate 10 is green on it.
+- **CARD-CLAUDEMD-REPOINT — CLOSED, closing line in R348.** `CLAUDE.md` names
+  `docs/governance/falsified.md`, `docs/governance/LAWS.md` and `docs/governance/archive/laws.md`;
+  gate 10 is green on it.
 - **CARD-GATE10-SCOPE — CLOSED.** `tools/ci_gates/check_tracked_refs.py` globs
   `docs/governance/` and carries a per-directory floor, so a dissolved directory can no longer be
   absorbed into a full one's count. `RULINGS.md` is exempt by declaration with grounds in the
@@ -53,6 +54,19 @@ Both were found by running the gate set rather than by reading it, and both are 
   next measurement and it is owed. **The consequence to hold on to: while this stands,
   no `make gates.exit` run in this repository can complete, so "local green is the gate" is
   answered by a gate that never finishes — the false-clean class, in the time dimension.**
+  **DISCRIMINATED 2026-09-11 under R348(b) — HOST, not code.** Record:
+  `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`. (i) SLOW, not hung: the dev box's
+  main thread sits in a bf16 CPU GEMM inside the GNN backward at ~60 s/step (14 workers) and
+  ~40 s/step (1 worker); (ii) the same row at HEAD on the box **PASSES in 178.4 s**, inside its
+  ceiling, at the minted 14 workers; (iii) the 2026-08-01 tree runs at the same ~40 s/step on the
+  dev box today, so no bisect. Mechanism measured, not inferred: the dev box (Ryzen 7 3700X,
+  AVX2, no AVX-512 BF16) runs LAW-06's bf16 autocast through ATen's generic path — one GEMM at
+  the trainer's edge shape is **72× slower than fp32** there — while the box has native bf16.
+  Contributing: `1203f740` (2026-08-31) minted 14 workers into the smoke config the row drives.
+  The first fact at contact was a different defect: the row FAILED in 46 s on DELETE-1's 10→8
+  `GameResultRow` change that the Python drain never received (fixed `92643671`). The bound is
+  NOT re-aimed: the docstring's rule yields 50 on the box and nothing on an AVX2 host, and
+  which of (tier runs on the box / row marked `slow` / LAW-06 CPU carve-out) is the operator's.
 
 - **CARD-GATE17-LOCAL-COUPLING — CARDED.** `tests/tools/test_gate_vacuity.py::test_an_empty_diff_degrades_WIDE_rather_than_printing_green`
   shells out to `rule7_gate.py --base HEAD` and asserts `returncode == 0`. Gate 17's local
@@ -95,9 +109,13 @@ run6 is minted and has never started.
   "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
   `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
-- **`F-816-24` — MINT-BLOCKING, LIVE, no close recorded.** `monitor/supervise.py` constructs a bare
-  `MonitorConfig()`, so every minted `supervisor_*` value reaches no process. A fix packet was
-  ordered; no merge or close is recorded. R291(b); A:2662.
+- **`F-816-24` — FIXED IN CODE, close never recorded.** Read at contact 2026-09-11 (R348(e)'s
+  AUDIT-3 lead): `supervise.main` loads the minted config and resolves every `monitor.supervisor_*`
+  through `resolve_monitor_config` since `c8bd7190` (2026-08-21), with a named refusal for a
+  missing `--config`; `tests/monitor/test_supervisor_config_witness.py` carries the running-
+  supervisor witnesses (integration) and an AST pin that the module constructs no `MonitorConfig`
+  by any shape (default tier). The record still says LIVE because no ruling entry closed it; the
+  close is a ruling line, owed to the operator. R291(b); A:2662.
 - **The `supervisor_kill_grace_sec` reading. OWED, one line.** `600.0` was armed on the reading that
   "only if the supervisor is used" describes when the value takes effect rather than conditioning
   the change. A one-line re-mint if the operator reads it the other way. A:7718.
@@ -121,7 +139,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 | id | subject | status | last moved | cite |
 |---|---|---|---|---|
 | F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) | A:1926 |
-| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | MINT-BLOCKING, LIVE; fix packet ordered, no close | R291(b) | A:2662 |
+| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | FIXED IN CODE at `c8bd7190` (2026-08-21), witnessed; the CLOSE is a ruling line still owed | R291(b) | A:2662 |
 | F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) | A:3498 |
 | F-816-34 | vacuous knee band — PICK = 2 from a band widened below every rung | FILED 2026-09-04, never adjudicated | none | A:6739 |
 | F-816-35 | r8 trainer need is a DISTRIBUTION exceeding `_SIZING_BUDGET_GIB` and R330(b)'s 3% | FILED, never adjudicated | none | A:6741 |
