@@ -32,10 +32,11 @@ pullers die with the session; what survives is the box and these files. To finis
    `/workspace/runs/shakedown/logs/`; write the readings here.
 2. If clean, START run6 from the box at `0f20896e` (its stamp `4c43bae2…` binds that tree):
    `cd /workspace/hexo-mantis && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True &&
-   setsid nohup .venv/bin/python -m mantis.monitor.supervise --config configs/run6.yaml
+   .venv/bin/python -m mantis.monitor.supervise --config configs/run6.yaml
    --heartbeat-file /workspace/runs/run6/logs/heartbeat_run6.json -- .venv/bin/python -m
-   mantis.run --config configs/run6.yaml --out-dir /workspace/runs/run6 > /workspace/runs/
-   run6.supervise.log 2>&1 < /dev/null &` (export PATH with `~/.cargo/bin:~/.local/bin` first).
+   mantis.run --config configs/run6.yaml --out-dir /workspace/runs/run6`, detached from the
+   ssh session in its own session group with its output to `/workspace/runs/run6.supervise.log`
+   (export PATH with `~/.cargo/bin:~/.local/bin` first).
 3. Run the puller DURABLY on the operator's machine (tmux/systemd, not a session task):
    `uv run python tools/mirror_pull.py --source <alias>:/workspace/runs/run6 --mirror
    ~/Work/HeXO/mantis-mirror/run6 --run-id run6 --interval-sec 600`. The mirror root is
