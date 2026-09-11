@@ -101,3 +101,13 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   Nothing in the row is re-opened: this note records that a reader citing the `sink=None` half as
   live repo state would be citing something that is no longer true, which is exactly the drift an
   append-only register corrects by annotation rather than by edit (R9).
+
+- **F-46 — repair annotation, per PERF-A4 (2026-09-11).** The row's finding stands: the
+  `checker_thread` posture AS BUILT at `7a97fa80` serialised against the server thread because the
+  verifier held the GIL. The repair the row named landed at `13562ce1` (`verify_edge_geometry` runs
+  inside `py.detach` over the six borrowed slices), and its falsifier was met on the same arm design:
+  `w32ct` 2,144 leaves/s vs the inline `w32` 1,831 (+17 %, pops/s 33.4 → 39.0 against the
+  pre-registered ≥ 37) and `w16ct` +17 % at run6's minted 16 workers
+  (`docs/design/measurements/PERF_A4_2026-09-11.md` §2). The row's "not to be armed as built"
+  therefore describes the tree it measured, not HEAD; arming the posture is a mint row the A4
+  record recommends with that number. Nothing in the row is re-opened.

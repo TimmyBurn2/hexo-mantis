@@ -146,11 +146,19 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   check 14 with the GIL released in Rust (+17–23 %), `torch.compile` of the trunk (−31 % serve
   wall measured in the microbench, +16 %), an edge-attribute codebook, pinned + `non_blocking`
   H2D, a fused message-pass kernel. `n_workers 32` measured +5 % alone (a mint row).
+  PERF-A4 (branch `perf-a4`, `docs/design/measurements/PERF_A4_2026-09-11.md`) landed four of
+  them as one commit each with a box arm apiece: the GIL-released verifier (+17 %), pinned
+  H2D + sync removals (0, the prerequisite), `inference.compile_trunk` (+21 % serial), and a
+  two-thread software pipeline (+52 % over serial) — 1,831 → 3,662 leaves/s at 32 workers
+  (2.0×), the block ≈ 10.6–11.1 h ESTIMATE against 20.5–21.5 h; the codebook is bit-exact on the
+  RTX 5080 only and is deferred with its numbers; the mint rows are in that record's §11.
 - **CARD-CHECKER-THREAD-GIL — the landed lever is a net loss as built (F-46).**
   `inference.edge_geometry_check: checker_thread` costs −12.6 % leaves/s at 32 workers because
   `verify_edge_geometry` holds the GIL for the whole verify; do NOT arm it in a mint. The repair
   is `py.detach` around the verifier (a Send wrapper over the borrowed slices) — a small packet
-  with the `w32ct` arm as its falsifier (pops/s 32 → ≥ 37; abort < +8 %).
+  with the `w32ct` arm as its falsifier (pops/s 32 → ≥ 37; abort < +8 %). REPAIRED at
+  `13562ce1` (PERF-A4 §2): pops/s 33.4 → 39.0, +17 % leaves/s at 32 AND at 16 workers; arming
+  the posture is now a recommended mint row (F-46 annotated).
 - **CARD-EVAL-CONTENTION — a measured term nobody had priced.** While an eval round is alive
   self-play runs at **0.79×** (arm `w16ev`: −20.7 % leaves/s over a 12-min round; two CUDA
   contexts time-slicing plus the child's 8 CPU threads, the child allocating only 38 MB). At run6's
