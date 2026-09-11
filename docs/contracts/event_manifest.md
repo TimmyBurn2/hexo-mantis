@@ -295,6 +295,16 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   since process start — a count still climbing after warm-up is the recompile storm the lever's
   abort names) and `recompile_limit` (past which Dynamo falls back to eager for the frame).
   Visible with `enabled: false` and `unique_graphs: 0` on the eager path; `None` on a grid run.
+  And a `pipeline` SUB-BLOCK (PERF-A4 lever 4, LAW-18): the serving loop is a two-thread
+  software pipeline — the server thread pops, collates and launches pop N+1 while pop N's
+  forward and pinned D2H run on the device, and a retire thread dispatches each pop the moment
+  its CUDA event completes, in launch order. `depth` (2: the pop on the device plus the one
+  being dispatched; the server thread blocks on a third) and `gpu_wait` (a timing sub-block of
+  the wait each retire spent on its device work: near 0 says the CPU stage bounds the loop,
+  large says the GPU stage does). Two consequences a reader must know: `collate` now measures
+  the CPU cost alone (the seven H2D copies are `non_blocking` from pinned staging), and a
+  check-14 finding under `checker_thread` refuses every pop retired after it latched, so only
+  pops already launched when the finding landed can have been served. `None` on a grid run.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

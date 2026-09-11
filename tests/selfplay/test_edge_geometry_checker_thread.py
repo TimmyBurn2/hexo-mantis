@@ -60,17 +60,26 @@ def test_the_server_refuses_a_posture_outside_the_closed_set() -> None:
 
 
 class _PacedBatcher(H.ScriptedGraphBatcher):
-    """Serve the next pop only once the checker processed the earlier ones: no race in the claim."""
+    """Serve the next pop only once every earlier pop is DISPATCHED and checked: no race."""
+
+    def __init__(self, pops) -> None:
+        super().__init__(pops)
+        self.handed_out = 0
 
     def next_graph_batch(self, batch_size: int, max_wait_ms: float):
         assert self.server is not None
         checker = self.server._edge_geometry_checker
+        deadline = time.monotonic() + _DEADLINE_SEC
+        while len(self.results) + len(self.failures) < self.handed_out and time.monotonic() < deadline:
+            time.sleep(0.005)
         served = len(self.results)  # only a SERVED pop hands the thread a check
         if checker is not None and served:
-            deadline = time.monotonic() + _DEADLINE_SEC
             while checker.processed < served and time.monotonic() < deadline:
                 time.sleep(0.005)
-        return super().next_graph_batch(batch_size, max_wait_ms)
+        ids, payload = super().next_graph_batch(batch_size, max_wait_ms)
+        if ids:
+            self.handed_out += 1
+        return ids, payload
 
 
 def _payload(payload_fields, *, corrupt: bool) -> GraphWirePayload:

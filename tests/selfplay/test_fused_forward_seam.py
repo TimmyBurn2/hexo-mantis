@@ -117,13 +117,19 @@ def test_fg7_04_the_successful_parts_output_is_discarded_not_submitted(
         "happens after every part has run (design §4.1 property 3)")
 
 
-def _graph_loop_ast() -> ast.FunctionDef:
+#: The loop's failure surface since A4-4 spans the loop and its two pipeline stages plus the
+#: one failure path they share; the census walks their union, not the loop body alone.
+_LOOP_FUNCTIONS = ("_run_graph_loop", "_launch_pop", "_retire", "_retire_or_fail", "_fail_pop")
+
+
+def _graph_loop_ast() -> ast.Module:
     src = (Path(__file__).resolve().parents[2] / "src" / "mantis" / "selfplay"
            / "inference_server.py").read_text(encoding="utf-8")
-    for node in ast.walk(ast.parse(src)):
-        if isinstance(node, ast.FunctionDef) and node.name == "_run_graph_loop":
-            return node
-    raise AssertionError("`_run_graph_loop` not found in inference_server.py")
+    found = {node.name: node for node in ast.walk(ast.parse(src))
+             if isinstance(node, ast.FunctionDef) and node.name in _LOOP_FUNCTIONS}
+    missing = [name for name in _LOOP_FUNCTIONS if name not in found]
+    assert not missing, f"{missing} not found in inference_server.py"
+    return ast.Module(body=[found[name] for name in _LOOP_FUNCTIONS], type_ignores=[])
 
 
 def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
@@ -150,10 +156,11 @@ def test_fg7_03_no_new_failure_path_is_introduced(monkeypatch, caplog) -> None:
         return h.type is None or ast.unparse(h.type) in {"Exception", "BaseException"}
 
     broad = [h for h in handlers if _is_broad(h)]
-    assert len(broad) == 2, (
-        f"the loop carries {len(broad)} BROAD except handlers; HEAD carries 2 — the inner arm "
-        "that submits the failure over the seam, and the outer loop guard. A third broad catch "
-        "on this path is the catch-and-degrade R276(f) forbids")
+    assert len(broad) == 3, (
+        f"the loop carries {len(broad)} BROAD except handlers; HEAD carries 3 — the launch arm "
+        "and the retire arm, each routing its OWN pop's failure through `_fail_pop`, and the "
+        "outer loop guard. A fourth broad catch on this path is the catch-and-degrade R276(f) "
+        "forbids")
     for handler in [h for h in handlers if not _is_broad(h)]:
         reraises = any(
             isinstance(n, ast.Raise) and n.exc is None for n in ast.walk(handler)

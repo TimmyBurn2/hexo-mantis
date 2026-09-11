@@ -15,6 +15,7 @@ import threading
 import time
 import traceback
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -141,6 +142,39 @@ def _compile_snapshot(enabled: bool) -> dict[str, Any]:
     }
 
 
+def _to_host_async(t: torch.Tensor, on_cuda: bool) -> torch.Tensor:
+    """Queue a device→pinned-host copy behind the stream (a plain host tensor off CUDA)."""
+    if not on_cuda:
+        return t.detach().cpu()
+    host = torch.empty(t.shape, dtype=t.dtype, pin_memory=True)
+    host.copy_(t, non_blocking=True)
+    return host
+
+
+@dataclass
+class _CollateGeometry:
+    """What every part's collate is checked against, resolved once per loop."""
+
+    caps: FusedGraphCapsSpec
+    trunk_size: int
+    win_length: int
+    node_feat_dim: int
+    edge_feat_dim: int
+    canary_period: int
+    capture_checks: bool
+
+
+@dataclass
+class _InFlightPop:
+    """One pop whose forward is queued on the device: what `_retire` needs to dispatch it."""
+
+    request_ids: list[int]
+    legal_offsets: np.ndarray
+    parts: list[tuple[torch.Tensor, torch.Tensor]] = field(default_factory=list)
+    pending_checks: list[tuple[Any, Any, tuple[int, int]]] = field(default_factory=list)
+    event: Any = None
+
+
 #: What a caller hands the server so a contract failure lands on disk. A CALLABLE and not a dict,
 #: because the context changes DURING the round and a snapshot would record the arming, not the fire.
 CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
@@ -207,6 +241,40 @@ class _EdgeGeometryChecker(threading.Thread):
         self._queue.put(None)
 
 
+#: Pops launched and not yet dispatched: the one on the device plus the one being dispatched.
+#: The server thread blocks on a third, which bounds the un-dispatched inputs held on the device.
+_PIPELINE_DEPTH = 2
+
+
+class _PopRetirer(threading.Thread):
+    """A4-4: dispatches each launched pop the moment its device work completes, in launch order;
+    `event.synchronize()` releases the GIL, so it holds the GIL only for the gate and the submit."""
+
+    def __init__(self, server: InferenceServer) -> None:
+        super().__init__(daemon=True, name="inference-retire")
+        self._server = server
+        self._queue: queue.Queue[_InFlightPop | None] = queue.Queue()
+        self.slots = threading.Semaphore(_PIPELINE_DEPTH)
+
+    def submit(self, pop: _InFlightPop) -> None:
+        """Hand over one launched pop; the caller already holds one of `slots`."""
+        self._queue.put(pop)
+
+    def run(self) -> None:
+        while True:
+            pop = self._queue.get()
+            if pop is None:
+                return
+            try:
+                self._server._retire_or_fail(pop)
+            finally:
+                self.slots.release()
+
+    def drain_and_stop(self) -> None:
+        """Let the thread dispatch everything queued, then exit; joined by the caller."""
+        self._queue.put(None)
+
+
 class InferenceServer(threading.Thread):
     """Thin Python inference loop backed by a Rust-owned batching queue."""
 
@@ -254,6 +322,7 @@ class InferenceServer(threading.Thread):
                 f"InferenceServer: edge_geometry_check={edge_geometry_check!r} is not a posture "
                 "(inline | checker_thread); resolve it through mantis.config.resolve")
         self._edge_geometry_checker: _EdgeGeometryChecker | None = None
+        self._retirer: _PopRetirer | None = None
         self._edge_geometry_deferred = 0
         self._edge_geometry_inline_fallback = 0
         self._edge_geometry_failures = 0
@@ -287,6 +356,10 @@ class InferenceServer(threading.Thread):
         self._collate_total_s = 0.0
         self._collate_min_s: float | None = None
         self._collate_max_s: float | None = None
+        self._gpu_wait_count = 0
+        self._gpu_wait_total_s = 0.0
+        self._gpu_wait_min_s: float | None = None
+        self._gpu_wait_max_s: float | None = None
         self._occupancy_total = 0
         self._occupancy_min: int | None = None
         self._occupancy_max: int | None = None
@@ -331,6 +404,7 @@ class InferenceServer(threading.Thread):
             self._h2d_staging: torch.Tensor | None = None
             if self._compile_trunk:
                 self._trunk = torch.compile(self.model.representation, dynamic=True)
+            self._retirer = _PopRetirer(self)
         else:
             # H2D staging sizes to the TRUNK window, the spatial dim the model accepts. For
             # single-window encodings trunk_size == board_size; multi-window encodings diverge.
@@ -374,6 +448,11 @@ class InferenceServer(threading.Thread):
     def stop(self) -> None:
         self._stop_event.set()
         self._batcher.close()
+        if self._retirer is not None and self._retirer.ident is not None and not self.is_alive():
+            # A live loop drains its retirer itself on exit (closing the batcher ends the loop);
+            # only a loop that already returned — a synchronous `run()` — is drained from here.
+            self._retirer.drain_and_stop()
+            self._retirer.join(timeout=5.0)
         if self._edge_geometry_checker is not None:
             self._edge_geometry_checker.drain_and_stop()
 
@@ -494,6 +573,15 @@ class InferenceServer(threading.Thread):
         if self._collate_max_s is None or collate_s > self._collate_max_s:
             self._collate_max_s = collate_s
 
+    def _record_gpu_wait(self, wait_s: float) -> None:
+        """Accumulate ONE retired pop's device wait: near 0 means the CPU stage is the bound."""
+        self._gpu_wait_count += 1
+        self._gpu_wait_total_s += wait_s
+        if self._gpu_wait_min_s is None or wait_s < self._gpu_wait_min_s:
+            self._gpu_wait_min_s = wait_s
+        if self._gpu_wait_max_s is None or wait_s > self._gpu_wait_max_s:
+            self._gpu_wait_max_s = wait_s
+
     def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
         """Accumulate ONE plan: `fusion_splits` counts POPS THAT SPLIT; `fusion_bound_hits` says
         which member forced each cut."""
@@ -583,23 +671,19 @@ class InferenceServer(threading.Thread):
             # A4-3's lever, LAW-18: a `unique_graphs` count still climbing after warm-up is the
             # recompile storm the abort names; past `recompile_limit` Dynamo falls back to eager.
             "compile": _compile_snapshot(self._compile_trunk) if self._is_graph else None,
+            # A4-4's lever, LAW-18: one pop in flight, and the wait its retire spent on the device.
+            "pipeline": {
+                "depth": _PIPELINE_DEPTH,
+                "gpu_wait": _timing_agg(
+                    self._gpu_wait_count, self._gpu_wait_total_s,
+                    self._gpu_wait_min_s, self._gpu_wait_max_s,
+                ),
+            } if self._is_graph else None,
         }
 
     def _run_graph_loop(self) -> None:
-        """Ragged axis-graph inference loop, MEMORY-BOUNDED: one payload read per pop, split at
-        graph boundaries under the fused caps, ONE submit per pop, ONE failure path."""
-        from mantis.selfplay.graph_collate import (
-            GraphContractError,
-            collate_graph_batch,
-            graph_wire_from_rust,
-            reset_semantic_canary,
-            segment_softmax,
-            stone_mask_from_batch,
-        )
-        from mantis.selfplay.graph_wire_split import (
-            plan_fused_forwards,
-            slice_graph_wire,
-        )
+        """The pipeline's CPU stage: pop, collate, launch; the retire thread dispatches."""
+        from mantis.selfplay.graph_collate import reset_semantic_canary
 
         caps = self._fused_caps
         if caps is None:
@@ -631,7 +715,19 @@ class InferenceServer(threading.Thread):
         if self._edge_geometry_check == "checker_thread" and checker is None:
             checker = self._edge_geometry_checker = _EdgeGeometryChecker(self)
             checker.start()
+        geometry = _CollateGeometry(
+            caps=caps, trunk_size=spec.trunk_size, win_length=win_length,
+            node_feat_dim=node_feat_dim, edge_feat_dim=edge_feat_dim,
+            canary_period=canary_period, capture_checks=checker is not None,
+        )
 
+        # Launched pops are dispatched by the retire thread as their device work completes, so
+        # this thread only ever pops, collates and launches — the CPU stage of the pipeline.
+        retirer = self._retirer
+        if retirer is None or retirer.ident is not None:
+            # Constructed at __init__ on the graph branch; a re-run after a stop needs a new one.
+            retirer = self._retirer = _PopRetirer(self)
+        retirer.start()
         try:
             while not self._stop_event.is_set():
                 try:
@@ -655,6 +751,8 @@ class InferenceServer(threading.Thread):
                                 "representation": "graph",
                             })
                     self._total_requests += len(request_ids)
+                    # The depth bound: a third un-dispatched pop waits here for the retirer.
+                    retirer.slots.acquire()
                     try:
                         # Detect-and-halt one batch later: a check-14 failure found after its
                         # batch was served is raised HERE, so this pop's waiters take it through
@@ -664,150 +762,184 @@ class InferenceServer(threading.Thread):
                                 f"deferred edge-geometry check failed: "
                                 f"{self._deferred_contract_failure}"
                             ) from self._deferred_contract_failure
-                        # ONE read of each Rust getter, then pure-numpy views per part.
-                        payload = graph_wire_from_rust(wire)
-                        edge_counts = np.diff(
-                            np.asarray(payload.edge_offsets, dtype=np.int64)
-                        )
-                        node_counts = np.diff(
-                            np.asarray(payload.node_offsets, dtype=np.int64)
-                        )
-                        plan = plan_fused_forwards(
-                            payload.edge_offsets, payload.node_offsets, caps,
-                        )
-                        self._record_fusion_plan(
-                            len(plan),
-                            *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
-                        )
-                        probs_parts: list[np.ndarray] = []
-                        values_parts: list[np.ndarray] = []
-                        # Check 14 captured per part under `checker_thread`, handed over only
-                        # after the pop is SERVED: off the critical path, still 1-in-1.
-                        pending_checks: list[tuple[Any, Any, tuple[int, int]]] = []
-                        for g0, g1 in plan:
-                            sub = slice_graph_wire(payload, g0, g1)
-                            _t_collate_start = time.perf_counter()
-                            sink: list[Any] | None = [] if checker is not None else None
-                            try:
-                                batch = collate_graph_batch(
-                                    sub,
-                                    expected_version=1,
-                                    trunk_size=spec.trunk_size,
-                                    win_length=win_length,
-                                    node_feat_dim=node_feat_dim,
-                                    edge_feat_dim=edge_feat_dim,
-                                    device=str(self.device),
-                                    semantic="canary",
-                                    canary_period=canary_period,
-                                    deferred_edge_geometry=sink,
-                                )
-                            except GraphContractError as exc:
-                                # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is
-                                # what is saved. The dump can only ADD an artifact, never replace it.
-                                self._dump_collate_failure(sub, exc, (g0, g1))
-                                raise
-                            # Per PART, not per pop: `collate.count == sum(M)`, and the asymmetry
-                            # is recorded so it is not read as a leak.
-                            self._record_collate(time.perf_counter() - _t_collate_start)
-                            if sink:
-                                # One check per part: `_check_semantic` captures check 14 once.
-                                pending_checks.append((sink[0], sub, (g0, g1)))
-                            stone_mask = stone_mask_from_batch(batch)
-                            if self._forward_count == 0:
-                                assert not self.model.training, (
-                                    "InferenceServer(graph) model entered hot loop in "
-                                    "train() mode; eval() should be set at __init__"
-                                )
-                            with self._weights_lock, torch.inference_mode():
-                                with torch.autocast(
-                                    device_type=self.device.type,
-                                    dtype=self._amp_dtype,
-                                    enabled=self.device.type == "cuda",
-                                ):
-                                    # `forward_batch` is GnnNet's real method; nn.Module's
-                                    # __getattr__ types dynamic attrs as Tensor | Module.
-                                    policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                                        batch.x,
-                                        batch.edge_index,
-                                        batch.edge_attr,
-                                        batch.legal_node_gather,
-                                        stone_mask,
-                                        batch.node_offsets,
-                                        **self._trunk_kwarg,
-                                    )
-                            # Segment-softmax in float32 corrects reduced-precision drift and is
-                            # segment-LOCAL, so a part's softmax is the un-split forward's softmax.
-                            probs = segment_softmax(
-                                policy_logits.float(), batch.legal_offsets
-                            )
-                            # Always-on finiteness gate: a NaN/Inf output otherwise reaches backup()
-                            # and poisons the tree silently, and the numeric asserts are release-out.
-                            if not bool(torch.isfinite(probs).all()) or not bool(
-                                torch.isfinite(value).all()
-                            ):
-                                raise RuntimeError(
-                                    "NonFiniteModelOutput: graph forward produced NaN/Inf "
-                                    f"(probs finite={bool(torch.isfinite(probs).all())}, "
-                                    f"values finite={bool(torch.isfinite(value).all())})"
-                                )
-                            probs_parts.append(np.ascontiguousarray(
-                                probs.detach().cpu().numpy(), dtype=np.float32
-                            ))
-                            values_parts.append(np.ascontiguousarray(
-                                value.detach().float().cpu().numpy().reshape(-1),
-                                dtype=np.float32,
-                            ))
-                            self._record_fusion_part(
-                                int(node_counts[g0:g1].sum()),
-                                int(edge_counts[g0:g1].sum()),
-                            )
-                            # One part resident at a time: the bound is on the PEAK, so the previous
-                            # part's device tensors must be gone before the next's exist.
-                            del sub, batch, stone_mask, policy_logits, value, probs
-                        # ONE submit per pop, against the payload's own UNSLICED offsets: the
-                        # parts' offsets are re-based and would segment the concatenation wrongly.
-                        self._batcher.submit_graph_inference_results(
-                            request_ids,
-                            np.ascontiguousarray(
-                                np.concatenate(probs_parts), dtype=np.float32
-                            ),
-                            np.ascontiguousarray(
-                                np.asarray(payload.legal_offsets), dtype=np.int64
-                            ),
-                            np.ascontiguousarray(
-                                np.concatenate(values_parts), dtype=np.float32
-                            ),
-                        )
-                        if checker is not None:
-                            checker.submit_parts(pending_checks)
+                        retirer.submit(self._launch_pop(request_ids, wire, geometry))
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
-                        error_msg = f"Graph inference failed: {exc}"
-                        _LOG.error(
-                            "graph_inference_forward_failed context=%s error_type=%s "
-                            "error=%s tb=%s",
-                            "inference_server", type(exc).__name__,
-                            str(exc)[:300] or repr(exc)[:300],
-                            traceback.format_exc()[:1500],
-                        )
-                        self._batcher.submit_graph_inference_failure(request_ids, error_msg)
-                        continue
-                    self._forward_count += 1
-                    if not self._first_served_emitted:
-                        self._first_served_emitted = True
-                        if self._sink is not None:
-                            self._sink.emit({
-                                "event": "first_inference_served",
-                                "batch_size": len(request_ids),
-                                "representation": "graph",
-                            })
-                    if self._heartbeat is not None:
-                        self._heartbeat(_HEARTBEAT_SOURCE)
+                        retirer.slots.release()
+                        self._fail_pop(request_ids, exc)
                 except Exception as exc:  # noqa: BLE001 — loop keeps serving next batch
                     _LOG.exception("inference_server_graph_loop_error error=%s", exc)
                     if self._stop_event.is_set():
                         break
         finally:
+            # Everything launched is dispatched before the queues close under the waiters.
+            retirer.drain_and_stop()
+            retirer.join()
             self._batcher.close()
+
+    def _launch_pop(
+        self, request_ids: list[int], wire: Any, geometry: _CollateGeometry,
+    ) -> _InFlightPop:
+        """The CPU stage of one pop: plan, collate, queue the forward and its D2H; raises."""
+        from mantis.selfplay.graph_collate import (
+            GraphContractError,
+            collate_graph_batch,
+            graph_wire_from_rust,
+            segment_softmax,
+            stone_mask_from_batch,
+        )
+        from mantis.selfplay.graph_wire_split import plan_fused_forwards, slice_graph_wire
+
+        caps = geometry.caps
+        # ONE read of each Rust getter, then pure-numpy views per part.
+        payload = graph_wire_from_rust(wire)
+        edge_counts = np.diff(np.asarray(payload.edge_offsets, dtype=np.int64))
+        node_counts = np.diff(np.asarray(payload.node_offsets, dtype=np.int64))
+        plan = plan_fused_forwards(payload.edge_offsets, payload.node_offsets, caps)
+        self._record_fusion_plan(
+            len(plan), *_fusion_bound_hits(plan, edge_counts, node_counts, caps),
+        )
+        pop = _InFlightPop(
+            request_ids=request_ids,
+            legal_offsets=np.ascontiguousarray(
+                np.asarray(payload.legal_offsets), dtype=np.int64),
+        )
+        on_cuda = self.device.type == "cuda"
+        for g0, g1 in plan:
+            sub = slice_graph_wire(payload, g0, g1)
+            _t_collate_start = time.perf_counter()
+            sink: list[Any] | None = [] if geometry.capture_checks else None
+            try:
+                batch = collate_graph_batch(
+                    sub,
+                    expected_version=1,
+                    trunk_size=geometry.trunk_size,
+                    win_length=geometry.win_length,
+                    node_feat_dim=geometry.node_feat_dim,
+                    edge_feat_dim=geometry.edge_feat_dim,
+                    device=str(self.device),
+                    semantic="canary",
+                    canary_period=geometry.canary_period,
+                    deferred_edge_geometry=sink,
+                )
+            except GraphContractError as exc:
+                # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is what is
+                # saved. The dump can only ADD an artifact, never replace it.
+                self._dump_collate_failure(sub, exc, (g0, g1))
+                raise
+            # Per PART, not per pop: `collate.count == sum(M)`, and the asymmetry is recorded
+            # so it is not read as a leak.
+            self._record_collate(time.perf_counter() - _t_collate_start)
+            if sink:
+                # One check per part: `_check_semantic` captures check 14 once.
+                pop.pending_checks.append((sink[0], sub, (g0, g1)))
+            stone_mask = stone_mask_from_batch(batch)
+            if self._forward_count == 0 and not pop.parts:
+                assert not self.model.training, (
+                    "InferenceServer(graph) model entered hot loop in "
+                    "train() mode; eval() should be set at __init__"
+                )
+            with self._weights_lock, torch.inference_mode():
+                with torch.autocast(
+                    device_type=self.device.type,
+                    dtype=self._amp_dtype,
+                    enabled=on_cuda,
+                ):
+                    # `forward_batch` is GnnNet's real method; nn.Module's __getattr__ types
+                    # dynamic attrs as Tensor | Module.
+                    policy_logits, value, _bins = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                        batch.x,
+                        batch.edge_index,
+                        batch.edge_attr,
+                        batch.legal_node_gather,
+                        stone_mask,
+                        batch.node_offsets,
+                        **self._trunk_kwarg,
+                    )
+            # Segment-softmax in float32 corrects reduced-precision drift and is segment-LOCAL,
+            # so a part's softmax is the un-split forward's softmax.
+            probs = segment_softmax(policy_logits.float(), batch.legal_offsets)
+            values = value.detach().float().reshape(-1)
+            # The D2H is queued behind the forward, into pinned host buffers on CUDA; nothing
+            # here waits on the device. The finiteness gate runs on the host copy at retire.
+            pop.parts.append((_to_host_async(probs, on_cuda), _to_host_async(values, on_cuda)))
+            self._record_fusion_part(
+                int(node_counts[g0:g1].sum()), int(edge_counts[g0:g1].sum()),
+            )
+            # One FORWARD resident at a time: the allocator reuses this part's activations for
+            # the next part's in stream order once the Python references are gone.
+            del sub, batch, stone_mask, policy_logits, value, probs, values
+        if on_cuda:
+            pop.event = torch.cuda.Event()
+            pop.event.record()
+        return pop
+
+    def _retire(self, pop: _InFlightPop) -> None:
+        """The dispatch stage of one pop: wait, gate finiteness on the host, submit ONCE."""
+        _t_gpu_wait = time.perf_counter()
+        if pop.event is not None:
+            pop.event.synchronize()
+        self._record_gpu_wait(time.perf_counter() - _t_gpu_wait)
+        # A check-14 finding latched while this pop was in flight refuses it here, so at most the
+        # pops already launched when the finding landed are served, never a later one.
+        if self._deferred_contract_failure is not None:
+            raise RuntimeError(
+                f"deferred edge-geometry check failed: {self._deferred_contract_failure}"
+            ) from self._deferred_contract_failure
+        # Always-on finiteness gate, on the HOST copies: a NaN/Inf output otherwise reaches
+        # backup() and poisons the tree silently, and the numeric asserts are release-out.
+        probs_parts: list[np.ndarray] = []
+        values_parts: list[np.ndarray] = []
+        probs_ok = values_ok = True
+        for probs_host, values_host in pop.parts:
+            probs_np, values_np = probs_host.numpy(), values_host.numpy()
+            probs_ok = probs_ok and bool(np.isfinite(probs_np).all())
+            values_ok = values_ok and bool(np.isfinite(values_np).all())
+            probs_parts.append(probs_np)
+            values_parts.append(values_np)
+        if not probs_ok or not values_ok:
+            raise RuntimeError(
+                "NonFiniteModelOutput: graph forward produced NaN/Inf "
+                f"(probs finite={probs_ok}, values finite={values_ok})"
+            )
+        # ONE submit per pop, against the payload's own UNSLICED offsets: the parts' offsets are
+        # re-based and would segment the concatenation wrongly.
+        self._batcher.submit_graph_inference_results(
+            pop.request_ids,
+            np.ascontiguousarray(np.concatenate(probs_parts), dtype=np.float32),
+            pop.legal_offsets,
+            np.ascontiguousarray(np.concatenate(values_parts), dtype=np.float32),
+        )
+        if self._edge_geometry_checker is not None:
+            self._edge_geometry_checker.submit_parts(pop.pending_checks)
+        self._forward_count += 1
+        if not self._first_served_emitted:
+            self._first_served_emitted = True
+            if self._sink is not None:
+                self._sink.emit({
+                    "event": "first_inference_served",
+                    "batch_size": len(pop.request_ids),
+                    "representation": "graph",
+                })
+        if self._heartbeat is not None:
+            self._heartbeat(_HEARTBEAT_SOURCE)
+
+    def _retire_or_fail(self, pop: _InFlightPop) -> None:
+        """`_retire`, with any failure mapped onto THIS pop's waiters — never the next pop's."""
+        try:
+            self._retire(pop)
+        except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
+            self._fail_pop(pop.request_ids, exc)
+
+    def _fail_pop(self, request_ids: list[int], exc: BaseException) -> None:
+        """The loop's ONE failure path: log, then wake this pop's waiters with the error."""
+        error_msg = f"Graph inference failed: {exc}"
+        _LOG.error(
+            "graph_inference_forward_failed context=%s error_type=%s error=%s tb=%s",
+            "inference_server", type(exc).__name__,
+            str(exc)[:300] or repr(exc)[:300],
+            traceback.format_exc()[:1500],
+        )
+        self._batcher.submit_graph_inference_failure(request_ids, error_msg)
 
     def run(self) -> None:
         """Serve inference until `stop()`. One loop: the ragged axis-graph one."""
