@@ -145,6 +145,34 @@ class GraphWirePayload:
     current_player: np.ndarray
 
 
+@dataclass(frozen=True)
+class EdgeGeometryCheck:
+    """Check 14's call, captured: run inline or handed to a checker thread, never rebuilt."""
+
+    node_feat: np.ndarray
+    node_coords: np.ndarray
+    edge_index: np.ndarray
+    edge_attr: np.ndarray
+    node_offsets: np.ndarray
+    current_player: np.ndarray
+    node_feat_dim: int
+    edge_feat_dim: int
+    win_length: int
+
+    def run(self) -> None:
+        """Re-derive every edge attribute in Rust; raises `EdgeAttrGeometryMismatch` by name."""
+        from mantis._engine import verify_edge_geometry
+
+        try:
+            verify_edge_geometry(
+                self.node_feat, self.node_coords, self.edge_index, self.edge_attr,
+                self.node_offsets, self.current_player, self.node_feat_dim,
+                self.edge_feat_dim, self.win_length,
+            )
+        except ValueError as exc:
+            raise EdgeAttrGeometryMismatch(str(exc)) from exc
+
+
 @dataclass
 class GraphBatch:
     """Collated block-diagonal torch tensors feeding `GnnNet.forward_batch`, plus the fields
@@ -304,11 +332,14 @@ def collate_graph_batch(
     canary_period: int = 64,
     allow_oracle_builder: bool = False,
     target_argmax_cells: Sequence[tuple[int, int] | None] | None = None,
+    deferred_edge_geometry: list[EdgeGeometryCheck] | None = None,
 ) -> GraphBatch:
     """Validate and collate one block-diagonal graph wire into a `GraphBatch`.
 
     `semantic`: "full" (trainer), "canary" (hot path — first + every Nth) or "off". The
     structural layer always runs full, and any mismatch raises a NAMED `GraphContractError`.
+    `deferred_edge_geometry`: a sink for check 14 — when given, the check is appended to it
+    instead of run, exactly when it would have run, for the caller's checker thread (R347(e)).
 
     THE FOUR GEOMETRY PARAMETERS ARE REQUIRED: they are the EXPECTED geometry the wire is
     checked against, so a default is a silent expectation and a payload re-captured at another
@@ -374,7 +405,7 @@ def collate_graph_batch(
             node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
             legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
             window_center, current_player, B, trunk_size, win_length, node_feat_dim,
-            edge_feat_dim, target_argmax_cells,
+            edge_feat_dim, target_argmax_cells, deferred_edge_geometry,
         )
 
     # --- resolver step 4: block-diagonal torch tensors (edge_index already global) ---
@@ -587,7 +618,7 @@ def _check_semantic(
     node_feat, node_coords, edge_index, edge_attr, node_offsets, edge_offsets,
     legal_offsets, legal_node_gather, policy_dst_slot, n_nodes_checksum, n_stones,
     window_center, current_player, B, trunk_size, win_length, node_feat_dim,
-    edge_feat_dim, target_argmax_cells,
+    edge_feat_dim, target_argmax_cells, deferred: list[EdgeGeometryCheck] | None = None,
 ) -> None:
     N = node_feat.size // node_feat_dim
     E = edge_attr.size // edge_feat_dim
@@ -597,20 +628,17 @@ def _check_semantic(
     coords = node_coords.reshape(N, 2).astype(np.int64)
 
     # 14. EdgeAttrGeometryMismatch — attrs re-derived from coords + player id in Rust over the
-    # same post-marshal zero-copy views, which removes the coord gather, the argmax onehot and
-    # the boolean-mask copy the profiler named as the largest single step cost. The Rust fn
-    # raises a plain ValueError, re-raised here under the same named error.
+    # same post-marshal zero-copy views. With a `deferred` sink the call is CAPTURED for the
+    # caller's checker thread (R347(e)) instead of run here; it still runs on every batch.
     if E > 0:
-        # deferred: matches the `import torch` pattern above
-        from mantis._engine import verify_edge_geometry
-
-        try:
-            verify_edge_geometry(
-                node_feat, node_coords, edge_index, edge_attr, node_offsets,
-                current_player, node_feat_dim, edge_feat_dim, win_length,
-            )
-        except ValueError as exc:
-            raise EdgeAttrGeometryMismatch(str(exc)) from exc
+        check = EdgeGeometryCheck(
+            node_feat, node_coords, edge_index, edge_attr, node_offsets, current_player,
+            node_feat_dim, edge_feat_dim, win_length,
+        )
+        if deferred is None:
+            check.run()
+        else:
+            deferred.append(check)
 
     # 15. GatherNotLegalNode — gather in the legal subrange (not stone/dummy).
     if Lg > 0:
@@ -730,6 +758,7 @@ __all__ = [
     "EdgeAttrDimMismatch",
     "EdgeAttrGeometryMismatch",
     "EdgeCrossesGraphBoundary",
+    "EdgeGeometryCheck",
     "EdgeIndexOutOfBounds",
     "EmptyLegalSet",
     "GatherNotLegalNode",

@@ -5,4 +5,4 @@
 # The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
 comment_excess_lines 3550
 banner_comment_lines 23
-docstring_excess_lines 13543
+docstring_excess_lines 13532

@@ -237,6 +237,9 @@ CONSUMER_REGISTRY = {
     "selfplay.playout_cap.temp_min": "SelfPlayHParams.from_config -> runner temp_min",
     "inference.inference_batch_size": "InferenceHParams.from_config -> inference_server batch size",
     "inference.inference_max_wait_ms": "InferenceHParams.from_config -> inference_server max wait",
+    "inference.edge_geometry_check":
+        "resolve_edge_geometry_check -> WorkerPool -> InferenceServer(edge_geometry_check=) -> "
+        "where check 14 runs in _run_graph_loop (R347(e))",
     # The GRAPH inference forward's memory bound, GRAPH-ROUTE-SCOPED: the resolver is called
     # from the graph branch of `InferenceServer.__init__` alone, so a grid run cannot reach it.
     "inference.fused_graph_caps.max_fused_edges":

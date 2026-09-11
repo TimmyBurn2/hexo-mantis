@@ -10,6 +10,7 @@ dense-by-default arm; autocast is bf16 UNCONDITIONALLY on the graph loop (LAW-06
 from __future__ import annotations
 
 import logging
+import queue
 import threading
 import time
 import traceback
@@ -133,6 +134,67 @@ def _occupancy_agg(
 CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
 
 
+#: Bounded, in pops' parts: a full queue runs the check inline rather than dropping it, so the
+#: memory held behind the serving loop is capped and 1-in-1 never narrows.
+_EDGE_GEOMETRY_QUEUE_DEPTH = 4
+
+
+class _EdgeGeometryChecker(threading.Thread):
+    """R347(e): runs check 14 AFTER the batch is served; a failure dumps and latches the server."""
+
+    def __init__(self, server: InferenceServer) -> None:
+        super().__init__(daemon=True, name="edge-geometry-checker")
+        self._server = server
+        self._queue: queue.Queue[tuple[Any, Any, tuple[int, int]] | None] = queue.Queue(
+            maxsize=_EDGE_GEOMETRY_QUEUE_DEPTH)
+        #: Checks completed on either path; the scheduling handle a deterministic drive waits on.
+        self.processed = 0
+
+    def submit_parts(self, parts: list[tuple[Any, Any, tuple[int, int]]]) -> None:
+        """Hand over one served pop's captured checks: the parts of ONE plan, after the submit."""
+        for check, wire, span in parts:
+            self.submit(check, wire, span)
+
+    def submit(self, check: Any, wire: Any, span: tuple[int, int]) -> None:
+        """Queue one captured check; a full queue runs it inline NOW (never dropped)."""
+        try:
+            self._queue.put_nowait((check, wire, span))
+        except queue.Full:
+            self._server._edge_geometry_inline_fallback += 1
+            self._run_one(check, wire, span)
+        else:
+            self._server._edge_geometry_deferred += 1
+
+    def _run_one(self, check: Any, wire: Any, span: tuple[int, int]) -> None:
+        from mantis.selfplay.graph_collate import GraphContractError
+
+        try:
+            check.run()
+        except GraphContractError as exc:
+            self._server._dump_collate_failure(wire, exc, span)
+            self._server._latch_deferred_contract_failure(exc)
+        finally:
+            self.processed += 1
+
+    def run(self) -> None:
+        while True:
+            item = self._queue.get()
+            if item is None:
+                return
+            self._run_one(*item)
+
+    def drain_and_stop(self) -> None:
+        """Run every queued check on the caller's thread, then let the thread exit."""
+        while True:
+            try:
+                item = self._queue.get_nowait()
+            except queue.Empty:
+                break
+            if item is not None:
+                self._run_one(*item)
+        self._queue.put(None)
+
+
 class InferenceServer(threading.Thread):
     """Thin Python inference loop backed by a Rust-owned batching queue."""
 
@@ -149,6 +211,7 @@ class InferenceServer(threading.Thread):
         fused_graph_caps: FusedGraphCapsSpec | None = None,
         collate_check_period: int | None = None,
         collate_dump: CollateDumpTarget | None = None,
+        edge_geometry_check: str | None = None,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
@@ -166,6 +229,18 @@ class InferenceServer(threading.Thread):
         # run6's `inference_batch_size: 64` makes 1-in-64. Not a config key: it is a path property.
         self._collate_check_period = collate_check_period
         self._collate_dump = collate_dump
+        # `None` is the PRE-EXISTING path (inline); production threads the resolved posture.
+        # The checker thread exists only under `checker_thread`, so inline is byte-identical.
+        self._edge_geometry_check = "inline" if edge_geometry_check is None else edge_geometry_check
+        if self._edge_geometry_check not in ("inline", "checker_thread"):
+            raise ValueError(
+                f"InferenceServer: edge_geometry_check={edge_geometry_check!r} is not a posture "
+                "(inline | checker_thread); resolve it through mantis.config.resolve")
+        self._edge_geometry_checker: _EdgeGeometryChecker | None = None
+        self._edge_geometry_deferred = 0
+        self._edge_geometry_inline_fallback = 0
+        self._edge_geometry_failures = 0
+        self._deferred_contract_failure: BaseException | None = None
         hp = InferenceHParams.from_config(config)
         self._batch_size = hp.inference_batch_size
         self._max_wait_ms = hp.inference_max_wait_ms
@@ -278,6 +353,21 @@ class InferenceServer(threading.Thread):
     def stop(self) -> None:
         self._stop_event.set()
         self._batcher.close()
+        if self._edge_geometry_checker is not None:
+            self._edge_geometry_checker.drain_and_stop()
+
+    @property
+    def deferred_contract_failure(self) -> BaseException | None:
+        """A check-14 failure found AFTER its batch was served: run-fatal, read by the pool."""
+        return self._deferred_contract_failure
+
+    def _latch_deferred_contract_failure(self, exc: BaseException) -> None:
+        """First failure wins; every later batch is refused so the runner latches and halts."""
+        self._edge_geometry_failures += 1
+        if self._deferred_contract_failure is None:
+            self._deferred_contract_failure = exc
+            _LOG.error("edge_geometry_deferred_failure context=%s error=%s",
+                       "inference_server", str(exc)[:300])
 
     def load_state_dict_safe(self, state_dict: dict) -> None:
         """Thread-safe weight swap — blocks until any in-flight forward completes. A compiled
@@ -341,9 +431,7 @@ class InferenceServer(threading.Thread):
         return self._total_requests
 
     def _record_batch_wait(self, wait_s: float, n_requests: int) -> None:
-        """Accumulate ONE served pop: the collector wait that produced it plus its occupancy.
-        AGGREGATE, never emit — this runs once per NN forward. `wait_s` pegged at
-        `inference_max_wait_ms` means every batch ran to the collector's deadline."""
+        """Accumulate ONE served pop's collector wait and occupancy; aggregate, never emit."""
         self._batch_wait_count += 1
         self._batch_wait_total_s += wait_s
         if self._batch_wait_min_s is None or wait_s < self._batch_wait_min_s:
@@ -361,9 +449,7 @@ class InferenceServer(threading.Thread):
     def _dump_collate_failure(
         self, wire: Any, error: BaseException, span: tuple[int, int]
     ) -> None:
-        """Write the offending batch before the caller re-raises. Never raises. A server with no
-        dump target does nothing: the instrument is armed per PATH, and the write only happens on a
-        contract failure, which is run-fatal."""
+        """Write the offending batch before the caller re-raises; never raises; no target, no-op."""
         if self._collate_dump is None:
             return
         from mantis.selfplay.collate_dump import write_collate_dump
@@ -382,8 +468,7 @@ class InferenceServer(threading.Thread):
             _LOG.error("F-816-37 dump-on-fire wrote %s", path)
 
     def _record_collate(self, collate_s: float) -> None:
-        """Accumulate ONE successful `collate_graph_batch`, counted SEPARATELY from the wait: a
-        batch whose collate raises still contributes a real wait sample."""
+        """Accumulate ONE successful collate, counted separately from the wait sample."""
         self._collate_count += 1
         self._collate_total_s += collate_s
         if self._collate_min_s is None or collate_s < self._collate_min_s:
@@ -392,17 +477,15 @@ class InferenceServer(threading.Thread):
             self._collate_max_s = collate_s
 
     def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
-        """Accumulate ONE plan: whether the lever fired, and which member forced each cut.
-        `fusion_splits` counts POPS THAT SPLIT, not cuts; attribution is `fusion_bound_hits`, which
-        is what tells an operator which member to re-fit."""
+        """Accumulate ONE plan: `fusion_splits` counts POPS THAT SPLIT; `fusion_bound_hits` says
+        which member forced each cut."""
         if n_parts > 1:
             self._fusion_splits += 1
         self._fusion_bound_hits["edges"] += edge_hits
         self._fusion_bound_hits["nodes"] += node_hits
 
     def _record_fusion_part(self, n_nodes: int, n_edges: int) -> None:
-        """Accumulate ONE bounded forward's `(N, E)`. Per PART, never per pop, because the part is
-        where the cap applies; `_forward_count` stays a per-POP occupancy denominator."""
+        """Accumulate ONE bounded forward's `(N, E)`, per PART — the part is where the cap applies."""
         self._fusion_parts += 1
         self._fused_edges_count += 1
         self._fused_edges_total += n_edges
@@ -471,23 +554,20 @@ class InferenceServer(threading.Thread):
             # The memory bound's own in-run instrument: PRESENT with a `None` value on a grid run,
             # never absent, since an absent key and a null one differ only if the key is always there.
             "fusion": self._fusion_snapshot(),
+            # R347(e)'s lever, LAW-18: its posture and its own fire rate, visible at 0 on the
+            # producing path; `None` on a grid run.
+            "edge_geometry_check": {
+                "mode": self._edge_geometry_check,
+                "deferred": self._edge_geometry_deferred,
+                "inline_fallback": self._edge_geometry_inline_fallback,
+                "failures": self._edge_geometry_failures,
+            } if self._is_graph else None,
         }
 
     def _run_graph_loop(self) -> None:
-        """Ragged axis-graph inference loop, MEMORY-BOUNDED.
-
-        Pull a block-diagonal graph wire from Rust, convert it to a payload ONCE, partition that
-        payload at GRAPH boundaries under `inference.fused_graph_caps`, and run one
-        `collate_graph_batch` + `GnnNet.forward_batch` (bf16 autocast — LAW-06) + segment-softmax
-        per PART, freeing each part before the next so only one part's tensors are ever resident.
-
-        The split is PRE-COLLATE, because a design whose first allocation is proportional to the
-        uncapped quantity cannot meet a bound; `PyGraphWire`'s getters COPY, so the payload is read
-        ONCE and the parts are numpy views of it. ONE SUBMIT, after every part has run, against the
-        UNSLICED `legal_offsets`, so a mid-plan failure has submitted NOTHING. Every failure — a
-        real `OutOfMemoryError` included — dies loud through the SAME `except`, and there is
-        deliberately no OOM handler, because the only reason to catch one is to retry.
-        """
+        """Ragged axis-graph inference loop, MEMORY-BOUNDED: one payload read per pop, split
+        PRE-COLLATE at graph boundaries under the fused caps, one part resident at a time, ONE
+        submit per pop after every part; every failure dies through the SAME `except`."""
         from mantis.selfplay.graph_collate import (
             GraphContractError,
             collate_graph_batch,
@@ -527,6 +607,10 @@ class InferenceServer(threading.Thread):
             int(self._batch_size) if self._collate_check_period is None
             else int(self._collate_check_period)
         )
+        checker = self._edge_geometry_checker
+        if self._edge_geometry_check == "checker_thread" and checker is None:
+            checker = self._edge_geometry_checker = _EdgeGeometryChecker(self)
+            checker.start()
 
         try:
             while not self._stop_event.is_set():
@@ -552,6 +636,14 @@ class InferenceServer(threading.Thread):
                             })
                     self._total_requests += len(request_ids)
                     try:
+                        # Detect-and-halt one batch later: a check-14 failure found after its
+                        # batch was served is raised HERE, so this pop's waiters take it through
+                        # the loop's one failure path and the runner's latch fires as inline did.
+                        if self._deferred_contract_failure is not None:
+                            raise RuntimeError(
+                                f"deferred edge-geometry check failed: "
+                                f"{self._deferred_contract_failure}"
+                            ) from self._deferred_contract_failure
                         # ONE read of each Rust getter, then pure-numpy views per part.
                         payload = graph_wire_from_rust(wire)
                         edge_counts = np.diff(
@@ -569,9 +661,13 @@ class InferenceServer(threading.Thread):
                         )
                         probs_parts: list[np.ndarray] = []
                         values_parts: list[np.ndarray] = []
+                        # Check 14 captured per part under `checker_thread`, handed over only
+                        # after the pop is SERVED: off the critical path, still 1-in-1.
+                        pending_checks: list[tuple[Any, Any, tuple[int, int]]] = []
                         for g0, g1 in plan:
                             sub = slice_graph_wire(payload, g0, g1)
                             _t_collate_start = time.perf_counter()
+                            sink: list[Any] | None = [] if checker is not None else None
                             try:
                                 batch = collate_graph_batch(
                                     sub,
@@ -583,6 +679,7 @@ class InferenceServer(threading.Thread):
                                     device=str(self.device),
                                     semantic="canary",
                                     canary_period=canary_period,
+                                    deferred_edge_geometry=sink,
                                 )
                             except GraphContractError as exc:
                                 # DUMP-ON-FIRE: the SLICE is what the check read, so the slice is
@@ -592,6 +689,9 @@ class InferenceServer(threading.Thread):
                             # Per PART, not per pop: `collate.count == sum(M)`, and the asymmetry
                             # is recorded so it is not read as a leak.
                             self._record_collate(time.perf_counter() - _t_collate_start)
+                            if sink:
+                                # One check per part: `_check_semantic` captures check 14 once.
+                                pending_checks.append((sink[0], sub, (g0, g1)))
                             stone_mask = stone_mask_from_batch(batch)
                             if self._forward_count == 0:
                                 assert not self.model.training, (
@@ -657,6 +757,8 @@ class InferenceServer(threading.Thread):
                                 np.concatenate(values_parts), dtype=np.float32
                             ),
                         )
+                        if checker is not None:
+                            checker.submit_parts(pending_checks)
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
                         error_msg = f"Graph inference failed: {exc}"
                         _LOG.error(

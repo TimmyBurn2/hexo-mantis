@@ -113,6 +113,10 @@ OPERATIONAL_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
     ("monitor.disk_guard.interval_sec", "disk-guard poll cadence"),
     ("monitor.disk_guard.warn_gb", "disk-guard warn threshold"),
     ("monitor.disk_guard.fail_gb", "disk-guard fail threshold"),
+    ("inference.edge_geometry_check", "where check 14 runs — inline on the serving loop or on "
+                                      "a checker thread after the batch is served (R347(e)); "
+                                      "it runs on every batch either way, so this operates "
+                                      "the server and decides nothing a run measures"),
 )
 
 

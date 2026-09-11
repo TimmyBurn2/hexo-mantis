@@ -282,6 +282,12 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   `eval_rung_skip_class` exclusion above; those two rulings disagree about whether an
   in-run instrument with no consuming gate rule belongs here, and an operator ruling
   collapsing them is owed.
+  The block also carries an `edge_geometry_check` SUB-BLOCK (R347(e), LAW-18): `mode` (the
+  minted posture, `inline` or `checker_thread`), `deferred` (checks handed to the checker
+  thread after their batch was served), `inline_fallback` (checks run on the serving loop
+  because the bounded queue was full — never dropped) and `failures` (check-14 refusals
+  found after serving, each with its F-816-37 dump). Cumulative since server start; visible
+  at 0 under `inline`; `None` on a grid run, for `fusion`'s reason.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

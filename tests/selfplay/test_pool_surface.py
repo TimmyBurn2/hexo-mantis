@@ -120,6 +120,7 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     inference = {
         "inference_batch_size": 4,
         "inference_max_wait_ms": 10,
+        "edge_geometry_check": "inline",
         # The graph arm resolves the fused-forward memory bound at construction. NON-BINDING BY
         # CONSTRUCTION here: this fixture is about wiring, and a cap that bound would exercise a
         # split with nothing asserting the M.
