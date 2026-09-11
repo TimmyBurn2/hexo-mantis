@@ -113,6 +113,11 @@ PATTERNS: dict[str, tuple[str, str]] = {
 #: than exempted, so this gate has never been green over a dirty tree.
 EXEMPT: tuple[tuple[str, str, str, str], ...] = ()
 
+#: Generated lock files carry four-part package versions (`12.8.4.1` is a CUDA library, not a
+#: machine) that the octet ranges cannot tell from an address; in a lock the only host position
+#: is a URL host, so `ipv4` counts there only immediately after `://`.
+LOCK_FILES = frozenset({"uv.lock"})
+
 #: Non-vacuity floor for --full-tree: a gate that scans nothing finds nothing. Set well below the
 #: measured tracked-text count, but high enough that a broken `git ls-files` or a wrong REPO_ROOT
 #: cannot pass silently.
@@ -213,10 +218,13 @@ def scan_text(rel: str, text: str) -> list[tuple[str, int, str, str, str]]:
         return []
     lines = text.splitlines()
     hits: list[tuple[str, int, str, str, str]] = []
+    lock = Path(rel).name in LOCK_FILES
     for name, rx, why in _compiled():
         for lineno, line in enumerate(lines, 1):
             for m in rx.finditer(line):
                 if _justified(lines, lineno):
+                    continue
+                if lock and name == "ipv4" and not line[:m.start()].endswith("://"):
                     continue
                 hits.append((rel, lineno, name, m.group(0), why))
     return hits
@@ -330,6 +338,16 @@ def self_test() -> bool:
             if scan_text("control.txt", f.read_text(encoding="utf-8")):
                 print(f"gate 17 SELF-TEST FAIL: false positive on control {line!r}")
                 ok = False
+        # The lock carve-out both ways: a version string is not a hit, a URL host still is.
+        f = Path(td) / "uv.lock"
+        f.write_text('version = "12.8.4.1"\n', encoding="utf-8")
+        if scan_text("uv.lock", f.read_text(encoding="utf-8")):
+            print("gate 17 SELF-TEST FAIL: a lock file's four-part version read as an address")
+            ok = False
+        f.write_text('url = "https://203.0.113.7/simple"\n', encoding="utf-8")
+        if not any(h[2] == "ipv4" for h in scan_text("uv.lock", f.read_text(encoding="utf-8"))):
+            print("gate 17 SELF-TEST FAIL: an address in a lock file's URL host did not fire")
+            ok = False
         # The hatch must actually suppress, or every register line below would red the gate.
         f = Path(td) / "hatched.txt"
         f.write_text("path = /root/x  # rule7-gate: ok -- fixture\n", encoding="utf-8")
