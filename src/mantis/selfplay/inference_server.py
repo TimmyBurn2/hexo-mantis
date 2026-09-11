@@ -403,7 +403,9 @@ class InferenceServer(threading.Thread):
             self._traced_model: Any = None
             self._h2d_staging: torch.Tensor | None = None
             if self._compile_trunk:
-                self._trunk = torch.compile(self.model.representation, dynamic=True)
+                # nn.Module's __getattr__ types the trunk as Tensor | Module; it is the module.
+                representation: Any = self.model.representation
+                self._trunk = torch.compile(representation, dynamic=True)
             self._retirer = _PopRetirer(self)
         else:
             # H2D staging sizes to the TRUNK window, the spatial dim the model accepts. For
