@@ -34,7 +34,8 @@ lint.rust:
 
 # THE LOCAL GATE SET (AUDIT-1 F-09). R311(b) made local green the gate; this is what
 # "local green" means. Two opt-ins, both self-declaring in the summary: `--with-fresh-sync`
-# (gate 1) and `--with-slow` (the tier BOTH pytest tiers deselect — R333(b)).
+# (gate 1) and `--with-slow` (the tier BOTH pytest tiers deselect — R333(b)). The set gates
+# the venv AS BUILT and never re-syncs it: `make build` (or `make build.cuda` on a box) first.
 gates:
 	bash tools/ci_gates/run_all.sh
 

@@ -543,62 +543,35 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
            "which exists to keep the device false-clear dead on every CPU box in the fleet.",
 )
 def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> None:
-    """Booting run5 on a non-CUDA box fails LOUD in `init_trainer`: the device is a config
-    fact, so a cpu preflight can no longer false-clear the GPU memory wall."""
+    """A cuda-minted run6 on a non-CUDA host fails LOUD and BEFORE any boot: since R347(d) the
+    START halt rc 17 (`PreflightCudaBuildError`) fires ahead of the child, where the old rc 33
+    in `init_trainer` used to be the first wall. The device stays a config fact either way, so a
+    cpu preflight can never false-clear the GPU memory wall."""
     out_dir = tmp_path / "run5_on_cpu"
     assert load_config(RUN5).train.device == "cuda", (
-        "PREMISE: run5 mints `train.device: cuda`. If run5 is ever re-minted to cpu this row "
+        "PREMISE: run6 mints `train.device: cuda`. If it is ever re-minted to cpu this row "
         "is testing nothing and must be re-adjudicated, not adjusted"
     )
-    # The arm selector is the module that OWNS the vocabulary: `None` IS the placeholder, a
-    # token is a minted regime, and anything else raises there instead of being guessed at
-    # here. A minted boot asserts its posture BEFORE init_trainer, so the child must launch in
-    # that posture, read from the config and never transcribed.
-    from mantis.config.resolve.allocator_posture import (
-        declared_allocator_posture,
-        resolve_allocator_posture,
-    )
+    from mantis.config.resolve.allocator_posture import resolve_allocator_posture
+
     full_config = load_config(RUN5).model_dump()
-    minted = declared_allocator_posture(full_config) is not None
-    # The placeholder arm passes NO environment deliberately: the refusal fires before the
-    # environment is read, so there is nothing to satisfy.
-    env = {**os.environ, **resolve_allocator_posture(full_config).required_env()} if minted else None
+    env = {**os.environ, **resolve_allocator_posture(full_config).required_env()}
     result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
                        "--out-dir", str(out_dir), "--timeout-sec", "45", env=env)
-    assert result.returncode == 33, (
-        "run5 on a non-CUDA box must FAIL, not rehearse something else: rc 33 "
-        f"PreflightBootFailedError. got {result.returncode}\n"
+    assert result.returncode == 17, (
+        "run6 on a non-CUDA box must HALT by name before the boot: rc 17 "
+        f"PreflightCudaBuildError. got {result.returncode}\n"
         f"{(result.stdout + result.stderr)[-3000:]}"
     )
     report = json.loads(sorted(out_dir.glob("preflight_*.json"))[0].read_text())
-    assert report["failure"] == "PreflightBootFailedError" and report["verdict"] == "fail"
-    assert report["child"]["timed_out"] is False, (
-        "the refusal is IMMEDIATE — a timeout here would mean the boot got past the device"
+    assert report["failure"] == "PreflightCudaBuildError" and report["verdict"] == "fail"
+    assert report.get("child") is None, (
+        "the halt lands BEFORE `_run_child`: a child block here means a boot was attempted on "
+        f"a torch that cannot compute on a GPU; got {report.get('child')!r}"
     )
-    tail = report["child"]["stderr_tail"]
-    if not minted:
-        assert "UncalibratedAllocatorPostureError" in tail, (
-            "PLACEHOLDER ARM: an unminted regime must refuse the boot BY NAME through the "
-            f"SHIPPED process, not somewhere else and not silently. got tail {tail[-800:]!r}"
-        )
-        assert "composition seam: init_trainer" not in tail, (
-            "…and it must refuse BEFORE the trainer is built: R308(g)(i) exists to land ahead "
-            "of the first CUDA allocation, and the init_trainer seam in this tail means that "
-            f"ordering inverted. got tail {tail[-800:]!r}"
-        )
-        assert "Torch not compiled with CUDA enabled" not in tail, (
-            "…and ahead of the DEVICE refusal too — this arm's subject is the ordering, so a "
-            f"torch CUDA assertion here is the device refusal winning. got tail {tail[-800:]!r}"
-        )
-    else:
-        assert "composition seam: init_trainer" in tail, (
-            "rc 33 must trace to a NAMED failure, not a swallowed one (R130): `_seam` annotates "
-            f"the in-flight exception with WHERE it happened and re-raises it. got {tail[-800:]!r}"
-        )
-        assert "Torch not compiled with CUDA enabled" in tail, (
-            "…and the raise itself is torch's own, verbatim in the evidence — acceptable-loud "
-            f"per R130, recorded rather than re-wrapped in scope. got tail {tail[-800:]!r}"
-        )
+    assert "CPU-ONLY build" in (result.stdout + result.stderr), (
+        "the refusal names the cause — a CPU-only torch — rather than a bare rc"
+    )
 
 
 def _mini_tree(tmp_path: Path) -> Path:

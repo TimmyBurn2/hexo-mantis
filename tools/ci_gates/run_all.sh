@@ -78,6 +78,14 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# THE GATES NEVER RE-SYNC THE VENV (R348(a)). A bare `uv run` re-syncs to the default groups,
+# which on a box swaps the `cuda` extra's +cu128 torch back to the CPU wheel in the middle of
+# the set and gates a torch nobody chose. `UV_NO_SYNC` is uv's own `--no-sync`, inherited by
+# every `uv run` below; syncing is the caller's step — `make build` or `make build.cuda`.
+export UV_NO_SYNC=1
+printf 'run_all: venv gated AS BUILT (UV_NO_SYNC=1): torch %s\n' \
+    "$($UV run python -c 'import torch; print(torch.__version__)' 2>/dev/null || echo absent)"
+
 PASSED=()
 FAILED=()
 
