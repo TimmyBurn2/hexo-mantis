@@ -425,6 +425,11 @@ def collate_graph_batch(
     )
 
 
+#: Below this size the pinned staging copy is a single-threaded `np.copyto`; above it torch's parallel
+#: `pin_memory()`, whose intra-op region is worth its pool wake-up only for the two edge arrays.
+_PIN_PARALLEL_BYTES = 1 << 20
+
+
 def _device_copier(device: str):
     """The one H2D path of the collate: pinned staging + `non_blocking` DMA on CUDA."""
     # The caching host allocator holds each pinned staging block until its copy has completed.
@@ -434,9 +439,13 @@ def _device_copier(device: str):
 
     def copy(arr: np.ndarray, dtype) -> Any:
         host = torch.from_numpy(np.ascontiguousarray(arr, dtype=dtype))
-        if pinned:
+        if not pinned:
+            return host.to(device)
+        if host.nbytes >= _PIN_PARALLEL_BYTES:
             return host.pin_memory().to(device, non_blocking=True)
-        return host.to(device)
+        staged = torch.empty(host.shape, dtype=host.dtype, pin_memory=True)
+        np.copyto(staged.numpy(), host.numpy())
+        return staged.to(device, non_blocking=True)
 
     return copy
 
