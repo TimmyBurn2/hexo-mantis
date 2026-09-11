@@ -114,6 +114,9 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
 
     MUTATION THAT REDS IT: compose `HexgBuffer` with any fixed capacity.
     """
+    # Under the minted Gumbel kind a sparse row's capacity is m whatever the sims, so the two
+    # shapes that must DIFFER drive the full-vector puct kind; the minted config is the third.
+    full_vector = {"search": {"kind": "puct"}, "train": {"policy_target": "raw_visit_distribution"}}
     pcr = smoke_run_config(
         "run6.yaml",
         selfplay={
@@ -123,15 +126,18 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
                 "n_sims_full": 600,
             }
         },
+        **full_vector,
     )
     assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
-
-    minted = smoke_run_config("run6.yaml")
-    assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
-    assert _derived(pcr) != _derived(minted), (
+    puct_minted_sims = smoke_run_config("run6.yaml", **full_vector)
+    assert _select_buffer(puct_minted_sims, _CAPACITY).visit_capacity == _derived(puct_minted_sims)
+    assert _derived(pcr) != _derived(puct_minted_sims), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "
         "derivation from a constant — the whole point of driving both shapes"
     )
+
+    minted = smoke_run_config("run6.yaml")
+    assert _select_buffer(minted, _CAPACITY).visit_capacity == _derived(minted)
 
 
 def _fill_graph_ring(buffer, n_records: int = 32) -> None:
