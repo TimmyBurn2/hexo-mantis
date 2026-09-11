@@ -1,9 +1,14 @@
-.PHONY: build build.native test test.integration lint lint.rust gates gates.exit dashboard bench bench.baseline check.wasm vendor vendor.sealbot clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard bench bench.baseline check.wasm vendor vendor.sealbot clean
 
 UV ?= uv
 
 build:
 	$(UV) sync
+
+# R348(a): CUDA torch is the `cuda` extra; the CPU wheel is a DEFAULT group, so the group is
+# dropped explicitly (uv refuses to drop a default group on its own). Box only.
+build.cuda:
+	$(UV) sync --extra cuda --no-group cpu
 
 # Local perf builds only. target-cpu never appears in committed build config;
 # artifacts built this way are host-specific and must not be distributed.

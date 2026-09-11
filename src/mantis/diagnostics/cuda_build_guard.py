@@ -1,8 +1,9 @@
 """Refuse a CPU-only torch build, and PROVE the CUDA path with a real matmul.
 
-`pyproject.toml` pins torch to the PyTorch CPU wheel index, so every `uv sync` on a GPU host
-replaces a CUDA torch with a `+cpu` one — committed configuration doing what it says, not a
-host accident, which is why the guard rides in the repo. `torch.cuda.is_available()` is not
+`pyproject.toml` installs the PyTorch CPU wheel by default and the cu128 wheel only under
+`--extra cuda` (R348(a)), so a bare `uv sync` on a GPU host replaces a CUDA torch with a
+`+cpu` one — committed configuration doing what it says, not a host accident, which is why the
+guard rides in the repo. `torch.cuda.is_available()` is not
 the check: it answers "did this build find a driver", which a CPU wheel answers False and a
 broken CUDA install can answer True. Only an arithmetic result answers whether CUDA computes
 correctly.
@@ -58,9 +59,9 @@ def assert_cuda_build() -> dict[str, object]:
     if build["cuda_toolkit"] is None:
         raise CudaBuildRefusal(
             f"torch {build['torch_version']} is a CPU-ONLY build (torch.version.cuda is None). "
-            "This is what `uv sync` installs here: pyproject.toml pins torch to the pytorch-cpu "
-            "index, so the downgrade recurs on every sync and re-running the box's CUDA restore "
-            "is required after each one."
+            "This is what a bare `uv sync` installs: pyproject.toml's default is the pytorch-cpu "
+            "index and the cu128 wheel is the `cuda` extra, so the downgrade recurs on every sync "
+            "that omits `--extra cuda --no-group cpu` (`make build.cuda`)."
         )
     if not build["cuda_available"]:
         raise CudaBuildRefusal(

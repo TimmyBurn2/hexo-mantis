@@ -9,7 +9,6 @@ dependencies = [
     "pydantic>=2.7",
     "pyyaml>=6.0",
     "mantis-engine",
-    "torch==2.11.0",
 ]
 
 [project.optional-dependencies]
@@ -18,13 +17,25 @@ dependencies = [
 # selfplay instrumentation's spearmanr (scipy). structlog is deliberately absent:
 # nothing imports it (WP10 swapped it for stdlib logging).
 analysis = ["matplotlib", "rich", "scipy"]
+# R348(a): CUDA torch is an EXTRA, never the default. `uv sync` alone installs the CPU wheel
+# (the WP9 parity regime); `uv sync --extra cuda` swaps the same pin to the cu128 index. The
+# box's declared-device halt (preflight rc 17) is the authority that a CUDA run got a CUDA
+# torch — no host sniffing here.
+cuda = ["torch==2.11.0"]
 
 [dependency-groups]
+# The CPU torch wheel is a DEFAULT group rather than a base dependency because uv refuses one
+# base dependency on two indexes; `default-groups` keeps `uv sync` alone on the CPU wheel.
+cpu = ["torch==2.11.0"]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
     "pyright>=1.1.380",
 ]
+
+[tool.uv]
+default-groups = ["dev", "cpu"]
+conflicts = [[{ group = "cpu" }, { extra = "cuda" }]]
 
 [tool.uv.workspace]
 members = ["crates/mantis-bridge"]
@@ -34,11 +45,19 @@ mantis-engine = { workspace = true }
 # torch pulled from the PyTorch CPU wheel index: the WP9 NN-forward parity regime
 # is CPU-only, and the +cpu manylinux x86_64 wheel is the MKL/AVX512 build that
 # matches the old-side capture backend (torch 2.11.0, BLAS=MKL, ISA=AVX512).
-torch = { index = "pytorch-cpu" }
+torch = [
+    { index = "pytorch-cpu", group = "cpu" },
+    { index = "pytorch-cu128", extra = "cuda" },
+]
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
 explicit = true
 
 [build-system]

@@ -143,9 +143,20 @@ def test_r328e_09_the_refusals_pyproject_claim_is_true_of_the_shipped_pyproject(
     Read STRUCTURALLY out of `[tool.uv.sources]` / `[[tool.uv.index]]` rather than grepped for
     a string, so a rename of the index does not quietly pass (R296(f))."""
     data = tomllib.loads((_REPO_ROOT / "pyproject.toml").read_text(encoding="utf-8"))
-    index_name = data["tool"]["uv"]["sources"]["torch"]["index"]
+    sources = data["tool"]["uv"]["sources"]["torch"]
     urls = {entry["name"]: entry["url"] for entry in data["tool"]["uv"]["index"]}
-    assert index_name in urls, f"torch names index {index_name!r}, which is not declared"
-    assert urls[index_name].rstrip("/").endswith("/cpu"), (
-        f"the guard's refusal blames a CPU wheel index; torch resolves to {urls[index_name]!r}. "
-        "If this pin has moved, the refusal message must move with it.")
+    by_selector = {}
+    for source in sources:
+        selector = ("group", source["group"]) if "group" in source else ("extra", source["extra"])
+        assert source["index"] in urls, f"torch names index {source['index']!r}, undeclared"
+        by_selector[selector] = urls[source["index"]].rstrip("/")
+    # R348(a): the DEFAULT is the CPU wheel — the `cpu` group is in `default-groups` — and the
+    # cu128 wheel rides the `cuda` extra, declared conflicting so neither can shadow the other.
+    assert "cpu" in data["tool"]["uv"]["default-groups"]
+    assert by_selector[("group", "cpu")].endswith("/cpu"), (
+        f"the guard's refusal blames a CPU wheel default; the cpu group resolves to "
+        f"{by_selector[('group', 'cpu')]!r}. If this pin has moved, the message must move too.")
+    assert by_selector[("extra", "cuda")].endswith("/cu128")
+    assert [{"group": "cpu"}, {"extra": "cuda"}] in data["tool"]["uv"]["conflicts"]
+    assert "torch" not in {d.split("==")[0] for d in data["project"]["dependencies"]}, (
+        "torch back in the base dependencies would put one package on two indexes again")
