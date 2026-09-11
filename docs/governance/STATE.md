@@ -6,10 +6,12 @@ the tree won and the disagreement is recorded in the last section.
 
 ## Current phase
 
-**run6 is MINTED and HELD. It has never started.** WAVE 3 (R348) leg 1 is complete on branch
-`wave3` (OC-7 → box rebuild → traps → PERF-3b); `dev` is at the wave-2 exit until the operator
-rules on the one true red below. What run6 is held on is unchanged in kind — the **wave-3
-re-mint** — and two new facts stand in front of it (next two sections).
+**run6 is MINTED and HELD. It has never started.** WAVE 3 (R348) is complete through AUDIT-3 and
+REPAIR-A3 on branch `wave3` (OC-7 → box rebuild → traps → PERF-3b → AUDIT-3 → REPAIR-A3); `dev`
+is at the wave-2 exit until the operator rules on the calls below. What run6 is held on is
+unchanged in kind — the **wave-3 re-mint** — and two facts stand in front of it (next two
+sections). The re-mint itself is STAGED as two branches the operator merges or discards:
+`remint-warmstart` (the one forced row) and `remint-gumbel` (R348(e)'s rows as a proposal).
 
 **The config still mints `search.kind: puct` at 50 simulations.** The kind row and the sims regime
 are OWED to the re-mint. A reader taking `puct`/`50` from this config as run6's search would be
@@ -54,8 +56,12 @@ plies/game (2× the prediction only because games are half the assumed length �
 the wall-clock line). The block is **trainer-bound**: 678 steps/h at 2.85M edges/step → **25k
 steps ≈ 37 h**. Eval at deploy 160/m16, G=8: **4.10 s/game** (264 games, 1,083 s, uncontended)
 against 7.09 at PUCT-150. α: 98.9% of rows carry a tail, mean 0.0006, **max 1.0 rows exist** —
-the architect's reading. The checker-thread A/B is OWED: R347(e)'s lever is not in code.
-`train.policy_target` must move with `search.kind` at the re-mint (schema pairs them).
+the architect's reading. **Host term for K/MAX_NODES at 16 workers: run RSS 3.84 GiB at boot,
+4.55 median, 4.70 max; GPU 7.66 GB max** without an eval round. **The checker-thread A/B is
+taken** (lever at `8443d0e5`): collate per part −57% (5.85 → 2.51 ms), end-to-end ≤ +5%
+positions/h, because fill stays at 55% and the pop wait absorbs the freed time — the server was
+not the bottleneck; arming it is a mint row, nothing forces it. `train.policy_target` moves with
+`search.kind` at the re-mint (schema pairs them); both are on `remint-gumbel`.
 
 ## CARD-OC7-OVERRUN — discriminated: HOST, not code
 
@@ -107,6 +113,17 @@ The table in the wave-2 STATE stands verbatim; nothing under `configs/`,
 wave-2 exit (`git diff --stat 24c9dab0 -- <those paths>` is empty). Search-engine constants,
 HEXG v2, radius 8, the resolved-config write: as recorded there. Gate 12 is GREEN at HEAD.
 
+## AUDIT-3 and REPAIR-A3 — `docs/audits/AUDIT_2026-09-11.md`
+
+AUDIT-2's four P0s re-read at HEAD: three REPAIRED by REPAIR-A2 and verified, P0-3 HALF
+(identity drift refused; the flat `RESUME_CHECKPOINT_OWNED_KEYS` filtered nothing on the nested
+shape). Four new P0s from running the tree (the two drain breaks, the warm-start stamp, the gate
+runner's silent CPU re-sync). REPAIR-A3 landed at `8443d0e5`: `RESUME_CHECKPOINT_OWNED_PATHS`
+(nested, leaf-wise, with a real-checkpoint producer test — a launch `train.eta_min` no longer
+overrides the baked one and the ignored value is published); the ten CUDA-venv rows state
+`device="cpu"` (all 150 rows of the affected suites pass on `+cu128`); R347(e)'s lever behind
+`inference.edge_geometry_check` with LAW-18 counters and the F-816-37 dump-on-fire halt.
+
 ## Protected set, laws, cards
 
 Protected set as listed in `docs/governance/LAWS.md`; seventeen laws; no gate number added (still
@@ -120,7 +137,10 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
   stamp trap, `669b6008` cuda extra, `5e529a44` gate-17 lock carve-out, `ad747400` OC-7 record,
   `9137ab1a` / `eb1a9b85` / `408af297` / `ff26f3a0` tier and default-tier repairs, `79b2b2c3`
   tail mass, `97711e65` floor ratchet. One line each, empty body, zero trailers.
-- **Collected tests: 4,530 → 4,560**; the gate 3c floor ratcheted to 4,560.
+- **Collected tests: 4,530 → 4,576**; the gate 3c floor ratcheted to 4,576.
+- Commits after `6941328a`: `7487d111`/`4c1b91e1` (REPAIR-A3 P1-1/P1-2, fork 1), `cb467637`/
+  `e0df50be` (the lever, fork 2), merge `8443d0e5`; proposals `9bdcebeb` (remint-warmstart),
+  `d472917d`+`c20297af` (remint-gumbel).
 - **Tree: 878 tracked files, 389,706 lines** (`git ls-files | xargs cat | wc -l`).
 - Comment ratchet: floor lowered 13561 → 13543 docstring lines across the leg; comment and
   banner measures held at 3551 / 23.
@@ -130,9 +150,10 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
 - Box: rebuilt through `box_setup.sh wave3` with the extra — `torch 2.11.0+cu128`, RTX 5080,
   extension, vendored sealbot and the warm-start checkpoint all present; host identity lines are
   in the box's own setup log. The instance is on the same physical host the archive records.
-- Gates, dev box at `ff26f3a0`: 3a 4,502 pass / **1 true red** (the warm-start row), 6–17
-  GREEN; **3b cannot run here** (bf16 emulation); 2a/2b/4/5 not run here (Rust changed only in
-  the bridge, gated on the box).
+- Gates, dev box: 3a — the two forks each ran the full default tier on their worktrees
+  (4,509 and 4,516 pass; the warm-start row loud-skips where the artifact is absent and is the
+  **1 true red** where it is present); 6–17 GREEN at every commit; **3b cannot run here** (bf16
+  emulation); 2a/2b/4/5 ran on the box.
 - Gates, box, `make gates.exit` at `ff26f3a0` (48 min): 2a, 2b, 4, 5, slow tier, 3c, 6–17 all
   GREEN; 3a and 3b RED on three rows — the warm-start row (true), the signal-posture row (an
   artefact of a detached job's SIG_IGN; passes in a foreground session), and the non-CUDA-host

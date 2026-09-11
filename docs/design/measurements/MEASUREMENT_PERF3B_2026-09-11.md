@@ -23,6 +23,7 @@ R347(d) halt refuses every preflight there (no stamp can exist) — stated, not 
 | eval, fully escalated round at G=8, deploy 160/m16 | **264 games in 1,083 s = 4.10 s/game** (terminal round, uncontended) | vs R341(c)'s 7.09 s/game at PUCT-150 |
 | eval, mid-run round | 264 games in 1,168 s (4.43 s/game), cut by the 200-step throwaway's close-out drain with only the random floor left | `eval_broken join_timeout` — an artefact of the burst's bound |
 | terminal outcome | `wr_sealbot 0.281`, promoted, at step 200 from the BC warm start | one round, not a strength claim |
+| **host memory, the K/MAX_NODES term** (R348(e)) | run process RSS **3.84 GiB at boot, 4.55 median, 4.70 max**; one process, 67 threads; GPU **7.66 GB max** during self-play + training (no eval round) | 120-step burst, 63 samples at 10 s |
 
 ## What replaces R347(b)'s prediction
 
@@ -45,13 +46,36 @@ at 2.85M edges puts 25k steps at ≈37 h (≈1.5 days), inside the prediction.
 3. **α max 1.0 rows exist** — rows whose 16 explicit entries carry no target mass at all. Not
    adjudicated here; it is the architect's reading against R347(a)'s "the completed-Q target is
    exact on the m sampled entries".
-4. The checker-thread lever of R347(e) does not exist in code (`verify_edge_geometry` runs inline
-   in `_check_semantic`), so its A/B is OWED behind the lever.
+4. The checker-thread lever of R347(e) landed after these readings (`8443d0e5`,
+   `inference.edge_geometry_check`); its A/B is recorded in §"A/B" below once taken. The Rust
+   verifier holds the GIL (`PyReadonlyArray1` borrows, no `allow_threads`), which bounds what
+   moving it to a thread can buy.
 5. 150–200 steps from a BC warm start: the α and plies readings are early-training values.
+
+## A/B — R347(e)'s checker-thread lever (`8443d0e5`), 120 steps per arm, same config and seed, box idle
+
+| reading | `inline` | `checker_thread` | Δ |
+|---|---|---|---|
+| collate per part (the server-cycle term the lever targets) | 5.85 ms mean, 34,457 parts | **2.51 ms mean**, 31,209 parts | **−57%** (×2.3) |
+| batcher queue wait per pop | 2.92 ms | 7.23 ms | +148% — the server now waits for fill |
+| batch fill | 54.68% | 54.62% | unchanged |
+| positions/h, steady | 41,069 | 42,369 | **+3.2%** |
+| wall for 120 steps | 705.7 s | 673.0 s | −4.6% |
+| steps/h (`iteration_complete`) | 613 | 643 | +4.9% |
+| checks deferred / inline fallbacks / failures | — | 31,209 / 0 / 0 | every check ran, none dropped |
+
+Reading: the lever does what R347(e) said on the server cycle — collate sheds 57% of its time
+per part, more than the ×1.2 expected — but the END-TO-END metric moves ~3–5% because the serving
+loop was not the binding constraint at this regime: fill stays at 55% and the pop wait rises to
+absorb the freed time (LAW-09: the microbench is not the metric). Single run per arm; a 3% gap
+is inside what two 12-minute bursts can resolve, so "≤ +5%" is the claim, not "+3.2%". The Rust
+verifier still holds the GIL during the check; releasing it is the next lever on THIS thread, and
+the 45% of batch capacity left unfilled is the larger one (HOT-14 / the carded server ceiling).
+Arming `checker_thread` in run6 is a mint row; nothing here forces it.
 
 ## Artefacts
 
 Box: the three burst directories under the box's workspace (`perf3b_run`, `perf3b_clean`, with
 `out/logs/events_*.jsonl` and the drive logs); the analysis script beside them
-(`analyze.py`); the minted throwaways `perf3b_gumbel.yaml` / `perf3b_gumbel_clean.yaml` in
-the dispatcher's scratchpad.
+(`analyze.py`); the A/B arms under `perf3b_ab/{inline,checker_thread}`; the host-memory burst under
+`perf3b_hostmem` (`rss.log`); the minted throwaways `perf3b_*.yaml` in the dispatcher's scratchpad.

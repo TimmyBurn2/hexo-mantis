@@ -109,12 +109,17 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
   device") in `tests/model/conformance/test_arch_states_its_memory_envelope.py` (8),
   `tests/model/test_gnn_v2_witnesses.py::test_both_arches_FORWARD_on_a_real_wire_position` (2),
   the `slow` tier's harness rows through `test_local_gate_runner`, and the ten-row control in
-  `test_preflight_start_halts` (fixed in place). The model rows are the tests' device
-  assumptions, not the run's; they are a leg of their own before "gates.exit green on the box"
-  can be claimed on a CUDA venv.
-- **CARD-CHECKER-THREAD-LEVER — OWED behind the lever.** R347(e)'s "verify_edge_geometry leaves
-  the server's critical path" is not in code; `_check_semantic` still runs it inline, so the
-  PERF-3b A/B could not be taken. A lever on a protected 1-in-1 check needs LAW-18's own fire-rate.
+  `test_preflight_start_halts` (fixed in place). **CLOSED IN FACT at `8443d0e5`** — the four
+  collate sites in the model oracles state `device="cpu"` instead of letting
+  `collate_graph_batch(device=None)` sniff CUDA beside a CPU net; all 150 rows of the affected
+  suites pass on the box's `+cu128` venv. The close line is a ruling's.
+- **CARD-CHECKER-THREAD-LEVER — the lever LANDED at `8443d0e5`; the A/B is the measurement.**
+  `inference.edge_geometry_check` (schema default `inline`; `checker_thread` moves check 14 to
+  one bounded checker thread after the batch is served, a full queue runs it inline, a failure
+  dumps the same artifact and halts through `deferred_contract_failure` on the next pop and the
+  pool health check). LAW-18 counters ride `iteration_complete.inference_batching.edge_geometry_check`.
+  The Rust verifier holds the GIL, which bounds the gain; the A/B reading is in
+  `docs/design/measurements/MEASUREMENT_PERF3B_2026-09-11.md`. Arming it in run6 is a mint row.
 
 ## Reading the identifiers
 
