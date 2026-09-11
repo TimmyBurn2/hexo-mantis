@@ -11,11 +11,10 @@ of which is code any more.** R349 (the START-path packet, forwarded 2026-09-12) 
 line through its order (e) up to and including (d): the two re-mint merges, the LAW-06 carve-out,
 the puller and receipts in place of the deleted overlay halt, the α = 1.0 rows reconstructed and
 their run-fatal half fixed, the trainer step profiled. What stands in front of the mint now is in
-the next two sections. `dev` on this machine IS the wave-3/START line and is 34 commits ahead of
-`origin/dev`; `origin/wave3` is 9 behind it — **this session could not push** (the tool's
-network-write classifier refused every `git push`), so the operator runs
-`git push origin dev:wave3` and, after the box's `make gates.exit` reads green on `7a97fa80`,
-`git push origin dev` (the wave3 → dev merge is a fast-forward).
+the next two sections. `dev` on this machine IS the wave-3/START line, pushed to `origin/wave3` at `7b2bf053`
+(the operator authorised the push mid-session after the tool's classifier had refused it);
+`origin/dev` is at `f1139c54`'s ancestor and the wave3 → dev merge is a fast-forward the operator
+runs (`git push origin dev`) after the box's `make gates.exit` reads green on `7b2bf053`.
 
 **`configs/run6.yaml` mints `search.kind: gumbel`** (`completed_improved_policy`, 320 full / 64
 quick at p 0.25, deploy 160/m16, grace 30 s, sealbot-only rungs) and
@@ -134,10 +133,19 @@ rather than from "why is the step 5 s".
   rustfmt sweep that was reverted before commit, the buffer-route row); 6–17 GREEN at HEAD; 2a/2b
   for the touched crates GREEN, `records.rs` rustfmt-clean (72 pre-existing fmt diffs elsewhere
   in `mantis-selfplay` are NOT this session's — R336(e)); 3b/4/5 not run here.
-- Gates, box: `make gates.exit` on `7a97fa80` (rebuilt `+cu128`, cargo on PATH) was RUNNING at
-  this handoff — `/workspace/oc7/gates_exit_startpath.log`, `box_gates_exit.out`. A first attempt
-  on `f253e65e` lost gates 2a/2b/4/5 to a detached shell without `~/.cargo/bin` and was killed
-  (PID-verified) before the relaunch. Read the log before claiming green.
+- Gates, box: `make gates.exit` on `7a97fa80` (rebuilt `+cu128`, cargo on PATH; 13:03–14:01
+  UTC, `/workspace/oc7/gates_exit_startpath.log`): **2a, 2b, 4, 5, 3a (4 533 pass), slow tier,
+  3c, 6–17 all GREEN; 3b RED on three rows** — the three preflight-driving integration rows,
+  one cause: the mirror halt demanded a resume bundle and a clean completion writes a checkpoint
+  and NO bundle (R137's third leg), so a finished burst had nothing to receipt. Fixed at
+  `2302aa40` / `7b2bf053` (the halt reads the burst's stamped checkpoint when no bundle exists;
+  the puller receipts bare checkpoints only when the payload hashes to the `content_sha8` in the
+  filename; the local puller discovers a run dir by its checkpoint) and the three rows are GREEN
+  on the dev box (preflight → puller → `MIRRORED` stamp → the trap accepts it, 135 s). **A
+  fresh `make gates.exit` on the box at `7b2bf053` is still OWED before `dev` moves** — the box
+  was held by the performance investigation's measurement session at this handoff. A first
+  attempt on `f253e65e` lost gates 2a/2b/4/5 to a detached shell without `~/.cargo/bin` and was
+  killed (PID-verified) before the relaunch.
 - Box artefacts: `/workspace/runs/startpath_cd/` (the burst: events, `pyspy_idle_native.raw`,
   bundles at 200 and 400 with rings, receipts on 200), `/workspace/oc7/{alpha_probe.py,
   alpha_probe_warmstart.json, trainer_profile.py, trainer_profile/, startpath_cd.yaml,
