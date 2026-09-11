@@ -134,9 +134,9 @@ def _make_scripted_pool(games, sink):
 
 
 def _make_games(n: int) -> list[tuple]:
-    """N scripted game-result 10-tuples (the `drain_game_results` shape): winner 1, 4 plies,
-    empty move history, no solver fires."""
-    return [(4, 1, [], 0, 0, 0, 0, 0, 0, 0) for _ in range(n)]
+    """N scripted game-result 8-tuples (the `drain_game_results` shape): winner 1, 4 plies,
+    empty move history."""
+    return [(4, 1, [], 0, 0, 0, 0, 0) for _ in range(n)]
 
 
 def test_on2a_production_pool_construction_does_not_pass_sink_none() -> None:

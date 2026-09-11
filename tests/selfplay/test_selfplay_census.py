@@ -359,8 +359,6 @@ _FROZEN_GAME_COMPLETE_KEYS = frozenset({
     "model_version_distinct",
     "stride5_run_p90",
     "row_max_density",
-    "seeded",
-    "solver_fires",
 })
 
 

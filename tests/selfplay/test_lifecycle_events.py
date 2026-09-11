@@ -152,7 +152,7 @@ def _make_drain_pool(games, sink):
 def test_game_loop_entered_emits_once(monkeypatch) -> None:
     """LAW-07 producer test — `game_loop_entered` emits once on drain-thread entry."""
     sink = _RecordingSink()
-    pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0, 0, 0)], sink)
+    pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0)], sink)
     monkeypatch.setattr(pool_drain, "time", type("T", (), {
         "monotonic": lambda self: 1000.0, "sleep": lambda self, s: None,
     })())
@@ -168,7 +168,7 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
     """LAW-07 producer test — `first_record_drained` emits once on the first NON-EMPTY drain
     (DESIGN §4.5 (β) — a record actually flowed)."""
     sink = _RecordingSink()
-    pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0, 0, 0)], sink)
+    pool = _make_drain_pool([(4, 1, [], 0, 0, 0, 0, 0)], sink)
     monkeypatch.setattr(pool_drain, "time", type("T", (), {
         "monotonic": lambda self: 1000.0, "sleep": lambda self, s: None,
     })())

@@ -194,7 +194,7 @@ class ScriptedPool:
 
 
 def _games_from_golden(golden: dict[str, Any]) -> list[tuple]:
-    """The scripted `drain_game_results()` 10-tuples (moves back to tuple-of-tuples)."""
+    """The scripted `drain_game_results()` 8-tuples (moves back to tuple-of-tuples)."""
     games = []
     for row in golden["_constants"]["games_batch"]:
         plies, winner_code, moves, *rest = row
@@ -334,7 +334,7 @@ def test_graph_drain_push_rows(run_drain, drain_goldens, graph_pushed, graph_row
 
 
 def test_game_complete_payload_golden(run_drain, drain_goldens):
-    """The six emitted `game_complete` payloads equal the capture on ALL 21 keys except the uuid.
+    """The six emitted `game_complete` payloads equal the capture on ALL 19 keys except the uuid.
 
     A failure is the event contract drifting — including a dropped, added, or reordered key.
 

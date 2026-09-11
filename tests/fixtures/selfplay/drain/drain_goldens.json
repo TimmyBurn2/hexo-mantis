@@ -73,9 +73,7 @@
     0,
     5,
     7,
-    3,
-    0,
-    0
+    3
    ],
    [
     24,
@@ -102,9 +100,7 @@
     1,
     7,
     7,
-    1,
-    1,
-    4
+    1
    ],
    [
     250,
@@ -127,9 +123,7 @@
     2,
     1,
     9,
-    5,
-    0,
-    2
+    5
    ],
    [
     30,
@@ -139,9 +133,7 @@
     3,
     0,
     0,
-    1,
-    0,
-    0
+    1
    ],
    [
     15,
@@ -168,9 +160,7 @@
     7,
     2,
     3,
-    2,
-    1,
-    0
+    2
    ],
    [
     9,
@@ -193,9 +183,7 @@
     0,
     0,
     1,
-    1,
-    0,
-    0
+    1
    ]
   ],
   "collect_data_input_npz": "c3b_collect_data_input.npz",
@@ -952,9 +940,7 @@
      "model_version_max": 7,
      "model_version_distinct": 3,
      "stride5_run_p90": 2,
-     "row_max_density": 6,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 6
     },
     {
      "event": "game_complete",
@@ -980,9 +966,7 @@
      "model_version_max": 7,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 4
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -1007,9 +991,7 @@
      "model_version_max": 9,
      "model_version_distinct": 5,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 2
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -1030,9 +1012,7 @@
      "model_version_max": 0,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 0,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 0
     },
     {
      "event": "game_complete",
@@ -1058,9 +1038,7 @@
      "model_version_max": 3,
      "model_version_distinct": 2,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -1085,9 +1063,7 @@
      "model_version_max": 1,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "system_stats",
@@ -2014,9 +1990,7 @@
      "model_version_max": 7,
      "model_version_distinct": 3,
      "stride5_run_p90": 2,
-     "row_max_density": 6,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 6
     },
     {
      "event": "game_complete",
@@ -2042,9 +2016,7 @@
      "model_version_max": 7,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 4
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2069,9 +2041,7 @@
      "model_version_max": 9,
      "model_version_distinct": 5,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 2
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2092,9 +2062,7 @@
      "model_version_max": 0,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 0,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 0
     },
     {
      "event": "game_complete",
@@ -2120,9 +2088,7 @@
      "model_version_max": 3,
      "model_version_distinct": 2,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2147,9 +2113,7 @@
      "model_version_max": 1,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 2
     }
    ],
    "event_order": [
@@ -2828,9 +2792,7 @@
      "model_version_max": 7,
      "model_version_distinct": 3,
      "stride5_run_p90": 2,
-     "row_max_density": 6,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 6
     },
     {
      "event": "game_complete",
@@ -2856,9 +2818,7 @@
      "model_version_max": 7,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 4
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2883,9 +2843,7 @@
      "model_version_max": 9,
      "model_version_distinct": 5,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 2
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2906,9 +2864,7 @@
      "model_version_max": 0,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 0,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 0
     },
     {
      "event": "game_complete",
@@ -2934,9 +2890,7 @@
      "model_version_max": 3,
      "model_version_distinct": 2,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -2961,9 +2915,7 @@
      "model_version_max": 1,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "system_stats",
@@ -3637,9 +3589,7 @@
      "model_version_max": 7,
      "model_version_distinct": 3,
      "stride5_run_p90": 2,
-     "row_max_density": 6,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 6
     },
     {
      "event": "game_complete",
@@ -3665,9 +3615,7 @@
      "model_version_max": 7,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 4
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -3692,9 +3640,7 @@
      "model_version_max": 9,
      "model_version_distinct": 5,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 2
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -3715,9 +3661,7 @@
      "model_version_max": 0,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 0,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 0
     },
     {
      "event": "game_complete",
@@ -3743,9 +3687,7 @@
      "model_version_max": 3,
      "model_version_distinct": 2,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -3770,9 +3712,7 @@
      "model_version_max": 1,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "system_stats",
@@ -4348,9 +4288,7 @@
      "model_version_max": 7,
      "model_version_distinct": 3,
      "stride5_run_p90": 2,
-     "row_max_density": 6,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 6
     },
     {
      "event": "game_complete",
@@ -4376,9 +4314,7 @@
      "model_version_max": 7,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 4
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -4403,9 +4339,7 @@
      "model_version_max": 9,
      "model_version_distinct": 5,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 2
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -4426,9 +4360,7 @@
      "model_version_max": 0,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 0,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 0
     },
     {
      "event": "game_complete",
@@ -4454,9 +4386,7 @@
      "model_version_max": 3,
      "model_version_distinct": 2,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 1,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "game_complete",
@@ -4481,9 +4411,7 @@
      "model_version_max": 1,
      "model_version_distinct": 1,
      "stride5_run_p90": 1,
-     "row_max_density": 2,
-     "seeded": 0,
-     "solver_fires": 0
+     "row_max_density": 2
     },
     {
      "event": "system_stats",

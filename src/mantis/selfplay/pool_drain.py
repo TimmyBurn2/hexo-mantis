@@ -104,8 +104,7 @@ def run_stats_loop(pool: Any) -> None:
 
         for entry in games_batch:
             (plies, winner_code, move_history, worker_id,
-             terminal_reason, mv_min, mv_max, mv_distinct,
-             seeded, solver_fires) = entry
+             terminal_reason, mv_min, mv_max, mv_distinct) = entry
             winner = _WINNER_NAMES[winner_code] if winner_code < 3 else "unknown"
             game_length = (plies + 1) // 2  # compound moves
             pool._game_lengths.append(game_length)
@@ -169,9 +168,6 @@ def run_stats_loop(pool: Any) -> None:
                 "stride5_run_p90":   int(_stride5_p90),
                 # densest hex-row stone count over the three axes
                 "row_max_density":   int(_row_max_density),
-                # per-game seeding + solver-fire metadata
-                "seeded":            int(seeded),
-                "solver_fires":      int(solver_fires),
             }
             _emit(pool, game_complete_payload)
 
