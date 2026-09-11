@@ -6,19 +6,41 @@ the tree won and the disagreement is recorded in the last section.
 
 ## Current phase
 
-**run6 is RE-MINTED at the Gumbel regime; the two holds the START path found are DECIDED by
-matrix under operator delegation and the mint procedure is next.** R349 (the START-path packet, forwarded 2026-09-12) is landed on this
-line through its order (e) up to and including (d): the two re-mint merges, the LAW-06 carve-out,
-the puller and receipts in place of the deleted overlay halt, the α = 1.0 rows reconstructed and
-their run-fatal half fixed, the trainer step profiled. What stands in front of the mint now is in
-the next two sections. **`dev` and `origin/dev` are one line at `e078b929`**: the wave3 → dev
-fast-forward was pushed after the box's `make gates.exit` read ALL GREEN on the decision commit.
+**run6 is RE-MINTED, PERF-A4's four serving levers are merged, and run6 is STAMPED** (preflight
+`4c43bae2…`, tier `sync_lag`, tree `0f20896e`, 21:36 UTC); the shakedown twin's preflight is
+next, then the 4 h shakedown, then START — the operator approved the START behind a clean
+shakedown ("with those perf improvements I approve"). `dev` and `origin/dev` are one line at
+`d7ea3481`; the box runs `0f20896e`, which differs from it by ONE test-file edit (the
+deploy-matched oracle's exemption set), so the stamp's tree and `dev` are code-identical.
 
-**`configs/run6.yaml` mints `search.kind: gumbel`** (`completed_improved_policy`, 320 full / 64
-quick at p 0.25, deploy 160/m16, grace 30 s, sealbot-only rungs) and
-`identity.warm_start.checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt` (the LAW-12 strip,
-net hash `2e72abd4…` unchanged). The default tier's one true red (the warm-start hash row) is
-green wherever the strip exists.
+**`configs/run6.yaml` mints** (header deltas replay): `search.kind gumbel` /
+`completed_improved_policy`, 320 full / 64 quick at p 0.25, deploy 160/m16, grace 30 s, the
+LAW-12 strip as warm start, **`train.actor_sync_cadence_steps 2`** (CARD-PREFLIGHT-CADENCE),
+and PERF-A4's rows **`selfplay.n_workers 32`, `inference.edge_geometry_check checker_thread`,
+`inference.compile_trunk true`, `train.max_train_burst 2`** (CARD-A4-MINT). The run6 preflight
+burst under this mint: steps/game **1.000**, batch fill 75.8 %, `compile` 1 graph (2/2 frames,
+fail-loud on the recompile limit), the checker thread 24,672 checks / 0 failures, α = 1.0 rows
+1 of 8,251.
+
+## PERF-A4 — the serving levers, merged at `41a5fea8` (branch `perf-a4`, red-teamed)
+
+Record: `docs/design/measurements/PERF_A4_2026-09-11.md` (pre-registrations, every arm, the red
+team's sixteen findings verbatim with the action on each). Four levers landed, one arm each, on
+the box: check 14 with the GIL released (`13562ce1`, +17 % at 16 and 32 workers — F-46's
+repair), pinned `non_blocking` H2D + `output_size=` + resident dist65 support (`8b54b3e1`),
+`inference.compile_trunk` (`35d7480d`, +17–21 %; numerics inside the eager path's own
+run-to-run null on the RTX 5080 — the eager forward itself is not bit-reproducible at 400k
+edges; the recompile limit fails loud after the red team's finding 1), the two-thread software
+pipeline (`c888c3b7`, +52 %; ordering and failure-targeting tests; check 14 still halts). The
+edge codebook is NOT landed (device-dependent numerics — a new arch kind or a keyed lever); the
+eval-contention term re-measured at −2.4 % (16 workers) / −7.4 % (32) on `cuda`, `cpu` worse.
+**Combined at 32 workers, same config and seed: leaves/s 1,831 → 3,804 (+108 %), positions/h
+51,480 → 106,128; block ESTIMATE ≈ 9.5 h + ≈ 7 % eval ≈ 10.2 h** (was 22.6 h). Costs stated:
+≈ 12 cores busy (torch's intra-op pool spins behind the pinned copies), `eval_interval 1000`
+now fires every ≈ 23 min of wall (the architect's regime note). Box `make gates.exit` on the
+code head `6a0d5e78`: 19 green, gate 3a red only on the signal-posture row under a detached
+shell's ignored SIGINT and green on the foreground re-run; the local default tier on the
+merged head: 4,554 pass.
 
 ## Hold 1 — the stamp trap and run6's burst floor: DECIDED by matrix, landed at `652b9f02`
 
