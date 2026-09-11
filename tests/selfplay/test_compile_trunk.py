@@ -44,7 +44,8 @@ def test_the_eager_server_hands_forward_batch_no_trunk() -> None:
                              batcher=H.ScriptedGraphBatcher([]), encoding_spec=H.GRAPH_SPEC)
     assert server._trunk is None
     block = server.batch_timing_snapshot()["compile"]
-    assert block == {"enabled": False, "unique_graphs": 0, "recompile_limit": block["recompile_limit"]}
+    assert block["enabled"] is False and block["unique_graphs"] == 0
+    assert block["frames_total"] == 0 and block["frames_ok"] == 0
 
 
 def _net_and_batch(payload_fields, device: str):
@@ -104,3 +105,37 @@ def test_compiled_trunk_matches_eager_to_bf16_noise_and_leaves_the_module_eager(
     d_value = float((eager[1].float() - fast[1].float()).abs().max())
     print(f"COMPILE-PARITY max|Δprobs| {d_probs:.3e} max|Δvalue| {d_value:.3e}")
     assert d_probs < 1e-2 and d_value < 1e-2, (d_probs, d_value)
+
+
+def test_the_compiling_server_makes_the_recompile_limit_a_loud_failure() -> None:
+    """Past `recompile_limit` Dynamo runs eager silently; the server makes it raise (red team 1)."""
+    import torch._dynamo
+    import torch._dynamo.config as dynamo_config
+
+    class _TrunkedSentinel(H.SentinelGraphNet):
+        def __init__(self) -> None:
+            super().__init__()
+            self.representation = torch.nn.Linear(4, 4)
+
+    was = dynamo_config.fail_on_recompile_limit_hit, dynamo_config.recompile_limit
+    try:
+        dynamo_config.fail_on_recompile_limit_hit = False
+        server = InferenceServer(_TrunkedSentinel(), torch.device("cpu"), H.graph_cfg(),
+                                 batcher=H.ScriptedGraphBatcher([]), encoding_spec=H.GRAPH_SPEC,
+                                 compile_trunk=True)
+        assert server._trunk is not None
+        assert dynamo_config.fail_on_recompile_limit_hit is True
+        block = server.batch_timing_snapshot()["compile"]
+        assert block["enabled"] is True and block["fail_on_recompile_limit_hit"] is True
+        assert {"frames_total", "frames_ok", "unique_graphs", "recompile_limit"} <= set(block)
+        # The mechanism itself: a limit of 1 and a second dtype must RAISE, not fall back.
+        dynamo_config.recompile_limit = 1
+        torch._dynamo.reset()
+        trunk = torch.compile(torch.nn.Linear(4, 4).eval(), dynamic=True)
+        with torch.inference_mode():
+            trunk(torch.ones(3, 4))
+            with pytest.raises(Exception, match="recompile_limit"):
+                trunk(torch.ones(3, 4, dtype=torch.float64))
+    finally:
+        dynamo_config.fail_on_recompile_limit_hit, dynamo_config.recompile_limit = was
+        torch._dynamo.reset()

@@ -293,18 +293,26 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
   `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
   since process start — a count still climbing after warm-up is the recompile storm the lever's
-  abort names) and `recompile_limit` (past which Dynamo falls back to eager for the frame).
-  Visible with `enabled: false` and `unique_graphs: 0` on the eager path; `None` on a grid run.
+  abort names), `recompile_limit`, `fail_on_recompile_limit_hit` (the server sets it `true` when
+  it compiles, so the limit RAISES and the pop fails loud instead of Dynamo running the frame
+  eager and saying nothing — `unique_graphs` can never exceed the limit, so it alone cannot
+  show a fallback), and `frames_total` / `frames_ok` (Dynamo's frame counters; `total > ok` is
+  a frame that ran eager). Visible with `enabled: false` and zeros on the eager path; `None` on
+  a grid run.
   And a `pipeline` SUB-BLOCK (PERF-A4 lever 4, LAW-18): the serving loop is a two-thread
   software pipeline — the server thread pops, collates and launches pop N+1 while pop N's
   forward and pinned D2H run on the device, and a retire thread dispatches each pop the moment
   its CUDA event completes, in launch order. `depth` (2: the pop on the device plus the one
-  being dispatched; the server thread blocks on a third) and `gpu_wait` (a timing sub-block of
-  the wait each retire spent on its device work: near 0 says the CPU stage bounds the loop,
-  large says the GPU stage does). Two consequences a reader must know: `collate` now measures
-  the CPU cost alone (the seven H2D copies are `non_blocking` from pinned staging), and a
-  check-14 finding under `checker_thread` refuses every pop retired after it latched, so only
-  pops already launched when the finding landed can have been served. `None` on a grid run.
+  being dispatched; the server thread blocks on a third), `launch` (a timing sub-block of the
+  server thread's CPU stage per pop after the pop returns: plan, collate, forward launch, D2H
+  queue) and `gpu_wait` (a timing sub-block of the wait each retire spent on its device work —
+  the DEVICE STAGE per pop, since the retirer picks a pop up the moment it is launched; it is
+  read against the cycle: `gpu_wait ≈ cycle` says the device bounds the loop, `launch ≈ cycle`
+  says the CPU stage does, and neither reads as zero in either regime). Two consequences a
+  reader must know: `collate` now measures the CPU cost alone (the seven H2D copies are
+  `non_blocking` from pinned staging), and a check-14 finding under `checker_thread` refuses
+  every pop retired after it latched, so only pops already launched when the finding landed
+  can have been served. `None` on a grid run.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

@@ -131,14 +131,18 @@ def _occupancy_agg(
 
 
 def _compile_snapshot(enabled: bool) -> dict[str, Any]:
-    """The `compile` sub-block: Dynamo's own unique-graph count beside its recompile limit."""
+    """The `compile` sub-block; `frames_total > frames_ok` is a frame Dynamo ran eager."""
     import torch._dynamo.config as dynamo_config
     import torch._dynamo.utils as dynamo_utils
 
+    frames = dynamo_utils.counters["frames"]
     return {
         "enabled": enabled,
         "unique_graphs": int(dynamo_utils.counters["stats"]["unique_graphs"]) if enabled else 0,
         "recompile_limit": int(dynamo_config.recompile_limit),
+        "fail_on_recompile_limit_hit": bool(dynamo_config.fail_on_recompile_limit_hit),
+        "frames_total": int(frames["total"]) if enabled else 0,
+        "frames_ok": int(frames["ok"]) if enabled else 0,
     }
 
 
@@ -267,6 +271,8 @@ class _PopRetirer(threading.Thread):
                 return
             try:
                 self._server._retire_or_fail(pop)
+            except Exception as exc:  # noqa: BLE001 — a dead retirer would block the loop's slots
+                _LOG.exception("inference_retire_thread_error error=%s", exc)
             finally:
                 self.slots.release()
 
@@ -360,6 +366,10 @@ class InferenceServer(threading.Thread):
         self._gpu_wait_total_s = 0.0
         self._gpu_wait_min_s: float | None = None
         self._gpu_wait_max_s: float | None = None
+        self._launch_count = 0
+        self._launch_total_s = 0.0
+        self._launch_min_s: float | None = None
+        self._launch_max_s: float | None = None
         self._occupancy_total = 0
         self._occupancy_min: int | None = None
         self._occupancy_max: int | None = None
@@ -403,6 +413,11 @@ class InferenceServer(threading.Thread):
             self._traced_model: Any = None
             self._h2d_staging: torch.Tensor | None = None
             if self._compile_trunk:
+                import torch._dynamo.config as dynamo_config
+
+                # Past `recompile_limit` Dynamo would run the frame EAGER and say nothing — a
+                # silently-disabled lever (R1); with this set it raises and the pop fails loud.
+                dynamo_config.fail_on_recompile_limit_hit = True
                 # nn.Module's __getattr__ types the trunk as Tensor | Module; it is the module.
                 representation: Any = self.model.representation
                 self._trunk = torch.compile(representation, dynamic=True)
@@ -576,13 +591,22 @@ class InferenceServer(threading.Thread):
             self._collate_max_s = collate_s
 
     def _record_gpu_wait(self, wait_s: float) -> None:
-        """Accumulate ONE retired pop's device wait: near 0 means the CPU stage is the bound."""
+        """Accumulate ONE retired pop's device stage (the retirer picks it up at launch)."""
         self._gpu_wait_count += 1
         self._gpu_wait_total_s += wait_s
         if self._gpu_wait_min_s is None or wait_s < self._gpu_wait_min_s:
             self._gpu_wait_min_s = wait_s
         if self._gpu_wait_max_s is None or wait_s > self._gpu_wait_max_s:
             self._gpu_wait_max_s = wait_s
+
+    def _record_launch(self, launch_s: float) -> None:
+        """Accumulate ONE pop's CPU stage after the pop: plan, collate, forward launch, D2H queue."""
+        self._launch_count += 1
+        self._launch_total_s += launch_s
+        if self._launch_min_s is None or launch_s < self._launch_min_s:
+            self._launch_min_s = launch_s
+        if self._launch_max_s is None or launch_s > self._launch_max_s:
+            self._launch_max_s = launch_s
 
     def _record_fusion_plan(self, n_parts: int, edge_hits: int, node_hits: int) -> None:
         """Accumulate ONE plan: `fusion_splits` counts POPS THAT SPLIT; `fusion_bound_hits` says
@@ -676,6 +700,10 @@ class InferenceServer(threading.Thread):
             # A4-4's lever, LAW-18: one pop in flight, and the wait its retire spent on the device.
             "pipeline": {
                 "depth": _PIPELINE_DEPTH,
+                "launch": _timing_agg(
+                    self._launch_count, self._launch_total_s,
+                    self._launch_min_s, self._launch_max_s,
+                ),
                 "gpu_wait": _timing_agg(
                     self._gpu_wait_count, self._gpu_wait_total_s,
                     self._gpu_wait_min_s, self._gpu_wait_max_s,
@@ -764,7 +792,10 @@ class InferenceServer(threading.Thread):
                                 f"deferred edge-geometry check failed: "
                                 f"{self._deferred_contract_failure}"
                             ) from self._deferred_contract_failure
-                        retirer.submit(self._launch_pop(request_ids, wire, geometry))
+                        _t_launch = time.perf_counter()
+                        launched = self._launch_pop(request_ids, wire, geometry)
+                        self._record_launch(time.perf_counter() - _t_launch)
+                        retirer.submit(launched)
                     except Exception as exc:  # noqa: BLE001 — reported to Rust waiters
                         retirer.slots.release()
                         self._fail_pop(request_ids, exc)

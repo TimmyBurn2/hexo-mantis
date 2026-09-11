@@ -119,3 +119,38 @@ def test_a_pop_is_dispatched_while_the_server_thread_still_waits_for_the_next_on
         "dispatch must not depend on another pop or on the pop deadline")
     assert [ids for ids, *_ in batcher.results] == [[1000, 1001]] and heartbeats == ["inference_dispatch"]
     assert server.batch_timing_snapshot()["pipeline"]["depth"] == 2
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="LOUD SKIP — the CUDA pipeline path (event, pinned D2H) needs a GPU")
+def test_every_pop_is_dispatched_to_its_own_ids_on_the_cuda_path(monkeypatch) -> None:
+    """The CPU drives record no event and no pinned D2H; this one does (red team 13)."""
+    import mantis.selfplay.graph_collate as collate_mod
+
+    shapes = [[2, 5, 3], [7, 1], [4, 4, 4, 4], [3, 3]]
+    pops = [H.build_payload(legal, uid_base=100 * (i + 1)) for i, legal in enumerate(shapes)]
+    reference = H.SentinelGraphNet()
+
+    def collate_on_cuda(wire, *_a, **_kw):
+        batch = H.collate_from_payload(wire)
+        for name in ("x", "edge_index", "edge_attr", "legal_offsets", "legal_node_gather",
+                     "node_offsets", "n_stones"):
+            setattr(batch, name, getattr(batch, name).cuda())
+        batch.device = "cuda"
+        return batch
+
+    monkeypatch.setattr(collate_mod, "collate_graph_batch", collate_on_cuda)
+    batcher = _IdTaggedBatcher(list(pops))
+    server = InferenceServer(H.SentinelGraphNet().cuda(), torch.device("cuda"), H.graph_cfg(),
+                             batcher=batcher, encoding_spec=H.GRAPH_SPEC)
+    batcher.server = server
+    server.run()
+    assert batcher.failures == []
+    assert [ids for ids, *_ in batcher.results] == [
+        list(range(1000 * (i + 1), 1000 * (i + 1) + len(legal))) for i, legal in enumerate(shapes)]
+    for (ids, probs, offsets, values), payload in zip(batcher.results, pops, strict=True):
+        want_probs, want_values = _expected(reference, payload)
+        assert np.array_equal(offsets, np.asarray(payload.legal_offsets))
+        assert np.allclose(probs, want_probs, atol=1e-6), f"probs of pop {ids[0] // 1000} moved"
+        assert np.allclose(values, want_values, atol=1e-6), f"values of pop {ids[0] // 1000} moved"
+    block = server.batch_timing_snapshot()["pipeline"]
+    assert block["gpu_wait"]["count"] == len(shapes) and block["launch"]["count"] == len(shapes)
