@@ -83,6 +83,15 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsified.md F-44/F-45.
 
+- **CARD-STAMP-FLOOR — BLOCKING START; a ruling, not code.** R348(c)'s trap (`mantis.run`
+  refuses a config with no passing stamp) meets the schema's own reachability rule: run6 mints
+  `train.draw_rate_abort.min_step 25000`, so `_apply_burst_override` refuses every burst below
+  25 001 steps (rc 11, as on 2026-09-08) and the only stamp-writing preflight of run6 is the
+  block itself (≈ 22.6 h at 1 105 steps/h). The shakedown config (R259's run class) carries the
+  same floor. Options (STATE.md, Hold 1): a `sync_lag`-tier stamp for production configs whose
+  full tier exceeds the shakedown length, with draw-rate reachability proven by the schema rule;
+  an in-process shakedown plus a ruled START bypass; or paying the 22.6 h. Phase W and the
+  post-rebuild cap calibration wait on the same launch path.
 - **CARD-ALPHA-TARGET-FORM — the architect's (R349(c)'s D2).** In decided positions the
   completed-Q improved policy is rescaled noise: `c_scale 1.0` on top of Mctx's per-node min-max
   maps a `< 0.06` Q spread onto 55–150 logits, so ~1 row per 1,000 (rising with value
