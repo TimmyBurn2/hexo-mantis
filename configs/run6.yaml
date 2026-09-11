@@ -22,6 +22,7 @@
 # delta: selfplay.playout_cap.n_sims_full: 0 -> 320
 # delta: selfplay.playout_cap.n_sims_quick: 0 -> 64
 # delta: eval.gate.deploy_sims: 150 -> 160
+# delta: train.actor_sync_cadence_steps: 1 -> 2
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
 # delta: eval.concurrency: 1 -> 8
@@ -92,7 +93,7 @@ train:
   scheduler_t_max: null
   eta_min: 0.0005
   checkpoint_interval: 1000
-  actor_sync_cadence_steps: 1
+  actor_sync_cadence_steps: 2
   ema:
     enabled: false
     decay: 0.999

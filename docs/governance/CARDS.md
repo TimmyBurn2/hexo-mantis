@@ -99,6 +99,17 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   production config therefore stamps at `sync_lag` from a ≈ 100-step burst; tier `full` is
   unchanged in meaning and needs a burst past `min_step`. The old pin ("a production config can
   never be preflighted in the short tier") is reversed in place with these grounds.
+- **CARD-PREFLIGHT-CADENCE — DECIDED by matrix, landed as one mint row.** The first real run6
+  preflight (17:00 UTC) ran its 101-step burst, mirrored and receipted its checkpoint and first
+  shard, played its terminal eval round — and returned **rc 23**
+  `PreflightInversionUndiscriminatedError`: at `train.actor_sync_cadence_steps 1` (the template
+  default run6 inherited; no ruling pinned it) the actor never lags the learner, so assertion (b)
+  cannot prove the armed lag abort's operand order, and the tool refuses to certify that by
+  design (`unproven` is never rc 0). Matrix: (a) mint cadence 2, the smoke config's own value —
+  proves the wiring on the production config, actor ≤ 1 step (≈ 6 s) stale, re-preflight 30 min;
+  (b) accept `undiscriminated` at cadence 1 in the tool — an armed abort's wiring left unproven,
+  the class the tool exists to refuse. **(a) selected**: `configs/run6.yaml` mints
+  `train.actor_sync_cadence_steps: 2` (its header carries the delta); the shakedown twin follows.
 - **CARD-PHASE-W-AT-GUMBEL — DECIDED by matrix: not re-run before START.** The rider named the
   n_workers sweep at the Gumbel regime as part of the mint. Measured instead by the investigation
   (F-47): 16 → 32 workers buys +5 % leaves/s with the server thread at 90.6 % → 99 %, so the knee
