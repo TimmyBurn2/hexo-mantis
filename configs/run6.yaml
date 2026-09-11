@@ -17,7 +17,7 @@
 # delta: eval.gate.stride: 1 -> 3
 # delta: monitor.supervisor_kill_grace_sec: 30.0 -> 600.0
 # delta: identity.arch_kind: null -> GnnArchV2
-# delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
+# delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
 # delta: eval.concurrency: 1 -> 8
 schema_version: 1
 run_id: run6
@@ -29,7 +29,7 @@ identity:
   representation: graph
   arch_kind: GnnArchV2
   warm_start:
-    checkpoint: checkpoints/bc/run6_00006500_5191bd09.ckpt
+    checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt
     net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65
 search:
   kind: puct
