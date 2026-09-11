@@ -141,6 +141,10 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
                      "have an augmentation path and run5 mints it false on the graph one",
     "monitor.alert_loss_increase_window": "a TIME window over training steps, not a board "
                                           "window; the K-cluster window is a different word",
+    "inference.edge_geometry_check": "an OPERATIONAL posture of the one serving loop — WHERE "
+                                     "check 14 runs, not what it checks; it carries the "
+                                     "check's name, not a graph-only quantity, and defaults "
+                                     "on every arch (R347(e), OPERATIONAL_DEFAULT_KEYS)",
 }
 
 #: THE RED ROWS. EMPTY, and emptied BY THE REPAIR — B1's eight rows are all green now, so the
