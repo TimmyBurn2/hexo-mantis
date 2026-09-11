@@ -94,6 +94,7 @@ from mantis.config.armed_aborts import (
     exit_code_for_abort,
 )
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
+from mantis.config.preflight_stamp import clear_stamp, write_stamp
 from mantis.config.schema import RunConfig
 from mantis.diagnostics.workspace_durability import WorkspaceNotDurableError, assert_durable
 
@@ -889,9 +890,22 @@ def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
         ) from exc
 
 
+def _stamp_pass(config: RunConfig, path: Path, args, report: dict, out_dir: Path) -> None:
+    """Write the R348(c) stamp for a preflight that REACHED its verdict (after `_verdict_exit`)."""
+    stamp_path = write_stamp(
+        config=config, config_path=path, tree_root=REPO_ROOT,
+        halts={"workspace": report["workspace"], "cuda_build": report["cuda_build"]},
+        booted_config_sha256=str(report["override"]["booted_config_sha256"]),
+        burst_steps=int(args.burst_steps), report_path=out_dir / _report_name(report))
+    report["preflight_stamp"] = str(stamp_path)
+    print(f"preflight: stamp written {stamp_path}")
+
+
 def _run_preflight(args, report: dict, out_dir: Path) -> None:
     path = _resolve_config_path(args.config)
     config = _load(path)
+    # A preflight that does not pass must leave no earlier pass behind for this identity.
+    clear_stamp(config)
     report["config"] = _config_block(path, config)
     report["coordinator"] = _coordinator_block(config)
     report["manifest"] = _audit_manifest_and_configs(_audit_paths(path))
@@ -950,6 +964,7 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["assertions"]["a_sync"] = blocks["a_sync"]
     report["assertions"]["b_lag"] = blocks["b_lag"]
     _verdict_exit(blocks)
+    _stamp_pass(config, path, args, report, out_dir)
 
 
 def _run_audit(args, report: dict) -> None:

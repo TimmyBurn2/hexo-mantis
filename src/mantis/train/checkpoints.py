@@ -11,7 +11,6 @@ import dataclasses
 import datetime as _datetime
 import hashlib
 import logging
-import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -32,6 +31,7 @@ from mantis.model import (
 )
 from mantis.train.bundle import atomic_write
 from mantis.train.emit import emit_via
+from mantis.util.git import head_sha
 
 _LOG = logging.getLogger(__name__)
 
@@ -109,16 +109,7 @@ class LrProvenance:
 
 def _resolve_commit_sha() -> str:
     """Return `git rev-parse HEAD`, or "unknown" outside a git checkout; never raises."""
-    try:
-        out = subprocess.check_output(
-            ["git", "rev-parse", "HEAD"],
-            stderr=subprocess.DEVNULL,
-            cwd=Path(__file__).resolve().parent,
-            timeout=2.0,
-        )
-        return out.decode("ascii", errors="replace").strip() or "unknown"
-    except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return "unknown"
+    return head_sha(Path(__file__).resolve().parent) or "unknown"
 
 
 def _now_iso() -> str:

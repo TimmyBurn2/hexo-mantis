@@ -21,9 +21,12 @@ _REPO = Path(__file__).resolve().parents[1]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 
 #: The ONE loader and the ONE launch path; `main` may name exactly these two, with nothing
-#: between them.
+#: between them except the ONE sanctioned read-only hand-off below.
 _LOADER = "load_config"
 _LAUNCHER = "launch_run"
+#: R348(c): the ONE callee that may read the config local between load and launch, as its
+#: first positional argument; its result is never what the launcher gets.
+_STAMP_READER = "require_preflight_stamp"
 
 #: Names a config-carrying local may not take unless it is the loader's own direct result.
 _CONFIG_ROOTS = ("config", "cfg")
@@ -147,10 +150,20 @@ def test_main_hands_the_launcher_the_loaders_own_result_and_nothing_else() -> No
 
     if name is not None:
         uses = [n for n in ast.walk(fn) if isinstance(n, ast.Name) and n.id == name]
-        assert len(uses) == 2, (
-            f"the config local {name!r} may appear exactly twice in `main` — once bound from "
-            f"{_LOADER}(), once forwarded to {_LAUNCHER}(config=). A third occurrence is a "
-            f"read, a mutation or a hand-off this census cannot vouch for; found {len(uses)}"
+        stamp_reads = [
+            call for call in ast.walk(fn)
+            if isinstance(call, ast.Call) and _called_name(call) == _STAMP_READER
+            and call.args and isinstance(call.args[0], ast.Name) and call.args[0].id == name
+        ]
+        assert len(stamp_reads) == 1, (
+            f"`main` must hand the config local {name!r} to {_STAMP_READER}() exactly once, as "
+            f"its first positional argument (R348(c)); found {len(stamp_reads)}"
+        )
+        assert len(uses) == 3, (
+            f"the config local {name!r} may appear exactly three times in `main` — once bound "
+            f"from {_LOADER}(), once read by {_STAMP_READER}(), once forwarded to "
+            f"{_LAUNCHER}(config=). Any other occurrence is a read, a mutation or a hand-off "
+            f"this census cannot vouch for; found {len(uses)}"
         )
 
 

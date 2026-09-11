@@ -31,6 +31,10 @@ from mantis.run import RunHandles, UnregisteredAbortExitError, launch_run  # noq
 
 import mantis.run as mantis_run
 from mantis.config.armed_aborts import exit_code_for_abort
+from mantis.config.preflight_stamp import (
+    PreflightStampMissingError,
+    PreflightStampTreeMismatchError,
+)
 from mantis.train.lifecycle.signals import ShutdownState
 
 _REPO = Path(__file__).resolve().parents[1]
@@ -151,22 +155,51 @@ def test_the_launcher_prints_no_config_ok_readiness_line() -> None:
     )
 
 
-def test_a_clean_run_exits_zero(monkeypatch, tmp_path) -> None:
+def test_a_clean_run_exits_zero(monkeypatch, tmp_path, preflight_stamped) -> None:
     """A clean run exits 0. `abort_rule is None` is the ONLY thing that means a clean run."""
+    preflight_stamped(_CONFIGS / "run6.yaml")
     monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: _handles(None))
     rc = mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
     assert rc == 0, f"a run with no fired abort exits 0; got {rc}"
 
 
-def test_a_fired_abort_exits_with_the_code_the_manifest_authors(monkeypatch, tmp_path) -> None:
-    """A fired abort exits with the code the manifest authors, through the SAME resolver the
-    preflight child reads.
+def test_main_refuses_to_launch_a_config_with_no_preflight_stamp(
+    monkeypatch, tmp_path, preflight_stamped,
+) -> None:
+    """R348(c): no stamp for this config on this tree means `main` refuses BEFORE `launch_run`."""
+    launched: list[dict] = []
+    monkeypatch.setattr(mantis_run, "launch_run",
+                        lambda **kw: (launched.append(kw), _handles(None))[1])
+    with pytest.raises(PreflightStampMissingError) as exc_info:
+        mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
+    assert launched == [], "the launcher ran a run that was never preflighted"
+    assert "run6" in str(exc_info.value) or "no preflight stamp" in str(exc_info.value)
+    # and the SAME call launches once the config is stamped on this tree
+    preflight_stamped(_CONFIGS / "run6.yaml")
+    assert mantis_run.main(
+        ["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)]) == 0
+    assert len(launched) == 1
 
-    Writing the literal 46 in `run.py` instead of resolving it is caught too: the assertion is
-    against `exit_code_for_abort`'s answer, so a second literal cannot agree with the manifest by
-    accident — but 46 is ALSO stated here, so a silent manifest drift is loud rather than
-    self-consistent.
-    """
+
+def test_a_stamp_from_another_tree_does_not_launch(monkeypatch, tmp_path, preflight_stamped) -> None:
+    """The stamp binds the config to the tree that preflighted it; a HEAD that moved refuses."""
+    import json
+
+    path = preflight_stamped(_CONFIGS / "run6.yaml")
+    doc = json.loads(path.read_text(encoding="utf-8"))
+    doc["tree_sha"] = "0" * 40
+    path.write_text(json.dumps(doc), encoding="utf-8")
+    monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: _handles(None))
+    with pytest.raises(PreflightStampTreeMismatchError):
+        mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
+
+
+def test_a_fired_abort_exits_with_the_code_the_manifest_authors(
+    monkeypatch, tmp_path, preflight_stamped,
+) -> None:
+    """A fired abort exits with the manifest's code through the resolver the preflight child reads;
+    46 is ALSO stated here so a literal in `run.py` and a silent manifest drift are both loud."""
+    preflight_stamped(_CONFIGS / "run6.yaml")
     monkeypatch.setattr(mantis_run, "launch_run",
                         lambda **_kw: _handles("draw_rate_collapse"))
     rc = mantis_run.main(["--config", str(_CONFIGS / "run6.yaml"), "--out-dir", str(tmp_path)])
@@ -176,14 +209,11 @@ def test_a_fired_abort_exits_with_the_code_the_manifest_authors(monkeypatch, tmp
 
 
 def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invented_number(
-    monkeypatch, tmp_path
+    monkeypatch, tmp_path, preflight_stamped,
 ) -> None:
-    """An abort with no authored code is a NAMED failure, never an invented number.
-
-    Mapping the unresolvable rule to 0 makes an aborted run read clean; mapping it to a made-up
-    number creates a second exit-code authority beside the manifest. The error must NAME the rule,
-    or the operator reading a supervisor log cannot tell which abort ended the run.
-    """
+    """An abort with no authored code is a NAMED failure that names the rule — never 0, never an
+    invented number that would be a second exit-code authority beside the manifest."""
+    preflight_stamped(_CONFIGS / "run6.yaml")
     monkeypatch.setattr(mantis_run, "launch_run",
                         lambda **_kw: _handles("grad_norm_hard_abort"))
     assert exit_code_for_abort("grad_norm_hard_abort") is None, (
@@ -199,7 +229,7 @@ def test_a_fired_abort_with_no_authored_code_is_a_named_failure_never_an_invente
 
 @pytest.mark.integration
 def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
-    monkeypatch, tmp_path, smoke_run_config
+    monkeypatch, tmp_path, smoke_run_config, preflight_stamped
 ) -> None:
     """A minted config boots through the one composer into the live run loop, bounded, clean stop.
 
@@ -264,6 +294,7 @@ def test_launch_run_boots_a_minted_config_into_the_live_loop_and_stops_clean(
     )
 
     # The clean-vs-aborted distinction, on the REAL handles.
+    preflight_stamped(_CONFIGS / _SMOKE_CONFIG)
     monkeypatch.setattr(mantis_run, "launch_run", lambda **_kw: handles)
     rc = mantis_run.main(["--config", str(_CONFIGS / _SMOKE_CONFIG), "--out-dir", str(tmp_path)])
     assert rc == 0, (

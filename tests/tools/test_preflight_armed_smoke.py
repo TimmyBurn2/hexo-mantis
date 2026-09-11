@@ -23,11 +23,15 @@ INTEGRATION tier: a real ~30 s CPU boot + burst + terminal-eval witness.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
+
+from mantis.config.loader import load_config
+from mantis.config.preflight_stamp import require_preflight_stamp
 
 pytestmark = pytest.mark.integration
 
@@ -42,14 +46,18 @@ BURST_STEPS = 16
 
 
 def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight(
-    tmp_path, preflight_budget_sec, preflight_harness_ceiling_sec
+    tmp_path, monkeypatch, preflight_budget_sec, preflight_harness_ceiling_sec
 ):
+    # The R348(c) stamp store is redirected so a test burst never stamps the host's real store.
+    state_home = tmp_path / "state"
+    monkeypatch.setenv("XDG_STATE_HOME", str(state_home))
     proc = subprocess.run(
         [sys.executable, str(TOOL), "--config", str(CONFIG),
          "--burst-steps", str(BURST_STEPS), "--out-dir", str(tmp_path),
          "--timeout-sec", str(preflight_budget_sec)],
         cwd=str(REPO_ROOT), capture_output=True, text=True,
         timeout=preflight_harness_ceiling_sec,
+        env={**os.environ, "XDG_STATE_HOME": str(state_home)},
     )
     tail = (proc.stdout + proc.stderr)[-3000:]
     assert proc.returncode == 0, f"preflight not green (rc {proc.returncode}):\n{tail}"
@@ -77,3 +85,8 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert report["tier"]["tier"] == "full"
     assert report["tier"]["covered"] == ["sync_lag", "full"]
     assert report["child"]["rc"] == 0 and report["child"]["timed_out"] is False
+    # R348(c): a green preflight leaves the stamp `mantis.run` will demand, on THIS tree.
+    stamp = require_preflight_stamp(load_config(CONFIG), tree_root=REPO_ROOT)
+    assert Path(report["preflight_stamp"]).is_relative_to(state_home)
+    assert stamp["halts"]["workspace"] == report["workspace"]
+    assert stamp["halts"]["cuda_build"] == report["cuda_build"]

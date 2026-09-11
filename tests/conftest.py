@@ -117,3 +117,21 @@ def mk_graph_buffer():
         return hb
 
     return make
+
+
+@pytest.fixture
+def preflight_stamped(monkeypatch, tmp_path):
+    """Redirect the R348(c) stamp store to a tmp home; the stamper writes a real passing stamp."""
+    from mantis.config.loader import load_config
+    from mantis.config.preflight_stamp import write_stamp
+
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
+    def stamp(config_path: Path) -> Path:
+        return write_stamp(
+            config=load_config(config_path), config_path=config_path, tree_root=CONFIGS_DIR,
+            halts={"workspace": {"verdict": "fixture"}, "cuda_build": {"verdict": "not_run"}},
+            booted_config_sha256="fixture", burst_steps=0,
+            report_path=tmp_path / "preflight_fixture.json")
+
+    return stamp

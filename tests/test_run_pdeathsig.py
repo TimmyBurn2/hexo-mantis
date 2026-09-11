@@ -37,6 +37,8 @@ from mantis.train.lifecycle.signals import (
 
 _LINUX = sys.platform.startswith("linux")
 _DEADLINE_SEC = 20.0
+#: What a stubbed R348(c) stamp check hands back: the three fields `main` logs.
+_STAMP = {"config_sha256": "stub", "tree_sha": "stub", "preflight_utc": "stub"}
 _LINUX_ONLY = pytest.mark.skipif(
     not _LINUX, reason="PR_SET_PDEATHSIG is a Linux prctl; there is no equivalent here"
 )
@@ -382,6 +384,10 @@ def test_main_arms_before_it_reads_anything(monkeypatch: pytest.MonkeyPatch, tmp
     monkeypatch.setattr(
         mantis_run, "load_config", lambda path: (order.append("load_config"), {})[1],
     )
+    monkeypatch.setattr(
+        mantis_run, "require_preflight_stamp",
+        lambda config, *, tree_root: (order.append("stamp"), _STAMP)[1],
+    )
 
     def _fake_launch(**_kw: Any) -> Any:
         order.append("launch_run")
@@ -419,6 +425,8 @@ def test_calling_main_in_this_process_does_not_arm_the_test_runner(
         assert arm_parent_death_if_supervised() is False
 
     monkeypatch.setattr(mantis_run, "load_config", lambda path: {})
+    monkeypatch.setattr(mantis_run, "require_preflight_stamp",
+                        lambda config, *, tree_root: _STAMP)
     monkeypatch.setattr(
         mantis_run, "launch_run",
         lambda **_kw: type("H", (), {"shutdown": type("S", (), {"abort_rule": None})()})(),

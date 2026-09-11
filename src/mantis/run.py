@@ -39,6 +39,7 @@ from mantis.config.armed_aborts import (
 )
 from mantis.config.emit import resolve_config, write_resolved_config
 from mantis.config.loader import config_identity_sha256, load_config
+from mantis.config.preflight_stamp import require_preflight_stamp
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence
 from mantis.config.resolve.allocator_posture import (
     assert_allocator_posture as _assert_allocator_posture,
@@ -967,6 +968,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     this process did NOT send itself still resolves to 0. rc 1 is not an AUTHORED code but
     CPython's rc for any exception leaving `main`, so `UnregisteredAbortExitError` and any
     composition wall are indistinguishable to a supervisor; no code is invented for either.
+
+    Raises:
+        PreflightStampRefusal: the loaded config has no passing preflight stamp for this tree
+            (R348(c)); one of its three named subclasses says which fact is missing.
+        UnregisteredAbortExitError: an abort fired whose rule authors no exit code.
     """
     # THE FIRST STATEMENT, before argparse and before any collaborator exists: the window this
     # closes is exactly "the supervisor was killed while the run was still coming up". A NO-OP
@@ -996,8 +1002,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     # `torch.load`, and had zero callers — so a mistyped path surfaced as a torch error deep
     # inside `init_trainer`'s resume branch, after the composition root had built a run.
     bootstrap = resolve_bootstrap(args.resume_from)
-    handles = launch_run(config=load_config(args.config), out_dir=args.out_dir,
-                         checkpoint_path=bootstrap.path)
+    config = load_config(args.config)
+    # R348(c): a run cannot skip the manual preflight by not running it; the stamp is keyed by
+    # the config's identity hash and bound to the tree that preflighted it.
+    stamp = require_preflight_stamp(config, tree_root=Path(__file__).resolve().parent)
+    _LOG.info("preflight_stamp_accepted config_sha256=%s tree_sha=%s preflight_utc=%s",
+              stamp["config_sha256"], stamp["tree_sha"], stamp["preflight_utc"])
+    handles = launch_run(config=config, out_dir=args.out_dir, checkpoint_path=bootstrap.path)
     rule = handles.shutdown.abort_rule
     if rule is None:
         return 0
