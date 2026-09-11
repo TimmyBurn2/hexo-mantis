@@ -172,3 +172,69 @@ def test_adv8_the_real_registry_dim_still_passes() -> None:
     """The control: the shipped `node_feat_dim` is 11 and must be unaffected."""
     assert NODE_FEAT_DIM >= 2
     assert _call(_clean_fixture()) is None
+
+
+def _long_axis_wire(n_nodes: int):
+    """ONE graph of `n_nodes` empty cells on axis 0, every in-window pair joined both ways."""
+    node_feat = np.zeros(n_nodes * NODE_FEAT_DIM, dtype=np.float32)
+    coords = np.zeros((n_nodes, 2), dtype=np.int32)
+    coords[:, 0] = np.arange(n_nodes, dtype=np.int32)
+    src, dst, dist = [], [], []
+    real = np.arange(n_nodes - 1)  # the last node is the dummy; no edge may touch it
+    for d in range(1, WIN_LENGTH):
+        s = real[: n_nodes - 1 - d]
+        src += [s, s + d]
+        dst += [s + d, s]
+        dist += [np.full(s.size, float(d)), np.full(s.size, -float(d))]
+    src_all, dst_all = np.concatenate(src), np.concatenate(dst)
+    attr = np.zeros((src_all.size, EDGE_FEAT_DIM), dtype=np.float32)
+    attr[:, 0] = 1.0
+    attr[:, 3] = np.concatenate(dist)
+    return (
+        node_feat, coords.reshape(-1),
+        np.concatenate([src_all, dst_all]).astype(np.int64), attr.reshape(-1),
+        np.array([0, n_nodes], dtype=np.int64), np.array([1], dtype=np.int8),
+    )
+
+
+def _longest_stall_while(call) -> tuple[float, float]:
+    """`(longest main-thread stall, wall of the call)` with `call` run on a worker thread."""
+    import threading
+    import time
+
+    done = threading.Event()
+    walls: list[float] = []
+
+    def run() -> None:
+        t0 = time.perf_counter()
+        call()
+        walls.append(time.perf_counter() - t0)
+        done.set()
+
+    worker = threading.Thread(target=run)
+    # `last` is taken BEFORE `start()`: starting a thread hands it the GIL, so a GIL-holding
+    # call has already run to completion by the time the line after `start()` executes.
+    longest, last = 0.0, time.perf_counter()
+    worker.start()
+    while not done.is_set():
+        now = time.perf_counter()
+        longest = max(longest, now - last)
+        last = now
+    worker.join()
+    return longest, walls[0]
+
+
+def test_verify_edge_geometry_releases_the_gil_while_it_runs() -> None:
+    """THE PIN for the detached verifier (F-46); the control is a C call that HOLDS the GIL."""
+    wire = _long_axis_wire(300_000)
+    assert _call(wire) is None
+    held_stall, held_wall = _longest_stall_while(lambda: pow(7, 2_000_000))
+    stall, wall = _longest_stall_while(lambda: _call(wire))
+    assert wall > 0.01, f"the verify is too short to measure: {wall * 1e3:.1f} ms"
+    assert held_stall > 0.5 * held_wall, (
+        f"the control did not hold the GIL: stall {held_stall * 1e3:.1f} ms of {held_wall * 1e3:.1f}"
+    )
+    assert stall < 0.5 * wall, (
+        f"the verify held the GIL: main thread stalled {stall * 1e3:.1f} ms of a "
+        f"{wall * 1e3:.1f} ms verify (control: {held_stall * 1e3:.1f} of {held_wall * 1e3:.1f} ms)"
+    )

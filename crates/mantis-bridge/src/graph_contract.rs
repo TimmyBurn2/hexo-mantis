@@ -29,8 +29,6 @@ use mantis_graph::WIN_AXES;
 /// # Errors
 /// Returns `Err(message)` on the first geometry violation or malformed-shape input. Every index
 /// is range-checked before use rather than trusting the structural layer.
-/// Returns `Err(message)` on the first geometry violation or malformed-shape input. Every index
-/// is range-checked before use rather than trusting the structural layer.
 // `float_cmp` allowed: the compared floats are EXACT constants the builder itself wrote, so
 // approximation would WEAKEN the check.
 #[allow(
@@ -199,8 +197,10 @@ fn verify_edge_geometry_impl(
     Ok(())
 }
 
-/// PyO3 shim: extract zero-copy readonly slices, delegate, map `Err(String)` to `PyValueError`,
-/// which the Python call site re-raises as the named `EdgeAttrGeometryMismatch`.
+/// PyO3 shim: zero-copy readonly slices in, the verify run with the GIL RELEASED, `Err(String)`
+/// mapped to `PyValueError` (re-raised in Python as the named `EdgeAttrGeometryMismatch`). Sound
+/// under ONE invariant the callers own: the six arrays are read-only for the whole call — the
+/// server's are fresh per pop (moved out of the fused wire by `GraphWire.take()`, never written).
 ///
 /// # Errors
 /// `PyValueError` on any geometry violation or malformed-shape input; also propagates
@@ -208,6 +208,7 @@ fn verify_edge_geometry_impl(
 #[pyfunction]
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn verify_edge_geometry(
+    py: Python<'_>,
     node_feat: PyReadonlyArray1<'_, f32>,
     node_coords: PyReadonlyArray1<'_, i32>,
     edge_index: PyReadonlyArray1<'_, i64>,
@@ -218,17 +219,26 @@ pub(crate) fn verify_edge_geometry(
     edge_feat_dim: usize,
     win_length: i64,
 ) -> PyResult<()> {
-    verify_edge_geometry_impl(
-        node_feat.as_slice()?,
-        node_coords.as_slice()?,
-        edge_index.as_slice()?,
-        edge_attr.as_slice()?,
-        node_offsets.as_slice()?,
-        current_player.as_slice()?,
-        node_feat_dim,
-        edge_feat_dim,
-        win_length,
-    )
+    let node_feat = node_feat.as_slice()?;
+    let node_coords = node_coords.as_slice()?;
+    let edge_index = edge_index.as_slice()?;
+    let edge_attr = edge_attr.as_slice()?;
+    let node_offsets = node_offsets.as_slice()?;
+    let current_player = current_player.as_slice()?;
+    // `&[T]` is `Send`, so the slices cross `detach` without a wrapper; the borrows outlive it.
+    py.detach(move || {
+        verify_edge_geometry_impl(
+            node_feat,
+            node_coords,
+            edge_index,
+            edge_attr,
+            node_offsets,
+            current_player,
+            node_feat_dim,
+            edge_feat_dim,
+            win_length,
+        )
+    })
     .map_err(PyValueError::new_err)
 }
 
