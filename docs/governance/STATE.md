@@ -142,8 +142,8 @@ rather than from "why is the step 5 s".
   bundles at 200 and 400 with rings, receipts on 200), `/workspace/oc7/{alpha_probe.py,
   alpha_probe_warmstart.json, trainer_profile.py, trainer_profile/, startpath_cd.yaml,
   drive_burst.py, burst.sh}`; the dev box's scratchpad `startpath/` mirrors them.
-- Two harness facts recorded so they are not re-learned: a detached `setsid nohup` job from an
-  ssh command has no `~/.cargo/bin` (export PATH in the script); and `cargo fmt -p <crate> --
+- Two harness facts recorded so they are not re-learned: a job detached from an ssh command
+  runs without `~/.cargo/bin` on PATH (export it in the script); and `cargo fmt -p <crate> --
   <file>` formats the WHOLE crate — use `rustfmt <file>` for a touched file.
 
 ## Provenance
