@@ -68,6 +68,21 @@ lever is S and ≥ ×2. The serving side from the same record: the inference-ser
 32 % of its wall in `_node_offsets_to_batch_vec`'s implicit device→host sync and 19 % in check 14
 inline; the 16 workers wait on it 99.6 % of theirs (`CARD-SERVER-SYNC`, INVESTIGATION-1 item 3).
 
+## The performance investigation (operator-ordered, two read-only agents, same day)
+
+Record: `docs/design/measurements/PERF_INVESTIGATION_2026-09-11.md` (the full report and its
+one-page summary; scripts and raw harvests in the dispatcher's scratchpad and under the box's
+`/workspace/oc7/pi`, `/workspace/runs/pi_*`). What it settled: **the inference-server thread is
+the block's price — 90.6 % busy at 16 workers, 99.0 % at 32**, cost linear in leaves (2.7 ms per
+pop + 0.515 ms per leaf), GPU busy 52.8 % of wall because the chain's CPU and GPU halves never
+overlap; **the landed `checker_thread` lever is a net loss as built (−12.6 % at 32 workers, the
+Rust verifier holds the GIL; F-46 — do not arm it)**; more workers buys +5 %, batch 128 −3 %
+(F-47); **eval rounds run self-play at 0.79× while alive** (`CARD-EVAL-CONTENTION`, ≈ 5–10 % of
+the block). Block ≈ 20.6 h + eval ≈ 21.6–22.7 h. Ten levers ranked with pre-registered gains and
+falsifiers (a two-stage server pipeline, check 14 with the GIL released, `torch.compile` of the
+trunk, an edge codebook, pinned H2D, a fused message pass …); stacked, an ESTIMATE of ≈ 7 h per
+block. All are LAW-09 proposals; nothing landed.
+
 ## R349(b) — the mirror arm, landed and proven
 
 `tools/mirror_pull.py` runs on the operator's machine against an rsync spec (`<alias>:/path`),
@@ -110,8 +125,9 @@ the one edit to `docs/governance/LAWS.md`. Gate 12 is GREEN at HEAD.
 ## Protected set, laws, cards
 
 Protected set as listed in `docs/governance/LAWS.md`; seventeen laws (LAW-06 amended by R349(a));
-no gate number added (still 17). Cards: `docs/governance/CARDS.md` — opened by R349:
-`CARD-ALPHA-TARGET-FORM`, `CARD-TRAINER-CADENCE`, `CARD-SERVER-SYNC`, `CARD-DEPLOY-HEAD-BUDGET`;
+no gate number added (still 17). Cards: `docs/governance/CARDS.md` — opened by R349 and the investigation:
+`CARD-ALPHA-TARGET-FORM`, `CARD-TRAINER-CADENCE`, `CARD-SERVER-SYNC`, `CARD-DEPLOY-HEAD-BUDGET`,
+`CARD-STAMP-FLOOR`, `CARD-CHECKER-THREAD-GIL`, `CARD-EVAL-CONTENTION`;
 closed: `CARD-BOX-VOLUME`, `CARD-WARMSTART-STAMP-SCHEMA`, `CARD-GATES-ON-CUDA-VENV`,
 `CARD-TIER-HOST` (ruled), `F-816-24`; `CARD-ALPHA-MAX-ROWS` discriminated. TEST-1 and
 INVESTIGATION-1 are **NOT dispatched**: both run "during the block" and the block has not started;

@@ -105,11 +105,27 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
   decision, not a lever. INVESTIGATION-1 item 2 is re-aimed: "is the reuse ratio right" and the
   GPU step's own 156 ms (`index_add_` 22 %, GEMMs 16 %, 31 syncs) — not "why is the step 5 s".
-- **CARD-SERVER-SYNC — INVESTIGATION-1 item 3's first item.** The inference-server thread spends
-  32 % of its wall in `_node_offsets_to_batch_vec`'s `repeat_interleave(…, counts)` — an implicit
-  device→host sync at the top of every forward (`output_size=` removes it) — and 19 % in check 14
-  inline (the checker-thread lever is landed, unarmed in run6's mint); the 16 workers wait on the
-  server 99.6 % of their wall. Measured, not yet benched (LAW-09 prereg first).
+- **CARD-SERVER-SYNC — INVESTIGATION-1 item 3, now the block's price.** The performance
+  investigation (`docs/design/measurements/PERF_INVESTIGATION_2026-09-11.md`) measured the
+  inference-server thread **90.6 % busy at 16 workers, 99.0 % at 32** (F-47): per 20.7-ms pop of
+  34.9 leaves, 8–10 ms spinning in `cudaStreamSynchronize` for an eager GINE forward at 6–9× its
+  bandwidth floor, 3–4 ms in check 14 with the GIL held, 1.7 ms pageable H2D, 1.8 ms of 216 eager
+  launches, 3 ms of contract work, 1.9 ms idle. Its ranked levers, each a LAW-09 proposal with a
+  falsifier: a two-stage pipeline (collate pop N+1 under pop N's forward, +40–60 % pre-reg),
+  check 14 with the GIL released in Rust (+17–23 %), `torch.compile` of the trunk (−31 % serve
+  wall measured in the microbench, +16 %), an edge-attribute codebook, pinned + `non_blocking`
+  H2D, a fused message-pass kernel. `n_workers 32` measured +5 % alone (a mint row).
+- **CARD-CHECKER-THREAD-GIL — the landed lever is a net loss as built (F-46).**
+  `inference.edge_geometry_check: checker_thread` costs −12.6 % leaves/s at 32 workers because
+  `verify_edge_geometry` holds the GIL for the whole verify; do NOT arm it in a mint. The repair
+  is `py.detach` around the verifier (a Send wrapper over the borrowed slices) — a small packet
+  with the `w32ct` arm as its falsifier (pops/s 32 → ≥ 37; abort < +8 %).
+- **CARD-EVAL-CONTENTION — a measured term nobody had priced.** While an eval round is alive
+  self-play runs at **0.79×** (arm `w16ev`: −20.7 % leaves/s over a 12-min round; two CUDA
+  contexts time-slicing plus the child's 8 CPU threads, the child allocating only 38 MB). At run6's
+  cadence that is ≈ 5–10 % of the block's wall (ESTIMATE from 12–22-min rounds every ≈ 54 min).
+  Levers: batch the child's inference across its 8 games, or `eval.worker_device: cpu` (a config
+  row, longer rounds). Only one 12-min round was crossed; a fully escalated one is not separated.
 - **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
   64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
   under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
