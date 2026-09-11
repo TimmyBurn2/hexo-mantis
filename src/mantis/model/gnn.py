@@ -38,12 +38,14 @@ class GnnDist65ValueHead(nn.Module):
         return value, bin_logits
 
 
-def _node_offsets_to_batch_vec(node_offsets: Tensor) -> Tensor:
-    """Turn a (B+1,) i64 ptr array into an (N,) i64 graph-id per node."""
+def _node_offsets_to_batch_vec(node_offsets: Tensor, n_total: int) -> Tensor:
+    """Turn a (B+1,) i64 ptr array into an (N,) i64 graph-id per node, sized from the host."""
+    # `output_size` is the host-known N: without it `repeat_interleave` syncs to size its output.
     counts = node_offsets[1:] - node_offsets[:-1]
     return torch.repeat_interleave(
         torch.arange(node_offsets.shape[0] - 1, device=node_offsets.device, dtype=torch.long),
         counts,
+        output_size=n_total,
     )
 
 
@@ -151,7 +153,7 @@ class GnnNet(nn.Module):
         legal_emb = emb.index_select(0, legal_index)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 
-        batch_vec = _node_offsets_to_batch_vec(node_offsets)
+        batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)
         pooled = segment_mean_with_fallback(emb, stone_mask, batch_vec, num_graphs)
         value, bin_logits = self.value_head(pooled)
         return policy_logits, value, bin_logits

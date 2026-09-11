@@ -32,12 +32,26 @@ def scalar_to_two_hot(z: torch.Tensor, n_bins: int = N_VALUE_BINS) -> torch.Tens
     return out
 
 
+# One resident copy of the support per device: `VALUE_SUPPORT.to(device)` on every decode was a
+# pageable H2D copy plus a stream sync inside every inference forward.
+_SUPPORT_ON: dict[torch.device, torch.Tensor] = {}
+
+
+def _support_on(device: torch.device) -> torch.Tensor:
+    support = _SUPPORT_ON.get(device)
+    if support is None:
+        # Built OUTSIDE inference mode: a cached inference tensor cannot be saved for backward,
+        # and the trainer's value head shares this cache with the serving forward.
+        with torch.inference_mode(False):
+            support = _SUPPORT_ON[device] = VALUE_SUPPORT.to(device, torch.float32)
+    return support
+
+
 def decode_binned_value(bin_logits: torch.Tensor) -> torch.Tensor:
     """(N, n_bins) logits → (N, 1) E[softmax·support], clamped [-1,1]."""
     # fp32 end-to-end (INV-D1): the search-side decode must not run in autocast fp16.
     probs = F.softmax(bin_logits.to(torch.float32), dim=-1)
-    support = VALUE_SUPPORT.to(bin_logits.device, torch.float32)
-    v = (probs * support).sum(dim=-1, keepdim=True)
+    v = (probs * _support_on(bin_logits.device)).sum(dim=-1, keepdim=True)
     return v.clamp(-1.0, 1.0)
 
 

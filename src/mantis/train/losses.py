@@ -30,7 +30,8 @@ def _segment_softmax(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch
     counts = legal_offsets[1:] - legal_offsets[:-1]
     b = int(legal_offsets.shape[0]) - 1
     seg = torch.repeat_interleave(
-        torch.arange(b, device=logits.device, dtype=torch.long), counts
+        torch.arange(b, device=logits.device, dtype=torch.long), counts,
+        output_size=int(logits.shape[0]),
     )
     seg_max = torch.full((b,), float("-inf"), dtype=logits.dtype, device=logits.device)
     seg_max.scatter_reduce_(0, seg, logits, reduce="amax", include_self=False)

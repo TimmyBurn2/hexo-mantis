@@ -411,35 +411,34 @@ def collate_graph_batch(
     # --- resolver step 4: block-diagonal torch tensors (edge_index already global) ---
     N = node_feat.size // node_feat_dim
     E = edge_attr.size // edge_feat_dim
-    x = torch.from_numpy(
-        np.ascontiguousarray(node_feat, dtype=np.float32)
-    ).reshape(N, node_feat_dim).to(device)
-    ei = torch.from_numpy(
-        np.ascontiguousarray(edge_index, dtype=np.int64)
-    ).reshape(2, E).to(device)
-    ea = torch.from_numpy(
-        np.ascontiguousarray(edge_attr, dtype=np.float32)
-    ).reshape(E, edge_feat_dim).to(device)
-
+    to_device = _device_copier(device)
     return GraphBatch(
-        x=x,
-        edge_index=ei,
-        edge_attr=ea,
-        legal_offsets=torch.from_numpy(
-            np.ascontiguousarray(legal_offsets, dtype=np.int64)
-        ).to(device),
-        legal_node_gather=torch.from_numpy(
-            np.ascontiguousarray(legal_node_gather, dtype=np.int64)
-        ).to(device),
-        node_offsets=torch.from_numpy(
-            np.ascontiguousarray(node_offsets, dtype=np.int64)
-        ).to(device),
-        n_stones=torch.from_numpy(
-            np.ascontiguousarray(n_stones, dtype=np.int64)
-        ).to(device),
+        x=to_device(node_feat, np.float32).reshape(N, node_feat_dim),
+        edge_index=to_device(edge_index, np.int64).reshape(2, E),
+        edge_attr=to_device(edge_attr, np.float32).reshape(E, edge_feat_dim),
+        legal_offsets=to_device(legal_offsets, np.int64),
+        legal_node_gather=to_device(legal_node_gather, np.int64),
+        node_offsets=to_device(node_offsets, np.int64),
+        n_stones=to_device(n_stones, np.int64),
         n_graphs=B,
         device=device,
     )
+
+
+def _device_copier(device: str):
+    """The one H2D path of the collate: pinned staging + `non_blocking` DMA on CUDA."""
+    # The caching host allocator holds each pinned staging block until its copy has completed.
+    import torch
+
+    pinned = torch.device(device).type == "cuda"
+
+    def copy(arr: np.ndarray, dtype) -> Any:
+        host = torch.from_numpy(np.ascontiguousarray(arr, dtype=dtype))
+        if pinned:
+            return host.pin_memory().to(device, non_blocking=True)
+        return host.to(device)
+
+    return copy
 
 
 # Structural layer — index in-range / unique / monotonic / typed.
@@ -717,7 +716,8 @@ def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     counts = legal_offsets[1:] - legal_offsets[:-1]
     b = int(legal_offsets.shape[0]) - 1
     seg = torch.repeat_interleave(
-        torch.arange(b, device=logits.device, dtype=torch.long), counts
+        torch.arange(b, device=logits.device, dtype=torch.long), counts,
+        output_size=int(logits.shape[0]),
     )
     # per-segment max for stability; include_self=False is safe because EmptyLegalSet
     # guarantees every graph has at least one legal node.
@@ -741,7 +741,8 @@ def stone_mask_from_batch(batch: GraphBatch) -> Any:
     b = int(node_offsets.shape[0]) - 1
     counts = node_offsets[1:] - node_offsets[:-1]
     node_graph = torch.repeat_interleave(
-        torch.arange(b, device=node_offsets.device, dtype=torch.long), counts
+        torch.arange(b, device=node_offsets.device, dtype=torch.long), counts,
+        output_size=n_total,
     )
     pos_in_graph = (
         torch.arange(n_total, device=node_offsets.device, dtype=torch.long)

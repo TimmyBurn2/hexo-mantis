@@ -123,7 +123,7 @@ def test_value_and_bin_logits_are_untouched_by_the_gather_change(payload_fields,
         )
         emb = net.node_embeddings(batch.x, batch.edge_index, batch.edge_attr)
         from mantis.model.gnn import _node_offsets_to_batch_vec, segment_mean_with_fallback
-        bv = _node_offsets_to_batch_vec(batch.node_offsets)
+        bv = _node_offsets_to_batch_vec(batch.node_offsets, int(batch.x.shape[0]))
         pooled = segment_mean_with_fallback(emb, stone_mask, bv, batch.n_graphs)
         ref_value, ref_bins = net.value_head(pooled)
     assert torch.equal(value, ref_value)

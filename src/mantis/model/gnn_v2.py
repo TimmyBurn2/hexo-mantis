@@ -162,7 +162,7 @@ class GnnNetV2(GnnNet):
         legal_emb = emb.index_select(0, legal_index)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 
-        batch_vec = _node_offsets_to_batch_vec(node_offsets)
+        batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)
         pooled = torch.cat(
             (
                 segment_mean_with_fallback(emb, stone_mask, batch_vec, num_graphs),
