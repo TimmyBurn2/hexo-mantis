@@ -85,22 +85,28 @@ All five were found by running things the dev box could not run — the integrat
 Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Records:
 `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `MEASUREMENT_PERF3B_2026-09-11.md`.
 
-- **CARD-BOX-VOLUME — BLOCKING the re-mint route on this instance.** `/` and `/workspace` on the
-  box are `overlay`; R347(d)'s rc 16 refuses every preflight, so no stamp exists and `mantis.run`
-  refuses (R348(c)). A persistent volume, or a ruled mirror arm, precedes the shakedown.
-- **CARD-WARMSTART-STAMP-SCHEMA — MINT-BLOCKING, one owed row.** run6's BC artifact's stamped
-  config no longer validates under the wave-2 schema (49 `extra_forbidden`), so the warm start
-  refuses at `load_checkpoint`. The LAW-12 strip is done and hash-identical
-  (`checkpoints/bc/run6_00006500_ca1afb71.ckpt`, on the box and off-box); the re-mint moves
-  `identity.warm_start.checkpoint` to it. Until then one default-tier row is a TRUE red wherever
-  the artifact exists. Alternative (a loader change) is a weakening and is not recommended.
-- **CARD-TIER-HOST — the integration tier's host is a ruling.** On an AVX2 host LAW-06's bf16 CPU
-  trainer is emulated (72× per GEMM) and the tier cannot finish; on the box it takes ~20–25 min.
-  Options: the tier is a box gate / the OC-7 row is `slow` / a CPU-only carve-out of LAW-06 (a
-  law amendment). The dev box also carries a GPU, so a minted CUDA smoke profile is a fourth.
-- **CARD-ALPHA-MAX-ROWS — the architect's reading.** Under the Gumbel regime 98.9% of rows carry a
-  tail (mean 0.0006) and rows with **α = 1.0** exist — no target mass on any of the 16 explicit
-  entries. Not adjudicated; read against R347(a)'s "exact on the m sampled entries".
+- **CARD-BOX-VOLUME — RE-SCOPED by R349(b); no volume exists and none is coming.** `/` and
+  `/workspace` on the box are `overlay`; R347(d)'s rc 16 refused every preflight there. R349(b)
+  deletes that halt and replaces it with a PULLER on the operator's machine (mirror + hash-verify
+  + a receipt beside each artifact on the box); the preflight requires receipts for the warm-start
+  bundle and shard 0. Loss-on-recycle is the operator's RECORDED acceptance.
+- **CARD-WARMSTART-STAMP-SCHEMA — CLOSED by R349(a) at `1793fee1`.** run6's BC artifact's stamped
+  config no longer validated under the wave-2 schema (49 `extra_forbidden`); the LAW-12 strip
+  (`checkpoints/bc/run6_00006500_ca1afb71.ckpt`, net hash unchanged) is now the minted
+  `identity.warm_start.checkpoint`, and the default tier's one true red is green wherever the
+  strip exists.
+- **CARD-TIER-HOST — RULED by R349(a): the carve-out.** On an AVX2 host LAW-06's bf16 CPU trainer
+  was emulated (72× per GEMM) and the tier could not finish. R349(a) takes the third option as a
+  law amendment: fp32 on `train.device: cpu` (the autocast context, never the dtype pin), landed
+  at `9491b4d0` with its own parity test; the tier runs on CUDA where a card exists (the dev box's
+  3070 via `make build.cuda`, the box remotely). TEST-1's minted CUDA smoke profile is the fourth
+  option and is still owed.
+- **CARD-ALPHA-MAX-ROWS — ORDERED by R349(c) as a CORRECTNESS question before any start.** Under
+  the Gumbel regime 98.9% of rows carry a tail (mean 0.0006) and rows with **α = 1.0** exist — no
+  target mass on any of the 16 explicit entries. Three such rows are reconstructed from the game
+  record (v_mix vs max visited Q, which stone of the turn, the perspective sign at the root); a
+  found defect halts the mint until fixed with a parity vector; the per-1,000 count rides the
+  dashboard from step 0.
 - **CARD-GATES-ON-CUDA-VENV — the gate set had never gated a CUDA venv.** Every `$UV run` in
   `run_all.sh` re-synced to the default groups, so every box gate run in history silently ran
   on the CPU wheel; fixed at `8dfa8b5f` (`UV_NO_SYNC=1`, torch build printed). Gated as built
@@ -109,10 +115,10 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
   device") in `tests/model/conformance/test_arch_states_its_memory_envelope.py` (8),
   `tests/model/test_gnn_v2_witnesses.py::test_both_arches_FORWARD_on_a_real_wire_position` (2),
   the `slow` tier's harness rows through `test_local_gate_runner`, and the ten-row control in
-  `test_preflight_start_halts` (fixed in place). **CLOSED IN FACT at `8443d0e5`** — the four
-  collate sites in the model oracles state `device="cpu"` instead of letting
+  `test_preflight_start_halts` (fixed in place). **CLOSED by R349(a)** — the four collate sites
+  in the model oracles state `device="cpu"` at `8443d0e5` instead of letting
   `collate_graph_batch(device=None)` sniff CUDA beside a CPU net; all 150 rows of the affected
-  suites pass on the box's `+cu128` venv. The close line is a ruling's.
+  suites pass on the box's `+cu128` venv.
 - **CARD-CHECKER-THREAD-LEVER — the lever LANDED at `8443d0e5`; the A/B is the measurement.**
   `inference.edge_geometry_check` (schema default `inline`; `checker_thread` moves check 14 to
   one bounded checker thread after the batch is served, a full queue runs it inline, a failure
@@ -151,16 +157,15 @@ run6 is minted and has never started.
   "omitted mass reads 0" is unreachable at any feasible K, since K = 2048 still drops 25% and halves
   `MAX_ARMED_SIMS` to 122. The tree memory delta is EXACTLY ZERO — the pool is preallocated at
   `MAX_NODES` — so what K costs is the armed-sims ceiling, which gates configs. R345(b)(5); A:7687.
-- **`F-816-24` — FIXED IN CODE, close never recorded.** Read at contact 2026-09-11 (R348(e)'s
-  AUDIT-3 lead): `supervise.main` loads the minted config and resolves every `monitor.supervisor_*`
-  through `resolve_monitor_config` since `c8bd7190` (2026-08-21), with a named refusal for a
-  missing `--config`; `tests/monitor/test_supervisor_config_witness.py` carries the running-
-  supervisor witnesses (integration) and an AST pin that the module constructs no `MonitorConfig`
-  by any shape (default tier). The record still says LIVE because no ruling entry closed it; the
-  close is a ruling line, owed to the operator. R291(b); A:2662.
-- **The `supervisor_kill_grace_sec` reading. OWED, one line.** `600.0` was armed on the reading that
-  "only if the supervisor is used" describes when the value takes effect rather than conditioning
-  the change. A one-line re-mint if the operator reads it the other way. A:7718.
+- **`F-816-24` — CLOSED by R349(a).** Read at contact 2026-09-11 (R348(e)'s AUDIT-3 lead):
+  `supervise.main` loads the minted config and resolves every `monitor.supervisor_*` through
+  `resolve_monitor_config` since `c8bd7190` (2026-08-21), with a named refusal for a missing
+  `--config`; `tests/monitor/test_supervisor_config_witness.py` carries the running-supervisor
+  witnesses (integration) and an AST pin that the module constructs no `MonitorConfig` by any
+  shape (default tier). R291(b); A:2662.
+- **The `supervisor_kill_grace_sec` reading — SETTLED at `a37d2e5e`.** The operator read it the
+  other way: the re-mint reverts `600.0` to the template's `30.0` (R348(e), merged under R349).
+  A:7718.
 
 Riding the run rather than holding it: **`F-816-37`**, below.
 
@@ -181,7 +186,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 | id | subject | status | last moved | cite |
 |---|---|---|---|---|
 | F-816-37 | run-fatal `EdgeAttrGeometryMismatch` at run6's minted geometry, not root-caused | OPEN. Converted into a 1-in-1 eval-path instrument with dump-on-fire (protected set); zero shakedown firings is explicitly NOT a close. Every firing on record is on the host R341 condemned and R342 downgraded to SUSPECT, and the work moved to a different box — the halt is spent, the class is not | R342(a) | A:1926 |
-| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | FIXED IN CODE at `c8bd7190` (2026-08-21), witnessed; the CLOSE is a ruling line still owed | R291(b) | A:2662 |
+| F-816-24 | bare `MonitorConfig()` — minted `supervisor_*` reach no process | CLOSED by R349(a); fixed at `c8bd7190` (2026-08-21), witnessed | R349(a) | A:2662 |
 | F-816-27 | supervisor kill-grace CEILING absent (schema is `Field(ge=0)` only) | RULED; rides prereg row 19 to the operator | R338(c) | A:3498 |
 | F-816-34 | vacuous knee band — PICK = 2 from a band widened below every rung | FILED 2026-09-04, never adjudicated | none | A:6739 |
 | F-816-35 | r8 trainer need is a DISTRIBUTION exceeding `_SIZING_BUDGET_GIB` and R330(b)'s 3% | FILED, never adjudicated | none | A:6741 |

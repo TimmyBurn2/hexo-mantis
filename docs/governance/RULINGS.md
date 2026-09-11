@@ -1,4 +1,4 @@
-# RULINGS — R23 to R348
+# RULINGS — R23 to R349
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R349.
+- Numbering continues from R346. The next ruling is R350.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,71 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R349 — START PATH: wave 3 ratified, rc-16 re-scoped to a puller, α = 1.0 and the trainer step before the mint
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R348: the START-path packet made its own §1 the canonical home and directed that it be
+copied verbatim here.
+
+> R{next} — (a) Wave 3 is RATIFIED: OC-7 was host (bf16 autocast on an
+> AVX2 CPU, 72× on one GEMM), not code; the seven pre-existing defects
+> found by running on the box — the drain arity, the dropped α, the
+> warm-start's 49 forbidden keys, the gate set re-syncing to the CPU wheel
+> on every box run in history, P0-3's nested half — are the era's thesis
+> again: fakes stayed green while the real seam died on its first game.
+> F-816-24 CLOSED (fixed since c8bd7190). CARD-GATES-ON-CUDA-VENV CLOSED
+> (UV_NO_SYNC, torch build printed). Integration tier: CUDA where a card
+> exists; fp32 on device=cpu is the ONE carve-out to LAW-06 and applies to
+> no production path.
+> (b) rc-16 RE-SCOPED for hosts without a volume: the run dir is
+> /workspace; a PULLER on the operator's machine mirrors bundles and
+> shards over the ssh alias each checkpoint interval, verifies hashes,
+> and writes a receipt beside each mirrored artifact on the box; the
+> preflight requires receipts for the warm-start bundle and shard 0
+> (the loop proven, not assumed); during the run, two missing intervals
+> is a dashboard warning, not a halt. The operator's acceptance of
+> loss-on-recycle is RECORDED; the halt that refused every preflight on
+> an overlay filesystem is deleted.
+> (c) α = 1.0 rows are a CORRECTNESS question before any start: under the
+> paper's mixed value, v_mix is a visit-weighted mean of visited Q after
+> the first phase, so a row whose explicit candidates all carry zero mass
+> should be near-impossible. Reconstruct three such rows from the game
+> record: v_mix vs max visited Q, which stone of the turn, the
+> perspective sign at the root. A perspective error at the intermediate
+> stone is the first hypothesis; the p3achygo early-value pathology the
+> second. Count per 1,000 rows on the dashboard from step 0. A found
+> defect halts the mint until fixed with a parity vector.
+> (d) TRAINER-STEP PROFILE, one hour on the box: py-spy on the trainer
+> thread and torch.profiler over ten steps at run6 shape — collate parts,
+> the 1-in-1 semantic check's share, replay rebuild, tail reconstruction,
+> forward, backward, optimizer, H2D. 2.85M edges through a 4×128 GINE
+> should cost tens of milliseconds, not 5.3 s. A lever that is S and
+> ≥ ×2 lands before the mint (the trainer term is measured at the mint
+> anyway); anything larger is INVESTIGATION-1's first item. Measured
+> before granted; the block's wall clock is the stake.
+> (e) ORDER: merges → (b) puller + receipts → (c) → (d) → mint (caps void
+> by the rebuild; rehearsed procedure; Phase W at the Gumbel regime) → 4 h
+> shakedown at 1-in-1 → START forward. Then, during the block: TEST-1 and
+> INVESTIGATION-1 as designed in §2–§3; STRENGTH-FRONTIER-1 at block end.
+> ROUTE as (e).
+
+`R{next}` is the packet's own placeholder and resolves to R349 — this file's header said the next
+number was 349 when the packet was forwarded; the text is copied as written rather than edited.
+Grounds: operator direction, forwarding the START-path packet on 2026-09-12. (a) ratifies wave 3 at
+`f1139c54` and takes CARD-TIER-HOST's third option as a law amendment (LAW-06's text carries the
+clause); (b) replaces a halt no host on offer can pass with a mirror whose loop the preflight
+proves; (c) and (d) are the two facts the operator wants measured before the block's wall clock
+is staked; the "five calls" of the packet's §0 land as the merges `1793fee1` (remint-warmstart)
+and `a37d2e5e` (remint-gumbel), the carve-out at `9491b4d0`, and the tier on CUDA.
+Closes: **F-816-24** (fixed since `c8bd7190`, witnessed in
+`tests/monitor/test_supervisor_config_witness.py`; the record said LIVE only because no ruling
+line closed it). **CARD-GATES-ON-CUDA-VENV** (`UV_NO_SYNC=1` at `8dfa8b5f`, the runner prints the
+torch build it gates, the ten CPU-torch rows state `device="cpu"` at `8443d0e5`).
+**CARD-TIER-HOST** (ruled: the carve-out). **CARD-WARMSTART-STAMP-SCHEMA** (the owed row landed
+in `1793fee1`; the default tier's one true red is green wherever the strip exists).
+Status: standing.
+
+---
 
 ### R348 — WAVE 3 RIDER: the four owed decisions, the two traps, and OC-7 discriminated first
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
