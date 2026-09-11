@@ -39,9 +39,12 @@ _DEADLINE_SEC = 20.0
 
 
 def test_the_schema_defaults_to_inline_through_the_one_loader() -> None:
-    config = load_config(_REPO / "configs" / "run6.yaml").model_dump()
+    """The DEFAULT is read off a config that omits the row; run6 MINTS `checker_thread` (PERF-A4)."""
+    config = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
     assert config["inference"]["edge_geometry_check"] == "inline"
     assert resolve_edge_geometry_check(config) == "inline"
+    minted = load_config(_REPO / "configs" / "run6.yaml").model_dump()
+    assert resolve_edge_geometry_check(minted) == "checker_thread"
 
 
 @pytest.mark.parametrize("bad", [{}, {"inference": {}}, {"inference": {"edge_geometry_check": "async"}}])

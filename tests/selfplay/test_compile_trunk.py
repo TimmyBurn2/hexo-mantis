@@ -28,9 +28,11 @@ _GEOMETRY = geometry_kwargs()
 
 
 def test_the_schema_defaults_to_eager_through_the_one_loader() -> None:
-    config = load_config(_REPO / "configs" / "run6.yaml").model_dump()
+    """The DEFAULT is read off a config that omits the row; run6 MINTS `true` (PERF-A4)."""
+    config = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
     assert config["inference"]["compile_trunk"] is False
     assert resolve_compile_trunk(config) is False
+    assert resolve_compile_trunk(load_config(_REPO / "configs" / "run6.yaml").model_dump()) is True
 
 
 @pytest.mark.parametrize("bad", [{}, {"inference": {}}, {"inference": {"compile_trunk": "yes"}}])

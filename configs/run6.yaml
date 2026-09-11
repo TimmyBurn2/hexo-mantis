@@ -8,7 +8,7 @@
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: inference.fused_graph_caps: {max_fused_edges: 57149441, max_fused_nodes: 1785921} -> {max_fused_edges: 1373143, max_fused_nodes: 56645}
 # delta: allocator_posture: null -> expandable_segments
-# delta: selfplay.n_workers: 1 -> 16
+# delta: selfplay.n_workers: 1 -> 32
 # delta: eval.strength_floor: null -> {probe_games: 4, min_decisive_rate: 0.25, min_winrate: 0.0}
 # delta: identity.encoding: gnn_axis_v1 -> gnn_axis_r8
 # delta: selfplay.max_game_moves: 128 -> 256
@@ -23,9 +23,12 @@
 # delta: selfplay.playout_cap.n_sims_quick: 0 -> 64
 # delta: eval.gate.deploy_sims: 150 -> 160
 # delta: train.actor_sync_cadence_steps: 1 -> 2
+# delta: train.max_train_burst: 1 -> 2
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65}
 # delta: eval.concurrency: 1 -> 8
+# delta: inference.edge_geometry_check: inline -> checker_thread
+# delta: inference.compile_trunk: false -> true
 schema_version: 1
 run_id: run6
 seed: 20260718
@@ -110,7 +113,7 @@ train:
   replay_capacity: 100000
   replay_capacity_schedule: []
   training_steps_per_game: 1.0
-  max_train_burst: 1
+  max_train_burst: 2
   batch_size: 256
   microbatch_caps:
     max_edges: 4500000
@@ -126,7 +129,7 @@ train:
   ply_cap_value: -0.5
   fast_policy_weight: 0.0
 selfplay:
-  n_workers: 16
+  n_workers: 32
   leaf_batch_size: 8
   max_game_moves: 256
   c_visit: 50.0
@@ -158,6 +161,8 @@ inference:
   fused_graph_caps:
     max_fused_edges: 1373143
     max_fused_nodes: 56645
+  edge_geometry_check: checker_thread
+  compile_trunk: true
 monitor:
   gate_interval: 1000
   alert_entropy_min: 1.0

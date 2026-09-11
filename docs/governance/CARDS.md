@@ -99,6 +99,19 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   production config therefore stamps at `sync_lag` from a ≈ 100-step burst; tier `full` is
   unchanged in meaning and needs a burst past `min_step`. The old pin ("a production config can
   never be preflighted in the short tier") is reversed in place with these grounds.
+- **CARD-A4-MINT — the four PERF-A4 rows, DECIDED by matrix under operator delegation, minted.**
+  Inputs: `docs/design/measurements/PERF_A4_2026-09-11.md` §11. `selfplay.n_workers 16 → 32`
+  (+59 % leaves/s over 16 once the pipeline is in; +1.3 GiB RSS; the ring rebuild drops to one
+  sample thread, inside the trainer's slack — R309(f)'s 2..14 bracket was already exceeded by the
+  operator's own 16 and is superseded by this measurement); `inference.edge_geometry_check:
+  checker_thread` (+17 % at 16 and 32 on the GIL-released verifier; check 14 still halts by test);
+  `inference.compile_trunk: true` (+17–21 %; numerics inside the eager path's own run-to-run null on
+  the RTX 5080; the recompile limit fails loud; the eval child stays eager — the 4 h shakedown is
+  this row's witness and a bad reading flips it back with a re-preflight); `train.max_train_burst
+  1 → 2` (steps/game 0.925–0.96 measured at the new game rate; the row keeps the minted 1 step per
+  game honest, the ratio itself untouched). `train.eval_interval` stays at R343(b)'s 1000 (a
+  ruling); at the new step rate a round fires every ≈ 23 min of wall — the architect's regime note.
+  Block ESTIMATE at this mint: ≈ 10.2 h.
 - **CARD-PREFLIGHT-CADENCE — DECIDED by matrix, landed as one mint row.** The first real run6
   preflight (17:00 UTC) ran its 101-step burst, mirrored and receipted its checkpoint and first
   shard, played its terminal eval round — and returned **rc 23**
