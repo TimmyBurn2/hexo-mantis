@@ -24,7 +24,7 @@ _DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 # The gate recipe. NO screen_confirm_hi key — it was inert and deliberately not ported.
 _PARITY_GATE = {
     "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
-    "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
+    "screen_confirm_lo": 0.44, "deploy_sims": 160, "opening_book": "book_v1_s20260625_p4",
     "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625,
 }
 
@@ -83,7 +83,7 @@ def test_run3_parity_values_pinned() -> None:
     assert gate.confirm_games == 128
     assert gate.promotion_winrate == 0.55
     assert gate.screen_confirm_lo == 0.44
-    assert gate.deploy_sims == 150
+    assert gate.deploy_sims == 160  # R346(b)/R348(e): eval deploy Gumbel 160 / m 16
     assert gate.bootstrap_resamples == 1000
     assert gate.min_distinct_per_pair == 10
     assert gate.seed_base == 20260625, (
