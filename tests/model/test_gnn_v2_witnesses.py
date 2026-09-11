@@ -332,9 +332,10 @@ def test_both_arches_FORWARD_on_a_real_wire_position(net_kind) -> None:
         board.current_player, board.moves_remaining, board.ply, True, 0.0, True, 8,
     )
     wire, _targets = buffer.sample_graph_batch(1, augment=False)
+    # Stated, not sniffed: both witness nets are built on CPU, so the batch lands there too.
     batch = collate_graph_batch(
         wire, trunk_size=spec.trunk_size, win_length=spec.win_length,
-        node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim,
+        node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim, device="cpu",
     )
     stone_mask = torch.zeros(batch.x.shape[0], dtype=torch.bool)
     stone_mask[: int(batch.n_stones.sum())] = True

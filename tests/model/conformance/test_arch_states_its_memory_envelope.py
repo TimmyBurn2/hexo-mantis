@@ -250,9 +250,11 @@ def _gnn_batch(spec):
         board.current_player, board.moves_remaining, board.ply, True, 0.0, True, 8,
     )
     wire, _targets = buffer.sample_graph_batch(1, augment=False)
+    # The probe nets are built on CPU; the collate's device is stated so a CUDA torch cannot
+    # land the batch on another device than the net (the device is a declared fact, never sniffed).
     batch = collate_graph_batch(
         wire, trunk_size=spec.trunk_size, win_length=spec.win_length,
-        node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim,
+        node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim, device="cpu",
     )
     stone_mask = torch.zeros(batch.x.shape[0], dtype=torch.bool)
     stone_mask[: int(batch.n_stones.sum())] = True

@@ -642,9 +642,10 @@ def _tiny_graph_forward(spec):
             board.current_player, board.moves_remaining, board.ply, True, 0.0, True, 8,
         )
         wire, _targets = buffer.sample_graph_batch(1, augment=False)
+        # Stated, not sniffed: the ladder's nets are built on CPU, so the batch lands there too.
         batch = collate_graph_batch(
             wire, trunk_size=spec.trunk_size, win_length=spec.win_length,
-            node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim,
+            node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim, device="cpu",
         )
         n_nodes = batch.x.shape[0]
         stone_mask = torch.zeros(n_nodes, dtype=torch.bool)

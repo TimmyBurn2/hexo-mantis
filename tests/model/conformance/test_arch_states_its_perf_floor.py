@@ -219,9 +219,10 @@ def _gnn_probe_arms(spec, arch_cls=GnnArch):
         return buffer.sample_graph_batch(1, augment=False)[0]
 
     def collate(w):
+        # Stated, not sniffed: the floor net is built on CPU, so the batch lands there too.
         batch = collate_graph_batch(
             w, trunk_size=spec.trunk_size, win_length=spec.win_length,
-            node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim,
+            node_feat_dim=spec.node_feat_dim, edge_feat_dim=spec.edge_feat_dim, device="cpu",
         )
         stone_mask = torch.zeros(batch.x.shape[0], dtype=torch.bool)
         stone_mask[: int(batch.n_stones.sum())] = True
