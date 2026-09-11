@@ -158,6 +158,9 @@ class InferenceConfig(StrictModel):
     # R347(e)'s lever: check 14 (`verify_edge_geometry`) runs inline on the server's critical path
     # or on a checker thread after the batch is served; it runs on EVERY batch either way.
     edge_geometry_check: Literal["inline", "checker_thread"] = Field(default="inline")
+    # A4-3: the SERVING trunk runs through `torch.compile(dynamic=True)`; the trainer and the eval
+    # child stay eager. Off is the shipped numerics; on is eager-to-bf16-noise, never bit-exact.
+    compile_trunk: bool = Field(default=False)
     # ARCH-SCOPED: `None` is the ABSENCE of the key, never a value. It does NOT collide with the
     # `null` PLACEHOLDER on the two MEMBERS, which means "minted but uncalibrated"; absence of the
     # BLOCK means "this arch has no such key", and the two are distinguished by `model_fields_set`.

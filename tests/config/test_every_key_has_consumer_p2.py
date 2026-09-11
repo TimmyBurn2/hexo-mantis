@@ -211,6 +211,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "inference.edge_geometry_check":
         "pool.py ctor -> resolve_edge_geometry_check -> InferenceServer._edge_geometry_check -> "
         "_run_graph_loop's checker thread or the inline check 14",
+    "inference.compile_trunk":
+        "pool.py ctor -> resolve_compile_trunk -> InferenceServer._trunk (torch.compile of the "
+        "shared representation, server-private) -> forward_batch(trunk=) in _run_graph_loop",
     # The GRAPH forward's memory bound, route-scoped: the resolve happens inside the graph
     # branch of the ctor. This copy states the chain independently of its twin.
     "inference.fused_graph_caps.max_fused_edges":

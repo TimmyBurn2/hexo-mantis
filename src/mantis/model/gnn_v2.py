@@ -10,6 +10,8 @@ counted off the edge list. `RepresentationNetworkV2` keeps V1's module names and
 """
 from __future__ import annotations
 
+from collections.abc import Callable
+
 import torch
 from torch import Tensor
 
@@ -133,6 +135,8 @@ class GnnNetV2(GnnNet):
         legal_index: Tensor,
         stone_mask: Tensor,
         node_offsets: Tensor | None = None,
+        *,
+        trunk: Callable[..., Tensor] | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """V1's contract shape and V1's returns; the readout and the trunk are V2's.
 
@@ -143,6 +147,7 @@ class GnnNetV2(GnnNet):
             legal_index: `(Lg,)` int64 rows of the legal nodes, strictly ascending.
             stone_mask: `(N_total,)` bool, True on stone nodes.
             node_offsets: `(B+1,)` int64 ptr array; `None` means one graph.
+            trunk: a stand-in for `self.representation` over the same parameters; `None` is it.
 
         Returns:
             `(policy_logits, value, bin_logits)`, as `GnnNet.forward_batch`.
@@ -158,7 +163,7 @@ class GnnNetV2(GnnNet):
         num_graphs = node_offsets.shape[0] - 1
 
         real_mask = self.real_mask_from_batch(stone_mask, legal_index)
-        emb = self.representation(x, edge_index, edge_attr, ~real_mask)
+        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr, ~real_mask)
         legal_emb = emb.index_select(0, legal_index)
         policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 

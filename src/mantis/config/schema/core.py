@@ -117,6 +117,10 @@ OPERATIONAL_DEFAULT_KEYS: tuple[tuple[str, str], ...] = (
                                       "a checker thread after the batch is served (R347(e)); "
                                       "it runs on every batch either way, so this operates "
                                       "the server and decides nothing a run measures"),
+    ("inference.compile_trunk", "whether the SERVING forward's trunk is torch-compiled; the "
+                                "default is the shipped eager path and arming it is a mint "
+                                "act whose numerics consequence (eager-to-bf16-noise on the "
+                                "serving side only) the A4 record states"),
 )
 
 

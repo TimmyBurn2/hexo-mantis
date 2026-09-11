@@ -129,6 +129,18 @@ def _occupancy_agg(
     }
 
 
+def _compile_snapshot(enabled: bool) -> dict[str, Any]:
+    """The `compile` sub-block: Dynamo's own unique-graph count beside its recompile limit."""
+    import torch._dynamo.config as dynamo_config
+    import torch._dynamo.utils as dynamo_utils
+
+    return {
+        "enabled": enabled,
+        "unique_graphs": int(dynamo_utils.counters["stats"]["unique_graphs"]) if enabled else 0,
+        "recompile_limit": int(dynamo_config.recompile_limit),
+    }
+
+
 #: What a caller hands the server so a contract failure lands on disk. A CALLABLE and not a dict,
 #: because the context changes DURING the round and a snapshot would record the arming, not the fire.
 CollateDumpTarget = tuple[str, "Callable[[], dict[str, Any]]"]
@@ -212,11 +224,16 @@ class InferenceServer(threading.Thread):
         collate_check_period: int | None = None,
         collate_dump: CollateDumpTarget | None = None,
         edge_geometry_check: str | None = None,
+        compile_trunk: bool | None = None,
     ) -> None:
         super().__init__(daemon=True, name="inference-server")
         self.model = model
         self.model.eval()
         self.device = device
+        # A4-3: `None` is the PRE-EXISTING eager path. The compiled wrapper is SERVER-PRIVATE:
+        # `self.model` is the trainer's module, so compiling it in place would compile training.
+        self._compile_trunk = bool(compile_trunk)
+        self._trunk: Any = None
         # The selfplay-local structural `EventSink`, NOT `mantis.train.emit.EventSink`: this
         # module must not import the train-side Protocol.
         self._sink = sink
@@ -312,6 +329,8 @@ class InferenceServer(threading.Thread):
             self._total_requests = 0
             self._traced_model: Any = None
             self._h2d_staging: torch.Tensor | None = None
+            if self._compile_trunk:
+                self._trunk = torch.compile(self.model.representation, dynamic=True)
         else:
             # H2D staging sizes to the TRUNK window, the spatial dim the model accepts. For
             # single-window encodings trunk_size == board_size; multi-window encodings diverge.
@@ -345,6 +364,8 @@ class InferenceServer(threading.Thread):
         # since fp16 GINE sum-aggregation overflows; the dense path must match the trainer's knob.
         _representation = "graph" if self._is_graph else "grid"
         self._amp_dtype = amp_dtype_for(_representation)
+        # The eager call stays byte-identical to the pre-A4-3 one: no kwarg unless compiling.
+        self._trunk_kwarg: dict[str, Any] = {} if self._trunk is None else {"trunk": self._trunk}
 
     @property
     def batcher(self) -> InferenceBatcher:
@@ -370,9 +391,7 @@ class InferenceServer(threading.Thread):
                        "inference_server", str(exc)[:300])
 
     def load_state_dict_safe(self, state_dict: dict) -> None:
-        """Thread-safe weight swap — blocks until any in-flight forward completes. A compiled
-        ``OptimizedModule`` is unwrapped once so the load targets the underlying parameters IN
-        PLACE, and the batcher's monotonic ``model_version`` is bumped after the swap."""
+        """Weight swap under the forward lock, IN PLACE; bumps the batcher's ``model_version``."""
         with self._weights_lock:
             target = getattr(self.model, "_orig_mod", self.model)
             target.load_state_dict(state_dict)
@@ -389,9 +408,8 @@ class InferenceServer(threading.Thread):
         """Synchronous single-state inference for test / diagnostic use, bypassing the Rust queue.
 
         Raises:
-            ValueError: prefixed with ``"Model inference failed: "`` if the wrapped model forward
-                raises. Translating it keeps callers waiting on a `threading.Event` from
-                deadlocking on a thread-bound exception.
+            ValueError: prefixed with ``"Model inference failed: "`` if the wrapped forward raises;
+                the translation keeps `threading.Event` waiters from deadlocking on it.
         """
         # Match the dispatcher's batch-prep contract (explicit C-contiguous f32).
         arr = np.ascontiguousarray(state, dtype=np.float32).reshape(self._shape)
@@ -562,12 +580,14 @@ class InferenceServer(threading.Thread):
                 "inline_fallback": self._edge_geometry_inline_fallback,
                 "failures": self._edge_geometry_failures,
             } if self._is_graph else None,
+            # A4-3's lever, LAW-18: a `unique_graphs` count still climbing after warm-up is the
+            # recompile storm the abort names; past `recompile_limit` Dynamo falls back to eager.
+            "compile": _compile_snapshot(self._compile_trunk) if self._is_graph else None,
         }
 
     def _run_graph_loop(self) -> None:
-        """Ragged axis-graph inference loop, MEMORY-BOUNDED: one payload read per pop, split
-        PRE-COLLATE at graph boundaries under the fused caps, one part resident at a time, ONE
-        submit per pop after every part; every failure dies through the SAME `except`."""
+        """Ragged axis-graph inference loop, MEMORY-BOUNDED: one payload read per pop, split at
+        graph boundaries under the fused caps, ONE submit per pop, ONE failure path."""
         from mantis.selfplay.graph_collate import (
             GraphContractError,
             collate_graph_batch,
@@ -713,6 +733,7 @@ class InferenceServer(threading.Thread):
                                         batch.legal_node_gather,
                                         stone_mask,
                                         batch.node_offsets,
+                                        **self._trunk_kwarg,
                                     )
                             # Segment-softmax in float32 corrects reduced-precision drift and is
                             # segment-LOCAL, so a part's softmax is the un-split forward's softmax.

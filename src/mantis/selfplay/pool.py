@@ -19,6 +19,7 @@ from typing import Any
 import torch
 
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
+from mantis.config.resolve.compile_trunk import resolve_compile_trunk
 from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
 from mantis.config.resolve.search import resolve_search_kind
 from mantis.selfplay.buffers import ReplayFacade
@@ -142,6 +143,8 @@ class WorkerPool:
             collate_dump=_collate_dump_target(config),
             # R347(e): where check 14 runs, read through its one resolver, never a literal.
             edge_geometry_check=resolve_edge_geometry_check(config),
+            # A4-3: whether the serving trunk is compiled, read through its one resolver.
+            compile_trunk=resolve_compile_trunk(config),
         )
 
         self._stop_event = threading.Event()

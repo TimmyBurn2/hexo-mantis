@@ -5,7 +5,7 @@ changes accumulation order by ~5e-7.
 from __future__ import annotations
 
 import random
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import TypedDict
 
 import torch
@@ -119,6 +119,8 @@ class GnnNet(nn.Module):
         legal_index: Tensor,
         stone_mask: Tensor,
         node_offsets: Tensor | None = None,
+        *,
+        trunk: Callable[..., Tensor] | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
         """Run a grad-capable forward over a disjoint-union batch of collated graphs.
 
@@ -130,6 +132,7 @@ class GnnNet(nn.Module):
                           mask here FAILS CLOSED, never slowly and never silently.
             stone_mask:   (N_total,) bool — True on stone nodes (for value pooling).
             node_offsets: (B+1,) int64 non-decreasing ptr array; `None` == one graph.
+            trunk:        a stand-in for `self.representation` over the same parameters, or `None`.
         Returns:
             policy_logits: (num_legal_total,) per-legal-node logits, in gather order.
             value:        (B, 1) decoded value per graph, in [-1, 1].
@@ -146,7 +149,7 @@ class GnnNet(nn.Module):
             node_offsets = torch.tensor([0, n_total], dtype=torch.long, device=device)
         num_graphs = node_offsets.shape[0] - 1
 
-        emb = self.representation(x, edge_index, edge_attr)
+        emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr)
         # Sync-free gather: `emb[bool_mask]` runs `aten::nonzero`, which host-syncs on CUDA,
         # while `index_select` knows its length from `legal_index.numel()`. Byte-identical
         # because both are row copies and the wire's gather is strictly ascending.

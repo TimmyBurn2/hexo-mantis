@@ -290,6 +290,11 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   because the bounded queue was full — never dropped) and `failures` (check-14 refusals
   found after serving, each with its F-816-37 dump). Cumulative since server start; visible
   at 0 under `inline`; `None` on a grid run, for `fusion`'s reason.
+  And a `compile` SUB-BLOCK (PERF-A4 lever 3, LAW-18): `enabled` (the minted
+  `inference.compile_trunk`), `unique_graphs` (Dynamo's own count of distinct compiled graphs
+  since process start — a count still climbing after warm-up is the recompile storm the lever's
+  abort names) and `recompile_limit` (past which Dynamo falls back to eager for the frame).
+  Visible with `enabled: false` and `unique_graphs: 0` on the eager path; `None` on a grid run.
 - `stride5_spam` was **REMOVED** at close-out (operator directive B — a dead artifact of bad
   hyperparams that never occurs under current recipes).
 - `eval_round` joins the heartbeat sources at WP11-A (4th source): the eval pipeline's

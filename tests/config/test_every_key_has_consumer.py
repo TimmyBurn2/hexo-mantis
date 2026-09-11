@@ -240,6 +240,9 @@ CONSUMER_REGISTRY = {
     "inference.edge_geometry_check":
         "resolve_edge_geometry_check -> WorkerPool -> InferenceServer(edge_geometry_check=) -> "
         "where check 14 runs in _run_graph_loop (R347(e))",
+    "inference.compile_trunk":
+        "resolve_compile_trunk -> WorkerPool -> InferenceServer(compile_trunk=) -> the "
+        "server-private compiled trunk handed to forward_batch(trunk=) (A4-3)",
     # The GRAPH inference forward's memory bound, GRAPH-ROUTE-SCOPED: the resolver is called
     # from the graph branch of `InferenceServer.__init__` alone, so a grid run cannot reach it.
     "inference.fused_graph_caps.max_fused_edges":
