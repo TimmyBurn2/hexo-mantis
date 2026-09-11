@@ -18,7 +18,7 @@ import pytest
 from mantis.config.loader import load_config
 from mantis.config.preflight_stamp import require_preflight_stamp
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("planted_durable_mounts")]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"

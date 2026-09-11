@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -21,6 +22,15 @@ EPHEMERAL_FSTYPES = frozenset(
 
 #: Where the kernel publishes the mount table. Parameterised so the parse has a mutation test.
 MOUNTS = Path("/proc/mounts")
+#: A test drive points the check at a planted table; the reading names the table it used and
+#: `mantis.run` refuses a stamp taken from any table but `MOUNTS`, so the seam launches nothing.
+MOUNTS_ENV = "MANTIS_PREFLIGHT_MOUNTS_TABLE"
+
+
+def resolve_mounts_table() -> Path:
+    """The mount table a preflight reads: `MOUNTS_ENV` when set, else the kernel's `MOUNTS`."""
+    override = os.environ.get(MOUNTS_ENV)
+    return Path(override) if override else MOUNTS
 
 
 class WorkspaceNotDurableError(RuntimeError):
@@ -91,7 +101,7 @@ def assert_durable(path: Path, mounts: Path | None = None) -> dict[str, object]:
         mounts: the mount table to parse.
 
     Returns:
-        A report naming the path, its backing mount and that mount's filesystem type.
+        A report naming the path, its backing mount and fstype, and the table it was read from.
 
     Raises:
         WorkspaceNotDurableError: the backing filesystem is ephemeral, or durability could
@@ -110,7 +120,8 @@ def assert_durable(path: Path, mounts: Path | None = None) -> dict[str, object]:
             "persistent volume."
         )
     return {"path": str(resolved), "mount_point": mount_point,
-            "fstype": fstype, "verdict": "DURABLE"}
+            "fstype": fstype, "verdict": "DURABLE",
+            "mounts_table": str(MOUNTS if mounts is None else mounts)}
 
 
 def build_parser() -> argparse.ArgumentParser:

@@ -1,10 +1,7 @@
 """R347(d) — the two START pre-flight HALTs, proven to fire and proven not to fire vacuously.
 
-Both are decided BEFORE the boot, in `preflight_mint._assert_start_halts`, and both are named
-outcomes with their own rc rather than a line in a green report. The CUDA halt is conditioned on
-what the RUN declares, never on sniffing the host: this box carries an NVIDIA card AND a
-deliberate `+cpu` wheel for the WP9 forward-parity regime, so host GPU presence would be the
-wrong predicate and would red a dev machine that is behaving correctly.
+Both are decided BEFORE the boot with their own rc; the CUDA halt keys on what the RUN declares,
+never on sniffing the host (a dev box can carry a GPU and a deliberate `+cpu` wheel).
 """
 from __future__ import annotations
 
@@ -16,6 +13,7 @@ import pytest
 import torch
 
 from mantis.config.loader import load_config
+from mantis.diagnostics.workspace_durability import MOUNTS, MOUNTS_ENV, resolve_mounts_table
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATES = REPO_ROOT / "tools" / "ci_gates"
@@ -131,3 +129,22 @@ def test_the_two_halts_hold_distinct_rcs_outside_the_reserved_band() -> None:
               if name.startswith("Preflight") and name.endswith("Error")
               and isinstance(cls, type) and cls.rc not in codes}
     assert not codes & others, f"a START halt rc collides with another named outcome: {others}"
+
+
+def test_a_planted_table_is_obeyed_and_named_in_the_reading(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`MOUNTS_ENV` points the halt at a planted table and the reading SAYS so."""
+    config = _config("smoke_preflight_armed.yaml")
+    table = tmp_path / "mounts"
+    table.write_text("dev0 / ext4 rw 0 0\n", encoding="utf-8")
+    monkeypatch.setenv(MOUNTS_ENV, str(table))
+    report: dict = {}
+    TOOL._assert_start_halts(config, tmp_path / "run", report)
+    assert report["workspace"]["verdict"] == "DURABLE"
+    assert report["workspace"]["mounts_table"] == str(table) != str(MOUNTS)
+
+
+def test_without_the_seam_the_reading_names_the_kernels_table(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(MOUNTS_ENV, raising=False)
+    assert resolve_mounts_table() == MOUNTS

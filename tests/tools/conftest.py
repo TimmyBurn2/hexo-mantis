@@ -11,6 +11,8 @@ from pathlib import Path
 
 import pytest
 
+from mantis.diagnostics.workspace_durability import MOUNTS_ENV
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The probe paths from the out-dir and symlink oracles, kept as literals rather than imported
 #: so this file is not a consumer of a frozen oracle's internals.
@@ -80,3 +82,13 @@ def _preflight_probe_path_is_not_left_in_the_tree():
     _sweep()
     yield
     _sweep()
+
+
+@pytest.fixture
+def planted_durable_mounts(monkeypatch, tmp_path_factory) -> Path:
+    """Point a subprocess preflight at a planted table calling `/` durable (pytest's tmp base is
+    tmpfs or overlay); the stamp refuses a reading from any table but the kernel's."""
+    table = tmp_path_factory.mktemp("mounts") / "mounts"
+    table.write_text("dev0 / ext4 rw 0 0\n", encoding="utf-8")
+    monkeypatch.setenv(MOUNTS_ENV, str(table))
+    return table

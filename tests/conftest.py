@@ -130,7 +130,8 @@ def preflight_stamped(monkeypatch, tmp_path):
     def stamp(config_path: Path) -> Path:
         return write_stamp(
             config=load_config(config_path), config_path=config_path, tree_root=CONFIGS_DIR,
-            halts={"workspace": {"verdict": "fixture"}, "cuda_build": {"verdict": "not_run"}},
+            halts={"workspace": {"verdict": "fixture", "mounts_table": "/proc/mounts"},
+                   "cuda_build": {"verdict": "not_run"}},
             booted_config_sha256="fixture", burst_steps=0,
             report_path=tmp_path / "preflight_fixture.json")
 

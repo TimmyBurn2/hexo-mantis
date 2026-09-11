@@ -176,7 +176,9 @@ def test_the_configs_device_reaches_the_real_trainer_and_the_real_pool(
 
 
 @pytest.mark.integration
-def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(tmp_path, smoke_run_config) -> None:
+def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(
+    tmp_path, smoke_run_config, monkeypatch,
+) -> None:
     """Prove a cuda-minted config either reaches cuda or fails loud, never boots on the cpu.
 
     Killer: any fallback coercing an unavailable device to `cpu`, invisible to every other
@@ -184,6 +186,8 @@ def test_a_cuda_minted_config_never_silently_boots_on_the_cpu(tmp_path, smoke_ru
     """
     config = smoke_run_config("smoke_preflight_armed.yaml", train={"device": "cuda"})
     if torch.cuda.is_available():
+        # The allocator posture is another halt with its own oracle; supplied as a launch would.
+        monkeypatch.setenv("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
         collab = build_run_collaborators(config=config, out_dir=tmp_path)
         assert collab.trainer.device.type == "cuda" and collab.pool.device.type == "cuda"
     else:

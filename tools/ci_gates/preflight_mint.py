@@ -96,7 +96,11 @@ from mantis.config.armed_aborts import (
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.config.preflight_stamp import clear_stamp, write_stamp
 from mantis.config.schema import RunConfig
-from mantis.diagnostics.workspace_durability import WorkspaceNotDurableError, assert_durable
+from mantis.diagnostics.workspace_durability import (
+    WorkspaceNotDurableError,
+    assert_durable,
+    resolve_mounts_table,
+)
 
 #: Every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
@@ -867,7 +871,7 @@ def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
             not a CUDA build that computes correctly.
     """
     try:
-        report["workspace"] = assert_durable(out_dir)
+        report["workspace"] = assert_durable(out_dir, resolve_mounts_table())
     except WorkspaceNotDurableError as exc:
         raise PreflightWorkspaceNotDurableError(str(exc)) from exc
     devices = {booted.train.device, booted.eval.worker_device}

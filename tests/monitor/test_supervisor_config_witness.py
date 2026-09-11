@@ -27,6 +27,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from mantis.monitor.supervise import RELAUNCH_BUDGET_EXIT_CODE
 
@@ -63,12 +64,26 @@ _DEADLINE_SEC = 60.0
 _REFUSAL_DEADLINE_SEC = 20.0
 
 
+def _in_template(template: dict, dotted: str) -> bool:
+    node: object = template
+    for part in dotted.split("."):
+        if not isinstance(node, dict) or part not in node:
+            return False
+        node = node[part]
+    return True
+
+
 def _mint(tmp_path: Path, **deltas: object) -> Path:
     """A MINTED config (R1: minted via the tool, never hand-varied), written to `tmp_path`."""
     out = tmp_path / "witness.yaml"
     argv = [sys.executable, str(MINT), "--template", "dev", "--out", str(out)]
+    template = yaml.safe_load((REPO_ROOT / "tools" / "config_templates" / "dev.yaml")
+                              .read_text(encoding="utf-8"))
     for key, value in deltas.items():
-        argv += ["--set", f"{key.replace('__', '.')}={value}"]
+        dotted = key.replace("__", ".")
+        # A key the template omits (a schema default since CONFIG-1) is minted as a ROW.
+        flag = "--set" if _in_template(template, dotted) else "--mint-row"
+        argv += [flag, f"{dotted}={value}"]
     proc = subprocess.run(argv, capture_output=True, text=True, check=False)
     assert proc.returncode == 0, f"mint failed: {proc.stderr}"
     return out

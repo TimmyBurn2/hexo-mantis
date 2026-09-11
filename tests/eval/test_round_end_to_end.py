@@ -28,6 +28,8 @@ from mantis.config.schema import (
     LadderRung,
     PlyCapAdjudicationConfig,
 )
+from mantis.config.loader import load_config
+from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.encoding import lookup
@@ -40,6 +42,7 @@ pytestmark = pytest.mark.integration
 #: `book_v1_s20260625_p4`, most of which need radius >= 6. Under `v6` the round dies in the
 #: eval CHILD with `IllegalOpeningError`, surfacing only as `EXIT_NONZERO`.
 _ENC = "gnn_axis_v1"
+_REPO = Path(__file__).resolve().parents[2]
 
 
 def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
@@ -118,10 +121,11 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
-        # The pipeline resolves the fused-forward memory bound ONCE in the parent and carries it
-        # to every `RoundSpec`; `None` is the GRID arm, written out rather than omitted.
+        # Fused caps stay unset (the tiny oracle net is not the minted arch); the batching
+        # geometry is REQUIRED on the graph arm, so it is resolved off the minted smoke config.
         fused_graph_caps=None,
-        inference_batching=None,
+        inference_batching=resolve_inference_batching(
+            load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()),
     )
 
 

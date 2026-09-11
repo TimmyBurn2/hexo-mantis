@@ -20,7 +20,7 @@ import pytest
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.schema import RunConfig
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("planted_durable_mounts")]
 
 _REPO = Path(__file__).resolve().parents[2]
 _TOOL = _REPO / "tools" / "ci_gates" / "preflight_mint.py"

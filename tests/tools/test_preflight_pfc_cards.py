@@ -46,6 +46,7 @@ def test_out_dir_reuse_error_carries_rc_15_uniquely(tool):
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     """The card's hole: `_read_segment` scopes by run_id, so a same-run_id reuse reads a
     PREVIOUS burst's events as this run's evidence. The refusal must land BEFORE any boot —
@@ -61,6 +62,7 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_budget_sec):
     """The discriminating negative: the refusal is scoped to THIS run_id's segments —
     foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
@@ -79,6 +81,7 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_child_streams_spool_in_full_beside_the_report(tool, tmp_path):
     """CARD-PREFLIGHT-CHILD-STDERR-BUDGET, the spool arm: the report's tails are a VIEW,
     the spools are the record. Driven through the real `_run_child` with a child that dies

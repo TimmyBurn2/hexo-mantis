@@ -421,6 +421,7 @@ def test_the_module_docstring_names_the_wall_the_boot_actually_hits() -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     """The real boot, on the real tree, in production posture — the only test that drives a
     preflight child to completion, so the child's rc is read off the report and never restated."""
@@ -464,6 +465,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(tmp_path) -> None:
     """An uncalibrated production config is refused by the ARMING AUDIT before a child is ever
     spawned, so the audit shadows the composition seam the refusal used to be measured at."""
@@ -495,6 +497,7 @@ def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_path) -> None:
     """The tool's SUCCESS path: an otherwise-identical config that HAS a cap boots clean and
     arms both watchdogs, so the refusal above is caused by the missing value and nothing else."""
@@ -529,6 +532,7 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 @pytest.mark.skipif(
     _CUDA_BOX,
     reason="asserts what a CUDA-MINTED run5 does on a NON-CUDA host; this box has CUDA, so "
@@ -2204,6 +2208,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path) -> None:
     """A BOOTED preflight reports a boot and names its child's own rc, whatever the child did."""
     out = tmp_path / "boot"
@@ -3005,6 +3010,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
 
 
 @pytest.mark.integration
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove(
         tmp_path) -> None:
     """The real preflight publishes the tier it RAN and what that tier does NOT prove; the tier

@@ -12,6 +12,7 @@ from mantis.config.preflight_stamp import (
     START_HALT_READINGS,
     PreflightStampMalformedError,
     PreflightStampMissingError,
+    PreflightStampPlantedTableError,
     PreflightStampRefusal,
     PreflightStampTreeMismatchError,
     clear_stamp,
@@ -25,7 +26,8 @@ from mantis.util.git import head_sha
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "run6.yaml"
-_HALTS = {"workspace": {"verdict": "durable"}, "cuda_build": {"verdict": "not_run"}}
+_HALTS = {"workspace": {"verdict": "DURABLE", "mounts_table": "/proc/mounts"},
+          "cuda_build": {"verdict": "not_run"}}
 
 
 @pytest.fixture
@@ -133,7 +135,16 @@ def test_clear_stamp_removes_the_pass_and_is_idempotent(state_home: Path, tmp_pa
         require_preflight_stamp(config, tree_root=_REPO)
 
 
+def test_a_reading_from_a_planted_mount_table_covers_no_host(state_home: Path, tmp_path: Path) -> None:
+    """The integration drives point the preflight at a planted table; that stamp must not launch."""
+    planted = {"workspace": {"verdict": "DURABLE", "mounts_table": str(tmp_path / "mounts")},
+               "cuda_build": {"verdict": "not_run"}}
+    config, _ = _write(tmp_path, halts=planted)
+    with pytest.raises(PreflightStampPlantedTableError, match="planted table"):
+        require_preflight_stamp(config, tree_root=_REPO)
+
+
 def test_every_refusal_is_one_named_family() -> None:
     for cls in (PreflightStampMissingError, PreflightStampMalformedError,
-                PreflightStampTreeMismatchError):
+                PreflightStampTreeMismatchError, PreflightStampPlantedTableError):
         assert issubclass(cls, PreflightStampRefusal)

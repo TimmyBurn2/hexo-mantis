@@ -52,7 +52,7 @@ def test_the_stamp_the_tool_writes_is_the_stamp_the_launcher_accepts(
     state_home: Path, tmp_path: Path,
 ) -> None:
     config = load_config(_CONFIG_PATH)
-    report = _report(workspace={"verdict": "DURABLE", "fstype": "xfs"},
+    report = _report(workspace={"verdict": "DURABLE", "fstype": "xfs", "mounts_table": "/proc/mounts"},
                      cuda_build={"verdict": "not_run", "reason": "cpu"})
     args = SimpleNamespace(burst_steps=16)
     TOOL._stamp_pass(config, _CONFIG_PATH, args, report, tmp_path / "out")
