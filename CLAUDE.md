@@ -126,7 +126,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - A bare `pytest` IS the default tier: pyproject's `addopts` carries
   `-m 'not integration and not slow'`, a later `-m` overrides it, and `-m ''` runs or counts
   the whole tree (gate 3c does). The header prints `TIER:` on every run — read it, never
-  assume the tier from the command typed (R330(g); the superset is ~35 min, the tier ~3).
+  assume the tier from the command typed (R330(g); measured 2026-09-11: the default tier
+  ~5 min, the integration tier ~20–25 min on the box and UNBOUNDED on an AVX2 host, where
+  LAW-06's bf16 CPU trainer is emulated — see CARD-OC7-OVERRUN).
 - Cadence (R311(b)): targeted tests, smallest relevant first, while iterating; the FULL local
   gate set at leg exit and before any push, never per edit. **At a PACKET exit that means
   `make gates.exit` (`run_all.sh --with-slow`), not `make gates`** — a `slow`-marked test is
