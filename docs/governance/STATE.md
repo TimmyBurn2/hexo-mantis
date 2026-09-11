@@ -6,10 +6,10 @@ the tree won and the disagreement is recorded in the last section.
 
 ## Current phase
 
-**run6 is MINTED and HELD. It has never started.** WAVE 3 (R348) is in progress on branch
-`wave3`; `dev` is at the wave-2 exit until the full gate set is green on the box. What run6 is
-held on is unchanged in kind — the **wave-3 re-mint** — and one new host fact stands in front of
-it (next section).
+**run6 is MINTED and HELD. It has never started.** WAVE 3 (R348) leg 1 is complete on branch
+`wave3` (OC-7 → box rebuild → traps → PERF-3b); `dev` is at the wave-2 exit until the operator
+rules on the one true red below. What run6 is held on is unchanged in kind — the **wave-3
+re-mint** — and two new facts stand in front of it (next two sections).
 
 **The config still mints `search.kind: puct` at 50 simulations.** The kind row and the sims regime
 are OWED to the re-mint. A reader taking `puct`/`50` from this config as run6's search would be
@@ -32,6 +32,31 @@ instance until a persistent volume is attached (or the mirror arm is proven off-
 first operator action of the re-mint, not a code item. PERF-3b's measurement burst drives
 `launch_run` in-process for that reason, stated in its driver, and produces no stamp.
 
+## run6's warm-start artifact no longer loads on this tree — the one red in the default tier
+
+Wave 2's schema shrink (DELETE-1 / CONFIG-1) invalidated the stamped config inside
+`checkpoints/bc/run6_00006500_5191bd09.ckpt` (49 `extra_forbidden` errors on read), so every
+warm start of run6 refuses at `load_checkpoint`. Nobody saw it because the artifact is
+gitignored and lived only on the box, and the box never ran the gate set after CONFIG-1. The
+LAW-12 route is done: `strip_and_restamp` produced `checkpoints/bc/run6_00006500_ca1afb71.ckpt`
+(weights-only, GnnArchV2, **net_param_hash unchanged** `2e72abd4…`), on the box and off-box.
+The re-mint must move `identity.warm_start.checkpoint` to it — an identity row, so the
+operator's — and until then
+`tests/train/test_f32_launch_pin_wiring.py::test_the_minted_warm_start_row_names_an_artifact_whose_hashes_AGREE`
+is a TRUE red wherever the artifact exists (the dev box now holds a copy). It is the only red in
+the default tier (4,502 pass); it is not hidden by removing the copy.
+
+## PERF-3b — measured (R348(d)); record `docs/design/measurements/MEASUREMENT_PERF3B_2026-09-11.md`
+
+Gumbel arm on the rebuilt box, warm-started from the strip: **positions/h ≈ 43.4k, leaves/h ≈
+5.6M at the mean-128 regime** (R347(b)'s ~4.4M leaves/h holds), games/h 1,125 steady at 38.6
+plies/game (2× the prediction only because games are half the assumed length — games/h is not
+the wall-clock line). The block is **trainer-bound**: 678 steps/h at 2.85M edges/step → **25k
+steps ≈ 37 h**. Eval at deploy 160/m16, G=8: **4.10 s/game** (264 games, 1,083 s, uncontended)
+against 7.09 at PUCT-150. α: 98.9% of rows carry a tail, mean 0.0006, **max 1.0 rows exist** —
+the architect's reading. The checker-thread A/B is OWED: R347(e)'s lever is not in code.
+`train.policy_target` must move with `search.kind` at the re-mint (schema pairs them).
+
 ## CARD-OC7-OVERRUN — discriminated: HOST, not code
 
 Record: `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`. The row **passes in 178.4 s on
@@ -42,16 +67,19 @@ rule yields no bound. The 2026-08-01 tree is equally slow there today; no bisect
 NOT re-aimed: which of (the tier runs on the box / the row is `slow` / a LAW-06 CPU carve-out) is
 the operator's.
 
-**The integration tier now runs on the box in ~20 min.** Running it found what the dev box
-could not: DELETE-1 had shrunk the Rust `GameResultRow` 10→8 and left the Python drain unpacking
-10, so the real self-play seam died on its first game while every default-tier fake stayed green
-(fixed `92643671`, arity parity test added); CONFIG-1 had moved `supervisor_*` keys to schema
-defaults and the supervisor witnesses still `--set` them; the eval-round oracle still passed the
-deleted grid arm's `inference_batching=None`; and R347(d)'s durability halt refused every
-preflight-driving test's tmp dir (tmpfs/overlay). All four repaired at `9137ab1a`; the preflight
-reads a planted mount table only through `MANTIS_PREFLIGHT_MOUNTS_TABLE`, the reading names the
-table it used, and the stamp REFUSES any table but `/proc/mounts`, so the seam launches nothing.
-The tier's box reading after the repair is in the exit facts.
+**The integration tier now runs on the box in ~20–25 min and is green there.** Running it —
+and then the Gumbel regime at scale — found what the dev box could not, all pre-existing on
+`dev` from wave 2: (1) DELETE-1 shrank the Rust `GameResultRow` 10→8 and left the Python drain
+unpacking 10, so the real self-play seam died on its first game while every default-tier fake
+stayed green (`92643671`, arity parity test added); (2) GUMBEL-3's drain dropped the sparse row's
+tail mass and the push defaulted it to 0, so R347(a)'s α never reached the ring and the first row
+with a real tail was refused at insert (`79b2b2c3`); (3) CONFIG-1 moved `supervisor_*` keys to
+schema defaults and the supervisor witnesses still `--set` them; (4) the eval-round oracle still
+passed the deleted grid arm's `None` specs; (5) R347(d)'s durability halt refused every
+preflight-driving test's tmp dir (tmpfs on a workstation, overlay in a container) — the preflight
+now reads a planted table only through `MANTIS_PREFLIGHT_MOUNTS_TABLE`, the reading names the
+table it used, and the stamp REFUSES any table but `/proc/mounts`, so the seam launches nothing;
+(6) the drain golden's manifest row and the Makefile's declared target set followed.
 
 ## R348(c) — the preflight stamp, landed at `e1e06843`
 
@@ -88,10 +116,11 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
 ## Exit facts — WAVE 3 leg 1 (OC-7 → box rebuild → traps), 2026-09-11
 
 - Ruling: R348 at `63671f08`, verbatim; `RULINGS.md` numbering continues at R349.
-- Commits on `wave3` since `b117e657`: `92643671` drain fix, `63671f08` R348, `e1e06843` stamp
-  trap, `669b6008` cuda extra, `5e529a44` gate-17 lock carve-out, `ad747400` OC-7 record,
-  `9137ab1a` tier repairs. One line each, empty body, zero trailers.
-- **Collected tests: 4,530 → 4,559** (gate 3c floor file still 4,530; ratchets at the merge).
+- Commits on `wave3` since `b117e657`: `92643671` drain arity, `63671f08` R348, `e1e06843`
+  stamp trap, `669b6008` cuda extra, `5e529a44` gate-17 lock carve-out, `ad747400` OC-7 record,
+  `9137ab1a` / `eb1a9b85` / `408af297` / `ff26f3a0` tier and default-tier repairs, `79b2b2c3`
+  tail mass, `97711e65` floor ratchet. One line each, empty body, zero trailers.
+- **Collected tests: 4,530 → 4,560**; the gate 3c floor ratcheted to 4,560.
 - **Tree: 878 tracked files, 389,706 lines** (`git ls-files | xargs cat | wc -l`).
 - Comment ratchet: floor lowered 13561 → 13543 docstring lines across the leg; comment and
   banner measures held at 3551 / 23.
@@ -101,23 +130,22 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
 - Box: rebuilt through `box_setup.sh wave3` with the extra — `torch 2.11.0+cu128`, RTX 5080,
   extension, vendored sealbot and the warm-start checkpoint all present; host identity lines are
   in the box's own setup log. The instance is on the same physical host the archive records.
-- Local gates on the dev box at `ad747400`: 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17 GREEN;
-  3a not re-run since the leg's targeted suites; **3b cannot run on the dev box** (above);
-  2a/2b/4/5 not run here (no Rust changed this leg). The box carries the full set at the exit.
-- PERF-3b: **NOT YET MEASURED at this handoff** — the throwaway config is minted (run6's deltas
-  + `search.kind gumbel`, `n_simulations 320`, PCR `full_search_prob 0.25 / n_sims_full 320 /
-  n_sims_quick 64`, `deploy_sims 160`, `policy_target completed_improved_policy`, bounded to 200
-  steps with one gate round at 150) and the burst is queued behind the tier on the box. The
-  checker-thread lever of R347(e) does not exist in code (`verify_edge_geometry` still runs inline
-  in `_check_semantic`), so its A/B is OWED behind the lever itself.
-- Two harness defects of this leg's own making are recorded so they are not re-learned: a
+- Gates: on the dev box at `ff26f3a0` — 3a 4,502 pass / 1 true red (the warm-start row, above),
+  6–17 GREEN; **3b cannot run on the dev box** (bf16 emulation). The full packet-exit set
+  (`make gates.exit`) ran on the box at the leg's tip; its screen is recorded in the line below
+  this one once read.
+- GATES-EXIT-BOX: see the leg's closing screen in the dispatcher's report; the same single red
+  is expected there because the box holds the artifact.
+- Three harness defects of this leg's own making are recorded so they are not re-learned: a
   py-spy wrapper without a `__main__` guard re-ran pytest inside the eval worker's spawn child
-  (fixed before any box number was taken), and the comment ratchet counts TRACKED files only, so
-  a green measured before `git add` is not a measurement.
+  (fixed before any box number was taken); the comment ratchet counts TRACKED files only, so a
+  green measured before `git add` is not a measurement; and a burst whose producer died left its
+  parent alive for 27 min, overlapping the next burst — the rider's own warning — so the
+  PERF-3b self-play numbers are from a third burst on a box verified idle by PID first.
 
 ## Provenance
 
-Derived 2026-09-11 on `wave3` at `9137ab1a`, from `configs/run6.yaml`, the box's
-`/workspace/oc7/{box_head,tier_box.log}` readings, the dev box's scratchpad `oc7/` artefacts,
+Derived 2026-09-11 on `wave3` at `ff26f3a0`, from `configs/run6.yaml`, the box's
+`oc7/{box_head,tier_box*.log}` and `perf3b_*` readings, the dev box's scratchpad `oc7/` artefacts,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
 `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.
