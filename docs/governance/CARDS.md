@@ -79,17 +79,45 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R349 (the START path)
+
+Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsified.md F-44/F-45.
+
+- **CARD-ALPHA-TARGET-FORM — the architect's (R349(c)'s D2).** In decided positions the
+  completed-Q improved policy is rescaled noise: `c_scale 1.0` on top of Mctx's per-node min-max
+  maps a `< 0.06` Q spread onto 55–150 logits, so ~1 row per 1,000 (rising with value
+  saturation) trains "none of the 16 searched moves". Options, each a regime change needing the
+  PERF-3b re-measure and a new parity vector: the paper's σ(q̂) without min-max; `c_scale 0.1`
+  (Mctx's default with the rescale); a span floor. Not a hold on run6 — the trainer's cost of
+  such a row is a zero-gradient self-target — but a target-quality question the count on the
+  dashboard now measures.
+- **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
+  1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle. The block is ≈ 22.6 h
+  at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
+  decision, not a lever. INVESTIGATION-1 item 2 is re-aimed: "is the reuse ratio right" and the
+  GPU step's own 156 ms (`index_add_` 22 %, GEMMs 16 %, 31 syncs) — not "why is the step 5 s".
+- **CARD-SERVER-SYNC — INVESTIGATION-1 item 3's first item.** The inference-server thread spends
+  32 % of its wall in `_node_offsets_to_batch_vec`'s `repeat_interleave(…, counts)` — an implicit
+  device→host sync at the top of every forward (`output_size=` removes it) — and 19 % in check 14
+  inline (the checker-thread lever is landed, unarmed in run6's mint); the 16 workers wait on the
+  server 99.6 % of their wall. Measured, not yet benched (LAW-09 prereg first).
+- **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
+  64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
+  under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
+
 ## Opened by R348 (WAVE 3, leg 1)
 
 All five were found by running things the dev box could not run — the integration tier and the
 Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Records:
 `docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `MEASUREMENT_PERF3B_2026-09-11.md`.
 
-- **CARD-BOX-VOLUME — RE-SCOPED by R349(b); no volume exists and none is coming.** `/` and
-  `/workspace` on the box are `overlay`; R347(d)'s rc 16 refused every preflight there. R349(b)
-  deletes that halt and replaces it with a PULLER on the operator's machine (mirror + hash-verify
-  + a receipt beside each artifact on the box); the preflight requires receipts for the warm-start
-  bundle and shard 0. Loss-on-recycle is the operator's RECORDED acceptance.
+- **CARD-BOX-VOLUME — CLOSED by R349(b) at `8e307af1`.** `/` and `/workspace` on the box are
+  `overlay`; R347(d)'s rc 16 refused every preflight there and is DELETED. `tools/mirror_pull.py`
+  (the operator's machine, an rsync spec, receipts beside each artifact on the box) is the arm;
+  the preflight's rc 16 now demands receipts for the burst's bundle and first shard, `mantis.run`
+  refuses a stamp without the `MIRRORED` verdict, and `resume_state_persisted.unreceipted_bundles`
+  feeds the dashboard's two-interval warning. Proven over the alias on the START-path burst
+  (cycle 11.1 s). Loss-on-recycle is the operator's RECORDED acceptance.
 - **CARD-WARMSTART-STAMP-SCHEMA — CLOSED by R349(a) at `1793fee1`.** run6's BC artifact's stamped
   config no longer validated under the wave-2 schema (49 `extra_forbidden`); the LAW-12 strip
   (`checkpoints/bc/run6_00006500_ca1afb71.ckpt`, net hash unchanged) is now the minted
@@ -101,12 +129,17 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
   at `9491b4d0` with its own parity test; the tier runs on CUDA where a card exists (the dev box's
   3070 via `make build.cuda`, the box remotely). TEST-1's minted CUDA smoke profile is the fourth
   option and is still owed.
-- **CARD-ALPHA-MAX-ROWS — ORDERED by R349(c) as a CORRECTNESS question before any start.** Under
-  the Gumbel regime 98.9% of rows carry a tail (mean 0.0006) and rows with **α = 1.0** exist — no
-  target mass on any of the 16 explicit entries. Three such rows are reconstructed from the game
-  record (v_mix vs max visited Q, which stone of the turn, the perspective sign at the root); a
-  found defect halts the mint until fixed with a parity vector; the per-1,000 count rides the
-  dashboard from step 0.
+- **CARD-ALPHA-MAX-ROWS — DISCRIMINATED under R349(c); the run-fatal half FIXED, the target
+  half OWED to the architect.** 25 rows reconstructed (`MEASUREMENT_STARTPATH_2026-09-11.md`
+  §B): all at `moves_remaining == 1`, all lost positions, the perspective flip CORRECT (F-45).
+  Mechanism: value-saturation asymmetry lifts `v_mix` above the clustered visited Q's and
+  Mctx's min-max rescale × `c_scale 1.0` underflows the explicit masses. The recorder dropped
+  zero-mass sampled cells, so an all-underflow row was refused at the ring as `EmptyTarget` and
+  killed the burst at step 496 — fixed at `f253e65e` with parity vectors on both sides of the
+  FFI. **OWED (D2):** whether ~1 per 1,000 decided-position rows should train "not here" —
+  the paper's σ without min-max, `c_scale 0.1`, or a span floor — each a regime change needing
+  the PERF-3b re-measure. The per-1,000 count rides `iteration_complete.gumbel_alpha_full` and
+  the dashboard from step 0.
 - **CARD-GATES-ON-CUDA-VENV — the gate set had never gated a CUDA venv.** Every `$UV run` in
   `run_all.sh` re-synced to the default groups, so every box gate run in history silently ran
   on the CPU wheel; fixed at `8dfa8b5f` (`UV_NO_SYNC=1`, torch build printed). Gated as built

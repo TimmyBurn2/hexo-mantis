@@ -17,8 +17,8 @@ R347(d) halt refuses every preflight there (no stamp can exist) — stated, not 
 | **leaves/h** at the mean-128 regime (positions/h × 128) | **≈5.6M** | derived from the row above |
 | games/h | 1,125 steady (1,470 whole-burst) | same; plies/game 38.6 steady (30.8 whole) |
 | batch fill | 54.6% | `iteration_complete` |
-| trainer | **678 steps/h ≈ 5.3 s/step** at 2.85M edges/step (batch 256) | `iteration_complete` |
-| **25k-step block wall** | **≈37 h** | trainer-bound: 1 step/game, steps lag games |
+| trainer | **678 steps/h ≈ 5.3 s/step** at 2.85M edges/step (batch 256) — CORRECTED 2026-09-11 (R311(c), in place): this is the from-boot `steps_per_hour` average of a 13-min burst with a 6-min ring fill, not the trainer's cost; the trainer thread is 92 % asleep and steps/h ≡ games/h at `training_steps_per_game 1.0` (0.986 measured over a 27-min stepping window, 1,105/h) — `MEASUREMENT_STARTPATH_2026-09-11.md` §C, falsified.md F-44 | `iteration_complete` |
+| **25k-step block wall** | **≈37 h** — CORRECTED to **≈ 22.6 h** at the stepping-window rate (same note) | game-bound: 1 step/game by `train.training_steps_per_game`, the trainer idle between games |
 | α (tail mass) per trainer step | mean 0.0006, p90 0.0002, **max 1.0**, 98.9% of rows carry a tail | `trainer_step.gumbel_tail_mass` |
 | eval, fully escalated round at G=8, deploy 160/m16 | **264 games in 1,083 s = 4.10 s/game** (terminal round, uncontended) | vs R341(c)'s 7.09 s/game at PUCT-150 |
 | eval, mid-run round | 264 games in 1,168 s (4.43 s/game), cut by the 200-step throwaway's close-out drain with only the random floor left | `eval_broken join_timeout` — an artefact of the burst's bound |
