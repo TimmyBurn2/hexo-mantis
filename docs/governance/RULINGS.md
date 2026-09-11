@@ -1,4 +1,4 @@
-# RULINGS — R23 to R347
+# RULINGS — R23 to R348
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R348.
+- Numbering continues from R346. The next ruling is R349.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,64 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R348 — WAVE 3 RIDER: the four owed decisions, the two traps, and OC-7 discriminated first
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346 and R347: the wave-3 rider made its own §1 the canonical home and directed that it be copied
+verbatim here.
+
+> R{next} — (a) DECISIONS: configs/ keeps three files (dev_example.yaml
+> is gate 12's only disarmed red-capability demonstration — a gate that
+> cannot go red is the F-26 class); mint_config keeps its --set/--mint-row
+> split; CUDA torch becomes a uv EXTRA (`--extra cuda`), the default stays
+> CPU, box_setup.sh syncs with the extra, and the run's declared-device
+> halt (already landed) is the authority on the box — no host sniffing;
+> CARD-CLAUDEMD-REPOINT gets its closing line and CLAUDE.md's "remote CI
+> is the gate" line becomes "the full local gate set is the gate; remote
+> CI is suspended by operator decision."
+> (b) CARD-OC7-OVERRUN is the FIRST act of wave 3, discriminated not
+> patched: (i) the test runs under a 600 s timeout with a py-spy dump at
+> 300 s — hang or slow is the first fact; (ii) the same test at HEAD on
+> the box separates host drift from code; (iii) if code, `git bisect`
+> over the mcts/ range since 2026-08-01 with the timed test as the oracle,
+> the pool size held at 1M for the bisect so the 4M change cannot confound
+> it; (iv) the tier's second failure (with the test removed) gets the
+> same treatment. The bound is re-aimed only after the cause is named;
+> the docstring's own rule stands. Time-box one day; if unresolved, the
+> re-mint proceeds on the targeted set plus every other tier, the
+> integration tier's status stated on every screen until it closes.
+> (c) TRAPS: `mantis.run` REFUSES to launch a run whose config hash has
+> no preflight stamp (`preflight_mint.py` writes the stamp: config hash,
+> tree SHA, timestamp, the two START halts' readings) — a run cannot skip
+> the manual preflight by not running it. The box is rebuilt from
+> box_setup.sh with the extra before PERF-3b; `uv sync` without the extra
+> on the box is a HALT line in the script.
+> (d) PERF-3b runs BEFORE the re-mint, on the rebuilt box: the Gumbel arm
+> (full 320/m16 p0.25, fast 64/m16, value_scale 1.0), the checker-thread
+> lever A/B, eval at deploy 160/m16 G=8. Its games/h number replaces
+> R347(b)'s prediction in the prereg table's wall-clock line; the
+> operator sees the measured price before arming the regime.
+> (e) Order after (b)–(d): AUDIT-3 (read-only, AUDIT-2's format, leading
+> with F-816-24's status at contact) → REPAIR-A3 → re-mint (search.kind
+> puct → gumbel, the prereg rows, sealbot-only rungs, supervisor grace
+> reverted, K/MAX_NODES host term measured) → 4 h shakedown at 1-in-1 →
+> START forward. STATE.md is the handoff at every step.
+> ROUTE: OC7 → box rebuild → PERF-3b → AUDIT-3 → REPAIR-A3 → re-mint →
+> shakedown → START.
+
+`R{next}` is the rider's own placeholder and resolves to R348 — this file's header said the next
+number was 348 when the rider was forwarded; the text is copied as written rather than edited.
+Grounds: operator direction, forwarding the wave-3 rider on 2026-09-11. (a) ratifies wave 2 at
+`b117e657` and rules STATE.md's three unratified deviations — 1 and 2 stand as they were reasoned,
+3 is decided as a uv extra; (b) puts the gate that never finishes ahead of everything, because the
+local set is the only gate this repo has; (c) closes the two traps AUDIT-2/R347 left open; (d)
+prices the Gumbel regime before it is armed.
+Closes: **CARD-CLAUDEMD-REPOINT** — gate 10 is green on `CLAUDE.md`, the dissolved `docs/registers/`
+is named nowhere in it, and the three governance paths it must cite are the three it cites. The
+card's remaining debt was this line.
+Status: standing.
+
+---
 
 ### R347 — CLEANUP WAVE 2: the sparse Gumbel row, and the ten open items ruled
 Decision: verbatim below. This entry breaks the <= 10-line convention for R346's reason and on

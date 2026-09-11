@@ -132,9 +132,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   `make gates.exit` (`run_all.sh --with-slow`), not `make gates`** — a `slow`-marked test is
   deselected from BOTH pytest tiers, so nothing else in the repo executes it (R333(b); the
   runner prints which of the two opt-ins ran on every invocation, so a log says whether the
-  tier was covered). **Remote CI is SUSPENDED by
-  operator decision** until the operator re-enables it — no push or merge waits on it, and
-  local green is the gate. Doc/governance-only commits need no gates at all. The accepted cost
+  tier was covered). **The full local gate set is the gate; remote CI is suspended by
+  operator decision** (R348(a)) until the operator re-enables it — no push or merge waits on
+  it. Doc/governance-only commits need no gates at all. The accepted cost
   is on the record: gate 1's fresh-clone `uv sync` is the one check no local run reproduces.
   This sets WHEN gates run, never WHAT they check.
 - `make bench` / `make bench.baseline` — criterion smoke bench (baseline saves locally).
