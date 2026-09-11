@@ -1236,3 +1236,27 @@ document and nothing needs to be.
    `test_mint_header_roundtrip.py` carries the tombstone. `tools/bench_floors.toml` loses five
    floors with the two benches that produced them; no surviving floor moved, so the rustc/CPU
    attestation still holds and this is a deletion rather than a re-baseline.
+
+### AMENDMENT — one OPERATOR-SIDE tool is admitted under `tools/`: the mirror puller (R349(b))
+
+**R349(b), landed at `8e307af1`.** Recorded here rather than left as silent drift (R9).
+
+1. **What changed.** `tools/mirror_pull.py` runs on the OPERATOR'S machine, not on a dev box
+   and not on the box it mirrors: each cycle it rsyncs a run directory down from an rsync
+   spec (an ssh alias plus a path, or a plain directory for the in-tree loop), verifies every
+   complete bundle against its own manifest and every closed shard against the index's
+   recorded size, writes `<artifact>.receipt.json` beside each verified copy and rsyncs the
+   receipts back up. The `tools/` row's "dev-only" is therefore widened by exactly this one
+   entry; it names no host (gate 17), and its transport is `rsync` alone.
+2. **What it replaced.** R347(d)'s volume arm — `mantis.diagnostics.workspace_durability`,
+   `mantis.util.mounts`, the planted-table seam and `PreflightStampPlantedTableError` — is
+   DELETED: no host on offer has a volume, and a halt no host can pass gates nothing. The
+   receipt primitives live in `mantis.util.mirror_receipts` (a leaf, so `mantis.config` can
+   read the stamp's verdict), the artifact enumeration in `mantis.diagnostics.mirror_receipts`,
+   and the run's own lag reading in `mantis.train.bundle_receipts` (the coordinator publishes
+   it and cannot import diagnostics without a package cycle).
+3. **Where it bites.** The preflight's rc 16 is `PreflightMirrorReceiptsError`, decided AFTER
+   the boot on the boot's own bundle and first shard; `mantis.run` refuses a stamp whose
+   workspace verdict is not `MIRRORED`; `resume_state_persisted.unreceipted_bundles` feeds
+   the dashboard's two-interval warning and halts nothing. `sha256_file` moved to
+   `mantis.util.hashing` so the bundle, the receipts and the puller share one hash.
