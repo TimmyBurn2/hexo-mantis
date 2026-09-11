@@ -1256,7 +1256,8 @@ document and nothing needs to be.
    and the run's own lag reading in `mantis.train.bundle_receipts` (the coordinator publishes
    it and cannot import diagnostics without a package cycle).
 3. **Where it bites.** The preflight's rc 16 is `PreflightMirrorReceiptsError`, decided AFTER
-   the boot on the boot's own bundle and first shard; `mantis.run` refuses a stamp whose
+   the boot on the boot's own bundle — or, since a clean completion writes a checkpoint and no
+   bundle (R137's third leg), on its stamped checkpoint of record — and first shard; `mantis.run` refuses a stamp whose
    workspace verdict is not `MIRRORED`; `resume_state_persisted.unreceipted_bundles` feeds
    the dashboard's two-interval warning and halts nothing. `sha256_file` moved to
    `mantis.util.hashing` so the bundle, the receipts and the puller share one hash.

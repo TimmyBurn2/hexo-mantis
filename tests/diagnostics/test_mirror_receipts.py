@@ -110,3 +110,22 @@ def test_the_cli_mirrors_the_halt(tmp_path: Path, synthetic_run_dir, capsys) -> 
     _receipt_everything(tmp_path)
     assert D.main([str(tmp_path), "--run-id", "synth", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["verdict"] == U.MIRRORED_VERDICT
+
+
+def test_a_clean_completion_with_no_bundle_is_proven_on_its_checkpoint(
+    tmp_path: Path, synthetic_run_dir,
+) -> None:
+    """R137's third leg writes no bundle; killer: the halt that demanded one (three box rows red)."""
+    synthetic_run_dir(tmp_path, bundle=False)
+    with pytest.raises(D.MirrorReceiptsMissingError, match="checkpoint .* is not receipted"):
+        D.require_mirror_receipts(tmp_path, "synth")
+    ckpt = D.stamped_checkpoints(tmp_path / D.CHECKPOINTS_SUBDIR)[-1]
+    U.write_receipt(ckpt, mirrored_sha256=sha256_file(ckpt), mirrored_bytes=ckpt.stat().st_size,
+                    cycle=1, mirror_id="test")
+    shard = D.first_closed_shard(tmp_path / D.GAMES_SUBDIR, "synth")
+    assert shard is not None
+    U.write_receipt(shard, mirrored_sha256=sha256_file(shard), mirrored_bytes=shard.stat().st_size,
+                    cycle=1, mirror_id="test")
+    reading = D.require_mirror_receipts(tmp_path, "synth")
+    assert reading["verdict"] == U.MIRRORED_VERDICT and "bundle" not in reading
+    assert reading["checkpoint"]["name"] == ckpt.name

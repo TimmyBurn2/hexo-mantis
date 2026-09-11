@@ -18,6 +18,7 @@ from typing import Any
 from mantis.diagnostics.mirror_receipts import CHECKPOINTS_SUBDIR, GAMES_SUBDIR, bundle_member_paths
 from mantis.monitor.game_record import index_filename
 from mantis.train.bundle import BundleError, complete_bundles
+from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE, stamped_checkpoints
 from mantis.util.hashing import sha256_file
 from mantis.util.mirror_receipts import (
     RECEIPT_SUFFIX,
@@ -68,8 +69,7 @@ def _receipt_current(path: Path, digest: str) -> bool:
 
 
 def receipt_bundles(mirror: Path, *, cycle: int, mirror_id: str) -> list[int]:
-    """Receipt every complete bundle in the mirror (`complete_bundles` re-verified each member
-    on the MIRRORED copy, so a receipt means a resume point that reads); return the new steps."""
+    """Receipt every complete bundle (`complete_bundles` re-verified the MIRRORED members); new steps."""
     directory = mirror / CHECKPOINTS_SUBDIR
     receipted: list[int] = []
     for manifest in complete_bundles(directory):
@@ -83,6 +83,38 @@ def receipt_bundles(mirror: Path, *, cycle: int, mirror_id: str) -> list[int]:
             wrote = True
         if wrote:
             receipted.append(manifest.step)
+    return receipted
+
+
+def _checkpoint_verifies(path: Path) -> bool:
+    """The copy hashes to the `content_sha8` its filename carries (the loader's own check)."""
+    import torch  # lazy: the checkpoint arm is the only reason the puller needs torch
+
+    from mantis.train.checkpoints import content_sha8
+
+    match = CHECKPOINT_NAME_RE.match(path.name)
+    if match is None:
+        return False
+    try:
+        payload = torch.load(path, weights_only=True, map_location="cpu")
+    except Exception as exc:  # noqa: BLE001 — a copy torch cannot read is not receipted, and why is logged
+        _LOG.warning("checkpoint unreadable in the mirror path=%s: %s", path.name, exc)
+        return False
+    return isinstance(payload, dict) and content_sha8(payload) == match.group("sha8")
+
+
+def receipt_checkpoints(mirror: Path, *, cycle: int, mirror_id: str) -> list[str]:
+    """Receipt every bare stamped checkpoint whose payload hashes to its name; returns the names."""
+    receipted: list[str] = []
+    for path in stamped_checkpoints(mirror / CHECKPOINTS_SUBDIR):
+        digest = sha256_file(path)
+        if _receipt_current(path, digest):
+            continue
+        if not _checkpoint_verifies(path):
+            continue
+        write_receipt(path, mirrored_sha256=digest, mirrored_bytes=path.stat().st_size,
+                      cycle=cycle, mirror_id=mirror_id)
+        receipted.append(path.name)
     return receipted
 
 
@@ -134,10 +166,11 @@ def run_cycle(source: str, mirror: Path, run_id: str, *, cycle: int,
     except (BundleError, OSError) as exc:
         _LOG.error("bundle receipting failed cycle=%d: %s", cycle, exc)
         bundles = []
+    checkpoints = receipt_checkpoints(mirror, cycle=cycle, mirror_id=mirror_id)
     shards = receipt_shards(mirror, run_id, cycle=cycle, mirror_id=mirror_id)
     push_receipts(mirror, source)
-    return {"cycle": cycle, "bundles_receipted": bundles, "shards_receipted": shards,
-            "seconds": round(time.monotonic() - started, 2)}
+    return {"cycle": cycle, "bundles_receipted": bundles, "checkpoints_receipted": checkpoints,
+            "shards_receipted": shards, "seconds": round(time.monotonic() - started, 2)}
 
 
 def build_parser() -> argparse.ArgumentParser:

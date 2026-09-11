@@ -151,20 +151,27 @@ def synthetic_run_dir():
     from mantis.monitor.game_record import index_filename, shard_filename
     from mantis.train import bundle as B
 
-    def make(root: Path, *, run_id: str = "synth", step: int = 40, shards: int = 1) -> Path:
+    def make(root: Path, *, run_id: str = "synth", step: int = 40, shards: int = 1,
+             bundle: bool = True) -> Path:
+        import torch
+
+        from mantis.train.checkpoints import content_sha8
+
         checkpoints = root / "checkpoints"
         checkpoints.mkdir(parents=True, exist_ok=True)
-        stem = f"{run_id}_{step:08d}_{step:08x}"
-        ckpt = checkpoints / f"{stem}.ckpt"
-        ckpt.write_bytes(b"ckpt " + str(step).encode() * 64)
-        B.publish_bundle(
-            checkpoint_path=ckpt, run_id=run_id, step=step,
-            write_ring=lambda p: Path(p).write_bytes(b"ring " + str(step).encode() * 512),
-            ring_path=B.ring_path_for(ckpt),
-            write_sidecar=lambda p: Path(p).write_text(json.dumps({"step": step}),
-                                                        encoding="utf-8"),
-            sidecar_path=checkpoints / f"{stem}.resume.json",
-        )
+        # A real torch payload named by ITS OWN `content_sha8`, as `save_checkpoint` names it.
+        payload = {"schema_version": 2, "step": step, "model_state": {"w": torch.ones(3) * step}}
+        ckpt = checkpoints / f"{run_id}_{step:08d}_{content_sha8(payload)}.ckpt"
+        torch.save(payload, ckpt)
+        if bundle:
+            B.publish_bundle(
+                checkpoint_path=ckpt, run_id=run_id, step=step,
+                write_ring=lambda p: Path(p).write_bytes(b"ring " + str(step).encode() * 512),
+                ring_path=B.ring_path_for(ckpt),
+                write_sidecar=lambda p: Path(p).write_text(json.dumps({"step": step}),
+                                                            encoding="utf-8"),
+                sidecar_path=ckpt.with_name(ckpt.name + ".resume.json"),
+            )
         games = root / "logs" / "games"
         games.mkdir(parents=True, exist_ok=True)
         index = games / index_filename(run_id)

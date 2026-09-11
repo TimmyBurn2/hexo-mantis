@@ -105,3 +105,22 @@ def test_the_cli_once_mode_reports_the_cycle(tmp_path: Path, synthetic_run_dir, 
 def test_a_missing_source_is_a_transport_failure_not_a_silent_pass(tmp_path: Path) -> None:
     with pytest.raises(TOOL.MirrorTransportError):
         TOOL.pull_down(str(tmp_path / "absent"), tmp_path / "m")
+
+
+def test_a_bare_checkpoint_is_receipted_only_when_its_payload_hashes_to_its_name(
+    tmp_path: Path, synthetic_run_dir,
+) -> None:
+    """The puller verifies a bare checkpoint the loader's way — `content_sha8` against its name."""
+    import torch
+
+    source = synthetic_run_dir(tmp_path / "box", bundle=False)
+    mirror = tmp_path / "mirror"
+    summary = TOOL.run_cycle(str(source), mirror, "synth", cycle=1, mirror_id="op")
+    assert summary["bundles_receipted"] == [] and len(summary["checkpoints_receipted"]) == 1
+    assert D.require_mirror_receipts(source, "synth")["checkpoint"]["name"].endswith(".ckpt")
+    # A checkpoint whose bytes do not hash to its name is a torn or foreign copy: no receipt.
+    forged = source / "checkpoints" / "synth_00000099_deadbeef.ckpt"
+    torch.save({"schema_version": 2, "step": 99}, forged)
+    again = TOOL.run_cycle(str(source), mirror, "synth", cycle=2, mirror_id="op")
+    assert again["checkpoints_receipted"] == []
+    assert not U.receipt_path_for(forged).exists()

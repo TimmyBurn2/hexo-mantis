@@ -2,10 +2,15 @@
 coordinator publishes the reading and cannot import diagnostics without a package cycle."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from mantis.train.bundle import BundleManifest, complete_bundles, manifest_path_for
 from mantis.util.mirror_receipts import MirrorReceiptError, verify_receipt
+
+#: `checkpoints.checkpoint_filename`'s grammar, `{run_id}_{step:08d}_{sha8}.ckpt`; the sha8 is
+#: `content_sha8` of the payload, which is what makes a bare checkpoint verifiable off-box.
+CHECKPOINT_NAME_RE = re.compile(r"^(?P<run_id>.+)_(?P<step>\d{8})_(?P<sha8>[0-9a-f]{8})\.ckpt$")
 
 
 def bundle_member_paths(manifest: BundleManifest, directory: Path) -> list[Path]:
@@ -33,4 +38,15 @@ def unreceipted_bundle_steps(checkpoint_dir: str | Path) -> list[int]:
             if unreceipted_members(manifest, base)]
 
 
-__all__ = ["bundle_member_paths", "unreceipted_bundle_steps", "unreceipted_members"]
+def stamped_checkpoints(directory: str | Path) -> list[Path]:
+    """Every v2-named checkpoint under `directory`, oldest step first (a clean stop writes no bundle)."""
+    base = Path(directory)
+    if not base.is_dir():
+        return []
+    found = [(int(m.group("step")), path) for path in base.glob("*.ckpt")
+             if (m := CHECKPOINT_NAME_RE.match(path.name))]
+    return [path for _step, path in sorted(found, key=lambda item: (item[0], item[1].name))]
+
+
+__all__ = ["CHECKPOINT_NAME_RE", "bundle_member_paths", "stamped_checkpoints",
+           "unreceipted_bundle_steps", "unreceipted_members"]

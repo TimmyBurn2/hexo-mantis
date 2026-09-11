@@ -14,6 +14,7 @@ from mantis.monitor.game_record import index_filename
 from mantis.train.bundle import complete_bundles
 from mantis.train.bundle_receipts import (
     bundle_member_paths,
+    stamped_checkpoints,
     unreceipted_bundle_steps,
     unreceipted_members,
 )
@@ -50,24 +51,41 @@ def first_closed_shard(record_dir: str | Path, run_id: str) -> Path | None:
 
 
 def require_mirror_receipts(run_dir: str | Path, run_id: str) -> dict[str, Any]:
-    """The newest complete bundle and the first closed shard are BOTH receipted; the stamp's reading.
+    """The newest complete bundle (else the newest stamped checkpoint) and the first closed shard
+    are BOTH receipted; the stamp's reading names which artefact it read.
 
     Raises:
-        MirrorReceiptsMissingError: no complete bundle or closed shard, or a receipt absent/wrong.
+        MirrorReceiptsMissingError: no artefact of record or closed shard, or a receipt absent/wrong.
     """
     root = Path(run_dir).expanduser().resolve()
     checkpoint_dir = root / CHECKPOINTS_SUBDIR
     bundles = complete_bundles(checkpoint_dir)
-    if not bundles:
-        raise MirrorReceiptsMissingError(
-            f"no complete resume bundle under {checkpoint_dir}: the run must publish one "
-            "before its mirroring can be proven")
-    newest = bundles[-1]
-    missing = unreceipted_members(newest, checkpoint_dir)
-    if missing:
-        raise MirrorReceiptsMissingError(
-            f"the bundle at step {newest.step} is not receipted: "
-            + "; ".join(f"{name}: {why}" for name, why in missing.items()))
+    artefact: dict[str, Any]
+    if bundles:
+        newest = bundles[-1]
+        missing = unreceipted_members(newest, checkpoint_dir)
+        if missing:
+            raise MirrorReceiptsMissingError(
+                f"the bundle at step {newest.step} is not receipted: "
+                + "; ".join(f"{name}: {why}" for name, why in missing.items()))
+        artefact = {"bundle": {"step": newest.step, "files": {
+            path.name: verify_receipt(path)["verified_sha256"]
+            for path in bundle_member_paths(newest, checkpoint_dir)}}}
+    else:
+        # A clean completion writes a checkpoint and NO bundle (R137's third leg).
+        checkpoints = stamped_checkpoints(checkpoint_dir)
+        if not checkpoints:
+            raise MirrorReceiptsMissingError(
+                f"no complete resume bundle and no stamped checkpoint under {checkpoint_dir}: "
+                "the run must write one before its mirroring can be proven")
+        newest_ckpt = checkpoints[-1]
+        try:
+            ckpt_receipt = verify_receipt(newest_ckpt)
+        except MirrorReceiptError as exc:
+            raise MirrorReceiptsMissingError(
+                f"checkpoint {newest_ckpt.name} is not receipted: {exc}") from exc
+        artefact = {"checkpoint": {"name": newest_ckpt.name,
+                                   "sha256": ckpt_receipt["verified_sha256"]}}
     shard = first_closed_shard(root / GAMES_SUBDIR, run_id)
     if shard is None:
         raise MirrorReceiptsMissingError(
@@ -76,12 +94,10 @@ def require_mirror_receipts(run_dir: str | Path, run_id: str) -> dict[str, Any]:
         shard_receipt = verify_receipt(shard)
     except MirrorReceiptError as exc:
         raise MirrorReceiptsMissingError(f"shard {shard.name} is not receipted: {exc}") from exc
-    covered = {path.name: verify_receipt(path)["verified_sha256"]
-               for path in bundle_member_paths(newest, checkpoint_dir)}
     return {
         "verdict": MIRRORED_VERDICT,
         "run_dir": str(root),
-        "bundle": {"step": newest.step, "files": covered},
+        **artefact,
         "shard": {"name": shard.name, "sha256": shard_receipt["verified_sha256"]},
     }
 
@@ -130,9 +146,11 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(payload) if args.json else f"MIRROR-RECEIPTS HALT: {exc}",
               file=sys.stderr)
         return 2
+    artefact = (f"bundle step {reading['bundle']['step']}" if "bundle" in reading
+                else f"checkpoint {reading['checkpoint']['name']}")
     print(json.dumps(reading) if args.json else
-          f"MIRROR-RECEIPTS PASS: bundle step {reading['bundle']['step']} and shard "
-          f"{reading['shard']['name']} are receipted under {reading['run_dir']}")
+          f"MIRROR-RECEIPTS PASS: {artefact} and shard {reading['shard']['name']} are "
+          f"receipted under {reading['run_dir']}")
     return 0
 
 
