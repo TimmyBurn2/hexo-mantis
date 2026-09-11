@@ -15,8 +15,12 @@ from pathlib import Path
 
 import pytest
 
-from mantis.config.loader import load_config
-from mantis.config.preflight_stamp import require_preflight_stamp
+from mantis.config.loader import config_identity_sha256, load_config
+from mantis.config.preflight_stamp import (
+    PreflightStampPlantedTableError,
+    read_stamp,
+    require_preflight_stamp,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("planted_durable_mounts")]
 
@@ -70,8 +74,13 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert report["tier"]["tier"] == "full"
     assert report["tier"]["covered"] == ["sync_lag", "full"]
     assert report["child"]["rc"] == 0 and report["child"]["timed_out"] is False
-    # R348(c): a green preflight leaves the stamp `mantis.run` will demand, on THIS tree.
-    stamp = require_preflight_stamp(load_config(CONFIG), tree_root=REPO_ROOT)
+    # R348(c): a green preflight leaves a stamp carrying the halts' readings — and because this
+    # drive read a PLANTED mount table, `mantis.run` refuses that stamp by name.
+    config = load_config(CONFIG)
+    stamp = read_stamp(config_identity_sha256(config))
     assert Path(report["preflight_stamp"]).is_relative_to(state_home)
     assert stamp["halts"]["workspace"] == report["workspace"]
     assert stamp["halts"]["cuda_build"] == report["cuda_build"]
+    assert stamp["halts"]["workspace"]["mounts_table"] != "/proc/mounts"
+    with pytest.raises(PreflightStampPlantedTableError):
+        require_preflight_stamp(config, tree_root=REPO_ROOT)
