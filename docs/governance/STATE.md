@@ -130,12 +130,19 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
 - Box: rebuilt through `box_setup.sh wave3` with the extra — `torch 2.11.0+cu128`, RTX 5080,
   extension, vendored sealbot and the warm-start checkpoint all present; host identity lines are
   in the box's own setup log. The instance is on the same physical host the archive records.
-- Gates: on the dev box at `ff26f3a0` — 3a 4,502 pass / 1 true red (the warm-start row, above),
-  6–17 GREEN; **3b cannot run on the dev box** (bf16 emulation). The full packet-exit set
-  (`make gates.exit`) ran on the box at the leg's tip; its screen is recorded in the line below
-  this one once read.
-- GATES-EXIT-BOX: see the leg's closing screen in the dispatcher's report; the same single red
-  is expected there because the box holds the artifact.
+- Gates, dev box at `ff26f3a0`: 3a 4,502 pass / **1 true red** (the warm-start row), 6–17
+  GREEN; **3b cannot run here** (bf16 emulation); 2a/2b/4/5 not run here (Rust changed only in
+  the bridge, gated on the box).
+- Gates, box, `make gates.exit` at `ff26f3a0` (48 min): 2a, 2b, 4, 5, slow tier, 3c, 6–17 all
+  GREEN; 3a and 3b RED on three rows — the warm-start row (true), the signal-posture row (an
+  artefact of a detached job's SIG_IGN; passes in a foreground session), and the non-CUDA-host
+  row, whose failure exposed that **`run_all.sh`'s bare `uv run` re-synced the venv to the CPU
+  wheel mid-set** — no box gate run in history has ever gated a CUDA venv. Fixed at `8dfa8b5f`
+  (`UV_NO_SYNC=1`; the runner prints the torch build it gates). Gated AS BUILT on `+cu128`, 3a
+  then shows the rows that assume a CPU torch (CARD-GATES-ON-CUDA-VENV, 10 model/slow rows) —
+  a leg of their own. **So "gates.exit green on the box" is NOT claimed at this handoff**: green
+  on a CPU-wheel box was never the measurement it appeared to be, and on the CUDA venv the
+  remaining reds are named, carded and not this leg's code.
 - Three harness defects of this leg's own making are recorded so they are not re-learned: a
   py-spy wrapper without a `__main__` guard re-ran pytest inside the eval worker's spawn child
   (fixed before any box number was taken); the comment ratchet counts TRACKED files only, so a
@@ -145,7 +152,7 @@ place; `CARD-GATE17-LOCAL-COUPLING` unchanged; `CARD-CLAUDEMD-REPOINT` closed by
 
 ## Provenance
 
-Derived 2026-09-11 on `wave3` at `ff26f3a0`, from `configs/run6.yaml`, the box's
+Derived 2026-09-11 on `wave3` at `8f89545c`, from `configs/run6.yaml`, the box's
 `oc7/{box_head,tier_box*.log}` and `perf3b_*` readings, the dev box's scratchpad `oc7/` artefacts,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
 `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.
