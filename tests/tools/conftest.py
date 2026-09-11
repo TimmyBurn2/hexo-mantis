@@ -6,13 +6,15 @@ the precondition instead of on the guard. The sweep touches exactly the two path
 """
 from __future__ import annotations
 
+import importlib.util
+import json
 import shutil
+import sys
+import threading
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-
-from mantis.diagnostics.workspace_durability import MOUNTS_ENV
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 #: The probe paths from the out-dir and symlink oracles, kept as literals rather than imported
@@ -85,15 +87,56 @@ def _preflight_probe_path_is_not_left_in_the_tree():
     _sweep()
 
 
+def _load_puller():
+    spec = importlib.util.spec_from_file_location("_conftest_mirror_pull",
+                                                  REPO_ROOT / "tools" / "mirror_pull.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _run_dirs_under(base: Path) -> list[tuple[Path, str]]:
+    """`(run dir, run_id)` for every directory under `base` holding a resume-bundle manifest."""
+    found: dict[Path, str] = {}
+    for manifest in base.rglob("checkpoints/*.bundle.json"):
+        try:
+            run_id = str(json.loads(manifest.read_text(encoding="utf-8"))["run_id"])
+        except (OSError, ValueError, KeyError):
+            continue
+        found.setdefault(manifest.parents[1], run_id)
+    return sorted(found.items())
+
+
 @pytest.fixture(scope="module")
-def planted_durable_mounts(tmp_path_factory) -> Iterator[Path]:
-    """Point a subprocess preflight at a planted table calling `/` durable (pytest's tmp base is
-    tmpfs or overlay); module-scoped so a module-scoped preflight fixture sees it."""
-    table = tmp_path_factory.mktemp("mounts") / "mounts"
-    table.write_text("dev0 / ext4 rw 0 0\n", encoding="utf-8")
-    patch = pytest.MonkeyPatch()
-    patch.setenv(MOUNTS_ENV, str(table))
+def local_puller(tmp_path_factory) -> Iterator[Path]:
+    """The R349(b) loop in miniature: the REAL puller as a LOCAL loop over every run directory
+    a preflight child writes under pytest's tmp base; module-scoped for the preflight fixtures."""
+    puller = _load_puller()
+    base = Path(tmp_path_factory.getbasetemp())
+    mirrors = tmp_path_factory.mktemp("mirror")
+    stop = threading.Event()
+
+    def loop() -> None:
+        cycle = 0
+        while not stop.is_set():
+            cycle += 1
+            for run_dir, run_id in _run_dirs_under(base):
+                if mirrors in run_dir.parents:
+                    continue
+                mirror = mirrors / f"{run_dir.parent.name}_{run_dir.name}"
+                try:
+                    puller.run_cycle(str(run_dir), mirror, run_id, cycle=cycle,
+                                     mirror_id="local_puller")
+                except puller.MirrorTransportError:
+                    continue
+            stop.wait(1.0)
+
+    thread = threading.Thread(target=loop, name="local_puller", daemon=True)
+    thread.start()
     try:
-        yield table
+        yield mirrors
     finally:
-        patch.undo()
+        stop.set()
+        thread.join(timeout=30)

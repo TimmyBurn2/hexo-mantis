@@ -46,7 +46,7 @@ def test_out_dir_reuse_error_carries_rc_15_uniquely(tool):
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     """The card's hole: `_read_segment` scopes by run_id, so a same-run_id reuse reads a
     PREVIOUS burst's events as this run's evidence. The refusal must land BEFORE any boot —
@@ -55,14 +55,14 @@ def test_a_dirty_same_run_id_out_dir_is_refused_before_the_boot(tmp_path):
     (out / "logs").mkdir(parents=True)
     (out / "logs" / f"events_{SMOKE_RUN_ID}_seg0000.jsonl").write_text('{"event":"x"}\n')
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", "60")
+                    "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert res.returncode == 15, res.stdout + res.stderr
     assert SMOKE_RUN_ID in res.stdout + res.stderr
     assert "seg0000" in res.stdout + res.stderr
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_budget_sec):
     """The discriminating negative: the refusal is scoped to THIS run_id's segments —
     foreign litter proceeds to the boot (witnessed by the run reaching a real verdict,
@@ -76,12 +76,13 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_
     (out / "logs").mkdir(parents=True)
     (out / "logs" / "events_some_other_run_seg0000.jsonl").write_text('{"event":"x"}\n')
     res = _run_tool("--config", str(SMOKE_CONFIG), "--burst-steps", "16",
-                    "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec))
+                    "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec),
+                    "--receipt-wait-sec", "120")
     assert res.returncode == 0, res.stdout + res.stderr
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_child_streams_spool_in_full_beside_the_report(tool, tmp_path):
     """CARD-PREFLIGHT-CHILD-STDERR-BUDGET, the spool arm: the report's tails are a VIEW,
     the spools are the record. Driven through the real `_run_child` with a child that dies

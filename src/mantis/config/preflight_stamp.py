@@ -10,7 +10,7 @@ from typing import Any
 from mantis.config.loader import config_identity_sha256
 from mantis.config.schema import RunConfig
 from mantis.util.git import head_sha, is_dirty
-from mantis.util.mounts import MOUNTS
+from mantis.util.mirror_receipts import MIRRORED_VERDICT
 
 STAMP_SCHEMA_VERSION = 1
 #: The two START halts a stamp must carry a reading for; a stamp missing either is refused.
@@ -33,8 +33,8 @@ class PreflightStampMalformedError(PreflightStampRefusal):
     """The stamp exists but does not carry what a stamp must carry."""
 
 
-class PreflightStampPlantedTableError(PreflightStampRefusal):
-    """The stamp's durability reading came from a planted mount table, not the kernel's."""
+class PreflightStampUnmirroredError(PreflightStampRefusal):
+    """The stamp's workspace reading does not say the run directory's mirror loop was proven."""
 
 
 def stamp_dir() -> Path:
@@ -133,16 +133,17 @@ def require_preflight_stamp(config: RunConfig, *, tree_root: Path) -> dict[str, 
         PreflightStampMissingError: no stamp exists for this config identity.
         PreflightStampMalformedError: the stamp does not carry what a stamp must carry.
         PreflightStampTreeMismatchError: the stamp names another HEAD, or this HEAD is unreadable.
-        PreflightStampPlantedTableError: the workspace reading was taken from a table other
-            than the kernel's, so it is a test drive's evidence and covers no host.
+        PreflightStampUnmirroredError: the workspace reading's verdict is not `MIRRORED`, so
+            the preflight never saw the puller's receipts on this run directory (R349(b)).
     """
     sha = config_identity_sha256(config)
     stamp = read_stamp(sha)
-    table = stamp["halts"]["workspace"].get("mounts_table")
-    if table != str(MOUNTS):
-        raise PreflightStampPlantedTableError(
-            f"{config.run_id} ({sha}) was preflighted against mount table {table!r}, not "
-            f"{str(MOUNTS)!r}: a planted table proves nothing about this host")
+    workspace = stamp["halts"]["workspace"]
+    verdict = workspace.get("verdict") if isinstance(workspace, dict) else None
+    if verdict != MIRRORED_VERDICT:
+        raise PreflightStampUnmirroredError(
+            f"{config.run_id} ({sha}) was preflighted with workspace verdict {verdict!r}, not "
+            f"{MIRRORED_VERDICT!r}: the mirror loop was never proven on its run directory")
     here = head_sha(tree_root)
     if here is None:
         raise PreflightStampTreeMismatchError(

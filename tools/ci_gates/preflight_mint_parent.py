@@ -129,9 +129,9 @@ class PreflightOutDirReusedError(PreflightError):
     rc = 15
 
 
-class PreflightWorkspaceNotDurableError(PreflightError):
-    """The run directory is on a filesystem a reboot erases. A START HALT, before the boot — the
-    failure it guards costs a whole run and looks exactly like silence."""
+class PreflightMirrorReceiptsError(PreflightError):
+    """The burst's bundle and first shard were not receipted off-box within the wait (R349(b)):
+    a START HALT decided AFTER the boot, because it needs the boot's own artifacts."""
     rc = 16
 
 

@@ -485,9 +485,57 @@ def panel_f816_37(rec: Record) -> Panel:
     return Panel(title, reads, body, note)
 
 
+#: R349(b): this many retained bundles without receipts is the mirror WARNING (never a halt).
+MIRROR_LAG_WARN_BUNDLES = 2
+
+
+def panel_mirror(rec: Record) -> Panel:
+    """R349(b): the puller's lag off `resume_state_persisted.unreceipted_bundles`; two retained
+    bundles without receipts is a WARNING, no publication is an absence."""
+    title, reads = "Mirror receipts", "resume_state_persisted.unreceipted_bundles"
+    rows = [r for r in rec.rows("resume_state_persisted")
+            if isinstance(r.get("unreceipted_bundles"), list)]
+    if not rows:
+        return Panel(title, reads, no_rows("resume_state_persisted"))
+    last = rows[-1]
+    lag = len(last["unreceipted_bundles"])
+    body = table(["published at step", "unreceipted bundles (steps)", "count"],
+                 [[r.get("step"), ", ".join(str(x) for x in r["unreceipted_bundles"]) or "none",
+                   len(r["unreceipted_bundles"])] for r in rows[-12:]])
+    if lag >= MIRROR_LAG_WARN_BUNDLES:
+        body += (f'<p class="warn"><b>WARNING</b> — {lag} retained bundle(s) carry no '
+                 f"receipt at the last publication (step {last.get('step')}): the puller has "
+                 f"missed at least {MIRROR_LAG_WARN_BUNDLES} intervals. A recycled host would "
+                 "take them. Not a halt (R349(b)).</p>")
+    note = f"last publication: {lag} unreceipted (warning at {MIRROR_LAG_WARN_BUNDLES})"
+    return Panel(title, reads, body, note)
+
+
+def panel_alpha_full(rec: Record) -> Panel:
+    """R349(c): alpha = 1.0 rows per 1,000 graph rows off `iteration_complete.gumbel_alpha_full`;
+    a `None` block is no producer and is drawn as an absence."""
+    title, reads = "alpha = 1.0 rows per 1,000", "iteration_complete.gumbel_alpha_full"
+    blocks = [(r.get("step"), r.get("gumbel_alpha_full")) for r in rec.rows("iteration_complete")]
+    measured = [(step, b) for step, b in blocks
+                if isinstance(b, dict) and isinstance(b.get("per_1000"), (int, float))]
+    if not measured:
+        return Panel(title, reads, no_rows("iteration_complete.gumbel_alpha_full"))
+    series = [(float(step if step is not None else i), float(b["per_1000"]))
+              for i, (step, b) in enumerate(measured)]
+    last_step, last = measured[-1]
+    body = sparkline(series, label="alpha = 1.0 rows per 1,000 graph rows (cumulative)")
+    body += table(["step", "rows", "graph rows", "per 1,000"],
+                  [[step, b.get("rows"), b.get("graph_rows"), b.get("per_1000")]
+                   for step, b in measured[-8:]])
+    note = (f"at step {last_step}: {last.get('rows')} of {last.get('graph_rows')} rows "
+            f"({last.get('per_1000')} per 1,000) since boot")
+    return Panel(title, reads, body, note)
+
+
 PANELS = (
     panel_throughput, panel_sims_per_move, panel_memory, panel_losses, panel_heldout,
     panel_gates, panel_strength, panel_determinism, panel_health, panel_f816_37,
+    panel_mirror, panel_alpha_full,
 )
 
 
@@ -521,6 +569,7 @@ section { background:var(--card); border:1px solid var(--rule); border-radius:8p
 .reads { color:var(--muted); font-size:12px; margin:0 0 12px; }
 .note { color:var(--muted); font-size:12px; margin:8px 0 0; }
 .absent { color:var(--absent); font-size:13px; margin:8px 0; }
+.warn { color:#b45309; font-size:13px; margin:8px 0; border-left:3px solid #b45309; padding-left:8px; }
 .banked { color:var(--banked); font-size:13px; margin:4px 0; }
 figure { margin:12px 0; } figcaption { color:var(--muted); font-size:12px; margin-top:2px; }
 svg { display:block; background:transparent; }
@@ -618,6 +667,32 @@ def self_test() -> int:
             bad += 1
         else:
             print("  [OK] every zero on the page is labelled an ABSENCE in its own row")
+
+        lagging = Path(tmp) / "lag.jsonl"
+        lagging.write_text(
+            '{"event": "resume_state_persisted", "step": 2000, "unreceipted_bundles": [1000, 2000]}\n'
+            '{"event": "iteration_complete", "step": 2000, "gumbel_alpha_full": null}\n',
+            encoding="utf-8")
+        page = render(load_record(lagging), "self-test")
+        if "WARNING" not in page or "missed at least 2 intervals" not in page:
+            print("  [SELF-TEST FAILED] two unreceipted bundles did not raise the mirror WARNING")
+            bad += 1
+        else:
+            print("  [OK] two unreceipted bundles raise the mirror WARNING")
+        if "iteration_complete.gumbel_alpha_full" not in page or "per 1,000)" in page:
+            print("  [SELF-TEST FAILED] an alpha block of null was not drawn as an absence")
+            bad += 1
+        else:
+            print("  [OK] an unproduced alpha block is drawn as an ABSENCE")
+        caught_up = Path(tmp) / "ok.jsonl"
+        caught_up.write_text(
+            '{"event": "resume_state_persisted", "step": 2000, "unreceipted_bundles": [2000]}\n',
+            encoding="utf-8")
+        if "WARNING" in render(load_record(caught_up), "self-test"):
+            print("  [SELF-TEST FAILED] ONE unreceipted bundle (the one just published) warned")
+            bad += 1
+        else:
+            print("  [OK] one unreceipted bundle is not a warning")
 
     try:
         banked_block("a panel nobody declared")

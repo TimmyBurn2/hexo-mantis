@@ -12,13 +12,14 @@ name resolves to unwritten blocks.
 from __future__ import annotations
 
 import dataclasses
-import hashlib
 import logging
 import os
 import re
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, BinaryIO
+
+from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
@@ -31,20 +32,11 @@ BUNDLE_VERSION = 1
 BUNDLE_SUFFIX = ".bundle.json"
 RING_SUFFIX = ".ring.bin"
 
-_HASH_CHUNK = 1 << 20
 _STEP_RE = re.compile(r"^.+_(\d{8})_[0-9a-f]+$")
 
 
 class BundleError(RuntimeError):
     """A bundle is absent, incomplete, or does not hash as its manifest records."""
-
-
-def sha256_file(path: str | Path) -> str:
-    digest = hashlib.sha256()
-    with open(path, "rb") as handle:
-        for chunk in iter(lambda: handle.read(_HASH_CHUNK), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def atomic_write(path: str | Path, writer: Callable[[BinaryIO], Any]) -> Path:

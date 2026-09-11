@@ -47,15 +47,6 @@ TOOL_PATH = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
 PARENT_PATH = TOOL_PATH.with_name("preflight_mint_parent.py")
 
 
-@pytest.fixture(autouse=True)
-def _durable_workspace(monkeypatch, tmp_path):
-    """Declare `tmp_path`'s tree durable, so the START workspace halt cannot fire on a tmpfs host."""
-    from mantis.diagnostics import workspace_durability
-
-    mounts = tmp_path / "_mounts"
-    mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} xfs rw 0 0\n", encoding="utf-8")
-    monkeypatch.setattr(workspace_durability, "MOUNTS", mounts)
-
 #: run5's own constants, read from the file rather than restated.
 RUN5 = REPO_ROOT / "configs" / "run6.yaml"
 _N = 101
@@ -423,14 +414,14 @@ def test_the_module_docstring_names_the_wall_the_boot_actually_hits() -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
     """The real boot, on the real tree, in production posture — the only test that drives a
     preflight child to completion, so the child's rc is read off the report and never restated."""
     out_dir = tmp_path / "boot"
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 40, (
         "post-TD-4, and post-mint, the boot runs until the timeout kills it: rc 40 "
         "PreflightTimeoutError. An rc 33 here means run5's minted caps stopped resolving. "
@@ -467,7 +458,7 @@ def test_the_real_boot_terminates_where_the_docstring_says(tmp_path) -> None:
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(tmp_path) -> None:
     """An uncalibrated production config is refused by the ARMING AUDIT before a child is ever
     spawned, so the audit shadows the composition seam the refusal used to be measured at."""
@@ -476,7 +467,7 @@ def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(
         "inference.fused_graph_caps={max_fused_edges: null, max_fused_nodes: null}",
     ])
     result = _run_tool("--config", str(twin), "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 30, (
         "an UNCALIBRATED production config must be refused by the ARMING AUDIT before any "
         f"boot: rc 30 PreflightArmingAuditError. got {result.returncode}\n"
@@ -499,14 +490,14 @@ def test_an_UNCALIBRATED_twin_is_refused_by_the_ARMING_AUDIT_before_it_can_boot(
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_path) -> None:
     """The tool's SUCCESS path: an otherwise-identical config that HAS a cap boots clean and
     arms both watchdogs, so the refusal above is caused by the missing value and nothing else."""
     out_dir = tmp_path / "boot_calibrated"
     result = _run_tool("--config", str(_mint_run5_cpu_bootable_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     assert result.returncode == 40, (
         "with the cap VALUED the boot runs until the timeout kills it: rc 40 "
         "PreflightTimeoutError. An rc 33 here means the caps are refused even when present, "
@@ -534,7 +525,7 @@ def test_the_real_boot_still_reaches_an_ARMED_loop_on_a_CALIBRATED_config(tmp_pa
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 @pytest.mark.skipif(
     _CUDA_BOX,
     reason="asserts what a CUDA-MINTED run5 does on a NON-CUDA host; this box has CUDA, so "
@@ -557,7 +548,7 @@ def test_booting_run5_on_a_non_CUDA_box_fails_LOUD_in_init_trainer(tmp_path) -> 
     full_config = load_config(RUN5).model_dump()
     env = {**os.environ, **resolve_allocator_posture(full_config).required_env()}
     result = _run_tool("--config", str(RUN5), "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45", env=env)
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0", env=env)
     assert result.returncode == 17, (
         "run6 on a non-CUDA box must HALT by name before the boot: rc 17 "
         f"PreflightCudaBuildError. got {result.returncode}\n"
@@ -1744,7 +1735,9 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
     with pytest.MonkeyPatch.context() as patch:
         patch.setenv("XDG_STATE_HOME", str(state_home))
         write_stamp(config=load_config(odd), config_path=odd, tree_root=REPO_ROOT,
-                    halts={"workspace": {"verdict": "drive", "mounts_table": "/proc/mounts"},
+                    halts={"workspace": {"verdict": "MIRRORED", "run_dir": str(tmp_path),
+                                         "bundle": {"step": 0, "files": {}},
+                                         "shard": {"name": "drive", "sha256": ""}},
                            "cuda_build": {"verdict": "not_run"}},
                     booted_config_sha256="drive", burst_steps=0, report_path=tmp_path / "r.json")
 
@@ -2170,7 +2163,7 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
     the shipped process on a real config, and asserted on TRUTH rather than mode-agreement."""
     out = tmp_path / "out"
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
-                       "--out-dir", str(out), "--timeout-sec", "60")
+                       "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     reports = sorted(out.glob("preflight_*.json"))
     assert len(reports) == 1, f"the evidence report is written ALWAYS; found {reports}"
@@ -2193,13 +2186,13 @@ def test_a_real_PREFLIGHT_report_never_claims_a_boot_ITS_OWN_child_block_denies(
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_a_BOOTED_preflight_reports_a_boot_and_names_its_childs_own_rc(tmp_path) -> None:
     """A BOOTED preflight reports a boot and names its child's own rc, whatever the child did."""
     out = tmp_path / "boot"
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out), "--timeout-sec", "45")
+                       "--out-dir", str(out), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     # The child's rc is read off the report and never restated here: a run that spawned a child
     # must not carry the NOT_BOOTED disclaimer, whatever the child then did.
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]
@@ -2230,7 +2223,7 @@ def test_a_report_with_no_config_block_is_still_NAMED_and_never_unnamed(tmp_path
     )
     out = tmp_path / "out"
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "5",
-                       "--out-dir", str(out), "--timeout-sec", "60")
+                       "--out-dir", str(out), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11
     assert [path.name for path in sorted(out.glob("*.json"))][0].startswith(
         "preflight_run6_"), (
@@ -2715,7 +2708,7 @@ _SCAN_POSTURES = (
 
 @pytest.mark.parametrize(("mode", "expected", "segments"), _SCAN_POSTURES,
                          ids=[posture[0] for posture in _SCAN_POSTURES])
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_events_block(
     monkeypatch, tmp_path, mode, expected, segments,
 ) -> None:
@@ -2981,7 +2974,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
     """A refused burst publishes tier `none` and owes BOTH tiers."""
     out_dir = tmp_path / "refused"
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_RUN5_BURST - 1),
-                       "--out-dir", str(out_dir), "--timeout-sec", "60")
+                       "--out-dir", str(out_dir), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     assert result.returncode == 11, (result.stdout + result.stderr)[-2000:]
     report = json.loads(next(iter(out_dir.glob("preflight_*.json"))).read_text())
     assert report["child"] is None and report["override"] is None
@@ -2996,7 +2989,7 @@ def test_a_refused_burst_publishes_tier_none_and_owes_BOTH_tiers(tmp_path) -> No
 
 
 @pytest.mark.integration
-@pytest.mark.usefixtures("planted_durable_mounts")
+@pytest.mark.usefixtures("local_puller")
 def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove(
         tmp_path) -> None:
     """The real preflight publishes the tier it RAN and what that tier does NOT prove; the tier
@@ -3004,7 +2997,7 @@ def test_the_real_preflight_publishes_the_tier_it_RAN_and_what_it_does_NOT_prove
     out_dir = tmp_path / "tiered"
     result = _run_tool("--config", str(_mint_run5_cpu_twin(tmp_path)),
                        "--burst-steps", str(_RUN5_BURST),
-                       "--out-dir", str(out_dir), "--timeout-sec", "45")
+                       "--out-dir", str(out_dir), "--timeout-sec", "45", "--receipt-wait-sec", "0")
     # The TIER ARITHMETIC does not move with the outcome: the tier block is published on every
     # terminating preflight, and a run that proved LESS must still say what it did not prove.
     assert result.returncode == 40, (result.stdout + result.stderr)[-3000:]

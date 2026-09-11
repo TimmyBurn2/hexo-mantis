@@ -19,18 +19,16 @@ def _draw_outcome_band(
     return lo, hi
 
 
-#: A sparse Gumbel row whose explicit entries carry NO target mass (R349(c)): alpha within one
-#: f32 ULP of unity. Counted per row pushed and published on `iteration_complete`.
+#: R349(c): a sparse row whose explicit entries carry no target mass — alpha within one f32 ULP
+#: of unity — counted per row pushed and published on `iteration_complete`.
 ALPHA_FULL_THRESHOLD = 1.0 - 1e-6
-#: The `alpha_full_row` events a run publishes at most: enough rows to reconstruct, bounded so a
-#: pathological regime cannot turn the event stream into a second ring.
+#: At most this many `alpha_full_row` events per run: enough to reconstruct, never a second ring.
 ALPHA_FULL_ROW_EVENT_CAP = 256
 
 
 def _alpha_full_row_event(rec: tuple[Any, ...], tail_mass: float,
                           runner_game_id: int) -> dict[str, Any]:
-    """The row, as the reconstruction needs it: the position, whose stone it was, and the
-    explicit cells the target left empty. Field order is `GraphRecord`'s drain tuple."""
+    """The row as the reconstruction needs it; field order is `GraphRecord`'s drain tuple."""
     stones, visits, current_player, moves_remaining, ply_index, is_full_search = rec[:6]
     return {
         "event": "alpha_full_row",

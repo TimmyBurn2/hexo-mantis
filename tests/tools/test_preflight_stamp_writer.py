@@ -52,7 +52,9 @@ def test_the_stamp_the_tool_writes_is_the_stamp_the_launcher_accepts(
     state_home: Path, tmp_path: Path,
 ) -> None:
     config = load_config(_CONFIG_PATH)
-    report = _report(workspace={"verdict": "DURABLE", "fstype": "xfs", "mounts_table": "/proc/mounts"},
+    report = _report(workspace={"verdict": "MIRRORED", "run_dir": "/x",
+                                "bundle": {"step": 1, "files": {}},
+                                "shard": {"name": "s", "sha256": ""}},
                      cuda_build={"verdict": "not_run", "reason": "cpu"})
     args = SimpleNamespace(burst_steps=16)
     TOOL._stamp_pass(config, _CONFIG_PATH, args, report, tmp_path / "out")
@@ -90,14 +92,16 @@ def _statement_index(body: list[ast.stmt], callee: str) -> int:
 
 
 def test_the_stamp_is_written_after_the_verdict_and_cleared_before_the_boot() -> None:
-    """Source order in `_run_preflight`: clear < halts < child < verdict < stamp."""
+    """Source order in `_run_preflight`: clear < cuda halt < child < verdict < mirror halt <
+    stamp — a stamp can never precede the receipts it certifies (R349(b))."""
     tree = ast.parse(TOOL_PATH.read_text(encoding="utf-8"))
     fn = next(n for n in ast.walk(tree)
               if isinstance(n, ast.FunctionDef) and n.name == "_run_preflight")
     order = [_statement_index(fn.body, name) for name in
-             ("clear_stamp", "_assert_start_halts", "_run_child", "_verdict_exit", "_stamp_pass")]
-    assert order == sorted(order) and len(set(order)) == 5, (
-        f"statement order (clear, halts, child, verdict, stamp) = {order}")
+             ("clear_stamp", "_assert_cuda_build_halt", "_run_child", "_verdict_exit",
+              "_assert_mirror_receipts_halt", "_stamp_pass")]
+    assert order == sorted(order) and len(set(order)) == 6, (
+        f"statement order (clear, cuda halt, child, verdict, mirror halt, stamp) = {order}")
 
 
 def test_audit_mode_never_touches_the_stamp_store() -> None:

@@ -131,9 +131,36 @@ def test_the_panel_roster_matches_the_ruling(tmp_path: Path):
     for title in ("Throughput", "Average sims/move", "Memory shares vs minted caps",
                   "Training losses", "Held-out loss", "Gate outcomes and floor refusals",
                   "Strength vs external rungs, with CIs", "Determinism hash", "Health",
-                  "F-816-37 firings"):
+                  "F-816-37 firings", "Mirror receipts", "alpha = 1.0 rows per 1,000"):
         assert f"<h2>{title}</h2>" in page, f"the ruling's {title!r} panel is not on the page"
-    assert len(dash.PANELS) == 10
+    assert len(dash.PANELS) == 12
+
+
+def test_the_mirror_panel_warns_at_two_unreceipted_bundles_and_not_at_one(tmp_path: Path):
+    """R349(b): two missing intervals is a dashboard WARNING, one is the bundle just published."""
+    warn = dash.render(dash.load_record(_write(tmp_path, [
+        {"event": "resume_state_persisted", "step": 2000, "unreceipted_bundles": [1000, 2000]},
+    ])), "t")
+    assert "WARNING" in warn and "missed at least 2 intervals" in warn
+    calm = dash.render(dash.load_record(_write(tmp_path, [
+        {"event": "resume_state_persisted", "step": 2000, "unreceipted_bundles": [2000]},
+    ])), "t")
+    assert "WARNING" not in calm
+
+
+def test_the_alpha_panel_draws_the_rate_and_an_absence_for_an_unproduced_block(tmp_path: Path):
+    """R349(c): the per-1,000 count from step 0; `None` is no producer, never a zero."""
+    page = dash.render(dash.load_record(_write(tmp_path, [
+        {"event": "iteration_complete", "step": 0,
+         "gumbel_alpha_full": {"rows": 0, "graph_rows": 512, "per_1000": 0.0}},
+        {"event": "iteration_complete", "step": 10,
+         "gumbel_alpha_full": {"rows": 1, "graph_rows": 8000, "per_1000": 0.125}},
+    ])), "t")
+    assert "0.125" in page and "<figure>" in page
+    absent = dash.render(dash.load_record(_write(tmp_path, [
+        {"event": "iteration_complete", "step": 10, "gumbel_alpha_full": None},
+    ])), "t")
+    assert "iteration_complete.gumbel_alpha_full" in absent and "0.125" not in absent
 
 
 def test_the_firings_panel_draws_an_absence_when_it_was_given_no_record_dir(tmp_path: Path):

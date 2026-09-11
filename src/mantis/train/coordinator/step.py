@@ -21,6 +21,7 @@ from typing import Any, cast
 import mantis.monitor.rules as _rules  # module-attribute counter reads
 import mantis.train.buffer_persist as _buffer_persist
 import mantis.train.bundle as _bundle
+import mantis.train.bundle_receipts as _bundle_receipts
 import mantis.train.resume_state as _resume_state
 from mantis.config.resolve.fast_policy_weight import resolve_fast_policy_weight
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
@@ -351,6 +352,10 @@ class StepCoordinator:
             "ring_sha256": "" if loaded.ring is None else loaded.ring.sha256,
             "round_counter": state.round_counter,
             "manifest": str(manifest), "pruned_members": len(pruned),
+            # R349(b): every retained complete bundle (this one included) without receipts on all
+            # its files — the mirror's lag; two is the dashboard's warning, nothing halts.
+            "unreceipted_bundles": _bundle_receipts.unreceipted_bundle_steps(
+                self.trainer.checkpoint_dir),
         })
         return side
 

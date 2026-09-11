@@ -1,11 +1,6 @@
-"""R349(a): fp32 on `train.device: cpu` is the ONE carve-out to LAW-06.
-
-CARD-OC7-OVERRUN discriminated the 40-60 s CPU step as HOST: bf16 autocast on an AVX2 CPU takes
-ATen's generic path and one GEMM at the trainer's edge shape measured 72x slower than fp32. The
-carve-out disables the autocast CONTEXT on a CPU trainer; the dtype PIN is untouched, so the
-CUDA trainer — every production path — still runs bf16 and an unknown representation still
-raises. Both halves are pinned here so neither can drift into the other.
-"""
+"""R349(a): fp32 on `train.device: cpu` is the ONE carve-out to LAW-06 — the autocast CONTEXT
+is off on a CPU trainer (CARD-OC7-OVERRUN's 72x generic GEMM), the dtype PIN is untouched and
+the CUDA trainer still runs bf16; both halves are pinned so neither drifts into the other."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,7 +14,7 @@ from mantis.train.trainer.core import Trainer
 
 
 def test_a_cpu_trainer_keeps_the_bf16_pin_but_runs_its_step_in_fp32(tmp_path: Path) -> None:
-    """Killer: `self._autocast_enabled = self.amp_dtype == torch.bfloat16` (the pre-R349 line)."""
+    """Killer: the pre-R349 line, `_autocast_enabled = amp_dtype == torch.bfloat16`."""
     trainer = H.tiny_graph_trainer(tmp_path)
     assert trainer.device.type == "cpu"
     assert trainer.amp_dtype is torch.bfloat16, (

@@ -359,9 +359,8 @@ impl PyMCTSTree {
         self.inner.root_value()
     }
 
-    /// The network's RAW value for the root before any child statistic entered it — the
-    /// `raw_value` term of Mctx's `v_mix` (R349(c): the reconstruction reads it beside the
-    /// visited children's Q, so the completed-Q arithmetic can be replayed off the tree).
+    /// The network's RAW root value before any child statistic entered it — Mctx's `v_mix`
+    /// term, exposed so R349(c)'s reconstruction can replay the completed-Q arithmetic.
     pub fn root_raw_value(&self) -> f32 {
         self.inner.root_raw_value()
     }

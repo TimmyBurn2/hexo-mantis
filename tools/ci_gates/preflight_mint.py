@@ -96,11 +96,7 @@ from mantis.config.armed_aborts import (
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
 from mantis.config.preflight_stamp import clear_stamp, write_stamp
 from mantis.config.schema import RunConfig
-from mantis.diagnostics.workspace_durability import (
-    WorkspaceNotDurableError,
-    assert_durable,
-    resolve_mounts_table,
-)
+from mantis.diagnostics.mirror_receipts import MirrorReceiptsMissingError, await_mirror_receipts
 
 #: Every repo-root resolution lives HERE, never in the shipped package.
 REPO_ROOT = Path(os.path.abspath(__file__)).resolve().parents[2]
@@ -167,7 +163,7 @@ PreflightResumedTrainerError = _parent_half.PreflightResumedTrainerError
 PreflightOutDirInsideRepoError = _parent_half.PreflightOutDirInsideRepoError
 PreflightConfigIdentityError = _parent_half.PreflightConfigIdentityError
 PreflightOutDirReusedError = _parent_half.PreflightOutDirReusedError
-PreflightWorkspaceNotDurableError = _parent_half.PreflightWorkspaceNotDurableError
+PreflightMirrorReceiptsError = _parent_half.PreflightMirrorReceiptsError
 PreflightCudaBuildError = _parent_half.PreflightCudaBuildError
 PreflightArmingAuditError = _parent_half.PreflightArmingAuditError
 PreflightManifestError = _parent_half.PreflightManifestError
@@ -704,6 +700,9 @@ def _build_parser() -> argparse.ArgumentParser:
                         help="the burst length; overrides train.max_train_steps ONLY")
     parser.add_argument("--out-dir", help="evidence + run artifacts; must be OUTSIDE the repo")
     parser.add_argument("--timeout-sec", type=float, help="hard bound on the child boot")
+    parser.add_argument("--receipt-wait-sec", type=float,
+                        help="how long to wait after the burst for the puller's receipts on "
+                             "its bundle and first shard (R349(b))")
     parser.add_argument("--_boot", action="store_true", help=argparse.SUPPRESS)
     return parser
 
@@ -712,7 +711,9 @@ def _require_preflight_args(parser: argparse.ArgumentParser, args) -> None:
     missing = [name for name, value in (("--config", args.config),
                                         ("--burst-steps", args.burst_steps),
                                         ("--out-dir", args.out_dir),
-                                        ("--timeout-sec", args.timeout_sec)) if value is None]
+                                        ("--timeout-sec", args.timeout_sec),
+                                        ("--receipt-wait-sec", args.receipt_wait_sec))
+               if value is None]
     if missing:
         parser.error(
             "mode PREFLIGHT requires " + ", ".join(missing) +
@@ -857,23 +858,17 @@ def _run_child(args, report: dict) -> dict:
     return child
 
 
-def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
-    """The two START pre-flight HALTs, both decided before the boot.
+def _assert_cuda_build_halt(booted: RunConfig, report: dict) -> None:
+    """The START HALT decided BEFORE the boot: a cuda config needs a torch that computes on a GPU.
 
     Args:
         booted: the config the child will run.
-        out_dir: the run directory the child will write into.
-        report: the preflight report; each halt records its own evidence block.
+        report: the preflight report; the halt records its own evidence block.
 
     Raises:
-        PreflightWorkspaceNotDurableError: the run directory would not survive the machine.
         PreflightCudaBuildError: the config declares a cuda device and the installed torch is
             not a CUDA build that computes correctly.
     """
-    try:
-        report["workspace"] = assert_durable(out_dir, resolve_mounts_table())
-    except WorkspaceNotDurableError as exc:
-        raise PreflightWorkspaceNotDurableError(str(exc)) from exc
     devices = {booted.train.device, booted.eval.worker_device}
     if "cuda" not in devices:
         report["cuda_build"] = {"verdict": "not_run", "reason": f"no cuda device declared: "
@@ -892,6 +887,20 @@ def _assert_start_halts(booted: RunConfig, out_dir: Path, report: dict) -> None:
             f"eval.worker_device={booted.eval.worker_device!r}, and the installed torch "
             f"cannot compute on a GPU: {exc}"
         ) from exc
+
+
+def _assert_mirror_receipts_halt(booted: RunConfig, out_dir: Path, args, report: dict) -> None:
+    """The START HALT decided AFTER the boot (R349(b)): the burst's bundle and first shard carry
+    the puller's receipts, waited for up to `--receipt-wait-sec`.
+
+    Raises:
+        PreflightMirrorReceiptsError: the receipts did not appear, or do not match the bytes here.
+    """
+    try:
+        report["workspace"] = await_mirror_receipts(
+            out_dir, booted.run_id, wait_sec=float(args.receipt_wait_sec))
+    except MirrorReceiptsMissingError as exc:
+        raise PreflightMirrorReceiptsError(str(exc)) from exc
 
 
 def _stamp_pass(config: RunConfig, path: Path, args, report: dict, out_dir: Path) -> None:
@@ -935,7 +944,7 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
             f"{booted.run_id!r} (first: {stale[0].name}): a same-run_id reuse would read a "
             "previous burst's events as this run's evidence. Use a fresh out-dir"
         )
-    _assert_start_halts(booted, out_dir, report)
+    _assert_cuda_build_halt(booted, report)
     child = _run_child(args, report)
     segments, events = (_read_segment(log_dir, run_id=booted.run_id)
                         if log_dir.is_dir() else ([], []))
@@ -968,6 +977,9 @@ def _run_preflight(args, report: dict, out_dir: Path) -> None:
     report["assertions"]["a_sync"] = blocks["a_sync"]
     report["assertions"]["b_lag"] = blocks["b_lag"]
     _verdict_exit(blocks)
+    # The mirror halt comes LAST: a burst that did not pass leaves nothing worth mirroring, and
+    # a stamp must carry both readings (R348(c)).
+    _assert_mirror_receipts_halt(booted, out_dir, args, report)
     _stamp_pass(config, path, args, report, out_dir)
 
 

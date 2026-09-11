@@ -268,8 +268,7 @@ class WorkerPool:
 
     @property
     def alpha_full(self) -> dict[str, Any]:
-        """R349(c)'s LAW-18 reading: sparse rows with alpha = 1.0 over graph rows pushed, as
-        `{rows, graph_rows, per_1000}`; `per_1000` is `None` before the first graph row."""
+        """R349(c)'s LAW-18 reading `{rows, graph_rows, per_1000}`; `per_1000` is `None` before the first graph row."""
         with self._lock:
             rows, total = self.alpha_full_rows, self.graph_rows_pushed
         return {"rows": int(rows), "graph_rows": int(total),

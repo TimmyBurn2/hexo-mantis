@@ -600,7 +600,7 @@ def test_an_out_dir_inside_the_repo_is_refused(tmp_path) -> None:
     # removes what the failure created so one red assertion does not also litter the tree.
     try:
         result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", str(_N),
-                           "--out-dir", str(inside), "--timeout-sec", "60")
+                           "--out-dir", str(inside), "--timeout-sec", "60", "--receipt-wait-sec", "0")
         assert result.returncode == 13, (
             "§6.3 rc 13 PreflightOutDirInsideRepoError; got "
             f"{result.returncode}\nstdout={result.stdout[-2000:]}\nstderr={result.stderr[-2000:]}"
@@ -619,7 +619,7 @@ def test_a_burst_below_the_lag_threshold_is_refused_by_name(tmp_path) -> None:
     """The minimum legal burst is 101 on every minted config, and the refusal must TEACH that —
     quote the binding validator, state the minimum — not merely reject."""
     result = _run_tool("--config", "configs/run6.yaml", "--burst-steps", "50",
-                       "--out-dir", str(tmp_path), "--timeout-sec", "60")
+                       "--out-dir", str(tmp_path), "--timeout-sec", "60", "--receipt-wait-sec", "0")
     output = result.stdout + result.stderr
     assert result.returncode == 11, (
         f"§6.3 rc 11 PreflightBurstTooShortError; got {result.returncode}\n{output[-2000:]}"
@@ -636,7 +636,7 @@ def test_the_preflight_args_carry_no_defaults_and_are_enforced_per_mode(tmp_path
     """Requiredness is pinned BEHAVIOURALLY, per mode: argparse cannot express "required in mode
     PREFLIGHT only" and the gate-12 step invokes `--audit-only` alone."""
     full = {"--config": "configs/run6.yaml", "--burst-steps": str(_N),
-            "--out-dir": str(tmp_path), "--timeout-sec": "60"}
+            "--out-dir": str(tmp_path), "--timeout-sec": "60", "--receipt-wait-sec": "0"}
     for omitted in full:
         argv = [token for key, value in full.items() if key != omitted
                 for token in (key, value)]
@@ -750,11 +750,11 @@ def test_the_parser_declares_no_defaults() -> None:
     """A `default=` in the parser is a code-side default authority for a run input, which is
     the defect this repo is arranged against."""
     calls = _add_argument_calls()
-    # `--device` DIED on both callers, so the surface is FIVE documented inputs plus the
-    # suppressed `--_boot`. Pinned rather than floored: `>= 6` kept passing NUMERICALLY across
-    # the removal. The successor is the device-flag BAN over BOTH parsers.
-    assert len(calls) == 6, (
-        f"the tool declares exactly the five documented CLI inputs plus the suppressed "
+    # `--device` DIED on both callers and R349(b) added `--receipt-wait-sec`, so the surface is
+    # SIX documented inputs plus the suppressed `--_boot`. Pinned rather than floored: `>= 6`
+    # kept passing NUMERICALLY across the removal. The device-flag BAN covers BOTH parsers.
+    assert len(calls) == 7, (
+        f"the tool declares exactly the six documented CLI inputs plus the suppressed "
         f"--_boot; found {len(calls)}"
     )
     for call in calls:
@@ -766,7 +766,7 @@ def test_the_parser_declares_no_defaults() -> None:
         )
     declared = {arg.value for call in calls for arg in call.args
                 if isinstance(arg, ast.Constant) and isinstance(arg.value, str)}
-    for option in ("--config", "--burst-steps", "--out-dir", "--timeout-sec",
+    for option in ("--config", "--burst-steps", "--out-dir", "--timeout-sec", "--receipt-wait-sec",
                    "--audit-only"):
         assert option in declared, f"the tool must declare {option}; got {sorted(declared)}"
 

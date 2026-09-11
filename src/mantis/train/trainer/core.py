@@ -170,9 +170,8 @@ class Trainer:
         # state, and dropping it would move the resume bundle's shape.
         self.fp16 = False
         self._scaler_enabled = False
-        # R349(a): fp32 on `train.device: cpu` is the ONE carve-out to LAW-06 — bf16 autocast on
-        # an AVX2 CPU takes ATen's generic path (72x on one GEMM, CARD-OC7-OVERRUN); the dtype pin
-        # itself is untouched and no production path trains on the CPU.
+        # R349(a): fp32 on `train.device: cpu` is the ONE carve-out to LAW-06 (bf16 autocast on an
+        # AVX2 CPU is ATen's 72x generic GEMM path); the dtype pin is untouched.
         self._autocast_enabled = (
             self.amp_dtype == torch.bfloat16 and self.device.type == "cuda"
         )

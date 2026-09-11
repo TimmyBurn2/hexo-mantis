@@ -17,12 +17,11 @@ import pytest
 
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.preflight_stamp import (
-    PreflightStampPlantedTableError,
     read_stamp,
     require_preflight_stamp,
 )
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("planted_durable_mounts")]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_puller")]
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TOOL = REPO_ROOT / "tools" / "ci_gates" / "preflight_mint.py"
@@ -43,7 +42,7 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     proc = subprocess.run(
         [sys.executable, str(TOOL), "--config", str(CONFIG),
          "--burst-steps", str(BURST_STEPS), "--out-dir", str(tmp_path),
-         "--timeout-sec", str(preflight_budget_sec)],
+         "--timeout-sec", str(preflight_budget_sec), "--receipt-wait-sec", "120"],
         cwd=str(REPO_ROOT), capture_output=True, text=True,
         timeout=preflight_harness_ceiling_sec,
         env={**os.environ, "XDG_STATE_HOME": str(state_home)},
@@ -74,13 +73,16 @@ def test_armed_smoke_config_completes_a_bounded_burst_through_the_real_preflight
     assert report["tier"]["tier"] == "full"
     assert report["tier"]["covered"] == ["sync_lag", "full"]
     assert report["child"]["rc"] == 0 and report["child"]["timed_out"] is False
-    # R348(c): a green preflight leaves a stamp carrying the halts' readings — and because this
-    # drive read a PLANTED mount table, `mantis.run` refuses that stamp by name.
+    # R348(c): a green preflight leaves a stamp carrying the halts' readings; R349(b): the local
+    # puller receipted the burst's bundle and first shard, so `mantis.run` accepts the stamp.
     config = load_config(CONFIG)
     stamp = read_stamp(config_identity_sha256(config))
     assert Path(report["preflight_stamp"]).is_relative_to(state_home)
     assert stamp["halts"]["workspace"] == report["workspace"]
     assert stamp["halts"]["cuda_build"] == report["cuda_build"]
-    assert stamp["halts"]["workspace"]["mounts_table"] != "/proc/mounts"
-    with pytest.raises(PreflightStampPlantedTableError):
-        require_preflight_stamp(config, tree_root=REPO_ROOT)
+    workspace = stamp["halts"]["workspace"]
+    assert workspace["verdict"] == "MIRRORED"
+    assert workspace["bundle"]["step"] == BURST_STEPS, workspace
+    assert workspace["shard"]["name"].startswith("games_smoke_preflight_armed_seg")
+    accepted = require_preflight_stamp(config, tree_root=REPO_ROOT)
+    assert accepted["config_sha256"] == stamp["config_sha256"]

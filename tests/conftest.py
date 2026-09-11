@@ -121,18 +121,63 @@ def mk_graph_buffer():
 
 @pytest.fixture
 def preflight_stamped(monkeypatch, tmp_path):
-    """Redirect the R348(c) stamp store to a tmp home; the stamper writes a real passing stamp."""
+    """Redirect the R348(c) stamp store to a tmp home; the stamp carries R349(b)'s verdict."""
     from mantis.config.loader import load_config
     from mantis.config.preflight_stamp import write_stamp
+    from mantis.util.mirror_receipts import MIRRORED_VERDICT
 
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
 
     def stamp(config_path: Path) -> Path:
         return write_stamp(
             config=load_config(config_path), config_path=config_path, tree_root=CONFIGS_DIR,
-            halts={"workspace": {"verdict": "fixture", "mounts_table": "/proc/mounts"},
+            halts={"workspace": {"verdict": MIRRORED_VERDICT, "run_dir": str(tmp_path),
+                                 "bundle": {"step": 0, "files": {}},
+                                 "shard": {"name": "fixture", "sha256": ""}},
                    "cuda_build": {"verdict": "not_run"}},
             booted_config_sha256="fixture", burst_steps=0,
             report_path=tmp_path / "preflight_fixture.json")
 
     return stamp
+
+
+@pytest.fixture
+def synthetic_run_dir():
+    """Return a factory building a run directory the mirror arm reads: a REAL bundle under
+    `checkpoints/` and CLOSED, indexed shards under `logs/games/` — synthetic bytes, the
+    production grammar."""
+    import json
+
+    from mantis.monitor.game_record import index_filename, shard_filename
+    from mantis.train import bundle as B
+
+    def make(root: Path, *, run_id: str = "synth", step: int = 40, shards: int = 1) -> Path:
+        checkpoints = root / "checkpoints"
+        checkpoints.mkdir(parents=True, exist_ok=True)
+        stem = f"{run_id}_{step:08d}_{step:08x}"
+        ckpt = checkpoints / f"{stem}.ckpt"
+        ckpt.write_bytes(b"ckpt " + str(step).encode() * 64)
+        B.publish_bundle(
+            checkpoint_path=ckpt, run_id=run_id, step=step,
+            write_ring=lambda p: Path(p).write_bytes(b"ring " + str(step).encode() * 512),
+            ring_path=B.ring_path_for(ckpt),
+            write_sidecar=lambda p: Path(p).write_text(json.dumps({"step": step}),
+                                                        encoding="utf-8"),
+            sidecar_path=checkpoints / f"{stem}.resume.json",
+        )
+        games = root / "logs" / "games"
+        games.mkdir(parents=True, exist_ok=True)
+        index = games / index_filename(run_id)
+        with index.open("a", encoding="utf-8") as handle:
+            for segment in range(1, shards + 1):
+                hour = f"20260912{segment:02d}"
+                shard = games / shard_filename(run_id, segment, hour)
+                shard.write_text(json.dumps({"record": "shard_opened"}) + "\n"
+                                 + json.dumps({"moves": [[0, 0]], "seg": segment}) + "\n",
+                                 encoding="utf-8")
+                handle.write(json.dumps({"record": "shard_closed", "run_id": run_id,
+                                         "segment": segment, "hour": hour, "shard": shard.name,
+                                         "games": 1, "bytes": shard.stat().st_size}) + "\n")
+        return root
+
+    return make

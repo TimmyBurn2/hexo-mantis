@@ -1,12 +1,6 @@
-"""R349(c): the alpha = 1.0 row count is a LAW-18 reading with a live producer.
-
-A sparse Gumbel row whose explicit entries carry no target mass to f32 resolution ships them
-with masses below the tail's ULP and a tail that rounds to 1.0 (a row with NO explicit cell is
-refused at the ring as `EmptyTarget`, so the ring never holds one). The push arm counts those
-rows against every graph row pushed, publishes the pair on `iteration_complete` as a per-1,000
-rate, and emits the first rows whole so they can be reconstructed. Each half is pinned by the
-mutation that would silence it.
-"""
+"""R349(c): the alpha = 1.0 count is a LAW-18 reading with a live producer — such a row ships
+its sampled cells at sub-ULP mass and a tail that rounds to 1.0 (an EMPTY explicit set is
+refused at the ring), the push arm counts it, and the first rows are emitted whole."""
 from __future__ import annotations
 
 import threading
@@ -42,8 +36,7 @@ class _Pool:
 
 
 def _row(*, tail: float, ply: int = 3, game_id: int = 1) -> tuple[Any, ...]:
-    """A full-vector row at `tail == 0.0`; at `tail == 1.0` the explicit cells carry the
-    sub-ULP masses the recorder ships for such a row, so the ring's unity guard admits it."""
+    """At `tail == 1.0` the explicit cells carry sub-ULP masses, as the recorder ships them."""
     visits = ([(2, 0, 1e-9), (1, 1, 1e-9)] if tail >= 1.0
               else [(2, 0, 0.6 * (1 - tail)), (1, 1, 0.4 * (1 - tail))])
     return ([(0, 0, 1), (1, 0, -1), (0, 1, 1)], visits, 1, 2, ply, True, 1.0, True, 10,
@@ -82,7 +75,7 @@ def test_an_alpha_full_row_is_emitted_whole_and_the_stream_is_capped() -> None:
 
 
 def test_the_pool_publishes_the_pair_as_a_rate() -> None:
-    """The read `iteration_complete` carries: `None` before any graph row, a rate after."""
+    """`iteration_complete`'s read: `None` before any graph row, a rate after."""
     from mantis.selfplay.pool import WorkerPool
 
     reading = WorkerPool.alpha_full.fget  # type: ignore[attr-defined]

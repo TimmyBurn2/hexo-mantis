@@ -20,7 +20,7 @@ import pytest
 from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.schema import RunConfig
 
-pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("planted_durable_mounts")]
+pytestmark = [pytest.mark.integration, pytest.mark.usefixtures("local_puller")]
 
 _REPO = Path(__file__).resolve().parents[2]
 _TOOL = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
@@ -40,7 +40,7 @@ def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ce
     proc = subprocess.run(
         [sys.executable, str(_TOOL), "--config", str(_CONFIG),
          "--burst-steps", str(_BURST_STEPS), "--out-dir", str(out_dir),
-         "--timeout-sec", str(preflight_budget_sec)],
+         "--timeout-sec", str(preflight_budget_sec), "--receipt-wait-sec", "120"],
         cwd=str(_REPO), capture_output=True, text=True,
         timeout=preflight_harness_ceiling_sec,
     )
