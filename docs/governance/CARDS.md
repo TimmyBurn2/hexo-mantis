@@ -79,6 +79,32 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R348 (WAVE 3, leg 1)
+
+All five were found by running things the dev box could not run — the integration tier and the
+Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Records:
+`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `MEASUREMENT_PERF3B_2026-09-11.md`.
+
+- **CARD-BOX-VOLUME — BLOCKING the re-mint route on this instance.** `/` and `/workspace` on the
+  box are `overlay`; R347(d)'s rc 16 refuses every preflight, so no stamp exists and `mantis.run`
+  refuses (R348(c)). A persistent volume, or a ruled mirror arm, precedes the shakedown.
+- **CARD-WARMSTART-STAMP-SCHEMA — MINT-BLOCKING, one owed row.** run6's BC artifact's stamped
+  config no longer validates under the wave-2 schema (49 `extra_forbidden`), so the warm start
+  refuses at `load_checkpoint`. The LAW-12 strip is done and hash-identical
+  (`checkpoints/bc/run6_00006500_ca1afb71.ckpt`, on the box and off-box); the re-mint moves
+  `identity.warm_start.checkpoint` to it. Until then one default-tier row is a TRUE red wherever
+  the artifact exists. Alternative (a loader change) is a weakening and is not recommended.
+- **CARD-TIER-HOST — the integration tier's host is a ruling.** On an AVX2 host LAW-06's bf16 CPU
+  trainer is emulated (72× per GEMM) and the tier cannot finish; on the box it takes ~20–25 min.
+  Options: the tier is a box gate / the OC-7 row is `slow` / a CPU-only carve-out of LAW-06 (a
+  law amendment). The dev box also carries a GPU, so a minted CUDA smoke profile is a fourth.
+- **CARD-ALPHA-MAX-ROWS — the architect's reading.** Under the Gumbel regime 98.9% of rows carry a
+  tail (mean 0.0006) and rows with **α = 1.0** exist — no target mass on any of the 16 explicit
+  entries. Not adjudicated; read against R347(a)'s "exact on the m sampled entries".
+- **CARD-CHECKER-THREAD-LEVER — OWED behind the lever.** R347(e)'s "verify_edge_geometry leaves
+  the server's critical path" is not in code; `_check_semantic` still runs it inline, so the
+  PERF-3b A/B could not be taken. A lever on a protected 1-in-1 check needs LAW-18's own fire-rate.
+
 ## Reading the identifiers
 
 Cites below are `A:` for `docs/governance/archive/RULINGS_ACTIVE.md` and `R:` for
