@@ -196,9 +196,11 @@ path = "selfplay/drain/graph_pushed.npz"
 sha256 = "659d5a9550373c590787110246eddd443351aa19af7f0492b7d954f27ac27f78"
 added_by = "WP-SP"
 
+# Re-pinned 2026-09-11: DELETE-1 removed `seeded`/`solver_fires` from the engine's game row,
+# so the golden's scripted rows and `game_complete` payloads lost those two fields.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-sha256 = "93eccefa9c57ffa0ce81b2dd27da0528f48e71c304c4b62c143aaf9d2e0649a1"
+sha256 = "dbe1d3d27f15e0c9f4dc10dca5bd6b987dfd4b71b60ceabfd6c9033bc645e67a"
 added_by = "WP-SP"
 
 [[required]]

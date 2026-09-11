@@ -41,7 +41,7 @@ def test_an_ephemeral_run_directory_HALTS_with_its_own_rc(tmp_path: Path) -> Non
     config = _config()
     mounts = tmp_path / "mounts"
     mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} tmpfs rw 0 0\n", encoding="utf-8")
-    from mantis.diagnostics import workspace_durability
+    from mantis.util import mounts as workspace_durability
 
     original = workspace_durability.MOUNTS
     workspace_durability.MOUNTS = mounts
@@ -60,7 +60,7 @@ def test_a_durable_run_directory_records_its_evidence_and_does_not_halt(tmp_path
     config = _config()
     mounts = tmp_path / "mounts"
     mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} xfs rw 0 0\n", encoding="utf-8")
-    from mantis.diagnostics import workspace_durability
+    from mantis.util import mounts as workspace_durability
 
     original = workspace_durability.MOUNTS
     workspace_durability.MOUNTS = mounts
@@ -85,7 +85,7 @@ def test_a_cuda_config_on_a_cpu_torch_HALTS_with_its_own_rc(tmp_path: Path) -> N
         "this pin needs a config that declares cuda; run6 does")
     mounts = tmp_path / "mounts"
     mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} xfs rw 0 0\n", encoding="utf-8")
-    from mantis.diagnostics import workspace_durability
+    from mantis.util import mounts as workspace_durability
 
     original = workspace_durability.MOUNTS
     workspace_durability.MOUNTS = mounts
@@ -107,7 +107,7 @@ def test_a_cpu_config_records_not_run_rather_than_asserting_cuda(tmp_path: Path)
                 "eval": _config().eval.model_copy(update={"worker_device": "cpu"})})
     mounts = tmp_path / "mounts"
     mounts.write_text(f"dev0 / ext4 rw 0 0\ndev1 {tmp_path} xfs rw 0 0\n", encoding="utf-8")
-    from mantis.diagnostics import workspace_durability
+    from mantis.util import mounts as workspace_durability
 
     original = workspace_durability.MOUNTS
     workspace_durability.MOUNTS = mounts

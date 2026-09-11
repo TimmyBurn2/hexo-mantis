@@ -35,6 +35,7 @@ from mantis.config.armed_aborts import (
     audit_arming,
 )
 from mantis.config.loader import config_identity_sha256, discover_configs, load_config
+from mantis.config.preflight_stamp import write_stamp
 from mantis.monitor.sink import JsonlEventSink
 from mantis.train.actor_sync import ActorSync
 from mantis.train.lifecycle.heartbeat_watchdog import ActorLagSpec, HeartbeatWatchdog
@@ -234,7 +235,8 @@ def _mint_run5_cpu_twin(out_dir: Path, *, name: str = "run5_cpu_boot",
     return dest
 
 
-def _launch_until_boot_identity(config_path: Path, out_dir: Path, *, deadline_sec: float = 180.0):
+def _launch_until_boot_identity(config_path: Path, out_dir: Path, *, deadline_sec: float = 180.0,
+                                env: dict[str, str] | None = None):
     """Drive the production launcher and stop it the moment the run publishes `run_boot_identity`.
 
     Teardown is SIGTERM to the child's own process group, which lands on the lifecycle
@@ -244,7 +246,7 @@ def _launch_until_boot_identity(config_path: Path, out_dir: Path, *, deadline_se
         [sys.executable, "-m", "mantis.run", "--config", str(config_path),
          "--out-dir", str(out_dir)],
         cwd=str(REPO_ROOT), start_new_session=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env,
     )
     witness = None
     started = time.monotonic()
@@ -1762,8 +1764,18 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
     odd = tmp_path / "run6.txt"
     odd.write_bytes(canonical.read_bytes())
     identity = config_identity_sha256(load_config(odd))
+    # R348(c): the launcher demands a stamp for this identity on this tree; one stamp covers
+    # both shapes because they are the same bytes.
+    state_home = tmp_path / "state"
+    env = {**os.environ, "XDG_STATE_HOME": str(state_home)}
+    with pytest.MonkeyPatch.context() as patch:
+        patch.setenv("XDG_STATE_HOME", str(state_home))
+        write_stamp(config=load_config(odd), config_path=odd, tree_root=REPO_ROOT,
+                    halts={"workspace": {"verdict": "drive", "mounts_table": "/proc/mounts"},
+                           "cuda_build": {"verdict": "not_run"}},
+                    booted_config_sha256="drive", burst_steps=0, report_path=tmp_path / "r.json")
 
-    launched = _launch_until_boot_identity(odd, tmp_path / "odd_shape")
+    launched = _launch_until_boot_identity(odd, tmp_path / "odd_shape", env=env)
     assert "ConfigSuffixError" not in launched.stderr, (
         "the refusal must be gone from the launch path entirely, not merely downgraded\n"
         f"{launched.stderr[-2000:]}"
@@ -1779,7 +1791,7 @@ def test_the_LAUNCH_route_accepts_any_shape_and_the_gates_SEE_it(tmp_path) -> No
         f"{launched.witness['config_sha256']!r} against {identity!r}"
     )
 
-    control = _launch_until_boot_identity(canonical, tmp_path / "canonical_shape")
+    control = _launch_until_boot_identity(canonical, tmp_path / "canonical_shape", env=env)
     assert control.witness is not None, (
         "the control arm: the same bytes at a canonical `.yaml` shape must still launch, or "
         f"this row passes by breaking the entry point. rc {control.rc}\n"
@@ -2730,6 +2742,7 @@ _SCAN_POSTURES = (
 
 @pytest.mark.parametrize(("mode", "expected", "segments"), _SCAN_POSTURES,
                          ids=[posture[0] for posture in _SCAN_POSTURES])
+@pytest.mark.usefixtures("planted_durable_mounts")
 def test_the_POST_CHILD_segment_scan_is_driven_and_agrees_with_the_reports_OWN_events_block(
     monkeypatch, tmp_path, mode, expected, segments,
 ) -> None:

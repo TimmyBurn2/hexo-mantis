@@ -430,6 +430,7 @@ def _drive_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
 
     monkeypatch.setattr(mantis_run, "compose_run", _recording_compose)
     config_path = _write_config(tmp_path, **train_overrides)
+    request.getfixturevalue("preflight_stamped")(config_path)  # R348(c): the launcher demands it
     drive.rc = mantis_run.main(["--config", str(config_path), "--out-dir", str(out_dir)])
     return drive
 

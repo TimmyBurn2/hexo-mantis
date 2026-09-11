@@ -10,9 +10,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
+
+from mantis.util import mounts as _mounts
 
 #: Filesystems whose contents do not survive the machine; `overlay` is a container's writable
 #: layer, which dies with the container even when the image is durable.
@@ -20,17 +21,11 @@ EPHEMERAL_FSTYPES = frozenset(
     {"tmpfs", "ramfs", "devtmpfs", "overlay", "overlayfs", "aufs", "squashfs", "ramdisk"}
 )
 
-#: Where the kernel publishes the mount table. Parameterised so the parse has a mutation test.
-MOUNTS = Path("/proc/mounts")
-#: A test drive points the check at a planted table; the reading names the table it used and
-#: `mantis.run` refuses a stamp taken from any table but `MOUNTS`, so the seam launches nothing.
-MOUNTS_ENV = "MANTIS_PREFLIGHT_MOUNTS_TABLE"
-
-
-def resolve_mounts_table() -> Path:
-    """The mount table a preflight reads: `MOUNTS_ENV` when set, else the kernel's `MOUNTS`."""
-    override = os.environ.get(MOUNTS_ENV)
-    return Path(override) if override else MOUNTS
+#: The kernel's table and the planted-table seam live in one util leaf, re-exported here so
+#: the durability check stays the one reader and `mantis.config` never imports this sink.
+MOUNTS = _mounts.MOUNTS
+MOUNTS_ENV = _mounts.MOUNTS_ENV
+resolve_mounts_table = _mounts.resolve_mounts_table
 
 
 class WorkspaceNotDurableError(RuntimeError):
@@ -52,7 +47,7 @@ def _mount_table(mounts: Path | None = None) -> list[tuple[str, str]]:
         WorkspaceNotDurableError: the mount table is unreadable, so durability is UNKNOWN and
             an unknown must halt rather than pass.
     """
-    mounts = MOUNTS if mounts is None else mounts
+    mounts = _mounts.MOUNTS if mounts is None else mounts
     try:
         raw = mounts.read_text(encoding="utf-8")
     except OSError as exc:
@@ -88,7 +83,7 @@ def backing_mount(path: Path, mounts: Path | None = None) -> tuple[str, str]:
         if resolved == mount or mount in resolved.parents:
             return mount_point, fstype
     raise WorkspaceNotDurableError(
-        f"no mount in {MOUNTS if mounts is None else mounts} contains {resolved}: the backing "
+        f"no mount in {_mounts.MOUNTS if mounts is None else mounts} contains {resolved}: the backing "
         "filesystem is unidentifiable and durability cannot be decided."
     )
 
@@ -121,7 +116,7 @@ def assert_durable(path: Path, mounts: Path | None = None) -> dict[str, object]:
         )
     return {"path": str(resolved), "mount_point": mount_point,
             "fstype": fstype, "verdict": "DURABLE",
-            "mounts_table": str(MOUNTS if mounts is None else mounts)}
+            "mounts_table": str(_mounts.MOUNTS if mounts is None else mounts)}
 
 
 def build_parser() -> argparse.ArgumentParser:

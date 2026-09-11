@@ -9,8 +9,8 @@ from typing import Any
 
 from mantis.config.loader import config_identity_sha256
 from mantis.config.schema import RunConfig
-from mantis.diagnostics.workspace_durability import MOUNTS
 from mantis.util.git import head_sha, is_dirty
+from mantis.util.mounts import MOUNTS
 
 STAMP_SCHEMA_VERSION = 1
 #: The two START halts a stamp must carry a reading for; a stamp missing either is refused.
