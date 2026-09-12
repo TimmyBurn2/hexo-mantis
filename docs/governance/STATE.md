@@ -4,46 +4,43 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — THE SHAKEDOWN IS RUNNING; START follows it on the operator's approval
+## Current phase — RUN6 IS RUNNING (the block), STARTED 2026-09-12 02:08 UTC
 
-**run6 is RE-MINTED, PERF-A4's four serving levers are merged, run6 and its shakedown twin are
-STAMPED, and the 4 h shakedown is RUNNING on the box** (launched 21:56 UTC 2026-09-11 through
-`/workspace/run_shakedown.sh`, config `/workspace/oc7/shakedown.yaml` = run6 with `run_id:
-shakedown`, out-dir `/workspace/runs/shakedown`, time-box 14 400 s → ends ≈ 01:56 UTC; the
-launcher reports rc 124 as its success path). The operator approved START behind a clean
-shakedown ("with those perf improvements I approve"). `dev` = `origin/dev`; the box runs
-`0f20896e`, code-identical to `dev` (the commits above it are docs and one test-file edit).
+**START forward SENT and executed on the operator's approval** ("with those perf improvements I
+approve", 2026-09-11): the supervisor (`mantis.monitor.supervise --config configs/run6.yaml
+--heartbeat-file /workspace/runs/run6/logs/heartbeat_run6.json`) over `mantis.run` at box tree
+`0f20896e`, stamp `4c43bae2…` accepted, out-dir `/workspace/runs/run6`, log
+`/workspace/runs/run6.supervise.log`, launcher `/workspace/oc7/box_start_run6.sh`. The block is
+25 001 steps; at the shakedown's measured rates (2 316 → 1 474 → 1 309 steps/h across its three
+hours as games lengthened 27 → 36 compound moves) the ETA is **≈ 13–19 h** (≈ 15 h). Mirror:
+`~/Work/HeXO/mantis-mirror/run6` on the operator's machine; a session-bound puller ran at start
+and **the operator must run it durably** (tmux/systemd): `uv run python tools/mirror_pull.py
+--source <alias>:/workspace/runs/run6 --mirror ~/Work/HeXO/mantis-mirror/run6 --run-id run6
+--interval-sec 600`. A missed interval is a dashboard warning (`make dashboard`), never a halt.
 
-**Live readings at 23:44 UTC (1 h 47 min in):** 3 411 steps in 105 min = **1 945 steps/h**
-whole-window with two eval rounds inside it, steps/game **0.997**; last 30 min 1 301 steps/h
-(a third round running, games lengthening 39 → 68 plies as the net learns); positions/h 68 100
-from boot; batch fill 75 %; GPU 90 % / 9.4 GB; eval rounds at 1000/2000/3000, each ≈ 8–9 min;
-0 F-816-37 dumps; bundles receipted through step 3000 by the puller; `compile` 1 graph, 2/2
-frames; checker thread 468 992 checks, 1 053 inline fallbacks (0.2 %), 0 failures. **α = 1.0
-rows 750 of 174 714 = 4.3 per 1 000 and RISING** (1 per 1 000 at step 500) — the D2 question,
-decided "count and decide at block end", is growing faster than expected; the architect should
-read it before the block ends. Block ETA at these rates: 25 001 steps ≈ **13–19 h**, not the
-A4 estimate's 10 h (that assumed the burst's short games).
+**The 4 h shakedown (21:56 → 01:56 UTC, `/workspace/runs/shakedown`, mirrored):** 6 269 steps
+in 238 min = 1 583 steps/h whole (2 316 / 1 474 / 1 309 by hour), steps/game **0.998**,
+positions/h 67 520 from boot, batch fill 74 %, card peak **10.2 GiB** of 16, GPU ≈ 90 %; **five
+eval rounds** (1000–5000) all completed in 8–9 min, sealbot WR 0.22–0.375, **one promotion at
+step 3000** (a fully escalated 264-game round); 0 target-integrity defects, 0 inference failures,
+0 F-816-37 dumps; `compile` 1 graph 2/2 frames; checker thread 1 039 565 checks / 1 053 inline
+fallbacks / 0 failures; six periodic bundles, all receipted by the puller within a cycle; draw
+rate 0.5 %. **Two findings:** (1) α = 1.0 rows **1 798 of 383 904 = 4.7 per 1 000, rising**
+(1 → 4.3 → 4.7 across the run) — CARD-ALPHA-TARGET-FORM is decided "count and decide at block
+end", and the count says the architect should read it before then; (2) the launcher's `timeout`
+stop lost LAW-16's save — no `shutdown_save`, no final bundle, a silent death 2 s before the
+deadline — while a direct SIGTERM on the same tree saves and exits in 3 s
+(CARD-SHAKEDOWN-TIMEOUT-STOP, open, not a START hold: the block stops through the supervisor).
 
-**Dispatcher state for a fresh session (this one's context is near its limit).** Waiters and
-pullers die with the session; what survives is the box and these files. To finish the packet:
-1. Read the shakedown close-out: `/workspace/oc7/shakedown_launch.out` (`RC=`, card peak, any
-   `DUMP` line is a HALT per R340(c), the orphan sweep) and the run's events under
-   `/workspace/runs/shakedown/logs/`; write the readings here.
-2. If clean, START run6 from the box at `0f20896e` (its stamp `4c43bae2…` binds that tree):
-   `cd /workspace/hexo-mantis && export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True &&
-   .venv/bin/python -m mantis.monitor.supervise --config configs/run6.yaml
-   --heartbeat-file /workspace/runs/run6/logs/heartbeat_run6.json -- .venv/bin/python -m
-   mantis.run --config configs/run6.yaml --out-dir /workspace/runs/run6`, detached from the
-   ssh session in its own session group with its output to `/workspace/runs/run6.supervise.log`
-   (export PATH with `~/.cargo/bin:~/.local/bin` first).
-3. Run the puller DURABLY on the operator's machine (tmux/systemd, not a session task):
-   `uv run python tools/mirror_pull.py --source <alias>:/workspace/runs/run6 --mirror
-   ~/Work/HeXO/mantis-mirror/run6 --run-id run6 --interval-sec 600`. The mirror root is
-   `~/Work/HeXO/mantis-mirror/<run_id>`; the shakedown's mirror is already there.
-4. Then the block's own work: TEST-1 and INVESTIGATION-1 (re-aimed by the cards),
-   STRENGTH-FRONTIER-1 at block end, REPAIR-A4's remaining levers (the codebook as a keyed lever,
-   the cadence and eval-interval regime notes, the α target form).
+**Dispatcher state for a fresh session.** Nothing on the box depends on this session. The
+block's own work is open: TEST-1 and INVESTIGATION-1 (re-aimed by CARD-TRAINER-CADENCE,
+CARD-SERVER-SYNC, the A4 record), STRENGTH-FRONTIER-1 at block end, REPAIR-A4's remainder (the
+codebook as a keyed lever, the cadence and `eval_interval` regime notes, the α target form, the
+launcher's stop). To check on the run: `/workspace/runs/run6/logs/events_run6_seg0001.jsonl`
+(`iteration_complete`, `eval_round_complete`, `resume_state_persisted.unreceipted_bundles`),
+`make dashboard EVENTS=<mirror>/logs/events_run6_seg0001.jsonl OUT=/tmp/run6.html`, the
+supervisor log for relaunches. To stop it: one SIGTERM to the supervisor (save-then-exit is
+witnessed on this tree); to resume: `mantis.run --resume-from` the newest complete bundle.
 
 **`configs/run6.yaml` mints** (header deltas replay): `search.kind gumbel` /
 `completed_improved_policy`, 320 full / 64 quick at p 0.25, deploy 160/m16, grace 30 s, the

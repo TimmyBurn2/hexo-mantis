@@ -99,6 +99,22 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   production config therefore stamps at `sync_lag` from a ≈ 100-step burst; tier `full` is
   unchanged in meaning and needs a burst past `min_step`. The old pin ("a production config can
   never be preflighted in the short tier") is reversed in place with these grounds.
+- **CARD-SHAKEDOWN-TIMEOUT-STOP — LAW-16's save did NOT fire under the R340 launcher's
+  `timeout`; it DOES fire under a direct SIGTERM (the supervisor's path). OPEN, not a START hold.**
+  The 4 h shakedown (2026-09-11 21:56 → 01:56 UTC, `/workspace/runs/shakedown`) ended by the
+  launcher's `timeout 14400` and reported rc 124 "the success path" — but the run's events end
+  2 s before the deadline with no `shutdown_requested` log line, no `shutdown_save`, no final
+  bundle (the step-6000 periodic bundle stands); the process died silently within 3 s. The
+  falsifier run 8 min later on the same tree (`/workspace/runs/sigtest`, `/workspace/oc7/
+  sigtest.log`): the twin launched bare, ONE `kill -TERM` at step 2 → `shutdown_requested`,
+  `shutdown_save`, a complete bundle at step 3, exit in 3 s. A toy shows GNU `timeout` delivers
+  one coalesced SIGTERM to a sleeping child; what differs for the real run under `timeout`
+  (group kill + PDEATHSIG armed at SIGKILL + a busy main thread + the eval child in the group)
+  is NOT root-caused. Consequences now: the launcher's rc-124 claim is FALSE unless the events
+  carry `shutdown_save` — it must assert that; every `timeout`-wrapped stop on record (R340,
+  R343 leg 3) is suspect the same way. Falsifier: a 5-min twin under `timeout` vs `timeout
+  --foreground`, `strace -f -e trace=signal` on the child. START is unaffected: the block stops
+  through the supervisor (one SIGTERM, witnessed) and its bundles every 1 000 steps bound a loss.
 - **CARD-A4-MINT — the four PERF-A4 rows, DECIDED by matrix under operator delegation, minted.**
   Inputs: `docs/design/measurements/PERF_A4_2026-09-11.md` §11. `selfplay.n_workers 16 → 32`
   (+59 % leaves/s over 16 once the pipeline is in; +1.3 GiB RSS; the ring rebuild drops to one
