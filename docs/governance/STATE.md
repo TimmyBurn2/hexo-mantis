@@ -13,10 +13,19 @@ approve", 2026-09-11): the supervisor (`mantis.monitor.supervise --config config
 `/workspace/runs/run6.supervise.log`, launcher `/workspace/oc7/box_start_run6.sh`. The block is
 25 001 steps; at the shakedown's measured rates (2 316 → 1 474 → 1 309 steps/h across its three
 hours as games lengthened 27 → 36 compound moves) the ETA is **≈ 13–19 h** (≈ 15 h). Mirror:
-`~/Work/HeXO/mantis-mirror/run6` on the operator's machine; a session-bound puller ran at start
-and **the operator must run it durably** (tmux/systemd): `uv run python tools/mirror_pull.py
---source <alias>:/workspace/runs/run6 --mirror ~/Work/HeXO/mantis-mirror/run6 --run-id run6
---interval-sec 600`. A missed interval is a dashboard warning (`make dashboard`), never a halt.
+`~/Work/HeXO/mantis-mirror/run6` on the operator's machine, pulled by the transient user
+service `mantis-puller-run6` (`systemctl --user status mantis-puller-run6`; log
+`~/Work/HeXO/mantis-mirror/logs/puller-run6.log`; restart-on-failure; it outlives any session
+but not a full logout unless lingering is enabled). A missed interval is a dashboard warning
+(`make dashboard`), never a halt.
+
+**Readings at 07:24 UTC (5 h 16 min in):** 6 491 steps, 6 666 games, steps/game 0.974,
+1 241 steps/h whole and 980 in the last 30 min as games lengthen (39.8 compound moves ≈ 80
+plies); six rounds, sealbot WR 0.19 / 0.22 / 0.09 (promoted at 3000) / 0.16 / 0.16 / 0.03
+(the 56-game screens are noisy; the WR abort is warn-only by G-3 — a WATCH item); α = 1.0 rows
+4.9 per 1 000; compile 1 graph; checker 1.19 M checks / 0 failures; six bundles, all
+receipted; GPU 11.8 GB / 81 %; host 11 GB. **ETA for the remaining 18 500 steps at
+1 000–1 240/h: ≈ 15–18 h → the block ends ≈ 22:00–01:00 UTC on 2026-09-12/13.**
 
 **The 4 h shakedown (21:56 → 01:56 UTC, `/workspace/runs/shakedown`, mirrored):** 6 269 steps
 in 238 min = 1 583 steps/h whole (2 316 / 1 474 / 1 309 by hour), steps/game **0.998**,
