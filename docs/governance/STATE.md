@@ -14,9 +14,10 @@ approve", 2026-09-11): the supervisor (`mantis.monitor.supervise --config config
 25 001 steps; at the shakedown's measured rates (2 316 → 1 474 → 1 309 steps/h across its three
 hours as games lengthened 27 → 36 compound moves) the ETA is **≈ 13–19 h** (≈ 15 h). Mirror:
 `~/Work/HeXO/mantis-mirror/run6` on the operator's machine, pulled by the transient user
-service `mantis-puller-run6` (`systemctl --user status mantis-puller-run6`; log
-`~/Work/HeXO/mantis-mirror/logs/puller-run6.log`; restart-on-failure; it outlives any session
-but not a full logout unless lingering is enabled). A missed interval is a dashboard warning
+service `mantis-puller-run6` every **30 min** — one cycle per checkpoint interval, as R349(b)
+says, a bundle landing every 1 000 steps ≈ 50–60 min (`systemctl --user status
+mantis-puller-run6`; log `~/Work/HeXO/mantis-mirror/logs/puller-run6.log`; restart-on-failure;
+it outlives any session but not a full logout unless lingering is enabled). A missed interval is a dashboard warning
 (`make dashboard`), never a halt.
 
 **Readings at 07:24 UTC (5 h 16 min in):** 6 491 steps, 6 666 games, steps/game 0.974,
