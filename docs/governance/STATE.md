@@ -4,53 +4,59 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — RUN6 IS RUNNING (the block), STARTED 2026-09-12 02:08 UTC
+## Current phase — RUN6 PAST ITS FIRST BLOCK, STILL RUNNING (25 001 crossed 2026-09-12 ≈ 23:39 UTC)
 
-**START forward SENT and executed on the operator's approval** ("with those perf improvements I
-approve", 2026-09-11): the supervisor (`mantis.monitor.supervise --config configs/run6.yaml
---heartbeat-file /workspace/runs/run6/logs/heartbeat_run6.json`) over `mantis.run` at box tree
-`0f20896e`, stamp `4c43bae2…` accepted, out-dir `/workspace/runs/run6`, log
-`/workspace/runs/run6.supervise.log`, launcher `/workspace/oc7/box_start_run6.sh`. The block is
-25 001 steps; at the shakedown's measured rates (2 316 → 1 474 → 1 309 steps/h across its three
-hours as games lengthened 27 → 36 compound moves) the ETA is **≈ 13–19 h** (≈ 15 h). Mirror:
-`~/Work/HeXO/mantis-mirror/run6` on the operator's machine, pulled by the transient user
-service `mantis-puller-run6` every **30 min** — one cycle per checkpoint interval, as R349(b)
-says, a bundle landing every 1 000 steps ≈ 50–60 min (`systemctl --user status
-mantis-puller-run6`; log `~/Work/HeXO/mantis-mirror/logs/puller-run6.log`; restart-on-failure;
-it outlives any session but not a full logout unless lingering is enabled). A missed interval is a dashboard warning
-(`make dashboard`), never a halt.
+**The block is measured.** Record: `docs/design/measurements/RUN6_BLOCK_2026-09-12.md` — every
+number derived from the mirrored run record by one script. The supervisor
+(`mantis.monitor.supervise --config configs/run6.yaml --heartbeat-file
+/workspace/runs/run6/logs/heartbeat_run6.json`) over `mantis.run` at box tree `0f20896e`, stamp
+`4c43bae2…`, out-dir `/workspace/runs/run6`, started 02:08:28 UTC and has NOT stopped: `configs/run6.yaml`
+mints `max_train_steps 1 000 000` and no stop bound, and R344 §0.5's block is a 25 001-step
+MINIMUM, extendable by resume. **Whether it keeps stepping is the operator's call**; the cost is
+the box's hour, the stop is one SIGTERM to the supervisor (save-then-exit witnessed on this tree),
+the resume is `--resume-from` the newest complete bundle.
 
-**Readings at 07:24 UTC (5 h 16 min in):** 6 491 steps, 6 666 games, steps/game 0.974,
-1 241 steps/h whole and 980 in the last 30 min as games lengthen (39.8 compound moves ≈ 80
-plies); six rounds, sealbot WR 0.19 / 0.22 / 0.09 (promoted at 3000) / 0.16 / 0.16 / 0.03
-(the 56-game screens are noisy; the WR abort is warn-only by G-3 — a WATCH item); α = 1.0 rows
-4.9 per 1 000; compile 1 graph; checker 1.19 M checks / 0 failures; six bundles, all
-receipted; GPU 11.8 GB / 81 %; host 11 GB. **ETA for the remaining 18 500 steps at
-1 000–1 240/h: ≈ 15–18 h → the block ends ≈ 22:00–01:00 UTC on 2026-09-12/13.**
+**What was loaded (the record's §A, from the boot log):** the warm start is the LAW-12 strip
+`checkpoints/bc/run6_00006500_ca1afb71.ckpt` (net hash `2e72abd4…`, 46 tensors verified) into
+`representation.*` + `policy_head.*` ONLY — **the value head, the optimizer and the step counter
+were fresh**; the anchor `best_model.pt` was initialised from that step-0 model as a stamped
+payload (`901139d9`). Not a fresh init, not a resume.
+
+**Block readings at the 00:00 UTC mirror (21.88 h):** 25 441 steps, 25 622 games, 0.993 steps per
+game, **1 163 steps/h whole**, 83 800 positions/h; game length 45 → 63 → **73–79 plies from hour 2
+on, a plateau**; draws 0.5 %; α = 1.0 rows **4.98 per 1 000, flat since ≈ 9 000**; 0 gate fires,
+0 checker failures in 5.09 M checks, compile 1 graph, 0 relaunches; 25 bundles receipted within a
+cycle each. **Strength:** `sealbot_d5` 32-game screens pooled 16 % (1k–5k) → **2.5 % trough
+(10k–14k)** → 16 % (15k–19k) → 14 % (20k–25k); arena promoted at **3 000, 18 000, 24 000**;
+losses to SealBot end at a median 25 plies (67 % inside 30) against 75-ply self-play games — a
+tactical-horizon deficit (SealBot: 5 compound turns full-width; the candidate: mean simulation
+depth 3.85 plies at 128 sims). **Against R334(f)'s witness shape: (i) MET, (ii) NOT MET (best round
+25 %, CI 0.13–0.41), (iii) NOT MET (first third flat at 14 %).** The eval cadence costs 1.7 % of the
+block (self-play at 0.94× during a round, not 0.79×); the cadence question is signal, not wall —
+CARD-EVAL-CADENCE carries the literature comparison and the lever (fewer, larger points).
+
+**Dispatcher state for a fresh session.** Nothing on the box depends on a session. Open, in order:
+(1) the operator's decision on the run; (2) STRENGTH-FRONTIER-1 on the mirrored frozen
+checkpoints 3k / 13k / 18k / 24k (sims 128 / 256 / 512 vs `sealbot_d5`, fixed-depth
+head-to-heads) — separates "net weak" from "search short"; (3) CARD-ALPHA-TARGET-FORM's decision
+(the architect's; the count and the trough are on the record); (4) INVESTIGATION-1 re-aimed at the
+10k–14k trough and the reuse ratio; (5) the eval-cadence ruling (R343(b)/R345 hold 1 000);
+(6) CARD-SHAKEDOWN-TIMEOUT-STOP root cause; (7) REPAIR-A4's codebook lever and the eval child's
+batched inference; (8) GAME-RECORD-1 / DASH-2 / RUNG-2 as R344 ordered; (9) the `axis_distribution`
+bands (0.45 / 0.50 fire on balanced play — calibration debt, warn-only). To check on the run:
+`/workspace/runs/run6/logs/events_run6_seg0001.jsonl` (`iteration_complete`, `eval_round_complete`,
+`resume_state_persisted.unreceipted_bundles`); the mirror `~/Work/HeXO/mantis-mirror/run6` is pulled
+every 30 min by the user service `mantis-puller-run6` (log `~/Work/HeXO/mantis-mirror/logs/puller-run6.log`),
+the dashboard regenerates at :05/:35 (`mantis-dashboard-run6.timer`, served loopback-only by
+`mantis-dashboard-http` on port 8765 from `~/Work/HeXO/mantis-mirror/dashboard/run6.html`);
+`loginctl enable-linger` keeps the three units alive across a logout.
 
 **The 4 h shakedown (21:56 → 01:56 UTC, `/workspace/runs/shakedown`, mirrored):** 6 269 steps
-in 238 min = 1 583 steps/h whole (2 316 / 1 474 / 1 309 by hour), steps/game **0.998**,
-positions/h 67 520 from boot, batch fill 74 %, card peak **10.2 GiB** of 16, GPU ≈ 90 %; **five
-eval rounds** (1000–5000) all completed in 8–9 min, sealbot WR 0.22–0.375, **one promotion at
-step 3000** (a fully escalated 264-game round); 0 target-integrity defects, 0 inference failures,
-0 F-816-37 dumps; `compile` 1 graph 2/2 frames; checker thread 1 039 565 checks / 1 053 inline
-fallbacks / 0 failures; six periodic bundles, all receipted by the puller within a cycle; draw
-rate 0.5 %. **Two findings:** (1) α = 1.0 rows **1 798 of 383 904 = 4.7 per 1 000, rising**
-(1 → 4.3 → 4.7 across the run) — CARD-ALPHA-TARGET-FORM is decided "count and decide at block
-end", and the count says the architect should read it before then; (2) the launcher's `timeout`
-stop lost LAW-16's save — no `shutdown_save`, no final bundle, a silent death 2 s before the
-deadline — while a direct SIGTERM on the same tree saves and exits in 3 s
-(CARD-SHAKEDOWN-TIMEOUT-STOP, open, not a START hold: the block stops through the supervisor).
-
-**Dispatcher state for a fresh session.** Nothing on the box depends on this session. The
-block's own work is open: TEST-1 and INVESTIGATION-1 (re-aimed by CARD-TRAINER-CADENCE,
-CARD-SERVER-SYNC, the A4 record), STRENGTH-FRONTIER-1 at block end, REPAIR-A4's remainder (the
-codebook as a keyed lever, the cadence and `eval_interval` regime notes, the α target form, the
-launcher's stop). To check on the run: `/workspace/runs/run6/logs/events_run6_seg0001.jsonl`
-(`iteration_complete`, `eval_round_complete`, `resume_state_persisted.unreceipted_bundles`),
-`make dashboard EVENTS=<mirror>/logs/events_run6_seg0001.jsonl OUT=/tmp/run6.html`, the
-supervisor log for relaunches. To stop it: one SIGTERM to the supervisor (save-then-exit is
-witnessed on this tree); to resume: `mantis.run --resume-from` the newest complete bundle.
+in 238 min = 1 583 steps/h whole, steps/game **0.998**, card peak **10.2 GiB** of 16; five
+eval rounds, one promotion at step 3000; 0 target-integrity defects, 0 inference failures, 0
+F-816-37 dumps; six periodic bundles, all receipted. Two findings: the rising α count (now read at
+block end, above) and the launcher's `timeout` stop losing LAW-16's save while a direct SIGTERM
+saves in 3 s (CARD-SHAKEDOWN-TIMEOUT-STOP, open; the block's stop path is the supervisor).
 
 **`configs/run6.yaml` mints** (header deltas replay): `search.kind gumbel` /
 `completed_improved_policy`, 320 full / 64 quick at p 0.25, deploy 160/m16, grace 30 s, the
@@ -225,7 +231,8 @@ rather than from "why is the step 5 s".
 
 ## Provenance
 
-Derived 2026-09-11 on `dev` at `7a97fa80`, from `configs/run6.yaml`, the box's
+Derived 2026-09-13 on `dev` at `9b0a981e` (the block section from the 00:00 UTC run6 mirror and
+`RUN6_BLOCK_2026-09-12.md`; the rest as of 2026-09-11 at `7a97fa80`), from `configs/run6.yaml`, the box's
 `/workspace/runs/startpath_cd/` readings, `tools/ci_gates/test_count_floor.txt`,
 `tools/ci_gates/comment_length_floor.txt` and `docs/governance/LAWS.md`. Ruling texts:
 `docs/governance/RULINGS.md`.

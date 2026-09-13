@@ -159,7 +159,12 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   "not these 16" target after `cc5bf14f` / 0 / none.** (d) selected for run6's start;
   `iteration_complete.gumbel_alpha_full` and the dashboard count it from step 0, and the block-end
   reading (rate, its trend with saturation, any strength signature) decides among (a)–(c) as a
-  pre-registered experiment.
+  pre-registered experiment. **BLOCK-END READING (2026-09-13, `RUN6_BLOCK_2026-09-12.md` §B–C):
+  4.98 per 1 000, flat from step ≈ 9 000 (4.7 → 5.1 → 5.0); the run-fatal half never fired. The
+  strength signature beside it: a sealbot WR trough at 10k–14k (2.5 % pooled against 16 % on
+  either side) coinciding with the policy-loss peak, on a value head that was FRESH at boot —
+  consistent with the completed-Q target reading an untrained value head, not proof of it. The
+  decision among (a)–(c) is the architect's; the input is now on the record.**
 - **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
   1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle. The block is ≈ 22.6 h
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
@@ -194,6 +199,24 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   cadence that is ≈ 5–10 % of the block's wall (ESTIMATE from 12–22-min rounds every ≈ 54 min).
   Levers: batch the child's inference across its 8 games, or `eval.worker_device: cpu` (a config
   row, longer rounds). Only one 12-min round was crossed; a fully escalated one is not separated.
+  **RE-MEASURED on the block (25 rounds, 5.9 h alive of 21.8 h): self-play at 0.94× during a
+  round at 32 workers behind the PERF-A4 pipeline — ≈ 440 steps, 1.7 % of the block, ≈ 22 min.
+  The term is priced and small; lever (a) stays a proposal.**
+- **CARD-EVAL-CADENCE — the regime note REPAIR-A4 owed, now with the block's numbers.** The
+  cadence's wall cost is 1.7 % (above), so `train.eval_interval 1000` is not a wall-clock question.
+  It is a signal question: a 32-game screen resolves ± 15 pp, the channel monitor pools four rounds
+  before it labels, and R334(f)(ii)'s "CI excluding 0.5" is unstatable from 32 games below ≈ 72 %
+  WR. Every reference regime (AlphaGo Zero, KataGo's optional gatekeeper, MiniZero, OpenSpiel)
+  evaluates once per 10³–10⁴ games with ≥ 200 games per point, and only AlphaGo Zero gates
+  (`RUN6_BLOCK_2026-09-12.md` §D, sources there). The lever is fewer, larger points at the same
+  game budget — e.g. 300 games per 3 000 steps (± 5 pp) with the gate riding the same round —
+  which is a re-mint under a ruling (R343(b)/R345 hold 1 000), not a session's call.
+- **CARD-SEALBOT-HORIZON — how the block's candidate loses.** 800 `sealbot_d5` games: losses end
+  at a median 25 plies (67 % inside 30) while self-play runs 75; SealBot searches 5 compound turns
+  full-width with a threat evaluation, the candidate's mean simulation depth is 3.85 plies at 128
+  sims / `gumbel_m 16`. A tactical-horizon deficit, not the colony attractor (colony fraction 0).
+  STRENGTH-FRONTIER-1's frozen-checkpoint arms (sims 128 / 256 / 512 vs `sealbot_d5`; fixed-depth
+  head-to-heads 3k / 13k / 18k / 24k) separate "the net is weak" from "the search is short".
 - **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
   64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
   under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
