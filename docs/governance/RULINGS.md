@@ -1,4 +1,4 @@
-# RULINGS — R23 to R349
+# RULINGS — R23 to R350
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R350.
+- Numbering continues from R346. The next ruling is R351.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,122 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R350 — BLOCK VERDICT: run6 STOPPED below its warm start; WARMSTART-2 / BC-3 ordered; STRENGTH-FRONTIER-1 NOW; run7's cadence, α rows and sims rules
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R349: the block-verdict packet made its own §1 the canonical home and directed that it be
+copied verbatim here.
+
+> R{next} — (a) VERDICT ON THE BLOCK: it started BELOW its warm start and
+> never recovered. The seam copied trunk + policy and left the value
+> head RANDOM ("the seam's contract" — a contract nobody ruled, on the
+> architect's ledger for not reading it); Gumbel's completed-Q target
+> at value_scale 1.0 is near-argmax on Q, so for the first thousands of
+> steps the policy was trained toward the argmax of a random value head
+> and the BC prior was overwritten — policy loss rose 2.28 → 2.86, the
+> screen fell to 2.5 %, and recovery tracked the value loss reaching its
+> floor. This is the p3achygo/MiniZero early-value pathology the
+> research named in advance. The operator's memory is correct and is
+> the control: the R340 burst — same BC net, ALL heads, PUCT-50
+> self-play, PUCT-150 deploy — read 53 % at step 0 and 79 % at step
+> 2,004. The block's best round was 25 %. Nothing in this run's regime
+> is adopted on faith again; §1(c) measures which part failed.
+> (b) WARMSTART-2 and BC-3, ordered: (i) the seam copies EVERY head by
+> default; the step-0 witness is full net-hash equality with the source
+> (as R336(c) ruled and the seam later abandoned — find the commit, note
+> it); `identity.warm_start.reinit` lists heads to re-initialize and is
+> empty for run7. (ii) BC-3 pretrains the VALUE head on the human corpus'
+> outcomes (dist65 CE, mover-frame z, the same held-out monitor as
+> policy) alongside policy CE — AlphaGo's SL value from outcomes is the
+> pattern, and a value head trained on human outcomes is a far better
+> prior than noise even if miscalibrated for our play. (iii) A VALUE
+> WARM-UP at run start: `train.policy_loss_weight_schedule` holds policy
+> weight 0 for the first N steps (proposed 2,000, ENV [1,000, 4,000])
+> while value trains on self-play outcomes and the search runs on the
+> pretrained heads; the policy prior is left untouched until the value
+> head has seen the run's own positions. (iv) Two lines from step 0, with
+> a pre-registered HALT: target-vs-prior KL and policy loss; policy loss
+> above its step-0 value by 0.2 nats for 3 consecutive windows inside
+> the first 5k steps halts — that is the trough's signature and nobody
+> watches it live.
+> (c) STRENGTH-FRONTIER-1 runs NOW on the stopped run. Cells: the BC net
+> (all heads) under PUCT-150 and under Gumbel-160/m16 vs sealbot_d5, 288
+> paired games each — same net, two searches: if Gumbel deploy reads far
+> below PUCT's 53 %, the search implementation or its scale is the
+> failure and no warm-start fix will hide it; frozen checkpoints 3k /
+> 13k / 18k / 25k × sims {128, 256, 512} × kind {gumbel, puct} vs
+> sealbot_d5; and the 25k checkpoint vs the BC net head-to-head at equal
+> search. Pair-level CI on every cell; s/game beside it. "Net weak" vs
+> "search short" vs "kind" separates here or nowhere.
+> (d) EVAL CADENCE for run7, proposed rows: eval_interval 3,000; the
+> sealbot point 288 paired games (± 5 pp) with the random floor 20; the
+> promotion gate unchanged at stride 1 on that cadence; witness (iii)
+> becomes the OLS Elo slope over ALL points of the block (≥ 8 at 25k)
+> with CI excluding 0; witness (ii) is statable at 288 games from
+> WR ≥ 0.56. The measured cadence cost (1.7 % of the block) retires the
+> throughput framing; the signal framing replaces it. R343(b)'s 1,000 and
+> R345(c)'s stride 3 are superseded for run7.
+> (e) α = 1.0 rows (5 per 1,000, flat) are EXCLUDED from the policy loss
+> from run7's first step: under the paper's mixed value they are near-
+> impossible after phase one, and a row that says "play none of what you
+> searched" is not a target. The three-row reconstruction R349(c) ordered
+> is still owed with its finding; a perspective error at the intermediate
+> stone remains the first hypothesis.
+> (f) SIMS: not decided by argument. The candidate's mean simulation
+> depth is 3.85 plies against a bot that reads ten; if the same net at
+> 512 sims moves the sealbot reading materially, depth is a lever and
+> run7's arms rise; if not, the net is the deficit and sims stay. The
+> frontier's cells (c) decide it. Games, not epochs, is the block's other
+> shortfall (references train on 10²–10³× more games per step); the
+> answer there is throughput and time, not a knob.
+> (g) RUN7 = WARMSTART-2 (all heads, BC-3) + value warm-up + the search
+> kind and sims the frontier picks + the (d) rows + sealbot-only rungs.
+> INVESTIGATION-1 continues, re-aimed first at the trough: what the
+> targets were between 8k and 14k, KL-from-prior reconstructed from the
+> shards, and the α distribution beside it.
+> ROUTE: stop → frontier (box) ∥ WARMSTART-2/BC-3 (dev) → verdict on
+> kind/sims → re-mint → shakedown → run7 START.
+
+`R{next}` is the packet's own placeholder and resolves to R350 — this file's header said the next
+number was 350 when the packet was forwarded; the text is copied as written rather than edited.
+Grounds: operator direction, forwarding the block-verdict packet on 2026-09-13, on the block record
+`docs/design/measurements/RUN6_BLOCK_2026-09-12.md`. The stop was executed first: one SIGTERM to the
+supervisor at 08:15:12 UTC, `shutdown_save` at step 35 084, bundle `run6_00035084_e1563d16` written
+and both processes gone in 32 s, the 35 000 and 35 084 bundles receipted by one manual puller cycle
+(the timer service stopped first); the run had gone 10 083 steps past the block at the same regime.
+**The packet's §2 asked for (a)'s control to be read from its record before anything else, and the
+record says the control is WEAKER than (a) states:** the R340 burst's driver log was destroyed with
+the box (archive v3.54), so its tree is the only evidence, and `run6-mint` at `d3ba75e` (the burst's
+head) carries the same `load_representation_policy_from_bc` over `BC_TRANSFER_PREFIXES =
+("representation.", "policy_head.")` that run6 booted with — the burst's value head was fresh too.
+"ALL heads" is therefore not the difference between 53 % → 79 % and 16 % → 2.5 %; the differences
+are the search kind and target form (PUCT-50 raw-visit vs Gumbel-320/64 completed-Q), the deploy
+kind (PUCT-150 vs Gumbel-160/m16) and the screen width (80 vs 32 games), which is exactly what (c)'s
+first cells measure — the head set is measured beside them as a fourth cell pair (the BC net as the
+seam loaded it, `bc_tp`, against the BC net with every head, `bc_full`). (a)'s mechanism — a
+completed-Q target read off an untrained value head — stands as the hypothesis under test; its
+attribution of the burst's recovery to the head set does not. **A second fact the tree carries for
+(b)(ii):** the BC route trains through the SAME `run_declared_train_step` as self-play with
+`train.value_target: pure_outcome_z`, and the human-corpus ring carries a mover-frame outcome per
+ply (`graph_row_outcome` in `mantis.data.bootstrap_encode`), so `run6_00006500_ca1afb71.ckpt`'s
+value head IS trained on the corpus' outcomes (optimizer state on all 46 parameters; weights moved
+off their init) — the prior (b)(ii) asks for exists in the artifact and the seam threw it away. What
+BC-3 still owes is the held-out VALUE reading beside the policy one (`heldout.py` monitors policy
+only). The commit that fixed the seam's tensor set is `1a3291d2` (2026-09-03, AUDIT-1 F-19's dead-code
+half): it deleted the CNN-era value-head arm and left `BC_TRANSFER_PREFIXES` in
+`src/mantis/model/gnn.py` as the whole contract — a set whose own comment excludes `value_head.*`
+"because the dist65 head has a different architecture", a ground that stopped being true once the
+BC route built the same `GnnNetV2`. R332(d) chose the ENTRY, not the set; no ruling chose the set.
+R336(c)'s 4c witness was executed as a 20-game play against a seeded control (archive v3.47), and
+the launch pin (`verify_launch_anchor_pin`) hashes the STORED source, never the live step-0 net —
+so no hash-equality witness ever existed to refuse a seam that dropped a head.
+Closes: **CARD-EVAL-CADENCE** (ruled by (d): the rows are proposed, armed at run7's mint by the
+operator's forward). **CARD-ALPHA-TARGET-FORM** (ruled by (e): excluded from the policy loss; the
+three-row reconstruction stays OWED under R349(c), now a line in the owed section). **CARD-SEALBOT-
+HORIZON** folds into STRENGTH-FRONTIER-1's record, which (c) makes the answer's home.
+Status: standing.
+
+---
 
 ### R349 — START PATH: wave 3 ratified, rc-16 re-scoped to a puller, α = 1.0 and the trainer step before the mint
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as

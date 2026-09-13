@@ -79,6 +79,29 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R350 (the block verdict)
+
+- **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**
+  Witnessed at run6's stop (2026-09-13 08:15:12 UTC, one SIGTERM to the supervisor): `shutdown_save`
+  at +0.5 s, `resume_state_persisted` (the 35 084 bundle, complete) and `flush_pending_eval` at
+  +1.4 s — then 30 s of `game_complete` events while `close_out` waited on the in-flight round-35
+  eval child, and the supervisor's `monitor.supervisor_kill_grace_sec 30` SIGKILLed the run at
+  +30 s. The drain's bound is `min(final_eval_drain_timeout_sec × safety, hard_cap)` = 2 700 s
+  from the schema-default `monitor.drain` block run6 does not mint, so on any stop that lands
+  inside a round (≈ 27 % of wall at run6's cadence) the teardown ladder past the drain — pool stop,
+  the recorder's `stop()` that indexes the open shard — never runs. Cost this time: the hour's
+  two open game shards (`games_run6_seg0001_2026091308.jsonl`, `games_run6_seg0036_2026091308.jsonl`,
+  427 KB) carry no `shard_closed` row and are therefore unreceipted by the puller; the bytes are
+  on disk and mirrored (line-buffered writes, `iter_run_games` scans shards). LAW-16's save is
+  intact; the exit is not orderly. Fix shape: a RESUMABLE stop terminates the in-flight round at
+  once (a resumed run re-kicks rounds from its restored counter; the round's result is not owed)
+  and closes the recorder before anything that can wait; and the supervisor's grace must exceed
+  the child's worst orderly teardown, stated as a relation at the mint rather than two numbers.
+- **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree.** R350(a) states
+  the burst copied ALL heads; `run6-mint` at `d3ba75e` carries the same trunk+policy seam run6
+  booted with (the burst's log died with the box, archive v3.54). The frontier measures the head
+  set as its own cell pair (`bc_tp` vs `bc_full`); the card closes on that reading.
+
 ## Opened by R349 (the START path)
 
 Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsified.md F-44/F-45.
@@ -147,24 +170,9 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   box. Falsifier: the shakedown's `positions_per_hour` against the burst's 46,800; a reading
   ≥ 5 % below re-opens the sweep. The post-rebuild cap term was measured by PERF-3b on the rebuilt
   box (GPU 7.66 GB max, RSS 4.70 GiB max at the minted caps) and the shakedown reads it again.
-- **CARD-ALPHA-TARGET-FORM — DECIDED by matrix for the START: keep the form, count it, decide at
-  block end.** In decided positions the completed-Q improved policy is rescaled noise: `c_scale
-  1.0` on top of Mctx's per-node min-max maps a `< 0.06` Q spread onto 55–150 logits, so ~1 row
-  per 1,000 (rising with value saturation) trains "none of the 16 searched moves". The matrix —
-  learning impact / cost / risk to the measured regime: (a) the paper's σ(q̂) without min-max:
-  unknown / new parity vectors + a re-mint / voids PERF-3b's Gumbel numbers and R347(a)'s target
-  semantics; (b) `c_scale 0.1` (Mctx's default with the rescale): unknown / a mint row + re-measure
-  / voids the same; (c) a span floor: unknown / small code + parity vector / a third transform
-  nobody has run; **(d) keep, count, decide on data: ≤ 0.1 % of rows, each now a correct
-  "not these 16" target after `cc5bf14f` / 0 / none.** (d) selected for run6's start;
-  `iteration_complete.gumbel_alpha_full` and the dashboard count it from step 0, and the block-end
-  reading (rate, its trend with saturation, any strength signature) decides among (a)–(c) as a
-  pre-registered experiment. **BLOCK-END READING (2026-09-13, `RUN6_BLOCK_2026-09-12.md` §B–C):
-  4.98 per 1 000, flat from step ≈ 9 000 (4.7 → 5.1 → 5.0); the run-fatal half never fired. The
-  strength signature beside it: a sealbot WR trough at 10k–14k (2.5 % pooled against 16 % on
-  either side) coinciding with the policy-loss peak, on a value head that was FRESH at boot —
-  consistent with the completed-Q target reading an untrained value head, not proof of it. The
-  decision among (a)–(c) is the architect's; the input is now on the record.**
+- **CARD-ALPHA-TARGET-FORM — CLOSED by R350(e).** α = 1.0 rows (4.98 per 1 000, flat from
+  ≈ 9 000) are EXCLUDED from the policy loss from run7's first step; the matrix's (a)–(c) are not
+  taken. The three-row reconstruction R349(c) ordered stays OWED (owed section below).
 - **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
   1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle. The block is ≈ 22.6 h
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
@@ -202,21 +210,13 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   **RE-MEASURED on the block (25 rounds, 5.9 h alive of 21.8 h): self-play at 0.94× during a
   round at 32 workers behind the PERF-A4 pipeline — ≈ 440 steps, 1.7 % of the block, ≈ 22 min.
   The term is priced and small; lever (a) stays a proposal.**
-- **CARD-EVAL-CADENCE — the regime note REPAIR-A4 owed, now with the block's numbers.** The
-  cadence's wall cost is 1.7 % (above), so `train.eval_interval 1000` is not a wall-clock question.
-  It is a signal question: a 32-game screen resolves ± 15 pp, the channel monitor pools four rounds
-  before it labels, and R334(f)(ii)'s "CI excluding 0.5" is unstatable from 32 games below ≈ 72 %
-  WR. Every reference regime (AlphaGo Zero, KataGo's optional gatekeeper, MiniZero, OpenSpiel)
-  evaluates once per 10³–10⁴ games with ≥ 200 games per point, and only AlphaGo Zero gates
-  (`RUN6_BLOCK_2026-09-12.md` §D, sources there). The lever is fewer, larger points at the same
-  game budget — e.g. 300 games per 3 000 steps (± 5 pp) with the gate riding the same round —
-  which is a re-mint under a ruling (R343(b)/R345 hold 1 000), not a session's call.
-- **CARD-SEALBOT-HORIZON — how the block's candidate loses.** 800 `sealbot_d5` games: losses end
-  at a median 25 plies (67 % inside 30) while self-play runs 75; SealBot searches 5 compound turns
-  full-width with a threat evaluation, the candidate's mean simulation depth is 3.85 plies at 128
-  sims / `gumbel_m 16`. A tactical-horizon deficit, not the colony attractor (colony fraction 0).
-  STRENGTH-FRONTIER-1's frozen-checkpoint arms (sims 128 / 256 / 512 vs `sealbot_d5`; fixed-depth
-  head-to-heads 3k / 13k / 18k / 24k) separate "the net is weak" from "the search is short".
+- **CARD-EVAL-CADENCE — CLOSED by R350(d).** run7's proposed rows: `eval_interval 3 000`, the
+  sealbot point 288 paired games (± 5 pp), random floor 20, the promotion gate at stride 1 on that
+  cadence, witness (iii) an OLS Elo slope over every point with CI excluding 0, witness (ii)
+  statable from WR ≥ 0.56. Armed at run7's mint by the operator's forward; R343(b)'s 1 000 and
+  R345(c)'s stride 3 are superseded for run7.
+- **CARD-SEALBOT-HORIZON — FOLDED into STRENGTH-FRONTIER-1 by R350(c)/(f).** The question
+  ("net weak" vs "search short" vs "kind") is the frontier's; its record is the answer's home.
 - **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
   64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
   under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
@@ -363,7 +363,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 
 | item | subject | status | last moved |
 |---|---|---|---|
-| STRENGTH-FRONTIER-1 | measures the sims question (50 vs 96) at block end on run6's own frozen checkpoints | ORDERED, waits on block end | R345(d) |
+| STRENGTH-FRONTIER-1 | the BC net (all heads / as the seam loaded it) under PUCT-150 and Gumbel-160/m16; frozen 3k/13k/18k/25k × sims {128, 256, 512} × kind vs `sealbot_d5`; 25k vs the BC net at equal search; 288 paired games per cell, pair-level CI | RUNNING on the stopped run's box since 2026-09-13 08:27 UTC (`tools/strength_frontier.py`, `/workspace/frontier/`) | R350(c) |
 | GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | ORDERED — lands, stays UNARMED. run6 mints `gumbel_mcts: false` | R345(d) |
 | GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | ORDERED BEFORE THE START — a run that does not write its games cannot be viewed, replayed or mined | R344 |
 | DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge | R344(d) |
@@ -390,6 +390,10 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
   `eval.random_floor_games` were owed against run5's config, which minted them at `0`. R346(f)
   pruned that config out of the tree, so the rows have no subject; run6 mints `1000` and `20`.
 - **R226 / R229 / R243 — prereg rows owed:** two flagged at dispatch 8C, three 8B findings.
+- **R349(c) / R350(e) — the three-row α = 1.0 reconstruction is OWED with its finding.** Three
+  rows from the game record: `v_mix` vs max visited Q, which stone of the turn, the perspective
+  sign at the root; a perspective error at the intermediate stone is the first hypothesis. The
+  START-path measurement (§B, F-45) read 25 rows from a burst; the block's rows are not yet read.
 - **R245(c) — the LAW-18 augmentation-group counter is OWED.** The per-record losslessness gate
   landed; the in-run fire-rate counter beside it did not.
 
