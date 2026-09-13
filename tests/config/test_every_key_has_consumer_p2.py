@@ -103,6 +103,10 @@ CONSUMER_REGISTRY: dict[str, str] = {
                                 " and the graph step tail call it — R173/CARD-CS2)",
     "train.actor_sync_cadence_steps": "resolve_actor_sync_cadence -> compose_run -> ActorSync.maybe_sync (WP-UNFREEZE K1)",
     "train.ema.enabled": "resolve_ema_config -> Trainer.__init__ (the EMA lever's ARMING key, R332(d) / AUDIT-1 F-06; every committed config mints false explicitly)",
+    "train.policy_loss_trough_abort.delta_nats": "resolve_policy_loss_trough_abort -> StepCoordinatorConfig.policy_loss_trough_abort -> step.py::_run_policy_loss_trough_gate -> check_policy_loss_trough (the trough HALT, R350(b)(iv); null is OFF)",
+    "train.policy_loss_trough_abort.consec": "check_policy_loss_trough's consecutive-window count; the ring is sized by it at the point of use",
+    "train.policy_loss_trough_abort.max_step": "check_policy_loss_trough's upper step bound (the halt names an EARLY signature); the manifest's bounded cadence reads it",
+    "train.policy_loss_weight_schedule.warmup_steps": "TrainHParams.from_config -> Trainer.train_step_from_graph_batch via policy_loss_weight_at (the VALUE WARM-UP, R350(b)(iii); 0 is OFF; the BC route refuses a non-zero value)",
     "train.ema.decay": "resolve_ema_config -> build_ema_model(decay=...) -> EmaModel mixing rate",
     "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":

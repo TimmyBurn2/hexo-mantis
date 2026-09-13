@@ -1,4 +1,7 @@
-"""The sparse Gumbel row's trainer side: the reconstructed tail and the fast-arm policy weight.
+# >300 justify (R8). ONE claim over ONE rebuilt target: the tail, the fast-arm weight, the alpha
+# exclusion and the KL line read the same fixture and real step; a split forks both into copies that drift.
+"""The sparse Gumbel row's trainer side: the reconstructed tail, the fast-arm policy weight, the
+alpha = 1.0 exclusion and the KL line.
 
 Under Sequential Halving only `selfplay.gumbel_m` candidates are visited, so the row stores
 those m explicit entries plus the tail mass alpha, and the trainer rebuilds the tail as
@@ -17,10 +20,12 @@ import torch
 from mantis.train.events import GUMBEL_TAIL_MASS_KEY, tail_mass_block
 from mantis.train.losses import (
     _segment_softmax,
+    exclude_alpha_full_rows,
     graph_loss_denominators,
     graph_policy_row_weights,
     ragged_policy_ce,
 )
+from mantis.util.constants import ALPHA_FULL_THRESHOLD, is_alpha_full
 
 
 def _fixture() -> dict[str, torch.Tensor]:
@@ -264,4 +269,76 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
         caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
         sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
     assert math.isfinite(float(result["loss"])) and math.isfinite(float(result["policy_loss"]))
-    assert sink.named("trainer_step")[0][GUMBEL_TAIL_MASS_KEY]["max"] == pytest.approx(1.0)
+    event = sink.named("trainer_step")[0]
+    assert event[GUMBEL_TAIL_MASS_KEY]["max"] == pytest.approx(1.0)
+    # R350(e): every one of these rows is alpha = 1.0, so the step trained NO policy row and the
+    # count on the event says so; the policy loss over an empty set is a measured zero.
+    assert event["policy_rows_excluded_alpha_full"] == 8
+    assert float(result["policy_loss"]) == 0.0
+
+
+def test_the_target_entropy_makes_ce_minus_it_the_kl_to_the_prior() -> None:
+    """R350(b)(iv)'s line: `CE - H(target) == KL(target || model)` on the fixture; H carries no grad."""
+    from mantis.train.losses import ragged_policy_ce_and_target_entropy
+
+    f = _fixture()
+    logits = f["logits"].clone().requires_grad_(True)
+    ce, entropy = ragged_policy_ce_and_target_entropy(
+        logits, f["policy_target"], f["legal_offsets"],
+        explicit_mask=f["explicit_mask"], tail_mass=f["tail_mass"])
+    target = _rebuilt_target(f, detached=True)
+    probs = _segment_softmax(f["logits"], f["legal_offsets"])
+    seg = torch.repeat_interleave(torch.arange(2), f["legal_offsets"][1:] - f["legal_offsets"][:-1])
+    kl_nodes = target * (torch.log(target.clamp(min=1e-12)) - torch.log(probs.clamp(min=1e-12)))
+    kl = torch.zeros(2).scatter_add_(0, seg, kl_nodes).mean()
+    assert float((ce - entropy).detach()) == pytest.approx(float(kl), abs=1e-5)
+    assert not entropy.requires_grad
+    assert ce.requires_grad
+
+
+def test_the_real_graph_trainer_step_publishes_the_kl_line(tmp_path) -> None:
+    """Producer test: `trainer_step` carries H(target) and `KL == policy_loss - H` on the real step."""
+    import _microbatch_harness as H  # noqa: PLC0415 — the tests/train rootdir harness
+    from mantis.config.resolve.microbatch import MicrobatchCapsSpec
+    from mantis.train.coordinator.dispatch import run_declared_train_step
+
+    buf = H.uniform_graph_buffer()
+    buf.seed_sampler(H.SEED)
+    replay = H.ReplayWireBuffer(buf, 8)
+    sink = H.SpySink()
+    trainer = H.tiny_graph_trainer(tmp_path, sink=sink, checkpoint_interval=0)
+    run_declared_train_step(
+        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0,
+        recent_buffer=None,
+        caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
+        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+    event = sink.named("trainer_step")[0]
+    assert event["policy_target_entropy"] > 0.0
+    assert event["policy_kl_target_vs_prior"] == pytest.approx(
+        event["policy_loss"] - event["policy_target_entropy"])
+    assert event["policy_kl_target_vs_prior"] >= -1e-6, "a KL cannot be negative"
+
+
+def test_an_alpha_full_row_leaves_the_policy_weight_and_the_denominator() -> None:
+    """R350(e), the unit: a row at alpha >= the threshold weighs 0, one just under it stays."""
+    weights = graph_policy_row_weights(np.asarray([True, True, True, False]), 0.5)
+    alpha = np.asarray([1.0, 1.0 - 1e-7, ALPHA_FULL_THRESHOLD - 1e-5, 1.0], dtype=np.float32)
+    out, excluded = exclude_alpha_full_rows(weights, alpha)
+    assert excluded == 3
+    assert out.tolist() == [0.0, 0.0, 1.0, 0.0]
+    p_den, _v_den = graph_loss_denominators(out, np.asarray([True] * 4), 4)
+    assert p_den == 1.0, "the excluded rows must leave the denominator too, or the mean is biased low"
+    with pytest.raises(ValueError, match="rows"):
+        exclude_alpha_full_rows(weights, np.asarray([1.0, 0.0], dtype=np.float32))
+
+
+def test_the_alpha_full_threshold_has_one_authority() -> None:
+    """The self-play counter and the trainer's exclusion read ONE predicate, and it agrees with
+    itself across the f32 a row carries and the f64 the counter reads."""
+    from mantis.selfplay import pool_push
+
+    assert pool_push.is_alpha_full is is_alpha_full
+    f32_edge = float(np.float32(ALPHA_FULL_THRESHOLD))
+    weights = graph_policy_row_weights(np.asarray([True]), 0.0)
+    _out, excluded = exclude_alpha_full_rows(weights, np.asarray([f32_edge], dtype=np.float32))
+    assert excluded == int(is_alpha_full(f32_edge))

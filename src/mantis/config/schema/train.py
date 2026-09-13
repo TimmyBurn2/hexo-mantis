@@ -136,6 +136,21 @@ class EmaConfig(StrictModel):
     update_every: int = Field(ge=1)
 
 
+class PolicyLossTroughAbortConfig(StrictModel):
+    """R350(b)(iv)'s trough halt: `consec` gate windows each `delta_nats` above the FIRST window's
+    mean policy loss, at or before `max_step`, halt; `null` on the parent is the explicit OFF."""
+
+    delta_nats: float = Field(gt=0)
+    consec: int = Field(ge=1)
+    max_step: int = Field(ge=1)
+
+
+class PolicyLossWeightScheduleConfig(StrictModel):
+    """R350(b)(iii)'s value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
+
+    warmup_steps: int = Field(ge=0)
+
+
 class TrainConfig(StrictModel):
     """Training hyperparameters. Every field REQUIRED — no terminal default anywhere in this
     class; the minted value in each `configs/*.yaml` is the sole default authority.
@@ -160,6 +175,8 @@ class TrainConfig(StrictModel):
     # The EMA lever's arming block, REQUIRED so every config states its posture explicitly:
     # `resolve_ema_config` used to read four names no schema had, so the lever was unreachable.
     ema: EmaConfig
+    # The value warm-up's one knob, consumed by `TrainHParams.from_config` -> the graph step.
+    policy_loss_weight_schedule: PolicyLossWeightScheduleConfig
     # The RUN-LENGTH authority, in coordinator training steps, consumed by
     # `resolve_max_train_steps` -> `StepCoordinatorConfig.stop_step`; distinct from
     # `total_steps`, the LR-scheduler horizon. ABSOLUTE, not per-process: a run resumed past
@@ -169,6 +186,8 @@ class TrainConfig(StrictModel):
     # is no boolean enable beside it, which would be a second authority over one fact.
     # `default=...` is this class's no-terminal-default idiom: absence names the key.
     draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
+    # The policy-loss trough halt's ARMING SURFACE, the same idiom: `None` is EXPLICITLY OFF.
+    policy_loss_trough_abort: PolicyLossTroughAbortConfig | None = Field(default=...)
 
     # The step-coordinator knobs: builder literals and dataclass terminal defaults that decided
     # what the run IS while the minted config said nothing. FLAT `train.*` keys and NOT a

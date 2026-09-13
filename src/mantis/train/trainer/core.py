@@ -41,7 +41,9 @@ from mantis.train.events import tail_mass_block
 from mantis.train.losses import (
     backward_accumulate,
     clip_and_step,
+    policy_loss_weight_at,
     ragged_policy_ce,
+    ragged_policy_ce_and_target_entropy,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -82,11 +84,18 @@ class TrainHParams:
     policy_target: str
     draw_reward: float
     ply_cap_value: float
+    #: `train.policy_loss_weight_schedule.warmup_steps` (R350(b)(iii)); 0 is OFF.
+    policy_loss_warmup_steps: int
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
-        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section. No flat-key
-        fallback: `config['train']` is REQUIRED, with every field present."""
+        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section; every
+        member is REQUIRED, no flat-key fallback.
+
+        Raises:
+            ValueError: no `train` section, an unsupported value target, or a policy target that
+                disagrees with `search.kind`. KeyError: a required `train` member is missing.
+        """
         cfg = config if isinstance(config, dict) else {}
         train = cfg.get("train")
         if not isinstance(train, dict):
@@ -97,9 +106,12 @@ class TrainHParams:
         if train["value_target"] != "pure_outcome_z":
             raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
         _assert_policy_target_consistency(train, cfg.get("search") or {})
-        fields = {f for f in cls.__dataclass_fields__}
+        fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps"}
         kwargs = {k: train[k] for k in fields}
-        return cls(**kwargs)
+        return cls(
+            **kwargs,
+            policy_loss_warmup_steps=int(train["policy_loss_weight_schedule"]["warmup_steps"]),
+        )
 
 
 def _assert_policy_target_consistency(train: dict[str, Any], search: dict[str, Any]) -> None:
@@ -346,6 +358,8 @@ class Trainer:
         # Every row's tail mass alpha, collected across the split so the reading is the STEP's
         # distribution and not one part's.
         tail_alphas: list[float] = []
+        policy_weight = policy_loss_weight_at(self.step, self.hp.policy_loss_warmup_steps)
+        target_entropy_total = 0.0
         for make in parts:
             inputs = make()
             tail_alphas.extend(
@@ -366,21 +380,22 @@ class Trainer:
                         "denominator is computed from the per-GRAPH mask, so a mismatch "
                         "would silently make the denominator a second authority over a count "
                         "it does not own.")
-                policy_loss = ragged_policy_ce(policy_logits, inputs.policy_target,
-                                               inputs.legal_offsets,
-                                               full_search_mask=inputs.policy_row_weight,
-                                               explicit_mask=inputs.explicit_mask,
-                                               tail_mass=inputs.tail_mass,
-                                               denominator=policy_denominator)
+                policy_loss, target_entropy = ragged_policy_ce_and_target_entropy(
+                    policy_logits, inputs.policy_target, inputs.legal_offsets,
+                    full_search_mask=inputs.policy_row_weight,
+                    explicit_mask=inputs.explicit_mask, tail_mass=inputs.tail_mass,
+                    denominator=policy_denominator)
                 value_loss = _binned_value_loss(bin_logits, inputs.outcomes,
                                                 value_mask=inputs.value_valid,
                                                 denominator=value_denominator)
-                loss = policy_loss + value_loss
+                # At weight 0 the policy term is LEFT OUT, not zeroed: a zero grad would still let
+                # AdamW's decoupled decay move the prior the warm-up holds. `policy_loss` stays the raw CE.
+                loss = value_loss if policy_weight == 0.0 else policy_weight * policy_loss + value_loss
             # Without this guard one NaN/inf microbatch loss backwards into a NaN clip coefficient,
             # which writes NaN to EVERY weight while the run keeps reporting numbers. SKIPPED, not
             # zeroed — its gradient contribution is undefined — and counted, because a run dropping
             # half its microbatches looks exactly like a healthy one on loss alone (LAW-18).
-            if not torch.isfinite(loss):
+            if not torch.isfinite(loss) or not torch.isfinite(policy_loss):
                 self.nonfinite_loss_microbatches += 1
                 if (self.nonfinite_loss_microbatches <= 5
                         or self.nonfinite_loss_microbatches % 50 == 0):
@@ -389,14 +404,15 @@ class Trainer:
                         self.step + 1, self.nonfinite_loss_microbatches,
                         float(loss.detach().item()),
                     )
-                del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
+                del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
                 continue
             backward_accumulate(loss, self.scaler, self._scaler_enabled)
             contributing += 1
+            target_entropy_total += float(target_entropy.item())
             loss_total += loss.item()
             policy_total += policy_loss.item()
             value_total += value_loss.item()
-            del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss
+            del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
 
         # THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH. Both ways there is not
         # used to advance the clock anyway: every micro-batch skipped (`.grad` stays zeroed, so
@@ -454,7 +470,13 @@ class Trainer:
                                   # second thing to keep in sync.
                                   **(batch_composition or {}),
                                   # The same reasoning for the tail mass.
-                                  **tail_mass_block(tail_alphas)})
+                                  **tail_mass_block(tail_alphas),
+                                  # LAW-18: the warm-up reports its own weight on every step.
+                                  "policy_loss_weight": policy_weight,
+                                  # R350(b)(iv)'s first line: KL(target || policy) = CE - H(target),
+                                  # both reduced over the step's policy rows the same way.
+                                  "policy_target_entropy": target_entropy_total,
+                                  "policy_kl_target_vs_prior": policy_total - target_entropy_total})
             self._maybe_periodic_checkpoint(result)
         return result
 

@@ -300,7 +300,7 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
     """A REAL `StepCoordinator`, so the latch's ABSENCE is an AttributeError here rather than a
     `SimpleNamespace` silently answering `None`."""
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         **_mirrored({"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 10,

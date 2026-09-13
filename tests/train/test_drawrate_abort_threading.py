@@ -239,7 +239,7 @@ def _coordinator_config(spec, **overrides) -> StepCoordinatorConfig:
     knobs so the builder stays the single source of the rest, and `drain_caps` arrives from a
     MINTED block for `stop_step`'s reason: a literal would be a second authority."""
     base = _step_coordinator_config(
-        stop_step=10**9, draw_rate_abort=spec,
+        stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None,
         drain_caps=resolve_drain_caps(load_config(_CONFIGS / "dev_example.yaml").monitor),
         gate_interval=load_config(_CONFIGS / "dev_example.yaml").monitor.gate_interval,
         knobs=resolve_coordinator_knobs(load_config(_CONFIGS / "dev_example.yaml").train))

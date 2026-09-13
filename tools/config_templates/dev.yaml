@@ -83,6 +83,8 @@ train:
     enabled: false
     decay: 0.999
     update_every: 10
+  policy_loss_weight_schedule:
+    warmup_steps: 0
   max_train_steps: 1000000
   # WPAX Phase D (R65/R80/R79+R83), statistic replaced by R92 (WPMINT Phase DS): the
   # draw-rate collapse hard abort's terms. `null` is the EXPLICIT off posture and is what
@@ -98,6 +100,7 @@ train:
   # The four travel together (R80) and are RUN-SCOPED CONSTANTS fixed at mint prereg
   # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
+  policy_loss_trough_abort: null
   # ── the step-coordinator knobs (WPMINT Phase K-B — CARD-COORD-KNOBS, R78/R80) ────────
   # Until this phase these knobs were LITERALS inside `mantis.run._step_coordinator_config`
   # and terminal defaults on `StepCoordinatorConfig`: they decided what a run WAS while no

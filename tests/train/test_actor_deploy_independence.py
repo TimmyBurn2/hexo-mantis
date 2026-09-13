@@ -205,7 +205,7 @@ def _kick_config() -> StepCoordinatorConfig:
     only. `None` is the EXPLICIT disarmed draw-rate posture; the four drain caps come from
     a MINTED `monitor.drain` block (R93/DR-11)."""
     return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         # R242: `gate_interval` mirrors `log_interval` here — this file drives the deploy

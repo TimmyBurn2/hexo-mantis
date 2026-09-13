@@ -48,6 +48,9 @@ DISK_SPACE_EXHAUSTED_EXIT_CODE: int = 47
 # RETURNS, so the loop unwinds through `close_out`, the terminal-eval drain and the shutdown
 # checkpoint, all of which an `os._exit(46)` would discard (LAW-16).
 TERMINAL_EVAL_BROKEN_EXIT_CODE: int = 48
+# 49 is the FOURTH cooperative member (R350(b)(iv)): the policy-loss trough halt fires through
+# `_fire_hard_abort` like 46 and unwinds through `close_out`, so the save survives the halt.
+POLICY_LOSS_TROUGH_EXIT_CODE: int = 49
 
 # 47 is the SECOND cooperative member: the disk guard's critical arm is a SIGTERM to its own pid,
 # and an `os._exit(47)` would discard the save the guard exists to protect. Before it was

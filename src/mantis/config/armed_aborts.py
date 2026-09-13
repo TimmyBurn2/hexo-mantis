@@ -32,6 +32,7 @@ from mantis.monitor.heartbeat import (
     ACTOR_LAG_EXIT_CODE,
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
     DRAW_RATE_COLLAPSE_EXIT_CODE,
+    POLICY_LOSS_TROUGH_EXIT_CODE,
     TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
 
@@ -245,6 +246,10 @@ class Cadence(StrEnum):
     #: real fire from BELOW. Operands: (consec path, min-step path).
     GATE_INTERVAL_CONSEC = "gate_interval_consec"
 
+    #: The trough halt on the same clock: the first boundary is the reference, so the earliest
+    #: fire is boundary `consec + 1`, and only at or before `max_step` (an UPPER bound). Operands: (consec, max-step).
+    GATE_INTERVAL_CONSEC_BOUNDED = "gate_interval_consec_bounded"
+
     #: The sealbot-WR trajectory abort in the EVAL-ROUND clock: the earliest fire is the
     #: MINIMUM over its three triggers, in ROUNDS, converted through `train.eval_interval`.
     #: Operands: (collapse-consec, early-death-min-step, collapse-min-step, rolling-consec,
@@ -283,6 +288,7 @@ class Cadence(StrEnum):
         """WHICH clock this member's evidence arrives in. DATA, like `arity`."""
         return {
             Cadence.GATE_INTERVAL_CONSEC: SampleClock.GATE_BOUNDARY,
+            Cadence.GATE_INTERVAL_CONSEC_BOUNDED: SampleClock.GATE_BOUNDARY,
             Cadence.EVAL_ROUND_CONSEC: SampleClock.EVAL_ROUND,
             Cadence.CONSEC_TRAIN_STEPS: SampleClock.TRAIN_STEP,
             Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
@@ -297,6 +303,7 @@ class Cadence(StrEnum):
         so a path the arithmetic never reads cannot sit on a row pretending to be an input."""
         return {
             Cadence.GATE_INTERVAL_CONSEC: 2,
+            Cadence.GATE_INTERVAL_CONSEC_BOUNDED: 2,
             Cadence.EVAL_ROUND_CONSEC: 5,
             Cadence.CONSEC_TRAIN_STEPS: 1,
             Cadence.STEP_LAG_THRESHOLD: 1,
@@ -362,6 +369,12 @@ class Cadence(StrEnum):
                 _evals_to_first_fire(collapse_consec, collapse_min, period),  # trigger B
                 _evals_to_first_fire(rolling_consec, rolling_min, period),   # trigger A
             )
+        if self is Cadence.GATE_INTERVAL_CONSEC_BOUNDED:
+            consec, max_step = (float(value) for value in values)
+            if period < 1.0 or consec < 1.0:
+                return math.inf
+            ticks = consec + 1.0
+            return ticks if ticks * period <= max_step else math.inf
         consec, min_step = (float(value) for value in values)
         if period < 1.0 or consec < 1.0:
             return math.inf
@@ -577,6 +590,33 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "_fire_hard_abort sets to the rule NAME beside the stop; a process boundary maps "
             "it here through exit_code_for_abort. The three clean stops (stop(), O2 "
             "iteration limit, O3 shutdown-save) leave the field None."
+        ),
+    ),
+    ArmedAbort(
+        name="policy_loss_trough",
+        config_path="train.policy_loss_trough_abort.delta_nats",
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        cadence=Cadence.GATE_INTERVAL_CONSEC_BOUNDED,
+        cadence_paths=("train.policy_loss_trough_abort.consec",
+                       "train.policy_loss_trough_abort.max_step"),
+        status=Status.DEFERRED,
+        exit_code=POLICY_LOSS_TROUGH_EXIT_CODE,
+        owner="run7's mint (R350(b)(iv): armed by the operator's forward at the re-mint)",
+        source_pin=(
+            "src/mantis/run.py",
+            "policy_loss_trough_abort=resolve_policy_loss_trough_abort(config.train)",
+        ),
+        note=(
+            "The early-run policy-loss TROUGH halt (R350(b)(iv)): the per-step policy loss is "
+            "pooled into one mean per monitor.gate_interval window, the FIRST window's mean is "
+            "the reference (under the value warm-up it is the untouched prior's CE against "
+            "the run's own targets), and consec later windows each at least delta_nats above "
+            "it, at or before max_step, halt cooperatively (exit 49) — run6's trough rose "
+            "2.28 -> 2.86 nats over 12k steps with nobody watching. DEFERRED, not REQUIRED: "
+            "configs/run6.yaml is a finished run's record and mints null truthfully; run7's "
+            "mint proposes {delta_nats: 0.2, consec: 3, max_step: 5000} and flips this row to "
+            "REQUIRED as a one-field data edit. The cadence is an UPPER bound: at gate_interval "
+            "1000 the earliest fire is boundary 4 = step 4000 <= 5000."
         ),
     ),
     ArmedAbort(

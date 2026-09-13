@@ -129,8 +129,13 @@ def test_an_all_skipped_microbatch_set_advances_no_clock(
     clock_before = _optimizer_clock(trainer.optimizer)
     assert clock_before, "Adam kept no per-parameter step state — the clock has no instrument"
 
-    real = core.ragged_policy_ce
-    monkeypatch.setattr(core, "ragged_policy_ce", lambda *a, **k: real(*a, **k) * float("nan"))
+    real = core.ragged_policy_ce_and_target_entropy
+
+    def _nan_ce(*a, **k):
+        ce, entropy = real(*a, **k)
+        return ce * float("nan"), entropy
+
+    monkeypatch.setattr(core, "ragged_policy_ce_and_target_entropy", _nan_ce)
 
     result = _graph_step(trainer, buffer)
 

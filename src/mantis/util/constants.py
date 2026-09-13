@@ -20,3 +20,12 @@ HISTORY_LEN: int = 8
 # `config/schema/core.py::_draw_rate_evidence_bar_within_configured_capacity`; both sides
 # import THIS name so no second literal can re-open the dead zone silently.
 DRAW_RATE_WINDOW: int = 50
+
+# A sparse Gumbel row at alpha = 1.0 (within one f32 ULP): ONE authority for the self-play counter
+# and the trainer's exclusion (R350(e)) — `selfplay` and `train` may not import each other.
+ALPHA_FULL_THRESHOLD: float = 1.0 - 1e-6
+
+
+def is_alpha_full(alpha: float) -> bool:
+    """The ONE predicate behind the counter and the exclusion, in float64 on both sides."""
+    return float(alpha) >= ALPHA_FULL_THRESHOLD

@@ -143,6 +143,7 @@ def graph_hparams(**over: Any) -> TrainHParams:
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
         checkpoint_interval=0, value_target="pure_outcome_z",
         policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
+        policy_loss_warmup_steps=0,
     )
     base.update(over)
     return TrainHParams(**base)

@@ -21,6 +21,7 @@ import torch.nn as nn
 from torch.amp.grad_scaler import GradScaler
 
 from mantis.train.emit import emit_via
+from mantis.util.constants import is_alpha_full
 
 
 def _segment_softmax(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch.Tensor:
@@ -60,19 +61,9 @@ def compute_policy_loss(
 def graph_policy_row_weights(
     is_full_search: Any, fast_policy_weight: float
 ) -> torch.Tensor:
-    """Per-row POLICY weight for a graph batch — the one authority.
-
-    A full-search row weighs 1 and a fast-arm row weighs `fast_policy_weight`, so the fast arm
-    trains VALUE always and POLICY at a declared weight instead of being gated out entirely.
-
-    Args:
-        is_full_search: per-row full-search flags, `[B]`. `Any` because the ONE production caller
-            holds them as NUMPY pre-collate; `torch.as_tensor` is a no-op on a tensor.
-        fast_policy_weight: `train.fast_policy_weight`, resolved by its own resolver.
-
-    Returns:
-        A flat float32 tensor `[B]`, evaluated ONCE per step and read by BOTH the numerator and
-        the denominator, because two evaluations of one rule can disagree.
+    """Per-row POLICY weight for a graph batch, the one authority: 1 on a full-search row,
+    `fast_policy_weight` on a fast-arm row (weighted, not gated). A flat float32 `[B]`, evaluated
+    ONCE per step and read by both the numerator and the denominator.
 
     Raises:
         ValueError: `fast_policy_weight` is negative or not finite — a negative policy weight
@@ -87,24 +78,44 @@ def graph_policy_row_weights(
     return ifs + fast_policy_weight * (1.0 - ifs)
 
 
+def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> tuple[torch.Tensor, int]:
+    """Zero the policy weight of every row at alpha = 1.0 (R350(e): "play none of the searched
+    moves" is not a target), BEFORE the denominator reads the vector; returns `(weights, n_excluded)`.
+
+    Raises:
+        ValueError: the two vectors disagree in length.
+    """
+    alpha = torch.as_tensor(tail_mass).reshape(-1)
+    if alpha.shape != policy_row_weight.shape:
+        raise ValueError(
+            f"exclude_alpha_full_rows: tail_mass has {alpha.shape[0]} rows for "
+            f"{policy_row_weight.shape[0]} row weights"
+        )
+    full = torch.tensor([is_alpha_full(a) for a in alpha.tolist()], dtype=torch.bool)
+    return policy_row_weight * (~full).to(policy_row_weight.dtype), int(full.sum().item())
+
+
+def policy_loss_weight_at(step: int, warmup_steps: int) -> float:
+    """R350(b)(iii): 0.0 while `step < warmup_steps` (0-based, the step about to be taken), else 1.0.
+
+    Raises:
+        ValueError: a negative step or warm-up length.
+    """
+    if step < 0 or warmup_steps < 0:
+        raise ValueError(f"policy_loss_weight_at: step={step}, warmup_steps={warmup_steps} must be >= 0")
+    return 0.0 if step < warmup_steps else 1.0
+
+
 def graph_loss_denominators(
     is_full_search: Any,
     value_valid: Any,
     n_graphs: int,
 ) -> tuple[float, float]:
-    """`(policy_denominator, value_denominator)` for ONE training step's WHOLE batch.
-
-    The micro-batch split is equivalent to the un-split step only if every micro-batch divides by
-    the denominator the UN-SPLIT batch would have used. Weighting by `B_m/B` or by `1/M` is wrong:
-    neither denominator is the graph count, and no single scalar per micro-batch is right for both.
-
-    THE TWO EXPRESSIONS ARE DELIBERATELY ASYMMETRIC BECAUSE THE LOSSES ARE — policy sums the mask
-    VALUES, value counts TRUE entries — and they agree only while the masks are strictly 0/1, so a
-    SYMMETRIC implementation would pass every behavioural oracle while encoding a latent
-    divergence. Measured on the mask `[2, 0, 3]`: 5.0 vs 2.0.
-
-    The `None` arms fall back to the graph count; the value arm's fallback is only correct while
-    `bin_logits` has one row per graph, which the caller ASSERTS at the call site.
+    """`(policy_denominator, value_denominator)` for ONE step's WHOLE batch, so every micro-batch
+    divides by what the un-split batch would have (never `B_m/B` or `1/M`). DELIBERATELY
+    asymmetric: policy SUMS the mask values, value COUNTS true entries — they agree only on a
+    strict 0/1 mask (measured `[2, 0, 3]`: 5.0 vs 2.0). The `None` arms fall back to the graph
+    count; the value arm's is right only with one `bin_logits` row per graph, asserted by the caller.
     """
     if is_full_search is None:
         p_den = float(n_graphs)
@@ -126,20 +137,30 @@ def ragged_policy_ce(
     explicit_mask: torch.Tensor | None = None,
     tail_mass: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """Ragged per-legal-node policy CE for the GNN graph branch — the no-drop replacement for the
-    dense-362 `compute_policy_loss`.
+    """`ragged_policy_ce_and_target_entropy`'s CE alone — the loss term. See that function."""
+    ce, _entropy = ragged_policy_ce_and_target_entropy(
+        policy_logits, policy_target, legal_offsets, full_search_mask=full_search_mask,
+        denominator=denominator, explicit_mask=explicit_mask, tail_mass=tail_mass,
+    )
+    return ce
 
-    Per graph: log_softmax over its legal-node segment, then -Σ target·logp, masked by
-    is_full_search so quick-search rows contribute value only. The fp32 cast at entry stops an fp16
-    `policy_logits` dragging fp16 into the scatter_add, and fixes the fp16 log-clamp underflow.
 
-    `denominator`, when supplied, makes the reduction `numerator_sum / denominator` — how ONE
-    micro-batch divides by the WHOLE step's denominator so the parts sum to the un-split loss.
+def ragged_policy_ce_and_target_entropy(
+    policy_logits: torch.Tensor,
+    policy_target: torch.Tensor,
+    legal_offsets: torch.Tensor,
+    full_search_mask: torch.Tensor | None = None,
+    denominator: float | None = None,
+    explicit_mask: torch.Tensor | None = None,
+    tail_mass: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Ragged per-legal-node policy CE for the GNN graph branch, and — reduced the SAME way and
+    DETACHED — the target's entropy, so `CE - H` is KL(target || policy) (R350(b)(iv)'s line).
 
-    `explicit_mask` / `tail_mass` reconstruct the SPARSE Gumbel row from THIS model's prior. THE
-    DETACH IS THE MECHANISM: built from a live `probs` the tail would be a function of the
-    parameters, and the CE gradient would pick up a second term pushing the prior toward whatever
-    it already is — a self-referential objective on most of the legal set.
+    Per graph: log_softmax over its legal segment, `-Σ target·logp`, masked by `full_search_mask`;
+    `denominator` makes ONE micro-batch divide by the WHOLE step's so the parts sum to the
+    un-split loss; `explicit_mask` / `tail_mass` rebuild the SPARSE Gumbel row's tail from THIS
+    model's DETACHED prior (live, the CE gradient would push the prior toward itself).
 
     Raises:
         ValueError: exactly one of `explicit_mask` / `tail_mass` was supplied — a tail mass with
@@ -154,7 +175,8 @@ def ragged_policy_ce(
     device = policy_logits.device
     b = int(legal_offsets.shape[0]) - 1
     if b == 0 or policy_logits.numel() == 0:
-        return torch.zeros((), device=device, dtype=torch.float32)
+        zero = torch.zeros((), device=device, dtype=torch.float32)
+        return zero, zero.clone()
     probs = _segment_softmax(policy_logits, legal_offsets)
     logp = torch.log(probs.clamp(min=1e-12))
     counts = legal_offsets[1:] - legal_offsets[:-1]
@@ -176,15 +198,23 @@ def ragged_policy_ce(
     per_node = -(target * logp)  # (Lg,)
     per_graph = torch.zeros(b, device=device, dtype=per_node.dtype)
     per_graph.scatter_add_(0, seg, per_node)  # (B,)
-    if full_search_mask is not None:
-        mask = full_search_mask.reshape(-1).to(per_graph.dtype)
+    with torch.no_grad():
+        t = target.detach()
+        entropy_node = -(t * torch.log(t.clamp(min=1e-12)))
+        entropy_graph = torch.zeros(b, device=device, dtype=entropy_node.dtype)
+        entropy_graph.scatter_add_(0, seg, entropy_node)
+
+    def _reduce(values: torch.Tensor) -> torch.Tensor:
+        if full_search_mask is not None:
+            mask = full_search_mask.reshape(-1).to(values.dtype)
+            if denominator is not None:
+                return (values * mask).sum() / denominator
+            return (values * mask).sum() / mask.sum().clamp_min(1.0)
         if denominator is not None:
-            return (per_graph * mask).sum() / denominator
-        denom = mask.sum().clamp_min(1.0)
-        return (per_graph * mask).sum() / denom
-    if denominator is not None:
-        return per_graph.sum() / denominator
-    return per_graph.mean()
+            return values.sum() / denominator
+        return values.mean()
+
+    return _reduce(per_graph), _reduce(entropy_graph)
 
 
 def compute_kl_policy_loss(

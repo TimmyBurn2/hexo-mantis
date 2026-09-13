@@ -30,6 +30,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     WR_PEAK_WINDOW_EVALS,
     check_draw_rate_collapse,
+    check_policy_loss_trough,
     check_sealbot_wr_hard_abort,
     emit_training_step_alerts,
     sealbot_wr_trajectory_alert,
@@ -78,7 +79,7 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
 #: `sealbot_wr_abort` ships warn-only and `draw_rate_collapse` is armed by the config, so both
 #: are named here to keep an inert posture readable rather than silent.
 GATE_NAMES: tuple[str, ...] = (
-    "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort",
+    "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort", "policy_loss_trough",
 )
 
 #: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
@@ -219,6 +220,11 @@ class StepCoordinator:
         self._wr_history_rung: str | None = None
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
+        # The trough halt's producer state (R350(b)(iv)): every step's policy loss since the last
+        # gate boundary, the FIRST boundary's mean as the reference, later means as the history.
+        self._policy_loss_window: list[float] = []
+        self._policy_loss_reference: float | None = None
+        self._policy_loss_window_means: list[float] = []
         self._last_iter_games = 0
         # The previous `iteration_complete` boundary's counter readings, so the payload can
         # publish an INTERVAL delta beside the cumulative total. Seeded at 0 (pool start).
@@ -490,6 +496,11 @@ class StepCoordinator:
                 self.actor_sync.maybe_sync(self._train_step)
             if self._initial_policy_loss is None and "policy_loss" in loss_info:
                 self._initial_policy_loss = float(loss_info["policy_loss"])
+            # Only a TAKEN step feeds the trough window: a refused step (non-finite grad norm)
+            # reports a policy loss no parameter saw, and a 0.0 there would reset `consec`.
+            if ("policy_loss" in loss_info and math.isfinite(float(loss_info["policy_loss"]))
+                    and math.isfinite(float(loss_info.get("grad_norm", math.nan)))):
+                self._policy_loss_window.append(float(loss_info["policy_loss"]))
             self._last_loss_info = loss_info
 
             # D3: hard-abort on sustained gradient norm. The FIRE routes through the shared
@@ -611,8 +622,35 @@ class StepCoordinator:
             return False
         sink = self._sink if self._sink is not None else NullEventSink()
         fired = self._run_hard_abort_gates(cfg)
+        fired = self._run_policy_loss_trough_gate(cfg) or fired
         self._emit_monitor_gates(cfg, sink)
         return fired
+
+    def _run_policy_loss_trough_gate(self, cfg: StepCoordinatorConfig) -> bool:
+        """R350(b)(iv)'s trough halt: one policy-loss mean per gate window, the FIRST the reference."""
+        spec = cfg.policy_loss_trough_abort
+        window = self._policy_loss_window
+        self._policy_loss_window = []
+        if spec is None:
+            self._sample("policy_loss_trough", self._policy_loss_window_means, None)
+            return False
+        if not window:
+            self._sample("policy_loss_trough", self._policy_loss_window_means, None)
+            return False
+        mean = sum(window) / len(window)
+        if self._policy_loss_reference is None:
+            self._policy_loss_reference = mean
+            self._gate_stats["policy_loss_trough"]["checks"] += 1
+            return False
+        if not self._sample("policy_loss_trough", self._policy_loss_window_means, lambda: mean):
+            return False
+        del self._policy_loss_window_means[:-spec.consec]
+        message = check_policy_loss_trough(
+            self._policy_loss_window_means, self._train_step,
+            reference=self._policy_loss_reference, delta_nats=spec.delta_nats,
+            consec=spec.consec, max_step=spec.max_step,
+        )
+        return self._fire_hard_abort("policy_loss_trough", message)
 
     def _emit_training_step(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
@@ -783,6 +821,13 @@ class StepCoordinator:
             "step": self._train_step,
             "gates": {name: dict(stats) for name, stats in self._gate_stats.items()},
             "draw_rate_threshold": None if spec is None else spec.threshold,
+            # The trough halt's live terms beside its counters: the reference window mean is
+            # `None` until the first boundary, never a 0.0 in the loss's own range.
+            "policy_loss_trough_delta_nats": (
+                None if cfg.policy_loss_trough_abort is None
+                else cfg.policy_loss_trough_abort.delta_nats),
+            "policy_loss_reference": self._policy_loss_reference,
+            "policy_loss_window_means": list(self._policy_loss_window_means),
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
             "sealbot_wr_result_producer_pending": None,  # producer landed (eval.rounds)
             "wr_history_len": len(self._wr_history),

@@ -8,6 +8,8 @@ from typing import Any
 
 import numpy as np
 
+from mantis.util.constants import is_alpha_full
+
 
 def _draw_outcome_band(
     draw_value: float, ply_cap_value: float, eps: float = 0.05
@@ -19,9 +21,6 @@ def _draw_outcome_band(
     return lo, hi
 
 
-#: R349(c): a sparse row whose explicit entries carry no target mass — alpha within one f32 ULP
-#: of unity — counted per row pushed and published on `iteration_complete`.
-ALPHA_FULL_THRESHOLD = 1.0 - 1e-6
 #: At most this many `alpha_full_row` events per run: enough to reconstruct, never a second ring.
 ALPHA_FULL_ROW_EVENT_CAP = 256
 
@@ -58,7 +57,7 @@ def push_graph(pool: Any, rows: list[tuple[Any, ...]]) -> None:
         # because the push signature carries `game_id` before it.
         runner_game_id = int(rec[-1])
         tail_mass = float(rec[-2])
-        if tail_mass >= ALPHA_FULL_THRESHOLD:
+        if is_alpha_full(tail_mass):
             alpha_full += 1
             sink = getattr(pool, "_sink", None)
             if sink is not None and pool.alpha_full_rows_emitted < ALPHA_FULL_ROW_EVENT_CAP:
@@ -168,5 +167,5 @@ def buffer_composition(pool: Any) -> dict[str, float]:
     }
 
 
-__all__ = ["ALPHA_FULL_ROW_EVENT_CAP", "ALPHA_FULL_THRESHOLD", "buffer_composition",
+__all__ = ["ALPHA_FULL_ROW_EVENT_CAP", "buffer_composition",
            "push_dense", "push_graph"]

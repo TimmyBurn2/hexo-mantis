@@ -213,7 +213,7 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     settings = {"eval_interval": 1, "log_interval": 1, "min_buf_size": 10, **overrides}
     settings.setdefault("gate_interval", settings["log_interval"])
     return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         **settings,
@@ -415,7 +415,7 @@ def test_log_interval_boundaries_are_evaluated_per_training_step() -> None:
     here just step 20, thinning the stream and both gates' sampling by roughly the burst.
     `iteration_complete` is decoupled and emits per burst, at `[4, 8, 12, 16, 20]`."""
     cfg = _make_config(log_interval=5, max_train_burst=4, training_steps_per_game=4.0,
-                       draw_rate_abort=None)
+                       draw_rate_abort=None, policy_loss_trough_abort=None)
     h = _make_coordinator(config=cfg)
     for _ in range(5):
         h.pool.games_completed += 5
@@ -441,7 +441,7 @@ def test_gate_interval_boundaries_are_evaluated_per_training_step() -> None:
     4 must give EXACTLY 4 summaries at 5/10/15/20 and ZERO `training_step` events; testing once
     per burst would hit only step 20 and stretch the `consec` window by the mean burst."""
     cfg = _make_config(log_interval=1000, gate_interval=5, max_train_burst=4,
-                       training_steps_per_game=4.0, draw_rate_abort=None)
+                       training_steps_per_game=4.0, draw_rate_abort=None, policy_loss_trough_abort=None)
     h = _make_coordinator(config=cfg)
     for _ in range(5):
         h.pool.games_completed += 5

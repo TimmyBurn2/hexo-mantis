@@ -179,7 +179,11 @@ def _build_graph_parts(
         slice_graph_wire,
         slice_targets,
     )
-    from mantis.train.losses import graph_loss_denominators, graph_policy_row_weights
+    from mantis.train.losses import (
+        exclude_alpha_full_rows,
+        graph_loss_denominators,
+        graph_policy_row_weights,
+    )
 
     # ONE read of each member, into a local. Not a style choice: `train.microbatch_caps` has
     # exactly one authority and the reader census is frozen at two reads here, so a second read
@@ -203,6 +207,11 @@ def _build_graph_parts(
     # trainer's own resolved hyper-parameters and nothing here supplies a fallback.
     policy_row_weight = graph_policy_row_weights(
         np.asarray(targets.is_full_search), float(fast_policy_weight_provider())
+    )
+    # R350(e): an alpha = 1.0 row leaves the policy loss here, BEFORE the denominator reads
+    # this vector, so it is out of the numerator and the mean alike; the count rides the step event.
+    policy_row_weight, alpha_full_excluded = exclude_alpha_full_rows(
+        policy_row_weight, np.asarray(targets.tail_mass, dtype=np.float32)
     )
 
     def _make(g0: int, g1: int):
@@ -266,7 +275,8 @@ def _build_graph_parts(
         "total_nodes": int(payload.node_offsets[-1]),
         "caps_max_edges": max_edges,
         "caps_max_nodes": max_nodes,
-        "batch_composition": _batch_composition(buffer),
+        "batch_composition": {**_batch_composition(buffer),
+                              "policy_rows_excluded_alpha_full": alpha_full_excluded},
     }
 
 

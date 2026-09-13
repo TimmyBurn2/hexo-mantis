@@ -100,6 +100,17 @@ class DrawRateAbortLike(Protocol):
     def consec(self) -> int: ...
 
 
+class PolicyLossTroughAbortLike(Protocol):
+    """The RESOLVED trough halt's terms (R350(b)(iv)); `None` is the EXPLICIT disarmed posture."""
+
+    @property
+    def delta_nats(self) -> float: ...
+    @property
+    def consec(self) -> int: ...
+    @property
+    def max_step(self) -> int: ...
+
+
 @runtime_checkable
 class WorkerPoolLike(Protocol):
     games_completed: int
@@ -225,6 +236,8 @@ class StepCoordinatorConfig:
     # authors on this dataclass. `None` is EXPLICITLY OFF, never an inherited posture: a literal
     # the caller always replaces is still a second default authority.
     draw_rate_abort: DrawRateAbortLike | None
+    # The policy-loss trough halt, the same idiom: `None` is EXPLICITLY OFF, never inherited.
+    policy_loss_trough_abort: PolicyLossTroughAbortLike | None
     # The four drain/terminal-eval caps are CONFIG-AUTHORED and lose their code-side defaults for
     # `stop_step`'s reason: `monitor.drain.*` had been minted and validated while the resolver
     # popped the block and threw it away, so the defaults were what the run actually used.

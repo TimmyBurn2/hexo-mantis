@@ -163,7 +163,7 @@ def test_absent_sealbot_rounds_route_none_and_coordinator_skip_counts() -> None:
     # and the four drain caps come from a MINTED `monitor.drain` block (R93/DR-11).
     config = dataclasses.replace(
         _step_coordinator_config(
-            stop_step=10**9, draw_rate_abort=None,
+            stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
             drain_caps=resolve_drain_caps(load_config(_REPO / "configs" / "dev_example.yaml").monitor),
             gate_interval=load_config(
                 _REPO / "configs" / "dev_example.yaml").monitor.gate_interval,

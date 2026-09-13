@@ -94,12 +94,15 @@ train:
     enabled: false
     decay: 0.999
     update_every: 10
+  policy_loss_weight_schedule:
+    warmup_steps: 0
   max_train_steps: 200
   draw_rate_abort:
     threshold: 0.5
     min_step: 10
     N_pool_min: 50
     consec: 3
+  policy_loss_trough_abort: null
   eval_interval: 1000
   log_interval: 10
   min_buf_size: 1

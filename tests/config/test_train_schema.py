@@ -49,6 +49,8 @@ VALID_TRAIN_PAYLOAD: dict = {
     "ply_cap_value": -0.5,
     "fast_policy_weight": 0.0,
     "ema": {"enabled": False, "decay": 0.999, "update_every": 10},
+    "policy_loss_weight_schedule": {"warmup_steps": 0},
+    "policy_loss_trough_abort": None,
 }
 
 FIELD_NAMES = sorted(VALID_TRAIN_PAYLOAD)

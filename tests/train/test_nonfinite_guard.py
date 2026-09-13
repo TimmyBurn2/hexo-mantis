@@ -52,10 +52,13 @@ def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
     buffer = H.uniform_graph_buffer()
     before = H.param_vector(trainer.model).clone()
 
-    real = core.ragged_policy_ce
-    monkeypatch.setattr(
-        core, "ragged_policy_ce",
-        lambda *a, **k: real(*a, **k) * float("nan"))
+    real = core.ragged_policy_ce_and_target_entropy
+
+    def _nan_ce(*a, **k):
+        ce, entropy = real(*a, **k)
+        return ce * float("nan"), entropy
+
+    monkeypatch.setattr(core, "ragged_policy_ce_and_target_entropy", _nan_ce)
 
     _graph_step(trainer, buffer)
 

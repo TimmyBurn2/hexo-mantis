@@ -35,6 +35,11 @@ from mantis.train.pretrain.graph_route import (
 _REPO = Path(__file__).resolve().parents[2]
 
 
+#: The route refuses a config that mints a policy warm-up (R350(b)(iii)), so a stub config must
+#: carry the key it reads — an absent key is a KeyError, never a silent zero.
+_NO_WARM_UP: dict[str, Any] = {"train": {"policy_loss_weight_schedule": {"warmup_steps": 0}}}
+
+
 def _write_ring(tmp_path: Path, **overrides: Any) -> Path:
     """A `.hexg` stand-in plus the provenance sidecar the route reads its geometry from."""
     ring = tmp_path / "corpus.hexg"
@@ -239,7 +244,7 @@ def test_the_graph_arm_trains_THROUGH_the_declared_seam(tmp_path: Path, monkeypa
     monkeypatch.setattr(graph_route, "run_declared_train_step", _spy)
 
     out = run_graph_pretrain(
-        spec=_Spec(), full_config={"train": {}}, train_section=object(), ring_path=ring,
+        spec=_Spec(), full_config=_NO_WARM_UP, train_section=object(), ring_path=ring,
         checkpoint_dir=tmp_path, device=None, steps=3, epochs=1, dense_arm_flags={},
     )
     assert out == tmp_path / "ckpt.pt"
@@ -284,7 +289,7 @@ def test_the_BC_route_passes_zero_recency_and_it_is_STRUCTURAL(tmp_path: Path, m
     monkeypatch.setattr(graph_route, "run_declared_train_step",
                         lambda _t, _b, _s, **kw: seen.append(kw["recency_weight"]) or {"loss": 0.0})
     run_graph_pretrain(
-        spec=_Spec(), full_config={}, train_section=object(), ring_path=ring,
+        spec=_Spec(), full_config=_NO_WARM_UP, train_section=object(), ring_path=ring,
         checkpoint_dir=tmp_path, device=None, steps=2, epochs=1, dense_arm_flags={},
     )
     assert seen == [0.0, 0.0]
@@ -433,7 +438,8 @@ def test_the_graph_arch_is_built_from_the_NESTED_config(tmp_path: Path, monkeypa
     resolve a different arch the day a `gnn_*` width key is minted. Asserted on the ARGUMENT."""
     ring = _write_ring(tmp_path)
     seen: list[Any] = []
-    nested = {"train": {"batch_size": 4}, "identity": {"encoding": "gnn_axis_v1"}}
+    nested = {"train": {"batch_size": 4, "policy_loss_weight_schedule": {"warmup_steps": 0}},
+              "identity": {"encoding": "gnn_axis_v1"}}
 
     class _Buf:
         def __init__(self, *_a, **_k) -> None: ...

@@ -95,7 +95,7 @@ _GATE_INTERVAL = load_config(
 
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         # Gate cadence mirrors narration cadence; this file calls `_run_hard_abort_gates`

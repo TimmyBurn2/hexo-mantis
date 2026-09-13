@@ -194,6 +194,21 @@ def refuse_dense_arm_flags(supplied: dict[str, Any]) -> None:
         )
 
 
+def refuse_policy_warm_up(full_config: dict[str, Any]) -> None:
+    """A BC pretrain runs only with the value warm-up OFF: it would skip N steps of the one loss BC exists for.
+
+    Raises:
+        GraphPretrainError: a non-zero warm-up. KeyError: no `train.policy_loss_weight_schedule`.
+    """
+    warmup = int(full_config["train"]["policy_loss_weight_schedule"]["warmup_steps"])
+    if warmup != 0:
+        raise GraphPretrainError(
+            f"train.policy_loss_weight_schedule.warmup_steps is {warmup}: the value warm-up is a "
+            "self-play-start posture and would zero this pretrain's policy loss for its first "
+            f"{warmup} steps. Run BC on a config minted with warmup_steps 0."
+        )
+
+
 def run_graph_pretrain(
     *, spec: Any, full_config: dict[str, Any], train_section: Any, ring_path: Path,
     checkpoint_dir: Path, device: Any, steps: int | None, epochs: int,
@@ -224,10 +239,12 @@ def run_graph_pretrain(
         The path of the checkpoint written by `Trainer.save_checkpoint`.
 
     Raises:
-        GraphPretrainError: a dense-arm flag was supplied, the ring or its budget refuses, or
-            the held-out estimator's measured noise exceeds the monitor's `min_delta`.
+        GraphPretrainError: a dense-arm flag was supplied, the config mints a policy warm-up, the
+            ring or its budget refuses, or the held-out estimator's measured noise exceeds the
+            monitor's `min_delta`.
     """
     refuse_dense_arm_flags(dense_arm_flags)
+    refuse_policy_warm_up(full_config)
     buf, prov = load_ring(ring_path, encoding=spec.name)
     knobs = resolve_coordinator_knobs(train_section)
     total_steps = resolve_step_budget(
