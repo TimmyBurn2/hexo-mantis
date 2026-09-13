@@ -146,3 +146,25 @@ def local_puller(tmp_path_factory) -> Iterator[Path]:
     finally:
         stop.set()
         thread.join(timeout=30)
+
+
+def load_dashboard_package():
+    """Load `tools/dashboard` by path under the name `dashboard`, once per process — `tools/`
+    is not a package and nothing may touch `sys.path` (R5)."""
+    if "dashboard" in sys.modules:
+        return sys.modules["dashboard"]
+    pkg_dir = REPO_ROOT / "tools" / "dashboard"
+    spec = importlib.util.spec_from_file_location(
+        "dashboard", pkg_dir / "__init__.py", submodule_search_locations=[str(pkg_dir)],
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["dashboard"] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="session")
+def dashboard():
+    """The `tools/dashboard` package, with its submodules importable as `dashboard.<name>`."""
+    return load_dashboard_package()
