@@ -46,18 +46,18 @@ taken with a head that no longer exists; §D). Under Gumbel the two nets are 0.1
 
 ## B. The grid — frozen checkpoints × sims × kind vs `sealbot_d5`
 
-Filled as cells land (WR [95 % CI over pairs]; W–L–D, s/game and median plies in the cell's
-`cell.json` on the box). Blank = still running at the last read (13:14 UTC).
+All 27 cells complete at 16:45 UTC (27 ok, 0 failed; WR [95 % CI over pairs], W–L–D, median
+plies; s/game and the raw records in the cell's `cell.json` and `games/` on the box).
 
 | net | kind | 128 | 256 | 512 |
 |---|---|---|---|---|
-| ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | **0.542** [0.486, 0.594] (156–132–0, 33 plies) | |
+| ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | **0.542** [0.486, 0.594] (156–132–0, 33 plies) | **0.628** [0.576, 0.681] (181–107–0, 33 plies) |
 | ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | 0.125 [0.090, 0.163] (36–252–0, 24 plies) | 0.062 [0.035, 0.090] (18–270–0, 21 plies) |
-| ck13k | puct | **0.464** [0.408, 0.519] (133–154–1, 60 plies) | | |
+| ck13k | puct | **0.464** [0.408, 0.519] (133–154–1, 60 plies) | 0.538 [0.479, 0.597] (155–133–0, 61 plies) | 0.599 [0.543, 0.655] (172–115–1, 61 plies) |
 | ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | 0.014 [0.003, 0.028] (4–284–0, 25 plies) | 0.007 [0.000, 0.017] (2–286–0, 25 plies) |
-| ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | **0.646** [0.594, 0.698] (186–102–0, 50 plies) | |
+| ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | **0.646** [0.594, 0.698] (186–102–0, 50 plies) | **0.774** [0.726, 0.819] (223–65–0, 49 plies) |
 | ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | **0.111** [0.080, 0.146] (32–256–0, 25 plies) | 0.066 [0.038, 0.097] (19–269–0, 25 plies) |
-| ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | **0.601** [0.542, 0.656] (173–115–0, 47 plies) | |
+| ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | **0.601** [0.542, 0.656] (173–115–0, 47 plies) | **0.689** [0.635, 0.745] (198–89–1, 43 plies) |
 | ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | **0.056** [0.031, 0.083] (16–272–0, 23 plies) | 0.014 [0.003, 0.028] (4–284–0, 23 plies) |
 | ck35k | gumbel | 0.149 [0.108, 0.191] (43–245–0, 27 plies) | — | — |
 
@@ -115,7 +115,7 @@ and 7/32 once against `sealbot_d5`; nothing on the record put that net at 79 % a
 Section A measures the same net under HEAD's heads at 288 games; the block's 16 % → 2.5 % → 16 %
 was never a fall from 53 %.
 
-## E. Findings (the cells still running at 12:44 UTC can move the sims row under PUCT, nothing else)
+## E. Findings
 
 1. **KIND — the Gumbel deploy head is the failure R350(c) named, and it is the run's own
    instrument.** On the same net it reads 24 pp below PUCT at equal sims (BC net: 0.413 vs
@@ -136,11 +136,16 @@ was never a fall from 53 %.
    head. The "trough" was the instrument's; the net improved through it. (35k under Gumbel-128
    reads 0.149 vs 25k's 0.167 — the 10k steps past the block bought nothing that head can see;
    no PUCT cell was run on 35k.)
-4. **SIMS — a lever under PUCT, a liability under Gumbel.** 128 → 256 under PUCT: 3k 0.431 →
-   0.542, 18k 0.568 → 0.646, 25k 0.497 → 0.601 (+8 to +11 pp each, the 3k and 25k CIs disjoint);
-   under Gumbel the same doubling HALVES the reading on every net, and 512 halves it again
-   (3k 0.062, 13k 0.007, 18k 0.066, 25k 0.014). The 13k PUCT-256 and the four PUCT-512 cells
-   complete the row and say whether the PUCT gain continues past 256.
+4. **SIMS — a lever under PUCT, a liability under Gumbel.** Under PUCT every doubling buys
+   +6 to +13 pp on every net and the gain has not flattened by 512: 3k 0.431 → 0.542 → 0.628,
+   13k 0.464 → 0.538 → 0.599, 18k 0.568 → 0.646 → **0.774**, 25k 0.497 → 0.601 → 0.689
+   (128 → 256 → 512). Under Gumbel the same doublings HALVE the reading each time (18k 0.233 →
+   0.111 → 0.066; 25k 0.167 → 0.056 → 0.014). R350(f)'s rule is answered: depth is a lever
+   under the head run7 deploys under, and run7's eval arms rise — the record proposes
+   `sealbot_model_sims` 512 for the external point (≈ 35–49 s/game at 12-way load on the box,
+   ≈ 288 games in ≈ 25 min on an otherwise idle card) and `deploy_sims` 512 for the gate, the
+   per-game cost stated beside them for the mint. The 18k net at PUCT-512 beats `sealbot_d5`
+   three games in four.
    R350(f)'s rule ("if 512 sims moves the reading materially, depth is a lever and run7's arms
    rise") is answered YES under the head run7 will deploy under, NO under the head run6 used.
 
@@ -148,5 +153,8 @@ Falsified on this record: F-48 (the block's net is weak), F-49 (the R340 control
 mint the record hands the operator: `search.kind` for deploy/eval = `puct` (the `deploy_sims`
 and `sealbot_model_sims` values from the completed sims row), the seam with `reinit: []`, and the
 self-play kind as an open decision with both arms' evidence stated above.
+
+Cost of the frontier: 31 cells × 288 games = 8 928 games, 08:27 → 16:45 UTC on the box (8.3 h of
+a card that ran 4–12 cells at a time; the PUCT-512 tail ran alone at ≈ 40 s/game).
 
 ## Sources

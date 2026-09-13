@@ -4,7 +4,7 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — RUN6 STOPPED under R350; STRENGTH-FRONTIER-1 RUNNING on the box; WARMSTART-2 / BC-3 LANDED on dev
+## Current phase — RUN6 STOPPED under R350; STRENGTH-FRONTIER-1 COMPLETE; WARMSTART-2 / BC-3 LANDED on dev; run7's mint waits on the operator's forward
 
 **run6 is stopped.** One SIGTERM to the supervisor at 2026-09-13 08:15:12 UTC: `shutdown_save` at
 step **35 084** (+0.5 s), the bundle `run6_00035084_e1563d16` complete, both processes gone in 32 s,
@@ -26,11 +26,12 @@ falsified.md **F-48, F-49**. (a)'s MECHANISM stands and the trough analysis supp
 block — the completed-Q target IS an argmax — and KL(target ‖ prior) rising 2.08 → 2.75 nats into
 the trough with the targets no softer).
 
-**STRENGTH-FRONTIER-1 is running on the box** (`tools/strength_frontier.py`, driver sha
-`1e586293055d` on tree `0f20896e` — the block's own eval worker, head, book and sealbot; record
-`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`; cells and results under
-`/workspace/frontier/{phase1,phase2}/`, `summary.jsonl` per phase; nothing on the box depends on
-a session). Landed so far (288 paired games, one shared opening window, pair-level 95 % CI):
+**STRENGTH-FRONTIER-1 is COMPLETE** — 31 cells, 8 928 games, 08:27 → 16:45 UTC on the box, 0
+failed (`tools/strength_frontier.py`, driver sha `1e586293055d` on tree `0f20896e` — the block's
+own eval worker, head, book and sealbot; record
+`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`, its §E the verdicts; raw cells under
+`/workspace/frontier/{phase1,phase2}/`). The box is idle. The readings (288 paired games, one
+shared opening window, pair-level 95 % CI):
 
 | cell | WR | CI |
 |---|---|---|
@@ -39,23 +40,27 @@ a session). Landed so far (288 paired games, one shared opening window, pair-lev
 | `bc_tp` (run6's seam: value head fresh) PUCT-150 | **0.038** | [0.017, 0.062] |
 | `bc_tp` Gumbel-160/m16 | **0.014** | [0.003, 0.028] |
 | `ck3k` / `ck13k` / `ck18k` / `ck25k` Gumbel-128 | 0.205 / **0.031** / 0.233 / 0.167 | [0.160, 0.250] / [0.014, 0.052] / [0.191, 0.278] / [0.128, 0.208] |
-| `ck3k` / `ck13k` / `ck18k` / `ck25k` PUCT-128 | 0.431 / **0.464** / **0.568** / 0.497 | [0.372, 0.483] / [0.408, 0.519] / [0.510, 0.625] / [0.444, 0.549] |
+| `ck3k` / `ck13k` / `ck18k` / `ck25k` PUCT-128 | 0.431 / 0.464 / 0.568 / 0.497 | ± ≈ 0.055 each |
+| the same, PUCT-256 | 0.542 / 0.538 / 0.646 / 0.601 | ± ≈ 0.055 each |
+| the same, PUCT-512 | 0.628 / 0.599 / **0.774** / 0.689 | ± ≈ 0.05 each |
+| the same, Gumbel-256 | 0.125 / 0.014 / 0.111 / 0.056 | |
+| the same, Gumbel-512 | 0.062 / 0.007 / 0.066 / 0.014 | |
 | `ck35k` Gumbel-128 | 0.149 | [0.108, 0.191] |
-| `ck18k` Gumbel-256 | **0.111** | [0.080, 0.146] |
 | `ck25k` vs `bc_full`, Gumbel-160/m16 (25k as candidate) | **0.438** | [0.389, 0.486] |
+| `ck25k` vs `bc_full`, PUCT-150 (25k as candidate) | **0.672** | [0.622, 0.721] |
 
 Two answers already: the KIND — the Gumbel deploy head reads the SAME net 24 pp below PUCT; and
 the HEAD SET — the BC checkpoint's own value head (trained on the corpus outcomes, thrown away by
 the seam) is worth 0.413 vs 0.038 at PUCT-150, and a BC prior searched over a random value head
 is WORSE than the prior. And the NET: under PUCT-128 the block's nets sit at or ABOVE the BC net
 (0.431 → 0.568 at 18k → 0.497), so the block trained a stronger net than it started with, read
-by the wrong head; the 13k "trough" is a 3 % Gumbel reading of a net PUCT reads at 0.464. Under the Gumbel head
-more sims read WORSE (18k: 0.233 at 128 → 0.111 at 256), and the run's own promotion instrument
-scores the 25k net BELOW its prior (0.438 vs `bc_full` at Gumbel-160) while PUCT-vs-sealbot has
-it above. Phase 2's 27 cells (3k/13k/18k/25k × {128, 256, 512} × {gumbel, puct},
-`ck35k` Gumbel-128, `ck25k` vs `bc_full` at Gumbel-160 and PUCT-150) finish over the next hours;
-the record's §B/§C/§E fill as they land. The verdict on kind/sims for run7's mint is the
-record's, not this file's.
+by the wrong head; the 13k "trough" is a 3 % Gumbel reading of a net PUCT reads at 0.464. SIMS: under PUCT every
+doubling buys +6 to +13 pp on every net with no flattening by 512 (18k 0.568 → 0.646 → 0.774);
+under Gumbel every doubling HALVES the reading. The run's own promotion instrument scores the
+25k net BELOW its prior (0.438 at Gumbel-160) while PUCT has it beating the prior 0.672. The
+record's §E hands run7's mint: deploy/eval kind `puct`, `deploy_sims` and `sealbot_model_sims`
+512 (cost stated), the seam with `reinit: []`; the SELF-PLAY kind is left to the operator with
+both arms' evidence stated. F-48/F-49 falsified on this record.
 
 **Landed on dev this leg (R350(b), (e), the stop card), one commit line each — see the
 Exit facts:** (b)(i) the seam copies EVERY tensor and `identity.warm_start.reinit` names what
@@ -72,15 +77,17 @@ the step event. **The loader now reads a stamp that predates a schema leaf as pr
 not refused) — before that fix the three REQUIRED additions orphaned every run6 bundle and the BC
 artifact (a review finding; the re-strip it prompted was reverted).
 
-**Dispatcher state for a fresh session.** Open, in order: (1) read the frontier's `summary.jsonl`
-files off the box into the record's §B/§C and write §E (kind, sims, the head set); (2) the run7
-re-mint from `docs/design/measurements/RUN7_PREREG_2026-09-13.md` once the operator forwards the
-filled rows (the kind and sims rows are the frontier's); (3) preflight stamp on the box, the 4 h
-shakedown twin, START on the operator's word; (4) BC-3's re-run is OPTIONAL — the existing strip
-carries a trained value head; the operator may pin it with `reinit: []`; (5) the owed items in
+**Dispatcher state for a fresh session.** Open, in order: (1) the run7 re-mint from
+`docs/design/measurements/RUN7_PREREG_2026-09-13.md` once the operator forwards the filled rows
+(the frontier's answers are in that file's §1 now: kind `puct` for deploy/eval, sims 512, the
+self-play kind the operator's); (2) preflight stamp on the box (carry this line's commits over
+by bundle first — the box is at `0f20896e`), the 4 h shakedown twin, START on the operator's
+word; (3) the frontier's raw cells (`/workspace/frontier/`, ≈ 9 000 game records) are on the box
+only — mirror them before any recycle; (5) the owed items in
 `CARDS.md`: the three-row α reconstruction, the self-play search-stats sample
 (`CARD-SELFPLAY-SEARCH-STATS`), the poller race (`CARD-DRAIN-POLLER-RACE`), the supervisor grace
-as a relation. The box: `/workspace/hexo-mantis` at `0f20896e` (the frontier's tree; carry this
+as a relation; (4) BC-3's re-run stays OPTIONAL (the strip's value head is trained; pin it with
+`reinit: []`). The box: `/workspace/hexo-mantis` at `0f20896e` (the frontier's tree; carry this
 line's commits over by bundle before any run7 work there), run6's record under
 `/workspace/runs/run6/`, the R342-era logs under `/workspace/r342/`.
 
@@ -172,6 +179,6 @@ is not dispatched.
 ## Provenance
 
 Derived 2026-09-13 on `dev` at the exit commit of this leg, from `configs/run6.yaml`, the box's
-`/workspace/frontier/*/summary.jsonl` (read at 11:15 UTC), the run6 mirror's events and rings,
+`/workspace/frontier/*/summary.jsonl` (complete, 16:45 UTC), the run6 mirror's events and rings,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
 `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.
