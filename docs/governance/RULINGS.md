@@ -1,4 +1,4 @@
-# RULINGS — R23 to R350
+# RULINGS — R23 to R351
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R351.
+- Numbering continues from R346. The next ruling is R352.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,88 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R351 — FRONTIER VERDICT → RUN7: the instrument was the failure; four scale cells; run7's self-play kind by rule; deploy and eval PUCT-512
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R350: the frontier-verdict packet made its own §1 the canonical home and directed that it be
+copied verbatim here.
+
+> R{next} — (a) THE INSTRUMENT WAS THE FAILURE. Every screen, round and
+> promotion in run6 was read by a Gumbel deploy head that scores 16
+> candidates by logit + g + (c_visit + max_n)·c_scale·q̂ with q̂ MIN-MAX
+> RESCALED to [0, 1] and c_scale 1.0 — a 50–200-nat value term against
+> a few nats of prior. The paper says so in its own words: Atari uses
+> normalized advantages with c_scale 0.1 "approximately in [−5, 5]", and
+> "if c_scale is large, Gumbel MuZero focuses on q̂ and neglects the
+> logits… performance is worse"; Go and chess use c_scale 1.0 on RAW
+> q ∈ [−1, 1], whose spreads between plausible moves are hundredths.
+> Our mint combined rescaling with 1.0 — neither pair the paper ran.
+> R347(b)'s "value_scale 1.0 (every board-game implementation)" is
+> ANNOTATED: true of raw-q implementations, false under min-max
+> rescaling; the architect's. F-46 is FILED: rescaled Q with c_scale 1.0
+> reads the same net 24 pp below PUCT, inverts a 0.672 head-to-head, and
+> falls with every doubling of sims. The net was never the problem: under
+> PUCT the block rose 0.41 → 0.57 at 128 sims and reached 0.77 at 512.
+> (b) FOUR CELLS, on the 18k net vs sealbot_d5, 288 paired games each,
+> sims 128 and 512: Gumbel deploy with (rescale, c_scale 0.1) — Mctx's
+> own pair — and with (no rescale, c_scale 1.0) — the paper's Go pair.
+> Pre-registered reading: a pair is ALIVE if its 512 reading is within
+> the CI of PUCT-512 (0.774) AND does not fall from 128 to 512; the
+> higher alive pair is Gumbel's scale from now on, for deploy targets
+> and self-play targets alike (one σ, one key).
+> (c) RUN7 SELF-PLAY KIND, by rule: if a Gumbel pair is alive in (b),
+> run7 self-play is Gumbel-320/64 at that scale — it trained a net PUCT
+> reads 15 pp above its prior with a random value head and a broken
+> σ, and its low-sim improvement property is the reason it was chosen;
+> if no pair is alive, run7 self-play is PUCT with playout-cap 320/64 at
+> p 0.25, policy rows from the full arm only (fast_policy_weight 0.0),
+> τ 0.5 — the measured reader, untested as a trainer at this regime, and
+> that is disclosed. Either way DEPLOY AND EVAL ARE PUCT-512: the
+> promotion bar is deploy-matched to what the ladder will play, not to
+> the training search. The schema splits `search.kind` into
+> `selfplay.search.kind` and `deploy.search.kind` (S) so the two can
+> differ by construction.
+> (d) RUN7 ROWS, corrections to the prereg: the policy-loss trough halt
+> is DEMOTED to a dashboard warning — the block's policy loss rose 0.6
+> nats while the net improved; a halt on it would have killed a
+> productive run; the PUCT-512 point every 3,000 steps is the watch.
+> `reinit: []` on the existing strip (its value head IS the corpus-
+> outcome head, worth 0.41 vs 0.04); BC-3's re-run is skipped. Value
+> warm-up 2,000 steps stands as cheap insurance. Supervisor grace as the
+> relation (120 s), drain block minted explicitly, checkpoint = eval
+> interval — all accepted. Witnesses (ii)/(iii) as the prereg restates
+> them.
+> (e) α = 1.0 rows stay out of the policy loss; the reconstruction is
+> owed, and (b)'s scale may make the class vanish — if it does, that is
+> the finding.
+> (f) Sims: a lever under PUCT (+6 to +13 pp per doubling, unflattened
+> at 512); eval takes it (512). Self-play arms stay 320/64 — the games
+> budget is the block's other shortfall and more sims per move buys
+> fewer games.
+> ROUTE: dashboard merge → (b) cells → (c) row → re-mint → stamp →
+> shakedown → START.
+
+`R{next}` is the packet's own placeholder and resolves to R351 — this file's header said the next
+number was 351 when the packet was forwarded; the text is copied as written rather than edited.
+**(a)'s "F-46" resolves to F-50 on the same footing:** `falsified.md` already carried F-46 (the
+`checker_thread` posture, 2026-09-11) and F-47–F-49 when the packet was written, so the row (a)
+files is the register's next number; its text is copied as written under F-50 with the resolution
+noted beside it.
+Grounds: operator direction, forwarding the frontier-verdict packet (dated 2026-09-14) on
+2026-09-13, on the frontier record `docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`
+(31 cells, 8 928 games, 0 failed) read against Danihelka et al. 2022 §4 / App. F and
+`mctx/_src/qtransforms.py`. The forward ratifies the frontier, the frontier leg's six commits,
+the ANNOTATION under R350's foot, and the `dashboard-v2` ff merge (landed at `3295cd8c`).
+(b)'s pairs are the LAST frontier spend; the "no rescale" arm is a search knob this tree did not
+have (the min-max rescale was unconditional in `mctx_completed_qvalues`), built for the cells
+under the same one-σ-one-key posture (c) states.
+Amends: R347(b) — ANNOTATED under R347's foot (its `Status` line says so).
+Supersedes for run7: R350(b)(iv)'s trough HALT (demoted to a warning by (d) — the mint arms
+no `train.policy_loss_trough_abort`); R350(b)(ii)'s BC-3 re-run (skipped by (d)); the prereg's
+"one key carries both heads" (split by (c)).
+Status: standing.
+
+---
 
 ### R350 — BLOCK VERDICT: run6 STOPPED below its warm start; WARMSTART-2 / BC-3 ordered; STRENGTH-FRONTIER-1 NOW; run7's cadence, α rows and sims rules
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -333,7 +415,7 @@ Grounds: operator direction, forwarding the wave-2 packet. (a) closes the HEXG b
 the Gumbel target format; (b)-(c) move prereg rows on evidence named in place; (d) retires a law
 with no producer and converts two operational risks into pre-flight halts; (e) takes the one
 serving lever whose cost is measurable and cards the two that are not.
-Status: standing.
+Status: standing — (b)'s "value_scale = 1.0 (App. F, every board-game implementation)" is ANNOTATED under R347's foot by R351(a): true of raw-q implementations, false under min-max rescaling; the pair this mint combined was one the paper never ran.
 
 ---
 
@@ -2990,7 +3072,8 @@ Status: standing — the register section carries the header summary, the proven
 Register text corrects ONLY by annotation, never by repair (R285(c) shape, R290(f) ledger).
 Numbered annotations 1-14 are NOT stored in numeric order: 1-6 and 9-11 sit in the
 `## REGISTER-FOOT ANNOTATIONS` block, 12 sits under R282, 7 under R308, 8 under R310, and
-13-14 under R336. Five further annotations carry no number and sit under their ruling's foot.
+13-14 under R336. The later annotations carry no number and sit under their ruling's foot
+(the count that used to stand here was stale by one at R350 and is derived, not stated — R192(e)).
 Source: docs/governance/archive/rulings_register.md, plus laws.md for the LAW-10 annotation.
 
 ### ANNOTATION 1 — the (t)-for-(v) misreference in the R289 packet's framing prose
@@ -3158,6 +3241,20 @@ put the BC net at 79 % against `sealbot_d5`; the frontier's 288-game cells
 (`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`) are the control now.
 Ordered by: R350 §2 ("if it too copied only trunk + policy, (a)'s control is weaker and the
 packet says so"), appended 2026-09-13 by the landing session
+
+### ANNOTATION under R347's foot — R347(b)'s "value_scale 1.0 (every board-game implementation)" IS TRUE OF RAW-Q IMPLEMENTATIONS ONLY
+Corrects: R347(b)'s ground for `c_scale` 1.0 (the clause's value stood until R351(b) re-measures it;
+(a), (c)–(e) are untouched)
+Fact: the paper's Go and chess runs use c_scale 1.0 on RAW q ∈ [−1, 1], whose spreads between
+plausible moves are hundredths of a nat; its Atari runs use c_scale 0.1 on advantages
+normalized "approximately in [−5, 5]", and the paper's own words are "if c_scale is large,
+Gumbel MuZero focuses on q̂ and neglects the logits… performance is worse". Mctx's
+`qtransform_completed_by_mix_value` MIN-MAX RESCALES q̂ to [0, 1] and pairs that with
+`value_scale` 0.1. Our mint combined the rescale with 1.0 — a (c_visit + max_n)-nat value term
+against a few nats of prior, a pair neither the paper nor Mctx ran. The frontier read it: the
+same net 24 pp below PUCT, a 0.672 head-to-head inverted to 0.438, and halving with every
+doubling of sims (`falsified.md` F-50). The architect's; ledger.
+Ordered by: R351(a), appended 2026-09-13 by the landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
