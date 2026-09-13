@@ -105,6 +105,21 @@ def test_the_cadence_gates_evaluation(monkeypatch) -> None:
     assert [s for s, _ in m.history] == [5, 10]
 
 
+def test_the_value_loss_rides_the_same_pass_and_never_the_stop(monkeypatch) -> None:
+    """BC-3 (R350(b)(ii)): the value loss rides every pass and is recorded; the stop reads POLICY ONLY."""
+    import mantis.train.coordinator.dispatch as dispatch
+
+    m = _monitor(eval_every=1, plies=200, batch_size=100)
+    readings = iter([{"policy_loss": 1.0, "value_loss": 0.9}, {"policy_loss": 1.0, "value_loss": 0.7},
+                     {"policy_loss": 1.0, "value_loss": 0.5}, {"policy_loss": 1.0, "value_loss": 0.3}])
+    monkeypatch.setattr(dispatch, "run_declared_eval_step", lambda *a, **k: next(readings))
+    m.maybe_evaluate(object(), step=1)
+    m.maybe_evaluate(object(), step=2)
+    assert m.value_history == [(1, pytest.approx(0.8)), (2, pytest.approx(0.4))]
+    assert [loss for _, loss in m.history] == [1.0, 1.0]
+    assert m.stop.since_best == 1, "a falling value loss must not reset the policy patience"
+
+
 def test_measure_noise_reports_the_SPREAD_of_repeated_readings(monkeypatch) -> None:
     """The number `min_delta` has to clear. Measured on an unchanged model, so any difference
     is the sampler's."""

@@ -1,17 +1,9 @@
-"""Held-out policy-loss monitoring and the patience stop for BC pretrain (R328(d)).
-
-WHY A MODULE AND NOT A FEW LINES IN `graph_route`. The stopping rule is the ONE stated risk
-bound on bootstrap posture (A) — the filed adjudication's §3(A) says the over-fit risk *"is
-bounded by a knob the operator already controls, how long you pretrain"* — so it is the thing
-that has to be provable on its own, with planted breaks, before any pretrain consumes it. A
-rule woven into the training loop can only be tested by running a training loop.
-
-THE ESTIMATOR IS HONEST ABOUT BEING ONE. `HexgBuffer.sample_graph_batch` takes no seed, so a
-held-out pass is `ceil(plies / batch_size)` SAMPLED batches — ring-equivalent in expectation,
-covering about 63 % of distinct rows with replacement, and NOT an exact epoch loss. Its own
-step-to-step noise is therefore measurable and is measured (`measure_noise`), because a
-stopping rule whose noise exceeds the improvement it looks for is not a stopping rule. The
-`min_delta` that decides "improved" is set from that measurement, never guessed.
+"""Held-out policy-loss monitoring and the patience stop for BC pretrain (R328(d)), with the
+held-out VALUE loss read on the same pass (BC-3, R350(b)(ii)) — reported, never a stop term.
+A module of its own because the stop is the one stated over-fit bound on bootstrap posture (A)
+and must be provable with planted breaks before a pretrain consumes it. The estimator is
+`ceil(plies / batch_size)` SAMPLED batches (no seed on `sample_graph_batch`), so its own noise
+is measured (`measure_noise`) and `min_delta` is set from that, never guessed.
 """
 from __future__ import annotations
 
@@ -88,6 +80,9 @@ class HeldOutMonitor:
     eval_batches: int = 0
     plies: int = 0
     history: list[tuple[int, float]] = field(default_factory=list)
+    #: BC-3's line: the held-out VALUE loss from the SAME pass; the stop reads policy only (R328(d)).
+    value_history: list[tuple[int, float]] = field(default_factory=list)
+    last_value_loss: float | None = None
 
     @classmethod
     def build(cls, *, ring: Any, spec: Any, plies: int, batch_size: int, eval_every: int,
@@ -118,10 +113,10 @@ class HeldOutMonitor:
         )
 
     def evaluate(self, trainer: Any) -> float:
-        """Mean held-out POLICY loss over one ring-equivalent of sampled batches."""
+        """Mean held-out POLICY loss over one ring-equivalent; the pass's value loss lands on `last_value_loss`."""
         from mantis.train.coordinator.dispatch import run_declared_eval_step  # noqa: PLC0415
 
-        total = 0.0
+        policy_total = value_total = 0.0
         for _ in range(self.eval_batches):
             info = run_declared_eval_step(
                 trainer, self.ring, self.spec, batch_size=self.batch_size,
@@ -129,8 +124,10 @@ class HeldOutMonitor:
                 sample_threads_provider=self.sample_threads_provider,
                 fast_policy_weight_provider=self.fast_policy_weight_provider,
             )
-            total += float(info["policy_loss"])
-        return total / self.eval_batches
+            policy_total += float(info["policy_loss"])
+            value_total += float(info["value_loss"])
+        self.last_value_loss = value_total / self.eval_batches
+        return policy_total / self.eval_batches
 
     def measure_noise(self, trainer: Any, *, repeats: int = 2) -> float:
         """Spread of the estimator on an UNCHANGED model — the floor `min_delta` must clear.
@@ -149,7 +146,10 @@ class HeldOutMonitor:
             return self.stop.fired, None
         loss = self.evaluate(trainer)
         self.history.append((step, loss))
+        if self.last_value_loss is not None:
+            self.value_history.append((step, self.last_value_loss))
         should_stop = self.stop.observe(loss, step=step)
-        _LOG.info("bc_heldout step=%d policy_loss=%.6f best=%.6f since_best=%d stop=%s",
-                  step, loss, self.stop.best, self.stop.since_best, should_stop)
+        _LOG.info("bc_heldout step=%d policy_loss=%.6f value_loss=%s best=%.6f since_best=%d "
+                  "stop=%s", step, loss, self.last_value_loss, self.stop.best,
+                  self.stop.since_best, should_stop)
         return should_stop, loss
