@@ -240,23 +240,24 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
                 f"{path.name}: the resolver must carry the operator's terms through verbatim"
             )
 
-    # The ONE armed production config, which CARRIES the four pre-registered constants rather than
+    # The armed production configs, which CARRY the four pre-registered constants rather than
     # re-authoring them. The pin is on the MINTED file, so an in-place edit of its armed block reds
     # here; gate 12 audits it by name.
-    run6 = postures.pop("run6.yaml", None)
-    assert run6 is not None, (
-        "configs/run6.yaml is the ONE declared PRODUCTION config and must ARM the draw-rate "
-        "row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
-    )
-    assert (run6.threshold, run6.min_step, run6.N_pool_min, run6.consec) == (
-        RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
-        RUN5_PREREG["consec"]), (
-        f"run6 CARRIES the four pre-registered constants unchanged; got {run6}. They are "
-        f"RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's threshold, R85's "
-        f"min_step, R92's evidence bar and R92's consec — and a dispatcher authors none "
-        "(R1/R119). Changing one in place is R1's hand-varied config; it is re-minted with a "
-        "recorded delta or not at all"
-    )
+    for production in ("run6.yaml", "run7.yaml"):
+        armed = postures.pop(production, None)
+        assert armed is not None, (
+            f"configs/{production} is a declared PRODUCTION config and must ARM the draw-rate "
+            "row — a disarmed production config is rc 30 at gate 12 (R59/R61)"
+        )
+        assert (armed.threshold, armed.min_step, armed.N_pool_min, armed.consec) == (
+            RUN5_PREREG["threshold"], RUN5_PREREG["min_step"], RUN5_PREREG["N_pool_min"],
+            RUN5_PREREG["consec"]), (
+            f"{production} CARRIES the four pre-registered constants unchanged; got {armed}. They are "
+            f"RUN-SCOPED CONSTANTS pre-registered at mint prereg — R82's threshold, R85's "
+            f"min_step, R92's evidence bar and R92's consec — and a dispatcher authors none "
+            "(R1/R119). Changing one in place is R1's hand-varied config; it is re-minted with a "
+            "recorded delta or not at all"
+        )
 
     # Exactly ONE non-production config is ARMED — the preflight-rehearsal target, at its OWN
     # minted burst-scale guard values, NOT the production prereg constants; asserting the

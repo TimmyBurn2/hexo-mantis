@@ -43,8 +43,9 @@ _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps
 
 #: The two configs whose value is the OPERATOR'S, minted at the box sitting from the calibration
 #: tool's output. `run6.yaml` joins run5 on run5's own grounds: a box-class config that already
-#: mints run5's `microbatch_caps` and is already excluded beside it from the train-side sweep.
-_PRODUCTION = ("run6.yaml",)
+#: mints run5's `microbatch_caps` and is already excluded beside it from the train-side sweep;
+#: `run7.yaml` carries run6's caps by mint (R351 route, 2026-09-13).
+_PRODUCTION = ("run6.yaml", "run7.yaml")
 _NON_PRODUCTION = ("dev_example.yaml", "smoke_preflight_armed.yaml")
 
 
@@ -142,13 +143,14 @@ def test_fg5_02_production_configs_SHARING_A_FIT_carry_the_SAME_minted_pair() ->
             f"production configs sharing the fit {fit} disagree about the fused-graph bound: "
             f"{pairs}. They partition the SAME card from the SAME sweep; a divergence means "
             "one was minted without the other, which R281(d) rules is not a legal posture.")
-    # THE CROSS-FILE COMPARISON HAS NO SUBJECT, stated rather than papered over: `configs/` holds
-    # ONE production config, so every fit group is a group of one. The vacuity is asserted in the
-    # direction that survives, so a SECOND production config reds this until the row is re-armed.
-    assert sum(len(pairs) for pairs in groups.values()) == 1, (
-        f"more than one production config is shipped ({ {k: sorted(v) for k, v in groups.items()} }); "
-        "the cross-file fit comparison above is live again and this vacuity note must be "
-        "replaced by the `any(len(pairs) > 1)` arm it stands in for")
+    # THE COMPARISON HAS A SUBJECT AGAIN: run7 shares run6's fit (same encoding, arch, ply cap
+    # and pop width) and carries its pair by mint, so at least one group holds two files. Held
+    # in this direction so a re-mint that leaves every group a singleton reds rather than
+    # passing over air.
+    assert any(len(pairs) > 1 for pairs in groups.values()), (
+        f"no two production configs share a fit ({ {k: sorted(v) for k, v in groups.items()} }); "
+        "the cross-file comparison above asserts nothing — restore the vacuity note if that is "
+        "deliberate")
 
 
 def test_fg5_02_the_placeholder_is_schema_valid_so_gate_7_stays_green() -> None:

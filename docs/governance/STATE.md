@@ -4,92 +4,81 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — RUN6 STOPPED under R350; STRENGTH-FRONTIER-1 COMPLETE; WARMSTART-2 / BC-3 LANDED on dev; run7's mint waits on the operator's forward
+## Current phase — R351 LANDED; the four σ cells COMPLETE (no pair alive); run7 MINTED (`configs/run7.yaml`, PUCT/PUCT); the preflight stamp, the shakedown and START are next
 
-**run6 is stopped.** One SIGTERM to the supervisor at 2026-09-13 08:15:12 UTC: `shutdown_save` at
-step **35 084** (+0.5 s), the bundle `run6_00035084_e1563d16` complete, both processes gone in 32 s,
-the 35 000 and 35 084 bundles receipted by one manual puller cycle (the user service
-`mantis-puller-run6` was stopped first and stays stopped; the dashboard timer is idle). The run
-had gone 10 083 steps past the block at the same regime. The stop was not orderly past the save:
-`close_out` waited on the in-flight round-35 eval child and the supervisor's 30 s grace SIGKILLed
-it — `CARD-STOP-DRAIN-VS-GRACE`, fixed on this line (a resumable stop now ABANDONS the round,
-`eval_broken(abandoned)`). The last hour's two game shards are mirrored but unindexed.
+**R351 is landed verbatim** (`487d8661`), the operator's forward of the frontier-verdict packet
+(dated 2026-09-14, forwarded 2026-09-13): the Gumbel deploy head that read every screen of run6
+scored its 16 candidates by a min-max-rescaled Q × `c_scale` 1.0 — a 50–200-nat value term
+against a few nats of prior, a pair neither the paper nor Mctx ran. R347(b) is ANNOTATED under
+its foot; the packet's "F-46" is filed as **F-50** (F-46–F-49 were already taken; the resolution
+is noted in the entry, as `R{next}` → R350 was). `dashboard-v2` merged ff at `3295cd8c`.
 
-**R350 is landed verbatim** (`5743cff6`) with its landing note, and ANNOTATED at its foot: (a)'s
-control — "same BC net, ALL heads … 53 % → 79 % vs sealbot" — is not what the record says. Read
-from the box before the frontier ran: the R342-era bursts boot `loaded_keys=46` (value head FRESH,
-the same seam run6 used); the deploy head until `6ee52ca7` (2026-09-09) was a since-deleted
-PUCT-tree/transformed-Q-root hybrid; and 72.5 % = 58/80 and 78.8 % = 63/80 are GATE-SCREEN
-fractions (the candidate vs its own step-0 anchor), 53.1 % = 17/32 the one sealbot reading.
-falsified.md **F-48, F-49**. (a)'s MECHANISM stands and the trough analysis supports it
-(`docs/design/measurements/INVESTIGATION1_TROUGH_2026-09-13.md`: H(target) 0.10–0.14 nats all
-block — the completed-Q target IS an argmax — and KL(target ‖ prior) rising 2.08 → 2.75 nats into
-the trough with the targets no softer).
+**The four σ cells (R351(b)) are COMPLETE — no pair is alive.** On the 18k net vs `sealbot_d5`,
+288 paired games each, tree `646ca237` (record §F of
+`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`; raw cells `/workspace/frontier/phase3/`
+on the box and mirrored to the operator's `mantis-mirror/frontier/`, all three phases, 98 MB):
 
-**STRENGTH-FRONTIER-1 is COMPLETE** — 31 cells, 8 928 games, 08:27 → 16:45 UTC on the box, 0
-failed (`tools/strength_frontier.py`, driver sha `1e586293055d` on tree `0f20896e` — the block's
-own eval worker, head, book and sealbot; record
-`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`, its §E the verdicts; raw cells under
-`/workspace/frontier/{phase1,phase2}/`). The box is idle. The readings (288 paired games, one
-shared opening window, pair-level 95 % CI):
-
-| cell | WR | CI |
+| σ pair | 128 | 512 |
 |---|---|---|
-| `bc_full` (every head) PUCT-150 | **0.413** | [0.358, 0.469] |
-| `bc_full` Gumbel-160/m16 | **0.177** | [0.135, 0.219] |
-| `bc_tp` (run6's seam: value head fresh) PUCT-150 | **0.038** | [0.017, 0.062] |
-| `bc_tp` Gumbel-160/m16 | **0.014** | [0.003, 0.028] |
-| `ck3k` / `ck13k` / `ck18k` / `ck25k` Gumbel-128 | 0.205 / **0.031** / 0.233 / 0.167 | [0.160, 0.250] / [0.014, 0.052] / [0.191, 0.278] / [0.128, 0.208] |
-| `ck3k` / `ck13k` / `ck18k` / `ck25k` PUCT-128 | 0.431 / 0.464 / 0.568 / 0.497 | ± ≈ 0.055 each |
-| the same, PUCT-256 | 0.542 / 0.538 / 0.646 / 0.601 | ± ≈ 0.055 each |
-| the same, PUCT-512 | 0.628 / 0.599 / **0.774** / 0.689 | ± ≈ 0.05 each |
-| the same, Gumbel-256 | 0.125 / 0.014 / 0.111 / 0.056 | |
-| the same, Gumbel-512 | 0.062 / 0.007 / 0.066 / 0.014 | |
-| `ck35k` Gumbel-128 | 0.149 | [0.108, 0.191] |
-| `ck25k` vs `bc_full`, Gumbel-160/m16 (25k as candidate) | **0.438** | [0.389, 0.486] |
-| `ck25k` vs `bc_full`, PUCT-150 (25k as candidate) | **0.672** | [0.622, 0.721] |
+| (rescale, 0.1) — Mctx's default | 0.167 [0.125, 0.208] | 0.056 [0.031, 0.083] |
+| (no rescale, 1.0) — the paper's Go pair | 0.219 [0.174, 0.264] | 0.073 [0.045, 0.104] |
+| (rescale, 1.0) — run6's mint | 0.233 | 0.066 |
+| PUCT | 0.568 | 0.774 |
 
-Two answers already: the KIND — the Gumbel deploy head reads the SAME net 24 pp below PUCT; and
-the HEAD SET — the BC checkpoint's own value head (trained on the corpus outcomes, thrown away by
-the seam) is worth 0.413 vs 0.038 at PUCT-150, and a BC prior searched over a random value head
-is WORSE than the prior. And the NET: under PUCT-128 the block's nets sit at or ABOVE the BC net
-(0.431 → 0.568 at 18k → 0.497), so the block trained a stronger net than it started with, read
-by the wrong head; the 13k "trough" is a 3 % Gumbel reading of a net PUCT reads at 0.464. SIMS: under PUCT every
-doubling buys +6 to +13 pp on every net with no flattening by 512 (18k 0.568 → 0.646 → 0.774);
-under Gumbel every doubling HALVES the reading. The run's own promotion instrument scores the
-25k net BELOW its prior (0.438 at Gumbel-160) while PUCT has it beating the prior 0.672. The
-record's §E hands run7's mint: deploy/eval kind `puct`, `deploy_sims` and `sealbot_model_sims`
-512 (cost stated), the seam with `reinit: []`; the SELF-PLAY kind is left to the operator with
-both arms' evidence stated. F-48/F-49 falsified on this record.
+Both fall from 128 to 512 and both sit ~70 pp below PUCT-512's CI. By R351(c)'s rule run7's
+self-play is PUCT (320/64 at p 0.25, full-arm policy rows, τ 0.5); deploy and eval PUCT-512.
+**F-51 is filed:** σ's scale is NOT the Gumbel head's failure — all three pairs read the same net
+within 7 pp at 128 and 2 pp at 512 and every one halves per doubling of sims; the class R351(e)
+hoped would vanish with the scale does not. What is left is the head itself (m 16 over a ≈ 355-move
+legal set, the halving schedule, the interior selector) or a defect the parity pins do not reach —
+a card, not a run7 question.
 
-**Landed on dev this leg (R350(b), (e), the stop card), one commit line each — see the
-Exit facts:** (b)(i) the seam copies EVERY tensor and `identity.warm_start.reinit` names what
-stays fresh (REQUIRED; `configs/run6.yaml` re-minted with `[value_head]`, the truth of what it
-booted; run7 mints `[]`), with the step-0 witness `net_param_hash(live) == net_hash` refusing a
-dropped head; (b)(ii) BC-3's held-out VALUE line rides every BC pass (the strip's value head was
-already trained on the corpus outcomes — R350's landing note); (b)(iii) `train.policy_loss_weight_schedule.warmup_steps`
-(0 everywhere; run7 proposes 2 000) leaves the policy term OUT of the loss so AdamW cannot move
-the prior, the BC route refuses a non-zero value; (b)(iv) `trainer_step.policy_kl_target_vs_prior`
-and `policy_target_entropy` from step 0, and the trough halt `train.policy_loss_trough_abort`
-(`null` everywhere; run7 proposes `{0.2, 3, 5000}`; manifest row DEFERRED, exit 49, bounded
-cadence); (e) α = 1.0 rows leave the policy loss and its denominator unconditionally, counted on
-the step event. **The loader now reads a stamp that predates a schema leaf as provenance** (logged,
-not refused) — before that fix the three REQUIRED additions orphaned every run6 bundle and the BC
-artifact (a review finding; the re-strip it prompted was reverted).
+**Landed on dev this leg (one line each, the full local gate set run at `5f05026f`, see the Exit
+facts):** `646ca237` — the σ rescale switch: `QSigma { c_visit, c_scale, rescale }` through
+`mantis-search`/`mantis-selfplay`/the bridge, the bridge's root calls reading the tree's ONE
+configured σ (`MCTSTree.search_sigma` reads it back), `selfplay.q_rescale` REQUIRED (Mctx's
+`rescale_values`; every config mints `true`, the arm it ran), per-cell `c_scale`/`q_rescale` in
+`tools/strength_frontier.py`, contract v26. `5d014130` — **`search.kind` SPLIT** (R351(c)):
+`selfplay.search.kind` and `deploy.search.kind`, two resolvers with one reader per key
+(`resolve_selfplay_search_kind` feeds the pool, the HEXG capacity, the policy-target validator and
+the resume guard; `resolve_deploy_search_kind` feeds the eval pipeline), the node-pool ceiling
+checking eval sims under the deploy kind, `RETIRED_STAMP_SECTIONS` so a stamp carrying the retired
+top-level `search` loads as provenance (run6's 36 bundles and the BC strip still load; the resume
+guard reads a pre-split stamp's kind through the retired path), contract v27, repo_design amended.
+`5f05026f` — the policy-loss trough is the dashboard's eighth health input (WARN, never a halt;
+the prereg's {0.2 nats, 3 rows, step 5000} read off `trainer_step.policy_loss`), R351(d).
 
-**Dispatcher state for a fresh session.** Open, in order: (1) the run7 re-mint from
-`docs/design/measurements/RUN7_PREREG_2026-09-13.md` once the operator forwards the filled rows
-(the frontier's answers are in that file's §1 now: kind `puct` for deploy/eval, sims 512, the
-self-play kind the operator's); (2) preflight stamp on the box (carry this line's commits over
-by bundle first — the box is at `0f20896e`), the 4 h shakedown twin, START on the operator's
-word; (3) the frontier's raw cells (`/workspace/frontier/`, ≈ 9 000 game records) are on the box
-only — mirror them before any recycle; (5) the owed items in
-`CARDS.md`: the three-row α reconstruction, the self-play search-stats sample
-(`CARD-SELFPLAY-SEARCH-STATS`), the poller race (`CARD-DRAIN-POLLER-RACE`), the supervisor grace
-as a relation; (4) BC-3's re-run stays OPTIONAL (the strip's value head is trained; pin it with
-`reinit: []`). The box: `/workspace/hexo-mantis` at `0f20896e` (the frontier's tree; carry this
-line's commits over by bundle before any run7 work there), run6's record under
-`/workspace/runs/run6/`, the R342-era logs under `/workspace/r342/`.
+**run7 is MINTED: `configs/run7.yaml`** (34 header deltas, `config_diff --from-header` MATCH,
+gates 7/12 green, `PRODUCTION_CONFIGS` carries it). Rows: PUCT self-play (320/64 at p 0.25,
+`fast_policy_weight` 0.0, `temp_min` 0.5) and PUCT deploy/eval at 512/512; `reinit: []` on the
+existing strip (net hash `2e72abd4…`, every tensor); `eval_interval` = `checkpoint_interval` 3000;
+the sealbot point 288 paired games with `round_games` 288 AND `calibration_games` 288 /
+`calibration_every_k_rounds` 1 (a sealbot-only rung that saturates would otherwise drop to 8-game
+calibration and end the watch); `random_floor_games` 20; `gate.stride` 1; value warm-up 2000;
+`policy_loss_trough_abort: null` (demoted — the manifest row stays DEFERRED);
+`supervisor_kill_grace_sec` 120 as the relation; `seed` 20260914 (a dispatcher's value, the
+packet's date). NOT minted: `monitor.drain` at its defaults — `config_diff --from-header` reads a
+row minted at the template's own value as a lying header; the boot's `resolved_config.yaml`
+records the four caps (900 × 3, 14 400, 14 400). The prereg's §5 carries every as-minted row.
+
+**Dispatcher state for a fresh session.** The box `/workspace/hexo-mantis` is on branch `r351` at
+`646ca237` (the σ switch; the split, the dashboard warning and the mint are NOT there yet — carry
+`646ca237..dev` over by bundle before the preflight); CUDA torch was restored with
+`make build.cuda` after a bare `uv sync` reverted it (do not run a bare `uv sync` on the box).
+Open, in order: (1) bundle → box → `make build.cuda`; (2) the preflight stamp:
+`/workspace/oc7/box_preflight.sh configs/run7.yaml /workspace/runs/run7-preflight <burst-steps>
+<receipt-wait-sec>` with the operator's puller cycling against the out-dir
+(`tools/mirror_pull.py --source <box-alias>:/workspace/runs/run7-preflight --mirror
+<mirror-root>/run7-preflight --run-id run7 --interval-sec 60`); (3) the 4 h shakedown
+twin (a config whose ONLY delta from `run7.yaml` is `run_id: shakedown`, verified by
+`config_diff --expect run_id`; `/workspace/run_shakedown.sh <cfg> /workspace/runs/shakedown7
+14400` — its end by `timeout` is rc 124 and CARD-SHAKEDOWN-TIMEOUT-STOP applies); (4) START on
+the operator's word, `/workspace/oc7/box_start_run6.sh`'s shape with `run7`, the puller under
+tmux/systemd on the operator's machine. Owed items (`CARDS.md`): the α = 1.0 three-row
+reconstruction, `CARD-SELFPLAY-SEARCH-STATS`, `CARD-DRAIN-POLLER-RACE`; and a NEW card is
+owed for F-51's residue (which part of the Gumbel head loses to the most-visited child at
+every σ). run6's record stays under `/workspace/runs/run6/`, the R342-era logs under
+`/workspace/r342/`.
 
 ## PERF-A4 — the serving levers, merged at `41a5fea8` (branch `perf-a4`, red-teamed)
 
@@ -123,14 +112,20 @@ preflight's rc 16 reading them. run6's mirror is `~/Work/HeXO/mantis-mirror/run6
 fp32 on `train.device: cpu` is the ONE carve-out to LAW-06 (`tests/train/test_law06_cpu_carveout.py`).
 The dev box runs the CPU wheel; the tier's authority is the box.
 
-## Minted values — `configs/run6.yaml`
+## Minted values — `configs/run7.yaml` (and `configs/run6.yaml`, a finished run's record)
 
-Re-minted through its own header on this line (the 32 deltas replay; `tools/config_diff.py
---from-header` MATCH): `identity.warm_start.reinit: [value_head]` (what run6 booted — the seam of
-the time copied trunk + policy), `train.policy_loss_weight_schedule.warmup_steps: 0`,
-`train.policy_loss_trough_abort: null` — the last two at their template values, the OFF postures
-run6 ran. The warm-start checkpoint stays `checkpoints/bc/run6_00006500_ca1afb71.ckpt` (net hash
-`2e72abd4…`, 50 tensors). Gate 12 is GREEN at HEAD with `policy_loss_trough` printed DEFERRED.
+`run7.yaml`: 34 deltas from the `dev` template, replayable (`tools/config_diff.py --from-header`
+MATCH). `selfplay.search.kind: puct`, `deploy.search.kind: puct`, `train.policy_target:
+raw_visit_distribution`, `selfplay.c_scale` 1.0 / `q_rescale` true (template values, inert under
+PUCT), `identity.warm_start: {checkpoints/bc/run6_00006500_ca1afb71.ckpt, 2e72abd4…, reinit: []}`,
+`train.eval_interval` 3000 = `checkpoint_interval`, `eval.gate.deploy_sims` 512,
+`eval.sealbot_model_sims` 512, the sealbot rung at `games_max` 288 with `round_games` 288 and
+calibration 288 every round, `policy_loss_weight_schedule.warmup_steps` 2000,
+`policy_loss_trough_abort: null`, `supervisor_kill_grace_sec` 120, `n_workers` 32, the PERF-A4
+serving rows, `draw_rate_abort {0.25, 25000, 50, 3}`, `actor_lag_abort_enabled` true. Gate 12 is
+GREEN with `policy_loss_trough` printed DEFERRED. `run6.yaml` re-minted through its own header
+twice this leg (+`q_rescale: true`; `search.kind` → the two split keys, both `gumbel`) — the truth
+of what it ran; its 32 original deltas replay.
 
 ## Protected set, laws, cards
 
@@ -143,42 +138,29 @@ no gate number added (still 17). Cards (`docs/governance/CARDS.md`): opened by R
 STRENGTH-FRONTIER-1 is RUNNING; INVESTIGATION-1's trough item is measured (record above); TEST-1
 is not dispatched.
 
-## Exit facts — the block-verdict packet, 2026-09-13
+## Exit facts — the frontier-verdict packet (R351), 2026-09-13
 
-- Ruling: R350 at `5743cff6`, verbatim, ANNOTATED at its foot on this line; numbering continues
-  at R351.
-- Commits on this line: `bd94dd96` (the seam, `reinit`, the loader's provenance tolerance),
-  `fc83ccf1` (BC-3's held-out value line), `25073aed` (the warm-up, the KL line, the trough halt,
-  the α exclusion), `49b7740d` (the resumable stop's abandon), `f161719d` (the frontier driver +
-  floors), then this record. One line each, empty body, zero trailers.
-- Stop witnessed: `shutdown_save` step 35 084 at 08:15:12 UTC; bundle `run6_00035084_e1563d16`;
-  receipts on 35 000 and 35 084 by `tools/mirror_pull.py --once`.
-- Frontier launched 08:27 UTC (phase 1, 4 cells, parallel 4) and 08:30 UTC (phase 2, 27 cells,
-  parallel 8); box CPU ≈ 81 % busy, GPU ≈ 53 %; ≈ 13 s/game per cell under that load.
-- Reviewed by a reviewer subagent before commit: 12 findings, all acted on or carded; the
-  material ones — the loader orphaning every pre-R350 envelope (fixed: tolerance for a stamp
-  that predates a leaf, the re-strip REVERTED), `load_from_bc` loading a reinit head's shape
-  (fixed), `abandon_pending` dropping its escalation (fixed: `EvalBrokenReason.ABANDONED`),
-  the trough window ingesting refused steps (fixed), the warm-up bypassing the non-finite guard
-  (fixed), the α predicate in two precisions (fixed: `is_alpha_full`), the driver's readout
-  without LAW-04 dedupe and its hand-copied rung/postures (fixed).
-- **Collected tests: 4 614 → 4 656**; the gate 3c floor ratchets to 4 656. Comment ratchet:
-  3 546 / 23 / 13 527 → **3 545 / 23 / 13 527** (the floor file carries 3 545).
-- Contract: `docs/contracts/run_config_schema.md` v23–v25 (158 leaf key-paths, gate 13 green);
-  `docs/contracts/event_manifest.md` carries the five new instrument rows.
-- Gates on the committed tree (`tools/ci_gates/run_all.sh`, dev box, CPU wheel): 2 (cargo test
-  + clippy) and the default tier ran through; the integration tier **33/34 in 26 min**, the one
-  red (`tests/test_run_launcher.py::test_a_periodic_cadence_burst_streams_periodic_checkpoint_save`)
-  stopped by an external SIGINT at step 4 under the detached shell and **green on the foreground
-  re-run** (130 s) — the detached-shell class this file already records; a concurrent integration
-  tier from another checkout (`/tmp/mantis-dash`) was on the machine at the time. The default
-  tier alone on the committed tree: **4 596 passed, 8 skipped**. Gates 3c, 6–17 GREEN
-  individually; 4/5 not run (no wasm, no bench surface touched); the slow tier not run on the
-  dev box (CARD-OC7-OVERRUN).
+- Ruling: R351 at `487d8661`, verbatim; the packet's `R{next}` → R351 and its "F-46" → F-50
+  resolved in the entry; numbering continues at R352. R347(b) annotated under its foot.
+- Commits on this line: `3295cd8c` (dashboard-v2 ff), `487d8661` (R351, F-50), `646ca237` (the σ
+  switch), `5d014130` (the kind split), `5f05026f` (the trough warning), then the mint + records
+  commit. One line each, empty body, zero trailers.
+- The four σ cells: 18:10 → 19:20 UTC on the box, 4 cells at parallel 4, 1 152 games, 0 failed,
+  11.9–14.6 s/game; verdict NO PAIR ALIVE; F-51 filed.
+- The box: branch `r351` at `646ca237`; CUDA torch restored by `make build.cuda`.
+- **Collected tests: 4 656 → 4 729** (the floor file follows; gate 3c property 2 holds against
+  `origin/dev`'s 4 614). Comment ratchet: 3 545 / 23 / 13 527 → **3 535 / 23 / 13 511** (the
+  dashboard merge had taken the tree below the floor without lowering it; lowered here).
+- Contract: `docs/contracts/run_config_schema.md` v26–v27 (160 leaf key-paths, gate 13 green);
+  `docs/design/repo_design.md` carries the split's amendment (R9).
+- Gates on the committed tree (`tools/ci_gates/run_all.sh --with-slow`, dev box, CPU wheel):
+  see the gate log line the mint commit's message cites; the default tier alone read
+  **4 669 passed, 8 skipped** at `5d014130` and the config-reading tests 876 passed with
+  `run7.yaml` declared.
 
 ## Provenance
 
-Derived 2026-09-13 on `dev` at the exit commit of this leg, from `configs/run6.yaml`, the box's
-`/workspace/frontier/*/summary.jsonl` (complete, 16:45 UTC), the run6 mirror's events and rings,
-`tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
-`docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.
+Derived 2026-09-13 on `dev` at the exit commit of this leg, from `configs/run7.yaml`,
+`configs/run6.yaml`, the box's `/workspace/frontier/phase3/summary.jsonl` (complete, 19:20 UTC)
+and its mirror, `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt`
+and `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.

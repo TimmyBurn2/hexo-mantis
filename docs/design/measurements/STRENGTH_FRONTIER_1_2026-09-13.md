@@ -157,4 +157,46 @@ self-play kind as an open decision with both arms' evidence stated above.
 Cost of the frontier: 31 cells × 288 games = 8 928 games, 08:27 → 16:45 UTC on the box (8.3 h of
 a card that ran 4–12 cells at a time; the PUCT-512 tail ran alone at ≈ 40 s/game).
 
+## F. The four σ cells R351(b) ordered — the LAST frontier spend (2026-09-13, 18:10 → 19:20 UTC)
+
+R351(a) read the Gumbel head's failure as its σ: the mint paired Mctx's min-max rescale of the
+completed Q with `c_scale` 1.0 — a 50–200-nat value term against a few nats of prior — a pair
+neither the paper nor Mctx ran. (b) ordered the two pairs they DID run, on the 18k net (the
+block's best under PUCT: 0.568 / 0.646 / 0.774) vs `sealbot_d5`, 288 paired games each, sims 128
+and 512, through the same driver and the same 144-opening window as §A–C, on the tree that
+carries the switch (`646ca237`: `selfplay.q_rescale`, `QSigma`, per-cell `c_scale`/`q_rescale`;
+driver sha `73200b451089`). Pre-registered reading: a pair is ALIVE iff its 512 reading is
+within the CI of PUCT-512 (0.774 [≈ 0.72, 0.82]) AND does not fall from 128 to 512.
+
+| σ pair | 128 sims | 512 sims | 128 → 512 |
+|---|---|---|---|
+| (rescale, 0.1) — Mctx's own default | 0.167 [0.125, 0.208] 48-240-0 | 0.056 [0.031, 0.083] 16-272-0 | FALLS |
+| (no rescale, 1.0) — the paper's Go/chess pair | 0.219 [0.174, 0.264] 63-225-0 | 0.073 [0.045, 0.104] 21-267-0 | FALLS |
+| (rescale, 1.0) — run6's mint (§B, for reference) | 0.233 [0.191, 0.278] | 0.066 | FALLS |
+| PUCT (§B, for reference) | 0.568 | **0.774** | RISES |
+
+Every cell 288 games, `eff_n` 288, 144 pairs, 0 draws; 11.9–14.6 s/game at 4 cells sharing the
+card; median 29 plies at 128 sims and 23 at 512 (the games get SHORTER with more sims — the head
+loses faster, not slower). Net hash `d057e0c7…` (`run6_00018000_c46fa529.ckpt`), 4 ok, 0 failed;
+raw cells under `/workspace/frontier/phase3/` on the box and mirrored to the operator's
+`mantis-mirror/frontier/`.
+
+**NO PAIR IS ALIVE.** Both pairs fall from 128 to 512 and both sit ~70 pp below PUCT-512's CI.
+By R351(c)'s rule run7's self-play is PUCT (playout-cap 320/64 at p 0.25, policy rows from the
+full arm only, τ 0.5), deploy and eval PUCT-512.
+
+**The finding beyond the rule: σ's SCALE is not the Gumbel head's failure.** All three σ pairs —
+the one run6 minted, the one Mctx ships, the one the paper ran for Go — read the same net within
+7 pp of each other at 128 and within 2 pp at 512, and every one of them halves with each doubling
+of sims while PUCT gains +6 to +13 pp per doubling on the same net. R351(a)'s mechanism (the value
+term swamping the prior) predicted that the pairs the paper ran would close the gap; they do not
+move it. Whatever makes Sequential Halving's completed-Q root pick lose to the most-visited child
+on this net at every scale is not the rescale and not `c_scale`: the candidates left are the head
+itself — `m` 16 over a legal set of ≈ 355 at radius 8, the halving schedule at 128–512 sims, the
+interior selector, or a defect none of the parity pins reach — and R351(e)'s α = 1.0 class does
+NOT vanish with the scale (it is a symptom of the same head). Filed as F-51. The one-σ-one-key
+switch stays in the schema (every config mints `true`, the arm it ran) and is inert under run7's
+PUCT/PUCT mint; a Gumbel arm returns only with a card that names which of the candidates above
+it tests.
+
 ## Sources
