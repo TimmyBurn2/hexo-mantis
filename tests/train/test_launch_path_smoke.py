@@ -99,7 +99,7 @@ def _selfplay_block():
     # WPSC Phase 2 SC-A2: `selfplay:` is now the expanded nested shape (DESIGN_P2.md §3);
     # `legal_move_radius_schedule` is gone (DESIGN_P2.md §5).
     return {
-        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -161,7 +161,7 @@ def _config():
         "identity": {"encoding": ENCODING, "representation": _REPRESENTATION},
         "eval": _eval_block(),
         "train": _train_block(),
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "selfplay": _selfplay_block(),
         "inference": _inference_block(),
         "monitor": _monitor_block(),

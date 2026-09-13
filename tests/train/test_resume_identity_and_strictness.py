@@ -8,6 +8,7 @@ against itself, which is what `load_checkpoint`'s encoding check already covers.
 """
 from __future__ import annotations
 
+import copy
 from pathlib import Path
 from typing import Any
 
@@ -148,20 +149,26 @@ def test_the_halt_names_both_sides(tmp_path: Path) -> None:
 # These target-semantics leaves build no net, so every identity check above passes them;
 # what they decide is whether a stored replay row is a visit-count distribution or a
 # completed improved policy, and a restored ring carries no per-row provenance to tell
-# the two apart. `search.kind` decides it, `train.policy_target` is what the stamp carries.
-@pytest.mark.parametrize("section,leaf,value", [
-    ("train", "policy_target", "completed_improved_policy"),
-    ("search", "kind", "gumbel"),
+# the two apart. `selfplay.search.kind` decides it, `train.policy_target` is what the stamp
+# carries; the DEPLOY kind plays games nobody trains on and is deliberately not guarded.
+@pytest.mark.parametrize("section,path,value", [
+    ("train", ("policy_target",), "completed_improved_policy"),
+    ("selfplay", ("search", "kind"), "gumbel"),
 ])
 def test_a_resume_that_moves_a_target_semantics_key_halts(
-    tmp_path: Path, section: str, leaf: str, value: Any
+    tmp_path: Path, section: str, path: tuple[str, ...], value: Any
 ) -> None:
     """Each leaf separately, so one parametrised row cannot pass by covering another."""
-    path = _write_full(tmp_path)
-    baked = load_checkpoint(path).config
-    block = dict(baked[section])
-    assert block.get(leaf) != value, "the fixture no longer moves the leaf it names"
-    block[leaf] = value
+    leaf = path[-1]
+    path_ck = _write_full(tmp_path)
+    baked = load_checkpoint(path_ck).config
+    block = copy.deepcopy(baked[section])
+    node = block
+    for key in path[:-1]:
+        node = node[key]
+    assert node.get(leaf) != value, "the fixture no longer moves the leaf it names"
+    node[leaf] = value
+    path = path_ck
 
     with pytest.raises(ResumeTargetSemanticsError, match=leaf):
         resume_trainer(
@@ -198,6 +205,19 @@ def test_the_target_semantics_halt_names_both_sides(tmp_path: Path) -> None:
     assert "completed_improved_policy" in message and "raw_visit_distribution" in message, (
         f"the halt does not name the effective value and the checkpoint's: {message}"
     )
+
+
+def test_the_deploy_kind_is_deliberately_not_a_target_semantics_key(tmp_path: Path) -> None:
+    """R351(c): the deploy head plays games nobody trains on, so a resume may re-take it."""
+    path = _write_full(tmp_path)
+    deploy = copy.deepcopy(load_checkpoint(path).config["deploy"])
+    deploy["search"]["kind"] = "gumbel" if deploy["search"]["kind"] == "puct" else "puct"
+    trainer = resume_trainer(
+        Trainer, path, device=torch.device("cpu"),
+        config_overrides={"deploy": deploy},
+        declared_keys=frozenset({"deploy"}),
+    )
+    assert trainer.loaded_from_full_checkpoint
 
 
 def test_the_search_regime_knobs_are_deliberately_not_target_semantics_keys(

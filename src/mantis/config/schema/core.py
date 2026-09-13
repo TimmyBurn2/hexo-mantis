@@ -16,7 +16,7 @@ from pydantic import Field, field_validator, model_serializer, model_validator
 
 from mantis.config.schema._base import StrictModel
 from mantis.config.schema.monitor import MonitorSchemaConfig
-from mantis.config.schema.search import SearchConfig
+from mantis.config.schema.search import DeployConfig
 from mantis.config.schema.selfplay import (
     MAX_ARMED_SIMS,
     MAX_ARMED_SIMS_GUMBEL,
@@ -361,9 +361,8 @@ class RunConfig(StrictModel):
     # refused at boot by `mantis.config.resolve.allocator_posture`.
     allocator_posture: Literal["default", "expandable_segments"] | None
     identity: IdentityConfig
-    # The SEARCH REGIME, top-level because self-play searches with it and `arena.deploy_head`
-    # searches with it, and the deploy-matched claim is that the two are the SAME search.
-    search: SearchConfig
+    # The deploy head's regime, split from the workers' by R351(c): the bar plays what will be deployed.
+    deploy: DeployConfig
     eval: EvalConfig
     train: TrainConfig
     selfplay: SelfplayConfig
@@ -437,7 +436,8 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _policy_target_matches_the_search_kind(self) -> "RunConfig":
-        """`train.policy_target` states what the SEARCH produced, so it follows `search.kind`.
+        """`train.policy_target` states what the SELF-PLAY search produced, so it follows
+        `selfplay.search.kind` (the deploy kind plays games nobody trains on).
 
         It is not derived away because it is the key the CHECKPOINT stamp carries, so it is the
         record of what a stored ring's rows MEAN.
@@ -445,15 +445,14 @@ class RunConfig(StrictModel):
         Raises:
             ValueError: the target and the search kind disagree.
         """
+        kind = self.selfplay.search.kind
         expected = (
-            "completed_improved_policy"
-            if self.search.kind == "gumbel"
-            else "raw_visit_distribution"
+            "completed_improved_policy" if kind == "gumbel" else "raw_visit_distribution"
         )
         if self.train.policy_target != expected:
             raise ValueError(
                 f"train.policy_target={self.train.policy_target!r} disagrees with "
-                f"search.kind={self.search.kind!r}, which produces {expected!r}. The search "
+                f"selfplay.search.kind={kind!r}, which produces {expected!r}. The search "
                 "builds the target; a config that trains one target's loss on the other "
                 "target's rows is the defect this pairing exists to make unmintable."
             )
@@ -468,17 +467,24 @@ class RunConfig(StrictModel):
         key in ANOTHER SECTION.
 
         Raises:
-            ValueError: an armed sims knob exceeds the Gumbel kind's ceiling.
+            ValueError: an armed sims knob exceeds the Gumbel kind's ceiling, under whichever
+                of the two kinds spends it.
         """
-        if self.search.kind != "gumbel":
-            return self
-        armed = {
-            "selfplay.mcts.n_simulations": self.selfplay.mcts.n_simulations,
-            "selfplay.playout_cap.standard_sims": self.selfplay.playout_cap.standard_sims,
-            "selfplay.playout_cap.fast_sims": self.selfplay.playout_cap.fast_sims,
-            "selfplay.playout_cap.n_sims_quick": self.selfplay.playout_cap.n_sims_quick,
-            "selfplay.playout_cap.n_sims_full": self.selfplay.playout_cap.n_sims_full,
-        }
+        armed: dict[str, int] = {}
+        if self.selfplay.search.kind == "gumbel":
+            armed.update({
+                "selfplay.mcts.n_simulations": self.selfplay.mcts.n_simulations,
+                "selfplay.playout_cap.standard_sims": self.selfplay.playout_cap.standard_sims,
+                "selfplay.playout_cap.fast_sims": self.selfplay.playout_cap.fast_sims,
+                "selfplay.playout_cap.n_sims_quick": self.selfplay.playout_cap.n_sims_quick,
+                "selfplay.playout_cap.n_sims_full": self.selfplay.playout_cap.n_sims_full,
+            })
+        if self.deploy.search.kind == "gumbel":
+            armed.update({
+                "eval.gate.deploy_sims": self.eval.gate.deploy_sims,
+                "eval.sealbot_model_sims": self.eval.sealbot_model_sims,
+                "eval.random_model_sims": self.eval.random_model_sims,
+            })
         over = {k: v for k, v in armed.items() if v > MAX_ARMED_SIMS_GUMBEL}
         if over:
             raise ValueError(
@@ -487,7 +493,7 @@ class RunConfig(StrictModel):
                 "reaches the root's FULL legal set and spends MAX_ROOT_CHILDREN pool slots "
                 "on it instead of MAX_CHILDREN_PER_NODE. Over the ceiling: "
                 + ", ".join(f"{k}={v}" for k, v in sorted(over.items()))
-                + " — lower the budget, or mint search.kind='puct'."
+                + " — lower the budget, or mint that side's search.kind='puct'."
             )
         return self
 
@@ -567,7 +573,7 @@ class RunConfig(StrictModel):
                 n_sims_full=pc.n_sims_full,
                 leaf_batch_size=sp.leaf_batch_size,
                 gumbel_m=sp.gumbel_m,
-                search_kind=self.search.kind,
+                search_kind=self.selfplay.search.kind,
             )
         except ValueError as exc:
             raise ValueError(
@@ -575,7 +581,7 @@ class RunConfig(StrictModel):
                 f"format: {exc} [derived from selfplay.mcts.n_simulations, "
                 "selfplay.playout_cap.{standard_sims,fast_prob,fast_sims,"
                 "full_search_prob,n_sims_quick,n_sims_full}, selfplay.leaf_batch_size, "
-                "selfplay.gumbel_m, search.kind — R255/ADJ-D34 + R347(a): refused at mint, "
+                "selfplay.gumbel_m, selfplay.search.kind — R255/ADJ-D34 + R347(a): refused at mint, "
                 "never at boot]"
             ) from exc
         return self

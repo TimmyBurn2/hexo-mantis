@@ -178,7 +178,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
         "resolve_coordinator_knobs -> _step_coordinator_config -> step.py"
         " StallWatchdog(timeout_sec=) (LAW-16 always-armed guard)",
     "train.value_target": "TrainHParams.from_config single-variant assertion (T-D)",
-    "train.policy_target": "TrainHParams -> the CE-vs-KL loss switch; RunConfig cross-section validator vs search.kind",
+    "train.policy_target": "TrainHParams -> the CE-vs-KL loss switch; RunConfig cross-section validator vs selfplay.search.kind",
     "train.draw_reward": "SelfPlayHParams.from_config reads config['train']['draw_reward'] (cross-section)",
     "train.ply_cap_value": "SelfPlayHParams.from_config reads config['train']['ply_cap_value'] (cross-section)",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> _build_graph_parts fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
@@ -189,7 +189,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.c_visit": "SelfPlayHParams.c_visit -> runner c_visit ctor kwarg",
     "selfplay.c_scale": "SelfPlayHParams.c_scale -> runner c_scale ctor kwarg",
     "selfplay.q_rescale": "SelfPlayHParams.q_rescale -> runner q_rescale ctor kwarg",
-    "search.kind": "resolve_search_kind -> SelfPlayHParams.search_kind -> cfg attr -> MCTSTree::configure_search; and -> RoundSpec -> DeployHeadPlayer",
+    "selfplay.search.kind": "resolve_selfplay_search_kind -> SelfPlayHParams.search_kind -> cfg attr -> MCTSTree::configure_search",
+    "deploy.search.kind": "resolve_deploy_search_kind -> build_eval_pipeline -> RoundSpec -> DeployHeadPlayer -> MCTSTree::configure_search",
     "selfplay.gumbel_m": "SelfPlayHParams.gumbel_m -> runner gumbel_m ctor kwarg (R23)",
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.gumbel_explore_moves -> runner ctor kwarg (R23)",
     "selfplay.results_queue_cap": "SelfPlayHParams.results_queue_cap -> runner results_queue_cap ctor kwarg",

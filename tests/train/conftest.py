@@ -157,7 +157,7 @@ def _make_train_block(**over: Any) -> dict[str, Any]:
 
 def _make_selfplay_block(**over: Any) -> dict[str, Any]:
     base = {
-        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -228,7 +228,7 @@ def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph
         "run_id": run_id,
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "eval": _make_eval_block(),
         "train": _make_train_block(),
         "selfplay": _make_selfplay_block(),

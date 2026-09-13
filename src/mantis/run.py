@@ -65,7 +65,7 @@ from mantis.config.resolve.policy_loss_trough import (
     resolve_policy_loss_trough_abort,
 )
 from mantis.config.resolve.run_length import resolve_max_train_steps
-from mantis.config.resolve.search import resolve_search_kind
+from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.schema import RunConfig
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
@@ -285,7 +285,7 @@ def _select_buffer(config: Any, capacity: int) -> Any:
             n_sims_full=pc.n_sims_full,
             leaf_batch_size=sp.leaf_batch_size,
             gumbel_m=sp.gumbel_m,
-            search_kind=config.search.kind,
+            search_kind=config.selfplay.search.kind,
         )
         buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
         buffer.seed_sampler(config.seed)
@@ -767,10 +767,9 @@ def compose_run(
                     # player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
                     q_rescale=config.selfplay.q_rescale,
-                    # The deploy head searches with the RUN'S OWN KIND, through the SAME
-                    # resolver `SelfPlayHParams.from_config` reads. LAW-15's deploy-matched
-                    # bar is a construction here, not a coincidence between two call sites.
-                    search_kind=resolve_search_kind(config),
+                    # The deploy head searches with `deploy.search.kind` — matched to what
+                    # the ladder will play, not to the training search (R351(c), LAW-15).
+                    search_kind=resolve_deploy_search_kind(config),
                     gumbel_m=config.selfplay.gumbel_m,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     # The SAME directory the self-play recorder writes into, named once

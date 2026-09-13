@@ -68,9 +68,9 @@ def cfg(
     sp.update(selfplay or {})
     sp["mcts"] = dict(BASE_MCTS, **(mcts or {}))
     sp["playout_cap"] = dict(BASE_PLAYOUT_CAP, **(playout_cap or {}))
+    sp["search"] = dict({"kind": "puct"}, **(search or {}))
     return {
         "encoding": encoding,
-        "search": dict({"kind": "puct"}, **(search or {})),
         "selfplay": sp,
         "train": dict(BASE_TRAIN, **(train or {})),
     }
@@ -202,10 +202,10 @@ def test_ply_cap_value_wire(assemble, train_over, expected_draw, expected_ply) -
 def test_search_kind_property_reads_live_config() -> None:
     """`search_kind` reflects a config mutated AFTER construction and REFUSES an absent one."""
     holder = type("H", (), {"search_kind": WorkerPool.search_kind})()
-    holder.config = {"search": {"kind": "puct"}}
+    holder.config = {"selfplay": {"search": {"kind": "puct"}}}
     assert holder.search_kind == "puct"
 
-    holder.config["search"]["kind"] = "gumbel"
+    holder.config["selfplay"]["search"]["kind"] = "gumbel"
     assert holder.search_kind == "gumbel", "the property must re-read the live config"
 
     # NO FALLBACK: a pool that cannot say which search it ran must raise rather than answer

@@ -1,16 +1,9 @@
-"""`search.kind` resolver — THE one selector both the self-play pool and the deploy head read.
+"""The two `search.kind` resolvers — ONE reader per key, and each wire reads its own.
 
-WHY A RESOLVER FOR A ONE-LEAF SECTION. Not to transform anything: `resolve_search_kind`
-returns the key unchanged. It exists so that "the deploy head runs the same search as
-self-play" is true BY CONSTRUCTION rather than by two call sites happening to agree. The
-head that decides a promotion (LAW-15's deploy-matched bar) and the workers that generate
-the targets must read ONE authority; before this, the eval head's search regime was not
-read from the config at all — it was `DeployHeadPlayer`'s own constructor signature, and
-the run's regime and the bar's regime were only ever equal by coincidence (AUDIT-1 F-39
-found the same class on `c_visit`/`c_scale`).
-
-NO DEFAULT (R1/LAW-11). A mapping without `search.kind` raises: a bar that cannot say
-which search it ran is not a bar.
+Each returns its key unchanged; they exist so "the workers run `selfplay.search.kind`" and "the
+deploy head runs `deploy.search.kind`" are true BY CONSTRUCTION, not by call sites agreeing
+(AUDIT-1 F-39 found the drift class; R351(c) split the one key that fed both wires).
+NO DEFAULT (R1/LAW-11): a bar that cannot say which search it ran is not a bar.
 """
 from __future__ import annotations
 
@@ -23,44 +16,54 @@ SEARCH_KINDS: tuple[str, ...] = ("puct", "gumbel")
 
 
 class MissingSearchKindError(ValueError):
-    """`search.kind` is absent from the mapping, or is not a kind this build implements."""
+    """The key is absent from the mapping, or is not a kind this build implements."""
 
 
-def resolve_search_kind(config: Mapping[str, Any] | Any) -> str:
-    """The run's search kind, from a validated `RunConfig` or its `model_dump()` mapping.
-
-    Args:
-        config: a `RunConfig`, or any mapping shaped like one (`{"search": {"kind": ...}}`).
-
-    Returns:
-        The kind's config spelling — one of `SEARCH_KINDS`.
-
-    Raises:
-        MissingSearchKindError: the mapping carries no `search.kind`, or carries a value
-            this build does not implement. Never defaulted: a silent `puct` would let a
-            config that never declared its search regime still boot one, and would let the
-            deploy head disagree with the self-play workers without a config diff to show
-            for it.
-    """
-    section: Any
+def _section(config: Mapping[str, Any] | Any, name: str) -> Any:
     if isinstance(config, Mapping):
-        section = config.get("search")
-        kind = section.get("kind") if isinstance(section, Mapping) else None
-    else:
-        section = getattr(config, "search", None)
-        kind = getattr(section, "kind", None)
+        return config.get(name)
+    return getattr(config, name, None)
+
+
+def _resolve(config: Mapping[str, Any] | Any, section: str) -> str:
+    home = _section(config, section)
+    search = _section(home, "search") if home is not None else None
+    kind = _section(search, "kind") if search is not None else None
+    dotted = f"{section}.search.kind"
     if kind is None:
         raise MissingSearchKindError(
-            "search.kind is required and has no default (R1/LAW-11). The search regime "
+            f"{dotted} is required and has no default (R1/LAW-11). The search regime "
             "decides the root mechanism, the interior selector and the exported target's "
-            "semantics, and it is the key that makes the deploy-matched promotion bar "
-            "(LAW-15) a claim rather than a coincidence."
+            "semantics; the deploy key is what makes the promotion bar (LAW-15) a claim "
+            "rather than a coincidence, and the self-play key is what a stored ring's rows mean."
         )
     kind = str(kind)
     if kind not in SEARCH_KINDS:
         raise MissingSearchKindError(
-            f"search.kind={kind!r} is not a search kind this build implements; known: "
+            f"{dotted}={kind!r} is not a search kind this build implements; known: "
             f"{list(SEARCH_KINDS)}. REFUSED rather than defaulted — a typo silently "
             "becoming 'puct' is the silent-fallback class LAW-11 closes."
         )
     return kind
+
+
+def resolve_selfplay_search_kind(config: Mapping[str, Any] | Any) -> str:
+    """The workers' kind, `selfplay.search.kind`, from a `RunConfig` or its `model_dump()`.
+
+    Raises:
+        MissingSearchKindError: the key is absent or not a kind this build implements — never
+            defaulted, and never read from the deploy key (the training search would then
+            follow what the ladder plays).
+    """
+    return _resolve(config, "selfplay")
+
+
+def resolve_deploy_search_kind(config: Mapping[str, Any] | Any) -> str:
+    """The deploy head's kind, `deploy.search.kind` — the bar's and every ladder rung's.
+
+    Raises:
+        MissingSearchKindError: the key is absent or not a kind this build implements — never
+            defaulted, and never read from the self-play key (the bar is matched to what will
+            be deployed, R351(c)).
+    """
+    return _resolve(config, "deploy")

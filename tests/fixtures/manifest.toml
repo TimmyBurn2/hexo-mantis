@@ -217,7 +217,9 @@ path = "selfplay/pool/runner_config_goldens.json"
 # kind, so the golden proves the wire carries the VALUE rather than that a default coincided.
 # Re-cut by R351(b): `selfplay.q_rescale` is a REQUIRED σ leaf beside `c_scale`, carried to the
 # ctor as `q_rescale`; `full_config` carries `false`, the NON-shipped arm, for the same reason.
-sha256 = "9e5b8afca96853313a7d6015bd94b866c5f6769e04cdfe50ff39c96dbafa8dd0"
+# Re-cut again by R351(c): `search.kind` split into `selfplay.search.kind` (what the wire reads)
+# and `deploy.search.kind`; the capture carries both, the self-play one still `gumbel` in `full_config`.
+sha256 = "86701632c64e25177c495e8a79c0ae4216c0269bcfca17648440ff54d7503403"
 added_by = "WP-SP"
 
 [[required]]

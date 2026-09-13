@@ -21,7 +21,7 @@ import torch
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
 from mantis.config.resolve.compile_trunk import resolve_compile_trunk
 from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
-from mantis.config.resolve.search import resolve_search_kind
+from mantis.config.resolve.search import resolve_selfplay_search_kind
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
     SelfPlayHParams,
@@ -254,15 +254,15 @@ class WorkerPool:
 
     @property
     def search_kind(self) -> str:
-        """The run's `search.kind`, as its config spelling, read from the LIVE config rather than
+        """The run's `selfplay.search.kind`, as its config spelling, read from the LIVE config rather than
         the frozen ctor-time hparams: the PUCT-only diagnostics are meaningless under Gumbel-root
         sampling, so the emitter must see a config flipped after construction.
 
         Raises:
-            MissingSearchKindError: no `search.kind`, or one this build does not implement. NOT
+            MissingSearchKindError: no `selfplay.search.kind`, or one this build does not implement. NOT
                 defaulted: a pool that cannot say which search it ran must not answer "puct".
         """
-        return resolve_search_kind(self.config)
+        return resolve_selfplay_search_kind(self.config)
 
     @property
     def avg_game_length(self) -> float | None:

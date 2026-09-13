@@ -212,13 +212,17 @@ CONSUMER_REGISTRY = {
         "SelfPlayHParams.from_config -> runner q_rescale -> QSigma.rescale at the workers' "
         "configure_search; and RoundSpec.q_rescale -> DeployHeadPlayer -> the same setter"
     ),
-    "search.kind": (
-        "mantis.config.resolve.resolve_search_kind -> SelfPlayHParams.from_config -> the "
-        "bridge search_kind setter -> SearchFlags.search_kind -> MCTSTree::configure_search; "
-        "the SAME resolver -> build_eval_pipeline -> RoundSpec -> build_candidate_player -> "
-        "DeployHeadPlayer -> the same configure_search; and "
+    "selfplay.search.kind": (
+        "mantis.config.resolve.resolve_selfplay_search_kind -> SelfPlayHParams.from_config -> "
+        "the bridge search_kind setter -> SearchFlags.search_kind -> MCTSTree::configure_search; "
+        "RunConfig._policy_target_matches_the_search_kind; and "
         "RunConfig._graph_sims_regime_fits_the_hexg_record_format -> "
-        "derived_hexg_visit_capacity's density refusal"
+        "derived_hexg_visit_capacity's density refusal (R351(c): the workers' key)"
+    ),
+    "deploy.search.kind": (
+        "mantis.config.resolve.resolve_deploy_search_kind -> build_eval_pipeline -> RoundSpec -> "
+        "build_candidate_player -> DeployHeadPlayer -> the same configure_search; and "
+        "RunConfig._search_kind_fits_the_node_pool over the eval sims (R351(c): the bar's key)"
     ),
     "selfplay.gumbel_m": (
         "SelfPlayHParams.from_config -> runner gumbel_m; and RoundSpec.gumbel_m -> "

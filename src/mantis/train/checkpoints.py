@@ -592,12 +592,17 @@ def load_checkpoint(
     )
 
 
+#: Sections the schema RETIRED after runs stamped them — the one `extra_forbidden` a stamp can
+#: carry (a stamp is written from a validated config): `search` was split by R351(c).
+RETIRED_STAMP_SECTIONS: frozenset[str] = frozenset({"search"})
+
+
 def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
-    """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew AFTER the stamp is
-    logged, not refused; anything else still refuses, and the payload is never touched.
+    """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew, or a section it
+    RETIRED, after the stamp is logged, not refused; anything else refuses, the payload untouched.
 
     Raises:
-        pydantic.ValidationError: any error that is not a leaf missing from an older stamp.
+        pydantic.ValidationError: any error that is not a missing newer leaf or a retired section.
     """
     from pydantic import ValidationError  # noqa: PLC0415 — the one exception type this reads
 
@@ -606,9 +611,13 @@ def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
     except ValidationError as exc:
         newer = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
                  if err["type"] == "missing"]
-        if len(newer) != len(exc.errors()):
+        retired = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
+                   if err["type"] == "extra_forbidden" and len(err["loc"]) == 1
+                   and str(err["loc"][0]) in RETIRED_STAMP_SECTIONS]
+        if len(newer) + len(retired) != len(exc.errors()):
             raise
-        _LOG.info("checkpoint_config_predates_schema checkpoint=%s missing=%s", path.name, newer)
+        _LOG.info("checkpoint_config_predates_schema checkpoint=%s missing=%s retired=%s",
+                  path.name, newer, retired)
 
 
 # The read path for the THREE real pre-v2 shapes.
@@ -768,7 +777,7 @@ def strip_and_restamp(
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
         # `puct` is the value that agrees with this payload's own
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "eval": {
             "random_model_sims": 1, "sealbot_model_sims": 1,
             "random_floor_games": 0, "worker_device": "cpu",
@@ -818,6 +827,7 @@ def strip_and_restamp(
             "fast_policy_weight": 0.0,
         },
         "selfplay": {
+            "search": {"kind": "puct"},
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
             "gumbel_explore_moves": 10,
@@ -999,14 +1009,29 @@ def resolve_lr_provenance(
 _IDENTITY_LEAVES = ("encoding", "representation", "arch_kind")
 
 
-#: The `(section, leaf)` pairs that decide what a STORED replay row MEANS. Not identity keys —
-#: they change no net and have no stamp to fall back on, so they need their own guard.
-#: `search.kind` decides the other: resuming a `puct` ring under `gumbel` restores visit
-#: distributions and applies the completed-Q loss to them, and vice versa.
-_TARGET_SEMANTICS_LEAVES: tuple[tuple[str, str], ...] = (
+#: The dotted paths that decide what a STORED replay row MEANS (not identity keys: no net moves,
+#: no stamp to fall back on). `selfplay.search.kind` decides the other; the DEPLOY kind is not
+#: here — it plays games nobody trains on, and a resume may re-take it (R351(c)).
+_TARGET_SEMANTICS_LEAVES: tuple[tuple[str, ...], ...] = (
     ("train", "policy_target"),
-    ("search", "kind"),
+    ("selfplay", "search", "kind"),
 )
+
+#: Where a PRE-SPLIT stamp carries a guarded leaf — read on the BAKED side only, so a resume
+#: from a run6 bundle is still guarded rather than skipped.
+_TARGET_SEMANTICS_RETIRED_PATHS: dict[tuple[str, ...], tuple[str, ...]] = {
+    ("selfplay", "search", "kind"): ("search", "kind"),
+}
+
+
+def _leaf_at(config: Mapping[str, Any], path: tuple[str, ...]) -> tuple[bool, Any]:
+    """`(readable, value)` for a dotted path; unreadable when any parent is not a mapping."""
+    node: Any = config
+    for key in path[:-1]:
+        node = node.get(key) if isinstance(node, Mapping) else None
+        if not isinstance(node, Mapping):
+            return False, None
+    return True, node.get(path[-1])
 
 
 def _refuse_target_semantics_drift(
@@ -1024,15 +1049,16 @@ def _refuse_target_semantics_drift(
     if not baked_config:
         return
     drift: list[str] = []
-    for section, leaf in _TARGET_SEMANTICS_LEAVES:
-        baked_section = baked_config.get(section)
-        effective_section = effective_config.get(section)
-        if not isinstance(baked_section, Mapping) or not isinstance(effective_section, Mapping):
+    for leaf_path in _TARGET_SEMANTICS_LEAVES:
+        baked_ok, want = _leaf_at(baked_config, leaf_path)
+        if not baked_ok and leaf_path in _TARGET_SEMANTICS_RETIRED_PATHS:
+            baked_ok, want = _leaf_at(baked_config, _TARGET_SEMANTICS_RETIRED_PATHS[leaf_path])
+        effective_ok, got = _leaf_at(effective_config, leaf_path)
+        if not (baked_ok and effective_ok):
             # A shape this guard cannot read and must not GUESS at; mint-time validation covers it.
             continue
-        want, got = baked_section.get(leaf), effective_section.get(leaf)
         if want != got:
-            drift.append(f"{section}.{leaf}: checkpoint={want!r}, resume={got!r}")
+            drift.append(f"{'.'.join(leaf_path)}: checkpoint={want!r}, resume={got!r}")
     if drift:
         raise ResumeTargetSemanticsError(
             f"{path.name}: the resuming run builds its policy targets differently from the "

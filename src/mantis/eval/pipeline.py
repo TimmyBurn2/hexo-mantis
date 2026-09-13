@@ -355,7 +355,7 @@ class EvalPipeline:
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
         self._q_rescale = bool(q_rescale)
-        #: The run's `search.kind` and `selfplay.gumbel_m`. NOT defaulted: the eval head's
+        #: The run's `deploy.search.kind` and `selfplay.gumbel_m`. NOT defaulted: the eval head's
         #: regime used to come from `DeployHeadPlayer`'s body, which the config never stated.
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)

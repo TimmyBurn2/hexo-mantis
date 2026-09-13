@@ -82,7 +82,7 @@ def _train_block(*, lr: float = 1e-3) -> dict:
 
 def _selfplay_block() -> dict:
     return {
-        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -141,7 +141,7 @@ def _full_config(*, lr: float = 1e-3) -> dict:
         "identity": {"encoding": ENCODING, "representation": "graph"},
         "eval": _eval_block(),
         "train": _train_block(lr=lr),
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "selfplay": _selfplay_block(),
         "inference": _inference_block(),
         "monitor": _monitor_block(),

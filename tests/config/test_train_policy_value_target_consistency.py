@@ -1,4 +1,4 @@
-"""RunConfig cross-section validator: `train.policy_target` must name the target `search.kind` produces.
+"""RunConfig cross-section validator: `train.policy_target` must name the target `selfplay.search.kind` produces.
 
 The rule replaced a three-way agreement between `policy_target` and a `completed_q_values`
 boolean on each of two sections, so a disagreement is now expressible in exactly one shape
@@ -119,10 +119,11 @@ def _payload(
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "search": {"kind": search_kind},
+        "deploy": {"search": {"kind": search_kind}},
         "eval": _eval_block(),
         "train": _train_block(**(train_over or {})),
-        "selfplay": {**_selfplay_block(n_simulations=n_simulations), **(selfplay_over or {})},
+        "selfplay": {**_selfplay_block(n_simulations=n_simulations), "search": {"kind": search_kind},
+                     **(selfplay_over or {})},
         "inference": _inference_block(),
         "monitor": _monitor_block(),
     }
@@ -130,7 +131,7 @@ def _payload(
 
 def test_the_shipped_combo_constructs_cleanly():
     cfg = RunConfig.model_validate(_payload())
-    assert cfg.search.kind == "puct"
+    assert cfg.selfplay.search.kind == "puct"
     assert cfg.train.policy_target == "raw_visit_distribution"
 
 
@@ -159,7 +160,7 @@ def test_the_gumbel_kind_and_the_completed_target_agree():
         train_over={"policy_target": "completed_improved_policy"},
     )
     cfg = RunConfig.model_validate(payload)
-    assert cfg.search.kind == "gumbel"
+    assert cfg.selfplay.search.kind == "gumbel"
     assert cfg.train.policy_target == "completed_improved_policy"
 
 
@@ -176,7 +177,7 @@ def test_the_gumbel_kind_on_a_graph_run_mints_at_the_minted_slot_bound():
             n_simulations=192,
         )
     )
-    assert cfg.search.kind == "gumbel"
+    assert cfg.selfplay.search.kind == "gumbel"
     assert cfg.identity.representation == "graph"
 
 

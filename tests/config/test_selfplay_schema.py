@@ -30,6 +30,7 @@ VALID_PLAYOUT_CAP: dict = {
     "temperature_threshold_compound_moves": 0, "temp_min": 0.5,
 }
 VALID_SELFPLAY: dict = {
+    "search": {"kind": "puct"},
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
     "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
@@ -210,7 +211,7 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
 
     That kind reaches the root's full legal set, so its ceiling is `MAX_ARMED_SIMS_GUMBEL`,
     below the `MAX_ARMED_SIMS` the field bounds carry. The validator lives on `RunConfig`
-    because the applicable ceiling depends on `search.kind`, a different section. Validator
+    because the applicable ceiling depends on a `search.kind`, another section. Validator
     ORDER is load-bearing: the pool-ceiling check is declared before the HEXG record-format
     one, which would otherwise refuse `gumbel` first and pass this on the wrong ground.
     """
@@ -229,9 +230,16 @@ def test_the_gumbel_kind_lowers_the_sim_ceiling_at_mint(smoke_run_config):
     with pytest.raises(ValidationError, match="MAX_ROOT_CHILDREN"):
         smoke_run_config(
             "dev_example.yaml",
-            search={"kind": "gumbel"},
             train={"policy_target": "completed_improved_policy"},
-            selfplay={"mcts": {"n_simulations": in_gap}},
+            selfplay={"search": {"kind": "gumbel"}, "mcts": {"n_simulations": in_gap}},
+        )
+
+    # The DEPLOY kind spends the eval sims against the same pool (R351(c)'s split).
+    with pytest.raises(ValidationError, match="eval.gate.deploy_sims"):
+        smoke_run_config(
+            "dev_example.yaml",
+            deploy={"search": {"kind": "gumbel"}},
+            eval={"gate": {"deploy_sims": in_gap}},
         )
 
 
@@ -242,9 +250,8 @@ def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_co
         with pytest.raises(ValidationError, match=key):
             smoke_run_config(
                 "dev_example.yaml",
-                search={"kind": "gumbel"},
                 train={"policy_target": "completed_improved_policy"},
-                selfplay={"playout_cap": {key: over}},
+                selfplay={"search": {"kind": "gumbel"}, "playout_cap": {key: over}},
             )
 
 

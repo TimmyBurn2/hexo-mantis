@@ -29,7 +29,7 @@ from mantis.config.schema.monitor import (
     DrainCapsConfig,
     MonitorSchemaConfig,
 )
-from mantis.config.schema.search import SearchConfig
+from mantis.config.schema.search import DeployConfig, SearchConfig
 from mantis.config.schema.selfplay import (
     InferenceConfig,
     MctsConfig,
@@ -56,6 +56,7 @@ __all__ = [
     "PlayoutCapConfig",
     "PlyCapAdjudicationConfig",
     "RunConfig",
+    "DeployConfig",
     "SearchConfig",
     "SelfplayConfig",
     "StrengthFloorConfig",

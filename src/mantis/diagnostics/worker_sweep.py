@@ -657,7 +657,7 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
             fast_prob=pc.fast_prob, fast_sims=pc.fast_sims,
             full_search_prob=pc.full_search_prob, n_sims_quick=pc.n_sims_quick,
             n_sims_full=pc.n_sims_full, leaf_batch_size=sp.leaf_batch_size,
-            gumbel_m=sp.gumbel_m, search_kind=config.search.kind,
+            gumbel_m=sp.gumbel_m, search_kind=config.selfplay.search.kind,
         )
         return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
 

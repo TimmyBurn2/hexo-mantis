@@ -101,7 +101,7 @@ class DeployHeadPlayer:
 
     @property
     def search_kind(self) -> str:
-        """The kind this head searches with — the run's own `search.kind`."""
+        """The kind this head searches with — the run's own `deploy.search.kind`."""
         return self._search_kind
 
     def new_game(self) -> None:

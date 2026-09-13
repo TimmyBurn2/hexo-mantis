@@ -34,7 +34,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.eval_posture import resolve_strength_floor
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
-from mantis.config.resolve.search import resolve_search_kind
+from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.encoding import lookup
 from mantis.eval.floor_gate import evaluate_strength_floor, probe_measurements
 from mantis.eval.worker import build_candidate_player
@@ -297,9 +297,8 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        c_visit=cfg.selfplay.c_visit,
                                        c_scale=cfg.selfplay.c_scale,
                                        q_rescale=cfg.selfplay.q_rescale,
-                                       # The RUN'S OWN search, through the one resolver the
-                                       # self-play pool reads.
-                                       search_kind=resolve_search_kind(cfg),
+                                       # The deploy head's own key (R351(c)).
+                                       search_kind=resolve_deploy_search_kind(cfg),
                                        gumbel_m=cfg.selfplay.gumbel_m,
                                        gumbel_seed=cfg.seed),
                 resolve_bot("random", depth=None, opponent_sims=sims)(

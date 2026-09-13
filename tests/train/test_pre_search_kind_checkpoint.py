@@ -39,7 +39,8 @@ _DELETED = (
 def _pre_branch(config: dict[str, Any]) -> dict[str, Any]:
     """Return the config as it would have been written before this branch."""
     old = copy.deepcopy(config)
-    old.pop("search", None)
+    old["selfplay"].pop("search", None)
+    old.pop("deploy", None)
     for section, leaf, value in _DELETED:
         old[section][leaf] = value
     return old
@@ -104,10 +105,11 @@ def test_the_sanctioned_weights_strip_still_recovers_it(pre_branch_checkpoint, t
     ck = load_checkpoint(stripped)
     assert ck.kind == "weights"
     assert ck.model_state, "the recovered artifact must still carry its weights"
-    assert ck.config["search"]["kind"] in ("puct", "gumbel"), (
-        "the re-synthesised config must declare a search kind — an artifact whose config "
-        "cannot say which search produced it is the provenance gap this key closes"
-    )
+    for home in (ck.config["selfplay"]["search"], ck.config["deploy"]["search"]):
+        assert home["kind"] in ("puct", "gumbel"), (
+            "the re-synthesised config must declare both search kinds — an artifact whose "
+            "config cannot say which search produced it is the provenance gap this key closes"
+        )
     for section, leaf, _value in _DELETED:
         assert leaf not in ck.config[section], (
             f"the re-synthesised config still carries the deleted {section}.{leaf}"
@@ -123,4 +125,4 @@ def test_a_LIVE_checkpoint_round_trips(tmp_path, tiny_net, optim_scaler_sched, v
         config=valid_config, metadata_kwargs=metadata_kwargs, checkpoint_dir=tmp_path,
         kind="full",
     )
-    assert load_checkpoint(live).config["search"]["kind"] == "puct"
+    assert load_checkpoint(live).config["selfplay"]["search"]["kind"] == "puct"

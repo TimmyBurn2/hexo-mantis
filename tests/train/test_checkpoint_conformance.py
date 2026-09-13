@@ -197,6 +197,28 @@ def test_a_stamp_that_predates_a_required_leaf_still_loads_and_says_so(
         load_checkpoint(_resave_rehashed(payload, tmp_path))
 
 
+def test_a_stamp_carrying_a_retired_section_still_loads_and_says_so(
+        tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, caplog):
+    """The mirror image: a section the schema RETIRED after the stamp (R351(c) split the
+    top-level `search`) loads as provenance, logged; an unregistered extra key still refuses."""
+    import logging
+
+    opt, scaler, sched = optim_scaler_sched
+    path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
+                      config=valid_config, meta=metadata_kwargs)
+    payload = _load_raw(path)
+    payload["config"]["search"] = {"kind": "gumbel"}   # the pre-split stamp's shape
+    older = _resave_rehashed(payload, tmp_path)
+    with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
+        ck = load_checkpoint(older)
+    assert ck.config["search"] == {"kind": "gumbel"}, "the payload was repaired"
+    assert any("checkpoint_config_predates_schema" in r.message and "retired=" in r.message
+               and "search" in r.message for r in caplog.records)
+    payload["config"]["not_a_section"] = {"kind": "gumbel"}
+    with pytest.raises(ValueError):
+        load_checkpoint(_resave_rehashed(payload, tmp_path))
+
+
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):
     """T-CK-05 — a save whose encoding_name cannot be resolved raises; there is no metadata-omitted fallback."""
@@ -610,9 +632,9 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         "train": load_config(
             Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
         ).train.model_dump(),
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "selfplay": {
-            "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+            "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0,
             "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
             "results_queue_cap": 10_000, "random_opening_plies": 0,

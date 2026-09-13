@@ -1262,3 +1262,36 @@ document and nothing needs to be.
    workspace verdict is not `MIRRORED`; `resume_state_persisted.unreceipted_bundles` feeds
    the dashboard's two-interval warning and halts nothing. `sha256_file` moved to
    `mantis.util.hashing` so the bundle, the receipts and the puller share one hash.
+
+---
+
+### AMENDMENT — `search.kind` SPLIT: `selfplay.search.kind` and `deploy.search.kind` (R351(c))
+
+**R351(c), 2026-09-13.** The `search.kind` amendment above made the regime one top-level key so
+that the eval head and the self-play workers would run the SAME search by construction (its
+clause 2). run6 showed what that construction costs: every screen, round and promotion was read
+through the TRAINING search's head, and that head was the failure (R351(a), `falsified.md` F-50).
+Under R9 this lands as an amendment in the commit that moves it.
+
+1. **Two keys, two homes.** The top-level `search` section is DELETED. `selfplay.search.kind`
+   (inside `SelfplayConfig`) is what the workers run and what a stored ring's rows MEAN;
+   `deploy.search.kind` (the new top-level `DeployConfig`, one leaf) is what the promotion bar
+   and every ladder rung play. Both are `SearchConfig`, REQUIRED, no default. Contract #5 moves
+   v26 → v27 and the doc half is not deferred. Twelve top-level sections still: one out, one in.
+
+2. **Clause 2 above is REVERSED, not repaired.** LAW-15's deploy-matched claim is that the bar
+   plays what will be DEPLOYED; nothing in it says the training search must be that search. The
+   two may differ by construction — run7 mints PUCT deploy under either self-play kind. The σ
+   (`selfplay.{c_visit, c_scale, q_rescale}`) stays ONE key set both heads read (R351(b)).
+
+3. **One reader PER KEY.** `mantis.config.resolve.resolve_selfplay_search_kind` feeds
+   `SelfPlayHParams`, the pool, the HEXG capacity derivation, the policy-target validator and
+   the checkpoint's target-semantics guard; `mantis.config.resolve.resolve_deploy_search_kind`
+   feeds `build_eval_pipeline` and the diagnostics that build a deploy head. The pre-split
+   `resolve_search_kind` is deleted; `tests/eval/test_search_kind_is_one_selector.py` now
+   pins that the self-play wire never calls the deploy resolver and vice versa.
+
+4. **What follows which key.** `train.policy_target` and the resume guard follow the SELF-PLAY
+   kind (the deploy kind plays games nobody trains on, so a resume may re-take it). The
+   node-pool ceiling checks the self-play sims under the self-play kind and the eval sims under
+   the deploy kind. No crate moves, no import edge changes.

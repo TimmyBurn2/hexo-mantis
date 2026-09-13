@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from mantis._engine import SelfPlayRunnerConfig
-from mantis.config.resolve.search import resolve_search_kind
+from mantis.config.resolve.search import resolve_selfplay_search_kind
 from mantis.encoding import EncodingSpec, resolve_from_config
 from mantis.model import RepresentationMismatch
 
@@ -93,7 +93,7 @@ class SelfPlayHParams:
     n_workers: int = 1
     leaf_batch_size: int = 8
     max_moves_per_game: int = 128
-    #: `search.kind`, REQUIRED with no default: it selects the root mechanism, the interior
+    #: `selfplay.search.kind`, REQUIRED with no default: it selects the root mechanism, the interior
     #: selector AND the exported target's semantics, so a default would boot an undeclared regime.
     search_kind: str
     c_visit: float = 50.0
@@ -153,9 +153,8 @@ class SelfPlayHParams:
             n_workers=int(n_workers if n_workers is not None else sp["n_workers"]),
             leaf_batch_size=int(sp["leaf_batch_size"]),
             max_moves_per_game=int(sp["max_game_moves"]),
-            # THE ONE SELECTOR, shared with `build_eval_pipeline`, so the bar and the workers
-            # cannot read two call sites that happen to agree.
-            search_kind=resolve_search_kind(config),
+            # THE self-play selector; the deploy head reads its own key (R351(c)).
+            search_kind=resolve_selfplay_search_kind(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
             q_rescale=bool(sp["q_rescale"]),

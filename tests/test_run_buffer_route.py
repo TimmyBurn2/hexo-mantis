@@ -35,7 +35,7 @@ def _derived(config) -> int:
         n_sims_full=pc.n_sims_full,
         leaf_batch_size=sp.leaf_batch_size,
         gumbel_m=sp.gumbel_m,
-        search_kind=config.search.kind,
+        search_kind=config.selfplay.search.kind,
     )
 
 
@@ -116,10 +116,13 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
     """
     # Under the minted Gumbel kind a sparse row's capacity is m whatever the sims, so the two
     # shapes that must DIFFER drive the full-vector puct kind; the minted config is the third.
-    full_vector = {"search": {"kind": "puct"}, "train": {"policy_target": "raw_visit_distribution"}}
+    full_vector = {"deploy": {"search": {"kind": "puct"}},
+                   "train": {"policy_target": "raw_visit_distribution"}}
+    puct_selfplay = {"search": {"kind": "puct"}}
     pcr = smoke_run_config(
         "run6.yaml",
         selfplay={
+            **puct_selfplay,
             "playout_cap": {
                 "full_search_prob": 0.10,
                 "n_sims_quick": 75,
@@ -129,7 +132,7 @@ def test_the_graph_buffer_is_composed_with_the_derived_visit_capacity(
         **full_vector,
     )
     assert _select_buffer(pcr, _CAPACITY).visit_capacity == _derived(pcr)
-    puct_minted_sims = smoke_run_config("run6.yaml", **full_vector)
+    puct_minted_sims = smoke_run_config("run6.yaml", selfplay=puct_selfplay, **full_vector)
     assert _select_buffer(puct_minted_sims, _CAPACITY).visit_capacity == _derived(puct_minted_sims)
     assert _derived(pcr) != _derived(puct_minted_sims), (
         "the two sims regimes now derive the same capacity, so this test can no longer tell a "

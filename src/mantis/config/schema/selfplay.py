@@ -11,6 +11,7 @@ from pydantic import Field, model_validator
 
 from mantis._engine import mcts_max_armed_sims, mcts_max_armed_sims_gumbel
 from mantis.config.schema._base import StrictModel
+from mantis.config.schema.search import SearchConfig
 
 #: The largest sim budget the MCTS node pool can serve, READ FROM THE ENGINE. `finish_expansion`
 #: panics on pool overflow and `select_leaves` expands TT-hit leaves without counting them, so one
@@ -106,6 +107,8 @@ class SelfplayConfig(StrictModel):
     under ``search.kind: puct``.
     """
 
+    #: The workers' regime — what the ring's rows MEAN (`train.policy_target` follows it).
+    search: SearchConfig
     n_workers: int = Field(ge=1)
     leaf_batch_size: int = Field(ge=1)
     max_game_moves: int = Field(ge=1)

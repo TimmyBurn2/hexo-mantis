@@ -1181,8 +1181,8 @@ def _identity(representation: str, encoding: str = "gnn_axis_v1"):
         # The selector seeds the ring's sampler from `config.seed`, so only the attribute's
         # presence is load-bearing here.
         seed=20260719,
-        search=SimpleNamespace(kind="puct"),
         selfplay=SimpleNamespace(
+            search=SimpleNamespace(kind="puct"),
             leaf_batch_size=8,
             gumbel_m=16,
             mcts=SimpleNamespace(n_simulations=50),

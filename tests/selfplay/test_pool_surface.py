@@ -104,7 +104,7 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
     # readers no longer take a flat dict with a top-level-namespace fallback. `over` still layers
     # onto `selfplay`.
     selfplay: dict[str, Any] = {
-        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -127,7 +127,7 @@ def _cfg(encoding: str, **over: Any) -> dict[str, Any]:
         "fused_graph_caps": {"max_fused_edges": 57149441, "max_fused_nodes": 1785921},
     }
     train = {"draw_reward": -0.5, "ply_cap_value": -0.5}
-    return {"encoding": encoding, "search": {"kind": "puct"}, "selfplay": selfplay,
+    return {"encoding": encoding, "deploy": {"search": {"kind": "puct"}}, "selfplay": selfplay,
             "inference": inference, "train": train}
 
 

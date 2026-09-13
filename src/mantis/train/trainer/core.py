@@ -105,7 +105,7 @@ class TrainHParams:
             )
         if train["value_target"] != "pure_outcome_z":
             raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
-        _assert_policy_target_consistency(train, cfg.get("search") or {})
+        _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
         fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps"}
         kwargs = {k: train[k] for k in fields}
         return cls(

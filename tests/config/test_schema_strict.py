@@ -50,7 +50,7 @@ def _valid_train_block() -> dict:
 
 def _valid_selfplay_block() -> dict:
     return {
-        "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
+        "search": {"kind": "puct"}, "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
         "c_visit": 50.0,
         "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
@@ -116,7 +116,7 @@ def _valid_payload() -> dict:
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
         "eval": _valid_eval_block(),
         "train": _valid_train_block(),
-        "search": {"kind": "puct"},
+        "deploy": {"search": {"kind": "puct"}},
         "selfplay": _valid_selfplay_block(),
         "inference": _valid_inference_block(),
         "monitor": _valid_monitor_block(),
