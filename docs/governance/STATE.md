@@ -76,18 +76,22 @@ minted for. The READINGS at step 101 (value warm-up in force, policy weight 0): 
 of value-only training on the run's first 26k rows take the BC net's search BELOW its own prior
 (the frontier read every-head BC at 0.413 under PUCT-150; the boot's hash witness proves every
 tensor loaded). The warm-up's early cost, not a defect on the record; whether the value head
-recovers past the prior by step 3 000 is the shakedown's first regular point. A twin config
-(`shakedown7`, its only delta `run_id`, `config_diff --expect run_id` MATCH) needs its OWN stamp —
-the identity hash carries `run_id`, as run6's shakedown did — and is being preflighted next.
+recovers past the prior by step 3 000 is the shakedown's first regular point. The twin config
+(`shakedown7`, its only delta `run_id`, `config_diff --expect run_id` MATCH) has its OWN stamp
+(`preflight_shakedown7_20260913T205402Z.json`, pass, MIRRORED; its step-101 point 392 games in
+2 834 s, `sealbot_d5` 0.399 [0.344, 0.455] — the same construction as run7's 0.271, so the
+101-step value-only head is noisy, not broken) and **the 4 h shakedown is RUNNING** on the box
+since 2026-09-13 21:50:36 UTC (`/workspace/runs/shakedown7`, `/workspace/oc7/shakedown7.launch.log`,
+tree `ccfaf699`, ends ≈ 01:50 UTC by `timeout`, rc 124 the success path): its step-3 000 round is
+the reading that decides `eval.rung_concurrency` and the warm-up's cost, and its steps/h against
+the block's 1 163 is the cost of the 288-game rounds.
 
 **Dispatcher state for a fresh session.** The box `/workspace/hexo-mantis` is on branch `r351b`
-at `ccfaf699` (`make build.cuda` — never a bare `uv sync` there). Open, in order: (1) the twin's
-stamp (`/workspace/oc7/box_preflight_run7.sh /workspace/oc7/shakedown7.yaml
-/workspace/runs/shakedown7-preflight 101 900`, the puller cycling against the out-dir); (2) the
-4 h shakedown (`/workspace/run_shakedown.sh /workspace/oc7/shakedown7.yaml
-/workspace/runs/shakedown7 14400` — its end by `timeout` is rc 124, CARD-SHAKEDOWN-TIMEOUT-STOP
-applies), whose step-3 000 round is the reading that decides `eval.rung_concurrency` and the
-warm-up's cost; (3) START on the operator's word: `/workspace/oc7/box_start_run6.sh`'s shape with
+at `ccfaf699` (`make build.cuda` — never a bare `uv sync` there). Open, in order: (1) read the
+shakedown's record when it ends (`/workspace/runs/shakedown7/logs/events_shakedown7_seg0001.jsonl`,
+`card.csv`, the launch log's `card_peak` and orphan sweep) into a measurement note and STATE;
+(2) the operator ratifies or reverses `eval.rung_concurrency: 8` (a one-row re-mint and a fresh
+stamp if reversed); (3) START on the operator's word: `/workspace/oc7/box_start_run6.sh`'s shape with
 `run7` (the supervisor over `mantis.run`, out-dir `/workspace/runs/run7`), the puller under
 tmux/systemd on the operator's machine (`tools/mirror_pull.py --source
 <box-alias>:/workspace/runs/run7 --mirror <mirror-root>/run7 --run-id run7 --interval-sec 600`). Owed items (`CARDS.md`): the α = 1.0 three-row
