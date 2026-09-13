@@ -659,6 +659,7 @@ class EvalPipeline:
             # Same seam. Read straight off `cfg` rather than cached: it is one int with no
             # resolver, and a cached copy is the second authority these rows exist to remove.
             concurrency=cfg.concurrency,
+            rung_concurrency=cfg.rung_concurrency,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's.
             allocator_posture=self._allocator_posture,

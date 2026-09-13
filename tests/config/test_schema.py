@@ -28,7 +28,7 @@ from mantis.config.schema import (
     TrainConfig,
     nested_block,
 )
-from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
+from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
 
@@ -332,8 +332,8 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # `identity.arch_kind`, whose absent row resolves to the representation's INCUMBENT kind;
     # `identity.warm_start`, a BLOCK whose exemption is on the PARENT only, since `checkpoint`,
     # `net_hash` and `reinit` are REQUIRED inside it; and `eval.concurrency`, whose default is not a placeholder
-    # but the BEHAVIOUR ITSELF — `1` is the serial loop that ran before the parameter existed.
-    exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
+    # but the BEHAVIOUR ITSELF (`1` is the serial loop), and `eval.rung_concurrency`, its twin (R351).
+    exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW}
     # THE FIFTH CLASS IS A REGISTRY, not a row: an OPERATIONAL CONSTANT carries a schema default and
     # leaves the YAML, and `OPERATIONAL_DEFAULT_KEYS` is the ONE authority. A default on anything
     # NOT in a registry is still a red, and a registered key that is still required is a stale

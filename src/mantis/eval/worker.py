@@ -474,15 +474,22 @@ def _play_rung_block(
         rung_job.bot, depth=rung_job.depth,
         opponent_sims=_model_sims_for_kind(spec, rung_job.bot),
     )
-    opponent = bot_factory()
     # Rung games play at the resolved PER-KIND *_model_sims the RegimeKey stamps, never at
     # gate.deploy_sims, which is reserved for the deploy-matched GATE block.
-    candidate = build_candidate_player(
-        candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
-        leaf_batch_size=spec.leaf_batch_size,
-        c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
-        search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
-    )
+    def _candidate() -> DeployHeadPlayer:
+        return build_candidate_player(
+            candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
+            leaf_batch_size=spec.leaf_batch_size,
+            c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
+            search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
+        )
+
+    # One (candidate, opponent) pair per game thread under `rung_concurrency` > 1: both carry
+    # per-game state, and the bot factory builds a fresh opponent per call.
+    def _pair() -> tuple[DeployHeadPlayer, Any]:
+        return _candidate(), bot_factory()
+
+    candidate, opponent = _pair()
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
         opponent_spec=f"{rung_job.bot}:{rung_job.variant}", opening_book=rung_job.opening_book,
@@ -495,6 +502,7 @@ def _play_rung_block(
     records = play_paired_match(
         candidate, opponent, openings, regime_key=regime_key,
         board_factory=board_factory, record_sink=_both(progress.sink("rung"), games.sink("rung", channel="external", rung=rung_job.name, served_sims=_model_sims_for_kind(spec, rung_job.bot), seed=spec.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
+        player_factory=_pair, concurrency=spec.rung_concurrency,
     )
     return [_agg_record(r) for r in records[: rung_job.games]]
 

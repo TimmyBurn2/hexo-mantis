@@ -48,6 +48,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "eval.round_timeout_sec": "pipeline.py mid-round subprocess join bound",
     "eval.concurrency":
         "worker.py::_play_gate_block gate-block games in flight (R339(b))",
+    "eval.rung_concurrency":
+        "worker.py::_play_rung_block rung games in flight (R351)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",
     "eval.ply_cap_adjudication.criterion":
         "resolve_ply_cap_adjudication -> RoundSpec.ply_cap_adjudication -> worker.py "

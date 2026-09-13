@@ -1605,7 +1605,7 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
 #: discovered. The stem is ASSERTED undeclared by its own row below rather than chosen and
 #: hoped for; the history in the docstrings still names `run6.yaml`, because that is what
 #: was demonstrated.
-_F1_PLANT_STEM = "run7"
+_F1_PLANT_STEM = "run9"
 _F1_PLANT_PATHS = (f"{_F1_PLANT_STEM}.yaml", f"{_F1_PLANT_STEM}.yml",
                    f"prod/{_F1_PLANT_STEM}.yaml", f"prod/nested/{_F1_PLANT_STEM}.yml",
                    f"{_F1_PLANT_STEM}.txt", f"{_F1_PLANT_STEM}.YAML",
@@ -2392,10 +2392,14 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
         f"tuple is not a red gate, it is silence. got {PRODUCTION_CONFIGS}"
     )
     assert "configs/run6.yaml" not in exempt
-    assert PRODUCTION_CONFIGS == ("configs/run6.yaml",), (
-        "R346(f) took run5 and the shakedown config, so run6 is the whole production side. A "
-        "member added without a by-name pin of its own is F-P2B's escape reopened, and an "
-        f"empty tuple is N-1's silence. got {PRODUCTION_CONFIGS}"
+    assert "configs/run7.yaml" in PRODUCTION_CONFIGS and "configs/run7.yaml" not in exempt, (
+        "run7 is the config the operator is about to start (R351 mint) and is bound BY NAME "
+        f"for run6's reason. got {PRODUCTION_CONFIGS}"
+    )
+    assert PRODUCTION_CONFIGS == ("configs/run6.yaml", "configs/run7.yaml"), (
+        "R346(f) took run5 and the shakedown config; run6 (a finished run's record) and run7 "
+        "are the whole production side. A member added without a by-name pin of its own is "
+        f"F-P2B's escape reopened, and an empty tuple is N-1's silence. got {PRODUCTION_CONFIGS}"
     )
 
     # …and the escape the pin exists to refuse, driven.

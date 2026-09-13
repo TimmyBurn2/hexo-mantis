@@ -34,6 +34,7 @@
 # delta: inference.edge_geometry_check: inline -> checker_thread
 # delta: inference.compile_trunk: false -> true
 # delta: eval.concurrency: 1 -> 8
+# delta: eval.rung_concurrency: 1 -> 8
 schema_version: 1
 run_id: run7
 seed: 20260914
@@ -93,6 +94,7 @@ eval:
     bt_prior_games: 1.0
     bootstrap_seed: 1234
   concurrency: 8
+  rung_concurrency: 8
 train:
   lr: 0.001
   weight_decay: 0.0001

@@ -354,7 +354,7 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     config slips past the sweep, and enumeration goes through the ONE discovery authority.
     """
     configs = discover_configs(_REPO / "configs")
-    assert len(configs) == 3, f"expected the three committed configs, found {configs}"
+    assert len(configs) == 4, f"expected the four committed configs, found {configs}"
     for path in configs:
         cfg = load_config(path)
         assert cfg.monitor.gate_interval == cfg.train.log_interval, (

@@ -57,7 +57,10 @@ the sealbot point 288 paired games with `round_games` 288 AND `calibration_games
 calibration and end the watch); `random_floor_games` 20; `gate.stride` 1; value warm-up 2000;
 `policy_loss_trough_abort: null` (demoted — the manifest row stays DEFERRED);
 `supervisor_kill_grace_sec` 120 as the relation; `seed` 20260914 (a dispatcher's value, the
-packet's date). NOT minted: `monitor.drain` at its defaults — `config_diff --from-header` reads a
+packet's date); **`eval.rung_concurrency` 8 — a NEW row (contract v28) the operator must ratify or
+reverse before START:** the sealbot rung was serial by R339(b), and at ≈ 40 s/game a 288-game
+PUCT-512 point is ≈ 3 h against the 3 600 s round timeout, so every round would have broken; 8
+is the gate block's G, the shakedown measures the round under it. NOT minted: `monitor.drain` at its defaults — `config_diff --from-header` reads a
 row minted at the template's own value as a lying header; the boot's `resolved_config.yaml`
 records the four caps (900 × 3, 14 400, 14 400). The prereg's §5 carries every as-minted row.
 

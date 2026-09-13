@@ -29,7 +29,7 @@ from mantis.config.schema import (
     RunConfig,
     leaf_paths,
 )
-from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
+from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
 
@@ -57,7 +57,7 @@ def _leaves(node: object, prefix: str = "") -> set[str]:
 OMITTABLE_KEYS: frozenset[str] = frozenset(
     {key for key, _grounds in OPERATIONAL_DEFAULT_KEYS}
     | {f"{key.section}.{key.field}" for key in ARCH_SCOPED_KEYS}
-    | {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
+    | {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW}
 )
 
 

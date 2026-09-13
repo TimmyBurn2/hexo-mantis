@@ -55,7 +55,7 @@ def _round_spec(tmp_path: Path) -> RoundSpec:
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=24,
-        leaf_build_threads=1, concurrency=1,
+        leaf_build_threads=1, concurrency=1, rung_concurrency=1,
         round_index=0, round_id="f816_37_instrument", step=7, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate,

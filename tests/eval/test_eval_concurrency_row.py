@@ -175,7 +175,7 @@ def _round_spec(tmp_path: Path, concurrency: int) -> RoundSpec:
     )
     return RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=32,
-        leaf_build_threads=1, concurrency=concurrency,
+        leaf_build_threads=1, concurrency=concurrency, rung_concurrency=1,
         round_index=0, round_id="concurrency_wiring", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=_ENC, worker_device="cpu",
         gate=gate, rung_jobs=[], random_floor_games=2,
@@ -259,6 +259,7 @@ def test_only_the_gate_block_carries_the_row(
     for phase, conc, has_factory in other_rows:
         assert conc is None and not has_factory, (
             f"{phase} carries the concurrency row; only the gate block may. The floor probe is "
-            "a LAW-07 gate input and the rung block is LAW-04's Elo channel — both stay serial "
-            "and deterministic by ruling, not by omission."
+            "a LAW-07 gate input and the random floor its posture — both stay serial and "
+            "deterministic by ruling, not by omission (the rung block carries its OWN row, "
+            "`eval.rung_concurrency`, pinned in test_eval_rung_concurrency_row.py)."
         )

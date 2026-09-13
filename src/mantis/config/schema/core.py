@@ -335,8 +335,10 @@ class EvalConfig(StrictModel):
     strength_floor: StrengthFloorConfig | None = Field(default=...)
     #: The gate-block concurrency row: how many gate games run IN FLIGHT, one thread each, sharing
     #: the round's two inference engines. `1` is byte-exact the serial loop that ran before the
-    #: parameter existed; the floor probe, rung battery and random floor stay serial deliberately.
+    #: parameter existed; the floor probe and random floor stay serial deliberately.
     concurrency: int = Field(ge=1, default=1)
+    #: The RUNG block's own row, same idiom (R351: a 288-game PUCT-512 point is ≈ 3 h serial).
+    rung_concurrency: int = Field(ge=1, default=1)
     gate: GateConfig
     ladder: LadderConfig
 

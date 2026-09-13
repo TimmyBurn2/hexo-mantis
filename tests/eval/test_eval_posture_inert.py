@@ -101,7 +101,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #: The configs a RULING has armed `eval.strength_floor` on. CLOSED and NAMED: it is widened only
 #: by a mint act with a ruling behind it, and it is NOT derived from the files, because a
 #: predicate over `configs/` would go vacuous on exactly the event this suite exists to catch.
-_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run7.yaml"})
 
 
 def _armed_config():
@@ -205,7 +205,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # `RoundSpec` carries the fused-forward memory bound in the SAME shape as the two postures;
     # its own round-trip is pinned elsewhere, so here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
-                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
+                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
                          fused_graph_caps=None,
                          inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
@@ -213,7 +213,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back == disarmed
 
     armed = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1, rung_concurrency=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),
@@ -231,7 +231,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # left as a raw mapping it raises in a subprocess whose stderr nobody is reading.
     targeted = RoundSpec(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128,
-        leaf_build_threads=1, concurrency=1,
+        leaf_build_threads=1, concurrency=1, rung_concurrency=1,
         **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=None, inference_batching=None,

@@ -138,7 +138,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         search_kind="", gumbel_m=config.selfplay.gumbel_m,
         inference_batching=resolve_inference_batching(dump) if graph else None,
         leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
-        concurrency=1,
+        concurrency=1, rung_concurrency=1,
         allocator_posture=(declared_allocator_posture(dump)
                            if governs_device(cfg.worker_device) else None),
     )

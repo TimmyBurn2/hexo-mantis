@@ -24,9 +24,12 @@ from mantis.eval.errors import EvalBrokenReason, ResultContractError
 #: The contract-doc / schema-census name of the gate-block concurrency row: it lives beside the
 #: spec that carries it, because the name belongs with the consumer, not with the test.
 EVAL_CONCURRENCY_ROW = "eval.concurrency"
+#: The rung block's own row (R351): same idiom, its one reader is `worker._play_rung_block`.
+EVAL_RUNG_CONCURRENCY_ROW = "eval.rung_concurrency"
 
 __all__ = [
     "EVAL_CONCURRENCY_ROW",
+    "EVAL_RUNG_CONCURRENCY_ROW",
     "GameRecordTarget",
     "RoundSpec",
     "build_round_result",
@@ -182,6 +185,8 @@ class RoundSpec:
     #: The gate-block concurrency. NOT defaulted: a spec silently carrying `1` while the config
     #: minted `4` is the silently-disabled-knob class.
     concurrency: int
+    #: The rung block's games in flight (`eval.rung_concurrency`). NOT defaulted, for the same reason.
+    rung_concurrency: int
     allocator_posture: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
