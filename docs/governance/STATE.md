@@ -64,20 +64,33 @@ is the gate block's G, the shakedown measures the round under it. NOT minted: `m
 row minted at the template's own value as a lying header; the boot's `resolved_config.yaml`
 records the four caps (900 × 3, 14 400, 14 400). The prereg's §5 carries every as-minted row.
 
-**Dispatcher state for a fresh session.** The box `/workspace/hexo-mantis` is on branch `r351` at
-`646ca237` (the σ switch; the split, the dashboard warning and the mint are NOT there yet — carry
-`646ca237..dev` over by bundle before the preflight); CUDA torch was restored with
-`make build.cuda` after a bare `uv sync` reverted it (do not run a bare `uv sync` on the box).
-Open, in order: (1) bundle → box → `make build.cuda`; (2) the preflight stamp:
-`/workspace/oc7/box_preflight.sh configs/run7.yaml /workspace/runs/run7-preflight <burst-steps>
-<receipt-wait-sec>` with the operator's puller cycling against the out-dir
-(`tools/mirror_pull.py --source <box-alias>:/workspace/runs/run7-preflight --mirror
-<mirror-root>/run7-preflight --run-id run7 --interval-sec 60`); (3) the 4 h shakedown
-twin (a config whose ONLY delta from `run7.yaml` is `run_id: shakedown`, verified by
-`config_diff --expect run_id`; `/workspace/run_shakedown.sh <cfg> /workspace/runs/shakedown7
-14400` — its end by `timeout` is rc 124 and CARD-SHAKEDOWN-TIMEOUT-STOP applies); (4) START on
-the operator's word, `/workspace/oc7/box_start_run6.sh`'s shape with `run7`, the puller under
-tmux/systemd on the operator's machine. Owed items (`CARDS.md`): the α = 1.0 three-row
+**run7 is PREFLIGHTED and STAMPED on the box** (`preflight_run7_20260913T195032Z.json`, tree
+`ccfaf699`, config identity `cac27d8f…`, verdict pass, rc 0, tier `sync_lag` covered / `full` owed
+as run6's was, workspace MIRRORED — bundle `run7_00000101_2be3a173.ckpt` and the first shard
+receipted by the puller): 101 steps, child wall 3 520 s. **The terminal round is the first
+reading of R351's rows:** 392 games in 2 782 s — the 288-game `sealbot_d5` point at PUCT-512 under
+`rung_concurrency` 8, the 80-game gate screen at 512, the 20-game random floor (1.0) and the
+4-game probe — inside the 3 600 s round timeout with 23 % to spare, so the row does what it was
+minted for. The READINGS at step 101 (value warm-up in force, policy weight 0): `sealbot_d5`
+**0.271 [0.219, 0.326]** and the gate screen vs the step-0 anchor **0.225** (80 games) — 101 steps
+of value-only training on the run's first 26k rows take the BC net's search BELOW its own prior
+(the frontier read every-head BC at 0.413 under PUCT-150; the boot's hash witness proves every
+tensor loaded). The warm-up's early cost, not a defect on the record; whether the value head
+recovers past the prior by step 3 000 is the shakedown's first regular point. A twin config
+(`shakedown7`, its only delta `run_id`, `config_diff --expect run_id` MATCH) needs its OWN stamp —
+the identity hash carries `run_id`, as run6's shakedown did — and is being preflighted next.
+
+**Dispatcher state for a fresh session.** The box `/workspace/hexo-mantis` is on branch `r351b`
+at `ccfaf699` (`make build.cuda` — never a bare `uv sync` there). Open, in order: (1) the twin's
+stamp (`/workspace/oc7/box_preflight_run7.sh /workspace/oc7/shakedown7.yaml
+/workspace/runs/shakedown7-preflight 101 900`, the puller cycling against the out-dir); (2) the
+4 h shakedown (`/workspace/run_shakedown.sh /workspace/oc7/shakedown7.yaml
+/workspace/runs/shakedown7 14400` — its end by `timeout` is rc 124, CARD-SHAKEDOWN-TIMEOUT-STOP
+applies), whose step-3 000 round is the reading that decides `eval.rung_concurrency` and the
+warm-up's cost; (3) START on the operator's word: `/workspace/oc7/box_start_run6.sh`'s shape with
+`run7` (the supervisor over `mantis.run`, out-dir `/workspace/runs/run7`), the puller under
+tmux/systemd on the operator's machine (`tools/mirror_pull.py --source
+<box-alias>:/workspace/runs/run7 --mirror <mirror-root>/run7 --run-id run7 --interval-sec 600`). Owed items (`CARDS.md`): the α = 1.0 three-row
 reconstruction, `CARD-SELFPLAY-SEARCH-STATS`, `CARD-DRAIN-POLLER-RACE`; and a NEW card is
 owed for F-51's residue (which part of the Gumbel head loses to the most-visited child at
 every σ). run6's record stays under `/workspace/runs/run6/`, the R342-era logs under

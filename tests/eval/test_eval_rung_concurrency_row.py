@@ -1,9 +1,5 @@
-"""`eval.rung_concurrency` — the RUNG block's own games-in-flight row (R351's 288-game
-PUCT-512 point: serial, the rung is ≈ 3 h a round against a 3 600 s timeout).
-
-The same idiom as `eval.concurrency` (R339(b)): `1` is byte-exact the serial arm that ran
-before the row existed, an absent row IS a minted `1`, and the rung is the ONE reader.
-"""
+"""`eval.rung_concurrency` — the rung block's own games-in-flight row, `eval.concurrency`'s idiom:
+`1` is the serial arm byte-exact, an absent row IS a minted `1`, the rung is the ONE reader."""
 from __future__ import annotations
 
 import copy
@@ -43,8 +39,7 @@ def _net(seed: int):
 
 
 def _census(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, int | None, bool]]:
-    """One `(phase, concurrency-kwarg, factory-present)` row per `play_paired_match` call, the
-    phase read off the record sink's closure (the same census `test_eval_concurrency_row` runs)."""
+    """One `(phase, concurrency, factory-present)` row per `play_paired_match` call."""
     rows: list[tuple[str, int | None, bool]] = []
     real = worker.play_paired_match
 
@@ -137,8 +132,7 @@ def _rung_spec(tmp_path: Path, rung_concurrency: int) -> RoundSpec:
 def test_the_rung_block_carries_the_row_with_a_factory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, armed: int
 ) -> None:
-    """At `armed=2` the rung call must carry 2 with a `player_factory`; at 1 the factory is
-    still handed over (byte-exact at G=1, never called)."""
+    """At `armed=2` the rung carries 2 with a factory; at 1 the factory is handed over, never called."""
     rows = _census(monkeypatch)
     worker.run_round(_rung_spec(tmp_path, armed))
     rung_rows = [r for r in rows if r[0] == "rung"]
