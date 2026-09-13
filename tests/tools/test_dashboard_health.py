@@ -34,6 +34,9 @@ def _clean_rows() -> list[dict]:
          "gates": {"grad_norm_hard_abort": {"checks": 1000, "fires": 0, "skips": 0, "warns": 0}}},
         {"event": "resume_state_persisted", "step": 1000, "unreceipted_bundles": [1000]},
         {"event": "disk_free", "disk_free_gb": 88.0, "ts": 2.0},
+        {"event": "trainer_step", "step": 0, "policy_loss": 2.30},
+        {"event": "trainer_step", "step": 1000, "policy_loss": 2.28},
+        {"event": "trainer_step", "step": 2000, "policy_loss": 2.25},
     ]
 
 
@@ -94,3 +97,33 @@ def test_bad_outranks_warn_outranks_unmeasured(health, reader, tmp_path):
     assert health.assess(_record(reader, tmp_path, rows)).state == "bad"
     rows = _clean_rows() + [{"event": "training_alert", "rule": "r", "step": 4}]
     assert health.assess(_record(reader, tmp_path, rows)).state == "warn"
+
+
+def _with_policy_loss(rows: list[dict], series: list[tuple[int, float]]) -> list[dict]:
+    kept = [r for r in rows if r["event"] != "trainer_step"]
+    return kept + [{"event": "trainer_step", "step": s, "policy_loss": v} for s, v in series]
+
+
+def test_the_policy_loss_trough_is_a_warning_not_a_halt(health, reader, tmp_path):
+    """R351(d): the prereg's trough signature reads `warn`, never `bad` — the halt is demoted."""
+    rows = _with_policy_loss(_clean_rows(), [(0, 2.28), (1000, 2.50), (2000, 2.60), (3000, 2.70)])
+    reading = health.assess(_record(reader, tmp_path, rows, record_dir=tmp_path))
+    assert _states(reading)["policy-loss trough"] == "warn"
+    assert reading.state == "warn"
+    detail = next(i.reason for i in reading.inputs if i.name == "policy-loss trough")
+    assert "2.28" in detail and "0.2" in detail and "R351(d)" in detail
+
+
+def test_a_rise_after_the_trough_window_or_a_short_rise_is_not_the_signature(health, reader, tmp_path):
+    late = _with_policy_loss(_clean_rows(), [(0, 2.28), (6000, 2.60), (7000, 2.70), (8000, 2.80)])
+    assert _states(health.assess(_record(reader, tmp_path, late, record_dir=tmp_path)))[
+        "policy-loss trough"] == "ok"
+    short = _with_policy_loss(_clean_rows(), [(0, 2.28), (1000, 2.60), (2000, 2.70), (3000, 2.30)])
+    assert _states(health.assess(_record(reader, tmp_path, short, record_dir=tmp_path)))[
+        "policy-loss trough"] == "ok"
+
+
+def test_fewer_than_two_policy_loss_rows_leave_the_trough_unmeasured(health, reader, tmp_path):
+    rows = _with_policy_loss(_clean_rows(), [(0, 2.28)])
+    reading = health.assess(_record(reader, tmp_path, rows, record_dir=tmp_path))
+    assert _states(reading)["policy-loss trough"] == "unmeasured"

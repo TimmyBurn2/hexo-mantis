@@ -1,4 +1,4 @@
-"""The health badge: the worst of seven inputs, and an absent input is never green."""
+"""The health badge: the worst of eight inputs, and an absent input is never green."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,6 +19,12 @@ MIRROR_LAG_WARN_BUNDLES = 2
 
 _RANK = {"bad": 3, "warn": 2, "unmeasured": 1, "ok": 0}
 
+#: The trough signature run7's prereg armed as a halt, DEMOTED by R351(d) to this warning: policy
+#: loss >= its first reading + delta on `consec` consecutive `trainer_step` rows by `max_step`.
+TROUGH_DELTA_NATS = 0.2
+TROUGH_CONSEC = 3
+TROUGH_MAX_STEP = 5000
+
 _WATCHDOG_FIRES = ("heartbeat_watchdog_fired", "selfplay_stall_watchdog")
 _HARD_ABORTS = ("hard_abort", "hard_abort_after_stop")
 
@@ -38,10 +44,10 @@ class HealthReading:
 
 
 def assess(rec: Record) -> HealthReading:
-    """Read the seven health inputs off the record and rank them into one badge."""
+    """Read the eight health inputs off the record and rank them into one badge."""
     inputs = [_gates(rec), _hard_aborts(rec), _watchdogs(rec)]
     fired, firings = _firings(rec)
-    inputs += [fired, _mirror(rec), _alerts(rec), _disk(rec)]
+    inputs += [fired, _mirror(rec), _alerts(rec), _disk(rec), _policy_loss_trough(rec)]
     state = max((i.state for i in inputs), key=lambda s: _RANK[s])
     return HealthReading(state=state, inputs=inputs, firings=firings)
 
@@ -137,3 +143,27 @@ def _disk(rec: Record) -> HealthInput:
         return HealthInput("disk", "warn", f"{len(alerts)} disk_alert row(s); last free "
                            f"{free[-1][1]:.1f} GB")
     return HealthInput("disk", "ok", f"last free {free[-1][1]:.1f} GB")
+
+
+def _policy_loss_trough(rec: Record) -> HealthInput:
+    series = rec.series("trainer_step", "step", "policy_loss")
+    if len(series) < 2:
+        return HealthInput("policy-loss trough", "unmeasured",
+                           f"{len(series)} trainer_step.policy_loss row(s); the signature needs "
+                           "a reference and at least one later row")
+    reference = series[0][1]
+    bar = reference + TROUGH_DELTA_NATS
+    run = 0
+    for step, loss in series[1:]:
+        if step > TROUGH_MAX_STEP:
+            break
+        run = run + 1 if loss >= bar else 0
+        if run >= TROUGH_CONSEC:
+            return HealthInput("policy-loss trough", "warn",
+                               f"policy loss {loss:.2f} >= {reference:.2f} + {TROUGH_DELTA_NATS} "
+                               f"nats on {run} consecutive rows by step {step:.0f} — the trough "
+                               "signature, a WARNING not a halt (R351(d): the block's policy "
+                               "loss rose 0.6 nats while the net improved)")
+    return HealthInput("policy-loss trough", "ok",
+                       f"no {TROUGH_CONSEC}-row rise of {TROUGH_DELTA_NATS} nats over the first "
+                       f"reading {reference:.2f} inside step {TROUGH_MAX_STEP}")
