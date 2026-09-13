@@ -39,15 +39,20 @@ a session). Landed so far (288 paired games, one shared opening window, pair-lev
 | `bc_tp` (run6's seam: value head fresh) PUCT-150 | **0.038** | [0.017, 0.062] |
 | `bc_tp` Gumbel-160/m16 | **0.014** | [0.003, 0.028] |
 | `ck3k` / `ck13k` / `ck18k` / `ck25k` Gumbel-128 | 0.205 / **0.031** / 0.233 / 0.167 | [0.160, 0.250] / [0.014, 0.052] / [0.191, 0.278] / [0.128, 0.208] |
-| `ck3k` / `ck18k` / `ck25k` PUCT-128 | 0.431 / **0.568** / 0.497 | [0.372, 0.483] / [0.510, 0.625] / [0.444, 0.549] |
+| `ck3k` / `ck13k` / `ck18k` / `ck25k` PUCT-128 | 0.431 / **0.464** / **0.568** / 0.497 | [0.372, 0.483] / [0.408, 0.519] / [0.510, 0.625] / [0.444, 0.549] |
+| `ck35k` Gumbel-128 | 0.149 | [0.108, 0.191] |
+| `ck18k` Gumbel-256 | **0.111** | [0.080, 0.146] |
+| `ck25k` vs `bc_full`, Gumbel-160/m16 (25k as candidate) | **0.438** | [0.389, 0.486] |
 
 Two answers already: the KIND — the Gumbel deploy head reads the SAME net 24 pp below PUCT; and
 the HEAD SET — the BC checkpoint's own value head (trained on the corpus outcomes, thrown away by
 the seam) is worth 0.413 vs 0.038 at PUCT-150, and a BC prior searched over a random value head
 is WORSE than the prior. And the NET: under PUCT-128 the block's nets sit at or ABOVE the BC net
 (0.431 → 0.568 at 18k → 0.497), so the block trained a stronger net than it started with, read
-by the wrong head; the 13k "trough" is a 3 % Gumbel reading of a net PUCT reads in the forties
-(interim). Phase 2's 27 cells (3k/13k/18k/25k × {128, 256, 512} × {gumbel, puct},
+by the wrong head; the 13k "trough" is a 3 % Gumbel reading of a net PUCT reads at 0.464. Under the Gumbel head
+more sims read WORSE (18k: 0.233 at 128 → 0.111 at 256), and the run's own promotion instrument
+scores the 25k net BELOW its prior (0.438 vs `bc_full` at Gumbel-160) while PUCT-vs-sealbot has
+it above. Phase 2's 27 cells (3k/13k/18k/25k × {128, 256, 512} × {gumbel, puct},
 `ck35k` Gumbel-128, `ck25k` vs `bc_full` at Gumbel-160 and PUCT-150) finish over the next hours;
 the record's §B/§C/§E fill as they land. The verdict on kind/sims for run7's mint is the
 record's, not this file's.
@@ -154,14 +159,19 @@ is not dispatched.
   3 546 / 23 / 13 527 → **3 545 / 23 / 13 527** (the floor file carries 3 545).
 - Contract: `docs/contracts/run_config_schema.md` v23–v25 (158 leaf key-paths, gate 13 green);
   `docs/contracts/event_manifest.md` carries the five new instrument rows.
-- Gates run locally on this line: 2a/2b not run (no Rust touched), 3a default tier, 3c, 6, 7,
-  8, 9, 10 (with the new files added), 11, 12, 13, 14, 15, 16, 17 — GREEN; 3b/4/5 not run here
-  (no crate, no wasm, no bench surface touched); `make gates.exit`'s slow tier not run on the dev
-  box (CARD-OC7-OVERRUN: the box is the tier's host and is busy with the frontier).
+- Gates on the committed tree (`tools/ci_gates/run_all.sh`, dev box, CPU wheel): 2 (cargo test
+  + clippy) and the default tier ran through; the integration tier **33/34 in 26 min**, the one
+  red (`tests/test_run_launcher.py::test_a_periodic_cadence_burst_streams_periodic_checkpoint_save`)
+  stopped by an external SIGINT at step 4 under the detached shell and **green on the foreground
+  re-run** (130 s) — the detached-shell class this file already records; a concurrent integration
+  tier from another checkout (`/tmp/mantis-dash`) was on the machine at the time. The default
+  tier alone on the committed tree: **4 596 passed, 8 skipped**. Gates 3c, 6–17 GREEN
+  individually; 4/5 not run (no wasm, no bench surface touched); the slow tier not run on the
+  dev box (CARD-OC7-OVERRUN).
 
 ## Provenance
 
 Derived 2026-09-13 on `dev` at the exit commit of this leg, from `configs/run6.yaml`, the box's
-`/workspace/frontier/*/summary.jsonl` (read at 10:02 UTC), the run6 mirror's events and rings,
+`/workspace/frontier/*/summary.jsonl` (read at 11:15 UTC), the run6 mirror's events and rings,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
 `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.

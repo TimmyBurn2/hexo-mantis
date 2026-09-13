@@ -13,7 +13,10 @@ confirm phase made unreachable. WR is draw-aware; the CI is a 2 000-resample boo
 OPENING PAIRS (both legs of an opening are one observation) at 95 %; `s/game` is the cell's wall
 over its games with 8–12 cells sharing the card, so it is a throughput reading of the box under
 that load, not of one game alone. Box: RTX 5080, 24 cores; cells ran 4 (phase 1, from 08:27 UTC)
-then 8 (phase 2, from 08:30 UTC) at a time, CPU ≈ 81 % busy, GPU ≈ 53 %.
+then 8 (phase 2, from 08:30 UTC) at a time, CPU ≈ 81 % busy, GPU ≈ 53 %. The driver as run on the
+box predates the review fixes committed at `f161719d`: it played no strength-floor probe and its
+readout did not dedupe trajectories (LAW-04) — a no-op here, since two legs of one opening carry
+different seats and no two openings share a move list, so `eff_n = n` on every cell.
 
 The nets: `bc_full` = every tensor of the BC checkpoint of record (`run6_00006500_ca1afb71.ckpt`,
 net hash `2e72abd4…`, 50 tensors — its value head IS trained on the human corpus' outcomes,
@@ -44,25 +47,26 @@ taken with a head that no longer exists; §D). Under Gumbel the two nets are 0.1
 ## B. The grid — frozen checkpoints × sims × kind vs `sealbot_d5`
 
 Filled as cells land (WR [95 % CI over pairs]; W–L–D, s/game and median plies in the cell's
-`cell.json` on the box). Blank = still running at the last read (10:02 UTC).
+`cell.json` on the box). Blank = still running at the last read (11:15 UTC).
 
 | net | kind | 128 | 256 | 512 |
 |---|---|---|---|---|
 | ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | | |
 | ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | | |
-| ck13k | puct | | | |
+| ck13k | puct | **0.464** [0.408, 0.519] (133–154–1, 60 plies) | | |
 | ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | | |
 | ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | | |
-| ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | | |
+| ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | **0.111** [0.080, 0.146] (32–256–0, 25 plies) | |
 | ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | | |
 | ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | | |
-| ck35k | gumbel | | — | — |
+| ck35k | gumbel | 0.149 [0.108, 0.191] (43–245–0, 27 plies) | — | — |
 
 At 128 sims, read so far: under PUCT the block's nets are AT OR ABOVE the BC net (`bc_full`
 PUCT-150 0.413): 0.431 at 3k → 0.568 at 18k → 0.497 at 25k — the block trained a net that
 PUCT plays 15 pp better than its warm start at 18k. Under the Gumbel head the same nets read
-0.205 → 0.031 (13k) → 0.233 → 0.167: run6's own screens, reproduced — and the 13k "trough" is a
-3 % Gumbel reading of a net PUCT reads in the forties (interim 42 % at 237/288 games). The
+0.205 → 0.031 (13k) → 0.233 → 0.167 → 0.149 (35k): run6's own screens, reproduced — and the 13k
+"trough" is a 3 % Gumbel reading of a net PUCT reads at **0.464** [0.408, 0.519], with the
+longest games of the grid (median 60 plies against the depth-5 reader). The
 Gumbel deploy head's reading fell where the value head's calibration moved (the block record:
 value loss 0.53 → 0.57 at 4k–6k → 0.48 by 21k), which is what Sequential Halving's completed-Q
 root pick depends on and PUCT's most-visited pick does not. Median plies under PUCT lengthen
@@ -72,7 +76,7 @@ with training (33 → 49): the net holds longer games against the depth-5 reader
 
 | cell | WR (25k as candidate) | 95 % CI | W–L–D | s/game |
 |---|---|---|---|---|
-| ck25k vs `bc_full`, Gumbel-160/m16 | | | | |
+| ck25k vs `bc_full`, Gumbel-160/m16 | **0.438** | [0.389, 0.486] | 126–162–0 | 14.4 (median 19 plies) |
 | ck25k vs `bc_full`, PUCT-150 | | | | |
 
 ## D. What the R340 control was, read from the box
