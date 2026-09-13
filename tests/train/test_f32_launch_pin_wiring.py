@@ -55,7 +55,7 @@ def _config_with_row(checkpoint: Path, net_hash: str) -> dict[str, Any]:
     cfg = minimal_config()
     cfg["identity"]["encoding"] = _ENC
     cfg["identity"]["representation"] = "graph"
-    cfg["identity"]["warm_start"] = {"checkpoint": str(checkpoint), "net_hash": net_hash}
+    cfg["identity"]["warm_start"] = {"checkpoint": str(checkpoint), "net_hash": net_hash, "reinit": []}
     return cfg
 
 

@@ -34,7 +34,7 @@ from mantis.model.dist65 import (
 from mantis.model.gnn import (
     GnnDist65ValueHead,
     GnnNet,
-    load_representation_policy_from_bc,
+    load_from_bc,
 )
 from mantis.model.gnn_v2 import GnnNetV2
 from mantis.model.identity import net_param_hash, state_dict_param_hash
@@ -60,7 +60,7 @@ __all__ = [
     "binned_value_loss",
     "build_net",
     "decode_binned_value",
-    "load_representation_policy_from_bc",
+    "load_from_bc",
     "net_param_hash",
     "state_dict_param_hash",
     "scalar_to_two_hot",

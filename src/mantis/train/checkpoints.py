@@ -573,7 +573,7 @@ def load_checkpoint(
             )
 
     if isinstance(config, dict):
-        RunConfig.model_validate(config)  # config schema-validated on read
+        _validate_stamped_config(path, config)
 
     kind = payload.get("kind")
     if not isinstance(kind, str):
@@ -590,6 +590,25 @@ def load_checkpoint(
         scaler_state=payload.get("scaler_state"),
         scheduler_state=payload.get("scheduler_state"),
     )
+
+
+def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
+    """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew AFTER the stamp is
+    logged, not refused; anything else still refuses, and the payload is never touched.
+
+    Raises:
+        pydantic.ValidationError: any error that is not a leaf missing from an older stamp.
+    """
+    from pydantic import ValidationError  # noqa: PLC0415 — the one exception type this reads
+
+    try:
+        RunConfig.model_validate(config)
+    except ValidationError as exc:
+        newer = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
+                 if err["type"] == "missing"]
+        if len(newer) != len(exc.errors()):
+            raise
+        _LOG.info("checkpoint_config_predates_schema checkpoint=%s missing=%s", path.name, newer)
 
 
 # The read path for the THREE real pre-v2 shapes.

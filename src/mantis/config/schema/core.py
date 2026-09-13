@@ -159,6 +159,22 @@ class WarmStartConfig(StrictModel):
 
     checkpoint: str = Field(min_length=1)
     net_hash: str = Field(pattern=r"^[0-9a-f]{64}$")
+    # The heads put back to their fresh initialisation AFTER every tensor is copied (R350(b)(i)).
+    # REQUIRED and empty for a full transfer: a config that carries the row states what it drops.
+    reinit: list[str]
+
+    @field_validator("reinit")
+    @classmethod
+    def _reinit_names_are_distinct_module_names(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError(f"identity.warm_start.reinit lists a head twice: {value}")
+        for head in value:
+            if not head or "." in head or head != head.strip():
+                raise ValueError(
+                    f"identity.warm_start.reinit entry {head!r} is not a top-level module name "
+                    "(one of the net's heads, e.g. `value_head`)"
+                )
+        return value
 
 
 class IdentityConfig(StrictModel):

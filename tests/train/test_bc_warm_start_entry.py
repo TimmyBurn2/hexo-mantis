@@ -61,9 +61,10 @@ def _write_source(tmp_path: Path, arch: Any) -> tuple[Path, str]:
     return path, net_param_hash(net)
 
 
-def _config_with_row(checkpoint: Path, net_hash: str) -> dict[str, Any]:
+def _config_with_row(checkpoint: Path, net_hash: str, reinit: list[str] | None = None) -> dict[str, Any]:
     return {"identity": {"encoding": _ENC, "representation": "graph",
-                         "warm_start": {"checkpoint": str(checkpoint), "net_hash": net_hash}}}
+                         "warm_start": {"checkpoint": str(checkpoint), "net_hash": net_hash,
+                                        "reinit": [] if reinit is None else reinit}}}
 
 
 def test_a_config_with_no_row_declares_no_warm_start() -> None:
@@ -74,7 +75,13 @@ def test_a_config_with_no_row_declares_no_warm_start() -> None:
 def test_a_row_missing_its_hash_is_REFUSED_not_defaulted() -> None:
     """Prove a row with no hash is refused: a bare path warm-starts from whatever file is there."""
     with pytest.raises(ValueError, match="net_hash"):
-        resolve_bc_warm_start({"identity": {"warm_start": {"checkpoint": "/x.pt"}}})
+        resolve_bc_warm_start({"identity": {"warm_start": {"checkpoint": "/x.pt", "reinit": []}}})
+
+
+def test_a_row_missing_reinit_is_REFUSED_not_defaulted() -> None:
+    """An absent `reinit` is not an empty one (the silent-head-set class R350(b)(i) closes)."""
+    with pytest.raises(ValueError, match="reinit"):
+        resolve_bc_warm_start({"identity": {"warm_start": {"checkpoint": "/x.pt", "net_hash": "a" * 64}}})
 
 
 def test_the_row_has_exactly_one_reader() -> None:
@@ -91,16 +98,57 @@ def test_the_warm_started_net_carries_the_declared_checkpoints_hash(tmp_path: Pa
         "the fresh net already hashes equal to the source — the fixture proves nothing"
     )
 
-    report = apply_bc_warm_start(fresh, BcWarmStart(source, source_hash), spec=_spec())
+    report = apply_bc_warm_start(fresh, BcWarmStart(source, source_hash, ()), spec=_spec())
     assert report["loaded_keys"], "the transfer reported no keys"
+    assert report["reinit_keys"] == []
 
-    # Only the transferred half is byte-equal; the value head is untouched, so the whole-net
-    # hash is deliberately not asserted equal.
+    # EVERY tensor is byte-equal and the live net hashes to the source: the step-0 witness.
     src_state = build_net(arch)
     src_state.load_state_dict(torch.load(source, map_location="cpu", weights_only=True)["model_state"])
     for key, value in src_state.state_dict().items():
-        if key.startswith(("representation.", "policy_head.")):
+        assert torch.equal(fresh.state_dict()[key], value), key
+    assert net_param_hash(fresh) == source_hash
+
+
+def test_reinit_puts_the_named_head_back_to_its_fresh_init_and_copies_the_rest(tmp_path: Path) -> None:
+    """`reinit: [value_head]` is what run6 ran; the report names exactly the tensors kept fresh."""
+    arch = _arch()
+    source, source_hash = _write_source(tmp_path, arch)
+    fresh = build_net(arch)
+    fresh_value = {k: v.detach().clone() for k, v in fresh.state_dict().items()
+                   if k.startswith("value_head.")}
+
+    report = apply_bc_warm_start(fresh, BcWarmStart(source, source_hash, ("value_head",)), spec=_spec())
+    assert report["reinit_keys"] == sorted(fresh_value)
+    assert not any(k.startswith("value_head.") for k in report["loaded_keys"])
+    for key, value in fresh_value.items():
+        assert torch.equal(fresh.state_dict()[key], value), key
+    src_state = build_net(arch)
+    src_state.load_state_dict(torch.load(source, map_location="cpu", weights_only=True)["model_state"])
+    for key, value in src_state.state_dict().items():
+        if not key.startswith("value_head."):
             assert torch.equal(fresh.state_dict()[key], value), key
+    assert net_param_hash(fresh) != source_hash, "a re-initialised head cannot hash to the source"
+
+
+def test_a_reinit_entry_naming_no_head_is_REFUSED(tmp_path: Path) -> None:
+    arch = _arch()
+    source, source_hash = _write_source(tmp_path, arch)
+    with pytest.raises(ValueError, match="matches no tensor"):
+        apply_bc_warm_start(build_net(arch), BcWarmStart(source, source_hash, ("valeu_head",)), spec=_spec())
+
+
+def test_a_source_missing_a_head_is_REFUSED_not_partially_loaded(tmp_path: Path) -> None:
+    """Strict over the whole net: a source without a value head is a refusal, never a half-load."""
+    arch = _arch()
+    source, source_hash = _write_source(tmp_path, arch)
+    payload = torch.load(source, map_location="cpu", weights_only=True)
+    payload["model_state"] = {k: v for k, v in payload["model_state"].items()
+                              if not k.startswith("value_head.")}
+    from mantis.model import load_from_bc
+
+    with pytest.raises(RuntimeError, match="missing="):
+        load_from_bc(build_net(arch), payload["model_state"], reinit=[])
 
 
 def test_a_checkpoint_that_is_NOT_the_declared_net_is_REFUSED(tmp_path: Path) -> None:
@@ -109,13 +157,13 @@ def test_a_checkpoint_that_is_NOT_the_declared_net_is_REFUSED(tmp_path: Path) ->
     source, _ = _write_source(tmp_path, arch)
     wrong = "0" * 64
     with pytest.raises(WarmStartIdentityError, match="net_param_hash"):
-        apply_bc_warm_start(build_net(arch), BcWarmStart(source, wrong), spec=_spec())
+        apply_bc_warm_start(build_net(arch), BcWarmStart(source, wrong, ()), spec=_spec())
 
 
 def test_an_absent_checkpoint_is_a_named_refusal(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         apply_bc_warm_start(
-            build_net(_arch()), BcWarmStart(tmp_path / "nope.pt", "0" * 64), spec=_spec(),
+            build_net(_arch()), BcWarmStart(tmp_path / "nope.pt", "0" * 64, ()), spec=_spec(),
         )
 
 
@@ -129,7 +177,7 @@ def test_the_transfer_is_graph_only_and_says_so(tmp_path: Path) -> None:
     source, source_hash = _write_source(tmp_path, arch)
     with pytest.raises(ValueError, match="graph-only"):
         apply_bc_warm_start(
-            build_net(arch), BcWarmStart(source, source_hash), spec=_NonGraphSpec(),
+            build_net(arch), BcWarmStart(source, source_hash, ()), spec=_NonGraphSpec(),
         )
 
 

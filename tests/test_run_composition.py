@@ -610,7 +610,7 @@ def _capture_anchor(monkeypatch) -> dict:
 #: A row the RESOLVER accepts without touching the filesystem — it parses and never stats, and
 #: the pin's derivation happens before anything opens the artifact. What this drive owns is
 #: whether the row's value reaches the guard at all.
-_WARM_START_ROW = {"checkpoint": "/nonexistent/bc_of_record.ckpt", "net_hash": "b" * 64}
+_WARM_START_ROW = {"checkpoint": "/nonexistent/bc_of_record.ckpt", "net_hash": "b" * 64, "reinit": []}
 
 
 def test_the_launch_pin_reaches_the_anchor_resolver_from_the_warm_start_row(

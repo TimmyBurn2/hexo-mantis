@@ -99,6 +99,7 @@ _CUDA_BOX = _cuda_is_available()
 FORCED_TWIN_LEAVES: frozenset[str] = frozenset({
     "run_id", "train.device", "eval.worker_device",
     "identity.warm_start", "identity.warm_start.checkpoint", "identity.warm_start.net_hash",
+    "identity.warm_start.reinit",
 })
 
 

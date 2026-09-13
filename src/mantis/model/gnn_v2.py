@@ -6,7 +6,7 @@ a mean over a growing node set dilutes it; and a degree-normalized dummy aggrega
 V2 consumes `gnn_axis_v1` and adds no registry row, config key or arch field. Two wire facts
 stay DERIVED: the dummy is the node that is NEITHER legal NOR a stone, and its in-degree is
 counted off the edge list. `RepresentationNetworkV2` keeps V1's module names and shapes because
-`load_representation_policy_from_bc` raises on ANY key mismatch.
+`load_from_bc` raises on ANY key mismatch.
 """
 from __future__ import annotations
 

@@ -4,7 +4,6 @@ changes accumulation order by ~5e-7.
 """
 from __future__ import annotations
 
-import random
 from collections.abc import Callable, Mapping, Sequence
 from typing import TypedDict
 
@@ -15,10 +14,6 @@ from torch import Tensor
 from mantis.model.arch import GnnArch
 from mantis.model.dist65 import N_VALUE_BINS, decode_binned_value
 from mantis.model.gine import PolicyHead, RepresentationNetwork
-
-# The prefixes that load byte-compatibly from a BC-prefit checkpoint; `value_head.*` is
-# excluded because the dist65 head has a different architecture.
-BC_TRANSFER_PREFIXES: tuple[str, ...] = ("representation.", "policy_head.")
 
 
 class GnnDist65ValueHead(nn.Module):
@@ -192,56 +187,72 @@ class GnnNet(nn.Module):
 
 
 class BcTransferReport(TypedDict):
-    """The return shape of `load_representation_policy_from_bc`."""
+    """The return shape of `load_from_bc`."""
 
     loaded_keys: list[str]
+    reinit_keys: list[str]
     verified_tensors: int
 
 
-def load_representation_policy_from_bc(
+def _reinit_keys(own_keys: Sequence[str], reinit: Sequence[str]) -> list[str]:
+    """The tensors `reinit` names by module prefix; a name matching nothing is refused.
+
+    Raises:
+        ValueError: a `reinit` entry matches no tensor of the net, or is listed twice.
+    """
+    if len(set(reinit)) != len(reinit):
+        raise ValueError(f"load_from_bc: reinit lists a head twice: {list(reinit)}")
+    keys: list[str] = []
+    for head in reinit:
+        matched = [k for k in own_keys if k == head or k.startswith(head + ".")]
+        if not matched:
+            raise ValueError(
+                f"load_from_bc: reinit names {head!r}, which matches no tensor of the net "
+                f"(top-level modules: {sorted({k.split('.')[0] for k in own_keys})})"
+            )
+        keys.extend(matched)
+    return sorted(keys)
+
+
+def load_from_bc(
     net: GnnNet,
     bc_state_dict: Mapping[str, Tensor],
     *,
-    prefixes: Sequence[str] = BC_TRANSFER_PREFIXES,
-    verify_n: int | None = None,
-    seed: int = 0,
+    reinit: Sequence[str],
 ) -> BcTransferReport:
-    """Load ONLY the transfer-prefix tensors from a BC checkpoint onto `net`.
-
-    STRICT on those prefixes, and a landed-verify pass `allclose`-checks what was transferred,
-    guarding a silent key-mismatch drop under `strict=False`.
+    """Load EVERY tensor of a BC checkpoint onto `net` (strict both ways), then put the heads
+    `reinit` names back to the fresh init (R350(b)(i)); every landed tensor is verified `torch.equal`.
 
     Raises:
-        RuntimeError: on a key mismatch, or a failed landed-verify.
+        ValueError:   a `reinit` entry matches no tensor, or repeats.
+        RuntimeError: a key mismatch between source and net, or a failed landed-verify.
     """
     own_sd = net.state_dict()
-    own_keys_for_prefixes = {k for k in own_sd if k.startswith(tuple(prefixes))}
-    src = {k: v for k, v in bc_state_dict.items() if k.startswith(tuple(prefixes))}
-
-    missing = own_keys_for_prefixes - src.keys()
-    unexpected = src.keys() - own_keys_for_prefixes
+    reinit_keys = _reinit_keys(list(own_sd), reinit)
+    missing = own_sd.keys() - bc_state_dict.keys()
+    unexpected = bc_state_dict.keys() - own_sd.keys()
     if missing or unexpected:
         raise RuntimeError(
-            "load_representation_policy_from_bc: state-dict key mismatch for "
-            f"prefixes={prefixes} — missing={sorted(missing)} unexpected={sorted(unexpected)}"
+            "load_from_bc: state-dict key mismatch — "
+            f"missing={sorted(missing)} unexpected={sorted(unexpected)}"
         )
+    # Fresh tensors are captured BEFORE the load and the reinit keys are never loaded: a
+    # re-initialised head may differ in SHAPE, which `load_state_dict` refuses under any `strict`.
+    fresh = {k: own_sd[k].detach().clone() for k in reinit_keys}
+    net.load_state_dict({k: v for k, v in bc_state_dict.items() if k not in fresh}, strict=False)
 
-    net.load_state_dict(src, strict=False)
-
-    reloaded_sd = net.state_dict()
-    rng = random.Random(seed)
+    landed = net.state_dict()
     verified = 0
-    for prefix in prefixes:
-        keys = sorted(k for k in own_keys_for_prefixes if k.startswith(prefix))
-        sample = keys if verify_n is None else rng.sample(keys, min(verify_n, len(keys)))
-        for k in sample:
-            loaded = reloaded_sd[k]
-            source = src[k].to(device=loaded.device, dtype=loaded.dtype)
-            if not torch.allclose(loaded, source):
-                raise RuntimeError(
-                    f"load_representation_policy_from_bc: landed-verify FAILED for {k!r} "
-                    "(strict=False load did not land this tensor)."
-                )
-            verified += 1
-
-    return {"loaded_keys": sorted(src.keys()), "verified_tensors": verified}
+    for key, source in bc_state_dict.items():
+        expected = fresh[key] if key in fresh else source
+        if not torch.equal(landed[key], expected.to(device=landed[key].device, dtype=landed[key].dtype)):
+            raise RuntimeError(
+                f"load_from_bc: landed-verify FAILED for {key!r} (the load did not land this "
+                "tensor byte-equal)."
+            )
+        verified += 1
+    return {
+        "loaded_keys": sorted(k for k in bc_state_dict if k not in fresh),
+        "reinit_keys": reinit_keys,
+        "verified_tensors": verified,
+    }

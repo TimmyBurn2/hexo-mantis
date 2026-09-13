@@ -38,6 +38,9 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "identity.warm_start.net_hash": "resolve_bc_warm_start -> apply_bc_warm_start identity check: "
                                     "net_param_hash of the net rebuilt from the checkpoint's OWN "
                                     "stamp must equal this, else WarmStartIdentityError (R332(d))",
+    "identity.warm_start.reinit": "resolve_bc_warm_start -> apply_bc_warm_start -> load_from_bc: "
+                                  "the heads put back to fresh AFTER every tensor is copied; empty "
+                                  "arms the step-0 hash-equality witness (R350(b)(i))",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.sealbot_model_sims": "resolve_eval_model_sims (sealbot rungs) + sims regime-parity (O9) + emit",
     "eval.random_floor_games": "worker.py random-floor block game count",

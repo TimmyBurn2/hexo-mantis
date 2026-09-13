@@ -148,14 +148,23 @@ def test_the_two_graph_nets_have_DIFFERENT_state_dict_shapes_at_the_value_head()
 
 
 def test_the_REPRESENTATION_keys_are_IDENTICAL_so_BC_warmstart_survives() -> None:
-    """`load_representation_policy_from_bc` raises on ANY key mismatch under `representation.` /
-    `policy_head.`, so a V2 whose trunk keys had moved would silently cost the warmstart path its
-    subject."""
+    """`load_from_bc` is strict over the whole net, so a V1 source seeds a V2 net only with
+    `reinit: [value_head]` covering the one head whose shape differs — exercised, not claimed."""
+    from mantis.model import load_from_bc
+
     torch.manual_seed(0)
     v1_sd = build_net(_V1).state_dict()
     torch.manual_seed(0)
-    v2_sd = build_net(_V2).state_dict()
+    v2 = build_net(_V2)
+    v2_sd = v2.state_dict()
     for prefix in ("representation.", "policy_head."):
         v1_keys = {k: v.shape for k, v in v1_sd.items() if k.startswith(prefix)}
         v2_keys = {k: v.shape for k, v in v2_sd.items() if k.startswith(prefix)}
         assert v1_keys == v2_keys, f"{prefix} keys/shapes differ between V1 and V2"
+    fresh_value = {k: v.clone() for k, v in v2_sd.items() if k.startswith("value_head.")}
+    report = load_from_bc(v2, v1_sd, reinit=["value_head"])
+    assert report["reinit_keys"] == sorted(fresh_value)
+    assert all(torch.equal(v2.state_dict()[k], v) for k, v in fresh_value.items())
+    assert all(torch.equal(v2.state_dict()[k], v1_sd[k]) for k in v1_sd if not k.startswith("value_head."))
+    with pytest.raises(RuntimeError, match="size mismatch"):
+        load_from_bc(build_net(_V2), v1_sd, reinit=[])

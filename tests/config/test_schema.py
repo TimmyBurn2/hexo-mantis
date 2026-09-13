@@ -330,8 +330,8 @@ def test_o16_all_fields_required_no_code_side_defaults():
     assert exempt, "no key is arch-scoped, so this exemption is unused and should go"
     # THE SECOND, THIRD AND FOURTH EXEMPT ROWS, each enumerated by name so a fifth is still a red:
     # `identity.arch_kind`, whose absent row resolves to the representation's INCUMBENT kind;
-    # `identity.warm_start`, a BLOCK whose exemption is on the PARENT only, since `checkpoint` and
-    # `net_hash` are REQUIRED inside it; and `eval.concurrency`, whose default is not a placeholder
+    # `identity.warm_start`, a BLOCK whose exemption is on the PARENT only, since `checkpoint`,
+    # `net_hash` and `reinit` are REQUIRED inside it; and `eval.concurrency`, whose default is not a placeholder
     # but the BEHAVIOUR ITSELF — `1` is the serial loop that ran before the parameter existed.
     exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
     # THE FIFTH CLASS IS A REGISTRY, not a row: an OPERATIONAL CONSTANT carries a schema default and

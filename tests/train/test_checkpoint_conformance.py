@@ -176,6 +176,27 @@ def test_config_snapshot_schema_validated_on_read(tmp_path, tiny_net, optim_scal
         load_checkpoint(bad)
 
 
+def test_a_stamp_that_predates_a_required_leaf_still_loads_and_says_so(
+        tmp_path, tiny_net, optim_scaler_sched, valid_config, metadata_kwargs, caplog):
+    """A leaf the schema grew AFTER the stamp loads (logged, payload untouched); an unknown key still refuses."""
+    import logging
+
+    opt, scaler, sched = optim_scaler_sched
+    path = _save_full(tmp_path, net=tiny_net, opt=opt, scaler=scaler, sched=sched,
+                      config=valid_config, meta=metadata_kwargs)
+    payload = _load_raw(path)
+    del payload["config"]["train"]["ema"]                # a v15 leaf: a pre-v15 stamp's shape
+    older = _resave_rehashed(payload, tmp_path)
+    with caplog.at_level(logging.INFO, logger="mantis.train.checkpoints"):
+        ck = load_checkpoint(older)
+    assert "ema" not in ck.config["train"], "the payload was repaired"
+    assert any("checkpoint_config_predates_schema" in r.message and "train.ema" in r.message
+               for r in caplog.records)
+    payload["config"]["train"]["not_a_key"] = 1
+    with pytest.raises(ValueError):
+        load_checkpoint(_resave_rehashed(payload, tmp_path))
+
+
 def test_metadata_encoding_name_required(tmp_path, tiny_net, optim_scaler_sched, valid_config,
                                          tiny_arch):
     """T-CK-05 — a save whose encoding_name cannot be resolved raises; there is no metadata-omitted fallback."""
