@@ -766,6 +766,7 @@ def compose_run(
                     # The deploy head's sigma terms are the RUN's minted keys, not the
                     # player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
+                    q_rescale=config.selfplay.q_rescale,
                     # The deploy head searches with the RUN'S OWN KIND, through the SAME
                     # resolver `SelfPlayHParams.from_config` reads. LAW-15's deploy-matched
                     # bar is a construction here, not a coincidence between two call sites.

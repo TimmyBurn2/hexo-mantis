@@ -32,7 +32,7 @@ VALID_PLAYOUT_CAP: dict = {
 VALID_SELFPLAY: dict = {
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
-    "c_scale": 1.0, "gumbel_m": 16, "gumbel_explore_moves": 10,
+    "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
     "results_queue_cap": 10_000, "random_opening_plies": 0,
     "log_investigation_metrics": True,
     "mcts": dict(VALID_MCTS),
@@ -246,3 +246,14 @@ def test_every_armed_sims_knob_is_checked_against_the_kinds_ceiling(smoke_run_co
                 train={"policy_target": "completed_improved_policy"},
                 selfplay={"playout_cap": {key: over}},
             )
+
+
+def test_q_rescale_is_required_with_no_default() -> None:
+    """The σ's rescale switch has no default: rescale × `c_scale` 1.0 is the pair that read
+    run6 (F-50), so a block that never wrote the switch does not silently get either arm."""
+    block = _selfplay()
+    del block["q_rescale"]
+    with pytest.raises(ValidationError) as excinfo:
+        SelfplayConfig.model_validate(block)
+    assert any(err["loc"] == ("q_rescale",) and err["type"] == "missing"
+               for err in excinfo.value.errors()), excinfo.value.errors()

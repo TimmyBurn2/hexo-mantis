@@ -98,6 +98,8 @@ class SelfPlayHParams:
     search_kind: str
     c_visit: float = 50.0
     c_scale: float = 1.0
+    #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch (F-50).
+    q_rescale: bool
     gumbel_m: int = 16
     gumbel_explore_moves: int = 10
     results_queue_cap: int = 10_000
@@ -156,6 +158,7 @@ class SelfPlayHParams:
             search_kind=resolve_search_kind(config),
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
+            q_rescale=bool(sp["q_rescale"]),
             gumbel_m=int(sp["gumbel_m"]),
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
@@ -257,6 +260,7 @@ def build_runner_config(
         temp_min=hp.temp_min,
         c_visit=hp.c_visit,
         c_scale=hp.c_scale,
+        q_rescale=hp.q_rescale,
         gumbel_m=hp.gumbel_m,
         gumbel_explore_moves=hp.gumbel_explore_moves,
         dirichlet_alpha=hp.dirichlet_alpha,

@@ -13,6 +13,7 @@ use super::atomics::WorkerAtomics;
 use super::params::{self, ExplorationFlags, SearchFlags, WorkerChannels, WorkerParams};
 use super::stats::WorkerStats;
 use super::{game, SelfPlayRunner};
+use mantis_search::QSigma;
 
 /// Run one worker body, converting a panic into a COUNTED, run-halting event.
 ///
@@ -139,8 +140,11 @@ impl SelfPlayRunner {
             temp_min: c.temp_min,
             draw_reward: c.draw_reward,
             ply_cap_value: c.ply_cap_value,
-            c_visit: c.c_visit,
-            c_scale: c.c_scale,
+            sigma: QSigma {
+                c_visit: c.c_visit,
+                c_scale: c.c_scale,
+                rescale: c.q_rescale,
+            },
             gumbel_m: c.gumbel_m,
             gumbel_explore_moves: c.gumbel_explore_moves,
             dirichlet_alpha: c.dirichlet_alpha,

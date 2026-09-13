@@ -95,9 +95,11 @@ class SelfplayConfig(StrictModel):
 
     ``c_scale`` IS Mctx's ``value_scale`` under ``search.kind: gumbel`` — the same slot as
     ``c_visit``'s ``maxvisit_init`` — so a second key for it would be the duplicate-authority
-    class. BOTH ARE REQUIRED WITH NO DEFAULT: the published board-game setting (cvisit = 50,
-    cscale = 1.0) and the mctx library's Atari default (0.1) differ by an order of magnitude, and
-    which one a run arms changes how peaked every exported target is.
+    class, and ``q_rescale`` is Mctx's ``rescale_values``: the completed Q is min-max mapped
+    onto [0, 1] before σ scales it (Mctx's default, paired there with 0.1) or left raw in
+    [−1, 1] (the paper's Go/chess arm, paired with 1.0). ALL THREE ARE REQUIRED WITH NO
+    DEFAULT: rescale × 1.0 is the pair that read run6 24 pp below PUCT (F-50), and which pair a
+    run arms changes how peaked every exported target is.
 
     ``gumbel_m`` is Mctx's ``max_num_considered_actions`` and ``gumbel_explore_moves`` the span of
     opening plies that sample instead of taking the Sequential-Halving winner; both are inert
@@ -109,6 +111,7 @@ class SelfplayConfig(StrictModel):
     max_game_moves: int = Field(ge=1)
     c_visit: float = Field(gt=0)
     c_scale: float = Field(gt=0)
+    q_rescale: bool
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
     # OPERATIONAL CONSTANT: a queue's back-pressure bound.

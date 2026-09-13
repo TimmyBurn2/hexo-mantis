@@ -52,6 +52,7 @@ class DeployHeadPlayer:
         leaf_batch_size: int,
         c_visit: float,
         c_scale: float,
+        q_rescale: bool,
         search_kind: str,
         gumbel_m: int,
         gumbel_seed: int,
@@ -63,8 +64,8 @@ class DeployHeadPlayer:
                 f"(graph); {supplied} was supplied. There is no default arm — picking one "
                 f"here would decide the decode contract silently."
             )
-        # `c_visit`, `c_scale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema keys, never
-        # defaulted: a default equal to today's minted value is still a second authority.
+        # `c_visit`, `c_scale`, `q_rescale`, `leaf_batch_size` and `gumbel_m` are REQUIRED schema
+        # keys, never defaulted: a default equal to today's minted value is still a second authority.
         if int(leaf_batch_size) < 1:
             raise ValueError(
                 f"DeployHeadPlayer: leaf_batch_size={leaf_batch_size!r} must be >= 1. It is "
@@ -84,6 +85,7 @@ class DeployHeadPlayer:
         self._leaf_batch_size = int(leaf_batch_size)
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
+        self._q_rescale = bool(q_rescale)
         self._search_kind = str(search_kind)
         self._gumbel_m = int(gumbel_m)
         self._gumbel_seed = int(gumbel_seed) & _SEED_MASK
@@ -109,10 +111,11 @@ class DeployHeadPlayer:
         self.last_root = None
 
     def _fresh_tree(self) -> MCTSTree:
-        """A tree configured with the RUN's search kind. `configure_search` runs ONCE per tree:
-        under `gumbel` it allocates a per-node raw-value vector that does not change per ply."""
+        """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per
+        tree: under `gumbel` it allocates a per-node raw-value vector that does not change per
+        ply, and the root calls below read the σ it set (one σ per tree)."""
         tree = MCTSTree()
-        tree.configure_search(self._search_kind, self._c_visit, self._c_scale)
+        tree.configure_search(self._search_kind, self._c_visit, self._c_scale, self._q_rescale)
         return tree
 
     def _evaluate(self, tree: MCTSTree, leaves: list[Any]) -> None:
@@ -197,7 +200,7 @@ class DeployHeadPlayer:
         tree.gumbel_root_begin(self._gumbel_m, budget, self._move_seed())
         spent = 0
         while spent < budget:
-            child = tree.gumbel_root_select(self._c_visit, self._c_scale)
+            child = tree.gumbel_root_select()
             if child is None:
                 break
             tree.forced_root_child = child
@@ -210,7 +213,7 @@ class DeployHeadPlayer:
             finally:
                 tree.forced_root_child = None
             spent += len(leaves)
-        return tree.gumbel_root_best_move(self._c_visit, self._c_scale)
+        return tree.gumbel_root_best_move()
 
 
 __all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn", "InferFn"]

@@ -55,7 +55,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
         ),
         encoding="v6_live2_ls",
         max_plies=128,
-        c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16,
+        c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
         run_id="q3_mp_ctx_whitelist",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         ladder_state_path=tmp_path / "ladder_state.json",

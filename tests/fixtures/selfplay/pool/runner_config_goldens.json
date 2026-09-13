@@ -23,6 +23,7 @@
      "max_game_moves": 200,
      "c_visit": 40.0,
      "c_scale": 2.0,
+     "q_rescale": false,
      "gumbel_m": 24,
      "gumbel_explore_moves": 14,
      "results_queue_cap": 5000,
@@ -57,6 +58,7 @@
    "ctor_kwargs": {
     "c_puct": 1.75,
     "c_scale": 2.0,
+    "q_rescale": false,
     "c_visit": 40.0,
     "dirichlet_alpha": 0.25,
     "dirichlet_enabled": false,
@@ -116,6 +118,7 @@
      "max_game_moves": 128,
      "c_visit": 50.0,
      "c_scale": 1.0,
+     "q_rescale": true,
      "gumbel_m": 16,
      "gumbel_explore_moves": 10,
      "results_queue_cap": 10000,
@@ -150,6 +153,7 @@
    "ctor_kwargs": {
     "c_puct": 1.5,
     "c_scale": 1.0,
+    "q_rescale": true,
     "c_visit": 50.0,
     "dirichlet_alpha": 0.3,
     "dirichlet_enabled": true,

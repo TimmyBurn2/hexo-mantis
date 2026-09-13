@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
 use mantis_encoding::{RegistrySpec, Representation};
-use mantis_search::SearchKind;
+use mantis_search::{QSigma, SearchKind};
 
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
@@ -89,8 +89,7 @@ pub(crate) struct WorkerParams {
     pub(crate) draw_reward: f32,
     /// §178: terminal-via-ply-cap outcome (distinct from `draw_reward`).
     pub(crate) ply_cap_value: f32,
-    pub(crate) c_visit: f32,
-    pub(crate) c_scale: f32,
+    pub(crate) sigma: QSigma,
     pub(crate) gumbel_m: usize,
     pub(crate) gumbel_explore_moves: usize,
     pub(crate) dirichlet_alpha: f32,

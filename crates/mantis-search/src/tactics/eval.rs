@@ -49,7 +49,11 @@ fn pattern_table() -> &'static [i32; N_PATTERNS] {
                 x /= 3;
             }
             // Mixed window => dead (blocked): neither side can make six in it.
-            *slot = if mine > 0 && theirs > 0 { 0 } else { RUN_WEIGHT[mine] - RUN_WEIGHT[theirs] };
+            *slot = if mine > 0 && theirs > 0 {
+                0
+            } else {
+                RUN_WEIGHT[mine] - RUN_WEIGHT[theirs]
+            };
         }
         t
     })
@@ -141,8 +145,16 @@ mod tests {
     fn pattern_table_dead_window_is_zero() {
         // A window with BOTH colours is blocked => 0 (neither can complete six).
         let t = pattern_table();
-        assert_eq!(t[idx([1, 2, 0, 0, 0, 0])], 0, "mine+opp window must be dead");
-        assert_eq!(t[idx([1, 1, 1, 2, 0, 0])], 0, "any mixed window must be dead");
+        assert_eq!(
+            t[idx([1, 2, 0, 0, 0, 0])],
+            0,
+            "mine+opp window must be dead"
+        );
+        assert_eq!(
+            t[idx([1, 1, 1, 2, 0, 0])],
+            0,
+            "any mixed window must be dead"
+        );
         assert_eq!(t[idx([0, 0, 0, 0, 0, 0])], 0, "empty window scores 0");
     }
 
@@ -162,7 +174,10 @@ mod tests {
             }
             let vm = t[idx(mine)];
             let vo = t[idx(opp)];
-            assert!(vm > prev, "pure-mine weight must increase with run length at n={n}");
+            assert!(
+                vm > prev,
+                "pure-mine weight must increase with run length at n={n}"
+            );
             prev = vm;
             assert_eq!(vo, -vm, "colour swap must negate the weight at n={n}");
         }
@@ -170,7 +185,11 @@ mod tests {
 
     #[test]
     fn static_eval_none_on_empty_board() {
-        assert_eq!(static_eval(&Board::new()), None, "empty board has nothing to score");
+        assert_eq!(
+            static_eval(&Board::new()),
+            None,
+            "empty board has nothing to score"
+        );
     }
 
     #[test]
@@ -180,8 +199,14 @@ mod tests {
         let stones: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let as_p1 = static_eval(&board_with(&stones, Player::One)).unwrap();
         let as_p2 = static_eval(&board_with(&stones, Player::Two)).unwrap();
-        assert!(as_p1 > 0, "side-with-the-run must score positive, got {as_p1}");
-        assert_eq!(as_p2, -as_p1, "flipping the side-to-move must negate the eval");
+        assert!(
+            as_p1 > 0,
+            "side-with-the-run must score positive, got {as_p1}"
+        );
+        assert_eq!(
+            as_p2, -as_p1,
+            "flipping the side-to-move must negate the eval"
+        );
     }
 
     #[test]
@@ -193,12 +218,18 @@ mod tests {
             .chain((0..20).map(|q| ((q, 1), Cell::P1)))
             .collect();
         for b in [
-            board_with(&(0..6).map(|q| ((q, 0), Cell::P1)).collect::<Vec<_>>(), Player::One),
+            board_with(
+                &(0..6).map(|q| ((q, 0), Cell::P1)).collect::<Vec<_>>(),
+                Player::One,
+            ),
             board_with(&dense, Player::One),
             board_with(&dense, Player::Two),
         ] {
             let v = heuristic_leaf(&b);
-            assert!(v.abs() < WIN_THRESHOLD, "heuristic leaf {v} leaked into the proof region");
+            assert!(
+                v.abs() < WIN_THRESHOLD,
+                "heuristic leaf {v} leaked into the proof region"
+            );
         }
     }
 }

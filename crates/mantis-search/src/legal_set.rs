@@ -30,7 +30,16 @@ impl LegalSetPolicy {
     /// `trunk_sz`/`half` the spec-derived geometry.
     #[inline]
     #[allow(clippy::too_many_arguments)] // VERBATIM signature (scalar coord + geometry + floor)
-    pub fn get(&self, q: i32, r: i32, bcq: i32, bcr: i32, trunk_sz: i32, half: i32, floor: f32) -> f32 {
+    pub fn get(
+        &self,
+        q: i32,
+        r: i32,
+        bcq: i32,
+        bcr: i32,
+        trunk_sz: i32,
+        half: i32,
+        floor: f32,
+    ) -> f32 {
         let flat = Board::window_flat_idx_at_geom(q, r, bcq, bcr, trunk_sz, half);
         if flat < self.dense.len() {
             self.dense[flat]

@@ -17,7 +17,7 @@ use mantis_core::Board;
 use mantis_encoding::RegistrySpec;
 use mantis_search::{
     compute_move_temperature, ply_to_compound_move, LegalSetPolicy, MCTSTree, MctxRootState,
-    SearchKind,
+    QSigma, SearchKind,
 };
 
 use crate::queues::{build_leaf_graph, GraphQueue};
@@ -102,8 +102,7 @@ pub(crate) struct MovePlayContext {
     pub(crate) visit_capacity: Option<usize>,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
-    pub(crate) c_visit: f32,
-    pub(crate) c_scale: f32,
+    pub(crate) sigma: QSigma,
     pub(crate) gumbel_m: usize,
     pub(crate) gumbel_explore_moves: usize,
     pub(crate) dirichlet_alpha: f32,
@@ -382,8 +381,7 @@ fn run_mcts_search(
     dirichlet_alpha: f32,
     dirichlet_epsilon: f32,
     gumbel_m: usize,
-    c_visit: f32,
-    c_scale: f32,
+    sigma: QSigma,
     running: &AtomicBool,
     rng: &mut ThreadRng,
     agg_trunk_sz: i32,
@@ -412,7 +410,7 @@ fn run_mcts_search(
                 // THE ROUND, not the simulation, is the unit, and the batch is re-derived from
                 // the tree's own visit counts each round — which is what makes the halving
                 // Mctx's rather than a phase allocation.
-                let mut round = state.round_batch(tree, c_visit, c_scale);
+                let mut round = state.round_batch(tree, sigma);
                 if round.is_empty() {
                     break;
                 }
@@ -545,8 +543,7 @@ pub(crate) fn play_one_move(
         ctx.dirichlet_alpha,
         ctx.dirichlet_epsilon,
         ctx.gumbel_m,
-        ctx.c_visit,
-        ctx.c_scale,
+        ctx.sigma,
         running,
         rng,
         agg_trunk_sz,
@@ -619,7 +616,7 @@ pub(crate) fn play_one_move(
 
     // The target's semantics are the search kind's own answer — no second flag can disagree.
     let target_policy = if ctx.search_kind.completed_q_target() {
-        MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.c_visit, ctx.c_scale))
+        MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.sigma))
     } else {
         policy.clone()
     };
@@ -727,7 +724,7 @@ fn select_move(
         );
     // Mctx's final action: the highest-scoring of the MOST-VISITED children.
     let winner_pool = if use_gumbel_winner {
-        gumbel_state.and_then(|state| state.best_action(tree, ctx.c_visit, ctx.c_scale))
+        gumbel_state.and_then(|state| state.best_action(tree, ctx.sigma))
     } else {
         None
     };

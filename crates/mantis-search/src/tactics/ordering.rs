@@ -34,18 +34,29 @@ pub(crate) struct OrderingState {
 
 impl OrderingState {
     pub(crate) fn new() -> Self {
-        OrderingState { killers: Vec::new(), history: FxHashMap::default(), policy: None }
+        OrderingState {
+            killers: Vec::new(),
+            history: FxHashMap::default(),
+            policy: None,
+        }
     }
 
     /// Build with a net-policy prior wired into ordering; the proof core stays net-free.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn with_policy(policy: Box<dyn PolicyPrior>) -> Self {
-        OrderingState { killers: Vec::new(), history: FxHashMap::default(), policy: Some(policy) }
+        OrderingState {
+            killers: Vec::new(),
+            history: FxHashMap::default(),
+            policy: Some(policy),
+        }
     }
 
     #[inline]
     fn killers_at(&self, ply: i32) -> [Option<(i32, i32)>; 2] {
-        self.killers.get(ply.max(0) as usize).copied().unwrap_or([None, None])
+        self.killers
+            .get(ply.max(0) as usize)
+            .copied()
+            .unwrap_or([None, None])
     }
 
     /// Refresh the ply's killer slots and add a depth-weighted history bonus, on a WIN/β cutoff.
@@ -128,7 +139,11 @@ pub(crate) fn candidates(
     // 0-prior-refuter guarantee), then the developmental cells the threat-only set omits.
     let mut seen: FxHashSet<(i32, i32)> = FxHashSet::default();
     let mut out: Vec<(i32, i32)> = Vec::new();
-    for m in board.threat_moves(stm).into_iter().chain(board.threat_moves(opp)) {
+    for m in board
+        .threat_moves(stm)
+        .into_iter()
+        .chain(board.threat_moves(opp))
+    {
         if seen.insert(m) {
             out.push(m);
         }
@@ -167,14 +182,31 @@ mod tests {
     fn order_moves_is_a_strict_permutation() {
         // SOUNDNESS-CRITICAL: ordering must never add/drop a candidate (the
         // LOSS-completeness guard reads the SET). Reordering preserves the multiset.
-        let original = vec![(0, 0), (1, 0), (2, 0), (3, 3), (-1, -1), (5, 2), (7, 7), (-4, 1)];
+        let original = vec![
+            (0, 0),
+            (1, 0),
+            (2, 0),
+            (3, 3),
+            (-1, -1),
+            (5, 2),
+            (7, 7),
+            (-4, 1),
+        ];
         let mut state = OrderingState::new();
         state.record_cutoff(2, (5, 2), 7); // history bonus for (5,2)
         state.record_cutoff(2, (7, 7), 3); // killer[0] at ply 2
         let mut moves = original.clone();
         order_moves(&mut moves, Some((3, 3)), 2, &state);
-        assert_eq!(moves.len(), original.len(), "ordering changed the candidate count");
-        assert_eq!(sorted(moves.clone()), sorted(original.clone()), "ordering is not a permutation of the set");
+        assert_eq!(
+            moves.len(),
+            original.len(),
+            "ordering changed the candidate count"
+        );
+        assert_eq!(
+            sorted(moves.clone()),
+            sorted(original.clone()),
+            "ordering is not a permutation of the set"
+        );
     }
 
     #[test]
@@ -191,7 +223,11 @@ mod tests {
         assert_eq!(moves[1], (1, 0), "killer[0] next");
         assert_eq!(moves[2], (5, 0), "killer[1] next");
         // remaining must still be the full set (permutation).
-        assert_eq!(sorted(moves.clone()), sorted(original), "permutation preserved");
+        assert_eq!(
+            sorted(moves.clone()),
+            sorted(original),
+            "permutation preserved"
+        );
     }
 
     #[test]
@@ -201,7 +237,10 @@ mod tests {
         let state = OrderingState::new();
         let mut moves = original.clone();
         order_moves(&mut moves, None, 0, &state);
-        assert_eq!(moves, original, "no ordering signal must leave the order unchanged");
+        assert_eq!(
+            moves, original,
+            "no ordering signal must leave the order unchanged"
+        );
     }
 
     #[test]
@@ -220,17 +259,36 @@ mod tests {
 
         let mut moves = original.clone();
         order_moves(&mut moves, Some((1, 0)), 0, &state);
-        assert_eq!(moves[0], (1, 0), "TT move must lead regardless of the policy prior");
-        assert_eq!(moves[1], (5, 0), "killer must precede the quiet tier regardless of policy");
+        assert_eq!(
+            moves[0],
+            (1, 0),
+            "TT move must lead regardless of the policy prior"
+        );
+        assert_eq!(
+            moves[1],
+            (5, 0),
+            "killer must precede the quiet tier regardless of policy"
+        );
         // The remaining quiet moves are ordered by the prior (higher q first).
-        assert_eq!(&moves[2..], &[(4, 0), (3, 0), (2, 0), (0, 0)], "quiet tier must follow the net-policy prior");
-        assert_eq!(sorted(moves.clone()), sorted(original.clone()), "policy ordering must stay a permutation");
+        assert_eq!(
+            &moves[2..],
+            &[(4, 0), (3, 0), (2, 0), (0, 0)],
+            "quiet tier must follow the net-policy prior"
+        );
+        assert_eq!(
+            sorted(moves.clone()),
+            sorted(original.clone()),
+            "policy ordering must stay a permutation"
+        );
 
         // Non-vacuity: with no policy the quiet tier keeps candidates() order.
         let mut plain = original.clone();
         let mut nostate = OrderingState::new();
         nostate.record_cutoff(0, (5, 0), 6);
         order_moves(&mut plain, Some((1, 0)), 0, &nostate);
-        assert_ne!(plain, moves, "policy must actually change the quiet ordering (else vacuous)");
+        assert_ne!(
+            plain, moves,
+            "policy must actually change the quiet ordering (else vacuous)"
+        );
     }
 }

@@ -262,7 +262,8 @@ def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
 
 def build_candidate_player(
     engine: LocalInferenceEngine, n_sims: int, *, spec: EncodingSpec, leaf_batch_size: int,
-    c_visit: float, c_scale: float, search_kind: str, gumbel_m: int, gumbel_seed: int,
+    c_visit: float, c_scale: float, q_rescale: bool, search_kind: str, gumbel_m: int,
+    gumbel_seed: int,
 ) -> DeployHeadPlayer:
     """Build the candidate player by a CLOSED match on the DECLARED representation.
 
@@ -272,12 +273,12 @@ def build_candidate_player(
     if spec.representation == "graph":
         return DeployHeadPlayer(expand_fn=_graph_expand_fn(engine, spec), n_sims=n_sims,
                                 leaf_batch_size=leaf_batch_size,
-                                c_visit=c_visit, c_scale=c_scale,
+                                c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
                                 gumbel_seed=gumbel_seed)
     if spec.representation == "grid":
         return DeployHeadPlayer(infer_fn=engine.infer, n_sims=n_sims,
-                                c_visit=c_visit, c_scale=c_scale,
+                                c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
                                 leaf_batch_size=leaf_batch_size,
                                 search_kind=search_kind, gumbel_m=gumbel_m,
                                 gumbel_seed=gumbel_seed)
@@ -339,7 +340,7 @@ def _play_floor_probe(
     candidate = build_candidate_player(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
-        c_visit=spec.c_visit, c_scale=spec.c_scale,
+        c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(
@@ -397,14 +398,14 @@ def _play_gate_block(
                 build_candidate_player(
                     candidate_engine, spec.gate.deploy_sims, spec=encoding_spec,
                     leaf_batch_size=spec.leaf_batch_size,
-                    c_visit=spec.c_visit, c_scale=spec.c_scale,
+                    c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
                     gumbel_seed=spec.seed_base,
                 ),
                 build_candidate_player(
                     best_engine, spec.gate.deploy_sims, spec=encoding_spec,
                     leaf_batch_size=spec.leaf_batch_size,
-                    c_visit=spec.c_visit, c_scale=spec.c_scale,
+                    c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
                     search_kind=spec.search_kind, gumbel_m=spec.gumbel_m,
                     gumbel_seed=spec.seed_base,
                 ),
@@ -479,7 +480,7 @@ def _play_rung_block(
     candidate = build_candidate_player(
         candidate_engine, _model_sims_for_kind(spec, rung_job.bot), spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
-        c_visit=spec.c_visit, c_scale=spec.c_scale,
+        c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(
@@ -512,7 +513,7 @@ def _play_random_floor(
     candidate = build_candidate_player(
         candidate_engine, spec.random_model_sims, spec=encoding_spec,
         leaf_batch_size=spec.leaf_batch_size,
-        c_visit=spec.c_visit, c_scale=spec.c_scale,
+        c_visit=spec.c_visit, c_scale=spec.c_scale, q_rescale=spec.q_rescale,
         search_kind=spec.search_kind, gumbel_m=spec.gumbel_m, gumbel_seed=spec.seed_base,
     )
     regime_key = RegimeKey(

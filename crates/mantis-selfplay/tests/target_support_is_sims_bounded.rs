@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 use mantis_core::board::Cell;
 use mantis_core::{Board, Player};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{SearchKind, MAX_CHILDREN_PER_NODE};
+use mantis_search::{QSigma, SearchKind, MAX_CHILDREN_PER_NODE};
 use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::GraphRecord;
@@ -206,7 +206,14 @@ fn a_zero_visit_search_is_refused_before_the_wide_exporter_arm_can_run() {
 
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
-    tree.configure_search(SearchKind::Gumbel, 50.0, 0.1);
+    tree.configure_search(
+        SearchKind::Gumbel,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     tree.new_game(board);
     let leaves = tree.select_leaves(1).expect("a fresh root selects itself");
     assert_eq!(leaves.len(), 1);

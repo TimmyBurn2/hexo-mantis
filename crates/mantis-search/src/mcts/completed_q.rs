@@ -34,20 +34,22 @@ pub(super) fn prior_fallback_masses(children: &[CqChild]) -> Vec<f32> {
     masses
 }
 
-/// Mctx's completed Q-values: mixed-value completion off the RAW root value, min-max
-/// rescaled, then scaled by `(c_visit + max_visits) * c_scale`.
-///
-/// `c_visit` is Mctx's `maxvisit_init` and `c_scale` its `value_scale` — the same slot, not a
-/// second knob. `raw_value` is the network's value for the node before any child statistic
-/// entered it, NOT the running mean `W/N`.
-///
-/// All-unvisited is not special-cased: every completed value is then `v_mix`, the rescale maps
-/// a constant vector to zeros, and the caller's `softmax(log_prior + 0)` is the prior.
+/// σ(q̂) = `(c_visit + max_n) · c_scale · (rescale ? minmax(q̂) : q̂)` — Mctx's `maxvisit_init`,
+/// `value_scale` and `rescale_values` as ONE value, so no two surfaces can hold two σs (R351(b)).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct QSigma {
+    pub c_visit: f32,
+    pub c_scale: f32,
+    pub rescale: bool,
+}
+
+/// Mctx's completed Q-values: mixed-value completion off the RAW root value (`raw_value` is the
+/// net's own estimate, NOT `W/N`), min-max rescaled iff `sigma.rescale`, then visit-scaled.
+/// All-unvisited is a constant vector (zeros under the rescale), and softmax gives the prior.
 pub(super) fn mctx_completed_qvalues(
     children: &[CqChild],
     raw_value: f32,
-    c_visit: f32,
-    c_scale: f32,
+    sigma: QSigma,
 ) -> Vec<f32> {
     /// Mctx's `epsilon` for the rescale denominator.
     const EPSILON: f32 = 1e-8;
@@ -85,17 +87,23 @@ pub(super) fn mctx_completed_qvalues(
         .map(|ch| if ch.visits > 0 { ch.q_val } else { v_mix })
         .collect();
 
-    // Min/max run across all actions AFTER completion, not across the visited ones only.
-    let mut min_v = f32::INFINITY;
-    let mut max_v = f32::NEG_INFINITY;
-    for &v in &completed {
-        min_v = min_v.min(v);
-        max_v = max_v.max(v);
-    }
-    let span = (max_v - min_v).max(EPSILON);
-    let visit_scale = (c_visit + max_n as f32) * c_scale;
-    for v in &mut completed {
-        *v = (*v - min_v) / span * visit_scale;
+    let visit_scale = (sigma.c_visit + max_n as f32) * sigma.c_scale;
+    if sigma.rescale {
+        // Min/max run across all actions AFTER completion, not across the visited ones only.
+        let mut min_v = f32::INFINITY;
+        let mut max_v = f32::NEG_INFINITY;
+        for &v in &completed {
+            min_v = min_v.min(v);
+            max_v = max_v.max(v);
+        }
+        let span = (max_v - min_v).max(EPSILON);
+        for v in &mut completed {
+            *v = (*v - min_v) / span * visit_scale;
+        }
+    } else {
+        for v in &mut completed {
+            *v *= visit_scale;
+        }
     }
     completed
 }
@@ -105,10 +113,9 @@ pub(super) fn mctx_completed_qvalues(
 pub(super) fn mctx_improved_policy_masses(
     children: &[CqChild],
     raw_value: f32,
-    c_visit: f32,
-    c_scale: f32,
+    sigma: QSigma,
 ) -> Vec<f32> {
-    let completed = mctx_completed_qvalues(children, raw_value, c_visit, c_scale);
+    let completed = mctx_completed_qvalues(children, raw_value, sigma);
     if completed.is_empty() {
         return Vec::new();
     }

@@ -28,7 +28,7 @@ from mantis.selfplay.hparams import (
 
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
-    "c_visit": 40.0, "c_scale": 2.0,
+    "c_visit": 40.0, "c_scale": 2.0, "q_rescale": False,
     "gumbel_m": 24, "gumbel_explore_moves": 14,
     "results_queue_cap": 5000, "random_opening_plies": 3,
     "log_investigation_metrics": False,
@@ -158,6 +158,15 @@ def test_dirichlet_alpha_field_name_equals_its_key(assemble) -> None:
     config = cfg(mcts={"dirichlet_alpha": 0.6})
     assert SelfPlayHParams.from_config(config).dirichlet_alpha == 0.6
     assert assemble(config).recorded_kwargs["dirichlet_alpha"] == 0.6
+
+
+@pytest.mark.parametrize("rescale", [True, False])
+def test_q_rescale_reaches_hparams_and_wire(assemble, rescale: bool) -> None:
+    """`selfplay.q_rescale` (Mctx's `rescale_values`) reaches the hparams field and the runner
+    kwarg — the third σ knob beside `c_visit`/`c_scale`, R351(b)'s lever."""
+    config = cfg(selfplay={"q_rescale": rescale})
+    assert SelfPlayHParams.from_config(config).q_rescale is rescale
+    assert assemble(config).recorded_kwargs["q_rescale"] is rescale
 
 
 def test_dirichlet_epsilon_reaches_hparams_and_wire(assemble) -> None:

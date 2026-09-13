@@ -42,7 +42,7 @@ def test_tactical_solver_prove_round_trip():
 
 
 def test_selfplay_runner_config_field_round_trip():
-    cfg = _engine.SelfPlayRunnerConfig(n_workers=2, encoding_name="gnn_axis_v1")
+    cfg = _engine.SelfPlayRunnerConfig(n_workers=2, q_rescale=True, encoding_name="gnn_axis_v1")
     # The post-ctor get/set knobs round-trip. Nine of the ten went with the solver, forced-win
     # and seed-corpus levers the dense path carried (R346(f)); `search_kind` is what is left.
     cfg.search_kind = "gumbel"
@@ -50,7 +50,7 @@ def test_selfplay_runner_config_field_round_trip():
 
 
 def test_selfplay_runner_construct_and_counters():
-    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, encoding_name="gnn_axis_v1")
+    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, q_rescale=True, encoding_name="gnn_axis_v1")
     runner = _engine.SelfPlayRunner(cfg)
     assert runner.is_running() is False
     assert runner.model_version == 0

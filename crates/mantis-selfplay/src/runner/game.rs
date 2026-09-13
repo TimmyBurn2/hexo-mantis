@@ -26,7 +26,7 @@ use rand::{rng, RngExt};
 use mantis_core::board::DEFAULT_CLUSTER_THRESHOLD;
 use mantis_core::{Board, BoardGeometry};
 use mantis_encoding::RegistrySpec;
-use mantis_search::{MCTSTree, SearchKind, VIRTUAL_LOSS_PENALTY};
+use mantis_search::{MCTSTree, QSigma, SearchKind, VIRTUAL_LOSS_PENALTY};
 
 use crate::replay::hexg::GraphRecord;
 
@@ -64,8 +64,7 @@ struct WorkerMoveCfg {
     visit_capacity: Option<usize>,
     temp_threshold: usize,
     temp_min: f32,
-    c_visit: f32,
-    c_scale: f32,
+    sigma: QSigma,
     gumbel_m: usize,
     gumbel_explore_moves: usize,
     dirichlet_alpha: f32,
@@ -149,8 +148,7 @@ pub(crate) fn run_worker_thread(
         temp_min,
         draw_reward,
         ply_cap_value,
-        c_visit,
-        c_scale,
+        sigma,
         gumbel_m,
         gumbel_explore_moves,
         dirichlet_alpha,
@@ -174,7 +172,7 @@ pub(crate) fn run_worker_thread(
     // Configure quiescence once per worker.
     tree.configure_quiescence(quiescence_enabled, quiescence_blend_2);
     // Same posture as quiescence: per-WORKER configuration, set once, survives `new_game`.
-    tree.configure_search(search_kind, c_visit, c_scale);
+    tree.configure_search(search_kind, sigma);
     let mut rng = rng();
     // Per-move model-version snapshot: each `play_one_move` dedup-pushes `model_version`, so a
     // played-out game's drain tuple `(mv_min, mv_max, mv_distinct)` is (0, 0, 1) until it moves.
@@ -225,8 +223,7 @@ pub(crate) fn run_worker_thread(
         visit_capacity,
         temp_threshold,
         temp_min,
-        c_visit,
-        c_scale,
+        sigma,
         gumbel_m,
         gumbel_explore_moves,
         dirichlet_alpha,
@@ -314,8 +311,7 @@ fn run_one_game(
         visit_capacity,
         temp_threshold,
         temp_min,
-        c_visit,
-        c_scale,
+        sigma,
         gumbel_m,
         gumbel_explore_moves,
         dirichlet_alpha,
@@ -347,8 +343,7 @@ fn run_one_game(
         visit_capacity,
         temp_threshold,
         temp_min,
-        c_visit,
-        c_scale,
+        sigma,
         gumbel_m,
         gumbel_explore_moves,
         dirichlet_alpha,

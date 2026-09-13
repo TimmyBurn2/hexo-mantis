@@ -92,6 +92,8 @@ impl PySelfPlayRunnerConfig {
         temp_min = 0.5,
         c_visit = 50.0,
         c_scale = 1.0,
+        *,
+        q_rescale,
         gumbel_m = 16,
         gumbel_explore_moves = 10,
         dirichlet_alpha = 0.3,
@@ -122,6 +124,7 @@ impl PySelfPlayRunnerConfig {
         temp_min: f32,
         c_visit: f32,
         c_scale: f32,
+        q_rescale: bool,
         gumbel_m: usize,
         gumbel_explore_moves: usize,
         dirichlet_alpha: f32,
@@ -154,6 +157,7 @@ impl PySelfPlayRunnerConfig {
                 temp_min,
                 c_visit,
                 c_scale,
+                q_rescale,
                 gumbel_m,
                 gumbel_explore_moves,
                 dirichlet_alpha,
@@ -432,6 +436,7 @@ mod tests {
             0.5,
             50.0,
             1.0,
+            true,
             16,
             10,
             0.3,
@@ -474,8 +479,8 @@ mod tests {
     #[test]
     fn runner_missing_encoding_errors() {
         let cfg = PySelfPlayRunnerConfig::new(
-            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, 50.0, 1.0, 16, 10,
-            0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
+            1, 64, 30, 8, 1.5, 0.25, 0.0, 50, 0, 0, -0.1, -0.1, true, 0.3, 0.5, 50.0, 1.0, true,
+            16, 10, 0.3, 0.25, true, 10_000, 0.0, 0, 0, 0, None,
         );
         assert!(
             PySelfPlayRunner::new(&cfg).is_err(),

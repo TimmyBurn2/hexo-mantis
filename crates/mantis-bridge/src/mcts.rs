@@ -12,7 +12,7 @@ use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
-use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, SearchKind};
+use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind};
 
 use crate::board::PyBoard;
 
@@ -71,20 +71,32 @@ impl PyMCTSTree {
         }
     }
 
-    /// Select the search kind once per player, through the SAME setter the self-play worker
-    /// calls — what makes "the bar searches the way the run searched" a construction.
-    /// `c_visit`/`c_scale` are the config's required keys; nothing here defaults them.
+    /// Select the search kind and σ once per player, through the SAME setter the self-play
+    /// worker calls; the root calls below read the σ set here rather than taking their own.
     ///
     /// # Errors
     /// `ValueError` — `kind` is not a search kind this build knows. REFUSED, never defaulted.
-    pub fn configure_search(&mut self, kind: &str, c_visit: f32, c_scale: f32) -> PyResult<()> {
+    pub fn configure_search(
+        &mut self,
+        kind: &str,
+        c_visit: f32,
+        c_scale: f32,
+        q_rescale: bool,
+    ) -> PyResult<()> {
         let parsed = SearchKind::from_config_str(kind).ok_or_else(|| {
             PyValueError::new_err(format!(
                 "search.kind={kind:?} is not a known search kind (expected \"puct\" or \
                  \"gumbel\")"
             ))
         })?;
-        self.inner.configure_search(parsed, c_visit, c_scale);
+        self.inner.configure_search(
+            parsed,
+            QSigma {
+                c_visit,
+                c_scale,
+                rescale: q_rescale,
+            },
+        );
         self.gumbel_root = None;
         Ok(())
     }
@@ -93,6 +105,14 @@ impl PyMCTSTree {
     #[getter]
     pub fn search_kind(&self) -> &'static str {
         self.inner.search_kind().as_config_str()
+    }
+
+    /// The σ this tree runs, as `(c_visit, c_scale, q_rescale)` — readable so a head can be
+    /// checked against the run's config rather than trusted.
+    #[getter]
+    pub fn search_sigma(&self) -> (f32, f32, bool) {
+        let sigma = self.inner.q_sigma();
+        (sigma.c_visit, sigma.c_scale, sigma.rescale)
     }
 
     /// Draw this search's Gumbel root state over the EXPANDED root, from an explicit seed —
@@ -117,11 +137,11 @@ impl PyMCTSTree {
     ///
     /// # Errors
     /// `RuntimeError` — no root state has been drawn for this search.
-    pub fn gumbel_root_select(&self, c_visit: f32, c_scale: f32) -> PyResult<Option<u32>> {
+    pub fn gumbel_root_select(&self) -> PyResult<Option<u32>> {
         let state = self.gumbel_root.as_ref().ok_or_else(|| {
             PyRuntimeError::new_err("gumbel_root_select: call gumbel_root_begin first")
         })?;
-        Ok(state.select(&self.inner, c_visit, c_scale))
+        Ok(state.select(&self.inner, self.inner.q_sigma()))
     }
 
     /// Sequential Halving's answer: the highest-scoring of the MOST-VISITED root children,
@@ -129,16 +149,12 @@ impl PyMCTSTree {
     ///
     /// # Errors
     /// `RuntimeError` — no root state has been drawn for this search.
-    pub fn gumbel_root_best_move(
-        &self,
-        c_visit: f32,
-        c_scale: f32,
-    ) -> PyResult<Option<(i32, i32)>> {
+    pub fn gumbel_root_best_move(&self) -> PyResult<Option<(i32, i32)>> {
         let state = self.gumbel_root.as_ref().ok_or_else(|| {
             PyRuntimeError::new_err("gumbel_root_best_move: call gumbel_root_begin first")
         })?;
         Ok(state
-            .best_action(&self.inner, c_visit, c_scale)
+            .best_action(&self.inner, self.inner.q_sigma())
             .map(|pool_idx| {
                 let val = self.inner.pool[pool_idx as usize].action_idx;
                 ((val >> 16) as i32 - 32768, (val & 0xFFFF) as i32 - 32768)
@@ -414,19 +430,17 @@ impl PyMCTSTree {
     }
 
     /// Improved policy targets from Gumbel completed Q-values (Danihelka et al., ICLR 2022),
-    /// for the policy viewer's Gumbel-mode overlay.
-    #[pyo3(signature = (board_size = None, c_visit = 50.0, c_scale = 1.0))]
+    /// for the policy viewer's Gumbel-mode overlay, under the σ `configure_search` set.
+    #[pyo3(signature = (board_size = None))]
     pub fn get_improved_policy<'py>(
         &self,
         py: Python<'py>,
         board_size: Option<usize>,
-        c_visit: f32,
-        c_scale: f32,
     ) -> Bound<'py, PyArray1<f32>> {
         let bs = board_size.unwrap_or(self.board_size);
         let n_actions = bs * bs + 1;
         self.inner
-            .get_improved_policy(n_actions, c_visit, c_scale)
+            .get_improved_policy(n_actions, self.inner.q_sigma())
             .into_pyarray(py)
     }
 }

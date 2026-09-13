@@ -51,8 +51,6 @@ REGISTERED_DEBT: frozenset[str] = frozenset({
     "__init__(standard_sims=0)",
     "__init__(temp_min=0.5)",
     "apply_dirichlet_to_root(epsilon=0.25)",
-    "get_improved_policy(c_scale=1.0)",
-    "get_improved_policy(c_visit=50.0)",
     "sample_graph_batch(augment=False)",
 })
 
@@ -72,7 +70,8 @@ def _config_leaf_names() -> set[str]:
 def test_the_vocabulary_is_not_empty() -> None:
     leaves = _config_leaf_names()
     assert len(leaves) > 100, f"only {len(leaves)} leaf name(s) — the walk is broken"
-    for expected in ("n_workers", "max_game_moves", "draw_reward", "c_visit", "c_scale"):
+    for expected in ("n_workers", "max_game_moves", "draw_reward", "c_visit", "c_scale",
+                     "q_rescale"):
         assert expected in leaves, f"{expected} missing — the census would not cover it"
 
 

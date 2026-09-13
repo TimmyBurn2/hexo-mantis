@@ -35,6 +35,8 @@ pub struct SelfPlayRunnerConfig {
     pub temp_min: f32,
     pub c_visit: f32,
     pub c_scale: f32,
+    /// Mctx's `rescale_values`: min-max the completed Q before σ scales it (`QSigma::rescale`).
+    pub q_rescale: bool,
     /// Which search the workers run (`search.kind`). THE one key: it selects the root
     /// mechanism, the interior selector AND the exported target's semantics together.
     pub search_kind: SearchKind,
@@ -77,6 +79,7 @@ impl Default for SelfPlayRunnerConfig {
             temp_min: 0.5,
             c_visit: 50.0,
             c_scale: 1.0,
+            q_rescale: true,
             search_kind: SearchKind::Puct,
             gumbel_m: 16,
             gumbel_explore_moves: 10,

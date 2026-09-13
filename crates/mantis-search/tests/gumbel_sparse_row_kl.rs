@@ -11,7 +11,7 @@
 //! target is recomputed here from the tree; no production row carries it.
 
 use mantis_core::Board;
-use mantis_search::{MCTSTree, MctxRootState, SearchKind};
+use mantis_search::{MCTSTree, MctxRootState, QSigma, SearchKind};
 
 /// 19-window stride with a pass slot.
 const N_ACTIONS: usize = 19 * 19 + 1;
@@ -56,7 +56,14 @@ fn stub_policy() -> Vec<f32> {
 fn search(board: &Board, policy: &[f32], seed: u64, c_scale: f32) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
-    tree.configure_search(SearchKind::Gumbel, C_VISIT, c_scale);
+    tree.configure_search(
+        SearchKind::Gumbel,
+        QSigma {
+            c_visit: C_VISIT,
+            c_scale,
+            rescale: true,
+        },
+    );
     tree.new_game(board.clone());
 
     let root = tree.select_leaves(1).expect("a fresh root selects itself");
@@ -67,7 +74,14 @@ fn search(board: &Board, policy: &[f32], seed: u64, c_scale: f32) -> MCTSTree {
     let state = MctxRootState::new_seeded(&tree, GUMBEL_M, budget, seed);
     let mut spent = 0usize;
     while spent < budget {
-        let mut round = state.round_batch(&tree, C_VISIT, c_scale);
+        let mut round = state.round_batch(
+            &tree,
+            QSigma {
+                c_visit: C_VISIT,
+                c_scale,
+                rescale: true,
+            },
+        );
         if round.is_empty() {
             break;
         }
@@ -222,7 +236,14 @@ fn measure_game(c_scale: f32) -> Vec<Row> {
         if children.is_empty() {
             break;
         }
-        let target = tree.get_improved_policy_ls(N_ACTIONS, C_VISIT, c_scale);
+        let target = tree.get_improved_policy_ls(
+            N_ACTIONS,
+            QSigma {
+                c_visit: C_VISIT,
+                c_scale,
+                rescale: true,
+            },
+        );
         let (bcq, bcr) = board.window_center();
         let trunk = board.cluster_window_size() as i32;
         let half = (trunk - 1) / 2;

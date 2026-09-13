@@ -6,8 +6,10 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`,
 `games`, optional `opponent` (`sealbot_d5`, or a snapshot source played through the GATE block),
-`gumbel_m`, `concurrency` (1 = the arena's serial loop). Departures from a production round: no
-random floor, one rung, `round_index` 0 on every cell, a refused floor probe is a FAILED cell.
+`gumbel_m`, `c_scale` and `q_rescale` (the deploy head's σ; the config's when absent — R351(b)'s
+cells vary them on one net), `concurrency` (1 = the arena's serial loop). Departures from a
+production round: no random floor, one rung, `round_index` 0 on every cell, a refused floor probe
+is a FAILED cell.
 """
 from __future__ import annotations
 
@@ -132,6 +134,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         leaf_batch_size=config.selfplay.leaf_batch_size,
         max_plies=config.selfplay.max_game_moves,
         c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
+        q_rescale=config.selfplay.q_rescale,
         search_kind="", gumbel_m=config.selfplay.gumbel_m,
         inference_batching=resolve_inference_batching(dump) if graph else None,
         leaf_build_threads=resolve_leaf_build_threads(dump) if graph else 1,
@@ -167,6 +170,8 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         candidate_snapshot=str(cell_dir / "candidate.pt"),
         result_path=str(cell_dir / "result.json"), progress_path=str(cell_dir / "progress.txt"),
         search_kind=kind, gumbel_m=int(cell.get("gumbel_m", base.gumbel_m)),
+        c_scale=float(cell.get("c_scale", base.c_scale)),
+        q_rescale=bool(cell.get("q_rescale", base.q_rescale)),
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
     )
@@ -276,7 +281,8 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
 def format_row(record: Mapping[str, Any]) -> str:
     """One summary line per cell."""
     cell = record["cell"]
-    head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}"
+    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale") if k in cell)
+    head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}{sigma}"
     if record["rc"] != 0 or "readout" not in record:
         return f"{head}  FAILED rc={record['rc']} ({record['wall_sec']} s) {record.get('error', '')}"
     r = record["readout"]

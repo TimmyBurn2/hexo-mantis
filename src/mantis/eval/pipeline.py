@@ -308,6 +308,7 @@ class EvalPipeline:
         max_plies: int,
         c_visit: float,
         c_scale: float,
+        q_rescale: bool,
         search_kind: str,
         gumbel_m: int,
         leaf_build_threads: int = 1,
@@ -349,10 +350,11 @@ class EvalPipeline:
         #: The run's `selfplay.max_game_moves`. NOT defaulted: a default is the
         #: `DEFAULT_MAX_PLIES = 128` module constant put back on an operator-owed prereg axis.
         self._max_plies = int(max_plies)
-        #: `selfplay.{c_visit, c_scale}`, the deploy head's sigma terms. NOT defaulted: a
-        #: default is `DeployHeadPlayer`'s own `50.0`/`1.0` put back one layer out.
+        #: `selfplay.{c_visit, c_scale, q_rescale}`, the deploy head's sigma terms. NOT defaulted:
+        #: a default is `DeployHeadPlayer`'s own `50.0`/`1.0` put back one layer out.
         self._c_visit = float(c_visit)
         self._c_scale = float(c_scale)
+        self._q_rescale = bool(q_rescale)
         #: The run's `search.kind` and `selfplay.gumbel_m`. NOT defaulted: the eval head's
         #: regime used to come from `DeployHeadPlayer`'s body, which the config never stated.
         self._search_kind = str(search_kind)
@@ -646,7 +648,7 @@ class EvalPipeline:
             max_plies=self._max_plies,
             # Same seam and same reason: two REQUIRED schema keys the deploy head was never
             # given, so it searched at its own signature defaults.
-            c_visit=self._c_visit, c_scale=self._c_scale,
+            c_visit=self._c_visit, c_scale=self._c_scale, q_rescale=self._q_rescale,
             search_kind=self._search_kind, gumbel_m=self._gumbel_m,
             # Same seam: the child's graph server wrote its pop width and pop deadline as
             # literals, and 33 % of the eval path's ms/sim was the deadline one of them set.
@@ -1104,6 +1106,7 @@ def build_eval_pipeline(
     max_plies: int,
     c_visit: float,
     c_scale: float,
+    q_rescale: bool,
     search_kind: str,
     gumbel_m: int,
     run_id: str,
@@ -1124,7 +1127,7 @@ def build_eval_pipeline(
         eval_cfg=eval_cfg, caps=coordinator_cfg_caps, encoding=encoding,
         fused_graph_caps=fused_graph_caps, inference_batching=inference_batching,
         leaf_batch_size=leaf_batch_size, max_plies=max_plies,
-        c_visit=c_visit, c_scale=c_scale,
+        c_visit=c_visit, c_scale=c_scale, q_rescale=q_rescale,
         search_kind=search_kind, gumbel_m=gumbel_m,
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,

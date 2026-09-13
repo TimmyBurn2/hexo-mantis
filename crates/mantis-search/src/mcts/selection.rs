@@ -230,7 +230,7 @@ impl MCTSTree {
     /// measurement first.
     #[allow(clippy::cast_possible_truncation)] // j indexes children, itself a u16 count
     pub(crate) fn pick_best_mctx_interior(&self, node_idx: u32) -> Option<u32> {
-        let completed = self.node_completed_qvalues(node_idx, self.q_c_visit, self.q_c_scale);
+        let completed = self.node_completed_qvalues(node_idx, self.q_sigma);
         if completed.is_empty() {
             return None;
         }

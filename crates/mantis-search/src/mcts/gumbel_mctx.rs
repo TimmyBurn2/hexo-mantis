@@ -10,7 +10,7 @@
 use rand::{RngExt, SeedableRng};
 
 use super::seq_halving::{considered_visits_sequence, score_considered};
-use super::MCTSTree;
+use super::{MCTSTree, QSigma};
 
 /// Per-search Mctx root state: the Gumbel draw and the halving schedule.
 pub struct MctxRootState {
@@ -86,10 +86,10 @@ impl MctxRootState {
     /// The root child this simulation must descend into; `None` on an exhausted schedule or a
     /// desynchronised search, where the caller stops rather than descending arbitrarily.
     #[must_use]
-    pub fn select(&self, tree: &MCTSTree, c_visit: f32, c_scale: f32) -> Option<u32> {
+    pub fn select(&self, tree: &MCTSTree, sigma: QSigma) -> Option<u32> {
         let sim = self.simulation_index(tree);
         let considered = *self.schedule.get(sim)?;
-        let completed = tree.root_completed_qvalues(c_visit, c_scale);
+        let completed = tree.root_completed_qvalues(sigma);
         self.argmax_at(tree, considered, &completed)
     }
 
@@ -101,7 +101,7 @@ impl MctxRootState {
     /// descending, and EMPTY on an exhausted schedule or a desynchronised search.
     #[allow(clippy::cast_possible_truncation)] // j < n_children, itself a u16
     #[must_use]
-    pub fn round_batch(&self, tree: &MCTSTree, c_visit: f32, c_scale: f32) -> Vec<u32> {
+    pub fn round_batch(&self, tree: &MCTSTree, sigma: QSigma) -> Vec<u32> {
         let sim = self.simulation_index(tree);
         let Some(&considered) = self.schedule.get(sim) else {
             return Vec::new();
@@ -113,7 +113,7 @@ impl MctxRootState {
             .take_while(|&&v| v == considered)
             .count();
 
-        let completed = tree.root_completed_qvalues(c_visit, c_scale);
+        let completed = tree.root_completed_qvalues(sigma);
         let mut scored: Vec<(u32, f32)> = Vec::new();
         for (j, ((&q, &gumbel), &log_prior)) in completed
             .iter()
@@ -142,12 +142,12 @@ impl MctxRootState {
     /// Mctx's final action: the highest-scoring of the MOST-VISITED children, which is
     /// Sequential Halving's answer rather than a visit-count sample.
     #[must_use]
-    pub fn best_action(&self, tree: &MCTSTree, c_visit: f32, c_scale: f32) -> Option<u32> {
+    pub fn best_action(&self, tree: &MCTSTree, sigma: QSigma) -> Option<u32> {
         let n = tree.pool[0].n_children as usize;
         let max_visits = (0..n)
             .map(|j| tree.pool[self.first_child as usize + j].n_visits)
             .max()?;
-        let completed = tree.root_completed_qvalues(c_visit, c_scale);
+        let completed = tree.root_completed_qvalues(sigma);
         self.argmax_at(tree, max_visits, &completed)
     }
 

@@ -9,6 +9,7 @@
 
 use mantis_core::board::{Board, BOARD_SIZE};
 use mantis_search::MCTSTree;
+use mantis_search::QSigma;
 
 /// Build a tree with one visited child (n_visits=1, w_value=child_value).
 /// The board determines root.moves_remaining.
@@ -73,8 +74,22 @@ mod perspective_parity {
         // get_improved_policy takes n_actions (= policy_stride). A 19-window
         // encoding has a pass slot, so n_actions = bs²+1.
         let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
-        let policy_mr2 = tree_mr2.get_improved_policy(n_actions, c_visit, c_scale);
-        let policy_mr1 = tree_mr1.get_improved_policy(n_actions, c_visit, c_scale);
+        let policy_mr2 = tree_mr2.get_improved_policy(
+            n_actions,
+            QSigma {
+                c_visit,
+                c_scale,
+                rescale: true,
+            },
+        );
+        let policy_mr1 = tree_mr1.get_improved_policy(
+            n_actions,
+            QSigma {
+                c_visit,
+                c_scale,
+                rescale: true,
+            },
+        );
 
         // log(policy) ≈ logit - log(Z). Visited-child logit differs by ±σ*q.
         // After fix: diff >> 2*0.8*c_scale*max_n (actual ≈ 20 at c_visit=50).
@@ -114,7 +129,11 @@ mod perspective_parity {
         // than its raw value: at mr==2 the visited child holds the max completed value,
         // at mr==1 the minimum. A missing flip puts it at the same end of both.
         let rank = |tree: &MCTSTree| -> (usize, usize) {
-            let completed = tree.root_completed_qvalues(50.0, 0.1);
+            let completed = tree.root_completed_qvalues(QSigma {
+                c_visit: 50.0,
+                c_scale: 0.1,
+                rescale: true,
+            });
             let visited = tree
                 .get_top_visits(1)
                 .first()

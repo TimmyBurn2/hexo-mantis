@@ -215,7 +215,9 @@ path = "selfplay/pool/runner_config_goldens.json"
 # cannot read it. The precedent is this file's own history — both the selfplay-schema landing
 # and GUMBEL-REPAIR-1 amended it the same way. `full_config` carries `gumbel`, the NON-shipped
 # kind, so the golden proves the wire carries the VALUE rather than that a default coincided.
-sha256 = "573de10c62ab153a6f3baa78ec0027df51a33eefdd2a89c20cfbbbe97c38194a"
+# Re-cut by R351(b): `selfplay.q_rescale` is a REQUIRED σ leaf beside `c_scale`, carried to the
+# ctor as `q_rescale`; `full_config` carries `false`, the NON-shipped arm, for the same reason.
+sha256 = "9e5b8afca96853313a7d6015bd94b866c5f6769e04cdfe50ff39c96dbafa8dd0"
 added_by = "WP-SP"
 
 [[required]]

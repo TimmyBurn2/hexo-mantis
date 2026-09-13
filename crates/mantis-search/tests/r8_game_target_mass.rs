@@ -14,7 +14,7 @@
 //! `the_root_materializes_every_legal_child_today` pins today's behaviour so the change is loud.
 
 use mantis_core::Board;
-use mantis_search::{MCTSTree, MctxRootState, SearchKind};
+use mantis_search::{MCTSTree, MctxRootState, QSigma, SearchKind};
 
 /// 19-window stride with a pass slot.
 const N_ACTIONS: usize = 19 * 19 + 1;
@@ -46,7 +46,14 @@ fn stub_policy() -> Vec<f32> {
 fn search(board: &Board, policy: &[f32], seed: u64) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
-    tree.configure_search(SearchKind::Gumbel, 50.0, 0.1);
+    tree.configure_search(
+        SearchKind::Gumbel,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     tree.new_game(board.clone());
 
     // ONE root leaf, charged against the budget as the self-play drive charges it.
@@ -58,7 +65,14 @@ fn search(board: &Board, policy: &[f32], seed: u64) -> MCTSTree {
     let state = MctxRootState::new_seeded(&tree, GUMBEL_M, budget, seed);
     let mut spent = 0usize;
     while spent < budget {
-        let mut round = state.round_batch(&tree, 50.0, 0.1);
+        let mut round = state.round_batch(
+            &tree,
+            QSigma {
+                c_visit: 50.0,
+                c_scale: 0.1,
+                rescale: true,
+            },
+        );
         if round.is_empty() {
             break;
         }
@@ -96,7 +110,14 @@ fn every_ply_of_a_driven_r8_game_exports_a_target_over_the_full_legal_set() {
         widest_legal = widest_legal.max(legal.len());
 
         let tree = search(&board, &policy, 20260909 + ply as u64);
-        let target = tree.get_improved_policy_ls(N_ACTIONS, 50.0, 0.1);
+        let target = tree.get_improved_policy_ls(
+            N_ACTIONS,
+            QSigma {
+                c_visit: 50.0,
+                c_scale: 0.1,
+                rescale: true,
+            },
+        );
 
         // SUPPORT: every legal move carries mass, and nothing else does.
         let support = target.dense.iter().filter(|&&m| m > 0.0).count() + target.overflow.len();

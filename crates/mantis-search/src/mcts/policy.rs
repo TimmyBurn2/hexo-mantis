@@ -3,7 +3,7 @@
 //! Policy extraction for MCTSTree: temperature policy, Gumbel completed-Q improved policy,
 //! root children info, root Dirichlet noise, top-visits selection.
 
-use super::{completed_q, MCTSTree};
+use super::{completed_q, MCTSTree, QSigma};
 use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashMap;
 
@@ -56,7 +56,7 @@ impl MCTSTree {
     /// Improved policy targets from Gumbel completed Q-values (Danihelka et al., ICLR 2022
     /// §4, Appendix D Eq. 33). The softmax is sparse: only `child_data` entries are non-zero
     /// before exp, so its passes iterate that rather than a full-width vector.
-    pub fn get_improved_policy(&self, n_actions: usize, c_visit: f32, c_scale: f32) -> Vec<f32> {
+    pub fn get_improved_policy(&self, n_actions: usize, sigma: QSigma) -> Vec<f32> {
         let mut policy = vec![0.0f32; n_actions];
 
         let root = &self.pool[0];
@@ -105,12 +105,8 @@ impl MCTSTree {
 
         // No zero-visit branch is needed: every completed value is then `v_mix`, so the
         // rescale zeroes and `softmax(log_prior)` IS the normalized prior.
-        let masses = completed_q::mctx_improved_policy_masses(
-            &children,
-            self.root_raw_value(),
-            c_visit,
-            c_scale,
-        );
+        let masses =
+            completed_q::mctx_improved_policy_masses(&children, self.root_raw_value(), sigma);
         for (action, mass) in actions.iter().zip(masses) {
             policy[*action] = mass;
         }
@@ -205,12 +201,7 @@ impl MCTSTree {
     ///
     /// The completed-Q math is FROZEN; only the output container and NO-DROP differ — every
     /// off-window child is retained, since dropping them subset-renormalized the remainder.
-    pub fn get_improved_policy_ls(
-        &self,
-        n_actions: usize,
-        c_visit: f32,
-        c_scale: f32,
-    ) -> LegalSetPolicy {
+    pub fn get_improved_policy_ls(&self, n_actions: usize, sigma: QSigma) -> LegalSetPolicy {
         let mut dense = vec![0.0f32; n_actions];
         let mut overflow: FxHashMap<(i32, i32), f32> = FxHashMap::default();
 
@@ -252,12 +243,8 @@ impl MCTSTree {
         }
 
         // See `get_improved_policy` for why no zero-visit branch is needed.
-        let masses = completed_q::mctx_improved_policy_masses(
-            &children,
-            self.root_raw_value(),
-            c_visit,
-            c_scale,
-        );
+        let masses =
+            completed_q::mctx_improved_policy_masses(&children, self.root_raw_value(), sigma);
         for (&(q, r, flat), mass) in coords.iter().zip(masses) {
             if flat < n_actions {
                 dense[flat] = mass;
@@ -273,14 +260,14 @@ impl MCTSTree {
     /// is unexpanded. The same child scan `get_improved_policy_ls` runs, negamax flip included,
     /// so the selector and the exported target complete from ONE definition.
     #[must_use]
-    pub fn root_completed_qvalues(&self, c_visit: f32, c_scale: f32) -> Vec<f32> {
-        self.node_completed_qvalues(0, c_visit, c_scale)
+    pub fn root_completed_qvalues(&self, sigma: QSigma) -> Vec<f32> {
+        self.node_completed_qvalues(0, sigma)
     }
 
     /// `root_completed_qvalues` for ANY node — Mctx completes at every node it selects from,
     /// off that node's own raw value.
     #[must_use]
-    pub fn node_completed_qvalues(&self, node_idx: u32, c_visit: f32, c_scale: f32) -> Vec<f32> {
+    pub fn node_completed_qvalues(&self, node_idx: u32, sigma: QSigma) -> Vec<f32> {
         let node = &self.pool[node_idx as usize];
         if !node.is_expanded() {
             return Vec::new();
@@ -308,7 +295,7 @@ impl MCTSTree {
             .get(node_idx as usize)
             .copied()
             .unwrap_or(0.0);
-        completed_q::mctx_completed_qvalues(&children, raw, c_visit, c_scale)
+        completed_q::mctx_completed_qvalues(&children, raw, sigma)
     }
 
     /// The root children Sequential Halving actually VISITED, as axial cells — the sparse
@@ -408,6 +395,13 @@ mod tests {
     use super::*;
     use crate::mcts::node::Node;
     use mantis_core::board::{Board, BOARD_SIZE};
+
+    /// The rescaled arm at the board-game scale these tests were written against.
+    const MCTX_SIGMA: QSigma = QSigma {
+        c_visit: 50.0,
+        c_scale: 1.0,
+        rescale: true,
+    };
 
     #[test]
     fn test_get_policy_proportional_to_visits() {
@@ -559,7 +553,7 @@ mod tests {
             (8, -2.0, 0.3), // Q=-0.25
             (2, 0.4, 0.2),  // Q=0.2
         ]);
-        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
+        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, MCTX_SIGMA);
         let sum: f32 = policy.iter().sum();
         assert!(
             (sum - 1.0).abs() < 1e-5,
@@ -571,7 +565,7 @@ mod tests {
     fn test_improved_policy_no_visits_returns_prior() {
         // All children unvisited: normalized priors.
         let tree = setup_improved_policy_tree(&[(0, 0.0, 0.6), (0, 0.0, 0.4)]);
-        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
+        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, MCTX_SIGMA);
         let sum: f32 = policy.iter().sum();
         assert!(
             (sum - 1.0).abs() < 1e-5,
@@ -595,7 +589,7 @@ mod tests {
             (50, 45.0, 0.5),  // Q=+0.9
             (50, -45.0, 0.5), // Q=-0.9
         ]);
-        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
+        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, MCTX_SIGMA);
 
         let (cq, cr) = tree.root_board.window_center();
         let idx_good = Board::window_flat_idx_at(0, 0, cq, cr);
@@ -612,7 +606,7 @@ mod tests {
     #[test]
     fn test_improved_policy_illegal_actions_stay_zero() {
         let tree = setup_improved_policy_tree(&[(10, 5.0, 0.7), (5, 1.0, 0.3)]);
-        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, 50.0, 1.0);
+        let policy = tree.get_improved_policy(BOARD_SIZE * BOARD_SIZE + 1, MCTX_SIGMA);
 
         // Only 2 actions are non-zero out of the full stride.
         let nonzero_count = policy.iter().filter(|&&p| p > 0.0).count();

@@ -188,6 +188,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "selfplay.max_game_moves": "SelfPlayHParams.max_moves_per_game -> runner max_moves_per_game ctor kwarg",
     "selfplay.c_visit": "SelfPlayHParams.c_visit -> runner c_visit ctor kwarg",
     "selfplay.c_scale": "SelfPlayHParams.c_scale -> runner c_scale ctor kwarg",
+    "selfplay.q_rescale": "SelfPlayHParams.q_rescale -> runner q_rescale ctor kwarg",
     "search.kind": "resolve_search_kind -> SelfPlayHParams.search_kind -> cfg attr -> MCTSTree::configure_search; and -> RoundSpec -> DeployHeadPlayer",
     "selfplay.gumbel_m": "SelfPlayHParams.gumbel_m -> runner gumbel_m ctor kwarg (R23)",
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.gumbel_explore_moves -> runner ctor kwarg (R23)",

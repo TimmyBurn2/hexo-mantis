@@ -166,6 +166,7 @@ class RoundSpec:
     #: received, so the deploy-matched bar searched at a regime nobody minted.
     c_visit: float
     c_scale: float
+    q_rescale: bool
     #: The run's `search.kind` and `selfplay.gumbel_m`. The deploy head used to run a regime in
     #: NO config at all — a PUCT tree with a Gumbel-scored root pick — so the kind is resolved by
     #: the SAME authority `SelfPlayHParams.from_config` reads. NOT defaulted.

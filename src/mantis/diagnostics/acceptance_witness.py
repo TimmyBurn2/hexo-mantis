@@ -296,6 +296,7 @@ def run_witness(config_path: Path, arms: Sequence[ArmSpec], *, games: int,
                                        # the player's signature defaults.
                                        c_visit=cfg.selfplay.c_visit,
                                        c_scale=cfg.selfplay.c_scale,
+                                       q_rescale=cfg.selfplay.q_rescale,
                                        # The RUN'S OWN search, through the one resolver the
                                        # self-play pool reads.
                                        search_kind=resolve_search_kind(cfg),

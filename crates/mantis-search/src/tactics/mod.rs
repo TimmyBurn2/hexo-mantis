@@ -90,7 +90,12 @@ pub struct Budget {
 
 impl Budget {
     pub fn new(cap: u64) -> Self {
-        Budget { cap, nodes: 0, exhausted: false, hit_horizon: false }
+        Budget {
+            cap,
+            nodes: 0,
+            exhausted: false,
+            hit_horizon: false,
+        }
     }
 
     /// Charge one node. Returns false (and latches `exhausted`) once over cap.
@@ -123,7 +128,11 @@ pub struct TacticalConfig {
 
 impl Default for TacticalConfig {
     fn default() -> Self {
-        TacticalConfig { cand_cap: 40, window_half: Some(9), neighbor_dist: None }
+        TacticalConfig {
+            cand_cap: 40,
+            window_half: Some(9),
+            neighbor_dist: None,
+        }
     }
 }
 

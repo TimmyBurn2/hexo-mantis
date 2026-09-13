@@ -39,6 +39,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         temp_min: 0.0625,
         c_visit: 37.5,
         c_scale: 1.25,
+        q_rescale: false, // the non-default arm, so a drop to Default's `true` shows
         search_kind: SearchKind::Gumbel,
         gumbel_m: 12,
         gumbel_explore_moves: 7,
@@ -81,6 +82,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         temp_min,
         c_visit,
         c_scale,
+        q_rescale,
         search_kind,
         gumbel_m,
         gumbel_explore_moves,
@@ -112,6 +114,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert!(feq(temp_min, 0.0625));
     assert!(feq(c_visit, 37.5));
     assert!(feq(c_scale, 1.25));
+    assert!(!q_rescale);
     assert_eq!(search_kind, SearchKind::Gumbel);
     assert_eq!(gumbel_m, 12);
     assert_eq!(gumbel_explore_moves, 7);

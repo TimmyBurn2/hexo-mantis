@@ -43,6 +43,7 @@ def _head(kind: str, **over):
         leaf_batch_size=1,
         c_visit=_C_VISIT,
         c_scale=_C_SCALE,
+        q_rescale=True,
         search_kind=kind,
         gumbel_m=4,
         gumbel_seed=20260909,
@@ -64,6 +65,17 @@ def test_the_head_reports_and_configures_the_kind_it_was_given(kind: str):
     # string while its tree ran PUCT is exactly the coincidence this replaces.
     assert player._tree is not None
     assert player._tree.search_kind == kind
+
+
+@pytest.mark.parametrize("rescale", [True, False])
+def test_the_head_configures_the_sigma_it_was_given(rescale: bool):
+    """σ = (c_visit, c_scale, rescale) is set ONCE at `configure_search` and read back off the
+    tree — the root pick and the interior selector then hold one σ, not two (R351(b))."""
+    player = _head("gumbel", c_scale=0.1, q_rescale=rescale)
+    player.new_game()
+    assert player._tree is not None
+    c_visit, c_scale, got_rescale = player._tree.search_sigma
+    assert (c_visit, c_scale, got_rescale) == (_C_VISIT, pytest.approx(0.1), rescale)
 
 
 def test_an_unknown_kind_is_refused_by_the_engine_rather_than_defaulted():

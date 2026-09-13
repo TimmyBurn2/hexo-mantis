@@ -56,7 +56,7 @@ def _train_block(**over: object) -> dict:
 def _selfplay_block(*, n_simulations: int = 50) -> dict:
     return {
         "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
-        "c_visit": 50.0, "c_scale": 1.0, "gumbel_m": 16,
+        "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
         "gumbel_explore_moves": 10,
         "results_queue_cap": 10_000, "random_opening_plies": 0,
         "log_investigation_metrics": True,

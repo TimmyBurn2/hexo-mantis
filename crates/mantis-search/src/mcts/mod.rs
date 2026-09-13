@@ -26,6 +26,7 @@ pub use backup::{
     omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
     OmittedPriorStats,
 };
+pub use completed_q::QSigma;
 pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
@@ -113,10 +114,9 @@ pub struct MCTSTree {
     /// arm that reads no raw value. NOT cleared by `new_game` — `finish_expansion` writes a node's
     /// entry as it expands it, so every read is preceded by its own write.
     pub(crate) raw_values: Vec<f32>,
-    /// `c_visit` / `c_scale` for the interior selector, which runs inside `select_one_leaf` and
-    /// has no config in hand — the SAME two config keys the export path takes as arguments.
-    pub(crate) q_c_visit: f32,
-    pub(crate) q_c_scale: f32,
+    /// σ for the interior selector, which runs inside `select_one_leaf` and has no config in
+    /// hand — the SAME value the export path and the root selectors take as an argument.
+    pub(crate) q_sigma: QSigma,
     /// Children the ROOT may expand, as distinct from every other node's
     /// `MAX_CHILDREN_PER_NODE`. Set by `configure_search`; `MAX_CHILDREN_PER_NODE`
     /// under `SearchKind::Puct`, whose root is an ordinary PUCT node.
@@ -152,8 +152,11 @@ impl MCTSTree {
             omitted_prior: OmittedPriorStats::default(),
             kind: SearchKind::Puct,
             raw_values: Vec::new(),
-            q_c_visit: 50.0,
-            q_c_scale: 1.0,
+            q_sigma: QSigma {
+                c_visit: 50.0,
+                c_scale: 1.0,
+                rescale: true,
+            },
             root_children_cap: MAX_CHILDREN_PER_NODE,
         }
     }
@@ -227,15 +230,21 @@ impl MCTSTree {
         self.quiescence_blend_2 = blend_2;
     }
 
+    /// The σ `configure_search` set — what the interior selector runs and what a caller with
+    /// no config in hand (the bridge's root calls) passes back to the root selectors.
+    #[must_use]
+    pub fn q_sigma(&self) -> QSigma {
+        self.q_sigma
+    }
+
     /// Select the search kind once per worker. Pure state set, surviving `new_game`.
     ///
     /// ONE setter and ONE stored kind: every surface that used to branch on a `gumbel_mcts` bool
     /// AND a dialect name AND a `completed_q_values` flag now reads this field, so the four
     /// cannot disagree about which search ran.
-    pub fn configure_search(&mut self, kind: SearchKind, c_visit: f32, c_scale: f32) {
+    pub fn configure_search(&mut self, kind: SearchKind, sigma: QSigma) {
         self.kind = kind;
-        self.q_c_visit = c_visit;
-        self.q_c_scale = c_scale;
+        self.q_sigma = sigma;
         self.root_children_cap = match kind {
             SearchKind::Puct => MAX_CHILDREN_PER_NODE,
             SearchKind::Gumbel => MAX_ROOT_CHILDREN,

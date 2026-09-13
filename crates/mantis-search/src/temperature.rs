@@ -15,11 +15,7 @@
 /// * `temp_threshold` — compound move at which the floor kicks in. Config-driven;
 ///   default `0` = schedule OFF (returns a constant `temp_min` at every move).
 /// * `temp_min`       — minimum temperature floor. Config-driven; default `0.5`.
-pub fn compute_move_temperature(
-    compound_move: usize,
-    temp_threshold: usize,
-    temp_min: f32,
-) -> f32 {
+pub fn compute_move_temperature(compound_move: usize, temp_threshold: usize, temp_min: f32) -> f32 {
     if compound_move < temp_threshold {
         let progress = compound_move as f32 / temp_threshold as f32;
         f32::max(temp_min, (std::f32::consts::FRAC_PI_2 * progress).cos())

@@ -155,19 +155,23 @@ class MCTSTree:
         quiescence_enabled: bool = True,
         quiescence_blend_2: float = 0.3,
     ) -> None: ...
-    def configure_search(self, kind: str, c_visit: float, c_scale: float) -> None:
-        """Select the search kind. Raises ValueError on an unknown kind (never defaults)."""
+    def configure_search(
+        self, kind: str, c_visit: float, c_scale: float, q_rescale: bool
+    ) -> None:
+        """Select the search kind and its σ. Raises ValueError on an unknown kind (never
+        defaults)."""
     @property
     def search_kind(self) -> str: ...
+    @property
+    def search_sigma(self) -> tuple[float, float, bool]:
+        """`(c_visit, c_scale, q_rescale)` as `configure_search` set them."""
     def gumbel_root_begin(self, m: int, budget: int, seed: int) -> None:
         """Draw this search's Gumbel root state over the expanded root, from an explicit
         seed. Raises RuntimeError when the root is not expanded."""
-    def gumbel_root_select(self, c_visit: float, c_scale: float) -> int | None:
-        """Raises RuntimeError when no root state has been drawn."""
-    def gumbel_root_best_move(
-        self, c_visit: float, c_scale: float
-    ) -> tuple[int, int] | None:
-        """Raises RuntimeError when no root state has been drawn."""
+    def gumbel_root_select(self) -> int | None:
+        """Under the configured σ. Raises RuntimeError when no root state has been drawn."""
+    def gumbel_root_best_move(self) -> tuple[int, int] | None:
+        """Under the configured σ. Raises RuntimeError when no root state has been drawn."""
     @property
     def quiescence_fire_count(self) -> int: ...
     def last_search_stats(self) -> tuple[float, float]: ...
@@ -210,12 +214,7 @@ class MCTSTree:
     def get_root_children_info(
         self,
     ) -> list[tuple[tuple[int, int], int, float, int, float]]: ...
-    def get_improved_policy(
-        self,
-        board_size: int | None = None,
-        c_visit: float = 50.0,
-        c_scale: float = 1.0,
-    ) -> numpy.ndarray: ...
+    def get_improved_policy(self, board_size: int | None = None) -> numpy.ndarray: ...
 
 # --------------------------------------------------------------------------- #
 # TacticalSolver
@@ -351,6 +350,8 @@ class SelfPlayRunnerConfig:
         temp_min: float = 0.5,
         c_visit: float = 50.0,
         c_scale: float = 1.0,
+        *,
+        q_rescale: bool,
         gumbel_m: int = 16,
         gumbel_explore_moves: int = 10,
         dirichlet_alpha: float = 0.3,

@@ -135,7 +135,10 @@ pub struct ProofTt {
 
 impl ProofTt {
     pub fn new() -> Self {
-        ProofTt { buckets: vec![[Slot::EMPTY; 2]; N_BUCKETS], generation: 0 }
+        ProofTt {
+            buckets: vec![[Slot::EMPTY; 2]; N_BUCKETS],
+            generation: 0,
+        }
     }
 
     /// Bucket index — fold the u128 zobrist low word with the turn-structure key.
@@ -190,7 +193,10 @@ impl ProofTt {
     /// node value; `ply`/`depth` are the node's. Trusted by `get_loss_proof`.
     #[inline]
     pub fn store_loss_proof(&mut self, key: TtKey, score: i32, ply: i32, depth: i32) {
-        debug_assert!(score <= -WIN_THRESHOLD, "store_loss_proof needs a mate-magnitude LOSS score");
+        debug_assert!(
+            score <= -WIN_THRESHOLD,
+            "store_loss_proof needs a mate-magnitude LOSS score"
+        );
         self.put(Slot {
             key,
             score: encode_score(score, ply),
@@ -283,11 +289,19 @@ mod tests {
                 let s = loss_score(m);
                 let e = encode_score(s, p);
                 assert!(e <= -WIN_THRESHOLD_I16, "encoded LOSS {e} not in mate band");
-                assert_eq!(decode_score(e, p), s, "LOSS round-trip failed (p={p}, k={k})");
+                assert_eq!(
+                    decode_score(e, p),
+                    s,
+                    "LOSS round-trip failed (p={p}, k={k})"
+                );
                 let sw = win_score(m);
                 let ew = encode_score(sw, p);
                 assert!(ew >= WIN_THRESHOLD_I16, "encoded WIN {ew} not in mate band");
-                assert_eq!(decode_score(ew, p), sw, "WIN round-trip failed (p={p}, k={k})");
+                assert_eq!(
+                    decode_score(ew, p),
+                    sw,
+                    "WIN round-trip failed (p={p}, k={k})"
+                );
             }
         }
     }
@@ -298,7 +312,11 @@ mod tests {
         // i.e. 2 from node) decodes at ANY probe ply p' to a mate 2 plies below p'.
         let stored = encode_score(loss_score(5), 3); // dist-from-node = 2
         for &pp in &[0, 2, 6, 11] {
-            assert_eq!(decode_score(stored, pp), loss_score(pp + 2), "reuse at ply {pp} wrong");
+            assert_eq!(
+                decode_score(stored, pp),
+                loss_score(pp + 2),
+                "reuse at ply {pp} wrong"
+            );
         }
     }
 
@@ -310,11 +328,20 @@ mod tests {
         // genuine mate scores and correctly encode to the band, and the search never feeds an
         // out-of-band heuristic because leaves are pre-clamped.
         for &v in &[-WIN_THRESHOLD + 1, -123, 0, 77, WIN_THRESHOLD - 1] {
-            assert!(v.abs() < WIN_THRESHOLD, "test input {v} must be a genuine heuristic (sub-mate)");
+            assert!(
+                v.abs() < WIN_THRESHOLD,
+                "test input {v} must be a genuine heuristic (sub-mate)"
+            );
             let e = encode_score(v, 0);
-            assert!(e.abs() < WIN_THRESHOLD_I16, "heuristic {v} -> {e} leaked into the mate band");
+            assert!(
+                e.abs() < WIN_THRESHOLD_I16,
+                "heuristic {v} -> {e} leaked into the mate band"
+            );
             let d = decode_score(e, 0);
-            assert!(d.abs() < WIN_THRESHOLD, "decoded heuristic {d} leaked into the proof region");
+            assert!(
+                d.abs() < WIN_THRESHOLD,
+                "decoded heuristic {d} leaked into the proof region"
+            );
         }
     }
 
@@ -325,8 +352,16 @@ mod tests {
         assert_eq!(tt.get_loss_proof(key, 0), None, "empty table: no proof");
         tt.store_loss_proof(key, loss_score(6), 4, 10);
         // probe re-encodes at the probe ply (dist-from-node = 6 - 4 = 2)
-        assert_eq!(tt.get_loss_proof(key, 4), Some(loss_score(6)), "store/probe at same ply");
-        assert_eq!(tt.get_loss_proof(key, 9), Some(loss_score(11)), "reuse at deeper ply (2 from node)");
+        assert_eq!(
+            tt.get_loss_proof(key, 4),
+            Some(loss_score(6)),
+            "store/probe at same ply"
+        );
+        assert_eq!(
+            tt.get_loss_proof(key, 9),
+            Some(loss_score(11)),
+            "reuse at deeper ply (2 from node)"
+        );
     }
 
     #[test]
@@ -337,8 +372,16 @@ mod tests {
         let mut tt = ProofTt::new();
         let key = (42u128, -1i8, 1u8);
         tt.store_bound(key, loss_score(3), 0, Bound::Upper, Some((2, 5)), 8);
-        assert_eq!(tt.get_loss_proof(key, 0), None, "non-proof entry must not be a verdict");
-        assert_eq!(tt.get_best_move(key), Some((2, 5)), "ordering hint must still be readable");
+        assert_eq!(
+            tt.get_loss_proof(key, 0),
+            None,
+            "non-proof entry must not be a verdict"
+        );
+        assert_eq!(
+            tt.get_best_move(key),
+            Some((2, 5)),
+            "ordering hint must still be readable"
+        );
     }
 
     #[test]
@@ -348,10 +391,18 @@ mod tests {
         let mut tt = ProofTt::new();
         let k1 = (0x0000_0000_0000_0001_u128, 1i8, 2u8);
         let k2 = (k1.0 | (1u128 << 100), 1i8, 2u8); // same low word/turn -> same bucket
-        assert_eq!(ProofTt::index(k1), ProofTt::index(k2), "test setup: keys must collide");
+        assert_eq!(
+            ProofTt::index(k1),
+            ProofTt::index(k2),
+            "test setup: keys must collide"
+        );
         tt.store_loss_proof(k1, loss_score(2), 0, 5);
         assert_eq!(tt.get_loss_proof(k1, 0), Some(loss_score(2)), "k1 stored");
-        assert_eq!(tt.get_loss_proof(k2, 0), None, "k2 must NOT false-hit k1's entry");
+        assert_eq!(
+            tt.get_loss_proof(k2, 0),
+            None,
+            "k2 must NOT false-hit k1's entry"
+        );
     }
 
     #[test]
@@ -368,11 +419,23 @@ mod tests {
 
         tt.store_loss_proof(deep, loss_score(2), 0, /*depth*/ 30);
         tt.store_loss_proof(shallow, loss_score(2), 0, /*depth*/ 3);
-        assert_eq!(tt.get_loss_proof(deep, 0), Some(loss_score(2)), "deep proof survives in slot 0");
-        assert_eq!(tt.get_loss_proof(shallow, 0), Some(loss_score(2)), "shallow proof in always-replace");
+        assert_eq!(
+            tt.get_loss_proof(deep, 0),
+            Some(loss_score(2)),
+            "deep proof survives in slot 0"
+        );
+        assert_eq!(
+            tt.get_loss_proof(shallow, 0),
+            Some(loss_score(2)),
+            "shallow proof in always-replace"
+        );
 
         tt.store_loss_proof(third, loss_score(2), 0, /*depth*/ 4);
-        assert_eq!(tt.get_loss_proof(deep, 0), Some(loss_score(2)), "deep slot retained vs always-replace churn");
+        assert_eq!(
+            tt.get_loss_proof(deep, 0),
+            Some(loss_score(2)),
+            "deep slot retained vs always-replace churn"
+        );
     }
 
     #[test]
@@ -386,9 +449,27 @@ mod tests {
         assert_eq!(ProofTt::index(proof), ProofTt::index(bound_a));
         tt.store_loss_proof(proof, loss_score(2), 0, /*depth*/ 5);
         // two deep non-proof bounds churn the bucket; the proof must remain.
-        tt.store_bound(bound_a, 100, 0, Bound::Lower, Some((1, 1)), /*depth*/ 40);
-        tt.store_bound(bound_b, 100, 0, Bound::Lower, Some((2, 2)), /*depth*/ 40);
-        assert_eq!(tt.get_loss_proof(proof, 0), Some(loss_score(2)), "proof must survive non-proof churn");
+        tt.store_bound(
+            bound_a,
+            100,
+            0,
+            Bound::Lower,
+            Some((1, 1)),
+            /*depth*/ 40,
+        );
+        tt.store_bound(
+            bound_b,
+            100,
+            0,
+            Bound::Lower,
+            Some((2, 2)),
+            /*depth*/ 40,
+        );
+        assert_eq!(
+            tt.get_loss_proof(proof, 0),
+            Some(loss_score(2)),
+            "proof must survive non-proof churn"
+        );
     }
 
     #[test]
@@ -403,10 +484,18 @@ mod tests {
         tt.store_loss_proof(old, loss_score(2), 0, /*depth*/ 50); // gen 0, depth slot
         tt.new_generation();
         tt.store_loss_proof(new, loss_score(2), 0, /*depth*/ 1); // gen 1: stale gen-0 yields slot 0
-        // old demoted to always-replace; a second gen-1 store overwrites it.
+                                                                 // old demoted to always-replace; a second gen-1 store overwrites it.
         tt.store_loss_proof(filler, loss_score(2), 0, /*depth*/ 1);
-        assert_eq!(tt.get_loss_proof(old, 0), None, "stale deep entry evicted after aging + churn");
-        assert_eq!(tt.get_loss_proof(new, 0), Some(loss_score(2)), "new-generation entry retained in slot 0");
+        assert_eq!(
+            tt.get_loss_proof(old, 0),
+            None,
+            "stale deep entry evicted after aging + churn"
+        );
+        assert_eq!(
+            tt.get_loss_proof(new, 0),
+            Some(loss_score(2)),
+            "new-generation entry retained in slot 0"
+        );
     }
 
     #[test]
@@ -417,6 +506,9 @@ mod tests {
             let mut tt = ProofTt::new();
             tt.store_loss_proof((0u128, 1i8, 2u8), 0 /* heuristic, not a loss */, 0, 5);
         });
-        assert!(r.is_err(), "store_loss_proof must debug-assert a mate-magnitude LOSS score");
+        assert!(
+            r.is_err(),
+            "store_loss_proof must debug-assert a mate-magnitude LOSS score"
+        );
     }
 }

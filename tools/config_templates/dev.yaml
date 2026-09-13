@@ -163,6 +163,7 @@ selfplay:
   max_game_moves: 128
   c_visit: 50.0
   c_scale: 1.0
+  q_rescale: true
   gumbel_m: 16
   gumbel_explore_moves: 10
   random_opening_plies: 0

@@ -17,7 +17,7 @@
 
 use mantis_core::board::{Board, BoardGeometry};
 use mantis_encoding::lookup_or_panic;
-use mantis_search::{LegalSetPolicy, MCTSTree};
+use mantis_search::{LegalSetPolicy, MCTSTree, QSigma};
 
 const N_SIMS: usize = 50; // The run's target-generation regime.
 const LEAF_BATCH: usize = 8;
@@ -40,7 +40,10 @@ fn geometry() -> (BoardGeometry, usize, i32) {
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
-    let mut ls = LegalSetPolicy { dense: vec![0.0; n_actions], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; n_actions],
+        overflow: Default::default(),
+    };
     for (q, r) in legal {
         let idx = board.window_flat_idx(q, r);
         if idx < n_actions {
@@ -56,13 +59,16 @@ fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32, sims: usize)
     let mut done = 0;
     while done < sims {
         let take = LEAF_BATCH.min(sims - done);
-        let boards = tree.select_leaves(take)
-        .expect("select_leaves: no desync in this fixture");
+        let boards = tree
+            .select_leaves(take)
+            .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }
-        let policies: Vec<LegalSetPolicy> =
-            boards.iter().map(|b| no_drop_uniform(b, n_actions)).collect();
+        let policies: Vec<LegalSetPolicy> = boards
+            .iter()
+            .map(|b| no_drop_uniform(b, n_actions))
+            .collect();
         let values = vec![0.0_f32; boards.len()];
         let centers: Vec<(i32, i32)> = boards.iter().map(|b| b.window_center()).collect();
         tree.expand_and_backup_ls_at(&policies, &values, &centers, trunk_sz);
@@ -145,7 +151,13 @@ fn setup(seed: u64, plies: usize, sims: usize) -> Setup {
             visited_offwindow.push((q, r));
         }
     }
-    Setup { board, tree, n_actions, visited, visited_offwindow }
+    Setup {
+        board,
+        tree,
+        n_actions,
+        visited,
+        visited_offwindow,
+    }
 }
 
 #[test]
@@ -218,7 +230,14 @@ fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
          not exercised"
     );
     let ls = s.tree.get_policy_ls(1.0, s.n_actions);
-    let improved = s.tree.get_improved_policy_ls(s.n_actions, 50.0, 1.0);
+    let improved = s.tree.get_improved_policy_ls(
+        s.n_actions,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 1.0,
+            rescale: true,
+        },
+    );
 
     // Both are the prior fallback over the FULL child set: identical by coord, sum 1.
     let total = export_mass(&ls);
@@ -228,7 +247,10 @@ fn s1a_zero_visit_root_falls_back_to_the_prior_distribution() {
          the silent all-zero arm (DESIGN_T §1.1 arm 4) is live"
     );
     let imp_total = export_mass(&improved);
-    assert!((imp_total - 1.0).abs() <= TOL, "improved-ls fallback must sum to 1, got {imp_total}");
+    assert!(
+        (imp_total - 1.0).abs() <= TOL,
+        "improved-ls fallback must sum to 1, got {imp_total}"
+    );
 
     let root = &s.tree.pool[0];
     let first = root.first_child as usize;
@@ -251,11 +273,21 @@ fn s1b_improved_ls_keeps_every_child_including_uncovered() {
         !s.visited_offwindow.is_empty(),
         "construction failed: no visited off-window child"
     );
-    let improved = s.tree.get_improved_policy_ls(s.n_actions, 50.0, 1.0);
+    let improved = s.tree.get_improved_policy_ls(
+        s.n_actions,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 1.0,
+            rescale: true,
+        },
+    );
     let total = export_mass(&improved);
     // A sum check alone cannot see a subset renorm, which also sums to 1; the full-set
     // presence check below is the load-bearing assert.
-    assert!((total - 1.0).abs() <= 1e-4, "improved-ls must sum to 1, got {total}");
+    assert!(
+        (total - 1.0).abs() <= 1e-4,
+        "improved-ls must sum to 1, got {total}"
+    );
 
     let root = &s.tree.pool[0];
     let first = root.first_child as usize;

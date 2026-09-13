@@ -139,7 +139,7 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
 
     cfg = load_config(_CONFIG_DIR / config_name)
     pipeline = EvalPipeline(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1,
         eval_cfg=cfg.eval,
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
@@ -205,7 +205,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # `RoundSpec` carries the fused-forward memory bound in the SAME shape as the two postures;
     # its own round-trip is pinned elsewhere, so here it rides as `None`.
     disarmed = RoundSpec(**base, ply_cap_adjudication=None, strength_floor=None,
-                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
+                         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
                          fused_graph_caps=None,
                          inference_batching=None)
     back = RoundSpec.from_dict(json.loads(json.dumps(disarmed.to_dict())))
@@ -213,7 +213,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     assert back == disarmed
 
     armed = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128, leaf_build_threads=1, concurrency=1,
         **base,
         ply_cap_adjudication=PlyCapAdjudicationSpec(criterion="longest_run_margin",
                                                     min_margin=2),
@@ -230,7 +230,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
     # `game_record` is the field the CHILD dereferences by ATTRIBUTE the moment a round starts:
     # left as a raw mapping it raises in a subprocess whose stderr nobody is reading.
     targeted = RoundSpec(
-        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, search_kind="puct", gumbel_m=16, max_plies=128,
+        leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128,
         leaf_build_threads=1, concurrency=1,
         **{**base, "game_record": GameRecordTarget(record_dir="/tmp/games", run_id="r6")},
         ply_cap_adjudication=None, strength_floor=None,

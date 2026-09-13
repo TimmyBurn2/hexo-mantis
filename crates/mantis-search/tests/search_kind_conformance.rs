@@ -9,7 +9,7 @@
 
 use mantis_core::Board;
 use mantis_search::{
-    MCTSTree, MctxRootState, SearchKind, MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL,
+    MCTSTree, MctxRootState, QSigma, SearchKind, MAX_ARMED_SIMS, MAX_ARMED_SIMS_GUMBEL,
     MAX_CHILDREN_PER_NODE, MAX_NODES, MAX_ROOT_CHILDREN,
 };
 
@@ -55,7 +55,14 @@ fn expand_root_unlocked(kind: SearchKind, value: f32) -> (MCTSTree, Board) {
     let mut tree = MCTSTree::new(1.5);
     // Quiescence OFF so the backed-up value is the supplied one rather than a corrected version.
     tree.configure_quiescence(false, 0.0);
-    tree.configure_search(kind, 50.0, 0.1);
+    tree.configure_search(
+        kind,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     tree.new_game(board.clone());
     let leaves = tree.select_leaves(1).expect("a fresh root selects itself");
     assert_eq!(leaves.len(), 1, "root expansion selects exactly the root");
@@ -78,7 +85,14 @@ fn the_kind_is_readable_off_the_tree_and_carries_its_root_cap() {
     );
     assert_eq!(tree.root_children_cap(), MAX_CHILDREN_PER_NODE);
 
-    tree.configure_search(SearchKind::Gumbel, 50.0, 0.1);
+    tree.configure_search(
+        SearchKind::Gumbel,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     assert_eq!(tree.search_kind(), SearchKind::Gumbel);
     assert_eq!(
         tree.root_children_cap(),
@@ -88,7 +102,14 @@ fn the_kind_is_readable_off_the_tree_and_carries_its_root_cap() {
          cannot contain the action it would have drawn"
     );
 
-    tree.configure_search(SearchKind::Puct, 50.0, 1.0);
+    tree.configure_search(
+        SearchKind::Puct,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 1.0,
+            rescale: true,
+        },
+    );
     assert_eq!(tree.root_children_cap(), MAX_CHILDREN_PER_NODE, "and back");
 }
 
@@ -206,7 +227,14 @@ fn the_exported_target_covers_the_full_legal_set_and_sums_to_one() {
 
     // The LEGAL-SET exporter, not the dense one: at radius 8 many legal cells fall outside the
     // 19-window, and the dense export drops `action >= n_actions` by construction.
-    let target = tree.get_improved_policy_ls(N_ACTIONS, 50.0, 0.1);
+    let target = tree.get_improved_policy_ls(
+        N_ACTIONS,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     let support = target.dense.iter().filter(|&&m| m > 0.0).count() + target.overflow.len();
     assert_eq!(
         support, legal,
@@ -292,7 +320,14 @@ fn the_interior_selector_changes_where_the_visits_land() {
         board.apply_move(1, 0).expect("(1,0) is legal beside it");
         let mut tree = MCTSTree::new(1.5);
         tree.configure_quiescence(false, 0.0);
-        tree.configure_search(kind, 50.0, 0.1);
+        tree.configure_search(
+            kind,
+            QSigma {
+                c_visit: 50.0,
+                c_scale: 0.1,
+                rescale: true,
+            },
+        );
         tree.new_game(board);
         // A SKEWED policy: under a uniform one the two selectors can agree by symmetry and the
         // comparison would pass on a dead wire.
@@ -350,7 +385,14 @@ fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
     let board = wide_board();
     let mut tree = MCTSTree::new(1.5);
     tree.configure_quiescence(false, 0.0);
-    tree.configure_search(SearchKind::Gumbel, 50.0, 0.1);
+    tree.configure_search(
+        SearchKind::Gumbel,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     tree.new_game(board);
     let policy = vec![1.0f32 / N_ACTIONS as f32; N_ACTIONS];
     let leaves = tree.select_leaves(1).expect("a fresh root selects itself");
@@ -359,7 +401,14 @@ fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
 
     let state = MctxRootState::new_seeded(&tree, M, 64, 20260909);
 
-    let first = state.round_batch(&tree, 50.0, 0.1);
+    let first = state.round_batch(
+        &tree,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     assert_eq!(
         first.len(),
         M,
@@ -385,7 +434,14 @@ fn a_gumbel_round_is_exactly_the_halving_phase_wide() {
     let policies: Vec<Vec<f32>> = (0..boards.len()).map(|_| policy.clone()).collect();
     tree.expand_and_backup(&policies, &vec![0.0; boards.len()]);
 
-    let second = state.round_batch(&tree, 50.0, 0.1);
+    let second = state.round_batch(
+        &tree,
+        QSigma {
+            c_visit: 50.0,
+            c_scale: 0.1,
+            rescale: true,
+        },
+    );
     assert_eq!(
         second.len(),
         M,

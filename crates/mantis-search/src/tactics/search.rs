@@ -26,7 +26,10 @@ impl Scored {
     /// A bounded leaf value, clamped so `outcome_of` can NEVER read it as a proof.
     #[inline]
     fn heuristic(score: i32) -> Self {
-        Scored { score: clamp_heuristic(score), line: Vec::new() }
+        Scored {
+            score: clamp_heuristic(score),
+            line: Vec::new(),
+        }
     }
 }
 
@@ -61,8 +64,15 @@ pub(crate) fn solve(
 
     // (1) Terminal: the engine-owned CF-1 sign is the ONLY proof sign; mate distance = `ply`.
     if board.check_win() {
-        let score = if board.terminal_value_to_move() > 0.0 { MATE - ply } else { -(MATE - ply) };
-        return Scored { score, line: Vec::new() };
+        let score = if board.terminal_value_to_move() > 0.0 {
+            MATE - ply
+        } else {
+            -(MATE - ply)
+        };
+        return Scored {
+            score,
+            line: Vec::new(),
+        };
     }
 
     let stm = board.current_player;
@@ -70,22 +80,36 @@ pub(crate) fn solve(
 
     // (2) Immediate-win shortcut: a sound stone-count proof, yielding the winning cell.
     if board.count_winning_moves(stm) >= 1 {
-        let line = board.first_winning_move(stm).map_or_else(Vec::new, |m| vec![m]);
-        return Scored { score: MATE - ply, line };
+        let line = board
+            .first_winning_move(stm)
+            .map_or_else(Vec::new, |m| vec![m]);
+        return Scored {
+            score: MATE - ply,
+            line,
+        };
     }
 
     // (3) Double-threat LOSS shortcut (mr==1 only): stm places one stone before the flip and
     //     opp then has >=2 standing win-in-1 cells, so stm blocks at most one.
     if board.moves_remaining == 1 && board.count_winning_moves(opp) >= 2 {
-        return Scored { score: -(MATE - ply), line: Vec::new() };
+        return Scored {
+            score: -(MATE - ply),
+            line: Vec::new(),
+        };
     }
 
     // (4) TT probe — only a PROVEN LOSS is trusted: a WIN hit has an empty PV and could
     //     truncate the override line.
     let key = (board.zobrist_hash, stm as i8, board.moves_remaining);
     if let Some(score) = tt.get_loss_proof(key, ply) {
-        debug_assert!(score <= -WIN_THRESHOLD, "TT proof probe must decode a mate-magnitude LOSS");
-        return Scored { score, line: Vec::new() };
+        debug_assert!(
+            score <= -WIN_THRESHOLD,
+            "TT proof probe must decode a mate-magnitude LOSS"
+        );
+        return Scored {
+            score,
+            line: Vec::new(),
+        };
     }
 
     if depth_left <= 0 {
@@ -125,13 +149,31 @@ pub(crate) fn solve(
         // PVS + LMR, pruning/ordering ONLY. idx 0 is the PV (full window, full depth); later
         // moves get a null-window scout, LMR-reduced when late/quiet/not-in-check.
         let (rc, child_line) = if idx == 0 {
-            let (ca, cb) = if flipped { (-beta, -alpha) } else { (alpha, beta) };
+            let (ca, cb) = if flipped {
+                (-beta, -alpha)
+            } else {
+                (alpha, beta)
+            };
             let c = solve(board, dchild, ply + 1, ca, cb, budget, cfg, tt, ordering);
             (if flipped { -c.score } else { c.score }, c.line)
         } else {
             let reduce = lmr_reduction(idx, depth_left, in_check);
-            let (na, nb) = if flipped { (-alpha - 1, -alpha) } else { (alpha, alpha + 1) };
-            let c = solve(board, dchild - reduce, ply + 1, na, nb, budget, cfg, tt, ordering);
+            let (na, nb) = if flipped {
+                (-alpha - 1, -alpha)
+            } else {
+                (alpha, alpha + 1)
+            };
+            let c = solve(
+                board,
+                dchild - reduce,
+                ply + 1,
+                na,
+                nb,
+                budget,
+                cfg,
+                tt,
+                ordering,
+            );
             let mut rc = if flipped { -c.score } else { c.score };
             let mut line = c.line;
             // Re-search at full depth+window whenever the scout could matter. The one reduced
@@ -142,7 +184,11 @@ pub(crate) fn solve(
                 rc > alpha && rc < beta
             };
             if need_full {
-                let (fa, fb) = if flipped { (-beta, -alpha) } else { (alpha, beta) };
+                let (fa, fb) = if flipped {
+                    (-beta, -alpha)
+                } else {
+                    (alpha, beta)
+                };
                 let c = solve(board, dchild, ply + 1, fa, fb, budget, cfg, tt, ordering);
                 rc = if flipped { -c.score } else { c.score };
                 line = c.line;
@@ -182,14 +228,34 @@ pub(crate) fn solve(
     if best >= WIN_THRESHOLD {
         // ORDERING hint only (is_proof=false; never returned as a verdict — a WIN
         // is always reconstructed). The winning move ordered first next visit.
-        tt.store_bound(key, best, ply, Bound::Lower, best_line.first().copied(), depth_left);
-        return Scored { score: best, line: best_line };
+        tt.store_bound(
+            key,
+            best,
+            ply,
+            Bound::Lower,
+            best_line.first().copied(),
+            depth_left,
+        );
+        return Scored {
+            score: best,
+            line: best_line,
+        };
     }
     // β-cutoff with a non-win `best`: a fail-high BOUND, so the LOSS-proof logic below must NOT
     // run. It is strictly above `-WIN_THRESHOLD`, so it cannot be misread as a proven LOSS.
     if cutoff {
-        tt.store_bound(key, best, ply, Bound::Lower, best_line.first().copied(), depth_left);
-        return Scored { score: best, line: best_line };
+        tt.store_bound(
+            key,
+            best,
+            ply,
+            Bound::Lower,
+            best_line.first().copied(),
+            depth_left,
+        );
+        return Scored {
+            score: best,
+            line: best_line,
+        };
     }
 
     // Loop ran to completion with no cutoff => `best` is the EXACT node value.
@@ -206,7 +272,10 @@ pub(crate) fn solve(
         (in_check && moves_len < cfg.cand_cap) || moves_len >= board.legal_move_count();
     if loss_complete {
         tt.store_loss_proof(key, best, ply, depth_left); // proven, game-theoretic — cache it
-        return Scored { score: best, line: Vec::new() };
+        return Scored {
+            score: best,
+            line: Vec::new(),
+        };
     }
 
     // RECALL-PRESERVING VERIFY: certifying a LOSS needs the DROPPED legal moves too, searched
@@ -225,7 +294,17 @@ pub(crate) fn solve(
             let flipped = board.current_player != node_player;
             // Full window, full depth, NO PVS/LMR — the verify preserves EXACT
             // recall for the LOSS certification (the soundness-critical path).
-            let child = solve(board, depth_left - 1, ply + 1, NEG_INF, POS_INF, budget, cfg, tt, ordering);
+            let child = solve(
+                board,
+                depth_left - 1,
+                ply + 1,
+                NEG_INF,
+                POS_INF,
+                budget,
+                cfg,
+                tt,
+                ordering,
+            );
             let rc = if flipped { -child.score } else { child.score };
             if rc >= WIN_THRESHOLD {
                 let mut line = vec![(q, r)];
@@ -245,7 +324,10 @@ pub(crate) fn solve(
         }
         // Every reduced candidate AND every dropped legal move loses => certified.
         tt.store_loss_proof(key, vbest, ply, depth_left);
-        return Scored { score: vbest, line: Vec::new() };
+        return Scored {
+            score: vbest,
+            line: Vec::new(),
+        };
     }
 
     Scored::heuristic(0) // candidate set incomplete, verify disabled -> cannot prove LOSS
@@ -349,7 +431,10 @@ pub(crate) struct Solved3 {
 impl Solved3 {
     #[inline]
     fn unknown() -> Self {
-        Solved3 { outcome: Outcome::Unknown, line: Vec::new() }
+        Solved3 {
+            outcome: Outcome::Unknown,
+            line: Vec::new(),
+        }
     }
 }
 
@@ -365,22 +450,39 @@ pub(crate) fn solve_3valued(
         return Solved3::unknown();
     }
     if board.check_win() {
-        let outcome =
-            if board.terminal_value_to_move() > 0.0 { Outcome::Win } else { Outcome::Loss };
-        return Solved3 { outcome, line: Vec::new() };
+        let outcome = if board.terminal_value_to_move() > 0.0 {
+            Outcome::Win
+        } else {
+            Outcome::Loss
+        };
+        return Solved3 {
+            outcome,
+            line: Vec::new(),
+        };
     }
     let stm = board.current_player;
     let opp = stm.other();
     if board.count_winning_moves(stm) >= 1 {
-        let line = board.first_winning_move(stm).map_or_else(Vec::new, |m| vec![m]);
-        return Solved3 { outcome: Outcome::Win, line };
+        let line = board
+            .first_winning_move(stm)
+            .map_or_else(Vec::new, |m| vec![m]);
+        return Solved3 {
+            outcome: Outcome::Win,
+            line,
+        };
     }
     if board.moves_remaining == 1 && board.count_winning_moves(opp) >= 2 {
-        return Solved3 { outcome: Outcome::Loss, line: Vec::new() };
+        return Solved3 {
+            outcome: Outcome::Loss,
+            line: Vec::new(),
+        };
     }
     let key = (board.zobrist_hash, stm as i8, board.moves_remaining);
     if tt.get_loss_proof(key, 0).is_some() {
-        return Solved3 { outcome: Outcome::Loss, line: Vec::new() };
+        return Solved3 {
+            outcome: Outcome::Loss,
+            line: Vec::new(),
+        };
     }
     if depth_left <= 0 {
         return Solved3::unknown();
@@ -401,14 +503,21 @@ pub(crate) fn solve_3valued(
         };
         let child = solve_3valued(board, depth_left - 1, budget, cfg, tt);
         let flipped = board.current_player != node_player;
-        let rc = if flipped { child.outcome.negate() } else { child.outcome };
+        let rc = if flipped {
+            child.outcome.negate()
+        } else {
+            child.outcome
+        };
         if rc == Outcome::Win {
             let mut line = vec![(q, r)];
             if !flipped {
                 line.extend(child.line.iter().copied());
             }
             board.undo_move(diff);
-            return Solved3 { outcome: Outcome::Win, line };
+            return Solved3 {
+                outcome: Outcome::Win,
+                line,
+            };
         }
         board.undo_move(diff);
         if rc == Outcome::Unknown {
@@ -422,7 +531,10 @@ pub(crate) fn solve_3valued(
         (in_check && moves_len < cfg.cand_cap) || moves_len >= board.legal_move_count();
     if loss_complete {
         tt.store_loss_proof(key, -MATE, 0, depth_left);
-        return Solved3 { outcome: Outcome::Loss, line: Vec::new() };
+        return Solved3 {
+            outcome: Outcome::Loss,
+            line: Vec::new(),
+        };
     }
     if cfg.neighbor_dist.is_some() {
         for (q, r) in board.legal_moves() {
@@ -436,14 +548,21 @@ pub(crate) fn solve_3valued(
             };
             let child = solve_3valued(board, depth_left - 1, budget, cfg, tt);
             let flipped = board.current_player != node_player;
-            let rc = if flipped { child.outcome.negate() } else { child.outcome };
+            let rc = if flipped {
+                child.outcome.negate()
+            } else {
+                child.outcome
+            };
             if rc == Outcome::Win {
                 let mut line = vec![(q, r)];
                 if !flipped {
                     line.extend(child.line.iter().copied());
                 }
                 board.undo_move(diff);
-                return Solved3 { outcome: Outcome::Win, line };
+                return Solved3 {
+                    outcome: Outcome::Win,
+                    line,
+                };
             }
             board.undo_move(diff);
             if rc == Outcome::Unknown {
@@ -451,7 +570,10 @@ pub(crate) fn solve_3valued(
             }
         }
         tt.store_loss_proof(key, -MATE, 0, depth_left);
-        return Solved3 { outcome: Outcome::Loss, line: Vec::new() };
+        return Solved3 {
+            outcome: Outcome::Loss,
+            line: Vec::new(),
+        };
     }
     Solved3::unknown()
 }
@@ -467,7 +589,11 @@ mod tests {
     fn solver() -> super::super::TacticalSolver {
         // window_half=None for the core proof tests (offense-guard tested
         // separately); cand_cap matches the reference candidate cap.
-        super::super::TacticalSolver::new(TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None })
+        super::super::TacticalSolver::new(TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
+        })
     }
 
     // Independent exhaustive oracle: ALL legal moves, no TT, early-exit on WIN.
@@ -476,7 +602,11 @@ mod tests {
             return Outcome::Unknown;
         }
         if board.check_win() {
-            return if board.terminal_value_to_move() > 0.0 { WIN } else { LOSS };
+            return if board.terminal_value_to_move() > 0.0 {
+                WIN
+            } else {
+                LOSS
+            };
         }
         let stm = board.current_player;
         if board.count_winning_moves(stm) >= 1 {
@@ -503,7 +633,11 @@ mod tests {
                 saw_unknown = true;
             }
         }
-        if saw_unknown { Outcome::Unknown } else { LOSS }
+        if saw_unknown {
+            Outcome::Unknown
+        } else {
+            LOSS
+        }
     }
 
     // Deterministic, dependency-free PRNG (matches board/mod.rs test style).
@@ -527,11 +661,29 @@ mod tests {
         let mut b = Board::new();
         b.apply_move(0, 0).unwrap(); // P1 opener
         let p2_order = [
-            (3, 3), (2, 3), (4, 3), (1, 3), (5, 3), (3, 2), (3, 4), (3, 1), (3, 5),
+            (3, 3),
+            (2, 3),
+            (4, 3),
+            (1, 3),
+            (5, 3),
+            (3, 2),
+            (3, 4),
+            (3, 1),
+            (3, 5),
         ];
         let p1_fillers = [
-            (-3, -3), (-3, -2), (-2, -3), (-3, -4), (-4, -3), (-2, -2),
-            (-4, -4), (-4, -2), (-2, -4), (-5, -3), (-3, -5), (-5, -4),
+            (-3, -3),
+            (-3, -2),
+            (-2, -3),
+            (-3, -4),
+            (-4, -3),
+            (-2, -2),
+            (-4, -4),
+            (-4, -2),
+            (-2, -4),
+            (-5, -3),
+            (-3, -5),
+            (-5, -4),
         ];
         let (mut p2i, mut p1i) = (0usize, 0usize);
         let mut turn: i32 = -1;
@@ -615,23 +767,39 @@ mod tests {
         let mut c = Board::new();
         for &(q, r) in &[
             (0, 0),
-            (0, 9), (0, 8),
-            (1, 0), (2, 0),
-            (-3, 9), (-3, 8),
-            (3, 0), (4, 0),
-            (-1, 9), (-2, 9),
+            (0, 9),
+            (0, 8),
+            (1, 0),
+            (2, 0),
+            (-3, 9),
+            (-3, 8),
+            (3, 0),
+            (4, 0),
+            (-1, 9),
+            (-2, 9),
         ] {
             c.apply_move(q, r).unwrap();
         }
         assert_eq!(c.current_player, Player::One, "expected P1 to move");
-        assert!(c.count_winning_moves(Player::One) >= 1, "P1 should have an immediate win");
+        assert!(
+            c.count_winning_moves(Player::One) >= 1,
+            "P1 should have an immediate win"
+        );
         let r = solver().prove(&c, 20, 10_000);
-        assert_eq!(r.result, WIN, "P1-with-immediate-win must be WIN, got {:?}", r.result);
+        assert_eq!(
+            r.result, WIN,
+            "P1-with-immediate-win must be WIN, got {:?}",
+            r.result
+        );
         assert!(!r.line.is_empty(), "WIN must carry the move line");
         // line[0] must actually complete a 6.
         let mut c2 = c.clone();
         c2.apply_move(r.line[0].0, r.line[0].1).unwrap();
-        assert!(c2.check_win(), "line[0] must complete 6, got {:?}", r.line[0]);
+        assert!(
+            c2.check_win(),
+            "line[0] must complete 6, got {:?}",
+            r.line[0]
+        );
     }
 
     #[test]
@@ -642,7 +810,11 @@ mod tests {
             e.apply_move(q, r).unwrap();
         }
         let r = solver().prove(&e, 20, 5_000);
-        assert_ne!(r.result, LOSS, "quiet position must not be a proven LOSS, got {:?}", r.result);
+        assert_ne!(
+            r.result, LOSS,
+            "quiet position must not be a proven LOSS, got {:?}",
+            r.result
+        );
     }
 
     #[test]
@@ -651,12 +823,24 @@ mod tests {
         // depths. Brute confirmation lives in `test5`, where the tree is not ~300^2 (~60 s).
         let f = build_fork();
         assert_eq!(f.current_player, Player::One, "fork: expected P1 to move");
-        assert_eq!(f.count_winning_moves(Player::Two), 4, "fork: expected 4 P2 threats");
+        assert_eq!(
+            f.count_winning_moves(Player::Two),
+            4,
+            "fork: expected 4 P2 threats"
+        );
 
         let rt = solver().prove(&f, 30, 300_000);
         let rm = solver().prove(&f, 12, 300_000);
-        assert_eq!(rt.result, LOSS, "depth-30 must prove the fork LOSS, got {:?}", rt);
-        assert_eq!(rm.result, LOSS, "depth-12 must prove the fork LOSS, got {:?}", rm);
+        assert_eq!(
+            rt.result, LOSS,
+            "depth-30 must prove the fork LOSS, got {:?}",
+            rt
+        );
+        assert_eq!(
+            rm.result, LOSS,
+            "depth-12 must prove the fork LOSS, got {:?}",
+            rm
+        );
     }
 
     #[test]
@@ -673,11 +857,21 @@ mod tests {
                 (q, r, vert)
             );
             let res = s.prove(&b, 12, 200_000);
-            assert_eq!(res.result, LOSS, "solver must prove compact LOSS, case {:?}", (q, r, vert));
+            assert_eq!(
+                res.result,
+                LOSS,
+                "solver must prove compact LOSS, case {:?}",
+                (q, r, vert)
+            );
 
             let mut bb = Budget::new(2_000_000);
             let brute = brute_solve(&mut b.clone(), 12, &mut bb);
-            assert_eq!(brute, LOSS, "brute oracle disagrees (soundness), case {:?}", (q, r, vert));
+            assert_eq!(
+                brute,
+                LOSS,
+                "brute oracle disagrees (soundness), case {:?}",
+                (q, r, vert)
+            );
             assert!(
                 res.nodes < bb.nodes,
                 "TSS ({}) not cheaper than brute ({}), case {:?}",
@@ -776,9 +970,18 @@ mod tests {
             }
         }
 
-        assert_eq!(bad, 0, "SOUNDNESS: {bad}/{checked} LOSS claims refuted by exhaustive oracle");
-        assert!(checked > 0, "soundness fuzz vacuous: no LOSS claims exercised");
-        assert!(nic_checked > 0, "not-in-check surface not exercised (R3 guard untested)");
+        assert_eq!(
+            bad, 0,
+            "SOUNDNESS: {bad}/{checked} LOSS claims refuted by exhaustive oracle"
+        );
+        assert!(
+            checked > 0,
+            "soundness fuzz vacuous: no LOSS claims exercised"
+        );
+        assert!(
+            nic_checked > 0,
+            "not-in-check surface not exercised (R3 guard untested)"
+        );
         eprintln!(
             "soundness fuzz: {checked} LOSS claims (all brute-confirmed), {nic_checked} not-in-check positions exercised"
         );
@@ -789,20 +992,37 @@ mod tests {
         // P1 has 0..4 on r=0 (immediate win at (-1,0)/(5,0)); a far P2 stone at
         // (20,20) shifts the window center to ~(10,10) so the winning cell is
         // off-window (cheb > 9). Guard ON -> suppressed (UNKNOWN); OFF -> WIN.
-        let mut stones: Vec<((i32, i32), Cell)> =
-            (0..5).map(|q| ((q, 0), Cell::P1)).collect();
+        let mut stones: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
         stones.push(((20, 20), Cell::P2));
         let b = static_board(&stones, Player::One, 2);
-        assert!(b.count_winning_moves(Player::One) >= 1, "P1 should have an immediate win");
+        assert!(
+            b.count_winning_moves(Player::One) >= 1,
+            "P1 should have an immediate win"
+        );
 
-        let off = super::super::TacticalSolver::new(TacticalConfig { cand_cap: 40, window_half: Some(9), neighbor_dist: None });
-        let on = super::super::TacticalSolver::new(TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None });
+        let off = super::super::TacticalSolver::new(TacticalConfig {
+            cand_cap: 40,
+            window_half: Some(9),
+            neighbor_dist: None,
+        });
+        let on = super::super::TacticalSolver::new(TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
+        });
 
         let guarded = off.prove(&b, 8, 10_000);
         let unguarded = on.prove(&b, 8, 10_000);
         assert_eq!(unguarded.result, WIN, "no guard: must be WIN");
-        assert!(super::super::is_off_window(&b, unguarded.line[0], 9), "test setup: win cell must be off-window");
-        assert_eq!(guarded.result, Outcome::Unknown, "in-window guard must suppress the off-window WIN");
+        assert!(
+            super::super::is_off_window(&b, unguarded.line[0], 9),
+            "test setup: win cell must be off-window"
+        );
+        assert_eq!(
+            guarded.result,
+            Outcome::Unknown,
+            "in-window guard must suppress the off-window WIN"
+        );
         assert!(guarded.line.is_empty(), "suppressed proof carries no line");
     }
 
@@ -849,7 +1069,10 @@ mod tests {
         );
         // Widening is additive: every threat-only candidate is still present.
         for m in &threat_only {
-            assert!(widened.contains(m), "widened set dropped threat candidate {m:?}");
+            assert!(
+                widened.contains(m),
+                "widened set dropped threat candidate {m:?}"
+            );
         }
     }
 
@@ -858,23 +1081,42 @@ mod tests {
         // Coherence: the A1 override places line[0] AND the cached completing line[1], so BOTH
         // must be in-window. Here line[0] is in-window (cheb 3) and line[1] is not (cheb 4).
         let stones = vec![
-            ((0, 0), Cell::P1), ((1, 0), Cell::P1), ((2, 0), Cell::P1), ((3, 0), Cell::P1),
+            ((0, 0), Cell::P1),
+            ((1, 0), Cell::P1),
+            ((2, 0), Cell::P1),
+            ((3, 0), Cell::P1),
             ((-1, 0), Cell::P2),
         ];
         let mut b = static_board(&stones, Player::One, 2);
         b.set_legal_move_radius(3);
 
         let raw = super::super::TacticalSolver::new(TacticalConfig {
-            cand_cap: 40, window_half: None, neighbor_dist: None,
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
         });
         let ru = raw.prove(&b, 12, 80_000);
         assert_eq!(ru.result, WIN, "unguarded must find the rightward win");
-        assert!(ru.line.len() >= 2, "expected a 2-stone win, got {:?}", ru.line);
-        assert!(!super::super::is_off_window(&b, ru.line[0], 3), "setup: line[0] must be IN-window, got {:?}", ru.line[0]);
-        assert!(super::super::is_off_window(&b, ru.line[1], 3), "setup: completing line[1] must be OFF-window, got {:?}", ru.line[1]);
+        assert!(
+            ru.line.len() >= 2,
+            "expected a 2-stone win, got {:?}",
+            ru.line
+        );
+        assert!(
+            !super::super::is_off_window(&b, ru.line[0], 3),
+            "setup: line[0] must be IN-window, got {:?}",
+            ru.line[0]
+        );
+        assert!(
+            super::super::is_off_window(&b, ru.line[1], 3),
+            "setup: completing line[1] must be OFF-window, got {:?}",
+            ru.line[1]
+        );
 
         let guarded = super::super::TacticalSolver::new(TacticalConfig {
-            cand_cap: 40, window_half: Some(3), neighbor_dist: None,
+            cand_cap: 40,
+            window_half: Some(3),
+            neighbor_dist: None,
         });
         assert_eq!(
             guarded.prove(&b, 12, 80_000).result,
@@ -907,9 +1149,15 @@ mod tests {
         // (b) a MULTI-CLUSTER non-winning board at large coords, kept within a BOUNDED bbox:
         //     clusters 150 cells apart make the brute oracle's legal rebuild O(bbox).
         let multi: Vec<((i32, i32), Cell)> = vec![
-            ((70, 70), Cell::P1), ((71, 70), Cell::P1), ((70, 71), Cell::P2),
-            ((78, 72), Cell::P2), ((79, 72), Cell::P2), ((78, 73), Cell::P1),
-            ((73, 78), Cell::P1), ((74, 78), Cell::P2), ((73, 79), Cell::P1),
+            ((70, 70), Cell::P1),
+            ((71, 70), Cell::P1),
+            ((70, 71), Cell::P2),
+            ((78, 72), Cell::P2),
+            ((79, 72), Cell::P2),
+            ((78, 73), Cell::P1),
+            ((73, 78), Cell::P1),
+            ((74, 78), Cell::P2),
+            ((73, 79), Cell::P1),
         ];
         let mut mb = static_board(&multi, Player::One, 2);
         mb.set_legal_move_radius(1); // tight legal set -> the brute oracle stays cheap
@@ -938,7 +1186,12 @@ mod tests {
         for &(q, r, vert) in &cases {
             let b = compact_double_threat(q, r, vert);
             let res = s.prove(&b, 12, 1_000_000);
-            assert_ne!(res.result, WIN, "widened FALSE WIN on a forced loss, case {:?}", (q, r, vert));
+            assert_ne!(
+                res.result,
+                WIN,
+                "widened FALSE WIN on a forced loss, case {:?}",
+                (q, r, vert)
+            );
             if res.result == LOSS {
                 loss_claims += 1;
                 let mut bb = Budget::new(2_000_000);
@@ -950,7 +1203,10 @@ mod tests {
                 );
             }
         }
-        assert!(loss_claims > 0, "widened solver proved 0 LOSSes (vacuous) — raise budget/depth");
+        assert!(
+            loss_claims > 0,
+            "widened solver proved 0 LOSSes (vacuous) — raise budget/depth"
+        );
     }
 
     #[test]
@@ -968,9 +1224,16 @@ mod tests {
             window_half: None,
             neighbor_dist: Some(2),
         });
-        assert_eq!(no_verify.prove(&b, 20, 200_000).result, Outcome::Unknown, "no-verify: conservative UNKNOWN");
+        assert_eq!(
+            no_verify.prove(&b, 20, 200_000).result,
+            Outcome::Unknown,
+            "no-verify: conservative UNKNOWN"
+        );
         let res = verify.prove(&b, 20, 400_000);
-        assert_eq!(res.result, WIN, "verify must recover the truncated winning counter");
+        assert_eq!(
+            res.result, WIN,
+            "verify must recover the truncated winning counter"
+        );
         // The recovered line's first move must actually win the position.
         assert!(!res.line.is_empty(), "WIN carries a line");
     }
@@ -989,10 +1252,22 @@ mod tests {
             window_half: None,
             neighbor_dist: Some(2),
         });
-        assert_eq!(no_verify.prove(&b, 12, 400_000).result, Outcome::Unknown, "no-verify: conservative UNKNOWN");
-        assert_eq!(verify.prove(&b, 12, 1_000_000).result, LOSS, "verify must certify the truncated LOSS");
+        assert_eq!(
+            no_verify.prove(&b, 12, 400_000).result,
+            Outcome::Unknown,
+            "no-verify: conservative UNKNOWN"
+        );
+        assert_eq!(
+            verify.prove(&b, 12, 1_000_000).result,
+            LOSS,
+            "verify must certify the truncated LOSS"
+        );
         let mut bb = Budget::new(2_000_000);
-        assert_eq!(brute_solve(&mut b.clone(), 12, &mut bb), LOSS, "brute confirms the LOSS (soundness)");
+        assert_eq!(
+            brute_solve(&mut b.clone(), 12, &mut bb),
+            LOSS,
+            "brute confirms the LOSS (soundness)"
+        );
     }
 
     #[test]
@@ -1007,7 +1282,12 @@ mod tests {
         for &(q, r, vert) in &cases {
             let b = compact_double_threat(q, r, vert);
             let res = s.prove(&b, 12, 1_500_000);
-            assert_ne!(res.result, WIN, "verify FALSE WIN on a forced loss, case {:?}", (q, r, vert));
+            assert_ne!(
+                res.result,
+                WIN,
+                "verify FALSE WIN on a forced loss, case {:?}",
+                (q, r, vert)
+            );
             if res.result == LOSS {
                 let mut bb = Budget::new(2_000_000);
                 assert_eq!(
@@ -1061,7 +1341,8 @@ mod tests {
                                 let mut bb = Budget::new(1_500_000);
                                 let brute = brute_solve(&mut b.clone(), 12, &mut bb);
                                 assert_ne!(
-                                    brute, WIN,
+                                    brute,
+                                    WIN,
                                     "FALSE LOSS: solver LOSS but brute finds an escape-to-WIN \
                                      (cap={cap}, nd={nd}, in_check={in_check}, case {:?})",
                                     (off_q, off_r, vert, builder)
@@ -1074,7 +1355,8 @@ mod tests {
                                 let mut bb = Budget::new(1_500_000);
                                 let brute = brute_solve(&mut b.clone(), 12, &mut bb);
                                 assert_ne!(
-                                    brute, LOSS,
+                                    brute,
+                                    LOSS,
                                     "FALSE WIN: solver WIN but brute proves LOSS \
                                      (cap={cap}, nd={nd}, case {:?})",
                                     (off_q, off_r, vert, builder)
@@ -1157,7 +1439,10 @@ mod tests {
                 win_claims += 1;
                 let mut bb = Budget::new(1_500_000);
                 let brute = brute_solve(&mut bd.clone(), 12, &mut bb);
-                assert_ne!(brute, LOSS, "FALSE WIN (random): solver WIN but brute proves LOSS");
+                assert_ne!(
+                    brute, LOSS,
+                    "FALSE WIN (random): solver WIN but brute proves LOSS"
+                );
             }
         }
         eprintln!(
@@ -1170,26 +1455,45 @@ mod tests {
     /// the line — independent of the brute oracle, which shares the flip logic.
     #[test]
     fn redteam_flip_sign_two_stone_win_realized() {
-        let stones: Vec<((i32, i32), Cell)> =
-            (0..4).map(|q| ((q, 0), Cell::P1)).collect();
+        let stones: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let b = static_board(&stones, Player::One, 2);
-        assert_eq!(b.count_winning_moves(Player::One), 0, "setup: no single-stone win (needs 2)");
+        assert_eq!(
+            b.count_winning_moves(Player::One),
+            0,
+            "setup: no single-stone win (needs 2)"
+        );
         let res = solver().prove(&b, 12, 200_000);
-        assert_eq!(res.result, WIN, "2-stone forcing win must be WIN (flip-sign), got {:?}", res.result);
+        assert_eq!(
+            res.result, WIN,
+            "2-stone forcing win must be WIN (flip-sign), got {:?}",
+            res.result
+        );
         // Realize the same-turn line: both stones are P1's (mr=2 -> 1, not flipped),
         // so line carries P1's two placements. Replaying must complete a 6.
-        assert!(res.line.len() >= 2, "same-turn win must carry both P1 stones, got {:?}", res.line);
+        assert!(
+            res.line.len() >= 2,
+            "same-turn win must carry both P1 stones, got {:?}",
+            res.line
+        );
         let mut c = b.clone();
         c.apply_move(res.line[0].0, res.line[0].1).unwrap();
         c.apply_move(res.line[1].0, res.line[1].1).unwrap();
-        assert!(c.check_win(), "realized WIN line must produce a real 6, got line {:?}", res.line);
+        assert!(
+            c.check_win(),
+            "realized WIN line must produce a real 6, got line {:?}",
+            res.line
+        );
         // And the SAME position must never be called a LOSS by the verify config.
         let v = super::super::TacticalSolver::new(TacticalConfig {
             cand_cap: 2,
             window_half: None,
             neighbor_dist: Some(2),
         });
-        assert_ne!(v.prove(&b, 12, 500_000).result, LOSS, "winnable position must never be a LOSS");
+        assert_ne!(
+            v.prove(&b, 12, 500_000).result,
+            LOSS,
+            "winnable position must never be a LOSS"
+        );
     }
 
     /// RED-TEAM: a budget-starved target must return UNKNOWN, never a manufactured proof.
@@ -1203,7 +1507,11 @@ mod tests {
         // A brute-confirmed forced LOSS, so the full-budget result is LOSS.
         let b = compact_double_threat(0, 0, false);
         let mut bb = Budget::new(2_000_000);
-        assert_eq!(brute_solve(&mut b.clone(), 12, &mut bb), LOSS, "setup: truly a forced LOSS");
+        assert_eq!(
+            brute_solve(&mut b.clone(), 12, &mut bb),
+            LOSS,
+            "setup: truly a forced LOSS"
+        );
         // Find a budget large enough to prove it, then starve below that.
         let full = v.prove(&b, 12, 1_000_000);
         assert_eq!(full.result, LOSS, "full budget proves the LOSS");
@@ -1240,12 +1548,28 @@ mod tests {
         let b = fork_with_p1_counter();
         // Test-setup invariants: P1 is in check (4 P2 threats), has no win-in-1,
         // but the position is truly a WIN (full-legal brute finds the counter).
-        assert_eq!(b.count_winning_moves(Player::Two), 4, "setup: 4 P2 threats (P1 in check)");
-        assert_eq!(b.count_winning_moves(Player::One), 0, "setup: P1 has no immediate win");
+        assert_eq!(
+            b.count_winning_moves(Player::Two),
+            4,
+            "setup: 4 P2 threats (P1 in check)"
+        );
+        assert_eq!(
+            b.count_winning_moves(Player::One),
+            0,
+            "setup: P1 has no immediate win"
+        );
         let mut bb = Budget::new(2_000_000);
-        assert_eq!(brute_solve(&mut b.clone(), 12, &mut bb), WIN, "setup: position is truly a P1 WIN");
+        assert_eq!(
+            brute_solve(&mut b.clone(), 12, &mut bb),
+            WIN,
+            "setup: position is truly a P1 WIN"
+        );
 
-        let trunc = super::super::TacticalSolver::new(TacticalConfig { cand_cap: 1, window_half: None, neighbor_dist: None });
+        let trunc = super::super::TacticalSolver::new(TacticalConfig {
+            cand_cap: 1,
+            window_half: None,
+            neighbor_dist: None,
+        });
         let res = trunc.prove(&b, 20, 200_000);
         assert_ne!(
             res.result, LOSS,
@@ -1265,7 +1589,17 @@ mod tests {
         let mut bud = Budget::new(budget);
         let mut tt = super::super::tt::ProofTt::new();
         let mut ordering = super::OrderingState::new();
-        let s = super::solve(&mut board, depth, 0, NEG_INF, POS_INF, &mut bud, cfg, &mut tt, &mut ordering);
+        let s = super::solve(
+            &mut board,
+            depth,
+            0,
+            NEG_INF,
+            POS_INF,
+            &mut bud,
+            cfg,
+            &mut tt,
+            &mut ordering,
+        );
         (outcome_of(s.score), s.score, s.line)
     }
 
@@ -1281,11 +1615,32 @@ mod tests {
     fn clamp_heuristic_never_reaches_proof_region() {
         // SOUNDNESS: a heuristic leaf can NEVER masquerade as a mate. Clamp pins
         // any eval (incl. ±∞-ish) strictly inside (-WIN_THRESHOLD, WIN_THRESHOLD).
-        for &v in &[i32::MIN, -MATE, -WIN_THRESHOLD, -1, 0, 1, WIN_THRESHOLD, MATE, i32::MAX] {
+        for &v in &[
+            i32::MIN,
+            -MATE,
+            -WIN_THRESHOLD,
+            -1,
+            0,
+            1,
+            WIN_THRESHOLD,
+            MATE,
+            i32::MAX,
+        ] {
             let c = super::clamp_heuristic(v);
-            assert!(c.abs() < WIN_THRESHOLD, "clamp({v}) = {c} leaked into the proof region");
-            assert_ne!(outcome_of(c), WIN, "clamped heuristic must never read as WIN");
-            assert_ne!(outcome_of(c), LOSS, "clamped heuristic must never read as LOSS");
+            assert!(
+                c.abs() < WIN_THRESHOLD,
+                "clamp({v}) = {c} leaked into the proof region"
+            );
+            assert_ne!(
+                outcome_of(c),
+                WIN,
+                "clamped heuristic must never read as WIN"
+            );
+            assert_ne!(
+                outcome_of(c),
+                LOSS,
+                "clamped heuristic must never read as LOSS"
+            );
         }
     }
 
@@ -1294,12 +1649,19 @@ mod tests {
         // Mate-distance encoding: a SHORTER forced win scores higher. An immediate
         // (1-stone) win at the root is exactly `MATE - 0 = MATE`; a 2-stone forcing
         // win must score strictly less (it lands a ply deeper) but still proven.
-        let cfg = TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None };
+        let cfg = TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
+        };
 
         // Immediate win: P1 has 0..4 on r=0 (a single stone completes six).
         let imm: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
         let imm_b = static_board(&imm, Player::One, 2);
-        assert!(imm_b.count_winning_moves(Player::One) >= 1, "setup: immediate win");
+        assert!(
+            imm_b.count_winning_moves(Player::One) >= 1,
+            "setup: immediate win"
+        );
         let (o1, s1, _) = run_scored(&imm_b, &cfg, 12, 50_000);
         assert_eq!(o1, WIN, "immediate win must be WIN");
         assert_eq!(s1, MATE, "immediate win scores MATE - 0 = MATE, got {s1}");
@@ -1307,22 +1669,36 @@ mod tests {
         // 2-stone forcing win: P1 has 0..3 on r=0 (needs (4,0) then (5,0)).
         let two: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let two_b = static_board(&two, Player::One, 2);
-        assert_eq!(two_b.count_winning_moves(Player::One), 0, "setup: no 1-stone win");
+        assert_eq!(
+            two_b.count_winning_moves(Player::One),
+            0,
+            "setup: no 1-stone win"
+        );
         let (o2, s2, _) = run_scored(&two_b, &cfg, 12, 200_000);
         assert_eq!(o2, WIN, "2-stone forcing win must be WIN");
         assert!(s2 >= WIN_THRESHOLD, "2-stone win must be proven, got {s2}");
-        assert!(s2 < s1, "deeper mate must score lower: 2-stone {s2} !< immediate {s1}");
+        assert!(
+            s2 < s1,
+            "deeper mate must score lower: 2-stone {s2} !< immediate {s1}"
+        );
     }
 
     #[test]
     fn scored_loss_is_mate_magnitude_negative() {
         // A proven forced LOSS carries a mate-magnitude NEGATIVE score (the
         // mate-distance loss encoding), and the verdict matches the oracle.
-        let cfg = TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None };
+        let cfg = TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
+        };
         let b = compact_double_threat(0, 0, false);
         let (o, s, _) = run_scored(&b, &cfg, 12, 200_000);
         assert_eq!(o, LOSS, "compact double-threat is a forced LOSS");
-        assert!(s <= -WIN_THRESHOLD, "LOSS must carry a mate-magnitude negative score, got {s}");
+        assert!(
+            s <= -WIN_THRESHOLD,
+            "LOSS must carry a mate-magnitude negative score, got {s}"
+        );
     }
 
     #[test]
@@ -1341,20 +1717,80 @@ mod tests {
             quiet.apply_move(q, r).unwrap();
         }
         let cases: Vec<Case> = vec![
-            (static_board(&imm, Player::One, 2), cfg(40, None), 12, 50_000, "immediate-win"),
-            (static_board(&two, Player::One, 2), cfg(40, None), 12, 200_000, "2-stone-win"),
+            (
+                static_board(&imm, Player::One, 2),
+                cfg(40, None),
+                12,
+                50_000,
+                "immediate-win",
+            ),
+            (
+                static_board(&two, Player::One, 2),
+                cfg(40, None),
+                12,
+                200_000,
+                "2-stone-win",
+            ),
             (quiet, cfg(40, None), 20, 20_000, "quiet-not-loss"),
             (build_fork(), cfg(40, None), 30, 300_000, "fork-loss-d30"),
             (build_fork(), cfg(40, None), 12, 300_000, "fork-loss-d12"),
-            (compact_double_threat(0, 0, false), cfg(40, None), 12, 200_000, "compact-loss-a"),
-            (compact_double_threat(-3, 4, false), cfg(40, None), 12, 200_000, "compact-loss-b"),
-            (compact_double_threat(2, -2, true), cfg(40, None), 12, 200_000, "compact-loss-c"),
-            (compact_double_open_four(0, 0, false), cfg(40, None), 12, 80_000, "open4-threatonly-unknown"),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(40, None),
+                12,
+                200_000,
+                "compact-loss-a",
+            ),
+            (
+                compact_double_threat(-3, 4, false),
+                cfg(40, None),
+                12,
+                200_000,
+                "compact-loss-b",
+            ),
+            (
+                compact_double_threat(2, -2, true),
+                cfg(40, None),
+                12,
+                200_000,
+                "compact-loss-c",
+            ),
+            (
+                compact_double_open_four(0, 0, false),
+                cfg(40, None),
+                12,
+                80_000,
+                "open4-threatonly-unknown",
+            ),
             // verify (neighbor_dist) + truncating cand_cap surfaces:
-            (fork_with_p1_counter(), cfg(1, None), 20, 200_000, "trunc-r3-unknown"),
-            (fork_with_p1_counter(), cfg(1, Some(2)), 20, 400_000, "trunc-verify-win"),
-            (compact_double_threat(0, 0, false), cfg(1, Some(2)), 12, 1_000_000, "trunc-verify-loss"),
-            (compact_double_threat(0, 0, false), cfg(1, None), 12, 400_000, "trunc-noverify-unknown"),
+            (
+                fork_with_p1_counter(),
+                cfg(1, None),
+                20,
+                200_000,
+                "trunc-r3-unknown",
+            ),
+            (
+                fork_with_p1_counter(),
+                cfg(1, Some(2)),
+                20,
+                400_000,
+                "trunc-verify-win",
+            ),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(1, Some(2)),
+                12,
+                1_000_000,
+                "trunc-verify-loss",
+            ),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(1, None),
+                12,
+                400_000,
+                "trunc-noverify-unknown",
+            ),
         ];
         for (b, c, depth, budget, name) in cases {
             let (scored, _, _) = run_scored(&b, &c, depth, budget);
@@ -1370,12 +1806,19 @@ mod tests {
     fn scored_win_pv_is_realizable() {
         // α-β must not corrupt the winning PV (the A1 override plays line[0..2]).
         // The 2-stone forcing win's line must replay to a real 6-in-a-row.
-        let cfg = TacticalConfig { cand_cap: 40, window_half: None, neighbor_dist: None };
+        let cfg = TacticalConfig {
+            cand_cap: 40,
+            window_half: None,
+            neighbor_dist: None,
+        };
         let two: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let b = static_board(&two, Player::One, 2);
         let (o, _, line) = run_scored(&b, &cfg, 12, 200_000);
         assert_eq!(o, WIN, "must be WIN");
-        assert!(line.len() >= 2, "2-stone win carries both stones, got {line:?}");
+        assert!(
+            line.len() >= 2,
+            "2-stone win carries both stones, got {line:?}"
+        );
         let mut c = b.clone();
         c.apply_move(line[0].0, line[0].1).unwrap();
         c.apply_move(line[1].0, line[1].1).unwrap();
@@ -1394,9 +1837,21 @@ mod tests {
         let cfgs = [(1usize, None), (2, None), (40, None)];
         let (mut win, mut loss, mut unknown, mut checked, mut exact_agree) = (0, 0, 0, 0, 0);
 
-        let check = |b: &Board, cand: usize, nd: Option<i32>, depth: i32, budget: u64,
-                     win: &mut i32, loss: &mut i32, unknown: &mut i32, checked: &mut i32, exact: &mut i32| {
-            let cfg = TacticalConfig { cand_cap: cand, window_half: None, neighbor_dist: nd };
+        let check = |b: &Board,
+                     cand: usize,
+                     nd: Option<i32>,
+                     depth: i32,
+                     budget: u64,
+                     win: &mut i32,
+                     loss: &mut i32,
+                     unknown: &mut i32,
+                     checked: &mut i32,
+                     exact: &mut i32| {
+            let cfg = TacticalConfig {
+                cand_cap: cand,
+                window_half: None,
+                neighbor_dist: nd,
+            };
             let (scored, _, _) = run_scored(b, &cfg, depth, budget);
             let reference = run_3valued(b, &cfg, depth, budget);
             assert!(
@@ -1404,7 +1859,10 @@ mod tests {
                 "FUZZ CONTRADICTION: scored {scored:?} vs oracle {reference:?} (cand={cand}, nd={nd:?})"
             );
             if scored != Outcome::Unknown && reference != Outcome::Unknown {
-                assert_eq!(scored, reference, "FUZZ INVARIANCE: both conclusive but unequal (cand={cand}, nd={nd:?})");
+                assert_eq!(
+                    scored, reference,
+                    "FUZZ INVARIANCE: both conclusive but unequal (cand={cand}, nd={nd:?})"
+                );
                 *exact += 1;
             }
             // Brute-confirm any scored verdict; radius-2 boards keep it cheap.
@@ -1412,9 +1870,15 @@ mod tests {
                 let mut bb = Budget::new(200_000);
                 let brute = brute_solve(&mut b.clone(), 12, &mut bb);
                 if scored == LOSS {
-                    assert_ne!(brute, WIN, "FUZZ FALSE LOSS: scored LOSS but brute escapes to WIN");
+                    assert_ne!(
+                        brute, WIN,
+                        "FUZZ FALSE LOSS: scored LOSS but brute escapes to WIN"
+                    );
                 } else {
-                    assert_ne!(brute, LOSS, "FUZZ FALSE WIN: scored WIN but brute proves LOSS");
+                    assert_ne!(
+                        brute, LOSS,
+                        "FUZZ FALSE WIN: scored WIN but brute proves LOSS"
+                    );
                 }
             }
             match scored {
@@ -1457,7 +1921,18 @@ mod tests {
             }
             samples += 1;
             let (cand, nd) = cfgs[rng.range(0, cfgs.len() - 1)];
-            check(&bd, cand, nd, 6, 40_000, &mut win, &mut loss, &mut unknown, &mut checked, &mut exact_agree);
+            check(
+                &bd,
+                cand,
+                nd,
+                6,
+                40_000,
+                &mut win,
+                &mut loss,
+                &mut unknown,
+                &mut checked,
+                &mut exact_agree,
+            );
         }
 
         // (B) constructed double-threats guaranteeing forced-LOSS verdicts under truncation.
@@ -1470,7 +1945,18 @@ mod tests {
                         compact_double_open_four(off_q, off_r, vert)
                     };
                     let (cand, nd) = cfgs[rng.range(0, cfgs.len() - 1)];
-                    check(&b, cand, nd, 8, 100_000, &mut win, &mut loss, &mut unknown, &mut checked, &mut exact_agree);
+                    check(
+                        &b,
+                        cand,
+                        nd,
+                        8,
+                        100_000,
+                        &mut win,
+                        &mut loss,
+                        &mut unknown,
+                        &mut checked,
+                        &mut exact_agree,
+                    );
                 }
             }
         }
@@ -1478,18 +1964,31 @@ mod tests {
         // (C) constructed WIN positions over a grid: an open FIVE proves WIN instantly for ANY
         //     cand_cap, and radius-2 stops the rare truncation path expanding a wide tree.
         for off in -4..=3i32 {
-            let stones: Vec<((i32, i32), Cell)> =
-                (0..5).map(|q| ((q, off), Cell::P1)).collect();
+            let stones: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, off), Cell::P1)).collect();
             let mut b = static_board(&stones, Player::One, 2);
             b.set_legal_move_radius(2);
             let (cand, nd) = cfgs[rng.range(0, cfgs.len() - 1)];
-            check(&b, cand, nd, 8, 80_000, &mut win, &mut loss, &mut unknown, &mut checked, &mut exact_agree);
+            check(
+                &b,
+                cand,
+                nd,
+                8,
+                80_000,
+                &mut win,
+                &mut loss,
+                &mut unknown,
+                &mut checked,
+                &mut exact_agree,
+            );
         }
 
         assert!(checked > 40, "fuzz too small ({checked} positions)");
         assert!(win > 0, "fuzz vacuous: no WIN verdict exercised");
         assert!(loss > 0, "fuzz vacuous: no LOSS verdict exercised");
-        assert!(unknown > 0, "fuzz should include UNKNOWN positions (mate-bound corners)");
+        assert!(
+            unknown > 0,
+            "fuzz should include UNKNOWN positions (mate-bound corners)"
+        );
         eprintln!(
             "verdict-invariance fuzz: {checked} positions ({win} WIN, {loss} LOSS, {unknown} UNKNOWN), \
              {exact_agree} both-conclusive agreements, 0 contradictions, 0 brute-refuted verdicts"
@@ -1503,8 +2002,14 @@ mod tests {
         let b = compact_double_threat(0, 0, false); // forced P1 LOSS in a few plies
         let shallow = s.prove(&b, 6, 400_000);
         let deep = s.prove(&b, 40, 400_000);
-        assert_eq!(shallow.result, LOSS, "ID must prove the short forced LOSS at a small cap");
-        assert_eq!(deep.result, LOSS, "ID verdict idempotent under a deeper cap");
+        assert_eq!(
+            shallow.result, LOSS,
+            "ID must prove the short forced LOSS at a small cap"
+        );
+        assert_eq!(
+            deep.result, LOSS,
+            "ID verdict idempotent under a deeper cap"
+        );
         assert!(
             deep.nodes < 400_000 && !deep.budget_exhausted,
             "mate-early-stop must prove the shallow mate well within budget (nodes={}, exhausted={})",
@@ -1521,11 +2026,19 @@ mod tests {
         let b = static_board(&two, Player::One, 2);
         let r = s.prove(&b, 20, 200_000);
         assert_eq!(r.result, WIN, "ID must prove the 2-stone forcing WIN");
-        assert!(r.line.len() >= 2, "WIN carries both stones, got {:?}", r.line);
+        assert!(
+            r.line.len() >= 2,
+            "WIN carries both stones, got {:?}",
+            r.line
+        );
         let mut c = b.clone();
         c.apply_move(r.line[0].0, r.line[0].1).unwrap();
         c.apply_move(r.line[1].0, r.line[1].1).unwrap();
-        assert!(c.check_win(), "ID WIN PV must realize a real 6, got {:?}", r.line);
+        assert!(
+            c.check_win(),
+            "ID WIN PV must realize a real 6, got {:?}",
+            r.line
+        );
     }
 
     /// Drive the scored core with an OPTIONAL `PolicyPrior` wired into ordering.
@@ -1543,7 +2056,17 @@ mod tests {
             Some(p) => super::OrderingState::with_policy(p),
             None => super::OrderingState::new(),
         };
-        let s = super::solve(&mut board, depth, 0, NEG_INF, POS_INF, &mut bud, cfg, &mut tt, &mut ordering);
+        let s = super::solve(
+            &mut board,
+            depth,
+            0,
+            NEG_INF,
+            POS_INF,
+            &mut bud,
+            cfg,
+            &mut tt,
+            &mut ordering,
+        );
         (outcome_of(s.score), s.line)
     }
 
@@ -1562,7 +2085,11 @@ mod tests {
                 ((z & 0xFFFF) as f32) / 32768.0 - 1.0
             }
         }
-        let cfg = |cand_cap, neighbor_dist| TacticalConfig { cand_cap, window_half: None, neighbor_dist };
+        let cfg = |cand_cap, neighbor_dist| TacticalConfig {
+            cand_cap,
+            window_half: None,
+            neighbor_dist,
+        };
         let imm: Vec<((i32, i32), Cell)> = (0..5).map(|q| ((q, 0), Cell::P1)).collect();
         let two: Vec<((i32, i32), Cell)> = (0..4).map(|q| ((q, 0), Cell::P1)).collect();
         let mut quiet = Board::new();
@@ -1571,30 +2098,78 @@ mod tests {
         }
         type Case = (Board, TacticalConfig, i32, u64, &'static str);
         let cases: Vec<Case> = vec![
-            (static_board(&imm, Player::One, 2), cfg(40, None), 12, 50_000, "immediate-win"),
-            (static_board(&two, Player::One, 2), cfg(40, None), 12, 200_000, "2-stone-win"),
+            (
+                static_board(&imm, Player::One, 2),
+                cfg(40, None),
+                12,
+                50_000,
+                "immediate-win",
+            ),
+            (
+                static_board(&two, Player::One, 2),
+                cfg(40, None),
+                12,
+                200_000,
+                "2-stone-win",
+            ),
             (quiet, cfg(40, None), 12, 40_000, "quiet-unknown"),
             (build_fork(), cfg(40, None), 12, 300_000, "fork-loss"),
-            (compact_double_threat(0, 0, false), cfg(40, None), 12, 200_000, "compact-loss"),
-            (compact_double_threat(-3, 4, false), cfg(40, None), 12, 200_000, "compact-loss-b"),
-            (fork_with_p1_counter(), cfg(1, Some(2)), 20, 400_000, "trunc-verify-win"),
-            (compact_double_threat(0, 0, false), cfg(1, Some(2)), 12, 1_000_000, "trunc-verify-loss"),
-            (compact_double_threat(0, 0, false), cfg(1, None), 12, 400_000, "trunc-noverify-unknown"),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(40, None),
+                12,
+                200_000,
+                "compact-loss",
+            ),
+            (
+                compact_double_threat(-3, 4, false),
+                cfg(40, None),
+                12,
+                200_000,
+                "compact-loss-b",
+            ),
+            (
+                fork_with_p1_counter(),
+                cfg(1, Some(2)),
+                20,
+                400_000,
+                "trunc-verify-win",
+            ),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(1, Some(2)),
+                12,
+                1_000_000,
+                "trunc-verify-loss",
+            ),
+            (
+                compact_double_threat(0, 0, false),
+                cfg(1, None),
+                12,
+                400_000,
+                "trunc-noverify-unknown",
+            ),
         ];
         for (b, c, depth, budget, name) in cases {
             let (base, base_line) = run_scored_pol(&b, &c, depth, budget, None);
-            let (perm, perm_line) = run_scored_pol(&b, &c, depth, budget, Some(Box::new(Adversarial)));
-            assert_eq!(base, perm, "net-policy ordering CHANGED the verdict ({name}): {base:?} -> {perm:?}");
+            let (perm, perm_line) =
+                run_scored_pol(&b, &c, depth, budget, Some(Box::new(Adversarial)));
+            assert_eq!(
+                base, perm,
+                "net-policy ordering CHANGED the verdict ({name}): {base:?} -> {perm:?}"
+            );
             // A WIN PV must still realize a real win under the reordered search.
             if perm == WIN {
                 let mut bd = b.clone();
                 for &(q, r) in perm_line.iter().take(2) {
                     bd.apply_move(q, r).unwrap();
                 }
-                assert!(bd.check_win(), "policy-reordered WIN PV must realize a real 6 ({name})");
+                assert!(
+                    bd.check_win(),
+                    "policy-reordered WIN PV must realize a real 6 ({name})"
+                );
             }
             let _ = &base_line;
         }
     }
 }
-

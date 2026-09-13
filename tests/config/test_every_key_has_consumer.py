@@ -208,6 +208,10 @@ CONSUMER_REGISTRY = {
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",
     "selfplay.c_visit": "SelfPlayHParams.from_config -> runner c_visit",
     "selfplay.c_scale": "SelfPlayHParams.from_config -> runner c_scale",
+    "selfplay.q_rescale": (
+        "SelfPlayHParams.from_config -> runner q_rescale -> QSigma.rescale at the workers' "
+        "configure_search; and RoundSpec.q_rescale -> DeployHeadPlayer -> the same setter"
+    ),
     "search.kind": (
         "mantis.config.resolve.resolve_search_kind -> SelfPlayHParams.from_config -> the "
         "bridge search_kind setter -> SearchFlags.search_kind -> MCTSTree::configure_search; "
