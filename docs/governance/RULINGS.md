@@ -147,7 +147,7 @@ Closes: **CARD-EVAL-CADENCE** (ruled by (d): the rows are proposed, armed at run
 operator's forward). **CARD-ALPHA-TARGET-FORM** (ruled by (e): excluded from the policy loss; the
 three-row reconstruction stays OWED under R349(c), now a line in the owed section). **CARD-SEALBOT-
 HORIZON** folds into STRENGTH-FRONTIER-1's record, which (c) makes the answer's home.
-Status: standing.
+Status: standing — (a)'s control is CORRECTED by ANNOTATION under R350's foot (fresh value head, a deleted head, two of three readings against the step-0 anchor); the mechanism stands.
 
 ---
 
@@ -3140,6 +3140,24 @@ Fact: the block becomes a 25 001-STEP MINIMUM, extendable by resume. Ground is a
 of its own armed aborts could fire, which is LAW-07 in the time dimension. The first-third screen
 moves with it, 4 h -> ~8 334 steps, carrying ~8 external points against the >= 5 bar.
 Ordered by: R344 §0.5, 2026-09-08
+
+### ANNOTATION under R350's foot — R350(a)'s CONTROL IS NOT WHAT IT STATES
+Corrects: R350(a)'s description of the control only ("same BC net, ALL heads … read 53 % at
+step 0 and 79 % at step 2,004"); (a)'s mechanism and (c)'s cells are untouched
+Fact: read from the box and the archive before the frontier ran, as §2 of the packet ordered.
+(1) HEAD SET: every burst of that era booted `bc_warmstart_loaded … loaded_keys=46` — trunk +
+policy, value head FRESH (`/workspace/r342/burst/burst.log`, `/workspace/r342/g4/g4.log`,
+2026-09-07; the R340 run 2's own log died with the box, and its tree `d3ba75e` carries the same
+seam). (2) INSTRUMENT: the deploy head until `6ee52ca7` (2026-09-09) was a PUCT tree with a
+transformed-Q root pick — a third algorithm that commit deleted; neither of HEAD's heads is it.
+(3) DENOMINATORS: 53.1 % = 17/32 is the sitting-10 step-0 `sealbot_d5` RUNG (archive v3.47:
+"INDISTINGUISHABLE at that width"); 72.5 % = 58/80 and 78.8 % = 63/80 are 80-game fractions,
+the GATE SCREEN's size — the candidate against its own step-0 ANCHOR, not the bot. The R342 g4
+round's rung at step 10 (same construction, old head) read 7/32 = 22 %. Nothing on the record
+put the BC net at 79 % against `sealbot_d5`; the frontier's 288-game cells
+(`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`) are the control now.
+Ordered by: R350 §2 ("if it too copied only trunk + policy, (a)'s control is weaker and the
+packet says so"), appended 2026-09-13 by the landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure

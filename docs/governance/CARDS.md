@@ -97,6 +97,23 @@ Both were found by running the gate set rather than by reading it, and both are 
   once (a resumed run re-kicks rounds from its restored counter; the round's result is not owed)
   and closes the recorder before anything that can wait; and the supervisor's grace must exceed
   the child's worst orderly teardown, stated as a relation at the mint rather than two numbers.
+- **CARD-DRAIN-POLLER-RACE — `drain_pending` can return `None` while the poller finalises the
+  same round.** `EvalPipeline._finalize_round`'s once-only guard returns `inflight["_result"]`
+  to the second caller, which is `None` while the first (the poller thread) is still between
+  latching `_finalized` and storing the result — so a `close_out` drain that loses the race by a
+  few milliseconds proceeds with no result routed, and the poller's mailbox copy is never read
+  after the run stops (a promotion decided in the run's last round could go unapplied). Seen as
+  a 1-in-~5 flake of `tests/eval/test_eval_broken.py::test_killed_worker_yields_eval_broken_and_clean_drain`
+  on 2026-09-13 (the fake process is flipped dead just before the drain). Fix shape: the second
+  finaliser WAITS (bounded by the kill grace) for `_result` rather than returning `None`.
+- **CARD-SELFPLAY-SEARCH-STATS — the self-play game record carries no per-position search
+  stats.** R344 ordered "per-position search stats on every eval-channel game and a 1-in-N
+  sample of self-play"; the eval channel writes them, the self-play recorder
+  (`mantis.monitor.game_recorder.GameRecorder.maybe_record`) writes the move list and result
+  only, so INVESTIGATION-1's "KL-from-prior reconstructed from the shards" had to be read from
+  the RINGS instead (`INVESTIGATION1_TROUGH_2026-09-13.md`). The sample (rate a minted key with
+  a live consumer, the root's prior + visits + completed target per position) is owed before
+  run7 if the trough is to be read per position rather than per ring.
 - **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree.** R350(a) states
   the burst copied ALL heads; `run6-mint` at `d3ba75e` carries the same trunk+policy seam run6
   booted with (the burst's log died with the box, archive v3.54). The frontier measures the head
