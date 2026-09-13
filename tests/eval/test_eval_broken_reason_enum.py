@@ -35,10 +35,11 @@ _CENSUSED_REASONS = {
     "result_invalid",
     "ladder_persist_failed",
     "round_completion_error",
+    "abandoned",
 }
 
 
-def test_the_enum_declares_exactly_the_seven_censused_reasons() -> None:
+def test_the_enum_declares_exactly_the_censused_reasons() -> None:
     """Exact set equality in BOTH directions, member count derived from the census itself.
 
     An extra member is a reason with no producer; a missing one is a live failure route whose

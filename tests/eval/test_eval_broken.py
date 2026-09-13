@@ -244,6 +244,27 @@ def test_killed_worker_yields_eval_broken_and_clean_drain(fake_mp, tmp_path) -> 
         pipeline.stop()
 
 
+def test_a_resumable_stop_abandons_the_live_round_at_once_without_the_drain_budget(fake_mp, tmp_path) -> None:
+    """CARD-STOP-DRAIN-VS-GRACE: a LIVE round is terminated at once, finalised as killed, nothing in flight."""
+    sink = _SpySink()
+    clock = FakeClock(0.0)
+    cfg = _eval_cfg(round_timeout_sec=3600.0, worker_kill_grace_sec=0.1)
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, eval_cfg=cfg, sink=sink, clock=clock), leaf_batch_size=1)
+    try:
+        ack = pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
+        assert ack["kicked"] is True
+        proc = fake_mp.last_process
+        assert proc is not None and proc.alive is True
+
+        result = _bounded(lambda: pipeline.abandon_pending(), timeout=5.0)
+        assert result is not None and result["eval_broken_reason"] == "abandoned"
+        assert proc.terminated is True
+        assert sink.named("eval_round_abandoned")[-1]["reason"] == "resumable_stop"
+        assert pipeline.abandon_pending() is None, "nothing may remain in flight after an abandon"
+    finally:
+        pipeline.stop()
+
+
 def test_hung_worker_join_timeout_escalates_terminate_then_kill(fake_mp, tmp_path) -> None:
     sink = _SpySink()
     clock = FakeClock(0.0)

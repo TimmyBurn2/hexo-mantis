@@ -15,7 +15,7 @@ from mantis.bots.protocol import RungUnresolvable
 class EvalBrokenReason(StrEnum):
     """WHY an eval round broke — the ONE authority (WP12-R Phase O, R152).
 
-    Seven members, one per censused failure route in `mantis.eval.pipeline`, with wire
+    Eight members, one per censused failure route in `mantis.eval.pipeline`, with wire
     spellings BYTE-IDENTICAL to the bare literals this taxonomy replaces: the change is a
     SHAPE change (a typed value that only this enum can author) and never a VALUE change,
     so every event-stream reason already in the ONE channel keeps its spelling.
@@ -43,6 +43,9 @@ class EvalBrokenReason(StrEnum):
     RESULT_INVALID = "result_invalid"
     LADDER_PERSIST_FAILED = "ladder_persist_failed"
     ROUND_COMPLETION_ERROR = "round_completion_error"
+    #: A RESUMABLE stop terminated the round on purpose (`abandon_pending`); an operator stop,
+    #: never a worker fault, so a consumer counting failures can leave it out by name.
+    ABANDONED = "abandoned"
 
 
 class EvalBrokenError(RuntimeError):

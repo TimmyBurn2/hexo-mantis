@@ -76,3 +76,36 @@ def test_the_skip_never_overrides_terminal_eval_disabled() -> None:
     coord.config = SimpleNamespace(terminal_eval_enabled=False)
     assert drain.run_terminal_eval(coord, resumable_stop=False) is None
     assert p.evaluations == 0
+
+
+class _DrainingPipeline(_Pipeline):
+    """Records WHICH drain `close_out` took (CARD-STOP-DRAIN-VS-GRACE)."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.drained = 0
+        self.abandoned = 0
+
+    def drain_pending(self) -> None:
+        self.drained += 1
+        return None
+
+    def abandon_pending(self) -> None:
+        self.abandoned += 1
+        return None
+
+
+def test_a_resumable_stop_abandons_the_in_flight_round_and_still_stops_the_pool() -> None:
+    """abandon -> `on_drained` (pool.stop) -> no battery. MUTATION THAT REDS IT: `drain_pending` here."""
+    p = _DrainingPipeline()
+    order: list[str] = []
+    p.abandon_pending = lambda: order.append("abandon")  # type: ignore[method-assign]
+    drain.close_out(_coord(p), on_drained=lambda: order.append("pool.stop"), resumable_stop=True)
+    assert order == ["abandon", "pool.stop"]
+    assert p.drained == 0 and p.evaluations == 0
+
+
+def test_a_non_resumable_stop_keeps_the_budgeted_drain() -> None:
+    p = _DrainingPipeline()
+    drain.close_out(_coord(p), on_drained=None, resumable_stop=False)
+    assert p.drained == 1 and p.abandoned == 0 and p.evaluations == 1

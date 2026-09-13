@@ -53,6 +53,7 @@ _ROUTE_REASON = {
     "result_invalid": "result_invalid",
     "ladder_persist_failed": "ladder_persist_failed",
     "round_completion_error": "round_completion_error",
+    "abandoned": "abandoned",
 }
 _ROUTE_PHASE = {
     "join_timeout": "drain",
@@ -62,6 +63,7 @@ _ROUTE_PHASE = {
     "result_invalid": "worker_exit",
     "ladder_persist_failed": "ladder_persist",
     "round_completion_error": "round_completion",
+    "abandoned": "abandon",
 }
 _ROUTES = tuple(_ROUTE_REASON)
 
@@ -254,6 +256,8 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
                 raise LadderStateError(f"simulated persistence fault writing {path}")
 
             monkeypatch.setattr(LadderState, "save", _persist_boom)
+        elif route == "abandoned":
+            proc.alive = True                       # a live round a resumable stop abandons
         else:  # round_completion_error
             proc.alive, proc.exitcode = False, 0
 
@@ -262,7 +266,7 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
 
             pipeline._read_worker_result = _completion_boom  # noqa: SLF001
 
-        result = pipeline.drain_pending()
+        result = pipeline.abandon_pending() if route == "abandoned" else pipeline.drain_pending()
         assert isinstance(result, dict), (
             f"premise: route {route!r} must route ONE completed round mapping; got {result!r}"
         )
@@ -291,7 +295,7 @@ def test_each_route_yields_its_own_typed_reason(route, tmp_path, monkeypatch) ->
     )
 
 
-def test_the_seven_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) -> None:
+def test_the_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) -> None:
     """O-03. The "distinguishable from each other" leg, taken in the EVENT STREAM. The rc
     taxonomy is many-to-one by decision — all seven map to 48 — so if the emitted `reason`
     values ever collide, nothing separates a killed worker from a garbage result. Reads the
@@ -307,8 +311,8 @@ def test_the_seven_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) 
     assert collisions == [], (
         f"routes sharing one emitted reason: {collisions} (full map: {emitted})"
     )
-    assert len(set(values)) == len(_ROUTES) == 7, (
-        f"7 routes must emit 7 distinct reasons; got {sorted(set(values))}"
+    assert len(set(values)) == len(_ROUTES), (
+        f"{len(_ROUTES)} routes must emit {len(_ROUTES)} distinct reasons; got {sorted(set(values))}"
     )
 
 

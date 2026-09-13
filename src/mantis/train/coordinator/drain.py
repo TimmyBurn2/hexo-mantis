@@ -74,18 +74,22 @@ def _unroutable(coord: Any, result: Any, reason: str) -> None:
     })
 
 
-def flush_pending_eval(coord: Any) -> Any:
-    """Drain a possibly-promoted final eval before teardown; no-op when no eval pipeline is
-    injected."""
+def flush_pending_eval(coord: Any, *, resumable_stop: bool = False) -> Any:
+    """Drain a possibly-promoted final eval before teardown (no-op with no pipeline); a RESUMABLE
+    stop ABANDONS the in-flight round instead, since a wait past the supervisor's grace is a
+    SIGKILL that skips `pool.stop` and the recorder's close."""
     pipeline = getattr(coord, "eval_pipeline", None)
     if pipeline is None:
         return None
-    drain = getattr(pipeline, "drain_pending", None)
+    drain = (getattr(pipeline, "abandon_pending", None) if resumable_stop
+             else getattr(pipeline, "drain_pending", None))
     if drain is None:
         return None
-    _LOG.info("flush_pending_eval step=%s", getattr(coord, "_train_step", None))
+    _LOG.info("flush_pending_eval step=%s resumable_stop=%s",
+              getattr(coord, "_train_step", None), resumable_stop)
     emit_via(getattr(coord, "_sink", None),
-             {"event": "flush_pending_eval", "step": getattr(coord, "_train_step", None)})
+             {"event": "flush_pending_eval", "step": getattr(coord, "_train_step", None),
+              "resumable_stop": bool(resumable_stop)})
     return _route_eval_result(coord, drain())
 
 
@@ -183,7 +187,7 @@ def close_out(
                 "false-fire 42 on every clean finish with a long terminal eval"
             )
         disarm()
-    flush_pending_eval(coord)
+    flush_pending_eval(coord, resumable_stop=resumable_stop)
     if on_drained is not None:
         on_drained()
     run_terminal_eval(coord, resumable_stop=resumable_stop)

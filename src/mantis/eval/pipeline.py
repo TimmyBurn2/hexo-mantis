@@ -632,7 +632,7 @@ class EvalPipeline:
             game_record=GameRecordTarget(record_dir=str(self._game_record_dir),
                                         run_id=self._run_id),
             # The two early-strength postures, resolved through their ONE read path and
-            # carried to the child. Both are `None` for every committed config.
+            # carried to the child (`run6.yaml` arms the floor; the ply-cap posture is `null`).
             ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
             strength_floor=resolve_strength_floor(cfg),
             # Resolved once in the parent: the child has no `RunConfig` and builds its graph
@@ -715,6 +715,24 @@ class EvalPipeline:
                 return self._finalize_round(inflight, escalated_reason=reason)
         return self._finalize_round(inflight)
 
+    def abandon_pending(self) -> dict | list | None:
+        """A RESUMABLE stop's drain: terminate the in-flight round NOW (bounded by twice the kill
+        grace) and finalise it as ABANDONED (CARD-STOP-DRAIN-VS-GRACE)."""
+        with self._lock:
+            inflight = self._inflight
+        if inflight is None:
+            return None
+        proc = inflight["proc"]
+        if not proc.is_alive():
+            return self._finalize_round(inflight)
+        _emit(self._sink, {"event": "eval_round_abandoned", "round_id": inflight["round_id"],
+                           "step": inflight["step"], "reason": "resumable_stop"})
+        drain_or_kill(proc, budget_sec=0.0,
+                      worker_kill_grace_sec=self._eval_cfg.worker_kill_grace_sec,
+                      clock=self._clock)
+        # ABANDONED whatever the child did with its signal: a stop's round is not a worker fault.
+        return self._finalize_round(inflight, escalated_reason=EvalBrokenReason.ABANDONED)
+
     def _finalize_round(
         self, inflight: dict[str, Any], *, escalated_reason: EvalBrokenReason | None = None,
     ) -> dict[str, Any] | None:
@@ -758,6 +776,7 @@ class EvalPipeline:
                 # `phase` is a FUNCTION of the reason, so it stays on the payload: a constant
                 # "drain" would send a supervisor triaging a round timeout to the drain budget.
                 phase = ("round_timeout" if escalated_reason is EvalBrokenReason.ROUND_TIMEOUT
+                         else "abandon" if escalated_reason is EvalBrokenReason.ABANDONED
                          else "drain")
                 result = self._broken_result(inflight, reason=escalated_reason, exit_code=exit_code,
                                              wall_sec=wall_sec, phase=phase)
