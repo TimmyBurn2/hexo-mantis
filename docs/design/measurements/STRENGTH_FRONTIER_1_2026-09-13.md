@@ -47,18 +47,18 @@ taken with a head that no longer exists; §D). Under Gumbel the two nets are 0.1
 ## B. The grid — frozen checkpoints × sims × kind vs `sealbot_d5`
 
 Filled as cells land (WR [95 % CI over pairs]; W–L–D, s/game and median plies in the cell's
-`cell.json` on the box). Blank = still running at the last read (11:15 UTC).
+`cell.json` on the box). Blank = still running at the last read (12:44 UTC).
 
 | net | kind | 128 | 256 | 512 |
 |---|---|---|---|---|
-| ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | | |
-| ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | | |
+| ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | **0.542** [0.486, 0.594] (156–132–0, 33 plies) | |
+| ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | 0.125 [0.090, 0.163] (36–252–0, 24 plies) | |
 | ck13k | puct | **0.464** [0.408, 0.519] (133–154–1, 60 plies) | | |
-| ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | | |
+| ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | 0.014 [0.003, 0.028] (4–284–0, 25 plies) | |
 | ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | | |
-| ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | **0.111** [0.080, 0.146] (32–256–0, 25 plies) | |
+| ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | **0.111** [0.080, 0.146] (32–256–0, 25 plies) | 0.066 [0.038, 0.097] (19–269–0, 25 plies) |
 | ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | | |
-| ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | | |
+| ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | **0.056** [0.031, 0.083] (16–272–0, 23 plies) | |
 | ck35k | gumbel | 0.149 [0.108, 0.191] (43–245–0, 27 plies) | — | — |
 
 At 128 sims, read so far: under PUCT the block's nets are AT OR ABOVE the BC net (`bc_full`
@@ -77,7 +77,13 @@ with training (33 → 49): the net holds longer games against the depth-5 reader
 | cell | WR (25k as candidate) | 95 % CI | W–L–D | s/game |
 |---|---|---|---|---|
 | ck25k vs `bc_full`, Gumbel-160/m16 | **0.438** | [0.389, 0.486] | 126–162–0 | 14.4 (median 19 plies) |
-| ck25k vs `bc_full`, PUCT-150 | | | | |
+| ck25k vs `bc_full`, PUCT-150 | **0.672** | [0.622, 0.721] | 187–88–13 | 37.0 (median 56 plies) |
+
+The two heads INVERT the verdict on the same pair of nets: at PUCT-150 the block's 25k net beats
+its own prior 187–88 (13 draws — the only draws in the whole frontier, in 56-ply games between two
+nets that both hold the position); at Gumbel-160/m16, the run's promotion instrument, the same
+25k net loses to the same prior. Every promotion decision run6 took was read through the head
+that gets this pair backwards.
 
 ## D. What the R340 control was, read from the box
 
@@ -109,6 +115,35 @@ and 7/32 once against `sealbot_d5`; nothing on the record put that net at 79 % a
 Section A measures the same net under HEAD's heads at 288 games; the block's 16 % → 2.5 % → 16 %
 was never a fall from 53 %.
 
-## E. Findings
+## E. Findings (the cells still running at 12:44 UTC can move the sims row under PUCT, nothing else)
+
+1. **KIND — the Gumbel deploy head is the failure R350(c) named, and it is the run's own
+   instrument.** On the same net it reads 24 pp below PUCT at equal sims (BC net: 0.413 vs
+   0.177); on the block's nets 0.03–0.23 against PUCT's 0.43–0.57; it gets the 25k-vs-prior pair
+   BACKWARDS (0.438 vs 0.672); and it reads WORSE with more sims on every net (18k: 0.233 → 0.111
+   → 0.066 at 128 → 256 → 512; 3k, 13k, 25k likewise at 256). Sequential Halving's completed-Q
+   root pick leans on the value head's calibration in a way the most-visited-child pick does
+   not, and the value head this block trained is well enough calibrated for PUCT and not for it.
+   Run6's screens, gate rounds and promotions were all taken through this head. run7 deploys
+   and evaluates under PUCT; whether it also SELF-PLAYS under PUCT is the operator's call — the
+   self-play target under Gumbel-320 was an argmax on Q from the first ring (the trough record)
+   and the block still produced a net PUCT reads 15 pp above its warm start.
+2. **HEAD SET — the seam, not the net.** The BC checkpoint's own value head is worth 0.413 vs
+   0.038 at PUCT-150; run6 booted with the 0.038 net (CARD-WARMSTART-CONTROL closes on this
+   pair). R350(b)(i)'s `reinit: []` restores it for run7 with no BC re-run required.
+3. **NET — not weak.** Under PUCT-128 the block's nets read 0.431 (3k) → 0.464 (13k) → 0.568
+   (18k) → 0.497 (25k) against the prior's 0.413, and the 25k net beats the prior 0.672 head to
+   head. The "trough" was the instrument's; the net improved through it. (35k under Gumbel-128
+   reads 0.149 vs 25k's 0.167 — the 10k steps past the block bought nothing that head can see;
+   no PUCT cell was run on 35k.)
+4. **SIMS — a lever under PUCT, a liability under Gumbel.** 3k at PUCT-256 reads 0.542 against
+   0.431 at 128 (CIs disjoint); the 13k/18k/25k PUCT-256 and all PUCT-512 cells complete this row.
+   R350(f)'s rule ("if 512 sims moves the reading materially, depth is a lever and run7's arms
+   rise") is answered YES under the head run7 will deploy under, NO under the head run6 used.
+
+Falsified on this record: F-48 (the block's net is weak), F-49 (the R340 control). For run7's
+mint the record hands the operator: `search.kind` for deploy/eval = `puct` (the `deploy_sims`
+and `sealbot_model_sims` values from the completed sims row), the seam with `reinit: []`, and the
+self-play kind as an open decision with both arms' evidence stated above.
 
 ## Sources
