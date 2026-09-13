@@ -47,18 +47,18 @@ taken with a head that no longer exists; §D). Under Gumbel the two nets are 0.1
 ## B. The grid — frozen checkpoints × sims × kind vs `sealbot_d5`
 
 Filled as cells land (WR [95 % CI over pairs]; W–L–D, s/game and median plies in the cell's
-`cell.json` on the box). Blank = still running at the last read (12:44 UTC).
+`cell.json` on the box). Blank = still running at the last read (13:14 UTC).
 
 | net | kind | 128 | 256 | 512 |
 |---|---|---|---|---|
 | ck3k | puct | 0.431 [0.372, 0.483] (124–164–0, 33 plies) | **0.542** [0.486, 0.594] (156–132–0, 33 plies) | |
-| ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | 0.125 [0.090, 0.163] (36–252–0, 24 plies) | |
+| ck3k | gumbel | 0.205 [0.160, 0.250] (59–229–0, 25 plies) | 0.125 [0.090, 0.163] (36–252–0, 24 plies) | 0.062 [0.035, 0.090] (18–270–0, 21 plies) |
 | ck13k | puct | **0.464** [0.408, 0.519] (133–154–1, 60 plies) | | |
-| ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | 0.014 [0.003, 0.028] (4–284–0, 25 plies) | |
-| ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | | |
+| ck13k | gumbel | **0.031** [0.014, 0.052] (9–279–0, 27 plies) | 0.014 [0.003, 0.028] (4–284–0, 25 plies) | 0.007 [0.000, 0.017] (2–286–0, 25 plies) |
+| ck18k | puct | **0.568** [0.510, 0.625] (163–124–1, 49 plies) | **0.646** [0.594, 0.698] (186–102–0, 50 plies) | |
 | ck18k | gumbel | 0.233 [0.191, 0.278] (67–221–0, 31 plies) | **0.111** [0.080, 0.146] (32–256–0, 25 plies) | 0.066 [0.038, 0.097] (19–269–0, 25 plies) |
-| ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | | |
-| ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | **0.056** [0.031, 0.083] (16–272–0, 23 plies) | |
+| ck25k | puct | 0.497 [0.444, 0.549] (143–145–0, 45 plies) | **0.601** [0.542, 0.656] (173–115–0, 47 plies) | |
+| ck25k | gumbel | 0.167 [0.128, 0.208] (48–240–0, 27 plies) | **0.056** [0.031, 0.083] (16–272–0, 23 plies) | 0.014 [0.003, 0.028] (4–284–0, 23 plies) |
 | ck35k | gumbel | 0.149 [0.108, 0.191] (43–245–0, 27 plies) | — | — |
 
 At 128 sims, read so far: under PUCT the block's nets are AT OR ABOVE the BC net (`bc_full`
@@ -136,8 +136,11 @@ was never a fall from 53 %.
    head. The "trough" was the instrument's; the net improved through it. (35k under Gumbel-128
    reads 0.149 vs 25k's 0.167 — the 10k steps past the block bought nothing that head can see;
    no PUCT cell was run on 35k.)
-4. **SIMS — a lever under PUCT, a liability under Gumbel.** 3k at PUCT-256 reads 0.542 against
-   0.431 at 128 (CIs disjoint); the 13k/18k/25k PUCT-256 and all PUCT-512 cells complete this row.
+4. **SIMS — a lever under PUCT, a liability under Gumbel.** 128 → 256 under PUCT: 3k 0.431 →
+   0.542, 18k 0.568 → 0.646, 25k 0.497 → 0.601 (+8 to +11 pp each, the 3k and 25k CIs disjoint);
+   under Gumbel the same doubling HALVES the reading on every net, and 512 halves it again
+   (3k 0.062, 13k 0.007, 18k 0.066, 25k 0.014). The 13k PUCT-256 and the four PUCT-512 cells
+   complete the row and say whether the PUCT gain continues past 256.
    R350(f)'s rule ("if 512 sims moves the reading materially, depth is a lever and run7's arms
    rise") is answered YES under the head run7 will deploy under, NO under the head run6 used.
 
