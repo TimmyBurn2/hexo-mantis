@@ -16,6 +16,7 @@
 # because the census cannot tell which tier a marker moves a test INTO without being told, and
 # because a test silently gaining `integration` leaves the default tier just as completely.
 tests/bots/test_sealbot_vendored.py	<module>	integration
+tests/bots/test_strix_adapter.py	test_the_live_driver_plays_twenty_legal_games_end_to_end	integration
 tests/config/test_train_device_authority.py	test_a_cuda_minted_config_never_silently_boots_on_the_cpu	integration
 tests/config/test_train_device_authority.py	test_the_configs_device_reaches_the_real_trainer_and_the_real_pool	integration
 tests/diagnostics/test_cuda_build_guard.py	test_r328e_01_a_cpu_only_build_refuses_by_name_and_names_the_recurring_cause	skipif

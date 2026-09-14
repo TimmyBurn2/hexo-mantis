@@ -113,5 +113,9 @@ ignore = ["E501"]
 # were measured test-idiom noise, runtime-guarded by the tests themselves (CENSUS_LT §5b);
 # the basic-mode src surface is held at ZERO by tools/ci_gates/lint_gate.sh.
 include = ["src", "tools"]
+# tools/strix_driver.py runs INSIDE the vendored hexo-strix venv (RUNG-2): its imports
+# (hexo_rs, hexo_a0, torch_geometric) exist only there, by design, so it is excluded with
+# that ground; everything it does is exercised by tests/bots/test_strix_adapter.py's live witness.
+exclude = ["tools/strix_driver.py"]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
