@@ -229,6 +229,20 @@ def test_the_hero_strength_cell_carries_wr_games_wilson_and_elo(html, reader, tm
     assert "sealbot_d5" in page
 
 
+def test_the_strength_panel_says_every_sealbot_reading_is_provisional(html, reader, tmp_path):
+    """R353(b)/§0.2: until SEALBOT-TT's A/B re-derives the level, every sealbot reading is
+    PROVISIONAL and the strength panel says so — with rounds drawn AND with none, because the
+    record carries no witness of which adapter played its rung."""
+    for rows in (BOOT, [_round(1, 0.5)]):
+        page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.5)]))
+        panel = re.search(r'<section class="panel tier2" id="ladder">(.*?)</section>', page, re.S)
+        assert panel is not None
+        note = re.search(r'<p class="note">(.*?)</p>', panel.group(1), re.S)
+        assert note is not None, "the strength panel carries no note"
+        assert "PROVISIONAL" in note.group(1)
+        assert "CARD-SEALBOT-TT-SEAT" in note.group(1) and "R353" in note.group(1)
+
+
 def test_the_hero_trend_cell_names_the_rounds_in_its_window(html, reader, tmp_path):
     rows = [_round(i, wr) for i, wr in enumerate([0.2, 0.25, 0.3, 0.35, 0.4], start=1)]
     page = _page(html, reader, tmp_path, rows,
