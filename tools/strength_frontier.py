@@ -5,11 +5,10 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 — are only checkable against each other; every game goes through `python -m mantis.eval.worker`.
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`,
-`games`, optional `opponent` (`sealbot_d5`, or a snapshot source played through the GATE block),
-`gumbel_m`, `c_scale` and `q_rescale` (the deploy head's σ; the config's when absent — R351(b)'s
-cells vary them on one net), `concurrency` (1 = the arena's serial loop). Departures from a
-production round: no random floor, one rung, `round_index` 0 on every cell, a refused floor probe
-is a FAILED cell.
+`games`, optional `opponent` (`sealbot_d5`; `strix` at its own `strix_sims` — RUNG-2; or a
+snapshot source played through the GATE block), `gumbel_m`, `c_scale`/`q_rescale` (the deploy
+head's σ, the config's when absent), `concurrency` (games in flight; 1 = the arena's serial
+loop). No random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
 """
 from __future__ import annotations
 
@@ -48,6 +47,9 @@ from mantis.util.determinism import seed_everything
 BC_FULL = "bc_full"
 BC_TP = "bc_tp"
 SEALBOT_D5 = "sealbot_d5"
+STRIX = "strix"
+#: The two opponents played through the RUNG block; anything else is a snapshot through the gate.
+_RUNG_OPPONENTS = (SEALBOT_D5, STRIX)
 _RUN_ID = "frontier1"
 _BOOTSTRAP_RESAMPLES = 2000
 _CI_LEVEL = 0.95
@@ -155,8 +157,25 @@ def _sealbot_rung(config: Any, games: int) -> RungJob:
                    deploy_matched=rung.deploy_matched, games=games)
 
 
+def _strix_rung(config: Any, games: int, strix_sims: int) -> RungJob:
+    """The strix rung (RUNG-2): the pinned checkpoint at `strix_sims`, on the gate's opening book."""
+    from mantis.bots import strix as _strix
+
+    pin = _strix._pin()
+    if pin is None:
+        raise FrontierCellError("vendor/pins.toml declares no [pins.hexo-strix]")
+    stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
+    return RungJob(name=STRIX, bot=STRIX, variant=stem, depth=None, opponent_sims=strix_sims,
+                   opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games)
+
+
+def cell_channel(cell: Mapping[str, Any]) -> str:
+    """The game-record channel a cell's games land on: rung opponents write `external`."""
+    return "external" if str(cell.get("opponent", SEALBOT_D5)) in _RUNG_OPPONENTS else "promotion"
+
+
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
-    """One cell's RoundSpec: the rung at `sims` vs sealbot, or the gate SCREEN vs a model (no escalation)."""
+    """One cell's RoundSpec: the rung at `sims` vs sealbot or strix, or the gate SCREEN vs a model."""
     games = int(cell["games"])
     kind = str(cell["search_kind"])
     sims = int(cell["sims"])
@@ -174,10 +193,16 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         q_rescale=bool(cell.get("q_rescale", base.q_rescale)),
         game_record=GameRecordTarget(record_dir=str(cell_dir / "games"), run_id=_RUN_ID),
         concurrency=int(cell.get("concurrency", 1)),
+        rung_concurrency=int(cell.get("concurrency", 1)),
     )
     if opponent == SEALBOT_D5:
         return replace(base, **common, sealbot_model_sims=sims,
                        rung_jobs=[_sealbot_rung(config, games)])
+    if opponent == STRIX:
+        if "strix_sims" not in cell:
+            raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
+        return replace(base, **common, strix_model_sims=sims,
+                       rung_jobs=[_strix_rung(config, games, int(cell["strix_sims"]))])
     gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
                    deploy_sims=sims, screen_confirm_lo=2.0)
     return replace(base, **common, gate=gate, best_snapshot=str(cell_dir / "opponent.pt"))
@@ -243,7 +268,7 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     cell_dir.mkdir(parents=True, exist_ok=True)
     provenance = {"candidate": build_snapshot(str(cell["candidate"]), config, cell_dir / "candidate.pt")}
     opponent = str(cell.get("opponent", SEALBOT_D5))
-    if opponent != SEALBOT_D5:
+    if opponent not in _RUNG_OPPONENTS:
         provenance["opponent"] = build_snapshot(opponent, config, cell_dir / "opponent.pt")
     spec = cell_spec(cell, base, cell_dir=cell_dir, config=config)
     spec_path = cell_dir / "spec.json"
@@ -259,12 +284,18 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
         "label": label, "cell": dict(cell), "provenance": provenance, "rc": proc.returncode,
         "wall_sec": round(wall, 1), "started_utc": time.strftime("%FT%TZ", time.gmtime(started)),
     }
+    if opponent == STRIX:
+        from mantis.bots.strix import FINDING_LOG_MARKER
+
+        lines = [ln.strip() for ln in (cell_dir / "child.log").read_text(encoding="utf-8").splitlines()
+                 if FINDING_LOG_MARKER in ln]
+        record["strix_findings"] = {"count": len(lines), "first": lines[:5]}
     if proc.returncode == 0:
         result = json.loads(Path(spec.result_path).read_text(encoding="utf-8"))
         record["worker_result"] = {"rungs": result.get("rungs"), "gate": result.get("gate"),
                                    "skipped_rungs": result.get("skipped_rungs")}
-        channel = "external" if opponent == SEALBOT_D5 else "promotion"
-        readout = pair_readout(list(_records_for(cell_dir, channel)), seed=spec.ladder_bootstrap_seed)
+        readout = pair_readout(list(_records_for(cell_dir, cell_channel(cell))),
+                               seed=spec.ladder_bootstrap_seed)
         if readout["eff_n"] == 0:
             # A skipped rung or a refused floor probe exits 0 with no games of the cell's own:
             # a failed cell, never a 0-game reading.
@@ -281,15 +312,17 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
 def format_row(record: Mapping[str, Any]) -> str:
     """One summary line per cell."""
     cell = record["cell"]
-    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale") if k in cell)
+    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims") if k in cell)
     head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}{sigma}"
     if record["rc"] != 0 or "readout" not in record:
         return f"{head}  FAILED rc={record['rc']} ({record['wall_sec']} s) {record.get('error', '')}"
     r = record["readout"]
     med = "-" if r["median_plies"] is None else f"{r['median_plies']:.0f}"
+    findings = record.get("strix_findings")
+    tail = "" if findings is None else f"  strix findings {findings['count']}"
     return (f"{head}  WR {r['wr']:.3f} [{r['wr_ci_lower']:.3f}, {r['wr_ci_upper']:.3f}]  "
             f"{r['wins']}-{r['losses']}-{r['draws']} n={r['games']} eff_n={r['eff_n']}  "
-            f"{r['sec_per_game']} s/game  med {med} plies")
+            f"{r['sec_per_game']} s/game  med {med} plies{tail}")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

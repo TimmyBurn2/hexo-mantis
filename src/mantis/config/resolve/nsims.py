@@ -1,15 +1,11 @@
-"""Eval opponent model_sims resolver (REBUILD of frozen resolve/nsims.py).
-
-The frozen code-side {random:96, sealbot:128} default dict DIES: the per-opponent value is a
-required schema field (eval.random_model_sims / eval.sealbot_model_sims) the resolver READS.
-Unknown opponent → ValueError (no silent fallback); a None value → ValueError (Δ-REBUILD —
-the config field is required, there is no code default to fall to).
-"""
+"""Eval opponent model_sims resolver: the per-opponent value is a required config row the
+resolver READS (the frozen {random:96, sealbot:128} default dict is dead); an unknown opponent
+or a None value is a ValueError, never a fallback."""
 from __future__ import annotations
 
 # The known eval opponents (name authority; NOT a value default — the values live in the config).
 # (design §a.4) — semantics unchanged: the config value always wins, None still raises.
-_KNOWN_OPPONENTS = ("random", "sealbot")
+_KNOWN_OPPONENTS = ("random", "sealbot", "strix")
 
 
 def resolve_eval_model_sims(opponent: str, cfg_value: int | None) -> int:

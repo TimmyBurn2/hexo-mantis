@@ -1,14 +1,11 @@
-"""mantis.eval.worker — CHILD-ONLY module.
-
-Entry: `python -m mantis.eval.worker <spec.json> <result.json>` / spawn target `worker_main`.
-Loads snapshots, builds nets on `spec.worker_device`, then plays the strength floor probe (when
-armed), the gate block, the resolved ladder rungs (a per-rung `RungUnresolvable` is RECORDED,
-never fatal) and the random floor, writing the sidecar result JSON ATOMICALLY.
+"""mantis.eval.worker — CHILD-ONLY: `python -m mantis.eval.worker <spec.json> <result.json>`
+loads the snapshots, builds the nets on `spec.worker_device`, plays the floor probe, the gate
+block, the ladder rungs (a per-rung `RungUnresolvable` is RECORDED, never fatal) and the random
+floor, and writes the sidecar result ATOMICALLY.
 
 >300 justify (R8): one entry point owning all four blocks, which share the candidate player,
-inference engine, book loading, the ONE encoding resolution, the decode-capability guard and
-the graph decode+expand collaborator. Splitting would duplicate that setup and let the phases
-drift out of the one-worker-process-per-round contract.
+the inference engine, the book, the ONE encoding resolution and the decode+expand collaborator;
+split, the phases drift out of the one-worker-process-per-round contract.
 """
 from __future__ import annotations
 
@@ -97,15 +94,10 @@ def _assert_value_pool_implemented(spec: EncodingSpec) -> None:
 
 
 class _RoundProgress:
-    """Per-game progress, written by the CHILD as the round plays.
-
-    PLAIN COUNTERS, LABELS AND TIMESTAMPS ONLY — no moves, no positions, no trajectory hash, so
-    the redaction discipline holds by construction. `margin` is `None` when no adjudicator was
-    armed or the cap was not reached — never `0`, which is a MEASURED margin.
-
-    A write error is reported ONCE on stderr and disables further writes, never raising:
-    deliberately NOT LAW-14's posture, because this file is diagnostic.
-    """
+    """Per-game progress, written by the CHILD as the round plays: PLAIN COUNTERS, LABELS AND
+    TIMESTAMPS ONLY (no moves, positions or trajectory hash, so redaction holds by construction);
+    `margin` is `None` when no adjudicator was armed or the cap not reached, never a measured `0`.
+    A write error is reported ONCE and disables further writes — diagnostic, not LAW-14's posture."""
 
     def __init__(self, path: str | Path) -> None:
         self._path = Path(path)
@@ -154,13 +146,10 @@ class _RoundProgress:
 
 
 class _RoundGameRecords:
-    """The eval channels' GAME-RECORD-1 producer, separate from `_RoundProgress` because that
-    class satisfies its no-positions discipline by construction and moves are what a game record
-    is for. `None` for `target` is the no-op arm.
-
-    A CONSTRUCTION FAILURE IS NOT FATAL HERE, unlike the trainer's arm: killing a round over an
-    unwritable directory trades a lost record for a skipped gate. Reported once on stderr.
-    """
+    """The eval channels' GAME-RECORD-1 producer, apart from `_RoundProgress` (which holds no
+    positions by construction); `None` for `target` is the no-op arm. A construction failure is
+    NOT fatal here, unlike the trainer's: a round killed over an unwritable directory trades a
+    lost record for a skipped gate. Reported once on stderr."""
 
     def __init__(self, target: GameRecordTarget | None, *, round_id: str, step: int) -> None:
         self._writer: GameRecordWriter | None = None
@@ -241,6 +230,12 @@ def _agg_record(game_record: Any) -> dict[str, Any]:
 
 
 def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
+    """The candidate's sims per opponent KIND; a strix job on a round without `strix_model_sims` is refused by name."""
+    if kind == "strix":
+        if spec.strix_model_sims is None:
+            raise ValueError("a strix rung job needs RoundSpec.strix_model_sims; production rounds "
+                             "carry None because strix is not a ladder rung (R352(e))")
+        return int(spec.strix_model_sims)
     return {
         "sealbot": spec.sealbot_model_sims,
         "random": spec.random_model_sims,
@@ -472,7 +467,9 @@ def _play_rung_block(
 ) -> list[dict[str, Any]]:
     bot_factory = resolve_bot(
         rung_job.bot, depth=rung_job.depth,
-        opponent_sims=_model_sims_for_kind(spec, rung_job.bot),
+        opponent_sims=(rung_job.opponent_sims if rung_job.bot == "strix"
+                       else _model_sims_for_kind(spec, rung_job.bot)),
+        variant=rung_job.variant,
     )
     # Rung games play at the resolved PER-KIND *_model_sims the RegimeKey stamps, never at
     # gate.deploy_sims, which is reserved for the deploy-matched GATE block.
@@ -492,7 +489,11 @@ def _play_rung_block(
     candidate, opponent = _pair()
     regime_key = RegimeKey(
         bot=rung_job.bot, variant=rung_job.variant, model_sims=_model_sims_for_kind(spec, rung_job.bot),
-        opponent_spec=f"{rung_job.bot}:{rung_job.variant}", opening_book=rung_job.opening_book,
+        # A model opponent's own sims are part of the instrument's identity (a strix rung at 128
+        # and at 256 are two rungs); a bot with none (sealbot's depth rides `variant`) is unchanged.
+        opponent_spec=(f"{rung_job.bot}:{rung_job.variant}"
+                       + ("" if rung_job.opponent_sims is None else f"@{rung_job.opponent_sims}")),
+        opening_book=rung_job.opening_book,
         deploy_matched=rung_job.deploy_matched, encoding=spec.encoding,
     )
     openings = round_openings(

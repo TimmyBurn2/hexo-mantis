@@ -2,12 +2,8 @@
 # fields carried across the eval process seam, the table saying which must be rebuilt as a
 # dataclass on the far side, and the result-shape validation the child answers with. A field
 # split from its rehydration row arrives as a raw mapping and fails at the first attribute read.
-"""RoundSpec + build_round_result + resolve_ladder_rungs.
-
-`RoundSpec` is PATHS AND PRIMITIVES ONLY — the type surface cannot carry a live model across the
-process seam. `build_round_result` UNCONDITIONALLY sets `wr_sealbot`, and `resolve_ladder_rungs`
-CATCHES a `RungUnresolvable` and records it rather than failing the round.
-"""
+"""RoundSpec (PATHS AND PRIMITIVES ONLY: no live model crosses the process seam), `build_round_result`
+(sets `wr_sealbot` unconditionally) and `resolve_ladder_rungs` (records a `RungUnresolvable`, never fails the round)."""
 from __future__ import annotations
 
 import dataclasses
@@ -188,6 +184,9 @@ class RoundSpec:
     #: The rung block's games in flight (`eval.rung_concurrency`). NOT defaulted, for the same reason.
     rung_concurrency: int
     allocator_posture: str | None = None
+    #: The candidate's sims against a strix rung (RUNG-2): `None` on every production round (strix
+    #: is not in the ladder), set by the frontier tool's strix cells; a strix job without it is refused by name.
+    strix_model_sims: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -221,13 +220,10 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
 def _first_sealbot_wr(
     rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
 ) -> tuple[float | None, str | None, int | None, float | None, float | None]:
-    """Return `(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung with
-    >= 1 game this round; all-`None` if none recorded a game.
-
-    Once a sealbot rung saturates it draws 0 games off-cadence and the reported number silently
-    becomes the next rung's, so the identity and the CI travel with the value out of the SAME
-    walk that selects it.
-    """
+    """`(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung with >= 1 game
+    this round, all-`None` if none; the identity and the CI travel with the value out of the SAME
+    walk, because a saturated rung draws 0 games off-cadence and the number would silently
+    become the next rung's."""
     for rung in rungs_config:
         if getattr(rung, "bot", None) != "sealbot":
             continue

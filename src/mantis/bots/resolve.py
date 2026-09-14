@@ -1,25 +1,21 @@
-"""resolve_bot — the ONE rung -> bot resolver.
-
-`kind="random"` resolves to the in-repo `RandomBot` unconditionally. `kind="sealbot"`
-resolves to the vendored fixed-depth engine through `mantis.bots.sealbot`, or refuses with
-a reason naming the ONE step that is missing; a sealbot rung at a ruled-out depth refuses
-with the operator-authorized marker. There is NO env-key channel: the authority for where
-the engine lives is `vendor/pins.toml` plus `make vendor`, and a second authority that can
-point anywhere is a host-path surface in disguise. The sims routing runs BEFORE any refusal.
-"""
+"""resolve_bot — the ONE rung -> bot resolver: `random` in-repo; `sealbot` and `strix` through
+their vendored trees, or a refusal naming the ONE missing step (a ruled-out sealbot depth carries
+the operator-authorized marker). NO env-key channel: `vendor/pins.toml` + `make vendor` is the
+one authority for where an engine lives. The sims routing runs BEFORE any refusal."""
 from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any
 
 import mantis.bots.sealbot as _sealbot_mod
+import mantis.bots.strix as _strix_mod
 import mantis.config.resolve.nsims as _nsims_mod
 from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.random_bot import RandomBot
 
 BotFactory = Callable[..., Any]
 
-_KNOWN_KINDS: tuple[str, ...] = ("random", "sealbot")
+_KNOWN_KINDS: tuple[str, ...] = ("random", "sealbot", "strix")
 
 #: The marker every R139 refusal carries, and the `operator_authorized` skip class.
 _R139_SKIP_MARKER = "operator-authorized skip (R139)"
@@ -95,12 +91,13 @@ def _resolve_sealbot(depth: int | None) -> BotFactory:
     return _factory
 
 
-def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None) -> BotFactory:
+def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None,
+                variant: str = _strix_mod.PIN_NAME) -> BotFactory:
     """Resolve `kind` to a `BotFactory`, or raise.
 
     Unknown kind -> `ValueError` naming the known set. A known kind that cannot be resolved
-    here -> `RungUnresolvable` (never fatal to a round — the caller catches it per rung).
-    """
+    here -> `RungUnresolvable` (never fatal to a round — the caller catches it per rung);
+    `variant` is read by the strix kind only (the pinned checkpoint's stem)."""
     if kind not in _KNOWN_KINDS:
         raise ValueError(f"unknown bot kind {kind!r}; known kinds: {sorted(_KNOWN_KINDS)}")
 
@@ -112,6 +109,9 @@ def resolve_bot(kind: str, *, depth: int | None, opponent_sims: int | None) -> B
             return RandomBot(seed=seed)
 
         return _factory
+
+    if kind == "strix":
+        return _strix_mod.resolve_strix(opponent_sims=opponent_sims, variant=variant)
 
     return _resolve_sealbot(depth)
 

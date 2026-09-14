@@ -61,6 +61,25 @@ and are folded in here, because a reader of any ladder reading needs them:
   "recorded broken" mechanism today; an earlier draft of this section claimed one and no such
   code exists. The trade is deliberate in this direction only: a round that dies loudly is
   recoverable, and an entry that quietly reports a bar it never played is not.
+- **The strix rung (RUNG-2, R352(e)) is a FIXED external reference of the other kind: a
+  net.** `SootyOwl/hexo-strix` publishes no model, so the rung IS the operator's
+  `checkpoint_00237000.pt`, pinned by sha256 in `vendor/pins.toml` beside the commit it is
+  played through (the checkpoint is not in the tree — R7 — and is placed under
+  `vendor/external/strix_models/`, verified at every load). It plays as a bot PROCESS in the
+  vendored tree's own venv (`tools/strix_driver.py`, `mantis.bots.strix`), at strix's own
+  eval/SPRT acting policy — argmax of the Gumbel-MCTS improved policy with Gumbel noise off —
+  so it is deterministic by construction; the position is rebuilt from the board's stones on
+  every call (`hexo_rs.GameState.from_state`, translated so a p1 stone sits at strix's origin,
+  which the game's translation symmetry makes exact) and the opening single is answered by the
+  adapter (every opening cell is the same position). THE FENCE IS READ AT CONTACT (R257): every
+  reply carries strix's legal set, compared with the board's; a disagreement is counted as a
+  finding, and a reply outside our fence is returned unchanged for the arena to FORFEIT, never
+  substituted. It is NOT a ladder rung: `tools/strength_frontier.py` plays it as two cells per
+  point — AS-SHIPPED (strix at 128 sims / m 16, its `play_vs_shrimp` defaults, vs ours at
+  PUCT-512) and EQUAL-WORK (both at 256 NN evaluations per move) — 288 paired games, both
+  colours, every 15 000 steps plus step 0 and block end, outside the promotion gate. Its
+  regime key carries its own sims (`strix:checkpoint_00237000@128`), so the two cells are two
+  instruments, not one.
 - **Vendoring, and the ONE build command.** External engines are pinned by commit sha in
   `vendor/pins.toml` and fetched by `make vendor`, which CLONES and does not build. The build
   is a separate, manual step and it must use mantis's OWN interpreter or the extension's ABI
@@ -121,3 +140,7 @@ row says so and names what does run.
 | each skip-reason class counts itself in-run, on a closed set | `tests/eval/test_rung_skip_class_counter.py` | yes |
 | the external win-rate field populates with no producer change | `tests/eval/test_wr_sealbot_handshake.py`, `tests/eval/test_wr_sealbot_config_only.py` | yes |
 | the REAL vendored engine agrees on the rules, holds its depth receipt, and is deterministic | `tests/bots/test_sealbot_vendored.py` | **no** — Tier 2, `@pytest.mark.integration`; skips with a named reason and a named box counterpart, and a skip is reported as `not_run`, never as coverage |
+| the strix pin names the commit, the checkpoint and both sha256s, and discloses the unsupplied config | `tests/tools/test_vendor_pins_strix.py` | yes |
+| the strix adapter sends the position, counts fence disagreements, returns an out-of-fence move for the forfeit, verifies the pinned sha, and answers the opening single itself | `tests/bots/test_strix_adapter.py` | yes (against a recording double) |
+| a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `strix_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier_strix.py`, `tests/eval/test_strix_rung_sims.py` | yes |
+| the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |

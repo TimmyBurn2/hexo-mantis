@@ -30,3 +30,22 @@ sha    = "c94749c21c16c3b072fff6da49762dd5f92f3986"
 branch = "master"
 as_of  = "2026-03-31"
 patch  = "vendor/patches/sealbot.patch"
+
+[pins.hexo-strix]
+# RUNG-2 (R352(e)): the strix rung. The PIN is the repo at the commit below; the RUNG is the
+# operator's checkpoint, which the tree does not carry (no weights in it, no releases) and R7
+# forbids tracking here — it is placed under vendor/external/strix_models/ and verified against
+# `checkpoint_sha256` at every load (mantis.bots.strix). The commit is upstream HEAD on the day
+# the checkpoint was supplied (2026-09-13); the operator supplied NO strix commit and NO
+# config.toml — the checkpoint embeds `model_config`, `game_config` and `training_config`, and
+# `config_sha256` is the sha256 of that embedded triple as sorted compact JSON. The checkpoint
+# loads into HeXONet(model_config) at this commit with zero missing or unexpected keys, which is
+# the witness that the pin fits the weights. LICENCE: MIT at this sha (local eval only).
+url    = "https://github.com/SootyOwl/hexo-strix.git"
+sha    = "5a771e572553a8bd8e010112b2ce65f16e5afa1b"
+as_of  = "2026-09-13"
+checkpoint             = "checkpoint_00237000.pt"
+checkpoint_sha256      = "351ed562065bed55528bf4a4bcc7da7bf48f36aec47c60ab108014d6a256447e"
+checkpoint_train_steps = 237000
+config                 = "embedded in the checkpoint (model_config, game_config, training_config); no config.toml was supplied"
+config_sha256          = "8f2f07096db501ed2ed32252c4041298e75d5d575ceaec009f5dbd05c52add02"
