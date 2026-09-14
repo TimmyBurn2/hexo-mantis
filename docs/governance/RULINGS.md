@@ -1,4 +1,4 @@
-# RULINGS — R23 to R352
+# RULINGS — R23 to R353
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R353.
+- Numbering continues from R346. The next ruling is R354.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,78 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R353 — START + SEALBOT INSTRUMENT + GAME QUALITY: run7 STARTS on the vested stamp; the sealbot TT seat defect is an instrument defect, fixed and A/B'd on frozen nets; the game-quality census; VIEWER-1's arm label; CARD-PUCT-ATTRACTOR closes
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R352: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R{next} — (a) run7 STARTS: the trainer is run6's regime, faster (1,630
+> steps/h before a round, 1,310 beside one), decisive games, ply-cap
+> window ≤ 0.015 against a halt at 0.5, step-3,000 net 0.70 over its
+> anchor; every head loaded reads 0.51–0.64 vs sealbot_d5 at 101 steps
+> where the PUCT-mint net read 0.27. Promotion does not depend on
+> sealbot; the block's checkpoints are frozen and re-readable, so the
+> instrument defect in (b) does not hold the start.
+> (b) SEALBOT-TT: the vendored engine's transposition table persists
+> across games and is keyed without the root player while its scores
+> are root-relative, so a rung thread that swaps colours reads the
+> other seat's entries with the wrong sign. That is a defect in the
+> INSTRUMENT, the fourth on record (F-27, F-30, the Gumbel head, this).
+> Fix: a fresh engine per game (or a TT cleared at game start and keyed
+> with the root player — whichever the tracked patch can carry with a
+> test that is RED on the old build). A/B, three frozen nets — the BC
+> net at PUCT-150, run6's 18k at PUCT-512, run7's step-0 stamp net at
+> PUCT-512 — 288 paired games each, old engine vs fixed: the delta
+> re-derives every sealbot level on the record (a ratio transfers, a
+> level does not); the 0.20 → 0.30 s/ply drift across stamps on an idle
+> card is tested against TT growth as the first hypothesis. The strix
+> rung is unaffected and stays the external anchor.
+> (c) GAME-QUALITY CENSUS over the frontier's, strix's and shakedown7's
+> games, per kind × sims × opponent: opponent fours left standing
+> (blunders), fours made, double-threat wins, wins by forced sequence
+> vs by opponent blunder, mean line-extension share (moves adjacent to
+> the mover's longest line), game length at win vs at loss. The
+> question it answers: whether PUCT-512's 0.77 is "wins more" or
+> "loses later". Pre-stated reading: if PUCT's wins are mostly forced
+> sequences and its fours-left-standing rate is near zero while
+> Gumbel's is near 0.75 (GAME_QUALITY's 3-of-4), PUCT is the better
+> player and the longer games are competent defence on both sides —
+> a strong attacker in a two-stone game wins by double threats, which
+> take building; "beats fast" is what happens against a side that
+> leaves fours standing, and that side was the Gumbel head.
+> (d) The operator's own reading is recorded and answered: a self-play
+> shard is three fast-arm moves in four (64 sims, Gumbel draw, no
+> noise) — those games are for VALUE DIVERSITY and are not meant to be
+> smart; their look is not the deploy net's strength. VIEWER-1 labels
+> every move with its arm (full / fast) and its sims so the operator
+> reads full-search moves apart from fast ones.
+> (e) CARD-PUCT-ATTRACTOR closes with GAME_QUALITY's mechanism recorded
+> in one line in the card; the balanced-book card stands (seat-decided
+> pairs are a power loss, not a bias).
+> ROUTE: START → SEALBOT-TT (dev + one box A/B) → census (dev) →
+> viewer label → first strix point at 15k.
+
+`R{next}` is the packet's own placeholder and resolves to R353 — this file's header said the next
+number was 353 when the packet was forwarded; the text is copied as written rather than edited.
+What the forward ENACTS beyond the clauses (the packet's §0): (1) START on the vested stamp
+(`/workspace/oc7/box_start_run7.sh`; the puller on the operator's machine at 600 s; the dashboard
+on the mirror; the first in-run round, ≈ 2 h in, closes CARD-SEALBOT-GIL-SERIAL by its wall);
+(2) SEALBOT-TT ordered as (b), and until it lands EVERY sealbot reading on the record, run7's
+included, is PROVISIONAL and the dashboard says so on its strength panel; (3) the census of (c),
+computed over games that already exist, no box time; (4) VIEWER-1's per-move arm label of (d).
+Grounds: operator direction, forwarding the START packet (dated 2026-09-14) on the R352 exit
+record (`STATE.md` at `488e774c`: four stamps 0.507–0.642, the twin shakedown's trainer reading,
+the GIL release's rung wall), `CARD-SEALBOT-TT-SEAT` (`GAME_QUALITY_2026-09-14.md` § Sources: the
+key `_hash ^ f(_cur_player) ^ g(_moves_left)`, the scores root-relative, one adapter per rung
+thread across colour-swapped pairs) and `GAME_QUALITY_2026-09-14.md` §B (PUCT 0–4 % fours left
+standing, the Gumbel head ≈ 3 of 4).
+Amends: nothing in R352; R352(g)'s CARD-PUCT-ATTRACTOR is closed by (e) on the GAME-QUALITY
+reading, not a fix, as the card's own text foresaw. The START hold of 2026-09-14 16:20 UTC
+(operator, recorded in `STATE.md`) is lifted by (a).
+Status: standing.
+
+---
 
 ### R352 — RUN7 KIND, STRIX RUNG, VIEWER: shakedown7 falsifies PUCT self-play; run7 is run6's Gumbel trainer with every head loaded; the ply-cap halt; RUNG-2 and VIEWER-1 ordered
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as

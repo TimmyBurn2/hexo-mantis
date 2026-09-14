@@ -81,21 +81,14 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R352 (run7 kind, strix rung, viewer)
 
-- **CARD-PUCT-ATTRACTOR — WHY PUCT self-play drifts to the ply cap (F-52), read on the games.**
-  shakedown7's 2 421 games (755 at the 256-ply cap, 84–86 % in the last hour) and run6's are the
-  subjects; VIEWER-1 (R352(g)) is the instrument. Hypotheses, each with what would falsify it:
-  (1) MASKED CAP ROWS — `train.ply_cap_value` -0.5 lands on the cap game's rows, but if the
-  trainer's exclusions leave the value head no signal that a LONG game is heading to a draw, the
-  head never learns to avoid it; falsified if cap-row targets are present and weighted in the
-  trainer's batch composition. (2) A 2.5-PLY SEARCH DEFENDS BUT CANNOT ATTACK — a double threat
-  needs the depth to see the second threat; falsified if the cap games show unanswered single
-  threats (the search is not even defending) or if run6's Gumbel games at depth 3.8 show the same
-  shape. (3) τ 0.5 SAMPLING AT 64 SIMS — the fast arm's visit distribution at 64 sims is flat
-  enough that τ 0.5 picks a non-best move often; falsified if the cap games' move choices track
-  the root's argmax. (4) THE BC VALUE HEAD CALIBRATED ON DECISIVE HUMAN GAMES — it has never seen a
-  256-ply position and reads them near 0, so a draw is not punished; falsified if the value trace
-  through a cap game moves away from 0 as the game lengthens. The card closes on a reading, not a
-  fix: run7 self-plays under Gumbel by R352(a), and PUCT stays the deploy head.
+- **CARD-PUCT-ATTRACTOR — CLOSED by R353(e), on a reading, not a fix.** The mechanism GAME-QUALITY
+  read on shakedown7's 2 421 games (`GAME_QUALITY_2026-09-14.md` §B, §E): PUCT self-play at τ 0.5
+  for the whole game is tactically degenerate — a quarter of the loser's must-block turns leave a
+  four standing and 3 % of wins-in-turn are missed, both rising with the drift (9 → 33 % missed
+  blocks, draws 6 → 66 % by 600-game window), a shape-building fingerprint (26 % `connect`, 9.5 %
+  `four`) without threats; hypothesis (2) "defends but cannot attack" is contradicted as stated
+  (the cap games show unanswered fours), (3) τ-0.5 sampling is consistent and not separated from
+  the 64-sim arm by the record. run7 self-plays under Gumbel (R352(a)); PUCT stays the deploy head.
 - **CARD-GUMBEL-HEAD-RESIDUE — which part of the Gumbel deploy head loses to the most-visited
   child at every σ (F-51's residue, R352(b)).** All three σ pairs read the 18k net within 7 pp of
   each other at 128 sims and within 2 pp at 512, halving per doubling, against PUCT's 0.774. The
