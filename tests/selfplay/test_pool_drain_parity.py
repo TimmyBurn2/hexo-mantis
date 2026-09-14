@@ -194,7 +194,7 @@ class ScriptedPool:
 
 
 def _games_from_golden(golden: dict[str, Any]) -> list[tuple]:
-    """The scripted `drain_game_results()` 8-tuples (moves back to tuple-of-tuples)."""
+    """The scripted `drain_game_results()` 9-tuples (moves back to tuple-of-tuples)."""
     games = []
     for row in golden["_constants"]["games_batch"]:
         plies, winner_code, moves, *rest = row
@@ -496,7 +496,7 @@ def test_heartbeat_emission_at_drain(run_drain):
 #: `game_id` is a fresh uuid4 per game and can never be a golden.
 _RECORDER_KWARGS = {
     "game_id", "moves", "winner_code", "plies", "worker_id", "terminal_reason",
-    "game_id_byte_hash", "served_sims",
+    "game_id_byte_hash", "served_sims", "move_arms",
 }
 
 
@@ -518,3 +518,5 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
         assert [list(m) for m in actual["moves"]] == want["moves"], f"recorder call {i}: moves"
         assert actual["winner_code"] == want["winner_code"]
         assert actual["plies"] == want["plies"]
+        # R353(d): the runner's per-move arms reach the recorder one per move, untouched.
+        assert len(actual["move_arms"]) == len(actual["moves"]), f"recorder call {i}: arms"

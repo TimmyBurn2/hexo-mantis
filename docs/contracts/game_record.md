@@ -57,7 +57,15 @@ Common to every channel:
 | `moves` | `[[q, r], …]`, axial, **one entry per PLY**. A turn places two stones and the first turn one, so the turn grouping is DERIVED by the reader from its own index rather than stored |
 
 Self-play only: `worker_id`, `game_id_byte_hash` (LAW-04's dedupe input, carried so effective-n
-is counted off the record rather than recomputed).
+is counted off the record rather than recomputed), and since R353(d) **`move_sims`** and
+**`move_arms`** — one entry per PLY, parallel to `moves`: the sims the runner searched that move
+at and the arm it DREW (`opening` for a random-opening ply that searched nothing, sims 0; `full`
+for the full budget; `fast` for the quick one). A self-play shard is three fast-arm moves in four
+under playout-cap randomisation, and those moves are for value diversity, not strength: the viewer
+labels every stone with its arm so a reader tells the full-search moves apart. The arm is the
+runner's own per-move draw (`GameResultRow`'s last field), never inferred by comparing sims to
+`served_sims`. A record from before this producer carries neither key, and a reader states that
+absence rather than guessing.
 
 Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats),
 `trajectory_hash`, and `search_stats` when the candidate's search exposed its root.

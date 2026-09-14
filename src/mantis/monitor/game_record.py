@@ -252,13 +252,19 @@ def selfplay_record(
     worker_id: int,
     seed: int,
     served_sims: int,
+    move_arms: list[tuple[int, bool]],
     game_id_byte_hash: str | None = None,
 ) -> dict[str, Any]:
     """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
-    this game, not the learner's live step — and `step_kind` says so. `colors` is ABSENT because
-    both seats are the same net. `search_stats` is a GAP, not a nothing: the visit distribution
-    reaches the replay ring but every row is pushed `game_id=-1`.
-    """
+    this game — and `step_kind` says so; `colors` is ABSENT (both seats are the same net);
+    `search_stats` is a GAP (the ring gets every row at `game_id=-1`); `move_arms` is the runner's
+    `(sims, is_full_search)` per move, written as `move_sims` and `move_arms` (R353(d)).
+    Raises: ValueError when `move_arms` and `moves` differ in length."""
+    if len(move_arms) != len(moves):
+        raise ValueError(
+            f"selfplay_record: {len(move_arms)} move arms for {len(moves)} moves — the arm "
+            f"list must label every move or the labels shift onto the wrong stones"
+        )
     record: dict[str, Any] = {
         "contract": GAME_RECORD_CONTRACT,
         "game_id": game_id,
@@ -273,11 +279,20 @@ def selfplay_record(
         "result": result,
         "termination": termination,
         "moves": _axial(moves),
+        "move_sims": [int(sims) for sims, _full in move_arms],
+        "move_arms": [_arm_label(int(sims), bool(full)) for sims, full in move_arms],
     }
     if game_id_byte_hash is not None:
         # LAW-04's dedupe input, carried so effective-n is counted off the RECORD.
         record["game_id_byte_hash"] = game_id_byte_hash
     return record
+
+
+def _arm_label(sims: int, is_full_search: bool) -> str:
+    """`opening` (no search), `full` or `fast` — the arm the runner drew."""
+    if sims == 0:
+        return "opening"
+    return "full" if is_full_search else "fast"
 
 
 def eval_record(

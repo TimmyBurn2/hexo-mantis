@@ -312,11 +312,7 @@ def test_an_illegal_buffered_move_is_discarded_re_searched_and_counted() -> None
 
 
 def test_new_game_never_carries_a_searched_engine_into_the_next_game() -> None:
-    """CARD-SEALBOT-TT-SEAT / R353(b): the vendored engine's transposition table persists across
-    `get_move` calls, is keyed WITHOUT the root player and stores root-relative scores, so an
-    engine that searched as one seat reads its own entries with the wrong sign when the next game
-    swaps it to the other seat. The instrument is therefore a FRESH engine per game: after a
-    search, `new_game()` drives a new `MinimaxBot`, and the searched one is never driven again."""
+    """R353(b): after a search, `new_game()` drives a NEW `MinimaxBot` (the table is keyed without the root player)."""
     from mantis.bots.sealbot import SealBotAdapter
 
     module = _FakeMinimaxModule()

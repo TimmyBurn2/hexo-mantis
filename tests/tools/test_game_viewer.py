@@ -104,6 +104,8 @@ def test_the_index_carries_the_facts_the_list_filters_on(reader, tmp_path):
         "t", "selfplay", "p1", 12, "six_in_a_row", 7)
     assert g1["shard"] == 0 and built.shards[0].name == "games_t_seg0001_2026091400.jsonl"
     assert built.index[2]["stats"] is True and g1["stats"] is False
+    assert built.index[2]["cand"] == 1 and built.index[2]["sims"] == 64, "eval rows carry the seat and sims for the move label"
+    assert "cand" not in g1 and "sims" not in g1
 
 
 def test_the_shard_data_carries_moves_the_win_line_and_stats_where_present(reader, tmp_path):
@@ -113,6 +115,32 @@ def test_the_shard_data_carries_moves_the_win_line_and_stats_where_present(reade
     assert data["g2"]["win"] is None and "s" not in data["g2"], "no stats on self-play: absent, not []"
     assert data["r1_promotion_00001"]["s"] == [{"ply": 0, "by": "candidate", "root_value": 0.1,
                                                 "visits": [[1, 0, 30], [0, 1, 10]]}]
+
+
+def test_the_shard_data_carries_each_moves_arm_and_the_arms_sims(reader, tmp_path):
+    """R353(d): one arm character per ply plus the sims per arm; a pre-producer record carries none."""
+    d = tmp_path / "games"
+    d.mkdir()
+    shard = d / "games_t_seg0001_2026091400.jsonl"
+    rows = [{"contract": "game-record-v1", "record": "shard_opened", "run_id": "t", "segment": 1,
+             "hour": "2026091400"},
+            _record("armed", [[0, 0], [1, 0], [0, 1], [2, 0]], result="draw", termination="ply_cap",
+                    move_arms=["opening", "full", "fast", "fast"], move_sims=[0, 320, 64, 64]),
+            _record("legacy", [[0, 0], [1, 0], [0, 1]], result="draw", termination="ply_cap")]
+    shard.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    built = reader.build_run(d, "t")
+    data = built.shards[0].games
+    assert data["armed"]["a"] == "ofqq"
+    assert data["armed"]["sims"] == {"f": 320, "q": 64}
+    assert "a" not in data["legacy"] and "sims" not in data["legacy"]
+
+
+def test_the_page_labels_every_stone_with_its_arm_and_states_an_unrecorded_arm(reader, html, tmp_path):
+    page = html.render([reader.build_run(_games_dir(tmp_path), "t")], "t")
+    assert "arm not recorded" in page, "a pre-producer record must say the arm is absent"
+    assert "fast" in page and "full" in page and "opening" in page
+    assert ".stone.fast" in page, "fast-arm stones are drawn apart from full-search ones"
+    assert "cur.a" in page and "cur.sims" in page, "the label reads the shard's arm string and sims"
 
 
 def test_a_six_in_a_row_record_whose_line_belongs_to_the_other_side_is_a_finding(reader, tmp_path):

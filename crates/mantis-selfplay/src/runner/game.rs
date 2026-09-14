@@ -83,6 +83,8 @@ struct PerGameInit {
     /// only grows on the `is_graph` record branch.
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
+    /// One `(sims, is_full_search)` per entry of `move_history`.
+    move_arms: Vec<(u32, bool)>,
     is_fast_game: bool,
     game_sims: usize,
 }
@@ -327,6 +329,7 @@ fn run_one_game(
         mut board,
         mut graph_records,
         mut move_history,
+        mut move_arms,
         is_fast_game,
         game_sims,
     } = init_per_game_board(board_geometry, init_ctx, rng, version_seen);
@@ -375,6 +378,7 @@ fn run_one_game(
                 break;
             }
             move_history.push((mq, mr));
+            move_arms.push((0, false));
             continue;
         }
 
@@ -383,6 +387,7 @@ fn run_one_game(
             &mut board,
             &mut graph_records,
             &mut move_history,
+            &mut move_arms,
             version_seen,
             rng,
             running,
@@ -412,6 +417,7 @@ fn run_one_game(
         init_ctx.max_moves,
         graph_records,
         move_history,
+        move_arms,
         version_seen,
         init_ctx.draw_reward,
         init_ctx.ply_cap_value,
@@ -441,6 +447,7 @@ fn init_per_game_board(
     // spec-derived geometry; there is no `Board::new()` fallback.
     let board = Board::with_geometry(board_geometry);
     let move_history: Vec<(i32, i32)> = Vec::with_capacity(init_ctx.max_moves);
+    let move_arms: Vec<(u32, bool)> = Vec::with_capacity(init_ctx.max_moves);
     version_seen.clear();
 
     // `legal_move_radius_jitter` is KILLED: dead for every registry spec.
@@ -457,6 +464,7 @@ fn init_per_game_board(
         board,
         graph_records: Vec::new(),
         move_history,
+        move_arms,
         is_fast_game,
         game_sims,
     }

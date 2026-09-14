@@ -431,7 +431,7 @@ class SelfPlayRunner:
     def drain_game_results(
         self,
     ) -> list[
-        tuple[int, int, list[tuple[int, int]], int, int, int, int, int]
+        tuple[int, int, list[tuple[int, int]], int, int, int, int, int, list[tuple[int, bool]]]
     ]: ...
     @property
     def model_version(self) -> int: ...

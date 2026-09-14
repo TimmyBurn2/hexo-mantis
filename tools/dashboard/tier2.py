@@ -25,9 +25,8 @@ _RATE_KEYS = (("games_per_hour", "games / h", "s1"), ("positions_per_hour", "pos
               ("steps_per_hour", "steps / h", "s3"), ("sims_per_sec", "sims / s", "s5"))
 
 
-#: R353(b) / §0.2: the record carries no witness of which sealbot adapter played its rung, and
-#: every adapter before the fix carried the previous seat's transposition-table entries, so the
-#: note stands on every record until the A/B's delta re-derives the level (a ratio transfers).
+#: R353(b): the record carries no witness of which adapter played its rung, so the note stands
+#: on every record until the SEALBOT-TT A/B's delta re-derives the level.
 SEALBOT_PROVISIONAL_NOTE = (
     "Every sealbot reading is PROVISIONAL (R353(b)): the vendored engine's transposition table "
     "persisted across games and was read with the wrong sign after a seat swap "

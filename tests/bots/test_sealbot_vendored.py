@@ -537,13 +537,7 @@ def test_the_search_releases_the_gil_and_eight_concurrent_searches_agree_with_se
 
 
 def test_a_colour_swapped_game_through_one_adapter_plays_the_fresh_engines_move() -> None:
-    """CARD-SEALBOT-TT-SEAT / R353(b): the engine's transposition table persists across `get_move`
-    calls, is keyed by position, side to move and stones left — NOT the root player — while its
-    scores are root-relative, so entries a game stored as one seat are read with the wrong sign
-    by the next game on the other seat. The rung's shape exactly: one adapter, a paired opening,
-    game 1 as the opening's mover against a fresh sealbot, game 2 the seats swapped. The adapter's
-    first move of game 2 must be the move a fresh engine makes at that position. Measured on the
-    old adapter: 3 of the book's first 4 pairs diverge at that very move."""
+    """R353(b), the rung's shape: one adapter, game 2 with the seats swapped plays a fresh engine's move (old adapter: 3 of 4 pairs diverge)."""
     from mantis.arena.books import paired_openings
     from mantis.bots.sealbot import SealBotAdapter
 

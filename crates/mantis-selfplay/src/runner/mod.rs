@@ -39,8 +39,19 @@ pub type WorkerResultRow = (
     u8,
 );
 
-/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`].
-pub type GameResultRow = (usize, u8, Vec<(i32, i32)>, usize, u8, u64, u64, u32);
+/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]; the last field is
+/// one `(sims, is_full_search)` per move, the arm it was DRAWN at (R353(d); opening plies `(0, false)`).
+pub type GameResultRow = (
+    usize,
+    u8,
+    Vec<(i32, i32)>,
+    usize,
+    u8,
+    u64,
+    u64,
+    u32,
+    Vec<(u32, bool)>,
+);
 
 /// Flat snapshot of the runner's in-run counter atomics, each read once via a `Relaxed` load.
 /// RAW cumulative counts ONLY: the fixed-point accumulators are handed back UNDIVIDED so the

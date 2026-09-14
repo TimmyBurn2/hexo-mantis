@@ -30,6 +30,7 @@ def _game(i: int) -> dict[str, object]:
         result="p1" if i % 2 else "draw", plies=6 + i % 5,
         termination="six_in_a_row" if i % 2 else "ply_cap",
         worker_id=i % 4, seed=20260719, served_sims=50,
+        move_arms=[(50, True)] * (6 + i % 5),
         game_id_byte_hash=f"{i:040x}",
     )
 
@@ -160,11 +161,13 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=20260719)
     recorder.maybe_record(
         game_id="pre-sync", moves=[(0, 0)], winner_code=0, plies=1, worker_id=0,
-        terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=50)
+        terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=50,
+        move_arms=[(50, True)] * 1)
     recorder.set_step(3000)
     recorder.maybe_record(
         game_id="post-sync", moves=[(0, 0), (1, 0)], winner_code=1, plies=2, worker_id=2,
-        terminal_reason="six_in_a_row", game_id_byte_hash="1" * 40, served_sims=50)
+        terminal_reason="six_in_a_row", game_id_byte_hash="1" * 40, served_sims=50,
+        move_arms=[(50, True)] * 2)
     recorder.stop()
 
     records = list(iter_run_games(tmp_path, "testrun"))
@@ -186,6 +189,21 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
     )
 
 
+def test_the_recorder_writes_every_moves_arm_and_sims(tmp_path: Path) -> None:
+    """R353(d): the record carries the arm the runner DREW per ply, never one inferred from `served_sims`."""
+    recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
+    recorder.maybe_record(
+        game_id="g", moves=[(0, 0), (1, 0), (0, 1), (2, 0)], winner_code=1, plies=4, worker_id=0,
+        terminal_reason="six_in_a_row", game_id_byte_hash="0" * 40, served_sims=64,
+        move_arms=[(0, False), (320, True), (64, False), (64, False)])
+    recorder.stop()
+
+    (record,) = list(iter_run_games(tmp_path, "testrun"))
+    assert record["move_sims"] == [0, 320, 64, 64]
+    assert record["move_arms"] == ["opening", "full", "fast", "fast"]
+    assert len(record["move_arms"]) == len(record["moves"])
+
+
 @pytest.mark.parametrize(
     ("winner_code", "expected"),
     [(0, "draw"), (1, "p1"), (2, "p2"), (3, "unknown"), (255, "unknown")],
@@ -198,7 +216,8 @@ def test_an_undecodable_winner_code_is_unknown_and_NEVER_a_draw(
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
         game_id="g", moves=[(0, 0)], winner_code=winner_code, plies=1, worker_id=0,
-        terminal_reason="unknown", game_id_byte_hash="0" * 40, served_sims=1)
+        terminal_reason="unknown", game_id_byte_hash="0" * 40, served_sims=1,
+        move_arms=[(1, True)])
     recorder.stop()
     assert next(iter(iter_run_games(tmp_path, "testrun")))["result"] == expected
 

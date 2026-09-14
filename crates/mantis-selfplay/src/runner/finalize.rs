@@ -38,6 +38,7 @@ pub(crate) fn finalize_game_graph(
     max_moves: usize,
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
+    move_arms: Vec<(u32, bool)>,
     version_seen: &[u64],
     draw_reward: f32,
     ply_cap_value: f32,
@@ -108,6 +109,7 @@ pub(crate) fn finalize_game_graph(
         plies,
         winner_code,
         move_history,
+        move_arms,
         worker_id,
         terminal_reason,
         (mv_min, mv_max, mv_distinct),
@@ -163,6 +165,7 @@ fn push_recent_meta(
     plies: usize,
     winner_code: u8,
     move_history: Vec<(i32, i32)>,
+    move_arms: Vec<(u32, bool)>,
     worker_id: usize,
     terminal_reason: u8,
     versions: (u64, u64, u32),
@@ -180,6 +183,7 @@ fn push_recent_meta(
         mv_min,
         mv_max,
         mv_distinct,
+        move_arms,
     ));
     if rg.len() > 2000 {
         rg.pop_front();

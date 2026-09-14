@@ -75,6 +75,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
 #help{font-size:12px;color:var(--mute)}
 .cell{fill:none;stroke:var(--line);stroke-width:.06}
 .stone.p1{fill:var(--p1)}.stone.p2{fill:var(--p2);stroke:var(--p1);stroke-width:.05}
+.stone.fast{stroke:var(--hi);stroke-width:.07;stroke-dasharray:.18 .12}
 .num.p1{fill:var(--p2)}.num.p2{fill:var(--p1)}.num{font:.42px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none}
 .last{fill:none;stroke:var(--hi);stroke-width:.09}.wincell{fill:none;stroke:var(--win);stroke-width:.12}
 .heat{stroke:none}.heatnum{font:.34px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--fg);pointer-events:none}
@@ -102,7 +103,7 @@ _BODY = """<body>
 <div id="info">Pick a game from the list.</div>
 <svg id="board" viewBox="0 0 10 10"></svg>
 <div id="ctl"><button id="b-first" title="Home">⏮</button><button id="b-prev" title="←">◀</button><button id="b-play" title="space">▶ play</button><button id="b-next" title="→">▶</button><button id="b-last" title="End">⏭</button><span class="ply" id="ply"></span><button id="b-heat" title="h" hidden>heatmap</button><span id="heatinfo"></span></div>
-<div id="help">Stones carry their ply number (0 = the opening single; then two per turn). The last two stones are ringed; the six-in-a-row is outlined at the final ply. A position's link is its address (<code>?g=run/game_id&amp;ply=N&amp;heat=1</code>).</div>
+<div id="help">Stones carry their ply number (0 = the opening single; then two per turn). The last two stones are ringed; the six-in-a-row is outlined at the final ply. A dashed stone was a FAST-arm search (the quick budget) — three self-play moves in four are; the ply readout names the arm and sims of the stone just placed, or says the record carries no arm. A position's link is its address (<code>?g=run/game_id&amp;ply=N&amp;heat=1</code>).</div>
 </section>
 </main>
 """
@@ -133,7 +134,7 @@ function hexPts(cx,cy){let p=[];for(let i=0;i<6;i++){const a=Math.PI/180*(60*i-3
 const X=(q,r)=>Math.sqrt(3)*(q+r/2),Y=(q,r)=>1.5*r;
 function draw(){const m=cur.m,n=m.length,st=m.slice(0,ply);const r=curRow;
 $('info').innerHTML='<b>'+r.run+'</b> · '+r.ch+(r.rung?' · '+r.rung:'')+(r.phase?' · '+r.phase:'')+' · result <b>'+r.res+'</b> · '+r.term+' · '+n+' plies · step '+(r.step??'—')+(r.kind?' ('+r.kind+')':'')+(r.w!=null?' · worker '+r.w:'')+' · <span style="font-size:11px">'+r.id+'</span>'+(cur.s?'':'<br><span class="gap">'+window.MANTIS_STATS_GAP+'</span>');
-$('ply').textContent='ply '+ply+' / '+n;
+$('ply').textContent='ply '+ply+' / '+n+(ply>0?' · stone '+(ply-1)+': '+armLabel(ply-1):'');
 let cells=m.slice();let hs=null;if(heat&&cur.s){hs=cur.s.find(e=>e.ply===ply)||null;if(hs)hs.visits.forEach(v=>cells.push([v[0],v[1]]));}
 if(!cells.length)cells=[[0,0]];
 let xs=cells.map(c=>X(c[0],c[1])),ys=cells.map(c=>Y(c[0],c[1]));const pad=2;const x0=Math.min(...xs)-pad,x1=Math.max(...xs)+pad,y0=Math.min(...ys)-pad,y1=Math.max(...ys)+pad;const w=x1-x0,h=y1-y0,S=Math.max(w,h);
@@ -143,9 +144,12 @@ for(let q=qmin;q<=qmax;q++)for(let rr=rmin;rr<=rmax;rr++){const x=X(q,rr),y=Y(q,
 if(hs){const mx=Math.max(...hs.visits.map(v=>v[2]),1);hs.visits.forEach(v=>{const x=X(v[0],v[1]),y=Y(v[0],v[1]),a=(0.12+0.78*v[2]/mx).toFixed(2);out.push('<polygon class="heat" style="fill:var(--heat);fill-opacity:'+a+'" points="'+hexPts(x,y)+'"/><text class="heatnum" x="'+x.toFixed(3)+'" y="'+y.toFixed(3)+'">'+v[2]+'</text>');});
 $('heatinfo').textContent='root before ply '+ply+' by '+hs.by+': value '+(+hs.root_value).toFixed(3)+', '+hs.visits.length+' visited children';}else{$('heatinfo').textContent=heat&&cur.s?'no root recorded before ply '+ply:'';}
 if(ply===n&&cur.win){cur.win.forEach(c=>{out.push('<polygon class="wincell" points="'+hexPts(X(c[0],c[1]),Y(c[0],c[1]))+'"/>');});}
-st.forEach((c,i)=>{const x=X(c[0],c[1]),y=Y(c[0],c[1]),o=owner(i)?'p2':'p1';out.push('<circle class="stone '+o+'" cx="'+x.toFixed(3)+'" cy="'+y.toFixed(3)+'" r="0.78"/><text class="num '+o+'" x="'+x.toFixed(3)+'" y="'+y.toFixed(3)+'">'+i+'</text>');});
+st.forEach((c,i)=>{const x=X(c[0],c[1]),y=Y(c[0],c[1]),o=owner(i)?'p2':'p1',fast=(cur.a&&cur.a[i]==='q')?' fast':'';out.push('<circle class="stone '+o+fast+'" cx="'+x.toFixed(3)+'" cy="'+y.toFixed(3)+'" r="0.78"/><text class="num '+o+'" x="'+x.toFixed(3)+'" y="'+y.toFixed(3)+'">'+i+'</text>');});
 for(let i=Math.max(0,ply-2);i<ply;i++){const c=m[i];out.push('<circle class="last" cx="'+X(c[0],c[1]).toFixed(3)+'" cy="'+Y(c[0],c[1]).toFixed(3)+'" r="0.9"/>');}
 svg.innerHTML=out.join('');link();}
+function armLabel(i){if(cur.a){const c=cur.a[i];if(c==='o')return 'opening (random ply, no search)';if(c==='f')return 'full @ '+(cur.sims.f??'?')+' sims';if(c==='q')return 'fast @ '+(cur.sims.q??'?')+' sims';}
+if(curRow.cand!=null&&curRow.sims!=null){if((owner(i)===0)===(curRow.cand===1))return 'candidate @ '+curRow.sims+' sims (deploy head)';return 'opponent'+(curRow.rung?' '+curRow.rung:(curRow.ch==='promotion'?' (anchor @ '+curRow.sims+' sims)':''));}
+return 'arm not recorded (a record from before R353(d))';}
 function play(){if(timer){clearInterval(timer);timer=null;$('b-play').textContent='▶ play';return;}$('b-play').textContent='⏸ pause';timer=setInterval(()=>{if(!cur||ply>=cur.m.length){play();return;}stepTo(ply+1);},350);}
 function nav(d){if(!curRow)return;const i=view.indexOf(curRow)+d;if(i>=0&&i<view.length){while(shown<=i)renderMore();open(i);}}
 $('b-first').onclick=()=>stepTo(0);$('b-prev').onclick=()=>stepTo(ply-1);$('b-next').onclick=()=>stepTo(ply+1);$('b-last').onclick=()=>stepTo(cur?cur.m.length:0);$('b-play').onclick=play;$('b-heat').onclick=()=>{heat=!heat;draw();};

@@ -501,6 +501,7 @@ pub(crate) fn play_one_move(
     board: &mut Board,
     graph_records_vec: &mut Vec<GraphRecord>,
     move_history: &mut Vec<(i32, i32)>,
+    move_arms: &mut Vec<(u32, bool)>,
     version_seen: &mut Vec<u64>,
     rng: &mut ThreadRng,
     running: &AtomicBool,
@@ -681,6 +682,12 @@ pub(crate) fn play_one_move(
         return MoveOutcome::Break;
     }
     move_history.push((move_idx.0, move_idx.1));
+    // The arm travels with the move so the game RECORD can label it (R353(d)); the graph row's
+    // `is_full_search` reaches the replay ring, not the record.
+    move_arms.push((
+        u32::try_from(move_sims).unwrap_or(u32::MAX),
+        move_is_full_search,
+    ));
     accumulators
         .positions_generated
         .fetch_add(1, Ordering::Relaxed);

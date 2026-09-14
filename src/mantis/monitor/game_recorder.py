@@ -60,6 +60,7 @@ class GameRecorder:
         terminal_reason: str,
         game_id_byte_hash: str,
         served_sims: int,
+        move_arms: list[tuple[int, bool]],
     ) -> None:
         """Write this game. Never raises — the writer owns the failure posture."""
         self._writer.write(selfplay_record(
@@ -74,6 +75,7 @@ class GameRecorder:
             seed=self._seed,
             served_sims=served_sims,
             game_id_byte_hash=game_id_byte_hash,
+            move_arms=move_arms,
         ))
 
     def latest_replay_path(self) -> Path | None:

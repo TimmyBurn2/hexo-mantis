@@ -17,9 +17,12 @@ class EmptyGameRecord(RuntimeError):
     """The games directory held no game of this run — refuse rather than render an empty viewer."""
 
 
+_ARM_CHAR = {"opening": "o", "full": "f", "fast": "q"}
+
+
 @dataclass
 class ShardData:
-    """One shard's games keyed by id: `m` moves, `win` the six line or None, `s` stats if present."""
+    """One shard's games keyed by id: `m` moves, `win` the six line or None, `s` stats, `a` arm chars (`o`/`f`/`q`) + `sims` per arm."""
 
     name: str
     games: dict[str, dict[str, Any]] = field(default_factory=dict)
@@ -45,9 +48,28 @@ def _row(game: dict[str, Any], run_id: str, shard: int) -> dict[str, Any]:
         "term": game.get("termination"), "step": game.get("step"), "kind": game.get("step_kind"),
         "shard": shard, "stats": bool(game.get("search_stats")),
         "rung": game.get("rung"), "phase": game.get("phase"), "w": game.get("worker_id"),
+        "sims": game.get("served_sims") if game.get("colors") else None,
+        "cand": (game.get("colors") or {}).get("candidate"),
     }
     # Absent keys stay absent: a null `rung` on every self-play row is bytes, not information.
     return {k: v for k, v in row.items() if v is not None}
+
+
+def _arms(game: dict[str, Any]) -> tuple[str, dict[str, int]] | None:
+    """`(arm string, sims per arm)` from `move_arms` / `move_sims`; None when the record has none."""
+    arms, sims = game.get("move_arms"), game.get("move_sims")
+    if not isinstance(arms, list) or not isinstance(sims, list) or len(arms) != len(sims):
+        return None
+    per_arm: dict[str, int] = {}
+    chars = []
+    for arm, n in zip(arms, sims, strict=True):
+        char = _ARM_CHAR.get(str(arm))
+        if char is None:
+            return None
+        chars.append(char)
+        if char != "o":
+            per_arm[char] = int(n)
+    return "".join(chars), per_arm
 
 
 def _shard_paths(games_dir: Path, run_id: str) -> list[Path]:
@@ -80,6 +102,9 @@ def build_run(games_dir: Path | str, run_id: str) -> RunData:
             stats = game.get("search_stats")
             if stats:
                 entry["s"] = stats
+            arms = _arms(game)
+            if arms is not None:
+                entry["a"], entry["sims"] = arms
             row = _row(game, run_id, shard_no)
             if line is not None and row["res"] in ("p1", "p2"):
                 side = "p1" if owner(len(moves) - 1) == 0 else "p2"

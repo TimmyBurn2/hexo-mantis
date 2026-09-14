@@ -257,11 +257,7 @@ class SealBotAdapter:
         return f"sealbot_d{self._depth}"
 
     def new_game(self) -> None:
-        """Start from an EMPTY transposition table: an engine that has searched is replaced, never
-        carried into another game. The vendored table persists across `get_move` calls, is keyed
-        without the root player and stores root-relative scores, so a seat swap between games
-        reads the previous seat's entries with the wrong sign (CARD-SEALBOT-TT-SEAT, R353(b)).
-        The compound-turn buffer is cleared and the two levers re-asserted on the fresh engine."""
+        """A searched engine is replaced, never carried into another game — its table is keyed without the root player (R353(b))."""
         self._buffer.clear()
         self._buffer_seat = None
         if self._engine_searched:

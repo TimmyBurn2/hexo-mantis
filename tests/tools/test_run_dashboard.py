@@ -230,9 +230,7 @@ def test_the_hero_strength_cell_carries_wr_games_wilson_and_elo(html, reader, tm
 
 
 def test_the_strength_panel_says_every_sealbot_reading_is_provisional(html, reader, tmp_path):
-    """R353(b)/§0.2: until SEALBOT-TT's A/B re-derives the level, every sealbot reading is
-    PROVISIONAL and the strength panel says so — with rounds drawn AND with none, because the
-    record carries no witness of which adapter played its rung."""
+    """R353(b): the strength panel says every sealbot reading is PROVISIONAL, with rounds and without."""
     for rows in (BOOT, [_round(1, 0.5)]):
         page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.5)]))
         panel = re.search(r'<section class="panel tier2" id="ladder">(.*?)</section>', page, re.S)
