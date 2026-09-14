@@ -107,6 +107,24 @@ Both were found by running the gate set rather than by reading it, and both are 
   18k net, 288 paired games, the same rung; the card is NOT a run7 question — as a TRAINER the
   head works. CARDED.
 
+- **CARD-SEALBOT-GIL-SERIAL — `rung_concurrency` overlaps only the candidate's side, because
+  the vendored sealbot holds the GIL through its search.** `vendor/external/sealbot/current/minimax_bot.cpp`
+  binds `get_move` with no `py::gil_scoped_release`, so under `eval.rung_concurrency 8` (R351,
+  ratified by R352) the eight threads' sealbot searches run one at a time. Measured on the
+  re-minted run7's stamp (`RUN7_STAMP2_2026-09-14.md`): the 288-game `sealbot_d5` rung took 48 of
+  the terminal round's 96 minutes while sealbot d5's own moves are 0–3 s each — ≈ 40 min of
+  serialised sealbot time. The round's wall is why `eval.round_timeout_sec` is minted at 10 800
+  and why a round can outlast the 3 000-step cadence. FIX SHAPE, proposed and unverified: a THIRD
+  HUNK of `vendor/patches/sealbot.patch` wrapping `engine.get_move(gs)` alone in
+  `py::gil_scoped_release` (the extraction stays under the GIL; the engine's transposition table
+  is per instance and the shared offset/zobrist tables are built by its constructor under the
+  GIL) — no move, score or depth receipt changes. The hunk and the rewritten patch are in the
+  R352 leg's scratch record; it is R145-class (a patch change) and the session's classifier
+  refused the rebuild, so it is the OPERATOR's: apply the patch text, `rm -rf vendor/external/sealbot
+  && make vendor && make vendor.sealbot`, run `tests/bots/test_sealbot_vendored.py` and the
+  cost cells (`/workspace/oc7/cells_rungcost.json`) to read the rung at concurrency 1 vs 8.
+  Nothing is ever pushed to the SealBot repository — the patch lives in this tree only.
+
 ## Opened by R350 (the block verdict)
 
 - **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**
