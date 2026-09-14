@@ -315,7 +315,30 @@ per-shard data files, the board module included) for a record that must be brows
 process. The one-file page replaces today's dashboard page (366 KB) at the same order of size; the
 size test is kept and its cap re-measured at landing.
 
-### 3.5 What the operator's machine and phone carry
+### 3.5 Game lists are bounded by construction (operator direction, 2026-09-14: "cut off games,
+show 100/200, load more manually")
+
+The list is never the run; it is a WINDOW of 200 rows, newest first, and a button that states the
+remainder ("200 of 38 988 · load 200 more"). No infinite scroll anywhere: a button is a deliberate
+act that prints the count; a scroll into 170 k rows on a phone is a trap. The same rule holds on
+the round page (a run7 round is ≈ 350 games) and on the overview's latest-games strip (8 rows, a
+link to the list). A "go to game id" box sits beside the filter row, because the measurement
+records cite games by id.
+
+| form | where the index lives | what the page receives | "load more" |
+|---|---|---|---|
+| served | in the process, COLUMNAR per shard (typed arrays / tuples, ≈ 100 B per game, so 170 k games are ≈ 17 MB — dicts would be ≈ 170 MB) | 200 light rows per request, filters applied server-side (`/api/run/<id>/games?after=<cursor>&n=200&channel=…`), plus the total under the filter | the button fetches the next page; with script stripped the page carries a plain "next page" link |
+| frozen directory (`--games all`) | chunk files of 500 rows in reverse shard order, `data/<run>/index/<n>.js`, with a manifest of chunk sizes | the FIRST chunk inline, the manifest, the total | the button loads the next chunk file; from `file://` in Chromium that load fails and the button says "open through a file server to load more" — the first rows stay |
+| one-file freeze | none | the last 100 games' light rows inline (≈ 17 KB), no moves | the button reads "the rest are in the shards" and is disabled |
+
+The cursor is `(shard ordinal, offset within shard)`, so a page is stable while the open shard
+grows; "newest first" means the open shard's tail first, then closed shards descending. Sort
+options are newest / longest / step; a sort other than newest is served from the columnar index
+without materialising rows. The events reducer keeps its series as `array('d')` for the same
+reason: a five-day run's 150 k `trainer_step` rows are 1.2 MB per key as doubles, not 15 MB as
+Python floats in lists.
+
+### 3.6 What the operator's machine and phone carry
 
 Server: one Python process, RSS ≈ 150–250 MB (the interpreter with `mantis._engine` imported,
 ≈ 7 MB of reduced state per run6-sized run, the shard index ≈ 7 MB per 39 k games); CPU: a poll is a
@@ -393,8 +416,8 @@ freeze's `--out`.
 - `file://` in Chromium blocks `fetch` and ES-module loads; the frozen ONE file inlines everything
   it carries and carries no game data; the directory freeze and the served form need a file
   server or the process. There is no fourth form and the docs say so.
-- A five-day run's game list is ≈ 170 k rows; pagination is server-side from the shard index and
-  the filters are one row above the list; the phone never receives an index.
+- A five-day run's game list is ≈ 170 k rows; §3.5 bounds every list to a 200-row window with a
+  stated remainder; the phone never receives an index.
 
 ### 4.6 What is deleted, and when
 
