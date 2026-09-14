@@ -18,7 +18,7 @@ its R333(d) / R352(g) amendments, `docs/governance/CARDS.md` (DASH-2) and R344(d
 | what a page needs of the stream | a dozen `(x, y)` series and the last row per event: ≈ 35 k points × 12 series × 16 B ≈ **7 MB** of state for run6 | derived from `tools/dashboard/tier2.py`'s reads |
 | the viewer's light index | ≈ 175 B / game → 39 k games = 6.8 MB inline; at run7's ≈ 1 400 games / h a five-day run is ≈ 170 k games ≈ **30 MB of index on the phone** | measured bytes ÷ games |
 | refresh machinery today | 2 generators, 2 refresh scripts (`refresh_run7.sh`, `refresh_viewer_run7.sh`) under 1 systemd timer + the puller unit; the timer fires 3 min after the puller's 10-min cycle | `~/.config/systemd/user/`, the mirror's `dashboard/` |
-| the live-ness facts the record already carries and the dashboard does not read | `heartbeat_<run>.json` (`seq`, per-source `ages`, `wall_ts`; its path is published on `heartbeat_watchdog_armed.heartbeat_file`); `eval_spool.work/<run>/<round>_progress.txt` (named by contract #11 as the join partner of `game_index`) | the run7 mirror; `docs/contracts/game_record.md` |
+| the live-ness facts the record already carries and the dashboard does not read | `heartbeat_<run>.json` (`seq`, per-source `ages`, `wall_ts`; its path is published on `heartbeat_watchdog_armed.heartbeat_file`; its FORMAT is named by `repo_design` §11 — "a monotonic `seq`" — and by no contract doc); `eval_spool.work/<run>/<round>_progress.txt` (its row shape is `eval_round_complete.progress`, manifest row `eval_round_progress`) | the run7 mirror; `docs/contracts/game_record.md`, `event_manifest.md` |
 | what `resolved_config` carries | **8 knobs**: `amp_dtype`, `eval.random_model_sims`, `eval.sealbot_model_sims`, `identity.encoding`, `identity.representation`, `run_id`, `schema_version`, `seed` — not `train.eval_interval`, not `deploy.search.kind`, not `monitor.alert_grad_norm_max` | run7's row |
 
 Extrapolation, linear, stated as such: a five-day run7 record is ≈ 800 MB of events; the v2
@@ -168,7 +168,7 @@ read, nowhere for the drill-down to live).
 | (i) is the run healthy | overview, first cell | the badge: the worst of nine inputs with an icon and a word; its reasons inline; **an unread input is never green** (the badge reads "unmeasured for …"); the record's age and the heartbeat's age at the pull on the masthead | animate, tick, or imply the mirror is the run |
 | (ii) strength and trend with their uncertainty | overview cells 3–5, the ladder | WR with its n, the Wilson band from the ladder file and the record's own pair-bootstrap CI as whiskers, ≈ Elo; the OLS slope with its t-interval and how many rounds are in it; PROVISIONAL note on every sealbot reading (R353(b)); promoted / rejected / no decision as three shapes | draw a curve from fewer than two rounds; draw a broken round as 0 %; smooth |
 | (iii) drill in: round → games → position | rounds, round, games, position | the round's phases with games, sims, wins, and the tactical columns; the game list filtered and paginated; the board with the root's visits, the standing fours, the blocking cells, the arm and sims of the stone just placed, the per-turn state list, the root-value trace | infer an arm from `served_sims`; draw an empty heatmap on self-play; score a move |
-| (iv) compare two runs | compare | small multiples with the run as the series (fixed colour per run), one step axis clipped to the shorter run, the ladder of each, and **the instrument behind each curve as a table** (rung, sims, games per round, cadence — each with the field it came from; a hatched row where the record does not carry it) | a dual axis; a curve where one run has no rows |
+| (iv) compare two runs | compare | small multiples with the run as the series (fixed colour per run), one step axis clipped to the shorter run by default with a full-extent toggle and a relative-wall-time option (the eval rounds land at different steps), the ladder of each, and **the instrument behind each curve as a table** (rung, sims, games per round, cadence — each with the field it came from; a hatched row where the record does not carry it) | a dual axis; a curve where one run has no rows |
 
 ### 2.3 Information hierarchy, density, typography
 
@@ -183,6 +183,10 @@ Type: one family, `system-ui`; 26 / 600 hero values with proportional figures (2
 for tables, axes, coordinates, plies and ids — never for a hero value. No webfont: the page must
 work from disk with no network, so there is no font host to lean on (the design canvas honours
 this too).
+
+Every chart has a table twin (the dataviz rule): a `<details>` under the panel listing the
+exact numbers the chart draws — per pixel column `x, min, max, last` (the envelope's own buckets)
+— server-rendered, present on the frozen file, so no value is reachable only by hover.
 
 Density: 8 px rhythm; 24 px page gutter at a desk, 16 on the phone; a chart is 440 × 150 in a
 three-column grid at a desk and full-width stacked on the phone; the board is 720 px beside a
@@ -229,18 +233,27 @@ frozen file carries both palettes as CSS custom properties, so one file serves b
 The vocabulary the two measurement records used (fours, WIN1, CHECK, LOST1, missed block, missed
 win, check-run) was computed by scratch scripts validated against the engine's `winning_moves ∪
 threat_moves` on 18 190 positions with 0 disagreements. It is a pure function of `moves`, exactly
-as the owner and the win line are, and the R352(g) amendment's rule for derived facts applies with
-one difference: there is no record field to check a four against, so the check is the engine
-oracle in tests (`mantis._engine.Board`), and the page says on every position that the state is
-**derived by the observatory, not recorded by the run**. It is computed on request for one game
-(milliseconds), never pre-built for 39 k games; the freeze carries it for the games it inlines.
-It is not a judgement: no accuracy score, no move classification beyond the exact one-turn facts.
+as the owner and the win line are, and the R352(g) amendment's rule for derived facts applies:
+derived, then CHECKED against the authority that owns the fact. The engine exposes
+`Board.winning_moves(player) ∪ Board.threat_moves(player)` — exactly the empties of every four
+(`crates/mantis-core/src/board/moves.rs`: the six-completing cells, and the cells of a window
+with four own stones and two empties) — but not the windows themselves, and CHECK vs LOST1 is a
+hitting-set question over windows. So the reader enumerates the windows in Python and, on EVERY
+position it serves, checks its union of empties against the engine's two calls (two calls, ms);
+a disagreement is drawn as a FINDING on the page and the state is withheld for that ply — the
+oracle is in the loop, not only in tests (the test suite holds the same check over the fixture
+positions at 0 disagreements, the GAME-QUALITY bar). The page says on every position that the
+state is **derived by the observatory, not recorded by the run**. It is computed on request for
+one game (milliseconds), never pre-built for 39 k games; the directory freeze carries it for the
+games it writes. It is not a judgement: no accuracy score, no move classification beyond the
+exact one-turn facts.
 
 ### 2.6 Keyboard and touch
 
 `←` `→` ply; `Home` `End`; `space` play/pause (350 ms); `n` `p` next/previous game in the current
 list; `[` `]` previous/next round; `h` visits; `t` tactics; `l` copy the position link; `g` focus
-the games list; `/` focus the filter row; `?` the map; `Esc` close. On the phone: swipe the board to
+the games list; `/` focus the filter row; `?` the map; `Esc` close. The turn list shows the ±10 turns around the current ply with "show all" beyond
+that (a 256-ply cap game is 128 turns). On the phone: swipe the board to
 step, tap a stone to jump to its ply, tap a blocking cell to see the four it blocks; controls are
 44 px. Every position is an address: `/run/<id>/game/<game_id>?ply=N&heat=1&tac=1`, server-rendered
 at that ply so the link works with script off and loads in one round trip on the phone; the
@@ -283,6 +296,11 @@ once when the run's `games_<run>_index.jsonl` names it closed, storing `(game_id
 offset)` and the light row; the open shard is re-read from its offset on each poll. A game is
 fetched by one seek and one line parse.
 
+The poll runs in ONE background thread and publishes an immutable snapshot: it builds the deltas,
+then swaps the snapshot reference under a lock; a request reads the snapshot it was handed and
+never a half-updated series. The snapshot is what `freeze` renders too, so the two front doors
+cannot disagree on a record.
+
 ### 3.2 Poll, not watch
 
 The mirror advances every 10 min; the server polls the run directories' mtimes every 30 s and
@@ -300,7 +318,11 @@ not latency.
 (the JSON the board module steps through: moves, arms, stats, the per-turn tactical rows),
 `/static/…`. Bind `127.0.0.1` by default; `--bind 0.0.0.0` exists for the phone and is documented
 as unsafe on any network that is not the operator's own (R344(d)'s words). Read-only: no route
-writes. Host names never appear in code or docs (rule 7).
+writes; the only readable roots are the package's `web/` and the `--run` directories, resolved
+and checked to stay inside them (a `..` or an absolute path is a 404, never a file); no directory
+listing. `freeze` is deterministic: the same record yields a byte-identical file — the page's
+"as of" line is the record's last event time, never the clock. Host names never appear in code or
+docs (rule 7).
 
 ### 3.4 Freeze — one file for the record
 
@@ -359,11 +381,11 @@ touches `src/mantis`, the box, or the mirror's units (the operator swaps those a
 |---|---|---|---|
 | **0 · ruling + amendment text** (docs only) | the amendment of §4.3 as text in this file's successor commit; CARDS.md's DASH-2 row updated to "built as OBSERVATORY under tools/" when phase 3 lands | — | none (docs) |
 | **1 · readers** | `tools/observatory/readers/{events,series,ladder,shards,games,hexlogic}.py` (hexlogic and the ladder/stats arithmetic MOVED from the two tools, not copied — the old tools import them from the new home) | parity: the reduced series and the hero numbers equal `tools/dashboard`'s over the fixture record; incremental ≡ whole (a planted append yields the same state); a torn tail is held, not skipped; a new segment is appended; a closed shard is indexed once; a game is read by offset; the viewer's owner/win-line tests move with the code | 14 (pyright over `tools/`), 15, 16, gate 3 floor follows |
-| **2 · views + freeze** | `views/`, `freeze.py`, `tools/observatory.py freeze`; the overview, rounds, round, games pages rendered from the readers; the size test | every tier-1 number survives script-stripped; the panel roster matches the contract order; every panel carries its `reads` line; the absence vocabulary of §2.7 has one test per shape (no zero, no empty axis, no flat line from no series); the page carries no absolute home path; the frozen page for the fixture record carries the same numbers as the old dashboard's | 6 (no output tracked), 14–17 |
-| **3 · serve** (the socket; **the amendment commit**) | `serve.py`, routes, the poll loop, `liveness.py` (heartbeat age via `heartbeat_watchdog_armed.heartbeat_file` — resolved by BASENAME under the run's `logs/`, because the published path is the writing host's and the mirror's differs; pull age from the newest receipt's mtime; round in flight via `<round>_progress.txt` with the block-end caveat), the `repo_design` amendment of §4.3, the DASH-2 card moved | routes serve the same HTML as freeze for the same record; loopback is the default bind; a stale mirror is drawn as stale, not as a stalled run; a round in flight with no rows is drawn as "rows land at block end"; a census pins that nothing under `src/mantis` imports `tools` and that `tools/observatory` opens no socket at import | 9 (unchanged), 17 (no host), the census |
-| **4 · games** | `readers/tactics.py` (the validated instrument, ported), the board module `web/board.js` (the viewer's JS as an ES module, stepping only), the server-rendered board at `?ply=N`, arms/sims, the visits overlay, the tactical overlay, the per-turn list, the value trace, pagination and filters | tactics vs the engine oracle on the fixture positions (`winning_moves ∪ threat_moves`, 0 disagreements — the GAME-QUALITY bar); a self-play game's visits toggle is disabled and says why; a pre-producer record says "arm not recorded"; the `?g=` redirect; the position page at `ply=N` carries that ply's stones with script stripped | 14–17 |
+| **2 · views + freeze** | `views/`, `freeze.py`, `tools/observatory.py freeze`; the overview, rounds, round, games pages rendered from the readers; the size test | every tier-1 number survives script-stripped; the panel roster matches §2.3's order (the new tool's own roster, health first); every panel carries its `reads` line and its table twin; the absence vocabulary of §2.7 has one test per shape (no zero, no empty axis, no flat line from no series); the page carries no absolute home path; the frozen page for the fixture record carries the same VALUES as the old dashboard's; freezing the same record twice is byte-identical | 6 (no output tracked), 14–17 |
+| **3 · serve** (the socket; **the amendment commit**) | `serve.py`, routes, the poll loop, `liveness.py` (heartbeat age via `heartbeat_watchdog_armed.heartbeat_file` — resolved by BASENAME under the run's `logs/`, because the published path is the writing host's and the mirror's differs; the file's FORMAT is uncontracted, so the panel reads only its mtime and `seq`, says "format uncontracted (repo_design §11)" and never feeds the health badge; pull age from the newest receipt's mtime; round in flight via `<round>_progress.txt` with the block-end caveat), the `repo_design` amendment of §4.3, the DASH-2 card moved | routes serve the same HTML as freeze for the same record; loopback is the default bind; `..` and absolute paths are 404s; a request during a poll sees the old or the new snapshot, never a mix (planted); a stale mirror is drawn as stale, not as a stalled run; the heartbeat panel says its format is uncontracted and feeds no badge; a round in flight with no rows is drawn as "rows land at block end"; a census pins that nothing under `src/mantis` imports `tools` and that `tools/observatory` opens no socket at import | 9 (unchanged), 17 (no host), the census |
+| **4 · games** | `readers/tactics.py` (the validated instrument, ported), the board module `web/board.js` (the viewer's JS as an ES module, stepping only), the server-rendered board at `?ply=N`, arms/sims, the visits overlay, the tactical overlay, the per-turn list, the value trace, pagination and filters | tactics vs the engine oracle on the fixture positions (`winning_moves ∪ threat_moves`, 0 disagreements — the GAME-QUALITY bar) AND the serve-time check drawing a FINDING on a planted disagreement; a self-play game's visits toggle is disabled and says why; a pre-producer record says "arm not recorded"; the `?g=` redirect; the position page at `ply=N` carries that ply's stones with script stripped; a 200-row window with the stated remainder, the cursor stable while the open shard grows | 14–17 |
 | **5 · compare** | `views/compare.py`: two runs on one step axis clipped to the shorter, small multiples, the instrument table with a hatched row per fact the record lacks | the series colour follows the run across a filter; a run with no rounds contributes an absence, not a curve; the instrument rows name their fields | 14–17 |
-| **6 · retire** | delete `tools/run_dashboard.py`, `tools/dashboard/`, `tools/game_viewer.py`, `tools/viewer/`, their tests (the moved ones already live under the new names), the `make dashboard` / `make viewer` targets (replaced by `make observatory.freeze` / `make observatory.serve`); the operator replaces the mirror's `refresh_run7.sh`, `refresh_viewer_run7.sh` and `mantis-dashboard-run7.{service,timer}` with one `mantis-observatory.service` (a documented unit shape with placeholders, not a tracked unit — it would carry home paths, rule 7); the R333(d) and R352(g) amendments gain a closing line; the test-count floor follows the net count | the parity fixtures stay as the observatory's own; gate 10 (no Makefile/doc reference to the deleted paths) | 10, 3c |
+| **6 · retire** | delete `tools/run_dashboard.py`, `tools/dashboard/`, `tools/game_viewer.py`, `tools/viewer/`, their tests (the moved ones already live under the new names), the `make dashboard` / `make viewer` targets (replaced by `make observatory.freeze` / `make observatory.serve`); the operator replaces the mirror's `refresh_run7.sh`, `refresh_viewer_run7.sh` and `mantis-dashboard-run7.{service,timer}` with one `mantis-observatory.service` (a documented unit shape with placeholders, not a tracked unit — it would carry home paths, rule 7); the R333(d) and R352(g) amendments gain a closing line; the moved tests land BEFORE the deletions in the same commit so gate 3c's non-decreasing count holds, and the floor follows the net count | the parity fixtures stay as the observatory's own; gate 10 (no Makefile/doc reference to the deleted paths) | 10, 3c |
 
 Phase 4 may precede 3 (it does not need the socket); phases 1–2 must precede both. Phase 6 is the
 only phase that deletes and it waits for the operator's word after phases 3–5 have run beside the
@@ -383,7 +405,9 @@ edge, no socket at import — is a census test, not a CI gate, because it guards
 ### 4.3 The `repo_design` amendment (phase 3's commit carries it; proposed text)
 
 > **AMENDMENT — R344(d) discharged under `tools/`: the OBSERVATORY is admitted; the two offline
-> tools it replaces are retired at its last phase.** §1 says display surfaces are absent and names
+> tools it replaces are retired at its last phase.** (Authority: operator direction on the
+> OBSERVATORY packet, 2026-09-14 — "proceed with this generally"; the ruling number is the
+> operator's to assign and this text cites it once assigned.) §1 says display surfaces are absent and names
 > the event manifest + the game record as the contract any display builds against. R344(d) ordered
 > a read-only stdlib server carrying the game viewer and owed this amendment; R333(d) and R352(g)
 > admitted two offline tools on the rule that an absent surface is one that would have to WATCH A
@@ -425,3 +449,34 @@ At phase 6, and not before: two generators (`tools/run_dashboard.py` + `tools/da
 `tools/game_viewer.py` + `tools/viewer/`), their two Makefile targets, ten test files (their
 behaviour re-homed), and on the operator's machine two refresh scripts and one timer/service pair,
 replaced by one unit. Until then both frozen CLIs run unchanged beside the new tool.
+
+## 5. Review of the design (operator direction: "do a review of the design first")
+
+Done before any plan or code, against the packet's non-negotiables, the two contracts, the repo's
+rules and the design's own consistency. Each finding names the change it made above; nothing was
+left as a note to self.
+
+| # | finding | verdict | change |
+|---|---|---|---|
+| F1 | §1.1 rests on R344(d) being standing. Checked: R344's status line corrects (c) and §0.5 only; (d) is untouched, and CARDS.md still carries it as ORDERED, NOT BUILT. | holds | §4.3 now states its authority (operator direction, this packet) and leaves the ruling number to the operator |
+| F2 | The packet names the two contracts as the ONLY inputs. `eval_ladder_state.json` is admitted by R333(d) and `<round>_progress.txt`'s row shape is contracted (`eval_round_complete.progress`), but `heartbeat_<run>.json`'s FORMAT is named only by `repo_design` §11 and by no contract doc. | a gap, not an input | the liveness panel reads the file's mtime and `seq` only, says the format is uncontracted, feeds no badge; a contract row is a docs follow-up (§0 row and phase 3 corrected) |
+| F3 | The tactics overlay was a derived fact whose oracle sat in tests only; R352(g)'s rule is derived AND checked. The engine exposes the empties of every four (`winning_moves ∪ threat_moves`) but not the windows a hitting set needs. | the oracle belongs in the loop | §2.5: every served position checks its union against the engine's; a disagreement is a FINDING and the state is withheld |
+| F4 | The dataviz method requires a table twin for every chart; the design had tables only for rounds. | a real gap | §2.3: a `<details>` table of the envelope's own buckets under every chart, on the frozen file too |
+| F5 | `ThreadingHTTPServer` plus a poll thread with no stated consistency rule. | would ship a race | §3.1: one poll thread, an immutable snapshot swapped under a lock; a planted test in phase 3 |
+| F6 | No statement on path traversal or readable roots. | would ship a hole | §3.3: only `web/` and the `--run` roots, resolved and contained; `..`/absolute → 404; no listing; a test in phase 3 |
+| F7 | `freeze` reproducibility unstated; a "generated at" clock would make two freezes of one record differ. | needed | §3.3: byte-identical on the same record; the "as of" line is the record's last event time; a test in phase 2 |
+| F8 | GAME-QUALITY §F's links are `viewer/index.html?g=…` on the operator's file server; the observatory's `?g=` redirect covers only its own root. | stated, not solved | the old viewer directory stays served by whatever serves it until phase 6; the doc says so here |
+| F9 | Health-first reorders the dashboard's contract order and would red its roster test. | intended | the new tool has its own roster test (§4 phase 2); the old tool's test is retired with it in phase 6 |
+| F10 | Compare clipped to the shorter run hides the long run's later shape; the eval rounds land at different steps. | add the option | §2.2 (iv): a full-extent toggle and a relative-wall-time x option, default clipped |
+| F11 | A 256-ply cap game is 128 turn rows on a phone. | add the window | §2.6: ±10 turns around the current ply, "show all" beyond |
+| F12 | Sorting 170 k index rows per request. | acceptable, measured at landing | columnar sort ≈ tens of ms; cached per filter if measured otherwise |
+| F13 | R8 and the comment ratchet scan `.py`/`.rs`, not `web/*.js`. | same discipline by hand | each module under 300 lines, no banners, no narrative; stated in phase 4's commit |
+| F14 | Phase 6 deletes ≈ 60 tests; gate 3c is non-decreasing. | ordering matters | the moved tests land before the deletions in the same commit (§4 phase 6) |
+| F15 | The canvas carried three numbers that were NOT read from the record: run7's first-mover share (42.1 % was GAME-QUALITY's 195-game sample, the record's 1 452 games read 49.1 %), "Gumbel 320/64" on the compare instrument table for run6 (its records predate the arm producer) and a search KIND for either run (`selfplay.search.kind` rides no event), and "flag 1 of 3" on the round page (the threshold is not on the row). | the exact defect class the house rule exists for, caught by its own review | canvas version 3: the share read from `game_complete.winner`, the kind row hatched for both runs, the sims row hatched for run6, the flag count without a threshold |
+| F16 | Memory at five days: `trainer_step` ≈ 150 k rows × 12 series as `array('d')` ≈ 14 MB; the cap window keeps a 600-flag deque; the game-length series ≈ 1.4 MB; the shard index ≈ 17 MB columnar. | within §3.6's budget | none |
+| F17 | The design skill's second look at the canvas: no emoji glyphs (the transport buttons are inline SVG), no fake phone chrome, 44 px controls on the phone artboards, the one placeholder set (latest-game ids) marked as such on the artboard. | holds | none |
+
+What the review did NOT change: the recommendation (c), the home under `tools/`, the phase order,
+the bounded lists of §3.5, the one-file freeze carrying no game data. Where a finding could have
+been argued either way (F10, F12) the cheaper option is taken and the measurement that would
+overturn it is named.
