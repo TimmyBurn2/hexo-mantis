@@ -1,9 +1,6 @@
-"""Sweep the preflight oracles' probe paths out of the tree, before and after the session.
-
-The oracle that drives the mint preflight with an in-repo `--out-dir` has no `try/finally`, so a
-failing guard leaves an untracked artifact directory behind and every later run then fails on
-the precondition instead of on the guard. The sweep touches exactly the two paths named below.
-"""
+"""Sweep the preflight oracles' probe paths out of the tree before and after the session (the
+in-repo `--out-dir` oracle has no `try/finally`, so a failing guard would poison every later run),
+and load the `tools/` packages by path for the tests that read them."""
 from __future__ import annotations
 
 import importlib.util
@@ -148,23 +145,33 @@ def local_puller(tmp_path_factory) -> Iterator[Path]:
         thread.join(timeout=30)
 
 
-def load_dashboard_package():
-    """Load `tools/dashboard` by path under the name `dashboard`, once per process — `tools/`
-    is not a package and nothing may touch `sys.path` (R5)."""
-    if "dashboard" in sys.modules:
-        return sys.modules["dashboard"]
-    pkg_dir = REPO_ROOT / "tools" / "dashboard"
+def load_tools_package(name: str):
+    """Load `tools/<name>` by path under that name, once per process; `sys.path` untouched (R5)."""
+    if name in sys.modules:
+        return sys.modules[name]
+    pkg_dir = REPO_ROOT / "tools" / name
     spec = importlib.util.spec_from_file_location(
-        "dashboard", pkg_dir / "__init__.py", submodule_search_locations=[str(pkg_dir)],
+        name, pkg_dir / "__init__.py", submodule_search_locations=[str(pkg_dir)],
     )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    sys.modules["dashboard"] = module
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def load_dashboard_package():
+    """The `tools/dashboard` package, by path."""
+    return load_tools_package("dashboard")
 
 
 @pytest.fixture(scope="session")
 def dashboard():
     """The `tools/dashboard` package, with its submodules importable as `dashboard.<name>`."""
     return load_dashboard_package()
+
+
+@pytest.fixture(scope="session")
+def viewer():
+    """The `tools/viewer` package (VIEWER-1), with its submodules importable as `viewer.<name>`."""
+    return load_tools_package("viewer")

@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard bench bench.baseline check.wasm vendor vendor.sealbot clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer bench bench.baseline check.wasm vendor vendor.sealbot clean
 
 UV ?= uv
 
@@ -51,6 +51,10 @@ gates.exit:
 dashboard:
 	uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
 	  $(if $(LADDER),--ladder-state "$(LADDER)",)
+
+#   make viewer RUNS="run6=<mirror>/run6/logs/games shakedown7=<mirror>/shakedown7/logs/games" OUT=<dir>
+viewer:
+	uv run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1

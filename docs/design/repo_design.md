@@ -1002,7 +1002,8 @@ commit as the tool, rather than as drift.
    server, and has no connection to a live run. It reads the §4.7 JSONL stream and, when given
    one, the run's `eval_ladder_state.json`. It is dev-only tooling under `tools/`, which is
    where §1's tree already puts `mint_config` and `hardcode_scan`.
-2. **What stays absent, unchanged.** The web dashboard, the game viewer and the TUI monitor.
+2. **What stays absent, unchanged.** The web dashboard, the game viewer and the TUI monitor
+   (the game viewer is admitted later by the R352(g) amendment below, on this amendment's terms).
    The distinction is not size, it is COUPLING: an absent surface is one that would have to
    watch a run, and everything on that list would. A report generated after the fact from an
    artifact is the same shape as the preflight report (contract #9) and the sweep report —
@@ -1023,6 +1024,36 @@ commit as the tool, rather than as drift.
    on the BC pretrain path and reports through a logger line, never through the sink).
 5. **§4.7 is unchanged.** The contract this reads through is the one that was already there;
    nothing about the event manifest moves, and no row is added to it.
+
+---
+
+### AMENDMENT — R352(g), VIEWER-1: the game viewer is ADMITTED on the dashboard's terms
+
+**R352(g).** §1 and the R333(d) amendment above keep the game viewer on the "stays absent"
+list. R352(g) orders it, over the GAME-RECORD-1 shards, "served from the mirror". Under R9 that
+is a deviation from this file and it lands as an amendment in the same commit as the tool.
+
+1. **What is admitted, narrowly.** `tools/game_viewer.py` (`make viewer RUNS="id=dir …" OUT=…`;
+   the implementation is `tools/viewer/`) — one command, EXISTING game-record shards in
+   (contract #11, `<run>/logs/games/`), one static directory out: an `index.html` carrying the
+   light per-game index and one `data/<run>/<shard>.js` per shard, loaded by the page on demand.
+   It adds no producer, opens no socket, runs no server and has no connection to a live run;
+   "served from the mirror" means any file server over the output directory (or `file://`).
+   It is dev-only tooling under `tools/`, beside the dashboard, and it reads the shards through
+   `mantis.monitor.game_record.read_shard`, the contract's own reader.
+2. **What stays absent, unchanged.** The web dashboard and the TUI monitor; the coupling rule
+   of the R333(d) amendment is untouched — this tool watches nothing.
+3. **The rule the tool carries.** Absent is not zero: the self-play channel records no
+   per-position search stats (contract #11), and the page states that gap in words on every
+   self-play game rather than drawing an empty heatmap; a games directory with no game of the
+   run is REFUSED, never rendered as an empty list. Facts the page derives — the owner of a ply
+   (`Ply::turn`'s mapping) and the six-in-a-row through the completing stone (`HEX_AXES`,
+   `WIN_LENGTH`) — are derived in Python and checked against every record's own `result` and
+   `termination` at build time; a disagreement is printed as a FINDING and carried on the page.
+4. **Measured at landing:** run6's 38 988 games (35 287 self-play, 3 701 eval-channel games
+   with search stats) and shakedown7's 2 421 — 41 409 — build in one page; the owner mapping
+   and the derived line agree with every decisive record of both runs (0 findings).
+5. **Contract #11 is unchanged.** Nothing about the game record moves; no field is added.
 
 ---
 
