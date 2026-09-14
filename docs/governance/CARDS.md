@@ -79,6 +79,34 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R352 (run7 kind, strix rung, viewer)
+
+- **CARD-PUCT-ATTRACTOR — WHY PUCT self-play drifts to the ply cap (F-52), read on the games.**
+  shakedown7's 2 421 games (755 at the 256-ply cap, 84–86 % in the last hour) and run6's are the
+  subjects; VIEWER-1 (R352(g)) is the instrument. Hypotheses, each with what would falsify it:
+  (1) MASKED CAP ROWS — `train.ply_cap_value` -0.5 lands on the cap game's rows, but if the
+  trainer's exclusions leave the value head no signal that a LONG game is heading to a draw, the
+  head never learns to avoid it; falsified if cap-row targets are present and weighted in the
+  trainer's batch composition. (2) A 2.5-PLY SEARCH DEFENDS BUT CANNOT ATTACK — a double threat
+  needs the depth to see the second threat; falsified if the cap games show unanswered single
+  threats (the search is not even defending) or if run6's Gumbel games at depth 3.8 show the same
+  shape. (3) τ 0.5 SAMPLING AT 64 SIMS — the fast arm's visit distribution at 64 sims is flat
+  enough that τ 0.5 picks a non-best move often; falsified if the cap games' move choices track
+  the root's argmax. (4) THE BC VALUE HEAD CALIBRATED ON DECISIVE HUMAN GAMES — it has never seen a
+  256-ply position and reads them near 0, so a draw is not punished; falsified if the value trace
+  through a cap game moves away from 0 as the game lengthens. The card closes on a reading, not a
+  fix: run7 self-plays under Gumbel by R352(a), and PUCT stays the deploy head.
+- **CARD-GUMBEL-HEAD-RESIDUE — which part of the Gumbel deploy head loses to the most-visited
+  child at every σ (F-51's residue, R352(b)).** All three σ pairs read the 18k net within 7 pp of
+  each other at 128 sims and within 2 pp at 512, halving per doubling, against PUCT's 0.774. The
+  candidates in order of cheapness to test: `gumbel_m` 16 over a ≈ 355-move legal set (a 16-sample
+  Gumbel top-k on a flat prior drops the best move with probability the paper's Go runs never
+  paid); the sequential-halving schedule at 512 sims (how many rounds survive, what each finalist
+  gets); the interior (non-root) selector; or a defect the Mctx parity fixtures do not reach (the
+  pins cover completed-Q and the root pick on toy trees, not a 355-move root). One cell each, the
+  18k net, 288 paired games, the same rung; the card is NOT a run7 question — as a TRAINER the
+  head works. CARDED.
+
 ## Opened by R350 (the block verdict)
 
 - **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**

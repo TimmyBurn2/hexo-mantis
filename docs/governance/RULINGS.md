@@ -1,4 +1,4 @@
-# RULINGS — R23 to R351
+# RULINGS — R23 to R352
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R352.
+- Numbering continues from R346. The next ruling is R353.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,96 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R352 — RUN7 KIND, STRIX RUNG, VIEWER: shakedown7 falsifies PUCT self-play; run7 is run6's Gumbel trainer with every head loaded; the ply-cap halt; RUNG-2 and VIEWER-1 ordered
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R351: the run7-kind packet made its own §1 the canonical home and directed that it be
+copied verbatim here.
+
+> R{next} — (a) SHAKEDOWN7 FALSIFIES PUCT SELF-PLAY at the minted regime
+> (320/64, τ 0.5, depth 2.5): five games in six at the 256-ply cap inside
+> four hours, the F-02/F-22 attractor. R351(c)'s fallback arm is
+> RETIRED for run7; F-52 filed. The only trainer reading on record is
+> run6's Gumbel-320/64: decisive 23–42-ply games, 0.5 % draws, 1,170
+> games/h, a net PUCT reads 15 pp above its prior. Run7 IS that trainer
+> with exactly one change — every head loaded — plus the instrument
+> fixes (PUCT-512 reader, 3,000/288 cadence, concurrency 8). The value
+> warm-up is dropped to keep the swap single; the trough line stays a
+> warning. Run7's curve is compared with run6's frozen-checkpoint PUCT
+> readings (0.63 / 0.60 / 0.77 / 0.69 at 3k / 13k / 18k / 25k, 512 sims).
+> (b) F-51 stands: σ's scale is not why the Gumbel HEAD loses as a
+> reader; the card asks which part (m over a ≈ 355-move legal set, the
+> halving schedule, the interior selector, or a defect the parity pins
+> do not reach). As a TRAINER it works; as a reader it is not used.
+> (c) The PLY-CAP HALT: `train.ply_cap_abort {rate: 0.5, window_games:
+> 600, min_step: 3000}` — the attractor is unambiguous at that level,
+> develops over hours, and the armed draw-rate abort at step 25,000
+> would have fired a day late. Producer test and planted break; the
+> dashboard shows the windowed cap rate from step 0.
+> (d) WHY FAST AND SLOW GAMES — the grounding, recorded so it is not
+> re-asked: playout-cap randomization (KataGo, Wu 2019) separates what
+> the two targets need. Value targets need many independent GAMES (one
+> outcome per game; positions within a game are correlated), so most
+> moves get a cheap search to finish games fast; policy targets need
+> many playouts per POSITION, so a fraction of moves get a full search
+> and only those rows train the policy. KataGo reported it as one of
+> its largest sample-efficiency gains. Under Gumbel the fast arm's
+> completed-Q target would also be a valid policy target; that is the
+> `fast_policy_weight` ablation, not the default.
+> (e) STRIX RUNG (RUNG-2): no model is published in SootyOwl/hexo-strix
+> (17 commits, no releases, no weights in the tree); the operator's
+> checkpoint_00237000.pt is the rung, pinned by sha256 with the strix
+> commit and config it belongs to. Two cells per point, both
+> deterministic, paired openings, both colors, 288 games: (A) AS-SHIPPED
+> — strix at its own deploy search and sims vs ours at PUCT-512, the
+> "who is stronger" cell; (B) EQUAL-WORK — both at 256 NN evaluations
+> per move, the fairness cell for claims. Cadence every 15,000 steps
+> plus step 0 and block end; NOT in the promotion gate; s/game measured
+> at step 0 before the cadence is confirmed. Grounds for doing it now:
+> sealbot_d5 reads 0.77 at 512 already and saturates within the block;
+> without a harder rung the run has no external instrument past ~20k.
+> (f) IS SEALBOT FAIR: it is not a fair fight and is not meant to be —
+> it is a FIXED reference: deterministic, depth read back, paired
+> openings, both colors, the same reading on every checkpoint. That is
+> the fairness an instrument needs. A time-matched cell (our move time
+> = sealbot's) is a tournament question; one cell at block end, not per
+> round.
+> (g) VIEWER-1 is ORDERED: the R344 DASH-2 game viewer over the game
+> shards (hex SVG board, step through moves, result/plies/channel, visit
+> heatmap where stats exist), served from the mirror; first subjects
+> are shakedown7's 2,421 games and run6's — the operator reads the
+> PUCT attractor with his own eyes. CARD-PUCT-ATTRACTOR is opened with
+> the hypotheses to test on those games: masked cap rows give the value
+> head no signal that long games are draws; a 2.5-ply search defends
+> but cannot attack (double threats need depth); τ 0.5 sampling at 64
+> sims; the BC value head calibrated on decisive human games.
+> ROUTE: re-mint → stamp → 3 h shakedown → START → RUNG-2 ∥ VIEWER-1.
+
+`R{next}` is the packet's own placeholder and resolves to R352 — this file's header said the next
+number was 352 when the packet was forwarded; the text is copied as written rather than edited.
+What the forward ENACTS beyond the clauses (the packet's §0): run7 self-play Gumbel-320/64 at
+p 0.25 with run6's σ (rescale, `c_scale` 1.0), `completed_improved_policy`, `fast_policy_weight`
+0.0, α = 1.0 rows excluded; deploy and eval PUCT-512; value warm-up 0; `eval.rung_concurrency: 8`
+RATIFIED; cadence, the 288-game point, `reinit: []`, the grace and calibration relations as
+minted. A re-mint (the kind row, warm-up 0, the halt row), a fresh stamp, a 3 h shakedown twin
+that reaches one contended eval round, then START; RUNG-2 and VIEWER-1 are the first non-box
+work after START, the operator supplying `checkpoint_00237000.pt`, its strix `config.toml` and
+the strix commit; `dev` is pushed (24 commits; the classifier refusal is not governance).
+Grounds: operator direction, forwarding the run7-kind packet (dated 2026-09-14) on the
+shakedown record `docs/design/measurements/SHAKEDOWN7_2026-09-14.md` (2 363 steps in 4 h,
+755 of 2 421 games at the 256-ply cap, 84–86 % in the last hour) read against run6's block
+record (`RUN6_BLOCK_2026-09-12.md`: 23–42-ply games, 0.2–0.5 % draws, 1 163 steps/h) and the
+frontier's frozen-checkpoint PUCT-512 readings (`STRENGTH_FRONTIER_1_2026-09-13.md`).
+Amends: R351(c) — its "no pair alive" PUCT self-play arm is RETIRED for run7 by (a) (the rule
+was applied, its arm measured as a trainer, and the measurement is F-52); R351(d) — the value
+warm-up of 2 000 steps is dropped to 0 by (a). R351's deploy/eval PUCT-512, the split keys,
+`reinit: []`, the demoted trough and the cadence rows all stand.
+Supersedes for run7: `configs/run7.yaml` as minted at `fa03905d`/`ccfaf699` and its two
+preflight stamps (a re-mint carries a fresh identity; R3/LAW-12 — the old stamps stay on the
+box as the record of what was preflighted, and bind nothing).
+Status: standing.
+
+---
 
 ### R351 — FRONTIER VERDICT → RUN7: the instrument was the failure; four scale cells; run7's self-play kind by rule; deploy and eval PUCT-512
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -113,7 +203,8 @@ Amends: R347(b) — ANNOTATED under R347's foot (its `Status` line says so).
 Supersedes for run7: R350(b)(iv)'s trough HALT (demoted to a warning by (d) — the mint arms
 no `train.policy_loss_trough_abort`); R350(b)(ii)'s BC-3 re-run (skipped by (d)); the prereg's
 "one key carries both heads" (split by (c)).
-Status: standing.
+Status: standing; (c)'s PUCT self-play arm and (d)'s 2 000-step value warm-up are superseded
+for run7 by R352(a) — the arm was measured as a trainer and falsified (F-52).
 
 ---
 
