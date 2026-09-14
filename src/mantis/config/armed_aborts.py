@@ -32,6 +32,7 @@ from mantis.monitor.heartbeat import (
     ACTOR_LAG_EXIT_CODE,
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
     DRAW_RATE_COLLAPSE_EXIT_CODE,
+    PLY_CAP_ATTRACTOR_EXIT_CODE,
     POLICY_LOSS_TROUGH_EXIT_CODE,
     TERMINAL_EVAL_BROKEN_EXIT_CODE,
 )
@@ -261,6 +262,10 @@ class Cadence(StrEnum):
     #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. Operands: (min-steps path,).
     CONSEC_TRAIN_STEPS = "consec_train_steps"
 
+    #: The ply-cap halt runs PER TRAINING STEP against the pool's live window and fires at the
+    #: first step `>= min_step` over the rate, so the earliest fire IS the floor. Operands: (min-step,).
+    TRAIN_STEP_FLOOR = "train_step_floor"
+
     #: `ActorLagSpec` — `learner_step_fn() - actor_ckpt_step_fn() > threshold_steps`. The
     #: seconds poll adds no STEP floor, so a frozen actor first satisfies the strict `>` one
     #: step past the threshold. Operands: (threshold-steps path,).
@@ -291,6 +296,7 @@ class Cadence(StrEnum):
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: SampleClock.GATE_BOUNDARY,
             Cadence.EVAL_ROUND_CONSEC: SampleClock.EVAL_ROUND,
             Cadence.CONSEC_TRAIN_STEPS: SampleClock.TRAIN_STEP,
+            Cadence.TRAIN_STEP_FLOOR: SampleClock.TRAIN_STEP,
             Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
             Cadence.WALL_CLOCK_POLL: SampleClock.NO_STEP_CLOCK,
             Cadence.CLOSE_OUT_TERMINAL: SampleClock.NO_STEP_CLOCK,
@@ -306,6 +312,7 @@ class Cadence(StrEnum):
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: 2,
             Cadence.EVAL_ROUND_CONSEC: 5,
             Cadence.CONSEC_TRAIN_STEPS: 1,
+            Cadence.TRAIN_STEP_FLOOR: 1,
             Cadence.STEP_LAG_THRESHOLD: 1,
             Cadence.WALL_CLOCK_POLL: 0,
             Cadence.CLOSE_OUT_TERMINAL: 0,
@@ -359,6 +366,8 @@ class Cadence(StrEnum):
         if self is Cadence.STEP_LAG_THRESHOLD:
             return float(values[0]) + 1.0
         if self is Cadence.CONSEC_TRAIN_STEPS:
+            return float(values[0])
+        if self is Cadence.TRAIN_STEP_FLOOR:
             return float(values[0])
         if self is Cadence.EVAL_ROUND_CONSEC:
             collapse_consec, early_min, collapse_min, rolling_consec, rolling_min = (
@@ -617,6 +626,36 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "mint proposes {delta_nats: 0.2, consec: 3, max_step: 5000} and flips this row to "
             "REQUIRED as a one-field data edit. The cadence is an UPPER bound: at gate_interval "
             "1000 the earliest fire is boundary 4 = step 4000 <= 5000."
+        ),
+    ),
+    ArmedAbort(
+        name="ply_cap_attractor",
+        config_path="train.ply_cap_abort.rate",
+        mechanism=Mechanism.CONFIG_THRESHOLD_GT_ZERO,
+        cadence=Cadence.TRAIN_STEP_FLOOR,
+        cadence_paths=("train.ply_cap_abort.min_step",),
+        status=Status.DEFERRED,
+        exit_code=PLY_CAP_ATTRACTOR_EXIT_CODE,
+        owner=("configs/run6.yaml — a finished run's record that mints null truthfully; the row "
+               "flips REQUIRED (one field) when that file leaves PRODUCTION_CONFIGS"),
+        source_pin=(
+            "src/mantis/run.py",
+            "ply_cap_abort=resolve_ply_cap_abort(config.train)",
+        ),
+        note=(
+            "The ply-cap ATTRACTOR halt (R352(c)): the pool keeps a ring of per-game cap flags "
+            "(PLY_CAP_RING_GAMES, completion order), the coordinator reads the last window_games "
+            "of it EVERY training step, and a windowed cap rate STRICTLY above rate at or past "
+            "min_step halts cooperatively (exit 50). Below window_games completed games the "
+            "gate makes NO OBSERVATION (skip-counted), never a rate over a partial window. "
+            "shakedown7 (F-52) reached 0.84-0.86 inside four hours while the armed draw-rate "
+            "abort's min_step 25000 was a day away; run7 mints {rate: 0.5, window_games: 600, "
+            "min_step: 3000} — run6's block never exceeded 0.005; on shakedown7's record the "
+            "600-game window first exceeded 0.5 at game 2229 (+3.4 h, train step ~2170), and "
+            "min_step 3000 is ~2.6 h at run6's 1160 steps/h. DEFERRED, not REQUIRED, for the "
+            "trough row's reason: "
+            "configs/run6.yaml is a finished run's record and mints null truthfully. The "
+            "cadence is the train-step clock: the earliest fire is min_step itself."
         ),
     ),
     ArmedAbort(

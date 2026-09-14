@@ -73,7 +73,7 @@ _GATE_INTERVAL = load_config(_CONFIG_PATH).monitor.gate_interval
 
 def _coordinator(*, spec, pool):
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         log_interval=1, gate_interval=1, eval_interval=1, min_buf_size=1,

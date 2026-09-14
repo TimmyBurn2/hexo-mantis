@@ -145,6 +145,26 @@ class PolicyLossTroughAbortConfig(StrictModel):
     max_step: int = Field(ge=1)
 
 
+class PlyCapAbortConfig(StrictModel):
+    """R352(c)'s ply-cap halt: the last `window_games` games' cap fraction STRICTLY above `rate` at or past `min_step` halts; `null` is OFF."""
+
+    rate: float = Field(gt=0, le=1)
+    window_games: int = Field(ge=1)
+    min_step: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _one_cap_game_cannot_fire_the_abort(self) -> "PlyCapAbortConfig":
+        """Refuse a window at which ONE cap game (`1/window_games`) already exceeds the rate."""
+        if 1.0 / self.window_games > self.rate:
+            raise ValueError(
+                f"train.ply_cap_abort.window_games ({self.window_games}) is too small for rate "
+                f"{self.rate}: ONE cap game in the window reads 1/{self.window_games} = "
+                f"{1.0 / self.window_games}, above the rate, and would fire the hard abort. "
+                f"Raise window_games above {int(1.0 / self.rate)} or raise the rate"
+            )
+        return self
+
+
 class PolicyLossWeightScheduleConfig(StrictModel):
     """R350(b)(iii)'s value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
 
@@ -188,6 +208,8 @@ class TrainConfig(StrictModel):
     draw_rate_abort: DrawRateAbortConfig | None = Field(default=...)
     # The policy-loss trough halt's ARMING SURFACE, the same idiom: `None` is EXPLICITLY OFF.
     policy_loss_trough_abort: PolicyLossTroughAbortConfig | None = Field(default=...)
+    # The ply-cap attractor halt's ARMING SURFACE (R352(c)), the same idiom.
+    ply_cap_abort: PlyCapAbortConfig | None = Field(default=...)
 
     # The step-coordinator knobs: builder literals and dataclass terminal defaults that decided
     # what the run IS while the minted config said nothing. FLAT `train.*` keys and NOT a

@@ -141,6 +141,9 @@ SHARED_DESPITE_THE_NAME: dict[str, str] = {
                      "have an augmentation path and run5 mints it false on the graph one",
     "monitor.alert_loss_increase_window": "a TIME window over training steps, not a board "
                                           "window; the K-cluster window is a different word",
+    "train.ply_cap_abort.window_games": "a COUNT window over completed self-play games "
+                                        "(R352(c)'s halt), not a board window; the K-cluster "
+                                        "window is a different word and every arch plays games",
     "inference.edge_geometry_check": "an OPERATIONAL posture of the one serving loop — WHERE "
                                      "check 14 runs, not what it checks; it carries the "
                                      "check's name, not a graph-only quantity, and defaults "

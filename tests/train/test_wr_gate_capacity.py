@@ -69,7 +69,7 @@ def _monitor_cfg(**overrides) -> MonitorConfig:
 
 def _coordinator(*, monitor_cfg: MonitorConfig, eval_interval: int = 1000):
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         log_interval=1, gate_interval=1, eval_interval=eval_interval, min_buf_size=1,

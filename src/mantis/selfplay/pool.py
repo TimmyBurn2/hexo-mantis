@@ -300,6 +300,10 @@ class WorkerPool:
         holds no second default over the operator's pre-registered value."""
         return self._instrumentation.pooled_draw_counts(self._lock)
 
+    def ply_cap_window_counts(self, window_games: int) -> tuple[int, int]:
+        """`(Sum(cap games), games)` over the last `window_games` games; the window is the caller's."""
+        return self._instrumentation.ply_cap_window_counts(self._lock, window_games)
+
     def terminal_reason_counts(self) -> dict[str, int]:
         """Cumulative terminal-reason counts since pool start, for the four KNOWN reason codes
         only — a code outside that set is counted internally but never surfaced, so the total

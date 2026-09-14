@@ -159,7 +159,7 @@ class _SpySink:
 
 def _coordinator(full_config: dict[str, Any]):
     cfg = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=resolve_drain_caps(_CONFIG.monitor),
                                  gate_interval=_CONFIG.monitor.gate_interval,
                                  knobs=resolve_coordinator_knobs(_CONFIG.train)),

@@ -219,7 +219,7 @@ def _config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder — this file's deltas only. `None` is the EXPLICIT
     disarmed draw-rate posture; neither the builder nor this factory gives it a default (R1)."""
     return dataclasses.replace(
-        _step_coordinator_config(stop_step=_CEILING, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=_CEILING, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         **_mirrored({"eval_interval": 0, "log_interval": 1, "min_buf_size": 10,
@@ -542,7 +542,7 @@ def test_an_in_loop_hard_abort_below_the_ceiling_writes_no_product_checkpoint() 
     spec = DrawRateAbortSpec(threshold=0.25, min_step=0, N_pool_min=50, consec=3)
     trainer = _Trainer(step=0)
     h = _harness(trainer=trainer, pool=_Pool(draws=900, completed=1000),
-                 config=_config(stop_step=_ABORT_CEILING, draw_rate_abort=spec, policy_loss_trough_abort=None, log_interval=1))
+                 config=_config(stop_step=_ABORT_CEILING, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None, log_interval=1))
     for _ in range(12):
         if not h.shutdown.running:
             break

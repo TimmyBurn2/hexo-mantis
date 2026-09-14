@@ -30,6 +30,7 @@ from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
     WR_PEAK_WINDOW_EVALS,
     check_draw_rate_collapse,
+    check_ply_cap_attractor,
     check_policy_loss_trough,
     check_sealbot_wr_hard_abort,
     emit_training_step_alerts,
@@ -80,6 +81,7 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
 #: are named here to keep an inert posture readable rather than silent.
 GATE_NAMES: tuple[str, ...] = (
     "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort", "policy_loss_trough",
+    "ply_cap_attractor",
 )
 
 #: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
@@ -225,6 +227,8 @@ class StepCoordinator:
         self._policy_loss_window: list[float] = []
         self._policy_loss_reference: float | None = None
         self._policy_loss_window_means: list[float] = []
+        # The ply-cap halt's last windowed reading (R352(c)); `None` until the window fills.
+        self._ply_cap_rate: float | None = None
         self._last_iter_games = 0
         # The previous `iteration_complete` boundary's counter readings, so the payload can
         # publish an INTERVAL delta beside the cumulative total. Seeded at 0 (pool start).
@@ -524,6 +528,8 @@ class StepCoordinator:
                     ) or hard_abort_fired
             else:
                 self._consec_high_gn = 0
+            # D3b: the ply-cap attractor halt, per training step against the pool's live window.
+            hard_abort_fired = self._run_ply_cap_gate(cfg) or hard_abort_fired
 
             # There is no checkpoint-cadence buffer save on this leg: `checkpoint_saved` stays
             # `False` for the whole burst path, and the O2/O3 legs above announce a real write.
@@ -651,6 +657,27 @@ class StepCoordinator:
             consec=spec.consec, max_step=spec.max_step,
         )
         return self._fire_hard_abort("policy_loss_trough", message)
+
+    def _run_ply_cap_gate(self, cfg: StepCoordinatorConfig) -> bool:
+        """R352(c)'s ply-cap halt, read EVERY training step; `min_step` gates the fire only."""
+        spec = cfg.ply_cap_abort
+        counts_fn = getattr(self.pool, "ply_cap_window_counts", None)
+        stats = self._gate_stats["ply_cap_attractor"]
+        stats["checks"] += 1
+        if spec is None or counts_fn is None:
+            stats["skips"] += 1
+            return False
+        caps, games = counts_fn(spec.window_games)
+        if games < spec.window_games:
+            stats["skips"] += 1
+            return False
+        observed = caps / games
+        self._ply_cap_rate = observed
+        message = check_ply_cap_attractor(
+            observed, self._train_step, rate=spec.rate,
+            window_games=spec.window_games, min_step=spec.min_step,
+        )
+        return self._fire_hard_abort("ply_cap_attractor", message)
 
     def _emit_training_step(
         self, cfg: StepCoordinatorConfig, loss_info: dict[str, float], sink: Any
@@ -828,6 +855,12 @@ class StepCoordinator:
                 else cfg.policy_loss_trough_abort.delta_nats),
             "policy_loss_reference": self._policy_loss_reference,
             "policy_loss_window_means": list(self._policy_loss_window_means),
+            # The ply-cap halt's live terms and last windowed reading (R352(c)): `None` on the
+            # explicit OFF, and `None` while the window is still filling, never a 0.0.
+            "ply_cap_abort_rate": None if cfg.ply_cap_abort is None else cfg.ply_cap_abort.rate,
+            "ply_cap_window_games": (
+                None if cfg.ply_cap_abort is None else cfg.ply_cap_abort.window_games),
+            "ply_cap_rate": self._ply_cap_rate,
             "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
             "sealbot_wr_result_producer_pending": None,  # producer landed (eval.rounds)
             "wr_history_len": len(self._wr_history),

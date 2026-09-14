@@ -294,6 +294,26 @@ def check_policy_loss_trough(
     return None
 
 
+def check_ply_cap_attractor(
+    observed_rate: float,
+    current_step: int,
+    *,
+    rate: float,
+    window_games: int,
+    min_step: int,
+) -> str | None:
+    """R352(c): the last ``window_games`` games' cap fraction STRICTLY above ``rate`` past ``min_step``."""
+    if rate <= 0 or window_games <= 0 or current_step < min_step:
+        return None
+    if float(observed_rate) > float(rate):
+        return (
+            f"HARD-ABORT (ply-cap attractor): {float(observed_rate):.2f} of the last "
+            f"{window_games} self-play games ended at the ply cap, above {float(rate):.2f} past "
+            f"step {min_step:,} — self-play is drifting into cap draws (F-02/F-22/F-52)"
+        )
+    return None
+
+
 def check_draw_rate_collapse(
     history: Sequence[float],
     current_step: int,

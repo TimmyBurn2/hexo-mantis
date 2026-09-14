@@ -362,7 +362,7 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
     settings = {"eval_interval": 10**9, "log_interval": 1, "min_buf_size": 1, **knob_over}
     settings.setdefault("gate_interval", settings["log_interval"])
     config = dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         **settings,
@@ -690,7 +690,7 @@ def test_the_builder_holds_no_literal_for_any_authored_knob() -> None:
             if key == "replay_capacity_schedule" else value)
         for key, value in _DISTINGUISHABLE.items()
     })
-    built = _step_coordinator_config(stop_step=11, draw_rate_abort=None, policy_loss_trough_abort=None,
+    built = _step_coordinator_config(stop_step=11, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                      drain_caps=_DRAIN_CAPS,
                                      gate_interval=_GATE_INTERVAL, knobs=distinguishable)
     for field in dataclasses.fields(CoordinatorKnobsSpec):

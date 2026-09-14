@@ -73,6 +73,7 @@ train:
   max_train_steps: 1000000
   draw_rate_abort: null
   policy_loss_trough_abort: null
+  ply_cap_abort: null
   eval_interval: 1000
   log_interval: 1000
   min_buf_size: 1

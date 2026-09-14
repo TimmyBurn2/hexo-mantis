@@ -15,7 +15,11 @@ from typing import Any
 from mantis._engine import HEX_AXES as _ENGINE_HEX_AXES
 from mantis._engine import WIN_LENGTH as _ENGINE_WIN_LENGTH
 from mantis.util.constants import DRAW_RATE_WINDOW as _DRAW_RATE_WINDOW
+from mantis.util.constants import PLY_CAP_RING_GAMES as _PLY_CAP_RING_GAMES
 from mantis.util.coordinates import axial_distance
+
+#: The Rust runner's terminal-reason code for a ply-cap game (0=six 1=colony 2=cap 3=other).
+_PLY_CAP_TERMINAL_CODE = 2
 
 # Colony-extension detector: the hex distance above which a stone counts as "colony extension",
 # the residual mechanism flagged for pre-W1 fast-game draw collapse.
@@ -231,6 +235,9 @@ class PoolInstrumentation:
         self._per_worker_draws: dict[int, deque[int]] = {}
         # Cumulative terminal-reason counts (0=six 1=colony 2=cap 3=other_draw).
         self._terminal_reason_counts: dict[int, int] = {0: 0, 1: 0, 2: 0, 3: 0}
+        # Pool-wide ring of per-game cap flags (1 = ply_cap) in completion order, the ply-cap
+        # halt's evidence (R352(c)); the window READ from it is the abort decision's.
+        self._ply_cap_ring: deque[int] = deque(maxlen=_PLY_CAP_RING_GAMES)
         # Per-game model-version range archive — last 200 games.
         self._mv_range_history: deque[tuple[int, int, int, int, int]] = deque(maxlen=200)
         # Class-4: rolling stride-5 archive for passive P90 emit.
@@ -267,6 +274,7 @@ class PoolInstrumentation:
             self._terminal_reason_counts[int(terminal_reason)] = (
                 self._terminal_reason_counts.get(int(terminal_reason), 0) + 1
             )
+            self._ply_cap_ring.append(1 if int(terminal_reason) == _PLY_CAP_TERMINAL_CODE else 0)
             is_draw_outcome = 1 if winner_code == 0 else 0
             dq = self._per_worker_draws.setdefault(
                 int(worker_id), deque(maxlen=_DRAW_RATE_WINDOW))
@@ -326,6 +334,12 @@ class PoolInstrumentation:
             draws = sum(sum(dq) for dq in self._per_worker_draws.values())
             completed = sum(len(dq) for dq in self._per_worker_draws.values())
         return int(draws), int(completed)
+
+    def ply_cap_window_counts(self, lock: threading.Lock, window_games: int) -> tuple[int, int]:
+        """`(Sum(cap games), games)` over the last `window_games` completed games, pool-wide."""
+        with lock:
+            tail = list(self._ply_cap_ring)[-int(window_games):] if window_games > 0 else []
+        return int(sum(tail)), int(len(tail))
 
     def terminal_reason_counts(self, lock: threading.Lock) -> dict[str, int]:
         """Class-3: cumulative terminal-reason counts since pool start."""

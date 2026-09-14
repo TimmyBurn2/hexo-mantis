@@ -102,6 +102,7 @@ train:
   # (R82/R85/R92) — never hand-edited in a minted file (R1).
   draw_rate_abort: null
   policy_loss_trough_abort: null
+  ply_cap_abort: null
   # ── the step-coordinator knobs (WPMINT Phase K-B — CARD-COORD-KNOBS, R78/R80) ────────
   # Until this phase these knobs were LITERALS inside `mantis.run._step_coordinator_config`
   # and terminal defaults on `StepCoordinatorConfig`: they decided what a run WAS while no

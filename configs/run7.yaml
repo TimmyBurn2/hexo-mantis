@@ -17,7 +17,6 @@
 # delta: train.max_train_burst: 1 -> 2
 # delta: train.eval_interval: 1000 -> 3000
 # delta: train.checkpoint_interval: 0 -> 3000
-# delta: train.policy_loss_weight_schedule.warmup_steps: 0 -> 2000
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: eval.random_floor_games: 4 -> 20
 # delta: eval.gate.deploy_sims: 150 -> 512
@@ -29,6 +28,9 @@
 # delta: eval.ladder.calibration_every_k_rounds: 4 -> 1
 # delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: monitor.supervisor_kill_grace_sec: 30.0 -> 120.0
+# delta: selfplay.search.kind: puct -> gumbel
+# delta: train.policy_target: raw_visit_distribution -> completed_improved_policy
+# delta: train.ply_cap_abort: null -> {rate: 0.5, window_games: 600, min_step: 3000}
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65, reinit: []}
 # delta: inference.edge_geometry_check: inline -> checker_thread
@@ -111,7 +113,7 @@ train:
     decay: 0.999
     update_every: 10
   policy_loss_weight_schedule:
-    warmup_steps: 2000
+    warmup_steps: 0
   max_train_steps: 1000000
   draw_rate_abort:
     threshold: 0.25
@@ -119,6 +121,10 @@ train:
     N_pool_min: 50
     consec: 3
   policy_loss_trough_abort: null
+  ply_cap_abort:
+    rate: 0.5
+    window_games: 600
+    min_step: 3000
   eval_interval: 3000
   log_interval: 1000
   min_buf_size: 4096
@@ -136,13 +142,13 @@ train:
   hard_gn_min_steps: 3
   terminal_eval_enabled: true
   value_target: pure_outcome_z
-  policy_target: raw_visit_distribution
+  policy_target: completed_improved_policy
   draw_reward: -0.5
   ply_cap_value: -0.5
   fast_policy_weight: 0.0
 selfplay:
   search:
-    kind: puct
+    kind: gumbel
   n_workers: 32
   leaf_batch_size: 8
   max_game_moves: 256

@@ -834,9 +834,10 @@ class.** Recorded here rather than left as silent drift (R9).
   | 47 | `DISK_SPACE_EXHAUSTED_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 48 | `TERMINAL_EVAL_BROKEN_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — see below |
   | 49 | `POLICY_LOSS_TROUGH_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — the R350(b)(iv) trough halt, fired through `_fire_hard_abort` like 46 |
+  | 50 | `PLY_CAP_ATTRACTOR_EXIT_CODE` | `monitor/heartbeat.py` | **cooperative** — the R352(c) ply-cap attractor halt, fired through `_fire_hard_abort` like 46 |
 
   Codes OUTSIDE the reserved band that a supervisor may nonetheless read from its child. They
-  are not run-outcome diagnoses — the 42–49 band stays reserved for those — and none is minted
+  are not run-outcome diagnoses — the 42–50 band stays reserved for those — and none is minted
   here: each is either a pre-existing lifecycle constant or a POSIX convention.
 
   | rc | constant | authority | delivery |
@@ -848,7 +849,7 @@ class.** Recorded here rather than left as silent drift (R9).
   preflight boot child; F-816-19 put an `os._exit(71)` inside `mantis.run.main`'s arming gate,
   which makes it a code the SUPERVISOR reads. It lands in `_on_child_exit`'s named
   `child_parent_vanished` arm: propagated, never relaunched — a child whose supervisor was
-  already gone has nothing to be relaunched into. It sits outside 42–49 deliberately: the band
+  already gone has nothing to be relaunched into. It sits outside 42–50 deliberately: the band
   is the run's own diagnosis of its own work, and 71 says the run never began. (It is also
   `EX_OSERR` in `sysexits.h`; cosmetic, no collision.) Its constant is DEFINED in
   `monitor/heartbeat.py`, beside the rest of the family, and imported by

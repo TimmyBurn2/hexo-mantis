@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from .envelope import windows
 from .fmt import esc, num, pct
+from .health import ply_cap_terms, ply_cap_windowed
 from .ladder import ladder_chart
 from .model import Gaps, Panel, no_rows
 from .reader import Record
@@ -82,12 +83,14 @@ def _share(games: list[dict], key: str, width: int) -> list[tuple[float, float]]
 
 
 def quality(rec: Record, gaps: Gaps) -> Panel:
-    reads = "game_complete (moves = plies, winner, terminal_reason); x = game ordinal since boot"
+    reads = ("game_complete (moves = plies, winner, terminal_reason); x = game ordinal since boot; "
+             "monitor_gates (ply_cap_abort_rate, ply_cap_window_games) for the halt's window")
     games = rec.rows("game_complete")
     if not games:
         marks = "".join(f'<div class="multiple"><h3>{esc(t)}</h3>' + gaps.mark(
             "Self-play quality", f"{t}: no <code>game_complete</code> row") + "</div>"
-            for t in ("game length (plies)", "share ended by ply cap", "draw rate", "first-mover win rate"))
+            for t in ("game length (plies)", "share ended by ply cap", "draw rate", "first-mover win rate",
+                      "ply-cap share over the halt's window"))
         return Panel("Self-play quality", reads, no_rows("game_complete")
                      + f'<div class="multiples">{marks}</div>', "quality")
     lengths = [(float(i), float(g["moves"])) for i, g in enumerate(games, start=1)
@@ -109,10 +112,32 @@ def quality(rec: Record, gaps: Gaps) -> Panel:
                                height=110, floor_zero=True)
         charts.append(f'<div class="multiple"><h3>{esc(label)}</h3>{chart}'
                       f'<p class="note">whole record: {num(total)} of {num(n)} games, {pct(total / n, 2)}</p></div>')
+    charts.append(_ply_cap_window(rec, games, gaps))
     note = ('<p class="note">Windows are one pixel column of games each; the share is the mean '
             'over the window. <code>moves</code> counts plies (LAW-03); one compound turn is two.</p>')
     return Panel("Self-play quality", reads, f'<div class="multiples">{"".join(charts)}</div>' + note,
                  "quality")
+
+
+def _ply_cap_window(rec: Record, games: list[dict], gaps: Gaps) -> str:
+    """R352(c)'s halt as the record reads it: the cap share over the halt's OWN window."""
+    rate, window, armed = ply_cap_terms(rec)
+    title = f"ply-cap share, {num(window)}-game window"
+    terms = (f"halt rate {rate:g}" + ("" if armed else
+             " (R352(c)'s minted terms — the halt was not armed in this run)"))
+    series = ply_cap_windowed(games, window)
+    if not series:
+        mark = gaps.mark("Self-play quality",
+                         f"{title}: {num(len(games))} games, fewer than the {num(window)}-game "
+                         f"window, so no windowed rate exists yet ({terms})")
+        return f'<div class="multiple"><h3>{esc(title)}</h3>{mark}<p class="note">{esc(terms)}</p></div>'
+    chart = envelope_chart([Series("cap share", series, "s4")], x_label="game", height=110,
+                           floor_zero=True, rules=[(rate, f"halt rate {rate:g}")])
+    peak_x, peak = max(series, key=lambda p: p[1])
+    return (f'<div class="multiple"><h3>{esc(title)}</h3>{chart}'
+            f'<p class="note">{esc(terms)}; peak {peak:.2f} at game {peak_x:.0f}, last '
+            f'{series[-1][1]:.2f} — the series the halt fires on when it exceeds the rate at or past '
+            f'its step floor</p></div>')
 
 
 def economy(rec: Record, gaps: Gaps) -> Panel:

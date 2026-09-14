@@ -312,3 +312,32 @@ def test_the_grad_norm_rule_is_drawn_when_the_ceiling_rides_resolved_config(html
     page = _page(html, reader, tmp_path, rows)
     assert page.count('class="rule"') == 1
     assert "monitor.alert_grad_norm_max = 10" in page
+
+
+def test_the_quality_panel_draws_the_halts_windowed_cap_rate_from_game_zero(html, reader, tmp_path):
+    """R352(c): the fifth multiple is the ply-cap share over the halt's own window."""
+    rows = BOOT + [{"event": "monitor_gates", "step": 1, "gates": {}, "ply_cap_abort_rate": 0.5,
+                    "ply_cap_window_games": 4}]
+    rows += [{"event": "game_complete", "winner": 0, "moves": 30, "terminal_reason": "six_in_a_row"}
+             for _ in range(4)]
+    rows += [{"event": "game_complete", "winner": -1, "moves": 256, "terminal_reason": "ply_cap"}
+             for _ in range(4)]
+    page = _page(html, reader, tmp_path, rows)
+    quality = re.search(r'<section class="panel tier2" id="quality">(.*?)</section>', page, re.S)
+    assert quality is not None
+    body = quality.group(1)
+    assert "ply-cap share, 4-game window" in body, "the window is the record's armed one"
+    assert "halt rate 0.5" in body
+    assert "peak 1.00" in body and "game 8" in body
+
+
+def test_an_unarmed_record_draws_the_windowed_cap_rate_at_the_minted_window_and_says_so(
+        html, reader, tmp_path):
+    rows = BOOT + [{"event": "game_complete", "winner": 0, "moves": 30, "terminal_reason": "six_in_a_row"}
+                   for _ in range(10)]
+    page = _page(html, reader, tmp_path, rows)
+    body = re.search(r'<section class="panel tier2" id="quality">(.*?)</section>', page, re.S).group(1)
+    assert "ply-cap share, 600-game window" in body
+    assert "not armed" in body
+    assert "not measured — see notes" in body, "below the window is a stated gap, never a zero"
+    assert "10 games, fewer than the 600-game window" in page, "the statement lives in the notes"

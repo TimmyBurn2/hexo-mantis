@@ -201,7 +201,7 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
     """DERIVED from the production builder, this file's deltas only; `None` is the EXPLICIT
     disarmed draw-rate posture, defaulted by neither the builder nor this factory."""
     return dataclasses.replace(
-        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None,
+        _step_coordinator_config(stop_step=10**9, draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None,
                                  drain_caps=_DRAIN_CAPS, gate_interval=_GATE_INTERVAL,
                                  knobs=_KNOBS),
         **_mirrored({"eval_interval": 1, "log_interval": 1, "min_buf_size": 10,

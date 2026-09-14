@@ -100,7 +100,7 @@ def _complete_kwargs(spec) -> dict:
     """Every `StepCoordinatorConfig` field, read off an object the SHIPPED builder produced.
     Derived, never hand-written: a literal census would agree with the dataclass by maintenance
     rather than by construction, and the `TypeError` arm could go vacuous silently."""
-    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec, policy_loss_trough_abort=None,
+    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None,
                                      drain_caps=_MINTED_DRAIN_CAPS,
                                      gate_interval=_MINTED_GATE_INTERVAL,
                                      knobs=_MINTED_KNOBS)
@@ -200,7 +200,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "or normalises it is a second authority over the operator's own terms"
     )
 
-    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec, policy_loss_trough_abort=None,
+    built = _step_coordinator_config(stop_step=11, draw_rate_abort=spec, policy_loss_trough_abort=None, ply_cap_abort=None,
                                      drain_caps=_MINTED_DRAIN_CAPS,
                                      gate_interval=_MINTED_GATE_INTERVAL,
                                      knobs=_MINTED_KNOBS)

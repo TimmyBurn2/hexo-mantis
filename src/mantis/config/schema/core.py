@@ -25,7 +25,7 @@ from mantis.config.schema.selfplay import (
 )
 from mantis.config.schema.train import TrainConfig
 from mantis.encoding import EncodingRegistryError, lookup
-from mantis.util.constants import DRAW_RATE_WINDOW
+from mantis.util.constants import DRAW_RATE_WINDOW, PLY_CAP_RING_GAMES
 
 SCHEMA_VERSION = 1
 
@@ -544,6 +544,26 @@ class RunConfig(StrictModel):
                 f"train.draw_rate_abort.min_step ({block.min_step}) must be < "
                 f"train.max_train_steps ({total}): a step floor the run never reaches is "
                 f"an invariant that can never fire — armed in the config, absent in effect"
+            )
+        cap = self.train.ply_cap_abort
+        if cap is not None and cap.min_step >= total:
+            raise ValueError(
+                f"train.ply_cap_abort.min_step ({cap.min_step}) must be < "
+                f"train.max_train_steps ({total}): a step floor the run never reaches is "
+                f"an invariant that can never fire — armed in the config, absent in effect"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _ply_cap_window_within_the_rings_depth(self) -> "RunConfig":
+        """`train.ply_cap_abort.window_games` <= `PLY_CAP_RING_GAMES`: a wider window never fills."""
+        block = self.train.ply_cap_abort
+        if block is not None and block.window_games > PLY_CAP_RING_GAMES:
+            raise ValueError(
+                f"train.ply_cap_abort.window_games ({block.window_games}) must be <= "
+                f"PLY_CAP_RING_GAMES ({PLY_CAP_RING_GAMES}): the pool keeps that many "
+                f"completed games' cap flags, so a wider window can never be observed — armed "
+                f"in the config, absent in effect"
             )
         return self
 
