@@ -16,10 +16,11 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
     }
     assert targets == {
         "build", "build.cuda", "build.native", "test", "test.integration", "lint", "lint.rust",
-        # `gates` is the everyday set; `gates.exit` adds the slow tier, which BOTH pytest
-        # tiers deselect; `dashboard` renders a run record.
-        "gates", "gates.exit", "dashboard",
-        "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "clean",
+        # `gates` is the everyday set; `gates.exit` adds the slow tier both pytest tiers deselect;
+        # `dashboard`/`viewer` render a record (R333(d)/R352(g)); `vendor.strix` builds strix's venv.
+        "gates", "gates.exit", "dashboard", "viewer",
+        "bench", "bench.baseline", "check.wasm", "vendor", "vendor.sealbot", "vendor.strix",
+        "clean",
     }
 
 
