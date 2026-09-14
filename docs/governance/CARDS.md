@@ -141,7 +141,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   change that needs a ruling and a same-book A/B (288 paired games, contaminated vs fresh) before
   it replaces the bar run7 is stamped against. Second finding from the same record: sealbot's
   mate claims at distance ≥ 3 are not proofs (8 of 150 self-reported mates lost); only its ≤ 2
-  band reads as a verdict.
+  band reads as a verdict. **RULED by R353(b) and FIXED in-repo at `748f5c47`** (2026-09-14):
+  `new_game()` replaces a searched engine (5 ms per game, measured; the per-search cost is the
+  same — 522 vs 499 ms mean over 24 colour-alternating games, so TT growth moves nothing), pinned
+  by a Tier-1 construction count and a Tier-2 colour-swapped pair that is RED on the old adapter
+  (3 of the book's first 4 pairs diverge at the swapped game's first move). The root-player-keyed
+  patch variant was NOT taken: it keeps cross-game entries valid but makes each game depend on the
+  games its thread played before, which under `rung_concurrency 8` is scheduling-dependent — a
+  reading that could not be reproduced even in principle. The A/B (three frozen nets, old tree
+  `15109ac3` vs the fixed worktree, 288 games each, concurrency 8) runs on the box after run7's
+  first in-run round; run7 itself plays the old adapter for its whole run (its tree is frozen by
+  the stamp) and every sealbot reading is PROVISIONAL until the delta lands
+  (`tools/dashboard/tier2.py::SEALBOT_PROVISIONAL_NOTE`). The card closes on the A/B's reading.
 
 ## Opened by R350 (the block verdict)
 
