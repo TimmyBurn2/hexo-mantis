@@ -4,7 +4,7 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — R351 LANDED; the four σ cells COMPLETE (no pair alive); run7 MINTED (`configs/run7.yaml`, PUCT/PUCT); the preflight stamp, the shakedown and START are next
+## Current phase — R351 LANDED; run7 MINTED and STAMPED; the 4 h shakedown says PUCT SELF-PLAY DRIFTS TO THE PLY-CAP ATTRACTOR — START IS HELD for the operator's decision on the self-play kind
 
 **R351 is landed verbatim** (`487d8661`), the operator's forward of the frontier-verdict packet
 (dated 2026-09-14, forwarded 2026-09-13): the Gumbel deploy head that read every screen of run6
@@ -81,17 +81,24 @@ recovers past the prior by step 3 000 is the shakedown's first regular point. Th
 (`preflight_shakedown7_20260913T205402Z.json`, pass, MIRRORED; its step-101 point 392 games in
 2 834 s, `sealbot_d5` 0.399 [0.344, 0.455] — the same construction as run7's 0.271, so the
 101-step value-only head is noisy, not broken) and **the 4 h shakedown is RUNNING** on the box
-since 2026-09-13 21:50:36 UTC (`/workspace/runs/shakedown7`, `/workspace/oc7/shakedown7.launch.log`,
-tree `ccfaf699`, ends ≈ 01:50 UTC by `timeout`, rc 124 the success path): its step-3 000 round is
-the reading that decides `eval.rung_concurrency` and the warm-up's cost, and its steps/h against
-the block's 1 163 is the cost of the 288-game rounds.
+2026-09-13 21:50 → 2026-09-14 01:50 UTC, rc 124 with the LAW-16 save FIRING under `timeout`
+(`docs/design/measurements/SHAKEDOWN7_2026-09-14.md`). **The reading: 2 363 steps in 4 h (600 steps/h,
+half the block's 1 163), no eval round (step 3 000 never reached), games lengthening 35 → 120 plies
+and 755 of 2 421 ending at the 256-ply cap — 84–86 % in the last hour** (run6's Gumbel self-play:
+23–42 plies, 0.2–0.5 % draws throughout). PUCT self-play at the minted regime is the F-02/F-22
+ply-cap attractor inside 4 h; the armed draw-rate abort would fire at step 25 000 on a run junk for
+a day. **run7 does NOT start on this mint.** The self-play-kind row is back on the operator's desk:
+R351(c)'s PUCT arm was "untested as a trainer at this regime" and is now tested; the Gumbel arm was
+set aside because no σ pair was alive as a DEPLOY head — it was never measured as a TRAINER, and
+run6's block (1 170 games/h, decisive games, a net PUCT reads +15 pp) is the only trainer reading on
+record. Card peak 10.98 GiB (run6 7.66 GB); mean search depth 2.5 (Gumbel 3.8).
 
 **Dispatcher state for a fresh session.** The box `/workspace/hexo-mantis` is on branch `r351b`
-at `ccfaf699` (`make build.cuda` — never a bare `uv sync` there). Open, in order: (1) read the
-shakedown's record when it ends (`/workspace/runs/shakedown7/logs/events_shakedown7_seg0001.jsonl`,
-`card.csv`, the launch log's `card_peak` and orphan sweep) into a measurement note and STATE;
-(2) the operator ratifies or reverses `eval.rung_concurrency: 8` (a one-row re-mint and a fresh
-stamp if reversed); (3) START on the operator's word: `/workspace/oc7/box_start_run6.sh`'s shape with
+at `ccfaf699` (`make build.cuda` — never a bare `uv sync` there). Open, in order: (1) the OPERATOR's decision on `selfplay.search.kind` in the light of the shakedown
+(the mint driver's Gumbel branch mints `completed_improved_policy` with the σ rows at run6's values
+and the split's PUCT-512 deploy; any change is a re-mint, a fresh stamp ≈ 1 h and a shakedown);
+(2) the operator ratifies or reverses `eval.rung_concurrency: 8`; (3) then START on the operator's
+word: `/workspace/oc7/box_start_run6.sh`'s shape with
 `run7` (the supervisor over `mantis.run`, out-dir `/workspace/runs/run7`), the puller under
 tmux/systemd on the operator's machine (`tools/mirror_pull.py --source
 <box-alias>:/workspace/runs/run7 --mirror <mirror-root>/run7 --run-id run7 --interval-sec 600`). Owed items (`CARDS.md`): the α = 1.0 three-row
