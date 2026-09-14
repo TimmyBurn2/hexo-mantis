@@ -8,6 +8,8 @@ from pathlib import Path
 from .series import Reducers, Snapshot
 
 SEGMENT_RE = re.compile(r"^events_(?P<run>.+)_seg(?P<seg>\d{4,})\.jsonl$")
+#: Bytes read per call so a first read of a 166 MB record peaks near this, not near the file's size.
+CHUNK_BYTES = 8 * 1024 * 1024
 
 
 class EmptyRunRecord(RuntimeError):
@@ -57,16 +59,21 @@ class EventTail:
         size = path.stat().st_size
         if size <= offset:
             return
+        held = self.held.pop(path, b"")
         with path.open("rb") as handle:
             handle.seek(offset)
-            chunk = handle.read(size - offset)
-        self.offsets[path] = size
-        lines = (self.held.pop(path, b"") + chunk).split(b"\n")
-        tail = lines.pop()
-        if tail:
-            self.held[path] = tail
-        for raw in lines:
-            self._feed_line(raw)
+            while offset < size:
+                chunk = handle.read(min(CHUNK_BYTES, size - offset))
+                if not chunk:
+                    break
+                offset += len(chunk)
+                lines = (held + chunk).split(b"\n")
+                held = lines.pop()
+                for raw in lines:
+                    self._feed_line(raw)
+        self.offsets[path] = offset
+        if held:
+            self.held[path] = held
 
     def _feed_line(self, raw: bytes) -> None:
         text = raw.strip()

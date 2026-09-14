@@ -15,6 +15,8 @@ SHARD_RE = re.compile(r"^games_(?P<run>.+)_seg(?P<seg>\d+)_(?P<hour>\d{10})\.jso
 INDEX_NAME = "games_{run}_index.jsonl"
 _RESULTS = ("p1", "p2", "draw", "unknown")
 _PLIES_MAX = 65535
+#: Bytes read per call; a shard is ≈ 1 MB, the bound matters only for a shard that grew past it.
+CHUNK_BYTES = 8 * 1024 * 1024
 
 
 class EmptyGameRecord(RuntimeError):
@@ -193,16 +195,21 @@ class ShardIndex:
         size = shard.path.stat().st_size
         if size <= shard.offset:
             return
-        with shard.path.open("rb") as handle:
-            handle.seek(shard.offset)
-            chunk = handle.read(size - shard.offset)
         line_start = shard.offset - len(shard.held)
-        lines = (shard.held + chunk).split(b"\n")
-        shard.held = lines.pop()
-        shard.offset = size
-        for raw in lines:
-            self._feed(shard, line_start, raw)
-            line_start += len(raw) + 1
+        held, offset = shard.held, shard.offset
+        with shard.path.open("rb") as handle:
+            handle.seek(offset)
+            while offset < size:
+                chunk = handle.read(min(CHUNK_BYTES, size - offset))
+                if not chunk:
+                    break
+                offset += len(chunk)
+                lines = (held + chunk).split(b"\n")
+                held = lines.pop()
+                for raw in lines:
+                    self._feed(shard, line_start, raw)
+                    line_start += len(raw) + 1
+        shard.held, shard.offset = held, offset
 
     def _feed(self, shard: Shard, offset: int, raw: bytes) -> None:
         text = raw.strip()
