@@ -31,7 +31,7 @@
 # delta: selfplay.search.kind: puct -> gumbel
 # delta: train.policy_target: raw_visit_distribution -> completed_improved_policy
 # delta: train.ply_cap_abort: null -> {rate: 0.5, window_games: 600, min_step: 3000}
-# delta: eval.round_timeout_sec: 3600.0 -> 10800.0
+# delta: eval.round_timeout_sec: 3600.0 -> 14400.0
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65, reinit: []}
 # delta: inference.edge_geometry_check: inline -> checker_thread
@@ -96,7 +96,7 @@ eval:
     bootstrap_ci_level: 0.95
     bt_prior_games: 1.0
     bootstrap_seed: 1234
-  round_timeout_sec: 10800.0
+  round_timeout_sec: 14400.0
   concurrency: 8
   rung_concurrency: 8
 train:
