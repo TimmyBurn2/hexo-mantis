@@ -119,11 +119,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   `py::gil_scoped_release` (the extraction stays under the GIL; the engine's transposition table
   is per instance and the shared offset/zobrist tables are built by its constructor under the
   GIL) — no move, score or depth receipt changes. The hunk and the rewritten patch are in the
-  R352 leg's scratch record; it is R145-class (a patch change) and the session's classifier
-  refused the rebuild, so it is the OPERATOR's: apply the patch text, `rm -rf vendor/external/sealbot
-  && make vendor && make vendor.sealbot`, run `tests/bots/test_sealbot_vendored.py` and the
-  cost cells (`/workspace/oc7/cells_rungcost.json`) to read the rung at concurrency 1 vs 8.
-  Nothing is ever pushed to the SealBot repository — the patch lives in this tree only.
+  R352 leg's scratch record; it is R145-class (a patch change). **APPLIED on the operator's
+  direction (2026-09-14 14:35 UTC, "do the cleanest thing", after the twin shakedown showed the
+  escalated contended round projecting to ≈ 3.2 h — `SHAKEDOWN7G_2026-09-14.md` §B):** the third
+  hunk is in `vendor/patches/sealbot.patch`, the extension rebuilt through
+  `tools/vendor_build_sealbot.sh`, and the release pinned by
+  `tests/bots/test_sealbot_vendored.py::test_the_search_releases_the_gil_and_eight_concurrent_searches_agree_with_serial`
+  (a background thread's tick rate during a depth-6 search: 5 056/s vs 19.6 M/s idle on the
+  unpatched build; eight concurrent fresh instances return the serial moves). The rung's new
+  wall is read on the re-stamp's terminal round. Nothing is ever pushed to the SealBot
+  repository — the patch lives in this tree only. The card stays open until that wall is read.
 
 - **CARD-SEALBOT-TT-SEAT — one sealbot instance judging both seats poisons its own scores.**
   Found by the game-quality instrument (`GAME_QUALITY_2026-09-14.md`, two contaminated first

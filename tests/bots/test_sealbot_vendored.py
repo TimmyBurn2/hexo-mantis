@@ -464,3 +464,73 @@ def test_the_illegal_buffer_counter_reads_zero_over_a_real_game() -> None:
         f"the compound-turn buffer was discarded {adapter.illegal_buffer_discards} times in "
         f"one game; the invariant DESIGN_A §2.5.3 rests on does not hold"
     )
+
+
+
+def test_the_search_releases_the_gil_and_eight_concurrent_searches_agree_with_serial() -> None:
+    """THIRD HUNK (CARD-SEALBOT-GIL-SERIAL): the search releases the GIL; eight concurrent fresh instances return the serial moves."""
+    import threading
+
+    from mantis.arena.books import paired_openings
+    from mantis.bots.sealbot import SealBotAdapter, build_shadow_game
+
+    minimax_module, game_module = _require_built_extension()
+    openings = paired_openings(_BOOK, n_pairs=8, seed=20260625)[:8]
+
+    def _board(opening: Any) -> Board:
+        board = Board.with_encoding_name(_ENC)
+        for q, r in opening.moves:
+            board.apply_move(int(q), int(r))
+        return board
+
+    serial = []
+    for opening in openings:
+        adapter = SealBotAdapter(depth=5, minimax_module=minimax_module, game_module=game_module)
+        adapter.new_game()
+        serial.append(adapter.select_move(_board(opening)))
+
+    # The GIL probe: a background thread counts while the MAIN thread runs a depth-6 search;
+    # held, the counter keeps ~0.02 % of its idle rate (4 742/s vs 19 M/s unpatched), released most.
+    import time
+
+    adapter = SealBotAdapter(depth=6, minimax_module=minimax_module, game_module=game_module)
+    adapter.new_game()
+    shadow = build_shadow_game(_board(openings[0]), game_module=game_module)
+    engine = adapter._engine
+    ticks = [0]
+    stop = threading.Event()
+
+    def _count() -> None:
+        while not stop.is_set():
+            ticks[0] += 1
+
+    counter = threading.Thread(target=_count, daemon=True)
+    counter.start()
+    time.sleep(1.0)
+    idle_rate = float(ticks[0])
+    before, t0 = ticks[0], time.perf_counter()
+    engine.get_move(shadow)
+    search_wall = time.perf_counter() - t0
+    during_rate = (ticks[0] - before) / search_wall
+    stop.set()
+    counter.join(timeout=5)
+    assert search_wall > 0.2, f"the probe search took {search_wall:.3f} s; too short to read"
+    assert during_rate > 0.2 * idle_rate, (
+        f"a background thread ran at {during_rate:,.0f}/s during a {search_wall:.1f} s search "
+        f"against {idle_rate:,.0f}/s idle: the extension holds the GIL through "
+        "`engine.get_move`, so `eval.rung_concurrency` serialises sealbot"
+    )
+
+    results: list[tuple[int, int] | None] = [None] * len(openings)
+
+    def _one(i: int) -> None:
+        a = SealBotAdapter(depth=5, minimax_module=minimax_module, game_module=game_module)
+        a.new_game()
+        results[i] = a.select_move(_board(openings[i]))
+
+    threads = [threading.Thread(target=_one, args=(i,)) for i in range(len(openings))]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=300)
+    assert results == serial, f"concurrent {results} != serial {serial}: the release changed a move"

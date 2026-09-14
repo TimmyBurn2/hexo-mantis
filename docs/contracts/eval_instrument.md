@@ -92,6 +92,10 @@ and are folded in here, because a reader of any ladder reading needs them:
   run inside `vendor/external/sealbot/current/`. `--with` is ephemeral: a vendor build
   dependency never becomes a mantis dependency. The refusal reason a rung emits when the
   extension is absent names this command verbatim, so the log says which step to run.
+  The tracked patch's THIRD hunk (2026-09-14, CARD-SEALBOT-GIL-SERIAL) wraps the engine's search
+  alone in `py::gil_scoped_release`, so `eval.rung_concurrency` overlaps the bar's searches as
+  well as the candidate's; it changes no move, score or depth receipt, and the vendored test
+  file pins both halves.
 - **Books** are versioned, sha-pinned and paired: `mantis.arena.books` verifies the sha256 at
   load and raises on mismatch, and every opening is played exactly twice with the colours
   swapped, so a colour advantage cancels within the pair rather than across the sample.
