@@ -198,9 +198,10 @@ added_by = "WP-SP"
 
 # Re-pinned 2026-09-11: DELETE-1 removed `seeded`/`solver_fires` from the engine's game row,
 # so the golden's scripted rows and `game_complete` payloads lost those two fields.
+# Re-pinned 2026-09-14: R353(d) added the per-move arms as the row's ninth field.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-sha256 = "dbe1d3d27f15e0c9f4dc10dca5bd6b987dfd4b71b60ceabfd6c9033bc645e67a"
+sha256 = "a6f7b24c4766de35b79f597200caba226df0eb37b721e9ed8079f13dd74eaf02"
 added_by = "WP-SP"
 
 [[required]]
