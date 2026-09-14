@@ -39,11 +39,10 @@ class EventTail:
         self.segments = [path for _seg, path in sorted(found)]
 
     def poll(self) -> Snapshot:
-        """Read every new byte of every segment, in segment order, and return the snapshot.
+        """Read every new byte of every segment, in segment order, and return the snapshot; OSError propagates.
 
         Raises:
             EmptyRunRecord: no parseable row exists in any segment yet.
-            OSError: a segment could not be read.
         """
         self._discover()
         for path in self.segments:

@@ -1,5 +1,4 @@
-"""The readers give the dashboard's numbers for the same record — pinned on a synthetic full-shaped record,
-and on the run6 mirror record when MANTIS_DASH_FIXTURE_EVENTS points at it (never a fixture in git, R7)."""
+"""The readers give the dashboard's numbers: on a synthetic full-shaped record, and on the run6 mirror record when MANTIS_DASH_FIXTURE_EVENTS names it (never a fixture in git, R7)."""
 from __future__ import annotations
 
 import importlib

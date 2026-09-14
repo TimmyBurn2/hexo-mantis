@@ -120,11 +120,7 @@ class Snapshot:
         return self._last.get(name)
 
     def series(self, name: str, x_key: str, y_key: str) -> Series:
-        """A reduced series.
-
-        Raises:
-            KeyError: the `(name, x_key, y_key)` triple is not one the reducers keep.
-        """
+        """A reduced series; a `(name, x_key, y_key)` triple the reducers do not keep is a KeyError, never an empty series."""
         return self._series[(name, x_key, y_key)]
 
     def wall_hours(self) -> float | None:

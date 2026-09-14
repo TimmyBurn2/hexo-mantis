@@ -1,6 +1,4 @@
-"""Sweep the preflight oracles' probe paths out of the tree before and after the session (the
-in-repo `--out-dir` oracle has no `try/finally`, so a failing guard would poison every later run),
-and load the `tools/` packages by path for the tests that read them."""
+"""Sweep the preflight oracles' probe paths before and after the session (a failing guard would poison every later run), and load the `tools/` packages by path."""
 from __future__ import annotations
 
 import importlib.util
@@ -21,13 +19,7 @@ PROBES = (REPO_ROOT / "_preflight_oracle_outdir",
 
 
 def _sweep() -> None:
-    """Remove each probe path, loudly — a silent sweep leaves the poisoned tree it exists to
-    prevent, and the next failure is then blamed on the guard.
-
-    The symlink arm runs FIRST because `Path.is_dir()` follows symlinks while `shutil.rmtree`
-    refuses them: from a session-scoped autouse fixture that raise was measured at 195 collection
-    errors across all of `tests/tools/`.
-    """
+    """Remove each probe path loudly, the symlink arm FIRST: `is_dir()` follows symlinks, `rmtree` refuses them (195 collection errors when it ran second)."""
     for probe in PROBES:
         if probe.is_symlink():
             try:
@@ -77,8 +69,7 @@ def preflight_harness_ceiling_sec() -> float:
 
 @pytest.fixture(scope="session", autouse=True)
 def _preflight_probe_path_is_not_left_in_the_tree():
-    """Sweep before as well as after, so an earlier session's leftovers cannot fail the guard's
-    oracle for an unrelated reason."""
+    """Sweep before as well as after, so an earlier session's leftovers cannot fail the guard's oracle."""
     _sweep()
     yield
     _sweep()
@@ -114,8 +105,7 @@ def _run_dirs_under(base: Path) -> list[tuple[Path, str]]:
 
 @pytest.fixture(scope="module")
 def local_puller(tmp_path_factory) -> Iterator[Path]:
-    """The R349(b) loop in miniature: the REAL puller as a LOCAL loop over every run directory
-    a preflight child writes under pytest's tmp base; module-scoped for the preflight fixtures."""
+    """The R349(b) loop in miniature: the REAL puller as a LOCAL loop over every preflight run dir under pytest's tmp base."""
     puller = _load_puller()
     base = Path(tmp_path_factory.getbasetemp())
     mirrors = tmp_path_factory.mktemp("mirror")

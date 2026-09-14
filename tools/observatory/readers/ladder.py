@@ -85,8 +85,7 @@ def primary_rung(snap: Snapshot, ladder: dict[str, Any] | None) -> str:
 
 
 def rung_series(snap: Snapshot, ladder: dict[str, Any] | None) -> dict[str, list[RoundPoint]]:
-    """Per rung, one point per round: the ladder row's (games, wr) joined by round index to the
-    round event's step, promotion, broken flag and CI; without a ladder, the events alone."""
+    """Per rung, one point per round: the ladder row's (games, wr) joined by round index to the round event; without a ladder, the events alone."""
     rounds = [r for r in snap.rows("eval_round_complete") if isinstance(r.get("step"), int)]
     by_idx = {_round_idx(r.get("round_id")): r for r in rounds}
     out: dict[str, list[RoundPoint]] = {}
@@ -145,11 +144,7 @@ def promotion_reading(snap: Snapshot) -> tuple[PromotionReading | None, Promotio
 
 
 def trend(points: list[RoundPoint]) -> SlopeFit | None:
-    """OLS slope of Elo(WR) on step, in Elo per 1 000 steps, over completed rounds.
-
-    Elo of a 0 % or 100 % round is not finite, so the rate is clamped by half a game
-    (`clamp_wr`) where the games count is known and skipped where it is not.
-    """
+    """OLS slope of Elo(WR) on step in Elo per 1 000 steps over completed rounds; a 0 %/100 % round is clamped by half a game where n is known, skipped where not."""
     xs, ys = [], []
     for p in points:
         if p.broken or p.wr is None:

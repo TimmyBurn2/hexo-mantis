@@ -173,11 +173,10 @@ class ShardIndex:
                 self._by_path[path] = shard
 
     def poll(self) -> None:
-        """Discover shards, read every new row, and mark a shard closed once it is complete on disk.
+        """Discover shards, read every new row, and mark a shard closed once complete on disk; OSError propagates.
 
         Raises:
             EmptyGameRecord: no shard of the run holds a game after reading everything present.
-            OSError: a shard could not be read.
         """
         self._discover()
         sizes = self._closed_sizes()
@@ -226,11 +225,7 @@ class ShardIndex:
         shard.rows.append(offset, row)
 
     def fetch(self, game_id: str) -> dict[str, Any] | None:
-        """The whole record of one game by one seek, or `None` when the run has no such game.
-
-        Raises:
-            OSError: the shard could not be read.
-        """
+        """The whole record of one game by one seek, or `None` when the run has no such game; OSError propagates."""
         where = self._where.get(game_id)
         if where is None:
             return None
