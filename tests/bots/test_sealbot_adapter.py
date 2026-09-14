@@ -311,6 +311,41 @@ def test_an_illegal_buffered_move_is_discarded_re_searched_and_counted() -> None
     )
 
 
+def test_new_game_never_carries_a_searched_engine_into_the_next_game() -> None:
+    """CARD-SEALBOT-TT-SEAT / R353(b): the vendored engine's transposition table persists across
+    `get_move` calls, is keyed WITHOUT the root player and stores root-relative scores, so an
+    engine that searched as one seat reads its own entries with the wrong sign when the next game
+    swaps it to the other seat. The instrument is therefore a FRESH engine per game: after a
+    search, `new_game()` drives a new `MinimaxBot`, and the searched one is never driven again."""
+    from mantis.bots.sealbot import SealBotAdapter
+
+    module = _FakeMinimaxModule()
+    adapter = SealBotAdapter(depth=5, minimax_module=module, game_module=_FakeGameModule)
+    adapter.new_game()
+    board = _board_mid_compound_turn()
+    module.instances[-1].program(board.legal_moves()[:1], last_depth=5)
+    adapter.select_move(board)
+    searched = module.instances[-1]
+
+    adapter.new_game()
+    module.instances[-1].program(board.legal_moves()[:1], last_depth=5)
+    adapter.select_move(board)
+
+    assert len(module.instances) == 2, (
+        f"one MinimaxBot served two games ({len(module.instances)} constructed): its "
+        f"transposition table carries the first game's root-relative scores into the second, "
+        f"read with the wrong sign when the seat swaps (CARD-SEALBOT-TT-SEAT)"
+    )
+    assert len(searched.payloads) == 1, (
+        f"the engine that searched game 1 was driven again in game 2 "
+        f"({len(searched.payloads)} get_move calls)"
+    )
+    assert module.instances[-1].writes["max_depth"] == 5, (
+        "the fresh engine must be configured (max_depth, time_limit) like the first"
+    )
+    assert module.instances[-1].writes["time_limit"] == _NON_BINDING_TIME_LIMIT
+
+
 def _sys_path_writes(tree: ast.AST) -> list[int]:
     """Lines that MUTATE `sys.path`: a call to insert/append/extend on it, or an assignment whose
     target is it."""

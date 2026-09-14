@@ -534,3 +534,62 @@ def test_the_search_releases_the_gil_and_eight_concurrent_searches_agree_with_se
     for thread in threads:
         thread.join(timeout=300)
     assert results == serial, f"concurrent {results} != serial {serial}: the release changed a move"
+
+
+def test_a_colour_swapped_game_through_one_adapter_plays_the_fresh_engines_move() -> None:
+    """CARD-SEALBOT-TT-SEAT / R353(b): the engine's transposition table persists across `get_move`
+    calls, is keyed by position, side to move and stones left — NOT the root player — while its
+    scores are root-relative, so entries a game stored as one seat are read with the wrong sign
+    by the next game on the other seat. The rung's shape exactly: one adapter, a paired opening,
+    game 1 as the opening's mover against a fresh sealbot, game 2 the seats swapped. The adapter's
+    first move of game 2 must be the move a fresh engine makes at that position. Measured on the
+    old adapter: 3 of the book's first 4 pairs diverge at that very move."""
+    from mantis.arena.books import paired_openings
+    from mantis.bots.sealbot import SealBotAdapter
+
+    minimax_module, game_module = _require_built_extension()
+
+    def _fresh() -> SealBotAdapter:
+        adapter = SealBotAdapter(depth=5, minimax_module=minimax_module, game_module=game_module)
+        adapter.new_game()
+        return adapter
+
+    def _board(moves: Any) -> Board:
+        board = Board.with_encoding_name(_ENC)
+        for q, r in moves:
+            board.apply_move(int(q), int(r))
+        return board
+
+    divergent: list[tuple[int, tuple[int, int], tuple[int, int]]] = []
+    for index, opening in enumerate(paired_openings(_BOOK, n_pairs=2, seed=20260625)[:2]):
+        adapter = _fresh()
+        board = _board(opening.moves)
+        seat = int(board.current_player)
+        # Game 1: two searches as the opening's mover — the second stores positions game 2's
+        # tree reaches at lower remaining depth, which is where the wrong-sign hits come from.
+        searches = 0
+        opponent = _fresh()
+        while searches < 2 and board.winner() is None:
+            if int(board.current_player) == seat:
+                searches += 1
+                board.apply_move(*adapter.select_move(board))
+                while int(board.current_player) == seat and board.winner() is None:
+                    board.apply_move(*adapter.select_move(board))
+            else:
+                board.apply_move(*opponent.select_move(board))
+        # Game 2: the seats swapped; a fresh sealbot plays the opening's mover.
+        adapter.new_game()
+        board = _board(opening.moves)
+        opponent = _fresh()
+        while int(board.current_player) == seat:
+            board.apply_move(*opponent.select_move(board))
+        reused = adapter.select_move(board)
+        fresh = _fresh().select_move(board)
+        if reused != fresh:
+            divergent.append((index, reused, fresh))
+    assert divergent == [], (
+        f"an adapter that played the other seat in its previous game chose differently from a "
+        f"fresh engine at its first move of the swapped game (pair, reused, fresh): {divergent}. "
+        f"Its transposition table carried the previous seat's root-relative scores "
+        f"(CARD-SEALBOT-TT-SEAT); every game must start from an empty table."
+    )

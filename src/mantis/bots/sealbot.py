@@ -212,7 +212,9 @@ class SealBotAdapter:
     def __init__(self, *, depth: int, minimax_module: Any, game_module: Any) -> None:
         self._depth = depth
         self._game_module = game_module
+        self._minimax_module = minimax_module
         self._engine = minimax_module.MinimaxBot()
+        self._engine_searched = False
         self._win_threshold = self._resolve_score_channel(minimax_module)
         #: The compound-turn discard is a COUNTED in-run event, never a silent `if`: a reader has
         #: to be able to see it fire while the run is going (LAW-18).
@@ -255,10 +257,16 @@ class SealBotAdapter:
         return f"sealbot_d{self._depth}"
 
     def new_game(self) -> None:
-        """Clear the compound-turn buffer and re-assert the two levers. No board state is held
-        between calls, so there is nothing else to reset."""
+        """Start from an EMPTY transposition table: an engine that has searched is replaced, never
+        carried into another game. The vendored table persists across `get_move` calls, is keyed
+        without the root player and stores root-relative scores, so a seat swap between games
+        reads the previous seat's entries with the wrong sign (CARD-SEALBOT-TT-SEAT, R353(b)).
+        The compound-turn buffer is cleared and the two levers re-asserted on the fresh engine."""
         self._buffer.clear()
         self._buffer_seat = None
+        if self._engine_searched:
+            self._engine = self._minimax_module.MinimaxBot()
+            self._engine_searched = False
         self._configure()
 
     def select_move(self, board: Any) -> tuple[int, int]:
@@ -291,6 +299,7 @@ class SealBotAdapter:
 
     def _search(self, board: Any, seat: int) -> tuple[int, int]:
         game = build_shadow_game(board, game_module=self._game_module)
+        self._engine_searched = True
         moves = [(int(q), int(r)) for q, r in self._engine.get_move(game)]
         if not moves:
             raise SealBotDepthError(
