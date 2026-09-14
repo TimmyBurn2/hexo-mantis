@@ -125,6 +125,26 @@ Both were found by running the gate set rather than by reading it, and both are 
   cost cells (`/workspace/oc7/cells_rungcost.json`) to read the rung at concurrency 1 vs 8.
   Nothing is ever pushed to the SealBot repository — the patch lives in this tree only.
 
+- **CARD-SEALBOT-TT-SEAT — one sealbot instance judging both seats poisons its own scores.**
+  Found by the game-quality instrument (`GAME_QUALITY_2026-09-14.md`, two contaminated first
+  passes discarded) and confirmed in the vendored source: the engine's transposition table
+  persists across `get_move` calls (only the history and killer tables are cleared when the
+  side to move changes, `engine/search.h`), its key is `_hash ^ f(_cur_player) ^ g(_moves_left)`
+  — the side to move and the placements left, NOT the ROOT player (`engine/bot.h::_tt_key`) —
+  while stored scores are from the ROOT player's perspective (`maximizing = (_cur_player ==
+  _player)`). So an entry written while the instance played seat A is read with the wrong sign
+  when the same instance later searches the same position as seat B. The eval rung builds ONE
+  adapter per thread and plays colour-swapped pairs through it (`worker.py::_play_rung_block`,
+  `_pair()`), and `SealBotAdapter.new_game()` clears only the compound-turn buffer — so every
+  sealbot reading on record (run6's rounds, the frontier's 33 cells, run7's stamps) was taken
+  through a bar whose TT carried the previous games' entries. How much it moves a reading is
+  UNMEASURED. Fix shape, in-repo (no vendor change): `new_game()` rebuilds the engine (a fresh
+  `MinimaxBot`, ≈ 1M-entry TT) so every game starts from an empty table — a LAW-15 instrument
+  change that needs a ruling and a same-book A/B (288 paired games, contaminated vs fresh) before
+  it replaces the bar run7 is stamped against. Second finding from the same record: sealbot's
+  mate claims at distance ≥ 3 are not proofs (8 of 150 self-reported mates lost); only its ≤ 2
+  band reads as a verdict.
+
 ## Opened by R350 (the block verdict)
 
 - **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**
