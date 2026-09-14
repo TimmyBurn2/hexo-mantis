@@ -100,28 +100,15 @@ Both were found by running the gate set rather than by reading it, and both are 
   18k net, 288 paired games, the same rung; the card is NOT a run7 question — as a TRAINER the
   head works. CARDED.
 
-- **CARD-SEALBOT-GIL-SERIAL — `rung_concurrency` overlaps only the candidate's side, because
-  the vendored sealbot holds the GIL through its search.** `vendor/external/sealbot/current/minimax_bot.cpp`
-  binds `get_move` with no `py::gil_scoped_release`, so under `eval.rung_concurrency 8` (R351,
-  ratified by R352) the eight threads' sealbot searches run one at a time. Measured on the
-  re-minted run7's stamp (`RUN7_STAMP2_2026-09-14.md`): the 288-game `sealbot_d5` rung took 48 of
-  the terminal round's 96 minutes while sealbot d5's own moves are 0–3 s each — ≈ 40 min of
-  serialised sealbot time. The round's wall is why `eval.round_timeout_sec` is minted at 10 800
-  and why a round can outlast the 3 000-step cadence. FIX SHAPE, proposed and unverified: a THIRD
-  HUNK of `vendor/patches/sealbot.patch` wrapping `engine.get_move(gs)` alone in
-  `py::gil_scoped_release` (the extraction stays under the GIL; the engine's transposition table
-  is per instance and the shared offset/zobrist tables are built by its constructor under the
-  GIL) — no move, score or depth receipt changes. The hunk and the rewritten patch are in the
-  R352 leg's scratch record; it is R145-class (a patch change). **APPLIED on the operator's
-  direction (2026-09-14 14:35 UTC, "do the cleanest thing", after the twin shakedown showed the
-  escalated contended round projecting to ≈ 3.2 h — `SHAKEDOWN7G_2026-09-14.md` §B):** the third
-  hunk is in `vendor/patches/sealbot.patch`, the extension rebuilt through
-  `tools/vendor_build_sealbot.sh`, and the release pinned by
-  `tests/bots/test_sealbot_vendored.py::test_the_search_releases_the_gil_and_eight_concurrent_searches_agree_with_serial`
-  (a background thread's tick rate during a depth-6 search: 5 056/s vs 19.6 M/s idle on the
-  unpatched build; eight concurrent fresh instances return the serial moves). The rung's new
-  wall is read on the re-stamp's terminal round. Nothing is ever pushed to the SealBot
-  repository — the patch lives in this tree only. The card stays open until that wall is read.
+- **CARD-SEALBOT-GIL-SERIAL — CLOSED on run7's first in-run round wall (R353 §0.1).** The lever
+  (the tracked patch's third hunk, `2177c926`: `py::gil_scoped_release` around `engine.get_move`)
+  took the idle rung from 48 to 21 min on the stamps; the reading the card waited for is the round
+  BESIDE the trainer: `r000001_3000` (2026-09-14 19:26–21:42 UTC) walled **8 131 s against
+  14 400** — probe 6 s, gate screen 80 games 2 154 s (0.49 s/ply), gate confirm 128 games 3 800 s
+  (0.51 s/ply), **the 288-game `sealbot_d5` rung 2 142 s (0.19 s/ply; 1.7× its idle wall, where the
+  GIL-held build's idle wall alone was 2 880 s)**, random floor 28 s. The gate blocks, not the rung,
+  are the round's cost now; the timeout's headroom was 6 269 s with the trainer stepping at
+  ≈ 1 400 steps/h throughout. The card's fix shape is the shipped one; nothing further is owed.
 
 - **CARD-SEALBOT-TT-SEAT — one sealbot instance judging both seats poisons its own scores.**
   Found by the game-quality instrument (`GAME_QUALITY_2026-09-14.md`, two contaminated first
