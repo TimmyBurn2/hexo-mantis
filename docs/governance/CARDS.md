@@ -110,36 +110,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   are the round's cost now; the timeout's headroom was 6 269 s with the trainer stepping at
   ≈ 1 400 steps/h throughout. The card's fix shape is the shipped one; nothing further is owed.
 
-- **CARD-SEALBOT-TT-SEAT — one sealbot instance judging both seats poisons its own scores.**
-  Found by the game-quality instrument (`GAME_QUALITY_2026-09-14.md`, two contaminated first
-  passes discarded) and confirmed in the vendored source: the engine's transposition table
-  persists across `get_move` calls (only the history and killer tables are cleared when the
-  side to move changes, `engine/search.h`), its key is `_hash ^ f(_cur_player) ^ g(_moves_left)`
-  — the side to move and the placements left, NOT the ROOT player (`engine/bot.h::_tt_key`) —
-  while stored scores are from the ROOT player's perspective (`maximizing = (_cur_player ==
-  _player)`). So an entry written while the instance played seat A is read with the wrong sign
-  when the same instance later searches the same position as seat B. The eval rung builds ONE
-  adapter per thread and plays colour-swapped pairs through it (`worker.py::_play_rung_block`,
-  `_pair()`), and `SealBotAdapter.new_game()` clears only the compound-turn buffer — so every
-  sealbot reading on record (run6's rounds, the frontier's 33 cells, run7's stamps) was taken
-  through a bar whose TT carried the previous games' entries. How much it moves a reading is
-  UNMEASURED. Fix shape, in-repo (no vendor change): `new_game()` rebuilds the engine (a fresh
-  `MinimaxBot`, ≈ 1M-entry TT) so every game starts from an empty table — a LAW-15 instrument
-  change that needs a ruling and a same-book A/B (288 paired games, contaminated vs fresh) before
-  it replaces the bar run7 is stamped against. Second finding from the same record: sealbot's
-  mate claims at distance ≥ 3 are not proofs (8 of 150 self-reported mates lost); only its ≤ 2
-  band reads as a verdict. **RULED by R353(b) and FIXED in-repo at `748f5c47`** (2026-09-14):
-  `new_game()` replaces a searched engine (5 ms per game, measured; the per-search cost is the
-  same — 522 vs 499 ms mean over 24 colour-alternating games, so TT growth moves nothing), pinned
-  by a Tier-1 construction count and a Tier-2 colour-swapped pair that is RED on the old adapter
-  (3 of the book's first 4 pairs diverge at the swapped game's first move). The root-player-keyed
-  patch variant was NOT taken: it keeps cross-game entries valid but makes each game depend on the
-  games its thread played before, which under `rung_concurrency 8` is scheduling-dependent — a
-  reading that could not be reproduced even in principle. The A/B (three frozen nets, old tree
-  `15109ac3` vs the fixed worktree, 288 games each, concurrency 8) runs on the box after run7's
-  first in-run round; run7 itself plays the old adapter for its whole run (its tree is frozen by
-  the stamp) and every sealbot reading is PROVISIONAL until the delta lands
-  (`tools/dashboard/tier2.py::SEALBOT_PROVISIONAL_NOTE`). The card closes on the A/B's reading.
+- **CARD-SEALBOT-TT-SEAT — CLOSED on the A/B's reading (R353(b); `SEALBOT_TT_AB_2026-09-14.md`).**
+  The defect is real in the engine (the table persists across `get_move`, keyed without the root
+  player, scores root-relative; the Tier-2 colour-swapped pair is RED on the old adapter against
+  a sealbot opponent) and INERT as a bias on the instrument: four cells, 1 152 games, old tree
+  `15109ac3` vs the fixed worktree, Δ 0.000 (serial) / −0.007 / +0.028 / −0.014 (concurrency 8),
+  every paired CI including 0, ratio 1.00, and no game in which sealbot's move differed before the
+  candidate's — against our nets game 2's tree never revisits game 1's nodes. Every sealbot level
+  on the record stands as read. The fix (`748f5c47`, fresh engine per game, 5 ms) stays for
+  reproducibility: a game is now a deterministic function of its own moves. Sealbot's mate claims
+  at distance ≥ 3 remain non-proofs (the second finding); nothing further is owed here.
 
 ## Opened by R350 (the block verdict)
 
