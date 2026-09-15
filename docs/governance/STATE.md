@@ -4,7 +4,7 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 
-## Current phase — run7 LIVE (step ≈ 22 700, ≈ 900 steps/h) on `15109ac3`, its eval rounds outlasting their cadence (two killed, two kicks skipped); the RESUME RE-MINT is landed at `ce0a8ff6` and WAITS on a push, a preflight stamp and a stop → resume; the strix anchor reads the run peaked near 9k
+## Current phase — run7 RESUMED 2026-09-15 20:03 UTC from step 23 829 on the re-minted config (tree `ba51fd46`, gate/rung 256, GSPRT armed); the strix anchor reads the run peaked near 9k; the first resumed round (@24k) is the re-mint's live confirmation
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -59,14 +59,19 @@ memory; the tree is stamp-bound). Resume mechanics verified on the real 18k chec
 config wins outside the checkpoint-owned set; the pre-row stamp loads with
 `checkpoint_config_predates_schema`).
 
-**The resume sequence, staged on the box, waiting on the operator's push of `dev`:**
-(1) `git pull` in the worktree `/workspace/mantis-tt` (tracks `origin/dev`), `make build.cuda`
-there (its extension predates the arm-producer row); (2) `/workspace/oc7/box_preflight_run7_resume.sh
-<out> 100 <wait>` from the worktree beside the live run — the local puller must cycle on `<out>`;
-its terminal round is the GSPRT's first live round; (3) right after a round completes: SIGTERM the
-supervisor, move `/workspace/hexo-mantis` to the commit, `make build.cuda`, then
-`/workspace/oc7/box_resume_run7.sh <the signal-save checkpoint>`; (4) the mirror's refresh scripts
-name `seg0001` — a resume writes `seg0002`.
+**The resume, DONE (operator: "you may also push and start again", 2026-09-15):** `dev` pushed
+at `ba51fd46`; run7 stopped by SIGTERM at 19:24:50 UTC with no round in flight (r5 had died at
+17:23, the 24k kick was minutes away) — save-then-exit wrote `run7_00023829_4a302f88.ckpt` + bundle
++ sidecar + ring (100 000 positions, round_counter 5), child rc 0; the worktree and the run tree
+moved to `ba51fd46` and rebuilt (`make build.cuda`, the extension now the arm-producer's); the
+preflight ran from the worktree on the idle card and PASSED (`run7-preflight-resume`, mirrored):
+its terminal round was 360 games in **1 229 s** — the GSPRT rejected the 101-step burst net against
+its anchor at 24 pairs (LLR −3.14, WR 0.33), the rung at 256 read 0.441 [0.385, 0.500]; the run
+resumed under the supervisor at 20:03:10 UTC (`box_resume_run7.sh`): stamp accepted on the new tree,
+the stop checkpoint's stamp tolerated (`missing=['eval.max_plies', 'eval.gate.sequential']`),
+`resume_state_restored step=23829`, four RNG streams, 32 workers, events in `seg0002`; both refresh
+scripts follow the newest segment. The mirror puller runs on. CARD-EVAL-ROUND-OVERRUN closes when
+the resumed run's first three rounds land inside the bound.
 
 ## The SEALBOT-TT A/B — read; every sealbot level on the record STANDS
 
@@ -126,9 +131,9 @@ reconstruction.
 ## Dispatcher state for a fresh session
 
 run7 is LIVE; stopping it is ONE SIGTERM to the supervisor (save-then-exit). Open, in order:
-(1) the RESUME SEQUENCE above, on the operator's push (every round until then risks the bound:
-r4 and r5 were lost; a second box job beside a round costs ≈ 4 700 s of it); (2) the strix
-cadence — 15k read 0.045 and the 9k anchor 0.097; the next point is 30k on the resumed run (`/workspace/oc7/strix_15k/`); (3) the
+(1) the resumed run's rounds — r6 @24k is the re-mint's first live round; read its wall and
+the GSPRT's `pairs_played`/`stopped`, and expect the rung ≈ 6–13 pp below the 512 series;
+(2) the strix cadence — 15k read 0.045 and the 9k anchor 0.097; the next point is 30k on the resumed run (`/workspace/oc7/strix_15k/`); (3) the
 balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — the other
 session's analysis, design and plan (`docs/design/observatory_design.md`, status "proposal for a
 ruling"; research in `observatory_research.md`) and its phase 1, the reader layer under
