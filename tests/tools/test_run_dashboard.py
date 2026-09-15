@@ -229,15 +229,16 @@ def test_the_hero_strength_cell_carries_wr_games_wilson_and_elo(html, reader, tm
     assert "sealbot_d5" in page
 
 
-def test_the_strength_panel_says_every_sealbot_reading_is_provisional(html, reader, tmp_path):
-    """R353(b): the strength panel says every sealbot reading is PROVISIONAL, with rounds and without."""
+def test_the_strength_panel_carries_the_sealbot_tt_finding(html, reader, tmp_path):
+    """R353(b): the panel's note names the A/B's finding (ratio 1.00), not a bare PROVISIONAL; with rounds and without."""
     for rows in (BOOT, [_round(1, 0.5)]):
         page = _page(html, reader, tmp_path, rows, _ladder([(1, 32, 0.5)]))
         panel = re.search(r'<section class="panel tier2" id="ladder">(.*?)</section>', page, re.S)
         assert panel is not None
         note = re.search(r'<p class="note">(.*?)</p>', panel.group(1), re.S)
         assert note is not None, "the strength panel carries no note"
-        assert "PROVISIONAL" in note.group(1)
+        assert "PROVISIONAL" not in note.group(1)
+        assert "SEALBOT_TT_AB_2026-09-14" in note.group(1) and "1.00" in note.group(1)
         assert "CARD-SEALBOT-TT-SEAT" in note.group(1) and "R353" in note.group(1)
 
 

@@ -25,14 +25,14 @@ _RATE_KEYS = (("games_per_hour", "games / h", "s1"), ("positions_per_hour", "pos
               ("steps_per_hour", "steps / h", "s3"), ("sims_per_sec", "sims / s", "s5"))
 
 
-#: R353(b): the record carries no witness of which adapter played its rung, so the note stands
-#: on every record until the SEALBOT-TT A/B's delta re-derives the level.
-SEALBOT_PROVISIONAL_NOTE = (
-    "Every sealbot reading is PROVISIONAL (R353(b)): the vendored engine's transposition table "
-    "persisted across games and was read with the wrong sign after a seat swap "
-    "(CARD-SEALBOT-TT-SEAT); the record does not say which adapter played its rung, and the "
-    "SEALBOT-TT A/B on frozen nets re-derives every level on the record. The strix rung is "
-    "unaffected."
+#: R353(b): the record carries no witness of which adapter played its rung, so the A/B's finding
+#: is stated on every record (docs/design/measurements/SEALBOT_TT_AB_2026-09-14.md).
+SEALBOT_TT_NOTE = (
+    "Sealbot readings through the pre-748f5c47 adapter (its transposition table persisted across "
+    "games, CARD-SEALBOT-TT-SEAT, R353(b)) transfer at ratio 1.00: the A/B on four cells and "
+    "1 152 games read \u0394 0.000 / \u22120.007 / +0.028 / \u22120.014, every CI including 0 "
+    "(SEALBOT_TT_AB_2026-09-14.md). The record does not say which adapter played its rung; the "
+    "strix rung is unaffected."
 )
 
 
@@ -42,14 +42,14 @@ def strength(series: dict[str, list[RoundPoint]], rec: Record, gaps: Gaps) -> Pa
     if not rec.rows("eval_round_complete"):
         body = no_rows("eval_round_complete") + gaps.mark(
             "Strength ladder", "no <code>eval_round_complete</code> row, so no round is drawn")
-        return Panel("Strength ladder", reads, body, "ladder", SEALBOT_PROVISIONAL_NOTE)
+        return Panel("Strength ladder", reads, body, "ladder", SEALBOT_TT_NOTE)
     body = ladder_chart(series)
     if not rec.rungs():
         body += gaps.mark("Strength ladder",
                           f"the ladder file was not read ({esc(rec.ladder_note)}); games per "
                           "rung and the Wilson band come from it, so only the record's own "
                           "bootstrap CI is drawn")
-    return Panel("Strength ladder", reads, body, "ladder", SEALBOT_PROVISIONAL_NOTE)
+    return Panel("Strength ladder", reads, body, "ladder", SEALBOT_TT_NOTE)
 
 
 def losses(rec: Record, gaps: Gaps) -> Panel:
