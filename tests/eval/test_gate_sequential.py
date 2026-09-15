@@ -1,5 +1,4 @@
-"""The sequential promotion gate: the LLR, its bounds, the batch loop's stops, driven with scripted
-pair outcomes and once through a real round (LAW-07: a flipped comparison reds the accept/reject rows)."""
+"""The sequential promotion gate: the LLR, its bounds, the loop's stops, and once through a real round (LAW-07)."""
 from __future__ import annotations
 
 import json
@@ -118,8 +117,6 @@ def test_the_spec_refuses_a_band_that_cannot_stop() -> None:
         _spec(check_every_pairs=0)
 
 
-# ── The producer, driven end to end through the worker (LAW-07) ─────────────────────────────────
-
 _ENC = "gnn_axis_v1"
 _BOOK = "book_v1_s20260625_p4"
 _SEED = 20260625
@@ -171,8 +168,7 @@ def _round_spec(tmp_path, sequential: dict | None):
 
 
 def test_the_worker_plays_the_sequential_gate_in_batches_and_reports_the_rule(tmp_path, monkeypatch) -> None:
-    """The armed block reaches `_play_gate_block`: batches under `gate_sequential`, at most `max_pairs`,
-    the gate result naming the rule (RED if the worker ignores the block)."""
+    """The armed block reaches `_play_gate_block`: batches under `gate_sequential`, the gate result naming the rule."""
     from mantis.eval import worker
 
     calls: list[int] = []

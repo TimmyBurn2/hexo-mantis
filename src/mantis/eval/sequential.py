@@ -1,5 +1,4 @@
-"""The sequential promotion gate (`eval.gate.sequential`): a GSPRT over opening-pair outcomes, the
-player injected so the rule is pinned without an engine; grounds in `docs/design/eval_gate_memo_2026-09-15.md` §3."""
+"""The sequential promotion gate (`eval.gate.sequential`): a GSPRT over opening-pair outcomes; grounds in `docs/design/eval_gate_memo_2026-09-15.md` §3."""
 from __future__ import annotations
 
 import math
