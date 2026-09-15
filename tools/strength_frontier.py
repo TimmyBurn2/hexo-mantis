@@ -118,7 +118,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         screen_confirm_lo=cfg.gate.screen_confirm_lo, deploy_sims=cfg.gate.deploy_sims,
         opening_book=cfg.gate.opening_book, bootstrap_resamples=cfg.gate.bootstrap_resamples,
         min_distinct_per_pair=cfg.gate.min_distinct_per_pair, seed_base=cfg.gate.seed_base,
-        run_gate=False,
+        run_gate=False, sequential=None,
     )
     return RoundSpec(
         round_id="cell", round_index=0, step=0, candidate_snapshot="", best_snapshot=None,

@@ -56,6 +56,13 @@ CONSUMER_REGISTRY = {
         "worker.py::_play_gate_block gate-block games in flight (R339(b))",
     "eval.rung_concurrency":
         "RoundSpec.rung_concurrency -> worker.py::_play_rung_block rung games in flight (R351)",
+    "eval.gate.sequential.mu0": "GateSpec.sequential -> worker.py::_play_gate_block -> sequential.SequentialGateSpec -> gsprt_llr's H0 mean (the GSPRT promotion rule, 2026-09-15; null is the screen/confirm rule)",
+    "eval.gate.sequential.mu1": "sequential.gsprt_llr's H1 mean",
+    "eval.gate.sequential.alpha": "sequential.llr_bounds -> the accept bound log((1-beta)/alpha)",
+    "eval.gate.sequential.beta": "sequential.llr_bounds -> the reject bound log(beta/(1-alpha))",
+    "eval.gate.sequential.check_every_pairs": "sequential.run_sequential_gate's batch width after the first check",
+    "eval.gate.sequential.min_pairs": "sequential.run_sequential_gate's first check (pairs played before any LLR is read)",
+    "eval.gate.sequential.max_pairs": "sequential.run_sequential_gate's ceiling, where the LLR's sign decides; also the book window's width (round_openings n_pairs)",
     "eval.max_plies":
         "run.py::compose_run -> build_eval_pipeline(max_plies=) -> RoundSpec.max_plies -> play_paired_match (every eval game's ply cap, its own row since 2026-09-15; the frontier driver composes the same row)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",

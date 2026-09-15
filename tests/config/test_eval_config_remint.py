@@ -25,7 +25,7 @@ _DEV_SMOKE_CONFIGS = (_CONFIGS_DIR / "dev_example.yaml",)
 _PARITY_GATE = {
     "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
     "screen_confirm_lo": 0.44, "deploy_sims": 160, "opening_book": "book_v1_s20260625_p4",
-    "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625,
+    "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
 }
 
 # The minted ladder, order binding. One rung: the others named bot kinds that could never

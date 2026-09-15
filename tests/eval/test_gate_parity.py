@@ -45,7 +45,7 @@ def _gate_cfg(**overrides):
 
     base = dict(
         promotion_winrate=0.55, screen_confirm_lo=0.44, bootstrap_resamples=1000,
-        min_distinct_per_pair=10, seed_base=20260625,
+        min_distinct_per_pair=10, seed_base=20260625, sequential=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)

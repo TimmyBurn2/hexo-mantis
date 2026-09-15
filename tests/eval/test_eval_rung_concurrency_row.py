@@ -108,7 +108,7 @@ def _rung_spec(tmp_path: Path, rung_concurrency: int) -> RoundSpec:
     gate = GateSpec(
         stride=1, screen_games=0, confirm_games=0, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=False,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=False, sequential=None,
     )
     rung = RungJob(name="r0", bot="random", variant="raw", depth=None, opponent_sims=None,
                    opening_book=_BOOK, deploy_matched=True, games=4)

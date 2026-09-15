@@ -219,6 +219,26 @@ class LadderRung(StrictModel):
     games_max: int = Field(ge=1)
 
 
+class SequentialGateConfig(StrictModel):
+    """The GSPRT promotion rule over opening pairs (2026-09-15); armed it replaces the screen/confirm rule, `null` is that rule."""
+
+    mu0: float = Field(gt=0, lt=1)
+    mu1: float = Field(gt=0, lt=1)
+    alpha: float = Field(gt=0, lt=1)
+    beta: float = Field(gt=0, lt=1)
+    check_every_pairs: int = Field(ge=1)
+    min_pairs: int = Field(ge=1)
+    max_pairs: int = Field(ge=1)
+
+    @model_validator(mode="after")
+    def _the_band_can_stop(self) -> "SequentialGateConfig":
+        if self.mu1 <= self.mu0:
+            raise ValueError(f"eval.gate.sequential: mu1 ({self.mu1}) must exceed mu0 ({self.mu0})")
+        if self.min_pairs > self.max_pairs:
+            raise ValueError(f"eval.gate.sequential: min_pairs ({self.min_pairs}) must be <= max_pairs ({self.max_pairs})")
+        return self
+
+
 class GateConfig(StrictModel):
     """The run3 deploy-strength gate, knob-for-knob (LIVE knobs only).
 
@@ -236,6 +256,8 @@ class GateConfig(StrictModel):
     bootstrap_resamples: int = Field(ge=1)
     min_distinct_per_pair: int = Field(ge=1)
     seed_base: int
+    #: REQUIRED key, `null` the explicit screen/confirm posture (`draw_rate_abort`'s idiom).
+    sequential: SequentialGateConfig | None = Field(default=...)
 
 
 class LadderConfig(StrictModel):

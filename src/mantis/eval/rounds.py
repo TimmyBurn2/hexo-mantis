@@ -109,6 +109,9 @@ class GateSpec:
     min_distinct_per_pair: int
     seed_base: int
     run_gate: bool
+    #: `eval.gate.sequential` as a plain mapping (`None` = screen/confirm). NOT defaulted: a spec
+    #: silently carrying `None` while the config minted the block is the silently-disabled class.
+    sequential: dict[str, Any] | None
 
 
 @dataclass(frozen=True)

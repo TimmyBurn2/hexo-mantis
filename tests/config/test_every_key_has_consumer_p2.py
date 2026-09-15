@@ -50,6 +50,13 @@ CONSUMER_REGISTRY: dict[str, str] = {
         "worker.py::_play_gate_block gate-block games in flight (R339(b))",
     "eval.rung_concurrency":
         "worker.py::_play_rung_block rung games in flight (R351)",
+    "eval.gate.sequential.mu0": "worker.py::_play_gate_block -> sequential.gsprt_llr (H0 mean; the GSPRT promotion rule, null = screen/confirm)",
+    "eval.gate.sequential.mu1": "sequential.gsprt_llr (H1 mean)",
+    "eval.gate.sequential.alpha": "sequential.llr_bounds (accept bound)",
+    "eval.gate.sequential.beta": "sequential.llr_bounds (reject bound)",
+    "eval.gate.sequential.check_every_pairs": "sequential.run_sequential_gate (batch width)",
+    "eval.gate.sequential.min_pairs": "sequential.run_sequential_gate (first check)",
+    "eval.gate.sequential.max_pairs": "sequential.run_sequential_gate (ceiling; the book window's width)",
     "eval.max_plies":
         "run.py::compose_run -> build_eval_pipeline(max_plies=) -> RoundSpec.max_plies (every eval game's ply cap, its own row)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",

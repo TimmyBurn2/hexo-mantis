@@ -66,7 +66,7 @@ def _round_spec(
     gate = GateSpec(
         stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=2, opening_book=_BOOK,
-        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True,
+        bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=_SEED, run_gate=True, sequential=None,
     )
     rung_jobs = [
         RungJob(

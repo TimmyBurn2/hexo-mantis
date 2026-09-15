@@ -32,6 +32,7 @@ from mantis.arena.regime import MixedRegimeError
 
 __all__ = [
     "GateAggregate",
+    "aggregate_sequential_gate",
     "MixedRegimeError",
     "RungAggregate",
     "aggregate_gate",
@@ -214,6 +215,34 @@ def gate_promotion_decision(
     wr_ok = wr_confirm >= promotion_winrate
     ci_clean = ci_lo_boot is not None and ci_lo_boot > 0.0
     return bool(wr_ok and ci_clean and not low_power)
+
+
+def aggregate_sequential_gate(
+    records: Sequence[Mapping[str, Any]], gate_cfg: Any, verdict: Mapping[str, Any],
+) -> GateAggregate:
+    """The GSPRT's aggregate over every game it played: `aggregate_gate`'s pooled WR and pair bootstrap, `promoted` = the verdict AND the low-power guard."""
+    pooled = list(records)
+    n_pooled = len(pooled)
+    pooled_wins = sum(1 for r in pooled if r["winner"] == "p1")
+    pooled_draws = sum(1 for r in pooled if r["winner"] == "draw")
+    wr = (pooled_wins + 0.5 * pooled_draws) / n_pooled if n_pooled > 0 else None
+    unit_outcomes = np.asarray(pair_units(pooled), dtype=np.float64)
+    eff_n = int(unit_outcomes.shape[0])
+    wr_lower_boot, _wr_upper_boot = pair_bootstrap_wr_ci(
+        unit_outcomes, resamples=gate_cfg.bootstrap_resamples, ci_level=0.95, seed=gate_cfg.seed_base,
+    )
+    elo_ci_lower_boot = (wr_lower_boot - 0.5) if wr_lower_boot is not None else None
+    distinct_per_pair = _distinct_per_pair(pooled) if pooled else 0
+    low_power = distinct_per_pair < int(gate_cfg.min_distinct_per_pair)
+    if distinct_per_pair < 2:
+        elo_ci_lower_boot = None
+    promoted = bool(verdict["decision"] == "promote" and not low_power)
+    return GateAggregate(
+        wr_screen=wr, wr_confirm=wr, n_screen=n_pooled, n_confirm=0, n_pooled=n_pooled,
+        escalated=int(verdict["checks"]) > 1, elo_ci_lower_boot=elo_ci_lower_boot,
+        low_power=low_power, eff_n=eff_n, promoted=promoted,
+        wins=pooled_wins, losses=n_pooled - pooled_wins - pooled_draws, draws=pooled_draws,
+    )
 
 
 @dataclass(frozen=True)

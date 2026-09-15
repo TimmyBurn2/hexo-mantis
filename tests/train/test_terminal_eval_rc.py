@@ -496,7 +496,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
     gate = GateConfig(stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=150,
                       opening_book="book_v1_s20260625_p4", bootstrap_resamples=1000,
-                      min_distinct_per_pair=10, seed_base=20260625)
+                      min_distinct_per_pair=10, seed_base=20260625, sequential=None)
     ladder = LadderConfig(rungs=rungs, round_games=64, min_games_per_active_rung=4,
                           graduation_wr_lower_ci=0.75, graduation_consec_rounds=3,
                           activation_wr_lower_ci=0.65, calibration_every_k_rounds=4,

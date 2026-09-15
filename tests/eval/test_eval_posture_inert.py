@@ -195,7 +195,7 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
         gate=GateSpec(stride=1, screen_games=2, confirm_games=2, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",
                       bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
-                      run_gate=False),
+                      run_gate=False, sequential=None),
         rung_jobs=[], random_floor_games=0, random_model_sims=1, sealbot_model_sims=1,
         seed_base=1, round_timeout_sec=1.0,
         result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,

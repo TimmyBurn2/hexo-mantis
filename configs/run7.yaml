@@ -19,8 +19,8 @@
 # delta: train.checkpoint_interval: 0 -> 3000
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: eval.random_floor_games: 4 -> 20
-# delta: eval.gate.deploy_sims: 150 -> 512
-# delta: eval.sealbot_model_sims: 128 -> 512
+# delta: eval.gate.deploy_sims: 150 -> 256
+# delta: eval.sealbot_model_sims: 128 -> 256
 # delta: eval.strength_floor: null -> {probe_games: 4, min_decisive_rate: 0.25, min_winrate: 0.0}
 # delta: eval.ladder.rungs: [{name: sealbot_d5, bot: sealbot, variant: d5, depth: 5, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}] -> [{name: sealbot_d5, bot: sealbot, variant: d5, depth: 5, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 288}]
 # delta: eval.ladder.round_games: 64 -> 288
@@ -39,6 +39,8 @@
 # delta: eval.concurrency: 1 -> 8
 # delta: eval.rung_concurrency: 1 -> 8
 # delta: eval.gate.screen_confirm_lo: 0.44 -> 0.5
+# delta: eval.max_plies: 128 -> 256
+# delta: eval.gate.sequential: null -> {mu0: 0.52, mu1: 0.62, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104}
 schema_version: 1
 run_id: run7
 seed: 20260914
@@ -57,7 +59,7 @@ deploy:
     kind: puct
 eval:
   random_model_sims: 96
-  sealbot_model_sims: 512
+  sealbot_model_sims: 256
   random_floor_games: 20
   worker_device: cuda
   ply_cap_adjudication: null
@@ -65,18 +67,26 @@ eval:
     probe_games: 4
     min_decisive_rate: 0.25
     min_winrate: 0.0
-  max_plies: 128
+  max_plies: 256
   gate:
     stride: 1
     screen_games: 80
     confirm_games: 128
     promotion_winrate: 0.55
     screen_confirm_lo: 0.5
-    deploy_sims: 512
+    deploy_sims: 256
     opening_book: book_v1_s20260625_p4
     bootstrap_resamples: 1000
     min_distinct_per_pair: 10
     seed_base: 20260625
+    sequential:
+      mu0: 0.52
+      mu1: 0.62
+      alpha: 0.05
+      beta: 0.1
+      check_every_pairs: 8
+      min_pairs: 16
+      max_pairs: 104
   ladder:
     rungs:
     - name: sealbot_d5

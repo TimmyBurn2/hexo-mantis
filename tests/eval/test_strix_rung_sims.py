@@ -15,7 +15,7 @@ def _spec(**over):
         encoding="gnn_axis_r8", worker_device="cpu", rung_jobs=[], random_floor_games=0,
         gate=GateSpec(stride=1, screen_games=0, confirm_games=0, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=512, opening_book="book_v1_s20260625_p4",
-                      bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1, run_gate=False),
+                      bootstrap_resamples=10, min_distinct_per_pair=1, seed_base=1, run_gate=False, sequential=None),
         random_model_sims=96, sealbot_model_sims=512, seed_base=1, round_timeout_sec=1.0,
         result_path="", progress_path="", ladder_bootstrap_resamples=1, ladder_bootstrap_ci_level=0.95,
         ladder_bootstrap_seed=1, game_record=None, ply_cap_adjudication=None, strength_floor=None,

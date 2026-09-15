@@ -9,6 +9,7 @@ split, the phases drift out of the one-worker-process-per-round contract.
 """
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import sys
@@ -26,11 +27,12 @@ from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.resolve import resolve_bot
 from mantis.config.resolve.allocator_posture import assert_posture_token
 from mantis.encoding import EncodingSpec, lookup, normalize_encoding_name
-from mantis.eval.aggregate import aggregate_gate, aggregate_rung
+from mantis.eval.aggregate import aggregate_gate, aggregate_rung, aggregate_sequential_gate
 from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
 from mantis.eval.rounds import GameRecordTarget, RoundSpec, RungJob
+from mantis.eval.sequential import SequentialGateSpec, run_sequential_gate
 from mantis.eval.snapshot import load_model_snapshot
 from mantis.monitor.game_record import (
     GameRecordError,
@@ -413,6 +415,24 @@ def _play_gate_block(
             opponent_spec="best_anchor:deploy_matched", opening_book=spec.gate.opening_book,
             deploy_matched=True, encoding=spec.encoding,
         )
+        if spec.gate.sequential is not None:
+            seq = SequentialGateSpec(**spec.gate.sequential)
+            # ONE seeded window of `max_pairs` openings, consumed in order batch by batch.
+            openings = round_openings(
+                spec.gate.opening_book, n_pairs=seq.max_pairs,
+                seed_base=spec.gate.seed_base, round_index=spec.round_index,
+            )
+
+            def _play_pairs(start: int, end: int) -> list[dict[str, Any]]:
+                batch = play_paired_match(
+                    candidate, opponent, openings[start:end], regime_key=regime_key,
+                    board_factory=board_factory, record_sink=_both(progress.sink("gate_sequential"), games.sink("gate_sequential", channel="promotion", rung="anchor", served_sims=spec.gate.deploy_sims, seed=spec.gate.seed_base)), adjudicator=adjudicator, max_plies=spec.max_plies,
+                    player_factory=_pair, concurrency=spec.concurrency,
+                )
+                return [_agg_record(r) for r in batch]
+
+            records, verdict = run_sequential_gate(_play_pairs, seq)
+            return {"screen": list(records), "confirm": [], "sequential": dataclasses.asdict(verdict)}
         # A per-ROUND window over a seed_base-seeded permutation, confirm offset by
         # `_CONFIRM_SEED_OFFSET`, so consecutive rounds and phases do not replay games.
         screen_openings = round_openings(
@@ -647,7 +667,11 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
         probe.mark("gate_block")
         gate_result: dict | None = None
         if gate_records is not None:
-            gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
+            verdict = gate_records.get("sequential")
+            if verdict is not None:
+                gate_agg = aggregate_sequential_gate(gate_records["screen"], spec.gate, verdict)
+            else:
+                gate_agg = aggregate_gate(gate_records["screen"], gate_records["confirm"], spec.gate)
             gate_result = {
                 "wr_screen": gate_agg.wr_screen, "wr_confirm": gate_agg.wr_confirm,
                 "n_screen": gate_agg.n_screen, "n_confirm": gate_agg.n_confirm,
@@ -655,6 +679,12 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "elo_ci_lower_boot": gate_agg.elo_ci_lower_boot, "low_power": gate_agg.low_power,
                 "eff_n": gate_agg.eff_n, "reason": "", "deploy_matched": True,
                 "promoted": gate_agg.promoted,
+                # The rule that decided, and the sequential rule's own reading (null under the
+                # screen/confirm rule): a reader must not take a 32-game gate for a truncated one.
+                "rule": "gsprt" if verdict is not None else "screen_confirm",
+                "llr": None if verdict is None else verdict["llr"],
+                "pairs_played": None if verdict is None else verdict["pairs_played"],
+                "stopped": None if verdict is None else verdict["stopped"],
             }
 
         rungs_result: dict[str, Any] = {}

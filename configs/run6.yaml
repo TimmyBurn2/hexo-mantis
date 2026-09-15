@@ -70,6 +70,7 @@ eval:
     bootstrap_resamples: 1000
     min_distinct_per_pair: 10
     seed_base: 20260625
+    sequential: null
   ladder:
     rungs:
     - name: sealbot_d5

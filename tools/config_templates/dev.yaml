@@ -50,6 +50,8 @@ eval:
     bootstrap_resamples: 1000
     min_distinct_per_pair: 10
     seed_base: 20260625
+    # The GSPRT promotion rule (2026-09-15); null is the screen/confirm rule above.
+    sequential: null
   ladder:
     rungs:
       - name: sealbot_d5

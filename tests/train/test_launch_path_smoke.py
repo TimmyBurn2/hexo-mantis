@@ -53,7 +53,7 @@ def _eval_block():
         "gate": {
             "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
             "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
-            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1,
+            "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1, "sequential": None,
         },
         "ladder": {
             "rungs": [{"name": "r0", "bot": "random", "variant": "raw", "depth": None,
