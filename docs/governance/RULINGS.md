@@ -1,4 +1,4 @@
-# RULINGS — R23 to R353
+# RULINGS — R23 to R354
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R354.
+- Numbering continues from R346. The next ruling is R355.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,95 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 322 entries over 321 numbers.
+
+### R354 — RUN7 READING + REPO SCAN: the trainer peaked near 9k and declined; the forced-move census tests the Gumbel-m hypothesis; three fixes pre-registered, none armed; book_v2 ordered; INVESTIGATION-1 launched with three added domains; the 30k decision rule
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R353: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R{next} — (a) RUN7 READING: the trainer improved to ~9k (strix 0.083
+> → 0.097, sealbot 0.73 promoted) and DECLINED by 15k (strix 0.045,
+> policy loss 2.33 → 2.65, run6's shape — run6 too fell 0.77 → 0.69 from
+> 18k to 25k under PUCT). Two runs, one shape: early gain while the value
+> head learns, then the policy erodes. The gate held the 9k anchor
+> correctly.
+> (b) HYPOTHESIS, to be counted not argued: the self-play head is the
+> Gumbel head with m = 16 over a ≈ 355-move legal set — the same head the
+> census found leaving 76 % of opponent fours standing. When a forced
+> block is not among the 16 Gumbel-sampled candidates it is never
+> searched, the completed-Q target puts its mass elsewhere, and the
+> policy is trained AWAY from blocking in exactly the positions where
+> blocking is forced. PUCT-512 still reads well because search repairs
+> tactics at 512 sims; the PRIOR degrades underneath it, and the strix
+> and late-run6 declines are that prior showing through. FORCED-MOVE
+> CENSUS over the self-play shards with search stats (1-in-8): per
+> position, is the mover facing a forced block (opponent four, or a
+> forced win available)? Is the forced move in the target's explicit
+> support? What mass does the target give it? Rate by arm (full / fast),
+> by step window, by σ pair recomputed from the stored stats where the
+> record allows ((rescale, 1.0) as run, (raw, 1.0) the paper's Go pair,
+> (rescale, 0.1)). Pre-stated reading: a forced-move miss rate above
+> ~10 % in the full arm, rising with step, confirms (b); below 2 %
+> refutes it and the search moves to the target's sharpness alone
+> (H ≈ 0.1 nats, a one-hot on the SH winner).
+> (c) FIXES, PRE-REGISTERED, none armed: (i) forced-move candidates
+> injected into the root candidate set by the rules engine (a four must
+> be answered; a winning move must be taken) — correct by construction,
+> cheap, and the paper's sampling-without-replacement rationale is
+> unharmed by adding must-moves; (ii) m = 32 on the full arm (the
+> literature's maximum); (iii) the target-σ pair the census favours.
+> Which of these run8 (or a resumed run7 from the 9k anchor) carries is
+> decided at 30k with the census beside the strix point — one swap, or
+> (i) alone if it explains the miss rate.
+> (d) BOOK_V2: 42–47 % of the book's openings are seat-decided under the
+> current best net against itself, compressing every gate and sealbot
+> reading toward 0.5 (ceiling ≈ 0.78). A balanced book is built by
+> measurement: openings kept only where the paired result under the
+> current anchor vs itself at PUCT-256 splits across ≥ 4 replays with
+> different seeds; 128 openings, sha-pinned, minted as `book_v2`.
+> Readings on book_v2 are a new unit; the bridge cell (anchor vs
+> sealbot on both books) is recorded once.
+> (e) AT 30K: if strix continues down and the census confirms (b), run7
+> STOPS and run8 starts from the 9k anchor with fix (i) (plus (ii) if
+> the census says m alone explains half the misses); if strix recovers,
+> run7 continues and the fix rides as run8's ablation; if the census
+> refutes (b), the decision is made on the target-sharpness evidence
+> and a σ swap is the candidate.
+> (f) INVESTIGATION-1 is LAUNCHED as designed (R349 §3) with three
+> added domains from the operator: one-time-use tooling (every script
+> and target with no live caller since the cleanup era is a delete
+> candidate), style compliance (comments, docstrings, banners, ruling
+> numbers in code — a linter pass with the R346(f) rule, counts by
+> file), and docs inventory (what a new session needs vs what exists;
+> superseded measurement records to archive; contracts that restate
+> each other). Red-team bundles as designed; the surviving ledger and
+> the killed list are what the architect reads.
+> ROUTE: run7 → 30k ∥ census ∥ INVESTIGATION-1 ∥ book_v2 → 30k decision.
+
+`R{next}` is the packet's own placeholder and resolves to R354 — this file's header said the next
+number was 354 when the packet was forwarded; the text is copied as written rather than edited.
+What the forward ENACTS beyond the clauses (the packet's §0): (1) the eval-cost follow-on is
+RATIFIED as executed (the GSPRT, gate/sealbot/cap 256, band 0.5, the resume re-mint at `ce0a8ff6`);
+the sealbot unit changed (≈ −6 to −13 pp at 256 for the same strength) and every reading from the
+resume on is labelled with its unit on the dashboard; (2) run7 CONTINUES to the 30k strix point —
+the decline since 9k is real (0.097 → 0.045, CIs disjoint) and one more point buys its shape;
+(3) the census of (b), offline, within a day; (4) INVESTIGATION-1 of (f), read-only, subagents in
+worktrees, repairs are packets; (5) `book_v2` of (d); (6) the decision at 30k by (e).
+Where the census reads from: the self-play game record carries NO per-position search stats
+(CARD-SELFPLAY-SEARCH-STATS; the "1-in-8 sample" the clause names has no producer at HEAD), so the
+count runs over the replay RINGS' stored sparse targets, as `INVESTIGATION1_TROUGH_2026-09-13.md`
+did; the σ-pair arm is answerable only where the record holds the raw stats, and the record says
+where it does not.
+Grounds: operator direction, forwarding the RUN7 READING + REPO SCAN packet (dated 2026-09-15) on
+the eval-cost leg's exit record (`STATE.md` at `83667687`: the strix points BC 0.083 → 9k anchor
+0.097 → 15k 0.045, the policy-loss trough, r4/r5 lost to the bound, the resume at 20:03 UTC),
+`GAME_QUALITY_CENSUS_2026-09-14.md` (the Gumbel deploy head leaving 75.9 % of fours standing) and
+`RUN7_EVAL_COST_2026-09-15.md` §(the book's ≈ 0.78 ceiling, 42–47 % seat-decided pairs).
+Amends: nothing in R353; R349(e)'s "INVESTIGATION-1 as designed in §2–§3" is launched by (f) with
+the three added domains, and R350(g)'s re-aim at the trough is folded into (b)'s census.
+Status: standing.
+
+---
 
 ### R353 — START + SEALBOT INSTRUMENT + GAME QUALITY: run7 STARTS on the vested stamp; the sealbot TT seat defect is an instrument defect, fixed and A/B'd on frozen nets; the game-quality census; VIEWER-1's arm label; CARD-PUCT-ATTRACTOR closes
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
