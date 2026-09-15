@@ -157,9 +157,8 @@ class RoundSpec:
     #: The deploy head's MCTS leaf-batch width, so the eval child searches under the SAME regime
     #: the net's targets came from. NOT defaulted: a default silently restores the k=1 mismatch.
     leaf_batch_size: int
-    #: The run's `selfplay.max_game_moves`. A hardcoded 128 capped every eval game as a copy of a
-    #: copy of the minted key, so a re-mint left eval capping silently and the draw channel
-    #: changing meaning with no config diff.
+    #: The run's `eval.max_plies` (its own row since 2026-09-15; before that a copy of
+    #: `selfplay.max_game_moves`, and before AUDIT-1 F-15 a hardcoded 128).
     max_plies: int
     #: The deploy head's completed-Q sigma terms — REQUIRED schema keys the eval head never
     #: received, so the deploy-matched bar searched at a regime nobody minted.

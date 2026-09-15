@@ -502,7 +502,7 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                           activation_wr_lower_ci=0.65, calibration_every_k_rounds=4,
                           calibration_games=8, bootstrap_resamples=1000,
                           bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234)
-    eval_cfg = EvalConfig(random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
+    eval_cfg = EvalConfig(random_model_sims=96, max_plies=128, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
                           round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
                           ply_cap_adjudication=None, strength_floor=None, gate=gate,
                           ladder=ladder)

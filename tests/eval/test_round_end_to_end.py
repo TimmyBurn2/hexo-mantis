@@ -83,7 +83,7 @@ def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
         bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     return EvalConfig(
-        random_model_sims=4, sealbot_model_sims=4, random_floor_games=2, worker_device="cpu",
+        random_model_sims=4, max_plies=128, sealbot_model_sims=4, random_floor_games=2, worker_device="cpu",
         round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
         ply_cap_adjudication=(
             PlyCapAdjudicationConfig(criterion="longest_run_margin", min_margin=1)

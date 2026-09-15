@@ -56,6 +56,8 @@ CONSUMER_REGISTRY = {
         "worker.py::_play_gate_block gate-block games in flight (R339(b))",
     "eval.rung_concurrency":
         "RoundSpec.rung_concurrency -> worker.py::_play_rung_block rung games in flight (R351)",
+    "eval.max_plies":
+        "run.py::compose_run -> build_eval_pipeline(max_plies=) -> RoundSpec.max_plies -> play_paired_match (every eval game's ply cap, its own row since 2026-09-15; the frontier driver composes the same row)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",
     "eval.ply_cap_adjudication.criterion":
         "resolve_ply_cap_adjudication -> RoundSpec.ply_cap_adjudication -> worker.py "

@@ -134,7 +134,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         strength_floor=resolve_strength_floor(cfg),
         fused_graph_caps=resolve_fused_graph_caps(dump) if graph else None,
         leaf_batch_size=config.selfplay.leaf_batch_size,
-        max_plies=config.selfplay.max_game_moves,
+        max_plies=config.eval.max_plies,
         c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
         q_rescale=config.selfplay.q_rescale,
         search_kind="", gumbel_m=config.selfplay.gumbel_m,

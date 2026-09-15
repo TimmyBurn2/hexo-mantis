@@ -18,6 +18,7 @@ constant survives as a TEST fixture cap and as nothing else.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -92,8 +93,8 @@ def test_the_round_spec_carries_the_cap_across_the_process_seam() -> None:
 
 
 def test_the_pipeline_takes_the_cap_from_the_config_and_hands_it_on() -> None:
-    """The parent half, end to end: a config's own `selfplay.max_game_moves` is what the
-    pipeline carries, so re-minting the key moves the eval cap with it."""
+    """The parent half, end to end: the config's own `eval.max_plies` is what the pipeline
+    carries, so re-minting the key moves the eval cap with it (its own row since 2026-09-15)."""
     import inspect
 
     from mantis.eval.pipeline import build_eval_pipeline
@@ -105,9 +106,13 @@ def test_the_pipeline_takes_the_cap_from_the_config_and_hands_it_on() -> None:
         "operator did not mint"
     )
     src = inspect.getsource(__import__("mantis.run", fromlist=["run"]).compose_run)
-    assert "max_plies=config.selfplay.max_game_moves" in src, (
-        "the composition root no longer threads the RUN's cap into the eval pipeline; the "
-        "eval bar and the self-play regime have drifted apart again (LAW-15)"
+    assert "max_plies=config.eval.max_plies" in src, (
+        "the composition root no longer threads the RUN's minted eval cap into the eval "
+        "pipeline (LAW-15: the bar's cap is a minted row, never a copy of another key)"
+    )
+    frontier = Path(__file__).resolve().parents[2] / "tools" / "strength_frontier.py"
+    assert "max_plies=config.eval.max_plies" in frontier.read_text(encoding="utf-8"), (
+        "the frontier driver composes its RoundSpec with a cap other than the minted eval one"
     )
 
 

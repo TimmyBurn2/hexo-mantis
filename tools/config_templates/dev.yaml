@@ -37,6 +37,8 @@ eval:
   #   strength_floor: {probe_games: <int >=1>, min_decisive_rate: <0..1>, min_winrate: <0..1>}
   ply_cap_adjudication: null
   strength_floor: null
+  # Every eval game's ply cap, its own row (2026-09-15); a capped game is a draw.
+  max_plies: 128
   gate:
     stride: 1
     screen_games: 80

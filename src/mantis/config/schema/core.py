@@ -339,6 +339,9 @@ class EvalConfig(StrictModel):
     concurrency: int = Field(ge=1, default=1)
     #: The RUNG block's own row, same idiom (R351: a 288-game PUCT-512 point is ≈ 3 h serial).
     rung_concurrency: int = Field(ge=1, default=1)
+    #: Every eval game's ply cap, its OWN row (2026-09-15): the self-play cap serves the attractor
+    #: halt and was raised to 256, and the gate's games ran to it. A capped game is a draw.
+    max_plies: int = Field(ge=1)
     gate: GateConfig
     ladder: LadderConfig
 
@@ -635,6 +638,12 @@ class RunConfig(StrictModel):
                 "discard its own late positions one record at a time instead of failing here. "
                 "Lower the cap, or raise MAX_STONES as a mint-class change with its ring "
                 "memory cost measured (R328 amendment, 2026-09-01)."
+            )
+        if self.eval.max_plies > ceiling:
+            raise ValueError(
+                f"eval.max_plies = {self.eval.max_plies} exceeds the engine's stone ceiling "
+                f"MAX_STONES = {ceiling}: the board cannot hold the position the cap allows, so "
+                "an eval game would fail mid-round instead of here."
             )
         return self
 

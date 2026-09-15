@@ -125,7 +125,7 @@ def _payload(**eval_overrides: Any) -> dict:
     eval_block = dict(
         random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cuda",
         round_timeout_sec=3600.0, worker_kill_grace_sec=10.0, gate=_gate(), ladder=_ladder(),
-        ply_cap_adjudication=None, strength_floor=None,
+        ply_cap_adjudication=None, strength_floor=None, max_plies=128,
     )
     eval_block.update(eval_overrides)
     return {
@@ -360,3 +360,23 @@ def test_minted_configs_still_load_after_f_rt2_1_bounds() -> None:
     assert payload["eval"]["worker_kill_grace_sec"] == 10.0
     assert payload["eval"]["ladder"]["bt_prior_games"] == 1.0
     _validate(payload)  # must not raise
+
+
+def test_max_plies_is_required_and_positive() -> None:
+    """`eval.max_plies` (2026-09-15): every eval game's ply cap, its OWN row; absent is an error naming it, 0 refused."""
+    payload = _payload()
+    del payload["eval"]["max_plies"]
+    with pytest.raises(ValidationError, match="max_plies"):
+        _validate(payload)
+    with pytest.raises(ValidationError, match="max_plies"):
+        _validate(_payload(max_plies=0))
+    assert _validate(_payload(max_plies=128)).eval.max_plies == 128
+
+
+def test_max_plies_above_the_engines_stone_ceiling_is_refused_on_the_graph_path() -> None:
+    """An eval cap above the engine's `max_stones()` is refused at mint, like the self-play cap."""
+    from mantis._engine import max_stones
+
+    with pytest.raises(ValidationError, match="eval.max_plies"):
+        _validate(_payload(max_plies=max_stones() + 1))
+    assert _validate(_payload(max_plies=max_stones())).eval.max_plies == max_stones()

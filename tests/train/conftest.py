@@ -124,7 +124,7 @@ def full_graph_state(full_graph_net: torch.nn.Module) -> dict[str, torch.Tensor]
 
 def _make_eval_block() -> dict[str, Any]:
     return {
-        "random_model_sims": 96, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "random_model_sims": 96, "max_plies": 128, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {

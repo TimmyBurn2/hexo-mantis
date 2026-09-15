@@ -38,6 +38,7 @@
 # delta: inference.compile_trunk: false -> true
 # delta: eval.concurrency: 1 -> 8
 # delta: eval.rung_concurrency: 1 -> 8
+# delta: eval.gate.screen_confirm_lo: 0.44 -> 0.5
 schema_version: 1
 run_id: run7
 seed: 20260914
@@ -64,12 +65,13 @@ eval:
     probe_games: 4
     min_decisive_rate: 0.25
     min_winrate: 0.0
+  max_plies: 128
   gate:
     stride: 1
     screen_games: 80
     confirm_games: 128
     promotion_winrate: 0.55
-    screen_confirm_lo: 0.44
+    screen_confirm_lo: 0.5
     deploy_sims: 512
     opening_book: book_v1_s20260625_p4
     bootstrap_resamples: 1000

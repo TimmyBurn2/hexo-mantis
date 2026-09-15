@@ -766,7 +766,7 @@ def compose_run(
                     # every round — the eval child has no RunConfig, and its dense forward had
                     # no dtype at all. The arena's ply cap is likewise the RUN's, not a module
                     # constant that was a copy of a copy of this key.
-                    max_plies=config.selfplay.max_game_moves,
+                    max_plies=config.eval.max_plies,
                     # The deploy head's sigma terms are the RUN's minted keys, not the
                     # player's signature defaults.
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,

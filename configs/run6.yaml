@@ -57,6 +57,7 @@ eval:
     probe_games: 4
     min_decisive_rate: 0.25
     min_winrate: 0.0
+  max_plies: 128
   gate:
     stride: 3
     screen_games: 80

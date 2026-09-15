@@ -347,7 +347,7 @@ class EvalPipeline:
         #: The deploy head's MCTS leaf-batch width. NOT defaulted: a default would be a search
         #: regime nobody minted standing in for the one the net was trained under.
         self._leaf_batch_size = int(leaf_batch_size)
-        #: The run's `selfplay.max_game_moves`. NOT defaulted: a default is the
+        #: The run's `eval.max_plies`. NOT defaulted: a default is the
         #: `DEFAULT_MAX_PLIES = 128` module constant put back on an operator-owed prereg axis.
         self._max_plies = int(max_plies)
         #: `selfplay.{c_visit, c_scale, q_rescale}`, the deploy head's sigma terms. NOT defaulted:

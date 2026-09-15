@@ -48,6 +48,7 @@ eval:
   worker_device: cpu
   ply_cap_adjudication: null
   strength_floor: null
+  max_plies: 128
   gate:
     stride: 1
     screen_games: 1
