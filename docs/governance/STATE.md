@@ -126,9 +126,12 @@ reconstruction.
 run7 is LIVE; stopping it is ONE SIGTERM to the supervisor (save-then-exit). Open, in order:
 (1) run7's rounds as they land (round 2, step 6 000, ran under the A/B's load and is not a wall
 reading); (2) the strix point at 15k (`/workspace/oc7/strix_15k/`); (3) the
-balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) the OBSERVATORY packet the
-operator is drafting (merge the dashboard and the viewer — analysis first, a server is a
-repo_design deviation). The worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
+balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — the other
+session's analysis, design and plan (`docs/design/observatory_design.md`, status "proposal for a
+ruling"; research in `observatory_research.md`) and its phase 1, the reader layer under
+`tools/observatory/readers` (`f16421f2`, fast-forwarded onto this leg's `35c89657` by the
+operator), await the ruling and the R344(d) amendment its §4.3 drafts; nothing there opens a
+socket yet. The worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -141,8 +144,9 @@ repo_design deviation). The worktree `/workspace/mantis-tt` exists only for the 
 - Vendored patch: unchanged (three hunks); the TT fix is in the adapter, not the vendor tree.
 - The box: run7 LIVE on `r352d` at `15109ac3`; the worktree `mantis-tt` at `748f5c47` for the
   A/B's fixed arm; the chains `chain_tt_ab.sh` and `chain_strix_15k.sh`.
-- Commits on this line: one line each, empty bodies, zero trailers; `dev` NOT pushed (no
-  operator approval this session).
+- Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
+  OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
+  `dev` NOT pushed (no operator approval this session).
 
 ## Provenance
 
