@@ -20,6 +20,9 @@ step`, `recent_frac 0`, no augment) on the dev box's CPU, and reads:
 Instrument: `scratchpad/trough_kl.py` (this session's scratchpad; the checkpoints are read
 through the one loader after `strip_and_restamp` — the loader's tolerance for a stamp that
 predates a schema leaf landed later the same day). Every row is `full_search` (α ≥ 0 on all).
+[Corrected in place 2026-09-15 (R311(c)): the rows are NOT all full-search — `is_full_search` is
+set on ≈ 25 % of every ring's rows (`full_search_prob 0.25`), the quick 64-sim arm on the rest;
+see `FORCED_MOVE_CENSUS_2026-09-15.md`. The KL/CE readings above pooled both arms.]
 
 | step | ring rows | CE (nats) | H(target) | KL(target ‖ prior) | α mean | α = 1.0 per 1 000 |
 |---|---|---|---|---|---|---|
