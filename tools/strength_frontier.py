@@ -4,11 +4,11 @@
 composition mirroring `mantis.run`'s eval seam, the parallel child runner, the pair-level readout
 — are only checkable against each other; every game goes through `python -m mantis.eval.worker`.
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
-`bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`,
-`games`, optional `opponent` (`sealbot_d5`; `strix` at its own `strix_sims` — RUNG-2; or a
-snapshot source played through the GATE block), `gumbel_m`, `c_scale`/`q_rescale` (the deploy
-head's σ, the config's when absent), `concurrency` (games in flight; 1 = the arena's serial
-loop). No random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
+`bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`, `games`,
+optional `opponent` (`sealbot_d5`; `strix` at its own `strix_sims` — RUNG-2; or a snapshot source
+played through the GATE block), `gumbel_m`, `c_scale`/`q_rescale` (the deploy head's σ), `concurrency`
+(games in flight; 1 = the arena's serial loop), `opening_book` (a manifest id) and `seed_base` — all
+the config's when absent; BOOK_V2's replays vary the last two. No random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
 """
 from __future__ import annotations
 
@@ -169,6 +169,11 @@ def _strix_rung(config: Any, games: int, strix_sims: int) -> RungJob:
                    opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games)
 
 
+def _rung_on_cell_book(job: RungJob, cell: Mapping[str, Any]) -> RungJob:
+    """The rung on the cell's `opening_book` when it names one, else on the ladder's."""
+    return replace(job, opening_book=str(cell["opening_book"])) if "opening_book" in cell else job
+
+
 def cell_channel(cell: Mapping[str, Any]) -> str:
     """The game-record channel a cell's games land on: rung opponents write `external`."""
     return "external" if str(cell.get("opponent", SEALBOT_D5)) in _RUNG_OPPONENTS else "promotion"
@@ -184,8 +189,10 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         raise FrontierCellError(f"{cell['label']}: search_kind {kind!r} is not gumbel|puct")
     if games < 2 or games % 2:
         raise FrontierCellError(f"{cell['label']}: games={games} must be an even number >= 2")
+    seed_base = int(cell.get("seed_base", base.gate.seed_base))
     common = dict(
         round_id=str(cell["label"]), round_index=0, step=int(cell.get("step", 0)),
+        seed_base=seed_base,
         candidate_snapshot=str(cell_dir / "candidate.pt"),
         result_path=str(cell_dir / "result.json"), progress_path=str(cell_dir / "progress.txt"),
         search_kind=kind, gumbel_m=int(cell.get("gumbel_m", base.gumbel_m)),
@@ -197,14 +204,15 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
     )
     if opponent == SEALBOT_D5:
         return replace(base, **common, sealbot_model_sims=sims,
-                       rung_jobs=[_sealbot_rung(config, games)])
+                       rung_jobs=[_rung_on_cell_book(_sealbot_rung(config, games), cell)])
     if opponent == STRIX:
         if "strix_sims" not in cell:
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
-        return replace(base, **common, strix_model_sims=sims,
-                       rung_jobs=[_strix_rung(config, games, int(cell["strix_sims"]))])
+        job = _strix_rung(config, games, int(cell["strix_sims"]))
+        return replace(base, **common, strix_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
-                   deploy_sims=sims, screen_confirm_lo=2.0)
+                   deploy_sims=sims, screen_confirm_lo=2.0, seed_base=seed_base,
+                   opening_book=str(cell.get("opening_book", base.gate.opening_book)))
     return replace(base, **common, gate=gate, best_snapshot=str(cell_dir / "opponent.pt"))
 
 

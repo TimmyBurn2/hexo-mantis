@@ -55,6 +55,15 @@ def _load_book_openings(book_id: str, books_dir: Path) -> list[dict]:
     return payload["openings"]
 
 
+def book_openings(book_id: str, *, books_dir: Path | str | None = None) -> list[Opening]:
+    """Every opening of `book_id` in FILE order, sha-verified (the pool order BOOK_V2's cut follows). Raises: BookError on an unknown id, a missing file or a sha256 mismatch."""
+    directory = Path(books_dir) if books_dir is not None else _DEFAULT_BOOKS_DIR
+    return [
+        Opening(opening_id=str(o["id"]), moves=[tuple(m) for m in o["moves"]])
+        for o in _load_book_openings(book_id, directory)
+    ]
+
+
 def paired_openings(
     book_id: str, n_pairs: int, seed: int, *, books_dir: Path | str | None = None
 ) -> list[Opening]:
@@ -127,4 +136,4 @@ def round_openings(
     ]
 
 
-__all__ = ["BookError", "Opening", "paired_openings", "round_openings"]
+__all__ = ["BookError", "Opening", "book_openings", "paired_openings", "round_openings"]

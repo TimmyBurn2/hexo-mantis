@@ -8,3 +8,13 @@
 [books."book_v1_s20260625_p4"]
 file = "book_v1_s20260625_p4.json"
 sha256 = "52943eabdfd911c36dcd9374da7d91f0a712b0d1eff47a99ab09a760b5088d06"
+
+# book_v2_pool: the BOOK_V2 CANDIDATE POOL (R354(d)), 512 four-ply openings disjoint from book_v1 by
+# exact move list, minted via tools/mint_opening_book.py --seed 20260915 --plies 4 --n 512
+# --exclude-book book_v1_s20260625_p4.json. An INPUT to the balance measurement, never a gate book:
+# its live consumers are the box anchor-vs-itself cells (`opening_book` in a strength_frontier cell)
+# and tools/select_balanced_book.py. Pinned by tests/tools/test_mint_opening_book.py.
+
+[books."book_v2_pool_s20260915_p4"]
+file = "book_v2_pool_s20260915_p4.json"
+sha256 = "929e01938c1bbbba771d49e14dbd9f27f827ed0a683e5b43228fbf7371612987"
