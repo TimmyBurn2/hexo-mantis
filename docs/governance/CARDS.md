@@ -121,6 +121,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   reproducibility: a game is now a deterministic function of its own moves. Sealbot's mate claims
   at distance ≥ 3 remain non-proofs (the second finding); nothing further is owed here.
 
+- **CARD-EVAL-ROUND-OVERRUN — the eval round outlasts its cadence; two readings lost (2026-09-15,
+  operator direction, `RUN7_EVAL_COST_2026-09-15.md`).** r4 @12k and r5 @18k died at the 14 400 s
+  bound and the 15k/21k kicks were skipped; the gate block (208 games of PUCT-512 vs PUCT-512,
+  55 → 95 plies a game, every screen escalating at 0.44) is 64–85 % of the wall. FIXED IN THE
+  RESUME MINT at `ce0a8ff6`: gate and rung at 256, `eval.max_plies` its own row (256), the band
+  0.5 and the GSPRT (`eval.gate.sequential`); expected round ≈ 4 500 s typical / ≈ 8 800 s worst.
+  CLOSES when the resumed run's first three rounds land inside the bound with the GSPRT's
+  `pairs_played` on the record. Still OPEN beside it, from the same review: the eval child emits
+  no `batch_timing_snapshot()` (LAW-18; needed before concurrency is touched), `book_v2` (the
+  balanced book is worth +11 pp of gate power), and the ruling that names "gate pair statistics"
+  for the GSPRT.
+
 ## Opened by R350 (the block verdict)
 
 - **CARD-STOP-DRAIN-VS-GRACE — a stop during an eval round is a SIGKILL after the save.**
