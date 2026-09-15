@@ -124,8 +124,10 @@ reconstruction.
 ## Dispatcher state for a fresh session
 
 run7 is LIVE; stopping it is ONE SIGTERM to the supervisor (save-then-exit). Open, in order:
-(1) run7's rounds as they land (round 2, step 6 000, ran under the A/B's load and is not a wall
-reading); (2) the strix point at 15k (`/workspace/oc7/strix_15k/`); (3) the
+(1) run7's rounds as they land — round 2 (`r000002_6000`, 22:51–02:25 UTC) walled **12 816 s
+against 14 400** under the A/B's load (screen 42/80 → confirm 73/128, NOT promoted against the
+step-3 000 anchor; rung 198/288 = 0.688): the A/B cost it ≈ 4 700 s and it survived with 1 584 s
+to spare — no second box job beside a round again without that arithmetic; (2) the strix point at 15k (`/workspace/oc7/strix_15k/`); (3) the
 balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — the other
 session's analysis, design and plan (`docs/design/observatory_design.md`, status "proposal for a
 ruling"; research in `observatory_research.md`) and its phase 1, the reader layer under
