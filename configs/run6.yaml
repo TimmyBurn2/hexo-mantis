@@ -28,6 +28,7 @@
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65, reinit: [value_head]}
 # delta: eval.concurrency: 1 -> 8
+# delta: eval.max_plies: 128 -> 256
 # delta: inference.edge_geometry_check: inline -> checker_thread
 # delta: inference.compile_trunk: false -> true
 schema_version: 1
@@ -57,7 +58,7 @@ eval:
     probe_games: 4
     min_decisive_rate: 0.25
     min_winrate: 0.0
-  max_plies: 128
+  max_plies: 256
   gate:
     stride: 3
     screen_games: 80
