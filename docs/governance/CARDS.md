@@ -291,6 +291,8 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
 - **CARD-DEPLOY-HEAD-BUDGET — item 4.** In decided positions the deploy head spends 28–40 of a
   64-sim budget and 52–77 of 320: `gumbel_root_select` returns `None` early. The eval instrument
   under-spends exactly where the position is settled; whether that moves a bar is unmeasured.
+  SUSPENDED under LAW-02 by R355(b) (2026-09-16): the numbers were read through the defective
+  Gumbel driver (A-1, the first-transposition stop); re-read from R355(c)'s cells.
 
 ## Opened by R348 (WAVE 3, leg 1)
 

@@ -116,3 +116,14 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   (`docs/design/measurements/PERF_A4_2026-09-11.md` §2). The row's "not to be armed as built"
   therefore describes the tree it measured, not HEAD; arming the posture is a mint row the A4
   record recommends with that number. Nothing in the row is re-opened.
+
+- **F-48, F-50, F-51 — SUSPENDED under LAW-02, per R355(b) (2026-09-16).** Every Gumbel-head reading
+  in these three rows went through `_drive_gumbel` as it stood from `6ee52ca7` (2026-09-09): the
+  driver stopped at its first transposition hit and served 0.19–0.42 of a 512-sim budget (0.63–0.78
+  at 160), measured by INVESTIGATION-1's red team A on the real `DeployHeadPlayer`
+  (`docs/design/measurements/INVESTIGATION1_2026-09-15.md`, ledger #2). The rows are neither retired
+  nor relied on: what they still conclude is written from R355(c)'s five re-derivation cells (run6's
+  18k net vs `sealbot_d5`, 288 paired games, 512 sims, the FIXED head under the three σ pairs plus
+  160/m16 and PUCT-512 as the control). PUCT readings in the same records spent their budget exactly
+  and are untouched. The fix (the deploy driver through `select_leaves_forced`, spent == budget
+  pinned for every kind) lands in the same leg.

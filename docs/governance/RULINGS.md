@@ -1,4 +1,4 @@
-# RULINGS — R23 to R354
+# RULINGS — R23 to R355
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R355.
+- Numbering continues from R346. The next ruling is R356.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -33,7 +33,80 @@ Four entries record an absence rather than a decision, and say so in place: **R2
 no section in the register (their text lives in an operator addendum that is not in this
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
-322 entries over 321 numbers.
+323 entries over 322 numbers.
+
+### R355 — CENSUS VERDICT, REPAIR-A4, RUN8: R354(b) refuted by count; the quiescence threat unit (A-2) and the Gumbel deploy driver (A-1) are the two load-bearing findings; run7 stops at the 30k strix point; run8 = run7 + A-2 + the σ swap (raw q, c_scale 1.0) from the 9k anchor with the search-stats producer; REPAIR-A4 ordered; the delete list approved
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R354: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R{next} — (a) The FORCED-MOVE hypothesis (R354(b)) is REFUTED by count:
+> the root expands the full legal set (MAX_ROOT_CHILDREN = u16::MAX),
+> the forced cell is in the top-16 draws on 99.995 % of forced rows.
+> What the census found instead: the target is a ONE-HOT (H ≈ 0.002
+> nats, median mass 1.0 on the searched winner), and on 2.5–4.4 % of
+> forced-block rows the one-hot went to a losing counter-threat — the
+> block searched, the four/five played instead, the opponent completing
+> next turn. MECHANISM (A-2, reproduced through the real backup on 20
+> of 20 rows): apply_quiescence counts ONE-stone completions in a
+> TWO-stone-turn game — blind to an opponent four-with-two-empties,
+> blind to the mover's own in-turn two-stone win, wrong-signed on some;
+> those leaf values enter the completed-Q target in both arms and the
+> PUCT head. FIX: the threat unit is "completable within the side's
+> remaining stones", both sides — inside F-15's sanctioned override;
+> census row 3664 is the test (counter-threat child ≤ −0.9, mover
+> win-in-1 root +1; both read ±0.3 today); FALSIFIER, offline before any
+> box hour: the residue on one ring under the fixed backup.
+> (b) The Gumbel DEPLOY DRIVER was defective (A-1): _drive_gumbel stops
+> at its first transposition hit and spent 19–78 % of its budget — every
+> reading of the Gumbel head since 2026-09-09 was through it. F-48, F-50,
+> F-51, CARD-DEPLOY-HEAD-BUDGET, run6's in-run screens and GAME_QUALITY's
+> "3 of 4 fours left standing" are SUSPENDED under LAW-02: not retired,
+> not relied on. Fix S (drive through select_leaves_forced, spent ==
+> budget pinned). The fifth instrument defect; the pattern holds — every
+> reading of a new head is verified against its budget before it is
+> believed, and that check is now a suite section for every search kind.
+> (c) RE-DERIVATION, five box cells on run6's 18k net vs sealbot_d5, 288
+> paired games each, at 512: the fixed Gumbel head under (rescale, 1.0),
+> (raw, 1.0), (rescale, 0.1), plus 160/m16 as run6 read it, plus PUCT-512
+> as the control. What those rows then conclude is written from these
+> cells, not from the suspended ones.
+> (d) RUN8, from the 9k anchor: A-2 fixed (correctness, not a swap);
+> ONE component swap — target σ becomes the paper's Go pair (raw q,
+> c_scale 1.0), grounds: targets soften where Q's are near-equal and
+> sharpen where one move is clearly better, where (rescale, 1.0) is a
+> one-hot on every row and the paper says a large effective scale
+> "neglects the logits… worse"; the trough shape appeared in both runs
+> at 100 % of rows, the A-2 residue in 3 %. Everything else as run7's
+> resume mint (Gumbel 320/64, PUCT-256 deploy/eval, GSPRT, cadence
+> 3,000, book_v1). Plus the self-play SEARCH-STATS producer (1-in-8
+> games: per-position visits, Q, prior for the candidates) — the record
+> the census could not read. Pre-registered reading at 15k and 30k
+> strix: rising past the 9k anchor's 0.097 is the success line; flat or
+> down and the σ swap is falsified and A-2 stands alone as run9's base.
+> (e) Run7's in-run issues (B-1 unfireable actor_lag, B-2 dashboard
+> rate, B-3 resume-at-interval kick, B-4 entropy without a producer, B-7
+> windows reset, A-3 partial verdicts) are repaired in the order of §2;
+> none is run-fatal, all are LAW-07 shapes — an armed row with no
+> producer, or a producer with no consumer.
+> (f) The DELETE list (§3) is APPROVED as sized; the observatory
+> question is decided by what serves the box page today: ONE dashboard
+> implementation stays, the other and the duplicated readers go.
+> book_v2's box half WAITS on a seeded deploy head (the "four replays"
+> were one measurement) and on a cost under 10 box-hours.
+> ROUTE: branches ff → run7 stop at 30k → A-2 + falsifier → A-1 + cells
+> → search-stats producer → mint run8 → 3 h shakedown → START → REPAIR-A4
+> continues beside the run.
+
+`R{next}` is the packet's own placeholder and resolves to R355 — this file's header said the next
+number was 355 when the packet was forwarded; the text is copied as written rather than edited.
+What the forward ENACTS beyond the clauses (the packet's §0): (1) INVESTIGATION-1 and the census
+are ACCEPTED, R354(b) is refuted (forced-move miss 0.005 %) and fix (c)(i) is withdrawn; (2) A-2 and
+A-1 are adopted as load-bearing; (3) run7 STOPS once the 30k strix point is read; (4) run8 as (d),
+armed by the forward; (5) REPAIR-A4 in the packet's §2 order with the §3 delete/archive list
+(~7,200 lines); (6) F-48, F-50, F-51, CARD-DEPLOY-HEAD-BUDGET and GAME_QUALITY's Gumbel-head line
+are SUSPENDED under LAW-02 until the five cells of (c) read. The `inv1` and `book-v2-tool` branches
+were fast-forwarded onto `dev` by this forward's landing session before any of it.
 
 ### R354 — RUN7 READING + REPO SCAN: the trainer peaked near 9k and declined; the forced-move census tests the Gumbel-m hypothesis; three fixes pre-registered, none armed; book_v2 ordered; INVESTIGATION-1 launched with three added domains; the 30k decision rule
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as

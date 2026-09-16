@@ -21,6 +21,9 @@ losses are its own missed blocks; its losses are SHORT (median 23 plies vs 33 fo
 because a side that leaves fours standing loses fast. So the longer PUCT games are two sides that
 both block every four and win only by building an unhittable threat set; "beats fast" is what
 happened to the Gumbel head, and the pre-stated reading holds on every column.
+[2026-09-16, R355(b): every Gumbel-head cell here was read through the deploy driver that stopped at
+its first transposition (INVESTIGATION-1 A-1, 0.19–0.42 of a 512 budget served); the Gumbel columns are
+SUSPENDED under LAW-02 until the five cells of R355(c) read. The PUCT columns spent their budget and stand.]
 
 The instrument's own check: sealbot_d5 leaves 0.0 % of fours standing in every cell it plays, and
 every side's missed-win rate is 0.0 % except shakedown7's (3.5 % of its wins came from the other
