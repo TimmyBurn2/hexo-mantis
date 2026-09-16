@@ -26,6 +26,7 @@
 //!   ply 1+: each player places exactly 2 stones before the turn passes.
 
 mod moves;
+mod threats;
 pub mod state;
 pub mod zobrist;
 
@@ -38,6 +39,7 @@ pub use state::{
 // backup path) reference `WIN_LENGTH - 1` instead of a bare `5`.
 pub use moves::WIN_LENGTH;
 pub use moves::{hex_ball_cells, DEFAULT_CLUSTER_THRESHOLD, DEFAULT_LEGAL_MOVE_RADIUS};
+pub use threats::{min_hitting_stones, OpenWindow};
 
 #[cfg(test)]
 mod tests {
