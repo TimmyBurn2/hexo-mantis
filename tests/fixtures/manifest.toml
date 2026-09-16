@@ -201,7 +201,8 @@ added_by = "WP-SP"
 # Re-pinned 2026-09-14: R353(d) added the per-move arms as the row's ninth field.
 [[required]]
 path = "selfplay/drain/drain_goldens.json"
-sha256 = "a6f7b24c4766de35b79f597200caba226df0eb37b721e9ed8079f13dd74eaf02"
+# Re-pinned 2026-09-16: R355(d) added a sampled game's search stats as the row's tenth field.
+sha256 = "798c655441f26b14bee60e8855a4dda11485b051bd459b925c5ccea88b358dee"
 added_by = "WP-SP"
 
 [[required]]
@@ -220,7 +221,8 @@ path = "selfplay/pool/runner_config_goldens.json"
 # ctor as `q_rescale`; `full_config` carries `false`, the NON-shipped arm, for the same reason.
 # Re-cut again by R351(c): `search.kind` split into `selfplay.search.kind` (what the wire reads)
 # and `deploy.search.kind`; the capture carries both, the self-play one still `gumbel` in `full_config`.
-sha256 = "86701632c64e25177c495e8a79c0ae4216c0269bcfca17648440ff54d7503403"
+# Re-pinned 2026-09-16: R355(d)'s `search_stats_every` is a REQUIRED leaf the ctor kwargs carry.
+sha256 = "9bf6a8fdfb3d0be723fb36c8268df158ff00f53f84690edb00efdd2a162da27f"
 added_by = "WP-SP"
 
 [[required]]

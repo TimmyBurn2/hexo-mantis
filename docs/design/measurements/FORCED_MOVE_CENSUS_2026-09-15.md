@@ -458,7 +458,7 @@ validation): `ring_reader.py` (HEXG v2 parser, LE, validated against
 `python tactics.py` runs the 17 hand cases), `validate_engine.py RING N SEED` (the engine
 cross-check), `census.py RING OUT_DIR` (one npz of per-row columns per ring), `tables.py
 OUT_DIR --run run7|run6` (every table above), `run_all.sh` (the 16-ring chain, ≈ 45 s per ring
-on the dev box). Environment: `/home/tom/Work/HeXO/hexo-mantis/.venv/bin/python` at HEAD
+on the dev box). Environment: the checkout's `.venv/bin/python` at HEAD
 `83667687`, read-only.
 
 Commands: `python ring_reader.py <ring>` (header + field histograms);
