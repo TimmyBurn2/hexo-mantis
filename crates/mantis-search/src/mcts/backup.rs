@@ -6,7 +6,7 @@ use super::node::{CachedPolicy, Node};
 use super::{MCTSTree, MAX_CHILDREN_PER_NODE};
 use crate::legal_set::LegalSetPolicy;
 use fxhash::FxHashSet;
-use mantis_core::board::{Board, WIN_LENGTH};
+use mantis_core::board::{min_hitting_stones, Board};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 /// One expansion's Top-K pick: the children, whether the cap truncated, and the PRIOR MASS the
@@ -251,67 +251,62 @@ impl MCTSTree {
         record_omitted_prior_global(dropped_mass);
     }
 
-    /// Apply quiescence correction to a NN value at a non-terminal leaf.
+    /// Quiescence value override at a non-terminal leaf, on the two-stone-turn threat unit.
     ///
-    /// Each turn places 2 stones, so the opponent blocks at most 2 winning cells per response:
-    /// ≥3 winning moves is a forced win (+1.0), ≥3 for the opponent a forced loss (-1.0), and
-    /// the unproven 2-move case blends toward the boundary by `quiescence_blend_2`. Value
+    /// With k the side to move's remaining stones: an own open window with <= k empties is a
+    /// win this turn (+1); the opponent's open windows (<= 2 empties, completed on its next
+    /// turn) that k stones cannot all hit are a loss (-1); two opponent one-stone completions
+    /// against a 2-stone turn — both stones spent blocking, the pre-A-2 rule's one surviving
+    /// blend case — nudge the unproven value by `quiescence_blend_2` toward -1. Value
     /// correction ONLY — the NN policy still drives expansion.
     #[inline]
     pub(crate) fn apply_quiescence(&self, board: &Board, value: f32) -> f32 {
         if !self.quiescence_enabled {
             return value;
         }
-
-        // Tier 1 (free): the ply gate. P1 first reaches 5 stones at ply 8 and P2 at ply 9, so
-        // below 8 half-moves `count_winning_moves` is necessarily 0.
-        if board.ply.index() < 8 {
+        // An open window needs 4 stones of one colour, which P2 first holds after 7 half-moves.
+        if board.ply.index() < 7 {
             return value;
         }
-
-        // Tier 2: a winning move needs ≥5 consecutive stones, so skip the O(legal_moves) count.
-        let current_player = board.current_player;
-        let opponent = current_player.other();
-        // A winning move needs a run of WIN_LENGTH - 1 (C1: no bare 5).
-        let current_may_threat = board.has_player_long_run(current_player, WIN_LENGTH - 1);
-        let opponent_may_threat = board.has_player_long_run(opponent, WIN_LENGTH - 1);
-
-        if !current_may_threat && !opponent_may_threat {
-            return value;
-        }
-
-        // One `fetch_add` at function end rather than four sites; no reader loads it mid-call.
-        let mut fired: u64 = 0;
-        let current_wins = if current_may_threat {
-            board.count_winning_moves(current_player)
-        } else {
-            0
-        };
-        let result = if current_wins >= 3 {
-            fired = 1;
+        let mover = board.current_player;
+        let k = board.moves_remaining;
+        let mut fired = false;
+        let result = if !board.open_windows(mover, k).is_empty() {
+            fired = true;
             1.0
         } else {
-            let opponent_wins = if opponent_may_threat {
-                board.count_winning_moves(opponent)
-            } else {
-                0
-            };
-            if opponent_wins >= 3 {
-                fired = 1;
-                -1.0
-            } else if current_wins == 2 {
-                fired = 1;
-                (value + self.quiescence_blend_2).min(1.0)
-            } else if opponent_wins == 2 {
-                fired = 1;
-                (value - self.quiescence_blend_2).max(-1.0)
-            } else {
-                value
+            let threats = board.open_windows(mover.other(), 2);
+            match min_hitting_stones(&threats) {
+                Some(0) => value,
+                Some(n) if n > k => {
+                    fired = true;
+                    -1.0
+                }
+                None => {
+                    fired = true;
+                    -1.0
+                }
+                Some(_) => {
+                    // Blockable. The blend keeps its pre-A-2 scope: two opponent FIVES needing
+                    // both stones (an open four at k = 2 is left to the net — measured at 6.6 %
+                    // of leaves, a behaviour change the correctness fix does not make).
+                    let fives: Vec<_> = threats
+                        .iter()
+                        .copied()
+                        .filter(|w| w.empties().len() == 1)
+                        .collect();
+                    if k == 2 && min_hitting_stones(&fives) == Some(2) {
+                        fired = true;
+                        (value - self.quiescence_blend_2).max(-1.0)
+                    } else {
+                        value
+                    }
+                }
             }
         };
-        if fired > 0 {
+        if fired {
             self.quiescence_fire_count
-                .fetch_add(fired, std::sync::atomic::Ordering::Relaxed);
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         result
     }

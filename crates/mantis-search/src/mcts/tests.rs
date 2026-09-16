@@ -367,27 +367,216 @@ fn test_quiescence_overrides_value_for_3_opponent_winning_moves() {
 }
 
 #[test]
-fn test_quiescence_blend_for_2_winning_moves() {
+fn test_quiescence_mover_win_in_one_is_plus_one() {
+    // The side to move completes six with its next stone: +1 whatever the NN said (A-2: the old
+    // rule read this as a blend, and a two-cell five as +0.3).
     let mut tree = MCTSTree::new(1.5);
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
-
     let stones: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P1)).collect();
-    // ply must be ≥ 8 so the early-game ply gate does not short-circuit.
-    let board = Board::from_stones(&stones, Player::One, 1, 10, None);
+    for mr in [1u8, 2] {
+        let board = Board::from_stones(&stones, Player::One, mr, 10, None);
+        assert_eq!(board.count_winning_moves(Player::One), 2);
+        assert_eq!(
+            tree.apply_quiescence(&board, -0.8),
+            1.0,
+            "mr={mr}: a win-in-1 is +1"
+        );
+    }
+}
 
-    let wins = board.count_winning_moves(Player::One);
+#[test]
+fn test_quiescence_mover_two_stone_win_is_plus_one_only_with_two_stones() {
+    // An open four for the side to move: six in two stones at mr = 2 (+1); at mr = 1 the mover
+    // cannot finish this turn and the rule stays out of it.
+    let mut tree = MCTSTree::new(1.5);
+    tree.quiescence_enabled = true;
+    tree.quiescence_blend_2 = 0.3;
+    let stones: Vec<((i32, i32), Cell)> = (0..4i32).map(|q| ((q, 0), Cell::P1)).collect();
+    let two = Board::from_stones(&stones, Player::One, 2, 10, None);
     assert_eq!(
-        wins, 2,
-        "unblocked 5-in-a-row should have exactly 2 winning moves"
+        two.count_winning_moves(Player::One),
+        0,
+        "no one-stone win exists"
     );
+    assert_eq!(tree.apply_quiescence(&two, 0.0), 1.0);
+    let one = Board::from_stones(&stones, Player::One, 1, 10, None);
+    assert_eq!(tree.apply_quiescence(&one, 0.1), 0.1);
+}
 
-    let nn_value = 0.5f32;
-    let corrected = tree.apply_quiescence(&board, nn_value);
-    let expected = (nn_value + 0.3).min(1.0);
+#[test]
+fn test_quiescence_opponent_open_four_is_a_loss_at_one_stone_and_the_nets_call_at_two() {
+    // P2 holds __OOOO__ ; P1 to move. With one stone it is lost (-1, the old rule read 0); with
+    // two it is blockable and the value is the net's — the blend keeps its pre-A-2 scope.
+    let mut tree = MCTSTree::new(1.5);
+    tree.quiescence_enabled = true;
+    tree.quiescence_blend_2 = 0.3;
+    let stones: Vec<((i32, i32), Cell)> = (0..4i32).map(|q| ((q, 0), Cell::P2)).collect();
+    let one = Board::from_stones(&stones, Player::One, 1, 11, None);
+    assert_eq!(tree.apply_quiescence(&one, 0.5), -1.0);
+    let two = Board::from_stones(&stones, Player::One, 2, 11, None);
+    assert_eq!(tree.apply_quiescence(&two, 0.5), 0.5);
+    // A CAPPED four (one end blocked) is one window, one stone: no verdict at either mr.
+    let mut capped = stones.clone();
+    capped.push(((-1, 0), Cell::P1));
+    let capped_one = Board::from_stones(&capped, Player::One, 1, 12, None);
+    assert_eq!(tree.apply_quiescence(&capped_one, 0.5), 0.5);
+    // Two fives at mr = 2 (the old rule's -blend case) still blend: both stones forced.
+    let mut fives: Vec<((i32, i32), Cell)> = (0..5i32).map(|q| ((q, 0), Cell::P2)).collect();
+    fives.push(((-1, 0), Cell::P1)); // one cell left on this five: (5, 0)
+    fives.extend((0..5i32).map(|q| ((q, 20), Cell::P2)));
+    fives.push(((-1, 20), Cell::P1)); // one cell left: (5, 20)
+    let two_fives = Board::from_stones(&fives, Player::One, 2, 20, None);
+    let got = tree.apply_quiescence(&two_fives, 0.0);
     assert!(
-        (corrected - expected).abs() < 1e-6,
-        "blend for 2 winning moves: expected {expected}, got {corrected}"
+        (got + 0.3).abs() < 1e-6,
+        "two forced blocks: 0 - 0.3, got {got}"
+    );
+    assert_eq!(
+        tree.apply_quiescence(&Board::from_stones(&fives, Player::One, 1, 20, None), 0.0),
+        -1.0
+    );
+}
+
+/// Census row 3664 (run7 ring 23829): the mover (45 stones, one stone left) faces a P2 four at
+/// (-2,-7)/(-2,-5) and holds fours of its own on q = -5. The one-hot went to (-5,-5), a mover five
+/// that loses to the opponent's two-stone completion. Through the real backup with uniform
+/// priors and NN = 0, the counter-threat child must read <= -0.9 and the block child above it;
+/// both read +0.3 / 0.0 before A-2.
+#[test]
+fn test_quiescence_census_row_3664_vetoes_the_counter_threat() {
+    const MOVER: [(i32, i32); 45] = [
+        (-7, -6),
+        (-6, -8),
+        (-6, -7),
+        (-6, -6),
+        (-6, -5),
+        (-5, -8),
+        (-5, -7),
+        (-5, -6),
+        (-5, -4),
+        (-5, -1),
+        (-4, -8),
+        (-4, -7),
+        (-4, -6),
+        (-4, -5),
+        (-4, -1),
+        (-4, 4),
+        (-3, -8),
+        (-3, -2),
+        (-3, 3),
+        (-2, -1),
+        (-2, 2),
+        (-1, -7),
+        (-1, -3),
+        (-1, 0),
+        (-1, 1),
+        (-1, 2),
+        (0, -7),
+        (0, -6),
+        (0, -1),
+        (1, -6),
+        (1, -3),
+        (1, 1),
+        (2, -5),
+        (2, -4),
+        (2, -3),
+        (2, -2),
+        (3, -7),
+        (3, -4),
+        (3, -2),
+        (4, -4),
+        (4, -1),
+        (5, -6),
+        (5, 0),
+        (6, -5),
+        (6, -4),
+    ];
+    const OPP: [(i32, i32); 45] = [
+        (-8, -8),
+        (-8, -6),
+        (-7, -4),
+        (-6, -10),
+        (-6, -4),
+        (-5, 1),
+        (-5, 5),
+        (-4, -9),
+        (-4, -3),
+        (-3, -7),
+        (-3, -5),
+        (-3, -4),
+        (-3, -3),
+        (-3, -1),
+        (-3, 1),
+        (-2, -9),
+        (-2, -8),
+        (-2, -6),
+        (-2, -4),
+        (-2, -3),
+        (-2, 1),
+        (-1, -6),
+        (-1, -5),
+        (-1, -2),
+        (-1, 4),
+        (0, -5),
+        (0, -2),
+        (0, 2),
+        (1, -7),
+        (1, -5),
+        (1, -1),
+        (2, -6),
+        (2, 0),
+        (3, -6),
+        (3, -1),
+        (4, -5),
+        (4, -3),
+        (4, -2),
+        (5, -4),
+        (5, -1),
+        (5, 1),
+        (6, -2),
+        (7, -6),
+        (7, -3),
+        (8, -7),
+    ];
+    let mut stones: Vec<((i32, i32), Cell)> = MOVER.iter().map(|&c| (c, Cell::P1)).collect();
+    stones.extend(OPP.iter().map(|&c| (c, Cell::P2)));
+    let board = Board::from_stones(&stones, Player::One, 1, 90, None);
+    assert!(!board.check_win());
+
+    let child_q = |cell: (i32, i32)| -> f32 {
+        let mut tree = MCTSTree::new_full(1.5, 0.0, 0.0);
+        tree.new_game(board.clone());
+        let n_actions = BOARD_SIZE * BOARD_SIZE + 1;
+        let uniform = vec![1.0 / n_actions as f32; n_actions];
+        let root = tree.select_leaves(1).expect("root descent");
+        assert_eq!(root.len(), 1);
+        tree.expand_and_backup(std::slice::from_ref(&uniform), &[0.0]);
+        let info = tree.get_root_children_info();
+        let (idx, _) = info
+            .iter()
+            .copied()
+            .find(|&(i, _)| {
+                let v = tree.pool[i as usize].action_idx;
+                ((v >> 16) as i32 - 32768, (v & 0xFFFF) as i32 - 32768) == cell
+            })
+            .expect("the cell is a root child (the root expands the full legal set)");
+        let leaves = tree.select_leaves_forced(&[idx]).expect("forced descent");
+        assert_eq!(leaves.len(), 1);
+        tree.expand_and_backup(&[uniform], &[0.0]);
+        let node = &tree.pool[idx as usize];
+        // Root perspective: the root is at mr = 1, so the child is the opponent's node.
+        -node.w_value / node.n_visits as f32
+    };
+    let counter = child_q((-5, -5));
+    let block = child_q((-2, -7));
+    assert!(
+        counter <= -0.9,
+        "the losing counter-threat must read <= -0.9, got {counter}"
+    );
+    assert!(
+        block > counter,
+        "the block ({block}) must beat the counter-threat ({counter})"
     );
 }
 

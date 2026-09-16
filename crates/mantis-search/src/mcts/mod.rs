@@ -78,12 +78,12 @@ pub struct MCTSTree {
     /// exit, eliminating the per-leaf `root_board.clone() + N × apply_move` re-walk.
     pub(crate) pending: Vec<(u32, Board)>,
     pub transposition_table: FxHashMap<u128, TTEntry>,
-    /// Enable quiescence value override at leaf nodes: ≥3 winning moves for the current player
-    /// overrides the value to ±1.0. A game-specific theorem — each turn places 2 stones, so the
-    /// opponent can block at most 2 winning cells per turn.
+    /// Enable the quiescence value override at leaf nodes: an own open window completable
+    /// within the side's remaining stones is +1.0, an opponent threat set the remaining stones
+    /// cannot block is -1.0 (`apply_quiescence`).
     pub(crate) quiescence_enabled: bool,
-    /// Value blend amount for the 2-winning-moves case (strong but unproven).
-    /// The NN value is nudged by ±quiescence_blend_2 toward ±1.0.
+    /// Nudge toward -1.0 when two opponent one-stone completions take both stones of a
+    /// two-stone turn — strong for the opponent but unproven.
     pub(crate) quiescence_blend_2: f32,
     /// When set, `select_one_leaf` skips PUCT at the root and descends directly to this child pool
     /// index — Sequential Halving forcing simulations into one candidate's subtree.
