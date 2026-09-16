@@ -1,9 +1,4 @@
-"""`MCTSTree.select_leaves_forced` — a forced descent that returns its leaf even on a transposition.
-
-`select_leaves(1)` under `forced_root_child` expands a transposition-hit leaf INLINE and returns
-nothing, which is how the Gumbel deploy driver stopped at its first TT hit (A-1, R355(b)). The
-forced variant has no such fast path: every call returns one leaf per child it was given.
-"""
+"""`MCTSTree.select_leaves_forced` returns one leaf per forced child even on a transposition (A-1, R355(b))."""
 from __future__ import annotations
 
 import pytest

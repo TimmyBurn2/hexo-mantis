@@ -137,7 +137,7 @@ def _make_scripted_pool(games, sink):
 
 
 def _make_games(n: int) -> list[tuple]:
-    """N scripted game-result 9-tuples (the `drain_game_results` shape): winner 1, 4 plies,
+    """N scripted game-result 10-tuples (the `drain_game_results` shape): winner 1, 4 plies,
     empty move history."""
     return [(4, 1, [], 0, 0, 0, 0, 0, [], None) for _ in range(n)]
 

@@ -262,11 +262,8 @@ def selfplay_record(
 ) -> dict[str, Any]:
     """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
     this game — and `step_kind` says so; `colors` is ABSENT (both seats are the same net);
-    `move_arms` is the runner's `(sims, is_full_search)` per move, written as `move_sims` and
-    `move_arms` (R353(d)); `search_stats` is written for a SAMPLED game only
-    (`selfplay.search_stats_every`, R355(d)): per searched ply, `visits` in the eval channel's
-    `[q, r, n]` shape plus `q` and `prior` arrays parallel to it, and `root_raw` when the search
-    kind stored one; an un-sampled game carries no key.
+    `move_arms` is the runner's `(sims, is_full_search)` per move (R353(d)); `search_stats` is
+    written for a SAMPLED game only (R355(d)) and an un-sampled game carries no key.
     Raises: ValueError when `move_arms` and `moves` differ in length."""
     if len(move_arms) != len(moves):
         raise ValueError(

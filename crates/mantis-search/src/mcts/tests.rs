@@ -306,7 +306,7 @@ fn test_dynamic_fpu_reduces_unvisited_q() {
 
 #[test]
 fn test_quiescence_overrides_value_for_3_winning_moves() {
-    // P1 has >= 3 winning moves, so the value is overridden to 1.0.
+    // P1 to move with three completion cells: +1.0 (a win-in-1 under the two-stone unit).
     let mut tree = MCTSTree::new(1.5);
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
@@ -341,7 +341,7 @@ fn test_quiescence_overrides_value_for_3_opponent_winning_moves() {
     tree.quiescence_enabled = true;
     tree.quiescence_blend_2 = 0.3;
 
-    // Current player is P1 but P2 has 3 winning moves, so the value is -1.0.
+    // P1 to move with ONE stone against three P2 completion cells: unblockable, -1.0.
     let mut stones: Vec<((i32, i32), Cell)> = Vec::new();
     for q in 0..5i32 {
         stones.push(((q, 0), Cell::P2));
@@ -438,11 +438,8 @@ fn test_quiescence_opponent_open_four_is_a_loss_at_one_stone_and_the_nets_call_a
     );
 }
 
-/// Census row 3664 (run7 ring 23829): the mover (45 stones, one stone left) faces a P2 four at
-/// (-2,-7)/(-2,-5) and holds fours of its own on q = -5. The one-hot went to (-5,-5), a mover five
-/// that loses to the opponent's two-stone completion. Through the real backup with uniform
-/// priors and NN = 0, the counter-threat child must read <= -0.9 and the block child above it;
-/// both read +0.3 / 0.0 before A-2.
+/// Census row 3664 (run7 ring 23829): the mover, one stone left, faces a P2 four and answers
+/// with a five at (-5,-5) that loses to the two-stone completion; +0.3 / 0.0 before A-2.
 #[test]
 fn test_quiescence_census_row_3664_vetoes_the_counter_threat() {
     const MOVER: [(i32, i32); 45] = [

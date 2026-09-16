@@ -190,9 +190,7 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
 
 
 def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path: Path) -> None:
-    """R355(d): a sampled self-play game's `search_stats` carries, per searched ply, `visits` in
-    the eval channel's `[q, r, n]` shape (the viewer reads it unchanged) plus `q` and `prior`
-    arrays PARALLEL to `visits`, and `root_raw` when the kind stored one. No `by` on self-play."""
+    """R355(d): eval's `visits` shape plus PARALLEL `q`/`prior`, `root_raw` when stored, no `by`."""
     recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
     recorder.maybe_record(
         game_id="g", moves=[(0, 0), (1, 0), (0, 1)], winner_code=0, plies=3, worker_id=0,

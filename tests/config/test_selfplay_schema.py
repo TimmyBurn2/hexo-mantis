@@ -268,9 +268,7 @@ def test_q_rescale_is_required_with_no_default() -> None:
 
 
 def test_search_stats_every_is_required_non_negative_and_has_no_default() -> None:
-    """`selfplay.search_stats_every` samples 1-in-N self-play games for the search-stats record
-    (CARD-SELFPLAY-SEARCH-STATS, R355(d)); 0 is off. Required: a defaulted sample rate is a
-    producer whose existence a config cannot see."""
+    """1-in-N self-play games record their roots (R355(d)); 0 is off; no default (R1)."""
     assert SelfplayConfig.model_validate(_selfplay(search_stats_every=8)).search_stats_every == 8
     assert SelfplayConfig.model_validate(_selfplay(search_stats_every=0)).search_stats_every == 0
     missing = _selfplay()

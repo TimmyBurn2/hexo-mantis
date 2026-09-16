@@ -39,16 +39,12 @@ pub type WorkerResultRow = (
     u8,
 );
 
-/// One searched position of a sampled game: `(ply, root_value, root_raw, children)` — `ply`
-/// indexes `move_history`, `root_value` is W/N at the root, `root_raw` the net's own
-/// post-quiescence root estimate (`Some` under the Gumbel kind only), and `children` is
-/// `(cell, visits, q, prior)` for every VISITED root child, `q` in the ROOT's perspective.
+/// One searched position of a sampled game: `(ply, root_value W/N, root_raw — Gumbel only,
+/// children as (cell, visits, q in the ROOT's view, prior) for every VISITED root child)`.
 pub type PositionStats = (u32, f32, Option<f32>, Vec<((i32, i32), u32, f32, f32)>);
 
-/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]; the ninth field is
-/// one `(sims, is_full_search)` per move, the arm it was DRAWN at (R353(d); opening plies
-/// `(0, false)`), the tenth the per-position search stats of a SAMPLED game (R355(d)), `None`
-/// otherwise.
+/// Per-game result tuple consumed by [`SelfPlayRunner::drain_game_results`]: the ninth field is
+/// the arm each move was DRAWN at (opening plies `(0, false)`), the tenth a sampled game's stats.
 #[allow(clippy::type_complexity)] // the drain row IS this tuple; a struct would re-pack per game
 pub type GameResultRow = (
     usize,

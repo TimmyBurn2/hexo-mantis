@@ -251,13 +251,9 @@ impl MCTSTree {
         record_omitted_prior_global(dropped_mass);
     }
 
-    /// Quiescence value override at a non-terminal leaf, on the two-stone-turn threat unit.
-    ///
-    /// With k the side to move's remaining stones: an own open window with <= k empties is a
-    /// win this turn (+1); the opponent's open windows (<= 2 empties, completed on its next
-    /// turn) that k stones cannot all hit are a loss (-1); two opponent one-stone completions
-    /// against a 2-stone turn — both stones spent blocking, the pre-A-2 rule's one surviving
-    /// blend case — nudge the unproven value by `quiescence_blend_2` toward -1. Value
+    /// Quiescence value override at a non-terminal leaf on the two-stone-turn unit: an own open
+    /// window completable within the k remaining stones is +1, an opponent threat set k stones
+    /// cannot all hit is -1, two opponent fives against a 2-stone turn blend toward -1. Value
     /// correction ONLY — the NN policy still drives expansion.
     #[inline]
     pub(crate) fn apply_quiescence(&self, board: &Board, value: f32) -> f32 {
@@ -287,9 +283,8 @@ impl MCTSTree {
                     -1.0
                 }
                 Some(_) => {
-                    // Blockable. The blend keeps its pre-A-2 scope: two opponent FIVES needing
-                    // both stones (an open four at k = 2 is left to the net — measured at 6.6 %
-                    // of leaves, a behaviour change the correctness fix does not make).
+                    // Blockable; the blend keeps its pre-A-2 scope (an open four at k = 2 is
+                    // the net's call — 6.6 % of leaves, not a correctness fix's to move).
                     let fives: Vec<_> = threats
                         .iter()
                         .copied()

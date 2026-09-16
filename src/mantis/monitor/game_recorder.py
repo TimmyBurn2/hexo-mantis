@@ -63,8 +63,7 @@ class GameRecorder:
         move_arms: list[tuple[int, bool]],
         search_stats: list[PositionStatsRow] | None = None,
     ) -> None:
-        """Write this game (`search_stats` only on a sampled game). Never raises — the writer
-        owns the failure posture."""
+        """Write this game (`search_stats` only on a sampled game); never raises."""
         self._writer.write(selfplay_record(
             game_id=game_id,
             run_id=self._run_id,

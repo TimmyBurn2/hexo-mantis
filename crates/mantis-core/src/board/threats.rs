@@ -24,9 +24,8 @@ impl OpenWindow {
     }
 }
 
-/// The fewest stones that put one stone into every window of `windows` (0, 1 or 2), or `None`
-/// when more than two are needed. Any hitting set of size <= 2 contains a cell of the first
-/// window and, if that cell misses some window, a cell of the first window it misses.
+/// The fewest stones hitting every window (0, 1 or 2; `None` past two): a hitting set of size
+/// <= 2 holds a cell of the first window and, if that misses one, a cell of the first it misses.
 #[must_use]
 pub fn min_hitting_stones(windows: &[OpenWindow]) -> Option<u8> {
     let Some(first) = windows.first() else {

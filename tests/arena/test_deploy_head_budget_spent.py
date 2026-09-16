@@ -1,12 +1,4 @@
-"""EVERY search kind spends EXACTLY `n_sims` leaves — the check R355(b) makes a suite section.
-
-THE DEFECT, measured (INVESTIGATION-1 A-1): `_drive_gumbel` called `select_leaves(1)` under a
-forced root child; a transposition hit expanded the leaf inline and returned nothing, the loop
-read that as exhaustion, and the Gumbel deploy head served 0.19–0.42 of a 512-sim budget on a
-40-stone board under a peaked prior. Every Gumbel-head reading since 2026-09-09 (F-48, F-50,
-F-51, CARD-DEPLOY-HEAD-BUDGET, GAME_QUALITY's Gumbel line) was through it. PUCT spent exactly.
-The witness counts LEAVES EVALUATED, the only place the budget is observable from outside.
-"""
+"""EVERY search kind spends EXACTLY `n_sims` leaves (R355(b); the old Gumbel driver served 0.19–0.42 of 512, A-1)."""
 from __future__ import annotations
 
 import math
@@ -15,14 +7,13 @@ import random
 import pytest
 
 from mantis._engine import Board
-from mantis.arena.deploy_head import DeployHeadPlayer
+from mantis.arena.deploy_head import DeployHeadPlayer, InferFn
 
 _STRIDE = 362
 
 
 def _mid_game_board(n_stones: int, seed: int) -> Board:
-    """A random legal position of `n_stones` stones under the real cadence — the red team's
-    `random_board`, on the rules-default board."""
+    """A random legal position of `n_stones` stones under the real cadence (the red team's)."""
     rng = random.Random(seed)
     board = Board()
     for _ in range(n_stones):
@@ -34,11 +25,9 @@ def _mid_game_board(n_stones: int, seed: int) -> Board:
     return board
 
 
-def _peaked_infer(calls: list[int]):
-    """The red team's peaked net: a prior decaying with distance from the last four stones and a
-    value that DEPENDS on the position (off its hash), so completed Qs differ between siblings
-    and the descent re-walks paths — the shape that read 0.19 of 512 through the old driver."""
-    def _infer(board):
+def _peaked_infer(calls: list[int]) -> InferFn:
+    """The red team's peaked net: a distance-decay prior and a position-dependent value."""
+    def _infer(board: Board) -> tuple[list[float], float]:
         calls.append(1)
         legal = board.legal_moves()
         recent = [(q, r) for (q, r, _p) in board.get_stones()][-4:]

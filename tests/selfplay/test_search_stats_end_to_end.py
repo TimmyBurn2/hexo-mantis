@@ -1,7 +1,4 @@
-"""The search-stats wire end to end (R355(d)): config key -> worker -> result row -> drain ->
-recorder -> shard. A real pool with a real Rust runner at `search_stats_every: 1`, games capped
-at six plies so one completes inside the budget; the record on disk carries visits/q/prior per
-searched ply, parallel and non-empty."""
+"""The search-stats wire end to end (R355(d)): a real pool at `search_stats_every: 1` writes visits/q/prior per ply."""
 from __future__ import annotations
 
 import time
