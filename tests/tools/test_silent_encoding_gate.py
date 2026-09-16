@@ -289,3 +289,15 @@ def test_v6_alternation_does_not_shadow_longer_names():
     """`v6` must not match inside `v6w25` and mislabel the finding."""
     assert GATE.ENCODINGS.index("v6") == len(GATE.ENCODINGS) - 1
     assert _fires('return "v6w25"')
+
+
+def test_the_live_set_is_the_registrys_and_a_new_entry_is_covered(tmp_path: Path):
+    """B-19 (R355(e)): the tuple hardcoded three deleted names and no live one could join it."""
+    live = GATE.registry_encodings()
+    assert set(live) >= {"gnn_axis_v1", "gnn_axis_r8"} and set(live) <= set(GATE.ENCODINGS)
+    planted = tmp_path / "registry.toml"
+    planted.write_text(
+        '[encodings.gnn_axis_v1]\nboard_size = 19\n[encodings.brand_new_enc]\nboard_size = 19\n',
+        encoding="utf-8")
+    assert "brand_new_enc" in GATE.registry_encodings(planted)
+    assert GATE.encoding_alternation(("v6", "v6w25", "brand_new_enc")) == ("brand_new_enc", "v6w25", "v6")

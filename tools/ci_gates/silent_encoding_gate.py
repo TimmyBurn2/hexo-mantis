@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import re
 import sys
+import tomllib
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -45,8 +46,24 @@ SKIP_DIR_PARTS = {"tests", "benches", "target", "__pycache__", "fixtures"}
 MIN_SCANNED_FILES = 80  # a floor, so "scanned nothing, found nothing" can never pass
 
 
-# The registered set, longest-first so the alternation cannot match "v6" inside "v6w25".
-ENCODINGS = ("v6_live2_ls", "gnn_axis_v1", "gnn_axis_r8", "v6w25", "v6")
+REGISTRY = REPO_ROOT / "crates" / "mantis-encoding" / "src" / "registry.toml"
+#: Names the registry no longer carries, kept so the evasion corpus's real arms stay replayable;
+#: the LIVE set is read off the registry (B-19), so an entry minted tomorrow is covered.
+RETIRED_ENCODING_NAMES: tuple[str, ...] = ("v6_live2_ls", "v6w25", "v6")
+
+
+def registry_encodings(path: Path = REGISTRY) -> tuple[str, ...]:
+    """Every encoding name the registry declares, in file order."""
+    with path.open("rb") as handle:
+        return tuple(tomllib.load(handle)["encodings"].keys())
+
+
+def encoding_alternation(names: tuple[str, ...]) -> tuple[str, ...]:
+    """Longest-first, so the alternation cannot match "v6" inside "v6w25"."""
+    return tuple(sorted(set(names), key=lambda name: (-len(name), name)))
+
+
+ENCODINGS = encoding_alternation((*registry_encodings(), *RETIRED_ENCODING_NAMES))
 _ENC = "|".join(ENCODINGS)
 # An optional `f`/`r`/`b` prefix: `return f"v6"` is the same arm with a redundant prefix.
 _Q = f"(?:[frb]{{0,2}})['\"](?:{_ENC})['\"]"
