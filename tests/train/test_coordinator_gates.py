@@ -272,6 +272,25 @@ def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
     assert h.shutdown.running is True, "no fire may come from the kick return"
 
 
+def test_steps_per_hour_after_a_resume_counts_steps_since_boot() -> None:
+    """B-2 (R355(e)): a coordinator booted at step 23 829 read `steps_per_hour` as 23 829 + d over
+    the hours since boot, 4.79e9 one burst after run7's resume. The rate is d / hours since boot."""
+    h = _make_coordinator()
+    h.trainer.step = 23_829
+    h.coord._train_step = 23_829
+    h.coord._boot_step = 23_829
+    started = h.coord._run_started
+    h.coord._clock = SimpleNamespace(now=lambda: started + 3600.0, sleep=lambda _s: None)
+    h.pool.games_completed = 5
+    h.coord.step()
+    sph = h.sink.named("iteration_complete")[-1]["steps_per_hour"]
+    steps_since_boot = h.trainer.step - 23_829
+    assert steps_since_boot > 0
+    assert sph == round(steps_since_boot / 3600.0 * 3600.0, 1), (
+        f"steps_per_hour must be steps SINCE BOOT over the run clock, got {sph}"
+    )
+
+
 def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
     """The `sealbot_wr_warn` producer test on the SHIPPED DEFAULT posture: N consecutive
     low-WR results delivered through the drain callback emit a VISIBLE warn carrying the

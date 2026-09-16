@@ -95,6 +95,7 @@ def test_a_rate_over_zero_elapsed_is_absent_not_zero() -> None:
     class _Stub:
         _games_played = 7
         _train_step = 3
+        _boot_step = 0
         _run_started = 100.0
         _clock = type("C", (), {"now": staticmethod(lambda: 100.0)})()
 

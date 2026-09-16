@@ -198,6 +198,8 @@ class StepCoordinator:
 
         # Per-step mutable bookkeeping.
         self._train_step = int(getattr(trainer, "step", 0))
+        # The step this PROCESS booted at: a resumed run's rate is the delta over the run clock (B-2).
+        self._boot_step = self._train_step
         self._games_played = 0
         self.last_train_game_count = 0
         self._schedule_idx = 0
@@ -743,10 +745,10 @@ class StepCoordinator:
         return (self._games_played / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _steps_per_hour(self) -> float | None:
-        """Train steps per hour over the same clock as `_games_per_hour`, published beside it;
-        `None` before the clock has advanced, for that method's reason."""
+        """Train steps SINCE BOOT per hour over the same clock as `_games_per_hour`; `None` before
+        the clock has advanced, for that method's reason."""
         elapsed = self._clock.now() - self._run_started
-        return (self._train_step / elapsed) * 3600.0 if elapsed > 0 else None
+        return ((self._train_step - self._boot_step) / elapsed) * 3600.0 if elapsed > 0 else None
 
     def _run_hard_abort_gates(self, cfg: StepCoordinatorConfig) -> bool:
         """The draw-rate hard-abort gate, keyed on the LIVE pool producer.
