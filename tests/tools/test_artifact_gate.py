@@ -149,3 +149,54 @@ def test_an_uppercase_jsonl_outside_fixtures_is_rejected(tmp_path):
     res = _run_gate(tmp_path, {"docs/probe.JSONL": b"{}\n"})
     assert res.returncode == 1, res.stdout + res.stderr
     assert "VIOLATION jsonl-outside-fixtures: docs/probe.JSONL" in res.stdout
+
+
+# ── B-6 (R355(e)): modified files are sized, and an empty diff widens ──
+
+def _repo_with(tree: Path, commits: list[dict[str, bytes]]) -> dict[str, str]:
+    """A repo with one commit per dict of files (the first is the base); returns the git env."""
+    env = _git_env()
+    tree.mkdir(parents=True, exist_ok=True)
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=tree, env=env, check=True, capture_output=True)
+
+    git("init", "-q", "-b", "main")
+    for i, files in enumerate(commits):
+        for rel, blob in files.items():
+            target = tree / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(blob)
+        git("add", "-A")
+        git("commit", "-qm", f"c{i}")
+    return env
+
+
+def _gate(tree: Path, env: dict[str, str], *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run([sys.executable, str(SCRIPT), *args], cwd=tree, env=env,
+                          capture_output=True, text=True, check=False)
+
+
+def test_a_tracked_file_MODIFIED_past_the_ceiling_is_rejected(tmp_path):
+    """B-6: only added paths were sized, so a tracked file growing past 1 MB passed."""
+    env = _repo_with(tmp_path, [{"src/mantis/grows.bin": b"\0" * 10},
+                                {"src/mantis/grows.bin": b"\0" * (MAX_ADDED_BYTES + 1)}])
+    res = _gate(tmp_path, env, "--base", "HEAD~1")
+    assert res.returncode == 1, res.stdout + res.stderr
+    assert "VIOLATION large-file: src/mantis/grows.bin" in res.stdout
+
+
+def test_an_empty_diff_widens_to_a_fallback_and_says_so(tmp_path):
+    """B-6: `--base HEAD` diffed nothing and printed no scope line; an empty range widens and says so."""
+    env = _repo_with(tmp_path, [{"base.txt": b"base\n"},
+                                {"src/mantis/blob.bin": b"\0" * (MAX_ADDED_BYTES + 1)}])
+    res = _gate(tmp_path, env, "--base", "HEAD")
+    assert "degrading WIDE" in res.stdout, res.stdout
+    assert res.returncode == 1 and "VIOLATION large-file: src/mantis/blob.bin" in res.stdout
+
+
+def test_an_empty_diff_with_no_fallback_scans_the_full_tree(tmp_path):
+    env = _repo_with(tmp_path, [{"src/mantis/blob.bin": b"\0" * (MAX_ADDED_BYTES + 1)}])
+    res = _gate(tmp_path, env, "--base", "HEAD")
+    assert "full tree" in res.stdout, res.stdout
+    assert res.returncode == 1 and "VIOLATION large-file: src/mantis/blob.bin" in res.stdout

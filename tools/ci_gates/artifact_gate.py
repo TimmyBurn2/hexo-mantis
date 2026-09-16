@@ -61,6 +61,12 @@ def _resolve_base(candidate: str) -> tuple[str, str]:
     return "HEAD~1", f"{reason}; NO fallback resolved — inspecting the last commit ONLY"
 
 
+def _range_diff(base: str) -> str:
+    """`git diff --name-status -z` from `merge-base(base, HEAD)` to HEAD."""
+    mb = _git("merge-base", base, "HEAD").strip()
+    return _git("diff", "--name-status", "-z", mb, "HEAD")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base", default=os.environ.get("ARTIFACT_GATE_BASE", ""))
@@ -69,8 +75,20 @@ def main(argv: list[str] | None = None) -> int:
     try:
         base, why = _resolve_base(args.base)
         print(f"gate 6: base={base} ({why})")
-        mb = _git("merge-base", base, "HEAD").strip()
-        raw = _git("diff", "--name-status", "-z", mb, "HEAD")
+        raw = _range_diff(base)
+        if not raw.strip("\0"):
+            # B-6: an EMPTY range (a base at HEAD, e.g. after a push) inspected nothing and
+            # said so nowhere. Widen to the next base with a range, else the whole tree.
+            widened = next((fb for fb in _WIDE_FALLBACKS
+                            if fb != base and _resolves(fb) and _range_diff(fb).strip("\0")), None)
+            if widened is not None:
+                print(f"gate 6: the diff against {base} is EMPTY -- degrading WIDE to {widened}")
+                raw = _range_diff(widened)
+            else:
+                print(f"gate 6: the diff against {base} is EMPTY and no fallback has a range -- "
+                      "degrading WIDE to the full tree")
+                tracked = [p for p in _git("ls-files", "-z").split("\0") if p]
+                raw = "".join(f"A\0{p}\0" for p in tracked)
     except subprocess.CalledProcessError as exc:
         print(f"git error: {exc.stderr.strip()}", file=sys.stderr)
         return 2
@@ -90,7 +108,8 @@ def main(argv: list[str] | None = None) -> int:
             changed.append((status[0], new, True))
             i += 3
         else:
-            changed.append((status[0], fields[i + 1], status[0] == "A"))
+            # A MODIFIED file's content enters the tree at HEAD too (B-6): it is sized.
+            changed.append((status[0], fields[i + 1], status[0] in ("A", "M")))
             i += 2
 
     violations = 0
