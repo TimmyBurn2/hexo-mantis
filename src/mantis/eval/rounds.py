@@ -7,8 +7,10 @@
 from __future__ import annotations
 
 import dataclasses
+import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from mantis.bots.protocol import RungUnresolvable
@@ -208,6 +210,35 @@ _REQUIRED_RESULT_KEYS = (
 )
 
 
+def partial_gate_path(result_path: str) -> Path:
+    """The gate phase's PARTIAL sidecar beside `result_path`, written when the gate block ends (A-3)."""
+    return Path(result_path + ".gate.partial.json")
+
+
+def write_partial_gate(result_path: str, *, step: int, gate_result: Mapping[str, Any]) -> Path:
+    """Persist the gate verdict atomically (tmp + replace). Raises OSError as the writer's own."""
+    target = partial_gate_path(result_path)
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(json.dumps({"step": int(step), "phase": "gate", "gate": dict(gate_result)}),
+                   encoding="utf-8")
+    tmp.replace(target)
+    return target
+
+
+def read_partial_gate(result_path: str, *, step: int) -> dict[str, Any] | None:
+    """The partial gate verdict for THIS step, or `None` (absent, unreadable, another step's)."""
+    try:
+        raw = json.loads(partial_gate_path(result_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(raw, dict) or raw.get("step") != step:
+        return None
+    gate = raw.get("gate")
+    if not isinstance(gate, dict) or "promoted" not in gate:
+        return None
+    return gate
+
+
 def validate_worker_result(raw: Any) -> dict[str, Any]:
     """The sidecar result JSON's shape contract. Any missing key -> named
     `ResultContractError` (never a silent partial read)."""
@@ -281,15 +312,16 @@ def build_round_result(
     worker_pid: int | None = None,
     candidate_snapshot_path: str | None = None,
     strength_floor: Mapping[str, Any] | None = None,
+    gate_verdict_partial: bool = False,
 ) -> dict[str, Any]:
     """Assemble the coordinator-facing round-result mapping, with `wr_sealbot` UNCONDITIONALLY
     present — success, broken and all-skip rounds alike.
 
     ONE authority for "did this round break": the typed `reason`, where `None` IS the clean
     state, with no defaulted boolean survivor beside it. `detail` is PROSE and nothing under
-    `src/` may branch on it.
+    `src/` may branch on it. `gate_verdict_partial`: the verdict is the child's partial sidecar (A-3).
     """
-    promoted = (reason is None) and _gate_result_promoted(gate_result)
+    promoted = (reason is None or gate_verdict_partial) and _gate_result_promoted(gate_result)
     _sealbot_reading = _first_sealbot_wr(rungs_config, rung_results)
     result: dict[str, Any] = {
         "step": step,
@@ -307,6 +339,7 @@ def build_round_result(
         "eval_round_wall_sec": eval_round_wall_sec,
         "eval_broken_reason": reason,
         "eval_broken_detail": detail,
+        "gate_verdict_partial": bool(gate_verdict_partial),
         "gate": _gate_result_to_mapping(gate_result),
         "rungs": dict(rung_results),
         "skipped_rungs": list(skipped_rungs),

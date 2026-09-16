@@ -273,8 +273,7 @@ def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
 
 
 def test_steps_per_hour_after_a_resume_counts_steps_since_boot() -> None:
-    """B-2 (R355(e)): a coordinator booted at step 23 829 read `steps_per_hour` as 23 829 + d over
-    the hours since boot, 4.79e9 one burst after run7's resume. The rate is d / hours since boot."""
+    """B-2 (R355(e)): booted at 23 829 the rate read 23 829 + d over the hours since boot (4.79e9)."""
     h = _make_coordinator()
     h.trainer.step = 23_829
     h.coord._train_step = 23_829

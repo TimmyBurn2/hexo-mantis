@@ -30,7 +30,8 @@ import torch
 from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
 from mantis.eval.errors import ResultContractError
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
-from mantis.eval.promote import DeployTagHooks
+from mantis.eval.promote import DeployTagHooks, apply_gate_decision
+from mantis.eval.rounds import partial_gate_path, write_partial_gate
 from mantis.encoding import lookup
 from mantis.model import GnnArch, build_net
 
@@ -351,5 +352,82 @@ def test_eval_broken_never_promotes_and_never_silently_skips(fake_mp, tmp_path) 
         got_event = bool(sink.named("eval_broken"))
         assert got_routed_result, "a broken round must still route a result with promoted=False"
         assert got_event, "a broken round must still emit eval_broken (never silent)"
+        # With NO partial gate sidecar; a round that finished its gate phase is the A-3 tests'.
+        assert result["gate_verdict_partial"] is False
+        assert sink.named("eval_broken")[-1]["partial_gate"] is False
     finally:
         pipeline.stop()
+
+
+def _gate_verdict(promoted: bool) -> dict:
+    return {"wr_screen": 0.7, "wr_confirm": 0.66, "n_screen": 80, "n_confirm": 128, "n_pooled": 208,
+            "escalated": True, "elo_ci_lower_boot": 40.0, "low_power": False, "eff_n": 100.0,
+            "reason": "", "deploy_matched": True, "promoted": promoted, "rule": "screen_confirm",
+            "llr": None, "pairs_played": None, "stopped": None}
+
+
+def _kill_after_partial(fake_mp, pipeline, *, partial_step: int, promoted: bool) -> str:
+    pipeline.run_evaluation(_tiny_model(), 3000, None, full_config={}, best_model_step=None)
+    proc = fake_mp.last_process
+    result_path = pipeline._inflight["spec"].result_path
+    write_partial_gate(result_path, step=partial_step, gate_result=_gate_verdict(promoted))
+    proc.alive = False
+    proc.exitcode = -9  # killed at the bound, after the gate phase
+    return result_path
+
+
+def test_a_round_killed_after_its_gate_phase_promotes_off_the_partial_verdict(fake_mp, tmp_path) -> None:
+    """A-3 (R355(e)): a round killed after its gate phase is broken for the ladder and still promotes."""
+    sink = _SpySink()
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    try:
+        result_path = _kill_after_partial(fake_mp, pipeline, partial_step=3000, promoted=True)
+        result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        assert result is not None
+        assert result["eval_broken_reason"] is not None, "the ROUND is still broken (no rungs)"
+        assert result["gate_verdict_partial"] is True
+        assert result["promoted"] is True and result["promoted_step"] == 3000
+        assert result["gate"]["promoted"] is True
+        assert sink.named("eval_broken")[-1]["partial_gate"] is True
+        assert sink.named("eval_round_complete")[-1]["promoted"] is True
+        assert not partial_gate_path(result_path).exists(), "consumed with the round"
+    finally:
+        pipeline.stop()
+
+
+def test_a_partial_verdict_that_did_not_promote_does_not(fake_mp, tmp_path) -> None:
+    sink = _SpySink()
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    try:
+        _kill_after_partial(fake_mp, pipeline, partial_step=3000, promoted=False)
+        result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        assert result["gate_verdict_partial"] is True and result["promoted"] is False
+    finally:
+        pipeline.stop()
+
+
+def test_a_partial_from_another_step_is_ignored(fake_mp, tmp_path) -> None:
+    sink = _SpySink()
+    pipeline = build_eval_pipeline(**_pipeline_kwargs(tmp_path, sink=sink), leaf_batch_size=1)
+    try:
+        _kill_after_partial(fake_mp, pipeline, partial_step=2000, promoted=True)
+        result = _bounded(lambda: pipeline.drain_pending(), timeout=5.0)
+        assert result["gate_verdict_partial"] is False and result["promoted"] is False
+        assert sink.named("eval_broken")[-1]["partial_gate"] is False
+    finally:
+        pipeline.stop()
+
+
+def test_apply_gate_decision_honours_a_partial_verdict_and_refuses_a_broken_round_without_one(tmp_path) -> None:
+    loads: list = []
+    hooks = _promotion_hooks(tmp_path)
+    hooks = DeployTagHooks(anchor_state=hooks.anchor_state, best_model_path=hooks.best_model_path,
+                           run_id=hooks.run_id, encoding=hooks.encoding,
+                           save_anchor=lambda *a, **k: None,
+                           guarded_load=lambda *a, **k: loads.append(a))
+    partial = {"eval_broken_reason": "killed", "gate_verdict_partial": True, "promoted": True,
+               "step": 3000}
+    assert apply_gate_decision(hooks, partial) == 3000 and len(loads) == 1
+    broken = {"eval_broken_reason": "killed", "gate_verdict_partial": False, "promoted": False,
+              "step": 3000}
+    assert apply_gate_decision(hooks, broken) is None and len(loads) == 1

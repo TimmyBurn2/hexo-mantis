@@ -48,7 +48,12 @@ def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int
     with the `promoted` test leading, a NON-promoted stale mapping would never have its
     reason read at all, which is exactly the case the guard claims to close.
     """
-    if result["eval_broken_reason"] is not None or not result.get("promoted"):
+    # The reason is read FIRST and as a SUBSCRIPT (R152); a broken round promotes ONLY off a
+    # partial gate verdict the child persisted before the break (A-3, R355(e)).
+    reason = result["eval_broken_reason"]
+    if not result.get("promoted"):
+        return None
+    if reason is not None and not result.get("gate_verdict_partial"):
         return None
 
     from mantis.eval.snapshot import load_model_snapshot

@@ -131,7 +131,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   `pairs_played` on the record. Still OPEN beside it, from the same review: the eval child emits
   no `batch_timing_snapshot()` (LAW-18; needed before concurrency is touched), `book_v2` (the
   balanced book is worth +11 pp of gate power), and the ruling that names "gate pair statistics"
-  for the GSPRT.
+  for the GSPRT. MECHANISM LANDED 2026-09-16 (A-3, R355(e)): the child persists the gate
+  verdict the moment the gate block ends (`<result>.json.gate.partial.json`), and a round
+  killed at the bound or abandoned by a stop promotes off it (`gate_verdict_partial`), so a
+  lost round no longer loses a promotion.
 
 ## Opened by R350 (the block verdict)
 

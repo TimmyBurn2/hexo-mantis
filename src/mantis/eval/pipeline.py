@@ -44,6 +44,8 @@ from mantis.eval.rounds import (
     RoundSpec,
     RungJob,
     build_round_result,
+    partial_gate_path,
+    read_partial_gate,
     validate_worker_result,
 )
 from mantis.eval.snapshot import write_model_snapshot
@@ -231,6 +233,17 @@ def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink:
 def _result_tmp_path(result_path: str) -> Path:
     """The `.tmp` the worker writes for `result_path`, derived the way the worker derives it."""
     return Path(result_path + ".tmp")
+
+
+def _remove_partial_gate(inflight: dict[str, Any]) -> None:
+    """Drop the round's partial gate sidecar once the round is finalised; non-raising."""
+    spec = inflight.get("spec")
+    if spec is None:
+        return
+    try:
+        partial_gate_path(spec.result_path).unlink(missing_ok=True)
+    except OSError:
+        _LOG.debug("partial gate sidecar not removed: %s", spec.result_path, exc_info=True)
 
 
 def _remove_result_tmp(result_path: str) -> None:
@@ -805,6 +818,7 @@ class EvalPipeline:
                 phase="round_completion", detail=detail, exception_class=type(exc).__name__,
             )
 
+        _remove_partial_gate(inflight)
         with self._lock:
             self._inflight = None
             self._mailbox.append(result)
@@ -840,9 +854,14 @@ class EvalPipeline:
     ) -> dict[str, Any]:
         """THE broken-round emitter — one event, one payload builder, one `build_round_result`
         call site for all seven routes."""
+        # The gate verdict the child persisted before the break, if any (A-3).
+        spec = inflight.get("spec")
+        partial = (None if spec is None
+                   else read_partial_gate(spec.result_path, step=inflight["step"]))
         payload: dict[str, Any] = {
             "event": "eval_broken", "round_id": inflight["round_id"], "step": inflight["step"],
             "reason": reason, "exit_code": exit_code, "phase": phase,
+            "partial_gate": partial is not None,
         }
         if exception_class is not None:
             payload["exception_class"] = exception_class
@@ -853,15 +872,17 @@ class EvalPipeline:
                   inflight["step"], reason.value)
         result = build_round_result(
             step=inflight["step"], round_id=inflight["round_id"],
-            rungs_config=self._eval_cfg.ladder.rungs, rung_results={}, gate_result=None,
+            rungs_config=self._eval_cfg.ladder.rungs, rung_results={}, gate_result=partial,
             skipped_rungs=[], bt={"ratings": {}, "p_hat": {}}, schedule_next={},
             eval_round_wall_sec=wall_sec, reason=reason, detail=detail, random_wr=None,
+            candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
+            gate_verdict_partial=partial is not None,
         )
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             # None, never 0 — a broken round MEASURED nothing, and a count here is a default
             # a reader will mistake for one (it already was).
-            games_total=None, promoted=False, wr_sealbot=result["wr_sealbot"],
+            games_total=None, promoted=bool(result["promoted"]), wr_sealbot=result["wr_sealbot"],
             progress=read_progress(inflight.get("spec")),
         )
         return result

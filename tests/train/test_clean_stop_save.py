@@ -664,9 +664,7 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
 
 
 def test_a_signal_in_the_pre_O3_poll_window_saves_ONCE() -> None:
-    """B-8 (R355(e)): a signal landing after the loop's `while running` and before O3 (inside
-    `_poll_eval_results`) saved at O3 AND at the loop's `_final_save` — two bundles at one step,
-    and `prune_bundles(keep=2)` then dropped the last periodic one."""
+    """B-8 (R355(e)): a signal in the pre-O3 poll window saved at O3 AND at the loop's `_final_save`."""
     shutdown = ShutdownState()
     trainer = _Trainer(step=5)
     h = _harness(trainer=trainer, config=_config(stop_step=1000), shutdown=shutdown)

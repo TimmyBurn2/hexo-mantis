@@ -31,7 +31,7 @@ from mantis.eval.aggregate import aggregate_gate, aggregate_rung, aggregate_sequ
 from mantis.eval.child_memory import make_probe
 from mantis.eval.errors import EvalDecodeUnsupportedError
 from mantis.eval.floor_gate import FLOOR_PROBE_VARIANT, evaluate_strength_floor
-from mantis.eval.rounds import GameRecordTarget, RoundSpec, RungJob
+from mantis.eval.rounds import GameRecordTarget, RoundSpec, RungJob, write_partial_gate
 from mantis.eval.sequential import SequentialGateSpec, run_sequential_gate
 from mantis.eval.snapshot import load_model_snapshot
 from mantis.monitor.game_record import (
@@ -686,6 +686,8 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "pairs_played": None if verdict is None else verdict["pairs_played"],
                 "stopped": None if verdict is None else verdict["stopped"],
             }
+            # The verdict outlives a kill at the bound or a stop (A-3): persisted the moment it exists.
+            write_partial_gate(spec.result_path, step=spec.step, gate_result=gate_result)
 
         rungs_result: dict[str, Any] = {}
         skipped_rungs: list[dict[str, str]] = []
