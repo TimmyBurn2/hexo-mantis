@@ -117,6 +117,8 @@ class SelfplayConfig(StrictModel):
     q_rescale: bool
     gumbel_m: int = Field(ge=1)
     gumbel_explore_moves: int = Field(ge=0)
+    #: 1-in-N self-play games carry per-position search stats in the game record; 0 is off.
+    search_stats_every: int = Field(ge=0)
     # OPERATIONAL CONSTANT: a queue's back-pressure bound.
     results_queue_cap: int = Field(default=10000, ge=1)
     random_opening_plies: int = Field(ge=0)

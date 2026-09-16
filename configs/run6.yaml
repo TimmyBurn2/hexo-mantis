@@ -31,6 +31,7 @@
 # delta: eval.max_plies: 128 -> 256
 # delta: inference.edge_geometry_check: inline -> checker_thread
 # delta: inference.compile_trunk: false -> true
+# delta: selfplay.search_stats_every: 8 -> 0
 schema_version: 1
 run_id: run6
 seed: 20260718
@@ -150,6 +151,7 @@ selfplay:
   q_rescale: true
   gumbel_m: 16
   gumbel_explore_moves: 10
+  search_stats_every: 0
   random_opening_plies: 0
   mcts:
     n_simulations: 320

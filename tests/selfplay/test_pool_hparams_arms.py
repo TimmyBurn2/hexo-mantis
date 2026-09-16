@@ -29,7 +29,7 @@ from mantis.selfplay.hparams import (
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
     "c_visit": 40.0, "c_scale": 2.0, "q_rescale": False,
-    "gumbel_m": 24, "gumbel_explore_moves": 14,
+    "gumbel_m": 24, "gumbel_explore_moves": 14, "search_stats_every": 5,
     "results_queue_cap": 5000, "random_opening_plies": 3,
     "log_investigation_metrics": False,
 }

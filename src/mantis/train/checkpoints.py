@@ -832,7 +832,7 @@ def strip_and_restamp(
             "search": {"kind": "puct"},
             "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
             "c_visit": 50.0, "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16,
-            "gumbel_explore_moves": 10,
+            "gumbel_explore_moves": 10, "search_stats_every": 0,
             "results_queue_cap": 10_000, "random_opening_plies": 0,
             "log_investigation_metrics": True,
             "mcts": {"n_simulations": 50, "c_puct": 1.5, "fpu_reduction": 0.25,

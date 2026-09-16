@@ -243,6 +243,8 @@ CONSUMER_REGISTRY = {
         "DeployHeadPlayer, so the bar considers the same number of root actions the run did"
     ),
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.from_config -> runner gumbel_explore_moves",
+    "selfplay.search_stats_every":
+        "SelfPlayHParams.from_config -> SelfPlayRunnerConfig.search_stats_every -> WorkerParams -> run_one_game's sample gate -> play_one_move's per-position root stats -> GameResultRow -> recorder (search_stats on 1-in-N self-play records, R355(d))",
     "selfplay.results_queue_cap": "SelfPlayHParams.from_config -> runner results_queue_cap",
     "selfplay.random_opening_plies": "SelfPlayHParams.from_config -> runner random_opening_plies",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.from_config -> pool investigation logging",

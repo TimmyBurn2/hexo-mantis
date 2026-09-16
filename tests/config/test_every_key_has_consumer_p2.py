@@ -207,6 +207,8 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "deploy.search.kind": "resolve_deploy_search_kind -> build_eval_pipeline -> RoundSpec -> DeployHeadPlayer -> MCTSTree::configure_search",
     "selfplay.gumbel_m": "SelfPlayHParams.gumbel_m -> runner gumbel_m ctor kwarg (R23)",
     "selfplay.gumbel_explore_moves": "SelfPlayHParams.gumbel_explore_moves -> runner ctor kwarg (R23)",
+    "selfplay.search_stats_every":
+        "SelfPlayHParams.from_config -> SelfPlayRunnerConfig.search_stats_every -> WorkerParams -> run_one_game's sample gate -> play_one_move's per-position root stats -> GameResultRow -> recorder (search_stats on 1-in-N self-play records, R355(d))",
     "selfplay.results_queue_cap": "SelfPlayHParams.results_queue_cap -> runner results_queue_cap ctor kwarg",
     "selfplay.random_opening_plies": "SelfPlayHParams.random_opening_plies -> runner ctor kwarg",
     "selfplay.log_investigation_metrics": "SelfPlayHParams.log_investigation_metrics -> investigation-metrics gate",

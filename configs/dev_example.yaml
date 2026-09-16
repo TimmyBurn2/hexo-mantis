@@ -108,6 +108,7 @@ selfplay:
   q_rescale: true
   gumbel_m: 16
   gumbel_explore_moves: 10
+  search_stats_every: 8
   random_opening_plies: 0
   mcts:
     n_simulations: 50

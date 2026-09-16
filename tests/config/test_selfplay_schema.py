@@ -33,7 +33,7 @@ VALID_SELFPLAY: dict = {
     "search": {"kind": "puct"},
     "n_workers": 1, "leaf_batch_size": 8, "max_game_moves": 128,
     "c_visit": 50.0,
-    "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10,
+    "c_scale": 1.0, "q_rescale": True, "gumbel_m": 16, "gumbel_explore_moves": 10, "search_stats_every": 8,
     "results_queue_cap": 10_000, "random_opening_plies": 0,
     "log_investigation_metrics": True,
     "mcts": dict(VALID_MCTS),
@@ -52,7 +52,8 @@ INFERENCE_FIELDS = sorted(VALID_INFERENCE)
 SELFPLAY_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("n_workers", 0), ("leaf_batch_size", 0), ("max_game_moves", 0),
     ("c_visit", 0.0), ("c_scale", 0.0), ("gumbel_m", 0),
-    ("gumbel_explore_moves", -1), ("results_queue_cap", 0), ("random_opening_plies", -1),
+    ("gumbel_explore_moves", -1), ("search_stats_every", -1), ("results_queue_cap", 0),
+    ("random_opening_plies", -1),
 ]
 INFERENCE_BOUND_VIOLATIONS: list[tuple[str, object]] = [
     ("inference_batch_size", 0), ("inference_max_wait_ms", -1),
@@ -264,3 +265,17 @@ def test_q_rescale_is_required_with_no_default() -> None:
         SelfplayConfig.model_validate(block)
     assert any(err["loc"] == ("q_rescale",) and err["type"] == "missing"
                for err in excinfo.value.errors()), excinfo.value.errors()
+
+
+def test_search_stats_every_is_required_non_negative_and_has_no_default() -> None:
+    """`selfplay.search_stats_every` samples 1-in-N self-play games for the search-stats record
+    (CARD-SELFPLAY-SEARCH-STATS, R355(d)); 0 is off. Required: a defaulted sample rate is a
+    producer whose existence a config cannot see."""
+    assert SelfplayConfig.model_validate(_selfplay(search_stats_every=8)).search_stats_every == 8
+    assert SelfplayConfig.model_validate(_selfplay(search_stats_every=0)).search_stats_every == 0
+    missing = _selfplay()
+    del missing["search_stats_every"]
+    with pytest.raises(ValidationError, match="search_stats_every"):
+        SelfplayConfig.model_validate(missing)
+    with pytest.raises(ValidationError, match="search_stats_every"):
+        SelfplayConfig.model_validate(_selfplay(search_stats_every=-1))
