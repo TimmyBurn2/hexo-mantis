@@ -24,6 +24,10 @@ from pathlib import Path
 #: are not here: they change how a test runs, never whether.
 DESELECTING: frozenset[str] = frozenset({"slow", "skip", "skipif", "integration"})
 
+#: `pytest.<name>(...)` CALLS that deselect from inside a body — invisible to a decorator scan
+#: (B-9): 17 body-level `pytest.skip(` and 8 `importorskip` sat in 12 files, 7 declared nowhere.
+BODY_SKIPS: frozenset[str] = frozenset({"skip", "importorskip"})
+
 #: Stand-in test name for the module-level `pytestmark` form, which takes a whole file out of a
 #: tier in one line and carries no decorator.
 MODULE_SCOPE = "<module>"
@@ -41,8 +45,17 @@ def _is_mark_root(node: ast.expr) -> bool:
             and isinstance(node.value, ast.Name) and node.value.id == "pytest")
 
 
+def _is_body_skip(node: ast.AST) -> str | None:
+    """The `skip`/`importorskip` of a `pytest.<name>(...)` call, else `None`."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) \
+            and node.func.attr in BODY_SKIPS and isinstance(node.func.value, ast.Name) \
+            and node.func.value.id == "pytest":
+        return node.func.attr
+    return None
+
+
 def census(tests_root: Path) -> set[Row]:
-    """`(path, test, marker)` for every deselecting marker under ``tests_root``.
+    """`(path, test, marker)` per deselecting marker or body-level skip call under ``tests_root``.
 
     Raises:
         SyntaxError: a test module does not parse. Deliberately NOT caught — a census that
@@ -54,13 +67,17 @@ def census(tests_root: Path) -> set[Row]:
         rel = path.relative_to(tests_root.parent).as_posix()
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
-                    and node.name.startswith("test_"):
-                for decorator in node.decorator_list:
-                    func = decorator.func if isinstance(decorator, ast.Call) else decorator
-                    if isinstance(func, ast.Attribute) and _is_mark_root(func.value) \
-                            and func.attr in DESELECTING:
-                        rows.add((rel, node.name, func.attr))
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.name.startswith("test_"):
+                    for decorator in node.decorator_list:
+                        func = decorator.func if isinstance(decorator, ast.Call) else decorator
+                        if isinstance(func, ast.Attribute) and _is_mark_root(func.value) \
+                                and func.attr in DESELECTING:
+                            rows.add((rel, node.name, func.attr))
+                for inner in ast.walk(node):
+                    kind = _is_body_skip(inner)
+                    if kind is not None:
+                        rows.add((rel, node.name, kind))
             elif isinstance(node, ast.Assign) and any(
                 isinstance(t, ast.Name) and t.id == "pytestmark" for t in node.targets
             ):
@@ -68,6 +85,13 @@ def census(tests_root: Path) -> set[Row]:
                     if isinstance(inner, ast.Attribute) and _is_mark_root(inner.value) \
                             and inner.attr in DESELECTING:
                         rows.add((rel, MODULE_SCOPE, inner.attr))
+        # Module-scope calls: `pytest.importorskip("x")` at the top of a file, or a
+        # `pytest.skip(..., allow_module_level=True)`.
+        for stmt in tree.body:
+            for inner in ast.walk(stmt):
+                kind = _is_body_skip(inner)
+                if kind is not None and not isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                    rows.add((rel, MODULE_SCOPE, kind))
     return rows
 
 
@@ -87,6 +111,10 @@ def load_declaration(path: Path) -> set[Row]:
             "pass over any marker in the tree — the phantom-gate class (LAW-07)."
         )
     return rows
+
+
+def _spell(marker: str) -> str:
+    return f"pytest.{marker}(...)" if marker == "importorskip" else f"@pytest.mark.{marker}"
 
 
 def compare(observed: set[Row], declared: set[Row]) -> tuple[list[Row], list[Row]]:
@@ -161,9 +189,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"tier census: {len(observed)} deselected test(s), all declared")
         return 0
     for row in undeclared:
-        print(f"UNDECLARED  {row[0]}::{row[1]}  @pytest.mark.{row[2]}", file=sys.stderr)
+        print(f"UNDECLARED  {row[0]}::{row[1]}  {_spell(row[2])}", file=sys.stderr)
     for row in stale:
-        print(f"STALE       {row[0]}::{row[1]}  @pytest.mark.{row[2]}", file=sys.stderr)
+        print(f"STALE       {row[0]}::{row[1]}  {_spell(row[2])}", file=sys.stderr)
     print(
         f"\ntier census FAIL: {len(undeclared)} undeclared, {len(stale)} stale.\n"
         "  A DESELECTED test is still COLLECTED, so the gate-3c floor, the suite's own green\n"

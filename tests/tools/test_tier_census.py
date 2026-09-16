@@ -69,6 +69,33 @@ def test_both_marker_spellings_are_seen(tmp_path: Path) -> None:
     }
 
 
+def test_a_body_level_skip_and_an_importorskip_are_censused(tmp_path: Path) -> None:
+    """B-9 (R355(e)): a body-level `pytest.skip(...)` or `importorskip` deselects like a decorator."""
+    suite = tmp_path / "tests"
+    suite.mkdir()
+    (suite / "test_body.py").write_text(
+        "import pytest\n\nyaml = pytest.importorskip(\"yaml\")\n\n\n"
+        "def _require_thing() -> None:\n    pytest.skip(\"no thing here\")\n\n\n"
+        "def test_a() -> None:\n    _require_thing()\n\n\n"
+        "def test_b() -> None:\n    if True:\n        pytest.skip(\"host\")\n\n\n"
+        "def test_c() -> None:\n    pytest.importorskip(\"scipy\")\n",
+        encoding="utf-8")
+    assert TOOL.census(suite) == {
+        ("tests/test_body.py", TOOL.MODULE_SCOPE, "importorskip"),
+        ("tests/test_body.py", "_require_thing", "skip"),
+        ("tests/test_body.py", "test_b", "skip"),
+        ("tests/test_body.py", "test_c", "importorskip"),
+    }
+
+
+def test_a_string_naming_pytest_skip_is_not_a_call(tmp_path: Path) -> None:
+    suite = tmp_path / "tests"
+    suite.mkdir()
+    (suite / "test_prose.py").write_text(
+        "def test_a() -> None:\n    assert \"pytest.skip(\" not in \"\"\n", encoding="utf-8")
+    assert TOOL.census(suite) == set()
+
+
 def test_a_non_deselecting_marker_is_not_censused(tmp_path: Path) -> None:
     """The control. `parametrize` changes HOW a test runs, never WHETHER — declaring it would
     make the declaration a list of every marker in the repo and stop being reviewable."""
