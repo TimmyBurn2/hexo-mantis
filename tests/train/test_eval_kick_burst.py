@@ -80,19 +80,15 @@ def test_the_kick_outcomes_are_or_folded_across_the_burst() -> None:
     assert "eval_skipped_busy = False" in outer
 
 
-def test_the_kick_still_guards_on_the_interval_modulo() -> None:
-    """The fix must not become 'kick every step'.
-
-    Moving the call inside the loop without keeping `self._train_step % cfg.eval_interval != 0`
-    would burn a round index per step and turn the eval cadence into 'continuous'. The modulo is
-    what makes per-step TESTING correct rather than per-step firing.
-    """
+def test_the_kick_still_guards_on_the_round_index_advance() -> None:
+    """The fix must not become 'kick every step': since B-3 (R355(e)) the guard is the round
+    INDEX advancing past the last kicked one, which the modulo could not see after a resume."""
     tree = ast.parse(_STEP_PY.read_text(encoding="utf-8"))
     kick = next(n for n in ast.walk(tree)
                 if isinstance(n, ast.FunctionDef) and n.name == "_maybe_kick_eval")
     src = ast.unparse(kick)
-    assert "self._train_step % cfg.eval_interval != 0" in src, (
-        "the interval modulo guard is gone — the kick would fire every training step"
+    assert "round_idx <= self._eval_round_last_step" in src, (
+        "the round-index guard is gone — the kick would fire every training step"
     )
     assert "self._eval_round_last_step" in src, (
         "the once-per-round-index latch is gone — one boundary could kick twice"

@@ -15,6 +15,7 @@ import base64
 import dataclasses
 import hashlib
 import json
+import logging
 import os
 import random
 from pathlib import Path
@@ -22,6 +23,8 @@ from typing import Any
 
 import numpy as np
 import torch
+
+_LOG = logging.getLogger(__name__)
 
 #: Appended to the checkpoint's own filename, so a sidecar can never be mistaken for a checkpoint
 #: and the checkpoint grammar still parses the stem it is derived from.
@@ -180,6 +183,8 @@ class ResumeState:
     last_p_hat: dict[str, float]
     anchor_sha256: str | None
     rng: dict[str, Any]
+    #: The last eval round index the coordinator KICKED; -1 = never, or a sidecar predating it.
+    eval_round_last_step: int = -1
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -217,9 +222,22 @@ class ResumeState:
                 last_p_hat={str(k): float(v) for k, v in payload["last_p_hat"].items()},
                 anchor_sha256=payload["anchor_sha256"],
                 rng={str(k): v for k, v in payload["rng"].items()},
+                eval_round_last_step=_eval_round_last_step(payload),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ResumeStateError(f"sidecar is malformed: {exc}") from exc
+
+
+def _eval_round_last_step(payload: dict[str, Any]) -> int:
+    """`-1` (unknown) for a sidecar written before the field existed, said once in the log."""
+    if "eval_round_last_step" not in payload:
+        _LOG.warning(
+            "resume_state_predates_eval_round_last_step step=%s — the boundary round is "
+            "re-kicked once if this resume lands on an eval_interval multiple (B-3)",
+            payload.get("step"),
+        )
+        return -1
+    return int(payload["eval_round_last_step"])
 
 
 def write_resume_state(state: ResumeState, checkpoint_path: str | Path) -> Path:

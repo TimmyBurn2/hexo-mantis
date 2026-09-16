@@ -849,6 +849,10 @@ def compose_run(
                 sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,
                 heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync,
             )
+        if resume_state is not None:
+            # The last KICKED round travels with the ring: a resume at an exact eval_interval
+            # multiple kicks that boundary's round iff the stop did not (B-3).
+            coordinator.restore_eval_round_state(resume_state.eval_round_last_step)
 
         # NOTHING is swallowed. The old blanket `except Exception -> log -> return` swallowed
         # actor-SYNC failures into an exit-0 return — a run that looks launched and never

@@ -148,7 +148,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   427 KB) carry no `shard_closed` row and are therefore unreceipted by the puller; the bytes are
   on disk and mirrored (line-buffered writes, `iter_run_games` scans shards). LAW-16's save is
   intact; the exit is not orderly. Fix shape: a RESUMABLE stop terminates the in-flight round at
-  once (a resumed run re-kicks rounds from its restored counter; the round's result is not owed)
+  once (a resumed run re-kicks the boundary round its sidecar says was never kicked — the
+  `eval_round_last_step` field, B-3/R355(e), 2026-09-16; the round's result is not owed)
   and closes the recorder before anything that can wait; and the supervisor's grace must exceed
   the child's worst orderly teardown, stated as a relation at the mint rather than two numbers.
 - **CARD-DRAIN-POLLER-RACE — `drain_pending` can return `None` while the poller finalises the

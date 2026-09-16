@@ -291,6 +291,62 @@ def test_steps_per_hour_after_a_resume_counts_steps_since_boot() -> None:
     )
 
 
+class _KickSpy:
+    """A pipeline that records the step of every kick and completes nothing."""
+
+    def __init__(self) -> None:
+        self.kicks: list[int] = []
+        self.round_counter = 0
+        self.last_p_hat: dict[str, float] = {}
+
+    def run_evaluation(self, model, step, best, *, full_config, best_model_step,
+                       ignore_stride=False) -> dict:
+        self.kicks.append(int(step))
+        return {"kicked": True}
+
+    def drain_pending(self):
+        return None
+
+    def poll_completed(self):
+        return None
+
+
+def _boot_at(step: int, *, eval_interval: int):
+    h = _make_coordinator(config=_make_config(eval_interval=eval_interval, log_interval=1),
+                          eval_pipeline=_KickSpy())
+    h.trainer.step = step
+    h.coord._train_step = step
+    h.coord._boot_step = step
+    return h
+
+
+def test_a_fresh_run_crossing_the_boundary_kicks_once() -> None:
+    h = _boot_at(2999, eval_interval=3000)
+    h.pool.games_completed = 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == [3000]
+    h.pool.games_completed += 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == [3000], "the round is kicked once, not on every later step"
+
+
+def test_a_resume_exactly_at_the_boundary_with_no_record_kicks_it() -> None:
+    """B-3 (R355(e)): resumed at 3000 the old rule tested `3001 % 3000` and never kicked round 1."""
+    h = _boot_at(3000, eval_interval=3000)
+    h.coord.restore_eval_round_state(-1)  # a sidecar that predates the field
+    h.pool.games_completed = 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == [3001], "round 1 kicks on the first step after the resume"
+
+
+def test_a_resume_whose_sidecar_says_the_round_was_kicked_does_not_repeat_it() -> None:
+    h = _boot_at(3000, eval_interval=3000)
+    h.coord.restore_eval_round_state(1)
+    h.pool.games_completed = 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == []
+
+
 def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
     """The `sealbot_wr_warn` producer test on the SHIPPED DEFAULT posture: N consecutive
     low-WR results delivered through the drain callback emit a VISIBLE warn carrying the

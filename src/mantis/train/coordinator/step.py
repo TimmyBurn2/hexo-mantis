@@ -325,6 +325,7 @@ class StepCoordinator:
             # A placeholder the publisher replaces: the ring's hash is unknown until written.
             ring=None,
             rng=_resume_state.capture_rng_streams(),
+            eval_round_last_step=int(self._eval_round_last_step),
         )
 
         def _write_ring(path: Path) -> None:
@@ -1053,10 +1054,10 @@ class StepCoordinator:
         `eval_skipped_busy` (`ack.get("kicked") is False`) — never for WR."""
         if self.eval_pipeline is None or cfg.eval_interval <= 0:
             return False, False
+        # The round INDEX advancing is the kick: in-run that is the exact multiple (the kick runs
+        # per training step); after a resume it is what a `% interval` test could not see (B-3).
         round_idx = self._train_step // cfg.eval_interval
-        if round_idx <= 0 or round_idx == self._eval_round_last_step:
-            return False, False
-        if self._train_step % cfg.eval_interval != 0:
+        if round_idx <= 0 or round_idx <= self._eval_round_last_step:
             return False, False
         self._eval_round_last_step = round_idx
         best = getattr(self.anchor_state, "best_model", None)
@@ -1068,6 +1069,10 @@ class StepCoordinator:
         eval_skipped_busy = bool(ack.get("kicked") is False)
         eval_kicked_off = bool(ack.get("kicked") is True)
         return eval_kicked_off, eval_skipped_busy
+
+    def restore_eval_round_state(self, last_kicked_round: int) -> None:
+        """The sidecar's last KICKED round index, restored before the first step (B-3)."""
+        self._eval_round_last_step = int(last_kicked_round)
 
     def _poll_eval_results(self) -> bool:
         if self.eval_pipeline is None:
