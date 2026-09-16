@@ -180,6 +180,10 @@ class MCTSTree:
         """Raises:
         SelectionDesync: the tree and the board disagree about what has been played.
         """
+    def select_leaves_forced(self, children: list[int]) -> list[Board]:
+        """One leaf per forced root child, no transposition fast path (A-1). Raises ValueError
+        for a child the root does not own, SelectionDesync on a tree/board disagreement."""
+        ...
     def expand_and_backup(
         self, policies: list[list[float]], values: list[float]
     ) -> None: ...

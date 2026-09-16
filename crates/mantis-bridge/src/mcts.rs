@@ -203,6 +203,35 @@ impl PyMCTSTree {
             .collect()
     }
 
+    /// One leaf per FORCED root child, in order, with no transposition fast path: a leaf that is
+    /// already expanded is still returned (and re-backed-up by `expand_and_backup`), so a driver
+    /// that credits leaves RETURNED spends its whole budget. Always call `expand_and_backup`
+    /// with the same number of results before the next call.
+    ///
+    /// Raises:
+    ///     ValueError: a child index is not one of the ROOT's children.
+    ///     SelectionDesync: tree and board disagree about what has been played.
+    pub fn select_leaves_forced(
+        &mut self,
+        py: Python<'_>,
+        children: Vec<u32>,
+    ) -> PyResult<Vec<Py<PyBoard>>> {
+        for &child in &children {
+            self.inner
+                .set_forced_root_child(Some(child))
+                .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        }
+        let boards = py
+            .detach(|| self.inner.select_leaves_forced(&children))
+            .map_err(|desync| SelectionDesync::new_err(desync.to_string()))?;
+        self.forced_root_child = None;
+        self.pending_boards = boards.clone();
+        boards
+            .into_iter()
+            .map(|b| Py::new(py, PyBoard::from_inner(b)))
+            .collect()
+    }
+
     /// Expand leaves and backup values from the last `select_leaves` call: `policies` is one
     /// vector per leaf of length `board_size * board_size + 1`, `values` one scalar in [-1, 1]
     /// per leaf from the leaf's current player.
