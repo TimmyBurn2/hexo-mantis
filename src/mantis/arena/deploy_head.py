@@ -203,15 +203,12 @@ class DeployHeadPlayer:
             child = tree.gumbel_root_select()
             if child is None:
                 break
-            tree.forced_root_child = child
-            try:
-                # ONE leaf: consecutive sims at a considered level land on DIFFERENT children.
-                leaves = tree.select_leaves(1)
-                if not leaves:
-                    break
-                self._evaluate(tree, leaves)
-            finally:
-                tree.forced_root_child = None
+            # The FORCED descent, not `select_leaves(1)`: the batch path expands a transposition
+            # hit inline and returns nothing, which this loop read as exhaustion (A-1).
+            leaves = tree.select_leaves_forced([child])
+            if not leaves:
+                break
+            self._evaluate(tree, leaves)
             spent += len(leaves)
         return tree.gumbel_root_best_move()
 
