@@ -65,6 +65,8 @@
 # can never be mistaken for a measured one in a log, and no CI step passes either (pinned by
 # tests/tools/test_test_count_gate.py's parse of every `run:` body).
 set -euo pipefail
+# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+export UV_NO_SYNC=1
 
 FLOOR_FILE="tools/ci_gates/test_count_floor.txt"
 # The ONE sanctioned way the floor goes DOWN. Absent on a normal tree; when present it holds

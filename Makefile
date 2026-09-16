@@ -16,11 +16,11 @@ build.native:
 	RUSTFLAGS="-C target-cpu=native" $(UV) sync --reinstall-package mantis-engine
 
 test:
-	$(UV) run pytest -m "not integration and not slow"
+	UV_NO_SYNC=1 $(UV) run pytest -m "not integration and not slow"
 	cargo test --workspace --locked
 
 test.integration:
-	$(UV) run pytest -m integration
+	UV_NO_SYNC=1 $(UV) run pytest -m integration
 
 # CI gate 14 (R98): curated lint/type gate — zero-error baseline, self-tested trigger.
 lint:
@@ -49,12 +49,12 @@ gates.exit:
 # at HEAD is drawn as a stated gap, never as a zero.
 #   make dashboard EVENTS=<run>/events.jsonl OUT=/tmp/run.html [LADDER=<run>/eval_ladder_state.json]
 dashboard:
-	uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
+	UV_NO_SYNC=1 uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
 	  $(if $(LADDER),--ladder-state "$(LADDER)",)
 
 #   make viewer RUNS="run6=<mirror>/run6/logs/games shakedown7=<mirror>/shakedown7/logs/games" OUT=<dir>
 viewer:
-	uv run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
+	UV_NO_SYNC=1 uv run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1

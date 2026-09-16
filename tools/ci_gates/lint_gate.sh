@@ -44,6 +44,8 @@
 # arm through stdin/scratch fixtures and requires each arm to go RED, then re-runs the real
 # gate. A gate whose trigger cannot fire is a phantom input (LAW-07's own class).
 set -u
+# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+export UV_NO_SYNC=1
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"

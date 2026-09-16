@@ -14,6 +14,8 @@
 # migration_plan.md places "audit CLI exit 0" in the cutover battery, not per-WP. It arms
 # here once the tree is populated post-cutover.
 set -euo pipefail
+# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+export UV_NO_SYNC=1
 
 REG="crates/mantis-encoding/src/registry.toml"
 [ -f "$REG" ] || { echo "gate 8: FAIL — expected registry at $REG (ported in WP3); absent."; exit 1; }
