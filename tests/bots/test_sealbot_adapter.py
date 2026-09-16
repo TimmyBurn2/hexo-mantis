@@ -31,7 +31,7 @@ import pytest
 from mantis._engine import Board
 
 _REPO = Path(__file__).resolve().parents[2]
-_SCAN_ROOTS = (_REPO / "src", _REPO / "tools")
+_SCAN_ROOTS = (_REPO / "src", _REPO / "tools", _REPO / "tests")
 
 #: `int64(time_limit * 1e6)` at 1e6 s is 1e12 microseconds, four orders below int64 max — provably
 #: non-overflowing AND provably unreachable within a game. Asserted as the LITERAL, never through a
@@ -365,7 +365,7 @@ def _sys_path_writes(tree: ast.AST) -> list[int]:
     return sorted(lines)
 
 
-def test_no_sys_path_write_anywhere_under_src_or_tools() -> None:
+def test_no_sys_path_write_anywhere_under_src_tools_or_tests() -> None:
     """LAW-17/R5, by AST walk rather than grep: this repo carries prose about `sys.path`, and a
     text scan would false-positive on it. The detector is self-tested inline so the row cannot
     pass by walking nothing."""
