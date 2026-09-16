@@ -853,6 +853,9 @@ def compose_run(
             # The last KICKED round travels with the ring: a resume at an exact eval_interval
             # multiple kicks that boundary's round iff the stop did not (B-3).
             coordinator.restore_eval_round_state(resume_state.eval_round_last_step)
+            # The abort windows and guard counters the stop held, so an armed abort's earliest
+            # fire does not move by a window on every resume (B-7).
+            coordinator.restore_guard_state(resume_state.guards)
 
         # NOTHING is swallowed. The old blanket `except Exception -> log -> return` swallowed
         # actor-SYNC failures into an exit-0 return — a run that looks launched and never

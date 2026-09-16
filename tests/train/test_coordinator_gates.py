@@ -424,6 +424,50 @@ def test_draw_rate_gate_fires_on_live_producer() -> None:
     )
 
 
+def test_a_resume_restores_the_draw_rate_window_so_the_third_observation_fires() -> None:
+    """B-7 (R355(e)): the resume emptied the abort windows (run7's draw-rate abort moved 25k -> 26k)."""
+    spec = DrawRateAbortSpec(threshold=0.4, min_step=0, N_pool_min=10, consec=3)
+    before = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+                               config=_make_config(draw_rate_abort=spec))
+    for _ in range(2):
+        before.pool.games_completed += 5
+        before.coord.step()
+    assert before.shutdown.running is True and len(before.coord._draw_rate_history) == 2
+    carried = before.coord.guard_state()
+
+    resumed = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+                                config=_make_config(draw_rate_abort=spec))
+    resumed.coord.restore_guard_state(carried)
+    resumed.pool.games_completed += 5
+    resumed.coord.step()
+    assert resumed.shutdown.running is False, "the third observation, first after the resume, fires"
+
+    fresh = _make_coordinator(pool=FakePool(draw_counts=(90, 100)),
+                              config=_make_config(draw_rate_abort=spec))
+    fresh.pool.games_completed += 5
+    fresh.coord.step()
+    assert fresh.shutdown.running is True, "the control: without the restore one observation is one"
+
+
+def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> None:
+    import json
+
+    h = _make_coordinator()
+    h.coord._wr_history = [(3000, 0.4), (6000, 0.3)]
+    h.coord._wr_history_rung = "sealbot_d5"
+    h.coord._consec_high_gn = 2
+    h.coord._initial_policy_loss = 2.5
+    h.trainer.skipped_steps = 4
+    state = json.loads(json.dumps(h.coord.guard_state()))
+    other = _make_coordinator()
+    other.coord.restore_guard_state(state)
+    assert other.coord._wr_history == [(3000, 0.4), (6000, 0.3)]
+    assert other.coord._wr_history_rung == "sealbot_d5"
+    assert other.coord._consec_high_gn == 2 and other.coord._initial_policy_loss == 2.5
+    assert other.trainer.skipped_steps == 4
+    other.coord.restore_guard_state({})  # a pre-field sidecar: nothing to restore, nothing raised
+
+
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
     """On the EXPLICITLY disarmed posture a high draw rate NEVER fires. Bites a gate that ships
     hot against the config the operator actually wrote."""

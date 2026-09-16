@@ -13,6 +13,7 @@ One defect per group of rows:
 from __future__ import annotations
 
 import ast
+import dataclasses
 import json
 import random
 from pathlib import Path
@@ -214,3 +215,18 @@ def test_a_sidecar_predating_the_kicked_round_field_reads_unknown(tmp_path: Path
     del payload["eval_round_last_step"]
     side.write_text(json.dumps(payload), encoding="utf-8")
     assert load_resume_state(ckpt).eval_round_last_step == -1
+
+
+def test_the_guards_round_trip_and_a_pre_field_sidecar_reads_empty(tmp_path: Path) -> None:
+    """B-7: the windows travel with the ring; an older sidecar reads `{}`, never raises."""
+    ckpt = tmp_path / "run6_00000750_abcdef12.ckpt"
+    ckpt.write_bytes(b"x")
+    state = dataclasses.replace(_state(tmp_path), guards={"draw_rate_history": [0.9, 0.8],
+                                                          "trainer": {"skipped_steps": 1}})
+    write_resume_state(state, ckpt)
+    assert load_resume_state(ckpt).guards == state.guards
+    side = sidecar_path_for(ckpt)
+    payload = json.loads(side.read_text(encoding="utf-8"))
+    del payload["guards"]
+    side.write_text(json.dumps(payload), encoding="utf-8")
+    assert load_resume_state(ckpt).guards == {}

@@ -185,6 +185,9 @@ class ResumeState:
     rng: dict[str, Any]
     #: The last eval round index the coordinator KICKED; -1 = never, or a sidecar predating it.
     eval_round_last_step: int = -1
+    #: The coordinator's abort windows and guard counters (`StepCoordinator.guard_state`, B-7);
+    #: `{}` for a sidecar predating the field.
+    guards: dict[str, Any] = dataclasses.field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return dataclasses.asdict(self)
@@ -223,6 +226,7 @@ class ResumeState:
                 anchor_sha256=payload["anchor_sha256"],
                 rng={str(k): v for k, v in payload["rng"].items()},
                 eval_round_last_step=_eval_round_last_step(payload),
+                guards=_guards(payload),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise ResumeStateError(f"sidecar is malformed: {exc}") from exc
@@ -238,6 +242,21 @@ def _eval_round_last_step(payload: dict[str, Any]) -> int:
         )
         return -1
     return int(payload["eval_round_last_step"])
+
+
+def _guards(payload: dict[str, Any]) -> dict[str, Any]:
+    """`{}` for a sidecar written before the field existed, said once in the log."""
+    if "guards" not in payload:
+        _LOG.warning(
+            "resume_state_predates_guards step=%s — the abort windows and guard counters start "
+            "empty, so an armed abort's earliest fire is one window later (B-7)",
+            payload.get("step"),
+        )
+        return {}
+    guards = payload["guards"]
+    if not isinstance(guards, dict):
+        raise ResumeStateError(f"sidecar guards is {type(guards).__name__}, not an object")
+    return dict(guards)
 
 
 def write_resume_state(state: ResumeState, checkpoint_path: str | Path) -> Path:

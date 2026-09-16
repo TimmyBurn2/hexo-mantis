@@ -328,6 +328,7 @@ class StepCoordinator:
             ring=None,
             rng=_resume_state.capture_rng_streams(),
             eval_round_last_step=int(self._eval_round_last_step),
+            guards=self.guard_state(),
         )
 
         def _write_ring(path: Path) -> None:
@@ -1077,6 +1078,53 @@ class StepCoordinator:
     def restore_eval_round_state(self, last_kicked_round: int) -> None:
         """The sidecar's last KICKED round index, restored before the first step (B-3)."""
         self._eval_round_last_step = int(last_kicked_round)
+
+    #: The trainer's guard counters that ride the sidecar beside the coordinator's windows.
+    _TRAINER_COUNTERS = ("skipped_steps", "nonfinite_loss_microbatches", "nonfinite_grad_steps")
+
+    def guard_state(self) -> dict[str, Any]:
+        """The abort windows and guard counters a resume must carry (B-7): JSON-shaped."""
+        trainer = self.trainer
+        return {
+            "draw_rate_history": [float(v) for v in self._draw_rate_history],
+            "wr_history": [[int(step), float(wr)] for step, wr in self._wr_history],
+            "wr_history_rung": self._wr_history_rung,
+            "consec_high_gn": int(self._consec_high_gn),
+            "initial_policy_loss": self._initial_policy_loss,
+            "policy_loss_reference": self._policy_loss_reference,
+            "policy_loss_window_means": [float(v) for v in self._policy_loss_window_means],
+            "loss_window": [float(v) for v in self._loss_window],
+            "ply_cap_rate": self._ply_cap_rate,
+            "trainer": {name: int(getattr(trainer, name, 0)) for name in self._TRAINER_COUNTERS
+                        if trainer is not None and hasattr(trainer, name)},
+        }
+
+    def restore_guard_state(self, state: Mapping[str, Any]) -> None:
+        """Restore what `guard_state` captured; an absent key keeps the fresh default (B-7)."""
+        if "draw_rate_history" in state:
+            self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
+        if "wr_history" in state:
+            self._wr_history = [(int(s), float(w)) for s, w in state["wr_history"]]
+        if "wr_history_rung" in state:
+            self._wr_history_rung = state["wr_history_rung"]
+        if "consec_high_gn" in state:
+            self._consec_high_gn = int(state["consec_high_gn"])
+        if "initial_policy_loss" in state:
+            v = state["initial_policy_loss"]
+            self._initial_policy_loss = None if v is None else float(v)
+        if "policy_loss_reference" in state:
+            v = state["policy_loss_reference"]
+            self._policy_loss_reference = None if v is None else float(v)
+        if "policy_loss_window_means" in state:
+            self._policy_loss_window_means = [float(v) for v in state["policy_loss_window_means"]]
+        if "loss_window" in state:
+            self._loss_window = [float(v) for v in state["loss_window"]]
+        if "ply_cap_rate" in state:
+            v = state["ply_cap_rate"]
+            self._ply_cap_rate = None if v is None else float(v)
+        for name, value in dict(state.get("trainer", {})).items():
+            if name in self._TRAINER_COUNTERS and self.trainer is not None:
+                setattr(self.trainer, name, int(value))
 
     def _poll_eval_results(self) -> bool:
         if self.eval_pipeline is None:
