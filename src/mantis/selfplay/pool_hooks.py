@@ -54,6 +54,7 @@ class RecorderLike(Protocol):
         game_id_byte_hash: str,
         served_sims: int,
         move_arms: list[tuple[int, bool]],
+        search_stats: list[Any] | None,
     ) -> None: ...
 
     def latest_replay_path(self) -> Path | None: ...
@@ -92,6 +93,7 @@ class NullRecorder:
         game_id_byte_hash: str,
         served_sims: int,
         move_arms: list[tuple[int, bool]],
+        search_stats: list[Any] | None,
     ) -> None:
         return None
 

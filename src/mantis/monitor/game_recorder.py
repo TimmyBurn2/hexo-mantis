@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from mantis.monitor.game_record import GameRecordWriter, selfplay_record
+from mantis.monitor.game_record import GameRecordWriter, PositionStatsRow, selfplay_record
 
 #: Rust `winner_code` -> the record's seat vocabulary. `0` is a DRAW, `1` is the first mover
 #: and `2` the second (`pool_drain._WINNER_NAMES = ("draw", "x", "o")`). Anything else is
@@ -61,8 +61,10 @@ class GameRecorder:
         game_id_byte_hash: str,
         served_sims: int,
         move_arms: list[tuple[int, bool]],
+        search_stats: list[PositionStatsRow] | None = None,
     ) -> None:
-        """Write this game. Never raises — the writer owns the failure posture."""
+        """Write this game (`search_stats` only on a sampled game). Never raises — the writer
+        owns the failure posture."""
         self._writer.write(selfplay_record(
             game_id=game_id,
             run_id=self._run_id,
@@ -76,6 +78,7 @@ class GameRecorder:
             served_sims=served_sims,
             game_id_byte_hash=game_id_byte_hash,
             move_arms=move_arms,
+            search_stats=search_stats,
         ))
 
     def latest_replay_path(self) -> Path | None:

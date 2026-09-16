@@ -168,6 +168,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   the RINGS instead (`INVESTIGATION1_TROUGH_2026-09-13.md`). The sample (rate a minted key with
   a live consumer, the root's prior + visits + completed target per position) is owed before
   run7 if the trough is to be read per position rather than per ring.
+  LANDED 2026-09-16 (R355(d)): `selfplay.search_stats_every` (contract v32) samples 1-in-N games
+  per worker and the record carries per searched ply `root_value`/`root_raw`/`visits`/`q`/`prior`
+  (`docs/contracts/game_record.md`); the completed target is rebuilt from those under any σ.
 - **CARD-WARMSTART-CONTROL — the R340 control's head set, read from the tree.** R350(a) states
   the burst copied ALL heads; `run6-mint` at `d3ba75e` carries the same trunk+policy seam run6
   booted with (the burst's log died with the box, archive v3.54). The frontier measures the head

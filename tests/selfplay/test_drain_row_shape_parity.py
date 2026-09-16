@@ -109,13 +109,14 @@ def test_every_side_of_the_drain_seam_agrees_on_the_row_arity() -> None:
         assert arities == {producer}, f"{name}: scripted rows are {arities}, producer is {producer}"
 
 
-def test_the_checker_bites_on_a_consumer_that_unpacks_the_old_ten() -> None:
-    """Mutation self-test: the pre-fix consumer shape is detected as a disagreement."""
+def test_the_checker_bites_on_a_consumer_that_unpacks_the_old_nine() -> None:
+    """Mutation self-test: the pre-R355(d) consumer shape (no `search_stats`) is detected as a
+    disagreement."""
     mutated = _POOL_DRAIN.read_text(encoding="utf-8").replace(
+        "terminal_reason, mv_min, mv_max, mv_distinct, move_arms, search_stats) = entry",
         "terminal_reason, mv_min, mv_max, mv_distinct, move_arms) = entry",
-        "terminal_reason, mv_min, mv_max, mv_distinct,\n             seeded, solver_fires) = entry",
     )
-    assert consumer_unpack_arity(mutated) == 10
+    assert consumer_unpack_arity(mutated) == 9
     assert consumer_unpack_arity(mutated) != rust_row_arity(_RUST_RUNNER.read_text(encoding="utf-8"))
 
 

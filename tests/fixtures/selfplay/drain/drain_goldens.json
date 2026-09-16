@@ -123,6 +123,24 @@
       50,
       true
      ]
+    ],
+    [
+     [
+      0,
+      0.0,
+      null,
+      [
+       [
+        [
+         0,
+         0
+        ],
+        5,
+        0.0,
+        1.0
+       ]
+      ]
+     ]
     ]
    ],
    [
@@ -168,7 +186,8 @@
       50,
       true
      ]
-    ]
+    ],
+    null
    ],
    [
     250,
@@ -205,7 +224,8 @@
       50,
       true
      ]
-    ]
+    ],
+    null
    ],
    [
     30,
@@ -216,7 +236,8 @@
     0,
     0,
     1,
-    []
+    [],
+    null
    ],
    [
     15,
@@ -261,7 +282,8 @@
       50,
       true
      ]
-    ]
+    ],
+    null
    ],
    [
     9,
@@ -298,14 +320,15 @@
       50,
       true
      ]
-    ]
+    ],
+    null
    ]
   ],
   "collect_data_input_npz": "c3b_collect_data_input.npz",
   "graph_rows_recipe": "graph_rows(): 3 opaque tuples (f32[6], i64[4], int, float)"
  },
  "_nondeterminism": {
-  "game_id": "uuid4().hex per game_complete event \u2014 EXCLUDED from this golden entirely; only the [0-9a-f]{32} format is contract (PREREG C-03)."
+  "game_id": "uuid4().hex per game_complete event — EXCLUDED from this golden entirely; only the [0-9a-f]{32} format is contract (PREREG C-03)."
  },
  "variants": {
   "dense_5s_crossed": {
@@ -728,7 +751,25 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 11
+     "plies": 11,
+     "search_stats": [
+      [
+       0,
+       0.0,
+       null,
+       [
+        [
+         [
+          0,
+          0
+         ],
+         5,
+         0.0,
+         1.0
+        ]
+       ]
+      ]
+     ]
     },
     {
      "moves": [
@@ -750,7 +791,8 @@
       ]
      ],
      "winner_code": 2,
-     "plies": 24
+     "plies": 24,
+     "search_stats": null
     },
     {
      "moves": [
@@ -768,12 +810,14 @@
       ]
      ],
      "winner_code": 0,
-     "plies": 250
+     "plies": 250,
+     "search_stats": null
     },
     {
      "moves": [],
      "winner_code": 0,
-     "plies": 30
+     "plies": 30,
+     "search_stats": null
     },
     {
      "moves": [
@@ -795,7 +839,8 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 15
+     "plies": 15,
+     "search_stats": null
     },
     {
      "moves": [
@@ -813,7 +858,8 @@
       ]
      ],
      "winner_code": 3,
-     "plies": 9
+     "plies": 9,
+     "search_stats": null
     }
    ],
    "log_calls": [
@@ -1778,7 +1824,25 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 11
+     "plies": 11,
+     "search_stats": [
+      [
+       0,
+       0.0,
+       null,
+       [
+        [
+         [
+          0,
+          0
+         ],
+         5,
+         0.0,
+         1.0
+        ]
+       ]
+      ]
+     ]
     },
     {
      "moves": [
@@ -1800,7 +1864,8 @@
       ]
      ],
      "winner_code": 2,
-     "plies": 24
+     "plies": 24,
+     "search_stats": null
     },
     {
      "moves": [
@@ -1818,12 +1883,14 @@
       ]
      ],
      "winner_code": 0,
-     "plies": 250
+     "plies": 250,
+     "search_stats": null
     },
     {
      "moves": [],
      "winner_code": 0,
-     "plies": 30
+     "plies": 30,
+     "search_stats": null
     },
     {
      "moves": [
@@ -1845,7 +1912,8 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 15
+     "plies": 15,
+     "search_stats": null
     },
     {
      "moves": [
@@ -1863,7 +1931,8 @@
       ]
      ],
      "winner_code": 3,
-     "plies": 9
+     "plies": 9,
+     "search_stats": null
     }
    ],
    "log_calls": [
@@ -2580,7 +2649,25 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 11
+     "plies": 11,
+     "search_stats": [
+      [
+       0,
+       0.0,
+       null,
+       [
+        [
+         [
+          0,
+          0
+         ],
+         5,
+         0.0,
+         1.0
+        ]
+       ]
+      ]
+     ]
     },
     {
      "moves": [
@@ -2602,7 +2689,8 @@
       ]
      ],
      "winner_code": 2,
-     "plies": 24
+     "plies": 24,
+     "search_stats": null
     },
     {
      "moves": [
@@ -2620,12 +2708,14 @@
       ]
      ],
      "winner_code": 0,
-     "plies": 250
+     "plies": 250,
+     "search_stats": null
     },
     {
      "moves": [],
      "winner_code": 0,
-     "plies": 30
+     "plies": 30,
+     "search_stats": null
     },
     {
      "moves": [
@@ -2647,7 +2737,8 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 15
+     "plies": 15,
+     "search_stats": null
     },
     {
      "moves": [
@@ -2665,7 +2756,8 @@
       ]
      ],
      "winner_code": 3,
-     "plies": 9
+     "plies": 9,
+     "search_stats": null
     }
    ],
    "log_calls": [
@@ -3377,7 +3469,25 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 11
+     "plies": 11,
+     "search_stats": [
+      [
+       0,
+       0.0,
+       null,
+       [
+        [
+         [
+          0,
+          0
+         ],
+         5,
+         0.0,
+         1.0
+        ]
+       ]
+      ]
+     ]
     },
     {
      "moves": [
@@ -3399,7 +3509,8 @@
       ]
      ],
      "winner_code": 2,
-     "plies": 24
+     "plies": 24,
+     "search_stats": null
     },
     {
      "moves": [
@@ -3417,12 +3528,14 @@
       ]
      ],
      "winner_code": 0,
-     "plies": 250
+     "plies": 250,
+     "search_stats": null
     },
     {
      "moves": [],
      "winner_code": 0,
-     "plies": 30
+     "plies": 30,
+     "search_stats": null
     },
     {
      "moves": [
@@ -3444,7 +3557,8 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 15
+     "plies": 15,
+     "search_stats": null
     },
     {
      "moves": [
@@ -3462,7 +3576,8 @@
       ]
      ],
      "winner_code": 3,
-     "plies": 9
+     "plies": 9,
+     "search_stats": null
     }
    ],
    "log_calls": [
@@ -4076,7 +4191,25 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 11
+     "plies": 11,
+     "search_stats": [
+      [
+       0,
+       0.0,
+       null,
+       [
+        [
+         [
+          0,
+          0
+         ],
+         5,
+         0.0,
+         1.0
+        ]
+       ]
+      ]
+     ]
     },
     {
      "moves": [
@@ -4098,7 +4231,8 @@
       ]
      ],
      "winner_code": 2,
-     "plies": 24
+     "plies": 24,
+     "search_stats": null
     },
     {
      "moves": [
@@ -4116,12 +4250,14 @@
       ]
      ],
      "winner_code": 0,
-     "plies": 250
+     "plies": 250,
+     "search_stats": null
     },
     {
      "moves": [],
      "winner_code": 0,
-     "plies": 30
+     "plies": 30,
+     "search_stats": null
     },
     {
      "moves": [
@@ -4143,7 +4279,8 @@
       ]
      ],
      "winner_code": 1,
-     "plies": 15
+     "plies": 15,
+     "search_stats": null
     },
     {
      "moves": [
@@ -4161,7 +4298,8 @@
       ]
      ],
      "winner_code": 3,
-     "plies": 9
+     "plies": 9,
+     "search_stats": null
     }
    ],
    "log_calls": [
@@ -4711,7 +4849,7 @@
   "dense_5s_crossed": "dense_pushed.npz",
   "dense_5s_not_crossed": null,
   "graph": "graph_pushed.npz",
-  "dense_no_recent_buffer": "dense_pushed.npz (byte-identical push_many args to dense_5s_crossed \u2014 verified sha-equal at promotion time)",
+  "dense_no_recent_buffer": "dense_pushed.npz (byte-identical push_many args to dense_5s_crossed — verified sha-equal at promotion time)",
   "dense_zero_rows": null
  }
 }

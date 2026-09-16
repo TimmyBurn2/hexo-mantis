@@ -104,7 +104,7 @@ def run_stats_loop(pool: Any) -> None:
 
         for entry in games_batch:
             (plies, winner_code, move_history, worker_id,
-             terminal_reason, mv_min, mv_max, mv_distinct, move_arms) = entry
+             terminal_reason, mv_min, mv_max, mv_distinct, move_arms, search_stats) = entry
             winner = _WINNER_NAMES[winner_code] if winner_code < 3 else "unknown"
             game_length = (plies + 1) // 2  # compound moves
             pool._game_lengths.append(game_length)
@@ -190,6 +190,7 @@ def run_stats_loop(pool: Any) -> None:
                 game_id_byte_hash=_game_id_byte_hash,
                 served_sims=int(pool._effective_sims_per_move),
                 move_arms=move_arms,
+                search_stats=search_stats,
             )
 
         # `_last_buf_emit` is a LOCAL of this loop: a copy hoisted onto the pool and left

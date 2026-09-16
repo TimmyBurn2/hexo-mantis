@@ -39,6 +39,10 @@ _SHARD_RE = re.compile(
 
 _MAX_SHARD_CLAIM_RETRIES = 64
 
+#: One searched ply of a sampled self-play game as the runner hands it over:
+#: `(ply, root_value, root_raw | None, [((q, r), visits, q_root_view, prior), ...])`.
+PositionStatsRow = tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]]]
+
 #: The four channels a game can come from (R344(b) names all four).
 CHANNELS = ("selfplay", "promotion", "external", "random_floor")
 
@@ -254,11 +258,15 @@ def selfplay_record(
     served_sims: int,
     move_arms: list[tuple[int, bool]],
     game_id_byte_hash: str | None = None,
+    search_stats: list[PositionStatsRow] | None = None,
 ) -> dict[str, Any]:
     """Build one self-play game as a record. `step` is the ACTOR step — the weights that played
     this game — and `step_kind` says so; `colors` is ABSENT (both seats are the same net);
-    `search_stats` is a GAP (the ring gets every row at `game_id=-1`); `move_arms` is the runner's
-    `(sims, is_full_search)` per move, written as `move_sims` and `move_arms` (R353(d)).
+    `move_arms` is the runner's `(sims, is_full_search)` per move, written as `move_sims` and
+    `move_arms` (R353(d)); `search_stats` is written for a SAMPLED game only
+    (`selfplay.search_stats_every`, R355(d)): per searched ply, `visits` in the eval channel's
+    `[q, r, n]` shape plus `q` and `prior` arrays parallel to it, and `root_raw` when the search
+    kind stored one; an un-sampled game carries no key.
     Raises: ValueError when `move_arms` and `moves` differ in length."""
     if len(move_arms) != len(moves):
         raise ValueError(
@@ -285,7 +293,23 @@ def selfplay_record(
     if game_id_byte_hash is not None:
         # LAW-04's dedupe input, carried so effective-n is counted off the RECORD.
         record["game_id_byte_hash"] = game_id_byte_hash
+    if search_stats is not None:
+        record["search_stats"] = [_position_entry(*row) for row in search_stats]
     return record
+
+
+def _position_entry(
+    ply: int, root_value: float, root_raw: float | None,
+    children: list[tuple[tuple[int, int], int, float, float]],
+) -> dict[str, Any]:
+    """One searched ply of a sampled self-play game: the eval `visits` shape plus `q`/`prior`."""
+    entry: dict[str, Any] = {"ply": int(ply), "root_value": float(root_value)}
+    if root_raw is not None:
+        entry["root_raw"] = float(root_raw)
+    entry["visits"] = [[int(c[0]), int(c[1]), int(n)] for c, n, _q, _p in children]
+    entry["q"] = [float(q) for _c, _n, q, _p in children]
+    entry["prior"] = [float(p) for _c, _n, _q, p in children]
+    return entry
 
 
 def _arm_label(sims: int, is_full_search: bool) -> str:

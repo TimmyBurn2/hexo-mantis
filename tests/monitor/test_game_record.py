@@ -184,9 +184,33 @@ def test_the_recorder_writes_one_record_per_game_with_the_actor_step(tmp_path: P
         "self-play has no candidate seat; a tautological colors dict would read as information"
     )
     assert "search_stats" not in records[0], (
-        "the self-play stats producer does not exist at HEAD — the field must be ABSENT, "
-        "never an empty list a reader would take for a measured nothing"
+        "an UN-SAMPLED game carries no search_stats key — absent, never an empty list a reader "
+        "would take for a measured nothing"
     )
+
+
+def test_a_sampled_game_writes_the_eval_shaped_visits_plus_q_and_prior(tmp_path: Path) -> None:
+    """R355(d): a sampled self-play game's `search_stats` carries, per searched ply, `visits` in
+    the eval channel's `[q, r, n]` shape (the viewer reads it unchanged) plus `q` and `prior`
+    arrays PARALLEL to `visits`, and `root_raw` when the kind stored one. No `by` on self-play."""
+    recorder = GameRecorder(record_dir=tmp_path, run_id="testrun", seed=1)
+    recorder.maybe_record(
+        game_id="g", moves=[(0, 0), (1, 0), (0, 1)], winner_code=0, plies=3, worker_id=0,
+        terminal_reason="ply_cap", game_id_byte_hash="0" * 40, served_sims=64,
+        move_arms=[(0, False), (64, False), (64, False)],
+        search_stats=[
+            (1, 0.25, 0.1, [((1, 0), 40, 0.3, 0.5), ((2, 2), 24, -0.1, 0.25)]),
+            (2, -0.5, None, [((0, 1), 64, -0.5, 1.0)]),
+        ])
+    recorder.stop()
+    (record,) = list(iter_run_games(tmp_path, "testrun"))
+    assert record["search_stats"] == [
+        {"ply": 1, "root_value": 0.25, "root_raw": 0.1,
+         "visits": [[1, 0, 40], [2, 2, 24]], "q": [0.3, -0.1], "prior": [0.5, 0.25]},
+        {"ply": 2, "root_value": -0.5,
+         "visits": [[0, 1, 64]], "q": [-0.5], "prior": [1.0]},
+    ]
+    assert all("by" not in e for e in record["search_stats"])
 
 
 def test_the_recorder_writes_every_moves_arm_and_sims(tmp_path: Path) -> None:

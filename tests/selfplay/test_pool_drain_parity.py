@@ -10,6 +10,7 @@ design names but does not spell: `pool._sink`, `pool._heartbeat`, `pool._recorde
 """
 from __future__ import annotations
 
+import json
 import re
 import threading
 from collections import deque
@@ -194,7 +195,7 @@ class ScriptedPool:
 
 
 def _games_from_golden(golden: dict[str, Any]) -> list[tuple]:
-    """The scripted `drain_game_results()` 9-tuples (moves back to tuple-of-tuples)."""
+    """The scripted `drain_game_results()` 10-tuples (moves back to tuple-of-tuples)."""
     games = []
     for row in golden["_constants"]["games_batch"]:
         plies, winner_code, moves, *rest = row
@@ -496,7 +497,7 @@ def test_heartbeat_emission_at_drain(run_drain):
 #: `game_id` is a fresh uuid4 per game and can never be a golden.
 _RECORDER_KWARGS = {
     "game_id", "moves", "winner_code", "plies", "worker_id", "terminal_reason",
-    "game_id_byte_hash", "served_sims", "move_arms",
+    "game_id_byte_hash", "served_sims", "move_arms", "search_stats",
 }
 
 
@@ -520,3 +521,7 @@ def test_recorder_receives_every_drained_game(run_drain, drain_goldens):
         assert actual["plies"] == want["plies"]
         # R353(d): the runner's per-move arms reach the recorder one per move, untouched.
         assert len(actual["move_arms"]) == len(actual["moves"]), f"recorder call {i}: arms"
+        # R355(d): the tenth field reaches the recorder untouched — `None` on an un-sampled game.
+        assert json.loads(json.dumps(actual["search_stats"])) == want["search_stats"], (
+            f"recorder call {i}: search_stats"
+        )

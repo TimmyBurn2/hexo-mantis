@@ -67,8 +67,9 @@ runner's own per-move draw (`GameResultRow`'s last field), never inferred by com
 `served_sims`. A record from before this producer carries neither key, and a reader states that
 absence rather than guessing.
 
-Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats),
-`trajectory_hash`, and `search_stats` when the candidate's search exposed its root.
+Eval only: `rung`, `phase`, `game_index`, `colors` (`{candidate, opponent}` seats) and
+`trajectory_hash`. `search_stats` appears on BOTH channels since R355(d): on eval when the
+candidate's search exposed its root, on self-play for a SAMPLED game (the shape is below).
 
 **`game_index` JOINS a record to its progress row.** The round's progress writer and this one
 are fed from ONE fan-out in loop order, so their per-round counters advance in lockstep and a
@@ -102,10 +103,16 @@ means.
 
 * `colors` is **absent** on self-play: both seats are the same net, so a `{"p1": 1, "p2": -1}`
   dict would read like information.
-* `search_stats` is **absent** on self-play. It is a GAP, not a nothing: the visit distribution
-  exists in the engine and reaches the replay ring, but every row is pushed `game_id=-1` by
-  construction, so no position can be attributed to a game without an engine change on the hot
-  drain path (LAW-09). A viewer draws this as a stated gap, never as an empty heatmap.
+* `search_stats` on self-play is written for a SAMPLED game only — `selfplay.search_stats_every`
+  (contract v32) samples 1-in-N games per worker, and an un-sampled game carries NO key (absent is
+  not empty). A sampled entry is
+  `{"ply", "root_value", "root_raw"?, "visits": [[q, r, n], …], "q": […], "prior": […]}`:
+  `visits` is the eval channel's shape, so a reader of one reads the other; `q` (the child's Q in
+  the ROOT's perspective) and `prior` are PARALLEL to `visits`; `root_raw` is the net's own
+  post-quiescence root estimate and is present under the Gumbel kind only; `by` is absent (one net
+  plays both seats). From these the completed-Q target can be rebuilt under any σ, which the ring
+  (masses + α) cannot give — the reason R355(d) orders the producer before run8. A record from
+  before the producer carries no key on any game, and a reader states that rather than guessing.
 * On the eval channels `search_stats` may be `None` (no player exposed a root) or `[]` (the
   candidate never moved). They are different facts and neither is a measurement.
 
