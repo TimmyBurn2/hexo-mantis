@@ -367,12 +367,14 @@ class _CoordinatorPublishingTheLatch:
 
     def __init__(self, *, trainer: _Trainer, shutdown: ShutdownState) -> None:
         self.clean_stop_saved = False
+        self.final_save_done = False
         self._trainer = trainer
         self._shutdown = shutdown
 
     def step(self) -> None:
         self._trainer.save_checkpoint(None)
         self.clean_stop_saved = True
+        self.final_save_done = True
         self._shutdown.shutdown_save = True
         self._shutdown.running = False
 
@@ -424,7 +426,7 @@ def test_a_coordinator_publishing_no_latch_makes_the_loop_raise() -> None:
         run_training_loop(trainer=trainer, shutdown_state=shutdown, coordinator=coord,
                           sink=_Sink(), max_steps=_LOOP_MAX_STEPS)
 
-    assert "clean_stop_saved" in str(exc_info.value), (
+    assert "final_save_done" in str(exc_info.value), (
         "the refusal must NAME the member that is missing, or the next reader cannot tell a "
         f"wiring bug from a bug in the loop; got {str(exc_info.value)!r}"
     )
@@ -659,3 +661,28 @@ def test_a_clean_run_at_the_minted_bound_leaves_one_stamped_checkpoint(
         "…and the FULL envelope was written, not a weights-only strip — the terminal artefact "
         "has to be resumable and evaluatable, which is the whole reason legs 1 and 2 write one"
     )
+
+
+def test_a_signal_in_the_pre_O3_poll_window_saves_ONCE() -> None:
+    """B-8 (R355(e)): a signal landing after the loop's `while running` and before O3 (inside
+    `_poll_eval_results`) saved at O3 AND at the loop's `_final_save` — two bundles at one step,
+    and `prune_bundles(keep=2)` then dropped the last periodic one."""
+    shutdown = ShutdownState()
+    trainer = _Trainer(step=5)
+    h = _harness(trainer=trainer, config=_config(stop_step=1000), shutdown=shutdown)
+    h.pool.games_completed = 100
+    persists: list = []
+    h.coord.persist_resume_state = lambda p, _l=persists: _l.append(p)
+    orig_poll = h.coord._poll_eval_results
+
+    def _poll_then_signal():
+        r = orig_poll()
+        shutdown.shutdown_save = True
+        shutdown.running = False
+        return r
+
+    h.coord._poll_eval_results = _poll_then_signal
+    run_training_loop(trainer=trainer, shutdown_state=shutdown, coordinator=h.coord,
+                      sink=h.sink, max_steps=50)
+    assert trainer.saves == 1, f"one final save, got {trainer.saves}"
+    assert len(persists) == 1

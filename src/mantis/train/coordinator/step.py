@@ -185,6 +185,8 @@ class StepCoordinator:
         # one consumer. Set AFTER the leg-3 write, and carrying no set-once guard: exactly-once
         # is a property of the driver, not of a branch only a test can reach.
         self.clean_stop_saved = False
+        # Set by EITHER save leg (O2 clean stop, O3 shutdown save): the loop's guard (B-8).
+        self.final_save_done = False
         # None is a unit-test affordance ONLY; production wiring is unconditional at the one
         # composition root.
         self.actor_sync = actor_sync
@@ -443,6 +445,7 @@ class StepCoordinator:
         if self.shutdown.shutdown_save:
             ckpt = self.trainer.save_checkpoint(self._last_loss_info or None)
             self.persist_resume_state(ckpt)
+            self.final_save_done = True
             self.shutdown.running = False
             return self._build_outcome(in_warmup=False, waiting_for_games=False,
                                        **{**base, "checkpoint_saved": True})
@@ -575,6 +578,7 @@ class StepCoordinator:
         """
         path = self.trainer.save_checkpoint(self._last_loss_info or None)
         self.clean_stop_saved = True
+        self.final_save_done = True
         emit_via(self._sink, {
             "event": "clean_stop_save",
             "step": self._train_step,

@@ -16,23 +16,23 @@ from mantis.train.lifecycle.signals import ShutdownState, install_signal_handler
 _LOG = logging.getLogger(__name__)
 
 
-def _clean_stop_already_saved(coordinator: Any) -> bool:
-    """Report whether the coordinator already wrote the run's FINAL checkpoint.
+def _final_save_already_done(coordinator: Any) -> bool:
+    """Report whether the coordinator already wrote the run's FINAL checkpoint on EITHER leg.
 
-    ``None`` answers False: there was no clean-completion leg to have fired. A coordinator that
-    is PRESENT but publishes no ``clean_stop_saved`` RAISES rather than answering a silent False,
-    which would invisibly re-open the window this guard closes — the two final artefacts are
-    DISTINCT files, since the filename carries a content hash over a microsecond timestamp.
+    ``None`` answers False: there was no save leg to have fired. A coordinator that is PRESENT
+    but publishes no ``final_save_done`` RAISES rather than answering a silent False, which would
+    invisibly re-open the window this guard closes — the two final artefacts are DISTINCT files,
+    since the filename carries a content hash over a microsecond timestamp.
     """
     if coordinator is None:
         return False
-    saved = getattr(coordinator, "clean_stop_saved", None)
+    saved = getattr(coordinator, "final_save_done", None)
     if saved is None:
         raise TypeError(
             f"run_training_loop: coordinator ({type(coordinator).__name__}) publishes no "
-            "`clean_stop_saved` — the loop cannot tell whether the clean-completion leg "
-            "already wrote the FINAL checkpoint, and a second `_final_save()` would write a "
-            "duplicate FINAL artefact at the same step (R137/CARD-CLEANSTOP-SAVE)"
+            "`final_save_done` — the loop cannot tell whether a save leg already wrote the "
+            "FINAL checkpoint, and a second `_final_save()` would write a duplicate FINAL "
+            "artefact at the same step (R137/CARD-CLEANSTOP-SAVE, B-8)"
         )
     return bool(saved)
 
@@ -118,6 +118,6 @@ def run_training_loop(
 
     # Guarded only here: at entry the coordinator has not run, so it cannot have saved. A signal
     # landing inside its own write would otherwise duplicate the FINAL checkpoint at one step.
-    if shutdown_state.shutdown_save and not _clean_stop_already_saved(coordinator):
+    if shutdown_state.shutdown_save and not _final_save_already_done(coordinator):
         _final_save()
     return shutdown_state
