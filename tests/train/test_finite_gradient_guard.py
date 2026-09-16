@@ -129,13 +129,13 @@ def test_an_all_skipped_microbatch_set_advances_no_clock(
     clock_before = _optimizer_clock(trainer.optimizer)
     assert clock_before, "Adam kept no per-parameter step state — the clock has no instrument"
 
-    real = core.ragged_policy_ce_and_target_entropy
+    real = core.ragged_policy_ce_and_entropies
 
     def _nan_ce(*a, **k):
-        ce, entropy = real(*a, **k)
-        return ce * float("nan"), entropy
+        ce, entropy, model_entropy = real(*a, **k)
+        return ce * float("nan"), entropy, model_entropy
 
-    monkeypatch.setattr(core, "ragged_policy_ce_and_target_entropy", _nan_ce)
+    monkeypatch.setattr(core, "ragged_policy_ce_and_entropies", _nan_ce)
 
     result = _graph_step(trainer, buffer)
 
@@ -192,4 +192,4 @@ def test_the_loss_info_contract_stays_five_keys_on_a_skipped_step(tmp_path: Path
         result = _graph_step(trainer, H.uniform_graph_buffer())
     finally:
         handle.remove()
-    assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
+    assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}

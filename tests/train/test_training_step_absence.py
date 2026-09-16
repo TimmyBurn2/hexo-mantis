@@ -10,8 +10,9 @@ WHY THE PRODUCER IS REAL HERE AND WAS NOT BEFORE. Every coordinator test of this
 injects a hand-built `loss_info` carrying `"policy_entropy": 2.0` — a shape production never
 emits — so LAW-07's producer test was satisfied against a fiction. These rows drive the two
 REAL tails (`_graph_step` through the production dispatch, and `train_step_from_tensors`)
-and feed their ACTUAL return dicts to the builder. If a trainer ever starts producing
-`policy_entropy`, row one reds and says so rather than quietly re-arming the alert.
+and feed their ACTUAL return dicts to the builder. The graph tail PRODUCES `policy_entropy`
+since R355(e) (B-4); row one pins that it is a finite measurement the alert reads, and the
+unproduced rows still travel as `None`.
 """
 from __future__ import annotations
 
@@ -37,7 +38,8 @@ MINTED_ENTROPY_FLOOR = 1.0
 
 # The keys the two tails GUARANTEE. Everything else in the payload is a measurement that may
 # be absent, and absence must travel as None.
-GUARANTEED = ("loss", "policy_loss", "value_loss", "grad_norm", "lr")
+GUARANTEED = ("loss", "policy_loss", "value_loss", "grad_norm", "lr",
+              "policy_entropy", "policy_entropy_selfplay")
 
 # The payload fields that carry `None` when their producer did not supply them.
 ABSENCE_CAPABLE = (
@@ -82,25 +84,26 @@ def _alerts(payload: dict[str, Any]) -> list[str]:
 
 # the premise, re-derived rather than assumed
 
-def test_the_real_trainer_tail_produces_no_policy_entropy(tmp_path: Path) -> None:
-    """F-01's premise. If this reds, a producer appeared and the builder should carry it —
-    the alert would then be measuring something, which it never has been. The dense tail this
-    row used to check beside the graph one went with `train_step_from_tensors` (R346(f))."""
+def test_the_real_graph_tail_produces_a_finite_policy_entropy(tmp_path: Path) -> None:
+    """F-01's premise, reversed by B-4: the producer exists, so the alert measures something."""
     graph = _real_graph_loss_info(tmp_path)
-    assert "policy_entropy" not in graph, sorted(graph)
-    # and the keys it DOES guarantee are the ones the builder may read without a default
+    assert math.isfinite(graph["policy_entropy"]) and graph["policy_entropy"] > 0.0
+    assert graph["policy_entropy_selfplay"] == graph["policy_entropy"]
     for key in GUARANTEED:
         assert key in graph, f"graph tail dropped {key}: {sorted(graph)}"
 
 
 # the audit's PIN, on both arms
 
-def test_the_real_graph_tail_yields_absent_entropy_and_fires_no_alert(
+def test_the_real_graph_tail_carries_its_measured_entropy_and_fires_only_below_the_floor(
     tmp_path: Path
 ) -> None:
-    """THE PIN. Before the repair: `policy_entropy` 0.0 and `entropy_collapse` fired."""
-    payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), None, _NullSink())
-    assert payload["policy_entropy"] is None
+    """THE PIN. `policy_entropy` was a fabricated 0.0 that fired the alert every log; now it is the
+    graph tail's measurement, far above the minted floor here, and the alert is quiet for a REASON."""
+    loss_info = _real_graph_loss_info(tmp_path)
+    payload = emit_training_step_event(0, loss_info, None, _NullSink())
+    assert payload["policy_entropy"] == pytest.approx(loss_info["policy_entropy"])
+    assert payload["policy_entropy"] > MINTED_ENTROPY_FLOOR
     assert "entropy_collapse" not in _alerts(payload)
 
 
@@ -138,7 +141,7 @@ def test_the_payload_is_valid_JSON_with_no_NaN(tmp_path: Path) -> None:
     payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), None, _NullSink())
     text = json.dumps(payload, allow_nan=False)  # raises ValueError on any NaN/Inf
     assert "NaN" not in text
-    for key in ("policy_entropy_pretrain", "policy_entropy_selfplay", "policy_entropy_recent"):
+    for key in ("policy_entropy_pretrain", "policy_entropy_recent"):
         assert payload[key] is None
 
 

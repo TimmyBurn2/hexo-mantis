@@ -52,13 +52,13 @@ def test_a_nonfinite_microbatch_loss_is_skipped_and_counted(
     buffer = H.uniform_graph_buffer()
     before = H.param_vector(trainer.model).clone()
 
-    real = core.ragged_policy_ce_and_target_entropy
+    real = core.ragged_policy_ce_and_entropies
 
     def _nan_ce(*a, **k):
-        ce, entropy = real(*a, **k)
-        return ce * float("nan"), entropy
+        ce, entropy, model_entropy = real(*a, **k)
+        return ce * float("nan"), entropy, model_entropy
 
-    monkeypatch.setattr(core, "ragged_policy_ce_and_target_entropy", _nan_ce)
+    monkeypatch.setattr(core, "ragged_policy_ce_and_entropies", _nan_ce)
 
     _graph_step(trainer, buffer)
 
@@ -99,7 +99,7 @@ def test_the_loss_info_contract_stays_five_keys(tmp_path: Path) -> None:
     gates and checkpoint metadata pin."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())
     result = _graph_step(trainer, H.uniform_graph_buffer())
-    assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
+    assert set(result) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}
 
 
 def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:

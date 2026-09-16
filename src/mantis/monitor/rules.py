@@ -51,8 +51,8 @@ WARN_RULE_NAMES: tuple[str, ...] = (
 
 #: The payload key(s) each WARN rule's verdict is a function of. LAW-18: a rule whose INPUT is
 #: absent DID NOT RUN, which is a different fact from one that ran and found nothing wrong, and the
-#: two were one observable. `check_selfplay_entropy_collapse` has been the first for the whole life
-#: of the run, since neither its canonical key nor its fallback has a producer anywhere in `src/`.
+#: two were one observable. Both entropy rules were the first for the whole life of the run until
+#: R355(e) (B-4): the graph step now publishes `policy_entropy` and `policy_entropy_selfplay`.
 WARN_RULE_INPUTS: dict[str, tuple[str, ...]] = {
     "entropy_collapse": ("policy_entropy",),
     "selfplay_entropy_collapse": ("selfplay_model_entropy_batch", "policy_entropy_selfplay"),

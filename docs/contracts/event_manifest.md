@@ -395,10 +395,14 @@ is silently disabled.
   `policy_entropy_selfplay`, `policy_entropy_recent`, `policy_target_entropy`, `loss_aux`,
   `loss_ownership`, `loss_threat`, `loss_chain`, `avg_sigma`, `value_accuracy`,
   `n_rows_policy_loss`, `n_rows_total`. Of these the two trainer tails currently produce
-  `value_accuracy` (dense only) and `loss_chain` (dense, when `aux_chain_weight > 0`); the
+  `value_accuracy` (dense only) and `loss_chain` (dense, when `aux_chain_weight > 0`), and since
+  R355(e) (B-4) the GRAPH tail produces `policy_entropy` and `policy_entropy_selfplay` — ONE
+  measurement, the model's segment-softmax entropy over the step's policy rows reduced like the
+  CE (every graph-route row is a self-play ring row), carried in the now seven-key `loss_info`
+  so `check_entropy_collapse` / `check_selfplay_entropy_collapse` read a produced number; the
   rest have no producer in a shipped run and are `None` on every step. ONE of them has the
   quantity produced ONE EVENT OVER: `training_step.policy_target_entropy` stays `None` (the
-  five-key `loss_info` contract does not carry it) while `trainer_step.policy_target_entropy`
+  seven-key `loss_info` contract does not carry it) while `trainer_step.policy_target_entropy`
   carries the graph step's live reading (R350(b)(iv), the INSTRUMENT rows above) — a panel
   wants the `trainer_step` field, and the `training_step` one is a stated gap, not a zero.
   **AUDIT-1 F-01 is the cost of not applying this rule here.** `policy_entropy` defaulted to

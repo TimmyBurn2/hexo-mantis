@@ -43,7 +43,7 @@ from mantis.train.losses import (
     clip_and_step,
     policy_loss_weight_at,
     ragged_policy_ce,
-    ragged_policy_ce_and_target_entropy,
+    ragged_policy_ce_and_entropies,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -360,6 +360,7 @@ class Trainer:
         tail_alphas: list[float] = []
         policy_weight = policy_loss_weight_at(self.step, self.hp.policy_loss_warmup_steps)
         target_entropy_total = 0.0
+        policy_entropy_total = 0.0
         for make in parts:
             inputs = make()
             tail_alphas.extend(
@@ -380,7 +381,7 @@ class Trainer:
                         "denominator is computed from the per-GRAPH mask, so a mismatch "
                         "would silently make the denominator a second authority over a count "
                         "it does not own.")
-                policy_loss, target_entropy = ragged_policy_ce_and_target_entropy(
+                policy_loss, target_entropy, model_entropy = ragged_policy_ce_and_entropies(
                     policy_logits, inputs.policy_target, inputs.legal_offsets,
                     full_search_mask=inputs.policy_row_weight,
                     explicit_mask=inputs.explicit_mask, tail_mass=inputs.tail_mass,
@@ -405,14 +406,17 @@ class Trainer:
                         float(loss.detach().item()),
                     )
                 del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
+                del model_entropy
                 continue
             backward_accumulate(loss, self.scaler, self._scaler_enabled)
             contributing += 1
             target_entropy_total += float(target_entropy.item())
+            policy_entropy_total += float(model_entropy.item())
             loss_total += loss.item()
             policy_total += policy_loss.item()
             value_total += value_loss.item()
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
+            del model_entropy
 
         # THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH. Both ways there is not
         # used to advance the clock anyway: every micro-batch skipped (`.grad` stays zeroed, so
@@ -448,10 +452,12 @@ class Trainer:
                 "nonfinite_grad_steps": self.nonfinite_grad_steps,
             })
         lr = self.optimizer.param_groups[0]["lr"]
-        # `result` stays the FIVE-key loss_info contract; the counters ride the EVENT instead,
-        # because widening `loss_info` changes a contract the gates and checkpoint metadata pin.
+        # The SEVEN-key loss_info contract (the counters ride the EVENT); the two entropy keys are
+        # ONE measurement, every graph-route row being a self-play ring row (B-4).
         result = {"loss": loss_total, "policy_loss": policy_total,
-                  "value_loss": value_total, "grad_norm": grad_norm, "lr": lr}
+                  "value_loss": value_total, "grad_norm": grad_norm, "lr": lr,
+                  "policy_entropy": policy_entropy_total,
+                  "policy_entropy_selfplay": policy_entropy_total}
         # A REFUSED step emits `trainer_step_skipped` INSTEAD: emitting both would put a step in
         # the stream the step counter does not carry, and `periodic_checkpoint` must not fire
         # either — `self.step` did not move, so a crossed cadence boundary would be crossed twice.

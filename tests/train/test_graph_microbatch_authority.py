@@ -302,7 +302,7 @@ def test_of2_9_leg1_totals_match_the_pre_registered_three_and_two() -> None:
     }
 
 
-_TAIL_KEYS = {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
+_TAIL_KEYS = {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}
 #: `update_parameters` is the EMA update, a TAIL statement exactly like `self.step += 1`. It is
 #: named because the behavioural rows cannot always reach it — a trainer built without EMA never
 #: executes that branch — so this token kills the mutation STRUCTURALLY, at any M.

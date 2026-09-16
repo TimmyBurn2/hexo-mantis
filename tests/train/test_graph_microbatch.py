@@ -430,7 +430,7 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
 
 
 @pytest.mark.parametrize("m", [1, 2, 4])
-def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> None:
+def test_of2_4_one_optimizer_step_and_seven_keys_at_every_m(tmp_path, m: int) -> None:
     """ONE of everything per training step, at M in {1, 2, 4}, and the returned dict carries all
     five keys at every M. The key-presence half is not decoration: the coordinator's grad-norm gate
     reads `float(loss_info.get("grad_norm", 0.0))`, so a branch returning a dict without
@@ -449,7 +449,7 @@ def test_of2_4_one_optimizer_step_and_five_keys_at_every_m(tmp_path, m: int) -> 
         assert key in r.info, (
             f"M={m}: the returned dict omits {key!r} — a missing 'grad_norm' silently "
             "disarms grad_norm_hard_abort through coordinator/step.py's .get(\"grad_norm\", 0.0)")
-    assert set(r.info) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr"}
+    assert set(r.info) == {"loss", "policy_loss", "value_loss", "grad_norm", "lr", "policy_entropy", "policy_entropy_selfplay"}
     assert math.isfinite(r.info["grad_norm"]) or math.isnan(r.info["grad_norm"])
     assert r.sink.named("trainer_step")[0]["microbatches"] == m
 

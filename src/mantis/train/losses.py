@@ -137,8 +137,8 @@ def ragged_policy_ce(
     explicit_mask: torch.Tensor | None = None,
     tail_mass: torch.Tensor | None = None,
 ) -> torch.Tensor:
-    """`ragged_policy_ce_and_target_entropy`'s CE alone — the loss term. See that function."""
-    ce, _entropy = ragged_policy_ce_and_target_entropy(
+    """`ragged_policy_ce_and_entropies`'s CE alone — the loss term. See that function."""
+    ce, _h_target, _h_model = ragged_policy_ce_and_entropies(
         policy_logits, policy_target, legal_offsets, full_search_mask=full_search_mask,
         denominator=denominator, explicit_mask=explicit_mask, tail_mass=tail_mass,
     )
@@ -154,8 +154,25 @@ def ragged_policy_ce_and_target_entropy(
     explicit_mask: torch.Tensor | None = None,
     tail_mass: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
-    """Ragged per-legal-node policy CE for the GNN graph branch, and — reduced the SAME way and
-    DETACHED — the target's entropy, so `CE - H` is KL(target || policy) (R350(b)(iv)'s line).
+    """`ragged_policy_ce_and_entropies` without the model's entropy. See that function."""
+    ce, h_target, _h_model = ragged_policy_ce_and_entropies(
+        policy_logits, policy_target, legal_offsets, full_search_mask=full_search_mask,
+        denominator=denominator, explicit_mask=explicit_mask, tail_mass=tail_mass,
+    )
+    return ce, h_target
+
+
+def ragged_policy_ce_and_entropies(
+    policy_logits: torch.Tensor,
+    policy_target: torch.Tensor,
+    legal_offsets: torch.Tensor,
+    full_search_mask: torch.Tensor | None = None,
+    denominator: float | None = None,
+    explicit_mask: torch.Tensor | None = None,
+    tail_mass: torch.Tensor | None = None,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    """Ragged per-legal-node policy CE for the GNN graph branch and — reduced the SAME way, DETACHED —
+    the target's entropy (`CE - H` is KL(target || policy), R350(b)(iv)) and the model's own (B-4).
 
     Per graph: log_softmax over its legal segment, `-Σ target·logp`, masked by `full_search_mask`;
     `denominator` makes ONE micro-batch divide by the WHOLE step's so the parts sum to the
@@ -176,7 +193,7 @@ def ragged_policy_ce_and_target_entropy(
     b = int(legal_offsets.shape[0]) - 1
     if b == 0 or policy_logits.numel() == 0:
         zero = torch.zeros((), device=device, dtype=torch.float32)
-        return zero, zero.clone()
+        return zero, zero.clone(), zero.clone()
     probs = _segment_softmax(policy_logits, legal_offsets)
     logp = torch.log(probs.clamp(min=1e-12))
     counts = legal_offsets[1:] - legal_offsets[:-1]
@@ -203,6 +220,10 @@ def ragged_policy_ce_and_target_entropy(
         entropy_node = -(t * torch.log(t.clamp(min=1e-12)))
         entropy_graph = torch.zeros(b, device=device, dtype=entropy_node.dtype)
         entropy_graph.scatter_add_(0, seg, entropy_node)
+        p = probs.detach()
+        model_node = -(p * torch.log(p.clamp(min=1e-12)))
+        model_graph = torch.zeros(b, device=device, dtype=model_node.dtype)
+        model_graph.scatter_add_(0, seg, model_node)
 
     def _reduce(values: torch.Tensor) -> torch.Tensor:
         if full_search_mask is not None:
@@ -214,7 +235,7 @@ def ragged_policy_ce_and_target_entropy(
             return values.sum() / denominator
         return values.mean()
 
-    return _reduce(per_graph), _reduce(entropy_graph)
+    return _reduce(per_graph), _reduce(entropy_graph), _reduce(model_graph)
 
 
 def compute_kl_policy_loss(
