@@ -99,6 +99,7 @@ pub(crate) struct WorkerParams {
     pub(crate) n_sims_quick: usize,
     pub(crate) n_sims_full: usize,
     pub(crate) random_opening_plies: u32,
+    pub(crate) search_stats_every: usize,
     /// DERIVED HEXG visit-slot capacity (R255/ADJ-D34) — composed once in
     /// `SelfPlayRunner::new`, never a default.
     pub(crate) visit_capacity: Option<usize>,

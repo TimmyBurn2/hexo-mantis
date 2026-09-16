@@ -17,7 +17,7 @@ _NAME_TAKING_CONSTRUCTORS = (
     ("HexgBuffer", lambda: _engine.HexgBuffer(8, "__no_such_encoding__", 128)),
     ("RegistrySpec.from_registry", lambda: _engine.RegistrySpec.from_registry("__no_such_encoding__")),
     ("SelfPlayRunner", lambda: _engine.SelfPlayRunner(
-        _engine.SelfPlayRunnerConfig(q_rescale=True, encoding_name="__no_such_encoding__"))),
+        _engine.SelfPlayRunnerConfig(q_rescale=True, search_stats_every=0, encoding_name="__no_such_encoding__"))),
 )
 
 

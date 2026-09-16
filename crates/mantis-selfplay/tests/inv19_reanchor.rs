@@ -51,6 +51,7 @@ fn distinct_sentinels() -> SelfPlayRunnerConfig {
         n_sims_quick: 50,
         n_sims_full: 100,
         random_opening_plies: 3,
+        search_stats_every: 5,
         encoding_name: Some("gnn_axis_r8".to_string()),
     }
 }
@@ -94,6 +95,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
         n_sims_quick,
         n_sims_full,
         random_opening_plies,
+        search_stats_every,
         encoding_name,
     } = cfg;
 
@@ -126,6 +128,7 @@ fn every_field_maps_to_exactly_one_slot_and_no_killed_fields() {
     assert_eq!(n_sims_quick, 50);
     assert_eq!(n_sims_full, 100);
     assert_eq!(random_opening_plies, 3);
+    assert_eq!(search_stats_every, 5);
     assert_eq!(encoding_name, Some("gnn_axis_r8".to_string()));
 }
 

@@ -210,15 +210,15 @@ fn random_only_stop_midgame_no_false_draws() {
 #[test]
 fn false_draw_checker_bites_on_injected_reason_3() {
     // A synthetic in-progress finalize: winner=None, plies < max_moves → terminal_reason == 3.
-    let injected: GameResultRow = (17, 0, Vec::new(), 0, 3, 0, 0, 0, Vec::new());
+    let injected: GameResultRow = (17, 0, Vec::new(), 0, 3, 0, 0, 0, Vec::new(), None);
     assert!(
         has_false_draw(&[injected]),
         "the false-draw checker MUST flag an injected terminal_reason==3 tuple",
     );
     // A clean set is NOT flagged: the checker is specific to the false-draw signature.
     let clean: Vec<GameResultRow> = vec![
-        (10, 0, Vec::new(), 0, 2, 0, 0, 0, Vec::new()), // ply-cap
-        (11, 1, Vec::new(), 1, 0, 0, 0, 0, Vec::new()), // six-in-a-row win
+        (10, 0, Vec::new(), 0, 2, 0, 0, 0, Vec::new(), None), // ply-cap
+        (11, 1, Vec::new(), 1, 0, 0, 0, 0, Vec::new(), None), // six-in-a-row win
     ];
     assert!(
         !has_false_draw(&clean),

@@ -50,6 +50,8 @@ pub struct SelfPlayRunnerConfig {
     pub n_sims_quick: usize,
     pub n_sims_full: usize,
     pub random_opening_plies: u32,
+    /// 1-in-N games carry per-position search stats on their result row; 0 is off.
+    pub search_stats_every: usize,
     /// Registry-form encoding name, resolved to a `&'static RegistrySpec` at
     /// `SelfPlayRunner::new`. `None` = **error**, never a grid/dense default.
     pub encoding_name: Option<String>,
@@ -91,6 +93,7 @@ impl Default for SelfPlayRunnerConfig {
             n_sims_quick: 0,
             n_sims_full: 0,
             random_opening_plies: 0,
+            search_stats_every: 0,
             encoding_name: None,
         }
     }

@@ -24,7 +24,7 @@ use mantis_core::{Board, Player};
 use crate::records;
 use crate::replay::hexg::GraphRecord;
 
-use super::GameResultRow;
+use super::{GameResultRow, PositionStats};
 
 /// Per-game terminal handler (frozen `inner.rs:1624`; warm path).
 ///
@@ -39,6 +39,7 @@ pub(crate) fn finalize_game_graph(
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
     move_arms: Vec<(u32, bool)>,
+    search_stats: Option<Vec<PositionStats>>,
     version_seen: &[u64],
     draw_reward: f32,
     ply_cap_value: f32,
@@ -110,6 +111,7 @@ pub(crate) fn finalize_game_graph(
         winner_code,
         move_history,
         move_arms,
+        search_stats,
         worker_id,
         terminal_reason,
         (mv_min, mv_max, mv_distinct),
@@ -166,6 +168,7 @@ fn push_recent_meta(
     winner_code: u8,
     move_history: Vec<(i32, i32)>,
     move_arms: Vec<(u32, bool)>,
+    search_stats: Option<Vec<PositionStats>>,
     worker_id: usize,
     terminal_reason: u8,
     versions: (u64, u64, u32),
@@ -184,6 +187,7 @@ fn push_recent_meta(
         mv_max,
         mv_distinct,
         move_arms,
+        search_stats,
     ));
     if rg.len() > 2000 {
         rg.pop_front();

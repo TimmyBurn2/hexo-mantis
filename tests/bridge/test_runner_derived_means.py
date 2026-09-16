@@ -26,7 +26,7 @@ DERIVED_MEANS = list(ZERO_GUARDED_MEANS)
 
 
 def _fresh_runner():
-    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, q_rescale=True, encoding_name="gnn_axis_v1")
+    cfg = _engine.SelfPlayRunnerConfig(n_workers=1, q_rescale=True, search_stats_every=0, encoding_name="gnn_axis_v1")
     return _engine.SelfPlayRunner(cfg)
 
 

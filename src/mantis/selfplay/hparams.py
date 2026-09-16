@@ -100,6 +100,8 @@ class SelfPlayHParams:
     c_scale: float = 1.0
     #: `selfplay.q_rescale`, REQUIRED with no default: the σ's rescale switch (F-50).
     q_rescale: bool
+    #: `selfplay.search_stats_every`, REQUIRED with no default: 1-in-N games record their roots.
+    search_stats_every: int
     gumbel_m: int = 16
     gumbel_explore_moves: int = 10
     results_queue_cap: int = 10_000
@@ -158,6 +160,7 @@ class SelfPlayHParams:
             c_visit=float(sp["c_visit"]),
             c_scale=float(sp["c_scale"]),
             q_rescale=bool(sp["q_rescale"]),
+            search_stats_every=int(sp["search_stats_every"]),
             gumbel_m=int(sp["gumbel_m"]),
             gumbel_explore_moves=int(sp["gumbel_explore_moves"]),
             results_queue_cap=int(sp["results_queue_cap"]),
@@ -260,6 +263,7 @@ def build_runner_config(
         c_visit=hp.c_visit,
         c_scale=hp.c_scale,
         q_rescale=hp.q_rescale,
+        search_stats_every=hp.search_stats_every,
         gumbel_m=hp.gumbel_m,
         gumbel_explore_moves=hp.gumbel_explore_moves,
         dirichlet_alpha=hp.dirichlet_alpha,

@@ -1,5 +1,5 @@
-//! R353(d): the per-game result row carries every move's `(sims, is_full_search)` beside
-//! `move_history` — the graph rows' flag reaches the replay ring, not the game record.
+//! R355(d): a 1-in-N game's result row carries, per searched ply, the root as the search left
+//! it — the record the forced-move census could not read from the ring.
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -52,14 +52,15 @@ fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>)
     })
 }
 
-fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
+fn drive(search_stats_every: usize, want_games: usize) -> Vec<GameResultRow> {
     let spec = lookup_or_panic(ENCODING);
     let runner = SelfPlayRunner::new(SelfPlayRunnerConfig {
         n_workers: 1,
         max_moves_per_game: PLY_CAP,
         n_simulations: N_SIMS_QUICK,
         leaf_batch_size: 4,
-        random_opening_plies,
+        random_opening_plies: 0,
+        search_stats_every,
         dirichlet_enabled: true,
         search_kind: SearchKind::Gumbel,
         quiescence_enabled: false,
@@ -96,40 +97,63 @@ fn drive(random_opening_plies: u32, want_games: usize) -> Vec<GameResultRow> {
 }
 
 #[test]
-fn every_move_carries_its_arm_and_both_arms_reach_the_row() {
-    let games = drive(0, 12);
-    let mut full = 0usize;
-    let mut quick = 0usize;
-    for (plies, _winner, moves, _worker, _term, _mn, _mx, _distinct, arms, _stats) in &games {
-        assert_eq!(
-            arms.len(),
-            moves.len(),
-            "a game of {plies} plies carries {} arms for {} moves",
-            arms.len(),
-            moves.len()
-        );
-        for &(sims, is_full) in arms {
-            match (sims as usize, is_full) {
-                (N_SIMS_FULL, true) => full += 1,
-                (N_SIMS_QUICK, false) => quick += 1,
-                other => panic!("an arm that is neither budget: {other:?}"),
+fn one_in_n_games_carry_a_root_per_searched_ply_and_the_rest_carry_none() {
+    let games = drive(2, 8);
+    let mut with = 0usize;
+    let mut without = 0usize;
+    for (plies, _w, moves, _wk, _t, _mn, _mx, _d, arms, stats) in &games {
+        match stats {
+            None => without += 1,
+            Some(rows) => {
+                with += 1;
+                let searched = arms.iter().filter(|&&(sims, _)| sims > 0).count();
+                assert_eq!(
+                    rows.len(),
+                    searched,
+                    "one entry per SEARCHED ply of a {plies}-ply game"
+                );
+                for (i, (ply, root_value, root_raw, children)) in rows.iter().enumerate() {
+                    assert_eq!(*ply as usize, i, "plies are the searched moves in order");
+                    assert!((-1.0..=1.0).contains(root_value));
+                    assert!(
+                        root_raw.is_some(),
+                        "the Gumbel kind stores the raw root value"
+                    );
+                    assert!(!children.is_empty(), "a searched root has visited children");
+                    for &(cell, visits, q, prior) in children {
+                        assert!(visits >= 1, "only the SUPPORT is stored");
+                        assert!((-1.0..=1.0).contains(&q));
+                        assert!((0.0..=1.0).contains(&prior));
+                        assert!(!moves.is_empty() && cell != (i32::MIN, i32::MIN));
+                    }
+                }
             }
         }
     }
     assert!(
-        full > 0 && quick > 0,
-        "the rows carry only one arm (full={full}, quick={quick}) at p=0.5"
+        with >= 3 && without >= 3,
+        "at every=2 both classes appear: with={with} without={without}"
     );
 }
 
 #[test]
-fn random_opening_plies_carry_no_arm() {
-    let games = drive(2, 6);
-    for (_plies, _winner, moves, _worker, _term, _mn, _mx, _distinct, arms, _stats) in &games {
-        assert_eq!(arms.len(), moves.len());
-        assert_eq!(&arms[..2], &[(0u32, false), (0u32, false)][..]);
-        for &(sims, _) in &arms[2..] {
-            assert!(sims > 0, "a searched ply carries sims 0");
+fn zero_turns_the_producer_off() {
+    let games = drive(0, 4);
+    assert!(games.iter().all(|g| g.9.is_none()));
+}
+
+#[test]
+fn every_game_is_sampled_at_one_and_the_played_move_is_in_the_support() {
+    let games = drive(1, 3);
+    for (_p, _w, moves, _wk, _t, _mn, _mx, _d, _arms, stats) in &games {
+        let rows = stats.as_ref().expect("every=1 samples every game");
+        // The row records what the search saw: the played move is among the visited candidates.
+        for (ply, _v, _raw, children) in rows {
+            let played = moves[*ply as usize];
+            assert!(
+                children.iter().any(|c| c.0 == played),
+                "ply {ply}: the played move {played:?} is in the support"
+            );
         }
     }
 }

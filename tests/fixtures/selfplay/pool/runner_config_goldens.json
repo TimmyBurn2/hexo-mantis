@@ -53,7 +53,8 @@
       "n_sims_full": 200,
       "temperature_threshold_compound_moves": 12,
       "temp_min": 0.35
-     }
+     },
+     "search_stats_every": 8
     },
     "train": {
      "draw_reward": -0.4,
@@ -89,7 +90,8 @@
     "results_queue_cap": 5000,
     "standard_sims": 160,
     "temp_min": 0.35,
-    "temp_threshold_compound_moves": 12
+    "temp_threshold_compound_moves": 12,
+    "search_stats_every": 8
    },
    "post_ctor_attrs": {
     "search_kind": "gumbel"
@@ -153,7 +155,8 @@
       "n_sims_full": 0,
       "temperature_threshold_compound_moves": 0,
       "temp_min": 0.5
-     }
+     },
+     "search_stats_every": 8
     },
     "train": {
      "draw_reward": -0.5,
@@ -189,7 +192,8 @@
     "results_queue_cap": 10000,
     "standard_sims": 0,
     "temp_min": 0.5,
-    "temp_threshold_compound_moves": 0
+    "temp_threshold_compound_moves": 0,
+    "search_stats_every": 8
    },
    "post_ctor_attrs": {
     "search_kind": "puct"

@@ -37,7 +37,7 @@ use super::search_drive::{
     play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
-use super::{GameResultRow, WorkerResultRow};
+use super::{GameResultRow, PositionStats, WorkerResultRow};
 
 /// Per-game-init scalar context. `Copy`.
 #[derive(Clone, Copy)]
@@ -52,6 +52,8 @@ struct PerGameInitCtx {
     ply_cap_value: f32,
     results_queue_cap: usize,
     worker_id: usize,
+    /// 1-in-N games carry per-position search stats; 0 is off.
+    search_stats_every: usize,
 }
 
 /// Per-worker STATIC per-move scalar config, built ONCE at proto-build and copied through the
@@ -160,6 +162,7 @@ pub(crate) fn run_worker_thread(
         n_sims_quick,
         n_sims_full,
         random_opening_plies,
+        search_stats_every,
         visit_capacity,
         registry_spec,
         search_flags:
@@ -219,6 +222,7 @@ pub(crate) fn run_worker_thread(
         ply_cap_value,
         results_queue_cap,
         worker_id,
+        search_stats_every,
     };
     let move_cfg = WorkerMoveCfg {
         leaf_batch_size,
@@ -254,7 +258,11 @@ pub(crate) fn run_worker_thread(
         &graph_game_seq,
     );
 
+    // Game `g` of THIS worker (0-based) is sampled for search stats iff `g % every == 0`.
+    let mut games_played: usize = 0;
     while running.load(Ordering::Relaxed) {
+        let sample_stats = init_ctx.search_stats_every > 0
+            && games_played.is_multiple_of(init_ctx.search_stats_every);
         run_one_game(
             &mut tree,
             &mut rng,
@@ -274,7 +282,9 @@ pub(crate) fn run_worker_thread(
             &graph_results_queue,
             &recent_game_results,
             finalize_counters,
+            sample_stats,
         );
+        games_played += 1;
     }
 }
 
@@ -307,6 +317,7 @@ fn run_one_game(
         &AtomicU64,
         &AtomicU64,
     ),
+    sample_stats: bool,
 ) {
     let WorkerMoveCfg {
         leaf_batch_size,
@@ -333,6 +344,7 @@ fn run_one_game(
         is_fast_game,
         game_sims,
     } = init_per_game_board(board_geometry, init_ctx, rng, version_seen);
+    let mut search_stats: Option<Vec<PositionStats>> = sample_stats.then(Vec::new);
 
     let infer = InferContext {
         graph_queue,
@@ -388,6 +400,7 @@ fn run_one_game(
             &mut graph_records,
             &mut move_history,
             &mut move_arms,
+            search_stats.as_mut(),
             version_seen,
             rng,
             running,
@@ -418,6 +431,7 @@ fn run_one_game(
         graph_records,
         move_history,
         move_arms,
+        search_stats,
         version_seen,
         init_ctx.draw_reward,
         init_ctx.ply_cap_value,

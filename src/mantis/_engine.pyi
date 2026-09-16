@@ -357,6 +357,7 @@ class SelfPlayRunnerConfig:
         c_scale: float = 1.0,
         *,
         q_rescale: bool,
+        search_stats_every: int,
         gumbel_m: int = 16,
         gumbel_explore_moves: int = 10,
         dirichlet_alpha: float = 0.3,
@@ -436,7 +437,10 @@ class SelfPlayRunner:
     def drain_game_results(
         self,
     ) -> list[
-        tuple[int, int, list[tuple[int, int]], int, int, int, int, int, list[tuple[int, bool]]]
+        tuple[
+            int, int, list[tuple[int, int]], int, int, int, int, int, list[tuple[int, bool]],
+            list[tuple[int, float, float | None, list[tuple[tuple[int, int], int, float, float]]]] | None,
+        ]
     ]: ...
     @property
     def model_version(self) -> int: ...

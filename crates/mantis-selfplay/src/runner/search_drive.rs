@@ -25,6 +25,7 @@ use crate::records;
 use crate::replay::hexg::GraphRecord;
 
 use super::record::record_position_graph_dispatch;
+use super::PositionStats;
 
 /// Graph queue handle + per-game symmetry context + the resolved spec (graph-build
 /// geometry). `Copy` — passed by value.
@@ -502,6 +503,7 @@ pub(crate) fn play_one_move(
     graph_records_vec: &mut Vec<GraphRecord>,
     move_history: &mut Vec<(i32, i32)>,
     move_arms: &mut Vec<(u32, bool)>,
+    search_stats: Option<&mut Vec<PositionStats>>,
     version_seen: &mut Vec<u64>,
     rng: &mut ThreadRng,
     running: &AtomicBool,
@@ -645,6 +647,28 @@ pub(crate) fn play_one_move(
     ) else {
         return MoveOutcome::Break;
     };
+
+    if let Some(stats) = search_stats {
+        // The root as the search left it — only the visited children, Q in the root's view —
+        // the record the census could not read from the ring (R355(d)).
+        let root_raw = if ctx.search_kind.stores_sparse_rows() {
+            Some(tree.root_raw_value())
+        } else {
+            None
+        };
+        let children: Vec<((i32, i32), u32, f32, f32)> = tree
+            .get_top_visits(tree.root_n_children())
+            .into_iter()
+            .filter(|&(_, visits, _, _)| visits > 0)
+            .map(|(cell, visits, prior, q)| (cell, visits, q, prior))
+            .collect();
+        stats.push((
+            u32::try_from(move_history.len()).unwrap_or(u32::MAX),
+            tree.root_value(),
+            root_raw,
+            children,
+        ));
+    }
 
     // ── Record position (BEFORE apply_move) ──
     {
