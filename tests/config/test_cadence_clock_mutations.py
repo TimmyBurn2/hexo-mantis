@@ -105,9 +105,6 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> N
         # The WR axis's own clock: eval rounds — invisible to a step-clock audit.
         ("eval_interval outruns the run", "train", "eval_interval", 1_000_000_000,
          "sealbot_wr_abort"),
-        # The actor-lag axis: the train-step clock, its threshold past the bound.
-        ("actor-lag threshold past the bound", "monitor", "actor_lag_threshold_steps",
-         900_000, "actor_lag"),
     ],
 )
 def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(

@@ -79,6 +79,20 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R355 (REPAIR-A4)
+
+- **CARD-SERVER-OWNED-COPY — the inference server serves the learner's module itself.** `run.py`
+  hands `trainer.model` to `WorkerPool` → `InferenceServer`, and `ActorSync` loads the state dict
+  INTO it (a self-copy). Two consequences landed as refusals on 2026-09-16 (B-1, R355(e)):
+  `train.ema.enabled: true` is refused at mint (the shadow would be synced into the learner), and
+  the `actor_lag` armed-abort row is RETIRED from `armed_aborts.MANIFEST` — its lag is
+  learner_step minus the step of the last self-copy and cannot exceed `actor_sync_cadence_steps`.
+  The keys `monitor.actor_lag_threshold_steps` / `actor_lag_abort_enabled` STAY: they drive the
+  watchdog's live `actor_lag_sample` (LAW-18) and its fire arm, and `Cadence.STEP_LAG_THRESHOLD`
+  stays with them, so the row returns as a one-line manifest edit the day this card lands. The
+  repair: the server owns a COPY the sync writes and the learner never reads; then EMA (and its
+  shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit.
+
 ## Opened by R352 (run7 kind, strix rung, viewer)
 
 - **CARD-PUCT-ATTRACTOR — CLOSED by R353(e), on a reading, not a fix.** The mechanism GAME-QUALITY

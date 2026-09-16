@@ -525,6 +525,19 @@ class RunConfig(StrictModel):
         return self
 
     @model_validator(mode="after")
+    def _ema_needs_a_server_owned_copy(self) -> "RunConfig":
+        # B-1: the inference server serves `trainer.model` ITSELF and ActorSync copies into it, so
+        # an EMA shadow would be synced INTO the learner every cadence (CARD-SERVER-OWNED-COPY).
+        if self.train.ema.enabled:
+            raise ValueError(
+                "train.ema.enabled: true is refused until the inference server holds a "
+                "server-owned copy of the served weights (CARD-SERVER-OWNED-COPY, R355(e)): today "
+                "it serves the learner's own module, and an EMA shadow synced into it would train "
+                "on EMA weights"
+            )
+        return self
+
+    @model_validator(mode="after")
     def _actor_lag_threshold_exceeds_sync_cadence(self) -> "RunConfig":
         # The lag threshold (monitor) and the sync cadence (train) share one invariant, so the
         # check lives here, the ONE model that sees both.

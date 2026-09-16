@@ -99,26 +99,24 @@ def _deferred(manifest=MANIFEST):
 
 
 def test_arming_audit_fails_a_disarmed_production_config() -> None:
-    """A real committed config ships `actor_lag_abort_enabled: false`, so this needs no
-    mutation — the corpus row is the tree. The inverse arm is asserted in the same test,
-    because a gate that only ever says FAIL is as useless as one that only ever says PASS."""
+    """A real committed config ships `train.draw_rate_abort: null`, so this needs no mutation —
+    the corpus row is the tree. The inverse arm is asserted in the same test, because a gate
+    that only ever says FAIL is as useless as one that only ever says PASS."""
     disarmed = audit_arming(load_config(REPO_ROOT / "configs" / "dev_example.yaml"))
-    assert [row.name for row in disarmed.disarmed] == ["actor_lag", "draw_rate_collapse"], (
-        "a production config with BOTH hard aborts disarmed must name those rows and only "
-        "those rows. WPAX Phase D (R87 hunk 1): `dev_example.yaml` ships "
-        "`actor_lag_abort_enabled: false` at `:200` AND `train.draw_rate_abort: null` — the "
-        "second is R59's deliberate smoke disarm, made observable by the `null` spelling "
-        "instead of inferable from an absent key. The 'and only those rows' bite is what "
-        f"this expectation keeps; got {[row.name for row in disarmed.disarmed]}"
+    assert [row.name for row in disarmed.disarmed] == ["draw_rate_collapse"], (
+        "a production config with the draw-rate abort disarmed must name that row and only "
+        "that row: `dev_example.yaml` ships `train.draw_rate_abort: null`, R59's deliberate "
+        "smoke disarm made observable by the `null` spelling; got "
+        f"{[row.name for row in disarmed.disarmed]}"
     )
     assert [row.config_path for row in disarmed.disarmed] == [
-        "monitor.actor_lag_abort_enabled", "train.draw_rate_abort.threshold"
+        "train.draw_rate_abort.threshold"
     ], "each disarmed row must carry its dotted arming surface, so the report can name it"
 
     armed = audit_arming(load_config(REPO_ROOT / "configs" / "run6.yaml"))
     assert list(armed.disarmed) == [], (
-        "configs/run6.yaml arms the actor-lag abort at `:203` (the R59 flip) — mode AUDIT "
-        f"must be GREEN on it today; got {[row.name for row in armed.disarmed]}"
+        "configs/run6.yaml arms the draw-rate abort — mode AUDIT must be GREEN on it today; "
+        f"got {[row.name for row in armed.disarmed]}"
     )
     assert [row.name for row in armed.required] == [row.name for row in _required()], (
         "the audit's `required` list is the manifest's, unfiltered — it is what the report "
@@ -130,17 +128,13 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
     """The cheapest implementation that passes M1 is a filename check, and both arms are needed
     to kill it: the two configs swap verdicts when — and only when — the VALUE swaps. Driven
     through the blessed load/dump/validate factory, so both payloads are schema-valid."""
-    run5_disarmed = smoke_run_config("run6.yaml", monitor={"actor_lag_abort_enabled": False})
-    assert [row.name for row in audit_arming(run5_disarmed).disarmed] == ["actor_lag"], (
-        "run5 with the arming flipped OFF must fail the audit — the audit reads the "
+    run5_disarmed = smoke_run_config("run6.yaml", train={"draw_rate_abort": None})
+    assert [row.name for row in audit_arming(run5_disarmed).disarmed] == ["draw_rate_collapse"], (
+        "run6 with the arming flipped OFF must fail the audit — the audit reads the "
         "validated config object, never the path it came from"
     )
     dev_armed = smoke_run_config(
         "dev_example.yaml",
-        monitor={"actor_lag_abort_enabled": True},
-        # The manifest carries TWO required rows, so "the arming flipped ON" means flipping
-        # BOTH postures; leaving the draw-rate block `null` would lose this oracle's real
-        # subject behind an unrelated red.
         train={"draw_rate_abort": {"threshold": 0.25, "min_step": 25000,
                                    "N_pool_min": 50, "consec": 3}},
     )
@@ -598,7 +592,9 @@ def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> N
 #: The rows that GATE a production mint. Editing this literal is the act of arming or
 #: disarming the audit, and it must be reviewed as one.
 _REQUIRED_ROWS_OF_RECORD = frozenset({
-    "actor_lag",
+    # `actor_lag` LEFT this set on 2026-09-16 (R355(e), B-1): the server serves the learner's
+    # module, so the lag it measured could never exceed the sync cadence — a row that cannot
+    # fire is a lie, and CARD-SERVER-OWNED-COPY carries its return.
     "allocator_posture_minted",
     "disk_space_exhausted",
     "draw_rate_collapse",

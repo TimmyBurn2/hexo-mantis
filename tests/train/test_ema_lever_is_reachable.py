@@ -23,6 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from mantis.config.loader import load_config, parse_config_yaml
 from mantis.config.schema import RunConfig
@@ -65,14 +66,15 @@ def test_the_lever_is_readable_from_every_committed_config(path: Path) -> None:
     assert 0.0 <= decay < 1.0 and update_every >= 1
 
 
-def test_a_config_CAN_arm_the_lever() -> None:
-    """The other half, and the one that was impossible before: a config that says `true` both
-    LOADS and reaches the resolver as True. A schema that forbade the key made every "EMA is
-    kept" claim unfalsifiable."""
+def test_an_armed_lever_is_refused_BY_NAME_until_the_server_owns_a_copy() -> None:
+    """The other half: the key is READ (the resolver sees True) and the armed posture is refused
+    by a validator that names its grounds (B-1, R355(e)) — a refusal, not a forbidden key, so
+    "EMA is kept" stays falsifiable and CARD-SERVER-OWNED-COPY names what unlocks it."""
     dump = load_config(_CONFIGS[0]).model_dump()
     dump["train"]["ema"] = {"enabled": True, "decay": 0.99, "update_every": 5}
-    RunConfig.model_validate(dump)  # the schema ACCEPTS an armed posture
     assert resolve_ema_config(dump) == (True, 0.99, 5)
+    with pytest.raises(ValidationError, match="CARD-SERVER-OWNED-COPY"):
+        RunConfig.model_validate(dump)
 
 
 def test_an_absent_block_RAISES_instead_of_resolving_to_off() -> None:
