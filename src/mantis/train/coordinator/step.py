@@ -185,7 +185,7 @@ class StepCoordinator:
         # one consumer. Set AFTER the leg-3 write, and carrying no set-once guard: exactly-once
         # is a property of the driver, not of a branch only a test can reach.
         self.clean_stop_saved = False
-        # Set by EITHER save leg (O2 clean stop, O3 shutdown save): the loop's guard (B-8).
+        # Set by EITHER save leg: the loop's guard (B-8); `clean_stop_saved` says WHICH leg.
         self.final_save_done = False
         # None is a unit-test affordance ONLY; production wiring is unconditional at the one
         # composition root.
@@ -280,6 +280,13 @@ class StepCoordinator:
         since an absent guard means no disk abort is in flight."""
         guard = getattr(self.subsystems, "disk_guard", None)
         return bool(guard is not None and getattr(guard, "critical_fired", False))
+
+    def settle_inflight_eval_for_stop(self) -> None:
+        """Abandon and route the in-flight round BEFORE a resumable stop's bundle hashes the anchor."""
+        if self.shutdown.abort_rule is not None or self._disk_critical():
+            return
+        from mantis.train.coordinator import drain
+        drain.flush_pending_eval(self, resumable_stop=True)
 
     def persist_resume_state(self, checkpoint_path: Any) -> Any:
         """Persist the ring and write the sidecar that makes `checkpoint_path` resumable.
@@ -444,6 +451,7 @@ class StepCoordinator:
         # O3: shutdown-save — checkpoint, ring and sidecar, then stop. `persist_resume_state`
         # is run-fatal: a stop that cannot record its ring has not stopped resumably.
         if self.shutdown.shutdown_save:
+            self.settle_inflight_eval_for_stop()
             ckpt = self.trainer.save_checkpoint(self._last_loss_info or None)
             self.persist_resume_state(ckpt)
             self.final_save_done = True
@@ -1059,12 +1067,14 @@ class StepCoordinator:
         `eval_skipped_busy` (`ack.get("kicked") is False`) — never for WR."""
         if self.eval_pipeline is None or cfg.eval_interval <= 0:
             return False, False
-        # The round INDEX advancing is the kick: in-run that is the exact multiple (the kick runs
-        # per training step); after a resume it is what a `% interval` test could not see (B-3).
+        # The round INDEX advancing is the kick (in-run the exact multiple; after a resume what a
+        # `% interval` test could not see, B-3); held as a STEP so a re-minted interval re-derives.
         round_idx = self._train_step // cfg.eval_interval
-        if round_idx <= 0 or round_idx <= self._eval_round_last_step:
+        last_idx = (-1 if self._eval_round_last_step < 0
+                    else self._eval_round_last_step // cfg.eval_interval)
+        if round_idx <= 0 or round_idx <= last_idx:
             return False, False
-        self._eval_round_last_step = round_idx
+        self._eval_round_last_step = self._train_step
         best = getattr(self.anchor_state, "best_model", None)
         best_step = getattr(self.anchor_state, "best_model_step", None)
         ack = self.eval_pipeline.run_evaluation(
@@ -1075,12 +1085,33 @@ class StepCoordinator:
         eval_kicked_off = bool(ack.get("kicked") is True)
         return eval_kicked_off, eval_skipped_busy
 
-    def restore_eval_round_state(self, last_kicked_round: int) -> None:
-        """The sidecar's last KICKED round index, restored before the first step (B-3)."""
-        self._eval_round_last_step = int(last_kicked_round)
+    def restore_eval_round_state(self, last_kicked_step: int) -> None:
+        """The STEP of the sidecar's last eval kick (-1 = none). Raises: `ResumeStateError` past the boot step."""
+        if int(last_kicked_step) > self._train_step:
+            raise _resume_state.ResumeStateError(
+                f"sidecar eval_round_last_step {int(last_kicked_step)} lies past the boot step "
+                f"{self._train_step}: not this bundle's kick record"
+            )
+        self._eval_round_last_step = int(last_kicked_step)
 
     #: The trainer's guard counters that ride the sidecar beside the coordinator's windows.
     _TRAINER_COUNTERS = ("skipped_steps", "nonfinite_loss_microbatches", "nonfinite_grad_steps")
+
+    def _fold_window_left_at_a_boundary(self) -> None:
+        """A boundary bundle is written before the boundary consumed its window: fold it as it would have (B-7)."""
+        cfg = self.config
+        if not self._policy_loss_window or self._train_step % cfg.gate_interval != 0:
+            return
+        window, self._policy_loss_window = self._policy_loss_window, []
+        spec = cfg.policy_loss_trough_abort
+        if spec is None:
+            return
+        mean = sum(window) / len(window)
+        if self._policy_loss_reference is None:
+            self._policy_loss_reference = mean
+            return
+        self._policy_loss_window_means.append(mean)
+        del self._policy_loss_window_means[:-spec.consec]
 
     def guard_state(self) -> dict[str, Any]:
         """The abort windows and guard counters a resume must carry (B-7): JSON-shaped."""
@@ -1093,6 +1124,7 @@ class StepCoordinator:
             "initial_policy_loss": self._initial_policy_loss,
             "policy_loss_reference": self._policy_loss_reference,
             "policy_loss_window_means": [float(v) for v in self._policy_loss_window_means],
+            "policy_loss_window": [float(v) for v in self._policy_loss_window],
             "loss_window": [float(v) for v in self._loss_window],
             "ply_cap_rate": self._ply_cap_rate,
             "trainer": {name: int(getattr(trainer, name, 0)) for name in self._TRAINER_COUNTERS
@@ -1100,7 +1132,13 @@ class StepCoordinator:
         }
 
     def restore_guard_state(self, state: Mapping[str, Any]) -> None:
-        """Restore what `guard_state` captured; an absent key keeps the fresh default (B-7)."""
+        """Restore what `guard_state` captured (absent keys keep defaults). Raises: `ResumeStateError` on a bad shape."""
+        try:
+            self._restore_guard_fields(state)
+        except (TypeError, ValueError) as exc:
+            raise _resume_state.ResumeStateError(f"sidecar guards are malformed: {exc}") from exc
+
+    def _restore_guard_fields(self, state: Mapping[str, Any]) -> None:
         if "draw_rate_history" in state:
             self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
         if "wr_history" in state:
@@ -1117,6 +1155,9 @@ class StepCoordinator:
             self._policy_loss_reference = None if v is None else float(v)
         if "policy_loss_window_means" in state:
             self._policy_loss_window_means = [float(v) for v in state["policy_loss_window_means"]]
+        if "policy_loss_window" in state:
+            self._policy_loss_window = [float(v) for v in state["policy_loss_window"]]
+            self._fold_window_left_at_a_boundary()
         if "loss_window" in state:
             self._loss_window = [float(v) for v in state["loss_window"]]
         if "ply_cap_rate" in state:

@@ -31,6 +31,8 @@
 #   torch_eval/             torch.profiler trace (CUDA kernels + shapes), if torch is present
 #   PROFILE_ENV.txt         provenance
 set -euo pipefail
+# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+export UV_NO_SYNC=1
 
 CONFIG=""; OUT_DIR=""; DURATION_SEC=900
 while [ $# -gt 0 ]; do

@@ -89,6 +89,10 @@ def run_training_loop(
         if saved:
             return
         emit_via(sink, {"event": "shutdown_save", "step": getattr(trainer, "step", None)})
+        # The in-flight round settles (and may promote) BEFORE the bundle hashes the anchor.
+        settle = getattr(coordinator, "settle_inflight_eval_for_stop", None)
+        if settle is not None:
+            settle()
         checkpoint_path = trainer.save_checkpoint(loss_info)
         saved = True
         # The sidecar rides this leg too: a stop DURING a step never returns from `step()`, so

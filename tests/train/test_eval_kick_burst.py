@@ -87,7 +87,7 @@ def test_the_kick_still_guards_on_the_round_index_advance() -> None:
     kick = next(n for n in ast.walk(tree)
                 if isinstance(n, ast.FunctionDef) and n.name == "_maybe_kick_eval")
     src = ast.unparse(kick)
-    assert "round_idx <= self._eval_round_last_step" in src, (
+    assert "round_idx <= last_idx" in src, (
         "the round-index guard is gone — the kick would fire every training step"
     )
     assert "self._eval_round_last_step" in src, (

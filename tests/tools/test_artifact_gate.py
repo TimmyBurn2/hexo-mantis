@@ -191,7 +191,7 @@ def test_an_empty_diff_widens_to_a_fallback_and_says_so(tmp_path):
     env = _repo_with(tmp_path, [{"base.txt": b"base\n"},
                                 {"src/mantis/blob.bin": b"\0" * (MAX_ADDED_BYTES + 1)}])
     res = _gate(tmp_path, env, "--base", "HEAD")
-    assert "degrading WIDE" in res.stdout, res.stdout
+    assert "NARROWING to the last commit" in res.stdout, res.stdout
     assert res.returncode == 1 and "VIOLATION large-file: src/mantis/blob.bin" in res.stdout
 
 

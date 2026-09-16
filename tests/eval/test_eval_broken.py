@@ -431,3 +431,31 @@ def test_apply_gate_decision_honours_a_partial_verdict_and_refuses_a_broken_roun
     broken = {"eval_broken_reason": "killed", "gate_verdict_partial": False, "promoted": False,
               "step": 3000}
     assert apply_gate_decision(hooks, broken) is None and len(loads) == 1
+
+
+def test_a_partial_left_by_an_earlier_process_cannot_promote_a_new_round(fake_mp, tmp_path) -> None:
+    """A watchdog exit finalises nothing and the relaunch restores the same round id: the ghost must go."""
+    sink = _SpySink()
+    kwargs = _pipeline_kwargs(tmp_path, sink=sink)
+    pipeline = build_eval_pipeline(**kwargs, leaf_batch_size=1)
+    try:
+        pipeline.run_evaluation(_tiny_model(), 3000, None, full_config={}, best_model_step=None)
+        result_path = pipeline._inflight["spec"].result_path
+    finally:
+        pipeline.stop()
+    write_partial_gate(result_path, step=3000, gate_result=_gate_verdict(True))  # the ghost
+    pipeline2 = build_eval_pipeline(**kwargs, leaf_batch_size=1)
+    try:
+        assert not partial_gate_path(result_path).exists(), "the constructor sweep takes it"
+        write_partial_gate(result_path, step=3000, gate_result=_gate_verdict(True))
+        pipeline2.run_evaluation(_tiny_model(), 3000, None, full_config={}, best_model_step=None)
+        spec = pipeline2._inflight["spec"]
+        assert spec.result_path == result_path, "the same round id recurs after a restore"
+        assert not partial_gate_path(result_path).exists(), "the spawn takes it too"
+        proc = fake_mp.last_process
+        proc.alive = False
+        proc.exitcode = -9
+        result = _bounded(lambda: pipeline2.drain_pending(), timeout=5.0)
+        assert result["gate_verdict_partial"] is False and result["promoted"] is False
+    finally:
+        pipeline2.stop()

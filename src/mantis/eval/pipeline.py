@@ -402,11 +402,12 @@ class EvalPipeline:
         # from `--out-dir` AND `run_id`; from the out-dir alone it was false exactly when two
         # runs shared one. Only `.tmp` is in scope, and no age threshold, which would be an
         # unmeasured constant against a race the precondition already excludes.
-        for stale in self._work_dir.glob("*_result.json.tmp"):
-            try:
-                stale.unlink(missing_ok=True)
-            except OSError:
-                _LOG.debug("stale eval result tmp not swept: %s", stale, exc_info=True)
+        for pattern in ("*_result.json.tmp", "*_result.json.gate.partial.json"):
+            for stale in self._work_dir.glob(pattern):
+                try:
+                    stale.unlink(missing_ok=True)
+                except OSError:
+                    _LOG.debug("stale eval litter not swept: %s", stale, exc_info=True)
         self._ladder_state_path = Path(ladder_state_path)
         self._promotion = promotion
         self._sink = sink
@@ -696,6 +697,9 @@ class EvalPipeline:
                 "it calls `signal.signal`. If the eval kick ever moves onto the poller "
                 "thread, the arming in `_worker_entry` must be re-derived FIRST."
             )
+        # A partial an EARLIER process left at this round's path (a watchdog exit finalises
+        # nothing, the relaunch restores the same round id) must not promote THIS round (A-3).
+        _remove_partial_gate({"spec": spec})
         spec_path = self._work_dir / f"{spec.round_id}_spec.json"
         spec_path.write_text(json.dumps(spec.to_dict()))
         ctx = multiprocessing.get_context(self._mp_ctx_name)
@@ -1116,6 +1120,7 @@ class EvalPipeline:
             # The teardown route's litter sweep: this method never calls `_finalize_round` and
             # runs on EVERY run exit, the commonest producer the per-round unlink cannot reach.
             _drop_result_tmp_if_writer_gone(inflight)
+            _remove_partial_gate(inflight)
 
 
 def build_eval_pipeline(

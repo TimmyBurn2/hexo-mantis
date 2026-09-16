@@ -49,7 +49,7 @@ def _state(tmp_path: Path, ckpt_name: str = "run6_00000750_abcdef12.ckpt") -> Re
     return ResumeState(
         version=SIDECAR_VERSION, run_id="run6", step=750, checkpoint_filename=ckpt_name,
         ring=_ring_file(tmp_path), round_counter=3, last_p_hat={"sealbot_d5": 0.79},
-        anchor_sha256="0" * 64, rng=capture_rng_streams(), eval_round_last_step=3,
+        anchor_sha256="0" * 64, rng=capture_rng_streams(), eval_round_last_step=750,
     )
 
 
@@ -211,7 +211,7 @@ def test_a_sidecar_predating_the_kicked_round_field_reads_unknown(tmp_path: Path
     write_resume_state(_state(tmp_path), ckpt)
     side = sidecar_path_for(ckpt)
     payload = json.loads(side.read_text(encoding="utf-8"))
-    assert payload["eval_round_last_step"] == 3
+    assert payload["eval_round_last_step"] == 750
     del payload["eval_round_last_step"]
     side.write_text(json.dumps(payload), encoding="utf-8")
     assert load_resume_state(ckpt).eval_round_last_step == -1

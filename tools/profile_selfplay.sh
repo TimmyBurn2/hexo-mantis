@@ -34,6 +34,8 @@
 #   flamegraph_selfplay.svg   cargo-flamegraph over the Rust engine, if --rust
 #   PROFILE_ENV.txt           what was measured: shas, config identity, tool versions
 set -euo pipefail
+# THE GATES NEVER RE-SYNC THE VENV (R348(a), B-5): `uv run` inherits uv's own `--no-sync`.
+export UV_NO_SYNC=1
 
 CONFIG=""; OUT_DIR=""; DURATION_SEC=300; DO_RUST=0
 while [ $# -gt 0 ]; do

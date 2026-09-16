@@ -183,7 +183,7 @@ class ResumeState:
     last_p_hat: dict[str, float]
     anchor_sha256: str | None
     rng: dict[str, Any]
-    #: The last eval round index the coordinator KICKED; -1 = never, or a sidecar predating it.
+    #: The STEP of the coordinator's last eval kick; -1 = never, or a sidecar predating it.
     eval_round_last_step: int = -1
     #: The coordinator's abort windows and guard counters (`StepCoordinator.guard_state`, B-7);
     #: `{}` for a sidecar predating the field.

@@ -663,9 +663,9 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
     root = _mini_tree(tmp_path)
     rel = f"{_F1_PLANT_STEM}.yaml"
     plant = root / "configs" / rel
-    plant.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                              "actor_lag_abort_enabled: false"))
-    assert "actor_lag_abort_enabled: false" in plant.read_text(), (
+    plant.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
+                                              "terminal_eval_enabled: false"))
+    assert "terminal_eval_enabled: false" in plant.read_text(), (
         "the planted config must really be disarmed, or this test is vacuous"
     )
     result = _mini_audit(root)
@@ -717,8 +717,8 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
     production config is still audited when a different config is named."""
     root = _mini_tree(tmp_path)
     production = root / PRODUCTION_CONFIGS[0]
-    production.write_text(production.read_text().replace("actor_lag_abort_enabled: true",
-                                                         "actor_lag_abort_enabled: false"))
+    production.write_text(production.read_text().replace("terminal_eval_enabled: true",
+                                                         "terminal_eval_enabled: false"))
     healthy = tmp_path / "healthy.yaml"
     healthy.write_text(RUN5.read_text())
 
@@ -733,7 +733,7 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
         "naming a healthy config on the command line must NOT excuse the production set — "
         f"replace semantics returned 0 here; got {named.returncode}\n{output[-3000:]}"
     )
-    assert "actor_lag" in output and PRODUCTION_CONFIGS[0].split("/")[-1] in output, (
+    assert "terminal_eval_broken" in output and PRODUCTION_CONFIGS[0].split("/")[-1] in output, (
         f"the failure must still name the disarmed production config; got {output[-2000:]}"
     )
 
@@ -1627,9 +1627,9 @@ def _plant_disarmed(root: Path, rel: str) -> Path:
     """A really-disarmed copy of run5 at `configs/<rel>` inside a mini tree."""
     target = root / "configs" / rel
     target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                               "actor_lag_abort_enabled: false"))
-    assert "actor_lag_abort_enabled: false" in target.read_text(), (
+    target.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
+                                               "terminal_eval_enabled: false"))
+    assert "terminal_eval_enabled: false" in target.read_text(), (
         "the planted config must really be disarmed, or this row is vacuous"
     )
     return target
@@ -2267,15 +2267,15 @@ def test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored(tmp_path) -> None
         f"{bare.returncode}\n{(bare.stdout + bare.stderr)[-2000:]}"
     )
     candidate = tmp_path / "candidate.yaml"
-    candidate.write_text(RUN5.read_text().replace("actor_lag_abort_enabled: true",
-                                                  "actor_lag_abort_enabled: false"))
+    candidate.write_text(RUN5.read_text().replace("terminal_eval_enabled: true",
+                                                  "terminal_eval_enabled: false"))
     named = _mini_audit(root, "--config", str(candidate))
     output = named.stdout + named.stderr
     assert named.returncode == 30, (
         "a DISARMED config named on the command line must be audited — `named = None` "
         f"returns 0 here with the whole tier green; got {named.returncode}\n{output[-3000:]}"
     )
-    assert "candidate.yaml" in output and "actor_lag" in output, (
+    assert "candidate.yaml" in output and "terminal_eval_broken" in output, (
         f"the failure must name the config the operator asked about; got {output[-2000:]}"
     )
 
@@ -2405,8 +2405,8 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
     # …and the escape the pin exists to refuse, driven.
     root = _mini_tree(tmp_path)
     production = root / "configs" / "run6.yaml"
-    production.write_text(production.read_text().replace("actor_lag_abort_enabled: true",
-                                                         "actor_lag_abort_enabled: false"))
+    production.write_text(production.read_text().replace("terminal_eval_enabled: true",
+                                                         "terminal_eval_enabled: false"))
     bare = _mini_audit(root)
     assert bare.returncode == 30, (
         "a disarmed run5 must fail gate 12 with NO --config in sight — this is the whole of "

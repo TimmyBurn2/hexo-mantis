@@ -15,6 +15,8 @@ from __future__ import annotations
 from mantis._engine import HexgBuffer
 
 import dataclasses
+
+import pytest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -221,9 +223,10 @@ def _make_config(**overrides) -> StepCoordinatorConfig:
 
 
 def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=None,
-                      monitor_cfg=None):
+                      monitor_cfg=None, trainer_step: int = 0):
     pool = pool or FakePool()
     trainer = FakeTrainer()
+    trainer.step = trainer_step  # a resumed trainer: the coordinator reads it at construction
     buffer = FakeBuffer()
     shutdown = ShutdownState()
     sink = SpySink()
@@ -274,10 +277,7 @@ def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
 
 def test_steps_per_hour_after_a_resume_counts_steps_since_boot() -> None:
     """B-2 (R355(e)): booted at 23 829 the rate read 23 829 + d over the hours since boot (4.79e9)."""
-    h = _make_coordinator()
-    h.trainer.step = 23_829
-    h.coord._train_step = 23_829
-    h.coord._boot_step = 23_829
+    h = _make_coordinator(trainer_step=23_829)
     started = h.coord._run_started
     h.coord._clock = SimpleNamespace(now=lambda: started + 3600.0, sleep=lambda _s: None)
     h.pool.games_completed = 5
@@ -311,12 +311,8 @@ class _KickSpy:
 
 
 def _boot_at(step: int, *, eval_interval: int):
-    h = _make_coordinator(config=_make_config(eval_interval=eval_interval, log_interval=1),
-                          eval_pipeline=_KickSpy())
-    h.trainer.step = step
-    h.coord._train_step = step
-    h.coord._boot_step = step
-    return h
+    return _make_coordinator(config=_make_config(eval_interval=eval_interval, log_interval=1),
+                             eval_pipeline=_KickSpy(), trainer_step=step)
 
 
 def test_a_fresh_run_crossing_the_boundary_kicks_once() -> None:
@@ -340,10 +336,32 @@ def test_a_resume_exactly_at_the_boundary_with_no_record_kicks_it() -> None:
 
 def test_a_resume_whose_sidecar_says_the_round_was_kicked_does_not_repeat_it() -> None:
     h = _boot_at(3000, eval_interval=3000)
-    h.coord.restore_eval_round_state(1)
+    h.coord.restore_eval_round_state(3000)  # the kick at 3000 is on the record
     h.pool.games_completed = 5
     h.coord.step()
     assert h.eval_pipeline.kicks == []
+
+
+def test_a_re_minted_eval_interval_across_a_resume_re_derives_the_round_from_the_kicked_step() -> None:
+    """The record is a STEP: kicked at 24000 under 3000, resumed under 2000 the next round is 26000."""
+    h = _boot_at(24000, eval_interval=2000)
+    h.coord.restore_eval_round_state(24000)
+    h.pool.games_completed = 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == []
+    h.coord._train_step = 25999
+    h.trainer.step = 25999
+    h.pool.games_completed += 5
+    h.coord.step()
+    assert h.eval_pipeline.kicks == [26000]
+
+
+def test_a_kick_record_past_the_boot_step_is_refused() -> None:
+    from mantis.train.resume_state import ResumeStateError
+
+    h = _boot_at(3000, eval_interval=3000)
+    with pytest.raises(ResumeStateError, match="past the boot step"):
+        h.coord.restore_eval_round_state(3001)
 
 
 def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
@@ -673,3 +691,11 @@ def test_monitor_gates_publishes_the_watchdog_best_effort_counters() -> None:
     h.coord.step()
     summary = h.sink.named("monitor_gates")[-1]
     assert summary["watchdog_best_effort"] == {"watchdog_file_mirror": 3}
+
+
+def test_a_malformed_guard_value_is_a_named_resume_error() -> None:
+    from mantis.train.resume_state import ResumeStateError
+
+    h = _make_coordinator()
+    with pytest.raises(ResumeStateError, match="malformed"):
+        h.coord.restore_guard_state({"consec_high_gn": "three"})

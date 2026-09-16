@@ -684,3 +684,66 @@ def test_a_signal_in_the_pre_O3_poll_window_saves_ONCE() -> None:
                       sink=h.sink, max_steps=50)
     assert trainer.saves == 1, f"one final save, got {trainer.saves}"
     assert len(persists) == 1
+
+
+class _AbandoningPipeline:
+    """A pipeline whose in-flight round, abandoned, promotes off a partial verdict (A-3)."""
+
+    def __init__(self, order: list[str]) -> None:
+        self.order = order
+        self.round_counter = 1
+        self.last_p_hat: dict[str, float] = {}
+
+    def abandon_pending(self):
+        self.order.append("abandon_pending")
+        return {"step": 5, "promoted": True, "promoted_step": 5, "eval_broken_reason": "killed",
+                "gate_verdict_partial": True, "wr_sealbot": None, "gate": {"promoted": True}}
+
+    def drain_pending(self):
+        return None
+
+    def poll_completed(self):
+        return None
+
+    def apply_gate_decision(self, result) -> int | None:
+        self.order.append("apply_gate_decision")
+        return int(result["step"])
+
+
+def _stop_leg_harness(shutdown: ShutdownState):
+    order: list[str] = []
+    trainer = _Trainer(step=5)
+    h = _harness(trainer=trainer, config=_config(stop_step=1000), shutdown=shutdown)
+    h.coord.eval_pipeline = _AbandoningPipeline(order)
+    real_persist = h.coord.persist_resume_state
+    h.coord.persist_resume_state = lambda p: order.append("persist_resume_state")
+    h.coord.on_eval_round_complete = lambda result: order.append("on_eval_round_complete")
+    return h, order, real_persist
+
+
+def test_the_O3_leg_settles_the_inflight_round_BEFORE_the_bundle_hashes_the_anchor() -> None:
+    """A-3's abandon-route promotion landed AFTER the sidecar hashed the anchor: the resume refused."""
+    shutdown = ShutdownState()
+    h, order, _ = _stop_leg_harness(shutdown)
+    shutdown.shutdown_save = True
+    h.coord.step()
+    assert order == ["abandon_pending", "on_eval_round_complete", "apply_gate_decision",
+                     "persist_resume_state"], order
+
+
+def test_the_loop_leg_settles_the_inflight_round_BEFORE_the_bundle_too() -> None:
+    shutdown = ShutdownState()
+    h, order, _ = _stop_leg_harness(shutdown)
+    shutdown.shutdown_save = True  # set at ENTRY: the 0-step shutdown takes the loop's own leg
+    run_training_loop(trainer=h.trainer, shutdown_state=shutdown, coordinator=h.coord,
+                      sink=h.sink, max_steps=5)
+    assert order[:3] == ["abandon_pending", "on_eval_round_complete", "apply_gate_decision"]
+    assert "persist_resume_state" in order and order.index("persist_resume_state") > 2
+
+
+def test_a_non_resumable_stop_settles_nothing() -> None:
+    shutdown = ShutdownState()
+    h, order, _ = _stop_leg_harness(shutdown)
+    shutdown.record_abort("disk_space_exhausted")
+    h.coord.settle_inflight_eval_for_stop()
+    assert order == []

@@ -340,7 +340,7 @@ class Trainer:
         `len()` without consuming anything, and the callables keep materialisation LAZY — already
         collated batches would all be resident at once, defeating the cap while passing every
         count-based oracle. ONE OPTIMIZER STEP PER TRAINING STEP: clipping is nonlinear in the
-        whole gradient and `grad_norm` is an armed gate's input. SINGLE TAIL, five keys — a path
+        whole gradient and `grad_norm` is an armed gate's input. SINGLE TAIL, seven keys — a path
         returning a dict without `grad_norm` would feed `grad_norm_hard_abort` a passing `0.0`.
         """
         if len(parts) == 0:
@@ -454,10 +454,11 @@ class Trainer:
         lr = self.optimizer.param_groups[0]["lr"]
         # The SEVEN-key loss_info contract (the counters ride the EVENT); the two entropy keys are
         # ONE measurement, every graph-route row being a self-play ring row (B-4).
+        policy_entropy = policy_entropy_total if contributing > 0 else None  # refused: unmeasured
         result = {"loss": loss_total, "policy_loss": policy_total,
                   "value_loss": value_total, "grad_norm": grad_norm, "lr": lr,
-                  "policy_entropy": policy_entropy_total,
-                  "policy_entropy_selfplay": policy_entropy_total}
+                  "policy_entropy": policy_entropy,
+                  "policy_entropy_selfplay": policy_entropy}
         # A REFUSED step emits `trainer_step_skipped` INSTEAD: emitting both would put a step in
         # the stream the step counter does not carry, and `periodic_checkpoint` must not fire
         # either — `self.step` did not move, so a crossed cadence boundary would be crossed twice.

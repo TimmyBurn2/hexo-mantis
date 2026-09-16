@@ -252,3 +252,28 @@ def test_the_manifest_row_is_deferred_with_the_bounded_cadence_and_exit_49() -> 
     assert Cadence.GATE_INTERVAL_CONSEC_BOUNDED.earliest_fire_step((3, 5000), period_steps=1000.0) == 4000.0
     # A bound the windows cannot reach is "can never fire", never a fabricated step.
     assert Cadence.GATE_INTERVAL_CONSEC_BOUNDED.earliest_fire_step((3, 3000), period_steps=1000.0) == float("inf")
+
+
+def test_a_window_left_unconsumed_at_a_boundary_bundle_is_folded_on_restore() -> None:
+    """B-7: a boundary bundle is written before the boundary consumed its window; the restore folds it."""
+    h = _harness(_rising, _SPEC, gate_interval=2)
+    # Steps 1-4: window 1 becomes the reference at 2, window 2's mean lands at 4.
+    _drive(h, 4)
+    assert h.coord._policy_loss_reference is not None
+    assert len(h.coord._policy_loss_window_means) == 1
+    # A bundle written at step 6 INSIDE the step: the window holds step 5 (and the boundary 6
+    # has not consumed it). Model that state directly.
+    h.coord._train_step = 6
+    h.coord._policy_loss_window = [2.58]
+    carried = h.coord.guard_state()
+    assert carried["policy_loss_window"] == [2.58]
+
+    resumed = _harness(_rising, _SPEC, gate_interval=2)
+    resumed.coord._train_step = 6
+    resumed.coord.restore_guard_state(carried)
+    assert resumed.coord._policy_loss_window == [], "folded, not carried into the next window"
+    assert len(resumed.coord._policy_loss_window_means) == 2, "the boundary's mean was taken"
+    # One more window (steps 7-8) is the third consecutive rise: the halt fires at 8.
+    resumed.coord.trainer.step = 6
+    _drive(resumed, 2)
+    assert resumed.shutdown.running is False, "consec 3 met on the resumed process's first boundary"

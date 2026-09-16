@@ -87,9 +87,9 @@ def test_an_unresolvable_config_path_is_a_NAMED_failure_not_an_unnamed_rc_1() ->
             "draw_rate_collapse", "train.step_coordinator.draw_rate_threshold",
             "step_coordinator"),
         "R71: the SAME route on the OTHER row — the fix is to the class, not to this row": (
-            "actor_lag", "monitor.actor_lag_abort_enabuled", "actor_lag_abort_enabuled"),
+            "terminal_eval_broken", "train.terminal_eval_enabuled", "terminal_eval_enabuled"),
         "R71: a typo in the FIRST segment, on the other row": (
-            "actor_lag", "moniter.actor_lag_abort_enabled", "moniter"),
+            "terminal_eval_broken", "trian.terminal_eval_enabled", "trian"),
     }
     for reason, (row_name, path, segment) in cases.items():
         with pytest.raises(ArmingSurfaceMissingError) as caught:

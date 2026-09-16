@@ -82,7 +82,9 @@ def main(argv: list[str] | None = None) -> int:
             widened = next((fb for fb in _WIDE_FALLBACKS
                             if fb != base and _resolves(fb) and _range_diff(fb).strip("\0")), None)
             if widened is not None:
-                print(f"gate 6: the diff against {base} is EMPTY -- degrading WIDE to {widened}")
+                how = ("NARROWING to the last commit" if widened == "HEAD~1"
+                       else f"degrading WIDE to {widened}")
+                print(f"gate 6: the diff against {base} is EMPTY -- {how}")
                 raw = _range_diff(widened)
             else:
                 print(f"gate 6: the diff against {base} is EMPTY and no fallback has a range -- "

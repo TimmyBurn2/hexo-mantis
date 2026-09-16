@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import logging
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,6 +19,8 @@ from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthF
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.eval.errors import EvalBrokenReason, ResultContractError
+
+_LOG = logging.getLogger(__name__)
 
 #: The contract-doc / schema-census name of the gate-block concurrency row: it lives beside the
 #: spec that carries it, because the name belongs with the consumer, not with the test.
@@ -215,13 +218,17 @@ def partial_gate_path(result_path: str) -> Path:
     return Path(result_path + ".gate.partial.json")
 
 
-def write_partial_gate(result_path: str, *, step: int, gate_result: Mapping[str, Any]) -> Path:
-    """Persist the gate verdict atomically (tmp + replace). Raises OSError as the writer's own."""
+def write_partial_gate(result_path: str, *, step: int, gate_result: Mapping[str, Any]) -> Path | None:
+    """Persist the gate verdict atomically; `None` on an OSError (logged: the round survives without it)."""
     target = partial_gate_path(result_path)
     tmp = target.with_suffix(target.suffix + ".tmp")
-    tmp.write_text(json.dumps({"step": int(step), "phase": "gate", "gate": dict(gate_result)}),
-                   encoding="utf-8")
-    tmp.replace(target)
+    try:
+        tmp.write_text(json.dumps({"step": int(step), "phase": "gate", "gate": dict(gate_result)}),
+                       encoding="utf-8")
+        tmp.replace(target)
+    except OSError:
+        _LOG.warning("partial_gate_not_written path=%s", target, exc_info=True)
+        return None
     return target
 
 

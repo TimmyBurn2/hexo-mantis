@@ -35,7 +35,7 @@ class DeployTagHooks:
 
 
 def apply_gate_decision(hooks: DeployTagHooks, result: Mapping[str, Any]) -> int | None:
-    """No-op (`None`) unless `result["promoted"] is True` and the round was not broken.
+    """No-op (`None`) unless `promoted` and the round is clean or carries a PARTIAL gate verdict (A-3).
 
     A gate pass advances the deploy tag and ONLY the deploy tag; the actor's weights
     are none of this function's business (WP-UNFREEZE, R49).
