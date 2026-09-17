@@ -23,17 +23,6 @@ class WarmStartIdentityError(RuntimeError):
     that came out of the seam is not the net that went in."""
 
 
-def _extract_state(raw: Any) -> dict[str, torch.Tensor]:
-    """Pull the model state dict out of a loaded artifact — bare, or a `{model_state: …}` /
-    `{state_dict: …}` wrapper. Prefixes stay intact; the BC-transfer matcher handles them."""
-    if isinstance(raw, dict):
-        for key in ("model_state", "state_dict"):
-            inner = raw.get(key)
-            if isinstance(inner, dict):
-                return inner
-    return raw
-
-
 #: THE ONE CONFIG ROW naming a BC warm-start source; `resolve_bc_warm_start` is its only reader.
 WARM_START_ROW = "identity.warm_start"
 

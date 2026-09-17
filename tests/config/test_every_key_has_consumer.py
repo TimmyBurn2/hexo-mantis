@@ -114,7 +114,7 @@ CONSUMER_REGISTRY = {
     # which reads config["train"] directly with no flat-key fallback.
     "train.lr": "TrainHParams.from_config -> optimizer ctor (trainer/core.py)",
     "train.weight_decay": "TrainHParams.from_config -> build_param_groups (trainer/core.py)",
-    "train.grad_clip": "TrainHParams.from_config -> fp16_backward_step max_grad_norm",
+    "train.grad_clip": "TrainHParams.from_config -> clip_and_step max_grad_norm",
     "train.device":
         "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"

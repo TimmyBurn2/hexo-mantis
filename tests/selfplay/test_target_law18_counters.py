@@ -17,7 +17,7 @@ The PRODUCER proofs (counters actually fire) are Rust-side
 (`target_wire_carry.rs::ctr_export_offwindow_mass_moves_fires_on_a_dispersed_run`,
 `::o4b_latch_stores_the_named_variant_and_halts_the_runner`). This leg pins the
 surface: values thread through un-crosswired, and an idle lever stays VISIBLE at 0
-(the chain_loss_with_fire_rate posture, losses.py:224-233). NOTE (recorded): the
+(the LAW-18 idle-lever posture). NOTE (recorded): the
 `getattr(..., 0)` legacy-wheel default in `runner_stats` means surface visibility is
 NOT a producer proof — that burden stays on the Rust legs (LAW-07).
 
@@ -61,5 +61,5 @@ def test_idle_counters_are_visible_at_zero() -> None:
     for f in _FIELDS:
         assert getattr(st, f) == 0, (
             f"idle counter {f!r} must be VISIBLE at 0 (a disabled/idle lever stays "
-            "visible — the chain_loss_with_fire_rate posture)"
+            "visible — the LAW-18 idle-lever posture)"
         )

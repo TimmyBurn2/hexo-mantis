@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import base64
 import dataclasses
-import hashlib
 import json
 import logging
 import os
@@ -23,6 +22,8 @@ from typing import Any
 
 import numpy as np
 import torch
+
+from mantis.util.hashing import sha256_file
 
 _LOG = logging.getLogger(__name__)
 
@@ -34,7 +35,6 @@ SIDECAR_SUFFIX = ".resume.json"
 #: field is refused by `from_dict`'s explicit read.
 SIDECAR_VERSION = 1
 
-_HASH_CHUNK = 1 << 20
 
 #: The streams `capture_rng_streams` writes and `restore_rng_streams` honours — ONE authority, so
 #: a stream can never be captured into a sidecar that nothing can restore.
@@ -51,15 +51,6 @@ class RingIdentityError(ResumeStateError):
     """The persisted ring's re-derived sha256 disagrees with the sidecar's record. Separate from
     `ResumeStateError` so a planted break can assert the specific refusal rather than the
     family — a test that accepts any exception cannot tell the two apart."""
-
-
-def sha256_file(path: str | Path) -> str:
-    """The file's sha256, streamed. Raises OSError if it cannot be read."""
-    digest = hashlib.sha256()
-    with open(path, "rb") as fh:
-        while chunk := fh.read(_HASH_CHUNK):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 def sidecar_path_for(checkpoint_path: str | Path) -> Path:

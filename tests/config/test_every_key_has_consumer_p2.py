@@ -101,7 +101,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     # train.*
     "train.lr": "TrainHParams.lr -> core.py:190 AdamW ctor; resume-owned (orchestrator.py:29)",
     "train.weight_decay": "TrainHParams.weight_decay -> core.py:189 AdamW ctor",
-    "train.grad_clip": "TrainHParams.grad_clip -> core.py:409,476 fp16_backward_step max_grad_norm",
+    "train.grad_clip": "TrainHParams.grad_clip -> core.py clip_and_step max_grad_norm",
     "train.device":
         "torch.device(config.train.device) in mantis.run.build_run_collaborators ->"
         " init_trainer(device=…) AND WorkerPool(device=…) (R126; the retired --device flag"

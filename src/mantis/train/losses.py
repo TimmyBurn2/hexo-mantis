@@ -20,7 +20,6 @@ import torch.nn as nn
 # Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
 from torch.amp.grad_scaler import GradScaler
 
-from mantis.train.emit import emit_via
 from mantis.util.constants import is_alpha_full
 
 
@@ -40,22 +39,6 @@ def _segment_softmax(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch
     denom = torch.zeros(b, dtype=logits.dtype, device=logits.device)
     denom.scatter_add_(0, seg, ex)
     return ex / denom[seg]
-
-
-def compute_policy_loss(
-    log_policy: torch.Tensor,
-    target_policy: torch.Tensor,
-    valid_mask: torch.Tensor,
-    device: torch.device,
-    full_search_mask: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Cross-entropy policy loss, masked on zero-policy rows and quick-search positions."""
-    combined = valid_mask
-    if full_search_mask is not None:
-        combined = valid_mask & full_search_mask.bool()
-    if combined.any():
-        return -(target_policy[combined] * log_policy[combined]).sum(dim=1).mean()
-    return torch.zeros(1, device=device, dtype=torch.float32).squeeze()
 
 
 def graph_policy_row_weights(
@@ -145,23 +128,6 @@ def ragged_policy_ce(
     return ce
 
 
-def ragged_policy_ce_and_target_entropy(
-    policy_logits: torch.Tensor,
-    policy_target: torch.Tensor,
-    legal_offsets: torch.Tensor,
-    full_search_mask: torch.Tensor | None = None,
-    denominator: float | None = None,
-    explicit_mask: torch.Tensor | None = None,
-    tail_mass: torch.Tensor | None = None,
-) -> tuple[torch.Tensor, torch.Tensor]:
-    """`ragged_policy_ce_and_entropies` without the model's entropy. See that function."""
-    ce, h_target, _h_model = ragged_policy_ce_and_entropies(
-        policy_logits, policy_target, legal_offsets, full_search_mask=full_search_mask,
-        denominator=denominator, explicit_mask=explicit_mask, tail_mass=tail_mass,
-    )
-    return ce, h_target
-
-
 def ragged_policy_ce_and_entropies(
     policy_logits: torch.Tensor,
     policy_target: torch.Tensor,
@@ -238,65 +204,6 @@ def ragged_policy_ce_and_entropies(
     return _reduce(per_graph), _reduce(entropy_graph), _reduce(model_graph)
 
 
-def compute_kl_policy_loss(
-    log_policy: torch.Tensor,
-    target_policy: torch.Tensor,
-    valid_mask: torch.Tensor,
-    device: torch.device,
-    full_search_mask: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """KL(target || model) policy loss for completed-Q targets — identical gradients to CE,
-    more interpretable value (0 when the model matches the target)."""
-    combined = valid_mask
-    if full_search_mask is not None:
-        combined = valid_mask & full_search_mask.bool()
-    if combined.any():
-        tgt = target_policy[combined]
-        log_model = log_policy[combined]
-        log_tgt = torch.log(tgt.clamp(min=1e-8)).clamp(min=-100.0)  # fp16-safe
-        return (tgt * (log_tgt - log_model)).sum(dim=1).mean()
-    return torch.zeros(1, device=device, dtype=torch.float32).squeeze()
-
-
-def compute_value_loss(
-    value_logit: torch.Tensor,
-    outcome: torch.Tensor,
-    value_mask: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Numerically-stable BCE via `binary_cross_entropy_with_logits`; outcomes {-1,+1}→{0,1}.
-    `value_mask` 0 rows (ply-capped horizon truncation, a false label) are excluded from numerator
-    AND denominator; `None` means all rows contribute."""
-    value_target = (outcome + 1.0) / 2.0
-    logit = value_logit.squeeze(1)
-    if value_mask is None:
-        return nn.functional.binary_cross_entropy_with_logits(logit, value_target)
-    per_row = nn.functional.binary_cross_entropy_with_logits(logit, value_target, reduction="none")
-    mask = value_mask.reshape(-1).bool()
-    combined = per_row[mask]
-    if combined.numel() == 0:
-        return torch.zeros((), device=per_row.device, dtype=per_row.dtype)
-    return combined.mean()
-
-
-def compute_aux_loss(
-    aux_logit: torch.Tensor,
-    target_policy: torch.Tensor,
-    valid_mask: torch.Tensor,
-    device: torch.device,
-    full_search_mask: torch.Tensor | None = None,
-) -> torch.Tensor:
-    """Opponent-reply auxiliary loss (policy-shaped; same MCTS visit targets, same gate)."""
-    combined = valid_mask
-    if full_search_mask is not None:
-        combined = valid_mask & full_search_mask.bool()
-    if combined.any():
-        valid_targets = target_policy[combined]
-        valid_logits = aux_logit[combined]
-        safe_log = valid_logits.clamp(min=-100.0)
-        return -(valid_targets * safe_log).sum(dim=1).mean()
-    return torch.zeros(1, device=device, dtype=torch.float32).squeeze()
-
-
 def compute_chain_loss(
     chain_pred: torch.Tensor,
     chain_target: torch.Tensor,
@@ -339,93 +246,10 @@ def chain_target_fire_rate(
     return active.float().mean().item()
 
 
-def chain_loss_with_fire_rate(
-    chain_pred: torch.Tensor,
-    chain_target: torch.Tensor,
-    weight: float,
-    *,
-    legal_mask: torch.Tensor | None = None,
-    huber_delta: float = 1.0,
-    sink: Any = None,
-    step: int | None = None,
-) -> torch.Tensor | None:
-    """Compute the `chain_head` smooth-L1 loss AND self-report its fire-rate in-run. At
-    ``weight <= 0`` the lever is OFF: no loss, and the report publishes ``fire_rate = 0.0``, so a
-    disabled lever stays VISIBLE. The loss MATH is `compute_chain_loss` unchanged."""
-    if weight <= 0.0:
-        emit_via(sink, {"event": "aux_chain_loss", "weight": float(weight),
-                        "fired": False, "fire_rate": 0.0, "step": step})
-        return None
-    loss = compute_chain_loss(chain_pred, chain_target, legal_mask=legal_mask,
-                              huber_delta=huber_delta)
-    fire_rate = chain_target_fire_rate(chain_target, legal_mask=legal_mask)
-    emit_via(sink, {"event": "aux_chain_loss", "weight": float(weight), "fired": True,
-                    "fire_rate": fire_rate, "loss": float(loss.detach().float()), "step": step})
-    return loss
-
-
-def compute_uncertainty_loss(
-    sigma2: torch.Tensor,
-    z_targets: torch.Tensor,
-    value_detached: torch.Tensor,
-) -> torch.Tensor:
-    """Huber loss for the value-uncertainty head, predicting squared value error. Gradient flows
-    only through the head params — the caller passes a detached value tensor."""
-    z = z_targets.float().unsqueeze(1)
-    target = (z - value_detached.float()).pow(2)
-    return torch.nn.functional.smooth_l1_loss(sigma2.float(), target, beta=1.0, reduction="mean")
-
-
-def compute_ply_index_loss(
-    ply_pred: torch.Tensor,
-    position_indices: torch.Tensor,
-) -> torch.Tensor:
-    """Huber loss on normalized ply index, forcing the trunk to encode game-time progress."""
-    target = (position_indices.float() / 100.0).clamp(0.0, 1.0).unsqueeze(1)
-    return torch.nn.functional.smooth_l1_loss(ply_pred.float(), target, beta=1.0, reduction="mean")
-
-
-def compute_total_loss(
-    policy_loss: torch.Tensor,
-    value_loss: torch.Tensor,
-    aux_loss: torch.Tensor | None = None,
-    aux_weight: float = 0.0,
-    entropy_bonus: torch.Tensor | None = None,
-    entropy_weight: float = 0.0,
-    uncertainty_loss: torch.Tensor | None = None,
-    uncertainty_weight: float = 0.0,
-    ownership_loss: torch.Tensor | None = None,
-    ownership_weight: float = 0.0,
-    threat_loss: torch.Tensor | None = None,
-    threat_weight: float = 0.0,
-    chain_loss: torch.Tensor | None = None,
-    chain_weight: float = 0.0,
-    ply_index_loss: torch.Tensor | None = None,
-    ply_index_weight: float = 0.0,
-) -> torch.Tensor:
-    """Combine policy, value, aux, entropy, uncertainty, ownership, threat, chain, ply-index."""
-    total = policy_loss + value_loss
-    if aux_loss is not None and aux_weight > 0.0:
-        total = total + aux_weight * aux_loss
-    if entropy_bonus is not None and entropy_weight > 0.0:
-        total = total - entropy_weight * entropy_bonus
-    if uncertainty_loss is not None and uncertainty_weight > 0.0:
-        total = total + uncertainty_weight * uncertainty_loss
-    if ownership_loss is not None and ownership_weight > 0.0:
-        total = total + ownership_weight * ownership_loss
-    if threat_loss is not None and threat_weight > 0.0:
-        total = total + threat_weight * threat_loss
-    if chain_loss is not None and chain_weight > 0.0:
-        total = total + chain_weight * chain_loss
-    if ply_index_loss is not None and ply_index_weight > 0.0:
-        total = total + ply_index_weight * ply_index_loss
-    return total
-
-
 def backward_accumulate(loss: torch.Tensor, scaler: GradScaler, fp16: bool) -> None:
-    """The BACKWARD half of `fp16_backward_step` — accumulate into `.grad`, step nothing. No
-    `zero_grad` inside, which is the point: the loop body accumulates and the caller zeroes once
-    before it and steps once after it."""
+    """The BACKWARD half of the fp16 step — accumulate into `.grad`, step nothing. No `zero_grad`
+    inside, which is the point: the loop body accumulates and the caller zeroes once before it
+    and steps once after it."""
     if fp16:
         scaler.scale(loss).backward()
     else:
@@ -464,17 +288,3 @@ def clip_and_step(
         optimizer.step()
     return grad_norm
 
-
-def fp16_backward_step(
-    loss: torch.Tensor,
-    optimizer: torch.optim.Optimizer,
-    scaler: GradScaler,
-    model: nn.Module,
-    fp16: bool,
-    max_grad_norm: float = 1.0,
-) -> float:
-    """Backward pass with optional FP16 gradient scaling + clipping, returning the pre-clip
-    gradient norm. DECOMPOSED, NOT FORKED: exactly the composition of `backward_accumulate` and
-    `clip_and_step`, the same statements in the same order on the same objects."""
-    backward_accumulate(loss, scaler, fp16)
-    return clip_and_step(optimizer, scaler, model, fp16, max_grad_norm)

@@ -279,11 +279,11 @@ def test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite(tmp
 
 def test_the_target_entropy_makes_ce_minus_it_the_kl_to_the_prior() -> None:
     """R350(b)(iv)'s line: `CE - H(target) == KL(target || model)` on the fixture; H carries no grad."""
-    from mantis.train.losses import ragged_policy_ce_and_target_entropy
+    from mantis.train.losses import ragged_policy_ce_and_entropies
 
     f = _fixture()
     logits = f["logits"].clone().requires_grad_(True)
-    ce, entropy = ragged_policy_ce_and_target_entropy(
+    ce, entropy, _model_entropy = ragged_policy_ce_and_entropies(
         logits, f["policy_target"], f["legal_offsets"],
         explicit_mask=f["explicit_mask"], tail_mass=f["tail_mass"])
     target = _rebuilt_target(f, detached=True)
