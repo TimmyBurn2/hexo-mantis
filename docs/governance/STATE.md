@@ -4,7 +4,7 @@ Rewritten in place, never appended to. Every value below was read from the tree 
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
 Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): the minted-values
-block, the OPEN-card line, the exit block's box and push facts, and dispatcher item (6); everything
+block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
 ## Current phase — run7 RESUMED 2026-09-15 20:03 UTC from step 23 829 on the re-minted config (tree `ba51fd46`, gate/rung 256, GSPRT armed); the strix anchor reads the run peaked near 9k; the first resumed round (@24k) is the re-mint's live confirmation
@@ -143,22 +143,22 @@ run7 is LIVE; stopping it is ONE SIGTERM to the supervisor (save-then-exit). Ope
 (1) the resumed run's rounds — r6 @24k is the re-mint's first live round; read its wall and
 the GSPRT's `pairs_played`/`stopped`, and expect the rung ≈ 6–13 pp below the 512 series;
 (2) the strix cadence — 15k read 0.045 and the 9k anchor 0.097; the next point is 30k on the resumed run (`/workspace/oc7/strix_15k/`); (3) the
-balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — the other
-session's analysis, design and plan (`docs/design/observatory_design.md`, status "proposal for a
-ruling"; research in `observatory_research.md`) and its phase 1, the reader layer under
-`tools/observatory/readers` (`f16421f2`, fast-forwarded onto this leg's `35c89657` by the
-operator), await the ruling and the R344(d) amendment its §4.3 drafts; nothing there opens a
-socket yet. The worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
+balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — DECIDED
+2026-09-17 under R355(f) by the operator: `tools/run_dashboard.py` + `tools/dashboard/` and
+`tools/game_viewer.py` + `tools/viewer/` are the ONE implementation (they produce the box page
+through the refresh scripts); the phase-1 reader layer (the observatory's `readers/` package, commits
+`3a563574..4678537d`, 39 tests) is RETIRED from the tree with nothing consuming it. The design
+(`docs/design/observatory_design.md`, `observatory_research.md`) stays as DASH-2's record; its
+measured reader advantage (run6: 3.0 s / 84 MB against the dashboard's 5.0 s / 729 MB) is on the
+DASH-2 card so phase 1 is revived from history, not rewritten, when the server is built. The
+worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
 (6) REPAIR-A4 (R355) LANDED in three plans, `d44f3459..` up to and including the review-fix
 commits of 2026-09-17 (the tip is `git log dev`; 43 commits at this writing):
 A-2 + A-1 + the search-stats producer; the in-run repairs B-1..B-9, B-11, B-19, A-3, C-3; steps
 10–12 — the doc repairs, the §3 deletes and archives (`docs/design/archive/`, `docs/audits/archive/`),
 `mantis.diagnostics.ring_reader`/`.tactics`, gate 15's stale-header rule, two ratchet measures,
-CARD-STYLE-BACKLOG. HELD by the operator (2026-09-17): the observatory deletion and the reader
-merge, until the box page's producer is NAMED — the record (this file, `observatory_design.md`)
-says `tools/run_dashboard.py` + `tools/game_viewer.py` through the refresh scripts, and
-`tools/observatory/` is phase 1 (readers, no page). Run-ops owes: the 30k stop, the five R355(c)
-cells, run8's mint + σ swap, the 3 h shakedown.
+CARD-STYLE-BACKLOG; then the observatory decision of item (5). Run-ops owes: the 30k stop, the
+five R355(c) cells, run8's mint + σ swap, the 3 h shakedown.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
