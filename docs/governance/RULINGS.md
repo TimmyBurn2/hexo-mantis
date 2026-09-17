@@ -355,7 +355,8 @@ warm-up of 2 000 steps is dropped to 0 by (a). R351's deploy/eval PUCT-512, the 
 Supersedes for run7: `configs/run7.yaml` as minted at `fa03905d`/`ccfaf699` and its two
 preflight stamps (a re-mint carries a fresh identity; R3/LAW-12 — the old stamps stay on the
 box as the record of what was preflighted, and bind nothing).
-Status: standing.
+Status: standing — (a)'s "PUCT-512 reader" and the enact paragraph's "deploy and eval PUCT-512" are
+the 2026-09-14 mint's unit, ANNOTATED under R352's foot (see R351's foot for the re-mint).
 
 ---
 
@@ -437,7 +438,9 @@ Amends: R347(b) — ANNOTATED under R347's foot (its `Status` line says so).
 Supersedes for run7: R350(b)(iv)'s trough HALT (demoted to a warning by (d) — the mint arms
 no `train.policy_loss_trough_abort`); R350(b)(ii)'s BC-3 re-run (skipped by (d)); the prereg's
 "one key carries both heads" (split by (c)).
-Status: standing; (c)'s PUCT self-play arm and (d)'s 2 000-step value warm-up are superseded
+Status: standing — the "DEPLOY AND EVAL ARE PUCT-512" unit is ANNOTATED under R351's foot (the
+2026-09-15 resume re-mint moved the gate and the sealbot rung to 256; the kind row and (b)'s
+frontier cells stand); (c)'s PUCT self-play arm and (d)'s 2 000-step value warm-up are superseded
 for run7 by R352(a) — the arm was measured as a trainer and falsified (F-52).
 
 ---
@@ -3580,6 +3583,29 @@ against a few nats of prior, a pair neither the paper nor Mctx ran. The frontier
 same net 24 pp below PUCT, a 0.672 head-to-head inverted to 0.438, and halving with every
 doubling of sims (`falsified.md` F-50). The architect's; ledger.
 Ordered by: R351(a), appended 2026-09-13 by the landing session
+
+### ANNOTATION under R351's foot — "DEPLOY AND EVAL ARE PUCT-512" IS THE 2026-09-14 MINT; GATE AND RUNG READ 256 SINCE THE RESUME RE-MINT
+Corrects: the eval UNIT the text names, not the clause's decision (the kind row `deploy.search.kind:
+puct` is unchanged, and (b)'s four frontier cells were run and read at 128 and 512 as written)
+Fact: run7 was minted with `eval.gate.deploy_sims: 512` and `eval.sealbot_model_sims: 512`
+(`fa03905d`/`ccfaf699`). The 2026-09-15 resume re-mint (`ce0a8ff6`; contract v30 `eval.max_plies`,
+v31 `eval.gate.sequential`; operator direction recorded in `RUN7_EVAL_COST_2026-09-15.md` §D and
+in STATE.md) set both to 256 for the eval-cost reason that record states — the gate block was
+64–85 % of a round's wall and two rounds died at the 14 400 s bound. From step 23 829 on, every
+gate and sealbot-rung reading of run7 is a 256 unit, ≈ 6–13 pp below the 512 series for the same
+strength (the SEALBOT-TT A/B and the frontier's two sims columns bridge the units); the dashboard
+labels both. A session reading "PUCT-512" off this entry and comparing run7's late rungs to run6's
+frozen-checkpoint 512 readings would compare two units — this note is so it does not.
+Ordered by: R355 §2 step 10 (INVESTIGATION-1 ledger C-8: "ANNOTATE under R351's Status, never an
+edit"), appended 2026-09-17 by the REPAIR-A4 plan-3 session
+
+### ANNOTATION under R352's foot — (a)'s "PUCT-512 READER" IS THE 2026-09-14 MINT'S UNIT
+Corrects: the eval unit named in (a) and in the enact paragraph; nothing in the decision
+Fact: see the ANNOTATION under R351's foot — the 2026-09-15 resume re-mint moved
+`eval.gate.deploy_sims` and `eval.sealbot_model_sims` to 256. The frozen-checkpoint comparison (a)
+orders (run6's 0.63 / 0.60 / 0.77 / 0.69 at 3k / 13k / 18k / 25k, 512 sims) is against the 512
+series only; run7's in-run gate and rung points after step 23 829 are not that unit.
+Ordered by: R355 §2 step 10 (ledger C-8), appended 2026-09-17 by the REPAIR-A4 plan-3 session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
