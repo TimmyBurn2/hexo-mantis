@@ -1,8 +1,4 @@
-"""AUDIT-1 F-28 rows A03, A05, A06, A07, A08, A09, A10, A11 — the diagnostics tools' defaults.
-
-Eight rows, one class: a tool publishing a number nothing measured, in an artifact an operator
-reads at a sitting or a mint. Each row's mechanism is named at its own test.
-"""
+"""AUDIT-1 F-28 rows A03–A11: a diagnostics tool publishing a number nothing measured; one test per row."""
 from __future__ import annotations
 
 import argparse
@@ -45,9 +41,8 @@ def test_the_shipped_plan_still_loads(tmp_path: Path) -> None:
 def test_a_sampler_that_cannot_produce_a_series_is_refused(
     tmp_path: Path, interval: float
 ) -> None:
-    """THE PIN (A03). At an interval at or above `round_sec` a round collects at most ONE
-    card sample, so the card high-water is not a series — and the rung PASSED anyway on the
-    allocator series alone while its card column read `card_samples<=1`."""
+    """THE PIN (A03). At an interval at or above `round_sec` a round collects at most ONE card
+    sample, so the high-water is not a series — and the rung PASSED on the allocator series alone."""
     path = tmp_path / "plan.toml"
     path.write_text(_plan_text(round_sec=120.0, interval=interval), encoding="utf-8")
     with pytest.raises(ValueError, match="sampler_interval_sec"):
