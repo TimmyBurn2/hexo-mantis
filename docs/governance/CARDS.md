@@ -1,8 +1,10 @@
 # CARDS — the open work
 
 Every card that is open at R346, with the ruling that last moved it. A card leaves this file by
-being closed, refused or spent — never by going quiet. Closed cards are not kept here; the
-reasoning that closed one lives in its ruling entry in `docs/governance/RULINGS.md`.
+being closed, refused or spent — never by going quiet. A closed card keeps its row, marked
+CLOSED/LANDED with the date and the ruling, until a ruling sweeps its section (this sentence once
+said closed cards are not kept here; ~20 were, so the practice is recorded rather than the claim);
+the reasoning that closed one lives in its ruling entry in `docs/governance/RULINGS.md`.
 
 Status words mean what they mean elsewhere in this repo: **BLOCKING** stops the thing it names;
 **MINT-BLOCKING** stops a mint; **HELD** is waiting on a named event; **CARDED** is accepted work
@@ -379,7 +381,7 @@ they are a starting point, not evidence — derive at point of use.
 Four traps, each of which has already misled a reader:
 
 1. **`F-<number>` is five namespaces, not one.** The graves in `docs/governance/falsified.md`
-   (`F-01`..`F-43`) · AUDIT-1's 52 findings · the session ledger's · a perf-ledger `F-10`
+   (`F-01`..`F-52` at this writing; derive the last row from the file) · AUDIT-1's 52 findings · the session ledger's · a perf-ledger `F-10`
    corrected by R320 · R246's cross-language-parity `F-01`/`F-02`. **Three distinct `F-10`s
    exist.** Unpadded `F-1`..`F-6` are ADJ-13 / RED-TEAM findings closed as a class by R71/R72 and
    never mean `F-01`..`F-06`. Every `F-NN` here names its register. Graves are never cards.
@@ -391,7 +393,8 @@ Four traps, each of which has already misled a reader:
 
 ## What holds run6
 
-run6 is minted and has never started.
+run6 RAN its block from these holds (`RUN6_BLOCK_2026-09-12.md`) and was STOPPED by R350(a) at
+35 084 steps; the items below are kept as the record of what held its START.
 
 - **REPAIR-A2 leg 5 — the MCTS root child cap. BLOCKING, the architect's.** Seven of eight legs
   landed; leg 5 halted with numbers rather than moving `MAX_CHILDREN_PER_NODE = 192`. Measured: the
@@ -457,9 +460,9 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 
 | item | subject | status | last moved |
 |---|---|---|---|
-| STRENGTH-FRONTIER-1 | the BC net (all heads / as the seam loaded it) under PUCT-150 and Gumbel-160/m16; frozen 3k/13k/18k/25k × sims {128, 256, 512} × kind vs `sealbot_d5`; 25k vs the BC net at equal search; 288 paired games per cell, pair-level CI | RUNNING on the stopped run's box since 2026-09-13 08:27 UTC (`tools/strength_frontier.py`, `/workspace/frontier/`) | R350(c) |
-| GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | ORDERED — lands, stays UNARMED. run6 mints `gumbel_mcts: false` | R345(d) |
-| GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | ORDERED BEFORE THE START — a run that does not write its games cannot be viewed, replayed or mined | R344 |
+| STRENGTH-FRONTIER-1 | the BC net (all heads / as the seam loaded it) under PUCT-150 and Gumbel-160/m16; frozen 3k/13k/18k/25k × sims {128, 256, 512} × kind vs `sealbot_d5`; 25k vs the BC net at equal search; 288 paired games per cell, pair-level CI | COMPLETE — 31 cells, 8 928 games, 0 failed (`docs/design/measurements/STRENGTH_FRONTIER_1_2026-09-13.md`); verdict R351(a): the instrument was the failure, not the net | R351(a) |
+| GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | LANDED and ARMED: run7's trainer is the repaired Gumbel head (`selfplay.search.kind: gumbel`, R352(a)); the `gumbel_mcts` key this row once named was replaced by `search.kind` and then split into the self-play and deploy rows (R351(c)) | R352(a) |
+| GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | LANDED (`docs/contracts/game_record.md`, contract #11, `937694e7`); the self-play search-stats sample followed at R355(d) | R355(d) |
 | DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge | R344(d) |
 | RUNG-2 | new external rungs — strix first, shrimp second | ORDERED as mid-run work, deferrable but not optional, sequenced AFTER DASH-2; shrimp HELD for an architect read on the R257 radius fence | R344(e) |
 | INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
@@ -497,13 +500,13 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 |---|---|---|
 | CARD-RUN5-GPU-OOM | GPU-OOM defect CLASS; the site set now includes the GNN training forward | OPEN as a class. Instance F-816-12 closed at the joint mint; the class row never closed. ANNOTATION 4 / R302(c) rider |
 | CARD-CLEANSTOP-SAVE leg (b) | the `checkpoint_interval` prereg row (leg (a) discharged) | LIVE, pinned to the operator's prereg batch. AMBIGUOUS: run6 mints `checkpoint_interval: 1000` and the derived index was never updated |
-| CARD-RESUME-LAUNCHER-FLAG | supervisor auto-resume / `--resume-from` launcher surface | OPEN — declared NOT BUILT on a CONTRACT, not a time-box; three admissible shapes carded |
-| CARD-EVAL-CHANNEL-SPLIT | split the promotion and external eval cadences | OPEN, narrowed. R343(b)(v)'s conditional FIRED; R345(c) moved `gate.stride` to 3 and ledgered "the split that was already a key" |
+| CARD-RESUME-LAUNCHER-FLAG | supervisor auto-resume / `--resume-from` launcher surface | BUILT IN CODE: `python -m mantis.run --resume-from <bundle>` is the ONE optional launcher flag (`resolve_bootstrap` fails a stale one at launch); run7 resumed through it on 2026-09-15. Supervisor AUTO-resume is not built and not ordered; the governance row closes when a ruling names it |
+| CARD-EVAL-CHANNEL-SPLIT | split the promotion and external eval cadences | OPEN, narrowed. R343(b)(v)'s conditional FIRED; R345(c) moved `gate.stride` to 3 and ledgered "the split that was already a key"; superseded for run7 — the gate runs at stride 1 on the 3 000-step cadence (R350(d), CARD-EVAL-CADENCE) |
 | CARD-PROTOCOL-COMPLETE | complete protocol declarations, widen the AST conformance gate, LAW-16 sink/watchdog row | OPEN, pre-cutover, NOT mint-blocking |
 | CARD-DENSE-EVAL-ADAPTER | wire `infer_batch_per_cluster` into the deploy-head decode | OPEN — pre-Stage-0 BLOCKING, not mint-blocking |
 | CARD-LINT-TYPE | ruff/pyright advisory type-debt backlog | OPEN debt row, deliberately kept out of the gate by R98 |
 | CARD-PYRIGHT-STRICT | pyright strict-mode adoption as a post-cutover ratchet | OPEN; live marker at `pyproject.toml:92` |
-| CARD-MAXPLIES | `_DEFAULT_MAX_PLIES` schema promotion | OPEN in governance, CLOSED IN CODE — the symbol is gone and `max_plies` derives from `selfplay.max_game_moves` |
+| CARD-MAXPLIES | `_DEFAULT_MAX_PLIES` schema promotion | CLOSED IN CODE twice over — `_DEFAULT_MAX_PLIES` is gone, and since contract v30 (2026-09-15) `eval.max_plies` is its OWN REQUIRED row rather than a copy of `selfplay.max_game_moves` |
 | CARD-TORCH-INDEX | conditional torch index / uv extra for the CPU-wheel parity regime | OPEN, post-mint |
 | CARD-EVAL-CORESIDENCY | characterize eval-child steady VRAM for the co-residency prereg row | OPEN. The founding 8.21 GiB figure was superseded by R229(1) (unbounded, to 13.5 GiB) without naming the card |
 | CARD-A10-CAP | whether an entropy term enters the graph loop at all | RECORDED, explicitly NOT executed. R335(b) makes entropy normalization a PRECONDITION on ever arming one |
