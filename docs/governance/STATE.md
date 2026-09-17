@@ -149,7 +149,8 @@ ruling"; research in `observatory_research.md`) and its phase 1, the reader laye
 `tools/observatory/readers` (`f16421f2`, fast-forwarded onto this leg's `35c89657` by the
 operator), await the ruling and the R344(d) amendment its §4.3 drafts; nothing there opens a
 socket yet. The worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
-(6) REPAIR-A4 (R355) LANDED in three plans, `d44f3459..d7bb90d5` (38 commits, 2026-09-16/17):
+(6) REPAIR-A4 (R355) LANDED in three plans, `d44f3459..` up to and including the review-fix
+commits of 2026-09-17 (the tip is `git log dev`; 43 commits at this writing):
 A-2 + A-1 + the search-stats producer; the in-run repairs B-1..B-9, B-11, B-19, A-3, C-3; steps
 10–12 — the doc repairs, the §3 deletes and archives (`docs/design/archive/`, `docs/audits/archive/`),
 `mantis.diagnostics.ring_reader`/`.tactics`, gate 15's stale-header rule, two ratchet measures,
