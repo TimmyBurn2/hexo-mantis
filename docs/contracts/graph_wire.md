@@ -77,7 +77,7 @@ Per-graph metadata travels in order (10–18): (10) `n_graphs == graphs.len()`;
 
 The single-read guard is a typed error; the build/queue reasons are `String`s that
 **travel to the failed waiter** (D6 — the build-side reason is preserved, not
-`.ok()`-swallowed; the dense path stays reason-free by design). Producer-side reasons
+`.ok()`-swallowed; the dense path left with the grid representation, R346(f)). Producer-side reasons
 (9–15) are the frozen catalogue the WP7 NN producer emits through the same `String`
 channel (`submit_graph_results` / `fail_remaining`).
 
@@ -134,7 +134,7 @@ which wakes every still-pending waiter with that reason so none is orphaned.
 | graph-build failure reason TRAVELS to the failed waiter (D6 fix; not `.ok()`-swallowed) | `queues/graph.rs` (build) → `fail_remaining` / `submit_graph_and_wait` | queue_roundtrip.rs |
 | inference-failure / segment-range / desync / assemble reasons travel verbatim; `fail_remaining` orphans none | `queues/graph.rs::{submit_graph_results, fail_remaining}` | queue_roundtrip.rs |
 | single-read delivery: a second `submit_graph_results` for a consumed id is a no-op | `queues/graph.rs::submit_graph_results` | queue_roundtrip.rs |
-| cross-queue: the graph batcher never touches the dense pool (disjoint `Inner`) | `queues/graph.rs` + `queues/dense.rs` (frozen `:1415`) | queue_roundtrip.rs |
+| cross-queue: ONE queue family since the grid path's deletion (R346(f)) — `queues/graph.rs` is the only batcher; `queues/dense.rs` and the disjoint-`Inner` property this row once pinned no longer exist, and the row stays so a reader of the frozen `:1415` cite knows why it resolves to nothing | `queues/graph.rs` | queue_roundtrip.rs |
 | F-19: exactly one native build per leaf (build count == leaves; a redundant build fails) | `queues/graph.rs::build_leaf_graph` | queue_roundtrip.rs, graph_build_bench.rs |
 
 ## Pinning tests
@@ -148,7 +148,7 @@ The gating tests live under `crates/mantis-selfplay/tests/`:
   `WireAlreadyConsumed`), and the LAW-07 corrupt-`node_offsets` mutation self-test.
   Inputs are the 3 dispatcher-frozen fuse-INPUT `AxisGraph`s (the old fuse is
   `pub(crate)`-unreachable, so P-09 pins the INPUTS and RECONSTRUCTS).
-- `queue_roundtrip.rs` (P-07 / P-08) — the dense + graph queue round-trips: submit →
+- `queue_roundtrip.rs` (P-07 / P-08) — the graph queue round-trips (the dense half left with the grid path): submit →
   mock pop → submit results → single-read take; the D6 graph reason-travels
   (inference-failure, `fail_remaining`, and the build-side reason) with no orphaned
   waiter; the native `builder_impl` handshake rejection; the disjoint-pool invariant;

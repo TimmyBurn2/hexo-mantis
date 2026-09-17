@@ -60,11 +60,10 @@ fired with NO authored code is rc 33 naming the rule.
 
 MINT TIERS. The report says what the burst it ran does and does not prove, in a `tier` block
 derived from `_burst_floors`: `none`, `sync_lag` and `full`, where `full` COVERS `sync_lag`. On a
-production config `sync_lag` is UNREACHABLE, since arming `draw_rate_collapse` is assertion (c)
-and an armed row puts `min_step + 1` in the floor set: measured, run5's floor is 25001 and the
-other four `configs/` entries' floor is 101. What `full` costs is a LOWER BOUND never measured
-here — at the recorded 41.66 ms/train-step, 25001 steps is >= 1041.5 s of pure train-step
-compute, and the coordinator is GAME-BOUND, so it also needs 25001 completed games.
+production config the shortest legal burst IS the `sync_lag` tier — a PREFIX of the run
+(`compose_run(burst_stop_step=)`, CARD-STAMP-FLOOR); the draw-rate row decides the tier and never
+refuses the burst, and `full` needs a burst past its `min_step` (25001 on run5/run6 — a lower
+bound of >= 1041.5 s of train-step compute at the recorded 41.66 ms/step, game-bound besides).
 """
 from __future__ import annotations
 

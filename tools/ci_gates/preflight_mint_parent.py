@@ -84,7 +84,7 @@ RELAUNCH_BUDGET_CODE = 44
 #: through every arm to `PreflightBootFailedError` and COLLAPSES TO 33, destroying the signal.
 ARMED_ABORT_CODES = (DRAW_RATE_COLLAPSE_EXIT_CODE, DISK_SPACE_EXHAUSTED_EXIT_CODE,
                      TERMINAL_EVAL_BROKEN_EXIT_CODE)
-#: The full 42–47 band the docstring declares, derived so the claim and the tuples cannot drift.
+#: The reserved band, derived so no prose literal can outgrow the tuples (the contract test reads it).
 RESERVED_CODES = tuple(sorted({*WATCHDOG_CODES, RELAUNCH_BUDGET_CODE, *ARMED_ABORT_CODES}))
 
 

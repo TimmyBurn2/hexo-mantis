@@ -56,7 +56,7 @@ and are folded in here, because a reader of any ladder reading needs them:
 
   **What a genuine violation costs, stated exactly, because this document outlives the work
   package that wrote it:** it raises `SealBotDepthError`, and
-  `src/mantis/eval/worker.py:349-356` catches `RungUnresolvable` and nothing else — so the
+  `run_round` in `src/mantis/eval/worker.py` (its per-rung loop) catches `RungUnresolvable` and nothing else — so the
   exception ends the **whole eval round**, not the one ladder entry. There is no per-entry
   "recorded broken" mechanism today; an earlier draft of this section claimed one and no such
   code exists. The trade is deliberate in this direction only: a round that dies loudly is

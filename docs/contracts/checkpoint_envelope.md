@@ -5,6 +5,9 @@
 - status: LIVE — the envelope writer/reader and THE ONE loader landed with WP10; this text is
   the contract half, filled by WPMINT Phase W. `CHECKPOINT_SCHEMA_VERSION = 2` is the ENVELOPE
   axis and is deliberately distinct from a config's own `schema_version: 1`.
+- corrections 2026-09-17 (REPAIR-A4, C-9/C-10): `CnnArch` left the arch row (deleted with the grid
+  path, R346(f)); the load-time tolerance of a schema-predating stamp is a contract row above,
+  not a loader surprise.
 
 ## Summary
 One format, one loader (docs/design/repo_design.md §6). The filename carries run-id + content
@@ -20,12 +23,12 @@ one-byte `model_state` mutation changes the name. Both halves are re-verified at
 makes a cross-lineage same-step collision structurally impossible.
 
 **Payload** — `schema_version: 2`, `kind: "full" | "weights"`, `model_state`, `metadata`,
-`config` (a complete snapshot, schema-validated); `kind == "full"` additionally carries
+`config` (a complete snapshot; validated at LOAD as provenance, see below); `kind == "full"` additionally carries
 `optimizer_state`, `scaler_state`, `scheduler_state`.
 
 **`metadata`** — `encoding_name` (REQUIRED, LAW-11, no fallback), `run_id`, `step`,
 `commit_sha` (`"unknown"` outside a git checkout — never blocks a write), `created_utc`
-(ISO-8601 Z, stamped once), `arch` (the declared `CnnArch`/`GnnArch` dataclass — the SOLE arch
+(ISO-8601 Z, stamped once), `arch` (the declared `GnnArch` dataclass — the SOLE arch
 source at load), optional `corpus_sha256`.
 
 ## Who asserts what where
@@ -41,6 +44,7 @@ source at load), optional `corpus_sha256`.
 | arch travels on `metadata.arch`; there is no shape-inference and no sniff-reconstruct on either surface | mantis.train.checkpoints (all shape-inference was DELETED at WP10) |
 | a state dict carrying a falsified-and-deleted branch prefix is REJECTED on BOTH read surfaces (WP9 O3b) | mantis.train.checkpoints (`KILLED_PREFIXES`, `_reject_killed_prefixes`) |
 | declared-encoding is an ASSERTION (a mismatch raises); decode-override is a deliberate loud cross-decode; both together is an error | mantis.train.checkpoints (`DeclaredEncodingMismatchError`, `load_checkpoint`) |
+| the stamped `config` is schema-validated at load as PROVENANCE: a leaf the schema grew after the stamp, or a top-level section it RETIRED (`RETIRED_STAMP_SECTIONS`, today `search`), is logged `checkpoint_config_predates_schema` and TOLERATED; any other validation error refuses the load with the payload untouched (run7's 23 829 stop checkpoint loaded under `missing=['eval.max_plies', 'eval.gate.sequential']`) | mantis.train.checkpoints (`_validate_stamped_config`, `RETIRED_STAMP_SECTIONS`) |
 | resume precedence: the launch config wins EXCEPT a frozen 18-key checkpoint-owned set | mantis.train.orchestrator (`RESUME_CHECKPOINT_OWNED_KEYS`, `build_resume_config_overrides`) |
 | the sanctioned encoding-change path is a weights-only strip gated on WIRE-SIGNATURE equality, stamped fresh from the declared encoding and never from a loaded config | mantis.train.checkpoints (`strip_and_restamp`) |
 
@@ -52,5 +56,6 @@ source at load), optional `corpus_sha256`.
 | `RESUME_CHECKPOINT_OWNED_KEYS` equals the exact frozen 18-key set (golden-pinned) | tests/train/test_checkpoint_conformance.py, tests/fixtures/train/resume_goldens.json |
 | resume precedence end to end: launch-wins outside the owned set, checkpoint-wins inside it | tests/train/test_resume_semantics.py, tests/train/test_resume_wiring_integration.py |
 | warm-start / weights-only load from a foreign lineage | tests/train/test_warmstart.py |
+| a stamp predating a schema leaf or carrying a retired section loads and is logged; any other error refuses | tests/train/test_checkpoint_conformance.py |
 | an anchor whose core is missing raises `AnchorLoadError` rather than degrading | tests/train/test_anchor.py |
 | the launch path writes an envelope-v2 checkpoint, resumes from it, and shuts down clean on a simulated signal (integration tier) | tests/train/test_launch_path_smoke.py |

@@ -51,7 +51,7 @@ Top-level keys, all present in every report (`_new_report`):
 | every tier has a "does not prove" sentence and there is NO default entry | tools/ci_gates/preflight_mint.py (`TIER_NOT_PROVEN`, keyed by `TIER_NONE`/`TIER_SYNC_LAG`/`TIER_FULL`) |
 | both `sync_lag` and `full` are required for a mint, and `full` covers `sync_lag` — the covered/owed split is published rather than left to a reader to infer | tools/ci_gates/preflight_mint.py (`MINT_REQUIRED_TIERS`, `_tier_covered`) |
 | the tier disclaimer is RE-DERIVED at write time and printed FROM the finalised report, so the sentence on the terminal is byte-identical to the one on disk | tools/ci_gates/preflight_mint.py (`_finalise_tier`, `_write_report`) |
-| the child's own named outcomes propagate unchanged (rc 10–41); the reserved band 42–47 is DERIVED from the watchdog / relaunch / armed-abort authorities, never re-typed (47 = the disk-guard abort, WPMAIN RT-2/R132 — it joined `RESERVED_CODES` without a re-typed set literal, which is the derivation earning its keep) | tools/ci_gates/preflight_mint.py (`PASS_THROUGH`, `RESERVED_CODES`) |
+| the child's own named outcomes propagate unchanged (rc 10–41); the reserved band 42–48 is DERIVED from the watchdog / relaunch / armed-abort authorities, never re-typed (47 = the disk-guard abort, 48 = the terminal eval-broken abort — each joined `RESERVED_CODES` without a re-typed set literal, which is the derivation earning its keep; `tests/tools/test_preflight_report_contract.py` derives this sentence's band from the tuple, because this row once stated a band one code short of the set) | tools/ci_gates/preflight_mint.py (`PASS_THROUGH`, `RESERVED_CODES`) |
 
 ## Pinning tests
 
@@ -62,7 +62,7 @@ Top-level keys, all present in every report (`_new_report`):
 | a writable out-dir still writes exactly ONE report; a report with no config block is still NAMED | tests/tools/test_preflight_mint_process.py |
 | the `not_run` reason names the mode, is derived from the report's own `child` block, and a reached verdict is never overwritten | tests/tools/test_preflight_mint_process.py |
 | an unknown report mode is refused and never defaulted | tests/tools/test_preflight_mint_process.py |
-| every mint tier has a NOT-PROVEN entry with no default; the tier is derived from the config's own floor rows; a production config can never be preflighted in the short tier | tests/tools/test_preflight_mint_process.py |
+| every mint tier has a NOT-PROVEN entry with no default; the tier is derived from the config's own floor rows; a production config STAMPS at `sync_lag` from the shortest legal burst — a PREFIX of the run under `compose_run(burst_stop_step=)` (CARD-STAMP-FLOOR, 2026-09-11) — and a burst below the actor-sync floors is REFUSED with `PreflightBurstTooShortError`; `full` needs a burst past the draw-rate row's `min_step` (this row once pinned the OPPOSITE — that the short tier was unreachable for a production config; CARD-STAMP-FLOOR reversed it and `test_a_PRODUCTION_config_stamps_at_sync_lag_and_its_burst_is_a_PREFIX_of_the_run` pins the reversal) | tests/tools/test_preflight_mint_process.py |
 | a tier is COVERED only when the run reached a verdict; a refused burst publishes `tier: none` and owes BOTH tiers | tests/tools/test_preflight_mint_process.py |
 | the disclaimer is re-derived at write time and the `none`-tier sentence is TRUE in mode AUDIT, not only at rc 11 | tests/tools/test_preflight_mint_process.py |
 
