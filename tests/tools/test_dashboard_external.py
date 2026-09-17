@@ -53,7 +53,8 @@ def _write_sidecars(root: Path, cells: list[dict]) -> Path:
 def _page(html, reader, tmp_path: Path, rows: list[dict], external_points: Path | None) -> str:
     events = tmp_path / "events.jsonl"
     events.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
-    return html.render(reader.load_record(events, None, None, external_points), "t")
+    return html.render(reader.load_record(events, None, None,
+                                          [external_points] if external_points else None), "t")
 
 
 _BOOT = [{"event": "run_boot_identity", "ts": 1.0, "run_id": "run8"}]
@@ -64,11 +65,11 @@ def test_sidecars_load_by_unit_and_a_failed_or_broken_one_is_skipped_and_named(e
                                     _sidecar(30000, 0.14, unit="as_shipped", ours=512, strix=128)])
     (ck / "run8_00045000_ffffffff.ckpt.strix256.failed.json").write_text("{}", encoding="utf-8")
     (ck / "run8_00060000_ffffffff.ckpt.strix256.json").write_text("{\"step\": 60000}", encoding="utf-8")
-    points, note = external.load_external_points(ck)
+    points, note = external.load_external_points([ck])
     assert [(p.step, p.unit) for p in points] == [(30000, "as_shipped"), (15000, "equal_work"), (30000, "equal_work")]
     units = external.series_by_unit(points)
-    assert list(units) == ["as_shipped: ours PUCT-512 vs strix 128 sims",
-                           "equal_work: ours PUCT-256 vs strix 256 sims"]
+    assert list(units) == ["run8 · as_shipped: ours PUCT-512 vs strix 128 sims",
+                           "run8 · equal_work: ours PUCT-256 vs strix 256 sims"]
     assert "3 sidecar(s) read" in note and "failed cell, not a receipt" in note
     assert "run8_00060000_ffffffff.ckpt.strix256.json (missing step, wr or the unit's sims)" in note
 
@@ -89,8 +90,8 @@ def test_the_panel_draws_one_series_per_unit_with_whiskers_regime_and_axis_label
     assert panel.count("<polyline") == 1, "two equal-work points make a line; one as-shipped point does not"
     assert panel.count('class="whisker') == 3
     assert 'class="marker point' in panel and 'class="marker idle' in panel
-    assert "equal_work: ours PUCT-256 vs strix 256 sims" in panel
-    assert "as_shipped: ours PUCT-512 vs strix 128 sims" in panel
+    assert "run8 · equal_work: ours PUCT-256 vs strix 256 sims" in panel
+    assert "run8 · as_shipped: ours PUCT-512 vs strix 128 sims" in panel
     assert "y = WR vs strix in the unit the legend names" in panel and "x = step" in panel
     assert "30.0 pp below parity" in panel and "36.0 pp below parity" in panel
     assert "not measured" not in panel
@@ -139,3 +140,14 @@ def test_the_throughput_panel_carries_a_unit_on_every_label(html, reader, tmp_pa
     assert "x-labels" in panel and "step" in panel and "game" in panel
     economy = re.search(r'<section class="panel tier2" id="economy">(.*?)</section>', page, re.S).group(1)
     assert "games / h" not in economy, "the rates moved; the economy panel keeps the buffer"
+
+
+def test_a_parents_bridge_cell_in_a_second_directory_is_its_own_series(external, tmp_path: Path) -> None:
+    ck8 = _write_sidecars(tmp_path / "run8", [_sidecar(15000, 0.15)])
+    parent = dict(_sidecar(42000, 0.14), run_id="run7", checkpoint="run7_00042000_46fdb931.ckpt", trigger="once")
+    ck7 = _write_sidecars(tmp_path / "run7", [parent])
+    points, note = external.load_external_points([ck8, ck7])
+    assert [(p.run_id, p.step) for p in points] == [("run7", 42000), ("run8", 15000)]
+    assert list(external.series_by_unit(points)) == ["run7 · equal_work: ours PUCT-256 vs strix 256 sims",
+                                                     "run8 · equal_work: ours PUCT-256 vs strix 256 sims"]
+    assert "2 sidecar(s) read" in note

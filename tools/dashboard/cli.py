@@ -21,9 +21,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--record-dir", type=Path, default=None,
                     help="the run-record directory holding collate_dumps/ and logs; omitted, "
                          "the firings input is unmeasured")
-    ap.add_argument("--external-points", type=Path, default=None,
+    ap.add_argument("--external-points", type=Path, action="append", default=None,
                     help="a directory (or one file) of the strix follower's <ckpt>.strix*.json "
-                         "sidecars; omitted, the external panel is a stated gap")
+                         "sidecars, repeatable (a parent's bridge cell lives beside the parent); "
+                         "omitted, the external panel is a stated gap")
     ap.add_argument("--out", type=Path, required=True, help="the HTML file to write")
     ap.add_argument("--title", default=None, help="page title (default: the events file's name)")
     args = ap.parse_args(argv)

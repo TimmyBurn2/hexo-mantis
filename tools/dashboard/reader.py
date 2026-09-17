@@ -76,7 +76,8 @@ def _finite(value: Any) -> float | None:
 
 
 def load_record(events_path: Path, ladder_path: Path | None = None,
-                record_dir: Path | None = None, external_points: Path | None = None) -> Record:
+                record_dir: Path | None = None,
+                external_points: list[Path] | None = None) -> Record:
     """Parse the event stream line by line, the ladder file and the strix sidecars when given.
 
     Raises:

@@ -707,13 +707,16 @@ strix readings are NOT in the event stream or the ladder file: they are OFFLINE 
 checkpoints (`STRIX_RUN7_60K_2026-09-17.md` §C said so of the 60k series). Under R9 the new
 input is a deviation from the amendment's text and lands here in the same commit as the code.
 
-1. **What is admitted, narrowly.** `--external-points <dir|file>` (`make dashboard … EXTERNAL=`):
-   the `<ckpt>.strix256.json` / `.strix512.json` sidecars `tools/strix_follower.py` writes beside
-   a run's checkpoints (contract #9's strix paragraph names their fields). Read at render time
-   like the ladder file; omitted, the panel is a stated gap naming the producer. Still no
-   server, no socket, no producer, no connection to a live run.
-2. **The rule the panel carries.** Each unit (ours PUCT-256 vs strix 256; ours PUCT-512 vs strix
-   128) is its own series and its own instrument, never merged; every point carries the regime
+1. **What is admitted, narrowly.** `--external-points <dir|file>`, repeatable (`make dashboard …
+   EXTERNAL="<run>/checkpoints <parent>/checkpoints"`): the `<ckpt>.strix256.json` /
+   `.strix512.json` sidecars `tools/strix_follower.py` writes beside a run's checkpoints
+   (contract #9's strix paragraph names their fields) — repeatable because a parent's bridge
+   cell lives beside the parent, in another run's directory. Read at render time like the
+   ladder file; omitted, the panel is a stated gap naming the producer. Still no server, no
+   socket, no producer, no connection to a live run.
+2. **The rule the panel carries.** Each (run, unit) is its own series and each unit (ours
+   PUCT-256 vs strix 256; ours PUCT-512 vs strix 128) its own instrument, never merged — another
+   run's point sits on that run's step axis and says so; every point carries the regime
    it was read in (CONTENDED / IDLE, from the run's heartbeat at cell start); the y axis and the
    legend name the unit; the gap to strix is printed as a number (pp below parity, and the Elo
    it implies) for the latest point of every unit, not shown as a colour. A failed cell

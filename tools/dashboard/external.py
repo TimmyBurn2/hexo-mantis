@@ -23,6 +23,7 @@ PRODUCER = ("tools/strix_follower.py sidecars (<ckpt>.strix256.json per cadence 
 class ExternalPoint:
     """One sidecar: the checkpoint's step and net, the unit it was read in, its regime, its reading."""
 
+    run_id: str
     step: int
     unit: str
     ours_sims: int
@@ -39,7 +40,7 @@ class ExternalPoint:
 
     @property
     def unit_label(self) -> str:
-        return f"{self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
+        return f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
 
 
 def _num(value: Any) -> float | None:
@@ -61,7 +62,8 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
         return None
     lo, hi = _num(raw.get("wr_ci_lower")), _num(raw.get("wr_ci_upper"))
     return ExternalPoint(
-        step=step, unit=str(raw.get("unit", "?")), ours_sims=ours_sims, strix_sims=strix_sims,
+        run_id=str(raw.get("run_id", "?")), step=step, unit=str(raw.get("unit", "?")),
+        ours_sims=ours_sims, strix_sims=strix_sims,
         regime=str(raw.get("regime", "?")), trigger=str(raw.get("trigger", "?")), wr=wr,
         ci=(lo, hi) if lo is not None and hi is not None else None,
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
@@ -70,13 +72,15 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
     )
 
 
-def load_external_points(spec: Path | None) -> tuple[list[ExternalPoint], str]:
-    """Every sidecar under `spec` (a directory, or one file) as points, plus a note on what was skipped."""
-    if spec is None:
+def load_external_points(specs: list[Path] | None) -> tuple[list[ExternalPoint], str]:
+    """Every sidecar under each spec (a directory, or one file) as points, plus a note on what was skipped."""
+    if not specs:
         return [], "no --external-points given"
-    paths = sorted(spec.rglob(SIDECAR_GLOB)) if spec.is_dir() else [spec] if spec.is_file() else []
+    paths: list[Path] = []
+    for spec in specs:
+        paths += sorted(spec.rglob(SIDECAR_GLOB)) if spec.is_dir() else [spec] if spec.is_file() else []
     if not paths:
-        return [], f"{spec} holds no {SIDECAR_GLOB} sidecar"
+        return [], f"{', '.join(str(s) for s in specs)} holds no {SIDECAR_GLOB} sidecar"
     points: list[ExternalPoint] = []
     skipped: list[str] = []
     for path in paths:
@@ -96,7 +100,7 @@ def load_external_points(spec: Path | None) -> tuple[list[ExternalPoint], str]:
     note = f"{len(points)} sidecar(s) read"
     if skipped:
         note += "; skipped " + ", ".join(skipped)
-    return sorted(points, key=lambda p: (p.unit, p.step)), note
+    return sorted(points, key=lambda p: (p.run_id, p.unit, p.step)), note
 
 
 def series_by_unit(points: list[ExternalPoint]) -> dict[str, list[ExternalPoint]]:
@@ -161,17 +165,19 @@ def external_panel(points: list[ExternalPoint], note: str, gaps: Gaps) -> Panel:
                             f"<code>{esc(PRODUCER)}</code>"))
         return Panel(title, reads, body, "external")
     units = series_by_unit(points)
-    rows = [[num(p.step), p.unit_label, p.regime, p.trigger, pct(p.wr),
+    rows = [[p.run_id, num(p.step), p.unit_label, p.regime, p.trigger, pct(p.wr),
              f"{pct(p.ci[0])}–{pct(p.ci[1])}" if p.ci else "—", num(p.eff_n),
              f"{(0.5 - p.wr) * 100:.1f} pp", p.net_hash[:12], p.checkpoint]
             for p in sorted(points, key=lambda p: (p.step, p.unit))]
     body = external_chart(units) + table(
-        ["step", "unit", "regime", "trigger", "WR vs strix", "95 % CI (pairs)", "eff_n",
+        ["run", "step", "unit", "regime", "trigger", "WR vs strix", "95 % CI (pairs)", "eff_n",
          "gap to parity", "net hash", "checkpoint"], rows)
     gap_lines = "".join(f"<li>{esc(label)} — {esc(gap_statement(pts[-1]))}</li>"
                         for label, pts in units.items())
     body += f'<ul class="legend">{gap_lines}</ul>'
-    note_text = (f"{note}. Each unit is its own instrument (the two sims pairs are not one series); "
+    note_text = (f"{note}. Each (run, unit) is its own series and each unit its own instrument (the "
+                 "two sims pairs are never one series; another run's point — a parent's bridge cell — sits "
+                 "on THAT run's step axis); "
                  "a point's regime travels with it because the wall changes with it and the WR did "
                  "not (STRIX_RUN7_60K_2026-09-17.md). Strix's absolute level is not stated: it is a "
                  "fixed external reference (R352(e)).")
