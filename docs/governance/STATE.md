@@ -142,7 +142,7 @@ CARD-SELFPLAY-SEARCH-STATS landed 2026-09-16. Owed still: the α = 1.0 three-row
 run7 is LIVE; stopping it is ONE SIGTERM to the supervisor (save-then-exit). Open, in order:
 (1) the resumed run's rounds — r6 @24k is the re-mint's first live round; read its wall and
 the GSPRT's `pairs_played`/`stopped`, and expect the rung ≈ 6–13 pp below the 512 series;
-(2) the strix cadence — 15k read 0.045 and the 9k anchor 0.097; the next point is 30k on the resumed run (`/workspace/oc7/strix_15k/`); (3) the
+(2) the strix cadence — 15k read 0.045 and the 9k anchor 0.097; the 2026-09-17 cells (`STRIX_RUN7_60K_2026-09-17.md`) read 24k 0.139 · 30k 0.170 · 42k 0.142 · 45k 0.094 · 48k 0.163 · 60k 0.111 — a plateau 6–9 pp above the start, two dips both instruments see; the next cadence point is 75k; (3) the
 balanced opening book (`book_v2`); (4) CARD-GUMBEL-HEAD-RESIDUE; (5) OBSERVATORY — DECIDED
 2026-09-17 under R355(f) by the operator: `tools/run_dashboard.py` + `tools/dashboard/` and
 `tools/game_viewer.py` + `tools/viewer/` are the ONE implementation (they produce the box page
