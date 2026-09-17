@@ -161,9 +161,25 @@ def test_a_malformed_or_incomplete_floor_is_refused(text: str):
 def test_a_complete_floor_parses_and_comments_in_it_are_ignored():
     got = GATE.parse_floor(
         "# grounds\ncomment_excess_lines 3\nbanner_comment_lines 1  # trailing\n"
-        "docstring_excess_lines 2\nruling_cite_comment_lines 9\n")
+        "docstring_excess_lines 2\nprivate_docstring_excess_lines 1\nrust_doc_excess_lines 4\n"
+        "ruling_cite_comment_lines 9\n")
     assert got == {"comment_excess_lines": 3, "banner_comment_lines": 1,
-                   "docstring_excess_lines": 2, "ruling_cite_comment_lines": 9}
+                   "docstring_excess_lines": 2, "private_docstring_excess_lines": 1,
+                   "rust_doc_excess_lines": 4, "ruling_cite_comment_lines": 9}
+
+
+def test_a_reference_floor_that_predates_a_gated_measure_parses_leniently_and_ratchets_the_rest():
+    """Adding a gated measure must not disable the ratchet half for the measures the reference has."""
+    old = "comment_excess_lines 2\nbanner_comment_lines 2\ndocstring_excess_lines 2\n"
+    with pytest.raises(ValueError):
+        GATE.parse_floor(old)
+    ref = GATE.parse_floor(old, strict=False)
+    assert "rust_doc_excess_lines" not in ref
+    tree = {**_flat(2), "comment_excess_lines": 4}
+    rc, msgs = GATE.verdict(_flat(2), tree, ref, "ref")
+    assert rc == 1 and any("ratchet" in m for m in msgs)
+    rc, _ = GATE.verdict(_flat(2), _flat(2), ref, "ref")
+    assert rc == 0
 
 
 def test_the_committed_floor_parses_and_covers_every_gated_measure():
@@ -194,3 +210,40 @@ def test_planting_comments_into_real_source_moves_every_gated_measure():
     assert after.comment_excess_lines > before.comment_excess_lines
     assert after.banner_comment_lines > before.banner_comment_lines
     assert after.docstring_excess_lines > before.docstring_excess_lines
+
+
+@pytest.mark.parametrize(("src", "want"), [
+    ('def _f():\n    """one\n    two\n    three"""\n', 2),
+    ('def f():\n    """one\n    two"""\n', 0),
+    ('def __init__(self):\n    """one\n    two"""\n', 0),
+    ('def f():\n    def g():\n        """one\n        two"""\n    return g\n', 1),
+    ('class _C:\n    def m(self):\n        """one\n        two"""\n', 1),
+])
+def test_private_docstring_excess_counts_private_and_nested_symbols_only(src: str, want: int):
+    assert GATE.measure_source("a.py", src).private_docstring_excess_lines == want
+
+
+@pytest.mark.parametrize(("src", "want"), [
+    ("/// a\n/// b\n/// c\nfn f() {}\n", 2),
+    ("//! a\n//! b\nfn f() {}\n", 1),
+    ("/// a\nfn f() {}\n", 0),
+    ("// a\n// b\n// c\nfn f() {}\n", 0),
+    ("/// a\n/// b\nfn f() {}\n/// c\n/// d\n/// e\nfn g() {}\n", 3),
+])
+def test_rust_doc_excess_counts_lines_beyond_the_first_of_each_doc_run(src: str, want: int):
+    assert GATE.measure_source("a.rs", src).rust_doc_excess_lines == want
+
+
+def test_the_two_new_measures_are_gated_and_in_the_committed_floor():
+    assert "private_docstring_excess_lines" in GATE.GATED and "rust_doc_excess_lines" in GATE.GATED
+    floor = GATE.parse_floor(FLOOR_PATH.read_text(encoding="utf-8"))
+    assert floor["private_docstring_excess_lines"] >= 0 and floor["rust_doc_excess_lines"] >= 0
+
+
+def test_planting_a_private_docstring_and_a_rust_doc_run_moves_the_new_measures():
+    py = 'def _f():\n    """one"""\n'
+    assert GATE.measure_source("a.py", py).private_docstring_excess_lines == 0
+    assert GATE.measure_source("a.py", py.replace('"""one"""', '"""one\n    two"""')).private_docstring_excess_lines == 1
+    rs = "/// a\nfn f() {}\n"
+    assert GATE.measure_source("a.rs", rs).rust_doc_excess_lines == 0
+    assert GATE.measure_source("a.rs", "/// a\n/// b\n" + rs[6:]).rust_doc_excess_lines == 1

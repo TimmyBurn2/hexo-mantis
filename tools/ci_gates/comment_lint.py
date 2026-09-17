@@ -5,10 +5,9 @@
 # stays in-file so the arms and the predicate they prove move together.
 """Comment-length lint: the measures may fall and may never rise.
 
-The comment rule is a ratchet, not a cap. A block longer than two lines is allowed when it
-states a non-obvious invariant, so a hard cap would either red on legitimate text or need an
-exemption list nobody maintains. What is enforced instead is direction: this tree's measures
-may not exceed the committed floor, and the floor itself may not be raised.
+The comment rule is a ratchet, not a cap: a block longer than two lines is allowed when it states
+a non-obvious invariant, so a hard cap would red on legitimate text or need an exemption list.
+What is enforced is direction — the measures may not exceed the committed floor, which may only fall.
 
 MEASURES, all over tracked ``.py``/``.rs`` under ``src/``, ``tools/``, ``crates/``, ``tests/``:
 
@@ -16,10 +15,11 @@ MEASURES, all over tracked ``.py``/``.rs`` under ``src/``, ``tools/``, ``crates/
   * ``banner_comment_lines``   comment lines carrying a rule of eight or more repeated
     box-drawing or punctuation characters.
   * ``docstring_excess_lines`` lines beyond the first in every module/class/function docstring.
+  * ``private_docstring_excess_lines`` the same over PRIVATE symbols (`_name`, or nested in a def).
+  * ``rust_doc_excess_lines`` lines beyond the first in every ``///``/``//!`` run (Rust's docstrings).
 
-``ruling_cite_comment_lines`` is measured and PRINTED but never gated: the R8 justification
-headers gate 15 requires carry the token ``R8``, so gating that count would set two gates
-against each other.
+``ruling_cite_comment_lines`` is measured and PRINTED but never gated: the R8 justification headers
+gate 15 requires carry the token ``R8``, so gating that count would set two gates against each other.
 
 Raises:
     SystemExit: rc 1 on a violation or a failed self-test, rc 2 on a usage or input refusal.
@@ -40,7 +40,8 @@ CAP = 2
 SCOPES = ("src/", "tools/", "crates/", "tests/")
 FLOOR_FILE = "tools/ci_gates/comment_length_floor.txt"
 MAIN_BRANCH = "dev"
-GATED = ("comment_excess_lines", "banner_comment_lines", "docstring_excess_lines")
+GATED = ("comment_excess_lines", "banner_comment_lines", "docstring_excess_lines",
+         "private_docstring_excess_lines", "rust_doc_excess_lines")
 
 _BANNER = re.compile(r"([─-╿=#*~_+.<>-])\1{7,}")
 _RULING = re.compile(
@@ -51,11 +52,13 @@ _RULING = re.compile(
 
 @dataclass(frozen=True)
 class Measures:
-    """The four counts this lint derives from a tree."""
+    """The six counts this lint derives from a tree."""
 
     comment_excess_lines: int = 0
     banner_comment_lines: int = 0
     docstring_excess_lines: int = 0
+    private_docstring_excess_lines: int = 0
+    rust_doc_excess_lines: int = 0
     ruling_cite_comment_lines: int = 0
 
     def __add__(self, other: Measures) -> Measures:
@@ -63,8 +66,8 @@ class Measures:
 
 
 _FIELDS = (
-    "comment_excess_lines", "banner_comment_lines",
-    "docstring_excess_lines", "ruling_cite_comment_lines",
+    "comment_excess_lines", "banner_comment_lines", "docstring_excess_lines",
+    "private_docstring_excess_lines", "rust_doc_excess_lines", "ruling_cite_comment_lines",
 )
 
 
@@ -182,27 +185,63 @@ def measure_source(rel: str, src: str) -> Measures:
                     flags[row - 1] = True
     banner = sum(1 for t in texts for ln in t.split("\n") if _BANNER.search(ln))
     cites = sum(1 for t in texts for ln in t.split("\n") if _RULING.search(ln))
-    docs = _docstring_excess(src) if rel.endswith(".py") else 0
-    return Measures(_excess(flags), banner, docs, cites)
+    docs, private_docs = _docstring_excess(src) if rel.endswith(".py") else (0, 0)
+    rust_docs = 0 if rel.endswith(".py") else _rust_doc_excess(src, lines)
+    return Measures(_excess(flags), banner, docs, private_docs, rust_docs, cites)
 
 
-def _docstring_excess(src: str) -> int:
+def _head_docstring_excess(node: ast.AST) -> int:
+    body = getattr(node, "body", None)
+    if not body:
+        return 0
+    head = body[0]
+    if isinstance(head, ast.Expr) and isinstance(head.value, ast.Constant) \
+            and isinstance(head.value.value, str):
+        return max(0, len(head.value.value.strip().split("\n")) - 1)
+    return 0
+
+
+def _docstring_excess(src: str) -> tuple[int, int]:
+    """(lines beyond the first in every docstring, the same over PRIVATE symbols only)."""
     try:
         tree = ast.parse(src)
     except (SyntaxError, ValueError):
-        return 0
-    total = 0
-    holders = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
-    for node in ast.walk(tree):
-        if not isinstance(node, holders):
-            continue
-        body = getattr(node, "body", None)
-        if not body:
-            continue
-        head = body[0]
-        if isinstance(head, ast.Expr) and isinstance(head.value, ast.Constant) \
-                and isinstance(head.value.value, str):
-            total += max(0, len(head.value.value.strip().split("\n")) - 1)
+        return 0, 0
+    total = _head_docstring_excess(tree)
+    private = 0
+    defs = (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+
+    def walk(node: ast.AST, is_private: bool, in_func: bool) -> None:
+        nonlocal total, private
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, defs):
+                name = child.name
+                priv = is_private or in_func or (name.startswith("_") and not name.endswith("__"))
+                n = _head_docstring_excess(child)
+                total += n
+                private += n if priv else 0
+                walk(child, priv, in_func or not isinstance(child, ast.ClassDef))
+            else:
+                walk(child, is_private, in_func)
+
+    walk(tree, False, False)
+    return total, private
+
+
+def _rust_doc_excess(src: str, lines: list[str]) -> int:
+    """Lines beyond the first in every own-line run of `///` or `//!` doc comments."""
+    flags = [False] * (len(lines) + 1)
+    for start, col, _end, text in rust_comment_spans(src):
+        if text.startswith(("///", "//!")) and not text.startswith("////") \
+                and _own_line(lines, start, col):
+            flags[start - 1] = True
+    total = run = 0
+    for f in [*flags, False]:
+        if f:
+            run += 1
+        else:
+            total += max(0, run - 1)
+            run = 0
     return total
 
 
@@ -227,8 +266,8 @@ def measure_tree(root: Path) -> tuple[Measures, int]:
     return total, seen
 
 
-def parse_floor(text: str) -> dict[str, int]:
-    """Parse a floor file. Raises ValueError on a malformed or incomplete record."""
+def parse_floor(text: str, *, strict: bool = True) -> dict[str, int]:
+    """Parse a floor file; ValueError on a malformed record, or on an incomplete one when `strict`."""
     out: dict[str, int] = {}
     for raw in text.split("\n"):
         line = raw.split("#", 1)[0].strip()
@@ -239,7 +278,7 @@ def parse_floor(text: str) -> dict[str, int]:
             raise ValueError(f"not a `<measure> <count>` record: {raw!r}")
         out[parts[0]] = int(parts[1])
     missing = [f for f in GATED if f not in out]
-    if missing:
+    if missing and strict:
         raise ValueError(f"floor omits gated measure(s): {', '.join(missing)}")
     return out
 
@@ -254,7 +293,7 @@ def verdict(now: dict[str, int], tree: dict[str, int], ref: dict[str, int] | Non
             msgs.append(
                 f"FAIL (grew): {name} is {now[name]}, floor is {tree[name]}. Comments grew. "
                 f"Raising {FLOOR_FILE} is not the fix.")
-        if ref is not None and tree[name] > ref[name]:
+        if ref is not None and name in ref and tree[name] > ref[name]:
             rc = 1
             msgs.append(
                 f"FAIL (ratchet): {name} floor is {tree[name]} here but {ref[name]} at "
@@ -295,11 +334,21 @@ def self_test() -> int:
         bad.append(f"python banner: got {m.banner_comment_lines}, want 1")
     if m.docstring_excess_lines != 2:
         bad.append(f"python docstring: got {m.docstring_excess_lines}, want 2")
+    if m.private_docstring_excess_lines != 0:
+        bad.append("python: a module docstring was counted as private")
+    priv = measure_source("a.py", 'def _f():\n    """a\n    b\n    c"""\n')
+    if priv.private_docstring_excess_lines != 2 or priv.docstring_excess_lines != 2:
+        bad.append(f"python private docstring: got {priv.private_docstring_excess_lines}, want 2")
     r = measure_source("a.rs", _RS_ARM)
     if r.comment_excess_lines != 2:
         bad.append(f"rust block run: got {r.comment_excess_lines}, want 2")
     if r.banner_comment_lines != 1:
         bad.append(f"rust banner: got {r.banner_comment_lines}, want 1")
+    if r.rust_doc_excess_lines != 0:
+        bad.append("rust: a lone `//!` banner line was counted as doc excess")
+    doc = measure_source("a.rs", "/// a\n/// b\n/// c\nfn f() {}\n")
+    if doc.rust_doc_excess_lines != 2:
+        bad.append(f"rust doc run: got {doc.rust_doc_excess_lines}, want 2")
     if measure_source("a.py", "x = (\n").comment_excess_lines != 0:
         bad.append("unparseable python did not measure as zero")
     if measure_source("a.py", "# one\n# two\n").comment_excess_lines != 0:
@@ -391,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
                                capture_output=True, text=True)
         if shown.returncode == 0:
             try:
-                ref_floor = parse_floor(shown.stdout)
+                ref_floor = parse_floor(shown.stdout, strict=False)
             except ValueError:
                 ref_floor = None
     if ref_floor is None:

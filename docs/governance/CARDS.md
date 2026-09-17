@@ -94,6 +94,25 @@ Both were found by running the gate set rather than by reading it, and both are 
   stays with them, so the row returns as a one-line manifest edit the day this card lands. The
   repair: the server owns a COPY the sync writes and the learner never reads; then EMA (and its
   shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit.
+- **CARD-STYLE-BACKLOG — the judgment half of the R346(f) census, held by the ratchet.** The
+  mechanical half landed 2026-09-17 (62 stale R8 headers, nine three-line runs, the labelled
+  separator rules, a cite-only line, a file-top banner). What is left is a POLICY call and
+  site-by-site work, measured at HEAD by `comment_lint.py --measure` and the census script:
+  `private_docstring_excess_lines` 1 530 (R346(f) names PUBLIC APIs; whether a private symbol may
+  carry a multi-line docstring is the architect's call — the measure exists so the answer can be
+  driven, never presumed), `rust_doc_excess_lines` 2 677, `comment_excess_lines` 3 451 (1 225 runs
+  beyond two, 442 of them invariant-tagged), `ruling_cite_comment_lines` 351 (measured, not gated).
+  The 104 parenthetical ruling cites in comments and 152 in docstrings were REVIEWED and kept:
+  each attaches a ruling or law to the fact it grounds (a pool size, a refused default, a fatal
+  latch), which is the provenance class R346(f) carves out — a strip would delete where a number
+  came from. Also on contact, never as a pass: the dense push arm (`push_dense`, B-15 — dead in
+  production since R346(f), but the golden-pinned drain-parity suite uses the dense variant as its
+  instrumentation oracle, so deleting it means re-basing six oracles on the graph variant and
+  re-pinning the fixture); the F1 defer path (`declared_keys`/`declared_lr` no production caller
+  passes, B-14 — its flat `RESUME_CHECKPOINT_OWNED_KEYS` is a golden-pinned contract row);
+  `get_temperature` (re-export only), `collate_graph_batch(device=None)`, the two segment softmaxes,
+  the double `torch.load` (B-15). Every measure may fall and may never rise; the floors are the
+  record of progress.
 
 ## Opened by R352 (run7 kind, strix rung, viewer)
 
