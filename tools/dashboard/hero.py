@@ -94,7 +94,8 @@ def throughput_cell(rec: Record, gaps: Gaps) -> HeroCell:
         gaps.mark("Throughput now", "<code>iteration_complete.games_per_hour</code> absent on the last row")
         return HeroCell("Throughput now", "—", GAP_MARKER, "absent")
     detail = (f"{num(last.get('steps_per_hour'))} steps / h · {num(last.get('positions_per_hour'))} "
-              f"positions / h · {num(last.get('sims_per_sec'))} sims / s · at step {num(last.get('step'))}")
+              f"turns / h (positions_per_hour, compound turns) · {num(last.get('sims_per_sec'))} "
+              f"leaves / s (billed) · at step {num(last.get('step'))}")
     return HeroCell("Throughput now", f"{num(last['games_per_hour'])} games / h", detail)
 
 

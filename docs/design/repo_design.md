@@ -698,6 +698,37 @@ is a deviation from this file and it lands as an amendment in the same commit as
 
 ---
 
+### AMENDMENT — R356(d): the dashboard reads a THIRD input, the strix follower's sidecars
+
+**R356(d).** The R333(d) amendment above says the dashboard "reads the §4.7 JSONL stream and,
+when given one, the run's `eval_ladder_state.json`". R356(d) orders an external-points panel —
+the strix series with CIs, unit and regime labelled, the gap to strix as a number — and the
+strix readings are NOT in the event stream or the ladder file: they are OFFLINE cells on frozen
+checkpoints (`STRIX_RUN7_60K_2026-09-17.md` §C said so of the 60k series). Under R9 the new
+input is a deviation from the amendment's text and lands here in the same commit as the code.
+
+1. **What is admitted, narrowly.** `--external-points <dir|file>` (`make dashboard … EXTERNAL=`):
+   the `<ckpt>.strix256.json` / `.strix512.json` sidecars `tools/strix_follower.py` writes beside
+   a run's checkpoints (contract #9's strix paragraph names their fields). Read at render time
+   like the ladder file; omitted, the panel is a stated gap naming the producer. Still no
+   server, no socket, no producer, no connection to a live run.
+2. **The rule the panel carries.** Each unit (ours PUCT-256 vs strix 256; ours PUCT-512 vs strix
+   128) is its own series and its own instrument, never merged; every point carries the regime
+   it was read in (CONTENDED / IDLE, from the run's heartbeat at cell start); the y axis and the
+   legend name the unit; the gap to strix is printed as a number (pp below parity, and the Elo
+   it implies) for the latest point of every unit, not shown as a colour. A failed cell
+   (`.failed.json`) is named in the panel's note and drawn as nothing.
+3. **Throughput units (the same clause).** The rate charts leave "Data economy" for a
+   "Throughput" panel where every label carries its unit and its producer: games / h, plies / h
+   (Σ `game_complete.moves` per window ÷ the window's own wall — plies, LAW-03), turns / h
+   (`positions_per_hour`, compound turns), leaves / s (`sims_per_sec`, the pool's bill of
+   positions × effective sims per move — stated as billed, not served), steps / h. "Data economy"
+   keeps the buffer fill and the replay-ratio gap.
+4. **§4.7 is unchanged.** No event row is added or moved; the sidecar is an artifact of a
+   dev-only tool, contract #9 describes it, and nothing in the run reads it.
+
+---
+
 ### AMENDMENT — contract #11 ADDED: the game record
 
 **R344(b).** A run's games are now WRITTEN. Under §4's own clause — *"each has

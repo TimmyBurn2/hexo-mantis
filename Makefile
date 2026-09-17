@@ -48,9 +48,10 @@ gates.exit:
 # HTML file out. No server, no producer, no live connection to a run. A panel with no producer
 # at HEAD is drawn as a stated gap, never as a zero.
 #   make dashboard EVENTS=<run>/events.jsonl OUT=/tmp/run.html [LADDER=<run>/eval_ladder_state.json]
+#                  [EXTERNAL=<run>/checkpoints]   # the strix follower's sidecars (R356(d))
 dashboard:
 	UV_NO_SYNC=1 uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
-	  $(if $(LADDER),--ladder-state "$(LADDER)",)
+	  $(if $(LADDER),--ladder-state "$(LADDER)",) $(if $(EXTERNAL),--external-points "$(EXTERNAL)",)
 
 #   make viewer RUNS="run6=<mirror>/run6/logs/games shakedown7=<mirror>/shakedown7/logs/games" OUT=<dir>
 viewer:

@@ -30,6 +30,9 @@ class Record:
     record_dir: Path | None = None
     dropped_fields: dict[str, int] = field(default_factory=dict)
     by: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
+    #: R356(d): the strix follower's sidecars, read beside the record, never from the stream.
+    external: list[Any] = field(default_factory=list)
+    external_note: str = "no --external-points given"
 
     def __post_init__(self) -> None:
         index: dict[str, list[dict[str, Any]]] = {}
@@ -73,8 +76,8 @@ def _finite(value: Any) -> float | None:
 
 
 def load_record(events_path: Path, ladder_path: Path | None = None,
-                record_dir: Path | None = None) -> Record:
-    """Parse the event stream line by line, and the ladder state file when one is given.
+                record_dir: Path | None = None, external_points: Path | None = None) -> Record:
+    """Parse the event stream line by line, the ladder file and the strix sidecars when given.
 
     Raises:
         EmptyRunRecord: the stream parsed to zero events.
@@ -109,8 +112,12 @@ def load_record(events_path: Path, ladder_path: Path | None = None,
             "from a clean run."
         )
     ladder, note = _load_ladder(ladder_path)
+    from .external import load_external_points
+
+    external, external_note = load_external_points(external_points)
     return Record(events=events, ladder=ladder, ladder_note=note, source=str(events_path),
-                  record_dir=record_dir, dropped_fields=dropped)
+                  record_dir=record_dir, dropped_fields=dropped, external=external,
+                  external_note=external_note)
 
 
 def _load_ladder(path: Path | None) -> tuple[dict[str, Any] | None, str]:

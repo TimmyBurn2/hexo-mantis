@@ -55,6 +55,7 @@ figcaption{grid-column:1/-1;grid-row:4}
 vertical-align:-1px;background:currentColor}
 .swatch.promoted{background:var(--ok)}.swatch.rejected{background:var(--bad)}
 .swatch.broken{background:none;border:1.5px solid var(--absent)}
+.swatch.idle{background:none;border:1.5px solid currentColor}
 .s1{color:var(--s1)}.s2{color:var(--s2)}.s3{color:var(--s3)}.s4{color:var(--s4)}
 .s5{color:var(--s5)}.s6{color:var(--s6)}
 svg .band{fill:currentColor;fill-opacity:.18;stroke:none}
@@ -63,6 +64,7 @@ svg .bar{fill:currentColor;fill-opacity:.7}
 svg .whisker{stroke:currentColor;stroke-width:1;stroke-opacity:.8}
 svg .marker{fill:var(--fg);stroke:none}svg .marker.promoted{fill:var(--ok)}
 svg .marker.rejected{fill:var(--bad)}svg .marker.broken{fill:none;stroke:var(--absent);stroke-width:2}
+svg .marker.idle{fill:none;stroke:currentColor;stroke-width:2}
 svg .half{stroke:var(--muted);stroke-dasharray:4 4;stroke-width:1}
 svg .rule{stroke:var(--bad);stroke-dasharray:6 3;stroke-width:1}
 svg .tick{stroke-width:2}svg .tick.alert{stroke:var(--warn)}svg .tick.fire{stroke:var(--bad)}

@@ -157,8 +157,8 @@ def test_the_panel_roster_matches_the_design_contract(html, reader, tmp_path):
     hero = re.search(r'<section class="hero">(.*?)</section>', page, re.S).group(1)
     assert hero.count('<div class="cell') == 7
     tier2 = re.findall(r'<section class="panel tier2"[^>]*>\s*<h2>(.*?)</h2>', page)
-    assert tier2 == ["Strength ladder", "Losses", "Self-play quality", "Data economy",
-                     "Health timeline"]
+    assert tier2 == ["Strength ladder", "External anchor: strix", "Losses", "Self-play quality",
+                     "Throughput", "Data economy", "Health timeline"]
     tier3 = set(re.findall(r'<details class="tier3"[^>]*>\s*<summary>(.*?)</summary>', page))
     assert {"Provenance", "Event inventory", "Memory shares vs minted caps", "Determinism hash",
             "Lifecycle", "Mirror receipts", "Eval child device memory", "alpha = 1.0 rows per 1,000",

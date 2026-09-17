@@ -1,7 +1,8 @@
-"""Tier 2: the five chart panels, every series drawn through the per-pixel envelope."""
+"""Tier 2: the chart panels, every series drawn through the per-pixel envelope."""
 from __future__ import annotations
 
 from .envelope import windows
+from .external import external_panel
 from .fmt import esc, num, pct
 from .health import ply_cap_terms, ply_cap_windowed
 from .ladder import ladder_chart
@@ -18,11 +19,10 @@ from .svg import (
     quantile_chart,
     tick_chart,
 )
+from .throughput import throughput
 
 _LOSS_KEYS = (("value_loss", "value loss", "s3"), ("policy_loss", "policy loss", "s2"),
               ("loss", "total loss", "s1"), ("grad_norm", "grad norm", "s4"), ("lr", "learning rate", "s6"))
-_RATE_KEYS = (("games_per_hour", "games / h", "s1"), ("positions_per_hour", "positions / h", "s2"),
-              ("steps_per_hour", "steps / h", "s3"), ("sims_per_sec", "sims / s", "s5"))
 
 
 #: R353(b): the record carries no witness of which adapter played its rung, so the A/B's finding
@@ -152,19 +152,11 @@ def _ply_cap_window(rec: Record, games: list[dict], gaps: Gaps) -> str:
 
 
 def economy(rec: Record, gaps: Gaps) -> Panel:
-    reads = "iteration_complete (step, games_per_hour, positions_per_hour, steps_per_hour, sims_per_sec, buffer_size ÷ buffer_capacity)"
+    reads = "iteration_complete (step, buffer_size ÷ buffer_capacity); the rates are the Throughput panel's"
     if not rec.rows("iteration_complete"):
         return Panel("Data economy", reads, no_rows("iteration_complete") + gaps.mark(
             "Data economy", "no <code>iteration_complete</code> row"), "economy")
     charts = []
-    for key, label, cls in _RATE_KEYS:
-        pts = rec.series("iteration_complete", "step", key)
-        if pts:
-            charts.append(f'<div class="multiple"><h3>{esc(label)}</h3>'
-                          + envelope_chart([Series(label, pts, cls)], x_label="step", height=110) + "</div>")
-        else:
-            charts.append(f'<div class="multiple"><h3>{esc(label)}</h3>' + gaps.mark(
-                "Data economy", f"<code>iteration_complete.{key}</code> carries no finite value") + "</div>")
     fill = [(float(r["step"]), r["buffer_size"] / r["buffer_capacity"])
             for r in rec.rows("iteration_complete")
             if isinstance(r.get("step"), (int, float)) and isinstance(r.get("buffer_size"), (int, float))
@@ -220,5 +212,6 @@ def health_timeline(rec: Record, gaps: Gaps) -> Panel:
 
 def panels(rec: Record, series: dict[str, list[RoundPoint]], gaps: Gaps) -> list[Panel]:
     """The tier-2 roster in the contract's order."""
-    return [strength(series, rec, gaps), losses(rec, gaps), quality(rec, gaps), economy(rec, gaps),
+    return [strength(series, rec, gaps), external_panel(rec.external, rec.external_note, gaps),
+            losses(rec, gaps), quality(rec, gaps), throughput(rec, gaps), economy(rec, gaps),
             health_timeline(rec, gaps)]

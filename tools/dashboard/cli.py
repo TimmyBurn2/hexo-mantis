@@ -1,4 +1,4 @@
-"""The frozen command line: `--events --out [--ladder-state] [--record-dir] [--title]`."""
+"""The frozen command line: `--events --out [--ladder-state] [--record-dir] [--external-points] [--title]`."""
 from __future__ import annotations
 
 import argparse
@@ -21,11 +21,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--record-dir", type=Path, default=None,
                     help="the run-record directory holding collate_dumps/ and logs; omitted, "
                          "the firings input is unmeasured")
+    ap.add_argument("--external-points", type=Path, default=None,
+                    help="a directory (or one file) of the strix follower's <ckpt>.strix*.json "
+                         "sidecars; omitted, the external panel is a stated gap")
     ap.add_argument("--out", type=Path, required=True, help="the HTML file to write")
     ap.add_argument("--title", default=None, help="page title (default: the events file's name)")
     args = ap.parse_args(argv)
     try:
-        rec = load_record(args.events, args.ladder_state, args.record_dir)
+        rec = load_record(args.events, args.ladder_state, args.record_dir, args.external_points)
     except EmptyRunRecord as exc:
         print(f"run_dashboard: refused: {exc}", file=sys.stderr)
         return 2
