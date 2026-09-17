@@ -151,7 +151,7 @@ The gating tests live under `crates/mantis-selfplay/tests/`:
 - `queue_roundtrip.rs` (P-07 / P-08) — the graph queue round-trips (the dense half left with the grid path): submit →
   mock pop → submit results → single-read take; the D6 graph reason-travels
   (inference-failure, `fail_remaining`, and the build-side reason) with no orphaned
-  waiter; the native `builder_impl` handshake rejection; the disjoint-pool invariant;
-  and the F-19 one-native-build-per-leaf structural assertion.
+  waiter; the native `builder_impl` handshake rejection; and the F-19 one-native-build-per-leaf
+  structural assertion (the disjoint-pool invariant left with the dense queue, R346(f)).
 - `graph_build_bench.rs` (`crates/mantis-selfplay/benches/`) — carries the F-19
   build-INVOCATION-COUNT structural assertion alongside the Metric (1) build median.
