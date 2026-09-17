@@ -90,7 +90,7 @@ target-version = "py311"
 # was ratified to end. PLE joins the select with a named catch (PLE0303, a live
 # TypeError-in-waiting in data/sources/base.py, fixed same-phase).
 select = ["E", "F", "W", "I", "UP", "B", "BLE", "PLE"]
-# BLE = flake8-blind-except: `except Exception:` without re-raise is banned repo-wide
+# BLE = flake8-blind-except: `except Exception:` without re-raise is banned over src/ and tools/
 # (repo_design §11 "except Exception: pass is lint-banned").
 # E501 dispositioned NEVER (WPCLEAN CENSUS_LT §7): 266 findings at census, ~all
 # comment/doc lines, zero defect history, no auto-fix — a permanently-red advisory rule.

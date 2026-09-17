@@ -32,6 +32,9 @@ amendment commit and operator sign-off.
 - LAW-13 FFI/build. panic = "unwind" so a panic crosses the FFI catchable, never as a process abort; no target-cpu in committed build config.
 - LAW-14 Persistence-fatal. Persistence failures are run-fatal; `except Exception: pass` is
   lint-banned; an optional effect goes through best_effort() and requires a counter.
+  ANNOTATION (2026-09-17, INVESTIGATION-1 C-11): the lint ban is ruff `BLE` over `src/` and
+  `tools/`; `tests/` carries a declared `BLE001` exclusion with its grounds in pyproject.toml (an
+  oracle-write corpus), so the ban's scope is the production tree, not "repo-wide".
 - LAW-15 Eval-instrument. Deploy-matched eval is the DEFAULT promotion bar and a missing deploy
   decision blocks promotion; strength bars are fixed-depth instruments, never wall-clock.
 - LAW-16 Lifecycle. One subsystem, contract-tested: signals save-then-exit, self-play stall watchdog ALWAYS armed, disk guard.
