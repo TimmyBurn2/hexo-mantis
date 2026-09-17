@@ -3,6 +3,9 @@
 Rewritten in place, never appended to. Every value below was read from the tree at the commit
 named under "Provenance", not copied from a register. Where a register disagreed with the tree,
 the tree won and the disagreement is recorded in the last section.
+Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): the minted-values
+block, the OPEN-card line, the exit block's box and push facts, and dispatcher item (6); everything
+else is the 2026-09-15 rewrite and reads as of that date.
 
 ## Current phase — run7 RESUMED 2026-09-15 20:03 UTC from step 23 829 on the re-minted config (tree `ba51fd46`, gate/rung 256, GSPRT armed); the strix anchor reads the run peaked near 9k; the first resumed round (@24k) is the re-mint's live confirmation
 
@@ -11,7 +14,7 @@ questions — the run's checkup, WHY the eval is slow, sealbot's share, the book
 `RUN7_EVAL_COST_2026-09-15.md` and the independent review `docs/design/eval_gate_memo_2026-09-15.md`,
 and the operator's decisions on both became the resume re-mint.
 
-**Tree at the exit (`dev`, NOT pushed — the operator pushes):** R353 (`c31fd74e`) · the sealbot TT
+**Tree at the exit (`dev`; pushed at `ba51fd46` once the resume below was approved):** R353 (`c31fd74e`) · the sealbot TT
 fix (`748f5c47`) · the dashboard's note (`136ab7b5`, discharged at `5bc28070`) · the census
 (`416c95b4`) · the arm producer (`af47a8ab`) · CARD-SEALBOT-GIL-SERIAL closed (`f33ea87c`) · the A/B
 record and CARD-SEALBOT-TT-SEAT closed (`992cd519`, `7e0a424c`) · `eval.max_plies` (`79d832cd`,
@@ -111,22 +114,28 @@ puller is a systemd user unit (above); run6's and shakedown7's mirrors stand bes
 
 fp32 on `train.device: cpu` is the ONE carve-out to LAW-06. The dev box runs the CPU wheel.
 
-## Minted values — `configs/run7.yaml` (unchanged this leg; the running config)
+## Minted values — `configs/run7.yaml` (the running config, as re-minted 2026-09-15)
 
-**38 deltas** from the `dev` template, replayable. `selfplay.search.kind: gumbel` (320/64 at p 0.25,
-`c_scale` 1.0, `q_rescale` true), `deploy.search.kind: puct`, `identity.warm_start` the LAW-12
-strip with `reinit: []`, `train.ply_cap_abort {0.5, 600, 3000}`, `train.eval_interval` 3000 =
-`checkpoint_interval`, deploy and eval PUCT-512, the rung 288 at `rung_concurrency` 8,
-`eval.round_timeout_sec` 14 400, `n_workers` 32, `seed` 20260914. Gate 12 GREEN with two rows
-DEFERRED.
+**41 deltas** from the `dev` template, replayable (derived: the `# delta:` header lines).
+`selfplay.search.kind: gumbel` (320/64 at p 0.25, `c_scale` 1.0, `q_rescale` true),
+`deploy.search.kind: puct`, `identity.warm_start` the LAW-12 strip with `reinit: []`,
+`train.ply_cap_abort {0.5, 600, 3000}`, `train.eval_interval` 3000 = `checkpoint_interval`, the gate
+at `deploy_sims` 256 and the sealbot rung at `sealbot_model_sims` 256 since the resume re-mint (512
+before it — the two units are labelled on the dashboard; RULINGS annotations under R351/R352), the
+rung 288 at `rung_concurrency` 8, `eval.max_plies` 256, the GSPRT armed (`eval.gate.sequential`),
+`eval.round_timeout_sec` 14 400, `n_workers` 32, `seed` 20260914. `selfplay.search_stats_every` 8
+(contract v32) is in the template and the file; the resumed run's stamp predates the row and the
+loader tolerates it (`checkpoint_config_predates_schema`). Gate 12 rc 0 with FOUR rows DEFERRED
+(`policy_loss_trough`, `ply_cap_attractor`, `grad_norm_hard_abort`, `sealbot_wr_abort`; the
+`actor_lag` row was RETIRED by B-1, CARD-SERVER-OWNED-COPY).
 
 ## Protected set, laws, cards
 
 Seventeen laws; no gate number added (still 17). Cards (`docs/governance/CARDS.md`): CLOSED this
 leg — CARD-PUCT-ATTRACTOR (R353(e)), CARD-SEALBOT-GIL-SERIAL (round 1's wall), CARD-SEALBOT-TT-SEAT (the A/B's reading); OPEN —
-CARD-GUMBEL-HEAD-RESIDUE,
-CARD-DRAIN-POLLER-RACE, CARD-SELFPLAY-SEARCH-STATS. Owed still: the α = 1.0 three-row
-reconstruction.
+every open card is in `CARDS.md` and is derived there, never enumerated here (this line once named
+three of ~thirty). Opened by R355 since: CARD-SERVER-OWNED-COPY, CARD-STYLE-BACKLOG;
+CARD-SELFPLAY-SEARCH-STATS landed 2026-09-16. Owed still: the α = 1.0 three-row reconstruction.
 
 ## Dispatcher state for a fresh session
 
@@ -140,6 +149,15 @@ ruling"; research in `observatory_research.md`) and its phase 1, the reader laye
 `tools/observatory/readers` (`f16421f2`, fast-forwarded onto this leg's `35c89657` by the
 operator), await the ruling and the R344(d) amendment its §4.3 drafts; nothing there opens a
 socket yet. The worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
+(6) REPAIR-A4 (R355) LANDED in three plans, `d44f3459..d7bb90d5` (38 commits, 2026-09-16/17):
+A-2 + A-1 + the search-stats producer; the in-run repairs B-1..B-9, B-11, B-19, A-3, C-3; steps
+10–12 — the doc repairs, the §3 deletes and archives (`docs/design/archive/`, `docs/audits/archive/`),
+`mantis.diagnostics.ring_reader`/`.tactics`, gate 15's stale-header rule, two ratchet measures,
+CARD-STYLE-BACKLOG. HELD by the operator (2026-09-17): the observatory deletion and the reader
+merge, until the box page's producer is NAMED — the record (this file, `observatory_design.md`)
+says `tools/run_dashboard.py` + `tools/game_viewer.py` through the refresh scripts, and
+`tools/observatory/` is phase 1 (readers, no page). Run-ops owes: the 30k stop, the five R355(c)
+cells, run8's mint + σ swap, the 3 h shakedown.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -148,17 +166,20 @@ socket yet. The worktree `/workspace/mantis-tt` exists only for the A/B's fixed 
   and contract rows v30/v31), not a numbered ruling; the memo names the protected-set item
   ("gate pair statistics") a ruling should name.
 - Full local gate set on the leg's code: 19 GREEN + 3a green in the foreground; gate 1 not run.
-- Collected tests: 4 804 → **4 862** (the floor follows at the next floor commit; 4 811 committed). Comment ratchet: 3 534 / 23 / 13 510
-  (held: the leg's docstrings were trimmed to the floor, none raised).
+- Collected tests: **4 988** collected (2026-09-17) against the committed floor 4 862. Comment
+  ratchet: 3 451 / 0 / 13 387, plus private-docstring 1 530 and Rust-doc 2 677 since 2026-09-17
+  (every floor lowered, none raised).
 - Contracts: `game_record.md` gained `move_sims` / `move_arms` (self-play only); `run_config_schema.md`
   v30 (`eval.max_plies`) and v31 (`eval.gate.sequential`); `event_manifest.md` the gate's rule fields
   and the `gate_sequential` phase; the fixtures manifest re-pinned `drain_goldens.json` (the row's ninth field).
 - Vendored patch: unchanged (three hunks); the TT fix is in the adapter, not the vendor tree.
-- The box: run7 LIVE on `r352d` at `15109ac3`; the worktree `mantis-tt` at `748f5c47` for the
-  A/B's fixed arm; the chains `chain_tt_ab.sh` and `chain_strix_15k.sh`.
+- The box: run7 LIVE since the 2026-09-15 resume on `ba51fd46` (events in `seg0002`); the worktree
+  `mantis-tt` at `748f5c47` exists only for the A/B's fixed arm; the chains `chain_tt_ab.sh` and
+  `chain_strix_15k.sh` are spent.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
-  `dev` NOT pushed (no operator approval this session).
+  `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
+  is pushed under the operator's grant of 2026-09-17.
 
 ## Provenance
 
