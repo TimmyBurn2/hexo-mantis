@@ -717,7 +717,7 @@ input is a deviation from the amendment's text and lands here in the same commit
 2. **The rule the panel carries.** Each (run, unit) is its own series and each unit (ours
    PUCT-256 vs strix 256; ours PUCT-512 vs strix 128) its own instrument, never merged — another
    run's point sits on that run's step axis and says so; every point carries the regime
-   it was read in (CONTENDED / IDLE, from the run's heartbeat at cell start); the y axis and the
+   it was read in (CONTENDED / IDLE, from every run's heartbeat under the runs root at cell start); the y axis and the
    legend name the unit; the gap to strix is printed as a number (pp below parity, and the Elo
    it implies) for the latest point of every unit, not shown as a colour. A failed cell
    (`.failed.json`) is named in the panel's note and drawn as nothing.

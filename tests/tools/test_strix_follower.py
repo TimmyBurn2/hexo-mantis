@@ -135,7 +135,8 @@ def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_
     body = json.loads(written[0].read_text(encoding="utf-8"))
     assert body["unit"] == "equal_work" and body["ours"]["sims"] == 256 and body["strix"]["sims"] == 256
     assert body["trigger"] == "cadence" and body["regime"] == "CONTENDED"
-    assert body["regime_evidence"]["heartbeat_age_sec"] == 30.0
+    assert body["regime_evidence"]["heartbeat_age_sec_self"] == 30.0
+    assert body["regime_evidence"]["live"] == [f"heartbeat_{_RUN}.json"]
     assert body["net_hash"] == "net" + "0" * 61
     assert body["checkpoint_sha256"] == hashlib.sha256(before).hexdigest()
     assert body["strix"]["checkpoint_sha256"] == "f" * 64
@@ -171,7 +172,7 @@ def test_a_promotion_fires_on_the_step_s_checkpoint_once_it_exists(follower_mod,
     assert [c["candidate"] for c in cells.calls] == [str(ckpt)]
     body = json.loads(written[0].read_text(encoding="utf-8"))
     assert body["trigger"] == "promotion" and body["step"] == 3000
-    assert body["regime"] == "IDLE" and body["regime_evidence"]["heartbeat_age_sec"] is None
+    assert body["regime"] == "IDLE" and body["regime_evidence"]["heartbeat_age_sec_self"] is None
 
 
 def test_a_failed_cell_leaves_no_receipt(follower_mod, tmp_path: Path) -> None:
@@ -218,3 +219,19 @@ def test_the_equal_work_cell_composes_through_the_frontier_as_the_256_256_rung(f
     assert round_spec.rung_concurrency == 8 and round_spec.step == 15000
     assert job.opening_book == config.eval.gate.opening_book == "book_v1_s20260625_p4"
     assert frontier.cell_channel(cell) == "external"
+
+
+def test_a_sibling_runs_live_heartbeat_makes_the_cell_contended(follower_mod, tmp_path: Path) -> None:
+    """The parent run or a shakedown twin shares the card as much as this run does."""
+    run = _run_dir(tmp_path)
+    twin = tmp_path / "runs" / "runx-shakedown" / "logs"
+    twin.mkdir(parents=True)
+    (twin / "heartbeat_runx-shakedown.json").write_text(json.dumps({"wall_ts": 1_000.0 - 5.0}),
+                                                        encoding="utf-8")
+    ckpt = _checkpoint(run, 15000)
+    _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": str(ckpt)}])
+    f = _follower(follower_mod, run, _FakeCells())
+    body = json.loads(f.poll()[0].read_text(encoding="utf-8"))
+    assert body["regime"] == "CONTENDED"
+    assert body["regime_evidence"]["live"] == ["heartbeat_runx-shakedown.json"]
+    assert body["regime_evidence"]["heartbeat_age_sec_self"] is None, "this run's own heartbeat is absent"

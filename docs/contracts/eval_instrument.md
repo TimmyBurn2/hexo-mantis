@@ -84,8 +84,9 @@ and are folded in here, because a reader of any ladder reading needs them:
   (`periodic_checkpoint_save`, `eval_round_complete.promoted`), never off filenames; its receipt
   is a sidecar beside the checkpoint (`<ckpt>.strix256.json`: the checkpoint's sha256 and the
   net's `net_param_hash`, strix's pinned commit and checkpoint sha256, the unit's two sims, the
-  trigger, the regime — CONTENDED when the run's heartbeat is live at cell start, IDLE otherwise,
-  with the heartbeat age as evidence — and the pair-level readout: games, eff_n, wins, losses,
+  trigger, the regime — CONTENDED when ANY run's heartbeat under the runs root is live at cell
+  start (a twin or a parent shares the card as much as this run), IDLE otherwise, with the
+  heartbeat ages as evidence — and the pair-level readout: games, eff_n, wins, losses,
   draws, wr and its CI). The sidecar is the receipt: an existing one is never re-read, the stamp
   is never touched (LAW-12), and a failed cell writes `<ckpt>.strix256.failed.json`, which is
   not a receipt. The as-shipped cell reads at block ends only (`--once --unit as_shipped`,

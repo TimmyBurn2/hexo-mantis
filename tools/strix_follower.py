@@ -96,15 +96,19 @@ def sidecar_path(checkpoint: Path, unit: str) -> Path:
 
 
 def regime(run_dir: Path, run_id: str, now: float) -> tuple[str, dict[str, Any]]:
-    """CONTENDED when the run's heartbeat is live at cell start, IDLE otherwise; the age is the evidence."""
-    beat = run_dir / "logs" / f"heartbeat_{run_id}.json"
-    try:
-        wall = float(json.loads(beat.read_text(encoding="utf-8")).get("wall_ts"))
-    except (OSError, ValueError, TypeError):
-        return "IDLE", {"heartbeat": str(beat), "heartbeat_age_sec": None}
-    age = now - wall
-    return ("CONTENDED" if age < HEARTBEAT_LIVE_SEC else "IDLE"), {
-        "heartbeat": str(beat), "heartbeat_age_sec": round(age, 1)}
+    """CONTENDED when ANY run's heartbeat under the runs root is live at cell start, IDLE otherwise."""
+    # A shakedown twin or the parent run shares the card as much as this run's own trainer does.
+    beats = sorted({run_dir / "logs" / f"heartbeat_{run_id}.json",
+                    *run_dir.parent.glob("*/logs/heartbeat_*.json")})
+    ages: dict[str, float | None] = {}
+    for beat in beats:
+        try:
+            ages[beat.name] = round(now - float(json.loads(beat.read_text(encoding="utf-8"))["wall_ts"]), 1)
+        except (OSError, ValueError, TypeError, KeyError):
+            ages[beat.name] = None
+    live = sorted(name for name, age in ages.items() if age is not None and age < HEARTBEAT_LIVE_SEC)
+    return ("CONTENDED" if live else "IDLE"), {"heartbeat_age_sec": ages, "live": live,
+                                               "heartbeat_age_sec_self": ages.get(f"heartbeat_{run_id}.json")}
 
 
 def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurrency: int,
