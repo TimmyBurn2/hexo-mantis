@@ -46,7 +46,7 @@ hexo-mantis/
 │   ├── selfplay/               # pool over Rust runner, inference server, graph collate
 │   ├── eval/                   # pipeline, promotion gate, round-robin, BT
 │   ├── arena/                  # EVALFAIR instrument (deploy-matched, paired books)
-│   ├── bots/                   # BotProtocol + all bot wrappers incl. community API client
+│   ├── bots/                   # BotProtocol + the bot wrappers (sealbot, strix, random)
 │   ├── monitor/                # HEADLESS ONLY: event emit, producer manifest, alert rules
 │   ├── diagnostics/            # single-definition production-importable readouts
 │   ├── util/                   # small helpers (device, coordinates, determinism)
@@ -185,7 +185,6 @@ check (tools/check_import_dag.py) — a new top-level cycle fails the build.
 | 5 | run config schema | see the contract doc's version table | pydantic models, extra=forbid; schema_version key in every file. The version is the CONTRACT DOC's own table, whose last row is the authority — this cell read v8 while `docs/contracts/run_config_schema.md` had reached v13, and v13 while it had reached v32, so the cell now DEFERS to the doc; gate 13 now asserts the doc's header equals its own max row (AUDIT-1 F-52) |
 | 6 | replay persist | HEXG v2 | magic, versioned header, slot-geometry guard, two-pass atomic load |
 | 7 | event manifest | v1 | every panel AND every headless gate input cites a live producer; mutation self-test proves the checker bites |
-| 8 | community bot API | bot-api v1 (SKELETON) | PLANNED: a vendored OpenAPI 3.1 spec + a BKE-notation round-trip suite. NEITHER EXISTS: the contract file carries two `TODO`s and there are zero `openapi`/`bke` tokens under `src/`, `tests/` or `vendor/`. Recorded as planned rather than deleted — it is a real intention — but it is not a shipped seam (AUDIT-1 F-52) |
 | 9 | eval instrument | v1 | deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair bootstrap CI, eff_n = trajectory-hash-distinct games |
 | 10 | mint preflight report | preflight-mint-v1 | the mint preflight's evidence JSON: always written (LAW-14); mode, verdict and mint TIER derived from what the run DID, never from what it intended |
 | 11 | game record | game-record-v1 | every game a run plays, one JSON object per line, sharded by (run, segment, hour) with an index; the SEGMENT is the writer and the hour is the window, so a resume never appends into a stopped process's file |
@@ -1327,3 +1326,14 @@ Under R9 this lands as an amendment in the commit that moves it.
    kind (the deploy kind plays games nobody trains on, so a resume may re-take it). The
    node-pool ceiling checks the self-play sims under the self-play kind and the eval sims under
    the deploy kind. No crate moves, no import edge changes.
+
+### AMENDMENT — R355(f), the approved delete list: contract #8 is DELETED, two profiling harnesses go
+
+**2026-09-17, REPAIR-A4 step 11.** Contract #8 (community bot API, `bot-api v1 (SKELETON)`) is
+deleted: the row said "NEITHER EXISTS" since AUDIT-1 F-52, nothing under `src/`, `tests/` or
+`vendor/` ever carried an `openapi` or `bke` token, and an intention with no seam is not a contract.
+Row 8 is removed rather than renumbered; the numbering keeps the gap so every older cite of "#8"
+still names what it named. `tools/profile_eval.sh`, `tools/profile_selfplay.sh` and
+`tools/perf_prereg_skeleton.md` — a run5-era harness pair never run, one reading a config key that
+does not exist, one citing a `plan/` directory that was never tracked — are deleted under the
+same clause. `bots/` in §1 now names the three shipped wrappers.
