@@ -208,9 +208,8 @@ def _bounded(factory, *, block, name: str = "smoke_preflight_armed.yaml", steps:
                           # the compose drive runs the real graph route.
                           "batch_size": 8},
                    monitor={"actor_lag_threshold_steps": steps - 1,
-                            # `smoke_preflight_armed.yaml` ships actor-lag DISARMED, so with
-                            # draw-rate required the audit would report BOTH rows disarmed and
-                            # the exact-list assertion below could never hold.
+                            # `smoke_preflight_armed.yaml` ships actor-lag DISARMED; with draw-rate
+                            # required the audit would report BOTH rows disarmed, failing the exact list.
                             "actor_lag_abort_enabled": True},
                    # `eval_enabled` is a CONFIG fact, declared here; posture byte-preserved.
                    eval_enabled=False)

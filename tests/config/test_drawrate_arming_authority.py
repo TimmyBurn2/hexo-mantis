@@ -210,7 +210,7 @@ def test_the_coordinator_threshold_has_NO_default_authority_ANYWHERE_so_the_conf
         "assertion above while the config reaches nothing — this is the transport arm"
     )
 
-    # ── the family's OTHER frozen dataclass ──────────────────────────────────────────
+    # the family's OTHER frozen dataclass
     # `DrawRateAbortSpec` is where the three VALUES live, so a default authority resurrected there
     # defeats every assertion above: the coordinator would faithfully carry a spec whose terms the
     # config never wrote. MEASURED: field defaults on all three keys, and a `__post_init__` +

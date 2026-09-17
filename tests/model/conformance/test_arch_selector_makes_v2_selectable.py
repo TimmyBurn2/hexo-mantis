@@ -96,7 +96,7 @@ def diagnostic_config(tmp_path):
     assert not path.exists()
 
 
-# ── the vocabulary and the pairing rule ──────────────────────────────────────────────────
+# the vocabulary and the pairing rule
 def test_the_kind_vocabulary_is_set_equal_to_build_nets_dispatch(derived):
     """The registry and the dispatch are one claim, checked as SET EQUALITY in both directions:
     a kind in the registry `build_net` cannot build is a name resolving to nothing, and an arch
@@ -183,7 +183,7 @@ def test_the_incumbent_is_a_KIND_the_pairing_rule_admits():
         assert kind in ARCH_KINDS_BY_REPRESENTATION[representation]
 
 
-# ── the selector's refusals ──────────────────────────────────────────────────────────────
+# the selector's refusals
 def test_an_UNKNOWN_kind_is_REFUSED_and_not_resolved_to_the_nearest_fit():
     """PB-T10a. The class LAW-11 exists for, transposed from encodings to arches: a name this
     build does not have is an error, never the closest member of the union."""
@@ -223,7 +223,7 @@ def test_select_arch_takes_NO_default_kind():
     assert parameter.kind is inspect.Parameter.KEYWORD_ONLY
 
 
-# ── the round trip: a minted config, V2, a served batch, a stable hash ───────────────────
+# the round trip: a minted config, V2, a served batch, a stable hash
 def _batch(in_dim: int, edge_dim: int, n_real: int = 12, n_stones: int = 3) -> dict:
     """A synthetic star graph on the `gnn_axis_v1` wire's dummy topology, LABELLED AS SUCH: one
     dummy node bidirectionally connected to every real node, all-zero edge attrs, so

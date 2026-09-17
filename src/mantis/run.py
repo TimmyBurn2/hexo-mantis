@@ -266,9 +266,8 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     """
     representation = config.identity.representation
     if representation == "graph":
-        # Lazy with a stated reason: `mantis._engine` is not an edge on the design's `run`
-        # row, and the extension module is the one import this root must not make
-        # unconditional.
+        # Lazy with a stated reason: `mantis._engine` is not an edge on the design's `run` row,
+        # and the extension module is the one import this root must not make unconditional.
         from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
 
         # The ring's visit-slot geometry is DERIVED at composition from the config's sims

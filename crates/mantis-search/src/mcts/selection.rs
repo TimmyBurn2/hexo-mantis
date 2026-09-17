@@ -164,9 +164,8 @@ impl MCTSTree {
             let first = node.first_child as usize;
             let n_ch = node.n_children as usize;
 
-            // KataGo-style dynamic FPU for unvisited children:
-            // `parent_q - fpu_reduction * sqrt(sum of visited children's priors)`, which
-            // collapses to 0.0 at `fpu_reduction == 0.0`.
+            // KataGo-style dynamic FPU for unvisited children: `parent_q - fpu_reduction *
+            // sqrt(sum of visited children's priors)`, which collapses to 0.0 at `fpu_reduction == 0.0`.
             let fpu_value = if self.fpu_reduction > 0.0 {
                 let parent_q = if node.n_visits > 0 {
                     node.w_value / node.n_visits as f32
@@ -373,9 +372,8 @@ impl MCTSTree {
             let (leaf_idx, leaf_depth) = match self.select_one_leaf(&mut board, &mut diffs) {
                 Ok(pair) => pair,
                 Err(desync) => {
-                    // Unwind this descent before propagating, exactly as `select_leaves` does:
-                    // leaving the virtual loss applied would permanently penalise nodes for a
-                    // walk that never produced a leaf.
+                    // Unwind this descent before propagating, exactly as `select_leaves` does: a
+                    // virtual loss left applied would permanently penalise nodes for a leafless walk.
                     self.undo_virtual_loss(desync.node);
                     while let Some(diff) = diffs.pop() {
                         board.undo_move(diff);

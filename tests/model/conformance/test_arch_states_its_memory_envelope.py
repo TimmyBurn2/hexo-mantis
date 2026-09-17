@@ -184,7 +184,7 @@ def check_term_moves_with_arch(
     return {name: wide[name].nbytes - narrow[name].nbytes for name in REQUIRED_TERMS}
 
 
-# ── the registered envelopes — one per arch kind `build_net` dispatches ────────────────
+# the registered envelopes — one per arch kind `build_net` dispatches
 def _net_tensors(net) -> list[torch.Tensor]:
     return [*net.parameters(), *net.buffers()]
 
@@ -339,7 +339,7 @@ def envelope_terms(arch_kind: str, encoding: str, narrow: bool = False) -> dict[
     return check_terms(arch_kind, {name: fn(spec) for name, fn in envelope.terms.items()})
 
 
-# ── the manifest, the unit rule and the derivation control — ALL DEFAULT TIER ─────────
+# the manifest, the unit rule and the derivation control — ALL DEFAULT TIER
 def test_EVERY_arch_build_net_dispatches_HAS_a_registered_memory_envelope(derived):
     dispatched = arch_kinds_dispatched(BUILD_SOURCE)
     registered = frozenset(registered_envelopes())
@@ -466,7 +466,7 @@ def test_resident_bytes_COUNTS_A_SHARED_STORAGE_ONCE():
     assert resident_bytes([base, other]) == 2 * resident_bytes([base])
 
 
-# ── the MEASUREMENT (`slow`) — a table, no budget comparison ──────────────────────────
+# the MEASUREMENT (`slow`) — a table, no budget comparison
 @pytest.mark.slow
 def test_report_the_per_arch_memory_envelope(derived):
     """The table the mint would generalize from — bytes and GiB per term per arch, with the basis

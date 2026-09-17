@@ -22,9 +22,8 @@ fn splitmix(s: &mut u64) -> u64 {
     z ^ (z >> 31)
 }
 
-/// 200-step splitmix64-scripted interleaving of apply_move_tracked /
-/// undo_move / legal_moves_set / legal_move_count on one board
-/// (deterministic, no fs, no proptest).
+/// 200-step splitmix64-scripted interleaving of apply_move_tracked / undo_move /
+/// legal_moves_set / legal_move_count on one board (deterministic, no fs, no proptest).
 #[test]
 fn miri_apply_undo_legal_interleave() {
     let mut b = Board::new();
@@ -128,9 +127,13 @@ fn miri_clone_while_set_borrowed() {
     b.apply_move(0, 0).unwrap();
     let expect = one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS);
     let set = b.legal_moves_set(); // shared borrow, held across clone()
-    assert_eq!(set.len(), expect, "the default-radius ball around (0,0) minus the stone");
+    assert_eq!(
+        set.len(),
+        expect,
+        "the default-radius ball around (0,0) minus the stone"
+    );
     let clone = b.clone(); // shared cap read while `set` is live
-    // The held reference stays valid and readable after the clone.
+                           // The held reference stays valid and readable after the clone.
     assert_eq!(set.len(), expect);
     assert!(set.contains(&(1, 0)));
     // The clone's first legal_moves_set() rebuilds correctly (same position).

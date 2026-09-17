@@ -7,8 +7,6 @@
 //! draw gate. What survives is the window-free half — the axial transform itself, which the
 //! graph (HEXG) sample path uses to rotate coords and visit keys.
 
-// Geometric constants (board-size invariant)
-
 /// D6 group order: 6 rotations × 2 (with/without prior reflection).
 pub const N_SYMS: usize = 12;
 

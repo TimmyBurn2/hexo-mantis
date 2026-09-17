@@ -195,7 +195,7 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
     )
     assert b4.shutdown.running is False, "a fired hard abort must stop the run"
 
-    # ── the flip-sets, stated as the divergence they are ──────────────────────────────
+    # the flip-sets, stated as the divergence they are
     assert b1.coord._draw_rate_history == [] and b2.coord._draw_rate_history == [], (
         "B1 and B2 must take the early return — no sample may be appended when EITHER "
         "input is absent, or a disarmed gate is feeding the abort history"
@@ -220,7 +220,7 @@ def test_every_branch_of_the_draw_rate_gate_has_an_input_that_takes_it() -> None
         f"absent producer does: {b5.coord._gate_stats[_GATE]}"
     )
 
-    # ── reachability: no line of the gate is dead ─────────────────────────────────────
+    # reachability: no line of the gate is dead
     executable = _executable_lines(StepCoordinator._run_hard_abort_gates.__code__)
     covered = lines1 | lines2 | lines3 | lines4 | lines5
     assert executable - covered == set(), (

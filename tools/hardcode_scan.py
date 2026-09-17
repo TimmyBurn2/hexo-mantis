@@ -80,7 +80,7 @@ _TEST_FILE_HINTS: tuple[str, ...] = ("test", "fixtures", "fixture")
 # Patterns that look like version tokens or in-string literals; allow.
 _VERSION_RE = re.compile(r"v\d+\b")
 
-# ── allowlist constants (rules 1–10) ──────────────────────────────────────────────────
+# allowlist constants (rules 1–10)
 
 # Rule 5 — tunable hyperparameter tokens: skip any line containing these names.
 _TUNABLE_TOKENS: frozenset[str] = frozenset({
@@ -218,7 +218,7 @@ def _hits_outside_strings(line: str) -> list[str]:
     return _NUM_PATTERN.findall(cleaned)
 
 
-# ── rule 1: test-range helpers ────────────────────────────────────────────────────────
+# rule 1: test-range helpers
 
 
 def _test_ranges_rust(lines: list[str]) -> frozenset[int]:
@@ -290,7 +290,7 @@ def _test_and_docstring_ranges_python(lines: list[str]) -> frozenset[int]:
     return frozenset(skip)
 
 
-# ── line-level transform helpers (rules 2, 3, 4, 7) ───────────────────────────────────
+# line-level transform helpers (rules 2, 3, 4, 7)
 
 
 def _strip_trailing_comment_rust(line: str) -> str:

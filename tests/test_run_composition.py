@@ -398,7 +398,7 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
     )
 
 
-# ── F-R-P2B-2 — the TRAINER's sink is composed live, not authored-and-dropped ────────────
+# F-R-P2B-2 — the TRAINER's sink is composed live, not authored-and-dropped
 def test_trainer_deferred_sink_is_bound_to_run_safety_sink(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:
@@ -484,7 +484,7 @@ def test_deferred_sink_pre_bind_drops_by_design_and_post_bind_delivers() -> None
     )
 
 
-# ── STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0) ─────────
+# STOP CANDIDATE 5 — MonitorConfig production wiring (REV1, DESIGN_P3.md §5.0)
 def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ) -> None:

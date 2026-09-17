@@ -267,7 +267,7 @@ impl Default for ProofTt {
     }
 }
 
-// ── Tests ──────────────────────────────────────────────────────────────────────
+// Tests
 #[cfg(test)]
 mod tests {
     use super::*;

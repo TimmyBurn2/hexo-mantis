@@ -105,7 +105,7 @@ def test_of2_8_run5s_caps_are_typed_and_inside_the_schema_range(tmp_path) -> Non
     assert isinstance(caps.max_nodes, int) and caps.max_nodes >= 1
 
 
-# ═══ N-1 — the fix's own ARMING, pinned WITHOUT pinning the operator's numbers ════════════
+# N-1 — the fix's own ARMING, pinned WITHOUT pinning the operator's numbers
 def _template_caps_of(config_name: str) -> dict:
     """The caps in the TEMPLATE `config_name` was minted from, read out of the config's own
     `# template:` header line, so this follows a re-template instead of assuming `dev`."""

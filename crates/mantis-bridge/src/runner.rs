@@ -19,8 +19,7 @@ use mantis_selfplay::runner::{GameResultRow, RunnerStatsSnapshot, SelfPlayRunner
 use crate::inference::PyInferenceBatcher;
 
 /// Per-row tuple from `collect_graph_data`: the first NINE fields are
-/// `HexgBuffer.push_graph_position`'s positional signature verbatim, the tenth its keyword
-/// `game_id`.
+/// `HexgBuffer.push_graph_position`'s positional signature verbatim, the tenth its keyword `game_id`.
 type GraphRecordRow = (
     Vec<(i16, i16, i8)>,
     Vec<(i16, i16, f32)>,

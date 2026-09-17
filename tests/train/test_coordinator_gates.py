@@ -68,7 +68,7 @@ _GATE_INTERVAL = load_config(
     Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml").monitor.gate_interval
 
 
-# ── fakes ─────────────────────────────────────────────────────────────────────────────
+# fakes
 class _RunnerStats:
     mcts_mean_depth = 5.0
     mcts_mean_root_concentration = 0.1
@@ -258,7 +258,7 @@ def _drive_until_stopped(h, *, games_per_step=5, cap=12):
     return last
 
 
-# ══ O-06 — sealbot at the ASYNC RESULT seam ══════════════════════════════════════════
+# O-06 — sealbot at the ASYNC RESULT seam
 def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
     """The eval KICK returns a collapse `wr_sealbot=0.01` that WOULD fire if wrongly consumed;
     step() must NOT append it to `_wr_history`, must NOT fire, and must make ZERO blocking
@@ -424,7 +424,7 @@ def test_sealbot_absent_key_skips_and_counts() -> None:
     assert h.shutdown.running is True, "a skipped round must never fire"
 
 
-# ══ O-03 — draw-rate gate WIRING (LIVE producer, log_interval cadence) ════════════════
+# O-03 — draw-rate gate WIRING (LIVE producer, log_interval cadence)
 # (O-04 stride5-spam gate REMOVED at close-out per operator directive B.)
 def test_draw_rate_gate_fires_on_live_producer() -> None:
     """The `draw_rate_collapse` producer test, keyed on the LIVE pooled rate and never on a NaN
@@ -498,7 +498,7 @@ def test_draw_rate_gate_default_off_does_not_fire() -> None:
     )
 
 
-# ══ O-22 — emission wiring + heartbeat beats + monitor_gates ══════════════════════════
+# O-22 — emission wiring + heartbeat beats + monitor_gates
 def test_log_interval_emits_training_step() -> None:
     """One step() crossing a log_interval boundary emits exactly one `training_step`, one
     `iteration_complete` and one `monitor_gates` summary. Bites alert rules with no live

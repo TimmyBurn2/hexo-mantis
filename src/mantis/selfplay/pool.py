@@ -207,7 +207,7 @@ class WorkerPool:
             ),
         )
 
-    # ── read surface ────────────────────────────────────────────────────────────
+    # read surface
     @property
     def batch_fill_pct(self) -> float:
         return _batch_fill_pct(self)
@@ -319,7 +319,7 @@ class WorkerPool:
         """Composition snapshot of the live replay buffer."""
         return _buffer_composition(self)
 
-    # ── actor-sync / recorder seam ───────────────────────────────────────────────
+    # actor-sync / recorder seam
     def sync_inference_weights(self, state_dict: dict[str, Any]) -> None:
         """Forward a promoted state_dict to the bound inference server."""
         _sync_inference_weights(self, state_dict)
@@ -332,7 +332,7 @@ class WorkerPool:
         """Most recent recorded self-play replay file, or `None` under the default."""
         return _latest_replay_path(self)
 
-    # ── lifecycle ───────────────────────────────────────────────────────────────
+    # lifecycle
     def check_producer_health(self) -> None:
         """Fail-fast hook the trainer calls every step. The buffer feeder is the SOLE producer,
         so a death by exception re-raises LOUD rather than letting training run on a stale
