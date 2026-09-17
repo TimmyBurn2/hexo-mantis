@@ -1,5 +1,3 @@
-# >300 justify (R8): one function's oracle — every row drives `_select_buffer`, so its routing
-# and its seeding stay one diff to read.
 """Oracle for `mantis.run._select_buffer`: representation routing, its named refusal, and
 sampler seeding.
 

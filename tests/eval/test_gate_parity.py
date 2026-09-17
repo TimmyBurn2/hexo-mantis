@@ -1,8 +1,5 @@
 """Pin the deploy-strength gate's ported arithmetic.
 
-R8 >300 justify: one harness — record builders, gate_cfg, promotion-sequence spy — shared by every
-oracle here, which would drift apart if duplicated across files.
-
   * draw-aware win rate `(wins + 0.5*draws) / n`, over the SCREEN games alone for `wr_screen`;
   * escalation on a SINGLE lower bound, with no upper band;
   * `wr_confirm` over the POOLED screen+confirm set, never confirm-only;

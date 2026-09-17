@@ -1,7 +1,3 @@
-# >300 justify (R8): one boundary, seen from both directions. The injected collaborators the pool
-# writes OUT to, the CALLEE surface the sync engine calls IN to, and the typed snapshots that
-# cross the same boundary are one edge contract; splitting them would put a shape and the reader
-# that fills it in separate files, where a dropped or re-typed field stops being a one-diff read.
 """The pool's outward hook surface: injection Protocols + read-only snapshots.
 
 The injected collaborators the pool writes OUT to, each with an explicit no-op default, plus

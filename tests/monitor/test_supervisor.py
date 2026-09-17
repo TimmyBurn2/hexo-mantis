@@ -1,7 +1,3 @@
-# >300 justify (R8): ONE subject — the supervisor's relaunch decision — through ONE scripted
-# harness. The exit-code table and the stale-`seq` kill ladder are two routes to that SAME
-# decision, and `LivenessTracker`'s seq/pid rows are the input it is computed FROM; cross-test
-# imports are barred, so any split also forks the harness into drifting copies.
 """The out-of-process supervisor: a torch-free, host-neutral babysitter.
 
 `Supervisor` takes injected `spawn_fn`/`kill_fn`/`clock` and a `sleep_fn` that advances the fake

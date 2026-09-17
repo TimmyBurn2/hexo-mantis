@@ -1,7 +1,4 @@
 #!/usr/bin/env python3
-# >300 justify: the per-function positional table, the binary-mode discriminator, the
-# self-expiring exemption register and the two scoped rules are one gate's single authority;
-# splitting them would create a second place where "what counts as encoding-less I/O" is decided.
 """CI gate 16: no encoding-less text I/O where it can break a run.
 
 `open()`, `read_text()` and `write_text()` default to the platform codepage, so a non-ASCII UTF-8

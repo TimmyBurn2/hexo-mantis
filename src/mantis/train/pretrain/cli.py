@@ -1,7 +1,3 @@
-# >300 justify (R8). ONE entry point over ONE linear act — parse, resolve the encoding, read the
-# training terms from the config, load the corpus, build the net, train, save, validate. A split
-# forks the argv namespace and the assembled config dict into two modules that must agree about
-# every term, which is the duplicate-authority shape this file was rewritten to end.
 """Bootstrap pretrain CLI: the `python -m mantis.train.pretrain` entry.
 
 Argparse surface, config resolution, corpus load, model build, train/save/validate. Config paths

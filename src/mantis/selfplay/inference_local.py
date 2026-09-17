@@ -1,11 +1,5 @@
-"""Local inference engine — the synchronous face over the batched seam.
-
->300 justify: one class, FOUR decode contracts that must be read together — the dense
-`infer_batch` scatter-max/min-pool decode, the graph leg riding the ONE `InferenceServer`, the
-RAW per-cluster grid decode (`infer_batch_per_cluster`), and the no-drop GRAPH decode
-(`infer_batch_ls`). Splitting them separates each decode from the docstring stating what it
-drops. Representation dispatch reads the BOUND SPEC, never the live model object.
-"""
+"""Local inference engine — the synchronous face over the batched seam; representation dispatch
+reads the BOUND SPEC, never the live model object."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -197,7 +191,6 @@ class LocalInferenceEngine:
                       is an artifact of map iteration; the Rust consumer rebuilds a map.
             values:   scalar value per board.
             centers:  the builder's `(cq, cr)` window centre per board.
-
         """
         if not boards:
             return [], [], [], []

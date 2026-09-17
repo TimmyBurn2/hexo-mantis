@@ -1,5 +1,3 @@
-// >300 justify (R8): ONE claim — what bounds an exported HEXG row's support — measured on a
-// real runner, plus the structural facts that make the measurement conclusive.
 //! The exported target's support is bounded by the SIM BUDGET, not the root's child count.
 //!
 //! Under `search.kind: puct` the target is the visit-count distribution, whose three arms are:

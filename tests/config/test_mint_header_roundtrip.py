@@ -1,6 +1,3 @@
-# >300 justify (R8): the behavioural half defines what the renderer does and the census half
-# asserts the committed configs are in that form; split, either half asserts a format no test
-# defines, and the parser under test is duplicated.
 """A minted header is REPLAYABLE: every delta value round-trips through the tool.
 
 Both header slots come from `yaml.safe_load`, so the value domain is exactly the image of

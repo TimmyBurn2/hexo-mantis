@@ -1,7 +1,3 @@
-# >300 justify (R8): the rows here are ONE claim — the split forward IS the un-split forward,
-# positionally — and every one of them, including the three mutation self-tests, binds the SAME
-# comparison helper. Separating the self-tests would let the oracle be weakened without the file
-# that proves it detects a transposition ever being opened.
 """The concat-then-submit round trip for a split fused forward.
 
 THE HIGHEST-RISK ORACLE IN THE PACKET. There is ZERO in-repo precedent — the train-side split

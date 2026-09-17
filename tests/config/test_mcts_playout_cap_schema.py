@@ -1,5 +1,4 @@
 """SC-A2 oracle — `MctsConfig` / `PlayoutCapConfig` census (DESIGN_P2.md §3 /
-PREREG_P2.md suite #4, split from test_selfplay_schema.py per R8's 300-line soft cap).
 
 RED-at-import until IMPL lands `mantis.config.schema.selfplay.MctsConfig` /
 `PlayoutCapConfig`. The `PlayoutCapConfig` mutual-exclusion `model_validator` (the three

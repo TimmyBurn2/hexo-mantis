@@ -1,9 +1,4 @@
-""">300 justify (R8): one block, one rejection corpus. The rejected payloads and the per-config
-posture census are DATA whose reason text IS the assertion, so splitting them would separate a
-rejection from the prereg pin it is judged against, and R5 bars the cross-test import that would
-rejoin them.
-
-What the draw-rate block can EXPRESS, and what each committed config says. The sibling authority
+"""What the draw-rate block can EXPRESS, and what each committed config says. The sibling authority
 file asserts who may set the value; this one asserts what the type system ACCEPTS at all.
 
 The defect each oracle is the ONLY witness to: a value outside the metric's own range in either

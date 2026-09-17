@@ -1,6 +1,3 @@
-# >300 justify (R8): the knee rule's ONE oracle — the band, the pick, the refusals, the exit
-# codes, the re-derivation from a written report and the per-rung noise term. A row that moves
-# the pick and a row that refuses to pick must read the same fixture and the same arithmetic.
 """The knee rule, its arithmetic, and the exit codes a sitting gates on.
 
 The rule is fixed before any number exists: the SMALLEST rung within 95 percent of the best

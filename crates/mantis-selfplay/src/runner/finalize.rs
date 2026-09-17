@@ -1,7 +1,3 @@
-//! R8-justify: the finalize phase + its in-src §178 ply-cap-outcome unit test
-//! exercise the VALUE branch (`outcome == ply_cap_value`) that the `drain_game_results`
-//! tuple cannot observe (outcome lives on `WorkerResultRow`, absent from `GameResultRow`).
-//!
 //! Finalize phase (WP6 D1) — `finalize_game_graph` (frozen
 //! `worker_loop/inner.rs:1624/1767`, dispatch branch `:571`).
 //!

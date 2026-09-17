@@ -1,5 +1,3 @@
-# >300 justify (R8): the fixed-pair buffer exists so two arms see ONE sample and the caps
-# helpers bound that same wire; split up, an arm could be compared against a different draw.
 """Shared rig for the micro-batch oracles: one buffer, one trainer, one wire-replay double.
 
 Real: the buffer, the wire, `collate_graph_batch`, the partition, the losses, the optimizer,

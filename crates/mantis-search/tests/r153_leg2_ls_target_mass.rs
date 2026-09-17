@@ -1,6 +1,5 @@
 // R8 >300 justify: the measurement harness (frozen semantics) and the flipped assertion arm
-// live in ONE file so the regression oracle and the prereg'd measurement it derives from can
-// never drift apart.
+// live in ONE file so the regression oracle and the prereg'd measurement cannot drift apart.
 //! Dropped target mass through each encoding's PRODUCTION expand.
 //!
 //! A permanent regression oracle: every sampled row must satisfy `dropped_mass <= 1e-6` and
@@ -63,7 +62,10 @@ fn geometry_for(enc: &str) -> (BoardGeometry, usize, i32) {
 fn no_drop_uniform(board: &Board, n_actions: usize) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0_f32 / legal.len().max(1) as f32;
-    let mut ls = LegalSetPolicy { dense: vec![0.0; n_actions], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; n_actions],
+        overflow: Default::default(),
+    };
     for (q, r) in legal {
         let idx = board.window_flat_idx(q, r);
         if idx < n_actions {
@@ -79,13 +81,16 @@ fn run_search(tree: &mut MCTSTree, n_actions: usize, trunk_sz: i32, mode: Expand
     let mut done = 0;
     while done < N_SIMS {
         let take = LEAF_BATCH.min(N_SIMS - done);
-        let boards = tree.select_leaves(take)
-        .expect("select_leaves: no desync in this fixture");
+        let boards = tree
+            .select_leaves(take)
+            .expect("select_leaves: no desync in this fixture");
         if boards.is_empty() {
             break;
         }
-        let policies: Vec<LegalSetPolicy> =
-            boards.iter().map(|b| no_drop_uniform(b, n_actions)).collect();
+        let policies: Vec<LegalSetPolicy> = boards
+            .iter()
+            .map(|b| no_drop_uniform(b, n_actions))
+            .collect();
         let values = vec![0.0_f32; boards.len()];
         match mode {
             Expand::LsAt => {
@@ -199,17 +204,31 @@ fn report(label: &str, rows: &[Row]) {
     let max = rows.iter().map(|r| r.dropped_mass).fold(0.0_f64, f64::max);
     let max_legal = rows.iter().map(|r| r.n_legal).max().unwrap_or(0);
     let with_offwindow = rows.iter().filter(|r| r.offwindow_children > 0).count();
-    let mut aff: Vec<f64> = rows.iter().map(|r| r.dropped_mass).filter(|&m| m > TOL).collect();
+    let mut aff: Vec<f64> = rows
+        .iter()
+        .map(|r| r.dropped_mass)
+        .filter(|&m| m > TOL)
+        .collect();
     aff.sort_by(|a, b| a.partial_cmp(b).unwrap());
     let pct = |q: f64| -> f64 {
-        if aff.is_empty() { 0.0 } else { aff[((aff.len() - 1) as f64 * q) as usize] }
+        if aff.is_empty() {
+            0.0
+        } else {
+            aff[((aff.len() - 1) as f64 * q) as usize]
+        }
     };
     let degenerate = rows.iter().filter(|r| r.dropped_mass >= 0.99).count();
     let over_half = rows.iter().filter(|r| r.dropped_mass >= 0.5).count();
     println!("\n=== {label} — {} positions ===", rows.len());
-    println!("  affected {affected} ({:.1}%)   max dropped_mass {max:.6}   max n_legal {max_legal}",
-             100.0 * affected as f64 / rows.len().max(1) as f64);
-    println!("  among affected: median {:.4}  p90 {:.4}", pct(0.5), pct(0.9));
+    println!(
+        "  affected {affected} ({:.1}%)   max dropped_mass {max:.6}   max n_legal {max_legal}",
+        100.0 * affected as f64 / rows.len().max(1) as f64
+    );
+    println!(
+        "  among affected: median {:.4}  p90 {:.4}",
+        pct(0.5),
+        pct(0.9)
+    );
     println!("  positions losing >=50% of the target: {over_half}");
     println!("  DEGENERATE (>=99% dropped, target ~all-zero): {degenerate}");
     println!("  positions WITH off-window children: {with_offwindow} (abort 4 needs > 0)");
@@ -239,7 +258,10 @@ fn assert_no_dropped_mass(label: &str, rows: &[Row]) {
             "{label}: ply {} (n_legal {}, n_children {}) drops {:.6} target mass \
              (> {TOL}) — the no-drop export law (records.rs:468-479, R34/R153) is \
              violated on the production path",
-            r.ply, r.n_legal, r.n_children, r.dropped_mass
+            r.ply,
+            r.n_legal,
+            r.n_children,
+            r.dropped_mass
         );
     }
     let degenerate = rows.iter().filter(|r| r.dropped_mass >= 0.99).count();
@@ -261,7 +283,10 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     let with_offwindow = rows.iter().filter(|r| r.offwindow_children > 0).count();
 
     // PREREG abort 1 — the tail must be reached.
-    assert!(max_legal > 361, "gnn_axis_v1: sample never reached >361 legal (max {max_legal})");
+    assert!(
+        max_legal > 361,
+        "gnn_axis_v1: sample never reached >361 legal (max {max_legal})"
+    );
 
     // PREREG abort 4 — THE ONE THAT MATTERS. A zero reached because the tree still holds no
     // off-window child would be a false clear.
@@ -277,7 +302,10 @@ fn r153_leg2_run5_exposure_through_production_expand() {
     let again = game_rows("gnn_axis_v1", 20_260_731, 64, Expand::LsAt);
     let a: Vec<f64> = repeat.iter().map(|r| r.dropped_mass).collect();
     let b: Vec<f64> = again.iter().map(|r| r.dropped_mass).collect();
-    assert_eq!(a, b, "gnn_axis_v1: instrument not deterministic at a fixed seed");
+    assert_eq!(
+        a, b,
+        "gnn_axis_v1: instrument not deterministic at a fixed seed"
+    );
 
     // SECONDARY: the wider-radius graph row through the UNFRAMED ls expand. Reported; it
     // does not decide run5.

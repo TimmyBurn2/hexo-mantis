@@ -1,7 +1,3 @@
-# >300 justify (R8): the arm and every control that shows it can refuse are ONE unit — the
-# real-path control, the length-preserving substitution and the radius refusal only mean anything
-# beside the arm they control, and a workaround that removes the second producer has to go red in
-# the same file as the arm it removed it from.
 """Check the action space's legal-move coverage against two producers that cannot collude.
 
 The graph crate computes the legal set from stones alone and is dep-free by the repo's DAG, so it

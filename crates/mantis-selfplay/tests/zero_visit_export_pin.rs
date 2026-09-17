@@ -1,7 +1,3 @@
-// R8 justify: one pin whose legs only mean anything together — the direct call proves it bites,
-// the positive control proves it does not bite everything, and the end-to-end drive proves the
-// predicate holds with every inference healthy. Split, a reader can green the refusal while its
-// positive control lives in another file.
 //! The EXPORTER conjunct pin over `records::refuse_zero_visit_export`.
 //!
 //! A search that backed up ZERO child visits has no visit distribution to export: every exporter
@@ -31,7 +27,9 @@ use mantis_core::{Cell, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::{assemble_ls_from_gnn_probs, refuse_zero_visit_export, TargetIntegrityError};
+use mantis_selfplay::records::{
+    assemble_ls_from_gnn_probs, refuse_zero_visit_export, TargetIntegrityError,
+};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 const NA: usize = 362; // gnn_axis_v1 policy stride (19*19 + 1)
@@ -48,7 +46,10 @@ fn wide_board() -> Board {
 fn uniform_prior(board: &Board) -> LegalSetPolicy {
     let legal = board.legal_moves();
     let p = 1.0f32 / legal.len() as f32;
-    let mut ls = LegalSetPolicy { dense: vec![0.0; NA], overflow: Default::default() };
+    let mut ls = LegalSetPolicy {
+        dense: vec![0.0; NA],
+        overflow: Default::default(),
+    };
     for &(q, r) in &legal {
         let flat = board.window_flat_idx(q, r);
         if flat < NA {
@@ -65,9 +66,14 @@ fn uniform_prior(board: &Board) -> LegalSetPolicy {
 fn zero_visit_tree(board: &Board) -> MCTSTree {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(board.clone());
-    let leaves = tree.select_leaves(1)
+    let leaves = tree
+        .select_leaves(1)
         .expect("select_leaves: no desync in this fixture");
-    assert_eq!(leaves.len(), 1, "construction: the root must be the only pending leaf");
+    assert_eq!(
+        leaves.len(),
+        1,
+        "construction: the root must be the only pending leaf"
+    );
     let centers = vec![board.window_center()];
     tree.expand_and_backup_ls_at(&[uniform_prior(board)], &[0.0f32], &centers, TRUNK);
     tree
@@ -82,7 +88,10 @@ fn a_zero_visit_search_handed_to_the_exporter_is_refused_loud() {
 
     // PRECONDITION, asserted not assumed: the root IS expanded and DOES hold children.
     let n_children = tree.pool[0].n_children as usize;
-    assert!(tree.pool[0].is_expanded() && n_children > 0, "construction: root must be expanded");
+    assert!(
+        tree.pool[0].is_expanded() && n_children > 0,
+        "construction: root must be expanded"
+    );
     assert!(
         (0..n_children).all(|j| tree.pool[tree.pool[0].first_child as usize + j].n_visits == 0),
         "construction: every child must carry zero visits"
@@ -91,14 +100,20 @@ fn a_zero_visit_search_handed_to_the_exporter_is_refused_loud() {
     let err = refuse_zero_visit_export(&tree, 125)
         .expect_err("a search that backed up nothing must not be exportable (M-ZV-1)");
     match err {
-        TargetIntegrityError::ZeroVisitSearch { ply_index, n_children: n } => {
+        TargetIntegrityError::ZeroVisitSearch {
+            ply_index,
+            n_children: n,
+        } => {
             assert_eq!(ply_index, 125, "the ply must ride the error");
             assert_eq!(n, n_children, "the child count must ride the error");
         }
         other => panic!("expected ZeroVisitSearch, got {other}"),
     }
     let text = format!("{err}");
-    assert!(text.starts_with("ZeroVisitSearch"), "the variant name must lead the Display: {text}");
+    assert!(
+        text.starts_with("ZeroVisitSearch"),
+        "the variant name must lead the Display: {text}"
+    );
     assert!(
         text.contains("did not run"),
         "the Display must say WHAT is wrong, not just that something is: {text}"
@@ -114,20 +129,27 @@ fn a_search_that_backed_up_visits_is_exportable() {
     let prior = uniform_prior(&board);
     let mut done = 0;
     while done < 8 {
-        let leaves = tree.select_leaves(4)
-        .expect("select_leaves: no desync in this fixture");
+        let leaves = tree
+            .select_leaves(4)
+            .expect("select_leaves: no desync in this fixture");
         if leaves.is_empty() {
             break;
         }
         let n = leaves.len();
-        let centers: Vec<(i32, i32)> = leaves.iter().map(mantis_core::Board::window_center).collect();
+        let centers: Vec<(i32, i32)> = leaves
+            .iter()
+            .map(mantis_core::Board::window_center)
+            .collect();
         tree.expand_and_backup_ls_at(&vec![prior.clone(); n], &vec![0.0f32; n], &centers, TRUNK);
         done += n;
     }
 
     let backed_up = refuse_zero_visit_export(&tree, 7)
         .expect("a search that visited children must be exportable");
-    assert!(backed_up > 0, "the returned total must be the real backed-up count");
+    assert!(
+        backed_up > 0,
+        "the returned total must be the real backed-up count"
+    );
 }
 
 #[test]
@@ -138,7 +160,10 @@ fn an_unexpanded_root_is_refused_with_zero_children() {
     tree.new_game(board.clone());
     match refuse_zero_visit_export(&tree, 0) {
         Err(TargetIntegrityError::ZeroVisitSearch { n_children, .. }) => {
-            assert_eq!(n_children, 0, "an unexpanded root reports zero children, not garbage");
+            assert_eq!(
+                n_children, 0,
+                "an unexpanded root reports zero children, not garbage"
+            );
         }
         other => panic!("expected ZeroVisitSearch on an unexpanded root, got {other:?}"),
     }
@@ -165,7 +190,12 @@ fn spawn_healthy_graph_producer(
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
@@ -200,7 +230,10 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         ..Default::default()
     })
     .expect("gnn runner constructs");
-    assert!(runner.fatal_defect().is_none(), "fresh runner carries no defect");
+    assert!(
+        runner.fatal_defect().is_none(),
+        "fresh runner carries no defect"
+    );
     assert_eq!(runner.stats_snapshot().target_integrity_defects, 0);
 
     let served = Arc::new(AtomicUsize::new(0));
@@ -222,7 +255,10 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(served.load(Ordering::Relaxed) > 0, "no graph inference served — vacuous drive");
+    assert!(
+        served.load(Ordering::Relaxed) > 0,
+        "no graph inference served — vacuous drive"
+    );
     let msg = defect.expect(
         "a zero-visit search ran to completion and was exported — the run recorded a target \
          built from priors alone (M-ZV-1/M-ZV-2)",
@@ -231,8 +267,14 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
         msg.contains("ZeroVisitSearch"),
         "the variant name must reach the drain face verbatim: {msg}"
     );
-    assert!(halted, "store-then-halt: running must be false once the latch stores (LAW-14)");
-    assert_eq!(snap.target_integrity_defects, 1, "the exporter pin's own counter must fire");
+    assert!(
+        halted,
+        "store-then-halt: running must be false once the latch stores (LAW-14)"
+    );
+    assert_eq!(
+        snap.target_integrity_defects, 1,
+        "the exporter pin's own counter must fire"
+    );
     assert_eq!(
         snap.inference_failures_total, 0,
         "the SEAM never fired on this drive — every inference succeeded. A non-zero count \

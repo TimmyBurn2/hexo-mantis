@@ -241,7 +241,7 @@ def _scratch_tree(root: Path, rel: str, text: str | bytes) -> None:
 def test_a_non_utf8_source_is_reported_not_crashed_on(tmp_path: Path) -> None:
     """A gate that dies on the input it judges reports nothing at all."""
     _scratch_tree(tmp_path, "src/bad.py", "# >300 justify\n".encode() + b"x = '\xff\xfe'\n")
-    violations, _over, _headers, _scanned = GATE.scan(tmp_path)
+    violations, _over, _headers, _scanned, _stale = GATE.scan(tmp_path)
     assert violations and "not UTF-8" in violations[0]
 
 
@@ -254,7 +254,7 @@ def test_the_scan_finds_a_planted_defect_in_a_scratch_tree(tmp_path: Path) -> No
         + "\n".join(_body(400))
         + "\n",
     )
-    violations, over_cap, headers, _scanned = GATE.scan(tmp_path)
+    violations, over_cap, headers, _scanned, _stale = GATE.scan(tmp_path)
     assert over_cap == 2
     assert headers == 1
     assert len(violations) == 2
@@ -264,7 +264,7 @@ def test_the_scan_finds_a_planted_defect_in_a_scratch_tree(tmp_path: Path) -> No
 
 def test_gate_is_green_on_the_committed_tree() -> None:
     """A gate is adopted only over a clean baseline."""
-    violations, over_cap, headers, scanned = GATE.scan()
+    violations, over_cap, headers, scanned, _stale = GATE.scan()
     assert not violations, "gate 15 baseline is dirty:\n" + "\n\n".join(violations)
     assert over_cap >= GATE.MIN_OVER_CAP
     assert headers >= GATE.MIN_HEADERS
@@ -274,7 +274,7 @@ def test_gate_is_green_on_the_committed_tree() -> None:
 
 def test_the_non_vacuity_floors_would_fire_on_an_empty_tree(tmp_path: Path) -> None:
     """`scanned nothing, found nothing` must never read as green."""
-    _, over_cap, headers, scanned = GATE.scan(tmp_path)
+    _, over_cap, headers, scanned, _stale = GATE.scan(tmp_path)
     assert over_cap < GATE.MIN_OVER_CAP and headers < GATE.MIN_HEADERS
     assert all(scanned[root] < floor for root, floor in GATE.MIN_FILES.items())
 
@@ -282,7 +282,7 @@ def test_the_non_vacuity_floors_would_fire_on_an_empty_tree(tmp_path: Path) -> N
 def test_the_floors_are_per_root_because_one_global_floor_was_measured_too_weak() -> None:
     """A single corpus-wide floor let a typo that dropped `src/` report GREEN: at adoption,
     renaming `src` in `ROOTS` still left 109 over-cap files against the then-floor of 100."""
-    _violations, _over, _headers, scanned = GATE.scan()
+    _violations, _over, _headers, scanned, _stale = GATE.scan()
     assert set(GATE.MIN_FILES) == set(GATE.ROOTS), (
         "every scanned root needs its own floor, or losing that root reads as green"
     )
@@ -342,12 +342,18 @@ def test_the_marker_TOKEN_itself_does_not_count_toward_the_reason() -> None:
     assert words == [], words
 
 
-def test_an_UNDER_cap_file_that_merely_mentions_R8_owes_no_reason() -> None:
-    """The duty exists only for a file over the cap; an under-cap NOTE owes no reason."""
-    lines = ["\"\"\"A short module.", "", "R8: 300-line soft cap not exceeded.", "\"\"\""]
-    violations, over_cap, has_marker = GATE.check_file("f.py", lines)
+def test_an_UNDER_cap_file_carrying_an_R8_marker_is_a_STALE_header() -> None:
+    """C-13: 62 files at or under the cap carried a `>300 justify` block that justified nothing;
+    under the cap the marker is a size claim a reader trusts, so the gate names it (2026-09-17)."""
+    lines = ["# >300 justify (R8): one seam, one set of fakes."] + ["x = 1"] * 20
+    violations, over_cap, has_marker = GATE.check_file("under.py", lines)
     assert not over_cap and has_marker
-    assert violations == [], violations
+    assert len(violations) == 1 and "STALE" in violations[0], violations
+
+
+def test_an_UNDER_cap_file_with_no_marker_is_clean() -> None:
+    violations, over_cap, has_marker = GATE.check_file("plain.py", ["x = 1"] * 20)
+    assert violations == [] and not over_cap and not has_marker
 
 
 def test_the_no_count_rule_still_applies_to_an_under_cap_file() -> None:
@@ -355,10 +361,10 @@ def test_the_no_count_rule_still_applies_to_an_under_cap_file() -> None:
     lines = ["# R8 justify: this file is one unit for reasons stated at length here now.",
              "# It is 42 lines long."]
     violations, _over_cap, _marker = GATE.check_file("f.py", lines)
-    assert violations and "states a line count" in violations[0], violations
+    assert any("states a line count" in v for v in violations), violations
 
 
 def test_the_committed_tree_passes_the_tightened_rule() -> None:
     """A rule is adopted only over a clean baseline."""
-    violations, _over, _hdr, _scanned = GATE.scan()
+    violations, _over, _hdr, _scanned, _stale = GATE.scan()
     assert violations == [], violations[:5]

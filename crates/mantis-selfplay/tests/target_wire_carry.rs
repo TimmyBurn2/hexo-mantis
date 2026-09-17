@@ -1,5 +1,3 @@
-// R8 justify: ONE oracle needs a live graph runner — the mock graph producer, the off-window
-// re-derivation and the drain loop are its single-purpose harness.
 //! Wire/record carry through finalize → drain: visits reach the drain verbatim.
 //!
 //! Drive: a REAL 1-worker graph runner (gnn_axis_v1) with a mock graph producer (uniform
@@ -30,7 +28,11 @@ use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
 /// Mock graph producer: uniform probs over each request's legal nodes, assembled by the
 /// PRODUCTION `assemble_ls_from_gnn_probs` (the shared producer both consumers reach).
-fn spawn_graph_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
+fn spawn_graph_producer(
+    queue: GraphQueue,
+    n_actions: usize,
+    served: Arc<AtomicUsize>,
+) -> JoinHandle<()> {
     thread::spawn(move || loop {
         let batch = queue.pop_graph_batch(4, 5);
         if batch.is_empty() {
@@ -45,12 +47,18 @@ fn spawn_graph_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicU
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
-            let res = assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                .map(|ls| (ls, 0.0f32));
+            let res =
+                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
+                    .map(|ls| (ls, 0.0f32));
             ids.push(id);
             results.push(res);
         }
@@ -66,7 +74,10 @@ fn record_offwindow_visits(rec: &GraphRecord, n_actions: usize) -> usize {
         .stones
         .iter()
         .map(|&(q, r, p)| {
-            ((i32::from(q), i32::from(r)), if p == 1 { Cell::P1 } else { Cell::P2 })
+            (
+                (i32::from(q), i32::from(r)),
+                if p == 1 { Cell::P1 } else { Cell::P2 },
+            )
         })
         .collect();
     let player = if rec.current_player == 1 {
@@ -191,7 +202,10 @@ fn ctr_export_offwindow_mass_moves_fires_on_a_dispersed_run() {
     }
     runner.stop();
     producer.join().expect("producer exits");
-    assert!(served.load(Ordering::Relaxed) > 0, "no graph inference served — vacuous drive");
+    assert!(
+        served.load(Ordering::Relaxed) > 0,
+        "no graph inference served — vacuous drive"
+    );
     assert!(
         fired >= 1,
         "export_offwindow_mass_moves never fired on a drive whose exports provably carry \

@@ -10,9 +10,6 @@ HEAD (no production path yields `promoted=True`), so it is driven exactly the wa
 existing routing suites drive it: fabricated results through `drain._route_eval_result`
 into a REAL `apply_gate_decision`. All drives are direct calls — zero threads, zero
 joins, zero sleeps.
-
->300 justify (R8): one seam family (gate↔actor independence) whose four oracles share
-one spy/hooks/coordinator harness; splitting harness from assertions would duplicate it.
 """
 from __future__ import annotations
 

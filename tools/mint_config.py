@@ -11,10 +11,6 @@ value the header cannot record replayably, schema-invalid result, existing outpu
 
 The delta is stamped into the header as REPLAYABLE YAML, and a minted row's old value is
 DERIVED from the validated template, so `tools/config_diff.py` keeps agreeing with it.
-
-R8 justification, over the 300-line soft cap: minting is one act with one invariant — the file
-it writes must be replayable from its own header — and the header's producer and the guarantee
-that it reads back only hold if they move together.
 """
 import argparse
 import sys

@@ -10,11 +10,6 @@ kick-latency assertions are deterministic.
 The model passed to `run_evaluation` carries its declared `arch` dataclass as a plain `.arch`
 attribute. Nothing here asserts on the snapshot's payload shape, only on where the file lands
 and that it carries no checkpoint-envelope keys.
-
->300 justify: one isolation-law seam (kick/ack, no-module-retained, spawn-context,
-join-boundedness, snapshot-vs-checkpoint) sharing one fake-process/fake-context harness and one
-minimal-config builder — splitting by behavior would duplicate that harness and let the
-isolation-law halves drift out of sync.
 """
 from __future__ import annotations
 

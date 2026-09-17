@@ -1,7 +1,3 @@
-# Exceeds the 300-line soft cap (R8): one defect, three routes. The poller thread, the drain
-# and the never-silent assertion are the same failure observed where it can reach the run from,
-# and a route moved to another file stops sharing the harness that proves the other two see the
-# same exception.
 """The poller/round-completion thread must be exception-proof.
 
 A timeout, crash or garbage result ALWAYS escalates to a named `eval_broken` event and a routed

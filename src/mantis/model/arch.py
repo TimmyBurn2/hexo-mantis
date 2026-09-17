@@ -1,7 +1,3 @@
-# >300 justify (R8). This module is ONE authority — the declared arch dataclasses, the kind
-# vocabulary that names them, the pairing rule for which representation admits which, the
-# incumbent-by-history table, the config row that can override it, and the two resolvers that
-# read all of the above. Splitting any of those out would put "which arch is this" in two files.
 """Declared model-arch dataclasses plus the spec/config to arch adapter.
 
 Arch metadata travels on these frozen dataclasses: a caller retains the declared arch and hands

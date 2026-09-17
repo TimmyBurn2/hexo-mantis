@@ -1,9 +1,4 @@
-""">300 justify (R8): ONE rule and the evidence that it is the RIGHT rule. The discriminator below
-was chosen over a simpler one only because the simpler one was measured and found to be a
-false-positive generator, and the tests that record that measurement are what stop the rule being
-"simplified" back into the version that does not work.
-
-Citation arrows are checked BY SYMBOL REFERENCE, never by prose. All four `monitor.supervisor_*`
+"""Citation arrows are checked BY SYMBOL REFERENCE, never by prose. All four `monitor.supervisor_*`
 keys were cited as `"resolve_monitor_config -> monitor/supervise.py <flag>"`, but
 `resolve_monitor_config` runs in the RUN process while `supervise.py::main` runs in the SUPERVISOR
 process and built its own bare `MonitorConfig()`. The arrow crossed a process boundary no code

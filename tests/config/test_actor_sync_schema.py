@@ -8,9 +8,6 @@ means NO representable "off" value exists (R49 at the type level); the cross-fie
 validator (`RunConfig`-level, since it spans sections) rejects a threshold at or below
 the cadence with a NAMED message. Payload builders mirror
 tests/config/test_train_policy_value_target_consistency.py's full-RunConfig shape.
-
->300 justify (R8): the full RunConfig payload builder (every field explicit per R1) is the
-price of testing a RunConfig-level validator; the assertions themselves are compact.
 """
 from __future__ import annotations
 

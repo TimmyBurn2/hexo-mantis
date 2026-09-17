@@ -1,5 +1,3 @@
-// >300 justify (R8): one claim under BOTH search kinds, through drives sharing the counting
-// producer that IS the measurement; split, the two arms' numbers stop being comparable.
 //! A search serves EXACTLY `n_simulations` leaves, never more and never fewer.
 //!
 //! The finding this exists for: 53.46 served sims/move against `n_simulations: 50`, because the

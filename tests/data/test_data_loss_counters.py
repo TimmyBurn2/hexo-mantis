@@ -1,7 +1,3 @@
-# >300 justify (R8). ONE closure: the counter, its producer at every arm, and its destination
-# are the same claim; split apart, a producer file passes while the sink key is gone and a
-# census passes while nothing feeds it. The census and its mutation self-test sit beside the
-# arms they police so adding an arm reds the file that owns it.
 """Every `data/**` skip/truncate loss is COUNTED and READ.
 
 Each test DRIVES the failure — nothing is asserted from source text — and then asserts the

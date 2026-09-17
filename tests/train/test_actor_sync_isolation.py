@@ -9,9 +9,6 @@ PLACEMENT DEVIATIONS (logged in ORACLE_NOTES_U.md): DESIGN homes S4 in the rewri
 `tests/test_run_composition.py` — both existing files ORACLE-WRITE may not touch; both
 censuses are therefore frozen HERE so the properties are oracle-guaranteed regardless of
 how IMPL executes those on-list rewrites.
-
->300 justify (R8): five censuses + five bite tests + one AST pin share one walker/scanner
-helper set; splitting the checkers from their bite tests would break the LAW-07 pairing.
 """
 from __future__ import annotations
 

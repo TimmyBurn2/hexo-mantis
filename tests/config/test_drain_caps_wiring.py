@@ -1,7 +1,3 @@
-# R8 justify: the four `monitor.drain.*` keys are ONE claim — a citation is verified by
-# MUTATION, never by grep — and each oracle is the SAME drive (real `compose_run`, real minted
-# config, one key distinguishable) with a different key set, sharing the composition harness and
-# the spied `build_eval_pipeline`; split across files the drive would be copied four times.
 """`monitor.drain.*` reaches the consumer its registry entry NAMES — proved by MUTATION.
 
 The four keys were minted into every config, schema-validated, and claimed by both copies of

@@ -11,10 +11,6 @@ posture. Below `N_pool_min` there is NO OBSERVATION — `None`, never a healthy 
 the abort history as a real measurement. And `Sum(completed)` cannot exceed
 `DRAW_RATE_WINDOW * n_workers`, so a bar above that ceiling makes the gate structurally unable
 to observe while auditing ARMED; the schema half lives in `test_drawrate_schema_range.py`.
-
->300 justify (R8): four measured rigs plus the transport and no-default census in ONE file,
-because they share one construction helper and one real subject — splitting them would fork
-`_play` into copies free to drift in exactly the direction the statistic moves.
 """
 from __future__ import annotations
 

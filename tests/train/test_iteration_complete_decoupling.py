@@ -1,7 +1,3 @@
-# >300 justify (R8): ONE decoupling claim driven by two oracles that must see the SAME emit —
-# one counts the `iteration_complete` events a burst produces, the other the
-# `pool.runner_stats()` calls those same events cost. The `_CountingPool` spy is the instrument
-# for both, so a split forks the fake that makes each side's numbers meaningful.
 """`iteration_complete` is decoupled from `log_interval`, and costs ONE pool read per emit.
 
 `games_total` is a per-iteration counter, not a training-logging event, so the emit rides every

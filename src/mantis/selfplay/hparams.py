@@ -1,11 +1,6 @@
 """Self-play knob resolution: validated `SelfplayConfig`/`InferenceConfig` -> typed hparams ->
-`SelfPlayRunnerConfig`.
-
->300 justify: ONE concern — everything the pool/server constructors used to read inline out of
-the config. Keeping the hparam dataclasses, the encoding resolve, the seed-corpus parse and the
-runner-config assembly together makes the config->runner wire greppable in one place, and that
-wire is write-only from Python. `from_config` reads a validated mapping's sections directly: no
-namespace fallback, no code-side default, the schema being the sole default authority.
+`SelfPlayRunnerConfig`. `from_config` reads a validated mapping's sections directly: no namespace
+fallback, no code-side default, the schema being the sole default authority.
 """
 from __future__ import annotations
 

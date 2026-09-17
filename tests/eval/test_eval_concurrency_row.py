@@ -1,6 +1,3 @@
-# >300 justify (R8): one row, and its arming question cannot be split. The fixtures that build a
-# match, the G=1-versus-factory byte-equality arm and the which-block-carries-it arm all read the
-# SAME constructed round; separating them would let two files disagree about the unarmed default.
 """`eval.concurrency`: the row exists, reaches ONE block, and is inert at its default.
 
 The gate block is ~93 % of a round's wall and the only block worth arming; the floor probe is a

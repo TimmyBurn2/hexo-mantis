@@ -1,7 +1,3 @@
-# >300 justify (R8): the DAG-clean seam layer — the injected-collaborator Protocols, the config
-# dataclass they are typed against, and the outcome record. Splitting it would put a Protocol and
-# the dataclass that consumes it on opposite sides of an import for no gain, and
-# `pooled_draw_rate` sits here because `DrawRateAbortLike` is the shape it is bounded by.
 """Step-coordinator collaborator Protocols + config + outcome.
 
 The injected-collaborator Protocols (no torch import), `StepCoordinatorConfig`, `StepOutcome` and

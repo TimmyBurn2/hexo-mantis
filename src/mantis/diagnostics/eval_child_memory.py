@@ -1,6 +1,3 @@
-# R8 justify: the stopping RULE, the two readers that feed it and the renderer are one unit — a
-# verdict is a function of a stated sample, so a reader living apart from the rule could hand it
-# a series shaped differently from the one the rule was pre-registered against.
 """`python -m mantis.diagnostics.eval_child_memory` — has the eval-child term CONVERGED?
 
 A STATED STOPPING RULE, applied by something other than the person who wants the answer, in

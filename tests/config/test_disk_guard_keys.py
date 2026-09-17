@@ -1,7 +1,3 @@
-# >300 justify (R8, and only just): O-D3 and O-D4 are two instruments on ONE config family and
-# share its minted values, the injected-sink spy and the rigged filesystem. R5 bars cross-test
-# imports, so splitting them writes the three minted numbers into a second file — a duplicated
-# value authority, for the handful of lines it would save.
 """The `monitor.disk_guard` family — O-D3 (liveness) and O-D4 (structure).
 
 `DiskGuard` was constructed at exactly one site, `build_subsystems`, which had ZERO callers,

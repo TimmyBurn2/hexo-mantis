@@ -1,4 +1,3 @@
-# >300 not exceeded; single-seam suite (the O1p Python leg + QA over ONE fixture family).
 """⊕ WP12-R Phase T (TARGET INTEGRITY) — O-1 exported-target parity, PYTHON LEG (O1p)
 + the quick-arm parity Python leg (QA). Written at T-2 ORACLE-WRITE, byte-frozen
 through IMPL (R138 pattern: same fixture, both sides of the FFI — the Rust leg is

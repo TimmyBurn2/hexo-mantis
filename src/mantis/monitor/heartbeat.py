@@ -7,9 +7,6 @@ supervisor must read the heartbeat file on a box whose GPU is the thing that wed
 thread fires that watchdog and exits `WATCHDOG_STALL_EXIT_CODE`; a starved watchdog thread
 freezes the file `seq` and the supervisor kills and relaunches. Staleness is measured on an
 INJECTED monotonic clock, so a wall-clock jump can neither hide a stall nor invent one.
-
->300 justify (R8): the supervisor<->child CONTRACT is ONE unit — file codec, source-name pins,
-exit codes and the parent-death env key are read from BOTH sides of an illegal-edge boundary.
 """
 from __future__ import annotations
 

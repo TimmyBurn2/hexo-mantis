@@ -17,6 +17,8 @@ written down. Two halves, of which the second is load-bearing:
     carrying nothing.
   * NO COUNT -- a justification may not state a line count. Measured at adoption: 47 headers
     stated one, at least 8 were already wrong, and `src/mantis/run.py` claimed 867 against 1024.
+  * NO STALE HEADER -- a file AT OR UNDER the cap may not carry a marker at all. Measured at
+    adoption (2026-09-17, C-13): 62 did, 244 block lines claiming a size the file no longer had.
 
 The alternative -- re-derive the stated count and require a match -- was rejected: it automates
 a transcription instead of removing it, editing every over-cap file's header forever to maintain
@@ -207,6 +209,13 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
         return violations, over_cap, False
 
     block = block_at(lines, marker)
+    if not over_cap:
+        violations.append(
+            f"{rel}:{marker + 1}: STALE R8 justification -- the file is {len(lines)} lines, at or "
+            f"under the {CAP}-line soft cap, and carries a justification marker.\n"
+            "    R8 asks a file OVER the cap to say why it is one unit; under the cap the header "
+            "is a claim about a size the file no longer has. Delete the block (C-13)."
+        )
     words = reason_words(block)
     # SCOPED TO FILES OVER THE CAP: R8's "say WHY" duty exists only for a file that exceeds it,
     # and an UNDER-cap file that merely mentions R8 in passing owes no justification. The
@@ -229,11 +238,12 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
     return violations, over_cap, True
 
 
-def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int, dict[str, int]]:
-    """Return (violations, files_over_cap, files_carrying_a_marker, files_scanned_per_root)."""
+def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int, dict[str, int], int]:
+    """(violations, files over cap, files carrying a marker, files scanned per root, stale headers)."""
     violations: list[str] = []
     over_cap = 0
     headers = 0
+    stale = 0
     scanned: dict[str, int] = {name: 0 for name in ROOTS}
 
     for path in source_files(root):
@@ -248,8 +258,9 @@ def scan(root: Path = REPO_ROOT) -> tuple[list[str], int, int, dict[str, int]]:
         violations += file_violations
         over_cap += int(is_over)
         headers += int(has_marker)
+        stale += int(has_marker and not is_over)
 
-    return violations, over_cap, headers, scanned
+    return violations, over_cap, headers, scanned, stale
 
 
 #: (name, synthetic header, must_fire) — the trigger's own proof. Each arm is the exact defect
@@ -285,6 +296,10 @@ def self_test() -> int:
         failures.append("    presence arm: find_marker() claimed a marker in a file with none")
     if find_marker(["# >300 justify (R8): one unit."] + ["x = 1"] * 400) != 0:
         failures.append("    presence arm: find_marker() missed a marker on line 1")
+    stale_probe, _over, _marker = check_file(
+        "probe.py", ["# >300 justify (R8): one unit, stated at length."] + ["x = 1"] * 10)
+    if not any("STALE" in v for v in stale_probe):
+        failures.append("    stale arm: an under-cap file carrying a marker was not flagged")
 
     if failures:
         print("gate 15 SELF-TEST FAIL -- the trigger cannot be trusted:")
@@ -297,10 +312,11 @@ def main(argv: list[str]) -> int:
     if self_test() != 0:
         return 1
     if "--self-test" in argv:
-        print(f"gate 15 self-test: {len(SELF_TEST)} no-count arms + 2 presence arms, all correct")
+        print(f"gate 15 self-test: {len(SELF_TEST)} no-count arms + 2 presence arms + 1 stale arm, "
+              "all correct")
         return 0
 
-    violations, over_cap, headers, scanned = scan()
+    violations, over_cap, headers, scanned, stale = scan()
     rc = 0
 
     for name, floor in MIN_FILES.items():
@@ -333,7 +349,7 @@ def main(argv: list[str]) -> int:
     if rc == 0:
         print(
             f"gate 15: {over_cap} file(s) over the {CAP}-line cap, all justified; "
-            f"{headers} justification(s), none stating a count"
+            f"{headers} justification(s), none stating a count, {stale} stale"
         )
     return rc
 

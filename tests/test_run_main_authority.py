@@ -1,6 +1,3 @@
-# >300 justify (R8): four rows of ONE census family over ONE parse of `src/mantis/run.py`,
-# sharing the AST instrument that makes the claim checkable. R5 bars cross-test imports, so a
-# split forks that instrument into copies that drift apart while both stay green.
 """`main()`'s body census — the twin of the `launch_run` body oracle.
 
 `main`, the launcher an operator actually types, had no body census at all, so inserting a

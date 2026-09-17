@@ -1,6 +1,3 @@
-# >300 justify (R8): one question — which encoding an eval round binds and decodes — asked
-# once per arm over ONE shared round-spec builder, so the arms are only comparable because they
-# are constructed identically.
 """Prove an eval round decodes the encoding the round DECLARED, not a constant.
 
 Board geometry comes from `RoundSpec.encoding` while the inference decode came from a hardcoded

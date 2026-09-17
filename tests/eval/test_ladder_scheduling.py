@@ -3,10 +3,6 @@
 Every threshold and cadence is read off the `LadderConfig` fixture rather than hardcoded,
 so literal drift in the implementation shows up in the source-grep oracle in
 tests/eval/test_ladder_config_schema.py, not here.
-
->300 justify: one state machine (activation/graduation/scheduling/persistence) under one
-shared fixture ladder; splitting it by behavior would duplicate the LadderConfig/rung
-fixtures and let the scheduling and hysteresis halves drift apart.
 """
 from __future__ import annotations
 

@@ -11,10 +11,6 @@ RUNG; the env channel surviving, observed both BEHAVIOURALLY and by SOURCE, sinc
 still reads as an arming surface and a live key producing equal strings is a disguised channel;
 and a host path or endpoint entering `bots/`, scoped to the token classes the sibling census does
 not cover.
-
->300 justify: one resolver, one file. Every row asserts something about the SAME refusal surface,
-and the point of the pairwise-distinctness rows is that a reader can tell the ruled skips from
-the environment-state refusals — an oracle seeing one class at a time cannot assert that.
 """
 from __future__ import annotations
 

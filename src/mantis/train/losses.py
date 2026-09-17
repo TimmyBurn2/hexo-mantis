@@ -1,11 +1,5 @@
 """Shared loss computation for the Trainer + pretrain.
 
->300 justify (R8): the full policy/value/aux loss family — dense CE, ragged graph CE, dist65
-value, uncertainty, ownership/threat, chain, ply-index, the total-loss combiner and the fp16
-backward step — is ONE concern, the trainer's loss math, kept together so the numeric contract is
-greppable in one file. `_segment_softmax` is inlined rather than up-imported from the self-play
-collate, which is not part of the train surface.
-
 Architecture spec (docs/01_architecture.md §2):
     L = L_policy + L_value + w_aux·L_opp_reply + w_unc·L_uncertainty (+ chain/ply/own/threat)
 """

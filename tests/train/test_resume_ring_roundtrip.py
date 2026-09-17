@@ -1,5 +1,3 @@
-# >300 justify (R8): one subject — a stopped run's replay ring — read from five angles. Split
-# apart, a change to the restorer reds one file and leaves a stale disclosure green in another.
 """A stopped run's REPLAY RING comes back end to end, on a REAL engine ring.
 
 `test_resume_state.py` pins the sidecar's own contract against byte payloads; this file drives

@@ -4,9 +4,6 @@ Invariant: `learner_step − actor_ckpt_step > N` fires exit 45 when armed, and 
 event per exceedance episode when disarmed, never an abort. Every drive is a direct
 `poll_once()` under an injected clock and a spy `exit_fn`; the watchdog thread is never
 started, so the only threads are the fire path's own bounded effect workers.
-
->300 justify (R8): nine oracles over one rig; the rig/spy set is the file's shared spine and
-duplicating it per-file would hide the family.
 """
 from __future__ import annotations
 

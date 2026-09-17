@@ -1,8 +1,3 @@
-//! R8 justify: ONE validator over one spec, and it is collect-all by contract — every check
-//! appends to a single `errs` list so a reader gets every violation of a registry row at once
-//! rather than one per parse attempt. A check living in another file could not append to that
-//! list without exporting it, and a validator whose arms report separately is the thing this
-//! one was written not to be.
 //! `RegistrySpec::validate` — cross-field invariant checks. Collects ALL
 //! violations into one multi-line message; never short-circuits on the first.
 

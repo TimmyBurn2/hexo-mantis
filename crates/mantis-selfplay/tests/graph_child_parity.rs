@@ -1,6 +1,3 @@
-// R8 >300 justify: one oracle — the self-play call sequence executed verbatim — plus the
-// flat-fixture reader it needs. Splitting the reader out would separate it from the ONE test
-// that proves it reads the committed fixture correctly.
 //! The SELF-PLAY leg of graph child parity: self-play semantics is THE authority.
 //!
 //! Runs the self-play graph call sequence VERBATIM —

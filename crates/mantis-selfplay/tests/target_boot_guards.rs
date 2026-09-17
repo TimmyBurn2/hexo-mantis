@@ -1,6 +1,3 @@
-// R8 justify: ONE derivation — the HEXG visit-slot capacity — and every refusal it can make,
-// in the file that also drives the BOOT guard against the same numbers; the mint surface and
-// the boot surface must agree, and a test measuring only one of them could not say so.
 //! Boot-guard oracles for the HEXG visit-slot capacity, at the runner's effective-sims seam.
 //!
 //!  * Under `puct` the capacity is DERIVED at composition:

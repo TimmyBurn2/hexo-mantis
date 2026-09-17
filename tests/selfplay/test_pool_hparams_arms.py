@@ -1,12 +1,4 @@
-"""Suite D — the self-play hparams and the runner wire they feed.
-
->300 justify: ONE surface. Every row binds `SelfPlayHParams.from_config` or the
-`build_runner_config` wire it feeds, sharing the recording proxy over the Rust config (which has
-no ctor getters, so the recorded kwarg dict is the only observable) and the base config dicts;
-splitting the hard-error arms from the wire arms would duplicate both. The old hard-error arms
-are now schema bounds covered in tests/config/, and the spelling traps are gone because the
-schema field IS the config key.
-"""
+"""Suite D — the self-play hparams and the runner wire they feed."""
 from __future__ import annotations
 
 import json

@@ -1,6 +1,3 @@
-// R8 justify: the legs are ONE claim with ONE construction — a seam failure and a drain shutdown
-// are the SAME `Err` arriving at the SAME line, separated only by the discriminator under test,
-// over one shared producer and switch.
 //! Pin the leaf-inference seam: a FAILED inference must never become a search reporting
 //! `Completed`, and a drain shutdown must not be mistaken for one.
 //!
@@ -86,7 +83,12 @@ fn spawn_graph_producer(
             let coords: Vec<(i32, i32)> = g
                 .legal_node_gather
                 .iter()
-                .map(|&row| (g.node_coords[row as usize * 2], g.node_coords[row as usize * 2 + 1]))
+                .map(|&row| {
+                    (
+                        g.node_coords[row as usize * 2],
+                        g.node_coords[row as usize * 2 + 1],
+                    )
+                })
                 .collect();
             let n = coords.len();
             let probs = vec![1.0f32 / n.max(1) as f32; n];
@@ -99,7 +101,6 @@ fn spawn_graph_producer(
         queue.submit_graph_results(&ids, results);
     })
 }
-
 
 fn wait_for_defect(runner: &SelfPlayRunner, secs: u64) -> Option<String> {
     let deadline = Instant::now() + Duration::from_secs(secs);
@@ -163,13 +164,19 @@ fn injected_graph_inference_failure_dies_loud_and_named_at_the_seam() {
         msg.contains("InferenceSeamFailure"),
         "the variant name must survive seam → latch → drain face verbatim: {msg}"
     );
-    assert!(msg.contains("graph"), "the failing ARM must ride the message: {msg}");
+    assert!(
+        msg.contains("graph"),
+        "the failing ARM must ride the message: {msg}"
+    );
     assert!(
         msg.contains(INJECTED_REASON),
         "the waiter's reason must ride VERBATIM — dropping it is §7.3, the whole point of \
          carrying it: {msg}"
     );
-    assert!(halted, "store-then-halt: running must be false once the latch stores (LAW-14)");
+    assert!(
+        halted,
+        "store-then-halt: running must be false once the latch stores (LAW-14)"
+    );
     assert_eq!(
         snap.inference_failures_total, 1,
         "the SEAM counter must count this fire (LAW-18)"
@@ -255,11 +262,17 @@ fn an_inference_server_death_that_closes_the_queue_is_a_failure_not_a_shutdown()
     runner.stop();
     producer.join().expect("producer exits");
 
-    assert!(blocked, "vacuous drive: the producer never parked holding a batch");
+    assert!(
+        blocked,
+        "vacuous drive: the producer never parked holding a batch"
+    );
     let msg = msg.expect(
         "a queue closed by something other than `stop()` was treated as a clean shutdown —          a dying inference server can therefore park every worker in a silent batch-skip          forever, with `running` still true and nothing raised. This is the F-816-9 degrade          re-entering through the shutdown door (R276(a))",
     );
-    assert!(msg.contains("InferenceSeamFailure"), "variant name must ride: {msg}");
+    assert!(
+        msg.contains("InferenceSeamFailure"),
+        "variant name must ride: {msg}"
+    );
     assert_eq!(
         snap.inference_failures_total, 1,
         "the seam counter must count a server-death failure like any other"

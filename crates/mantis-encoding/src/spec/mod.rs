@@ -1,6 +1,3 @@
-// Exceeds the 300-line soft cap (R8): the full-schema RegistrySpec record + its
-// three closed enums + every derived accessor kept together — splitting the type
-// from the accessors it owns would fragment one indivisible schema definition.
 //! Encoding registry spec — full-schema record per `registry.toml`.
 //!
 //! The sole encoding record type. Per-Board construction never binds a spec into

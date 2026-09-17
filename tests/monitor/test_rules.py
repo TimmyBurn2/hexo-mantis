@@ -1,8 +1,3 @@
-# >300 justify (R8): the oracle bank for ONE module. Every test drives a predicate in
-# `mantis.monitor.rules`, and each rule needs BOTH halves — the firing case and the mutation half
-# that proves it stays silent otherwise — so the file grows two tests per rule by construction.
-# The emitter tests assert the rules fire in `WARN_RULE_NAMES` order, so splitting per rule would
-# leave the ordering assertion with no natural home.
 """The pure stateless rule functions: decision-parity plus the run-safety hard-aborts on
 LIVE-shaped inputs.
 

@@ -1,5 +1,3 @@
-# >300 justify (R8): ONE theme — a run that died could not be recovered — and each arm's
-# mutation self-test means nothing away from the arm it controls.
 """The survivability triangle: resume in, model out, no invented paths.
 
 The resume branch dispatched on a `checkpoint_path` no production launch ever passed. The stall

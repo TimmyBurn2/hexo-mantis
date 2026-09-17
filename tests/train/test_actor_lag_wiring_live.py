@@ -4,10 +4,6 @@ Every lag oracle injects its own callables and every `compose_run` test fakes
 `build_run_safety`, so the two lambdas the composition root hands the watchdog were pinned by
 NOTHING: replacing either with `lambda: 0`, or swapping them, passed the whole suite while
 blinding the exit-45 actor-lag invariant. These are that missing producer test.
-
->300 justify (R8): the arming pins at the end have the SAME subject as the ones above — what
-the composition root hands `build_run_safety` and what that builder does with it — and
-cross-test imports are barred, so a second file would fork the pool/trainer/buffer fakes.
 """
 from __future__ import annotations
 

@@ -1,7 +1,3 @@
-# >300 justify (R8): the G-01..G-15 old-suite port (vectors and assertions frozen to the
-# predecessor's test_instrumentation.py) plus the G-17 scipy pin all bind ONE module,
-# selfplay/instrumentation.py, through one shared _game_complete driver; a split would scatter a
-# single frozen suite's numbering across files.
 """Suite G remainder — G-01 … G-15 (old-suite ports) plus G-17 (the scipy pin).
 
 IMPL-written. `test_instrumentation.py` is the oracle file and carries G-16 only, and the slice

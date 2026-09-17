@@ -1,6 +1,3 @@
-# >300 justify (R8): ONE rig for the whole fused-inference family — payload builder, collate
-# stand-in, stub net, scripted batcher and config factory are a single apparatus, and the
-# round-trip claim (split == unsplit) is only meaningful if one builder produces both sides.
 """Shared rig for the memory-bounded graph-inference-fusion oracles.
 
 Written before the feature exists, so it imports only surfaces LIVE at HEAD and collects today,

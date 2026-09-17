@@ -1,5 +1,3 @@
-# >300 justify (R8): a verdict list maintained apart from the derivation that produced it is
-# the transcribed-census defect this suite exists to refuse.
 """Arch reachability, derived structurally, and the graves that derivation produced.
 
 An arch with no production config selecting it AND no non-test consumer reaching it is ARCHIVED;

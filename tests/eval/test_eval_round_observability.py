@@ -1,10 +1,9 @@
 """An eval round says how far it got, and never reports a default as a measurement.
 
->300 justify (R8): every row pins ONE surface, the round's self-report, whose two defects were
-the same defect at two call sites. A hardcoded `games_total=0` is indistinguishable from a round
-that played zero games, so the sentinel is `None`. Observability must not become a new failure
-mode: a write failure never breaks a round, a read failure never raises, and escalation
-semantics are unchanged — checked structurally, since branching on progress leaves rows green.
+A hardcoded `games_total=0` is indistinguishable from a round that played zero games, so the
+sentinel is `None`; a write failure never breaks a round, a read failure never raises, and the
+escalation semantics are unchanged — checked structurally, since branching on progress leaves
+rows green.
 """
 from __future__ import annotations
 

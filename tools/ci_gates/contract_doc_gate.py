@@ -1,6 +1,3 @@
-# R8 justify: one drift check over one document, every arm answered by importing `RunConfig`
-# itself, so an arm in another file would need its own copy of that derivation — and a
-# transcribed key list is how the doc this gate checks rotted through four schema versions.
 """CI gate 13: docs/contracts/run_config_schema.md may not cite a config key or a `mantis.*`
 symbol the shipped schema does not have.
 

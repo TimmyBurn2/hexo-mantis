@@ -3,10 +3,6 @@
 RED-at-EXECUTION, not at collection: at HEAD every drive observes ZERO samples, because the lag
 check emits only on `lag < 0` or `lag > threshold`. Without the sample a healthy run emits
 nothing from the lag check, so no observer can tell a live reading from a frozen 0.
-
-R8 >300 justify: ONE unit — the emission, the two structural gates it inherits and the
-constructor CENSUS that keeps its interval derived rather than parameterised are one negotiated
-remedy; the census read alone looks like an arbitrary signature freeze.
 """
 from __future__ import annotations
 
