@@ -343,7 +343,7 @@ def test_the_marker_TOKEN_itself_does_not_count_toward_the_reason() -> None:
 
 
 def test_an_UNDER_cap_file_carrying_an_R8_marker_is_a_STALE_header() -> None:
-    """C-13: 62 files at or under the cap carried a `>300 justify` block that justified nothing;
+    """C-13: 63 files at or under the cap carried a `>300 justify` block that justified nothing;
     under the cap the marker is a size claim a reader trusts, so the gate names it (2026-09-17)."""
     lines = ["# >300 justify (R8): one seam, one set of fakes."] + ["x = 1"] * 20
     violations, over_cap, has_marker = GATE.check_file("under.py", lines)

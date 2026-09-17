@@ -446,6 +446,12 @@ def main(argv: list[str] | None = None) -> int:
     if ref_floor is None:
         print(f"comment_lint: BOOTSTRAP — no floor at {ref or 'any ref'}; the ratchet half is "
               "NOT enforced this run.", file=sys.stderr)
+    else:
+        unarmed = [n for n in GATED if n not in ref_floor]
+        if unarmed:
+            print(f"comment_lint: the reference floor at {ref} predates {', '.join(unarmed)}; the "
+                  "floor-may-only-fall check is NOT armed for them until that ref carries them.",
+                  file=sys.stderr)
 
     print(f"comment_lint: {seen} file(s) — " + "  ".join(
         f"{n}={measured[n]}/{tree_floor[n]}" for n in GATED))

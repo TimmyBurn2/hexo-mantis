@@ -65,8 +65,10 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
    file's opening comment or module docstring saying WHY the file is one unit. It states a
    reason, NEVER a line count: a transcribed tally must be re-edited on every edit, will
    eventually be wrong, and is then read as evidence (ratified G-DFIX-4 / R192(e),
-   derive-or-delete). Sizes are derived by `wc -l`, never asserted. Gate 15 enforces both
-   halves — the justification is present, and it states no count.
+   derive-or-delete). Sizes are derived by `wc -l`, never asserted. A file AT OR UNDER the cap
+   carries NO justification: a header left behind after a file shrank is a size claim a reader
+   trusts (C-13, 2026-09-17: 63 of them). Gate 15 enforces all three — present over the cap,
+   stating no count, absent under it.
    Reason: keeps the audit greppable; unjustified growth hides structure drift.
 9. **R9 registers.** docs/governance/falsified.md is read-before-optimizing;
    docs/governance/LAWS.md governs; deviations from docs/design/repo_design.md require an
@@ -212,7 +214,10 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     300 lines under src/, tools/, crates/, tests/ carries a justification, and NO justification
     states a line count. The second half is the load-bearing one: 47 headers stated a tally,
     at least 8 were already wrong, and run.py claimed 867 against 1024. A stale count is
-    misinformation a future reader trusts (SF-7). Line counts are derived, never asserted.
+    misinformation a future reader trusts (SF-7). Line counts are derived, never asserted. The
+    third rule (2026-09-17, C-13): a file at or under the cap carrying a marker is STALE — the
+    marker regex is deliberately tolerant, so a prose mention of the cap in the first 80 lines
+    counts too and is reworded, never exempted.
 16. Encoding-less text I/O (tools/ci_gates/encoding_io_gate.py) — `open`/`read_text`/
     `write_text` without `encoding=` default to the platform codepage, so they raise
     UnicodeDecodeError on any non-UTF-8 locale. ZERO in tools/ (these are the gates

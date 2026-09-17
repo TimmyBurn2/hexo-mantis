@@ -95,7 +95,7 @@ Both were found by running the gate set rather than by reading it, and both are 
   repair: the server owns a COPY the sync writes and the learner never reads; then EMA (and its
   shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit.
 - **CARD-STYLE-BACKLOG — the judgment half of the R346(f) census, held by the ratchet.** The
-  mechanical half landed 2026-09-17 (62 stale R8 headers, nine three-line runs, the labelled
+  mechanical half landed 2026-09-17 (63 stale R8 headers, nine three-line runs, the labelled
   separator rules, a cite-only line, a file-top banner). What is left is a POLICY call and
   site-by-site work, measured at HEAD by `comment_lint.py --measure` and the census script:
   `private_docstring_excess_lines` 1 530 (R346(f) names PUBLIC APIs; whether a private symbol may

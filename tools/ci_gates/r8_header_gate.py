@@ -10,7 +10,7 @@
 
 R8 asks a file over the soft cap to say WHY it is one unit. It never asked for a tally, and the
 repo ratified that distinction as derive-or-delete before stalling; this gate is the rule
-written down. Two halves, of which the second is load-bearing:
+written down. Three rules, of which the second is load-bearing:
 
   * PRESENCE -- a `.py`/`.rs` file over CAP lines under `src/`, `tools/`, `crates/`, `tests/`
     must carry a justification marker. Measured at adoption: 135 files over the cap, exactly 2
@@ -18,7 +18,8 @@ written down. Two halves, of which the second is load-bearing:
   * NO COUNT -- a justification may not state a line count. Measured at adoption: 47 headers
     stated one, at least 8 were already wrong, and `src/mantis/run.py` claimed 867 against 1024.
   * NO STALE HEADER -- a file AT OR UNDER the cap may not carry a marker at all. Measured at
-    adoption (2026-09-17, C-13): 62 did, 244 block lines claiming a size the file no longer had.
+    adoption (2026-09-17, C-13): 63 did, 249 block lines claiming a size the file no longer had;
+    a prose mention of the cap in an under-cap file's first 80 lines counts, and is reworded.
 
 The alternative -- re-derive the stated count and require a match -- was rejected: it automates
 a transcription instead of removing it, editing every over-cap file's header forever to maintain
@@ -214,12 +215,12 @@ def check_file(rel: str, lines: list[str]) -> tuple[list[str], bool, bool]:
             f"{rel}:{marker + 1}: STALE R8 justification -- the file is {len(lines)} lines, at or "
             f"under the {CAP}-line soft cap, and carries a justification marker.\n"
             "    R8 asks a file OVER the cap to say why it is one unit; under the cap the header "
-            "is a claim about a size the file no longer has. Delete the block (C-13)."
+            "is a claim about a size the file no longer has. Delete the justification block, or "
+            "reword a prose mention of the cap so it carries no marker (C-13)."
         )
     words = reason_words(block)
-    # SCOPED TO FILES OVER THE CAP: R8's "say WHY" duty exists only for a file that exceeds it,
-    # and an UNDER-cap file that merely mentions R8 in passing owes no justification. The
-    # no-count rule below stays universal — a stated tally is misinformation wherever it sits.
+    # The "say WHY" duty is judged only over the cap (under it the marker itself is the defect,
+    # above); the no-count rule stays universal — a stated tally is misinformation wherever it sits.
     if over_cap and len(words) < MIN_REASON_WORDS:
         violations.append(
             f"{rel}:{marker + 1}: the R8 justification states no REASON "
@@ -283,7 +284,7 @@ SELF_TEST: tuple[tuple[str, list[str], bool], ...] = (
 
 
 def self_test() -> int:
-    """Prove both halves can fire before trusting either verdict."""
+    """Prove every rule can fire, and the stale rule does NOT fire over the cap, before any verdict."""
     failures: list[str] = []
     for name, header, must_fire in SELF_TEST:
         fired = bool(counts_in(header))
@@ -300,6 +301,10 @@ def self_test() -> int:
         "probe.py", ["# >300 justify (R8): one unit, stated at length."] + ["x = 1"] * 10)
     if not any("STALE" in v for v in stale_probe):
         failures.append("    stale arm: an under-cap file carrying a marker was not flagged")
+    over_probe, _over, _marker = check_file(
+        "probe.py", ["# >300 justify (R8): one unit, stated at length."] + ["x = 1"] * 400)
+    if any("STALE" in v for v in over_probe):
+        failures.append("    stale arm: an OVER-cap file carrying a marker was flagged stale")
 
     if failures:
         print("gate 15 SELF-TEST FAIL -- the trigger cannot be trusted:")
@@ -312,7 +317,7 @@ def main(argv: list[str]) -> int:
     if self_test() != 0:
         return 1
     if "--self-test" in argv:
-        print(f"gate 15 self-test: {len(SELF_TEST)} no-count arms + 2 presence arms + 1 stale arm, "
+        print(f"gate 15 self-test: {len(SELF_TEST)} no-count arms + 2 presence arms + 2 stale arms, "
               "all correct")
         return 0
 
