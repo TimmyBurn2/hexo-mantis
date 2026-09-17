@@ -96,3 +96,40 @@ def test_the_cli_prints_the_header_line(tmp_path: Path, capsys) -> None:
     assert R.main([str(path)]) == 0
     out = capsys.readouterr().out
     assert f"encoding={_ENCODING}" in out and f"size={len(_ROWS)}" in out
+
+
+def test_explicit_entropy_is_the_census_h_over_the_renormalised_explicit_masses(tmp_path: Path) -> None:
+    """(0.75, 0.25) → H; (0.5, 0.3) under α 0.2 renormalises to (0.625, 0.375); a one-hot reads 0."""
+    path = tmp_path / "ring.hexg"
+    _write_ring(path)
+    h = R.explicit_entropy(R.load_ring(path))
+    expected = [
+        -(0.75 * np.log(0.75) + 0.25 * np.log(0.25)),
+        -(0.625 * np.log(0.625) + 0.375 * np.log(0.375)),
+        0.0,
+    ]
+    assert h.shape == (len(_ROWS),)
+    assert np.allclose(h, expected, atol=1e-6)
+
+
+def test_explicit_entropy_reads_zero_on_a_row_with_no_explicit_mass(tmp_path: Path) -> None:
+    """An α = 1 row has no mass to renormalise: 0.0, not NaN (planted: the engine refuses to write one)."""
+    path = tmp_path / "ring.hexg"
+    _write_ring(path)
+    ring = R.load_ring(path)
+    probs = ring.visits["prob"].copy()
+    probs[ring.visit_off[1]: ring.visit_off[1] + ring.n_visits[1]] = 0.0
+    ring.visits["prob"] = probs
+    ring.tail_mass[1] = 1.0
+    h = R.explicit_entropy(ring)
+    assert h[1] == 0.0 and np.isfinite(h).all()
+    assert h[0] == pytest.approx(-(0.75 * np.log(0.75) + 0.25 * np.log(0.25)))
+
+
+def test_the_cli_prints_the_entropy_line_by_arm(tmp_path: Path, capsys) -> None:
+    path = tmp_path / "ring.hexg"
+    _write_ring(path)
+    assert R.main([str(path)]) == 0
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if ln.startswith("H(explicit) nats:"))
+    assert "full n=2 median" in line and "quick n=1 median" in line

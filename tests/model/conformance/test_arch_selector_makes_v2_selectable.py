@@ -147,7 +147,7 @@ def test_the_selector_has_a_representation_with_a_REAL_choice(derived):
 #: as data so the two pins below read the SAME authority: a config carrying the row without an
 #: entry reds, and an entry naming a kind the file does not carry reds too. Widening it is a
 #: mint act with a ruling behind it.
-_MINTED_ARCH_KIND_ROW = {"run6.yaml": "GnnArchV2", "run7.yaml": "GnnArchV2"}
+_MINTED_ARCH_KIND_ROW = {"run6.yaml": "GnnArchV2", "run7.yaml": "GnnArchV2", "run8.yaml": "GnnArchV2"}
 
 
 def test_every_shipped_config_still_selects_the_arch_it_has_always_selected(derived):

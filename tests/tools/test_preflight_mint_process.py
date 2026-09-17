@@ -2396,9 +2396,13 @@ def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_pat
         "run7 is the config the operator is about to start (R351 mint) and is bound BY NAME "
         f"for run6's reason. got {PRODUCTION_CONFIGS}"
     )
-    assert PRODUCTION_CONFIGS == ("configs/run6.yaml", "configs/run7.yaml"), (
-        "R346(f) took run5 and the shakedown config; run6 (a finished run's record) and run7 "
-        "are the whole production side. A member added without a by-name pin of its own is "
+    assert "configs/run8.yaml" in PRODUCTION_CONFIGS and "configs/run8.yaml" not in exempt, (
+        "run8 is the config the operator is about to start (R356(c) mint) and is bound BY NAME "
+        f"for run6's reason. got {PRODUCTION_CONFIGS}"
+    )
+    assert PRODUCTION_CONFIGS == ("configs/run6.yaml", "configs/run7.yaml", "configs/run8.yaml"), (
+        "R346(f) took run5 and the shakedown config; run6 (a finished run's record), run7 and "
+        "run8 are the whole production side. A member added without a by-name pin of its own is "
         f"F-P2B's escape reopened, and an empty tuple is N-1's silence. got {PRODUCTION_CONFIGS}"
     )
 

@@ -157,8 +157,13 @@ commits of 2026-09-17 (the tip is `git log dev`; 43 commits at this writing):
 A-2 + A-1 + the search-stats producer; the in-run repairs B-1..B-9, B-11, B-19, A-3, C-3; steps
 10–12 — the doc repairs, the §3 deletes and archives (`docs/design/archive/`, `docs/audits/archive/`),
 `mantis.diagnostics.ring_reader`/`.tactics`, gate 15's stale-header rule, two ratchet measures,
-CARD-STYLE-BACKLOG; then the observatory decision of item (5). Run-ops owes: the 30k stop, the
-five R355(c) cells, run8's mint + σ swap, the 3 h shakedown.
+CARD-STYLE-BACKLOG; then the observatory decision of item (5). (7) R356 (2026-09-17): run8's
+mint LANDED on `dev` (`configs/run8.yaml` = run7's resume mint + `selfplay.q_rescale: false` + the
+warm start `run7_00042000_46fdb931.ckpt`, the gate's best_model; prereg
+`docs/design/measurements/RUN8_PREREG_2026-09-17.md`); the 30k stop is SPENT (run7 at 72k, r22 in
+flight at the mint). Run-ops owes, on the box under R356's grant: the stamp, run7's stop after it is
+vested (one SIGTERM), the 3 h shakedown + the entropy witness, START, the follower's first cell
+(the parent at 256/256), then the five R355(c) cells beside run8.
 
 ## Exit facts — the R353 packet, 2026-09-14
 

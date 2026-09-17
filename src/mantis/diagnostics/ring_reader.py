@@ -132,6 +132,36 @@ def load_ring(path: Path) -> Ring:
     )
 
 
+def explicit_entropy(ring: Ring) -> np.ndarray:
+    """Per row, H in nats of the explicit masses renormalised by `1 - tail_mass`: the census's H(explicit)."""
+    # NOT the trainer's `policy_target_entropy` (the tail rebuilt over the net's prior,
+    # FORCED_MOVE_CENSUS_2026-09-15.md); a row with no explicit mass (α = 1) reads 0.0, as a one-hot does.
+    n = ring.header.size
+    out = np.zeros(n, dtype=np.float64)
+    if n == 0 or ring.visits.size == 0:
+        return out
+    prob = ring.visits["prob"].astype(np.float64)
+    seg = np.repeat(np.arange(n), ring.n_visits)
+    mass = np.bincount(seg, weights=prob, minlength=n)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        q = np.where(mass[seg] > 0.0, prob / mass[seg], 0.0)
+        term = np.where(q > 0.0, -q * np.log(q), 0.0)
+    return np.bincount(seg, weights=term, minlength=n)
+
+
+def _entropy_line(ring: Ring) -> str:
+    """H(explicit) by arm: n, median and mean over the full-search rows, then the quick ones."""
+    h = explicit_entropy(ring)
+    parts = []
+    for label, mask in (("full", ring.is_full_search != 0), ("quick", ring.is_full_search == 0)):
+        sel = h[mask]
+        if sel.size:
+            parts.append(f"{label} n={sel.size} median {np.median(sel):.4f} mean {sel.mean():.4f}")
+        else:
+            parts.append(f"{label} n=0")
+    return "H(explicit) nats: " + "; ".join(parts)
+
+
 def _hist(name: str, arr: np.ndarray) -> str:
     """One line: `name: value: count, …` over the distinct values of `arr`."""
     vals, counts = np.unique(arr, return_counts=True)
@@ -155,6 +185,7 @@ def main(argv: list[str]) -> int:
     print(f"tail_mass: mean {ring.tail_mass.mean():.5f} p50 {np.median(ring.tail_mass):.2e} "
           f"p90 {np.quantile(ring.tail_mass, 0.9):.2e} n(alpha==1) {(ring.tail_mass >= 1.0).sum()}")
     print(f"distinct game_id: {len(np.unique(ring.game_id))}")
+    print(_entropy_line(ring))
     return 0
 
 

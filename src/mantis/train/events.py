@@ -334,6 +334,9 @@ def emit_iteration_complete_event(
         # pushed since boot. `None` = the source has no producer for it, never a zero.
         "gumbel_alpha_full": getattr(pool, "alpha_full", None),
         "mcts_mean_depth": rstats.mcts_mean_depth,
+        # LAW-18 for A-2 (R355(a)): the runner's cumulative count of backups on which
+        # `apply_quiescence` returned a verdict, since boot; a reader diffs consecutive rows.
+        "mcts_quiescence_fires": getattr(rstats, "mcts_quiescence_fires", None),
         # The target-integrity counters plus the SEAM conjunct of the same class reach the ONE
         # channel here, each as {total, delta, per_position} beside the `positions_delta`
         # denominator. Nested so they travel together and cannot crosswire; built by the

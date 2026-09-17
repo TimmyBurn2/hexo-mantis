@@ -101,7 +101,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #: The configs a RULING has armed `eval.strength_floor` on. CLOSED and NAMED: it is widened only
 #: by a mint act with a ruling behind it, and it is NOT derived from the files, because a
 #: predicate over `configs/` would go vacuous on exactly the event this suite exists to catch.
-_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run7.yaml"})
+_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run7.yaml", "run8.yaml"})
 
 
 def _armed_config():
