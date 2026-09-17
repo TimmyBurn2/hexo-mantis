@@ -321,7 +321,7 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
 
 All five were found by running things the dev box could not run — the integration tier and the
 Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Records:
-`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `MEASUREMENT_PERF3B_2026-09-11.md`.
+`docs/design/measurements/MEASUREMENT_OC7_2026-09-11.md`, `docs/design/archive/measurements/MEASUREMENT_PERF3B_2026-09-11.md` (archived 2026-09-17).
 
 - **CARD-BOX-VOLUME — CLOSED by R349(b) at `8e307af1`.** `/` and `/workspace` on the box are
   `overlay`; R347(d)'s rc 16 refused every preflight there and is DELETED. `tools/mirror_pull.py`
@@ -370,7 +370,7 @@ Gumbel regime at scale on the box — and every one is pre-existing on `dev`. Re
   dumps the same artifact and halts through `deferred_contract_failure` on the next pop and the
   pool health check). LAW-18 counters ride `iteration_complete.inference_batching.edge_geometry_check`.
   The Rust verifier holds the GIL, which bounds the gain; the A/B reading is in
-  `docs/design/measurements/MEASUREMENT_PERF3B_2026-09-11.md`. Arming it in run6 is a mint row.
+  `docs/design/archive/measurements/MEASUREMENT_PERF3B_2026-09-11.md` (archived 2026-09-17). Arming it in run6 is a mint row.
 
 ## Reading the identifiers
 
@@ -472,7 +472,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 | PERF-TRANCHE-1 residual | the 7.2% pre-control/ledger disagreement | OPEN as instrument hygiene; ledger absolute levels are not quotable without re-measurement | R320 |
 | PERF-TRANCHE-2 | six items T2-1..T2-6 | EXECUTED — its findings are cited as landed evidence by R335 — but NO ratifying clause exists in either archive file | R334(e) |
 | WP-AXIS2 | Phase 2 axis-graph arch, then a shakedown | LAST ORDERED, NEVER CONFIRMED. Neither the shakedown nor the R339 mint is ever labelled WP-AXIS2, so completion would be an inference, not a record | R335(g) |
-| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | **CLOSED.** Filed to `dev` at `428f3c8` as `docs/audits/AUDIT_2026-09-09.md`, 1661 lines. Read it with its own header caveat: the audit was taken at `97e814e3`, 29 commits behind `fb3725f`, so REPAIR-A2 and GUMBEL-REPAIR-1 both post-date it and its findings are not a statement about HEAD | R346 era |
+| AUDIT-2 filing | the `AUDIT_2026-09-09.md` analysis text | **CLOSED.** Filed to `dev` at `428f3c8` as `docs/audits/archive/AUDIT_2026-09-09.md`, 1661 lines. Read it with its own header caveat: the audit was taken at `97e814e3`, 29 commits behind `fb3725f`, so REPAIR-A2 and GUMBEL-REPAIR-1 both post-date it and its findings are not a statement about HEAD | R346 era |
 | DASH-1 banked panels | average sims/move, held-out loss | 2 BANKED with no producer at HEAD; drawn as stated gaps, never as zeros | R334(a) |
 | R317(c)(ii) diagnostic | move-sequence-hash diagnostic | accepted as NON-BLOCKING DEBT, never shipped | R318 |
 | AUDIT-1 P10 | lane-C design input, explicitly "not a packet" | still the architect's, undispatched | R331(d) |
@@ -596,7 +596,7 @@ Two limits, stated rather than hidden:
    the ruling that closed it prematurely before that. The discharge, the scope and the superseding
    annotation all live at the FOOT of a row, never in its title.
 3. **AUDIT-2's own card list is still not enumerable here.** The analysis text is now filed at
-   `docs/audits/AUDIT_2026-09-09.md`, but R345's "everything else in AUDIT-2 is CARDED with its
+   `docs/audits/archive/AUDIT_2026-09-09.md`, but R345's "everything else in AUDIT-2 is CARDED with its
    priority" refers to a card list that travelled in the packet, not in the audit document. An
    unknown number of AUDIT-2 cards therefore remain outside this file, and it should not be read as
    complete.
