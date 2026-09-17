@@ -27,8 +27,11 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
   (RESERVED, empty until post-cutover).
 - tests/ — SINGLE collection root, mirrors src/mantis + crates; tests/fixtures carries
   the fixtures manifest. configs/ — minted, complete, schema-validated. docs/ — design +
-  contracts + governance. tools/ — dev-only tooling + CI gate scripts. vendor/ —
-  pins.toml + `make vendor` fetcher.
+  contracts + governance: docs/governance/STATE.md (where the run IS; rewritten in place by
+  run-ops, repaired in place by whoever finds it stale), docs/governance/RULINGS.md (the
+  canonical ruling entries, R23 onward), docs/governance/CARDS.md (the open work), plus
+  LAWS.md and falsified.md as named under Hard rules. tools/ — dev-only tooling + CI gate
+  scripts. vendor/ — pins.toml + `make vendor` fetcher.
 
 ## Hard rules
 
@@ -121,6 +124,9 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - `uv sync` — the ONE bootstrap: builds mantis._engine via maturin, installs everything.
 - `make build` — alias for `uv sync`. `make build.native` — local perf build (env-only
   native flags; artifacts host-specific, never distributed).
+- `make build.cuda` — the BOX's build (`uv sync --extra cuda --no-group cpu`). A bare
+  `uv sync` on a box silently reverts the venv to the CPU torch wheel (R348(a)); this is the
+  one route that does not.
 - `make test` — pytest default tier + `cargo test --workspace --locked`.
 - `make test.integration` — the CI integration tier (`-m integration`).
 - A bare `pytest` IS the default tier: pyproject's `addopts` carries
