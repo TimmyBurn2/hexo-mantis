@@ -1,4 +1,4 @@
-# RULINGS — R23 to R355
+# RULINGS — R23 to R356
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R356.
+- Numbering continues from R346. The next ruling is R357.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,79 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R356 — STRIX FOLLOWER, RUN7 → RUN8: the cadence cell is EQUAL-WORK 256/256 with a sidecar receipt; run7 continues until run8's stamp is vested, then one SIGTERM; run8 = the gate's best_model + A-2 at HEAD + the σ swap (raw q, c_scale 1.0) + the 1-in-8 search-stats producer, with a shakedown entropy witness and a three-outcome pre-registered reading; dashboard external points and throughput units; the run9/run10 queue, nothing armed
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R355: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R356 — (a) STRIX FOLLOWER: the cadence cell is EQUAL-WORK 256/256
+> (matches the gate's deploy unit); every 15,000 steps AND on every
+> promotion; 288 paired games, both colours, deterministic; a receipt
+> keyed by net sha256 beside each checkpoint read (a sidecar, the stamp
+> untouched — LAW-12). The AS-SHIPPED cell reads at block ends only. No
+> "best" is acted on before three cells agree. UNIT BRIDGE: run8's parent
+> (the gate's best_model at mint) read once at 256/256 — that cell is
+> both the bridge from the 512 series and run8's baseline; the 48k bridge
+> is withdrawn unless the parent is 48k.
+> (b) run7 CONTINUES until run8's stamp is vested, then stops on one
+> SIGTERM. R355's "stops at the 30k strix point" is spent by operator
+> direction (the run passed 30k on 2026-09-16; 24k–60k are on the record).
+> (c) RUN8 = the gate's best_model (not the 9k anchor; the gate is the
+> promotion instrument) + A-2 at HEAD + ONE swap, selfplay.q_rescale
+> false (raw q, c_scale 1.0) + the 1-in-8 search-stats producer; every
+> other row as run7's resume mint. SHAKEDOWN WITNESS before START: mean
+> policy-target entropy over the shakedown's full-arm rows must exceed
+> run7's 0.002 nats by an order of magnitude — if it does not, the key did
+> not reach the target and START is a HALT. PRE-REGISTERED READING,
+> 256/256, 288 games vs the parent: SUCCESS run8@30k ≥ parent + 0.05;
+> FALSIFIED run8@15k ≤ parent AND run8@30k ≤ parent (σ swap dead, filed;
+> A-2 alone is run9's base); otherwise INCONCLUSIVE, read 45k, three-cell
+> rule. 3 h shakedown on the box after run7's stop, one contended round.
+> (d) DASHBOARD: external points (strix series with CIs, unit and regime
+> labelled, the stated gap to strix) and throughput units (plies/h,
+> turns/h, leaves/s beside games/h). One hour, no box.
+> (e) QUEUE, one swap per run, nothing armed: run9 = LR shape (horizon =
+> the block, floor ≤ 1e-4) OR deploy-EMA (needs CARD-SERVER-OWNED-COPY) —
+> the parameter-distance test on run7's checkpoints decides which; run10
+> = prior temperature on candidate sampling; sims per move after. The
+> entropy series over run7's 60k is read beside them.
+> (f) The five R355(c) cells run after START, contended, labelled.
+> ROUTE: mint (dev) → stamp → run7 STOP → shakedown 3 h → witness →
+> START → dashboard leg ∥ strix chain ∥ R355(c) cells ∥ RESEARCH-STRENGTH.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry and the three
+ANNOTATIONS under R355's foot land together; (2) RUN8 IS ARMED with exactly `selfplay.q_rescale:
+false` (raw q; `c_scale` stays 1.0 — the paper's Go pair), `selfplay.search_stats_every: 8`
+(already in the template; confirmed, not re-added), and the warm start = the gate's best_model at
+mint time, derived from the gate's promotion record on the box and pinned by sha256 in the stamp —
+no hand re-ranking of checkpoints; everything else byte-equal to run7's resume mint (`ce0a8ff6`
+lineage, contract v32); A-2 is CODE at HEAD, not a row, its falsifier record (0/275) cited in the
+prereg; (3) run7 STOP is GRANTED — one SIGTERM to the supervisor, save-then-exit, executed only
+after run8's stamp is vested and the bundle is receipted by the puller; if run7 has not reached
+75k by then, the 75k point is not read; (4) BOX GRANT: the packet's box block (§5 steps 7–13) goes
+to a fresh session on the box; (5) the strix follower chain (§3) and the dashboard external-points
+leg (§4) are ORDERED, no box hours beyond §3's cells; (6) the five R355(c) Gumbel-head cells run
+AFTER START, beside run8, regime labelled CONTENDED, not a prerequisite; (7) nothing in run9/run10
+is armed; RESEARCH-STRENGTH precedes any run9 row.
+Where (c)'s witness figure comes from: run7's "0.002 nats" is the forced-move census's H(explicit)
+MEDIAN over the ring's rows (`FORCED_MOVE_CENSUS_2026-09-15.md`, run7 table: median 0.002–0.003,
+MEAN 0.18–0.20, the mean carried by the ~22 % of rows that are not one-hot); the trainer's own
+`trainer_step.policy_target_entropy` (the tail rebuilt over the net's prior, "not comparable to the
+decimal" per the census) reads a mean of 0.12 over run7's 71 793 steps. The prereg
+(`docs/design/measurements/RUN8_PREREG_2026-09-17.md`) therefore pre-states the witness on the
+statistic that read 0.002 — the median of H(explicit) over the shakedown ring's full-arm rows,
+> 0.02 nats to PASS — with the mean and the trainer field reported beside it; the clause's
+"mean" is not edited.
+Grounds: operator direction at handoff (SESSION_HANDOFF_v6 §6), forwarded 2026-09-17, on
+`STRIX_RUN7_60K_2026-09-17.md` (24k 0.139 · 30k 0.170 · 42k 0.142 · 45k 0.094 · 48k 0.163 · 60k
+0.111, ±4–5 pp per point), `FORCED_MOVE_CENSUS_2026-09-15.md` (H ≈ 0.002 nats on every row) and
+the A-2 falsifier `A2_QUIESCENCE_FALSIFIER_2026-09-16.md` (275 → 0/275).
+Amends: R355(b)-route "run7 stop at 30k" (spent), R355(d) "from the 9k anchor" and "rising past
+0.097" (superseded by (c)). R355(a), (b), (c), (e), (f) stand.
+Status: standing.
+
+---
 
 ### R355 — CENSUS VERDICT, REPAIR-A4, RUN8: R354(b) refuted by count; the quiescence threat unit (A-2) and the Gumbel deploy driver (A-1) are the two load-bearing findings; run7 stops at the 30k strix point; run8 = run7 + A-2 + the σ swap (raw q, c_scale 1.0) from the 9k anchor with the search-stats producer; REPAIR-A4 ordered; the delete list approved
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -107,6 +180,13 @@ armed by the forward; (5) REPAIR-A4 in the packet's §2 order with the §3 delet
 (~7,200 lines); (6) F-48, F-50, F-51, CARD-DEPLOY-HEAD-BUDGET and GAME_QUALITY's Gumbel-head line
 are SUSPENDED under LAW-02 until the five cells of (c) read. The `inv1` and `book-v2-tool` branches
 were fast-forwarded onto `dev` by this forward's landing session before any of it.
+Status: standing — the ROUTE's "run7 stop at 30k" is SPENT and (d)'s "from the 9k anchor" and
+"rising past the 9k anchor's 0.097" are SUPERSEDED by R356(b)/(c); ANNOTATED under R355's foot
+(three annotations, A1–A3, in the annotations inventory). This Status line was added by R356's
+landing session: the entry landed at `a78737fb` without the register's foot lines, and the later
+ruling's move has to be said beside the text it moved (the decision text above is untouched).
+
+---
 
 ### R354 — RUN7 READING + REPO SCAN: the trainer peaked near 9k and declined; the forced-move census tests the Gumbel-m hypothesis; three fixes pre-registered, none armed; book_v2 ordered; INVESTIGATION-1 launched with three added domains; the 30k decision rule
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -3606,6 +3686,29 @@ Fact: see the ANNOTATION under R351's foot — the 2026-09-15 resume re-mint mov
 orders (run6's 0.63 / 0.60 / 0.77 / 0.69 at 3k / 13k / 18k / 25k, 512 sims) is against the 512
 series only; run7's in-run gate and rung points after step 23 829 are not that unit.
 Ordered by: R355 §2 step 10 (ledger C-8), appended 2026-09-17 by the REPAIR-A4 plan-3 session
+
+### ANNOTATION under R355's foot (A1 of 3) — "run7 stops at the 30k strix point" IS SPENT
+Corrects: the ROUTE line's "run7 stop at 30k" and the enact paragraph's "(3) run7 STOPS once the
+30k strix point is read"; nothing in the decision's mechanism
+Fact: run7 continued past 30k by operator direction on 2026-09-16 (grounds: the box does not idle
+while REPAIR-A4 and run8's mint land); the readings 24k–60k (`STRIX_RUN7_60K_2026-09-17.md`) are
+the record; R356(b) governs the stop — after run8's stamp is vested, one SIGTERM.
+Ordered by: R356, appended 2026-09-17 by its landing session
+
+### ANNOTATION under R355's foot (A2 of 3) — "RUN8, from the 9k anchor" IS SUPERSEDED
+Corrects: (d)'s warm-start source only; the swap, A-2 and the search-stats producer stand
+Fact: superseded by R356(c) — the gate's best_model at mint (its promotion record on the box:
+step 42 000, `run7_00042000_46fdb931.ckpt`, promoted r12). The 9k anchor was named when 15k read
+0.045; the 24k–60k plateau (0.14–0.17) is above it in the same unit.
+Ordered by: R356, appended 2026-09-17 by its landing session
+
+### ANNOTATION under R355's foot (A3 of 3) — "rising past the 9k anchor's 0.097" IS A 512-UNIT FIGURE
+Corrects: (d)'s success line only
+Fact: 0.097 is a reading in the as-shipped unit (ours PUCT-512 vs strix 128); R356(c) states the
+line in the 256/256 unit against the parent, with all three outcomes named (SUCCESS run8@30k ≥
+parent + 0.05; FALSIFIED run8@15k ≤ parent AND run8@30k ≤ parent; otherwise INCONCLUSIVE, read
+45k, three-cell rule).
+Ordered by: R356, appended 2026-09-17 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
