@@ -74,12 +74,23 @@ and are folded in here, because a reader of any ladder reading needs them:
   adapter (every opening cell is the same position). THE FENCE IS READ AT CONTACT (R257): every
   reply carries strix's legal set, compared with the board's; a disagreement is counted as a
   finding, and a reply outside our fence is returned unchanged for the arena to FORFEIT, never
-  substituted. It is NOT a ladder rung: `tools/strength_frontier.py` plays it as two cells per
-  point — AS-SHIPPED (strix at 128 sims / m 16, its `play_vs_shrimp` defaults, vs ours at
+  substituted. It is NOT a ladder rung: `tools/strength_frontier.py` plays it as a cell in one
+  of two units — AS-SHIPPED (strix at 128 sims / m 16, its `play_vs_shrimp` defaults, vs ours at
   PUCT-512) and EQUAL-WORK (both at 256 NN evaluations per move) — 288 paired games, both
-  colours, every 15 000 steps plus step 0 and block end, outside the promotion gate. Its
-  regime key carries its own sims (`strix:checkpoint_00237000@128`), so the two cells are two
-  instruments, not one.
+  colours, outside the promotion gate. Its regime key carries its own sims
+  (`strix:checkpoint_00237000@128`), so the two units are two instruments, not one. SINCE
+  R356(a) the CADENCE cell is the equal-work unit, played by `tools/strix_follower.py` on every
+  15 000-step checkpoint AND on every promotion, both read off the run's event stream
+  (`periodic_checkpoint_save`, `eval_round_complete.promoted`), never off filenames; its receipt
+  is a sidecar beside the checkpoint (`<ckpt>.strix256.json`: the checkpoint's sha256 and the
+  net's `net_param_hash`, strix's pinned commit and checkpoint sha256, the unit's two sims, the
+  trigger, the regime — CONTENDED when the run's heartbeat is live at cell start, IDLE otherwise,
+  with the heartbeat age as evidence — and the pair-level readout: games, eff_n, wins, losses,
+  draws, wr and its CI). The sidecar is the receipt: an existing one is never re-read, the stamp
+  is never touched (LAW-12), and a failed cell writes `<ckpt>.strix256.failed.json`, which is
+  not a receipt. The as-shipped cell reads at block ends only (`--once --unit as_shipped`,
+  `<ckpt>.strix512.json`). The 256/256 reading of a run's parent, taken once, is both the bridge
+  from the as-shipped series and that run's baseline.
 - **Vendoring, and the ONE build command.** External engines are pinned by commit sha in
   `vendor/pins.toml` and fetched by `make vendor`, which CLONES and does not build. The build
   is a separate, manual step and it must use mantis's OWN interpreter or the extension's ABI
@@ -146,5 +157,6 @@ row says so and names what does run.
 | the REAL vendored engine agrees on the rules, holds its depth receipt, and is deterministic | `tests/bots/test_sealbot_vendored.py` | **no** — Tier 2, `@pytest.mark.integration`; skips with a named reason and a named box counterpart, and a skip is reported as `not_run`, never as coverage |
 | the strix pin names the commit, the checkpoint and both sha256s, and discloses the unsupplied config | `tests/tools/test_vendor_pins_strix.py` | yes |
 | the strix adapter sends the position, counts fence disagreements, returns an out-of-fence move for the forfeit, verifies the pinned sha, and answers the opening single itself | `tests/bots/test_strix_adapter.py` | yes (against a recording double) |
+| the follower fires ONE equal-work cell per cadence checkpoint and per promotion read off the event stream, a planted duplicate fires nothing, a promotion waits for its checkpoint, a failed cell leaves no receipt, the sidecar carries unit + regime + the net's hash and the checkpoint bytes are untouched | `tests/tools/test_strix_follower.py` | yes (the cell runner is a recording double; the unit's RoundSpec is composed through the real frontier) |
 | a strix cell composes the rung at the pinned checkpoint with its own sims and the candidate's on `strix_model_sims`; a production round refuses a strix job by name | `tests/tools/test_strength_frontier_strix.py`, `tests/eval/test_strix_rung_sims.py` | yes |
 | the REAL vendored strix plays 20 legal games end to end at the pinned commit | `tests/bots/test_strix_adapter.py::test_the_live_driver_plays_twenty_legal_games_end_to_end` | **no** — `@pytest.mark.integration`; LOUD SKIP naming the missing step without the vendored venv and checkpoint |
