@@ -1,8 +1,5 @@
-"""Shared loss computation for the Trainer + pretrain.
-
-Architecture spec (docs/01_architecture.md §2):
-    L = L_policy + L_value + w_aux·L_opp_reply + w_unc·L_uncertainty (+ chain/ply/own/threat)
-"""
+"""Shared loss computation for the Trainer + pretrain: the ragged policy CE, the binned value loss
+and the chain head; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
 from __future__ import annotations
 
 import math
@@ -43,8 +40,7 @@ def graph_policy_row_weights(
     ONCE per step and read by both the numerator and the denominator.
 
     Raises:
-        ValueError: `fast_policy_weight` is negative or not finite — a negative policy weight
-            would train the fast arm AWAY from its own target.
+        ValueError: `fast_policy_weight` negative or not finite — it would train the fast arm AWAY.
     """
     if not math.isfinite(fast_policy_weight) or fast_policy_weight < 0.0:
         raise ValueError(
@@ -58,9 +54,7 @@ def graph_policy_row_weights(
 def exclude_alpha_full_rows(policy_row_weight: torch.Tensor, tail_mass: Any) -> tuple[torch.Tensor, int]:
     """Zero the policy weight of every row at alpha = 1.0 (R350(e): "play none of the searched
     moves" is not a target), BEFORE the denominator reads the vector; returns `(weights, n_excluded)`.
-
-    Raises:
-        ValueError: the two vectors disagree in length.
+    Raises ValueError when the two vectors disagree in length.
     """
     alpha = torch.as_tensor(tail_mass).reshape(-1)
     if alpha.shape != policy_row_weight.shape:
@@ -89,10 +83,10 @@ def graph_loss_denominators(
     n_graphs: int,
 ) -> tuple[float, float]:
     """`(policy_denominator, value_denominator)` for ONE step's WHOLE batch, so every micro-batch
-    divides by what the un-split batch would have (never `B_m/B` or `1/M`). DELIBERATELY
-    asymmetric: policy SUMS the mask values, value COUNTS true entries — they agree only on a
-    strict 0/1 mask (measured `[2, 0, 3]`: 5.0 vs 2.0). The `None` arms fall back to the graph
-    count; the value arm's is right only with one `bin_logits` row per graph, asserted by the caller.
+    divides by what the un-split batch would have (never `B_m/B` or `1/M`). DELIBERATELY asymmetric:
+    policy SUMS the mask values, value COUNTS true entries — they agree only on a strict 0/1 mask
+    (measured `[2, 0, 3]`: 5.0 vs 2.0). The `None` arms fall back to the graph count; the value arm's
+    is right only with one `bin_logits` row per graph, asserted by the caller.
     """
     if is_full_search is None:
         p_den = float(n_graphs)
@@ -135,13 +129,12 @@ def ragged_policy_ce_and_entropies(
     the target's entropy (`CE - H` is KL(target || policy), R350(b)(iv)) and the model's own (B-4).
 
     Per graph: log_softmax over its legal segment, `-Σ target·logp`, masked by `full_search_mask`;
-    `denominator` makes ONE micro-batch divide by the WHOLE step's so the parts sum to the
-    un-split loss; `explicit_mask` / `tail_mass` rebuild the SPARSE Gumbel row's tail from THIS
-    model's DETACHED prior (live, the CE gradient would push the prior toward itself).
+    `denominator` makes ONE micro-batch divide by the WHOLE step's so the parts sum to the un-split
+    loss; `explicit_mask` / `tail_mass` rebuild the SPARSE Gumbel row's tail from THIS model's
+    DETACHED prior (live, the CE gradient would push the prior toward itself).
 
     Raises:
-        ValueError: exactly one of `explicit_mask` / `tail_mass` was supplied — a tail mass with
-            no support set has no set to spread over.
+        ValueError: exactly one of `explicit_mask` / `tail_mass` was supplied — a tail mass with no set.
     """
     if (explicit_mask is None) != (tail_mass is None):
         raise ValueError(

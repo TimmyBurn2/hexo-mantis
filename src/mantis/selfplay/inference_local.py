@@ -191,6 +191,7 @@ class LocalInferenceEngine:
                       is an artifact of map iteration; the Rust consumer rebuilds a map.
             values:   scalar value per board.
             centers:  the builder's `(cq, cr)` window centre per board.
+
         """
         if not boards:
             return [], [], [], []

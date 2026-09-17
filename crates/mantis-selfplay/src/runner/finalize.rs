@@ -1,15 +1,14 @@
-//! Finalize phase (WP6 D1) — `finalize_game_graph` (frozen
-//! `worker_loop/inner.rs:1624/1767`, dispatch branch `:571`).
+//! Finalize phase (WP6 D1) — `finalize_game_graph` (frozen `worker_loop/inner.rs:1624/1767`,
+//! dispatch branch `:571`). The in-src ply-cap unit test exists because `outcome` lives on
+//! `WorkerResultRow`, not `GameResultRow`, so the drain tuple cannot observe the value branch.
 //!
-//! Ports the §178 ply-cap value branch VERBATIM: the `winner == None` arm pays
-//! `ply_cap_value` when `terminal_reason == 2` else `draw_reward`; `value_valid`
-//! is the DRAW-MASK (`terminal_reason != 2`). The per-game push loop holds the
-//! results-queue lock ONCE across the whole game (frozen `:1689`) so every game's
-//! rows are CONTIGUOUS in the shared queue (observable only multi-worker; ported
-//! as a verbatim obligation). The terminal reason / outcome are read from
-//! `board.winner()` + `terminal_reason` (never re-derived from ply parity,
-//! LAW-03). Feeds the shared `VecDeque` result queues (the pyo3 `collect_data`
-//! drain is WP7); drop-oldest backpressure bumps `positions_dropped`.
+//! Ports the §178 ply-cap value branch VERBATIM: the `winner == None` arm pays `ply_cap_value`
+//! when `terminal_reason == 2` else `draw_reward`; `value_valid` is the DRAW-MASK
+//! (`terminal_reason != 2`). The per-game push loop holds the results-queue lock ONCE across the
+//! whole game (frozen `:1689`) so every game's rows are CONTIGUOUS in the shared queue (observable
+//! only multi-worker; ported as a verbatim obligation). The terminal reason / outcome are read from
+//! `board.winner()` + `terminal_reason` (never re-derived from ply parity, LAW-03). Feeds the shared
+//! `VecDeque` result queues (the pyo3 `collect_data` drain is WP7); drop-oldest bumps `positions_dropped`.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};

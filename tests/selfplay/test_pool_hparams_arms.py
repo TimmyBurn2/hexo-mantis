@@ -1,4 +1,5 @@
-"""Suite D — the self-play hparams and the runner wire they feed."""
+"""Suite D — the self-play hparams and the runner wire they feed. The old hard-error arms are now
+schema bounds covered in tests/config/; the spelling traps are gone because the schema field IS the key."""
 from __future__ import annotations
 
 import json

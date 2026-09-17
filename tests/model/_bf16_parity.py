@@ -2,6 +2,7 @@
 
 NOT COLLECTED (leading `_`): it carries the one fixture, the one arm runner and the pinned
 null-distribution artifact, so the drift rows and the null-calibration rows read the SAME two
+arms and the SAME grounds.
 
 THE PINNED ARTIFACT is the box measurement of the HEAD-vs-HEAD distribution of every
 OF1-3/OF1-4 statistic on CUDA at commit 982da03, torch 2.11.0+cu128, RTX 5080 — 3675 null

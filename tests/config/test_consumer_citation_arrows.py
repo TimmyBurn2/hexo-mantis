@@ -1,9 +1,10 @@
 """Citation arrows are checked BY SYMBOL REFERENCE, never by prose. All four `monitor.supervisor_*`
-keys were cited as `"resolve_monitor_config -> monitor/supervise.py <flag>"`, but
-`resolve_monitor_config` runs in the RUN process while `supervise.py::main` runs in the SUPERVISOR
-process and built its own bare `MonitorConfig()`. The arrow crossed a process boundary no code
-crossed, and every existing check passed, because the registry is verified only for BIJECTION
-against schema leaves — so the citation STRINGS were unverified prose.
+keys were cited as `"resolve_monitor_config -> monitor/supervise.py <flag>"`, but `resolve_monitor_config`
+runs in the RUN process while `supervise.py::main` runs in the SUPERVISOR process and built its own
+bare `MonitorConfig()`: the arrow crossed a process boundary no code crossed, and every check passed,
+because the registry is verified only for BIJECTION against schema leaves — the citation STRINGS were
+unverified prose. The discriminator below was chosen over a simpler one MEASURED as a false-positive
+generator; the tests recording that measurement stop the rule being "simplified" back.
 
 THE DISCRIMINATOR. The naive check — the cited file must reference the cited symbol — was measured
 first: it flags 17 of the 21 citations that name a file, of which 4 are the real defect and 13 are
