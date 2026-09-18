@@ -85,6 +85,17 @@ def test_the_forced_block_stats_name_the_poisoned_row(planted: Path) -> None:
     assert stats.counter_threat_rows == [0]
 
 
+def test_a_k2_row_whose_fours_share_a_cell_is_in_support_wherever_its_one_hot_went(tmp_path: Path) -> None:
+    """The census's literal B(k = 2): every first stone is safe when the fours share a cell, so mass = 1 − α."""
+    first_stone = _board(_BLOCK_SEQ[:-1])
+    assert first_stone.moves_remaining == 2
+    path = tmp_path / "k2.ring.bin"
+    _write(path, [_row(first_stone, [(_ELSEWHERE[0], _ELSEWHERE[1], 0.9)], tail=0.1)])
+    stats = A.forced_block_stats(R.load_ring(path))
+    assert (stats.n, stats.counter_threat_rows, stats.residue_candidates) == (1, [], [])
+    assert stats.mass_median == pytest.approx(0.9)
+
+
 def test_the_residue_oracle_reads_the_a2_veto_on_the_poisoned_row(planted: Path) -> None:
     """Through the real backup the counter-threat child reads −1 from the root, the block child ≈ 0."""
     ring = R.load_ring(planted)

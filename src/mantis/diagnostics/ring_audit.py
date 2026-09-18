@@ -42,7 +42,7 @@ class Row:
 
 @dataclass(frozen=True)
 class BlockStats:
-    """Forced-block rows (tactics oracle, literal B(k)): explicit target mass on B and where it went."""
+    """Forced-block rows (tactics oracle, the census's literal B(k)): explicit target mass on B and where it went."""
 
     n: int
     mass_median: float
@@ -75,11 +75,13 @@ def forced_block_stats(ring: Ring) -> BlockStats:
     candidates: list[tuple[int, tuple[int, int], tuple[int, int]]] = []
     for i in range(ring.header.size):
         mover, k = int(ring.current_player[i]), int(ring.moves_remaining[i])
-        kind, cells = T.analyze(*_row_arrays(ring, i), mover, k).forced(k)
+        tac = T.analyze(*_row_arrays(ring, i), mover, k)
+        kind, cells = tac.forced(k)
         if kind != "block":
             continue
         visits = ring.row_visits(i)
-        on_block = [(int(v["q"]), int(v["r"])) in cells for v in visits]
+        # The census's literal B(2): fours sharing a cell make EVERY first stone safe, mass = 1 − α.
+        on_block = [tac.block_any or (int(v["q"]), int(v["r"])) in cells for v in visits]
         mass = float(visits["prob"][on_block].sum()) if visits.size else 0.0
         masses.append(mass)
         if mass < COUNTER_THREAT_MASS:
