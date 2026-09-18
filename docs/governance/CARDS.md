@@ -128,34 +128,30 @@ Both were found by running the gate set rather than by reading it, and both are 
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
   degenerate); opponent diversity (one asymmetric-game cumulative ablation); teacher signal (no
   measured later cost anywhere; the goal call is the operator's).
-- **CARD-PERF-3 — ORDERED by R359(f), dev-side; STOPPED AT §2 STEP 1 AND REPORTED 2026-09-18 (the
-  landing session), awaiting the architect's re-aim.** As issued (the packet's §2; the terms
-  survive in R359's entry): carried baseline 3.19k leaves/s, server thread 90.6–99 % busy, GPU
-  52.8 % busy, cycle ≈ 2.7 ms + 0.515 ms/leaf, CPU and GPU halves never overlapping; step 1
-  PROFILE FIRST with F-47's harness at HEAD on the workstation, STOP if the decomposition does not
-  reproduce within 10 % (ratios); step 2 ONE design, the two-stage pipeline (collate k+1 under
-  forward k, double-buffered; pre-reg +40–60 %), the edge-count batch cutoff (strix's 45k-edge knee)
-  a SECOND swap behind a batch-edge histogram producer; step 3 witnesses (determinism on/off,
-  budget, no cross-worker reordering); step 4 SUCCESS ≥ 1.4× leaves/s with GPU-busy % beside it,
-  FALSIFIED < 1.15× (filed, code out of the tree); step 5 not a run8 change, box confirmation one
-  20-min standalone bench in run9's preflight window; step 6 report, the architect decides.
-  **STEP 1's STOP CONDITION IS MET BY THE RECORD, before any profile:** the ordered design IS
-  PERF-A4's A4-4 — `c888c3b7` (2026-09-11), on `dev` since `41a5fea8`/`59524840`: the server thread
-  pops, collates and launches pop N+1 while pop N's forward and pinned D2H run on the device, a
-  retire thread dispatches each pop on its CUDA event, a `Semaphore(2)` double-buffers
-  (`PERF_A4_2026-09-11.md` §5; `tests/selfplay/test_pipeline_ordering.py` is step 3's
-  no-reordering witness). It met its own pre-registration: **+52 % over serial** (inside +40–60 %),
-  1,831 → 3,127 eager / 3,662 with `compile_trunk` at 32 workers. run7 and run8 are minted on it
-  (`n_workers 32`, `checker_thread`, `compile_trunk true`), which is what shakedown8's 3.19k IS. The
-  carried ratios are F-47's PRE-pipeline tree (`d12cd0b0`/`7a97fa80`): at HEAD the record reads
-  GPU **95 %** busy eager (`gpu_wait` 11.1 of a 15.2-ms cycle) and **85 %** under compile with the
-  server thread's CPU stage the bound at 94 % (plan, `slice_graph_wire`, seven pinned copies, 106
-  launches, the fuse). Two more facts: the workstation has NO CUDA device (`torch 2.11.0+cpu`, no
-  driver), and F-47's harness lives in the dispatcher's scratchpad and on the box, not in the tree —
-  step 1 as written is not executable here. NOTHING BUILT. What remains open of §2 on the record:
-  the edge-count batch cutoff (a config row + histogram producer, unmeasured) and the CPU-stage
-  millisecond PERF-A4 §5 names; a re-aimed PERF-3 starts from HEAD's decomposition, not F-47's. The
-  register text (R358(f), R359(f)) corrects only by annotation, the next ruling's to order.
+- **CARD-PERF-3 — RE-AIMED by R360(b) at the cost-vs-fill curve; steps 1–2 DONE 2026-09-18, step 3
+  RESERVED for run9's preflight window; design only after step 3.** R359(f)'s §2 (the two-stage
+  pipeline as the design to build against a GPU-52.8 %-busy baseline) was issued against F-47's
+  PRE-PIPELINE tree — A4-4 (`c888c3b7`, +52 %, 1 831 → 3 127 eager / 3 662 compiled at 32 workers)
+  is at HEAD and run7/run8 ride it; R360(a) annotated it (A1 under R359's foot). The record:
+  `docs/design/measurements/PERF3_2026-09-18.md`. **Step 1 (the mirror):** run8 ALONE serves
+  **3,208 leaves/s** at B 46.3 — 85 % of pops wake at the 32-leaf saturation threshold
+  (`batch_size / 2`), 14.6 % find a full 64, 0.4 % are deadline pops, `empty_polls` 0; cycle 14.44 ms
+  = `queue_wait` 2.96 + `launch` 11.46 (the CPU stage, collate 3.99 of it) + 0.02, the device stage
+  9.36 ms/pop — the CPU stage is the bound and the GPU ≈ 65 % duty (ESTIMATE, `gpu_wait`/cycle);
+  16.1 k edges per graph, 80 % of pops in [512 k, 1 M) fused edges. Beside a strix cell **1,222**
+  (38 %): every CPU term ×3–7, the GPU +2 ms — R359(e)'s cost priced. shakedown8's 3 196 vs A4's
+  3 662 is the SAME unit (served leaves/s; the billed `sims_per_sec` is 1.8× and never the number)
+  in a longer-game regime: B −6.7 % × cycle +6.2 %, from +28 % GPU and +35 % collate per graph on
+  88-ply games against the arm's 32; A-2, augment, the recorder and the cadence are present but
+  unseparated. **Step 2:** `tools/bench_server.py` — the real batcher and server per B ∈ {16, 32,
+  64, 128, 256}, threads replaying a run's newest games, budget and probe witnesses on every cell,
+  JSON out with host facts (`tests/tools/test_bench_server.py`). Workstation CPU ratio: collate per
+  graph flat-to-falling in B (0.075 → 0.048 ms; F-47's linear-in-edges holds), the probe 0 across B,
+  and the in-flight supply CAPS B at ≈ workers × leaf_batch / 2 (the 256 cell served 128). **Step 3
+  (box, ≈ 19 min):** the tool at HEAD with the net, `--device cuda`, 200-s cells — ms/batch, the
+  device stage and the wake shares at each B; the same-cell probe under bf16 is the determinism
+  witness. Candidates, in R360(b)'s order and none designed: batch fill (workers, wait), the
+  edge-count cutoff, the CPU stage. Pre-registered success unchanged: ≥ 1.4× on the same machine.
 
 ## Opened by R355 (REPAIR-A4)
 

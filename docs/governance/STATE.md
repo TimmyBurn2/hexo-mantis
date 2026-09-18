@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue, and PERF-3 is stopped at its step 1 by the record (item 11). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -258,10 +258,24 @@ over serial at 32 workers (pre-reg +40–60 % met), and run7/run8 are minted on 
 3.19k leaves/s is that regime; the carried GPU 52.8 % / "never overlap" ratios are F-47's
 pre-pipeline tree, and at HEAD the record reads GPU 85–95 % busy with the server thread's CPU stage
 the bound (`PERF_A4_2026-09-11.md` §5). This workstation has no CUDA device and F-47's harness is not
-in the tree, so step 1 cannot run here either. CARD-PERF-3 carries the numbers; a re-aimed PERF-3
-(the edge-count cutoff, the CPU stage) and the register annotation under R358(f)/R359(f) are R360's.
+in the tree, so step 1 cannot run here either. CARD-PERF-3 carries the numbers; the re-aim and the
+register annotation under R359(f) landed as R360 (item 12).
 Also OWED as code (CARDS.md): R359(e)'s twin-inherits-its-run's-preflight rule — the launch trap
 keys the stamp by an identity that hashes `run_id`, so a twin is refused without its own stamp.
+(12) R360 (2026-09-18, dev + mirror; no box hours, run8 untouched): the register at R360 (next
+R361), A1 under R359's foot. **Twin inheritance is CODE** (`ee6e7abe`): `python -m mantis.run
+--inherit-preflight <run>.yaml` launches a twin (the run's rows but `run_id`) on the run's VESTED
+stamp — `require_preflight_stamp(inherit_from=)` diffs the two configs leaf by leaf, refuses any
+difference beyond `run_id` by name (`PreflightStampTwinMismatchError`, pinned with a planted
+`seed`), writes the twin's stamp with `inherited_from` + "preflight inherited from <sha>"; a stamp
+of the twin's own wins; the parent's refusals propagate. **PERF-3 steps 1–2 DONE**
+(`PERF3_2026-09-18.md`; CARD-PERF-3 carries the numbers): alone run8 serves 3 208 leaves/s at
+B 46 with the CPU stage (11.46 of a 14.44-ms cycle) the bound and 85 % of pops waking at the
+32-leaf threshold; beside a strix cell 1 222; shakedown8's 3 196 vs A4's 3 662 is one unit, two
+regimes (88- vs 32-ply games). `tools/bench_server.py` is in the tree (the real server per B,
+budget + probe witnesses); the workstation CPU ratio reads collate/graph flat-to-falling in B and
+the supply cap B ≈ workers × leaf_batch / 2. **Step 3 is the box's, in run9's preflight window**
+(≈ 19 min, the command in the record); the architect designs after it. Nothing in run9 armed.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -302,6 +316,12 @@ keys the stamp by an identity that hashes `run_id`, so a twin is refused without
 - R359 leg exit (2026-09-18): docs and governance only, plus ONE one-line field comment
   (`schema/selfplay.py`); gate 13 rc 0 on the contract doc, gates 14/15/16/17 and 3c re-run on the
   tip (the field comment is the one source touch); `dev` NOT pushed — the operator pushes.
+- R360 leg exit (2026-09-18): code in `preflight_stamp.py`, `run.py` (the flag), the new
+  `tools/bench_server.py`; tests in `tests/config/test_preflight_stamp.py` (+4),
+  `tests/test_run_main_authority.py` (+1), `tests/tools/test_bench_server.py` (+3), two stub
+  signatures in `tests/test_run_pdeathsig.py`; the comment ratchet AT its floor on every measure
+  after two folds; gates 10, 13, 15, 16, 17, 14's lint parts, 3a on the tip (see the commit); `dev`
+  NOT pushed — the operator pushes.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
@@ -309,7 +329,8 @@ keys the stamp by an identity that hashes `run_id`, so a twin is refused without
 
 ## Provenance
 
-Item (11) derived 2026-09-18 on `dev` from `docs/design/measurements/PERF_A4_2026-09-11.md`, `git log`
+Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
+`events_run8_seg0001.jsonl` (pulled 20:54 UTC). Item (11) derived 2026-09-18 on `dev` from `docs/design/measurements/PERF_A4_2026-09-11.md`, `git log`
 (`c888c3b7`, `41a5fea8`), `configs/run8.yaml`, `src/mantis/config/preflight_stamp.py` and this host
 (`torch.cuda.is_available()` False). Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
 `shakedown8.launch.log`, `witness_shakedown8.log`, `run8_supervisor.log`, `chain_follower_run8.log`,
