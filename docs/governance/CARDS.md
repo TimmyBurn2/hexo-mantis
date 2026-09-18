@@ -81,9 +81,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
-## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE)
+## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE); moved by R359 (READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED)
 
-- **CARD-STRIX-NET-ONLY — ORDERED, the first box cell after run8's START (R358(a)).** The parent
+- **CARD-STRIX-NET-ONLY — READ 2026-09-18, SPENT by R359(a); ordered as the first box cell after run8's START (R358(a)).** The parent
   (`run7_00042000_46fdb931.ckpt`) at PUCT-256 vs strix 256 sims with its root VCF solver OFF, 288
   paired games, book_v1, both colours, CONTENDED labelled; read beside the same session's solver-ON
   256/256 cell. Tooling LANDED 2026-09-18: `tools/strix_follower.py --once <ckpt> --unit net_only`
@@ -99,13 +99,28 @@ Both were found by running the gate set rather than by reading it, and both are 
   gap**; by the pre-stated rule search-in-the-loop LEAVES the run9 queue until new evidence. What is
   left on strix's side of the equal-work cell is the net and the head. Receipts:
   `<run7 dir>/checkpoints/run7_00042000_46fdb931.ckpt.strix256{,_nosolver}.json` (mirrored).
-- **CARD-RUN9-QUEUE — RECORDED, nothing armed (R358(f)).** One swap per run, order decided by
-  run8's 15k/30k reading and the parameter-distance test on run7's checkpoints: (i) DATA REGIME —
-  `replay_capacity` 500 000 with `training_steps_per_game` set so the MEASURED replay ratio
+  **A1 (R359(a), the reading's scope):** the cell switched strix's PLAY-TIME solver (the root VCF at
+  rung time) and read the play-time question only. strix's net was TRAINED under proof targets, so
+  the training-side hypothesis — the proof AS the self-play policy target — is UNTESTED and UNRANKED,
+  not refuted; it leaves the queue for want of a measurement, not by this Δ.
+- **CARD-RUN9-QUEUE — RECORDED, nothing armed (R358(f)); sourced and ORDERED by R359(c).** One
+  swap per run, each carrying its own in-run producer before it is armed. The entries: (i) DATA
+  REGIME — `replay_capacity` 500 000 with `training_steps_per_game` set so the MEASURED replay ratio
   (`ring_audit --events`, run7 3.6; shakedown8 READ 3.02) holds ≈ 8, strix's setpoint; (ii) LR —
   AdamW 2e-4 → 2e-5 cosine over the block horizon; (iii) the root proof solver — OUT of the queue
-  2026-09-18 by CARD-STRIX-NET-ONLY's reading (Δ +0.3 pp within CI), until new evidence; (iv) prior
-  temperature; (v) sims. Each carries its own in-run producer before it is armed.
+  2026-09-18 by CARD-STRIX-NET-ONLY's reading (Δ +0.3 pp within CI; the PLAY-TIME solver — A1 there
+  keeps the training-side hypothesis untested, not refuted), until new evidence; (iv) PRIOR
+  TEMPERATURE — KataGo's root policy softmax temperature 1.25 → 1.1 (g170), applied to the logits
+  BEFORE the Gumbel top-m draw (source: KataGo's upstream `KataGoMethods.md`, read 2026-09-18);
+  (v) sims; NEW (vi) POLICY-SURPRISE WEIGHTING — half the sampling weight uniform, half ∝
+  KL(prior ‖ target) per row; producer = the in-run distribution of the sampled rows' KL (same
+  source); NEW (vii) AUXILIARY SOFT-POLICY HEAD — a second policy head on target^(1/4)
+  (renormalised), nominal weight 8, behind the seam with a producer test (same source: KataGo's
+  T = 4, weight 8). A value-target swap is NOT a queue entry: KataGo's short-term value heads are the
+  family the landed-UNARMED λ-return codec already is (`src/mantis/model/value_targets.py`,
+  `f049ef02`, imported by nothing). ORDER after run8's 15k/30k reading: (i), (vii), (ii), (vi),
+  (iv), (v). run9's mint also DROPS the `selfplay.mcts.dirichlet_*` rows (R359(d): inert on the
+  Gumbel arm by code, so a cosmetic) with one pin that the Gumbel arm never applies Dirichlet.
   FALSIFIED run8 → run9 = parent + A-2 + augment with run7's σ (rescale): σ leaves, augmentation
   stays (R358(b)).
 - **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets
@@ -113,10 +128,34 @@ Both were found by running the gate set rather than by reading it, and both are 
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
   degenerate); opponent diversity (one asymmetric-game cumulative ablation); teacher signal (no
   measured later cost anywhere; the goal call is the operator's).
-- **CARD-PERF-3 — its own packet after START, measured before granted (R358(f)).** GPU 52.8 % busy
-  with CPU and GPU never overlapping (F-47); CARD-SERVER-SYNC's two-stage pipeline pre-registers
-  +40–60 %; strix's edge-count batch cutoff (`max_batch_edges`, "+35 % A/B" claimed in a config
-  comment with no record) is the one pattern strix has and we lack.
+- **CARD-PERF-3 — ORDERED by R359(f), dev-side; STOPPED AT §2 STEP 1 AND REPORTED 2026-09-18 (the
+  landing session), awaiting the architect's re-aim.** As issued (the packet's §2; the terms
+  survive in R359's entry): carried baseline 3.19k leaves/s, server thread 90.6–99 % busy, GPU
+  52.8 % busy, cycle ≈ 2.7 ms + 0.515 ms/leaf, CPU and GPU halves never overlapping; step 1
+  PROFILE FIRST with F-47's harness at HEAD on the workstation, STOP if the decomposition does not
+  reproduce within 10 % (ratios); step 2 ONE design, the two-stage pipeline (collate k+1 under
+  forward k, double-buffered; pre-reg +40–60 %), the edge-count batch cutoff (strix's 45k-edge knee)
+  a SECOND swap behind a batch-edge histogram producer; step 3 witnesses (determinism on/off,
+  budget, no cross-worker reordering); step 4 SUCCESS ≥ 1.4× leaves/s with GPU-busy % beside it,
+  FALSIFIED < 1.15× (filed, code out of the tree); step 5 not a run8 change, box confirmation one
+  20-min standalone bench in run9's preflight window; step 6 report, the architect decides.
+  **STEP 1's STOP CONDITION IS MET BY THE RECORD, before any profile:** the ordered design IS
+  PERF-A4's A4-4 — `c888c3b7` (2026-09-11), on `dev` since `41a5fea8`/`59524840`: the server thread
+  pops, collates and launches pop N+1 while pop N's forward and pinned D2H run on the device, a
+  retire thread dispatches each pop on its CUDA event, a `Semaphore(2)` double-buffers
+  (`PERF_A4_2026-09-11.md` §5; `tests/selfplay/test_pipeline_ordering.py` is step 3's
+  no-reordering witness). It met its own pre-registration: **+52 % over serial** (inside +40–60 %),
+  1,831 → 3,127 eager / 3,662 with `compile_trunk` at 32 workers. run7 and run8 are minted on it
+  (`n_workers 32`, `checker_thread`, `compile_trunk true`), which is what shakedown8's 3.19k IS. The
+  carried ratios are F-47's PRE-pipeline tree (`d12cd0b0`/`7a97fa80`): at HEAD the record reads
+  GPU **95 %** busy eager (`gpu_wait` 11.1 of a 15.2-ms cycle) and **85 %** under compile with the
+  server thread's CPU stage the bound at 94 % (plan, `slice_graph_wire`, seven pinned copies, 106
+  launches, the fuse). Two more facts: the workstation has NO CUDA device (`torch 2.11.0+cpu`, no
+  driver), and F-47's harness lives in the dispatcher's scratchpad and on the box, not in the tree —
+  step 1 as written is not executable here. NOTHING BUILT. What remains open of §2 on the record:
+  the edge-count batch cutoff (a config row + histogram producer, unmeasured) and the CPU-stage
+  millisecond PERF-A4 §5 names; a re-aimed PERF-3 starts from HEAD's decomposition, not F-47's. The
+  register text (R358(f), R359(f)) corrects only by annotation, the next ruling's to order.
 
 ## Opened by R355 (REPAIR-A4)
 
@@ -520,7 +559,7 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
 | GUMBEL-REPAIR-1 | Gumbel repaired to Mctx invariants; lands DURING the block, enabled in no run until the frontier compares at equal NN work | LANDED and ARMED: run7's trainer is the repaired Gumbel head (`selfplay.search.kind: gumbel`, R352(a)); the `gumbel_mcts` key this row once named was replaced by `search.kind` and then split into the self-play and deploy rows (R351(c)) | R352(a) |
 | GAME-RECORD-1 | every game written from step 0; move list in axial coordinates, append-only length-delimited msgpack shards, no new hard dependency | LANDED (`docs/contracts/game_record.md`, contract #11, `937694e7`); the self-play search-stats sample followed at R355(d) | R355(d) |
 | DASH-2 | `mantis dash serve`, a read-only stdlib HTTP server over the run record carrying the GAME VIEWER, loopback by default | ORDERED, NOT BUILT. Owes an R9 amendment to repo_design.md in the SAME commit as the code. One finding already booked: a concurrent block writes every progress row at BLOCK END, so from outside it is indistinguishable from a wedge. The OBSERVATORY design (`docs/design/observatory_design.md`, 2026-09-14) is this card's design; its phase-1 readers landed at `3a563574..4678537d` and were RETIRED from the tree on 2026-09-17 under R355(f) (one dashboard implementation stays: `tools/dashboard` + `tools/viewer`, which serve the box page) — revive them from history when this is built: they read run6's record in 3.0 s at 84 MB peak against the dashboard's 5.0 s at 729 MB, parity-tested against it | R344(d) |
-| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED: the frontier's cell (`STRIX_RUNG_2026-09-14.md`, step-0 point 2026-09-14; nine run7 points through 60k on the as-shipped unit) and, at R356(a), the FOLLOWER `tools/strix_follower.py` — the equal-work 256/256 cell on every 15 000-step checkpoint and every promotion read off the event stream, a sidecar receipt beside the checkpoint (`<ckpt>.strix256.json`), the as-shipped cell at block ends only; its first cell is run8's parent (`run7_00042000_46fdb931.ckpt`), the unit bridge. shrimp HELD for an architect read on the R257 radius fence | R356(a) |
+| RUNG-2 | new external rungs — strix first, shrimp second | strix LANDED: the frontier's cell (`STRIX_RUNG_2026-09-14.md`, step-0 point 2026-09-14; nine run7 points through 60k on the as-shipped unit) and, at R356(a), the FOLLOWER `tools/strix_follower.py` — the equal-work 256/256 cell on every 15 000-step checkpoint and every promotion read off the event stream, a sidecar receipt beside the checkpoint (`<ckpt>.strix256.json`), the as-shipped cell at block ends only; its first cell is run8's parent (`run7_00042000_46fdb931.ckpt`), the unit bridge; a follower cell beside the live trainer costs ≈ 1 h of run progress (two 8-in-flight cells cut run8 to ≈ 35 % of its rate, 2026-09-18) — ACCEPTED at 15k + promotions, R359(e). shrimp HELD for an architect read on the R257 radius fence | R356(a), R359(e) |
 | INCR-GRAPH / S-INCR-GRAPH | incremental axis-graph construction from the parent position | PARKED, after being elevated to the top of the floor lane at R325. A CANDIDATE, not a plan: gated on a Rust-criterion box measurement, falsifier pre-registered as F-19's own inequality (`delta_cost x depth < build_cost`). Outside F-17/F-19's measured scope — see `docs/governance/falsified.md` | R335(e) |
 | HOT-14 | cross-core ownership explains x1.66 of x6.84 | RE-OPENED when S-PREFUSE was refuted | R336(a) |
 | S-BATTERY-G | eval battery concurrency capability | landed UNARMED; the CUDA arm is OWED at the mint's battery | R336(a) |
@@ -547,6 +586,13 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
   rows from the game record: `v_mix` vs max visited Q, which stone of the turn, the perspective
   sign at the root; a perspective error at the intermediate stone is the first hypothesis. The
   START-path measurement (§B, F-45) read 25 rows from a burst; the block's rows are not yet read.
+- **R359(e) — the twin's inherited preflight is OWED as code.** The rule: a shakedown twin (its
+  run's rows but `run_id`) INHERITS its run's preflight. At HEAD `mantis.run` keys the stamp by
+  `config_identity_sha256`, which hashes `run_id`, so a twin's identity has no stamp and
+  `require_preflight_stamp` refuses it — shakedown8 was preflighted on its own (≈ 1.5 h). Enacting
+  the rule is a small change at the trap (accept the parent run's stamp for a config that differs
+  from it in `run_id` alone, stated in the stamp log) with a pin; not ordered as code by R359, so
+  not landed by its session.
 - **R245(c) — the LAW-18 augmentation-group counter: DISCHARGED 2026-09-18 (R358(b)).**
   `iteration_complete.sym_draws` (12 bins + empty-board skips off the ring's `draw_syms`), read by
   `ring_audit --events` as `sym_bin0_over_mean` and by the dashboard's throughput panel; producer-tested

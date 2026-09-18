@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue, and PERF-3 is stopped at its step 1 by the record (item 11). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -244,6 +244,24 @@ run9 queue until new evidence). The 256/256 solver-ON point is run8's baseline f
 15 000-step save and every promotion fires one equal-work cell. run8 under the two cells ran at 369
 steps/h / 394 games/h (step 1 057 at 19:47 UTC, 2 h 52 min in) — the CONTENDED price, ≈ 35 % of the
 shakedown's rate; alone it should return to ≈ 1 000 steps/h. PERF-3 and R359 are the architect's next.
+(11) R359 (2026-09-18, dev only; no box hours, run8 untouched): the readings LANDED — R359 verbatim
+in the register (next R360), A1 under CARD-STRIX-NET-ONLY (the cell read the PLAY-TIME solver; the
+training-side proof-target hypothesis is untested, not refuted), the prereg's §4 numeric line
+(baseline 0.111 solver ON; SUCCESS 30k ≥ 0.161; FALSIFIED 15k ≤ 0.111 AND 30k ≤ 0.111; else read 45k)
+and §3a's rule (only the pre-START audit halts; a 15k-ring miss is reported), CARD-RUN9-QUEUE sourced
+from KataGo's methods with (vi) policy-surprise weighting and (vii) the auxiliary soft-policy head
+and the order (i), (vii), (ii), (vi), (iv), (v), nothing armed; `dirichlet_*` inert on the Gumbel arm
+written at the field and in the contract's residuals; the 4 h twin in the prereg. **PERF-3 (R359(f))
+is ORDERED and STOPPED AT ITS OWN STEP 1 by the record, nothing built:** the §2 design (collate k+1
+under forward k, double-buffered) IS PERF-A4's pipeline, `c888c3b7` on `dev` since 2026-09-11, +52 %
+over serial at 32 workers (pre-reg +40–60 % met), and run7/run8 are minted on it — shakedown8's
+3.19k leaves/s is that regime; the carried GPU 52.8 % / "never overlap" ratios are F-47's
+pre-pipeline tree, and at HEAD the record reads GPU 85–95 % busy with the server thread's CPU stage
+the bound (`PERF_A4_2026-09-11.md` §5). This workstation has no CUDA device and F-47's harness is not
+in the tree, so step 1 cannot run here either. CARD-PERF-3 carries the numbers; a re-aimed PERF-3
+(the edge-count cutoff, the CPU stage) and the register annotation under R358(f)/R359(f) are R360's.
+Also OWED as code (CARDS.md): R359(e)'s twin-inherits-its-run's-preflight rule — the launch trap
+keys the stamp by an identity that hashes `run_id`, so a twin is refused without its own stamp.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -281,6 +299,9 @@ shakedown's rate; alone it should return to ≈ 1 000 steps/h. PERF-3 and R359 a
   marked test touched); gate 1 not run (the accepted cost). Nine gate-runner tests need a writable
   `UV_CACHE_DIR` in a sandboxed shell (`uv run` fails on a read-only `~/.cache/uv`); they pass with one.
   `dev` NOT pushed — the operator pushes (R358 §6 step 1).
+- R359 leg exit (2026-09-18): docs and governance only, plus ONE one-line field comment
+  (`schema/selfplay.py`); gate 13 rc 0 on the contract doc, gates 14/15/16/17 and 3c re-run on the
+  tip (the field comment is the one source touch); `dev` NOT pushed — the operator pushes.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
@@ -288,7 +309,9 @@ shakedown's rate; alone it should return to ≈ 1 000 steps/h. PERF-3 and R359 a
 
 ## Provenance
 
-Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
+Item (11) derived 2026-09-18 on `dev` from `docs/design/measurements/PERF_A4_2026-09-11.md`, `git log`
+(`c888c3b7`, `41a5fea8`), `configs/run8.yaml`, `src/mantis/config/preflight_stamp.py` and this host
+(`torch.cuda.is_available()` False). Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
 `shakedown8.launch.log`, `witness_shakedown8.log`, `run8_supervisor.log`, `chain_follower_run8.log`,
 `/workspace/runs/shakedown8/logs/events_shakedown8_seg0001.jsonl`). Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
 `configs/run8.yaml`, `tools/config_diff.py`, the gate logs of that session and `docs/governance/RULINGS.md`.
