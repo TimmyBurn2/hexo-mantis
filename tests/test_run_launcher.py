@@ -43,8 +43,9 @@ _CONFIGS = _REPO / "configs"
 
 #: The launcher's whole flag surface. The two REQUIRED inputs; neither may carry a `default=`.
 _LAUNCHER_REQUIRED_OPTIONS = {"--config", "--out-dir"}
-#: The one OPTIONAL flag, enumerated by name so a SECOND optional flag still reds the census.
-_LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from"}
+#: The OPTIONAL flags, enumerated by name so a further optional flag still reds the census:
+#: `--resume-from` (a resume target) and `--inherit-preflight` (R360(c): a twin's run config).
+_LAUNCHER_OPTIONAL_OPTIONS = {"--resume-from", "--inherit-preflight"}
 _LAUNCHER_OPTIONS = _LAUNCHER_REQUIRED_OPTIONS | _LAUNCHER_OPTIONAL_OPTIONS
 
 #: The armed-smoke config is the one minted config with a burst-scale posture on CPU; 16 is its
@@ -70,9 +71,9 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
 
     A defaulted out-dir is a run input the code decides — R1's exact subject — and every run that
     forgets the flag then writes into one shared directory, which is how two runs' checkpoints end
-    up in one lineage. `--resume-from` is the ONE optional flag: a resume target is a property of
-    THIS invocation, not of the run's identity, so a schema key would make two runs differ by an
-    identity key describing neither. The option SET is pinned, not merely a floor.
+    up in one lineage. The optional flags — a resume target, a twin's run to inherit a preflight
+    from (R360(c)) — are properties of THIS invocation, not of the run's identity, so a schema key
+    would make two runs differ by an identity key describing neither. The SET is pinned.
     """
     tree = ast.parse(_RUN_PY.read_text(encoding="utf-8"))
     calls = _add_argument_calls(tree)
@@ -92,8 +93,8 @@ def test_the_launcher_declares_exactly_config_and_out_dir_with_no_defaults() -> 
             default = [kw for kw in call.keywords if kw.arg == "default"]
             assert default and isinstance(default[0].value, ast.Constant) \
                 and default[0].value.value is None, (
-                f"add_argument{names} is the optional resume flag: its default must be "
-                "exactly None (no action), never a stand-in path"
+                f"add_argument{names} is an optional flag: its default must be exactly None "
+                "(no action), never a stand-in path"
             )
             assert not [kw for kw in call.keywords if kw.arg == "required"], (
                 f"add_argument{names} is optional; it must not declare required="
