@@ -1,5 +1,5 @@
 """The strix bot process (RUNG-2): runs INSIDE the vendored hexo-strix venv, imports no mantis,
-and speaks JSON lines — `load` {checkpoint, sims, m_actions}, `select` {stones [[q, r, side]],
+and speaks JSON lines — `load` {checkpoint, sims, m_actions, disable_forcing_solver?}, `select` {stones [[q, r, side]],
 to_move, moves_remaining} -> {move, legal, ms}, `quit`; an error is an {"error"} line. The
 position is rebuilt per request by `GameState.from_state`, TRANSLATED so a p1 stone sits at
 strix's fixed origin (the game is translation-invariant) and translated back."""
@@ -57,15 +57,19 @@ class Driver:
                 relative_stones=getattr(mc, "relative_stone_encoding", False))
         self.model, self.graph_fn, self.torch, self.hexo_rs = model, graph_fn, torch, hexo_rs
         self.device = device
+        # R358(a): `disable_forcing_solver` False (the default) is the rung on record — strix's root VCF
+        # solver ON, as in its own self-play, SPRT and eval; True is the NET-ONLY cell.
+        solver_off = bool(req.get("disable_forcing_solver", False))
         self.cfg = hexo_rs.MCTSConfig(n_simulations=int(req["sims"]), m_actions=int(req["m_actions"]),
-                                      c_visit=50, c_scale=1.0, disable_gumbel_noise=True)
+                                      c_visit=50, c_scale=1.0, disable_gumbel_noise=True,
+                                      disable_forcing_solver=solver_off)
         self.game_config = hexo_rs.GameConfig(int(req.get("win_length", 6)),
                                               int(req.get("placement_radius", 8)),
                                               int(req.get("max_moves", 300)))
         return {"ok": True, "params": sum(v.numel() for v in model.state_dict().values()),
                 "model_config": {k: v for k, v in vars(mc).items() if isinstance(v, (int, float, str, bool))},
                 "acting": ACTING, "torch": torch.__version__, "device": str(device),
-                "train_steps": ckpt.get("train_steps")}
+                "forcing_solver": "off" if solver_off else "on", "train_steps": ckpt.get("train_steps")}
 
     def _eval_fn(self, states: list[Any]) -> tuple[list[list[float]], list[float]]:
         from torch_geometric.data import Batch

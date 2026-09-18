@@ -32,6 +32,9 @@ PIN_ABSENT_MARKER = "strix pin absent"
 
 #: strix's `m_actions` at its own deploy (`scripts/play_vs_shrimp.py`); cell B keeps it too.
 DEFAULT_M_ACTIONS = 16
+#: R358(a): `<stem>:net_only` plays the pinned checkpoint with its root VCF solver OFF — a distinct
+#: instrument (the variant rides the regime key), never the rung on record, which loads solver ON.
+NET_ONLY_SUFFIX = ":net_only"
 
 #: Every fence finding is ALSO logged under this marker: the bot instance dies with the eval
 #: child, and `tools/strength_frontier.py` counts the lines into the cell record.
@@ -207,6 +210,26 @@ def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
     return python, driver, tree, checkpoint, pin
 
 
+def variant_solver(variant: str, *, stem: str) -> bool:
+    """Whether `variant` plays with the solver ON (the pinned stem, or the pin's name) or OFF (`<stem>:net_only`).
+
+    Raises:
+        RungUnresolvable: a variant the pin does not name."""
+    if variant in (stem, PIN_NAME):
+        return True
+    if variant == stem + NET_ONLY_SUFFIX:
+        return False
+    raise RungUnresolvable(rung=f"strix:{variant}", reason=(
+        f"the pin names {stem}; a strix rung plays the pinned checkpoint (solver ON) or "
+        f"{stem}{NET_ONLY_SUFFIX} (solver OFF, R358(a)) or nothing"))
+
+
+def load_request(checkpoint: str, *, sims: int, variant: str, stem: str) -> dict[str, Any]:
+    """The driver's `load` line for one variant; `disable_forcing_solver` False is the rung on record."""
+    return {"op": "load", "checkpoint": checkpoint, "sims": int(sims), "m_actions": DEFAULT_M_ACTIONS,
+            "disable_forcing_solver": not variant_solver(variant, stem=stem)}
+
+
 def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
     """Probe the vendored tree EAGERLY and hand back a factory over a fresh driver process.
 
@@ -216,26 +239,25 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
         raise RungUnresolvable(rung="strix", reason="strix rung declares no sims")
     python, driver, cwd, checkpoint, pin = locate_strix()
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
-    if variant not in (stem, PIN_NAME):
-        raise RungUnresolvable(rung=f"strix:{variant}", reason=(
-            f"the pin names {stem}; a strix rung plays the pinned checkpoint or nothing"))
+    solver_on = variant_solver(variant, stem=stem)
     sims = int(opponent_sims)
+    request = load_request(str(checkpoint), sims=sims, variant=variant, stem=stem)
+    name = f"strix_{stem}_s{sims}" + ("" if solver_on else "_nosolver")
 
     def _factory() -> StrixBot:
         transport = DriverTransport(python, driver, cwd)
-        reply = transport.ask({"op": "load", "checkpoint": str(checkpoint), "sims": sims,
-                               "m_actions": DEFAULT_M_ACTIONS})
+        reply = transport.ask(dict(request))
         if "error" in reply:
             transport.close()
             raise RungUnresolvable(rung="strix", reason=f"strix driver failed to load: {reply['error']}")
-        return StrixBot(transport=transport, sims=sims, name=f"strix_{stem}_s{sims}")
+        return StrixBot(transport=transport, sims=sims, name=name)
 
     return _factory
 
 
 __all__ = [
     "BUILD_SCRIPT", "CHECKPOINT_ABSENT_MARKER", "DEFAULT_M_ACTIONS", "DriverTransport", "FINDING_LOG_MARKER",
-    "PIN_ABSENT_MARKER", "PIN_NAME", "SHA_MISMATCH_MARKER", "StrixBot", "Transport",
-    "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "locate_strix", "resolve_strix",
-    "strix_availability", "verify_checkpoint_sha",
+    "NET_ONLY_SUFFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "SHA_MISMATCH_MARKER", "StrixBot", "Transport",
+    "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "load_request", "locate_strix", "resolve_strix",
+    "strix_availability", "variant_solver", "verify_checkpoint_sha",
 ]

@@ -1,6 +1,7 @@
 """The strix follower (R356(a)): the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
 # Triggers come from the EVENT STREAM, never polled filenames; the cell is `tools/strength_frontier.py`'s;
-# the receipt is a sidecar beside the checkpoint (`<ckpt>.strix256.json`) — the stamp is never touched.
+# the receipt is a sidecar beside the checkpoint (`<ckpt>.strix256.json`; `.strix256_nosolver.json` for the
+# net-only cell) — the stamp is never touched.
 from __future__ import annotations
 
 import argparse
@@ -18,9 +19,14 @@ from typing import Any
 
 EQUAL_WORK = "equal_work"
 AS_SHIPPED = "as_shipped"
+#: R358(a): equal work with strix's root VCF solver OFF — decomposes the gap into net and solver.
+NET_ONLY = "net_only"
 #: unit -> (our sims, strix sims, sidecar suffix). The suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
-                                          AS_SHIPPED: (512, 128, "strix512")}
+                                          AS_SHIPPED: (512, 128, "strix512"),
+                                          NET_ONLY: (256, 256, "strix256_nosolver")}
+#: The units that play strix without its solver; every other unit is the rung on record.
+SOLVER_OFF_UNITS = frozenset({NET_ONLY})
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start means a live trainer shares the card: CONTENDED.
 HEARTBEAT_LIVE_SEC = 300.0
@@ -115,9 +121,11 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
                  label: str) -> dict[str, Any]:
     """The frontier cell for one checkpoint in one unit: PUCT ours, strix at its sims, paired games."""
     ours, theirs, _suffix = UNITS[unit]
-    return {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
+    cell = {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
             "opponent": "strix", "strix_sims": theirs, "games": games, "step": step,
             "concurrency": concurrency}
+    # Solver-ON units carry no key, so their cells are byte-identical to every receipt on record.
+    return {**cell, "strix_solver": False} if unit in SOLVER_OFF_UNITS else cell
 
 
 def _sha256(path: Path) -> str:
@@ -145,7 +153,7 @@ def sidecar_record(checkpoint: Path, *, unit: str, trigger: str, record: Mapping
         "run_id": run_id, "checkpoint": checkpoint.name, "checkpoint_sha256": _sha256(checkpoint),
         "step": cell.get("step"), "net_hash": candidate.get("net_hash"),
         "unit": unit, "ours": {"search_kind": "puct", "sims": ours},
-        "strix": {**dict(strix_pin), "sims": theirs},
+        "strix": {**dict(strix_pin), "sims": theirs, "solver": "off" if unit in SOLVER_OFF_UNITS else "on"},
         "trigger": trigger, "regime": regime_name, "regime_evidence": dict(regime_evidence),
         "games": readout.get("games"), "eff_n": readout.get("eff_n"), "pairs": readout.get("pairs"),
         "wins": readout.get("wins"), "losses": readout.get("losses"), "draws": readout.get("draws"),
@@ -273,14 +281,14 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--follow", action="store_true")
     mode.add_argument("--once", type=Path, metavar="CKPT")
     ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK,
-                    help="--once only; --follow reads the equal-work unit")
+                    help="--once only; --follow reads the equal-work unit (net_only: strix's solver OFF, R358(a))")
     ap.add_argument("--cadence", type=int, default=15_000)
     ap.add_argument("--games", type=int, default=288)
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--poll-sec", type=float, default=300.0)
     args = ap.parse_args(argv)
     if args.follow and args.unit != EQUAL_WORK:
-        ap.error("--follow reads the equal-work unit only; the as-shipped cell is --once")
+        ap.error("--follow reads the equal-work unit only; the as-shipped and net-only cells are --once")
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
                         cadence=args.cadence, games=args.games, concurrency=args.concurrency,

@@ -11,7 +11,7 @@ from .model import Gaps, Panel, table
 from .stats import elo_of_wr
 from .svg import PAD, WIDTH, Scale, figure
 
-#: The sidecar suffixes the follower writes: `<ckpt>.strix256.json` (equal-work) and `.strix512.json`.
+#: The sidecar suffixes the follower writes: `<ckpt>.strix256.json` (equal-work), `.strix512.json`, `.strix256_nosolver.json`.
 SIDECAR_GLOB = "*.strix*.json"
 _HEIGHT = 200.0
 _CLASSES = ("s2", "s3", "s4", "s5", "s6", "s1")
@@ -37,10 +37,13 @@ class ExternalPoint:
     net_hash: str
     checkpoint: str
     path: str
+    #: `"off"` when the sidecar says strix's root VCF solver was disabled (R358(a)'s net-only cell).
+    solver: str = "on"
 
     @property
     def unit_label(self) -> str:
-        return f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
+        label = f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
+        return label + (", solver OFF" if self.solver == "off" else "")
 
 
 def _num(value: Any) -> float | None:
@@ -68,7 +71,7 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
         ci=(lo, hi) if lo is not None and hi is not None else None,
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
         net_hash=str(raw.get("net_hash", "?")), checkpoint=str(raw.get("checkpoint", path.name)),
-        path=str(path),
+        path=str(path), solver=str(strix.get("solver", "on")),
     )
 
 
