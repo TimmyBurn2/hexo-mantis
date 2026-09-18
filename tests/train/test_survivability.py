@@ -96,7 +96,7 @@ def test_cli_resume_flag_reaches_launch_run(monkeypatch: pytest.MonkeyPatch,
 
     monkeypatch.setattr(mantis_run, "launch_run", _fake_launch)
     monkeypatch.setattr(mantis_run, "load_config", lambda _p: object())
-    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root: _STAMP)
+    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root, inherit_from=None: _STAMP)
 
     ckpt = tmp_path / "ckpt.pt"
     ckpt.write_bytes(b"not a real checkpoint, but a real file")
@@ -117,7 +117,7 @@ def test_cli_resume_flag_with_a_STALE_path_refuses_before_it_launches(
 
     monkeypatch.setattr(mantis_run, "launch_run", _must_not_launch)
     monkeypatch.setattr(mantis_run, "load_config", lambda _p: object())
-    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root: _STAMP)
+    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root, inherit_from=None: _STAMP)
 
     with pytest.raises(BootstrapNotFoundError, match="does not exist"):
         mantis_run.main(["--config", "c.yaml", "--out-dir", "o",
@@ -132,7 +132,7 @@ def test_cli_without_the_flag_launches_fresh(monkeypatch: pytest.MonkeyPatch) ->
                                       SimpleNamespace(shutdown=SimpleNamespace(
                                           abort_rule=None)))[1])
     monkeypatch.setattr(mantis_run, "load_config", lambda _p: object())
-    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root: _STAMP)
+    monkeypatch.setattr(mantis_run, "require_preflight_stamp", lambda _c, *, tree_root, inherit_from=None: _STAMP)
 
     mantis_run.main(["--config", "c.yaml", "--out-dir", "o"])
     assert seen.get("checkpoint_path") is None, (
