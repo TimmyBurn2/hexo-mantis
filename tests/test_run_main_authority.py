@@ -266,8 +266,7 @@ def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
 
 
 def test_main_hands_the_stamp_reader_the_parsed_inherit_flag() -> None:
-    """R360(c): the twin's parent config reaches the trap as `inherit_from=args.<flag>`, read
-    directly off argparse — never a default path, never a re-pointed one."""
+    """R360(c): the twin's run config reaches the trap as `inherit_from=args.<flag>`, off argparse."""
     fn = _func(_tree(), "main")
     args_name, _ = _parsed_args_name(fn)
     reads = [node for node in ast.walk(fn)

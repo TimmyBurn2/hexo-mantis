@@ -993,26 +993,24 @@ def _lazy_guarded_load(model: Any, state_dict: Any) -> None:
 def main(argv: Sequence[str] | None = None) -> int:
     """`python -m mantis.run --config <path> --out-dir <path>` — the production launcher.
 
-    `--config` and `--out-dir` are required and NEITHER has a `default=`: a defaulted
-    `--out-dir` is a run input the code decides, and every run that forgets the flag then
-    writes into one shared directory. `--resume-from` is the one OPTIONAL flag, and its
-    `default=None` selects no action rather than picking a value; it is a flag rather than a
-    schema key because a resume target is a property of THIS invocation. There is NO `--device`
-    flag and no eval switch — `config.train.device` and `config.eval_enabled` are the only
-    routes. The preflight's in-repo `--out-dir` refusal is deliberately not mirrored here: that
-    guard exists because a CI gate must not dirty the tree it gates.
+    `--config` and `--out-dir` are required with NO `default=`: a defaulted `--out-dir` is a run
+    input the code decides, and every run that forgets the flag writes into one shared directory.
+    The OPTIONAL flags, `--resume-from` and `--inherit-preflight` (R360(c)), default to `None` —
+    no action, not a value — and are flags, not schema keys, because each names a property of
+    THIS invocation. NO `--device` flag and no eval switch: `config.train.device` and
+    `config.eval_enabled` are the only routes. The preflight's in-repo `--out-dir` refusal is not
+    mirrored here; that guard exists because a CI gate must not dirty the tree it gates.
 
-    rc policy goes through the SAME `exit_code_for_abort` the preflight child reads. Three
-    rules reach it with an authored code: `draw_rate_collapse` (46), `disk_space_exhausted`
-    (47) off the guard's latch, and `terminal_eval_broken` (48) off the coordinator's set-once
-    latch, read AFTER the disk-guard read so first-fire-wins keeps the root cause. A signal
-    this process did NOT send itself still resolves to 0. rc 1 is not an AUTHORED code but
-    CPython's rc for any exception leaving `main`, so `UnregisteredAbortExitError` and any
-    composition wall are indistinguishable to a supervisor; no code is invented for either.
+    rc policy goes through the SAME `exit_code_for_abort` the preflight child reads. Three rules
+    reach it with an authored code: `draw_rate_collapse` (46), `disk_space_exhausted` (47) off the
+    guard's latch, `terminal_eval_broken` (48) off the coordinator's set-once latch, read AFTER
+    the disk-guard read so first-fire-wins keeps the root cause. A signal this process did NOT
+    send itself still resolves to 0. rc 1 is CPython's rc for any exception leaving `main`, not an
+    AUTHORED code: `UnregisteredAbortExitError` and a composition wall look alike to a supervisor.
 
     Raises:
         PreflightStampRefusal: the loaded config has no passing preflight stamp for this tree
-            (R348(c)); one of its three named subclasses says which fact is missing.
+            (R348(c)) and inherits none (R360(c)); a named subclass says which fact is missing.
         UnregisteredAbortExitError: an abort fired whose rule authors no exit code.
     """
     # THE FIRST STATEMENT, before argparse and before any collaborator exists: the window this
