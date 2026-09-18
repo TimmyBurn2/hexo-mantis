@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — run7 STOPPED 2026-09-18 06:25 UTC at step 83 482 (flat by its gate since 42k); run8 RE-MINTED under R358 (σ + `train.augment: true`, the LAW-18 draw counter and the replay-ratio pair landed first, the D6 test in the tree); the box owes the stamp, the shakedown, the witness + audit (`--events` now read), START, then the NET-ONLY cell (dispatcher item 9 below). The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -206,6 +206,36 @@ series "solver OFF"). Box order under R358 §6 (alias `vast`, the grant standing
 <prereg> --events <events_run8_seg0001.jsonl>` on the same ring, five bands + the two new rows READ
 → START → follower `--once <parent> ` (solver ON) → `--once <parent> --unit net_only` →
 `--follow`; the cell's pre-stated reading is on CARD-STRIX-NET-ONLY; then PERF-3's packet.
+(10) THE BOX BLOCK, DONE 2026-09-18 (alias `vast`, the run tree `/workspace/hexo-mantis` on branch `r358`,
+carried by bundle — `dev` was NOT pushed at the time): `86308bc7` + `make build.cuda` (torch 2.11.0+cu128,
+CUDA True, the rebuilt bridge serves `sym_draw_counts`); the parent copied to `checkpoints/run7/` and
+sha-verified (`5750cca4…`); **run8 preflight PASS** 10:13–11:54 UTC (101-step burst, tier `sync_lag`,
+(a) sync 51/51 (b) lag pass, `cuda_build` PASS, workspace MIRRORED; terminal round 520 games / 5 520 s on
+the idle card, the burst net promoted over its anchor, rung 0.771 [0.722, 0.819] vs sealbot at 256 —
+a preflight reading, not a series point); `shakedown8.yaml` minted from run8's header (`config_diff
+--expect run_id` MATCH) and preflighted (PASS 11:58–13:18, stamp `fb17d30c…`); **shakedown8**
+13:19:22–16:19:25 UTC (`run_shakedown.sh`, 3 h cap, rc 124): 1 004 steps/h, 1 026 games/h, 39 866
+turns/h, mean game 38.8 turns, leaves 3 196/s, draw rate 1.7 %, ply-cap rate 2.7 % over the 600-game
+window, card peak 11.67 GiB; step 3 000 at 16:18:41 — the gate round at 3k STARTED 44 s before the cap
+and was CUT (its wall is not read); the 3k bundle + ring were written. **WITNESS PASS**: the QSigma pin
+5/5 on the box tree; on the step-3000 ring's 24 970 full-arm rows median H(explicit) **0.270 nats**
+(> 0.02; run7 0.0000), one-hot share **22.1 %** (< 25 %; run7 62–65 %), mean 0.458. **AUDIT PASS (5
+bands)**: counter_threat_share 0.013 % (< 0.5 %; 3 of 23 245 block rows), quiescence_residue 0 of 6,
+h_full_median 0.270, one_hot_share_full 0.221, cap_rate 2.2 % (< 5 %; 1 179 games); READ:
+**replay_ratio 3.02** over the ring's span (1.13 h, positions 170 515 → 270 493, samples 467 712 →
+769 536), **sym_bin0_over_mean 0.998** (bins 62 780–63 868, 9 479 empty-board skips; augmentation is ON
+and uniform). **START 16:55:34 UTC**: supervisor pid 3182641 over `mantis.run` pid 3182650, out-dir
+`/workspace/runs/run8`, `bc_warmstart_loaded` net hash `a9a46c55…` verified over 50 tensors, 32 workers;
+the puller `mantis-puller-run8.service` (600 s) replaces run7's on the operator's machine. The follower
+chain (`/workspace/oc7/chain_follower_run8.sh`, work `/workspace/oc8/strix_follow`): the parent at 256/256
+solver ON, then `--unit net_only`, then `--follow`; its first launch was killed after 90 s because the
+regime read IDLE beside the live trainer — a follower bug (heartbeat ages keyed by FILENAME; the stale
+`run8-preflight/logs/heartbeat_run8.json` overwrote the live one), fixed at `5e25e40c` (keyed by
+`<run>/logs/<file>`, test pinned), carried by bundle (tools-only over the stamped `86308bc7`; the run's
+tree HEAD is `5e25e40c`, `src/` and the extension byte-identical) and relaunched 17:00:59 UTC reading
+CONTENDED. run8's `dirichlet_*` rows are inert by code on the Gumbel arm (`search_drive.rs` applies
+Dirichlet only under `SearchKind::Puct`; the deploy head has none) — no double noise; minting them
+`false` is a run9 cosmetic. Owed by this block: the two cells' readings and the `--follow` handoff line.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -250,7 +280,9 @@ series "solver OFF"). Box order under R358 §6 (alias `vast`, the grant standing
 
 ## Provenance
 
-Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
+Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
+`shakedown8.launch.log`, `witness_shakedown8.log`, `run8_supervisor.log`, `chain_follower_run8.log`,
+`/workspace/runs/shakedown8/logs/events_shakedown8_seg0001.jsonl`). Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
 `configs/run8.yaml`, `tools/config_diff.py`, the gate logs of that session and `docs/governance/RULINGS.md`.
 Everything below the heading otherwise: derived 2026-09-14 on `dev` at the leg's exit commit, from `configs/run7.yaml`, the box's
 `/workspace/runs/run7/logs/events_run7_seg0001.jsonl` and
