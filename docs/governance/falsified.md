@@ -127,3 +127,9 @@ Each note names the ruling that authorised it; none of them re-opens its row.
   160/m16 and PUCT-512 as the control). PUCT readings in the same records spent their budget exactly
   and are untouched. The fix (the deploy driver through `select_leaves_forced`, spent == budget
   pinned for every kind) lands in the same leg.
+- **F-50 — GROUNDS RE-READ, per R358(b) (2026-09-18); the suspension stands.** The row's "The
+  paper's Go and chess runs use c_scale 1.0 on RAW q ∈ [−1, 1]" is not what App. F says: the tree's
+  Q-values are "normalized to be from the [0, 1] interval" for Go and chess, by a rule the paper does
+  not state. The raw-q + c_scale 1.0 pair run8 mints is grounded on MiniZero's board-game default
+  (raw Q, `actor_mcts_value_rescale` false, `sigma_scale_c` 1), not on the paper's Go pair. A grounds
+  correction, not a verdict on the row (RULINGS: ANNOTATION under R355's foot, A4).

@@ -81,6 +81,35 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE)
+
+- **CARD-STRIX-NET-ONLY — ORDERED, the first box cell after run8's START (R358(a)).** The parent
+  (`run7_00042000_46fdb931.ckpt`) at PUCT-256 vs strix 256 sims with its root VCF solver OFF, 288
+  paired games, book_v1, both colours, CONTENDED labelled; read beside the same session's solver-ON
+  256/256 cell. Tooling LANDED 2026-09-18: `tools/strix_follower.py --once <ckpt> --unit net_only`
+  → `<ckpt>.strix256_nosolver.json`; the driver's `disable_forcing_solver` pass-through (default
+  False, nothing on record changes). Pre-stated reading: Δ > the pair-level CI → a design packet
+  (root proof solver in self-play with the proof AS the policy target; R239's condition, F-15's
+  hazard, F-38–F-40 read in their regime — deploy probes on the dense tree); Δ within CI → the
+  solver is not the gap and search-in-the-loop leaves the queue until new evidence.
+- **CARD-RUN9-QUEUE — RECORDED, nothing armed (R358(f)).** One swap per run, order decided by
+  run8's 15k/30k reading and the parameter-distance test on run7's checkpoints: (i) DATA REGIME —
+  `replay_capacity` 500 000 with `training_steps_per_game` set so the MEASURED replay ratio
+  (`ring_audit --events`, run7 3.6) holds ≈ 8, strix's setpoint; (ii) LR — AdamW 2e-4 → 2e-5
+  cosine over the block horizon; (iii) the root proof solver per CARD-STRIX-NET-ONLY's reading;
+  (iv) prior temperature; (v) sims. Each carries its own in-run producer before it is armed.
+  FALSIFIED run8 → run9 = parent + A-2 + augment with run7's σ (rescale): σ leaves, augmentation
+  stays (R358(b)).
+- **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets
+  (ownership/score are Go quantities, no graph-native source, strix's q_head unmeasured); net size
+  (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
+  degenerate); opponent diversity (one asymmetric-game cumulative ablation); teacher signal (no
+  measured later cost anywhere; the goal call is the operator's).
+- **CARD-PERF-3 — its own packet after START, measured before granted (R358(f)).** GPU 52.8 % busy
+  with CPU and GPU never overlapping (F-47); CARD-SERVER-SYNC's two-stage pipeline pre-registers
+  +40–60 %; strix's edge-count batch cutoff (`max_batch_edges`, "+35 % A/B" claimed in a config
+  comment with no record) is the one pattern strix has and we lack.
+
 ## Opened by R355 (REPAIR-A4)
 
 - **CARD-SERVER-OWNED-COPY — the inference server serves the learner's module itself.** `run.py`

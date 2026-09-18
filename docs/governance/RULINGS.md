@@ -1,4 +1,4 @@
-# RULINGS — R23 to R357
+# RULINGS — R23 to R358
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R358.
+- Numbering continues from R346. The next ruling is R359.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,104 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R358 — RUN8 RE-MINT (σ + AUGMENT), PRODUCERS, THE NET-ONLY CELL, RUN9 QUEUE: the strix rung is a net PLUS a root proof solver and "the net is the deficit" is UNMEASURED; run8 = σ (raw q, c_scale 1.0) PLUS `train.augment: true`, a setup correction armed by the LAW-18 draw counter; the replay-ratio pair and the D6 test land before the mint; the net-only cell is the first box cell after START; five levers PARKED; the run9 queue recorded, nothing armed
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R357: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R358 — (a) The strix rung is a NET PLUS A ROOT PROOF SOLVER (VCF, 6
+> turns / 2 000 nodes, on by default in its self-play, eval and in our
+> rung games). Every strix reading on record is (net × solver × head);
+> "the net is the deficit" (STRIX_RUNG §B.2) is UNMEASURED, not refuted.
+> The NET-ONLY cell — strix with the solver disabled, 256/256, 288 games
+> vs run8's parent — decomposes the gap; it is the first box cell after
+> START. If it moves the reading by more than its CI, search-in-the-loop
+> is the lever and a design packet follows: root proof solver in
+> self-play with the proof AS the policy target (R239's condition; F-15's
+> hazard; F-38–F-40 cited, their regime named — deploy probes on the
+> dense tree).
+> (b) RUN8 = σ (raw q, c_scale 1.0 — MiniZero's board-game pair; the
+> paper's Go pair is normalised-Q, F-50's ground annotated) PLUS
+> train.augment true. Augmentation is a SETUP CORRECTION, not a
+> hypothesis: verified structurally lossless on all 12 D6 elements at
+> radius 8 (300 positions, 0 cells dropped), zero marginal cost, LOUD on
+> mass drop, done by every symmetric-game reference including the
+> same-game one. It rides only because those four hold; nothing else on
+> the list qualifies. Arming condition: the LAW-18 per-element draw
+> counter (R266) in-run, producer-tested. Success line unchanged
+> (R356(c), 256/256 vs the parent). FALSIFIED → run9 = parent + A-2 +
+> augment with run7's σ (rescale) — σ leaves, augmentation stays.
+> (c) PRODUCERS before the mint: samples_consumed_total and
+> positions_produced_total on one iteration_complete row so
+> ring_audit.replay_ratio reads a number; the D6 test lands.
+> (d) The witness (R357(a)) stands; it reads stored ring rows, which
+> augmentation at sampling does not touch.
+> (e) PARKED, one line each: aux targets (ownership/score are Go
+> quantities; no graph-native source; strix's q_head unmeasured); net
+> size (strix is 6 % smaller and wins); curriculum (no ablation in any
+> source; strix's r2 stage degenerate); opponent diversity (one
+> asymmetric-game cumulative ablation); teacher (no measured later cost
+> anywhere; the goal call is the operator's). Not resurrected without a
+> new measurement.
+> (f) RUN9 QUEUE, one swap per run, order decided by run8's 15k/30k
+> reading and the parameter-distance test on run7's checkpoints: (i)
+> DATA REGIME — replay_capacity 500 000 with training_steps_per_game set
+> so the measured replay ratio holds ≈ 8 (strix's setpoint; ours 3.6);
+> (ii) LR — AdamW 2e-4 → 2e-5 cosine over the block horizon (the one
+> AdamW-on-GNN reference); (iii) root proof solver per (a); (iv) prior
+> temperature; (v) sims. Each carries its own in-run producer before it
+> is armed. PERF-3 (GPU 52.8 % busy, CPU/GPU never overlap, CARD-SERVER-
+> SYNC's two-stage pipeline +40–60 % pre-registered; strix's edge-count
+> batch cutoff) is its own packet after START, measured before granted.
+> ROUTE: counter + producer + D6 test → re-mint → gates → stamp →
+> shakedown → witness + audit → START → net-only cell → parent cell.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim with
+ANNOTATION A1 under R357's foot and a fourth annotation under R355's foot (the packet numbered it
+A1; three already stood there, so it lands as A4 — a numbering collision, not a second correction);
+(2) RUN8 IS RE-MINTED with exactly these rows over run7's resume mint, everything else byte-equal
+by `config_diff.py --expect` — `selfplay.q_rescale: false`, `train.augment: true` (NEW; the
+per-sample D6 draw over all 12 elements, empty board excluded, as built), `identity.warm_start`
+`run7_00042000_46fdb931.ckpt` / net_hash `a9a46c55…`, `run_id: run8` (the earlier stamp was never
+vested — run7 stopped BEFORE it, `STATE.md`; had it been, this would be run8b and the old one
+binds nothing); the `2a2837b8` mint is superseded, not edited; (3) the ARMING CONDITION for
+`train.augment` (R266): the LAW-18 sym counter lands with its producer test green BEFORE the mint
+commit — no counter, no row; (4) the replay_ratio producer (§4) lands before the mint commit and the
+`ring_audit` row reads a number on the shakedown; (5) the D6 losslessness test (research Appendix
+A) lands as a real test in `mantis-graph`; (6) the strix NET-ONLY cell (§5) is ORDERED: one box
+cell after START, CONTENDED labelled; (7) the run9 queue of (f) is recorded, nothing in it armed;
+(8) the BOX GRANT stands (alias `vast`): preflight and the parent copy may start at once; the stamp
+waits for the mint commit. The packet's §3–§6: the counter is per-element (12 bins) plus the
+empty-board-skipped count on the row carrying the sampler's other cumulative counters
+(`iteration_complete`, derived: `trainer_step` carries the per-batch composition), producer-tested
+(augment true → 12 bins populated, bin 0 not > 2× the mean; false → bin 0 == N; a planted stuck
+RNG reds the uniformity band, LAW-07), one dashboard line with a unit, a manifest row, CARDS.md's
+R245(c) line discharged; the replay-ratio producer diffs the two totals over the ring's span and
+prints the ratio and the span's wall hours; the net-only cell is `tools/strix_driver.py`'s
+`disable_forcing_solver` pass-through (default False = today's rung, nothing on record changes)
+and the follower's `--unit net_only` → `<ckpt>.strix256_nosolver.json`, the parent (42k) at
+PUCT-256 vs strix 256 sims solver OFF, 288 paired games, book_v1, both colours, read beside the
+solver-ON 256/256 cell of the same session and regime label; pre-stated reading: Δ > the pair-level
+CI → (a)'s design packet is written; Δ within CI → the solver is not the gap and
+search-in-the-loop leaves the queue until new evidence. Box order (§6): dev in the order
+§3 → §4 → D6 test → re-mint → pins → gate 12 rc 0 → targeted tests → 3a on the tip → commit; the
+box in parallel: preflight, `make build.cuda`, copy + sha-verify the parent; NO stamp until the mint
+commit is on dev; then stamp → shakedown 3 h, one contended round → witness (pin attached; R357 §3(b)
+on the ring) → `ring_audit --bands` on the same ring, all five bands + the two new rows READ
+(`replay_ratio`, the sym bins, both through `--events`) → START → follower `--once` parent (solver
+ON) → `--once` parent `--unit net_only` → `--follow`; report + STATE in one line; then PERF-3's
+packet is written.
+Grounds: `STRENGTH_RESEARCH_2026-09-18.md` (§Q7.4 the solver; §Q1.2 the scratch D6 run; §Q2 3.6
+vs 8.0 held, 100 000 rows ≈ 1.4 h; §Q5 the [0, 1] sentence and MiniZero's raw-Q default; §Q6
+strix's AdamW 2e-4/2e-5); R357 summary §4 (replay_ratio NOT MEASURED).
+Ledger, one line: the handoff's "3-layer GINE" and the R357-era "fence is a disc about the origin"
+were the architect's; corrected by the research doc §Q7.1 and §Q1.2.
+Amends: R356(c)'s single-swap composition of run8 (by (b), one row, condition stated).
+Annotates: R355(d)/R351(a)'s "the paper's Go pair (raw q)"; R357(a)'s "(run7: 0.0000 / ≈ 48 %)".
+Status: standing.
+
+---
 
 ### R357 — WITNESS CORRECTION, RING AUDIT, BOX GO: R356(c)'s witness figure was the census MEDIAN and "mean > 0.02" gates nothing; the witness is three-part (a QSigma wiring pin on dev, then on the shakedown ring's full-arm rows median H(explicit) > 0.02 nats AND one-hot share < 25 %); every ring proves its targets before START through `mantis.diagnostics.ring_audit`, a standing pre-START gate with pre-stated bands; config diffs are read by value; run7 is flat by its own instrument since 42k and stops on the stamp; RESEARCH-STRENGTH issued
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -96,7 +194,8 @@ leaves; three header lines moved, no value) — and the prereg's §3 derivation,
 pre-stated the witness on the median.
 Amends: R356(c)'s witness sentence (annotated, A1 under R356's foot). R356(a), (b), (d), (e), (f)
 and the rest of (c) stand.
-Status: standing.
+Status: standing — (a)'s "(run7: 0.0000 / ≈ 48 %)" is a POOLED figure; ANNOTATED under R357's
+foot (A1, in the annotations inventory) by R358. The band and the witness are unchanged.
 
 ---
 
@@ -172,7 +271,10 @@ Amends: R355(b)-route "run7 stop at 30k" (spent), R355(d) "from the 9k anchor" a
 Status: standing — (c)'s witness sentence ("mean policy-target entropy … must exceed run7's
 0.002 nats by an order of magnitude") is AMENDED by R357(a): 0.002 is the census MEDIAN, the
 full-arm mean reads 0.105–0.111 on run7, and the line as written passes on run7; ANNOTATED under
-R356's foot (A1, in the annotations inventory). Everything else in (c) stands.
+R356's foot (A1, in the annotations inventory). (c)'s single-swap composition of run8 is AMENDED
+by R358(b): one more row, `train.augment: true`, rides as a setup correction under a stated arming
+condition (the LAW-18 draw counter), the σ swap and the parent unchanged. Everything else in (c)
+stands.
 
 ---
 
@@ -3747,6 +3849,12 @@ frozen-checkpoint 512 readings would compare two units — this note is so it do
 Ordered by: R355 §2 step 10 (INVESTIGATION-1 ledger C-8: "ANNOTATE under R351's Status, never an
 edit"), appended 2026-09-17 by the REPAIR-A4 plan-3 session
 
+### ANNOTATION under R351's foot (second) — (a)'s "the paper's Go pair (raw q)" IS RE-GROUNDED
+Corrects: the grounds (a) names for the raw-q pair, not the pair; see the ANNOTATION under R355's
+foot (A4) for the fact — the paper normalises Go/chess Q to [0, 1] by an unstated rule, and the
+pair rides on MiniZero's board-game default.
+Ordered by: R358(b), appended 2026-09-18 by its landing session
+
 ### ANNOTATION under R352's foot — (a)'s "PUCT-512 READER" IS THE 2026-09-14 MINT'S UNIT
 Corrects: the eval unit named in (a) and in the enact paragraph; nothing in the decision
 Fact: see the ANNOTATION under R351's foot — the 2026-09-15 resume re-mint moved
@@ -3789,6 +3897,24 @@ witness: a QSigma wiring pin on dev, then on the shakedown ring's `is_full_searc
 of H(explicit) > 0.02 nats AND the one-hot share (H < 1e-3) < 25 % (run7: 0.0000 / ≈ 48 %). The
 error is the architect's, ledger.
 Ordered by: R357(a), appended 2026-09-18 by its landing session
+
+### ANNOTATION under R355's foot (A4) — "the paper's Go pair (raw q, c_scale 1.0)" IS A GROUNDS CORRECTION
+Corrects: the grounds named for run8's σ pair in R355(d) (and R351(a), which R355 cites); nothing in
+the row itself
+Fact: the Gumbel MuZero paper's App. F says the tree's Q-values are "normalized to be from the
+[0, 1] interval" for Go and chess; WHICH normalisation is not stated. Run8's pair (`q_rescale`
+false, `c_scale` 1.0) is grounded on MiniZero's board-game default (raw Q, `actor_mcts_value_rescale`
+false, `sigma_scale_c` 1), not on the paper's Go pair. F-50 stays SUSPENDED (R355(b)); this is a
+grounds correction, not a verdict on the row. The packet numbered this A1; three annotations
+already stood under R355's foot, so it lands as A4. The architect's.
+Ordered by: R358(b), appended 2026-09-18 by its landing session
+
+### ANNOTATION under R357's foot (A1) — "(run7: 0.0000 / ≈ 48 %)" IS THE POOLED ONE-HOT SHARE
+Corrects: the parenthetical run7 figure in (a) only; the band (< 25 %) and the witness are unchanged
+Fact: 48.4 % is the POOLED one-hot share on the 23829 ring; the FULL-ARM share the band applies to
+reads 61.9–64.8 % on the run7 rings (`ring_audit` on 23829 / 81000: 65 / 62 %, STATE.md item 8).
+The architect's.
+Ordered by: R358, appended 2026-09-18 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
