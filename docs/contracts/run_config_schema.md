@@ -219,6 +219,12 @@ here that comes BACK reds the gate, which is the direction that matters.
 Recorded here because a contract that lists only its closed edges misleads at mint time. Each
 is also written at the field it belongs to.
 
+- `selfplay.mcts.dirichlet_alpha`, `selfplay.mcts.dirichlet_epsilon` and
+  `selfplay.mcts.dirichlet_enabled` are INERT under `selfplay.search.kind: gumbel`: the runner
+  applies root Dirichlet noise only on the `SearchKind::Puct` arm (`crates/mantis-selfplay/src/
+  runner/search_drive.rs`; the Gumbel draw IS the root exploration), and the deploy head applies
+  none — so run7/run8's minted `dirichlet_enabled: true` adds no second noise (R359(d), 2026-09-18).
+  Their live consumer is the PUCT self-play arm; run9's mint drops the rows with a pin.
 - `train.hard_gn_threshold` and `train.hard_gn_min_steps` have OPEN upper halves: the shipped
   `1e9` threshold is finite, positive and unreachable by any real gradient norm, and a very
   large `min_steps` disarms the gate without touching the threshold. No honest ceiling is

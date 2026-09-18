@@ -34,6 +34,7 @@ class MctsConfig(StrictModel):
     fpu_reduction: float
     quiescence_enabled: bool
     quiescence_blend_2: float = Field(ge=0, le=1)
+    # Applied on the PUCT self-play arm only (`search_drive.rs`); inert under `search.kind: gumbel`.
     dirichlet_alpha: float = Field(gt=0)
     # The schema field IS the config key, which retires the old key/field spelling mismatch.
     dirichlet_epsilon: float = Field(ge=0, le=1)

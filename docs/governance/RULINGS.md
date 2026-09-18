@@ -1,4 +1,4 @@
-# RULINGS — R23 to R358
+# RULINGS — R23 to R359
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R359.
+- Numbering continues from R346. The next ruling is R360.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,68 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R359 — READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED: the net-only cell read Δ +0.3 pp inside both CIs, so the PLAY-TIME solver is not the gap and queue (iii) is struck while the training-side proof-target hypothesis stays untested; run8's baseline is the parent at 256/256 solver ON, 0.111, and R356(c)'s reading is numeric (SUCCESS 30k ≥ 0.161); the run9 queue is sourced from KataGo's methods with two new entries and an order; `dirichlet_*` is inert on the Gumbel arm by code; a shakedown twin inherits its run's preflight and runs 4 h; PERF-3 issued, measured before granted
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R358: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R359 — (a) NET-ONLY read: solver OFF 0.115 [0.076, 0.153] vs ON 0.111
+> [0.073, 0.149], Δ +0.3 pp. The PLAY-TIME solver is not the gap; queue
+> (iii) struck. strix's net was trained under proof targets: the
+> training-side hypothesis is untested and unranked, not refuted.
+> (b) run8 baseline = the parent at 256/256, solver ON, 0.111. R356(c)
+> numeric: SUCCESS run8@30k ≥ 0.161; FALSIFIED 15k ≤ 0.111 AND 30k ≤
+> 0.111; else INCONCLUSIVE, read 45k. Live-ring audit misses REPORT; only
+> the pre-START audit HALTS.
+> (c) Queue, sourced from KataGoMethods.md (read 2026-09-18): (iv) prior
+> temperature = root softmax T 1.25 → 1.1 (g170), on logits before the
+> top-m draw; NEW (vi) policy-surprise weighting — half the sampling
+> weight uniform, half ∝ KL(prior‖target), producer = in-run sampled-KL
+> distribution; NEW (vii) auxiliary soft-policy head on target^(1/4),
+> nominal weight 8, behind the seam with a producer test. Value-target
+> swap = the landed λ codec (their short-term heads). Order after run8's
+> 15k/30k reading: (i) data regime, (vii), (ii) LR, (vi), (iv), (v).
+> (d) dirichlet_* rows are inert on the Gumbel arm by code
+> (search_drive.rs, Puct only): no double noise. run9's mint drops the
+> rows; one pin lands with it.
+> (e) A shakedown twin INHERITS its run's preflight (same rows but
+> run_id); a twin runs 4 h so its 3k round is read. Follower cells cost
+> ≈ 1 h of run progress each; accepted at 15k + promotions, recorded.
+> (f) PERF-3 issued (§2): measured before granted, lands for run9.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+annotation A1 under CARD-STRIX-NET-ONLY in `CARDS.md` (the play-time scope of the reading — a card
+line, not register text); (2) run8's prereg §4 gains the numeric line (baseline 0.111; SUCCESS
+≥ 0.161) as a RESTATEMENT of R356(c), not a new value; (3) CARD-RUN9-QUEUE gains (vi) and (vii),
+(iv) gains its source and numbers, nothing armed; (4) PERF-3 ORDERED, dev-side — box confirmation
+only in run9's preflight window; (5) three doc lines follow reality, one each: `dirichlet_*` inert
+on the Gumbel arm, the twin preflight rule, the 4 h twin. No box hours; run8 is not touched. The
+packet's §2, PERF-3 — the inference-server pipeline (dev, workstation bench, ≤ 2 days): read first
+F-43/F-44/F-47, CARD-SERVER-SYNC, `PERF_INVESTIGATION_2026-09-11.md`; carried baseline, verify-at-
+HEAD: 3.19k leaves/s, server thread 90.6–99 % busy, GPU 52.8 % busy, cycle ≈ 2.7 ms + 0.515 ms/leaf
+(collate 0.17, forward 0.24–0.26 ms/graph), the CPU half and the GPU half never overlapping.
+(1) PROFILE FIRST on the workstation with F-47's harness at HEAD, standalone, same net, 32 workers;
+if the decomposition does not reproduce within 10 % (ratios, not absolutes), STOP and report — no
+design on a baseline that moved. (2) ONE design: a two-stage pipeline — collate on its own thread,
+the GPU forward on another, double-buffered, so collate of batch k+1 overlaps forward of batch k
+(CARD-SERVER-SYNC's ranked lever, pre-reg +40–60 %); the edge-count batch cutoff (strix's 45k-edge
+knee) is a SECOND swap, only after (2) is measured, as a config row with a batch-edge histogram
+producer. (3) WITNESSES before any leaves/s reading: determinism (same seed → same games, pipeline
+on/off; LAW-15); budget (leaves == Σ sims per move); no reordering of results across workers (a
+planted swap reds). (4) PRE-REGISTERED: SUCCESS leaves/s ≥ 1.4× baseline, same machine, same net,
+same workers, standalone, GPU-busy % beside it; FALSIFIED < 1.15× → file it, keep the code out of
+the tree. (5) Not a run8 change (LAW-12); box confirmation = one 20-min standalone bench in run9's
+preflight window. (6) Report: numbers with regime, then the architect decides whether it rides
+run9's mint as a setup change (perf is not a training swap; it does not count against one-swap if
+determinism holds). Where PERF-3 stands after this landing is `STATE.md`'s and CARD-PERF-3's to
+say, not this entry's.
+Grounds: R358 box report §3–§4 (receipts on the box and the mirror), `witness_shakedown8.log`,
+KataGo's upstream `KataGoMethods.md` (read 2026-09-18).
+Amends: R356(c)'s reading, by (b) — numeric only, a restatement; R358(f)'s queue, by (c).
+Status: standing.
+
+---
 
 ### R358 — RUN8 RE-MINT (σ + AUGMENT), PRODUCERS, THE NET-ONLY CELL, RUN9 QUEUE: the strix rung is a net PLUS a root proof solver and "the net is the deficit" is UNMEASURED; run8 = σ (raw q, c_scale 1.0) PLUS `train.augment: true`, a setup correction armed by the LAW-18 draw counter; the replay-ratio pair and the D6 test land before the mint; the net-only cell is the first box cell after START; five levers PARKED; the run9 queue recorded, nothing armed
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
