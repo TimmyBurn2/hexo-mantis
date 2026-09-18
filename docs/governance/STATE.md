@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — run7 RESUMED 2026-09-15 20:03 UTC from step 23 829 on the re-minted config (tree `ba51fd46`, gate/rung 256, GSPRT armed); the strix anchor reads the run peaked near 9k; the first resumed round (@24k) is the re-mint's live confirmation
+## Current phase — run7 STOPPED 2026-09-18 06:25 UTC at step 83 482 (flat by its gate since 42k); run8 minted (R356) with its witness corrected and its ring audit landed (R357); the box owes the stamp, the shakedown, the witness + audit, START (dispatcher item 8 below). The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -171,10 +171,16 @@ planted stuck switch), then the shakedown ring's full-arm MEDIAN H(explicit) > 0
 share < 25 %; `mantis.diagnostics.ring_audit <ring> --bands <prereg>` is the standing pre-START gate
 (exit 1 on a miss; run7's 23829 / 81000 rings read counter-threat 2.9 / 3.1 %, residue 0/275 and
 0/184, full-arm one-hot share 65 / 62 % — three of the five run8 bands MISSED, the pre-fix baseline).
-Run-ops on the box (fresh session, alias `vast`, R356 §5 7–13 + the four R357 deltas): preflight →
-parent copy + sha → stamp → run7 STOP at once (record the final step and r22's state) → 3 h
-shakedown → witness (§3) + audit (§3a) on the same ring → START → the follower's first cell,
-CONTENDED if the twin is up. RESEARCH-STRENGTH runs in a web-enabled session beside it.
+**run7 STOPPED 2026-09-18 06:25:23 UTC** by operator direction ("stop run7 if we don't need it any
+more" — nothing on the record needed it: flat by its own gate since 42k, r13–r25 @48k–81k all
+`promoted: false`, r22 @72k completed), BEFORE the stamp rather than after it (R356(b)'s grant, one
+SIGTERM to supervisor pid 3127628, executed out of R357's ROUTE order on that direction): `shutdown_save
+step=83482`, `run7_00083482_01e6df4b.ckpt` + bundle + resume + ring written, `terminal_eval_skipped
+reason=signal_stop`, child rc 0, no round in flight (r25 @81k was the last, wall 4 211 s, rung 0.674;
+r26 never fired); the puller receipted the 83482 bundle on cycle 292. The card is idle. Run-ops on
+the box (fresh session, alias `vast`, R356 §5 7–13 + the four R357 deltas, the STOP step spent):
+preflight → parent copy + sha → stamp → 3 h shakedown → witness (§3) + audit (§3a) on the same ring →
+START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled session beside it.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
