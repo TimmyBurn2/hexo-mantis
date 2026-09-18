@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — run7 STOPPED 2026-09-18 06:25 UTC at step 83 482 (flat by its gate since 42k); run8 minted (R356) with its witness corrected and its ring audit landed (R357); the box owes the stamp, the shakedown, the witness + audit, START (dispatcher item 8 below). The 2026-09-15 resume record follows as history
+## Current phase — run7 STOPPED 2026-09-18 06:25 UTC at step 83 482 (flat by its gate since 42k); run8 RE-MINTED under R358 (σ + `train.augment: true`, the LAW-18 draw counter and the replay-ratio pair landed first, the D6 test in the tree); the box owes the stamp, the shakedown, the witness + audit (`--events` now read), START, then the NET-ONLY cell (dispatcher item 9 below). The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -181,6 +181,31 @@ r26 never fired); the puller receipted the 83482 bundle on cycle 292. The card i
 the box (fresh session, alias `vast`, R356 §5 7–13 + the four R357 deltas, the STOP step spent):
 preflight → parent copy + sha → stamp → 3 h shakedown → witness (§3) + audit (§3a) on the same ring →
 START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled session beside it.
+(9) R358 (2026-09-18, `docs/design/research/STRENGTH_RESEARCH_2026-09-18.md` read): run8 is
+RE-MINTED in place (`configs/run8.yaml`, `f06c3234`) = run7's resume mint + `selfplay.q_rescale:
+false` + **`train.augment: true`** + the 42k warm start, `config_diff --expect` MATCH on exactly
+those leaves (warm_start as its two changed leaves), header MATCH, gate 12 rc 0, the count still 5;
+the `2a2837b8` mint is superseded (never stamped — run7 stopped before it, so `run_id` stays run8).
+Landed BEFORE the mint commit, as the arming condition: `iteration_complete.sym_draws` (12 D6 bins
++ empty-board skips off the ring's `draw_syms`, cumulative since boot; `tests/train/
+test_augment_sym_counter.py` — augment true fills 12 bins with bin 0 ≤ 2× the mean, false puts
+every draw in bin 0, a planted stuck RNG reds the band), `iteration_complete.samples_consumed_total`
++ `positions_produced_total` (one row), `mantis.diagnostics.ring_audit <ring> --events <jsonl>`
+reading `replay_ratio` (Δsamples ÷ Δpositions over the ring's span, wall hours printed; run7's
+derived 3.6 vs strix's 8.0) and `sym_bin0_over_mean` (1.0 uniform, 12 stuck) — both REPORTED, not
+banded, the five run8 bands unchanged; the dashboard's throughput panel carries the draw line;
+`crates/mantis-graph/tests/d6_lossless.rs` pins Appendix A (24 positions × 12 elements, ≈ 27 s in
+debug). The NET-ONLY cell tooling: `tools/strix_driver.py` passes `disable_forcing_solver`
+(default False = every reading on record; verified against the vendored strix, both variants load
+and select), the adapter's `<stem>:net_only` variant (a distinct rung by name, regime key and bot
+name `…_nosolver`), `tools/strix_follower.py --once <ckpt> --unit net_only` →
+`<ckpt>.strix256_nosolver.json` (`strix.solver: off` in the receipt; the dashboard labels the
+series "solver OFF"). Box order under R358 §6 (alias `vast`, the grant standing): preflight +
+`make build.cuda` + parent copy/sha may run NOW; stamp only once the mint commit is on `dev` →
+3 h shakedown, one contended round → witness (R357 §3(b), pin attached) → `ring_audit --bands
+<prereg> --events <events_run8_seg0001.jsonl>` on the same ring, five bands + the two new rows READ
+→ START → follower `--once <parent> ` (solver ON) → `--once <parent> --unit net_only` →
+`--follow`; the cell's pre-stated reading is on CARD-STRIX-NET-ONLY; then PERF-3's packet.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -209,6 +234,15 @@ START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled ses
   deselected, 341 s; 3c collected 5 007 against the floor 4 862, 77 deselected tests all declared;
   gate 1 not run (the accepted cost). `dev` PUSHED at `a693a0a4` (`b4ddb21c..a693a0a4`, 8 commits,
   the RESEARCH-STRENGTH-1 doc `03dba760` fast-forwarded in by the operator) on the operator's grant.
+- R358 leg exit (2026-09-18, `dev` tip = this commit's parent chain `b8ad5ff0..`): gate 3a on the
+  tip 4 966 passed / 8 skipped / 56 deselected (337 s); 3c collected 5 030 against the floor 4 862, 77
+  deselected all declared; gates 4, 6, 7, 8, 9, 10, 11, 12 (rc 0, four rows deferred), 13, 14 (ruff
+  + pyright 0 + the comment ratchet AT its floor on all five measures), 15, 16, 17 green; `cargo test`
+  on the three touched crates (graph, selfplay, bridge) 297 passed, workspace clippy `-D clippy::all`
+  clean; 2a on the whole workspace, 3b and the slow tier NOT run (untouched crates, no integration-
+  marked test touched); gate 1 not run (the accepted cost). Nine gate-runner tests need a writable
+  `UV_CACHE_DIR` in a sandboxed shell (`uv run` fails on a read-only `~/.cache/uv`); they pass with one.
+  `dev` NOT pushed — the operator pushes (R358 §6 step 1).
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
@@ -216,7 +250,9 @@ START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled ses
 
 ## Provenance
 
-Derived 2026-09-14 on `dev` at the leg's exit commit, from `configs/run7.yaml`, the box's
+Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
+`configs/run8.yaml`, `tools/config_diff.py`, the gate logs of that session and `docs/governance/RULINGS.md`.
+Everything below the heading otherwise: derived 2026-09-14 on `dev` at the leg's exit commit, from `configs/run7.yaml`, the box's
 `/workspace/runs/run7/logs/events_run7_seg0001.jsonl` and
 `eval_spool.work/run7/r000001_3000_progress.txt`, `/workspace/oc7/{run7_supervisor,chain_tt_ab}.log`,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
