@@ -1,7 +1,6 @@
 """The strix follower (R356(a)): the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
 # Triggers come from the EVENT STREAM, never polled filenames; the cell is `tools/strength_frontier.py`'s;
-# the receipt is a sidecar beside the checkpoint (`<ckpt>.strix256.json`; `.strix256_nosolver.json` for the
-# net-only cell) — the stamp is never touched.
+# the receipt is a sidecar beside the checkpoint (`<ckpt>.<unit suffix>.json`) — the stamp is never touched.
 from __future__ import annotations
 
 import argparse
@@ -19,14 +18,12 @@ from typing import Any
 
 EQUAL_WORK = "equal_work"
 AS_SHIPPED = "as_shipped"
-#: R358(a): equal work with strix's root VCF solver OFF — decomposes the gap into net and solver.
-NET_ONLY = "net_only"
+NET_ONLY = "net_only"  # R358(a): equal work with strix's root VCF solver OFF
 #: unit -> (our sims, strix sims, sidecar suffix). The suffix names OUR sims: the 256 series.
 UNITS: dict[str, tuple[int, int, str]] = {EQUAL_WORK: (256, 256, "strix256"),
                                           AS_SHIPPED: (512, 128, "strix512"),
                                           NET_ONLY: (256, 256, "strix256_nosolver")}
-#: The units that play strix without its solver; every other unit is the rung on record.
-SOLVER_OFF_UNITS = frozenset({NET_ONLY})
+SOLVER_OFF_UNITS = frozenset({NET_ONLY})  # every other unit is the rung on record
 TRIGGER_EVENTS = ("periodic_checkpoint_save", "eval_round_complete")
 #: A heartbeat younger than this at cell start means a live trainer shares the card: CONTENDED.
 HEARTBEAT_LIVE_SEC = 300.0
@@ -124,7 +121,7 @@ def compose_cell(checkpoint: Path, *, unit: str, step: int, games: int, concurre
     cell = {"label": label, "candidate": str(checkpoint), "search_kind": "puct", "sims": ours,
             "opponent": "strix", "strix_sims": theirs, "games": games, "step": step,
             "concurrency": concurrency}
-    # Solver-ON units carry no key, so their cells are byte-identical to every receipt on record.
+    # A solver-ON cell carries no key, so it is byte-identical to every receipt on record.
     return {**cell, "strix_solver": False} if unit in SOLVER_OFF_UNITS else cell
 
 
@@ -280,8 +277,7 @@ def main(argv: list[str] | None = None) -> int:
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--follow", action="store_true")
     mode.add_argument("--once", type=Path, metavar="CKPT")
-    ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK,
-                    help="--once only; --follow reads the equal-work unit (net_only: strix's solver OFF, R358(a))")
+    ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK, help="--once only; --follow reads equal_work")
     ap.add_argument("--cadence", type=int, default=15_000)
     ap.add_argument("--games", type=int, default=288)
     ap.add_argument("--concurrency", type=int, default=8)
