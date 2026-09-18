@@ -318,10 +318,14 @@ the supply cap B ≈ workers × leaf_batch / 2. **Step 3 is the box's, in run9's
   tip (the field comment is the one source touch); `dev` NOT pushed — the operator pushes.
 - R360 leg exit (2026-09-18): code in `preflight_stamp.py`, `run.py` (the flag), the new
   `tools/bench_server.py`; tests in `tests/config/test_preflight_stamp.py` (+4),
-  `tests/test_run_main_authority.py` (+1), `tests/tools/test_bench_server.py` (+3), two stub
-  signatures in `tests/test_run_pdeathsig.py`; the comment ratchet AT its floor on every measure
-  after two folds; gates 10, 13, 15, 16, 17, 14's lint parts, 3a on the tip (see the commit); `dev`
-  NOT pushed — the operator pushes.
+  `tests/test_run_main_authority.py` (+1), `tests/tools/test_bench_server.py` (+3); the launcher's
+  pinned flag SET widened by name to admit `--inherit-preflight` (`tests/test_run_launcher.py`);
+  five trap stubs widened (`test_run_pdeathsig.py`, `test_survivability.py`). Gates 10, 13, 14
+  (ruff, pyright 0, the ratchet AT its floor on every measure after three folds), 15, 16, 17 (over
+  every file changed since `9dbc6667`) green; 3c collected 5 039 against the floor 4 862, 77
+  deselected all declared; 3a on the tip green with a writable `UV_CACHE_DIR` (the nine
+  gate-runner tests that shell out to `uv run` red in a sandboxed shell without one, as recorded
+  at the R358 exit). `dev` NOT pushed — the operator pushes.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
