@@ -158,8 +158,7 @@ def _sealbot_rung(config: Any, games: int) -> RungJob:
 
 
 def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True) -> RungJob:
-    """The strix rung (RUNG-2): the pinned checkpoint at `strix_sims`, on the gate's opening book; `solver`
-    False is R358(a)'s NET-ONLY variant (`<stem>:net_only`), a distinct rung by name."""
+    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False is R358(a)'s `<stem>:net_only` rung."""
     from mantis.bots import strix as _strix
 
     pin = _strix._pin()

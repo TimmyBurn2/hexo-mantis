@@ -270,9 +270,9 @@ def emit_training_step_event(
     return training_step_event
 
 
-def _ring_counter(buffer: Any, name: str) -> int | None:
-    """A cumulative counter read off the ring's accessor `name`, or `None` when it has none."""
-    reader = getattr(buffer, name, None)
+def _samples_consumed_total(buffer: Any) -> int | None:
+    """Rows the ring handed the trainer since boot, or `None` when the ring has no such counter."""
+    reader = getattr(buffer, "samples_consumed_total", None)
     if reader is None:
         return None
     try:
@@ -309,11 +309,8 @@ def emit_iteration_complete_event(
     rstats: Any,
     sink: EventSink,
 ) -> None:
-    """Build and emit `iteration_complete` — the per-iteration counter payload, emitted per
-    coordinator step and NOT `log_interval`-gated, because games_total is a per-iteration counter
-    rather than a training-logging event. `rstats` is passed IN so this builder makes no
-    `pool.runner_stats()` call of its own, which eliminates the straddle: both blocks read ONE
-    atomic snapshot instead of two taken microseconds apart."""
+    """Build and emit `iteration_complete`, the per-coordinator-step counter payload (NOT `log_interval`-gated);
+    `rstats` is passed IN so both blocks read the ONE snapshot and cannot straddle a game boundary."""
     # Each of the three is `None` when its inputs were not measured: a rate over zero elapsed
     # time, a mean over zero completed games, and a product of either are all absences, and
     # each used to be published as a hard `0.0`, which reads as a measured stall.
@@ -362,7 +359,7 @@ def emit_iteration_complete_event(
         "mcts_quiescence_fires": getattr(rstats, "mcts_quiescence_fires", None),
         # R358(c): the replay ratio's pair on ONE row, both cumulative since boot — rows the
         # ring handed the trainer beside positions the runner produced; a reader diffs rows.
-        "samples_consumed_total": _ring_counter(buffer, "samples_consumed_total"),
+        "samples_consumed_total": _samples_consumed_total(buffer),
         "positions_produced_total": getattr(rstats, "positions_generated", None),
         # LAW-18 for `train.augment` (R266/R358(b)): the ring's per-element D6 draw bins and the
         # empty-board skips since boot; `None` on a ring with no producer, never twelve zeros.

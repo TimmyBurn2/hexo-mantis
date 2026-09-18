@@ -1,7 +1,4 @@
-//! R358(b) — the graph path is structurally lossless under all 12 D6 elements at radius 8:
-//! `build(rot_s(board))` IS `rot_s(build(board))` in stones, fence, nodes and edges, the axis
-//! one-hot permuting as one signed permutation (RESEARCH-STRENGTH-1 Appendix A, pinned); the
-//! EMPTY board's fence is invariant under {0, 3, 6, 9} only, which is why `draw_syms` skips it.
+//! R358(b): build(rot_s(board)) IS rot_s(build(board)) under all 12 D6 elements at radius 8 (RESEARCH-STRENGTH-1 App. A, pinned).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -211,9 +208,8 @@ fn build_of_the_rotated_board_is_the_rotation_of_the_build_under_all_twelve_elem
 
 #[test]
 fn the_coordinate_spread_is_equivariant_under_the_order_four_subgroup_only() {
-    // Not a loss (the rotated record's features are what deploy sees on the rotated board), but
-    // the reason the net must LEARN the other eight elements: the `norm_q`/`norm_r` normaliser
-    // changes under them. The subgroup's invariance is integer-exact; the rest must move somewhere.
+    // Not a loss (deploy sees the same features on the rotated board) but why the net must LEARN
+    // the other eight elements: the `norm_q`/`norm_r` normaliser changes under them.
     let mut rng = Lcg(20_260_918);
     let mut changed = [0usize; N_SYMS];
     for _ in 0..N_POS {

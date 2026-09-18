@@ -40,14 +40,16 @@ class TrainerLike(Protocol):
 class ReplayBufferLike(Protocol):
     size: int
     capacity: int
-    # The symmetry-draw counters LEFT with their reader, their producer and the dense buffer that
-    # carried them: a `runtime_checkable` protocol still demanding them would refuse every ring.
 
     def resize(self, new_capacity: int) -> None: ...
     def save_to_path(self, path: str) -> None: ...
     #: The last sampled batch's rows-per-game and age quantiles, on the SHARED protocol because
     #: it is a fact about a ring, not about which sampler it carries.
     def last_batch_composition(self) -> dict[str, int]: ...
+    #: R358(b)/(c): the D6 draw bins + empty-board skips and the rows handed out, since boot; the
+    #: graph ring's own counters (the dense arm's `symmetry_draws` left with it at R346(f)).
+    def sym_draw_counts(self) -> tuple[list[int], int]: ...
+    def samples_consumed_total(self) -> int: ...
 
 
 @runtime_checkable

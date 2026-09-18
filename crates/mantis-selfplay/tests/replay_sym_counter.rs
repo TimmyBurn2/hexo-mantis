@@ -1,6 +1,4 @@
-//! R358(b)/R266 — the LAW-18 augmentation-group counter: twelve draw bins and the empty-board
-//! skips, cumulative since boot. The control is the point: `augment = false` must put EVERY
-//! draw in bin 0, or "12 bins populated" would pass on a counter that ticked by itself.
+//! R358(b)/R266: the LAW-18 draw counter; the control is `augment = false` putting EVERY draw in bin 0.
 
 use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer};
 use mantis_selfplay::replay::sym::N_SYMS;

@@ -67,8 +67,8 @@ def _rate_chart(rec: Record, key: str, label: str, cls: str, gaps: Gaps) -> str:
 def sym_draw_line(rec: Record, gaps: Gaps) -> str:
     """R358(b)/LAW-18: the D6 draw bins off the last `iteration_complete.sym_draws`, as a share per element."""
     rows = [r for r in rec.rows("iteration_complete") if isinstance(r.get("sym_draws"), dict)]
-    block = rows[-1]["sym_draws"] if rows else None
-    bins = block.get("bins") if block else None
+    block: dict[str, Any] = rows[-1]["sym_draws"] if rows else {}
+    bins = block.get("bins")
     total = sum(bins) if isinstance(bins, list) and bins and all(isinstance(b, int) for b in bins) else 0
     if not bins or total == 0:
         return gaps.mark("Throughput", "<code>iteration_complete.sym_draws</code> carries no draw: the "
