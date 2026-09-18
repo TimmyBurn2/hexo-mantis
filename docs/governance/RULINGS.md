@@ -1,4 +1,4 @@
-# RULINGS — R23 to R356
+# RULINGS — R23 to R357
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R357.
+- Numbering continues from R346. The next ruling is R358.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,71 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R357 — WITNESS CORRECTION, RING AUDIT, BOX GO: R356(c)'s witness figure was the census MEDIAN and "mean > 0.02" gates nothing; the witness is three-part (a QSigma wiring pin on dev, then on the shakedown ring's full-arm rows median H(explicit) > 0.02 nats AND one-hot share < 25 %); every ring proves its targets before START through `mantis.diagnostics.ring_audit`, a standing pre-START gate with pre-stated bands; config diffs are read by value; run7 is flat by its own instrument since 42k and stops on the stamp; RESEARCH-STRENGTH issued
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R356: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R357 — (a) R356(c)'s witness figure was the architect's error: 0.002
+> nats is the census MEDIAN; run7's full-arm MEAN is 0.105–0.111 and
+> "mean > 0.02" gates nothing. ANNOTATED, ledger. The witness is now
+> three-part (§3): a QSigma wiring pin (dev, no ring), then on the
+> shakedown ring's full-arm rows median H(explicit) > 0.02 nats AND
+> one-hot share (H < 1e-3) < 25 % (run7: 0.0000 / ≈ 48 %). Pin fails →
+> HALT, wiring. Pin passes, ring fails → HALT to the architect: "raw q
+> does not soften targets on this game" is a finding, filed, not a fault.
+> (b) RING AUDIT, standing: every ring proves its targets before START,
+> as every instrument proves its budget before its first reading. One
+> tool, mantis.diagnostics.ring_audit, over one ring: forced-block rows
+> and target mass on the block; counter-threat share; quiescence residue;
+> H stats and one-hot share, full-arm and quick; cap rate; draw share;
+> sample age and replay ratio. Pre-stated bands per run in the prereg;
+> exit 1 on a miss. Runs on every shakedown ring and every 15k mirror pull.
+> (c) Config diffs are read by value through config_diff.py; header
+> order is not a diff. (d) Run7's gate has promoted nothing since 42k
+> (r13–r21): the run is flat by its own instrument; stop on the stamp.
+> (e) RESEARCH-STRENGTH issued; run9's rows wait on it and on the audit.
+> The one-swap rule is not amended here; a proposal (setup corrections
+> with witnesses beside one hypothesis swap) comes with the findings.
+> ROUTE: pin → ring_audit tool → box: preflight → parent → stamp → run7
+> STOP → shakedown → witness + audit → START → follower first cell.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim with
+ANNOTATION A1 under R356's foot; (2) the packet's §3 witness statistic REPLACES the prereg's §3
+line (`RUN8_PREREG_2026-09-17.md`, one edit, armed by this forward); (3) the ring audit of (b) is
+ORDERED as a standing pre-START gate, its run8 bands ARMED as the packet's §4 states — counter-threat
+share < 0.5 % (run7 pre-fix 2.5–4.4 %; the A-2 falsifier 0/275), quiescence residue 0, H(explicit)
+full-arm median > 0.02 nats and one-hot share < 25 %, cap rate < 5 % (run6 0.2–0.5 %; F-52 0.84);
+draw share, mean |z|, sample age and replay ratio reported with no band, NOT MEASURED said where the
+ring carries no field for it; a LAW-07 producer test (one poisoned forced-block row → exit 1 naming
+the row); (4) the QSigma wiring pin of (a) is ORDERED before the box session starts — a TEST, not a
+config row: one fixed root with two candidates at Δq ≈ 0.01 and one at Δq ≈ 0.2 through the real
+completed-Q target builder, rescale true vs false — the two targets differ, under false the logit
+gap equals (c_visit + max_n)·c_scale·Δq to 1e-6, under true the Δq ≈ 0.01 row is one-hot
+(H < 1e-3) and under false it is not; symbol path `SelfPlayHParams.q_rescale` → runner ctor →
+`QSigma.rescale`; a pin that reaches QSigma but not the target builder is not the pin; (5) the
+prereg §1 header-line-order reading is RATIFIED — value-diff by instrument is the rule, a hand
+re-ordering is a hand-varied config (R1); (6) the exit sweep on `b4ddb21c` is ACCEPTED as partial
+(the full run on `8224b967` + 3a on the tip, cargo unchanged) — a ledger line, no re-run, the next
+full sweep at the next leg exit; (7) the BOX GRANT stands (R356 §5 7–13, the prereg's §7 order,
+alias `vast`) with four deltas — the prereg's §4 read at `b4ddb21c` before the stamp and restored to
+the ruling's text in one line if garbled; the witness is the three-part one with the pin result
+attached from dev, then the audit on the same ring; run7 STOP immediately after the stamp is
+vested, not after any strix point, recording the final step and whether r22 @72k was in flight or
+completed; the first follower cell (the parent at 256/256) runs CONTENDED beside the shakedown twin
+if that is when it runs, labelled, never waited for IDLE; (8) RESEARCH-STRENGTH (a separate packet)
+is ISSUED to a web-enabled session beside the box work.
+Grounds: R356's landing summary — §3 (`ring_reader.explicit_entropy` on the 23829 / 42k / 69k rings:
+full-arm median 0.0000, mean 0.105–0.111, one-hot share ≈ 48 %), §2 (r13–r21 not promoted; the only
+promotions since the resume are r6 @24k and r12 @42k), §1 (`config_diff` MATCH on exactly four
+leaves; three header lines moved, no value) — and the prereg's §3 derivation, which had already
+pre-stated the witness on the median.
+Amends: R356(c)'s witness sentence (annotated, A1 under R356's foot). R356(a), (b), (d), (e), (f)
+and the rest of (c) stand.
+Status: standing.
+
+---
 
 ### R356 — STRIX FOLLOWER, RUN7 → RUN8: the cadence cell is EQUAL-WORK 256/256 with a sidecar receipt; run7 continues until run8's stamp is vested, then one SIGTERM; run8 = the gate's best_model + A-2 at HEAD + the σ swap (raw q, c_scale 1.0) + the 1-in-8 search-stats producer, with a shakedown entropy witness and a three-outcome pre-registered reading; dashboard external points and throughput units; the run9/run10 queue, nothing armed
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -104,7 +169,10 @@ Grounds: operator direction at handoff (SESSION_HANDOFF_v6 §6), forwarded 2026-
 the A-2 falsifier `A2_QUIESCENCE_FALSIFIER_2026-09-16.md` (275 → 0/275).
 Amends: R355(b)-route "run7 stop at 30k" (spent), R355(d) "from the 9k anchor" and "rising past
 0.097" (superseded by (c)). R355(a), (b), (c), (e), (f) stand.
-Status: standing.
+Status: standing — (c)'s witness sentence ("mean policy-target entropy … must exceed run7's
+0.002 nats by an order of magnitude") is AMENDED by R357(a): 0.002 is the census MEDIAN, the
+full-arm mean reads 0.105–0.111 on run7, and the line as written passes on run7; ANNOTATED under
+R356's foot (A1, in the annotations inventory). Everything else in (c) stands.
 
 ---
 
@@ -3709,6 +3777,18 @@ line in the 256/256 unit against the parent, with all three outcomes named (SUCC
 parent + 0.05; FALSIFIED run8@15k ≤ parent AND run8@30k ≤ parent; otherwise INCONCLUSIVE, read
 45k, three-cell rule).
 Ordered by: R356, appended 2026-09-17 by its landing session
+
+### ANNOTATION under R356's foot (A1) — "mean … must exceed run7's 0.002 nats by an order of magnitude" IS THE WRONG STATISTIC
+Corrects: (c)'s shakedown-witness sentence only; the swap, the parent, A-2, the producer and the
+pre-registered reading stand
+Fact: 0.002 nats is the forced-move census's MEDIAN of H(explicit) over a ring's rows
+(`FORCED_MOVE_CENSUS_2026-09-15.md`, run7 table); run7's FULL-ARM mean reads 0.105–0.111 on every
+ring re-read with `mantis.diagnostics.ring_reader` (23829 / 42k / 69k), so "mean > 0.02" is
+satisfied by the run the swap is meant to move away from and gates nothing. R357(a) states the
+witness: a QSigma wiring pin on dev, then on the shakedown ring's `is_full_search` rows the MEDIAN
+of H(explicit) > 0.02 nats AND the one-hot share (H < 1e-3) < 25 % (run7: 0.0000 / ≈ 48 %). The
+error is the architect's, ledger.
+Ordered by: R357(a), appended 2026-09-18 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
