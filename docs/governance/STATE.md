@@ -163,7 +163,18 @@ warm start `run7_00042000_46fdb931.ckpt`, the gate's best_model; prereg
 `docs/design/measurements/RUN8_PREREG_2026-09-17.md`); the 30k stop is SPENT (run7 at 72k, r22 in
 flight at the mint). Run-ops owes, on the box under R356's grant: the stamp, run7's stop after it is
 vested (one SIGTERM), the 3 h shakedown + the entropy witness, START, the follower's first cell
-(the parent at 256/256), then the five R355(c) cells beside run8.
+(the parent at 256/256), then the five R355(c) cells beside run8. (8) R357 (2026-09-18): the
+witness is CORRECTED (A1 under R356's foot — 0.002 was the census MEDIAN, run7's full-arm mean reads
+0.105–0.111): three-part, the QSigma pin on dev (`tests/selfplay/test_qsigma_rescale_reaches_target.py`
+GREEN at HEAD: run8's config softens the Δq ≈ 0.01 row, run7's makes it one-hot, both red under a
+planted stuck switch), then the shakedown ring's full-arm MEDIAN H(explicit) > 0.02 nats AND one-hot
+share < 25 %; `mantis.diagnostics.ring_audit <ring> --bands <prereg>` is the standing pre-START gate
+(exit 1 on a miss; run7's 23829 / 81000 rings read counter-threat 2.9 / 3.1 %, residue 0/275 and
+0/184, full-arm one-hot share 65 / 62 % — three of the five run8 bands MISSED, the pre-fix baseline).
+Run-ops on the box (fresh session, alias `vast`, R356 §5 7–13 + the four R357 deltas): preflight →
+parent copy + sha → stamp → run7 STOP at once (record the final step and r22's state) → 3 h
+shakedown → witness (§3) + audit (§3a) on the same ring → START → the follower's first cell,
+CONTENDED if the twin is up. RESEARCH-STRENGTH runs in a web-enabled session beside it.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -182,6 +193,9 @@ vested (one SIGTERM), the 3 h shakedown + the entropy witness, START, the follow
 - The box: run7 LIVE since the 2026-09-15 resume on `ba51fd46` (events in `seg0002`); the worktree
   `mantis-tt` at `748f5c47` exists only for the A/B's fixed arm; the chains `chain_tt_ab.sh` and
   `chain_strix_15k.sh` are spent.
+- Ledger (R357 §0(6)): the exit sweep on `b4ddb21c` is ACCEPTED as partial — the full
+  `run_all.sh --with-slow` ran on `8224b967` (19 green + the count-pin red), the fix and 3a re-gated on
+  the tip, cargo unchanged; no re-run; the next full sweep is at the R357 leg's exit.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
