@@ -168,3 +168,33 @@ impl SelfPlayRunner {
         (stats_proto, atomics_proto, channels_proto, params_proto)
     }
 }
+
+#[cfg(test)]
+mod sigma_wire {
+    use super::super::SelfPlayRunnerConfig;
+    use super::SelfPlayRunner;
+
+    fn runner(q_rescale: bool) -> SelfPlayRunner {
+        SelfPlayRunner::new(SelfPlayRunnerConfig {
+            q_rescale,
+            c_visit: 37.5,
+            c_scale: 0.125,
+            encoding_name: Some("gnn_axis_v1".to_string()),
+            ..Default::default()
+        })
+        .expect("gnn_axis_v1 must resolve via the registry")
+    }
+
+    /// R357(a): the ctor's `q_rescale` is the σ every worker searches and exports targets under.
+    #[test]
+    fn the_ctor_q_rescale_is_the_workers_sigma_rescale() {
+        for arm in [false, true] {
+            let (_, _, _, params) = runner(arm).build_worker_prototypes();
+            assert_eq!(
+                params.sigma.rescale, arm,
+                "q_rescale={arm} did not reach WorkerParams.sigma"
+            );
+            assert_eq!((params.sigma.c_visit, params.sigma.c_scale), (37.5, 0.125));
+        }
+    }
+}
