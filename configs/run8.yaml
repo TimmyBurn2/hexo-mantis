@@ -35,6 +35,7 @@
 # delta: eval.max_plies: 128 -> 256
 # delta: eval.gate.sequential: null -> {mu0: 0.52, mu1: 0.62, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104}
 # delta: selfplay.q_rescale: true -> false
+# delta: train.augment: false -> true
 # delta: eval.round_timeout_sec: 3600.0 -> 14400.0
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/run7/run7_00042000_46fdb931.ckpt, net_hash: a9a46c55bd1ceadb38145fef6527254d77d37900aebea4332def55ca75f56bfc, reinit: []}
@@ -151,7 +152,7 @@ train:
   microbatch_caps:
     max_edges: 4500000
     max_nodes: 170000
-  augment: false
+  augment: true
   recency_weight: 0.0
   hard_gn_threshold: 1000000000.0
   hard_gn_min_steps: 3
