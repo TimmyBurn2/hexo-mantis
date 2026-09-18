@@ -1,4 +1,4 @@
-# RULINGS — R23 to R359
+# RULINGS — R23 to R360
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R360.
+- Numbering continues from R346. The next ruling is R361.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,47 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R360 — PERF-3 RE-AIMED, TWIN PREFLIGHT INHERITANCE: PERF-3 §2's baseline was F-47's pre-pipeline tree and A4-4 is at HEAD (annotated); PERF-3 is re-aimed at the cost-vs-fill curve in three steps — the mirror's event stream, F-47's harness in the tree as `tools/bench_server.py`, a 20-min standalone bench in run9's preflight window — with design only after step 3; the twin inherits a VESTED stamp differing in `run_id` and run paths alone, pinned; nothing in run9 is armed
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R359: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R360 — (a) PERF-3 §2's baseline was F-47's pre-pipeline tree; A4-4
+> (c888c3b7, +52 %, 1 831 → 3 127 eager / 3 662 compiled at 32 workers)
+> is at HEAD and run7/run8 ride it. The architect's carry; annotated.
+> (b) PERF-3 RE-AIMED at the cost-vs-fill curve. Step 1, mirror only:
+> from run8's live event stream, the batch-size histogram, ms/batch vs
+> B, timeout-vs-full share, and leaves/s, alone vs beside a cell; plus
+> why shakedown8 read 3 196 leaves/s against A4's 3 662 compiled — regime
+> named. Step 2, dev: F-47's harness lands in the tree as tools/
+> bench_server.py (one implementation; CPU collate A/B runs on the
+> workstation as a ratio). Step 3, run9's preflight window, 20 min
+> standalone: ms/batch for B ∈ {16, 32, 64, 128, 256} at HEAD. Design
+> only after step 3; candidates in order: batch fill (workers, wait),
+> edge-count cutoff, the CPU stage. Pre-registered success unchanged:
+> ≥ 1.4× on the same machine, determinism + budget witnesses first.
+> (c) TWIN INHERITANCE: require_preflight_stamp accepts a stamp whose
+> config differs from a VESTED stamp only in run_id and run paths, and
+> records "preflight inherited from <sha>" in the twin's stamp; every
+> other difference refuses. Pin: a planted third difference is refused.
+> (d) Nothing in run9 is armed; the 15k reading rules run9's rows.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+ANNOTATION A1 under R359's foot (the carried pre-pipeline figures; the architect's); (2) PERF-3
+steps 1–2 ORDERED, dev + mirror, no box; step 3 is reserved for run9's preflight window;
+(3) the twin's preflight inheritance is BUILT with its pin — R359(e)'s doc line becomes code;
+(4) the push is the operator's. No box hours; run8 untouched. The packet's §2 ORDER: R360 + the
+annotation → the (c) trap + pin (≤ 2 h) → PERF-3 step 1 off the mirror (≤ 1 h) →
+`tools/bench_server.py` in the tree with the CPU collate ratio (≤ 2 h) → targeted tests, 3a on
+the tip, commit, report; step-1's numbers come back to the architect before any design line is
+written.
+Grounds: the R359 landing report (A4-4 on `dev` 2026-09-11; `PERF_A4_2026-09-11.md` §5; the
+workstation's torch is CPU-only; the harness was not in the tree).
+Annotates: R359(f)'s carried figures (A1 under R359's foot).
+Status: standing.
+
+---
 
 ### R359 — READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED: the net-only cell read Δ +0.3 pp inside both CIs, so the PLAY-TIME solver is not the gap and queue (iii) is struck while the training-side proof-target hypothesis stays untested; run8's baseline is the parent at 256/256 solver ON, 0.111, and R356(c)'s reading is numeric (SUCCESS 30k ≥ 0.161); the run9 queue is sourced from KataGo's methods with two new entries and an order; `dirichlet_*` is inert on the Gumbel arm by code; a shakedown twin inherits its run's preflight and runs 4 h; PERF-3 issued, measured before granted
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -93,7 +134,10 @@ say, not this entry's.
 Grounds: R358 box report §3–§4 (receipts on the box and the mirror), `witness_shakedown8.log`,
 KataGo's upstream `KataGoMethods.md` (read 2026-09-18).
 Amends: R356(c)'s reading, by (b) — numeric only, a restatement; R358(f)'s queue, by (c).
-Status: standing.
+Status: standing — (f)'s carried §2 figures (GPU 52.8 % busy, the CPU and GPU halves never
+overlapping, the two-stage pipeline as the design to build) are F-47's PRE-PIPELINE tree; ANNOTATED
+under R359's foot (A1, in the annotations inventory) by R360(a), which re-aims PERF-3. (a)–(e)
+are unchanged.
 
 ---
 
@@ -3977,6 +4021,21 @@ Fact: 48.4 % is the POOLED one-hot share on the 23829 ring; the FULL-ARM share t
 reads 61.9–64.8 % on the run7 rings (`ring_audit` on 23829 / 81000: 65 / 62 %, STATE.md item 8).
 The architect's.
 Ordered by: R358, appended 2026-09-18 by its landing session
+
+### ANNOTATION under R359's foot (A1) — (f)'s CARRIED BASELINE IS F-47's PRE-PIPELINE TREE
+Corrects: the §2 figures R359(f) issued PERF-3 against — 3.19k leaves/s beside "GPU 52.8 % busy",
+"the CPU half and the GPU half never overlap", and the two-stage pipeline as the design to build;
+nothing in (a)–(e), and PERF-3's pre-registered success line (≥ 1.4×, witnesses first) stands
+Fact: the ratios are F-47's reading of the pre-pipeline tree (`d12cd0b0`/`7a97fa80`, 2026-09-11,
+1 831 leaves/s at 32 workers). The design PERF-3 §2 ordered is PERF-A4's A4-4, `c888c3b7`, on
+`dev` since 2026-09-11 (`PERF_A4_2026-09-11.md` §5): +52 % over serial, 1 831 → 3 127 eager /
+3 662 compiled at 32 workers, GPU 95 % busy eager / 85 % compiled with the server thread's CPU
+stage the bound. run7 and run8 are minted on it (`n_workers 32`, `checker_thread`,
+`compile_trunk`), so shakedown8's 3 196 leaves/s is that regime's number, not the pre-pipeline
+one's. The stale carry was the architect's; the R359 landing session stopped at §2's own step 1
+and reported (CARD-PERF-3, STATE item 11), building nothing. R360(b) re-aims PERF-3 at the
+cost-vs-fill curve.
+Ordered by: R360(a), appended 2026-09-18 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
