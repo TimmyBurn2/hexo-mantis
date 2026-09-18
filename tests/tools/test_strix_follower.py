@@ -136,7 +136,7 @@ def test_a_planted_cadence_event_fires_one_cell_and_writes_the_sidecar(follower_
     assert body["unit"] == "equal_work" and body["ours"]["sims"] == 256 and body["strix"]["sims"] == 256
     assert body["trigger"] == "cadence" and body["regime"] == "CONTENDED"
     assert body["regime_evidence"]["heartbeat_age_sec_self"] == 30.0
-    assert body["regime_evidence"]["live"] == [f"heartbeat_{_RUN}.json"]
+    assert body["regime_evidence"]["live"] == [f"{_RUN}/logs/heartbeat_{_RUN}.json"]
     assert body["net_hash"] == "net" + "0" * 61
     assert body["checkpoint_sha256"] == hashlib.sha256(before).hexdigest()
     assert body["strix"]["checkpoint_sha256"] == "f" * 64
@@ -233,5 +233,19 @@ def test_a_sibling_runs_live_heartbeat_makes_the_cell_contended(follower_mod, tm
     f = _follower(follower_mod, run, _FakeCells())
     body = json.loads(f.poll()[0].read_text(encoding="utf-8"))
     assert body["regime"] == "CONTENDED"
-    assert body["regime_evidence"]["live"] == ["heartbeat_runx-shakedown.json"]
+    assert body["regime_evidence"]["live"] == ["runx-shakedown/logs/heartbeat_runx-shakedown.json"]
     assert body["regime_evidence"]["heartbeat_age_sec_self"] is None, "this run's own heartbeat is absent"
+
+
+def test_a_stale_preflight_heartbeat_with_the_same_filename_cannot_hide_the_live_run(follower_mod, tmp_path: Path) -> None:
+    """Box fact 2026-09-18: a stale `<run>-preflight/logs/heartbeat_<run>.json` shares its NAME with the live one and, keyed by name, hid it (run8's cell read IDLE)."""
+    run = _run_dir(tmp_path)
+    _heartbeat(run, 1_000.0 - 2.0)
+    stale = tmp_path / "runs" / "runx-preflight" / "logs"
+    stale.mkdir(parents=True)
+    (stale / "heartbeat_runx.json").write_text(json.dumps({"wall_ts": 1_000.0 - 18_000.0}), encoding="utf-8")
+    name, evidence = follower_mod.regime(run, _RUN, 1_000.0)
+    assert name == "CONTENDED", evidence
+    assert evidence["heartbeat_age_sec_self"] == 2.0
+    assert "runx/logs/heartbeat_runx.json" in evidence["live"] and len(evidence["live"]) == 1
+    assert evidence["heartbeat_age_sec"]["runx-preflight/logs/heartbeat_runx.json"] == 18_000.0
