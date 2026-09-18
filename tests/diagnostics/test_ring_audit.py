@@ -6,10 +6,9 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from mantis import _engine
 from mantis.diagnostics import ring_audit as A
 from mantis.diagnostics import ring_reader as R
-
-_engine = pytest.importorskip("mantis._engine")
 
 _ENCODING = "gnn_axis_r8"
 # P2 holds a capped five on the q axis; P1 (the mover, k = 1) must block (5, 0): the tactics
