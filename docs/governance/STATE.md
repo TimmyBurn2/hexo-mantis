@@ -202,6 +202,13 @@ START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled ses
 - Ledger (R357 §0(6)): the exit sweep on `b4ddb21c` is ACCEPTED as partial — the full
   `run_all.sh --with-slow` ran on `8224b967` (19 green + the count-pin red), the fix and 3a re-gated on
   the tip, cargo unchanged; no re-run; the next full sweep is at the R357 leg's exit.
+- R357 leg exit (2026-09-18): `run_all.sh --with-slow` on `9eaa2277` — 19 GREEN + 3a RED (one
+  undeclared module-scope `importorskip` in the new `tests/diagnostics/test_ring_audit.py`, refused by
+  the tier census, fixed at `a693a0a4`), 2a 1 976 s, 3b 49 passed / 2 skipped in 6 144 s (1 h 42 min on
+  this host), the slow tier 5 passed; 3a re-run on the tip `a693a0a4`: 4 943 passed, 8 skipped, 56
+  deselected, 341 s; 3c collected 5 007 against the floor 4 862, 77 deselected tests all declared;
+  gate 1 not run (the accepted cost). `dev` PUSHED at `a693a0a4` (`b4ddb21c..a693a0a4`, 8 commits,
+  the RESEARCH-STRENGTH-1 doc `03dba760` fast-forwarded in by the operator) on the operator's grant.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
