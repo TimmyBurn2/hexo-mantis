@@ -64,10 +64,26 @@ def _rate_chart(rec: Record, key: str, label: str, cls: str, gaps: Gaps) -> str:
     return f'<div class="multiple"><h3>{esc(label)}</h3>{chart}</div>'
 
 
+def sym_draw_line(rec: Record, gaps: Gaps) -> str:
+    """R358(b)/LAW-18: the D6 draw bins off the last `iteration_complete.sym_draws`, as a share per element."""
+    rows = [r for r in rec.rows("iteration_complete") if isinstance(r.get("sym_draws"), dict)]
+    block = rows[-1]["sym_draws"] if rows else None
+    bins = block.get("bins") if block else None
+    total = sum(bins) if isinstance(bins, list) and bins and all(isinstance(b, int) for b in bins) else 0
+    if not bins or total == 0:
+        return gaps.mark("Throughput", "<code>iteration_complete.sym_draws</code> carries no draw: the "
+                         "augmentation counter has no producer on this record, or the run has not sampled yet")
+    shares = " · ".join(f"{i}: {b / total * 100:.1f} %" for i, b in enumerate(bins))
+    return (f'<p class="note"><code>iteration_complete.sym_draws</code> — D6 element share of '
+            f"{num(total)} draws since boot (uniform = {100 / len(bins):.1f} % each; bin 0 is the identity, "
+            f"all of it under <code>train.augment: false</code>): {esc(shares)}; "
+            f"{num(block.get('empty_skipped'))} empty-board rows left unrotated.</p>")
+
+
 def throughput(rec: Record, gaps: Gaps) -> Panel:
     """The five rates side by side; every label carries its unit and its producer, every chart its axis."""
-    reads = ("iteration_complete (step, games_per_hour, positions_per_hour, sims_per_sec, steps_per_hour); "
-             "game_complete (ts, moves) for plies / h")
+    reads = ("iteration_complete (step, games_per_hour, positions_per_hour, sims_per_sec, steps_per_hour, "
+             "sym_draws); game_complete (ts, moves) for plies / h")
     if not rec.rows("iteration_complete") and not rec.rows("game_complete"):
         return Panel("Throughput", reads, no_rows("iteration_complete") + gaps.mark(
             "Throughput", "no <code>iteration_complete</code> and no <code>game_complete</code> row"),
@@ -79,4 +95,4 @@ def throughput(rec: Record, gaps: Gaps) -> Panel:
             "plies / h and leaves / s do not. leaves / s is the pool's bill — positions × the config's "
             "effective sims per move over the drain interval — not a served-leaf count.")
     return Panel("Throughput", reads, f'<div class="multiples">{"".join(charts)}</div>'
-                 f'<p class="note">{esc(note)}</p>', "throughput")
+                 f'<p class="note">{esc(note)}</p>{sym_draw_line(rec, gaps)}', "throughput")

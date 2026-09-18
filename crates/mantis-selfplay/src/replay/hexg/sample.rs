@@ -166,11 +166,17 @@ impl HexgBuffer {
         indices
             .iter()
             .map(|&idx| {
-                if augment && self.n_stones[idx] != 0 {
+                if augment && self.n_stones[idx] == 0 {
+                    self.sym_empty_skipped += 1;
+                    return 0;
+                }
+                let sym = if augment {
                     self.rng.random_range(0..N_SYMS)
                 } else {
                     0
-                }
+                };
+                self.sym_draw_counts[sym] += 1;
+                sym
             })
             .collect()
     }
@@ -186,6 +192,7 @@ impl HexgBuffer {
             return Err("Cannot sample from an empty HEXG buffer".to_string());
         }
         let indices = self.sample_indices(batch_size, recent_frac);
+        self.samples_consumed_total += indices.len() as u64;
         self.record_batch_composition(&indices);
 
         let params_base = BuildParams {

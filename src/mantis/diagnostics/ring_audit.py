@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 
@@ -257,10 +259,83 @@ def audit(ring: Ring, child_q: ChildQ = child_q) -> list[Row]:
     rows += outcome_rows(ring)
     rows.append(Row("sample_age", None, None, "none",
                     "NOT MEASURED: the ring carries no step field (step written vs step read)"))
-    rows.append(Row("replay_ratio", None, None, "none",
-                    "NOT MEASURED: trainer samples/h ÷ positions written/h needs samples_consumed_total beside "
-                    "positions_produced_total on one iteration_complete row; neither is emitted"))
     return rows
+
+
+_EVENT_ROWS = "iteration_complete rows"
+_REPLAY_PAIR = ("samples_consumed_total", "positions_produced_total")
+
+
+def _iteration_rows(events: Path) -> list[dict[str, Any]]:
+    """Every `iteration_complete` row of an events file, in order; a partial last line is skipped."""
+    out: list[dict[str, Any]] = []
+    with events.open(encoding="utf-8") as fh:
+        for line in fh:
+            if "iteration_complete" not in line:
+                continue
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(row, dict) and row.get("event") == "iteration_complete":
+                out.append(row)
+    return out
+
+
+def _int_field(row: dict[str, Any], key: str) -> int | None:
+    value = row.get(key)
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+
+
+def replay_ratio_row(rows: list[dict[str, Any]], ring_size: int) -> Row:
+    """Δsamples_consumed_total ÷ Δpositions_produced_total from the first row within `ring_size` positions of the last paired row."""
+    producer = f"{_REPLAY_PAIR[0]} ÷ {_REPLAY_PAIR[1]} on {_EVENT_ROWS} (R358(c))"
+    paired = [r for r in rows if all(_int_field(r, k) is not None for k in _REPLAY_PAIR)]
+    if not paired:
+        missing = sorted({k for r in rows for k in _REPLAY_PAIR if _int_field(r, k) is None}) or list(_REPLAY_PAIR)
+        return Row("replay_ratio", None, len(rows), producer, f"NOT MEASURED: no row carries {missing}")
+    if len(paired) < 2:
+        return Row("replay_ratio", None, 1, producer, "NOT MEASURED: one row is no span")
+    end = paired[-1]
+    end_pos = _int_field(end, _REPLAY_PAIR[1]) or 0
+    span = [r for r in paired if (_int_field(r, _REPLAY_PAIR[1]) or 0) >= end_pos - ring_size]
+    start = span[0]
+    d_pos = end_pos - (_int_field(start, _REPLAY_PAIR[1]) or 0)
+    d_samples = (_int_field(end, _REPLAY_PAIR[0]) or 0) - (_int_field(start, _REPLAY_PAIR[0]) or 0)
+    ts0, ts1 = start.get("ts"), end.get("ts")
+    hours = (float(ts1) - float(ts0)) / 3600.0 if isinstance(ts0, (int, float)) and isinstance(ts1, (int, float)) else None
+    where = (f"span {hours:.2f} h" if hours is not None else "span (no ts)") + \
+        f", positions {_int_field(start, _REPLAY_PAIR[1])} → {end_pos}, " \
+        f"samples {_int_field(start, _REPLAY_PAIR[0])} → {_int_field(end, _REPLAY_PAIR[0])}"
+    if d_pos <= 0:
+        return Row("replay_ratio", None, len(span), producer, f"NOT MEASURED: no position produced over the span; {where}")
+    return Row("replay_ratio", d_samples / d_pos, len(span), producer, where)
+
+
+def sym_uniformity_row(rows: list[dict[str, Any]]) -> Row:
+    """bin 0 ÷ the mean bin off the LAST row carrying `sym_draws`: 1.0 is uniform, 12 is a draw stuck on the identity."""
+    producer = f"sym_draws.bins on the last of the {_EVENT_ROWS} (R358(b), LAW-18)"
+    blocks = [r["sym_draws"] for r in rows if isinstance(r.get("sym_draws"), dict)]
+    if not blocks:
+        return Row("sym_bin0_over_mean", None, len(rows), producer, "NOT MEASURED: no row carries sym_draws")
+    block = blocks[-1]
+    bins = block.get("bins")
+    if not isinstance(bins, list) or not bins or not all(isinstance(b, int) for b in bins):
+        return Row("sym_bin0_over_mean", None, len(rows), producer, f"NOT MEASURED: malformed bins {bins!r}")
+    total = sum(bins)
+    note = f"bins {bins}; empty_skipped {block.get('empty_skipped')}"
+    if total == 0:
+        return Row("sym_bin0_over_mean", None, 0, producer, f"NOT MEASURED: no draw yet; {note}")
+    return Row("sym_bin0_over_mean", bins[0] / (total / len(bins)), total, producer, note)
+
+
+def event_rows(events: Path | None, *, ring_size: int) -> list[Row]:
+    """The two rows read off the events stream (R358(b)/(c)); NOT MEASURED, naming `--events`, without one."""
+    if events is None:
+        absent = "NOT MEASURED: pass --events <events_<run>_seg*.jsonl>; the ring carries no counter"
+        return [Row("replay_ratio", None, None, "none", absent), Row("sym_bin0_over_mean", None, None, "none", absent)]
+    rows = _iteration_rows(events)
+    return [replay_ratio_row(rows, ring_size), sym_uniformity_row(rows)]
 
 
 def load_bands(path: Path) -> dict[str, tuple[str, float]]:
@@ -314,18 +389,20 @@ def _print_table(rows: list[Row], bands: dict[str, tuple[str, float]]) -> None:
 
 
 def main(argv: list[str]) -> int:
-    """CLI: `<ring> [--bands <prereg.md|bands.toml>]` → the table; rc 1 on a miss, 2 on a refusal."""
+    """CLI: `<ring> [--bands <prereg.md|bands.toml>] [--events <jsonl>]` → the table; rc 1 on a miss, 2 on a refusal."""
     parser = argparse.ArgumentParser(prog="mantis.diagnostics.ring_audit")
     parser.add_argument("ring", type=Path)
     parser.add_argument("--bands", type=Path, default=None)
+    parser.add_argument("--events", type=Path, default=None,
+                        help="the run's events file: replay_ratio and sym_bin0_over_mean read off its iteration_complete rows")
     args = parser.parse_args(argv)
     try:
         ring = load_ring(args.ring)
         bands = load_bands(args.bands) if args.bands else {}
+        rows = audit(ring) + event_rows(args.events, ring_size=ring.header.size)
     except (OSError, ValueError) as exc:
         print(f"ring_audit: REFUSED: {exc}")
         return 2
-    rows = audit(ring)
     misses, unknown = check_bands(rows, bands)
     print(f"{args.ring}: encoding={ring.header.encoding} rows={ring.header.size}")
     _print_table(rows, bands)

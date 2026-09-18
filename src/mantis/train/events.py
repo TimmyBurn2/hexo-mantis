@@ -270,6 +270,29 @@ def emit_training_step_event(
     return training_step_event
 
 
+def _ring_counter(buffer: Any, name: str) -> int | None:
+    """A cumulative counter read off the ring's accessor `name`, or `None` when it has none."""
+    reader = getattr(buffer, name, None)
+    if reader is None:
+        return None
+    try:
+        return int(reader())
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _sym_draws(buffer: Any) -> dict[str, Any] | None:
+    """`{bins: [12 ints], empty_skipped: int}` off the ring's `sym_draw_counts`, or `None` when it has none."""
+    reader = getattr(buffer, "sym_draw_counts", None)
+    if reader is None:
+        return None
+    try:
+        bins, skipped = reader()
+        return {"bins": [int(b) for b in bins], "empty_skipped": int(skipped)}
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
 def emit_iteration_complete_event(
     train_step: int,
     w_pre: float,
@@ -337,6 +360,13 @@ def emit_iteration_complete_event(
         # LAW-18 for A-2 (R355(a)): the runner's cumulative count of backups on which
         # `apply_quiescence` returned a verdict, since boot; a reader diffs consecutive rows.
         "mcts_quiescence_fires": getattr(rstats, "mcts_quiescence_fires", None),
+        # R358(c): the replay ratio's pair on ONE row, both cumulative since boot — rows the
+        # ring handed the trainer beside positions the runner produced; a reader diffs rows.
+        "samples_consumed_total": _ring_counter(buffer, "samples_consumed_total"),
+        "positions_produced_total": getattr(rstats, "positions_generated", None),
+        # LAW-18 for `train.augment` (R266/R358(b)): the ring's per-element D6 draw bins and the
+        # empty-board skips since boot; `None` on a ring with no producer, never twelve zeros.
+        "sym_draws": _sym_draws(buffer),
         # The target-integrity counters plus the SEAM conjunct of the same class reach the ONE
         # channel here, each as {total, delta, per_position} beside the `positions_delta`
         # denominator. Nested so they travel together and cannot crosswire; built by the

@@ -510,8 +510,10 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
   rows from the game record: `v_mix` vs max visited Q, which stone of the turn, the perspective
   sign at the root; a perspective error at the intermediate stone is the first hypothesis. The
   START-path measurement (§B, F-45) read 25 rows from a burst; the block's rows are not yet read.
-- **R245(c) — the LAW-18 augmentation-group counter is OWED.** The per-record losslessness gate
-  landed; the in-run fire-rate counter beside it did not.
+- **R245(c) — the LAW-18 augmentation-group counter: DISCHARGED 2026-09-18 (R358(b)).**
+  `iteration_complete.sym_draws` (12 bins + empty-board skips off the ring's `draw_syms`), read by
+  `ring_audit --events` as `sym_bin0_over_mean` and by the dashboard's throughput panel; producer-tested
+  with a stuck-RNG mutation (`tests/train/test_augment_sym_counter.py`).
 
 ## CARD-* named in governance
 

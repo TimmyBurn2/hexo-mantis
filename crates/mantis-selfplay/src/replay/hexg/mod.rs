@@ -22,6 +22,7 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 
 use super::schedule::WeightSchedule;
+use super::sym::N_SYMS;
 use mantis_encoding::RegistrySpec;
 
 /// Max stones per record slot. Over-cap push is a LOUD error.
@@ -235,6 +236,12 @@ pub struct HexgBuffer {
     pub last_batch_untagged_rows: u32,
     /// Rows back from the newest, at p50 / p90 / p99.
     pub last_batch_age_quantiles: [u32; 3],
+    /// LAW-18 (R266/R358): per-element D6 draws since boot, one bin per `sym::N_SYMS` element.
+    pub sym_draw_counts: [u64; N_SYMS],
+    /// Draws that landed on an empty-board row under `augment` and were left unrotated.
+    pub sym_empty_skipped: u64,
+    /// Rows handed to the trainer by `sample_graph_batch_impl` since boot (the replay ratio's numerator).
+    pub samples_consumed_total: u64,
     pub rng: StdRng,
     pub weight_buckets: [AtomicU64; 3],
 }
@@ -329,6 +336,9 @@ impl HexgBuffer {
             last_batch_max_rows_per_game: 0,
             last_batch_untagged_rows: 0,
             last_batch_age_quantiles: [0, 0, 0],
+            sym_draw_counts: [0u64; N_SYMS],
+            sym_empty_skipped: 0,
+            samples_consumed_total: 0,
             rng: StdRng::from_rng(&mut rand::rng()),
             weight_buckets: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
         })

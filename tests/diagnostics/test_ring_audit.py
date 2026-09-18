@@ -134,9 +134,11 @@ def test_cap_rate_draw_share_and_mean_abs_z_are_over_distinct_games(planted: Pat
 
 
 def test_sample_age_and_replay_ratio_are_not_measured_and_say_why(clean: Path) -> None:
-    got = {row.key: row for row in A.audit(R.load_ring(clean))}
+    ring = R.load_ring(clean)
+    got = {row.key: row for row in A.audit(ring) + A.event_rows(None, ring_size=ring.header.size)}
     assert got["sample_age"].value is None and "no step field" in got["sample_age"].note
-    assert got["replay_ratio"].value is None and "iteration_complete" in got["replay_ratio"].note
+    # R358(c): the ratio is read off the events stream, so without one the row names the flag.
+    assert got["replay_ratio"].value is None and "--events" in got["replay_ratio"].note
 
 
 def test_the_planted_ring_exits_1_naming_the_poisoned_row(planted: Path, tmp_path: Path, capsys) -> None:

@@ -99,6 +99,14 @@ class ReplayFacade:
         and an absent instrument looks exactly like a healthy zero."""
         return self.raw.last_batch_composition()
 
+    def sym_draw_counts(self) -> tuple[list[int], int]:
+        """The LAW-18 augmentation bins and empty-board skips since boot (R358(b)); forwarded as `last_batch_composition` is."""
+        return self.raw.sym_draw_counts()
+
+    def samples_consumed_total(self) -> int:
+        """Rows the ring handed the trainer since boot, the replay ratio's numerator (R358(c))."""
+        return self.raw.samples_consumed_total()
+
     def outcome_in_range_count(self, lo: float, hi: float) -> int:
         """Count buffered outcomes in `[lo, hi)`; absent on a graph buffer, and the resulting
         `AttributeError` propagates so the caller's NaN fallback stays reachable."""

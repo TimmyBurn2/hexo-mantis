@@ -254,6 +254,19 @@ impl PyHexgBuffer {
         ])
     }
 
+    /// LAW-18 (R266/R358): `(bins, empty_skipped)` — the D6 draw bins and empty-board skips since boot.
+    pub fn sym_draw_counts(&self, py: Python<'_>) -> (Vec<u64>, u64) {
+        py.detach(|| {
+            let r = self.ring();
+            (r.sym_draw_counts.to_vec(), r.sym_empty_skipped)
+        })
+    }
+
+    /// Rows handed to the trainer by `sample_graph_batch` since boot — the replay ratio's numerator (R358(c)).
+    pub fn samples_consumed_total(&self, py: Python<'_>) -> u64 {
+        py.detach(|| self.ring().samples_consumed_total)
+    }
+
     /// The `game_id` stored in ring slot `index`, oldest-first (`-1` = untagged), since a
     /// raw-slot index would expose the ring's head rotation as if it were data.
     ///

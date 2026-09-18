@@ -354,3 +354,17 @@ def test_an_unarmed_record_draws_the_windowed_cap_rate_at_the_minted_window_and_
     assert "not armed" in body
     assert "not measured — see notes" in body, "below the window is a stated gap, never a zero"
     assert "10 games, fewer than the 600-game window" in page, "the statement lives in the notes"
+
+
+def test_the_throughput_panel_carries_the_augmentation_draw_line_with_a_unit(html, reader, tmp_path):
+    """R358(b)/LAW-18: the D6 draw bins read as a share per element, cumulative since boot; absence is stated."""
+    page = _page(html, reader, tmp_path, [
+        {"event": "iteration_complete", "step": 0, "games_per_hour": 100.0,
+         "sym_draws": {"bins": [0] * 12, "empty_skipped": 0}},
+        {"event": "iteration_complete", "step": 10, "games_per_hour": 110.0,
+         "sym_draws": {"bins": [90] + [10] * 11, "empty_skipped": 3}}])
+    assert "iteration_complete.sym_draws" in page
+    assert "45.0 %" in page and "uniform = 8.3 %" in page and "3 empty-board" in page
+    absent = _page(html, reader, tmp_path, [
+        {"event": "iteration_complete", "step": 10, "games_per_hour": 110.0, "sym_draws": None}])
+    assert "iteration_complete.sym_draws" in absent and "45.0 %" not in absent
