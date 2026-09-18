@@ -386,7 +386,7 @@ def test_main_arms_before_it_reads_anything(monkeypatch: pytest.MonkeyPatch, tmp
     )
     monkeypatch.setattr(
         mantis_run, "require_preflight_stamp",
-        lambda config, *, tree_root: (order.append("stamp"), _STAMP)[1],
+        lambda config, *, tree_root, inherit_from=None: (order.append("stamp"), _STAMP)[1],
     )
 
     def _fake_launch(**_kw: Any) -> Any:
@@ -426,7 +426,7 @@ def test_calling_main_in_this_process_does_not_arm_the_test_runner(
 
     monkeypatch.setattr(mantis_run, "load_config", lambda path: {})
     monkeypatch.setattr(mantis_run, "require_preflight_stamp",
-                        lambda config, *, tree_root: _STAMP)
+                        lambda config, *, tree_root, inherit_from=None: _STAMP)
     monkeypatch.setattr(
         mantis_run, "launch_run",
         lambda **_kw: type("H", (), {"shutdown": type("S", (), {"abort_rule": None})()})(),

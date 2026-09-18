@@ -586,13 +586,13 @@ failure disarms one of run6's three success witnesses. R343(a); A:1927-1939, A:7
   rows from the game record: `v_mix` vs max visited Q, which stone of the turn, the perspective
   sign at the root; a perspective error at the intermediate stone is the first hypothesis. The
   START-path measurement (§B, F-45) read 25 rows from a burst; the block's rows are not yet read.
-- **R359(e) — the twin's inherited preflight is OWED as code.** The rule: a shakedown twin (its
-  run's rows but `run_id`) INHERITS its run's preflight. At HEAD `mantis.run` keys the stamp by
-  `config_identity_sha256`, which hashes `run_id`, so a twin's identity has no stamp and
-  `require_preflight_stamp` refuses it — shakedown8 was preflighted on its own (≈ 1.5 h). Enacting
-  the rule is a small change at the trap (accept the parent run's stamp for a config that differs
-  from it in `run_id` alone, stated in the stamp log) with a pin; not ordered as code by R359, so
-  not landed by its session.
+- **R359(e) — the twin's inherited preflight: DISCHARGED 2026-09-18 by R360(c).**
+  `require_preflight_stamp(config, tree_root=, inherit_from=<run config>)` — `mantis.run
+  --inherit-preflight <run>.yaml` — accepts the run's VESTED stamp for a config that differs from it
+  in `run_id` alone (`TWIN_LEAVES`; run paths are `--out-dir`'s, never a leaf), writes the twin's
+  stamp with `inherited_from` and "preflight inherited from <sha>", and refuses any further
+  difference by name (`PreflightStampTwinMismatchError`; `tests/config/test_preflight_stamp.py`
+  plants a `seed`). A stamp of the twin's own always wins; the parent's own refusals propagate.
 - **R245(c) — the LAW-18 augmentation-group counter: DISCHARGED 2026-09-18 (R358(b)).**
   `iteration_complete.sym_draws` (12 bins + empty-board skips off the ring's `draw_syms`), read by
   `ring_audit --events` as `sym_bin0_over_mean` and by the dashboard's throughput panel; producer-tested

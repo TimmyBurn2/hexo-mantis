@@ -263,3 +263,20 @@ def test_main_does_not_re_point_the_arguments_it_parsed() -> None:
             "`--config` or `--out-dir` inside the launcher is the same false-clear class as "
             "adjusting the loaded config, one step earlier in the same function"
         )
+
+
+def test_main_hands_the_stamp_reader_the_parsed_inherit_flag() -> None:
+    """R360(c): the twin's parent config reaches the trap as `inherit_from=args.<flag>`, read
+    directly off argparse — never a default path, never a re-pointed one."""
+    fn = _func(_tree(), "main")
+    args_name, _ = _parsed_args_name(fn)
+    reads = [node for node in ast.walk(fn)
+             if isinstance(node, ast.Call) and _called_name(node) == _STAMP_READER]
+    assert len(reads) == 1
+    inherit = {kw.arg: kw.value for kw in reads[0].keywords}.get("inherit_from")
+    assert inherit is not None, f"`{_STAMP_READER}(inherit_from=...)` must be passed by keyword"
+    assert (isinstance(inherit, ast.Attribute)
+            and isinstance(inherit.value, ast.Name)
+            and inherit.value.id == args_name), (
+        f"`inherit_from=` must be `{args_name}.<flag>`; got {ast.dump(inherit)[:160]}"
+    )

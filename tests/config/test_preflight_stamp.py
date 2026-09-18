@@ -15,6 +15,7 @@ from mantis.config.preflight_stamp import (
     PreflightStampUnmirroredError,
     PreflightStampRefusal,
     PreflightStampTreeMismatchError,
+    PreflightStampTwinMismatchError,
     clear_stamp,
     read_stamp,
     require_preflight_stamp,
@@ -148,5 +149,66 @@ def test_a_reading_without_the_mirrored_verdict_covers_no_host(state_home: Path,
 
 def test_every_refusal_is_one_named_family() -> None:
     for cls in (PreflightStampMissingError, PreflightStampMalformedError,
-                PreflightStampTreeMismatchError, PreflightStampUnmirroredError):
+                PreflightStampTreeMismatchError, PreflightStampUnmirroredError,
+                PreflightStampTwinMismatchError):
         assert issubclass(cls, PreflightStampRefusal)
+
+
+def _twin_of(tmp_path: Path, **edits: str) -> Path:
+    """run6.yaml with `run_id` changed and, per `edits`, a root leaf line rewritten."""
+    text = _CONFIG.read_text(encoding="utf-8").replace("run_id: run6\n", "run_id: run6-twin\n")
+    for key, value in edits.items():
+        old = next(line for line in text.splitlines() if line.startswith(f"{key}: "))
+        text = text.replace(old + "\n", f"{key}: {value}\n")
+    path = tmp_path / "twin.yaml"
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_a_twin_differing_in_run_id_alone_inherits_its_runs_vested_stamp(
+    state_home: Path, tmp_path: Path,
+) -> None:
+    """R360(c): the twin's stamp is written from the parent's and says where it came from."""
+    parent, parent_path = _write(tmp_path)
+    twin = load_config(_twin_of(tmp_path))
+    assert twin.run_id != parent.run_id
+    stamp = require_preflight_stamp(twin, tree_root=_REPO, inherit_from=_CONFIG)
+    parent_sha = config_identity_sha256(parent)
+    twin_sha = config_identity_sha256(twin)
+    assert stamp["config_sha256"] == twin_sha and stamp["run_id"] == "run6-twin"
+    assert stamp["inherited_from"] == parent_sha
+    assert stamp["inherited"] == f"preflight inherited from {parent_sha}"
+    assert stamp["halts"] == _HALTS and stamp["tree_sha"] == head_sha(_REPO)
+    assert json.loads(stamp_path(twin_sha).read_text(encoding="utf-8")) == stamp
+    assert json.loads(parent_path.read_text(encoding="utf-8")).get("inherited_from") is None
+    # The written twin stamp now stands on its own: no parent needed on the relaunch.
+    assert require_preflight_stamp(twin, tree_root=_REPO)["inherited_from"] == parent_sha
+
+
+def test_a_planted_third_difference_is_refused_by_name(state_home: Path, tmp_path: Path) -> None:
+    """R360(c)'s pin: `run_id` may differ; a `seed` that differs too is refused, naming `seed`."""
+    _write(tmp_path)
+    twin = load_config(_twin_of(tmp_path, seed="1"))
+    with pytest.raises(PreflightStampTwinMismatchError, match=r"beyond .*run_id.*: \['seed'\]"):
+        require_preflight_stamp(twin, tree_root=_REPO, inherit_from=_CONFIG)
+    assert not stamp_path(config_identity_sha256(twin)).exists(), "a refusal left a twin stamp"
+
+
+def test_a_twin_inherits_nothing_from_an_unvested_parent(state_home: Path, tmp_path: Path) -> None:
+    """The parent's own refusals propagate: no parent stamp means no twin stamp either."""
+    twin = load_config(_twin_of(tmp_path))
+    with pytest.raises(PreflightStampMissingError, match=config_identity_sha256(load_config(_CONFIG))):
+        require_preflight_stamp(twin, tree_root=_REPO, inherit_from=_CONFIG)
+    assert not stamp_path(config_identity_sha256(twin)).exists()
+
+
+def test_a_twin_with_its_own_stamp_launches_on_it_not_the_parents(
+    state_home: Path, tmp_path: Path,
+) -> None:
+    twin_path = _twin_of(tmp_path)
+    twin = load_config(twin_path)
+    write_stamp(config=twin, config_path=twin_path, tree_root=_REPO, halts=_HALTS,
+                booted_config_sha256="booted", burst_steps=7, tier="sync_lag",
+                report_path=tmp_path / "report.json")
+    stamp = require_preflight_stamp(twin, tree_root=_REPO, inherit_from=_CONFIG)
+    assert stamp["burst_steps"] == 7 and "inherited_from" not in stamp

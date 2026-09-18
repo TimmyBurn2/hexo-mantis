@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from mantis.config.loader import config_identity_sha256
+from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.schema import RunConfig
 from mantis.util.git import head_sha, is_dirty
 from mantis.util.mirror_receipts import MIRRORED_VERDICT
@@ -15,6 +15,9 @@ from mantis.util.mirror_receipts import MIRRORED_VERDICT
 STAMP_SCHEMA_VERSION = 1
 #: The two START halts a stamp must carry a reading for; a stamp missing either is refused.
 START_HALT_READINGS = ("workspace", "cuda_build")
+#: R360(c): the leaves a shakedown twin may differ from its run in and still inherit its stamp.
+#: Run PATHS are `--out-dir` and what derives from it, never a config leaf, so the set is one.
+TWIN_LEAVES = frozenset({"run_id"})
 
 
 class PreflightStampRefusal(RuntimeError):
@@ -35,6 +38,10 @@ class PreflightStampMalformedError(PreflightStampRefusal):
 
 class PreflightStampUnmirroredError(PreflightStampRefusal):
     """The stamp's workspace reading does not say the run directory's mirror loop was proven."""
+
+
+class PreflightStampTwinMismatchError(PreflightStampRefusal):
+    """A would-be twin differs from its run's config beyond `run_id`, so it inherits nothing."""
 
 
 def stamp_dir() -> Path:
@@ -127,18 +134,86 @@ def read_stamp(config_sha256: str) -> dict[str, Any]:
     return stamp
 
 
-def require_preflight_stamp(config: RunConfig, *, tree_root: Path) -> dict[str, Any]:
-    """The launch-time trap: return the passing stamp for `config` on THIS tree, or refuse.
+def _flat_leaves(doc: dict[str, Any], prefix: str = "") -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in doc.items():
+        path = f"{prefix}.{key}" if prefix else key
+        if isinstance(value, dict):
+            out.update(_flat_leaves(value, path))
+        else:
+            out[path] = value
+    return out
+
+
+def inherit_preflight_stamp(
+    twin: RunConfig, *, parent_config_path: Path, tree_root: Path,
+) -> dict[str, Any]:
+    """R360(c): write and return `twin`'s stamp from its run's VESTED one, if they differ in `run_id` alone.
 
     Raises:
-        PreflightStampMissingError: no stamp exists for this config identity.
+        PreflightStampTwinMismatchError: `twin` differs from the parent config beyond `TWIN_LEAVES`.
+        PreflightStampRefusal: the parent's own stamp is missing, malformed, on another tree
+            or unmirrored — every refusal the parent would meet at its own launch.
+        OSError: the parent config cannot be read, or the store is unwritable.
+    """
+    parent = load_config(parent_config_path)
+    parent_stamp = require_preflight_stamp(parent, tree_root=tree_root)
+    parent_leaves = _flat_leaves(parent.model_dump())
+    twin_leaves = _flat_leaves(twin.model_dump())
+    differing = sorted(
+        key for key in parent_leaves.keys() | twin_leaves.keys()
+        if parent_leaves.get(key) != twin_leaves.get(key)
+    )
+    beyond = [key for key in differing if key not in TWIN_LEAVES]
+    if beyond:
+        raise PreflightStampTwinMismatchError(
+            f"{twin.run_id} ({config_identity_sha256(twin)}) differs from {parent.run_id} "
+            f"({parent_stamp['config_sha256']}) beyond {sorted(TWIN_LEAVES)}: {beyond} — a twin "
+            "inherits a preflight only across run_id; every other difference needs its own")
+    parent_sha = parent_stamp["config_sha256"]
+    twin_sha = config_identity_sha256(twin)
+    stamp = dict(parent_stamp)
+    stamp.update({
+        "config_sha256": twin_sha,
+        "run_id": twin.run_id,
+        "inherited_from": parent_sha,
+        "inherited": f"preflight inherited from {parent_sha}",
+    })
+    path = stamp_path(twin_sha)
+    tmp = path.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(stamp, indent=1, sort_keys=True, default=str) + "\n",
+                   encoding="utf-8")
+    os.replace(tmp, path)
+    return stamp
+
+
+def require_preflight_stamp(
+    config: RunConfig, *, tree_root: Path, inherit_from: Path | None = None,
+) -> dict[str, Any]:
+    """The launch-time trap: return the passing stamp for `config` on THIS tree, or refuse.
+
+    With `inherit_from` (the run's config path), a `config` that has no stamp of its own and
+    differs from that run in `run_id` alone inherits the run's VESTED stamp (R360(c)); a stamp of
+    its own always wins.
+
+    Raises:
+        PreflightStampMissingError: no stamp exists for this config identity (nor, when
+            inheriting, for the parent's).
         PreflightStampMalformedError: the stamp does not carry what a stamp must carry.
         PreflightStampTreeMismatchError: the stamp names another HEAD, or this HEAD is unreadable.
         PreflightStampUnmirroredError: the workspace reading's verdict is not `MIRRORED`, so
             the preflight never saw the puller's receipts on this run directory (R349(b)).
+        PreflightStampTwinMismatchError: `inherit_from` names a run this config differs from
+            beyond `TWIN_LEAVES`.
     """
     sha = config_identity_sha256(config)
-    stamp = read_stamp(sha)
+    try:
+        stamp = read_stamp(sha)
+    except PreflightStampMissingError:
+        if inherit_from is None:
+            raise
+        stamp = inherit_preflight_stamp(
+            config, parent_config_path=inherit_from, tree_root=tree_root)
     workspace = stamp["halts"]["workspace"]
     verdict = workspace.get("verdict") if isinstance(workspace, dict) else None
     if verdict != MIRRORED_VERDICT:

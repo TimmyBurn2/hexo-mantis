@@ -1031,6 +1031,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--resume-from", default=None,
         help="checkpoint to resume the trainer from; omit for a fresh run")
+    parser.add_argument(
+        "--inherit-preflight", type=Path, default=None,
+        help="a shakedown twin's run config: the twin (its rows but run_id) launches on that "
+             "run's vested preflight stamp instead of one of its own (R360(c))")
     args = parser.parse_args(list(sys.argv[1:] if argv is None else argv))
 
     # THE ONE mantis stderr handler, installed at the process entry. Until this call
@@ -1046,9 +1050,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = load_config(args.config)
     # R348(c): a run cannot skip the manual preflight by not running it; the stamp is keyed by
     # the config's identity hash and bound to the tree that preflighted it.
-    stamp = require_preflight_stamp(config, tree_root=Path(__file__).resolve().parent)
-    _LOG.info("preflight_stamp_accepted config_sha256=%s tree_sha=%s preflight_utc=%s",
-              stamp["config_sha256"], stamp["tree_sha"], stamp["preflight_utc"])
+    stamp = require_preflight_stamp(config, tree_root=Path(__file__).resolve().parent,
+                                    inherit_from=args.inherit_preflight)
+    _LOG.info("preflight_stamp_accepted config_sha256=%s tree_sha=%s preflight_utc=%s%s",
+              stamp["config_sha256"], stamp["tree_sha"], stamp["preflight_utc"],
+              f" {stamp['inherited']}" if "inherited" in stamp else "")
     handles = launch_run(config=config, out_dir=args.out_dir, checkpoint_path=bootstrap.path)
     rule = handles.shutdown.abort_rule
     if rule is None:
