@@ -92,12 +92,20 @@ Both were found by running the gate set rather than by reading it, and both are 
   (root proof solver in self-play with the proof AS the policy target; R239's condition, F-15's
   hazard, F-38–F-40 read in their regime — deploy probes on the dense tree); Δ within CI → the
   solver is not the gap and search-in-the-loop leaves the queue until new evidence.
+  **READ 2026-09-18 (both cells CONTENDED beside run8, 288 paired games each, book_v1, the parent
+  `a9a46c55…` at PUCT-256 vs strix 256 sims, 0 fence findings):** solver ON **0.111 [0.073, 0.149]**
+  (32/256, median 43 plies, 14.8 s/game, wall 4 256 s); solver OFF **0.115 [0.076, 0.153]** (33/255,
+  median 45 plies, 19.7 s/game, wall 5 682 s). **Δ = +0.3 pp, inside both CIs → the solver is NOT the
+  gap**; by the pre-stated rule search-in-the-loop LEAVES the run9 queue until new evidence. What is
+  left on strix's side of the equal-work cell is the net and the head. Receipts:
+  `<run7 dir>/checkpoints/run7_00042000_46fdb931.ckpt.strix256{,_nosolver}.json` (mirrored).
 - **CARD-RUN9-QUEUE — RECORDED, nothing armed (R358(f)).** One swap per run, order decided by
   run8's 15k/30k reading and the parameter-distance test on run7's checkpoints: (i) DATA REGIME —
   `replay_capacity` 500 000 with `training_steps_per_game` set so the MEASURED replay ratio
-  (`ring_audit --events`, run7 3.6) holds ≈ 8, strix's setpoint; (ii) LR — AdamW 2e-4 → 2e-5
-  cosine over the block horizon; (iii) the root proof solver per CARD-STRIX-NET-ONLY's reading;
-  (iv) prior temperature; (v) sims. Each carries its own in-run producer before it is armed.
+  (`ring_audit --events`, run7 3.6; shakedown8 READ 3.02) holds ≈ 8, strix's setpoint; (ii) LR —
+  AdamW 2e-4 → 2e-5 cosine over the block horizon; (iii) the root proof solver — OUT of the queue
+  2026-09-18 by CARD-STRIX-NET-ONLY's reading (Δ +0.3 pp within CI), until new evidence; (iv) prior
+  temperature; (v) sims. Each carries its own in-run producer before it is armed.
   FALSIFIED run8 → run9 = parent + A-2 + augment with run7's σ (rescale): σ leaves, augmentation
   stays (R358(b)).
 - **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets

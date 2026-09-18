@@ -235,7 +235,15 @@ regime read IDLE beside the live trainer — a follower bug (heartbeat ages keye
 tree HEAD is `5e25e40c`, `src/` and the extension byte-identical) and relaunched 17:00:59 UTC reading
 CONTENDED. run8's `dirichlet_*` rows are inert by code on the Gumbel arm (`search_drive.rs` applies
 Dirichlet only under `SearchKind::Puct`; the deploy head has none) — no double noise; minting them
-`false` is a run9 cosmetic. Owed by this block: the two cells' readings and the `--follow` handoff line.
+`false` is a run9 cosmetic. **THE TWO CELLS, READ** (CONTENDED beside run8, 288 paired games each, 0 fence
+findings): the parent at 256/256 with strix's solver **ON 0.111 [0.073, 0.149]** (18:11:57 UTC, wall
+4 256 s) and **OFF 0.115 [0.076, 0.153]** (19:46:41 UTC, wall 5 682 s) — **Δ +0.3 pp, inside both
+CIs: the solver is not the gap** (CARD-STRIX-NET-ONLY's pre-stated rule; search-in-the-loop leaves the
+run9 queue until new evidence). The 256/256 solver-ON point is run8's baseline for R356(c)'s reading
+(the parent's as-shipped 512/128 point was 0.142). `--follow` is up (pid 3183447, 300 s polls): every
+15 000-step save and every promotion fires one equal-work cell. run8 under the two cells ran at 369
+steps/h / 394 games/h (step 1 057 at 19:47 UTC, 2 h 52 min in) — the CONTENDED price, ≈ 35 % of the
+shakedown's rate; alone it should return to ≈ 1 000 steps/h. PERF-3 and R359 are the architect's next.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
