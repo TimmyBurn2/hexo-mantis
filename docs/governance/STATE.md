@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; the redesign rows are R362's**. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -127,7 +127,11 @@ rung 288 at `rung_concurrency` 8, `eval.max_plies` 256, the GSPRT armed (`eval.g
 (contract v32) is in the template and the file; the resumed run's stamp predates the row and the
 loader tolerates it (`checkpoint_config_predates_schema`). Gate 12 rc 0 with FOUR rows DEFERRED
 (`policy_loss_trough`, `ply_cap_attractor`, `grad_norm_hard_abort`, `sealbot_wr_abort`; the
-`actor_lag` row was RETIRED by B-1, CARD-SERVER-OWNED-COPY).
+`actor_lag` row was RETIRED by B-1, CARD-SERVER-OWNED-COPY). **Since R362(c), 2026-09-19:** the
+committed `configs/run7.yaml` and `configs/run8.yaml` are RE-MINTED without the rung rows (35 and 37
+deltas; the sealbot rung, its 288-game point and `rung_concurrency` are gone from the tree), while
+the BOX's run8 stamp still carries them — `RETIRED_STAMP_PATHS` is what lets the tree load that
+stamp; gate 12 now has THREE deferred rows.
 
 ## Protected set, laws, cards
 
@@ -301,6 +305,49 @@ plus 39 % strix cells (72 % together); run8's trainer 999–1 069 steps/h alone,
 356–415 in a cell. ETA (ESTIMATE): 15k ≈ 13:30–14:00 UTC 09-19, 30k ≈ 08:30–09:30 UTC 09-20. Gate
 sims 64 UNMEASURED. Two cards opened (CARD-EVAL-REDESIGN, CARD-EVAL-GATE-FIELDS-IN-STREAM); CARD-PERF-3
 carries R361(d)'s contended arm. No config touched; nothing in run9 armed.
+(14) R362 (2026-09-19, dev + the two READ-ONLY box checks §0(4) owed; no box hours, run8's stamp
+untouched): **THE BOX, read 10:02:49 UTC after two banner drops** — the follower pid 3211513 is
+ALIVE (etime 3:47:43, `--follow --no-promotions --cadence 15000 --poll-sec 300`, HEAD `08805676`),
+its chain log ends at the R361(a) relaunch line with no cell fired since (15k not reached); the
+puller mirror is FRESH (`events_run8_seg0001.jsonl` at 09:42 UTC, run8 at **step 11 842**; r3 @9000
+NOT promoted, sealbot 0.693, wall 12 152 s; the 9000 resume bundle + ring receipted 07:07 UTC).
+Nothing relaunched. The register at R362 (next R363), A1 under R361's foot (the H0 clause: the zero-drift point is the 0.57
+midpoint), R361's Status line amended. **THE DELETION, one commit:** the sealbot rung is gone from
+the tree — `eval.ladder`, `eval.sealbot_model_sims`, `eval.rung_concurrency`, the nine `monitor.wr_*`
+leaves (contract v33; every committed config RE-MINTED through its own header minus those rows,
+byte-identical elsewhere; the `dev` template stripped), `mantis.eval.{ladder,bt,channel_health}`,
+the coordinator's `on_eval_round_complete` WR gate (a completed round routes straight to promotion
+through `drain._route_eval_result`), the `sealbot_wr_abort` manifest row with the `EVAL_ROUND`
+clock and `Cadence.EVAL_ROUND_CONSEC`, the `sealbot_wr_warn` producer row, the A/B/C predicates,
+`eval_channel_health`, `wr_sealbot*` on `eval_round_complete`, the rung-skip channels, the resume
+sidecar's `last_p_hat` (a pre-R362 sidecar is read with it ignored, version unbumped). The rung
+machinery (`RoundSpec.rung_jobs`, `RungJob` now carrying its own bootstrap terms,
+`worker._play_rung_block`) survives for the strix cell alone; the frontier tool's sealbot cell and
+its default opponent are gone (a cell names `strix` or a snapshot); the sealbot ADAPTER stays as a
+vendored opponent with no production caller. `RETIRED_STAMP_PATHS` widens the loader's tolerance to
+these nested paths (pinned) so run9 boots from a run8 stamp. The dashboard draws the rung as a stated
+gap on a record with no reading. Gate 12: THREE rows DEFERRED now (`policy_loss_trough`,
+`ply_cap_attractor`, `grad_norm_hard_abort`). **THE STREAM GAINS** `eval_round_complete.gate` =
+`{rule, pairs_played, stopped, llr, wr_confirm, n_pooled, promoted, wall_sec}` (`GATE_STREAM_FIELDS`;
+`wall_sec` the gate block's own, measured in the child), `null` when no gate ran, on the success and
+the A-3 partial routes, producer test + planted break; CARD-EVAL-GATE-FIELDS-IN-STREAM CLOSED,
+CARD-EVAL-REDESIGN moved (gate sims 64 as a measured cell is what stays open on it). **RUN9:**
+`docs/design/measurements/RUN9_PREREG_2026-09-19.md` is a SKELETON — the eval rows fixed
+(`--set train.eval_interval=15000`; the P6b pin reads `monitor.gate_interval == train.log_interval`
+and is unmoved, its count line is widened BY NAME when run9's config lands), the parent, the seed and
+the ONE training swap BLANK BY DESIGN, "ruled at 30k"; run9's config file is NOT minted (a
+placeholder warm start is a hand-varied identity row, R1/LAW-11). Repo_design carries the R362(c)
+amendment; `eval_instrument.md`, `event_manifest.md`, `checkpoint_envelope.md` and
+`run_config_schema.md` (v33, 150 leaves, the twelve section rows re-derived) are repaired in the
+same commit. The collected-test count is 4 863 against the 4 862 floor (no ratchet-down record
+needed); the R346(f) comment floors follow the deletion down (3 405 / 13 105 / 1 506). **The full
+local gate set on `ff5a43d8` (`run_all.sh --with-slow --base 671bf12c`, 11:43 UTC): 18 GREEN —
+2a cargo test (2 001 s), 2b, 4, 5, 3b integration (48 passed, 3 848 s), the slow tier (5 passed),
+3c, 7, 8, 9, 11, 12, 13, 14 (pyright 230 files, 0 errors), 15, 16, 6, 17; gate 1 not run (the
+accepted cost). Two reds with ONE cause, this file's own uncommitted draft naming run9's unminted
+config as a path: gate 10 (rc 1 on that line) and 3a's single failure, the gate-10 vacuity test
+(4 799 passed otherwise); the line is reworded and both re-read GREEN before this commit.** ETA for
+15k and 30k unchanged from item (13).
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -368,7 +415,7 @@ carries R361(d)'s contended arm. No config touched; nothing in run9 armed.
 
 ## Provenance
 
-Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
+Item (14) derived 2026-09-19 on `dev` at `ff5a43d8` from the commits named in it, the gate logs of that session, the mirror (`events_run8_seg0001.jsonl` pulled 09:42 UTC) and one read-only ssh to the box at 10:02 UTC (`ps -p 3211513`, `/workspace/oc7/chain_follower_run8.log`). Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
 `r361` branch), the mirror's `events_run{7,8}_seg*.jsonl` (run8 pulled 06:05 UTC), the rounds'
 `eval_spool.work/<run>/*_{result.json,progress.txt}` copied off the box's disk, the spool `.pt`
 tensor hashes and the source files named in the record. Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
