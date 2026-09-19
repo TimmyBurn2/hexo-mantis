@@ -1,8 +1,8 @@
 """The main-thread eval-result routing seam: `StepCoordinator.step()`'s eval poll.
 
 A non-blocking `poll_completed()` at the TOP of every `step()` iteration, routed through
-`drain._route_eval_result` into `on_eval_round_complete`, all on the MAIN thread — `step()`
-never blocks on eval and never consumes the kick ACK for WR.
+`drain._route_eval_result` to the promotion seam, all on the MAIN thread — `step()` never blocks
+on eval and never consumes the kick ACK as a result.
 
 >300 justify: one seam driven against the real `StepCoordinator` and `drain.py` through one
 shared fake-pool/fake-trainer/fake-pipeline harness its seven call sites would duplicate.
@@ -228,12 +228,13 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
 
 
 def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
-    """`step()` polls the pipeline and routes a completed round on the MAIN thread."""
-    pipe = ThreadIdentSpyEvalPipeline(poll_result={"step": 5, "wr_sealbot": 0.6,
-                                                    "promoted": False, "eval_broken_reason": None})
+    """`step()` polls the pipeline and routes a completed round on the MAIN thread — to the
+    promotion seam, the one consumer a routed round has since R362(c)."""
+    pipe = ThreadIdentSpyEvalPipeline(poll_result={"step": 5, "promoted": True,
+                                                    "eval_broken_reason": None})
     h = _make_coordinator(eval_pipeline=pipe)
     routed: list[dict] = []
-    h.coord.on_eval_round_complete = lambda result: routed.append(dict(result))
+    pipe.apply_gate_decision = lambda result: routed.append(dict(result))
     h.pool.games_completed = 5
     main_thread_id = threading.get_ident()
 
@@ -243,8 +244,8 @@ def test_step_polls_and_routes_completed_rounds_on_main_thread() -> None:
     assert all(tid == main_thread_id for tid in pipe.poll_calls_from_thread), (
         "poll_completed() must be called from the SAME (main) thread that called step()"
     )
-    assert routed and routed[0]["wr_sealbot"] == 0.6, (
-        "a completed round returned by poll_completed() must reach on_eval_round_complete"
+    assert routed and routed[0]["step"] == 5, (
+        "a completed round returned by poll_completed() must reach the promotion seam"
     )
 
 
@@ -280,11 +281,10 @@ def test_kick_ack_busy_sets_eval_skipped_busy_outcome() -> None:
 
 def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> None:
     """A promoted round routed mid-run reaches the ONE applier with ZERO pool sync calls."""
-    result = {"step": 7, "promoted": True, "promoted_step": 7, "wr_sealbot": 0.9,
+    result = {"step": 7, "promoted": True, "promoted_step": 7,
               "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline(poll_result=result)
     h = _make_coordinator(eval_pipeline=pipe)
-    h.coord.on_eval_round_complete = lambda r: None  # the WR consumer is not under test
     h.pool.games_completed = 5
 
     h.coord.step()
@@ -300,12 +300,11 @@ def test_promoted_result_advances_deploy_tag_midrun_without_touching_pool() -> N
 
 def test_terminal_route_applies_identically_to_midrun() -> None:
     """The terminal route calls the SAME applier as the mid-run route, pool stopped."""
-    result = {"step": 9, "promoted": True, "promoted_step": 9, "wr_sealbot": 0.9,
+    result = {"step": 9, "promoted": True, "promoted_step": 9,
               "eval_broken_reason": None}
     pipe = ThreadIdentSpyEvalPipeline()
     pipe.run_evaluation = lambda *a, **k: dict(result)  # terminal eval RETURNS the result
     h = _make_coordinator(eval_pipeline=pipe)
-    h.coord.on_eval_round_complete = lambda r: None  # the WR consumer is not under test
 
     drain.run_terminal_eval(h.coord)  # pool never started, never touched
 
@@ -334,7 +333,6 @@ def test_flush_before_pool_stop_before_terminal_order() -> None:
         config=SimpleNamespace(terminal_eval_enabled=True),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         _train_step=1000, _sink=None, eval_model=object(), full_config=_GRAPH_FULL_CONFIG,
-        on_eval_round_complete=lambda result: None,
         record_terminal_eval_reason=lambda reason: None,
     )
     drain.close_out(coord, on_drained=lambda: order.append("on_drained"))

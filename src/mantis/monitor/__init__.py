@@ -32,10 +32,8 @@ from mantis.monitor.rules import (
     check_grad_norm_spike,
     check_loss_increase_window,
     check_nonfinite_loss,
-    check_sealbot_wr_hard_abort,
     check_selfplay_entropy_collapse,
     emit_training_step_alerts,
-    sealbot_wr_trajectory_alert,
 )
 from mantis.monitor.sink import JsonlEventSink
 
@@ -57,13 +55,11 @@ __all__ = [
     "check_grad_norm_spike",
     "check_nonfinite_loss",
     "check_loss_increase_window",
-    "check_sealbot_wr_hard_abort",
     "check_selfplay_entropy_collapse",
     "configure_logging",
     "emit_training_step_alerts",
     "load_manifest",
     "read_heartbeat_file",
-    "sealbot_wr_trajectory_alert",
     "verify_manifest",
     "write_heartbeat_file",
 ]

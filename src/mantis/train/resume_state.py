@@ -171,7 +171,6 @@ class ResumeState:
     checkpoint_filename: str
     ring: RingRef | None
     round_counter: int
-    last_p_hat: dict[str, float]
     anchor_sha256: str | None
     rng: dict[str, Any]
     #: The STEP of the coordinator's last eval kick; -1 = never, or a sidecar predating it.
@@ -213,7 +212,8 @@ class ResumeState:
                 checkpoint_filename=payload["checkpoint_filename"],
                 ring=ring,
                 round_counter=int(payload["round_counter"]),
-                last_p_hat={str(k): float(v) for k, v in payload["last_p_hat"].items()},
+                # A pre-R362 sidecar also carries `last_p_hat` (the ladder's BT reading); with
+                # no ladder it is read by nothing and tolerated here as provenance.
                 anchor_sha256=payload["anchor_sha256"],
                 rng={str(k): v for k, v in payload["rng"].items()},
                 eval_round_last_step=_eval_round_last_step(payload),

@@ -13,10 +13,8 @@ repo-relative STRINGS; resolving them against a repo root lives in
 `tools/ci_gates/preflight_mint.py`, because a shipped package that resolved one would be
 depending on an editable install. Pinned by `tests/config/test_armed_abort_manifest.py`.
 
-`wr_hard_abort_enabled` is a DEFERRED row: the sealbot win-rate abort ships WARN-ONLY by
-operator ruling and nothing here may flip it REQUIRED, because that would gate every
-production mint on a value the operator deliberately mints false. A DEFERRED row prints
-loudly on every gate-12 run, gates nothing, and makes the flip a one-field data edit.
+A DEFERRED row prints loudly on every gate-12 run, gates nothing, and makes the flip to
+REQUIRED a one-field data edit.
 """
 from __future__ import annotations
 
@@ -153,12 +151,6 @@ class SampleClock(StrEnum):
     #: gates only when `self._train_step % cfg.gate_interval == 0`.
     GATE_BOUNDARY = "gate_boundary"
 
-    #: One sample per completed EVAL ROUND: round `r` lands at training step
-    #: `r * train.eval_interval` with `r >= 1`, and each routed result appends one WR sample.
-    #: DISCLOSED: `eval_enabled` false builds NO eval pipeline, so the axis ticks zero times
-    #: however small the interval is; that half is held by `test_minted_config_remint.py`.
-    EVAL_ROUND = "eval_round"
-
     #: NOT step-clocked at all — a wall-clock poll or a close-out rule. `period_steps` RAISES
     #: rather than answering 1, which would be the step-clock fallback this class forbids; such
     #: a row is judged by the STEP FLOOR its rule imposes instead.
@@ -175,7 +167,6 @@ class SampleClock(StrEnum):
         return {
             SampleClock.TRAIN_STEP: None,
             SampleClock.GATE_BOUNDARY: "monitor.gate_interval",
-            SampleClock.EVAL_ROUND: "train.eval_interval",
             SampleClock.NO_STEP_CLOCK: None,
         }[self]
 
@@ -213,19 +204,6 @@ class SampleClock(StrEnum):
         return float(value)
 
 
-def _evals_to_first_fire(consec: float, min_step: float, period: float) -> float:
-    """EVAL ROUNDS before ONE sealbot-WR trigger can first fire.
-
-    Derived from `monitor/rules.py::sealbot_wr_trajectory_alert`: `len(history) >= n_consec`
-    needs `consec` samples, but the empty-history guard needs at least ONE regardless, hence
-    the `max(consec, 1)` floor; `current_step > min_step` is STRICT and round `r` lands at
-    `r * period`. OPTIMISTIC by construction — a reachability floor, not a prediction.
-    """
-    if period < 1.0:
-        return math.inf
-    return max(max(consec, 1.0), float(math.floor(min_step / period)) + 1.0)
-
-
 class Cadence(StrEnum):
     """WHEN a row's abort can FIRST fire, in TRAINING STEPS. DATA, not a branch on `name`.
 
@@ -249,13 +227,6 @@ class Cadence(StrEnum):
     #: The trough halt on the same clock: the first boundary is the reference, so the earliest
     #: fire is boundary `consec + 1`, and only at or before `max_step` (an UPPER bound). Operands: (consec, max-step).
     GATE_INTERVAL_CONSEC_BOUNDED = "gate_interval_consec_bounded"
-
-    #: The sealbot-WR trajectory abort in the EVAL-ROUND clock: the earliest fire is the
-    #: MINIMUM over its three triggers, in ROUNDS, converted through `train.eval_interval`.
-    #: Operands: (collapse-consec, early-death-min-step, collapse-min-step, rolling-consec,
-    #: rolling-min-step) — B and C SHARE `monitor.wr_collapse_consecutive_evals`, which is why
-    #: five paths cover three triggers.
-    EVAL_ROUND_CONSEC = "eval_round_consec"
 
     #: The grad-norm gate is evaluated PER TRAINING STEP inside the burst and fires when
     #: `self._consec_high_gn >= cfg.hard_gn_min_steps`. Operands: (min-steps path,).
@@ -293,7 +264,6 @@ class Cadence(StrEnum):
         return {
             Cadence.GATE_INTERVAL_CONSEC: SampleClock.GATE_BOUNDARY,
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: SampleClock.GATE_BOUNDARY,
-            Cadence.EVAL_ROUND_CONSEC: SampleClock.EVAL_ROUND,
             Cadence.CONSEC_TRAIN_STEPS: SampleClock.TRAIN_STEP,
             Cadence.TRAIN_STEP_FLOOR: SampleClock.TRAIN_STEP,
             Cadence.STEP_LAG_THRESHOLD: SampleClock.TRAIN_STEP,
@@ -309,7 +279,6 @@ class Cadence(StrEnum):
         return {
             Cadence.GATE_INTERVAL_CONSEC: 2,
             Cadence.GATE_INTERVAL_CONSEC_BOUNDED: 2,
-            Cadence.EVAL_ROUND_CONSEC: 5,
             Cadence.CONSEC_TRAIN_STEPS: 1,
             Cadence.TRAIN_STEP_FLOOR: 1,
             Cadence.STEP_LAG_THRESHOLD: 1,
@@ -368,15 +337,6 @@ class Cadence(StrEnum):
             return float(values[0])
         if self is Cadence.TRAIN_STEP_FLOOR:
             return float(values[0])
-        if self is Cadence.EVAL_ROUND_CONSEC:
-            collapse_consec, early_min, collapse_min, rolling_consec, rolling_min = (
-                float(value) for value in values
-            )
-            return min(
-                _evals_to_first_fire(collapse_consec, early_min, period),    # trigger C
-                _evals_to_first_fire(collapse_consec, collapse_min, period),  # trigger B
-                _evals_to_first_fire(rolling_consec, rolling_min, period),   # trigger A
-            )
         if self is Cadence.GATE_INTERVAL_CONSEC_BOUNDED:
             consec, max_step = (float(value) for value in values)
             if period < 1.0 or consec < 1.0:
@@ -809,84 +769,6 @@ MANIFEST: tuple[ArmedAbort, ...] = (
             "(`exit_code_for_abort`'s docstring says so by name). The pin binds to the gate's "
             "own comparison, so deleting the gate, renaming the field or inverting the test all "
             "break the R56 scan."
-        ),
-    ),
-    ArmedAbort(
-        name="sealbot_wr_abort",
-        config_path="monitor.wr_hard_abort_enabled",
-        mechanism=Mechanism.CONFIG_BOOL,
-        # Declared on a DEFERRED row so the flip to REQUIRED stays a one-field data edit. With
-        # no row at all the cadence audit could not compute even a FALSE answer for this axis;
-        # `preflight_mint.py::_print_deferred_rows` prints the cadence and its clock meanwhile.
-        cadence=Cadence.EVAL_ROUND_CONSEC,
-        cadence_paths=("monitor.wr_collapse_consecutive_evals",
-                       "monitor.wr_early_death_min_step",
-                       "monitor.wr_collapse_min_step",
-                       "monitor.wr_rolling_consecutive_evals",
-                       "monitor.wr_rolling_min_step"),
-        status=Status.DEFERRED,
-        exit_code=None,
-        owner="operator ruling G-3 — the warn-vs-abort DISPOSITION, at run5 mint prereg",
-        source_pin=(
-            "src/mantis/train/coordinator/step.py",
-            'self._fire_hard_abort("sealbot_wr_abort", hard, step=step)',
-        ),
-        note=(
-            "The sealbot win-rate trajectory abort (monitor/rules.py's triggers A/B/C, fired "
-            "from coordinator/step.py::on_eval_round_complete). R265 / ADJ-D38 authors this "
-            "row; before it the axis was OUTSIDE the manifest entirely. "
-            "WHY DEFERRED AND NOT REQUIRED, and this row's answer is the STRONGEST of the "
-            "three deferred cases on record: flipping it REQUIRED would gate every "
-            "production mint on monitor.wr_hard_abort_enabled being true, and every "
-            "committed config mints it FALSE by operator ruling G-3 (warn-only; STATE §6 "
-            "names the mint-blocking pair as draw-rate + actor-lag). So REQUIRED here does "
-            "not demand a value nobody pre-registered — it OVERRULES one the operator "
-            "pre-registered, from a CI gate, which is worse than the class R84 refused. The "
-            "disposition is a ruling; this row is the instrument, not the ruling. "
-            "WHAT THE ROW BUYS WHILE DEFERRED, since a deferred row gates nothing: the axis "
-            "is now VISIBLE. _print_deferred_rows names its arming surface, its cadence "
-            "member, its five operands and the EVAL-ROUND clock they are denominated in, on "
-            "every gate-12 run; and the flip to REQUIRED stays the one-field data edit §8.5 "
-            "claims, so the day G-3 is revisited the audit is already wired. Before this row "
-            "the honest description was that gate 12 had no opinion about the WR axis at "
-            "all — not a wrong one, none. "
-            "WHY THE CADENCE IS EVAL-ROUND AND NOT GATE-INTERVAL, which is R265 itself: WR "
-            "evidence arrives once per COMPLETED EVAL ROUND, so this row's earliest possible "
-            "fire is a count of ROUNDS times train.eval_interval. Judged in the training-step "
-            "clock — the clock every row was judged in before D38 — an eval_interval that "
-            "outruns the run reads perfectly healthy, because monitor.gate_interval says "
-            "nothing whatever about when this rule is evaluated. That is ADJ-D22's defect on "
-            "the axis LAW-15/F-30 names as the one that actually kills runs. "
-            "THE RING BEHIND IT (ADJ-D38's mechanism half, landed with this row): "
-            "step.py::on_eval_round_complete used to trim the WR ring to a literal depth of "
-            "5 while all three triggers refuse on len(history) >= their consec, so every "
-            "schema-legal wr_collapse_consecutive_evals or wr_rolling_consecutive_evals >= 6 "
-            "was armed-in-the-config and permanently unfireable. The literal is DELETED: the "
-            "capacity now derives from the minted consec keys and from rule B's own peak "
-            "window (monitor/rules.py::WR_PEAK_WINDOW_EVALS), which is the ONE thing the "
-            "depth was ALSO a semantic constant of and is therefore preserved exactly rather "
-            "than widened. Driven by tests/train/test_wr_gate_capacity.py; bit-identical for "
-            "every consec <= the old depth, which every committed config mints (2 and 3). "
-            "exit_code is None, truthfully and for the grad-norm row's reason: "
-            "_fire_hard_abort stops the run COOPERATIVELY and R84 authored a code for the "
-            "draw-rate family only. Inventing one for a warn-only rule would be that refused "
-            "class twice over. exit_code_for_abort therefore still answers None for "
-            "'sealbot_wr_abort' — now from the SECOND of its two truthful sources (a "
-            "registered row carrying None) rather than the first (no row at all). "
-            "RESIDUAL, disclosed: the EVAL_ROUND clock has a second switch a single "
-            "config_path cannot cover — eval_enabled false builds no eval pipeline, so the "
-            "axis ticks zero times whatever the interval is. Held by "
-            "test_minted_config_remint.py's per-config eval-leaf assertion, the same "
-            "disposition the terminal_eval_broken row takes for the same reason. "
-            "SECOND RESIDUAL, and it is UNRULED rather than closed: both consec knobs carry "
-            "ge=0, and consec 0 does NOT disable a trigger — history[-0:] is the WHOLE ring "
-            "in Python, so 0 arms a weaker-evidence variant that fires on however many evals "
-            "the ring holds (minimum 1, via the empty-history guard). ADJ-D38 raises 'a rule "
-            "that needs zero observations is not a rule' as an OPERATOR question and R265 "
-            "does not rule it, so no bound was moved here; _evals_to_first_fire's max(consec, "
-            "1) floor is the arithmetic stating the same fact. "
-            "The pin binds the fire site, so deleting the gate, renaming the rule or "
-            "reordering the disposition past it all break the R56 scan."
         ),
     ),
     ArmedAbort(

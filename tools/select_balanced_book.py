@@ -64,12 +64,15 @@ were one measurement and the verdicts are one replay's, not four.
 3. Append the printed lines to src/mantis/arena/books/manifest.toml; commit the book file and the
    manifest together (the book does not exist until this measurement ran).
 
-4. The bridge cell, recorded ONCE: the anchor vs sealbot_d5 at PUCT-256 on BOTH books, same games:
+4. The bridge cell, recorded ONCE: the anchor vs strix 256/256 (the external scale; the sealbot
+   cell went with the sealbot rung, R362(c)) on BOTH books, same games:
    [
-    {"label": "bridge_v1", "candidate": "$ANCHOR", "search_kind": "puct", "sims": 256, "games": 256,
-     "concurrency": 8, "opening_book": "book_v1_s20260625_p4"},
-    {"label": "bridge_v2", "candidate": "$ANCHOR", "search_kind": "puct", "sims": 256, "games": 256,
-     "concurrency": 8, "opening_book": "book_v2_p4"}
+    {"label": "bridge_v1", "candidate": "$ANCHOR", "opponent": "strix", "strix_sims": 256,
+     "search_kind": "puct", "sims": 256, "games": 256, "concurrency": 8,
+     "opening_book": "book_v1_s20260625_p4"},
+    {"label": "bridge_v2", "candidate": "$ANCHOR", "opponent": "strix", "strix_sims": 256,
+     "search_kind": "puct", "sims": 256, "games": 256, "concurrency": 8,
+     "opening_book": "book_v2_p4"}
    ]
    uv run python tools/strength_frontier.py --config configs/run7.yaml --cells $WORK/bridge.json \\
      --work-dir $WORK/bridge --parallel 1

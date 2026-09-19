@@ -43,15 +43,12 @@ def test_o9_sims_regime_parity(production_config):
     `tests/config/test_eval_config_remint.py::test_run3_parity_values_pinned`, against a NAMED
     config. What THIS test is about is the relation, and the relation is what it now asserts.
     """
-    for rung, value in (("random", production_config.eval.random_model_sims),
-                        ("sealbot", production_config.eval.sealbot_model_sims)):
-        assert resolve_eval_model_sims(rung, value) == value, (
-            f"the {rung} resolver did not hand back the shipped config value — an eval-only "
-            "re-derivation has appeared, which is the second-authority class O9 exists to refuse"
-        )
-    assert production_config.eval.random_model_sims != production_config.eval.sealbot_model_sims, (
-        "the two rungs' sims collapsed to one value, so a passthrough assertion could not tell "
-        "the two resolver arms apart"
+    # ONE config arm since R362(c) deleted `eval.sealbot_model_sims` with the sealbot rung; the
+    # strix cells' sims are the frontier tool's cell rows, not a config leaf.
+    value = production_config.eval.random_model_sims
+    assert resolve_eval_model_sims("random", value) == value, (
+        "the random resolver did not hand back the shipped config value — an eval-only "
+        "re-derivation has appeared, which is the second-authority class O9 exists to refuse"
     )
 
 

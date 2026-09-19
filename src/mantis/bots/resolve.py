@@ -33,9 +33,8 @@ _NO_DEPTH_REASON = (
 #: The grounds are arithmetic: depth 6 measured 30.900 s per first move (three book
 #: positions, 15.331-42.176), and at `games_max: 32` under `round_timeout_sec: 3600.0` the
 #: whole round budget buys ~3.6 opponent moves per game before the candidate has moved once.
-#: A rung that cannot finish produces a KILLED round, not a weaker bar. It is a skip rather
-#: than an unminted rung because the row is minted in all seven configs, so this is reversible
-#: by deleting one row. The strings are EXACT.
+#: A rung that cannot finish produces a KILLED round, not a weaker bar. A skip keyed on the
+#: depth, reversible by deleting one row. The strings are EXACT.
 _R326_EXCLUDED_SEALBOT_DEPTHS: dict[int, str] = {
     6: ("sealbot depth 6 cannot finish its minted games inside eval.round_timeout_sec at the "
         "measured 30.9 s/move — the whole round budget buys ~3.6 opponent moves per game. "

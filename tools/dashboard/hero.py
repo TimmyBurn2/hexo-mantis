@@ -6,7 +6,14 @@ from .health import HealthReading
 from .model import GAP_MARKER, Gaps, HeroCell
 from .reader import Record
 from .stats import elo_of_wr
-from .strength import RoundPoint, primary_rung, promotion_reading, trend
+from .strength import (
+    RUNG_RETIRED_NOTE,
+    RoundPoint,
+    primary_rung,
+    promotion_reading,
+    sealbot_readings_present,
+    trend,
+)
 
 
 def strength_now(rec: Record, series: dict[str, list[RoundPoint]], gaps: Gaps) -> HeroCell:
@@ -14,6 +21,9 @@ def strength_now(rec: Record, series: dict[str, list[RoundPoint]], gaps: Gaps) -
     played = [p for p in series.get(rung, []) if not p.broken and p.wr is not None]
     label = f"Strength now vs {rung}"
     if not played:
+        if rec.rows("eval_round_complete") and not sealbot_readings_present(rec):
+            gaps.mark("Strength now", RUNG_RETIRED_NOTE)
+            return HeroCell("Strength now", "—", "see the external points — " + GAP_MARKER, "absent")
         gaps.mark("Strength now", "no completed <code>eval_round_complete</code> row")
         return HeroCell(label, "—", GAP_MARKER, "absent")
     p = max(played, key=lambda q: q.step)
@@ -38,6 +48,9 @@ def trend_cell(rec: Record, series: dict[str, list[RoundPoint]], gaps: Gaps) -> 
     label = "Trend, Elo / 1k steps"
     fit = trend(series.get(primary_rung(rec), []))
     completed = len([p for p in series.get(primary_rung(rec), []) if not p.broken])
+    if fit is None and rec.rows("eval_round_complete") and not sealbot_readings_present(rec):
+        gaps.mark("Trend", RUNG_RETIRED_NOTE)
+        return HeroCell(label, "—", "no rung series to fit — " + GAP_MARKER, "absent")
     if fit is None:
         gaps.mark("Trend", f"the OLS Elo slope needs three completed rounds; {completed} in the record")
         return HeroCell(label, "—", f"{completed} rounds in window — {GAP_MARKER}", "absent")

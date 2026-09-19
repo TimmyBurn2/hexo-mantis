@@ -45,20 +45,18 @@ def test_round_emits_start_and_complete_wall_events() -> None:
 
     sink = _SpySink()
     started = emit_round_started(
-        sink, round_id="r000001_1000", step=1000, scheduled={"sealbot_d5": 8},
-        gate_scheduled=True, ts=1234.5,
+        sink, round_id="r000001_1000", step=1000, gate_scheduled=True, ts=1234.5,
     )
-    for key in ("round_id", "step", "scheduled", "gate_scheduled", "ts"):
+    for key in ("round_id", "step", "gate_scheduled", "ts"):
         assert key in started, f"eval_round_started missing {key!r}"
     assert started["round_id"] == "r000001_1000"
-    assert started["scheduled"] == {"sealbot_d5": 8}
     assert started["gate_scheduled"] is True
 
     complete = emit_round_complete(
         sink, round_id="r000001_1000", step=1000, wall_sec=12.5, games_total=88,
-        promoted=False, wr_sealbot=None,
+        promoted=False, gate=None,
     )
-    for key in ("round_id", "step", "wall_sec", "games_total", "promoted", "wr_sealbot"):
+    for key in ("round_id", "step", "wall_sec", "games_total", "promoted", "gate"):
         assert key in complete, f"eval_round_complete missing {key!r}"
     assert complete["wall_sec"] == 12.5 > 0
     assert complete["round_id"] == started["round_id"]
@@ -84,7 +82,7 @@ def test_round_complete_wall_sec_feeds_the_routed_result_key() -> None:
     sink = _SpySink()
     complete = emit_round_complete(
         sink, round_id="r000002_2000", step=2000, wall_sec=3.75, games_total=4,
-        promoted=True, wr_sealbot=0.5,
+        promoted=True, gate=None,
     )
     routed_result_wall_sec = complete["wall_sec"]  # the wiring caller's read-back
     assert routed_result_wall_sec == 3.75

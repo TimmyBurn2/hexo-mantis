@@ -12,7 +12,7 @@ from mantis.config.schema._base import StrictModel
 #: The OPERATIONAL CONSTANTS here carry schema defaults and leave the YAML: a key defaults when
 #: it names how the PROCESS is operated and no run has ever decided it differently. It stays
 #: REQUIRED where a run really chooses it — `gate_interval`, the actor-lag pair,
-#: `supervisor_kill_grace_sec`, the WR/axis/warn family — because those are ARMING.
+#: `supervisor_kill_grace_sec`, the axis/warn family — because those are ARMING.
 
 
 class DiskGuardConfig(StrictModel):
@@ -67,17 +67,6 @@ class MonitorSchemaConfig(StrictModel):
     collapse_threshold_nats: float = Field(ge=0)
     alert_grad_norm_max: float = Field(ge=0)
     alert_loss_increase_window: int = Field(ge=0)
-
-    # sealbot-WR trajectory instrument (monitor/rules.py)
-    wr_hard_abort_enabled: bool
-    wr_rolling_consecutive_evals: int = Field(ge=0)
-    wr_rolling_threshold: float = Field(ge=0)
-    wr_rolling_min_step: int = Field(ge=0)
-    wr_collapse_from_peak_ratio: float = Field(ge=0)
-    wr_collapse_min_step: int = Field(ge=0)
-    wr_collapse_consecutive_evals: int = Field(ge=0)
-    wr_early_death_threshold: float = Field(ge=0)
-    wr_early_death_min_step: int = Field(ge=0)
 
     # axis-distribution warn/alert (train/events.py::emit_axis_distribution)
     axis_warn: float = Field(ge=0)

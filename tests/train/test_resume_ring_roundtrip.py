@@ -39,7 +39,7 @@ def _stop(tmp_path: Path, buffer, *, round_counter: int = 4) -> Path:
         version=SIDECAR_VERSION, run_id="run6", step=750, checkpoint_filename=ckpt.name,
         ring=RingRef(path=str(ring_path), sha256=sha256_file(ring_path),
                      positions=int(buffer.size)),
-        round_counter=round_counter, last_p_hat={"sealbot_d5": 0.79},
+        round_counter=round_counter,
         anchor_sha256="a" * 64, rng=capture_rng_streams(),
     )
     write_resume_state(state, ckpt)
@@ -76,13 +76,12 @@ def test_the_ring_comes_back_and_it_is_the_same_ring(tmp_path: Path, mk_graph_bu
     )
 
 
-def test_the_round_counter_and_p_hat_survive(tmp_path: Path, mk_graph_buffer) -> None:
+def test_the_round_counter_survives(tmp_path: Path, mk_graph_buffer) -> None:
     """WITNESS 2, carried on the sidecar the restorer returns."""
     ckpt = _stop(tmp_path, mk_graph_buffer(n_records=3, capacity=_CAPACITY,
                                            encoding=_ENCODING), round_counter=7)
     state = _restore_resume_state(_fresh_buffer(), str(ckpt))
     assert state.round_counter == 7
-    assert state.last_p_hat == {"sealbot_d5": 0.79}
 
 
 def test_a_planted_ring_corruption_is_refused_before_it_reaches_the_ring(

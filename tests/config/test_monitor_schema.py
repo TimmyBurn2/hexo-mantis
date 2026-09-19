@@ -20,12 +20,7 @@ from mantis.monitor.config import MonitorConfig
 # behaviour change.
 VALID_MONITOR_SCALARS: dict = {
     "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-    "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-    "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-    "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-    "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-    "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
-    "axis_warn": 0.45, "axis_alert": 0.50,
+    "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
     "heartbeat_deadline_train_step_sec": 1800.0,
     "heartbeat_deadline_inference_dispatch_sec": 1800.0,
     "heartbeat_deadline_selfplay_drain_sec": 1800.0,
@@ -136,7 +131,7 @@ def test_monitor_gate_interval_is_required_and_at_least_one():
 
 def test_monitor_bound_examples_reject_negative_thresholds():
     # a representative (not exhaustive) sample of the >=0-domain fields.
-    for field in ("alert_entropy_min", "alert_grad_norm_max", "wr_rolling_threshold",
+    for field in ("alert_entropy_min", "alert_grad_norm_max", "axis_warn",
                   "heartbeat_poll_interval_sec", "supervisor_max_relaunches"):
         with pytest.raises(ValidationError):
             MonitorSchemaConfig.model_validate(_monitor(**{field: -1}))

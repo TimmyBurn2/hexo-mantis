@@ -1,11 +1,9 @@
 """ORACLE — the coordinator gate seam.
 
-The centrepiece: the sealbot-WR consumer lives at the ASYNC eval-RESULT seam
-`on_eval_round_complete(result)`, NEVER the eval kick return. The fake pipeline's kick returns an
-ack WITHOUT `wr_sealbot`, and the tests assert step() consumes NOTHING from it and makes ZERO
-blocking calls. Also covered: draw-rate gate wiring on the LIVE producer, the emission wiring,
-and the `train_step` heartbeat beats. The default `MonitorConfig` ships warn-only, so a sustained
-collapse emits a visible `sealbot_wr_warn` and does not stop the run.
+step() never consumes the eval KICK return and makes ZERO blocking eval calls (the sealbot-WR
+consumer that once sat at the async result seam left with the rung, R362(c); a completed round
+is routed to promotion by `drain._route_eval_result`). Also covered: draw-rate gate wiring on the
+LIVE producer, the emission wiring, and the `train_step` heartbeat beats.
 
 >300 justify: one coordinator seam, one set of fakes shared by every gate row; splitting the file
 would duplicate the harness and let the two halves drift apart.
@@ -26,7 +24,6 @@ from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
 from mantis.monitor.config import MonitorConfig
-from mantis.monitor.rules import check_sealbot_wr_hard_abort  # noqa: F401 — RED-at-import anchor
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
@@ -169,6 +166,7 @@ class FakeEvalPipeline:
         self.run_calls = 0
         self.drain_calls = 0
         self.poll_calls = 0
+        self.apply_calls = 0
 
     def run_evaluation(self, model, step, best, *, full_config, best_model_step,
                        ignore_stride=False) -> dict:
@@ -181,9 +179,13 @@ class FakeEvalPipeline:
 
     def poll_completed(self):
         # WP11-A: step()'s non-blocking poll at the top of every iteration. This fixture
-        # never has a completed round ready — the kick-return-is-never-consumed-for-WR
-        # invariant this test pins is entirely about the KICK ack, not this seam.
+        # never has a completed round ready — the kick-return-is-never-consumed invariant this
+        # test pins is entirely about the KICK ack, not this seam.
         self.poll_calls += 1
+        return None
+
+    def apply_gate_decision(self, result):
+        self.apply_calls += 1
         return None
 
 
@@ -258,19 +260,19 @@ def _drive_until_stopped(h, *, games_per_step=5, cap=12):
     return last
 
 
-# O-06 — sealbot at the ASYNC RESULT seam
+# O-06 — the kick return is an ACK, never a result
 def test_step_does_not_consume_the_kick_return_and_never_blocks() -> None:
-    """The eval KICK returns a collapse `wr_sealbot=0.01` that WOULD fire if wrongly consumed;
-    step() must NOT append it to `_wr_history`, must NOT fire, and must make ZERO blocking
-    calls. Bites a gate wired to the kick return, and a blocking eval re-entering step()."""
-    pipe = FakeEvalPipeline(kick_result={"step": 30000, "wr_sealbot": 0.01})
+    """The eval KICK returns a result-shaped ack (`promoted: True`) that WOULD apply a promotion
+    if wrongly consumed; step() must route nothing from it and make ZERO blocking calls. Bites a
+    consumer wired to the kick return, and a blocking eval re-entering step()."""
+    pipe = FakeEvalPipeline(kick_result={"step": 30000, "promoted": True})
     h = _make_coordinator(eval_pipeline=pipe)
     h.pool.games_completed = 5
     h.coord.step()
     assert pipe.run_calls >= 1, "the eval kick must have fired at the boundary"
     assert pipe.drain_calls == 0, "step() must make ZERO blocking drain calls"
-    assert list(getattr(h.coord, "_wr_history", [])) == [], (
-        "the kick return must NEVER be consumed for WR (the masked-dead-gate class)"
+    assert pipe.apply_calls == 0, (
+        "the kick return must NEVER be consumed as a round result (the masked-dead-gate class)"
     )
     assert h.shutdown.running is True, "no fire may come from the kick return"
 
@@ -296,7 +298,6 @@ class _KickSpy:
     def __init__(self) -> None:
         self.kicks: list[int] = []
         self.round_counter = 0
-        self.last_p_hat: dict[str, float] = {}
 
     def run_evaluation(self, model, step, best, *, full_config, best_model_step,
                        ignore_stride=False) -> dict:
@@ -364,68 +365,6 @@ def test_a_kick_record_past_the_boot_step_is_refused() -> None:
         h.coord.restore_eval_round_state(3001)
 
 
-def test_sealbot_default_is_warn_only_and_does_not_shut_down() -> None:
-    """The `sealbot_wr_warn` producer test on the SHIPPED DEFAULT posture: N consecutive
-    low-WR results delivered through the drain callback emit a VISIBLE warn carrying the
-    de-diagnosed trajectory fact and do NOT stop the run. Warn-only that emitted NOTHING would
-    be the silently-disabled class."""
-    h = _make_coordinator()                          # default MonitorConfig() = warn-only
-    assert h.coord.monitor_cfg.wr_hard_abort_enabled is False, "shipped default is warn-only"
-    for _ in range(3):                              # 3 consecutive < 0.05 past min_step 15000
-        h.coord.on_eval_round_complete({"step": 30000, "wr_sealbot": 0.01})
-    assert h.shutdown.running is True, "warn-only must NOT stop the run (operator G-3)"
-    assert h.sink.named("hard_abort") == [], "warn-only must emit no hard_abort"
-    warns = h.sink.named("sealbot_wr_warn")
-    assert warns, "a sustained collapse must emit a VISIBLE sealbot_wr_warn (never silent)"
-    msg = " ".join(str(e) for e in warns)
-    assert "Objective-A" in msg and "Objective-B" in msg, (
-        "the warn message must be DE-DIAGNOSED (name BOTH mechanisms, assert neither): " + msg
-    )
-    # The warn is COUNTED (LAW-18), incrementing each round the collapse persists —
-    # here round 2 (trigger A, 2 consecutive) and round 3 (trigger C) both warn.
-    assert warns[-1]["warn_total"] == len(warns) == 2
-
-
-def test_sealbot_hard_abort_capability_when_enabled() -> None:
-    """DECISION-PARITY CAPABILITY: with the one-field flip the SAME results fire the hard abort
-    exactly as before — running=False plus a de-diagnosed `hard_abort` event. The triggers are
-    unchanged; only the DEFAULT disposition moved."""
-    h = _make_coordinator(monitor_cfg=MonitorConfig(wr_hard_abort_enabled=True))
-    for _ in range(3):
-        h.coord.on_eval_round_complete({"step": 30000, "wr_sealbot": 0.01})
-    assert h.shutdown.running is False, "with the flag True a sustained collapse must hard-abort"
-    aborts = h.sink.named("hard_abort")
-    assert aborts and aborts[-1]["rule"] == "sealbot_wr_abort"
-    msg = " ".join(str(e) for e in aborts)
-    assert "HARD-ABORT" in msg and "Objective-A" in msg and "Objective-B" in msg
-    assert h.sink.named("sealbot_wr_warn") == [], "the hard path must not also warn"
-
-
-def test_sealbot_single_low_result_does_not_fire_or_warn() -> None:
-    """O-06 — a single low result (a recovering dip) is not a sustained collapse: it must NOT
-    fire AND must NOT warn (no trajectory event at all). Bites a warn on a single dip."""
-    h = _make_coordinator()
-    h.coord.on_eval_round_complete({"step": 30000, "wr_sealbot": 0.5})
-    h.coord.on_eval_round_complete({"step": 31000, "wr_sealbot": 0.5})
-    h.coord.on_eval_round_complete({"step": 32000, "wr_sealbot": 0.01})  # one dip
-    assert h.shutdown.running is True
-    assert h.sink.named("sealbot_wr_warn") == [], "a single dip must not warn"
-
-
-def test_sealbot_absent_key_skips_and_counts() -> None:
-    """A result with `wr_sealbot` absent/None gives exactly one `sealbot_wr_gate_skipped` event
-    per delivered round plus a counter, and ZERO fires: the inert gate is loud, never silently
-    dead."""
-    h = _make_coordinator()
-    h.coord.on_eval_round_complete({"step": 30000})                 # no wr_sealbot
-    h.coord.on_eval_round_complete({"step": 31000, "wr_sealbot": None})
-    skips = h.sink.named("sealbot_wr_gate_skipped")
-    assert len(skips) == 2, "one skip event per delivered round with an absent/None key"
-    assert h.shutdown.running is True, "a skipped round must never fire"
-
-
-# O-03 — draw-rate gate WIRING (LIVE producer, log_interval cadence)
-# (O-04 stride5-spam gate REMOVED at close-out per operator directive B.)
 def test_draw_rate_gate_fires_on_live_producer() -> None:
     """The `draw_rate_collapse` producer test, keyed on the LIVE pooled rate and never on a NaN
     draw-target phantom: a sustained 0.9 pooled rate over sufficient evidence, past min_step,
@@ -471,19 +410,18 @@ def test_guard_state_round_trips_through_json_and_tolerates_an_empty_one() -> No
     import json
 
     h = _make_coordinator()
-    h.coord._wr_history = [(3000, 0.4), (6000, 0.3)]
-    h.coord._wr_history_rung = "sealbot_d5"
     h.coord._consec_high_gn = 2
     h.coord._initial_policy_loss = 2.5
     h.trainer.skipped_steps = 4
     state = json.loads(json.dumps(h.coord.guard_state()))
     other = _make_coordinator()
     other.coord.restore_guard_state(state)
-    assert other.coord._wr_history == [(3000, 0.4), (6000, 0.3)]
-    assert other.coord._wr_history_rung == "sealbot_d5"
     assert other.coord._consec_high_gn == 2 and other.coord._initial_policy_loss == 2.5
     assert other.trainer.skipped_steps == 4
     other.coord.restore_guard_state({})  # a pre-field sidecar: nothing to restore, nothing raised
+    # A pre-R362 sidecar's sealbot ring is ignored, not refused.
+    other.coord.restore_guard_state({"wr_history": [[3000, 0.4]], "wr_history_rung": "sealbot_d5"})
+    assert not hasattr(other.coord, "_wr_history")
 
 
 def test_draw_rate_gate_default_off_does_not_fire() -> None:
@@ -668,17 +606,6 @@ def test_step_loop_beats() -> None:
 
 
 # ══ RED-TEAM F12 / F9 — the result seam's step stamping + the watchdog counter consumer ═
-def test_sealbot_result_at_step_zero_is_not_rewritten() -> None:
-    """`payload.get("step") or self._train_step` rewrote a legitimate step 0 (falsy) to the
-    current train step, mis-stamping the WR ring. Absence, not falsiness, selects the fallback."""
-    h = _make_coordinator()
-    h.coord._train_step = 777
-    h.coord.on_eval_round_complete({"step": 0, "wr_sealbot": 0.25})
-    assert list(h.coord._wr_history) == [(0, 0.25)], (
-        f"a step-0 result must keep step 0, got {list(h.coord._wr_history)}"
-    )
-
-
 def test_monitor_gates_publishes_the_watchdog_best_effort_counters() -> None:
     """`BestEffortCounters` had ZERO consumers despite documenting `snapshot()` as what the
     in-run summary events publish — a dead surface. The `monitor_gates` summary carries it now,

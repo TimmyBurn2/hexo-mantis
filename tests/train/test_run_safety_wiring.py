@@ -82,7 +82,6 @@ def _fake_coord(*, watchdog, pipeline, sink):
         config=SimpleNamespace(terminal_eval_enabled=False),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         _train_step=1000, _sink=sink, eval_model=object(), full_config={},
-        on_eval_round_complete=lambda result: None,
     )
 
 
@@ -168,25 +167,8 @@ def test_monitor_config_is_frozen_with_no_lenient_from_dict() -> None:
     assert dataclasses.is_dataclass(MonitorConfig)
     cfg = MonitorConfig()
     with pytest.raises(dataclasses.FrozenInstanceError):
-        cfg.wr_rolling_threshold = 0.99  # type: ignore[misc]
+        cfg.alert_grad_norm_max = 0.99  # type: ignore[misc]
     assert not hasattr(MonitorConfig, "from_dict"), "the lenient from_dict must not survive"
-
-
-def test_monitor_config_carries_old_lineage_sealbot_defaults() -> None:
-    """The sealbot-WR thresholds are the old lineage values verbatim, shipped WARN-ONLY."""
-    cfg = MonitorConfig()
-    assert cfg.wr_hard_abort_enabled is False, "operator G-3: ships warn-only, not hard-abort"
-    assert MonitorConfig(wr_hard_abort_enabled=True).wr_hard_abort_enabled is True, (
-        "the hard-abort remains available via the one-field flip"
-    )
-    assert cfg.wr_rolling_threshold == 0.10
-    assert cfg.wr_rolling_consecutive_evals == 2
-    assert cfg.wr_rolling_min_step == 20000
-    assert cfg.wr_collapse_from_peak_ratio == 0.5
-    assert cfg.wr_collapse_min_step == 25000
-    assert cfg.wr_collapse_consecutive_evals == 3
-    assert cfg.wr_early_death_threshold == 0.05
-    assert cfg.wr_early_death_min_step == 15000
 
 
 def _top_level_imports(tree: ast.Module) -> list[str]:
@@ -279,10 +261,13 @@ def test_build_run_safety_requires_an_explicit_wiring_declaration() -> None:
 
 
 class _RecordingCoord(SimpleNamespace):
+    """`routed` records every result the drain applied a promotion for: since R362(c) the
+    promotion seam is the ONE consumer a routed round has."""
+
     def __init__(self, **kw) -> None:
         super().__init__(**kw)
         self.routed: list = []
-        self.on_eval_round_complete = self.routed.append
+        self.eval_pipeline.apply_gate_decision = self.routed.append
 
 
 def _drain_coord(result, sink):
@@ -297,10 +282,10 @@ def _drain_coord(result, sink):
 
 
 def test_a_batch_of_eval_rounds_is_routed_not_dropped() -> None:
-    """Every Mapping in a batched drain reaches the handler — a dropped batch takes the
-    sealbot gate's only feed path quiet."""
+    """Every promoted Mapping in a batched drain reaches the promotion seam — a dropped batch
+    takes the anchor's only feed path quiet."""
     sink = SpySink()
-    rounds = [{"step": 1, "wr_sealbot": 0.4}, {"step": 2, "wr_sealbot": 0.5}]
+    rounds = [{"step": 1, "promoted": True}, {"step": 2, "promoted": True}]
     coord = _drain_coord(rounds, sink)
     drain.flush_pending_eval(coord)
     assert coord.routed == rounds, "every completed round in a batch must be routed"

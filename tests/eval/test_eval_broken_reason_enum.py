@@ -33,7 +33,6 @@ _CENSUSED_REASONS = {
     "exit_nonzero",
     "result_missing",
     "result_invalid",
-    "ladder_persist_failed",
     "round_completion_error",
     "abandoned",
 }

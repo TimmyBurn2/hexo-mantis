@@ -16,28 +16,22 @@ _LOG = logging.getLogger(__name__)
 
 
 def _route_eval_result(coord: Any, result: Any) -> Any:
-    """Route completed eval-round result(s) through `on_eval_round_complete`, then apply any
-    promotion decision.
+    """Route completed eval-round result(s) to their promotion decision — the ONE consumer a
+    routed round has since R362(c) retired the sealbot-WR gate.
 
     A `Mapping` is ONE round, a list/tuple a BATCH, and any other shape is recorded loud rather
     than raised: a raise here escapes into `close_out` and skips `on_drained` (`pool.stop`) and
     the terminal eval, which is worse than a recorded drop.
     """
-    handler = getattr(coord, "on_eval_round_complete", None)
     if result is None:
         return result
-    if handler is None:
-        _unroutable(coord, result, "coordinator has no on_eval_round_complete handler")
-        return result
     if isinstance(result, Mapping):
-        handler(cast("Mapping[str, Any]", result))
         _apply_promotion(coord, result)
         return result
     if isinstance(result, (list, tuple)):
         rounds = cast("Sequence[Any]", result)
         for item in rounds:
             if isinstance(item, Mapping):
-                handler(cast("Mapping[str, Any]", item))
                 _apply_promotion(coord, item)
             else:
                 _unroutable(coord, item, "batch element is not a result mapping")
@@ -64,7 +58,7 @@ def _apply_promotion(coord: Any, result: Any) -> None:
 
 
 def _unroutable(coord: Any, result: Any, reason: str) -> None:
-    """A result the sealbot seam cannot consume is RECORDED, never dropped in silence."""
+    """A result the promotion seam cannot consume is RECORDED, never dropped in silence."""
     _LOG.error("eval_result_unroutable reason=%s type=%s", reason, type(result).__name__)
     emit_via(getattr(coord, "_sink", None), {
         "event": "eval_result_unroutable",

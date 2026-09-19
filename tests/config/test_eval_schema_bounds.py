@@ -2,17 +2,16 @@
 # each contributing one out-of-domain rejection and one in-domain boundary acceptance, so the
 # length tracks the field count rather than any logic. NOT covered: the two `Block | None`
 # postures, whose bounds need an ARMED fixture (tests/config/test_eval_posture_schema.py).
-"""Numeric-bounds validation on the eval/gate/ladder schema fields.
+"""Numeric-bounds validation on the eval/gate schema fields.
 
-Pre-fix, `random_model_sims=-5`, a `bootstrap_ci_level` outside `(0,1)` and
-`gate.promotion_winrate=2.0` all loaded SILENTLY — crashing `np.quantile` inside a worker,
-inverting a CI, or disabling promotion forever. Every case is parametrized: one out-of-domain
+Pre-fix, `random_model_sims=-5` and `gate.promotion_winrate=2.0` loaded SILENTLY — crashing
+`np.quantile` inside a worker or disabling promotion forever. Every case is parametrized: one out-of-domain
 value raises a `ValidationError` naming the field, one in-domain boundary value loads clean.
 
 The two timeout fields were floor-only bounds that admitted a REAL `.inf` YAML literal end to
-end, which reproduced a silent poller death through `Process.join(float("inf"))`. They and
-`ladder.bt_prior_games` now carry `allow_inf_nan=False`, and the timeouts a join depends on
-carry a finite ceiling.
+end, which reproduced a silent poller death through `Process.join(float("inf"))`. They now carry
+`allow_inf_nan=False` and a finite ceiling. (The `eval.ladder` rows this file also bounded were
+deleted with the sealbot rung, R362(c).)
 """
 from __future__ import annotations
 
@@ -34,26 +33,6 @@ def _gate(**overrides: Any) -> dict:
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
         bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
-    )
-    base.update(overrides)
-    return base
-
-
-def _rung(**overrides: Any) -> dict:
-    base = dict(
-        name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
-        opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32,
-    )
-    base.update(overrides)
-    return base
-
-
-def _ladder(**overrides: Any) -> dict:
-    base = dict(
-        rungs=[_rung()], round_games=64, min_games_per_active_rung=4,
-        graduation_wr_lower_ci=0.75, graduation_consec_rounds=3, activation_wr_lower_ci=0.65,
-        calibration_every_k_rounds=4, calibration_games=8, bootstrap_resamples=1000,
-        bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
     )
     base.update(overrides)
     return base
@@ -98,11 +77,7 @@ def _monitor_block() -> dict:
         # the ARMING cadence, schema-only and required
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-        "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-        "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-        "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-        "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
+        "alert_loss_increase_window": 3,
         "axis_warn": 0.45, "axis_alert": 0.50,
         "heartbeat_deadline_train_step_sec": 1800.0,
         "heartbeat_deadline_inference_dispatch_sec": 1800.0,
@@ -123,8 +98,8 @@ def _monitor_block() -> dict:
 
 def _payload(**eval_overrides: Any) -> dict:
     eval_block = dict(
-        random_model_sims=96, sealbot_model_sims=128, random_floor_games=4, worker_device="cuda",
-        round_timeout_sec=3600.0, worker_kill_grace_sec=10.0, gate=_gate(), ladder=_ladder(),
+        random_model_sims=96, random_floor_games=4, worker_device="cuda",
+        round_timeout_sec=3600.0, worker_kill_grace_sec=10.0, gate=_gate(),
         ply_cap_adjudication=None, strength_floor=None, max_plies=128,
     )
     eval_block.update(eval_overrides)
@@ -150,10 +125,7 @@ def _set_path(payload: dict, path: "tuple[str, ...]", value: Any) -> dict:
     payload = copy.deepcopy(payload)
     node = payload["eval"]
     for key in path[:-1]:
-        if key == "rungs0":
-            node = node["ladder"]["rungs"][0]
-        else:
-            node = node[key]
+        node = node[key]
     last = path[-1]
     node[last] = value
     return payload
@@ -171,16 +143,6 @@ def test_random_model_sims_negative_is_rejected_not_silently_loaded() -> None:
     assert "random_model_sims" in str(ei.value)
 
 
-def test_bootstrap_ci_level_out_of_unit_interval_is_rejected_not_silently_loaded() -> None:
-    """`bootstrap_ci_level = 1.5` crashes `np.quantile` in a worker; `-0.1` silently inverts."""
-    for bad in (1.5, -0.1, 0.0, 1.0):
-        payload = _payload()
-        payload["eval"]["ladder"]["bootstrap_ci_level"] = bad
-        with pytest.raises(ValidationError) as ei:
-            _validate(payload)
-        assert "bootstrap_ci_level" in str(ei.value), f"bootstrap_ci_level={bad} must be named"
-
-
 def test_promotion_winrate_above_one_is_rejected_not_silently_loaded() -> None:
     """`promotion_winrate = 2.0` loaded clean and disabled promotion forever."""
     payload = _payload()
@@ -190,13 +152,11 @@ def test_promotion_winrate_above_one_is_rejected_not_silently_loaded() -> None:
     assert "promotion_winrate" in str(ei.value)
 
 
-# Every bounded numeric field, out-of-domain + in-domain. Paths are relative to `eval`; "rungs0"
-# addresses eval.ladder.rungs[0].
+# Every bounded numeric field, out-of-domain + in-domain. Paths are relative to `eval`.
 _OUT_OF_DOMAIN_CASES = [
     # EvalConfig
     (("random_model_sims",), 0, "eval.random_model_sims"),
     (("random_model_sims",), -5, "eval.random_model_sims"),
-    (("sealbot_model_sims",), 0, "eval.sealbot_model_sims"),
     (("random_floor_games",), -1, "eval.random_floor_games"),
     (("round_timeout_sec",), 0.0, "eval.round_timeout_sec"),
     (("round_timeout_sec",), -1.0, "eval.round_timeout_sec"),
@@ -222,19 +182,6 @@ _OUT_OF_DOMAIN_CASES = [
     (("gate", "bootstrap_resamples"), 0, "eval.gate.bootstrap_resamples"),
     (("gate", "min_distinct_per_pair"), 0, "eval.gate.min_distinct_per_pair"),
     # LadderConfig
-    (("ladder", "round_games"), 0, "eval.ladder.round_games"),
-    (("ladder", "min_games_per_active_rung"), -1, "eval.ladder.min_games_per_active_rung"),
-    (("ladder", "calibration_games"), 0, "eval.ladder.calibration_games"),
-    (("ladder", "bootstrap_resamples"), 0, "eval.ladder.bootstrap_resamples"),
-    (("ladder", "bootstrap_ci_level"), 1.5, "eval.ladder.bootstrap_ci_level"),
-    (("ladder", "bootstrap_ci_level"), -0.1, "eval.ladder.bootstrap_ci_level"),
-    (("ladder", "bt_prior_games"), -1.0, "eval.ladder.bt_prior_games"),
-    (("ladder", "bt_prior_games"), float("inf"), "eval.ladder.bt_prior_games"),
-    (("ladder", "bt_prior_games"), float("-inf"), "eval.ladder.bt_prior_games"),
-    (("ladder", "bt_prior_games"), float("nan"), "eval.ladder.bt_prior_games"),
-    # LadderRung (rungs[0])
-    (("rungs0", "depth"), 0, "eval.ladder.rungs.0.depth"),
-    (("rungs0", "games_max"), 0, "eval.ladder.rungs.0.games_max"),
 ]
 
 
@@ -255,14 +202,12 @@ def test_out_of_domain_value_raises_named_validation_error(
 
 _IN_DOMAIN_BOUNDARY_CASES = [
     (("random_model_sims",), 1),
-    (("sealbot_model_sims",), 1),
     (("random_floor_games",), 0),
     (("round_timeout_sec",), 0.001),
     (("worker_kill_grace_sec",), 0.0),
     # The exact ceiling must still load: the fix rejects only non-finite/above-ceiling values.
     (("round_timeout_sec",), _EVAL_TIMEOUT_CEILING_SEC),
     (("worker_kill_grace_sec",), _EVAL_TIMEOUT_CEILING_SEC),
-    (("ladder", "bt_prior_games"), 1e18),
     (("gate", "stride"), 1),
     (("gate", "screen_games"), 1),
     (("gate", "confirm_games"), 1),
@@ -273,15 +218,6 @@ _IN_DOMAIN_BOUNDARY_CASES = [
     (("gate", "deploy_sims"), 1),
     (("gate", "bootstrap_resamples"), 1),
     (("gate", "min_distinct_per_pair"), 1),
-    (("ladder", "round_games"), 1),
-    (("ladder", "min_games_per_active_rung"), 0),
-    (("ladder", "calibration_games"), 1),
-    (("ladder", "bootstrap_resamples"), 1),
-    (("ladder", "bootstrap_ci_level"), 0.001),
-    (("ladder", "bootstrap_ci_level"), 0.999),
-    (("ladder", "bt_prior_games"), 0.0),
-    (("rungs0", "depth"), 1),
-    (("rungs0", "games_max"), 1),
 ]
 
 
@@ -296,7 +232,6 @@ def test_valid_payload_still_loads_after_bounds_added() -> None:
     """Sanity anchor: the bounds must never reject a legitimate, already-shipped config shape."""
     cfg = RunConfig.model_validate(_payload())
     assert cfg.eval.gate.promotion_winrate == 0.55
-    assert cfg.eval.ladder.bootstrap_ci_level == 0.95
 
 
     # The ORIGINAL repro shape: a genuine YAML document, not a hand-constructed Python float.
@@ -343,22 +278,11 @@ def test_original_f_rt2_1_repro_ceiling_boundary_still_loads() -> None:
     assert cfg.eval.worker_kill_grace_sec == _EVAL_TIMEOUT_CEILING_SEC
 
 
-def test_bt_prior_games_rejects_non_finite_via_real_yaml_document() -> None:
-    """An `inf` `bt_prior_games` degrades every rating and `p_hat` in `fit_bt` to NaN."""
-    payload = _yaml_doc_with_eval_override("bt_prior_games_probe", ".inf")
-    bad_value = payload["eval"].pop("bt_prior_games_probe")
-    payload["eval"]["ladder"]["bt_prior_games"] = bad_value
-    with pytest.raises(ValidationError) as ei:
-        _validate(payload)
-    assert "bt_prior_games" in str(ei.value)
-
-
 def test_minted_configs_still_load_after_f_rt2_1_bounds() -> None:
     """The fix must never require re-minting a shipped config."""
     payload = _payload()  # mirrors the minted-config values verbatim (see docstring)
     assert payload["eval"]["round_timeout_sec"] == 3600.0
     assert payload["eval"]["worker_kill_grace_sec"] == 10.0
-    assert payload["eval"]["ladder"]["bt_prior_games"] == 1.0
     _validate(payload)  # must not raise
 
 

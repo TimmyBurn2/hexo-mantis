@@ -1,23 +1,22 @@
-# >300 justify (R8). The seven eval-failure routes are ONE claim — each route yields its OWN
+# >300 justify (R8). The eval-failure routes are ONE claim — each route yields its OWN
 # typed reason, its own phase, one emitted event agreeing with the routed result, and a
 # traceback where an exception was in flight — driven over ONE harness. The fake-process /
-# fake-context / spy-sink rig plus the seven-route driver is the majority of the file and every
+# fake-context / spy-sink rig plus the route driver is the majority of the file and every
 # row needs all of it; R5 bars cross-test imports, so a split forks that rig into two copies
 # which drift while both stay green.
 """Every eval-failure route produces its OWN typed reason, and the stream says which.
 
 The defect: every broken round used to route a bare `str` reason that nothing in `src/` read,
-so the seven failures were indistinguishable to anything but a human reading a log line — and
-the LAW-14 `ladder_persist_failed` route had ZERO tests and ZERO doc mentions in the tree.
+so the failures were indistinguishable to anything but a human reading a log line. (The
+`ladder_persist_failed` route left with the sealbot rung, R362(c).)
 
 Per-oracle mutations: M-O2 swap two reasons; M-O3 collapse two members onto one value; M-O4
-emit `phase="drain"` for `result_missing`; M-O15 `except LadderStateError: pass`; M-O30a/b
-downgrade `_LOG.exception` to `_LOG.error`; M-O31 derive the event's `reason` from a second
-local. Each row names the one it is the only witness to.
+emit `phase="drain"` for `result_missing`; M-O30a downgrade `_LOG.exception` to `_LOG.error`;
+M-O31 derive the event's `reason` from a second local. Each row names the one it is the only
+witness to.
 
 REAL: the shipped `EvalPipeline`, its `_finalize_round` / `_read_worker_result` /
-`_broken_result` / `_success_result` chain, a real `LadderState`, real emission and a real
-round-result mapping. FAKE: the worker SUBPROCESS (an injected fake `multiprocessing` context,
+`_broken_result` / `_success_result` chain, real emission and a real round-result mapping. FAKE: the worker SUBPROCESS (an injected fake `multiprocessing` context,
 the house rig kept as a private copy) and, on two routes, a monkeypatched raise — spawning real
 subprocesses would trade determinism for nothing, since the subject is the reason assembly.
 """
@@ -32,9 +31,8 @@ from typing import Any
 
 import pytest
 
-from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
-from mantis.eval.errors import EvalBrokenReason, LadderStateError  # RED-at-import anchor
-from mantis.eval.ladder import LadderState
+from mantis.config.schema import EvalConfig, GateConfig
+from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.encoding import lookup
@@ -42,7 +40,7 @@ from mantis.model import GnnArch, build_net
 
 _GSPEC = lookup("gnn_axis_v1")
 
-#: The seven routes, each with the member it must produce and the phase that member forces.
+#: The routes, each with the member it must produce and the phase that member forces.
 #: Stated here rather than derived from the enum under test, which any consistent renaming
 #: would satisfy.
 _ROUTE_REASON = {
@@ -51,7 +49,6 @@ _ROUTE_REASON = {
     "exit_nonzero": "exit_nonzero",
     "result_missing": "result_missing",
     "result_invalid": "result_invalid",
-    "ladder_persist_failed": "ladder_persist_failed",
     "round_completion_error": "round_completion_error",
     "abandoned": "abandoned",
 }
@@ -61,19 +58,10 @@ _ROUTE_PHASE = {
     "exit_nonzero": "worker_exit",
     "result_missing": "worker_exit",
     "result_invalid": "worker_exit",
-    "ladder_persist_failed": "ladder_persist",
     "round_completion_error": "round_completion",
     "abandoned": "abandon",
 }
 _ROUTES = tuple(_ROUTE_REASON)
-
-#: A worker sidecar result that satisfies `validate_worker_result` — the ONLY way to reach
-#: `_success_result`, which is where the ladder-persist route lives.
-_VALID_WORKER_RESULT = {
-    "step": 1000, "gate": None, "rungs": {}, "skipped_rungs": [],
-    "random": {"games": 0, "wr": None}, "worker_pid": 7,
-}
-
 
 def _tiny_model():
     arch = GnnArch(in_dim=int(_GSPEC.node_feat_dim), edge_dim=int(_GSPEC.edge_feat_dim),
@@ -84,24 +72,14 @@ def _tiny_model():
 
 
 def _eval_cfg() -> EvalConfig:
-    rungs = [
-        LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
-                   opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32),
-    ]
     gate = GateConfig(
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
         bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
     )
-    ladder = LadderConfig(
-        rungs=rungs, round_games=64, min_games_per_active_rung=4,
-        graduation_wr_lower_ci=0.75, graduation_consec_rounds=3, activation_wr_lower_ci=0.65,
-        calibration_every_k_rounds=4, calibration_games=8, bootstrap_resamples=1000,
-        bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
-    )
     return EvalConfig(
-        random_model_sims=96, max_plies=128, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate, ladder=ladder,
+        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
+        round_timeout_sec=5.0, worker_kill_grace_sec=0.2, gate=gate,
         ply_cap_adjudication=None, strength_floor=None,
     )
 
@@ -214,7 +192,6 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
         ),
         encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        ladder_state_path=tmp_path / "ladder_state.json",
         # The pipeline resolves the fused-forward memory bound ONCE in the parent and carries
         # it to every `RoundSpec` — the eval child is a SECOND allocator on the same card that
         # no in-process bound can see. `None` is the GRID arm, written out rather than omitted.
@@ -248,14 +225,6 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
         elif route == "result_invalid":
             proc.alive, proc.exitcode = False, 0
             result_path.write_text(json.dumps({"step": 1000}))   # contract keys missing
-        elif route == "ladder_persist_failed":
-            proc.alive, proc.exitcode = False, 0
-            result_path.write_text(json.dumps(_VALID_WORKER_RESULT))
-
-            def _persist_boom(self: Any, path: Any) -> None:
-                raise LadderStateError(f"simulated persistence fault writing {path}")
-
-            monkeypatch.setattr(LadderState, "save", _persist_boom)
         elif route == "abandoned":
             proc.alive = True                       # a live round a resumable stop abandons
         else:  # round_completion_error
@@ -297,7 +266,7 @@ def test_each_route_yields_its_own_typed_reason(route, tmp_path, monkeypatch) ->
 
 def test_the_emitted_reasons_are_pairwise_distinct(tmp_path, monkeypatch) -> None:
     """O-03. The "distinguishable from each other" leg, taken in the EVENT STREAM. The rc
-    taxonomy is many-to-one by decision — all seven map to 48 — so if the emitted `reason`
+    taxonomy is many-to-one by decision — every member maps to 48 — so if the emitted `reason`
     values ever collide, nothing separates a killed worker from a garbage result. Reads the
     EMITTED values, so a collision introduced on the emit side alone is still caught."""
     emitted = {}
@@ -348,34 +317,6 @@ def test_the_emitted_event_reason_equals_the_routed_result_reason(tmp_path, monk
         )
 
 
-def test_a_ladder_persist_failure_is_a_named_broken_round_and_is_never_swallowed(
-    tmp_path, monkeypatch
-) -> None:
-    """O-15. `ladder_persist_failed` is a LAW-14 persistence-fatal route that had ZERO tests at
-    HEAD, and it is reachable: `LadderState.save` wraps `OSError` into `LadderStateError`.
-
-    The failure must be NAMED, must ROUTE a broken round, and the games already played must not
-    be reported as a success — the on-disk ladder state did not durably advance, so a success
-    drifts memory ahead of disk. MUTATION (M-O15): `except LadderStateError: pass`.
-    """
-    drive = _drive("ladder_persist_failed", tmp_path, monkeypatch)
-
-    assert drive.result["eval_broken_reason"] is EvalBrokenReason.LADDER_PERSIST_FAILED, (
-        "a persistence fault must surface as its OWN reason, never as a generic break — "
-        f"got {drive.result['eval_broken_reason']!r}"
-    )
-    assert drive.result["promoted"] is False, (
-        "a round whose ladder state never reached disk must not promote off it"
-    )
-    event = drive.broken_event()
-    assert event["phase"] == "ladder_persist", (
-        f"the phase names WHERE it broke; got {event['phase']!r}"
-    )
-    assert drive.sink.named("eval_round_complete"), (
-        "the round still completes loudly — LAW-14 is fail-loud, not fail-silent"
-    )
-
-
 def test_the_round_completion_route_logs_a_traceback_and_the_detail(
     tmp_path, monkeypatch, caplog
 ) -> None:
@@ -412,29 +353,3 @@ def test_the_round_completion_route_logs_a_traceback_and_the_detail(
         f"{[r.getMessage() for r in records]}"
     )
     assert drive.result["eval_broken_reason"] is EvalBrokenReason.ROUND_COMPLETION_ERROR
-
-
-def test_the_ladder_persist_route_logs_a_traceback_and_the_detail(
-    tmp_path, monkeypatch, caplog
-) -> None:
-    """O-30, arm 2 (ladder_persist_failed). The sibling route, and the shape both adopt: log
-    with `_LOG.exception` at the RAISING site, then call the one emitter. MUTATION (M-O30b):
-    downgrade it. O-15 stays green, which is why this arm is separate."""
-    with caplog.at_level(logging.ERROR, logger="mantis.eval.pipeline"):
-        drive = _drive("ladder_persist_failed", tmp_path, monkeypatch)
-
-    records = [r for r in caplog.records if r.name == "mantis.eval.pipeline"]
-    with_traceback = [r for r in records if r.exc_info is not None]
-    assert with_traceback, (
-        "a LAW-14 persistence fault must log its traceback — the OSError chain underneath "
-        f"`LadderStateError` is the only thing that says which write failed; captured: "
-        f"{[r.getMessage() for r in records]}"
-    )
-    assert any("LadderStateError" in repr(r.exc_info) for r in with_traceback), (
-        f"the traceback must be the persistence fault's: {[repr(r.exc_info) for r in with_traceback]}"
-    )
-    assert any("eval_broken" in r.getMessage() for r in records), (
-        "…and the emitter's own ERROR line is still present beside it: "
-        f"{[r.getMessage() for r in records]}"
-    )
-    assert drive.result["eval_broken_reason"] is EvalBrokenReason.LADDER_PERSIST_FAILED

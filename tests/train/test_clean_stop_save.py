@@ -692,12 +692,11 @@ class _AbandoningPipeline:
     def __init__(self, order: list[str]) -> None:
         self.order = order
         self.round_counter = 1
-        self.last_p_hat: dict[str, float] = {}
 
     def abandon_pending(self):
         self.order.append("abandon_pending")
         return {"step": 5, "promoted": True, "promoted_step": 5, "eval_broken_reason": "killed",
-                "gate_verdict_partial": True, "wr_sealbot": None, "gate": {"promoted": True}}
+                "gate_verdict_partial": True, "gate": {"promoted": True}}
 
     def drain_pending(self):
         return None
@@ -717,7 +716,6 @@ def _stop_leg_harness(shutdown: ShutdownState):
     h.coord.eval_pipeline = _AbandoningPipeline(order)
     real_persist = h.coord.persist_resume_state
     h.coord.persist_resume_state = lambda p: order.append("persist_resume_state")
-    h.coord.on_eval_round_complete = lambda result: order.append("on_eval_round_complete")
     return h, order, real_persist
 
 
@@ -727,8 +725,7 @@ def test_the_O3_leg_settles_the_inflight_round_BEFORE_the_bundle_hashes_the_anch
     h, order, _ = _stop_leg_harness(shutdown)
     shutdown.shutdown_save = True
     h.coord.step()
-    assert order == ["abandon_pending", "on_eval_round_complete", "apply_gate_decision",
-                     "persist_resume_state"], order
+    assert order == ["abandon_pending", "apply_gate_decision", "persist_resume_state"], order
 
 
 def test_the_loop_leg_settles_the_inflight_round_BEFORE_the_bundle_too() -> None:
@@ -737,8 +734,8 @@ def test_the_loop_leg_settles_the_inflight_round_BEFORE_the_bundle_too() -> None
     shutdown.shutdown_save = True  # set at ENTRY: the 0-step shutdown takes the loop's own leg
     run_training_loop(trainer=h.trainer, shutdown_state=shutdown, coordinator=h.coord,
                       sink=h.sink, max_steps=5)
-    assert order[:3] == ["abandon_pending", "on_eval_round_complete", "apply_gate_decision"]
-    assert "persist_resume_state" in order and order.index("persist_resume_state") > 2
+    assert order[:2] == ["abandon_pending", "apply_gate_decision"]
+    assert "persist_resume_state" in order and order.index("persist_resume_state") > 1
 
 
 def test_a_non_resumable_stop_settles_nothing() -> None:

@@ -1,4 +1,4 @@
-"""The strength-floor gate — the cheap probe that decides whether the EXPENSIVE ladder runs.
+"""The strength-floor gate — the cheap probe that decides whether the EXPENSIVE gate block runs.
 
 MEASURED GROUNDS: a terminal eval round spent its whole hard-cap budget and completed ZERO
 spec'd games on a healthy worker, because the gate block ran first and is the round's most

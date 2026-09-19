@@ -33,7 +33,8 @@ def base(frontier, tmp_path_factory):
 
 
 def _cell(**over):
-    cell = {"label": "c", "candidate": "bc_full", "search_kind": "gumbel", "sims": 128,
+    cell = {"label": "c", "candidate": "bc_full", "opponent": "strix", "strix_sims": 128,
+            "search_kind": "gumbel", "sims": 128,
             "games": 4}
     cell.update(over)
     return cell

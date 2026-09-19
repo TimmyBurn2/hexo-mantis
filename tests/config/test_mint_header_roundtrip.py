@@ -87,18 +87,19 @@ def _stringified_none(value: object) -> bool:
 
 def test_a_None_bearing_delta_mints_a_header_that_replays_green(tmp_path: Path) -> None:
     """A `None`-bearing delta mints a header whose slot replays to the SAME BYTES.
-    Killer: `str()` in the delta line, which replays `opponent_sims: 'None'` and exits 2."""
-    rungs = ("[{name: sealbot_d1, bot: sealbot, variant: d1, depth: 1, opponent_sims: null, "
-             "opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 1}]")
+    Killer: `str()` in the delta line, which replays `max_fused_edges: 'None'` and exits 2.
+    (The block is `inference.fused_graph_caps`, whose `null` pair is R119's schema-valid
+    placeholder; the `eval.ladder.rungs` list this once used left with the rung, R362(c).)"""
+    caps = "{max_fused_edges: null, max_fused_nodes: null}"
     first = tmp_path / "first.yaml"
     minted = _run_mint("--out", str(first), "--set", "run_id=none_bearing",
-                       "--set", f"eval.ladder.rungs={rungs}")
+                       "--set", f"inference.fused_graph_caps={caps}")
     assert minted.returncode == 0, (minted.stdout + minted.stderr)[-2000:]
-    assert load_config(first).eval.ladder.rungs[0].opponent_sims is None
+    assert load_config(first).inference.fused_graph_caps.max_fused_edges is None
 
     deltas = dict((key, new) for key, _old, new in _header_deltas(first))
-    assert yaml.safe_load(deltas["eval.ladder.rungs"])[0]["opponent_sims"] is None, (
-        f"the header recorded {deltas['eval.ladder.rungs']!r}, which reads back with a "
+    assert yaml.safe_load(deltas["inference.fused_graph_caps"])["max_fused_edges"] is None, (
+        f"the header recorded {deltas['inference.fused_graph_caps']!r}, which reads back with a "
         "stringified None -- the R187 defect"
     )
     second = tmp_path / "second.yaml"
@@ -119,18 +120,15 @@ def test_None_and_the_string_None_are_distinguishable_in_the_header(tmp_path: Pa
     emits a bare `None` for either, which cannot say which value was minted."""
     as_null = tmp_path / "null.yaml"
     as_text = tmp_path / "text.yaml"
-    rung = ("[{{name: r, bot: sealbot, variant: d1, depth: 1, opponent_sims: null, "
-            "opening_book: {book}, deploy_matched: true, games_max: 1}}]")
     assert _run_mint("--out", str(as_null), "--set", "train.draw_rate_abort=null"
                      ).returncode == 0
-    minted = _run_mint("--out", str(as_text), "--set",
-                       "eval.ladder.rungs=" + rung.format(book="'None'"))
+    minted = _run_mint("--out", str(as_text), "--set", "eval.gate.opening_book='None'")
     assert minted.returncode == 0, (minted.stdout + minted.stderr)[-2000:]
 
     null_slot = dict((k, n) for k, _o, n in _header_deltas(as_null))["train.draw_rate_abort"]
-    text_slot = dict((k, n) for k, _o, n in _header_deltas(as_text))["eval.ladder.rungs"]
+    text_slot = dict((k, n) for k, _o, n in _header_deltas(as_text))["eval.gate.opening_book"]
     assert yaml.safe_load(null_slot) is None, f"null slot rendered {null_slot!r}"
-    assert yaml.safe_load(text_slot)[0]["opening_book"] == "None", (
+    assert yaml.safe_load(text_slot) == "None", (
         f"the string 'None' came back as something else: {text_slot!r}"
     )
     assert null_slot == "null", (

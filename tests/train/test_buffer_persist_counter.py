@@ -78,12 +78,8 @@ def test_monitor_gates_payload_reads_the_counter_live(monkeypatch):
     emitted: list[dict] = []
     sink = SimpleNamespace(emit=emitted.append)
     fake_coord = SimpleNamespace(
-        _train_step=1, _gate_stats={}, _wr_history=[], _policy_loss_reference=None,
+        _train_step=1, _gate_stats={}, _policy_loss_reference=None,
         _policy_loss_window_means=[], _ply_cap_rate=None,
-        # AUDIT-1 F-14: the ring's length is published beside the rung it is a series
-        # OVER, so the stand-in carries both.
-        _wr_history_rung=None,
-        monitor_cfg=SimpleNamespace(wr_hard_abort_enabled=False),
         _watchdog_counters=lambda: {},
     )
     cfg = SimpleNamespace(draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None)

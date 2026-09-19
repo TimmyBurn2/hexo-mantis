@@ -2,8 +2,8 @@
 
 The rung builds its player at `_model_sims_for_kind(spec, bot)` — a DIFFERENT sims authority
 from `gate.deploy_sims` — so a window confinement re-appearing at this seat would leave the
-frozen gate-seat oracle green while every sealbot rung number measured that asymmetry instead
-of strength.
+frozen gate-seat oracle green while every strix cell number (the one rung job left since
+R362(c)) measured that asymmetry instead of strength.
 
 The stub net is the ONE stand-in and is duplicated rather than imported, since cross-test
 imports are barred; everything else on the path is production.
@@ -101,7 +101,7 @@ def _rung_round_spec() -> SimpleNamespace:
     carries a DIFFERENT value: a seat reading it would be visible rather than coincidental.
     """
     return SimpleNamespace(
-        sealbot_model_sims=1, random_model_sims=4,
+        random_model_sims=4, strix_model_sims=4,
         gate=SimpleNamespace(deploy_sims=150),
     )
 
@@ -113,8 +113,8 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
     """Build the head as `_play_rung_block` does and prove it answers outside the window."""
     engine, spec = graph_engine
     round_spec = _rung_round_spec()
-    rung_sims = worker._model_sims_for_kind(round_spec, "sealbot")
-    assert rung_sims == round_spec.sealbot_model_sims, (
+    rung_sims = worker._model_sims_for_kind(round_spec, "strix")
+    assert rung_sims == round_spec.strix_model_sims, (
         "the rung seat must read the PER-KIND sims authority (M-3); reading "
         f"gate.deploy_sims here would stamp a regime the rung did not play — got {rung_sims}"
     )
@@ -142,5 +142,5 @@ def test_rung_seat_head_plays_an_off_window_move_against_a_full_legal_set_oppone
         f"{pos['id']}: the head played no off-window move in 8 plies from the RUNG seat, "
         f"with {pos['expected_off_window_children']} off-window children available. A "
         f"window-confined head cannot answer an opponent that samples the full legal set, "
-        f"and every sealbot rung number would be measuring that asymmetry instead of strength."
+        f"and every strix cell number would be measuring that asymmetry instead of strength."
     )

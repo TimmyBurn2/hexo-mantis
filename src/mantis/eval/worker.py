@@ -1,7 +1,7 @@
 """mantis.eval.worker — CHILD-ONLY: `python -m mantis.eval.worker <spec.json> <result.json>`
 loads the snapshots, builds the nets on `spec.worker_device`, plays the floor probe, the gate
-block, the ladder rungs (a per-rung `RungUnresolvable` is RECORDED, never fatal) and the random
-floor, and writes the sidecar result ATOMICALLY.
+block, any rung job the spec carries (a strix cell's, R352(e); a `RungUnresolvable` is RECORDED,
+never fatal) and the random floor, and writes the sidecar result ATOMICALLY.
 
 >300 justify (R8): one entry point owning all four blocks, which share the candidate player,
 the inference engine, the book, the ONE encoding resolution and the decode+expand collaborator;
@@ -236,12 +236,12 @@ def _model_sims_for_kind(spec: RoundSpec, kind: str) -> int:
     if kind == "strix":
         if spec.strix_model_sims is None:
             raise ValueError("a strix rung job needs RoundSpec.strix_model_sims; production rounds "
-                             "carry None because strix is not a ladder rung (R352(e))")
+                             "carry None because strix cells are the frontier tool's (R352(e))")
         return int(spec.strix_model_sims)
-    return {
-        "sealbot": spec.sealbot_model_sims,
-        "random": spec.random_model_sims,
-    }[kind]
+    if kind == "random":
+        return spec.random_model_sims
+    raise ValueError(f"no candidate sims for opponent kind {kind!r}: the sealbot rung was deleted "
+                     "by R362(c) and no other kind plays through the rung block")
 
 
 def _graph_expand_fn(engine: LocalInferenceEngine, spec: EncodingSpec):
@@ -658,10 +658,14 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                     device_memory=probe.payload(),
                 )
 
+        gate_t0 = time.monotonic()
         gate_records = _play_gate_block(
             spec, candidate_engine, board_factory, encoding_spec=enc_spec,
             adjudicator=adjudicator, progress=progress, games=games,
         )
+        # The gate block's OWN wall, measured here rather than read off the device probe's
+        # phase marks, which carry no clock on a CPU child (R362(c): the split rides the stream).
+        gate_wall_sec = round(time.monotonic() - gate_t0, 3)
         # The one phase putting a SECOND model and engine on the card, skipped WHOLE with no
         # anchor. Marked whichever branch it took.
         probe.mark("gate_block")
@@ -685,6 +689,7 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 "llr": None if verdict is None else verdict["llr"],
                 "pairs_played": None if verdict is None else verdict["pairs_played"],
                 "stopped": None if verdict is None else verdict["stopped"],
+                "wall_sec": gate_wall_sec,
             }
             # The verdict outlives a kill at the bound or a stop (A-3): persisted the moment it exists.
             write_partial_gate(spec.result_path, step=spec.step, gate_result=gate_result)
@@ -704,19 +709,15 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
                 probe.mark(f"rung_skipped:{rung_job.name}")
                 continue
             probe.mark(f"rung:{rung_job.name}")
-            # Thread the bootstrap knobs through: aggregate.py's signature defaults had no
-            # live consumer and made a minted value silently inert.
             agg = aggregate_rung(
                 records,
-                bootstrap_resamples=spec.ladder_bootstrap_resamples,
-                bootstrap_ci_level=spec.ladder_bootstrap_ci_level,
-                bootstrap_seed=spec.ladder_bootstrap_seed,
+                bootstrap_resamples=rung_job.bootstrap_resamples,
+                bootstrap_ci_level=rung_job.bootstrap_ci_level,
+                bootstrap_seed=rung_job.bootstrap_seed,
             )
             rungs_result[rung_job.name] = {
                 "games": agg.games, "wins": agg.wins, "losses": agg.losses, "draws": agg.draws,
                 "wr": agg.wr, "wr_ci_lower": agg.wr_ci_lower, "wr_ci_upper": agg.wr_ci_upper,
-                # The CHILD has no `LadderState`, so a constant "active" mislabelled SATURATED
-                # rungs; the parent stamps the real status, read BEFORE `record_round`.
                 "eff_n": agg.eff_n, "regime_key": agg.regime_key,
             }
 
@@ -725,13 +726,9 @@ def run_round(spec: RoundSpec) -> dict[str, Any]:
             adjudicator=adjudicator, progress=progress, games=games,
         )
         probe.mark("random_floor")
+        # The floor reports a point win rate and no CI (nothing reads one), so no bootstrap runs.
         random_agg = (
-            aggregate_rung(
-                random_records,
-                bootstrap_resamples=spec.ladder_bootstrap_resamples,
-                bootstrap_ci_level=spec.ladder_bootstrap_ci_level,
-                bootstrap_seed=spec.ladder_bootstrap_seed,
-            )
+            aggregate_rung(random_records, bootstrap_resamples=None)
             if random_records
             else None
         )

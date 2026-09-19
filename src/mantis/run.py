@@ -771,14 +771,13 @@ def compose_run(
                     c_visit=config.selfplay.c_visit, c_scale=config.selfplay.c_scale,
                     q_rescale=config.selfplay.q_rescale,
                     # The deploy head searches with `deploy.search.kind` — matched to what
-                    # the ladder will play, not to the training search (R351(c), LAW-15).
+                    # will be deployed, not to the training search (R351(c), LAW-15).
                     search_kind=resolve_deploy_search_kind(config),
                     gumbel_m=config.selfplay.gumbel_m,
                     run_id=run_id, spool_dir=log_dir / "eval_spool",
                     # The SAME directory the self-play recorder writes into, named once
                     # here, so one run's four channels land in one store.
                     game_record_dir=log_dir / "games",
-                    ladder_state_path=log_dir / "eval_ladder_state.json",
                     promotion=DeployTagHooks(
                         anchor_state=resolved_anchor,
                         best_model_path=canonical_anchor_path(checkpoint_dir), run_id=run_id,
@@ -788,16 +787,13 @@ def compose_run(
                     sink=run_safety.sink, heartbeat=run_safety.heartbeat,
                 )
 
-        # The round counter and `p_hat` a stopped process left behind, restored before
-        # `pool.start()` so no round is kicked against a counter that restarted at zero:
-        # `_build_round_spec` gates the promotion channel on `round_idx % gate.stride`, so
-        # without this a resumed run's promotion cadence realigns to the restart.
+        # The round counter a stopped process left behind, restored before `pool.start()` so
+        # no round is kicked against a counter that restarted at zero: `_build_round_spec`
+        # gates the promotion channel on `round_idx % gate.stride`, so without this a resumed
+        # run's promotion cadence realigns to the restart.
         if resume_state is not None and eval_pipeline is not None:
             with _seam("restore_round_state"):
-                eval_pipeline.restore_round_state(
-                    round_counter=resume_state.round_counter,
-                    last_p_hat=resume_state.last_p_hat,
-                )
+                eval_pipeline.restore_round_state(round_counter=resume_state.round_counter)
 
         # ORDER PINNED: pool starts, THEN the watchdog. The flag is set BEFORE the call, not
         # after: `WorkerPool.start()` is three sub-starts, so a raise inside it leaves a

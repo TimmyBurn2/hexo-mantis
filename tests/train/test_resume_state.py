@@ -48,7 +48,7 @@ def _ring_file(tmp_path: Path, payload: bytes = b"HEXG-ring-bytes-0123456789") -
 def _state(tmp_path: Path, ckpt_name: str = "run6_00000750_abcdef12.ckpt") -> ResumeState:
     return ResumeState(
         version=SIDECAR_VERSION, run_id="run6", step=750, checkpoint_filename=ckpt_name,
-        ring=_ring_file(tmp_path), round_counter=3, last_p_hat={"sealbot_d5": 0.79},
+        ring=_ring_file(tmp_path), round_counter=3,
         anchor_sha256="0" * 64, rng=capture_rng_streams(), eval_round_last_step=750,
     )
 

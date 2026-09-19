@@ -53,13 +53,13 @@ def resolve_selfplay_search_kind(config: Mapping[str, Any] | Any) -> str:
     Raises:
         MissingSearchKindError: the key is absent or not a kind this build implements — never
             defaulted, and never read from the deploy key (the training search would then
-            follow what the ladder plays).
+            follow what the deploy head plays).
     """
     return _resolve(config, "selfplay")
 
 
 def resolve_deploy_search_kind(config: Mapping[str, Any] | Any) -> str:
-    """The deploy head's kind, `deploy.search.kind` — the bar's and every ladder rung's.
+    """The deploy head's kind, `deploy.search.kind` — the bar's and every external cell's.
 
     Raises:
         MissingSearchKindError: the key is absent or not a kind this build implements — never

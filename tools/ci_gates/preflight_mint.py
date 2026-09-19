@@ -425,9 +425,6 @@ _SELF_TEST_HEALTHY_PERIOD = 1_000
 _SELF_TEST_VACUOUS_PERIOD = 1_000_000_000
 #: (consec, min_step) on the gate-boundary clock — run5's draw-rate shape.
 _SELF_TEST_HEALTHY = (3, 25_000)
-#: (collapse_consec, early_death_min_step, collapse_min_step, rolling_consec,
-#: rolling_min_step) on the eval-round clock — run5's own sealbot-WR shape.
-_SELF_TEST_WR = (3, 15_000, 25_000, 2, 20_000)
 
 
 def _cadence_self_test() -> list[str]:
@@ -450,10 +447,6 @@ def _cadence_self_test() -> list[str]:
     vacuous = Cadence.GATE_INTERVAL_CONSEC.earliest_fire_step(
         _SELF_TEST_HEALTHY, period_steps=_SELF_TEST_VACUOUS_PERIOD)
     lag = Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((100,), period_steps=1)
-    wr_healthy = Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
-        _SELF_TEST_WR, period_steps=_SELF_TEST_HEALTHY_PERIOD)
-    wr_vacuous = Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
-        _SELF_TEST_WR, period_steps=_SELF_TEST_VACUOUS_PERIOD)
     if healthy is None or healthy > bound:
         failures.append(
             f"    arm A: operands {_SELF_TEST_HEALTHY} at period "
@@ -471,15 +464,7 @@ def _cadence_self_test() -> list[str]:
             f"    arm C: the lag cadence computed {lag!r} for a threshold of 100, not 101 — "
             "member dispatch has collapsed and every row is being judged by one arithmetic"
         )
-    if (wr_healthy is None or wr_healthy > bound
-            or wr_vacuous is None or wr_vacuous <= bound):
-        failures.append(
-            f"    arm D: the EVAL-ROUND cadence computed {wr_healthy!r} at period "
-            f"{_SELF_TEST_HEALTHY_PERIOD} and {wr_vacuous!r} at period "
-            f"{_SELF_TEST_VACUOUS_PERIOD} against the bound {bound} — the sealbot-WR axis "
-            "must clear a healthy eval cadence and FAIL one that outruns the run, or gate 12 "
-            "is back to having no opinion about the axis at all (R265 / ADJ-D38)"
-        )
+    # (arm D, the EVAL-ROUND clock's own self-test, retired with its one row by R362(c).)
     periods = {clock: clock.period_path for clock in SampleClock
                if clock.period_path is not None}
     if len(set(periods.values())) != len(periods):

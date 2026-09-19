@@ -1,7 +1,7 @@
 """A minted value is pinned ONCE, with its provenance; everywhere else the RELATION is asserted.
 
-AUDIT-1 F-49. run5's minted `eval.random_model_sims: 96` and `eval.sealbot_model_sims: 128` were
-asserted as literals in four places — the regime-parity suite and its `_p2` twin, and both
+AUDIT-1 F-49. run5's minted `eval.random_model_sims: 96` and `eval.sealbot_model_sims: 128` (the
+latter deleted with the sealbot rung, R362(c)) were asserted as literals in four places — the regime-parity suite and its `_p2` twin, and both
 `test_resolved_config_emit*` files — under docstrings that said DERIVED. Re-pointing
 `production_config` at run6 would have reddened all four with "96 != N" and no line anywhere
 saying 96 was run5's.
@@ -31,15 +31,13 @@ def test_a_REMINTED_sims_value_passes_the_relation_that_a_literal_would_have_red
     smoke_run_config,
 ):
     """Arm 1 — the audit's pin. A config that mints a DIFFERENT value is not a test failure."""
-    remint = smoke_run_config("run6.yaml", eval={"random_model_sims": 97,
-                                                 "sealbot_model_sims": 131})
+    remint = smoke_run_config("run6.yaml", eval={"random_model_sims": 97})
     assert remint.eval.random_model_sims == 97
-    for rung, value in (("random", remint.eval.random_model_sims),
-                        ("sealbot", remint.eval.sealbot_model_sims)):
-        assert resolve_eval_model_sims(rung, value) == value, (
-            f"the {rung} resolver did not hand back the re-minted value — under the literal "
-            "form this test read `== 96` and would have failed here, reporting a MINT as a bug"
-        )
+    value = remint.eval.random_model_sims
+    assert resolve_eval_model_sims("random", value) == value, (
+        "the random resolver did not hand back the re-minted value — under the literal "
+        "form this test read `== 96` and would have failed here, reporting a MINT as a bug"
+    )
 
 
 def test_the_relation_still_BITES_on_a_resolver_that_re_derives():

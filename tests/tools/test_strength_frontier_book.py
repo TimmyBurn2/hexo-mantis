@@ -53,11 +53,23 @@ def test_a_gate_cell_book_and_seed_rows_replace_the_configs(frontier, base, tmp_
     assert spec.best_snapshot == str(tmp_path / "opponent.pt")
 
 
-def test_a_sealbot_rung_cell_book_row_replaces_the_rungs_book(frontier, base, tmp_path) -> None:
+def test_a_strix_rung_cell_book_row_replaces_the_gates_book(frontier, base, tmp_path) -> None:
     config, base_spec = base
-    cell = {"label": "bridge_v2", "candidate": "ck.ckpt", "search_kind": "puct", "sims": 256,
-            "games": 256, "opening_book": "book_v2_p4", "seed_base": 5}
+    cell = {"label": "bridge_v2", "candidate": "ck.ckpt", "opponent": "strix", "strix_sims": 256,
+            "search_kind": "puct", "sims": 256, "games": 256, "opening_book": "book_v2_p4",
+            "seed_base": 5}
     spec = frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)
     [job] = spec.rung_jobs
     assert job.opening_book == "book_v2_p4" and job.games == 256
     assert spec.seed_base == 5
+
+
+def test_a_cell_without_an_opponent_is_refused_by_name(frontier, base, tmp_path) -> None:
+    """R362(c): the old default opponent (`sealbot_d5`) went with the sealbot rung; a cell that
+    names none is refused rather than silently played against anything."""
+    import pytest
+
+    config, base_spec = base
+    cell = {"label": "no_opp", "candidate": "ck.ckpt", "search_kind": "puct", "sims": 256, "games": 4}
+    with pytest.raises(frontier.FrontierCellError, match="names its opponent"):
+        frontier.cell_spec(cell, base_spec, cell_dir=tmp_path, config=config)

@@ -3,8 +3,7 @@ LIVE-shaped inputs.
 
 An ORACLE-FIRST file — the top-level `import mantis.monitor.rules` raises before any port code
 exists. Decision-parity is asserted against the old-side semantics, where the code IS the spec:
-the sealbot-WR triggers A/B/C with their "N consecutive, not a single dip" guards; the warn rules
-at their registered boundaries, including the non-finite grad-norm pin and the 3-window
+the warn rules at their registered boundaries, including the non-finite grad-norm pin and the 3-window
 strictly-increasing rule, and the headless emitter routing one `training_alert` per fired rule
 through the injected sink in rule order; and draw-rate collapse over `pooled_draw_rate` history.
 
@@ -27,64 +26,9 @@ from mantis.monitor.rules import (
     check_entropy_collapse,
     check_grad_norm_spike,
     check_loss_increase_window,
-    check_sealbot_wr_hard_abort,
     check_selfplay_entropy_collapse,
     emit_training_step_alerts,
-    sealbot_wr_trajectory_alert,
 )
-
-
-# Each row: (label, history[(step,wr)], current_step, expect_fire), chosen against the old
-# `check_sealbot_wr_hard_abort` semantics with the default MonitorConfig.
-_SEALBOT_BATTERY: list[tuple[str, list[tuple[int, float]], int, bool]] = [
-    ("empty_history_no_fire", [], 30000, False),
-    ("healthy_high_wr_no_fire",
-     [(30000, 0.5), (31000, 0.5), (32000, 0.5)], 32000, False),
-    # Trigger C — early death: last 3 all < 0.05, past step 15000.
-    ("trigger_C_early_death_fires",
-     [(16000, 0.04), (17000, 0.03), (18000, 0.02)], 18000, True),
-    # Trigger B — collapse from peak: last 3 all < peak(0.30)×0.5=0.15, past step 25000.
-    ("trigger_B_collapse_from_peak_fires",
-     [(26000, 0.30), (27000, 0.12), (28000, 0.12), (29000, 0.12)], 29000, True),
-    # Trigger A — rolling: last 2 both < 0.10, past step 20000, len==2 (< the 3 that B/C need).
-    ("trigger_A_rolling_fires",
-     [(21000, 0.08), (22000, 0.09)], 22000, True),
-    # Recovering single dip — one 2% eval after strong evals must NOT fire (§175/L34).
-    ("single_recovering_dip_no_fire",
-     [(30000, 0.30), (31000, 0.30), (32000, 0.02)], 32000, False),
-    # B transient: only one low eval below peak×0.5 → not 3 consecutive → no fire.
-    ("B_transient_single_low_no_fire",
-     [(26000, 0.30), (27000, 0.30), (28000, 0.12)], 28000, False),
-    # A below min_step: last 2 low but current_step <= 20000 → no fire.
-    ("A_below_min_step_no_fire",
-     [(19000, 0.08), (19500, 0.09)], 19500, False),
-    # A below consecutive: only one sample → len < wr_rolling_consecutive_evals(2) → no fire.
-    ("A_below_consec_no_fire",
-     [(21000, 0.08)], 21000, False),
-]
-
-
-@pytest.mark.parametrize("label,history,step,expect_fire",
-                         _SEALBOT_BATTERY, ids=[r[0] for r in _SEALBOT_BATTERY])
-def test_sealbot_wr_decision_parity(label, history, step, expect_fire) -> None:
-    """O-05 / P-05 — 100% decision match with the old-side triggers A/B/C incl."""
-    cfg = MonitorConfig()
-    msg = sealbot_wr_trajectory_alert(list(history), step, cfg)
-    assert (msg is not None) is expect_fire, f"{label}: fire={msg is not None}, want {expect_fire}"
-
-
-def test_hard_abort_disposition_requires_the_enabled_flag() -> None:
-    """O-05 / operator G-3 — the DEFAULT `MonitorConfig()` ships `wr_hard_abort_enabled=False` (warn-only), so `check_sealbot_wr_hard_abort` returns None on a collapse; the SAME trajectory yields a message from `sealbot_wr_trajectory_alert`, and setting the flag True restores the hard-abort disposition (the A/B/C capability is unchanged — only the default disposition moved)."""
-    collapse = [(16000, 0.01), (17000, 0.01), (18000, 0.01)]
-    default_cfg = MonitorConfig()
-    assert default_cfg.wr_hard_abort_enabled is False, "shipped default is warn-only"
-    assert check_sealbot_wr_hard_abort(collapse, 18000, default_cfg) is None
-    # The trajectory FACT is still produced (the warn path has content — never silent).
-    fact = sealbot_wr_trajectory_alert(collapse, 18000, default_cfg)
-    assert fact is not None and "Objective-A" in fact and "Objective-B" in fact
-    # Flipping the one field restores the hard-abort message.
-    hard = check_sealbot_wr_hard_abort(collapse, 18000, MonitorConfig(wr_hard_abort_enabled=True))
-    assert hard is not None and "HARD-ABORT" in hard and "Objective-A" in hard
 
 
 def test_entropy_collapse_boundary() -> None:

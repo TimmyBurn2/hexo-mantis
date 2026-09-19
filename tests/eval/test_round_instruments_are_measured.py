@@ -1,12 +1,11 @@
 """The eval round's constants become measurements.
 
-Four rows, one class — each published a value that read as a measurement and was not one:
+Three rows, one class — each published a value that read as a measurement and was not one:
 
-* the worker child stamped `"status": "active"` on EVERY rung result, because the child has no
-  `LadderState`, so a SATURATED rung's off-cadence calibration games were labelled active. The
-  parent now stamps the real status, read BEFORE `record_round` so it is the status the rung was
-  PLAYED under. Beside it, the random floor's `RegimeKey` claimed `deploy_matched=True` while
-  playing at `random_model_sims` against a uniform bot; only the GATE block is deploy-matched.
+* the random floor's `RegimeKey` claimed `deploy_matched=True` while playing at
+  `random_model_sims` against a uniform bot; only the GATE block is deploy-matched. (The rung
+  STATUS row this file also carried — the child's constant `"active"` against the ladder's real
+  status — left with the sealbot rung, R362(c).)
 * the progress writer defaulted `plies` to `0`, publishing a game that ended at ply zero for a
   record shape carrying no ply count. An unrecognised shape writes NULLS.
 * `eval_round_complete.promoted: false` covered three different rounds — the gate ran and
@@ -17,7 +16,6 @@ Four rows, one class — each published a value that read as a measurement and w
 from __future__ import annotations
 
 import json
-from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -80,70 +78,18 @@ def test_only_the_GATE_block_claims_to_be_deploy_matched() -> None:
 
 
 class _FakePipeline:
-    """`EvalPipeline._success_result` lifted off the class, with a ladder collaborator real
-    enough to carry statuses, so the code exercised is production."""
+    """`EvalPipeline._success_result` lifted off the class, so the code exercised is production."""
 
-    class _Ladder:
-        rungs: tuple = ()
-        bt_prior_games = 1.0
-        # The three the external-channel assessment threads into its ONE CI authority; real
-        # values, not stubs, so the stand-in drives the same arithmetic production does.
-        bootstrap_resamples = 200
-        bootstrap_ci_level = 0.95
-        bootstrap_seed = 0
-
-    def __init__(self, sink: Any, statuses: dict[str, str]) -> None:
+    def __init__(self, sink: Any) -> None:
         self._sink = sink
-        self._statuses = statuses
-        self._eval_cfg = SimpleNamespace(ladder=self._Ladder())
-        self._ladder_state_path = Path("/nonexistent/ladder.json")
-        self._last_p_hat: dict = {}
-        # `_finalize_round` also drives the external-channel assessment, so the stand-in carries
-        # the REAL method and the state it reads: stubbing it would leave the producer
-        # unexercised while this harness stayed green.
-        self._external_history: list = []
-        self._degradation_flags = 0
         self._round_counter = 0
-        from mantis.eval.pipeline import EvalPipeline as _EP  # lazy, this file's own style
-
-        self._assess_external_channel = partial(_EP._assess_external_channel, self)
         self._floor_checked_total = 0
         self._floor_skipped_total = 0
-        outer = self
-
-        class _State:
-            def status(self, rung: str) -> str:
-                return outer._statuses[rung]
-
-            def record_round(self, *a: Any, **k: Any) -> None:
-                # recording is what MOVES a status; anything read after this is the wrong fact
-                outer._statuses = {n: "saturated" for n in outer._statuses}
-
-            def save(self, *a: Any, **k: Any) -> None: ...
-
-            def allocate_games(self, *a: Any, **k: Any) -> dict:
-                return {}
-
-        self._state = _State()
-
-    def _ensure_ladder_state(self) -> Any:
-        return self._state
-
-    def _current_p_hat(self) -> dict:
-        return self._last_p_hat
-
-    def _check_the_sealbot_rung_identity(self, rungs_raw, result, *, round_id):
-        """The PRODUCTION method, bound through the class — not a stub. It walks
-        `self._eval_cfg.ladder.rungs`, which this stand-in supplies."""
-        from mantis.eval.pipeline import EvalPipeline
-
-        return EvalPipeline._check_the_sealbot_rung_identity(
-            self, rungs_raw, result, round_id=round_id)
 
     def _emit_posture_events(self, inflight: Any, raw: Any) -> None: ...
 
 
-def _drive(raw: dict[str, Any], statuses: dict[str, str]) -> tuple[dict, list[dict]]:
+def _drive(raw: dict[str, Any]) -> tuple[dict, list[dict]]:
     from mantis.eval.pipeline import EvalPipeline
 
     events: list[dict[str, Any]] = []
@@ -152,37 +98,11 @@ def _drive(raw: dict[str, Any], statuses: dict[str, str]) -> tuple[dict, list[di
         def emit(self, payload: dict) -> None:
             events.append(dict(payload))
 
-    fake = _FakePipeline(_Sink(), dict(statuses))
+    fake = _FakePipeline(_Sink())
     result = EvalPipeline._success_result(
         fake, {"round_id": "r000001_5000", "step": 5000, "round_idx": 1}, raw, wall_sec=9.0,
     )
     return result, events
-
-
-def test_a_SATURATED_rungs_calibration_games_are_not_labelled_active() -> None:
-    """The child stamped `active` unconditionally; the parent reads the truth."""
-    raw = {"rungs": {"sealbot_d5": {"games": 8, "wr": 0.5, "wr_ci_lower": 0.2}},
-           "gate": None, "random": {"games": 0, "wr": None}, "skipped_rungs": []}
-    result, _events = _drive(raw, {"sealbot_d5": "saturated"})
-    assert result["rungs"]["sealbot_d5"]["status"] == "saturated", result["rungs"]
-
-
-def test_the_status_is_the_one_the_rung_was_PLAYED_under() -> None:
-    """Read BEFORE `record_round`. Recording this round's result is what MOVES a status, so a
-    read after it reports the rung's next state as though the games were played in it."""
-    raw = {"rungs": {"sealbot_d5": {"games": 8, "wr": 1.0, "wr_ci_lower": 0.9}},
-           "gate": None, "random": {"games": 0, "wr": None}, "skipped_rungs": []}
-    result, _events = _drive(raw, {"sealbot_d5": "active"})
-    assert result["rungs"]["sealbot_d5"]["status"] == "active", (
-        "the status was read AFTER record_round, so it describes the round that follows"
-    )
-
-
-def test_a_rung_the_ladder_does_not_know_is_absent_not_active() -> None:
-    raw = {"rungs": {"mystery": {"games": 4, "wr": 0.5, "wr_ci_lower": 0.1}},
-           "gate": None, "random": {"games": 0, "wr": None}, "skipped_rungs": []}
-    result, _events = _drive(raw, {})
-    assert result["rungs"]["mystery"]["status"] is None
 
 
 
@@ -195,7 +115,7 @@ def _complete(events: list[dict[str, Any]]) -> dict[str, Any]:
 def test_a_round_with_no_gate_scheduled_reports_NO_promotion_decision() -> None:
     """Before this, `promoted: false` was identical to a gate that ran and refused."""
     raw = {"rungs": {}, "gate": None, "random": {"games": 4, "wr": 0.5}, "skipped_rungs": []}
-    _result, events = _drive(raw, {})
+    _result, events = _drive(raw)
     assert _complete(events)["promoted"] is None
 
 
@@ -207,7 +127,7 @@ def test_a_gate_that_RAN_reports_its_decision_either_way(promoted: bool) -> None
                     "n_pooled": 80, "escalated": False, "elo_ci_lower_boot": 1.0,
                     "low_power": False, "eff_n": 80, "reason": "", "deploy_matched": True,
                     "promoted": promoted}}
-    _result, events = _drive(raw, {})
+    _result, events = _drive(raw)
     assert _complete(events)["promoted"] is promoted
     assert _complete(events)["promoted"] is not None
 

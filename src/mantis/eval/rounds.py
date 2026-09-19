@@ -2,19 +2,18 @@
 # fields carried across the eval process seam, the table saying which must be rebuilt as a
 # dataclass on the far side, and the result-shape validation the child answers with. A field
 # split from its rehydration row arrives as a raw mapping and fails at the first attribute read.
-"""RoundSpec (PATHS AND PRIMITIVES ONLY: no live model crosses the process seam), `build_round_result`
-(sets `wr_sealbot` unconditionally) and `resolve_ladder_rungs` (records a `RungUnresolvable`, never fails the round)."""
+"""RoundSpec (PATHS AND PRIMITIVES ONLY: no live model crosses the process seam) and
+`build_round_result`, the coordinator-facing round-result mapping."""
 from __future__ import annotations
 
 import dataclasses
 import json
 import logging
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from mantis.bots.protocol import RungUnresolvable
 from mantis.config.resolve.eval_posture import PlyCapAdjudicationSpec, StrengthFloorSpec
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
@@ -25,35 +24,35 @@ _LOG = logging.getLogger(__name__)
 #: The contract-doc / schema-census name of the gate-block concurrency row: it lives beside the
 #: spec that carries it, because the name belongs with the consumer, not with the test.
 EVAL_CONCURRENCY_ROW = "eval.concurrency"
-#: The rung block's own row (R351): same idiom, its one reader is `worker._play_rung_block`.
-EVAL_RUNG_CONCURRENCY_ROW = "eval.rung_concurrency"
 
 __all__ = [
     "EVAL_CONCURRENCY_ROW",
-    "EVAL_RUNG_CONCURRENCY_ROW",
+    "GATE_STREAM_FIELDS",
     "GameRecordTarget",
     "RoundSpec",
     "build_round_result",
-    "resolve_ladder_rungs",
+    "gate_stream_fields",
     "validate_worker_result",
 ]
 
+#: The gate mapping's rule fields that ride `eval_round_complete.gate` (R362(c), CARD-EVAL-GATE-
+#: FIELDS-IN-STREAM): how the round's gate stopped, what it read, and what it cost — until this
+#: row they lived only in the child's `result.json`, so a stream reader could not see how a
+#: round stopped without the spool. Names are the child's own; `wall_sec` is the gate block's.
+GATE_STREAM_FIELDS: tuple[str, ...] = (
+    "rule", "pairs_played", "stopped", "llr", "wr_confirm", "n_pooled", "promoted", "wall_sec",
+)
 
-def resolve_ladder_rungs(
-    rungs: Sequence[Any], resolve_bot_fn: Callable[..., Any]
-) -> tuple[dict[str, Any], list[dict[str, str]]]:
-    """Resolve each rung's bot; a `RungUnresolvable` is CAUGHT and appended to `skipped`, never
-    raised further. Re-evaluated fresh every call."""
-    resolved: dict[str, Any] = {}
-    skipped: list[dict[str, str]] = []
-    for rung in rungs:
-        try:
-            resolved[rung.name] = resolve_bot_fn(
-                rung.bot, depth=rung.depth, opponent_sims=rung.opponent_sims
-            )
-        except RungUnresolvable as exc:
-            skipped.append({"rung": rung.name, "reason": exc.reason})
-    return resolved, skipped
+
+def gate_stream_fields(gate: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    """The `eval_round_complete.gate` projection of a gate mapping; `None` when no gate ran.
+
+    Every field is read with `.get`, never a subscript: the A-3 partial sidecar and a pre-R362
+    result mapping may lack one, and an absent field must read as `None`, never kill the poller.
+    """
+    if gate is None:
+        return None
+    return {name: gate.get(name) for name in GATE_STREAM_FIELDS}
 
 
 def _rehydrate(cls: Any, payload: Any) -> Any:
@@ -91,6 +90,10 @@ _REHYDRATED_SPEC_FIELDS: tuple[tuple[str, Any], ...] = (
 
 @dataclass(frozen=True)
 class RungJob:
+    """One external-opponent block the child plays beside the gate. Since R362(c) no production
+    round carries one (the sealbot rung is deleted); the strix cells compose theirs in
+    `tools/strength_frontier.py` (R352(e)), so the block's pair-bootstrap terms ride the job."""
+
     name: str
     bot: str
     variant: str
@@ -99,6 +102,9 @@ class RungJob:
     opening_book: str
     deploy_matched: bool
     games: int
+    bootstrap_resamples: int
+    bootstrap_ci_level: float
+    bootstrap_seed: int
 
 
 @dataclass(frozen=True)
@@ -135,19 +141,14 @@ class RoundSpec:
     encoding: str
     worker_device: str
     gate: GateSpec
+    #: `[]` on every production round since R362(c); a strix cell carries exactly one.
     rung_jobs: list[RungJob]
     random_floor_games: int
     random_model_sims: int
-    sealbot_model_sims: int
     seed_base: int
     round_timeout_sec: float
     result_path: str
     progress_path: str
-    # The three ladder bootstrap keys threaded to the live aggregation path; before this they
-    # had NO live consumer, the worker silently using the aggregator's signature defaults.
-    ladder_bootstrap_resamples: int
-    ladder_bootstrap_ci_level: float
-    ladder_bootstrap_seed: int
     #: Where this round's games are WRITTEN, or `None` for a round that records none. Same shape
     #: and reason as the postures below: resolved once in the parent, carried as data.
     game_record: GameRecordTarget | None
@@ -188,11 +189,11 @@ class RoundSpec:
     #: The gate-block concurrency. NOT defaulted: a spec silently carrying `1` while the config
     #: minted `4` is the silently-disabled-knob class.
     concurrency: int
-    #: The rung block's games in flight (`eval.rung_concurrency`). NOT defaulted, for the same reason.
+    #: A rung job's games in flight — the cell's own `concurrency` (no config row since R362(c)).
     rung_concurrency: int
     allocator_posture: str | None = None
-    #: The candidate's sims against a strix rung (RUNG-2): `None` on every production round (strix
-    #: is not in the ladder), set by the frontier tool's strix cells; a strix job without it is refused by name.
+    #: The candidate's sims against a strix rung (RUNG-2): `None` on every production round, set
+    #: by the frontier tool's strix cells; a strix job without it is refused by name.
     strix_model_sims: int | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -257,27 +258,6 @@ def validate_worker_result(raw: Any) -> dict[str, Any]:
     return raw
 
 
-def _first_sealbot_wr(
-    rungs_config: Sequence[Any], rung_results: Mapping[str, Mapping[str, Any]]
-) -> tuple[float | None, str | None, int | None, float | None, float | None]:
-    """`(wr, rung_name, games, ci_lower, ci_upper)` for the FIRST sealbot-kind rung with >= 1 game
-    this round, all-`None` if none; the identity and the CI travel with the value out of the SAME
-    walk, because a saturated rung draws 0 games off-cadence and the number would silently
-    become the next rung's."""
-    for rung in rungs_config:
-        if getattr(rung, "bot", None) != "sealbot":
-            continue
-        info = rung_results.get(rung.name)
-        if info is None:
-            continue
-        games = int(info.get("games", 0))
-        if games <= 0:
-            continue
-        return (info.get("wr"), rung.name, games,
-                info.get("wr_ci_lower"), info.get("wr_ci_upper"))
-    return None, None, None, None, None
-
-
 def _gate_result_to_mapping(gate_result: Any) -> dict[str, Any] | None:
     if gate_result is None:
         return None
@@ -306,12 +286,7 @@ def build_round_result(
     *,
     step: int,
     round_id: str,
-    rungs_config: Sequence[Any],
-    rung_results: Mapping[str, Mapping[str, Any]],
     gate_result: Any,
-    skipped_rungs: Sequence[Mapping[str, str]],
-    bt: Mapping[str, Any],
-    schedule_next: Mapping[str, int],
     eval_round_wall_sec: float,
     reason: EvalBrokenReason | None,
     detail: str | None,
@@ -321,37 +296,24 @@ def build_round_result(
     strength_floor: Mapping[str, Any] | None = None,
     gate_verdict_partial: bool = False,
 ) -> dict[str, Any]:
-    """Assemble the coordinator-facing round-result mapping, with `wr_sealbot` UNCONDITIONALLY
-    present — success, broken and all-skip rounds alike.
+    """Assemble the coordinator-facing round-result mapping — success and broken rounds alike.
 
     ONE authority for "did this round break": the typed `reason`, where `None` IS the clean
     state, with no defaulted boolean survivor beside it. `detail` is PROSE and nothing under
     `src/` may branch on it. `gate_verdict_partial`: the verdict is the child's partial sidecar (A-3).
     """
     promoted = (reason is None or gate_verdict_partial) and _gate_result_promoted(gate_result)
-    _sealbot_reading = _first_sealbot_wr(rungs_config, rung_results)
     result: dict[str, Any] = {
         "step": step,
         "round_id": round_id,
         "promoted": promoted,
         "promoted_step": step if promoted else None,
-        "wr_sealbot": _sealbot_reading[0],
-        "wr_sealbot_rung": _sealbot_reading[1],
-        "wr_sealbot_games": _sealbot_reading[2],
-        # The ROUND CI, beside the win rate it belongs to and out of the same walk that
-        # selected both: a bare win rate invites a reader to treat 32 games as a point estimate.
-        "wr_sealbot_ci_lower": _sealbot_reading[3],
-        "wr_sealbot_ci_upper": _sealbot_reading[4],
         "wr_random": random_wr,
         "eval_round_wall_sec": eval_round_wall_sec,
         "eval_broken_reason": reason,
         "eval_broken_detail": detail,
         "gate_verdict_partial": bool(gate_verdict_partial),
         "gate": _gate_result_to_mapping(gate_result),
-        "rungs": dict(rung_results),
-        "skipped_rungs": list(skipped_rungs),
-        "bt": dict(bt),
-        "schedule_next": dict(schedule_next),
     }
     if worker_pid is not None:
         result["worker_pid"] = worker_pid

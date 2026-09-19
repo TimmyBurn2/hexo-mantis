@@ -13,8 +13,14 @@ deploy-matched argmax head, frozen sha-pinned paired opening books, per-pair boo
 ## Who asserts what where
 
 This section is the DURABLE instrument: what each term means, and which module is the single
-authority for it. The run-specific choices — which rungs, which numbers — live in the minted
-config and are read from it, never restated here.
+authority for it. The run-specific choices — which numbers — live in the minted config and
+are read from it, never restated here. **R362(c) (2026-09-19) DELETED the sealbot rung** from
+the production round (`eval.ladder`, `eval.sealbot_model_sims`, `eval.rung_concurrency`, the
+ladder state, the Bradley-Terry fit, `eval_channel_health`, `wr_sealbot` and the coordinator's
+WR gate): the round is the strength-floor probe, the gate block and the random floor, and the
+EXTERNAL scale is the strix cell (`tools/strength_frontier.py`, `tools/strix_follower.py`). The
+rung machinery (`RoundSpec.rung_jobs`, `worker._play_rung_block`) survives for that cell alone;
+the sealbot adapter below survives as a vendored opponent with no production consumer.
 
 The run5 decision document carried that run's choices and is DELETED with its config
 (R346(f)): a decision document whose subject config is not in the tree
@@ -22,11 +28,9 @@ has nothing to be checked against, and its drift gate derived every expectation 
 file. The tag `archive/grid-path` carries both. Two of its properties were NOT run-specific
 and are folded in here, because a reader of any ladder reading needs them:
 
-- **The Bradley-Terry fit is only as wide as the opponent set.** With one bot family on the
-  ladder, however many games are recorded, ONE opponent lineage is all the information in the
-  fit. That is a property of the instrument, not a defect to work around, and it is stated
-  because a reader who does not know it will over-read every ladder-shaped field in a run.
-  `configs/run6.yaml` mints ONE rung. RUNG-2 is the carded work that widens it.
+- **The Bradley-Terry fit was only as wide as the opponent set** — with one bot family on the
+  ladder, ONE opponent lineage was all the information in it; read any pre-R362 record's `bt`
+  field that way. The fit is deleted with the ladder (R362(c)).
 - **eff_n on a deterministic rung is bounded by the openings, not by the game count.** A
   fixed-depth opponent facing a deterministic argmax head produces ONE trajectory per opening,
   which is why LAW-04 counts trajectory-hash-distinct games and why the opening book is
@@ -36,9 +40,9 @@ and are folded in here, because a reader of any ladder reading needs them:
   constructor at the SAME simulation count. `mantis.eval.worker` builds the candidate and the
   best snapshot through one `_build_candidate_player` call site at `eval.gate.deploy_sims`,
   and the `RegimeKey` stamped on each record carries the value that was actually used. A
-  ladder entry is deploy-matched to its own per-kind simulation count, never to the gate's —
-  playing at one value while stamping another is a mislabelled record, not a rounding
-  difference.
+  rung job (a strix cell's) is deploy-matched to its own per-kind simulation count, never to
+  the gate's — playing at one value while stamping another is a mislabelled record, not a
+  rounding difference.
 - **The fixed-depth external bar.** An external opponent whose strength axis is SEARCH DEPTH,
   not simulations, is only an instrument if the depth it plays is the depth it claims. The
   adapter (`mantis.bots.sealbot`) therefore drives the engine's depth ceiling, neutralises its
@@ -56,11 +60,11 @@ and are folded in here, because a reader of any ladder reading needs them:
 
   **What a genuine violation costs, stated exactly, because this document outlives the work
   package that wrote it:** it raises `SealBotDepthError`, and
-  `run_round` in `src/mantis/eval/worker.py` (its per-rung loop) catches `RungUnresolvable` and nothing else — so the
-  exception ends the **whole eval round**, not the one ladder entry. There is no per-entry
-  "recorded broken" mechanism today; an earlier draft of this section claimed one and no such
-  code exists. The trade is deliberate in this direction only: a round that dies loudly is
-  recoverable, and an entry that quietly reports a bar it never played is not.
+  `run_round` in `src/mantis/eval/worker.py` (its rung-job loop) catches `RungUnresolvable` and nothing else — so the
+  exception ends the **whole round** (a strix cell, since R362(c)), not the one job. There is
+  no per-job "recorded broken" mechanism; an earlier draft of this section claimed one and no
+  such code exists. The trade is deliberate in this direction only: a round that dies loudly is
+  recoverable, and a job that quietly reports a bar it never played is not.
 - **The strix rung (RUNG-2, R352(e)) is a FIXED external reference of the other kind: a
   net.** `SootyOwl/hexo-strix` publishes no model, so the rung IS the operator's
   `checkpoint_00237000.pt`, pinned by sha256 in `vendor/pins.toml` beside the commit it is
@@ -105,7 +109,7 @@ and are folded in here, because a reader of any ladder reading needs them:
   dependency never becomes a mantis dependency. The refusal reason a rung emits when the
   extension is absent names this command verbatim, so the log says which step to run.
   The tracked patch's THIRD hunk (2026-09-14, CARD-SEALBOT-GIL-SERIAL) wraps the engine's search
-  alone in `py::gil_scoped_release`, so `eval.rung_concurrency` overlaps the bar's searches as
+  alone in `py::gil_scoped_release`, so a cell's `concurrency` overlaps the bar's searches as
   well as the candidate's; it changes no move, score or depth receipt, and the vendored test
   file pins both halves.
 - **Books** are versioned, sha-pinned and paired: `mantis.arena.books` verifies the sha256 at
@@ -115,16 +119,14 @@ and are folded in here, because a reader of any ladder reading needs them:
   hash before any interval is computed, and the low-power guard counts distinct games PER
   PAIR. Games are not evidence; distinct trajectories are.
 - **The interval is a bootstrap percentile** over those distinct outcomes, seeded from the
-  gate seed (gate blocks) or the ladder bootstrap seed (ladder blocks). An empty sample
-  degenerates to an absent interval rather than raising, so a zero-game block cannot
-  manufacture a bound.
-- **A rung that cannot resolve SKIPS LOUD, on four channels**, and the fourth is the one that
-  answers the question the first three cannot: an `eval_rung_skipped` event, an ERROR log
-  line, the round result's own skip list, and — per LAW-18 as R164 reads it — an
-  `eval_rung_skip_class` counter event emitted alongside each skip, partitioning the reasons
-  into a CLOSED set so "these are the skips the operator authorised" and "the box is
-  misconfigured" stop looking identical while the run is still going. See
-  `docs/contracts/event_manifest.md` for the payload and the class set.
+  gate seed (gate blocks) or the rung job's own bootstrap seed (a cell's, `RungJob.bootstrap_*`,
+  the frontier tool's pinned terms since R362(c)). An empty sample degenerates to an absent
+  interval rather than raising, so a zero-game block cannot manufacture a bound; the random
+  floor reports a point win rate and no interval, since nothing reads one.
+- **A rung job that cannot resolve is RECORDED, never fatal**: the child's `skipped_rungs`
+  list names it, and the frontier tool reads a skipped job as a FAILED cell, never a 0-game
+  reading. (The production round's four skip channels — `eval_rung_skipped`, the ERROR line,
+  the skip list, the `eval_rung_skip_class` counter — left with the sealbot rung, R362(c).)
 - **A terminal round that yields no promotion decision is rc 48** (WP12-R Phase O / R152,
   discharging R133's "rc 0 does not certify eval health"). LAW-15's "no promotion decision =
   deliverable incomplete" is enforced at the PROCESS boundary: the terminal round's typed
@@ -146,15 +148,15 @@ row says so and names what does run.
 | claim | pinning test | runs in CI? |
 |---|---|---|
 | deploy-matched gate, both sides at the same constructor and count | `tests/eval/test_gate_parity.py` | yes |
-| the ladder entry plays at its per-kind simulation count, not the gate's | `tests/eval/test_rung_seat_off_window.py` | yes |
+| the rung job plays at its per-kind simulation count, not the gate's | `tests/eval/test_rung_seat_off_window.py` | yes |
 | the head answers outside the encoding window at both seats | `tests/eval/test_eval_selfplay_child_parity.py`, `tests/eval/test_rung_seat_off_window.py` | yes |
 | an unimplemented declared pooling is REFUSED, never a fallthrough | `tests/eval/test_value_pool_guard.py`, `tests/eval/test_eval_decode_guard_ordering.py`, `tests/eval/test_graph_round_encoding.py` | yes |
 | eff_n is trajectory-hash-distinct; the low-power guard is per pair; an empty sample degenerates rather than raising | `tests/eval/test_aggregate_regime.py` | yes |
 | a pin is a commit sha, and the declared patch is tracked | `tests/tools/test_vendor_pins_sealbot.py` | yes |
 | the depth adapter drives the ceiling, neutralises the time cut, and CHECKS the receipt | `tests/bots/test_sealbot_adapter.py` | yes (against a recording double) |
 | the refusal reasons name exactly their own missing step, and no environment key | `tests/bots/test_sealbot_resolve.py`, `tests/bots/test_protocol.py` | yes |
-| each skip-reason class counts itself in-run, on a closed set | `tests/eval/test_rung_skip_class_counter.py` | yes |
-| the external win-rate field populates with no producer change | `tests/eval/test_wr_sealbot_handshake.py`, `tests/eval/test_wr_sealbot_config_only.py` | yes |
+| the gate's rule fields ride `eval_round_complete.gate`, `null` when no gate ran; the A-3 partial carries them on a broken route | `tests/eval/test_gate_fields_ride_the_round_complete_row.py` | yes |
+| a strength-floor refusal is a third thing on the routed mapping and the stream | `tests/eval/test_strength_floor_verdict_on_the_routed_mapping.py` | yes |
 | the REAL vendored engine agrees on the rules, holds its depth receipt, and is deterministic | `tests/bots/test_sealbot_vendored.py` | **no** — Tier 2, `@pytest.mark.integration`; skips with a named reason and a named box counterpart, and a skip is reported as `not_run`, never as coverage |
 | the strix pin names the commit, the checkpoint and both sha256s, and discloses the unsupplied config | `tests/tools/test_vendor_pins_strix.py` | yes |
 | the strix adapter sends the position, counts fence disagreements, returns an out-of-fence move for the forfeit, verifies the pinned sha, and answers the opening single itself | `tests/bots/test_strix_adapter.py` | yes (against a recording double) |

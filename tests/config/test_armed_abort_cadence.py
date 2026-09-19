@@ -173,15 +173,12 @@ def test_the_arity_rule_is_enforced_at_construction_in_both_directions() -> None
                    cadence_paths=("monitor.gate_interval",), **common)
     with pytest.raises(ValueError, match="cadence_paths"):
         ArmedAbort(cadence=None, cadence_paths=("monitor.gate_interval",), **common)
-    # The WR member consumes five operands and the draw-rate member two — the interval that
-    # used to be operand 0 belongs to the CLOCK now, so a row still naming it is one path over.
+    # The draw-rate member consumes two operands — the interval that used to be operand 0
+    # belongs to the CLOCK now, so a row still naming it is one path over.
     with pytest.raises(ValueError, match="cadence_paths"):
         ArmedAbort(cadence=Cadence.GATE_INTERVAL_CONSEC,
                    cadence_paths=("monitor.gate_interval", "train.draw_rate_abort.consec",
                                   "train.draw_rate_abort.min_step"), **common)
-    with pytest.raises(ValueError, match="cadence_paths"):
-        ArmedAbort(cadence=Cadence.EVAL_ROUND_CONSEC,
-                   cadence_paths=("monitor.wr_collapse_consecutive_evals",), **common)
     # …and the legal shapes construct.
     ArmedAbort(cadence=Cadence.CLOSE_OUT_TERMINAL, cadence_paths=(), **common)
     ArmedAbort(cadence=Cadence.STEP_LAG_THRESHOLD,
@@ -214,24 +211,6 @@ def test_the_earliest_fire_step_is_derived_and_never_a_constant() -> None:
         "a row that fires at close-out has no in-run step cadence at all; claiming one "
         "would be a fabricated number"
     )
-    # The WR member, in EVAL ROUNDS: trigger C at run5's shape is the first satisfiable of the
-    # three (16 rounds against B's 26 and A's 21), and the answer moves with the eval cadence.
-    wr = Cadence.EVAL_ROUND_CONSEC
-    assert wr.earliest_fire_samples((3, 15000, 25000, 2, 20000), period_steps=1000) == 16.0
-    assert wr.earliest_fire_step((3, 15000, 25000, 2, 20000), period_steps=1000) == 16000.0
-    assert wr.earliest_fire_step((3, 15000, 25000, 2, 20000), period_steps=100) == 15100.0, (
-        "a shorter eval cadence reaches the strict `current_step > min_step` floor sooner — "
-        "round 151 at period 100, not round 16 at period 1000"
-    )
-    assert wr.earliest_fire_samples((7, 0, 0, 9, 0), period_steps=1000) == 7.0, (
-        "with every min_step at 0 the binding constraint is the SMALLEST consec across the "
-        "three triggers, since the abort fires on whichever is first satisfiable"
-    )
-    assert wr.earliest_fire_samples((0, 0, 0, 0, 0), period_steps=1000) == 1.0, (
-        "consec 0 does NOT fire before the first eval round: `if not wr_history: return "
-        "None` needs one sample however weak the evidence bar is (ADJ-D38's hair-trigger "
-        "observation, stated as arithmetic — 0 arms a weaker rule, it disables nothing)"
-    )
 
 
 def test_an_unjudgeable_operand_reads_as_UNREACHABLE_never_as_early() -> None:
@@ -247,8 +226,6 @@ def test_an_unjudgeable_operand_reads_as_UNREACHABLE_never_as_early() -> None:
             "a degenerate sample period must read UNREACHABLE, never as a fast clock — and "
             "never as `nan`, which `inf * 0` would produce and every bound would accept"
         )
-    assert Cadence.EVAL_ROUND_CONSEC.earliest_fire_step(
-        (3, 15000, 25000, 2, 20000), period_steps=0) == math.inf
     assert Cadence.STEP_LAG_THRESHOLD.earliest_fire_step((None,), period_steps=1) == math.inf
     assert Cadence.CONSEC_TRAIN_STEPS.earliest_fire_step((True,), period_steps=1) == math.inf, (
         "`bool` on a threshold path is a type confusion, not a threshold"
@@ -263,8 +240,9 @@ def test_every_axis_names_its_own_clock_and_no_two_clocks_share_a_key() -> None:
     cannot happen silently."""
     paths = {clock: clock.period_path for clock in SampleClock
              if clock.period_path is not None}
-    assert set(paths) == {SampleClock.GATE_BOUNDARY, SampleClock.EVAL_ROUND}, (
-        f"exactly the two config-period clocks may name a key; got {paths}"
+    assert set(paths) == {SampleClock.GATE_BOUNDARY}, (
+        f"exactly the one config-period clock may name a key (the EVAL-ROUND clock left with the "
+        f"sealbot rung, R362(c)); got {paths}"
     )
     assert len(set(paths.values())) == len(paths), (
         f"two sample clocks share a period key {paths}: one of those axes is being judged in "
@@ -287,9 +265,9 @@ def test_an_underivable_clock_RAISES_and_never_falls_back_to_the_step_clock() ->
     """The fail-loud half, in every direction it can rot. A silent fallback would make "one tick
     is one training step" and "nobody could derive this row's tick" the same observable — and the
     fallback is the FRIENDLY-looking outcome, which is why it must raise."""
-    absent = SimpleNamespace(train=SimpleNamespace(eval_interval=None))
-    with pytest.raises(SampleClockNotDerivableError, match="eval_interval"):
-        SampleClock.EVAL_ROUND.period_steps(absent, row="probe")
+    absent = SimpleNamespace(monitor=SimpleNamespace(gate_interval=None))
+    with pytest.raises(SampleClockNotDerivableError, match="gate_interval"):
+        SampleClock.GATE_BOUNDARY.period_steps(absent, row="probe")
     with pytest.raises(SampleClockNotDerivableError, match="not a training-step clock"):
         SampleClock.NO_STEP_CLOCK.period_steps(SimpleNamespace(), row="probe")
     with pytest.raises(SampleClockNotDerivableError, match="FALLBACK"):
@@ -302,8 +280,8 @@ def test_an_underivable_clock_RAISES_and_never_falls_back_to_the_step_clock() ->
         Cadence.GATE_INTERVAL_CONSEC.step_floor()
     # …and the derivation itself works, so the invariant is not simply "always raise".
     assert SampleClock.TRAIN_STEP.period_steps(SimpleNamespace(), row="probe") == 1.0
-    assert SampleClock.EVAL_ROUND.period_steps(
-        SimpleNamespace(train=SimpleNamespace(eval_interval=250)), row="probe") == 250.0
+    assert SampleClock.GATE_BOUNDARY.period_steps(
+        SimpleNamespace(monitor=SimpleNamespace(gate_interval=250)), row="probe") == 250.0
 
 
 def test_the_verdict_publishes_the_clock_it_judged_each_row_in(run5) -> None:

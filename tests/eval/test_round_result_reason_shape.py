@@ -36,9 +36,8 @@ def _clean_round_result() -> dict:
     """A CLEAN round built through the real builder. `reason=None` is the clean state and needs
     no enum member, so this oracle stays independent of `mantis.eval.errors`."""
     return build_round_result(
-        step=1000, round_id="r000001_1000", rungs_config=[], rung_results={},
-        gate_result=None, skipped_rungs=[], bt={"ratings": {}, "p_hat": {}},
-        schedule_next={}, eval_round_wall_sec=1.5, reason=None, detail=None, random_wr=None,
+        step=1000, round_id="r000001_1000", gate_result=None,
+        eval_round_wall_sec=1.5, reason=None, detail=None, random_wr=None,
     )
 
 

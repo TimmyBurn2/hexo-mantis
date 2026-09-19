@@ -20,14 +20,13 @@ from mantis.config.loader import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_SEVEN_SCHEMA_LEAVES = {
+_SIX_SCHEMA_LEAVES = {
     "schema_version",
     "run_id",
     "seed",
     "identity.encoding",
     "identity.representation",
     "eval.random_model_sims",
-    "eval.sealbot_model_sims",
 }
 
 
@@ -35,10 +34,10 @@ def _run5_payload() -> dict:
     return resolve_config(load_config(REPO_ROOT / "configs" / "run6.yaml")).to_event_payload()
 
 
-def test_payload_key_set_is_seven_leaves_plus_derived_amp_dtype():
+def test_payload_key_set_is_six_leaves_plus_derived_amp_dtype():
     payload = _run5_payload()
-    assert set(payload["knobs"]) == _SEVEN_SCHEMA_LEAVES | {"amp_dtype"}
-    assert len(payload["knobs"]) == 8
+    assert set(payload["knobs"]) == _SIX_SCHEMA_LEAVES | {"amp_dtype"}
+    assert len(payload["knobs"]) == 7
 
 
 def test_legal_move_radius_schedule_absent_from_payload():
@@ -59,7 +58,7 @@ def test_no_train_selfplay_monitor_leaves_threaded_into_payload():
 
 def test_schema_leaves_still_file_source_amp_still_derived():
     payload = _run5_payload()
-    for leaf in _SEVEN_SCHEMA_LEAVES:
+    for leaf in _SIX_SCHEMA_LEAVES:
         assert payload["knobs"][leaf]["source"] == "file"
     assert payload["knobs"]["amp_dtype"]["source"] == "derived"
 
@@ -77,5 +76,4 @@ def test_payload_pins_production_values_unchanged_by_radius_removal():
     assert knobs["identity.encoding"]["value"] == cfg.identity.encoding
     assert knobs["identity.representation"]["value"] == cfg.identity.representation
     assert knobs["eval.random_model_sims"]["value"] == cfg.eval.random_model_sims
-    assert knobs["eval.sealbot_model_sims"]["value"] == cfg.eval.sealbot_model_sims
     assert knobs["amp_dtype"]["value"] == "bf16"

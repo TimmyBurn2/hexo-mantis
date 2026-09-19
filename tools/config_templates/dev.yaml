@@ -22,13 +22,12 @@ deploy:
     kind: puct
 eval:
   random_model_sims: 96
-  sealbot_model_sims: 128
   # adjudication A-2: dev/smoke templates mint a small non-zero floor so the headless
   # end-to-end round exercises a real bot; the run3-parity config overrides this to 0.
   random_floor_games: 4
   worker_device: cuda
   # F-R-P2B-5 early-strength eval posture. Both blocks ship DISARMED (`null`), which is the
-  # IDENTITY posture: a ply-capped game stays a draw and the ladder runs ungated, exactly as
+  # IDENTITY posture: a ply-capped game stays a draw and the gate block runs ungated, exactly as
   # before the keys existed. `null` is not a placeholder value — it is the explicit statement
   # that the posture is off, the same shape `train.draw_rate_abort` uses (R79), and arming
   # either one is a mint-prereg event with operator-owned values, never an IMPL edit.
@@ -52,27 +51,6 @@ eval:
     seed_base: 20260625
     # The GSPRT promotion rule (2026-09-15); null is the screen/confirm rule above.
     sequential: null
-  ladder:
-    rungs:
-      - name: sealbot_d5
-        bot: sealbot
-        variant: d5
-        depth: 5
-        opponent_sims: null
-        opening_book: book_v1_s20260625_p4
-        deploy_matched: true
-        games_max: 32
-    round_games: 64
-    min_games_per_active_rung: 4
-    graduation_wr_lower_ci: 0.75
-    graduation_consec_rounds: 3
-    activation_wr_lower_ci: 0.65
-    calibration_every_k_rounds: 4
-    calibration_games: 8
-    bootstrap_resamples: 1000
-    bootstrap_ci_level: 0.95
-    bt_prior_games: 1.0
-    bootstrap_seed: 1234
 train:
   lr: 0.001
   weight_decay: 0.0001
@@ -239,15 +217,6 @@ monitor:
   collapse_threshold_nats: 1.5
   alert_grad_norm_max: 10.0
   alert_loss_increase_window: 3
-  wr_hard_abort_enabled: false
-  wr_rolling_consecutive_evals: 2
-  wr_rolling_threshold: 0.10
-  wr_rolling_min_step: 20000
-  wr_collapse_from_peak_ratio: 0.5
-  wr_collapse_min_step: 25000
-  wr_collapse_consecutive_evals: 3
-  wr_early_death_threshold: 0.05
-  wr_early_death_min_step: 15000
   axis_warn: 0.45
   axis_alert: 0.50
   # The eight heartbeat bounds, the three supervisor operating knobs, the four drain caps and

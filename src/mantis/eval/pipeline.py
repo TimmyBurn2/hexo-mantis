@@ -22,28 +22,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import numpy as np
-
-from mantis.bots.resolve import SKIP_REASON_MARKERS
 from mantis.config.resolve.eval_posture import (
     resolve_ply_cap_adjudication,
     resolve_strength_floor,
 )
 from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
 from mantis.config.resolve.inference_batching import InferenceBatchingSpec
-from mantis.eval.bt import fit_bt, predict_p
-from mantis.eval.channel_health import RoundReading as ChannelRoundReading
-from mantis.eval.channel_health import assess as assess_channel
 from mantis.eval.child_memory import EVENT as EVAL_DEVICE_MEMORY_EVENT
-from mantis.eval.errors import EvalBrokenReason, LadderStateError, ResultContractError
-from mantis.eval.ladder import LadderState
+from mantis.eval.errors import EvalBrokenReason, ResultContractError
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
 from mantis.eval.rounds import (
     GameRecordTarget,
     GateSpec,
     RoundSpec,
-    RungJob,
     build_round_result,
+    gate_stream_fields,
     partial_gate_path,
     read_partial_gate,
     validate_worker_result,
@@ -110,12 +103,11 @@ def _emit(sink: Any, payload: Mapping[str, Any]) -> None:
 
 
 def emit_round_started(
-    sink: Any, *, round_id: str, step: int, scheduled: Mapping[str, int],
-    gate_scheduled: bool, ts: float,
+    sink: Any, *, round_id: str, step: int, gate_scheduled: bool, ts: float,
 ) -> dict[str, Any]:
     payload = {
         "event": "eval_round_started", "round_id": round_id, "step": step,
-        "scheduled": dict(scheduled), "gate_scheduled": bool(gate_scheduled), "ts": ts,
+        "gate_scheduled": bool(gate_scheduled), "ts": ts,
     }
     _emit(sink, payload)
     return payload
@@ -123,16 +115,15 @@ def emit_round_started(
 
 def emit_round_complete(
     sink: Any, *, round_id: str, step: int, wall_sec: float, games_total: int | None,
-    promoted: bool | None, wr_sealbot: float | None, progress: dict[str, Any] | None = None,
-    wr_sealbot_ci_lower: float | None = None, wr_sealbot_ci_upper: float | None = None,
+    promoted: bool | None, gate: Mapping[str, Any] | None, progress: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build the round-complete payload; `games_total` is `None` on a broken round."""
+    """Build the round-complete payload; `games_total` is `None` on a broken round, `gate` is
+    the child's gate mapping (or the A-3 partial) projected to `GATE_STREAM_FIELDS`, `None`
+    when no gate ran."""
     payload = {
         "event": "eval_round_complete", "round_id": round_id, "step": step,
         "wall_sec": wall_sec, "games_total": games_total, "promoted": promoted,
-        "wr_sealbot": wr_sealbot, "progress": progress,
-        "wr_sealbot_ci_lower": wr_sealbot_ci_lower,
-        "wr_sealbot_ci_upper": wr_sealbot_ci_upper,
+        "gate": gate_stream_fields(gate), "progress": progress,
     }
     _emit(sink, payload)
     return payload
@@ -169,28 +160,6 @@ def emit_ply_cap_adjudication(
     return payload
 
 
-#: The CLOSED skip-reason partition, in the resolver's own order. A reason nothing recognises
-#: is a loud failure, never a fifth bucket invented at emission time.
-SKIP_REASON_CLASSES: tuple[str, ...] = (
-    "operator_authorized", "vendor_absent", "build_absent", "load_failed",
-)
-
-
-def _classify_skip_reason(reason: str) -> str | None:
-    """The reason's class, or None when nothing recognises it."""
-    if set(SKIP_REASON_MARKERS) != set(SKIP_REASON_CLASSES):
-        raise ResultContractError(
-            f"the skip-class partition disagrees with its markers: classes "
-            f"{sorted(SKIP_REASON_CLASSES)} vs markers {sorted(SKIP_REASON_MARKERS)}. Two "
-            f"authorities for one closed set is exactly what the marker mapping exists to "
-            f"prevent, so the disagreement is fatal rather than resolved in favour of either."
-        )
-    matched = [name for name, marker in SKIP_REASON_MARKERS.items() if marker in reason]
-    if len(matched) != 1:
-        return None
-    return matched[0]
-
-
 def emit_device_memory(
     sink: Any, *, round_id: str, step: int, device_memory: Mapping[str, Any],
 ) -> dict[str, Any]:
@@ -201,33 +170,6 @@ def emit_device_memory(
     }
     _emit(sink, payload)
     return payload
-
-
-def emit_rung_skip_events(round_id: str, skipped: list[Mapping[str, str]], sink: Any) -> None:
-    """Per skipped rung: an `eval_rung_skipped` event, an ERROR log line, and one
-    `eval_rung_skip_class` counter event carrying the running per-class count."""
-    counts: dict[str, int] = dict.fromkeys(SKIP_REASON_CLASSES, 0)
-    for entry in skipped:
-        payload = {"event": "eval_rung_skipped", "round_id": round_id,
-                   "rung": entry["rung"], "reason": entry["reason"]}
-        _emit(sink, payload)
-        _LOG.error("eval_rung_skipped round_id=%s rung=%s reason=%s",
-                   round_id, entry["rung"], entry["reason"])
-
-        reason_class = _classify_skip_reason(entry["reason"])
-        if reason_class is None:
-            _LOG.error(
-                "eval_rung_skip_class_unclassified round_id=%s rung=%s reason=%s — no "
-                "SKIP_REASON_MARKERS entry matches this reason, so it is counted in NO class; "
-                "the partition is closed and a fifth bucket is not invented here",
-                round_id, entry["rung"], entry["reason"],
-            )
-            continue
-        counts[reason_class] += 1
-        _emit(sink, {
-            "event": "eval_rung_skip_class", "round_id": round_id, "rung": entry["rung"],
-            "reason_class": reason_class, "class_count": counts[reason_class],
-        })
 
 
 def _result_tmp_path(result_path: str) -> Path:
@@ -329,7 +271,6 @@ class EvalPipeline:
         spool_dir: str | Path,
         game_record_dir: str | Path,
         allocator_posture: str | None = None,
-        ladder_state_path: str | Path,
         promotion: DeployTagHooks,
         sink: Any = None,
         heartbeat: Callable[[str], None] | None = None,
@@ -408,7 +349,6 @@ class EvalPipeline:
                     stale.unlink(missing_ok=True)
                 except OSError:
                     _LOG.debug("stale eval litter not swept: %s", stale, exc_info=True)
-        self._ladder_state_path = Path(ladder_state_path)
         self._promotion = promotion
         self._sink = sink
         self._heartbeat = heartbeat
@@ -419,11 +359,6 @@ class EvalPipeline:
         self._inflight: dict[str, Any] | None = None
         self._mailbox: list[dict[str, Any]] = []
         self._round_counter = 0
-        self._last_p_hat: dict[str, float] = {}
-        # The EXTERNAL channel's history and consecutive-flag counter. IN-MEMORY, resetting on
-        # resume: every reading is also emitted, so the durable series is the event stream.
-        self._external_history: list[ChannelRoundReading] = []
-        self._degradation_flags = 0
         #: Times `_finalize_round` was re-entered for an already-finalised round and the
         #: duplicate was SUPPRESSED. Non-zero means a promotion is being double-counted.
         self._double_finalize_suppressed = 0
@@ -432,27 +367,11 @@ class EvalPipeline:
         self._floor_checked_total = 0
         self._floor_skipped_total = 0
 
-        # LAZY: the ladder state is only needed once a round is kicked, so a pipeline built to
-        # exercise the poller alone need not hand a fully-populated `eval_cfg.ladder` up front.
-        self._ladder_state: LadderState | None = None
-
         self._stop_event = threading.Event()
         self._poller = threading.Thread(
             target=self._poll_loop, name="eval-pipeline-poller", daemon=True,
         )
         self._poller.start()
-
-    def _ensure_ladder_state(self) -> LadderState:
-        if self._ladder_state is None:
-            self._ladder_state = self._load_or_init_ladder_state()
-        return self._ladder_state
-
-    def _load_or_init_ladder_state(self) -> LadderState:
-        # LAW-14: a load failure (corrupt/unreadable state file) RAISES — it must never
-        # silently discard graduation streaks or saturation history by "starting fresh".
-        if self._ladder_state_path.exists():
-            return LadderState.load(self._ladder_state_path, ladder_cfg=self._eval_cfg.ladder)
-        return LadderState.initial(self._eval_cfg.ladder)
 
     def _beat(self, source: str) -> None:
         if self._heartbeat is not None:
@@ -502,7 +421,7 @@ class EvalPipeline:
             round_idx = self._round_counter + 1
             round_id = f"r{round_idx:06d}_{step}"
             self._round_counter = round_idx
-            spec, scheduled, gate_scheduled, candidate_path = self._build_round_spec(
+            spec, gate_scheduled, candidate_path = self._build_round_spec(
                 model, step, best, round_id=round_id, round_idx=round_idx, terminal=False,
             )
             proc = self._spawn_worker(spec)
@@ -512,8 +431,8 @@ class EvalPipeline:
                 "candidate_snapshot_path": str(candidate_path),
             }
         emit_round_started(
-            self._sink, round_id=round_id, step=step, scheduled=scheduled,
-            gate_scheduled=gate_scheduled, ts=time.time(),
+            self._sink, round_id=round_id, step=step, gate_scheduled=gate_scheduled,
+            ts=time.time(),
         )
         return {"kicked": True, "round_id": round_id, "step": step, "reason": None}
 
@@ -522,13 +441,8 @@ class EvalPipeline:
         """Rounds this pipeline has kicked. READ-ONLY; `restore_round_state` is the writer."""
         return self._round_counter
 
-    @property
-    def last_p_hat(self) -> dict[str, float]:
-        """The last observed per-rung win rates, as a copy. READ-ONLY."""
-        return dict(self._last_p_hat)
-
-    def restore_round_state(self, *, round_counter: int, last_p_hat: Mapping[str, float]) -> None:
-        """Resume the round counter and `p_hat` a stopped process left behind.
+    def restore_round_state(self, *, round_counter: int) -> None:
+        """Resume the round counter a stopped process left behind.
 
         Raises:
             ValueError: `round_counter` is negative, or lower than the counter already reached."""
@@ -541,64 +455,10 @@ class EvalPipeline:
                 "reusing one would overwrite a result already on disk"
             )
         self._round_counter = int(round_counter)
-        self._last_p_hat = {str(k): float(v) for k, v in last_p_hat.items()}
-
-    def _assess_external_channel(
-        self, result: Mapping[str, Any], *, round_id: str, step: int,
-    ) -> None:
-        """Read the saturation label and the degradation flag, and publish them."""
-        wr = result.get("wr_sealbot")
-        games = result.get("wr_sealbot_games")
-        rung = result.get("wr_sealbot_rung")
-        if wr is None or not games or rung is None:
-            # No sealbot rung recorded a game this round. NOT a zero: a round the instrument
-            # did not play is absent from the series, never a loss.
-            return
-        self._external_history.append(ChannelRoundReading(
-            round_idx=self._round_counter, games=int(games),
-            wins=int(round(float(wr) * int(games))),
-            promoted=bool(result.get("promoted")), rung=str(rung),
-        ))
-        health = assess_channel(
-            self._external_history,
-            bootstrap_resamples=self._eval_cfg.ladder.bootstrap_resamples,
-            bootstrap_ci_level=self._eval_cfg.ladder.bootstrap_ci_level,
-            bootstrap_seed=self._eval_cfg.ladder.bootstrap_seed,
-            previous_consecutive_flags=self._degradation_flags,
-        )
-        self._degradation_flags = health.consecutive_degradation_flags
-        if health.saturated:
-            _LOG.info(
-                "eval_channel_saturated round_id=%s rung=%s pooled_wr=%.4f over %d games — "
-                "the rung has stopped discriminating; strength claims answer to the NEXT rung",
-                round_id, rung, health.pooled_wr, health.pooled_games,
-            )
-        if health.degraded:
-            _LOG.warning(
-                "eval_channel_degraded round_id=%s rung=%s pooled_wr=%.4f vs running max "
-                "%.4f while promotions continue (flag %d of 2 before an architect read) — "
-                "WARN-ONLY for run6 (G-3)",
-                round_id, rung, health.pooled_wr, health.running_max_wr or 0.0,
-                health.consecutive_degradation_flags,
-            )
-        _emit(self._sink, {
-            "event": "eval_channel_health", "round_id": round_id, "step": step,
-            "rung": rung, "label": health.label, "pooled_wr": health.pooled_wr,
-            "pooled_games": health.pooled_games, "rounds_pooled": health.rounds_pooled,
-            "ci_lower": health.ci_lower, "ci_upper": health.ci_upper,
-            "running_max_wr": health.running_max_wr, "saturated": health.saturated,
-            "degraded": health.degraded,
-            "consecutive_degradation_flags": health.consecutive_degradation_flags,
-        })
-
-    def _current_p_hat(self) -> dict[str, float]:
-        if self._last_p_hat:
-            return dict(self._last_p_hat)
-        return {rung.name: 0.5 for rung in self._eval_cfg.ladder.rungs}
 
     def _build_round_spec(
         self, model: Any, step: int, best: Any, *, round_id: str, round_idx: int, terminal: bool,
-    ) -> tuple[RoundSpec, dict[str, int], bool, Path]:
+    ) -> tuple[RoundSpec, bool, Path]:
         cfg = self._eval_cfg
         candidate_path = self._spool_dir / f"{round_id}_candidate.pt"
         write_model_snapshot(model, candidate_path)
@@ -607,22 +467,7 @@ class EvalPipeline:
             best_path = self._spool_dir / f"{round_id}_best.pt"
             write_model_snapshot(best, best_path)
 
-        if terminal:
-            alloc = {rung.name: rung.games_max for rung in cfg.ladder.rungs}
-        else:
-            # Scheduling is the design's pre-registered activation law, verbatim: a dormant
-            # rung stays dormant until its predecessor clears `activation_wr_lower_ci`.
-            alloc = self._ensure_ladder_state().allocate_games(round_idx, self._current_p_hat())
-
         run_gate = (best is not None) and (round_idx % cfg.gate.stride == 0 or terminal)
-        rung_jobs = [
-            RungJob(
-                name=rung.name, bot=rung.bot, variant=rung.variant, depth=rung.depth,
-                opponent_sims=rung.opponent_sims, opening_book=rung.opening_book,
-                deploy_matched=rung.deploy_matched, games=int(alloc.get(rung.name, 0)),
-            )
-            for rung in cfg.ladder.rungs
-        ]
         gate_spec = GateSpec(
             stride=cfg.gate.stride, screen_games=cfg.gate.screen_games,
             confirm_games=cfg.gate.confirm_games, promotion_winrate=cfg.gate.promotion_winrate,
@@ -639,13 +484,12 @@ class EvalPipeline:
             candidate_snapshot=str(candidate_path),
             best_snapshot=(str(best_path) if best_path is not None else None),
             best_step=None, encoding=self._encoding, worker_device=cfg.worker_device,
-            gate=gate_spec, rung_jobs=rung_jobs, random_floor_games=cfg.random_floor_games,
-            random_model_sims=cfg.random_model_sims, sealbot_model_sims=cfg.sealbot_model_sims,
+            # No rung job since R362(c): the sealbot rung is deleted and strix cells are the
+            # frontier tool's (R352(e)); the round is the gate, the floor probe and the random floor.
+            gate=gate_spec, rung_jobs=[], random_floor_games=cfg.random_floor_games,
+            random_model_sims=cfg.random_model_sims,
             seed_base=cfg.gate.seed_base, round_timeout_sec=cfg.round_timeout_sec,
             result_path=str(result_path), progress_path=str(progress_path),
-            ladder_bootstrap_resamples=cfg.ladder.bootstrap_resamples,
-            ladder_bootstrap_ci_level=cfg.ladder.bootstrap_ci_level,
-            ladder_bootstrap_seed=cfg.ladder.bootstrap_seed,
             game_record=GameRecordTarget(record_dir=str(self._game_record_dir),
                                         run_id=self._run_id),
             # The two early-strength postures, resolved through their ONE read path and
@@ -674,12 +518,12 @@ class EvalPipeline:
             # Same seam. Read straight off `cfg` rather than cached: it is one int with no
             # resolver, and a cached copy is the second authority these rows exist to remove.
             concurrency=cfg.concurrency,
-            rung_concurrency=cfg.rung_concurrency,
+            rung_concurrency=1,
             # Same seam, same reason: a posture is a property of the PROCESS environment, so
             # the parent's boot assertion says nothing about the child's.
             allocator_posture=self._allocator_posture,
         )
-        return spec, dict(alloc), run_gate, candidate_path
+        return spec, run_gate, candidate_path
 
     def _spawn_worker(self, spec: RoundSpec) -> Any:
         # THE FIRST STATEMENT, ahead of the spec write: the single choke point both callers
@@ -875,9 +719,7 @@ class EvalPipeline:
         _LOG.error("eval_broken round_id=%s step=%s reason=%s", inflight["round_id"],
                   inflight["step"], reason.value)
         result = build_round_result(
-            step=inflight["step"], round_id=inflight["round_id"],
-            rungs_config=self._eval_cfg.ladder.rungs, rung_results={}, gate_result=partial,
-            skipped_rungs=[], bt={"ratings": {}, "p_hat": {}}, schedule_next={},
+            step=inflight["step"], round_id=inflight["round_id"], gate_result=partial,
             eval_round_wall_sec=wall_sec, reason=reason, detail=detail, random_wr=None,
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
             gate_verdict_partial=partial is not None,
@@ -886,7 +728,7 @@ class EvalPipeline:
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             # None, never 0 — a broken round MEASURED nothing, and a count here is a default
             # a reader will mistake for one (it already was).
-            games_total=None, promoted=bool(result["promoted"]), wr_sealbot=result["wr_sealbot"],
+            games_total=None, promoted=bool(result["promoted"]), gate=partial,
             progress=read_progress(inflight.get("spec")),
         )
         return result
@@ -894,76 +736,10 @@ class EvalPipeline:
     def _success_result(
         self, inflight: dict[str, Any], raw: dict[str, Any], *, wall_sec: float,
     ) -> dict[str, Any]:
-        round_idx = inflight["round_idx"]
-        rungs_raw: dict[str, Any] = raw.get("rungs", {})
         gate_raw = raw.get("gate")
         random_raw = raw.get("random") or {"games": 0, "wr": None}
-        skipped_rungs = raw.get("skipped_rungs", [])
 
-        ladder_results = {
-            name: {"games": info.get("games", 0), "wr": info.get("wr"), "ci_lo": info.get("wr_ci_lower")}
-            for name, info in rungs_raw.items()
-        }
-        # The worker has no `LadderState` and stamped `"status": "active"` on every rung,
-        # saturated ones included. Read BEFORE `record_round`: the status it was PLAYED under.
-        played_under = self._ensure_ladder_state()
-        for name, info in rungs_raw.items():
-            try:
-                info["status"] = played_under.status(name)
-            except KeyError:
-                # a rung the worker played that the ladder does not know: absent, not "active"
-                info["status"] = None
-        self._ensure_ladder_state().record_round(round_idx, ladder_results, sink=self._sink)
-        try:
-            self._ensure_ladder_state().save(self._ladder_state_path)
-        except LadderStateError:
-            # LAW-14: a persistence failure is run-fatal. The games already played go with it,
-            # since the ladder's on-disk state did not durably advance.
-            _LOG.exception("ladder_state_persist_failed round_id=%s", inflight["round_id"])
-            return self._broken_result(
-                inflight, reason=EvalBrokenReason.LADDER_PERSIST_FAILED, exit_code=None,
-                wall_sec=wall_sec, phase="ladder_persist",
-                detail=f"ladder state persist failed: {self._ladder_state_path}",
-            )
-
-        # Fold the best/gate entity into the SAME global BT fit: a fit that omits it still
-        # recovers rung-vs-candidate ratings but never the candidate-vs-best gap.
-        rung_entities = [
-            rung.name for rung in self._eval_cfg.ladder.rungs if rung.name in rungs_raw
-        ]
-        entities = ["candidate"]
-        if gate_raw:
-            entities.append("best")
-        entities += rung_entities
-        n = len(entities)
-        wins_matrix = np.zeros((n, n), dtype=np.float64)
-        if gate_raw:
-            idx = entities.index("best")
-            n_pooled = int(gate_raw.get("n_pooled") or 0)
-            wr_confirm = gate_raw.get("wr_confirm")
-            if n_pooled > 0 and wr_confirm is not None:
-                cand_wins = wr_confirm * n_pooled
-                wins_matrix[0, idx] += cand_wins
-                wins_matrix[idx, 0] += n_pooled - cand_wins
-        for name in rung_entities:
-            idx = entities.index(name)
-            info = rungs_raw[name]
-            games = int(info.get("games", 0))
-            wr = info.get("wr")
-            if games > 0 and wr is not None:
-                cand_wins = wr * games
-                wins_matrix[0, idx] += cand_wins
-                wins_matrix[idx, 0] += games - cand_wins
-        ratings = fit_bt(wins_matrix, prior_games=self._eval_cfg.ladder.bt_prior_games)
-        p_hat = {name: predict_p(ratings, 0, entities.index(name)) for name in rung_entities}
-        self._last_p_hat = p_hat
-
-        schedule_next = (
-            self._ensure_ladder_state().allocate_games(round_idx + 1, self._current_p_hat()) if p_hat else {}
-        )
-
-        games_total = sum(int(info.get("games", 0)) for info in rungs_raw.values())
-        games_total += int(random_raw.get("games", 0) or 0)
+        games_total = int(random_raw.get("games", 0) or 0)
         if gate_raw:
             games_total += int(gate_raw.get("n_pooled") or gate_raw.get("n_screen") or 0)
         # On a REFUSED strength floor the probe plays the only games of the round, so the terms
@@ -973,40 +749,24 @@ class EvalPipeline:
             games_total += int(floor_raw.get("games", 0) or 0)
 
         result = build_round_result(
-            step=inflight["step"], round_id=inflight["round_id"],
-            rungs_config=self._eval_cfg.ladder.rungs, rung_results=rungs_raw,
-            gate_result=gate_raw, skipped_rungs=skipped_rungs,
-            bt={"ratings": {name: float(ratings[i]) for i, name in enumerate(entities)}, "p_hat": p_hat},
-            schedule_next=schedule_next, eval_round_wall_sec=wall_sec, reason=None,
-            detail=None, random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
+            step=inflight["step"], round_id=inflight["round_id"], gate_result=gate_raw,
+            eval_round_wall_sec=wall_sec, reason=None, detail=None,
+            random_wr=random_raw.get("wr"), worker_pid=raw.get("worker_pid"),
             candidate_snapshot_path=inflight.get("candidate_snapshot_path"),
             # The floor's verdict reaches the LAW-15 gate ONLY through this mapping.
             # `_emit_posture_events` reads the same `raw` key; neither is the other's source,
             # so a floor payload that stops arriving silences both rather than staling one.
             strength_floor=raw.get("strength_floor"),
         )
-        # The identity is published by the producer out of one walk; this is the AGREEMENT
-        # CHECK over it — an independent walk that refuses when the two disagree.
-        self._check_the_sealbot_rung_identity(
-            rungs_raw, result, round_id=inflight["round_id"],
-        )
-
         emit_round_complete(
             self._sink, round_id=inflight["round_id"], step=inflight["step"], wall_sec=wall_sec,
             games_total=games_total,
             # `promoted: False` used to cover gate-refused, gate-not-scheduled and no-anchor
             # alike. A decision was taken iff the worker returned a gate result.
             promoted=(result["promoted"] if gate_raw else None),
-            wr_sealbot=result["wr_sealbot"],
-            # The ROUND CI travels with the win rate it belongs to; it was already bootstrapped
-            # and published per rung, and simply stopped at the round RESULT.
-            wr_sealbot_ci_lower=result.get("wr_sealbot_ci_lower"),
-            wr_sealbot_ci_upper=result.get("wr_sealbot_ci_upper"),
+            gate=gate_raw,
             progress=read_progress(inflight.get("spec")),
         )
-        self._assess_external_channel(result, round_id=inflight["round_id"],
-                                      step=inflight["step"])
-        emit_rung_skip_events(inflight["round_id"], skipped_rungs, self._sink)
         device_memory = raw.get("device_memory")
         if device_memory is not None:
             emit_device_memory(
@@ -1015,35 +775,6 @@ class EvalPipeline:
             )
         self._emit_posture_events(inflight, raw)
         return result
-
-    def _check_the_sealbot_rung_identity(
-        self, rungs_raw: Mapping[str, Any], result: Mapping[str, Any], *, round_id: str,
-    ) -> None:
-        """Refuse a round whose published sealbot identity disagrees with an independent walk.
-
-        Raises:
-            ResultContractError: the independent walk disagrees on the rung, its WR or its
-                game count."""
-        expected: tuple[Any, Any, Any] = (None, None, None)
-        for rung in self._eval_cfg.ladder.rungs:
-            if getattr(rung, "bot", None) != "sealbot":
-                continue
-            info = rungs_raw.get(rung.name)
-            if info is None or int(info.get("games", 0)) <= 0:
-                continue
-            expected = (info.get("wr"), rung.name, int(info.get("games", 0)))
-            break
-        published = (
-            result.get("wr_sealbot"), result.get("wr_sealbot_rung"),
-            result.get("wr_sealbot_games"),
-        )
-        if published != expected:
-            raise ResultContractError(
-                f"round {round_id}: the independent ladder walk derives "
-                f"(wr, rung, games) = {expected!r} for the first sealbot rung with games "
-                f"this round, but the round result publishes {published!r}. "
-                "`mantis.eval.rounds._first_sealbot_wr` and this walk have drifted."
-            )
 
     def _emit_posture_events(self, inflight: dict[str, Any], raw: Mapping[str, Any]) -> None:
         """The two armed-posture channels, driven by the worker payload's OWN key set."""
@@ -1069,15 +800,15 @@ class EvalPipeline:
         round_idx = self._round_counter + 1
         round_id = f"r{round_idx:06d}_{step}_terminal"
         self._round_counter = round_idx
-        spec, scheduled, gate_scheduled, candidate_path = self._build_round_spec(
+        spec, gate_scheduled, candidate_path = self._build_round_spec(
             model, step, best, round_id=round_id, round_idx=round_idx, terminal=True,
         )
         proc = self._spawn_worker(spec)
         # The terminal round emitted `eval_round_complete` with no `eval_round_started`, while
         # the `eval_round_wall` row names the PAIR as its producer.
         emit_round_started(
-            self._sink, round_id=round_id, step=step, scheduled=scheduled,
-            gate_scheduled=gate_scheduled, ts=time.time(),
+            self._sink, round_id=round_id, step=step, gate_scheduled=gate_scheduled,
+            ts=time.time(),
         )
         inflight = {
             "round_id": round_id, "step": step, "proc": proc, "spec": spec,
@@ -1140,7 +871,6 @@ def build_eval_pipeline(
     run_id: str,
     spool_dir: str | Path,
     game_record_dir: str | Path,
-    ladder_state_path: str | Path,
     promotion: DeployTagHooks,
     leaf_build_threads: int = 1,
     allocator_posture: str | None = None,
@@ -1160,8 +890,7 @@ def build_eval_pipeline(
         leaf_build_threads=leaf_build_threads,
         run_id=run_id,
         allocator_posture=allocator_posture,
-        spool_dir=spool_dir, game_record_dir=game_record_dir,
-        ladder_state_path=ladder_state_path, promotion=promotion,
+        spool_dir=spool_dir, game_record_dir=game_record_dir, promotion=promotion,
         sink=sink, heartbeat=heartbeat, clock=clock, mp_ctx_name=mp_ctx,
     )
 
@@ -1177,8 +906,6 @@ __all__ = [
     "emit_round_complete",
     "emit_round_skipped_busy",
     "emit_round_started",
-    "emit_rung_skip_events",
     "emit_strength_floor",
     "read_progress",
-    "SKIP_REASON_CLASSES",
 ]

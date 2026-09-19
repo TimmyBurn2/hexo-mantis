@@ -1013,3 +1013,48 @@ still names what it named. `tools/profile_eval.sh`, `tools/profile_selfplay.sh` 
 `tools/perf_prereg_skeleton.md` — a run5-era harness pair never run, one reading a config key that
 does not exist, one citing a `plan/` directory that was never tracked — are deleted under the
 same clause. `bots/` in §1 now names the three shipped wrappers.
+
+### AMENDMENT — R362(c): the sealbot rung is DELETED; the gate is an instrument; the strix cell is the external scale
+
+**R362(c), 2026-09-19.** Under R9 a structural deletion lands as an amendment in the commit that
+makes it, never as drift. The grounds are `docs/design/measurements/EVAL_COST_2026-09-19.md`:
+promotion selects nothing in the self-play loop (the actor runs the learner's weights on a
+2-step cadence; `best_model` feeds only the next anchor, the resume and the next parent), and
+the sealbot rung read 0.657 ± 0.045 flat over run7's 23 rounds while the strix series swung
+0.045 → 0.170 → 0.111, at 34 % of run7's 50 h of eval wall, separating no promoted round from a
+rejected one.
+
+1. **The eval round is three phases, not four.** The strength-floor probe, the gate block (the
+   internal comparator and parent selector) and the random floor. The `eval.ladder` block,
+   `eval.sealbot_model_sims` and `eval.rung_concurrency` leave the schema (contract #5 v33);
+   `mantis.eval.ladder` (the activation/graduation/calibration state), `mantis.eval.bt` (the
+   Bradley-Terry fit) and `mantis.eval.channel_health` are deleted; `eval_ladder_state.json` is
+   written by nothing; the resume sidecar's `last_p_hat` is read by nothing (a pre-R362 sidecar
+   carrying it is tolerated as provenance, unbumped).
+2. **The five consumers go with their producer (R4/LAW-07).** `sealbot_wr_abort` (a DEFERRED
+   armed-abort row — with it the `EVAL_ROUND` sample clock and `Cadence.EVAL_ROUND_CONSEC`, which
+   served that row alone), `sealbot_wr_warn` and the coordinator's `on_eval_round_complete` gate
+   (§11's "sealbot-WR gate" is that method; a completed round now routes straight to its
+   promotion decision through `drain._route_eval_result`), the nine `monitor.wr_*` keys and
+   their A/B/C predicates in `monitor/rules.py`, `eval_channel_health`, and `wr_sealbot` on
+   `eval_round_complete`. The rung-skip channels (`eval_rung_skipped`, `eval_rung_skip_class`)
+   were the production rung's and go too.
+3. **The rung machinery survives for ONE consumer, the strix cell.** `RoundSpec.rung_jobs`,
+   `RungJob` (now carrying its own pair-bootstrap terms, since no config block does) and
+   `worker._play_rung_block` are how `tools/strength_frontier.py` and `tools/strix_follower.py`
+   play the external scale (R352(e), R356(a)); a production round carries `rung_jobs: []` and a
+   cell names its opponent (`strix`, or a snapshot through the gate) — the tool's old default
+   opponent, `sealbot_d5`, is gone. The sealbot ADAPTER (`bots/sealbot`, the vendored build and
+   its pin) is not a consumer of the rung and stays as a vendored opponent with no production
+   caller; deleting it is a separate decision nobody has taken.
+4. **What the stream gains in the same commit.** `eval_round_complete.gate` carries the gate's
+   rule fields (`rule`, `pairs_played`, `stopped`, `llr`, `wr_confirm`, `n_pooled`, `promoted`,
+   `wall_sec` — the gate BLOCK's own wall, beside the row's round wall), `null` when no gate ran
+   (CARD-EVAL-GATE-FIELDS-IN-STREAM; contract #7). A stream reader can now see how a round
+   stopped and what it cost without the spool.
+5. **The dashboard (the R333(d) amendment above) keeps its `--ladder-state` input for pre-R362
+   records** and draws the rung as a STATED GAP on a record that carries no reading — never as a
+   zero; the run's external scale is the strix points panel (R356(d)).
+6. **The stamp loader widens its tolerance to nested retired paths.** `RETIRED_STAMP_SECTIONS`
+   (top-level only) becomes `RETIRED_STAMP_PATHS` carrying the dotted paths above, because run9's
+   warm start is a run8 checkpoint whose stamp carries every one of them (contract #4).

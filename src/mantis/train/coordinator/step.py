@@ -5,8 +5,8 @@ plus its run-safety instrumentation is ONE control-flow unit. The clean-completi
 to sit on the arm that ACTS on the completion predicate, so splitting the file would put the
 write in one place and the decision authorizing it in another.
 
-`step()` never blocks on eval and never reads the eval kick return; completed rounds reach
-the sealbot-WR gate only through `on_eval_round_complete`.
+`step()` never blocks on eval and never reads the eval kick return; a completed round is
+routed by `drain._route_eval_result` straight to its promotion decision.
 """
 from __future__ import annotations
 
@@ -28,13 +28,10 @@ from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.resolve.sample_threads import resolve_sample_threads
 from mantis.monitor.config import MonitorConfig
 from mantis.monitor.rules import (
-    WR_PEAK_WINDOW_EVALS,
     check_draw_rate_collapse,
     check_ply_cap_attractor,
     check_policy_loss_trough,
-    check_sealbot_wr_hard_abort,
     emit_training_step_alerts,
-    sealbot_wr_trajectory_alert,
 )
 from mantis.train.coordinator.config import (
     ClockLike,
@@ -77,11 +74,9 @@ def _anchor_sha256(anchor_state: Any) -> str | None:
     return checkpoint_state_sha256(Path(path))
 
 #: The gate keys carried by the `monitor_gates` summary (checks/fires/skips/warns).
-#: `sealbot_wr_abort` ships warn-only and `draw_rate_collapse` is armed by the config, so both
-#: are named here to keep an inert posture readable rather than silent.
+#: `draw_rate_collapse` is armed by the config and named here to keep an inert posture readable.
 GATE_NAMES: tuple[str, ...] = (
-    "draw_rate_collapse", "sealbot_wr_abort", "grad_norm_hard_abort", "policy_loss_trough",
-    "ply_cap_attractor",
+    "draw_rate_collapse", "grad_norm_hard_abort", "policy_loss_trough", "ply_cap_attractor",
 )
 
 #: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
@@ -92,9 +87,9 @@ _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
 )
 _POSITIONS_COUNTER = "positions_generated"
 
-# Neither the sealbot-WR ring nor the draw-rate ring has a depth constant: a literal clipped
-# every schema-legal `consec` above it into unfireable-in-effect, so capacity is derived at the
-# point of use. Plain `#` — this documents an ABSENCE and must attach to no assignment.
+# The draw-rate ring has no depth constant: a literal clipped every schema-legal `consec` above
+# it into unfireable-in-effect, so capacity is derived at the point of use. Plain `#` — this
+# documents an ABSENCE and must attach to no assignment.
 
 
 def _snapshot_counter(rstats: Any, name: str) -> int | None:
@@ -220,10 +215,6 @@ class StepCoordinator:
         self._eval_round_last_step = -1
 
         # Gate state — every ring is caller-owned (the rules are stateless).
-        self._wr_history: list[tuple[int, float]] = []
-        # Which sealbot rung the entries in `_wr_history` came from; `None` before the first
-        # round, and whenever the round reported no sealbot rung at all.
-        self._wr_history_rung: str | None = None
         self._draw_rate_history: list[float] = []
         self._loss_window: list[float] = []
         # The trough halt's producer state (R350(b)(iv)): every step's policy loss since the last
@@ -243,8 +234,8 @@ class StepCoordinator:
         # and read by the composition root.
         self._terminal_eval_reason: str | None = None
         self._run_started = self._clock.now()
-        # `warns` rides beside checks/fires/skips so the warn-only sealbot posture is visible
-        # per-gate in every `monitor_gates` event, not silent.
+        # `warns` rides beside checks/fires/skips so a warn-only posture is visible per-gate in
+        # every `monitor_gates` event, not silent.
         self._gate_stats: dict[str, dict[str, int]] = {
             name: {"checks": 0, "fires": 0, "skips": 0, "warns": 0} for name in GATE_NAMES
         }
@@ -329,7 +320,6 @@ class StepCoordinator:
             # The counters with no HEAD mechanism. Read through the pipeline's own accessor: a
             # second authority for "which round is next" is what `gate.stride` cannot survive.
             round_counter=(0 if pipeline is None else int(pipeline.round_counter)),
-            last_p_hat=({} if pipeline is None else dict(pipeline.last_p_hat)),
             anchor_sha256=_anchor_sha256(self.anchor_state),
             # A placeholder the publisher replaces: the ring's hash is unknown until written.
             ring=None,
@@ -877,11 +867,6 @@ class StepCoordinator:
             "ply_cap_window_games": (
                 None if cfg.ply_cap_abort is None else cfg.ply_cap_abort.window_games),
             "ply_cap_rate": self._ply_cap_rate,
-            "sealbot_wr_hard_abort_enabled": bool(self.monitor_cfg.wr_hard_abort_enabled),
-            "sealbot_wr_result_producer_pending": None,  # producer landed (eval.rounds)
-            "wr_history_len": len(self._wr_history),
-            # The ring's length means nothing without the rung it is a series OVER.
-            "wr_history_rung": self._wr_history_rung,
             # The watchdog's best-effort counters get a live in-run consumer here: a degraded
             # fire path is readable while the run is alive, not only moments before `os._exit`.
             "watchdog_best_effort": self._watchdog_counters(),
@@ -902,114 +887,6 @@ class StepCoordinator:
             return None
         # `snapshot()` returns a str-to-int mapping, duck-typed: the watchdog is injected Any.
         return dict(cast("Mapping[str, int]", snapshot()))
-
-    def on_eval_round_complete(self, result: Mapping[str, Any]) -> None:
-        """Consume ONE completed (drained) eval-round result dict.
-
-        Callers: `drain.py`'s `flush_pending_eval` / `run_terminal_eval`, and the mid-run
-        non-blocking drain, which MUST route every completed round here.
-
-        `wr_sealbot` absent/None gives ONE `sealbot_wr_gate_skipped` event plus a skip counter
-        carrying one of three reasons — `eval_round_broken`, `strength_floor_refused`,
-        `wr_sealbot_absent` — in that precedence, so the three causes of "this gate has no
-        number" are never one observable. That path appends nothing and must not trim.
-
-        THIS METHOD OWNS THE RING'S CAPACITY and derives it from the two minted consec keys and
-        rule B's peak window; a literal made every larger consec unfireable, and dropping the
-        window floor would widen rule B's peak with the ring.
-
-        A collapse trajectory HARD-ABORTS only when `wr_hard_abort_enabled` is True; the shipped
-        default is warn-only, which still emits a visible `sealbot_wr_warn`.
-        """
-        payload: Mapping[str, Any] = result or {}
-        stats = self._gate_stats["sealbot_wr_abort"]
-        stats["checks"] += 1
-        # `or self._train_step` would rewrite a legitimate step 0 (falsy) to the current train
-        # step and mis-stamp the WR ring: test for absence, not truth.
-        raw_step = payload.get("step")
-        step = self._train_step if raw_step is None else int(raw_step)
-        # A round that BROKE and a healthy round carrying no sealbot number used to reach this
-        # gate as the SAME observable, and the promotion bar must not read as un-evidenced when
-        # the evidence PATH failed. `.get` and NOT a subscript, unlike `apply_gate_decision`:
-        # the key legitimately postdates some routes, and a `KeyError` kills the poller thread.
-        broken = payload.get("eval_broken_reason")
-        # A round the strength floor REFUSED is neither broken nor healthy-but-metric-less.
-        # PRESENCE of the key is the arming evidence: a disarmed round carries none.
-        floor = payload.get("strength_floor")
-        floor_refused = False
-        # `None` on every arm but a refusal, so a consumer reads one key rather than inferring
-        # the case from a string.
-        floor_failed_bars: list[Any] | None = None
-        if isinstance(floor, Mapping) and floor.get("passed") is False:
-            floor_refused = True
-            floor_failed_bars = list(floor.get("failed_bars") or [])
-        wr = payload.get("wr_sealbot")
-        if wr is None:
-            stats["skips"] += 1
-            # Precedence, stated rather than incidental: broken outranks refused. A round that
-            # broke may carry a floor payload from before the break.
-            if broken is not None:
-                reason = "eval_round_broken"
-            elif floor_refused:
-                reason = "strength_floor_refused"
-            else:
-                reason = "wr_sealbot_absent"
-            emit_via(self._sink, {
-                "event": "sealbot_wr_gate_skipped",
-                "step": step,
-                "reason": reason,
-                # Present on EVERY skip, `None` on the healthy-but-metric-less arm.
-                "eval_broken_reason": broken,
-                # The bars that failed, or `None` when the floor did not refuse this round.
-                "strength_floor_failed_bars": floor_failed_bars,
-                "skipped_total": stats["skips"],
-                "pending_producer": None,  # producer landed (eval.rounds)
-            })
-            return
-        # The ring is PER-RUNG. `wr_sealbot` is the first sealbot rung with games this round, so
-        # a saturated rung going off-cadence makes consecutive rounds report different rungs, and
-        # a drop to a HARDER opponent is not a collapse. A rung change restarts the series and
-        # says so; carrying the rung in the tuple would reshape a ring two rules read.
-        rung = payload.get("wr_sealbot_rung")
-        if rung != self._wr_history_rung:
-            if self._wr_history:
-                emit_via(self._sink, {
-                    "event": "sealbot_wr_series_restarted",
-                    "step": step,
-                    "from_rung": self._wr_history_rung,
-                    "to_rung": rung,
-                    "discarded": len(self._wr_history),
-                    "reason": "the trajectory rules compare a rung against ITSELF; a series "
-                              "spanning two opponents is not one series",
-                })
-                _LOG.info("sealbot_wr_series_restarted step=%s from=%s to=%s discarded=%s",
-                          step, self._wr_history_rung, rung, len(self._wr_history))
-            self._wr_history.clear()
-            self._wr_history_rung = rung
-        self._wr_history.append((step, float(wr)))
-        # The capacity is DERIVED from everything that reads it — the two minted consec keys and
-        # rule B's peak window — so no schema-legal consec is unfireable. `max` also keeps it
-        # positive, since `[:-0]` deletes NOTHING and a 0 capacity would unbound the ring.
-        capacity = max(WR_PEAK_WINDOW_EVALS,
-                       int(self.monitor_cfg.wr_collapse_consecutive_evals),
-                       int(self.monitor_cfg.wr_rolling_consecutive_evals))
-        del self._wr_history[:-capacity]
-        alert = sealbot_wr_trajectory_alert(self._wr_history, step, self.monitor_cfg)
-        if alert is None:
-            return
-        hard = check_sealbot_wr_hard_abort(self._wr_history, step, self.monitor_cfg)
-        if hard is not None:                         # wr_hard_abort_enabled=True → hard-abort
-            self._fire_hard_abort("sealbot_wr_abort", hard, step=step)
-        else:                                        # default warn-only (operator G-3)
-            stats["warns"] += 1
-            _LOG.warning("sealbot_wr_warn step=%s message=%s", step, alert)
-            emit_via(self._sink, {
-                "event": "sealbot_wr_warn",
-                "step": step,
-                "message": alert,
-                "warn_total": stats["warns"],
-                "pending_producer": None,  # WP11-A: producer landed (eval.rounds's build_round_result)
-            })
 
     def _run_training_step(self, cfg: StepCoordinatorConfig) -> dict[str, float]:
         # `train.batch_size`, minted at 256. This was a dict lookup whose two levels both miss
@@ -1118,8 +995,6 @@ class StepCoordinator:
         trainer = self.trainer
         return {
             "draw_rate_history": [float(v) for v in self._draw_rate_history],
-            "wr_history": [[int(step), float(wr)] for step, wr in self._wr_history],
-            "wr_history_rung": self._wr_history_rung,
             "consec_high_gn": int(self._consec_high_gn),
             "initial_policy_loss": self._initial_policy_loss,
             "policy_loss_reference": self._policy_loss_reference,
@@ -1141,10 +1016,7 @@ class StepCoordinator:
     def _restore_guard_fields(self, state: Mapping[str, Any]) -> None:
         if "draw_rate_history" in state:
             self._draw_rate_history = [float(v) for v in state["draw_rate_history"]]
-        if "wr_history" in state:
-            self._wr_history = [(int(s), float(w)) for s, w in state["wr_history"]]
-        if "wr_history_rung" in state:
-            self._wr_history_rung = state["wr_history_rung"]
+        # A pre-R362 sidecar's `wr_history` / `wr_history_rung` (the sealbot ring) are ignored.
         if "consec_high_gn" in state:
             self._consec_high_gn = int(state["consec_high_gn"])
         if "initial_policy_loss" in state:

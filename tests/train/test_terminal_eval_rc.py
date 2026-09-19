@@ -1,4 +1,4 @@
-# >300 justify (R8). The seven rows are ONE claim — a BROKEN TERMINAL eval round is
+# >300 justify (R8). The per-reason rows are ONE claim — a BROKEN TERMINAL eval round is
 # supervisor-distinguishable from a clean run and a MID-RUN one deliberately is not — over one
 # seam running from `drain.run_terminal_eval` through a set-once latch to `mantis.run.main`'s
 # rc. Measuring it needs the whole ladder in one place: drivable collaborators, the `main()`
@@ -46,7 +46,7 @@ from mantis.config.armed_aborts import (
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung, RunConfig
+from mantis.config.schema import EvalConfig, GateConfig, RunConfig
 from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
@@ -85,11 +85,11 @@ _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
 _CONFIGS = _REPO / "configs"
 
-#: The seven censused reason spellings, transcribed rather than derived from the enum under
-#: test: an oracle reading its expectation off the subject accepts any consistent renaming.
-_SEVEN_REASONS = (
+#: The censused reason spellings, transcribed rather than derived from the enum under test:
+#: an oracle reading its expectation off the subject accepts any consistent renaming.
+_CENSUSED_REASONS = (
     "join_timeout", "killed", "exit_nonzero", "result_missing", "result_invalid",
-    "ladder_persist_failed", "round_completion_error",
+    "round_completion_error",
 )
 
 #: The rule name the composition root records for a broken terminal round, and the code the
@@ -490,22 +490,13 @@ class _FakeCtx:
 
 
 def _real_pipeline(tmp_path: Path, sink: _SpySink):
-    rungs = [LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5,
-                        opponent_sims=None, opening_book="book_v1_s20260625_p4",
-                        deploy_matched=True, games_max=32)]
     gate = GateConfig(stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
                       screen_confirm_lo=0.44, deploy_sims=150,
                       opening_book="book_v1_s20260625_p4", bootstrap_resamples=1000,
                       min_distinct_per_pair=10, seed_base=20260625, sequential=None)
-    ladder = LadderConfig(rungs=rungs, round_games=64, min_games_per_active_rung=4,
-                          graduation_wr_lower_ci=0.75, graduation_consec_rounds=3,
-                          activation_wr_lower_ci=0.65, calibration_every_k_rounds=4,
-                          calibration_games=8, bootstrap_resamples=1000,
-                          bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234)
-    eval_cfg = EvalConfig(random_model_sims=96, max_plies=128, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
+    eval_cfg = EvalConfig(random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
                           round_timeout_sec=5.0, worker_kill_grace_sec=0.2,
-                          ply_cap_adjudication=None, strength_floor=None, gate=gate,
-                          ladder=ladder)
+                          ply_cap_adjudication=None, strength_floor=None, gate=gate)
     spool = tmp_path / "spool"
     spool.mkdir(parents=True, exist_ok=True)
     pipeline = build_eval_pipeline(
@@ -516,7 +507,6 @@ def _real_pipeline(tmp_path: Path, sink: _SpySink):
                                        eval_final_drain_hard_cap_sec=0.05,
                                        terminal_eval_hard_cap_sec=0.05),
         encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool, game_record_dir=str(spool) + "_games",
-        ladder_state_path=tmp_path / "ladder_state.json",
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt", run_id="oracle_test_run",
@@ -596,11 +586,11 @@ def test_a_run_whose_MID_RUN_round_broke_still_exits_zero(tmp_path, monkeypatch,
 
 
 def test_the_latched_reason_is_the_routed_results_own_value(tmp_path) -> None:
-    """O-06, all seven reasons: the latch is a COPY of `result["eval_broken_reason"]` made in
+    """O-06, every censused reason: the latch is a COPY of `result["eval_broken_reason"]` made in
     ONE expression off the routed mapping, so it cannot disagree with its round.
 
     MUTATION THAT REDS IT (M-O6): latch a constant. rc 48 is still 48 and O-08 stays green."""
-    for reason in _SEVEN_REASONS:
+    for reason in _CENSUSED_REASONS:
         pipeline = _FakeEvalPipeline(terminal_result=_broken_round(reason))
         harness = _make_coordinator(eval_pipeline=pipeline, sink=_SpySink())
         routed = drain.run_terminal_eval(harness.coord)
@@ -700,7 +690,7 @@ def test_the_terminal_latch_has_one_writer_and_the_terminal_route_has_no_third_c
     )
 
 
-@pytest.mark.parametrize("reason", _SEVEN_REASONS)
+@pytest.mark.parametrize("reason", _CENSUSED_REASONS)
 def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch, request) -> None:
     """O-08 — a broken terminal round exits 48; measured at HEAD it returned 0, so a run with
     no promotion decision at all was indistinguishable to the supervisor. The rc is asserted
@@ -734,7 +724,7 @@ def test_a_broken_terminal_round_exits_48(reason, tmp_path, monkeypatch, request
 
 
 def test_a_clean_terminal_round_exits_zero(tmp_path, monkeypatch, request) -> None:
-    """O-08's CONTROL: a latch that fired on EVERY terminal round would pass all seven rows
+    """O-08's CONTROL: a latch that fired on EVERY terminal round would pass every row
     above and ship a run that always exits 48. The in-file twin of the integration-tier
     `tests/test_run_launcher.py` drive over a real bounded `launch_run`."""
     pipeline = _FakeEvalPipeline(terminal_result=_clean_round())

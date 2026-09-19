@@ -29,7 +29,7 @@ from mantis.config.schema import (
     RunConfig,
     leaf_paths,
 )
-from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW
+from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
 
@@ -48,7 +48,7 @@ def _leaves(node: object, prefix: str = "") -> set[str]:
     return out
 
 
-#: Every key a shipped config may legally omit, from the DECLARED registries and the three
+#: Every key a shipped config may legally omit, from the DECLARED registries and the two
 #: named optional rows — not from a second walk of `model_fields`, which would be a duplicate
 #: schema walker (`tests/config/test_one_schema_leaf_walker.py` refuses those) and, worse, a
 #: second answer to a question the registries already answer. That the registries and the
@@ -57,7 +57,7 @@ def _leaves(node: object, prefix: str = "") -> set[str]:
 OMITTABLE_KEYS: frozenset[str] = frozenset(
     {key for key, _grounds in OPERATIONAL_DEFAULT_KEYS}
     | {f"{key.section}.{key.field}" for key in ARCH_SCOPED_KEYS}
-    | {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW}
+    | {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
 )
 
 

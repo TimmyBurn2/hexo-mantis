@@ -28,39 +28,21 @@ from mantis.config.schema import (
     TrainConfig,
     nested_block,
 )
-from mantis.eval.rounds import EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW
+from mantis.eval.rounds import EVAL_CONCURRENCY_ROW
 from mantis.model import ARCH_KIND_ROW
 from mantis.train.warmstart import WARM_START_ROW
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# eval.gate/eval.ladder are required fields; this mirrors the ladder-schema fixture verbatim,
-# duplicated here only because this file predates the extension and must still construct a
-# schema-complete payload for its own, unrelated assertions.
-_LADDER_RUNGS = [
-    {"name": "sealbot_d5", "bot": "sealbot", "variant": "d5", "depth": 5,
-     "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-     "deploy_matched": True, "games_max": 32},
-]
-
-
 def _valid_eval_block() -> dict:
     return {
-        "random_model_sims": 96, "max_plies": 128, "sealbot_model_sims": 128, "random_floor_games": 0, "worker_device": "cuda",
+        "random_model_sims": 96, "max_plies": 128, "random_floor_games": 0, "worker_device": "cuda",
         "round_timeout_sec": 3600.0, "worker_kill_grace_sec": 10.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
             "stride": 1, "screen_games": 80, "confirm_games": 128, "promotion_winrate": 0.55,
             "screen_confirm_lo": 0.44, "deploy_sims": 150, "opening_book": "book_v1_s20260625_p4",
             "bootstrap_resamples": 1000, "min_distinct_per_pair": 10, "seed_base": 20260625, "sequential": None,
-        },
-        "ladder": {
-            "rungs": [dict(r) for r in _LADDER_RUNGS], "round_games": 64,
-            "min_games_per_active_rung": 4, "graduation_wr_lower_ci": 0.75,
-            "graduation_consec_rounds": 3, "activation_wr_lower_ci": 0.65,
-            "calibration_every_k_rounds": 4, "calibration_games": 8,
-            "bootstrap_resamples": 1000, "bootstrap_ci_level": 0.95,
-            "bt_prior_games": 1.0, "bootstrap_seed": 1234,
         },
     }
 
@@ -105,12 +87,7 @@ def _valid_monitor_block() -> dict:
         # R242 (ADJ-D12): the ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-        "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-        "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-        "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-        "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
-        "axis_warn": 0.45, "axis_alert": 0.50,
+        "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
         "heartbeat_deadline_train_step_sec": 1800.0,
         "heartbeat_deadline_inference_dispatch_sec": 1800.0,
         "heartbeat_deadline_selfplay_drain_sec": 1800.0,
@@ -183,8 +160,8 @@ def test_missing_identity_key_rejected():
 
 def test_missing_eval_key_rejected():
     payload = _valid_payload()
-    del payload["eval"]["sealbot_model_sims"]
-    with pytest.raises(ValidationError, match="sealbot_model_sims"):
+    del payload["eval"]["random_model_sims"]
+    with pytest.raises(ValidationError, match="random_model_sims"):
         RunConfig.model_validate(payload)
 
 
@@ -248,8 +225,8 @@ def test_o16_schema_round_trip():
 #: THE PREDICATE IS THE AUTHORITY'S: `mantis.config.schema.nested_block` is the one predicate,
 #: in `src/` where a test may import it, replacing a fourth local copy. The census parts company
 #: with the leaf-path walk deliberately — keeping `list[SubModel]` as ONE leaf is a statement
-#: about KEY PATHS, and `eval.ladder.rungs` and `train.replay_capacity_schedule` are reachable
-#: ONLY through the container arm, so the census asks the SAME predicate its second question.
+#: about KEY PATHS, and `train.replay_capacity_schedule` is reachable ONLY through the container
+#: arm, so the census asks the SAME predicate its second question.
 #: the census asks the SAME predicate its second question instead of holding a second walker.
 
 
@@ -332,8 +309,8 @@ def test_o16_all_fields_required_no_code_side_defaults():
     # `identity.arch_kind`, whose absent row resolves to the representation's INCUMBENT kind;
     # `identity.warm_start`, a BLOCK whose exemption is on the PARENT only, since `checkpoint`,
     # `net_hash` and `reinit` are REQUIRED inside it; and `eval.concurrency`, whose default is not a placeholder
-    # but the BEHAVIOUR ITSELF (`1` is the serial loop), and `eval.rung_concurrency`, its twin (R351).
-    exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW, EVAL_RUNG_CONCURRENCY_ROW}
+    # but the BEHAVIOUR ITSELF (`1` is the serial loop).
+    exempt |= {ARCH_KIND_ROW, WARM_START_ROW, EVAL_CONCURRENCY_ROW}
     # THE FIFTH CLASS IS A REGISTRY, not a row: an OPERATIONAL CONSTANT carries a schema default and
     # leaves the YAML, and `OPERATIONAL_DEFAULT_KEYS` is the ONE authority. A default on anything
     # NOT in a registry is still a red, and a registered key that is still required is a stale

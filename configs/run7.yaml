@@ -20,27 +20,21 @@
 # delta: train.draw_rate_abort: null -> {threshold: 0.25, min_step: 25000, N_pool_min: 50, consec: 3}
 # delta: eval.random_floor_games: 4 -> 20
 # delta: eval.gate.deploy_sims: 150 -> 256
-# delta: eval.sealbot_model_sims: 128 -> 256
 # delta: eval.strength_floor: null -> {probe_games: 4, min_decisive_rate: 0.25, min_winrate: 0.0}
-# delta: eval.ladder.rungs: [{name: sealbot_d5, bot: sealbot, variant: d5, depth: 5, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 32}] -> [{name: sealbot_d5, bot: sealbot, variant: d5, depth: 5, opponent_sims: null, opening_book: book_v1_s20260625_p4, deploy_matched: true, games_max: 288}]
-# delta: eval.ladder.round_games: 64 -> 288
-# delta: eval.ladder.calibration_games: 8 -> 288
-# delta: eval.ladder.calibration_every_k_rounds: 4 -> 1
 # delta: monitor.actor_lag_abort_enabled: false -> true
 # delta: monitor.supervisor_kill_grace_sec: 30.0 -> 120.0
 # delta: selfplay.search.kind: puct -> gumbel
 # delta: train.policy_target: raw_visit_distribution -> completed_improved_policy
 # delta: train.ply_cap_abort: null -> {rate: 0.5, window_games: 600, min_step: 3000}
+# delta: eval.gate.screen_confirm_lo: 0.44 -> 0.5
+# delta: eval.max_plies: 128 -> 256
+# delta: eval.gate.sequential: null -> {mu0: 0.52, mu1: 0.62, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104}
 # delta: eval.round_timeout_sec: 3600.0 -> 14400.0
 # delta: identity.arch_kind: null -> GnnArchV2
 # delta: identity.warm_start: null -> {checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt, net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65, reinit: []}
 # delta: inference.edge_geometry_check: inline -> checker_thread
 # delta: inference.compile_trunk: false -> true
 # delta: eval.concurrency: 1 -> 8
-# delta: eval.rung_concurrency: 1 -> 8
-# delta: eval.gate.screen_confirm_lo: 0.44 -> 0.5
-# delta: eval.max_plies: 128 -> 256
-# delta: eval.gate.sequential: null -> {mu0: 0.52, mu1: 0.62, alpha: 0.05, beta: 0.1, check_every_pairs: 8, min_pairs: 16, max_pairs: 104}
 schema_version: 1
 run_id: run7
 seed: 20260914
@@ -59,7 +53,6 @@ deploy:
     kind: puct
 eval:
   random_model_sims: 96
-  sealbot_model_sims: 256
   random_floor_games: 20
   worker_device: cuda
   ply_cap_adjudication: null
@@ -87,30 +80,8 @@ eval:
       check_every_pairs: 8
       min_pairs: 16
       max_pairs: 104
-  ladder:
-    rungs:
-    - name: sealbot_d5
-      bot: sealbot
-      variant: d5
-      depth: 5
-      opponent_sims: null
-      opening_book: book_v1_s20260625_p4
-      deploy_matched: true
-      games_max: 288
-    round_games: 288
-    min_games_per_active_rung: 4
-    graduation_wr_lower_ci: 0.75
-    graduation_consec_rounds: 3
-    activation_wr_lower_ci: 0.65
-    calibration_every_k_rounds: 1
-    calibration_games: 288
-    bootstrap_resamples: 1000
-    bootstrap_ci_level: 0.95
-    bt_prior_games: 1.0
-    bootstrap_seed: 1234
   round_timeout_sec: 14400.0
   concurrency: 8
-  rung_concurrency: 8
 train:
   lr: 0.001
   weight_decay: 0.0001
@@ -205,15 +176,6 @@ monitor:
   collapse_threshold_nats: 1.5
   alert_grad_norm_max: 10.0
   alert_loss_increase_window: 3
-  wr_hard_abort_enabled: false
-  wr_rolling_consecutive_evals: 2
-  wr_rolling_threshold: 0.1
-  wr_rolling_min_step: 20000
-  wr_collapse_from_peak_ratio: 0.5
-  wr_collapse_min_step: 25000
-  wr_collapse_consecutive_evals: 3
-  wr_early_death_threshold: 0.05
-  wr_early_death_min_step: 15000
   axis_warn: 0.45
   axis_alert: 0.5
   actor_lag_threshold_steps: 100

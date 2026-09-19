@@ -1,8 +1,6 @@
 """`MonitorConfig` — the monitor-side threshold authority.
 
-Frozen, explicit kwargs only, with no lenient `from_dict` ignoring unknown keys. The `wr_*`
-values are old-lineage calibrations carried verbatim, flagged for re-anchor; the criterion
-STRUCTURE is what is law.
+Frozen, explicit kwargs only, with no lenient `from_dict` ignoring unknown keys.
 
 CONSTRUCTION AUTHORITY: inside `src/`, exactly ONE place may construct this — the monitor
 resolver, a 1:1 copy off a VALIDATED schema — and an AST census enforces it. A bare construction
@@ -25,19 +23,6 @@ class MonitorConfig:
     collapse_threshold_nats: float = 1.5
     alert_grad_norm_max: float = 10.0
     alert_loss_increase_window: int = 3
-
-    # sealbot-WR trajectory instrument (monitor/rules.py), values verbatim from the old
-    # lineage. `wr_hard_abort_enabled=False` warns on a sustained collapse without stopping the
-    # run; True restores the hard abort, with the same triggers either way.
-    wr_hard_abort_enabled: bool = False
-    wr_rolling_consecutive_evals: int = 2
-    wr_rolling_threshold: float = 0.10
-    wr_rolling_min_step: int = 20000
-    wr_collapse_from_peak_ratio: float = 0.5
-    wr_collapse_min_step: int = 25000
-    wr_collapse_consecutive_evals: int = 3
-    wr_early_death_threshold: float = 0.05
-    wr_early_death_min_step: int = 15000
 
     # axis-distribution warn/alert (train/events.py) — one authority for the threshold.
     axis_warn: float = 0.45

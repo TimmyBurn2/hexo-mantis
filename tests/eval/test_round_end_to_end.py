@@ -5,8 +5,8 @@ this one runs the REAL out-of-process worker on CPU: no `multiprocessing.get_con
 
 The net is built at dims READ OFF `_ENC`'s registry spec, because the worker runs inference
 bound to the encoding the ROUND declared — the wire carries that geometry whatever the net was
-built at. `LadderState.initial()` marks ONLY rung index 0 active, so the resolvable stub is
-index 0 and plays from round 1 while `sealbot_d5` stays loud-skipped behind it.
+built at. Since R362(c) a production round carries no rung job: the round is the floor probe,
+the gate block (skipped here — no anchor) and the random floor, whose games are the ones played.
 
 The routed result carries an ADDITIONAL `"worker_pid"` key beyond the superset-stable shape; it
 is how this suite asserts eval inference is out-of-process without reaching into internals.
@@ -24,8 +24,6 @@ import torch
 from mantis.config.schema import (
     EvalConfig,
     GateConfig,
-    LadderConfig,
-    LadderRung,
     PlyCapAdjudicationConfig,
 )
 from mantis.config.loader import load_config
@@ -61,30 +59,14 @@ def _tiny_model(*, weight_seed: int) -> torch.nn.Module:
 
 
 def _eval_cfg(*, adjudicate: bool = False) -> EvalConfig:
-    rungs = [
-        # `LadderState.initial()` starts ONLY the first rung ACTIVE, so the resolvable stub must
-        # be index 0 to play from round 1.
-        LadderRung(name="resolvable_stub", bot="random", variant="raw", depth=None,
-                   opponent_sims=None, opening_book="book_v1_s20260625_p4",
-                   deploy_matched=True, games_max=20),
-        # Dormant behind the stub and never resolvable, so it exercises the loud-skip path.
-        LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
-                   opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32),
-    ]
     gate = GateConfig(
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
         bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
     )
-    ladder = LadderConfig(
-        rungs=rungs, round_games=20, min_games_per_active_rung=10,
-        graduation_wr_lower_ci=0.75, graduation_consec_rounds=3, activation_wr_lower_ci=0.65,
-        calibration_every_k_rounds=4, calibration_games=2, bootstrap_resamples=200,
-        bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
-    )
     return EvalConfig(
-        random_model_sims=4, max_plies=128, sealbot_model_sims=4, random_floor_games=2, worker_device="cpu",
-        round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate, ladder=ladder,
+        random_model_sims=4, max_plies=128, random_floor_games=2, worker_device="cpu",
+        round_timeout_sec=600.0, worker_kill_grace_sec=5.0, gate=gate,
         ply_cap_adjudication=(
             PlyCapAdjudicationConfig(criterion="longest_run_margin", min_margin=1)
             if adjudicate else None
@@ -121,7 +103,6 @@ def _build_pipeline(tmp_path: Path, *, adjudicate: bool = False):
         encoding=_ENC,
         run_id="oracle_e2e_run",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
         # Both graph specs are REQUIRED since the grid arm's `None` was deleted; the fused bound
         # is the smoke's own minted caps as a spec, since the tiny oracle net is not its arch.
@@ -152,57 +133,29 @@ def test_full_headless_round_end_to_end(tmp_path) -> None:
 
         result = _poll_until_complete(pipeline, timeout=600.0)
         assert result["eval_broken_reason"] is None
-        assert "wr_sealbot" in result   # G-2 handshake: always present, even with no sealbot games
-        assert "schedule_next" in result and result["schedule_next"]
-        assert "bt" in result and result["bt"].get("ratings")
         assert isinstance(result["promoted"], bool)   # gate decision present in the routed shape
-
-        rungs_played = {name: info for name, info in result["rungs"].items() if info["games"] > 0}
-        assert rungs_played, "no rung recorded any games in a full round with a resolvable stub rung"
-        assert "resolvable_stub" in rungs_played
-
+        assert result["wr_random"] is not None and 0.0 <= result["wr_random"] <= 1.0, (
+            "the random floor played its games and its win rate reached the routed result"
+        )
         assert "worker_pid" in result
         assert result["worker_pid"] != os.getpid(), "eval inference must run out-of-process"
     finally:
         pipeline.stop()
 
 
-def test_round_records_carry_regime_key_on_every_record(tmp_path) -> None:
-    pipeline = _build_pipeline(tmp_path)
-    try:
-        pipeline.run_evaluation(_tiny_model(weight_seed=20260625), 1000, None,
-                                 full_config={}, best_model_step=None)
-        result = _poll_until_complete(pipeline, timeout=600.0)
-        rungs_played = {name: info for name, info in result["rungs"].items() if info["games"] > 0}
-        assert rungs_played
-        regime_keys = [info["regime_key"] for info in rungs_played.values()]
-        assert all(regime_keys), "every played rung's aggregate must carry a non-empty regime_key"
-        # `aggregate_rung` raises on a mixed regime_key set, so a produced aggregate is itself
-        # evidence that every underlying record shared one canonical key; distinct rungs differ
-        # in bot/opponent, so their keys must differ too.
-        assert len(set(regime_keys)) == len(regime_keys)
-    finally:
-        pipeline.stop()
-
-
-def test_second_round_scheduling_reflects_first_round_bt(tmp_path) -> None:
-    # Two DIFFERENT deterministic weight seeds, so the BT fit's p_hat genuinely differs between
-    # rounds. THE ADJUDICATOR IS ARMED FOR THIS ROW ONLY, and it is the mechanism rather than a
-    # workaround: two untrained nets at `random_model_sims=4` draw every game on an unbounded
-    # board, both rounds fit `p_hat = 0.5`, and the assertion below goes blind.
+def test_a_second_round_with_an_armed_adjudicator_completes_on_the_same_pipeline(tmp_path) -> None:
+    """Two rounds on one pipeline, the ply-cap adjudicator ARMED so capped games resolve: the
+    round counter advances and each round routes its own result."""
     pipeline = _build_pipeline(tmp_path, adjudicate=True)
     try:
         pipeline.run_evaluation(_tiny_model(weight_seed=42), 1000, None,
                                  full_config={}, best_model_step=None)
         result1 = _poll_until_complete(pipeline, timeout=600.0)
-
         pipeline.run_evaluation(_tiny_model(weight_seed=1337), 2000, None,
                                  full_config={}, best_model_step=None)
         result2 = _poll_until_complete(pipeline, timeout=600.0)
-
-        p_hat_1 = result1["bt"]["p_hat"]
-        p_hat_2 = result2["bt"]["p_hat"]
-        assert p_hat_1 != p_hat_2, "the second round's BT fit must reflect the first round's games"
-        assert result1["schedule_next"] != result2["schedule_next"] or p_hat_1 != p_hat_2
+        assert (result1["step"], result2["step"]) == (1000, 2000)
+        assert result1["round_id"] != result2["round_id"]
+        assert result1["eval_broken_reason"] is None and result2["eval_broken_reason"] is None
     finally:
         pipeline.stop()

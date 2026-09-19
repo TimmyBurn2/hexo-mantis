@@ -31,21 +31,13 @@ _LADDER_RUNGS = [
 
 def _eval_block() -> dict:
     return {
-        "random_model_sims": 1, "max_plies": 128, "sealbot_model_sims": 1, "random_floor_games": 0, "worker_device": "cpu",
+        "random_model_sims": 1, "max_plies": 128, "random_floor_games": 0, "worker_device": "cpu",
         "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
         "ply_cap_adjudication": None, "strength_floor": None,
         "gate": {
             "stride": 1, "screen_games": 1, "confirm_games": 1, "promotion_winrate": 0.55,
             "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
             "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1, "sequential": None,
-        },
-        "ladder": {
-            "rungs": [dict(r) for r in _LADDER_RUNGS], "round_games": 1,
-            "min_games_per_active_rung": 1, "graduation_wr_lower_ci": 0.9,
-            "graduation_consec_rounds": 1, "activation_wr_lower_ci": 0.5,
-            "calibration_every_k_rounds": 1, "calibration_games": 1,
-            "bootstrap_resamples": 1, "bootstrap_ci_level": 0.95,
-            "bt_prior_games": 1.0, "bootstrap_seed": 1,
         },
     }
 
@@ -110,12 +102,7 @@ def _monitor_block() -> dict:
         # The ARMING cadence, schema-only and required.
         "gate_interval": 1000,
         "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-        "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-        "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-        "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-        "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-        "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
-        "axis_warn": 0.45, "axis_alert": 0.50,
+        "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
         "heartbeat_deadline_train_step_sec": 1800.0,
         "heartbeat_deadline_inference_dispatch_sec": 1800.0,
         "heartbeat_deadline_selfplay_drain_sec": 1800.0,

@@ -10,7 +10,7 @@ boolean could contradict it. `None` is ARMED=NO, explicitly; a spec is ARMED=YES
 disjoint TYPES, not two regions of one range, so no in-range number can imitate the disarmed
 posture and no code-side default exists — a missing key is rejected at load, naming the key.
 
-Two resolvers rather than one, because a run may want the ply-cap criterion without the ladder
+Two resolvers rather than one, because a run may want the ply-cap criterion without the strength
 floor or the reverse, and a single combined spec would make the two arm together.
 """
 from __future__ import annotations
@@ -34,7 +34,7 @@ class PlyCapAdjudicationSpec:
 
 @dataclass(frozen=True)
 class StrengthFloorSpec:
-    """The resolved terms of the ladder strength floor. Same seam reason as above."""
+    """The resolved terms of the round's strength floor. Same seam reason as above."""
 
     probe_games: int
     min_decisive_rate: float

@@ -69,6 +69,7 @@ def _round_spec(
         RungJob(
             name="random_rung", bot="random", variant="raw", depth=None, opponent_sims=None,
             opening_book=_BOOK, deploy_matched=True, games=rung_games,
+            bootstrap_resamples=10, bootstrap_ci_level=0.95, bootstrap_seed=1,
         )
     ]
     return RoundSpec(
@@ -76,10 +77,8 @@ def _round_spec(
         round_index=0, round_id=f"oracle_{enc_name}", step=1, candidate_snapshot=str(candidate),
         best_snapshot=str(best), best_step=None, encoding=enc_name, worker_device="cpu",
         gate=gate, rung_jobs=rung_jobs, random_floor_games=floor_games,
-        random_model_sims=2, sealbot_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
+        random_model_sims=2, seed_base=_SEED, round_timeout_sec=600.0,
         result_path=str(tmp_path / "result.json"), progress_path=str(tmp_path / "progress.txt"),
-        ladder_bootstrap_resamples=10, ladder_bootstrap_ci_level=0.95,
-        ladder_bootstrap_seed=1234,
         game_record=None,
         ply_cap_adjudication=None, strength_floor=None,
         fused_graph_caps=_caps_for(enc_name),

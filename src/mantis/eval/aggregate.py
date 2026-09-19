@@ -165,11 +165,12 @@ class RungAggregate:
 def aggregate_rung(
     records: Sequence[Mapping[str, Any]],
     *,
-    bootstrap_resamples: int = 1000,
+    bootstrap_resamples: int | None = 1000,
     bootstrap_ci_level: float = 0.95,
     bootstrap_seed: int = 0,
 ) -> RungAggregate:
-    """Aggregate one rung's game records. Raises `MixedRegimeError` (A3) if the records
+    """Aggregate one rung's game records; `bootstrap_resamples=None` reports no CI (the random
+    floor's posture, whose CI nothing reads). Raises `MixedRegimeError` (A3) if the records
     carry more than one distinct `regime_key`."""
     if not records:
         return RungAggregate(
@@ -191,10 +192,13 @@ def aggregate_rung(
 
     distinct_outcomes = _distinct_outcomes(records)
     eff_n = int(distinct_outcomes.shape[0])
-    wr_ci_lower, wr_ci_upper = pair_bootstrap_wr_ci(
-        distinct_outcomes, resamples=bootstrap_resamples,
-        ci_level=bootstrap_ci_level, seed=bootstrap_seed,
-    )
+    wr_ci_lower: float | None = None
+    wr_ci_upper: float | None = None
+    if bootstrap_resamples is not None:
+        wr_ci_lower, wr_ci_upper = pair_bootstrap_wr_ci(
+            distinct_outcomes, resamples=bootstrap_resamples,
+            ci_level=bootstrap_ci_level, seed=bootstrap_seed,
+        )
 
     return RungAggregate(
         games=games, wins=wins, losses=losses, draws=draws, wr=wr,

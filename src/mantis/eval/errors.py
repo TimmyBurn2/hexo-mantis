@@ -15,7 +15,7 @@ from mantis.bots.protocol import RungUnresolvable
 class EvalBrokenReason(StrEnum):
     """WHY an eval round broke — the ONE authority (WP12-R Phase O, R152).
 
-    Eight members, one per censused failure route in `mantis.eval.pipeline`, with wire
+    One member per censused failure route in `mantis.eval.pipeline`, with wire
     spellings BYTE-IDENTICAL to the bare literals this taxonomy replaces: the change is a
     SHAPE change (a typed value that only this enum can author) and never a VALUE change,
     so every event-stream reason already in the ONE channel keeps its spelling.
@@ -41,7 +41,6 @@ class EvalBrokenReason(StrEnum):
     EXIT_NONZERO = "exit_nonzero"
     RESULT_MISSING = "result_missing"
     RESULT_INVALID = "result_invalid"
-    LADDER_PERSIST_FAILED = "ladder_persist_failed"
     ROUND_COMPLETION_ERROR = "round_completion_error"
     #: A RESUMABLE stop terminated the round on purpose (`abandon_pending`); an operator stop,
     #: never a worker fault, so a consumer counting failures can leave it out by name.
@@ -50,10 +49,6 @@ class EvalBrokenReason(StrEnum):
 
 class EvalBrokenError(RuntimeError):
     """An eval round could not complete cleanly (join timeout / crash / garbage result)."""
-
-
-class LadderStateError(RuntimeError):
-    """`LadderState` persistence (save/load) failed — LAW-14, never a silent except."""
 
 
 class EvalDecodeUnsupportedError(RuntimeError):
@@ -75,7 +70,6 @@ __all__ = [
     "EvalBrokenError",
     "EvalBrokenReason",
     "EvalDecodeUnsupportedError",
-    "LadderStateError",
     "MixedRegimeError",
     "ResultContractError",
     "RungUnresolvable",

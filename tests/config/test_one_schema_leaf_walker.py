@@ -103,12 +103,13 @@ def test_the_two_modes_differ_by_exactly_the_container_expansion():
     reachable = set(leaf_paths(RunConfig, descend_containers=True))
     only_writable = writable - reachable
     only_reachable = reachable - writable
-    assert only_writable == {"eval.ladder.rungs", "train.replay_capacity_schedule"}, (
-        "the writable walk's extra leaves are exactly the container FIELDS themselves; if this "
-        f"set moved, a new container block entered the schema: {sorted(only_writable)}"
+    assert only_writable == {"train.replay_capacity_schedule"}, (
+        "the writable walk's extra leaves are exactly the container FIELDS themselves (one since "
+        f"R362(c) deleted `eval.ladder.rungs`); if this set moved, a container block entered or "
+        f"left the schema: {sorted(only_writable)}"
     )
-    assert all(leaf.split(".")[0:2] in (["eval", "ladder"], ["train", "replay_capacity_schedule"])
-               or leaf.startswith(("eval.ladder.rungs.", "train.replay_capacity_schedule."))
+    assert all(leaf.split(".")[0:2] == ["train", "replay_capacity_schedule"]
+               or leaf.startswith("train.replay_capacity_schedule.")
                for leaf in only_reachable), sorted(only_reachable)
     assert len(reachable) > len(writable)
 

@@ -204,21 +204,6 @@ class IdentityConfig(StrictModel):
         return self
 
 
-class LadderRung(StrictModel):
-    """One opponent-ladder rung. Exactly one of `depth`/`opponent_sims` is meaningful per `bot` and
-    the other travels as `None` rather than as a sentinel int; the bounds are named `Field`
-    constraints, so a rung that can never play a game is a named error and not a silent clamp."""
-
-    name: str = Field(min_length=1)
-    bot: Literal["sealbot", "random"]
-    variant: str = Field(min_length=1)
-    depth: int | None = Field(ge=1)
-    opponent_sims: int | None = Field(ge=1)
-    opening_book: str = Field(min_length=1)
-    deploy_matched: bool
-    games_max: int = Field(ge=1)
-
-
 class SequentialGateConfig(StrictModel):
     """The GSPRT promotion rule over opening pairs (2026-09-15); armed it replaces the screen/confirm rule, `null` is that rule."""
 
@@ -260,51 +245,6 @@ class GateConfig(StrictModel):
     sequential: SequentialGateConfig | None = Field(default=...)
 
 
-class LadderConfig(StrictModel):
-    """The opponent-ladder schema: ordered rungs plus every scheduling/hysteresis threshold as a
-    named field, never a code literal.
-
-    `bootstrap_ci_level` is bounded to the open `(0,1)`, since outside it `np.quantile` either
-    raises inside a worker subprocess or returns a statistically inverted CI; `bt_prior_games`
-    carries `allow_inf_nan=False`, because an `inf` prior makes every BT rating NaN."""
-
-    rungs: list[LadderRung]
-    round_games: int = Field(ge=1)
-    min_games_per_active_rung: int = Field(ge=0)
-    graduation_wr_lower_ci: float
-    graduation_consec_rounds: int
-    activation_wr_lower_ci: float
-    calibration_every_k_rounds: int
-    calibration_games: int = Field(ge=1)
-    bootstrap_resamples: int = Field(ge=1)
-    bootstrap_ci_level: float = Field(gt=0, lt=1)
-    bt_prior_games: float = Field(ge=0, allow_inf_nan=False)
-    bootstrap_seed: int
-
-    @model_validator(mode="after")
-    def _validate_ladder(self) -> "LadderConfig":
-        if not self.rungs:
-            raise ValueError("eval.ladder.rungs must be non-empty")
-        names = [r.name for r in self.rungs]
-        if len(names) != len(set(names)):
-            dupes = sorted({n for n in names if names.count(n) > 1})
-            raise ValueError(
-                f"eval.ladder.rungs: rung 'name' must be unique; duplicate name(s): {dupes}"
-            )
-        if not (0 < self.activation_wr_lower_ci <= self.graduation_wr_lower_ci < 1):
-            raise ValueError(
-                "eval.ladder: thresholds must satisfy "
-                "0 < activation_wr_lower_ci <= graduation_wr_lower_ci < 1 "
-                f"(got activation_wr_lower_ci={self.activation_wr_lower_ci}, "
-                f"graduation_wr_lower_ci={self.graduation_wr_lower_ci})"
-            )
-        if self.graduation_consec_rounds < 1:
-            raise ValueError("eval.ladder.graduation_consec_rounds must be >= 1")
-        if self.calibration_every_k_rounds < 1:
-            raise ValueError("eval.ladder.calibration_every_k_rounds must be >= 1")
-        return self
-
-
 class PlyCapAdjudicationConfig(StrictModel):
     """How a PLY-CAPPED eval game is resolved — ONE block carrying the whole fact "is ply-cap
     adjudication armed, and on what criterion".
@@ -319,8 +259,8 @@ class PlyCapAdjudicationConfig(StrictModel):
 
 
 class StrengthFloorConfig(StrictModel):
-    """The cheap probe that gates the EXPENSIVE ladder — ONE block carrying the whole fact "is the
-    ladder gated on a strength floor, and on what terms".
+    """The cheap probe that gates the EXPENSIVE gate block — ONE block carrying the whole fact "is
+    the round gated on a strength floor, and on what terms".
 
     `null` is ARMED=NO and is the posture every shipped config takes. `probe_games` is denominated
     in GAMES rather than seconds so the bar stays a reproducible instrument, and `min_winrate` at
@@ -341,7 +281,6 @@ class EvalConfig(StrictModel):
     raises `OverflowError` on a non-finite timeout."""
 
     random_model_sims: int = Field(ge=1)
-    sealbot_model_sims: int = Field(ge=1)
     random_floor_games: int = Field(ge=0)
     worker_device: Literal["cuda", "cpu"]
     # OPERATIONAL CONSTANTS: a round's wall-clock bound and a killed worker's grace are how the
@@ -359,13 +298,10 @@ class EvalConfig(StrictModel):
     #: the round's two inference engines. `1` is byte-exact the serial loop that ran before the
     #: parameter existed; the floor probe and random floor stay serial deliberately.
     concurrency: int = Field(ge=1, default=1)
-    #: The RUNG block's own row, same idiom (R351: a 288-game PUCT-512 point is ≈ 3 h serial).
-    rung_concurrency: int = Field(ge=1, default=1)
     #: Every eval game's ply cap, its OWN row (2026-09-15): the self-play cap serves the attractor
     #: halt and was raised to 256, and the gate's games ran to it. A capped game is a draw.
     max_plies: int = Field(ge=1)
     gate: GateConfig
-    ladder: LadderConfig
 
 
 class RunConfig(StrictModel):
@@ -509,7 +445,6 @@ class RunConfig(StrictModel):
         if self.deploy.search.kind == "gumbel":
             armed.update({
                 "eval.gate.deploy_sims": self.eval.gate.deploy_sims,
-                "eval.sealbot_model_sims": self.eval.sealbot_model_sims,
                 "eval.random_model_sims": self.eval.random_model_sims,
             })
         over = {k: v for k, v in armed.items() if v > MAX_ARMED_SIMS_GUMBEL}

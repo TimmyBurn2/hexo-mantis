@@ -144,13 +144,13 @@ def _spec_from(config_name: str, tmp_path: Path) -> RoundSpec:
         caps=DrainCaps(final_eval_drain_timeout_sec=1.0, eval_final_drain_safety_factor=1.0,
                        eval_final_drain_hard_cap_sec=1.0, terminal_eval_hard_cap_sec=1.0),
         encoding=cfg.identity.encoding, run_id=cfg.run_id, spool_dir=tmp_path / "spool", game_record_dir=str(tmp_path / "spool") + "_games",
-        ladder_state_path=tmp_path / "ladder.json", promotion=None, sink=None,
+        promotion=None, sink=None,
         # These fixtures assert the POSTURE fields, so the memory bound is `None` here.
         fused_graph_caps=None,
         inference_batching=None,
     )
     try:
-        spec, _alloc, _gate, _path = pipeline._build_round_spec(
+        spec, _gate, _path = pipeline._build_round_spec(
             _StubModel(), 1, None, round_id="r000001_1", round_idx=1, terminal=False,
         )
         return spec
@@ -196,10 +196,9 @@ def test_the_round_spec_survives_a_json_round_trip_on_both_arms() -> None:
                       screen_confirm_lo=0.44, deploy_sims=1, opening_book="b",
                       bootstrap_resamples=1, min_distinct_per_pair=1, seed_base=1,
                       run_gate=False, sequential=None),
-        rung_jobs=[], random_floor_games=0, random_model_sims=1, sealbot_model_sims=1,
+        rung_jobs=[], random_floor_games=0, random_model_sims=1,
         seed_base=1, round_timeout_sec=1.0,
-        result_path="r.json", progress_path="p.txt", ladder_bootstrap_resamples=1,
-        ladder_bootstrap_ci_level=0.95, ladder_bootstrap_seed=1,
+        result_path="r.json", progress_path="p.txt",
         game_record=None,
     )
     # `RoundSpec` carries the fused-forward memory bound in the SAME shape as the two postures;

@@ -592,17 +592,26 @@ def load_checkpoint(
     )
 
 
-#: Sections the schema RETIRED after runs stamped them — the one `extra_forbidden` a stamp can
-#: carry (a stamp is written from a validated config): `search` was split by R351(c).
-RETIRED_STAMP_SECTIONS: frozenset[str] = frozenset({"search"})
+#: Dotted paths the schema RETIRED after runs stamped them — the one `extra_forbidden` a stamp can
+#: carry (a stamp is written from a validated config): `search` was split by R351(c); the sealbot
+#: rung's rows and the WR-trajectory family were deleted by R362(c) (run7/run8 stamps carry them).
+RETIRED_STAMP_PATHS: frozenset[str] = frozenset({
+    "search",
+    "eval.ladder", "eval.sealbot_model_sims", "eval.rung_concurrency",
+    "monitor.wr_hard_abort_enabled", "monitor.wr_rolling_consecutive_evals",
+    "monitor.wr_rolling_threshold", "monitor.wr_rolling_min_step",
+    "monitor.wr_collapse_from_peak_ratio", "monitor.wr_collapse_min_step",
+    "monitor.wr_collapse_consecutive_evals", "monitor.wr_early_death_threshold",
+    "monitor.wr_early_death_min_step",
+})
 
 
 def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
-    """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew, or a section it
+    """Schema-validate the stamped config as PROVENANCE: a leaf the schema grew, or a path it
     RETIRED, after the stamp is logged, not refused; anything else refuses, the payload untouched.
 
     Raises:
-        pydantic.ValidationError: any error that is not a missing newer leaf or a retired section.
+        pydantic.ValidationError: any error that is not a missing newer leaf or a retired path.
     """
     from pydantic import ValidationError  # noqa: PLC0415 — the one exception type this reads
 
@@ -612,8 +621,8 @@ def _validate_stamped_config(path: Path, config: dict[str, Any]) -> None:
         newer = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
                  if err["type"] == "missing"]
         retired = [".".join(str(loc) for loc in err["loc"]) for err in exc.errors()
-                   if err["type"] == "extra_forbidden" and len(err["loc"]) == 1
-                   and str(err["loc"][0]) in RETIRED_STAMP_SECTIONS]
+                   if err["type"] == "extra_forbidden"
+                   and ".".join(str(loc) for loc in err["loc"]) in RETIRED_STAMP_PATHS]
         if len(newer) + len(retired) != len(exc.errors()):
             raise
         _LOG.info("checkpoint_config_predates_schema checkpoint=%s missing=%s retired=%s",
@@ -779,7 +788,7 @@ def strip_and_restamp(
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
         "deploy": {"search": {"kind": "puct"}},
         "eval": {
-            "random_model_sims": 1, "sealbot_model_sims": 1,
+            "random_model_sims": 1,
             "random_floor_games": 0, "worker_device": "cpu",
             "round_timeout_sec": 1.0, "worker_kill_grace_sec": 1.0,
             "ply_cap_adjudication": None, "strength_floor": None, "max_plies": 1,
@@ -788,16 +797,6 @@ def strip_and_restamp(
                 "screen_confirm_lo": 0.44, "deploy_sims": 1, "opening_book": "book_v1_s20260625_p4",
                 "bootstrap_resamples": 1, "min_distinct_per_pair": 1, "seed_base": 1,
                 "sequential": None,
-            },
-            "ladder": {
-                "rungs": [{"name": "r0", "bot": "random", "variant": "raw", "depth": None,
-                          "opponent_sims": None, "opening_book": "book_v1_s20260625_p4",
-                          "deploy_matched": True, "games_max": 1}],
-                "round_games": 1, "min_games_per_active_rung": 1, "graduation_wr_lower_ci": 0.9,
-                "graduation_consec_rounds": 1, "activation_wr_lower_ci": 0.5,
-                "calibration_every_k_rounds": 1, "calibration_games": 1,
-                "bootstrap_resamples": 1, "bootstrap_ci_level": 0.95,
-                "bt_prior_games": 1.0, "bootstrap_seed": 1,
             },
         },
         # `legal_move_radius_schedule` is gone; the registry alone is the radius authority.
@@ -852,11 +851,7 @@ def strip_and_restamp(
             # a placeholder must never be able to disagree with a real run's cadence.
             "gate_interval": 1000,
             "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
-            "alert_loss_increase_window": 3, "wr_hard_abort_enabled": False,
-            "wr_rolling_consecutive_evals": 2, "wr_rolling_threshold": 0.10,
-            "wr_rolling_min_step": 20000, "wr_collapse_from_peak_ratio": 0.5,
-            "wr_collapse_min_step": 25000, "wr_collapse_consecutive_evals": 3,
-            "wr_early_death_threshold": 0.05, "wr_early_death_min_step": 15000,
+            "alert_loss_increase_window": 3,
             "axis_warn": 0.45, "axis_alert": 0.50,
             "heartbeat_deadline_train_step_sec": 1800.0,
             "heartbeat_deadline_inference_dispatch_sec": 1800.0,

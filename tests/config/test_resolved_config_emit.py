@@ -17,14 +17,13 @@ from mantis.config.loader import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_EIGHT_SCHEMA_LEAVES = {
+_SEVEN_SCHEMA_LEAVES = {
     "schema_version",
     "run_id",
     "seed",
     "identity.encoding",
     "identity.representation",
     "eval.random_model_sims",
-    "eval.sealbot_model_sims",
 }
 
 
@@ -33,10 +32,10 @@ def _run5() -> ResolvedConfig:
 
 
 # O6 emit
-def test_payload_event_and_eight_knob_key_set():
+def test_payload_event_and_seven_knob_key_set():
     payload = _run5().to_event_payload()
     assert payload["event"] == "resolved_config"
-    assert set(payload["knobs"]) == _EIGHT_SCHEMA_LEAVES | {"amp_dtype"}
+    assert set(payload["knobs"]) == _SEVEN_SCHEMA_LEAVES | {"amp_dtype"}
 
 
 def test_payload_pins_production_values():
@@ -54,13 +53,12 @@ def test_payload_pins_production_values():
     assert knobs["identity.encoding"]["value"] == cfg.identity.encoding
     assert knobs["identity.representation"]["value"] == cfg.identity.representation
     assert knobs["eval.random_model_sims"]["value"] == cfg.eval.random_model_sims
-    assert knobs["eval.sealbot_model_sims"]["value"] == cfg.eval.sealbot_model_sims
     assert knobs["amp_dtype"]["value"] == "bf16"
 
 
 def test_schema_leaves_are_file_source_amp_is_derived():
     rc = _run5()
-    for leaf in _EIGHT_SCHEMA_LEAVES:
+    for leaf in _SEVEN_SCHEMA_LEAVES:
         assert rc.provenance(leaf).source == "file"
     assert rc.provenance("amp_dtype").source == "derived"
 

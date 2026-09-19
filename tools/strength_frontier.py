@@ -5,10 +5,11 @@ composition mirroring `mantis.run`'s eval seam, the parallel child runner, the p
 — are only checkable against each other; every game goes through `python -m mantis.eval.worker`.
 A cell: `label`, `candidate` (a checkpoint path, `bc_full` = every head of the BC checkpoint, or
 `bc_tp` = the BC net through the config's `identity.warm_start` seam), `search_kind`, `sims`, `games`,
-optional `opponent` (`sealbot_d5`; `strix` at its own `strix_sims` — RUNG-2; or a snapshot source
-played through the GATE block), `gumbel_m`, `c_scale`/`q_rescale` (the deploy head's σ), `concurrency`
-(games in flight; 1 = the arena's serial loop), `opening_book` (a manifest id) and `seed_base` — all
-the config's when absent; BOOK_V2's replays vary the last two. No random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
+`opponent` (`strix` at its own `strix_sims` — RUNG-2; or a snapshot source played through the GATE
+block; the sealbot cell went with the sealbot rung, R362(c)), `gumbel_m`, `c_scale`/`q_rescale` (the
+deploy head's σ), `concurrency` (games in flight; 1 = the arena's serial loop), `opening_book` (a
+manifest id) and `seed_base` — all the config's when absent; BOOK_V2's replays vary the last two. No
+random floor, one rung, `round_index` 0; a refused floor probe is a FAILED cell.
 """
 from __future__ import annotations
 
@@ -46,13 +47,17 @@ from mantis.util.determinism import seed_everything
 
 BC_FULL = "bc_full"
 BC_TP = "bc_tp"
-SEALBOT_D5 = "sealbot_d5"
 STRIX = "strix"
-#: The two opponents played through the RUNG block; anything else is a snapshot through the gate.
-_RUNG_OPPONENTS = (SEALBOT_D5, STRIX)
+#: The one opponent played through the RUNG block; anything else is a snapshot through the gate.
+_RUNG_OPPONENTS = (STRIX,)
 _RUN_ID = "frontier1"
 _BOOTSTRAP_RESAMPLES = 2000
 _CI_LEVEL = 0.95
+#: The rung block's own pair-bootstrap terms, the values every receipt on record was aggregated
+#: under (`eval.ladder.bootstrap_*` until R362(c) deleted the block): the child's `rungs` CI at
+#: 1000 resamples, this tool's `pair_readout` at 2000, both seeded here.
+_RUNG_BOOTSTRAP_RESAMPLES = 1000
+_BOOTSTRAP_SEED = 1234
 
 
 class FrontierCellError(ValueError):
@@ -124,11 +129,8 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
         round_id="cell", round_index=0, step=0, candidate_snapshot="", best_snapshot=None,
         best_step=None, encoding=config.identity.encoding, worker_device=cfg.worker_device,
         gate=gate, rung_jobs=[], random_floor_games=0, random_model_sims=cfg.random_model_sims,
-        sealbot_model_sims=cfg.sealbot_model_sims, seed_base=cfg.gate.seed_base,
+        seed_base=cfg.gate.seed_base,
         round_timeout_sec=cfg.round_timeout_sec, result_path="", progress_path="",
-        ladder_bootstrap_resamples=cfg.ladder.bootstrap_resamples,
-        ladder_bootstrap_ci_level=cfg.ladder.bootstrap_ci_level,
-        ladder_bootstrap_seed=cfg.ladder.bootstrap_seed,
         game_record=GameRecordTarget(record_dir=str(work_dir / "games"), run_id=_RUN_ID),
         ply_cap_adjudication=resolve_ply_cap_adjudication(cfg),
         strength_floor=resolve_strength_floor(cfg),
@@ -146,17 +148,6 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
     )
 
 
-def _sealbot_rung(config: Any, games: int) -> RungJob:
-    """The `sealbot_d5` rung as the config's ladder declares it, at `games`."""
-    rows = [r for r in config.eval.ladder.rungs if r.name == SEALBOT_D5]
-    if len(rows) != 1:
-        raise FrontierCellError(f"the config's ladder declares {len(rows)} rungs named {SEALBOT_D5!r}")
-    rung = rows[0]
-    return RungJob(name=rung.name, bot=rung.bot, variant=rung.variant, depth=rung.depth,
-                   opponent_sims=rung.opponent_sims, opening_book=rung.opening_book,
-                   deploy_matched=rung.deploy_matched, games=games)
-
-
 def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True) -> RungJob:
     """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False is R358(a)'s `<stem>:net_only` rung."""
     from mantis.bots import strix as _strix
@@ -167,25 +158,35 @@ def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
     variant = stem if solver else stem + _strix.NET_ONLY_SUFFIX
     return RungJob(name=STRIX, bot=STRIX, variant=variant, depth=None, opponent_sims=strix_sims,
-                   opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games)
+                   opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games,
+                   bootstrap_resamples=_RUNG_BOOTSTRAP_RESAMPLES, bootstrap_ci_level=_CI_LEVEL,
+                   bootstrap_seed=_BOOTSTRAP_SEED)
 
 
 def _rung_on_cell_book(job: RungJob, cell: Mapping[str, Any]) -> RungJob:
-    """The rung on the cell's `opening_book` when it names one, else on the ladder's."""
+    """The rung on the cell's `opening_book` when it names one, else on the gate's."""
     return replace(job, opening_book=str(cell["opening_book"])) if "opening_book" in cell else job
+
+
+def cell_opponent(cell: Mapping[str, Any]) -> str:
+    """The cell's `opponent`, REQUIRED: the old default (`sealbot_d5`) went with the rung (R362(c))."""
+    if "opponent" not in cell:
+        raise FrontierCellError(f"{cell.get('label')}: a cell names its opponent ({STRIX!r} or a "
+                                "snapshot source); the sealbot rung is deleted and there is no default")
+    return str(cell["opponent"])
 
 
 def cell_channel(cell: Mapping[str, Any]) -> str:
     """The game-record channel a cell's games land on: rung opponents write `external`."""
-    return "external" if str(cell.get("opponent", SEALBOT_D5)) in _RUNG_OPPONENTS else "promotion"
+    return "external" if cell_opponent(cell) in _RUNG_OPPONENTS else "promotion"
 
 
 def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, config: Any) -> RoundSpec:
-    """One cell's RoundSpec: the rung at `sims` vs sealbot or strix, or the gate SCREEN vs a model."""
+    """One cell's RoundSpec: the rung at `sims` vs strix, or the gate SCREEN vs a model."""
     games = int(cell["games"])
     kind = str(cell["search_kind"])
     sims = int(cell["sims"])
-    opponent = str(cell.get("opponent", SEALBOT_D5))
+    opponent = cell_opponent(cell)
     if kind not in ("gumbel", "puct"):
         raise FrontierCellError(f"{cell['label']}: search_kind {kind!r} is not gumbel|puct")
     if games < 2 or games % 2:
@@ -203,9 +204,6 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
         concurrency=int(cell.get("concurrency", 1)),
         rung_concurrency=int(cell.get("concurrency", 1)),
     )
-    if opponent == SEALBOT_D5:
-        return replace(base, **common, sealbot_model_sims=sims,
-                       rung_jobs=[_rung_on_cell_book(_sealbot_rung(config, games), cell)])
     if opponent == STRIX:
         if "strix_sims" not in cell:
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
@@ -276,7 +274,7 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
     cell_dir = work_dir / label
     cell_dir.mkdir(parents=True, exist_ok=True)
     provenance = {"candidate": build_snapshot(str(cell["candidate"]), config, cell_dir / "candidate.pt")}
-    opponent = str(cell.get("opponent", SEALBOT_D5))
+    opponent = cell_opponent(cell)
     if opponent not in _RUNG_OPPONENTS:
         provenance["opponent"] = build_snapshot(opponent, config, cell_dir / "opponent.pt")
     spec = cell_spec(cell, base, cell_dir=cell_dir, config=config)
@@ -304,7 +302,7 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
         record["worker_result"] = {"rungs": result.get("rungs"), "gate": result.get("gate"),
                                    "skipped_rungs": result.get("skipped_rungs")}
         readout = pair_readout(list(_records_for(cell_dir, cell_channel(cell))),
-                               seed=spec.ladder_bootstrap_seed)
+                               seed=_BOOTSTRAP_SEED)
         if readout["eff_n"] == 0:
             # A skipped rung or a refused floor probe exits 0 with no games of the cell's own:
             # a failed cell, never a 0-game reading.

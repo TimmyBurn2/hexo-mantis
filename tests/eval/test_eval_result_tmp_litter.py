@@ -25,7 +25,7 @@ from typing import Any
 
 import pytest
 
-from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
+from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.pipeline import DrainCaps, EvalPipeline, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 
@@ -34,24 +34,14 @@ _ROUND_ID = "r000001_1000"
 
 # fixtures, self-contained (R5 bars importing another test module)
 def _eval_cfg() -> EvalConfig:
-    rungs = [
-        LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
-                   opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32),
-    ]
     gate = GateConfig(
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
         bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
     )
-    ladder = LadderConfig(
-        rungs=rungs, round_games=64, min_games_per_active_rung=4,
-        graduation_wr_lower_ci=0.75, graduation_consec_rounds=3, activation_wr_lower_ci=0.65,
-        calibration_every_k_rounds=4, calibration_games=8, bootstrap_resamples=1000,
-        bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
-    )
     return EvalConfig(
-        random_model_sims=96, max_plies=128, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=5.0, worker_kill_grace_sec=0.1, gate=gate, ladder=ladder,
+        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
+        round_timeout_sec=5.0, worker_kill_grace_sec=0.1, gate=gate,
         ply_cap_adjudication=None, strength_floor=None,
     )
 
@@ -79,7 +69,6 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
         c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
         run_id=_RUN_ID,
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        ladder_state_path=tmp_path / "ladder_state.json",
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt",

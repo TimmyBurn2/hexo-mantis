@@ -50,6 +50,20 @@ def _ci(row: dict[str, Any]) -> tuple[float, float] | None:
     return (lo, hi) if lo is not None and hi is not None else None
 
 
+#: R362(c): the sealbot rung, its ladder file and `wr_sealbot` have no producer at HEAD; a record
+#: without a single reading is drawn as this stated gap, never as a zero.
+RUNG_RETIRED_NOTE = ("the sealbot rung was deleted by R362(c) — no round row carries "
+                     "<code>wr_sealbot</code> and no ladder file exists for a run minted after it; "
+                     "the run's external scale is the strix points panel")
+
+
+def sealbot_readings_present(rec: Record) -> bool:
+    """True iff some round row or ladder history carries a sealbot reading (a pre-R362 record)."""
+    if rec.rungs():
+        return True
+    return any(_num(r.get("wr_sealbot")) is not None for r in rec.rows("eval_round_complete"))
+
+
 def primary_rung(rec: Record) -> str:
     """The hero's rung: the channel-health rung, else the ladder's first, else `wr_sealbot`."""
     health = rec.last("eval_channel_health")

@@ -1,18 +1,12 @@
-# >300 justify (R8): one decision surface. Every function here is a PURE predicate over one
-# `training_step`-shaped payload, and they are read together — the WARN rules fire as an ordered
-# tuple through a single emitter, and the hard-abort rules are the same predicates at abort
-# severity. Splitting them would separate the rule ORDER from the code that depends on it and put
-# a rule's threshold in a different file from the one place that reads it.
 """Pure stateless run-safety rules plus the headless training-step alert emitter.
 
 Ports the surviving part of the predecessor's alert rules with DECISION PARITY — the old code is
-the spec. IN: the four training-step WARN rules, the sealbot-WR trajectory instrument (triggers
-A/B/C with the "N consecutive, not a single dip" guards) and `check_draw_rate_collapse`. OUT: the
-value-spread canary, which stayed green through a 33%→5% WR collapse, and the strength/robustness
-family, fed by a killed phantom input.
+the spec. IN: the four training-step WARN rules and `check_draw_rate_collapse`. OUT: the
+value-spread canary, which stayed green through a 33%→5% WR collapse, the strength/robustness
+family, fed by a killed phantom input, and (R362(c)) the sealbot-WR trajectory instrument, whose
+producer — the sealbot rung — is deleted.
 
-Every function is stateless — the caller owns the history/window ring — and the sealbot message is
-DE-DIAGNOSED: it reports the trajectory fact and names both candidate mechanisms. The draw-rate
+Every function is stateless — the caller owns the history/window ring. The draw-rate
 threshold lives in `StepCoordinatorConfig`, but this module must never import `mantis.train`, so
 the coordinator passes the numbers in as explicit keyword arguments.
 """
@@ -23,20 +17,6 @@ from collections.abc import Mapping, MutableSequence, Sequence
 from typing import Any
 
 from mantis.monitor.config import MonitorConfig
-
-# The fired message states the trajectory FACT and hands diagnosis back to the operator.
-_DEDIAGNOSIS = (
-    "trajectory fact only — the cause is EITHER off-distribution exploitability "
-    "(Objective-A) OR strength regression (Objective-B); diagnosis is the operator's"
-)
-
-#: Rule B's PEAK WINDOW, in eval rounds: how many most-recent evals the trajectory alert takes its
-#: `peak_wr` over. ONE literal used to carry TWO jobs — the sealbot-WR ring's CAPACITY and this
-#: window — so deriving the capacity from the minted consec keys would have silently widened the
-#: peak window with it, and a peak over more evals is a HIGHER bar for `wr < peak * ratio`. The
-#: capacity is DERIVED and the window is NAMED here, beside the predicate that reads it. Not a
-#: config key: no schema field has ever expressed it, and making it one would MINT an armed value.
-WR_PEAK_WINDOW_EVALS: int = 5
 
 # The rule-name tokens the emitted `training_alert` events carry (manifest + gate keys).
 WARN_RULE_NAMES: tuple[str, ...] = (
@@ -181,90 +161,6 @@ def emit_training_step_alerts(
             {"event": "training_alert", "rule": name, "message": message, "step": step}
         )
     return fired
-
-
-def sealbot_wr_trajectory_alert(
-    wr_history: Sequence[tuple[int, float]],
-    current_step: int,
-    cfg: MonitorConfig,
-) -> str | None:
-    """The sustained sealbot-WR collapse FACT (triggers A/B/C, de-diagnosed), computed REGARDLESS
-    of the abort disposition.
-
-    Any trigger fires: C, WR below ``wr_early_death_threshold`` for
-    ``wr_collapse_consecutive_evals`` evals past ``wr_early_death_min_step``; B, WR below
-    ``peak × wr_collapse_from_peak_ratio`` for the same count past ``wr_collapse_min_step``, with
-    ``peak`` over the last ``WR_PEAK_WINDOW_EVALS`` evals — rule B's own window, not the caller's
-    ring depth; A, WR below ``wr_rolling_threshold`` for ``wr_rolling_consecutive_evals`` evals
-    past ``wr_rolling_min_step``. The consecutive-N guards exist because a single self-correcting
-    dip once aborted a RECOVERING run, and a missed abort is the cheaper error.
-
-    Stateless, and the DISPOSITION is the CALLER's.
-    """
-    if not wr_history:
-        return None
-
-    history = list(wr_history)
-    current_wr = history[-1][1]
-    # Rule B's peak is taken over its own WINDOW, not over whatever the caller's ring holds: the
-    # ring's capacity now DERIVES from the minted consec keys, and a whole-ring peak would have
-    # widened this window with it. The slice is a no-op for every history the old ring could hold.
-    peak_wr = max(wr for _, wr in history[-WR_PEAK_WINDOW_EVALS:])
-    n_consec_collapse = int(cfg.wr_collapse_consecutive_evals)
-
-    if (
-        current_step > cfg.wr_early_death_min_step
-        and len(history) >= n_consec_collapse
-        and all(wr < cfg.wr_early_death_threshold for _, wr in history[-n_consec_collapse:])
-    ):
-        return (
-            f"sealbot-WR trigger C (early death): WR {current_wr:.1%} < "
-            f"{cfg.wr_early_death_threshold:.0%} for {n_consec_collapse} consecutive evals "
-            f"past step {cfg.wr_early_death_min_step:,} — {_DEDIAGNOSIS}"
-        )
-
-    if (
-        current_step > cfg.wr_collapse_min_step
-        and peak_wr > 0.0
-        and len(history) >= n_consec_collapse
-        and all(
-            wr < peak_wr * cfg.wr_collapse_from_peak_ratio
-            for _, wr in history[-n_consec_collapse:]
-        )
-    ):
-        return (
-            f"sealbot-WR trigger B (collapse from peak): WR {current_wr:.1%} < "
-            f"peak {peak_wr:.1%} × {cfg.wr_collapse_from_peak_ratio:.0%} for "
-            f"{n_consec_collapse} consecutive evals past step {cfg.wr_collapse_min_step:,} "
-            f"— {_DEDIAGNOSIS}"
-        )
-
-    n_consec = int(cfg.wr_rolling_consecutive_evals)
-    if current_step > cfg.wr_rolling_min_step and len(history) >= n_consec:
-        tail = history[-n_consec:]
-        if all(wr < cfg.wr_rolling_threshold for _, wr in tail):
-            mean_wr = sum(wr for _, wr in tail) / len(tail)
-            return (
-                f"sealbot-WR trigger A (rolling): mean WR {mean_wr:.1%} < "
-                f"{cfg.wr_rolling_threshold:.0%} for {n_consec} consecutive evals past "
-                f"step {cfg.wr_rolling_min_step:,} — {_DEDIAGNOSIS}"
-            )
-
-    return None
-
-
-def check_sealbot_wr_hard_abort(
-    wr_history: Sequence[tuple[int, float]],
-    current_step: int,
-    cfg: MonitorConfig,
-) -> str | None:
-    """The HARD-ABORT disposition of the sealbot-WR trajectory, gated on ``wr_hard_abort_enabled``.
-    The default posture is warn-only: with the flag False this returns None and the coordinator
-    emits a warn event instead, so the instrument is never silent. Enforcement is the caller's."""
-    if not cfg.wr_hard_abort_enabled:
-        return None
-    alert = sealbot_wr_trajectory_alert(wr_history, current_step, cfg)
-    return f"HARD-ABORT ({alert})" if alert is not None else None
 
 
 def check_policy_loss_trough(

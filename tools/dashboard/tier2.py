@@ -9,7 +9,7 @@ from .ladder import ladder_chart
 from .model import Gaps, Panel, no_rows
 from .reader import Record
 from .stats import quantile
-from .strength import RoundPoint
+from .strength import RUNG_RETIRED_NOTE, RoundPoint, sealbot_readings_present
 from .svg import (
     WIDTH,
     QuantileWindow,
@@ -43,6 +43,9 @@ def strength(series: dict[str, list[RoundPoint]], rec: Record, gaps: Gaps) -> Pa
         body = no_rows("eval_round_complete") + gaps.mark(
             "Strength ladder", "no <code>eval_round_complete</code> row, so no round is drawn")
         return Panel("Strength ladder", reads, body, "ladder", SEALBOT_TT_NOTE)
+    if not sealbot_readings_present(rec):
+        return Panel("Strength ladder", reads, gaps.mark("Strength ladder", RUNG_RETIRED_NOTE),
+                     "ladder", SEALBOT_TT_NOTE)
     body = ladder_chart(series)
     if not rec.rungs():
         body += gaps.mark("Strength ladder",

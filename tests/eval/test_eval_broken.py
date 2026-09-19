@@ -27,7 +27,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.config.schema import EvalConfig, GateConfig, LadderConfig, LadderRung
+from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.errors import ResultContractError
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision
@@ -47,27 +47,14 @@ def _tiny_model() -> torch.nn.Module:
 
 
 def _eval_cfg(**overrides: Any) -> EvalConfig:
-    rungs = [
-        LadderRung(name="sealbot_d5", bot="sealbot", variant="d5", depth=5, opponent_sims=None,
-                   opening_book="book_v1_s20260625_p4", deploy_matched=True, games_max=32),
-        LadderRung(name="random_floor_rung", bot="random", variant="raw", depth=None,
-                   opponent_sims=None, opening_book="book_v1_s20260625_p4",
-                   deploy_matched=True, games_max=32),
-    ]
     gate = GateConfig(
         stride=1, screen_games=80, confirm_games=128, promotion_winrate=0.55,
         screen_confirm_lo=0.44, deploy_sims=150, opening_book="book_v1_s20260625_p4",
         bootstrap_resamples=1000, min_distinct_per_pair=10, seed_base=20260625, sequential=None,
     )
-    ladder = LadderConfig(
-        rungs=rungs, round_games=64, min_games_per_active_rung=4,
-        graduation_wr_lower_ci=0.75, graduation_consec_rounds=3, activation_wr_lower_ci=0.65,
-        calibration_every_k_rounds=4, calibration_games=8, bootstrap_resamples=1000,
-        bootstrap_ci_level=0.95, bt_prior_games=1.0, bootstrap_seed=1234,
-    )
     defaults = dict(
-        random_model_sims=96, max_plies=128, sealbot_model_sims=128, random_floor_games=4, worker_device="cpu",
-        round_timeout_sec=0.3, worker_kill_grace_sec=0.2, gate=gate, ladder=ladder,
+        random_model_sims=96, max_plies=128, random_floor_games=4, worker_device="cpu",
+        round_timeout_sec=0.3, worker_kill_grace_sec=0.2, gate=gate,
         ply_cap_adjudication=None, strength_floor=None,
     )
     defaults.update(overrides)
@@ -103,7 +90,6 @@ def _pipeline_kwargs(tmp_path: Path, *, eval_cfg: EvalConfig | None = None, **ov
         c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
         run_id="oracle_test_run",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        ladder_state_path=tmp_path / "ladder_state.json",
         promotion=_promotion_hooks(tmp_path),
         # `None` is the no-fused-forward arm; the parameter is required, so it is
         # written out rather than omitted.

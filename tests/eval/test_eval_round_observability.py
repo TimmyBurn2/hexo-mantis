@@ -48,7 +48,7 @@ def test_a_broken_round_reports_games_total_None_not_a_countable_zero() -> None:
     the exact value is asserted because "falsy" admits the `0`."""
     sink = _Sink()
     emit_round_complete(sink, round_id="r1", step=25, wall_sec=3600.0,
-                        games_total=None, promoted=False, wr_sealbot=None)
+                        games_total=None, promoted=False, gate=None)
     payload = sink.events[-1]
     assert payload["games_total"] is None, (
         f"a broken round must report games_total=None, got {payload['games_total']!r}. A 0 here "
@@ -60,7 +60,7 @@ def test_a_successful_round_still_reports_its_real_count() -> None:
     """The sentinel must not cost the success path its number."""
     sink = _Sink()
     emit_round_complete(sink, round_id="r1", step=25, wall_sec=12.5,
-                        games_total=88, promoted=True, wr_sealbot=0.61)
+                        games_total=88, promoted=True, gate=None)
     assert sink.events[-1]["games_total"] == 88
 
 
@@ -225,7 +225,7 @@ def test_a_broken_round_now_CARRIES_how_far_it_got(tmp_path: Path) -> None:
 
     events = _Sink()
     emit_round_complete(events, round_id="r1", step=25, wall_sec=3600.0,
-                        games_total=None, promoted=False, wr_sealbot=None,
+                        games_total=None, promoted=False, gate=None,
                         progress=read_progress(SimpleNamespace(progress_path=str(path))))
     payload = events.events[-1]
     assert payload["games_total"] is None

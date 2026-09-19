@@ -151,26 +151,18 @@ def test_the_excluded_sealbot_depth_refuses_as_an_operator_authorized_skip() -> 
     )
 
 
-def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_rungs_alone() -> None:
-    """The exclusion is a statement about ONE depth, not about sealbot: `sealbot_d5` carries the
-    gate's own sealbot signal, so catching the kind would silently disarm the gate's only
-    resolvable opponent while looking like a narrow skip. Driven against the LIVE ladder."""
-    import yaml
-
+def test_the_exclusion_is_keyed_on_DEPTH_and_leaves_the_other_depths_alone() -> None:
+    """The exclusion is a statement about ONE depth, not about sealbot: depth 5, the depth every
+    sealbot cell on record played, must stay resolvable by name. (Driven against the depth set
+    rather than a config's ladder: no config mints a sealbot rung since R362(c).)"""
     from mantis.bots.resolve import _R326_EXCLUDED_SEALBOT_DEPTHS
 
-    rungs = yaml.safe_load((_REPO / "configs" / "run6.yaml").read_text(encoding="utf-8"))
-    sealbot_depths = {r["depth"] for r in rungs["eval"]["ladder"]["rungs"]
-                      if r["bot"] == "sealbot"}
     excluded = set(_R326_EXCLUDED_SEALBOT_DEPTHS)
-    assert sealbot_depths, "run5 mints no sealbot rung; this row would assert nothing"
-    assert sealbot_depths - excluded, (
-        f"the exclusion {sorted(excluded)} covers every sealbot depth run5 mints "
-        f"{sorted(sealbot_depths)} — that disarms wr_sealbot, the gate's only resolvable "
-        "opponent signal"
+    assert excluded == {6}, (
+        f"the exclusion names {sorted(excluded)}; R326 ruled out depth 6 alone, and widening "
+        "it to the kind would disarm every sealbot cell while looking like a narrow skip"
     )
-    survivor = min(sealbot_depths - excluded)
-    assert survivor not in _R326_EXCLUDED_SEALBOT_DEPTHS, survivor
+    assert 5 not in _R326_EXCLUDED_SEALBOT_DEPTHS
 
 
 def test_the_exclusion_fires_BEFORE_the_extension_probe() -> None:

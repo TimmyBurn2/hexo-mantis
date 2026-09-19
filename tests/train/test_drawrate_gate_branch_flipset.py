@@ -262,9 +262,9 @@ def test_a_disarmed_gate_run_records_exactly_one_check_and_one_skip() -> None:
 
     # `_sample` is what SKIP-counts an absent producer — the fact the deleted comment denied.
     # Driven on the real method, against a gate key of its own so the counters above stay pinned.
-    before = dict(harness.coord._gate_stats["sealbot_wr_abort"])
-    assert harness.coord._sample("sealbot_wr_abort", [], None) is False
-    after = harness.coord._gate_stats["sealbot_wr_abort"]
+    before = dict(harness.coord._gate_stats["policy_loss_trough"])
+    assert harness.coord._sample("policy_loss_trough", [], None) is False
+    after = harness.coord._gate_stats["policy_loss_trough"]
     assert after["checks"] == before["checks"] + 1 and after["skips"] == before["skips"] + 1, (
         "`_sample` itself counts the check AND the skip for an absent producer. The skip arm "
         f"DR-1 deleted claimed to be what counted the EXPLICIT-off case; it never ran. "
