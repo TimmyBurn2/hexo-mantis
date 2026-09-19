@@ -98,6 +98,35 @@ def test_triggers_are_cadence_multiples_and_promotions_only(follower_mod) -> Non
                                                         (3000, "promotion", None)]
 
 
+def test_promotions_off_reads_the_cadence_points_only(follower_mod, tmp_path: Path) -> None:
+    """R361(a): with the promotion trigger OFF a promoted round fires nothing; the cadence save still does."""
+    rows = [{"event": "eval_round_complete", "step": 3000, "promoted": True},
+            {"event": "periodic_checkpoint_save", "step": 15000, "path": "/x/a.ckpt"}]
+    got = follower_mod.triggers_from_rows(iter(rows), 15_000, promotions=False)
+    assert [(t.step, t.kind) for t in got] == [(15000, "cadence")]
+    run = _run_dir(tmp_path)
+    ckpt = _checkpoint(run, 3000)
+    _plant(run, [{"event": "eval_round_complete", "step": 3000, "promoted": True}])
+    cells = _FakeCells()
+    f = _follower(follower_mod, run, cells, promotions=False)
+    assert f.poll() == [] and f.pending == {} and cells.calls == []
+    assert not ckpt.with_name(ckpt.name + ".strix256.json").exists()
+    on = _follower(follower_mod, run, cells)
+    assert len(on.poll()) == 1, "the default is today's behaviour: the promotion fires"
+
+
+def test_the_cli_default_is_promotions_on_and_no_promotions_switches_it_off(follower_mod, monkeypatch, tmp_path: Path) -> None:
+    seen: list[bool] = []
+    monkeypatch.setattr(follower_mod, "_real_run_cell", lambda _config, _work: _FakeCells())
+    monkeypatch.setattr(follower_mod, "_strix_pin", lambda: {})
+    monkeypatch.setattr(follower_mod.Follower, "follow", lambda self, _poll: seen.append(self.promotions))
+    base = ["--config", "c.yaml", "--run-dir", str(tmp_path), "--run-id", _RUN, "--work-dir", str(tmp_path / "w")]
+    assert follower_mod.main([*base, "--follow"]) == 0
+    assert follower_mod.main([*base, "--follow", "--no-promotions"]) == 0
+    assert follower_mod.main([*base, "--follow", "--promotions"]) == 0
+    assert seen == [True, False, True]
+
+
 def test_the_tail_reads_only_new_lines_and_follows_a_new_segment(follower_mod, tmp_path: Path) -> None:
     run = _run_dir(tmp_path)
     _plant(run, [{"event": "periodic_checkpoint_save", "step": 15000, "path": "p"},

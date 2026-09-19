@@ -1,6 +1,6 @@
 """The strix follower (R356(a)): the equal-work strix cell on every 15 000-step checkpoint and every promotion."""
-# Triggers come from the EVENT STREAM, never polled filenames; the cell is `tools/strength_frontier.py`'s;
-# the receipt is a sidecar beside the checkpoint (`<ckpt>.<unit suffix>.json`) — the stamp is never touched.
+# >300 justify (R8): one unit — the triggers (the EVENT STREAM, never polled filenames), the tail, the regime
+# read, the cell (`tools/strength_frontier.py`'s) and the sidecar receipt (the stamp never touched) are one contract.
 from __future__ import annotations
 
 import argparse
@@ -41,8 +41,9 @@ class Trigger:
     path: str | None
 
 
-def triggers_from_rows(rows: Iterator[Mapping[str, Any]], cadence: int) -> list[Trigger]:
-    """The triggers in `rows`: a cadence-multiple periodic save, or a promoted round."""
+def triggers_from_rows(rows: Iterator[Mapping[str, Any]], cadence: int, *,
+                       promotions: bool = True) -> list[Trigger]:
+    """The triggers in `rows`: a cadence-multiple periodic save, or (when `promotions`) a promoted round."""
     out: list[Trigger] = []
     for row in rows:
         event, step = row.get("event"), row.get("step")
@@ -51,7 +52,7 @@ def triggers_from_rows(rows: Iterator[Mapping[str, Any]], cadence: int) -> list[
         if event == "periodic_checkpoint_save" and cadence > 0 and step % cadence == 0:
             path = row.get("path")
             out.append(Trigger(step, "cadence", path if isinstance(path, str) else None))
-        elif event == "eval_round_complete" and row.get("promoted") is True:
+        elif promotions and event == "eval_round_complete" and row.get("promoted") is True:
             out.append(Trigger(step, "promotion", None))
     return out
 
@@ -171,11 +172,12 @@ class Follower:
     """Reads triggers, plays one cell per (checkpoint, unit), writes the receipt; skips a receipted one."""
 
     def __init__(self, *, run_dir: Path, run_id: str, run_cell: RunCell, unit: str = EQUAL_WORK,
-                 cadence: int = 15_000, games: int = 288, concurrency: int = 8,
-                 strix_pin: Mapping[str, Any] | None = None, clock: Callable[[], float] = time.time,
-                 log: Callable[[str], None] = print) -> None:
+                 cadence: int = 15_000, promotions: bool = True, games: int = 288,
+                 concurrency: int = 8, strix_pin: Mapping[str, Any] | None = None,
+                 clock: Callable[[], float] = time.time, log: Callable[[str], None] = print) -> None:
         self.run_dir, self.run_id, self.run_cell = run_dir, run_id, run_cell
-        self.unit, self.cadence, self.games, self.concurrency = unit, cadence, games, concurrency
+        self.unit, self.cadence, self.promotions = unit, cadence, promotions
+        self.games, self.concurrency = games, concurrency
         self.strix_pin = dict(strix_pin) if strix_pin is not None else {}
         self.clock, self.log = clock, log
         self.tail = EventTail(run_dir, run_id)
@@ -214,7 +216,8 @@ class Follower:
 
     def poll(self) -> list[Path]:
         """One pass: new triggers join the pending set; every pending one whose checkpoint exists is read."""
-        for trig in triggers_from_rows(iter(self.tail.read_new()), self.cadence):
+        rows = iter(self.tail.read_new())
+        for trig in triggers_from_rows(rows, self.cadence, promotions=self.promotions):
             self.pending.setdefault(trig.step, trig)
         written: list[Path] = []
         for step in sorted(self.pending):
@@ -279,6 +282,9 @@ def main(argv: list[str] | None = None) -> int:
     mode.add_argument("--once", type=Path, metavar="CKPT")
     ap.add_argument("--unit", choices=sorted(UNITS), default=EQUAL_WORK, help="--once only; --follow reads equal_work")
     ap.add_argument("--cadence", type=int, default=15_000)
+    ap.add_argument("--promotions", action=argparse.BooleanOptionalAction, default=True,
+                    help="--follow: a cell on every promoted round too (R356(a)); "
+                         "--no-promotions reads the cadence points only (R361(a))")
     ap.add_argument("--games", type=int, default=288)
     ap.add_argument("--concurrency", type=int, default=8)
     ap.add_argument("--poll-sec", type=float, default=300.0)
@@ -287,8 +293,8 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--follow reads the equal-work unit only; the as-shipped and net-only cells are --once")
     follower = Follower(run_dir=args.run_dir, run_id=args.run_id,
                         run_cell=_real_run_cell(args.config, args.work_dir), unit=args.unit,
-                        cadence=args.cadence, games=args.games, concurrency=args.concurrency,
-                        strix_pin=_strix_pin())
+                        cadence=args.cadence, promotions=args.promotions, games=args.games,
+                        concurrency=args.concurrency, strix_pin=_strix_pin())
     if args.once is not None:
         status, _path = follower.read_one(args.once.resolve(), trigger="once")
         return 1 if status == "failed" else 0
