@@ -171,3 +171,34 @@ def viewer():
 def ladder():
     """The `tools/ladder` package (LADDER-1), with its submodules importable as `ladder.<name>`."""
     return load_tools_package("ladder")
+
+
+@pytest.fixture(scope="session")
+def analyzer():
+    """The `tools/analyzer` package (ANALYZER-1), with its submodules importable as `analyzer.<name>`."""
+    return load_tools_package("analyzer")
+
+
+def mint_analyzer_stamp(directory: Path, *, run_id: str = "an1", step: int = 7, deploy_kind: str | None = None) -> Path:
+    """A stamped checkpoint of a tiny GnnArchV2 over dev_example's config (test_arch_stamp_authority's recipe)."""
+    from mantis.config.loader import load_config
+    from mantis.encoding import lookup
+    from mantis.model import GnnArchV2, build_net
+    from mantis.train.checkpoints import save_checkpoint
+
+    cfg = load_config(REPO_ROOT / "configs" / "dev_example.yaml").model_dump()
+    if deploy_kind is not None:
+        cfg["deploy"]["search"]["kind"] = deploy_kind
+    spec = lookup(cfg["identity"]["encoding"])
+    arch = GnnArchV2(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=8, num_layers=1,
+                     policy_hidden=8, value_hidden=8)
+    return save_checkpoint(
+        model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=step, config=cfg,
+        metadata_kwargs={"encoding_name": cfg["identity"]["encoding"], "run_id": run_id, "arch": arch},
+        checkpoint_dir=directory, kind="weights")
+
+
+@pytest.fixture(scope="session")
+def mint_stamp():
+    """The stamp minter as a fixture, so analyzer tests share one recipe without importing each other."""
+    return mint_analyzer_stamp
