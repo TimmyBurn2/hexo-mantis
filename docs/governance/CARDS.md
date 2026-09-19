@@ -81,6 +81,29 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R361 (EVAL COST: STOP THE BLEED, COUNT, THEN REDESIGN)
+
+- **CARD-EVAL-REDESIGN — the census is READ (`docs/design/measurements/EVAL_COST_2026-09-19.md`);
+  the redesign rows are R362's, nothing in run9 armed.** What the census gives each pre-stated
+  direction (R361(c)): promotion selects NOTHING in the self-play loop — the actor runs the learner's
+  weights on a 2-step cadence and the promoted net is only the next round's anchor and the next
+  run's parent — so the gate is an instrument; gate cadence 15 000 returns ≈ 11–12 h of run7's 84
+  (25 rounds → 5; a round costs the trainer 24–32 % while it runs, 50 h of run7 was in one); the
+  sealbot rung read 0.657 ± 0.045 flat over run7 while strix swung 0.045 → 0.170 → 0.111, at 34 %
+  of eval wall, and did not separate promoted from rejected rounds — deleting it retires
+  `sealbot_wr_abort` (DEFERRED, inert), `sealbot_wr_warn`, the ladder state, `eval_channel_health`
+  and `wr_sealbot` in the same commit (R4/LAW-07); GSPRT H0 0.50 is −7 % pairs (≈ 1.3 h over run7)
+  for an equal candidate's false-promotion 2 % → 5 % — the long end is the (μ0+μ1)/2 = 0.57
+  midpoint, not H0; gate sims 64 is UNMEASURED (the gate game is the unit that costs: 38–40 s at
+  256/256 over 91–93 plies; a 64/64 cell's s/game is a bench, not a census).
+- **CARD-EVAL-GATE-FIELDS-IN-STREAM — the gate's rule fields reach no event row.** `pairs_played`,
+  `stopped`, `llr`, `wr_screen` live in the child's `eval_spool.work/<run>/<round>_result.json` and
+  the in-process routed result; the `eval_round_complete` JSONL row carries `wall_sec`, `games_total`,
+  `promoted`, `wr_sealbot`, `progress` and no `gate`, so a stream reader (the dashboard, the census)
+  cannot see how a round stopped without the spool. A producer change with its producer test; the
+  manifest's "routed `gate.*` fields" wording names the in-process result and reads as if it named
+  the row. CARDED 2026-09-19 by the census; not this packet's.
+
 ## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE); moved by R359 (READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED)
 
 - **CARD-STRIX-NET-ONLY — READ 2026-09-18, SPENT by R359(a); ordered as the first box cell after run8's START (R358(a)).** The parent
@@ -152,6 +175,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   device stage and the wake shares at each B; the same-cell probe under bf16 is the determinism
   witness. Candidates, in R360(b)'s order and none designed: batch fill (workers, wait), the
   edge-count cutoff, the CPU stage. Pre-registered success unchanged: ≥ 1.4× on the same machine.
+  **R361(d), 2026-09-19:** step 3 gains a CONTENDED arm — the same B-curve beside one strix cell —
+  and the success line is stated in BOTH regimes (alone, beside a cell); the census measured the
+  cell's cost in a second unit, run8's trainer at 356–415 steps/h inside a cell against 999–1 069
+  alone (`EVAL_COST_2026-09-19.md` §(iv)).
 
 ## Opened by R355 (REPAIR-A4)
 
