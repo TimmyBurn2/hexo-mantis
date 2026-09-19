@@ -1,6 +1,6 @@
 # ANALYZER — an interactive position analyzer over the engine: analysis, design, plan (2026-09-19)
 
-Status: **proposal for a ruling** (ANALYZER-1). Nothing here is landed; no code, no producer, no
+Status: **proposal for a ruling** (ANALYZER-1); the code is on branch `worktree-analyzer` awaiting the ruling number and the ff. No producer, no
 gate moved. Read together with `docs/design/repo_design.md` §1 and its R333(d) / R352(g)
 amendments, `docs/design/observatory_research.md` §"Takes and rejects" and
 `docs/design/observatory_design.md` §2.4–2.7 (the display conventions this reuses),
@@ -170,18 +170,20 @@ tools/analyzer/
   position.py    moves ↔ Board on the analyst thread; the compact text form; refusals by name; the legal window
   analysis.py    the ONE record: raw + search + the tactics verdict; perspective stated once
   instruments.py the 12 hex symmetries + the translation and the sweep; the value trace
-  serve.py       ThreadingHTTPServer; routes; ONE analyst thread with a superseding queue
-  html.py        the page shell; inlines web/analyzer.css + web/analyzer.js at render → one page
+  dispatch.py    the engine registry + `handle(request) -> {status, body}`; no threads, no HTTP
+  serve.py       ThreadingHTTPServer; routes; ONE analyst thread with a superseding queue, the engines closed on it
+  html.py        the page shell; inlines web/analyzer.css + web/board.js + web/analyzer.js at render → one page
   web/analyzer.css
-  web/analyzer.js
+  web/board.js   the hex renderer forked from tools/viewer (a scene in, SVG out; knows nothing about engines)
+  web/analyzer.js the state machine: slots, requests, cards
 tests/tools/test_analyzer_<module>.py     one per module, flat (R5); checkpoints minted in tmp_path, no fixture files
 tests/tools/conftest.py                   + one session fixture `analyzer` (append-only, the `viewer` pattern)
 tests/test_meta_ci.py                     + "analyzer" in the pinned Makefile target set
 Makefile: `analyzer` target (CHECKPOINTS=… [STRIX=1] [PORT=…]) + .PHONY
 ```
 
-Estimate: ≈ 900 lines Python, ≈ 400 CSS + JS, ≈ 500 tests, + 40 in `tools/strix_driver.py`,
-+ 3 in `tools/viewer/html.py`. Every `.py` under the R8 cap; a file that grows past it carries a
+Landed (2026-09-20, after an independent review of the code): ≈ 1 000 lines Python, ≈ 300 CSS + JS, ≈ 600 tests,
++ 40 in `tools/strix_driver.py`, + 3 in `tools/viewer/html.py`. Every `.py` under the R8 cap; a file that grows past it carries a
 reason, never a count.
 
 **One analyst thread.** `Board` and `MCTSTree` are `unsendable` (§0 item 4) and
