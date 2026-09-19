@@ -42,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI; 0 on success, 2 on a refusal (printed to stderr)."""
     args_in = list(sys.argv[1:] if argv is None else argv)
-    if not args_in or args_in[0].startswith("-"):
+    if not args_in or (args_in[0].startswith("-") and args_in[0] not in ("-h", "--help")):
         args_in.insert(0, "serve")
     args = build_parser().parse_args(args_in)
     infos = discover(args.checkpoints)

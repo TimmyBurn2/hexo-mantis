@@ -48,18 +48,24 @@ def test_the_raw_read_and_the_search_carry_full_children_rows(engine):
     board = _board([(0, 0), (1, 0), (0, 1)])
     raw = engine.raw_read(board)
     assert -1.0 <= raw.value <= 1.0 and len(raw.children) == len(board.legal_moves())
-    assert sum(c[2] for c in raw.children) == pytest.approx(1.0, abs=1e-3)
-    assert all(c[3] == 0 for c in raw.children)
+    assert sum(c.prior for c in raw.children) == pytest.approx(1.0, abs=1e-3)
+    assert all(c.visits == 0 for c in raw.children)
     s = engine.search(board, 16)
-    assert s.root_visits >= 1 and s.argmax in {c[0] for c in s.children} and -1.0 <= s.root_value <= 1.0
-    assert engine.card["gaps"] and engine.card["radius"] == 8 and engine.card["forcing_solver"] == "on"
+    assert s.root_visits >= 1 and s.argmax in {c.cell for c in s.children} and -1.0 <= s.root_value <= 1.0
+    assert len(engine.card["gaps"]) == 2 and engine.card["radius"] == 8 and engine.card["forcing_solver"] == "on"
 
 
-def test_the_raw_value_is_the_movers(engine):
-    # p2 to move holding an open four on the q axis: the mover wins, so the mover's value is ≈ +1.
-    board = _board([(0, 0), (5, 0), (6, 0), (0, 1), (0, 2), (7, 0), (8, 0), (0, 3), (0, 4)])
-    assert board.current_player == -1
+@pytest.mark.parametrize("moves,mover", [
+    # only p2 threatens and p2 is to move: a P1-fixed convention would read −1, the mover's reads +1
+    ([(0, 0), (3, 3), (4, 3), (0, 1), (-4, 0), (5, 3), (6, 3), (-4, 1), (-4, 2)], -1),
+    # only p1 threatens and p1 is to move: an opponent-view convention would read −1, the mover's reads +1
+    ([(0, 0), (3, 3), (4, 3), (1, 0), (2, 0), (3, 4), (4, 5), (3, 0), (0, -3), (5, 4), (3, 5)], 1),
+])
+def test_the_raw_value_is_the_movers(engine, moves, mover):
+    board = _board(moves)
+    assert board.current_player == mover
     assert engine.raw_read(board).value > 0.5
+    assert "mover" in engine.card["perspective"]
 
 
 def test_the_dispatcher_lists_strix_and_analyzes_through_it(analyzer):

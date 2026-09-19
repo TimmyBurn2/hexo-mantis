@@ -10,18 +10,23 @@ from mantis.bots.protocol import RungUnresolvable
 from mantis.bots.strix import DEFAULT_M_ACTIONS, DriverTransport, load_request, locate_strix
 from mantis.encoding import lookup
 
-from .engines import STRIX, ChildInfo, EngineInfo, EngineLoadError, RawRead, Search
+from .engines import STRIX, Child, EngineInfo, EngineLoadError, RawRead, Search
 
 DRIVER = Path(__file__).resolve().parents[1] / "strix_driver.py"
 RAW_SIMS = 1
+#: The pin declares no deploy budget; the chip offers the gate's 256 (the rung on record plays at the cell's sims).
+STRIX_CHIP_SIMS = 256
 GAPS = ("no searched root value of its own: the head row shows the visit-weighted mean of per_child_q, labelled derived",
-        "no quiescence counter (q-fires reads 0); strix's forcing solver may short-circuit a search (sims < requested)",
-        "raw_value is the mover's, probed 2026-09-19: p2 to move holding an open four reads +1.0")
+        "no quiescence counter (q-fires reads 0); strix's forcing solver may short-circuit a search (sims < requested)")
 STRIX_BUILD = "make vendor.strix"
 
 
 class StrixRefused(ValueError):
     """The driver refused this position; the message is the driver's own."""
+
+
+class StrixDead(EngineLoadError):
+    """The driver process is gone; the engine must be evicted so the next request respawns it."""
 
 
 def strix_info() -> EngineInfo:
@@ -54,25 +59,29 @@ class StrixEngine:
         self.card: dict[str, Any] = {
             "id": info.id, "run_id": "strix", "step": int(pin.get("checkpoint_train_steps", 0)),
             "sha8": str(pin["checkpoint_sha256"])[:8], "encoding": encoding, "radius": self.radius,
-            "search_kind": "gumbel (strix)", "deploy_sims": 256, "params": reply.get("params"),
+            "search_kind": "gumbel (strix)", "deploy_sims": STRIX_CHIP_SIMS, "params": reply.get("params"),
             "device": reply.get("device"), "threads": None, "seed": 0, "m_actions": DEFAULT_M_ACTIONS,
             "forcing_solver": reply.get("forcing_solver"), "driver": str(DRIVER),
+            "perspective": "raw_value is the mover's, probed 2026-09-19: p2 to move holding an open four reads +1.0",
             "encoding_note": "the Board is built with the mantis encoding named here (the legal fence)",
             "gaps": list(GAPS),
         }
 
     def _ask(self, board: Board, sims: int) -> dict[str, Any]:
         stones = [[int(q), int(r), int(p)] for q, r, p in board.get_stones()]
-        reply = self._transport.ask({"op": "analyze", "stones": stones, "to_move": int(board.current_player),
-                                     "moves_remaining": int(board.moves_remaining), "sims": int(sims)})
+        try:
+            reply = self._transport.ask({"op": "analyze", "stones": stones, "to_move": int(board.current_player),
+                                         "moves_remaining": int(board.moves_remaining), "sims": int(sims)})
+        except RuntimeError as exc:
+            raise StrixDead(f"strix: {exc}") from None
         if "error" in reply:
             raise StrixRefused(f"strix driver: {reply['error']}")
         return reply
 
     @staticmethod
-    def _children(reply: dict[str, Any], *, visits: bool) -> list[ChildInfo]:
-        return [((int(q), int(r)), i, float(reply["per_child_prior"][i]), int(reply["visits"][i]) if visits else 0,
-                 float(reply["per_child_q"][i])) for i, (q, r) in enumerate(reply["legal"])]
+    def _children(reply: dict[str, Any], *, visits: bool) -> list[Child]:
+        return [Child((int(q), int(r)), float(reply["per_child_prior"][i]), int(reply["visits"][i]) if visits else 0,
+                      float(reply["per_child_q"][i])) for i, (q, r) in enumerate(reply["legal"])]
 
     def raw_read(self, board: Board) -> RawRead:
         """The net's raw value (the mover's) and priors; raises StrixRefused on a board with no p1 stone."""
@@ -95,4 +104,4 @@ class StrixEngine:
         self._transport.close()
 
 
-__all__ = ["DRIVER", "GAPS", "STRIX_BUILD", "StrixEngine", "StrixRefused", "strix_info"]
+__all__ = ["DRIVER", "GAPS", "STRIX_BUILD", "STRIX_CHIP_SIMS", "StrixDead", "StrixEngine", "StrixRefused", "strix_info"]

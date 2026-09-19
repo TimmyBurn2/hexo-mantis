@@ -58,9 +58,9 @@ td.num{font-weight:600}
 .mark{font:.36px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--fg);pointer-events:none}
 .tacwin{fill:none;stroke:var(--win);stroke-width:.12}
 .tacfour{fill:none;stroke:var(--hi);stroke-width:.08;stroke-dasharray:.18 .12}
-#tracesvg{width:100%;height:90px;border:1px solid var(--line);margin-top:4px}
-#tracesvg[hidden]{display:none}
-#tracesvg .raw{fill:none;stroke:var(--mute);stroke-width:1;vector-effect:non-scaling-stroke}
-#tracesvg .root{fill:none;stroke:var(--heat);stroke-width:2;vector-effect:non-scaling-stroke}
-#tracesvg .cur{stroke:var(--hi);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
-#tracesvg .zero{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}
+.tracesvg{width:100%;height:90px;border:1px solid var(--line);margin-top:4px}
+.tracesvg[hidden]{display:none}
+.tracesvg .raw{fill:none;stroke:var(--mute);stroke-width:1;vector-effect:non-scaling-stroke}
+.tracesvg .root{fill:none;stroke:var(--heat);stroke-width:2;vector-effect:non-scaling-stroke}
+.tracesvg .cur{stroke:var(--hi);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+.tracesvg .zero{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}

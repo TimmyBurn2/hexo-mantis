@@ -3,14 +3,14 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import torch
 
 from mantis._engine import Board, MCTSTree
+from mantis.arena.deploy_head import ChildInfo
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
@@ -27,11 +27,29 @@ from mantis.train.checkpoints import load_checkpoint
 ANALYZER_GUMBEL_SEED = 0
 MANTIS, SNAPSHOT_GAP, STRIX = "mantis", "snapshot_gap", "strix"
 _SNAPSHOT = "best_model.pt"
-ChildInfo = tuple[tuple[int, int], int, float, int, float]
 
 
 class EngineLoadError(RuntimeError):
     """An engine that cannot be built; the message names the stamp key or the failure."""
+
+
+class Child(NamedTuple):
+    """One root child as every engine reports it: the cell, the net's prior, the visits, the Q in the mover's view."""
+
+    cell: tuple[int, int]
+    prior: float
+    visits: int
+    q: float
+
+
+def children_from_head(rows: list[ChildInfo]) -> list[Child]:
+    """The deploy head's `((q, r), pool_idx, prior, visits, q)` rows as `Child`s."""
+    return [Child((int(c[0][0]), int(c[0][1])), float(c[2]), int(c[3]), float(c[4])) for c in rows]
+
+
+def raw_argmax(children: list[Child]) -> tuple[int, int]:
+    """The max-prior cell — the net's own choice, never the move a 1-sim search returns."""
+    return max(children, key=lambda c: c.prior).cell
 
 
 @dataclass(frozen=True)
@@ -47,7 +65,8 @@ class EngineInfo:
     note: str = ""
 
     def as_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        """The row for the wire; the host path stays server-side."""
+        return {k: v for k, v in asdict(self).items() if k != "path"}
 
 
 @dataclass(frozen=True)
@@ -66,7 +85,7 @@ class RawRead:
     """The net's own read of a root: its value and the decoded priors over the legal children (visits all 0)."""
 
     value: float
-    children: list[ChildInfo]
+    children: list[Child]
     ms: float
 
 
@@ -76,7 +95,7 @@ class Search:
 
     root_value: float
     argmax: tuple[int, int]
-    children: list[ChildInfo]
+    children: list[Child]
     root_visits: int
     quiescence_fires: int
     ms: float
@@ -107,8 +126,8 @@ def discover(dirs: list[Path]) -> list[EngineInfo]:
                                        step=int(m["step"]), sha8=m["sha8"]))
             snap = d / _SNAPSHOT
             if snap.is_file():
-                rows.append(EngineInfo(id=f"{d.name if d is top else d.parent.name}/{_SNAPSHOT}",
-                                       kind=SNAPSHOT_GAP, path=str(snap), note=_snapshot_note(snap)))
+                rows.append(EngineInfo(id=f"{d.parent.name}/{_SNAPSHOT}", kind=SNAPSHOT_GAP, path=str(snap),
+                                       note=_snapshot_note(snap)))
     return rows
 
 
@@ -138,21 +157,19 @@ class MantisEngine:
         self.info = info
         self.encoding = str(ck.metadata.encoding_name)
         self.spec = lookup(self.encoding)
+        if self.spec.representation != "graph":
+            raise EngineLoadError(f"{info.id}: representation {self.spec.representation!r}; this analyzer decodes graph only")
         self.radius = int(self.spec.legal_move_radius)
         net = build_net(ck.metadata.arch)
         net.load_state_dict(ck.model_state)
         net.eval()
-        if threads:
+        if threads is not None:
             torch.set_num_threads(int(threads))
-        graph = self.spec.representation == "graph"
         self.engine = LocalInferenceEngine(
-            net, torch.device(device), encoding_spec=self.spec,
-            fused_graph_caps=resolve_fused_graph_caps(cfg) if graph else None,
-            inference_batching=resolve_inference_batching(cfg) if graph else None,
-            max_in_flight=self.hparams.leaf_batch_size,
-            leaf_build_threads=resolve_leaf_build_threads(cfg) if graph else 1)
-        self._expand: Callable[[MCTSTree, list[Board]], None] = (
-            _graph_expand_fn(self.engine, self.spec) if graph else self._grid_expand)
+            net, torch.device(device), encoding_spec=self.spec, fused_graph_caps=resolve_fused_graph_caps(cfg),
+            inference_batching=resolve_inference_batching(cfg), max_in_flight=self.hparams.leaf_batch_size,
+            leaf_build_threads=resolve_leaf_build_threads(cfg))
+        self._expand = _graph_expand_fn(self.engine, self.spec)
         self._raw_tree = MCTSTree(quiescence_enabled=False)
         self._raw_tree.configure_search(self.search_kind, self.hparams.c_visit, self.hparams.c_scale,
                                         self.hparams.q_rescale)
@@ -165,10 +182,6 @@ class MantisEngine:
             "quiescence": "off on the net row; the head row is the deploy head's own, its override counted",
         }
 
-    def _grid_expand(self, tree: MCTSTree, leaves: list[Board]) -> None:
-        policies, values = self.engine.infer_batch(leaves)
-        tree.expand_and_backup(policies, values)
-
     def raw_read(self, board: Board) -> RawRead:
         """The net on this root through the cached quiescence-off tree; raises RuntimeError when the root yields no leaf."""
         t0 = time.perf_counter()
@@ -177,7 +190,8 @@ class MantisEngine:
         if not leaves:
             raise RuntimeError("raw read: the root yielded no leaf (a terminal position is refused before this)")
         self._expand(self._raw_tree, leaves)
-        return RawRead(value=float(self._raw_tree.root_value()), children=self._raw_tree.get_root_children_info(),
+        return RawRead(value=float(self._raw_tree.root_value()),
+                       children=children_from_head(self._raw_tree.get_root_children_info()),
                        ms=(time.perf_counter() - t0) * 1000.0)
 
     def search(self, board: Board, sims: int) -> Search:
@@ -192,16 +206,16 @@ class MantisEngine:
         move = player.select_move(board)
         ms = (time.perf_counter() - t0) * 1000.0
         assert player.last_root is not None
-        root_value, children = player.last_root
+        root_value, rows = player.last_root
         # The head exposes no tree accessor; `_tree` is read for its two counters only (pinned by test).
         tree = player._tree  # noqa: SLF001
         assert tree is not None
-        return Search(root_value=float(root_value), argmax=(int(move[0]), int(move[1])), children=children,
+        return Search(root_value=float(root_value), argmax=(int(move[0]), int(move[1])), children=children_from_head(rows),
                       root_visits=int(tree.root_visits()), quiescence_fires=int(tree.quiescence_fire_count), ms=ms)
 
     def close(self) -> None:
         self.engine.close()
 
 
-__all__ = ["ANALYZER_GUMBEL_SEED", "MANTIS", "SNAPSHOT_GAP", "STRIX", "ChildInfo", "EngineInfo", "EngineLoadError", "HParams",
-           "MantisEngine", "RawRead", "Search", "discover"]
+__all__ = ["ANALYZER_GUMBEL_SEED", "MANTIS", "SNAPSHOT_GAP", "STRIX", "Child", "EngineInfo", "EngineLoadError",
+           "HParams", "MantisEngine", "RawRead", "Search", "children_from_head", "discover", "raw_argmax"]

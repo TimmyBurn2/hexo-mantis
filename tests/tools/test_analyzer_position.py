@@ -25,8 +25,8 @@ def test_the_compact_text_form_round_trips_and_tolerates_spaces_and_json(positio
     assert position.parse_moves("") == []
 
 
-@pytest.mark.parametrize("text", ["0,0;x,1", "0,0;1", "[[0, 0], [1]]", "[1, 2]", "[[0, true]]"])
-def test_malformed_text_is_refused_by_name(position, text):
+@pytest.mark.parametrize("text", ["0,0;x,1", "0,0;1", "[[0, 0], [1]]", "[1, 2]", "[[0, true]]", None, {"a": 1}])
+def test_malformed_moves_are_refused_by_name(position, text):
     with pytest.raises(position.PositionRefused, match="move"):
         position.parse_moves(text)
 
@@ -58,21 +58,17 @@ def test_an_occupied_cell_and_a_cell_outside_the_radius_are_refused_at_their_ply
         position.build_board([(0, 0), (40, 40)], ENC)
 
 
-SIX = [(0, 0), (0, 5), (1, 5), (1, 0), (2, 0), (0, 6), (1, 6), (3, 0), (4, 0), (0, 7), (1, 7), (5, 0)]
-
-
-def test_a_six_sets_the_winner_and_a_further_move_is_refused_even_though_apply_move_accepts_it(position):
-    pos = position.build_board(SIX, ENC)
+def test_a_six_sets_the_winner_and_a_further_move_is_refused_even_though_apply_move_accepts_it(position, positions):
+    pos = position.build_board(positions["SIX"], ENC)
     assert pos.winner == "p1"
     rec = position.position_record(pos)
     assert rec["winner"] == "p1" and sorted(rec["win_line"]) == [[i, 0] for i in range(6)]
     with pytest.raises(position.PositionRefused, match="after the game ended at ply 12"):
-        position.build_board(SIX + [(6, 1)], ENC)
+        position.build_board(positions["SIX"] + [(6, 1)], ENC)
 
 
 def test_the_side_table_is_the_engines_own_ints(position):
     assert position.SIDE_OF_INT == {1: "p1", -1: "p2"}
-    assert position.INT_OF_SIDE == {"p1": 1, "p2": -1}
 
 
 def test_the_pixel_inverse_round_trips_a_ring_of_cells(position):

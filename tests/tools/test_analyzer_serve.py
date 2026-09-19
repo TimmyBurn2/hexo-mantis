@@ -46,6 +46,7 @@ def server(serve):
     t.start()
     yield httpd, stub
     httpd.shutdown()
+    httpd.server_close()
     analyst.stop()
 
 
@@ -107,11 +108,42 @@ def test_a_newer_request_from_the_same_client_supersedes_the_queued_one(server):
     assert [r.get("seq") for r in stub.seen if r.get("op") == "analyze"] == [1, 3]
 
 
-def test_a_raw_request_does_not_supersede_a_search_request(serve):
+def test_the_supersession_key_is_total_and_tiers_raw_from_search(serve):
     a = {"client": "c", "engine": "e1", "op": "analyze", "sims": 0}
     b = {"client": "c", "engine": "e1", "op": "analyze", "sims": 256}
     assert serve.supersession_key(a) != serve.supersession_key(b)
     assert serve.supersession_key(a) == serve.supersession_key({**a, "moves": "x"})
+    for bad in ("many", [1], 1e400, None, {"n": 1}):
+        assert serve.supersession_key({**a, "sims": bad})[-1] in ("raw", "search"), bad
+    assert serve.supersession_key({"op": "engines"}) != serve.supersession_key({"op": "engines"}), "engines never supersede"
+
+
+def test_a_malformed_sims_does_not_kill_the_analyst(server):
+    httpd, _stub = server
+    port = httpd.server_address[1]
+    _post(port, "/analyze", {"engine": "e1", "moves": "0,0", "sims": "many", "client": "c", "seq": 1})
+    status, body = _post(port, "/analyze", {"engine": "e1", "moves": "0,0", "sims": 0, "client": "c", "seq": 2})
+    assert status == 200 and body["ok"] is True
+
+
+def test_a_bad_content_length_is_a_400_not_a_hang(server):
+    httpd, _stub = server
+    port = httpd.server_address[1]
+    for length in ("abc", "-1", "0"):
+        req = urllib.request.Request(f"http://127.0.0.1:{port}/analyze", data=b"{}", method="POST",
+                                     headers={"Content-Length": length})
+        with pytest.raises(urllib.error.HTTPError) as err:
+            urllib.request.urlopen(req, timeout=5)
+        assert err.value.code == 400, length
+
+
+def test_on_stop_runs_on_the_analyst_thread(serve):
+    seen = []
+    analyst = serve.Analyst(lambda req: {"status": 200, "body": {}}, timeout_sec=2.0,
+                            on_stop=lambda: seen.append(threading.current_thread().name))
+    analyst.start()
+    analyst.stop()
+    assert seen == ["analyst"] and not analyst._thread.is_alive()  # noqa: SLF001
 
 
 def test_a_base_exception_in_the_handler_is_a_500_and_the_analyst_survives(server):

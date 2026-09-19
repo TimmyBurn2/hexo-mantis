@@ -9,30 +9,29 @@ import numpy as np
 from mantis._engine import Board
 from mantis.diagnostics.tactics import analyze as tactics_analyze
 
-from .engines import ANALYZER_GUMBEL_SEED, RawRead, Search
+from .engines import ANALYZER_GUMBEL_SEED, Child, RawRead, Search, raw_argmax
 from .instruments import sweep
 from .position import Position, build_board, position_record
 
-TERMINAL = "position is terminal"
-NOT_REQUESTED = {"absent": "not requested"}
+
+def _rows(children: list[Child], *, visits: bool) -> list[list[float | int]]:
+    """Children for the wire, `[q, r, prior]` by prior or `[q, r, prior, visits, q]` by visits."""
+    if visits:
+        return [[c.cell[0], c.cell[1], round(c.prior, 4), c.visits, round(c.q, 4)]
+                for c in sorted(children, key=lambda c: (-c.visits, -c.prior))]
+    return [[c.cell[0], c.cell[1], round(c.prior, 4)] for c in sorted(children, key=lambda c: -c.prior)]
 
 
 def raw_record(raw: RawRead, derivation: str) -> dict[str, Any]:
     """The `raw` block: the net's value, the max-prior cell, every legal child's prior (never the returned move)."""
-    ranked = sorted(raw.children, key=lambda c: -c[2])
-    best = ranked[0][0]
-    return {"value": round(raw.value, 4), "argmax": [int(best[0]), int(best[1])],
-            "policy": [[int(c[0][0]), int(c[0][1]), round(float(c[2]), 4)] for c in ranked],
-            "ms": round(raw.ms, 1), "derivation": derivation}
+    return {"value": round(raw.value, 4), "argmax": list(raw_argmax(raw.children)),
+            "policy": _rows(raw.children, visits=False), "ms": round(raw.ms, 1), "derivation": derivation}
 
 
 def search_record(s: Search, sims: int, derivation: str, seed: int = ANALYZER_GUMBEL_SEED) -> dict[str, Any]:
     """The `search` block: the head's root value, move, children by visits, and the two counters."""
-    ranked = sorted(s.children, key=lambda c: (-c[3], -c[2]))
     return {"sims": int(sims), "root_visits": s.root_visits, "seed": seed, "root_value": round(s.root_value, 4),
-            "argmax": [s.argmax[0], s.argmax[1]],
-            "children": [[int(c[0][0]), int(c[0][1]), round(float(c[2]), 4), int(c[3]), round(float(c[4]), 4)]
-                         for c in ranked],
+            "argmax": [s.argmax[0], s.argmax[1]], "children": _rows(s.children, visits=True),
             "quiescence_fires": s.quiescence_fires, "ms": round(s.ms, 1), "derivation": derivation}
 
 
@@ -48,7 +47,7 @@ def verdict(cls: str, cells: set[tuple[int, int]], argmax: tuple[int, int] | lis
     return "quiet"
 
 
-def tactics_record(board: Board, radius: int, raw_argmax: list[int] | None,
+def tactics_record(board: Board, radius: int, raw_argmax_cell: list[int] | None,
                    search_argmax: list[int] | None) -> dict[str, Any]:
     """The census reading of the position for the mover (`tactics.analyze`) and the verdict on each argmax."""
     stones = board.get_stones()
@@ -63,7 +62,7 @@ def tactics_record(board: Board, radius: int, raw_argmax: list[int] | None,
         "class": cls, "k": k, "cells": sorted([int(c[0]), int(c[1])] for c in cells),
         "opp_fours": [sorted([int(c[0]), int(c[1])] for c in four) for four in row.fours],
         "forced_win_move": [int(fwm[0]), int(fwm[1])] if fwm is not None else None,
-        "verdict": {"raw": verdict(cls, cells, raw_argmax) if raw_argmax is not None else None,
+        "verdict": {"raw": verdict(cls, cells, raw_argmax_cell) if raw_argmax_cell is not None else None,
                     "search": verdict(cls, cells, search_argmax) if search_argmax is not None else None},
         "derivation": f"mantis.diagnostics.tactics.analyze(k={k}, radius={radius})",
     }
@@ -75,18 +74,18 @@ def analyze(engine: Any, moves: list[tuple[int, int]], sims: int, *, symmetry: b
     pos: Position = build_board(moves, engine.encoding)
     rec: dict[str, Any] = {"engine": engine.card, "position": position_record(pos), "perspective": "to_move"}
     if pos.winner is not None:
-        absent = {"absent": f"{TERMINAL} ({pos.winner} wins)"}
-        rec.update(raw=absent, search=absent, tactics={"class": "terminal", "winner": pos.winner})
+        absent = {"absent": f"position is terminal ({pos.winner} wins)"}
+        rec.update(raw=absent, search=absent, tactics={"class": "terminal", "winner": pos.winner},
+                   symmetry=absent if symmetry else {"absent": "not requested"})
     else:
         raw = raw_record(engine.raw_read(pos.board), engine.raw_derivation)
         search: dict[str, Any] = (search_record(engine.search(pos.board, sims), sims, engine.head_derivation)
                                   if sims >= 1 else {"absent": "sims=0 (raw only)"})
         rec.update(raw=raw, search=search,
-                   tactics=tactics_record(pos.board, engine.radius, raw["argmax"], search.get("argmax")))
-    rec["symmetry"] = sweep(engine, moves) if symmetry and pos.winner is None else dict(NOT_REQUESTED)
+                   tactics=tactics_record(pos.board, engine.radius, raw["argmax"], search.get("argmax")),
+                   symmetry=sweep(engine, moves) if symmetry else {"absent": "not requested"})
     rec["elapsed_ms"] = round((time.perf_counter() - t0) * 1000.0, 1)
     return rec
 
 
-__all__ = ["TERMINAL", "analyze", "raw_record", "search_record",
-           "tactics_record", "verdict"]
+__all__ = ["analyze", "raw_record", "search_record", "tactics_record", "verdict"]

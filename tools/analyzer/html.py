@@ -25,9 +25,9 @@ _CARD = """<div class="card" data-slot="">
 
 
 def render(title: str = "mantis analyzer") -> str:
-    """The whole page as a string; `web/analyzer.css` and `web/analyzer.js` are read at each render."""
+    """The whole page as a string; the CSS and the two scripts under `web/` are read and inlined at each render."""
     css = (_WEB / "analyzer.css").read_text(encoding="utf-8")
-    js = (_WEB / "analyzer.js").read_text(encoding="utf-8")
+    js = "\n".join((_WEB / name).read_text(encoding="utf-8") for name in ("board.js", "analyzer.js"))
     t = _html.escape(title)
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -43,7 +43,7 @@ def render(title: str = "mantis analyzer") -> str:
 <div id="help" class="mute">Click a cell to place the next stone (ply 0 is p1's single, then two stones per turn). Placing behind the end replaces the tail. The faint cells are the active engine's legal window; the ringed cell is the active card's argmax, small digits are the other cards'.</div>
 </section>
 <section id="side">
-<div class="row"><span class="chips" id="budget"><button data-sims="32" title="quick">32</button><button data-sims="deploy" title="the run's eval.gate.deploy_sims">deploy</button><button data-sims="1024" title="deep: about 23 s on a CPU host">1024</button><input id="sims" type="number" min="0" step="1" title="sims (0 = the net only)"></span>
+<div class="row"><span class="chips" id="budget"><button data-value="32" title="quick">32</button><button data-value="" id="deploychip" title="the run's eval.gate.deploy_sims">deploy</button><button data-value="1024" title="deep: about 23 s on a CPU host">1024</button><input id="sims" type="number" min="0" step="1" title="sims (0 = the net only)"></span>
 <label class="auto"><input id="auto" type="checkbox" checked> auto</label><button id="go">search</button><button id="addslot" title="another engine on this position">+ slot</button></div>
 <div class="row" id="pos"></div>
 <div class="row"><input id="moves" placeholder="q,r;q,r;… (paste to import)" spellcheck="false"><button id="copy" title="c">copy</button></div>

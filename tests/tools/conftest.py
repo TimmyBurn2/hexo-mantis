@@ -202,3 +202,27 @@ def mint_analyzer_stamp(directory: Path, *, run_id: str = "an1", step: int = 7, 
 def mint_stamp():
     """The stamp minter as a fixture, so analyzer tests share one recipe without importing each other."""
     return mint_analyzer_stamp
+
+
+@pytest.fixture(scope="session")
+def mantis_engine(analyzer, mint_stamp, tmp_path_factory):
+    """ONE tiny MantisEngine over a minted stamp for every analyzer test that needs a real engine."""
+    engines = importlib.import_module("analyzer.engines")
+    stamp = mint_stamp(tmp_path_factory.mktemp("analyzer_ckpt"))
+    engine = engines.MantisEngine(engines.discover([stamp.parent])[0], device="cpu", threads=2)
+    yield engine
+    engine.close()
+
+
+#: Hand-built positions the analyzer tests share (p1 = ply 0, then pairs): WIN1 — p1 to move holding an open five;
+#: CHECK — p2 to move against p1's open five (block set at both ends); SIX — p1's stone 12 completes six.
+ANALYZER_POSITIONS = {
+    "WIN1": [(0, 0), (0, 5), (1, 5), (1, 0), (2, 0), (0, 6), (1, 6), (3, 0), (4, 0), (0, 7), (1, 7)],
+    "CHECK": [(0, 0), (0, 3), (1, 3), (1, 0), (2, 0), (0, 4), (1, 4), (3, 0), (-1, 0)],
+    "SIX": [(0, 0), (0, 5), (1, 5), (1, 0), (2, 0), (0, 6), (1, 6), (3, 0), (4, 0), (0, 7), (1, 7), (5, 0)],
+}
+
+
+@pytest.fixture(scope="session")
+def positions():
+    return ANALYZER_POSITIONS

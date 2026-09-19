@@ -14,6 +14,11 @@ def instruments(analyzer):
     return importlib.import_module("analyzer.instruments")
 
 
+@pytest.fixture(scope="module")
+def count_engine(analyzer):
+    return lambda: _CountEngine(importlib.import_module("analyzer.engines").Child)
+
+
 def test_the_twelve_maps_are_distinct_and_the_first_is_the_identity(instruments):
     assert len(instruments.MAPS) == 12 and instruments.MAPS[0] == ("identity", 0, False)
     cells = [(1, 2), (-3, 1), (0, 4)]
@@ -45,13 +50,14 @@ class _CountEngine:
 
     encoding = "gnn_axis_v1"
 
-    def __init__(self):
+    def __init__(self, child_cls):
         self.calls = 0
+        self._child = child_cls
 
     def raw_read(self, board):
         self.calls += 1
         legal = board.legal_moves()
-        children = [((q, r), i, 1.0 if i == 0 else 0.0, 0, 0.0) for i, (q, r) in enumerate(sorted(legal))]
+        children = [self._child((q, r), 1.0 if i == 0 else 0.0, 0, 0.0) for i, (q, r) in enumerate(sorted(legal))]
         return SimpleNamespace(value=len(board.get_stones()) / 100.0, children=children, ms=1.0)
 
     def search(self, board, sims):
@@ -59,25 +65,25 @@ class _CountEngine:
                                quiescence_fires=0, ms=2.0)
 
 
-def test_the_sweep_reads_zero_spread_on_an_equivariant_engine_and_names_the_worst_map(instruments):
-    eng = _CountEngine()
+def test_the_sweep_reads_zero_spread_on_an_equivariant_engine_and_names_the_worst_map(instruments, count_engine):
+    eng = count_engine()
     out = instruments.sweep(eng, [(0, 0), (1, 0), (0, 1)])
     assert out["n"] == 12 and out["centre"] == [0, 0] and out["spread"] == 0.0
     assert out["value_min"] == out["value_max"] == pytest.approx(0.03)
-    assert out["worst"]["map"] in {m[0] for m in instruments.MAPS}
+    assert out["worst"]["map"] in {m[0] for m in instruments.MAPS[1:]}, "the worst map is never the identity"
     assert out["translation"]["value"] == pytest.approx(0.03) and out["rows"][0]["map"] == "identity"
     assert eng.calls == 13
 
 
-def test_the_sweep_states_the_empty_board_and_a_translation_off_the_opening_window(instruments):
-    eng = _CountEngine()
+def test_the_sweep_states_the_empty_board_and_a_translation_off_the_opening_window(instruments, count_engine):
+    eng = count_engine()
     assert instruments.sweep(eng, []) == {"absent": "an empty board has no first stone to centre on"}
     out = instruments.sweep(eng, [(2, 2)])
     assert "absent" in out["translation"] and "opening window" in out["translation"]["absent"]
 
 
-def test_the_trace_is_in_p1s_perspective_with_gaps_for_the_unsearched_and_terminal_plies(instruments):
-    eng = _CountEngine()
+def test_the_trace_is_in_p1s_perspective_with_gaps_for_the_unsearched_and_terminal_plies(instruments, count_engine, positions):
+    eng = count_engine()
     assert instruments.p1_view(0.4, "p1") == 0.4 and instruments.p1_view(0.4, "p2") == -0.4
     rows = instruments.trace(eng, [(0, 0), (1, 0), (0, 1)], 0)
     assert [r["ply"] for r in rows] == [0, 1, 2, 3]
@@ -85,6 +91,5 @@ def test_the_trace_is_in_p1s_perspective_with_gaps_for_the_unsearched_and_termin
     rows = instruments.trace(eng, [(0, 0), (1, 0)], 4)
     assert rows[2]["to_move"] == "p2", "p2 still holds the turn's second stone at ply 2"
     assert rows[2]["root"] == pytest.approx(-0.25) and rows[2]["ms"] == 2.0
-    six = [(0, 0), (0, 5), (1, 5), (1, 0), (2, 0), (0, 6), (1, 6), (3, 0), (4, 0), (0, 7), (1, 7), (5, 0)]
-    rows = instruments.trace(eng, six, 0)
+    rows = instruments.trace(eng, positions["SIX"], 0)
     assert rows[-1] == {"ply": 12, "to_move": None, "raw": None, "root": None, "terminal": "p1"}

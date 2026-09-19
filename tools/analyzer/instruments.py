@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .engines import raw_argmax
 from .position import SIDE_OF_INT, PositionRefused, build_board
 
 #: (name, rotations by 60°, reflect first); the identity is row 0.
@@ -36,8 +37,7 @@ def transform(cell: tuple[int, int], centre: tuple[int, int], k: int, reflect: b
 
 def _read(engine: Any, moves: list[tuple[int, int]]) -> tuple[float, tuple[int, int]]:
     raw = engine.raw_read(build_board(moves, engine.encoding).board)
-    best = max(raw.children, key=lambda c: c[2])[0]
-    return float(raw.value), (int(best[0]), int(best[1]))
+    return float(raw.value), raw_argmax(raw.children)
 
 
 def sweep(engine: Any, moves: list[tuple[int, int]]) -> dict[str, Any]:
