@@ -346,8 +346,20 @@ local gate set on `ff5a43d8` (`run_all.sh --with-slow --base 671bf12c`, 11:43 UT
 3c, 7, 8, 9, 11, 12, 13, 14 (pyright 230 files, 0 errors), 15, 16, 6, 17; gate 1 not run (the
 accepted cost). Two reds with ONE cause, this file's own uncommitted draft naming run9's unminted
 config as a path: gate 10 (rc 1 on that line) and 3a's single failure, the gate-10 vacuity test
-(4 799 passed otherwise); the line is reworded and both re-read GREEN before this commit.** ETA for
-15k and 30k unchanged from item (13).
+(4 799 passed otherwise); the line is reworded and both re-read GREEN before this commit.**
+**THE 15k POINT, read off the mirror 16:19 UTC 2026-09-19 (recorded, NOT acted on — R362(b)):** the
+cadence cell `run8_00015000_5777cb58.ckpt.strix256.json` (equal-work 256/256, solver ON, CONTENDED,
+13:00:07 → 14:34 UTC, 5 639 s, 19.6 s/game, median 43.5 plies) reads **0.104 [0.069, 0.139]**, 288 games,
+30 W / 258 L / 0 D — at the parent's 0.111 [0.073, 0.149], so the FALSIFIED line's 15k half
+(≤ 0.111) is MET by 0.7 pp inside both CIs; the 30k half decides. The 15k gate round r5 PROMOTED
+(GSPRT accept at 80 pairs, LLR +4.55, pooled 0.641 over 160 games, wall 9 553 s — gate 7 309 s, rung
+2 206 s); sealbot 0.799 [0.753, 0.844]; random floor 20/20; r3 @9000 and r4 @12000 NOT promoted
+(0.693, 0.778). The 15k RING AUDIT (`ring_audit … --bands RUN8_PREREG`, rc 1): counter-threat 0.031 %
+PASS, residue 0/8 PASS, `h_full_median` 0.209 PASS (mean 0.465), cap rate 0.88 % PASS,
+**`one_hot_share_full` 0.2745 MISS (band < 0.25; the shakedown read 22.1 %)** — a live-run miss is
+REPORTED and stops nothing (R359(b)); replay_ratio 3.10, sym bin0/mean 1.000. Trainer at 17 119
+(16:15 UTC), 1 099 steps/h alone; ETA 30k ≈ 05:45–07:15 UTC 2026-09-20, its cell's reading
+≈ 1.5 h after.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
