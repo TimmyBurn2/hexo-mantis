@@ -30,3 +30,9 @@ def test_the_header_prints_every_key_and_the_perspective_once(html):
 
 def test_the_title_is_escaped(html):
     assert "&lt;b&gt;" in html.render("<b>")
+
+
+def test_the_page_has_a_slot_control_and_a_card_template_with_a_marker_class(html):
+    page = html.render()
+    assert 'id="addslot"' in page and '<template id="cardtpl">' in page and 'class="cardengine"' in page
+    assert ".mark{" in page.replace(" ", "")

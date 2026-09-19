@@ -20,8 +20,13 @@ button:disabled{color:var(--mute);cursor:default}
 #moves{flex:1;min-width:120px;font-family:ui-monospace,monospace}
 #sims{width:64px}
 .chips{display:inline-flex;gap:3px}
+#cards{display:flex;flex-direction:column;gap:8px}
 .card{border:1px solid var(--line);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
-.cardhead{font-weight:600}
+.card.active{border-color:var(--fg)}
+.cardhead{display:flex;gap:6px;align-items:center;cursor:pointer}
+.cardhead .slotno{font:600 11px ui-monospace,monospace;border:1px solid var(--line);padding:0 5px;border-radius:3px}
+.cardhead .cardmeta{flex:1;font-size:11px}
+.cardhead .drop{padding:0 6px}
 .persp{font-size:11px}
 table{border-collapse:collapse;font-size:12px;width:100%}
 th{text-align:left;color:var(--mute);font-weight:500;padding:2px 6px 2px 0}
