@@ -1086,3 +1086,39 @@ entry" it widens to two.
 4. **The two head counters it added.** `DeployHeadPlayer.last_sims` and `StrixBot.last_sims`
    (each head's own count of the leaves the last search spent), so the receipt's budget column is
    read off the head, never tallied by the caller.
+---
+
+### AMENDMENT — R<nnn>, ANALYZER-1: an interactive position analyzer is ADMITTED on the viewer's terms plus one loopback socket
+
+**R<nnn>.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
+criterion is coupling, not sockets, and every tool admitted so far happened to need neither.
+ANALYZER-1 is a position analyzer: a position in (typed, pasted, or a deep link), one or more
+engines' readings out. It needs a process, so it is the first admitted tool that LISTENS on a socket
+(the ladder bot above holds an outbound stream);
+under R9 it lands as an amendment in the same commit as the server. The design and its review
+are `docs/design/analyzer_design.md`.
+
+1. **What is admitted, narrowly.** `tools/position_analyzer.py` (`make analyzer CHECKPOINTS=…
+   [STRIX=1]`; the implementation is `tools/analyzer/`) — a stdlib `ThreadingHTTPServer` bound
+   to loopback by default (`--bind 0.0.0.0` is documented as unsafe, never the default), serving
+   ONE page and answering `POST /analyze` by running the run's own `DeployHeadPlayer` on stamped
+   checkpoints (immutable, R3) and, opted in, the vendored strix pin through its driver. It
+   watches no run, reads no run record, holds no file open, polls nothing, adds no producer and
+   writes no artifact. It is dev-only tooling under `tools/`, beside the dashboard and the viewer.
+2. **What stays absent, unchanged.** The web dashboard and the TUI monitor; the coupling rule of
+   the R333(d) amendment is untouched. DASH-2 (a server over the run record carrying the viewer)
+   is neither discharged nor engaged by this.
+3. **The rule the tool carries.** Every number on the page is derived in Python from a named
+   engine call and carries its derivation; the NET's value is read through a quiescence-off tree
+   and the HEAD's value is the deploy head's own, its quiescence override included and counted;
+   values are for the side to move, stated once; a search not yet run is a STATE with its elapsed
+   time, never a stale number; a panel not requested is a stated cost, never a blank; a position
+   the engine refuses is refused by name; strix's gaps are stated on its card. Absent is not zero,
+   applied to a live engine.
+4. **Measured at landing** (the operator's CPU host, `run8_00018000_98fe0e8c`, 302 466 params, 8
+   torch threads): engine load 50 ms; `MCTSTree()` 45–50 ms; the net's read through the cached
+   tree 20–37 ms; search 64 sims 1.3 s, 256 sims 4.3 s. The design's §0 table (default threads)
+   reads 32 / 128 / 256 / 512 sims = 1.7 / 3.3 / 5.6 / 11.7 s.
+5. **Contracts #11 and §4.7 are unchanged.** Nothing is emitted; nothing is read from a record.
+
+The ruling number is the operator's; `R<nnn>` is filled when it is issued.

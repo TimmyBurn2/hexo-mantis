@@ -83,7 +83,7 @@ main{display:grid;grid-template-columns:minmax(260px,360px) 1fr;min-height:calc(
 """
 
 _BODY = """<body>
-<header><h1>__TITLE__</h1><p>__SUMMARY__ — GAME-RECORD-1 shards, one row per game; ← → step, Home/End, space plays, n/p next/previous game, h heatmap; swipe the board on a phone.</p>__FINDINGS__</header>
+<header><h1>__TITLE__</h1><p>__SUMMARY__ — GAME-RECORD-1 shards, one row per game; ← → step, Home/End, space plays, n/p next/previous game, h heatmap, c copies the position to the current ply (for the analyzer); swipe the board on a phone.</p>__FINDINGS__</header>
 <main>
 <section id="side">
 <div id="filters">
@@ -154,7 +154,7 @@ function play(){if(timer){clearInterval(timer);timer=null;$('b-play').textConten
 function nav(d){if(!curRow)return;const i=view.indexOf(curRow)+d;if(i>=0&&i<view.length){while(shown<=i)renderMore();open(i);}}
 $('b-first').onclick=()=>stepTo(0);$('b-prev').onclick=()=>stepTo(ply-1);$('b-next').onclick=()=>stepTo(ply+1);$('b-last').onclick=()=>stepTo(cur?cur.m.length:0);$('b-play').onclick=play;$('b-heat').onclick=()=>{heat=!heat;draw();};
 document.addEventListener('keydown',e=>{if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;const k=e.key;
-if(k==='ArrowLeft')stepTo(ply-1);else if(k==='ArrowRight')stepTo(ply+1);else if(k==='Home')stepTo(0);else if(k==='End')stepTo(cur?cur.m.length:0);else if(k===' '){e.preventDefault();play();}else if(k==='n')nav(1);else if(k==='p')nav(-1);else if(k==='h'&&cur&&cur.s){heat=!heat;draw();}else return;e.preventDefault();});
+if(k==='ArrowLeft')stepTo(ply-1);else if(k==='ArrowRight')stepTo(ply+1);else if(k==='Home')stepTo(0);else if(k==='End')stepTo(cur?cur.m.length:0);else if(k===' '){e.preventDefault();play();}else if(k==='n')nav(1);else if(k==='p')nav(-1);else if(k==='h'&&cur&&cur.s){heat=!heat;draw();}else if(k==='c'&&cur){navigator.clipboard.writeText(cur.m.slice(0,ply).map(c=>c[0]+','+c[1]).join(';'));}else return;e.preventDefault();});
 let tx=null,ty=null;const b=$('board');b.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
 b.addEventListener('touchend',e=>{if(tx==null)return;const dx=e.changedTouches[0].clientX-tx,dy=e.changedTouches[0].clientY-ty;tx=null;if(Math.abs(dx)>40&&Math.abs(dx)>Math.abs(dy))stepTo(ply+(dx<0?1:-1));});
 applyFilters();

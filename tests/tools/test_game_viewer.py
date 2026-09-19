@@ -173,6 +173,7 @@ def test_the_page_is_self_contained_and_references_only_its_own_data_files(reade
     assert 'data-shard="data/t/games_t_seg0001_2026091400.js"' in page or "data/t/" in page
     assert "MANTIS_INDEX" in page and '"g1"' in page
     assert "ArrowLeft" in page and "ArrowRight" in page and "touchstart" in page, "keyboard and swipe"
+    assert "writeText" in page, "c copies the position for the analyzer"
     assert "<svg" in page and "six" in page.lower()
 
 

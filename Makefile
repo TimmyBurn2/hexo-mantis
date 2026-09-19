@@ -1,4 +1,4 @@
-.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer bench bench.baseline check.wasm vendor vendor.sealbot vendor.strix clean
+.PHONY: build build.cuda build.native test test.integration lint lint.rust gates gates.exit dashboard viewer analyzer bench bench.baseline check.wasm vendor vendor.sealbot vendor.strix clean
 
 UV ?= uv
 
@@ -56,6 +56,11 @@ dashboard:
 #   make viewer RUNS="run6=<mirror>/run6/logs/games shakedown7=<mirror>/shakedown7/logs/games" OUT=<dir>
 viewer:
 	UV_NO_SYNC=1 uv run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
+
+#   make analyzer CHECKPOINTS="<mirror>/run8/checkpoints <mirror>/run7/checkpoints" [STRIX=1] [PORT=8766] [DEVICE=cuda] [THREADS=8]
+#   loopback only by default (ANALYZER-1); open http://127.0.0.1:$(PORT)/ or tunnel it with ssh -L
+analyzer:
+	UV_NO_SYNC=1 uv run python tools/position_analyzer.py serve $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(DEVICE),--device "$(DEVICE)",) $(if $(THREADS),--threads "$(THREADS)",)
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1
