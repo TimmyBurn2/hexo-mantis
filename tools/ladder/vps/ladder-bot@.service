@@ -1,0 +1,24 @@
+# One HeXO ladder bot per instance: `systemctl enable --now ladder-bot@mantis ladder-bot@strix`.
+# /etc/ladder/<instance>.env (mode 0600) carries HEXO_TOKEN, HEXO_SERVER, LADDER_THREADS and LADDER_ARGS
+# (mantis: `--config configs/<run>.yaml --checkpoint checkpoints/<run>/<run>_<step>_<hash>.ckpt`; strix: `--sims 256`).
+[Unit]
+Description=HeXO ladder bot (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mantis
+WorkingDirectory=/opt/mantis
+EnvironmentFile=/etc/ladder/%i.env
+ExecStart=/opt/mantis/.venv/bin/python tools/ladder_bot.py --backend %i --server ${HEXO_SERVER} --work-dir /var/lib/ladder/%i --threads ${LADDER_THREADS} $LADDER_ARGS
+Restart=always
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ladder
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

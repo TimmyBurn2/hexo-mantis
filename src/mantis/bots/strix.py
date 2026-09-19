@@ -97,6 +97,8 @@ class StrixBot:
         self.fence_disagreements = 0
         self.out_of_fence = 0
         self.findings: list[str] = []
+        #: The LAST reply's own `sims` (the driver's root-visit sum); None when no driver was consulted.
+        self.last_sims: int | None = None
 
     def name(self) -> str:
         return self._name
@@ -114,6 +116,7 @@ class StrixBot:
             # The opening single: hexo_rs seats p1 at the origin by rule, and every opening
             # cell is the same position up to translation — not a decision to consult on.
             self.moves += 1
+            self.last_sims = None
             return (0, 0) if board.is_legal(0, 0) else tuple(board.legal_moves()[0])
         request = {"op": "select", "stones": stones, "to_move": int(board.current_player),
                    "moves_remaining": int(board.moves_remaining)}
@@ -123,6 +126,7 @@ class StrixBot:
         if "error" in reply:
             raise RuntimeError(f"strix driver: {reply['error']}")
         self.moves += 1
+        self.last_sims = None if reply.get("sims") is None else int(reply["sims"])
         ours = {(int(q), int(r)) for q, r in board.legal_moves()}
         theirs = {(int(q), int(r)) for q, r in reply.get("legal", [])}
         if theirs != ours:

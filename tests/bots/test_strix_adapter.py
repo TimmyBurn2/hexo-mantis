@@ -79,6 +79,17 @@ def test_the_opening_single_is_the_origin_and_consults_no_driver() -> None:
     assert transport.requests == [] and bot.moves == 1
 
 
+def test_the_drivers_own_sims_count_rides_the_reply_into_last_sims() -> None:
+    """LADDER-1's budget witness reads `last_sims`; the opening single, which consults no driver, reads None."""
+    board = _board_after([(0, 0), (1, 0), (0, 1)])
+    bot = StrixBot(transport=_FakeTransport((2, 0), legal=board.legal_moves()), sims=8, name="strix_test")
+    assert bot.last_sims is None
+    bot.select_move(board)
+    assert bot.last_sims == 8
+    bot.select_move(_board_after([]))
+    assert bot.last_sims is None
+
+
 def test_a_fence_disagreement_is_a_counted_finding_and_the_move_is_still_returned() -> None:
     board = _board_after([(0, 0), (1, 0), (0, 1)])
     legal = [tuple(m) for m in board.legal_moves()]

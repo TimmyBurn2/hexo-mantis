@@ -319,3 +319,13 @@ added_by = "SEAM-B2"
 path = "mctx_parity/mctx_parity_v1.json"
 sha256 = "7359118514a079fa0cc0f8c7886c60fb0f182eaed745b7163b0e54f9d23120fb"
 added_by = "GUMBEL-REPAIR-1"
+
+[[required]]
+path = "ladder/recorded_stream.ndjson"
+sha256 = "1fbf0aa614faa278db0a41c7fdf57a96a3b0450328af8b0cba6b7f6229eed3ff"
+added_by = "LADDER-1"
+
+[[required]]
+path = "ladder/recorded_two_games.ndjson"
+sha256 = "8c711d5098829767b8c843544dd7c61d77e40caaa07012c6ca4c601cb958b3ff"
+added_by = "LADDER-1"

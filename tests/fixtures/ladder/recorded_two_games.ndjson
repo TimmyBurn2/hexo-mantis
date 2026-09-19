@@ -1,0 +1,8 @@
+{"type":"gameStart","gameId":"g_7Qm2Kx","side":"x","opponent":{"profileId":"p_them","displayName":"Strix","elo":1000},"timeControl":{"mode":"unlimited"},"rated":false}
+{"type":"moveRequest","gameId":"g_7Qm2Kx","request":{"board":{"to_move":"x","cells":[{"q":0,"r":0,"p":"x"},{"q":1,"r":0,"p":"o"},{"q":0,"r":1,"p":"o"}]},"request_id":1}}
+
+{"type":"moveRequest","gameId":"g_7Qm2Kx","request":{"board":{"to_move":"x","cells":[{"q":0,"r":0,"p":"x"},{"q":1,"r":0,"p":"o"},{"q":0,"r":1,"p":"o"},{"q":2,"r":0,"p":"x"},{"q":3,"r":0,"p":"x"},{"q":1,"r":-1,"p":"o"},{"q":2,"r":-1,"p":"o"}]},"time_limit":45,"request_id":2}}
+{"type":"gameFinish","gameId":"g_7Qm2Kx","winner":"o","reason":"six-in-a-row"}
+{"type":"gameStart","gameId":"g_second","side":"o","opponent":{"profileId":"p_them","displayName":"Strix","elo":1000},"timeControl":{"mode":"unlimited"},"rated":false}
+{"type":"moveRequest","gameId":"g_second","request":{"board":{"to_move":"o","cells":[{"q":0,"r":0,"p":"x"}]},"request_id":1}}
+{"type":"gameFinish","gameId":"g_second","winner":"o","reason":"surrender"}

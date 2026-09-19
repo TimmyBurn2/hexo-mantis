@@ -1,0 +1,8 @@
+{"type":"gameStart","gameId":"g_7Qm2Kx","side":"x","opponent":{"profileId":"p_strix","displayName":"Strix","elo":1000},"timeControl":{"mode":"unlimited"},"rated":false}
+
+{"type":"moveRequest","gameId":"g_7Qm2Kx","request":{"board":{"to_move":"x","cells":[{"q":0,"r":0,"p":"x"},{"q":1,"r":0,"p":"o"},{"q":0,"r":1,"p":"o"}]},"request_id":1}}
+{"type":"moveRequest","gameId":"g_7Qm2Kx","request":{"board":{"to_move":"x","cells":[{"q":0,"r":0,"p":"x"},{"q":1,"r":0,"p":"o"},{"q":0,"r":1,"p":"o"},{"q":-1,"r":0,"p":"x"},{"q":-1,"r":1,"p":"x"},{"q":2,"r":0,"p":"o"},{"q":3,"r":0,"p":"o"}]},"time_limit":45,"request_id":2}}
+{"type":"gameFinish","gameId":"g_7Qm2Kx","winner":"o","reason":"six-in-a-row"}
+{"type":"challenge","challenge":{"challengeId":"c_aXbY12","challenger":{"profileId":"p_mantis","displayName":"Mantis","elo":1000},"destUser":{"profileId":"p_strix","displayName":"Strix","elo":1000},"timeControl":{"mode":"turn","turnTimeMs":45000},"status":"created"}}
+{"type":"challengeDeclined","challenge":{"challengeId":"c_aXbY12","challenger":{"profileId":"p_mantis","displayName":"Mantis","elo":1000},"destUser":{"profileId":"p_strix","displayName":"Strix","elo":1000},"timeControl":{"mode":"turn","turnTimeMs":45000},"status":"declined"}}
+{"type":"challengeCanceled","challenge":{"challengeId":"c_9dEf34","challenger":{"profileId":"p_mantis","displayName":"Mantis","elo":1000},"destUser":{"profileId":null,"displayName":"guest","elo":null},"timeControl":{"mode":"match","mainTimeMs":300000,"incrementMs":2000},"status":"expired"},"reason":"expired"}

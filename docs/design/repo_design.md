@@ -1058,3 +1058,31 @@ rejected one.
 6. **The stamp loader widens its tolerance to nested retired paths.** `RETIRED_STAMP_SECTIONS`
    (top-level only) becomes `RETIRED_STAMP_PATHS` carrying the dotted paths above, because run9's
    warm start is a run8 checkpoint whose stamp carries every one of them (contract #4).
+
+---
+
+### AMENDMENT — LADDER-1 (CARD-LADDER-RUNG): a SECOND operator-side tool is admitted under `tools/`, the ladder bot
+
+**The LADDER-1 packet, 2026-09-19; the card is `docs/governance/CARDS.md` CARD-LADDER-RUNG.** Recorded
+here rather than left as silent drift (R9), beside the R349(b) amendment whose "exactly this one
+entry" it widens to two.
+
+1. **What it is.** `tools/ladder_bot.py` with the `tools/ladder/` package runs on the operator's
+   VPS, one process per registered bot on a HeXO server's bot API (the Hexo-Bot-Api contract,
+   verified against the DEPLOYED server, which is ahead of the spec file): hold the NDJSON stream
+   (presence and availability ARE the connection), answer every move request through ONE backend
+   behind one seam — `mantis`, the deploy head (`mantis.arena.deploy_head`) on a named checkpoint
+   under the run config's own `deploy.search.kind`, `eval.gate.deploy_sims`, σ and batching; or
+   `strix`, the pinned rung through its own driver, solver ON, noise off — and write one receipt
+   per game under `receipts/<net_hash[:8]>/`, keyed like the follower's sidecars. Endpoint strings
+   live in `tools/ladder/client.py` and nowhere else (pinned by test).
+2. **Posture A.** Ladder games are EVAL. The package imports no ring writer, and a test pins the
+   absence; nothing a ladder game produces reaches self-play data.
+3. **What it is NOT.** Not a series, not a promotion input, not in any prereg: the receipts are
+   a shakedown's until a ruling (R363 or later) reads one 288-game cell beside a follower cell on
+   the same checkpoint and admits the rung as an instrument. §12's strength discipline is
+   untouched — a ladder result is a different unit (server openings, the server's clock), labelled
+   as such wherever it is read.
+4. **The two head counters it added.** `DeployHeadPlayer.last_sims` and `StrixBot.last_sims`
+   (each head's own count of the leaves the last search spent), so the receipt's budget column is
+   read off the head, never tallied by the caller.

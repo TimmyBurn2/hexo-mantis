@@ -81,6 +81,40 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by the LADDER-1 packet (2026-09-19, register head R362)
+
+- **CARD-LADDER-RUNG — OPENED 2026-09-19: design + shakedown LANDED; NOT an instrument of record.**
+  `tools/ladder_bot.py` on the `tools/ladder/` package (client, wire, backends, session, receipt;
+  `tools/ladder/vps/` carries the unit file, the CPU build recipe and the README): one process per
+  registered bot on a HeXO server's bot API, the stream held (presence and availability ARE the
+  connection — there is no registration endpoint), every move request answered through ONE backend
+  (`mantis`: the deploy head on a named checkpoint, every knob the run config's; `strix`: the pin at
+  256 sims, solver ON, noise off), one receipt per game keyed by net hash. Posture A: ladder games are
+  EVAL, pinned by a test that the package imports no ring writer. Endpoint strings live in
+  `tools/ladder/client.py` alone (pinned by test). The witnesses held BEFORE the reading: determinism
+  (every live receipt replays move-for-move through its backend, 4 of 4), budget (read off
+  `DeployHeadPlayer.last_sims` / `StrixBot.last_sims`, both added: 512 leaves per compound turn on
+  every undecided position; a decided one stops early on BOTH backends — strix's solver at 3,
+  mantis's exhausted tree at 427 — reported, reproduced, never a verdict), the receipt (LAW-07 planted
+  break + mutation self-test). The shakedown: 20 games parent (42k) vs strix on the operator's server, Mantis 0 of 20 — which is 0 of 2
+  DISTINCT games (LAW-04), consistent with the parent cell's 0.111 (P = 0.79) and a reading of NOTHING;
+  0 rejections, 0 drops; mantis ≈ 13 s and strix ≈ 3.4 s per compound turn on the dev host's CPU. The record is
+  `docs/design/measurements/LADDER_SHAKEDOWN_2026-09-19.md`; repo_design carries the amendment
+  admitting a SECOND operator-side tool under `tools/`.
+  **The deployed server (TimmyBurn2/HeXO `deploy` @ 8166053, verified live) is ahead of the spec
+  file (Hexo-Bot-Api 0.2.0) in four places the client follows:** `firstPlayer` is
+  challenger|challenged|random (not host|guest); a challenge carries no `rated` (every bot game is
+  unrated); `challengeCanceled` carries `reason` and `Challenge.status` includes `expired`; a guest's
+  `elo`/`profileId` are null. **Server findings for the operator:** the finished-game record's
+  `moves[]` is racy within a compound turn (fire-and-forget `appendMove`; sort by `moveNumber`, which
+  is right and starts at 2); house bots refuse bot challenges, so a ladder needs two stream bots; two
+  deterministic bots from the auto-placed origin play the SAME game every time — the server has no
+  opening variety, and a series needs it from the server, the challenger or per-game noise.
+  **What remains:** the operator installs on the VPS; the witnesses on the VPS; ONE 288-game cell
+  read beside a follower cell on the same checkpoint — impossible as a distinct-game count until the
+  opening question is answered — then R363 or later admits or refuses the rung. Not a series, not a
+  promotion input, not in any prereg until then.
+
 ## Opened by R361 (EVAL COST: STOP THE BLEED, COUNT, THEN REDESIGN); moved by R362 (RUN8 TO 30K, RUN9 EVAL ROWS)
 
 - **CARD-EVAL-REDESIGN — RULED by R362(c) 2026-09-19; the rows LANDED on `dev` the same day.**

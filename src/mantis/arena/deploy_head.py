@@ -95,6 +95,8 @@ class DeployHeadPlayer:
         #: The LAST search's root for the game record, `(root_value, children)` from rows this
         #: head already computes. A plain attribute: the consumer reads it once per ply.
         self.last_root: tuple[float, list[ChildInfo]] | None = None
+        #: The LAST search's leaves spent, the head's own count (LADDER-1's budget witness reads it).
+        self.last_sims: int | None = None
 
     def name(self) -> str:
         return "deploy_head"
@@ -109,6 +111,7 @@ class DeployHeadPlayer:
         self._game_index += 1
         self._move_index = 0
         self.last_root = None
+        self.last_sims = None
 
     def _fresh_tree(self) -> MCTSTree:
         """A tree configured with the RUN's search kind and σ. `configure_search` runs ONCE per
@@ -165,9 +168,10 @@ class DeployHeadPlayer:
         sims_done = len(root_leaves)
 
         if self._search_kind == "gumbel":
-            move = self._drive_gumbel(tree, sims_done)
+            move, spent = self._drive_gumbel(tree, sims_done)
         else:
-            move = self._drive_puct(tree, sims_done)
+            move, spent = self._drive_puct(tree, sims_done)
+        self.last_sims = spent
 
         children_info = tree.get_root_children_info()
         # Captured from the tree the decision read, so a recorded root always matches its move.
@@ -180,7 +184,7 @@ class DeployHeadPlayer:
             )
         return move
 
-    def _drive_puct(self, tree: MCTSTree, sims_done: int) -> tuple[int, int] | None:
+    def _drive_puct(self, tree: MCTSTree, sims_done: int) -> tuple[tuple[int, int] | None, int]:
         # Batched by `leaf_batch_size`, the SAME knob the self-play worker reads: only the number
         # of blocking round-trips changes. Clamped to the remaining budget so N is exact.
         while sims_done < self._n_sims:
@@ -191,11 +195,11 @@ class DeployHeadPlayer:
             self._evaluate(tree, leaves)
             sims_done += len(leaves)
         top = tree.get_top_visits(1)
-        return top[0][0] if top else None
+        return (top[0][0] if top else None), sims_done
 
-    def _drive_gumbel(self, tree: MCTSTree, sims_done: int) -> tuple[int, int] | None:
+    def _drive_gumbel(self, tree: MCTSTree, sims_done: int) -> tuple[tuple[int, int] | None, int]:
         if tree.root_n_children() == 0:
-            return None
+            return None, sims_done
         budget = max(0, self._n_sims - sims_done)
         tree.gumbel_root_begin(self._gumbel_m, budget, self._move_seed())
         spent = 0
@@ -210,7 +214,7 @@ class DeployHeadPlayer:
                 break
             self._evaluate(tree, leaves)
             spent += len(leaves)
-        return tree.gumbel_root_best_move()
+        return tree.gumbel_root_best_move(), sims_done + spent
 
 
 __all__ = ["ChildInfo", "DeployHeadPlayer", "ExpandFn", "InferFn"]

@@ -1,0 +1,1 @@
+One process per registered bot (`tools/ladder_bot.py`): hold the stream, answer every move request through the backend, write a receipt per game under `receipts/<net_hash8>/`; `BUILD.md` is the CPU recipe and `ladder-bot@.service` the unit.

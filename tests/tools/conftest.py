@@ -165,3 +165,9 @@ def dashboard():
 def viewer():
     """The `tools/viewer` package (VIEWER-1), with its submodules importable as `viewer.<name>`."""
     return load_tools_package("viewer")
+
+
+@pytest.fixture(scope="session")
+def ladder():
+    """The `tools/ladder` package (LADDER-1), with its submodules importable as `ladder.<name>`."""
+    return load_tools_package("ladder")
