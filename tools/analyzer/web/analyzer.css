@@ -1,0 +1,61 @@
+:root{--bg:#f7f6f2;--fg:#1d1d1b;--mute:#6b6a66;--line:#d9d6cf;--p1:#1d1d1b;--p2:#f4f1ea;--hi:#d94f2b;--win:#2b8a3e;--heat:#3b6fd6;--pos:#2b8a3e;--neg:#d94f2b}
+@media (prefers-color-scheme:dark){:root{--bg:#171716;--fg:#ecebe6;--mute:#9a988f;--line:#3a3935;--p1:#0c0c0b;--p2:#efece4}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,sans-serif;font-variant-numeric:tabular-nums}
+header{padding:10px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:16px;margin:0 0 2px}
+header p{margin:0;color:var(--mute);font-size:12px}
+kbd{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:3px;padding:0 4px;margin:0 1px;color:var(--fg)}
+.mute{color:var(--mute);font-size:12px}
+main{display:grid;grid-template-columns:1fr minmax(320px,400px);gap:0;min-height:calc(100vh - 70px)}
+@media (max-aspect-ratio:1/1){main{grid-template-columns:1fr}#side{border-left:0;border-top:1px solid var(--line)}}
+#left{padding:12px 16px;min-width:0;display:flex;flex-direction:column;gap:6px}
+#board{width:100%;max-width:820px;aspect-ratio:1/1;max-height:78vh;border:1px solid var(--line);background:var(--bg);touch-action:manipulation;outline:none}
+#side{border-left:1px solid var(--line);padding:10px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;font-size:12px}
+select,input,button{font:12px system-ui,sans-serif;padding:3px 6px;background:var(--bg);color:var(--fg);border:1px solid var(--line);border-radius:3px}
+button{cursor:pointer}
+button.on{border-color:var(--fg)}
+button:disabled{color:var(--mute);cursor:default}
+#moves{flex:1;min-width:120px;font-family:ui-monospace,monospace}
+#sims{width:64px}
+.chips{display:inline-flex;gap:3px}
+.card{border:1px solid var(--line);padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.cardhead{font-weight:600}
+.persp{font-size:11px}
+table{border-collapse:collapse;font-size:12px;width:100%}
+th{text-align:left;color:var(--mute);font-weight:500;padding:2px 6px 2px 0}
+td{padding:2px 6px 2px 0;white-space:nowrap}
+td.num{font-weight:600}
+.children tbody tr{cursor:pointer}
+.children tbody tr.arg td:first-child::after{content:" ●"}
+.children tbody tr:hover{background:rgba(59,111,214,.08)}
+.tac{font-size:12px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 0}
+.tac .cls{font-weight:600}
+.tac .miss{color:var(--hi)}
+.panel{font-size:12px}
+.status{font-size:12px;min-height:1.2em}
+.status.err{color:var(--hi)}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center}
+#sheet[hidden]{display:none}
+#sheet>div{background:var(--bg);border:1px solid var(--line);padding:16px 20px;max-width:520px;font-size:13px}
+.cell{fill:none;stroke:var(--line);stroke-width:.06}
+.cell.win{fill:var(--line);fill-opacity:.35}
+.cell.hot:hover{stroke:var(--fg)}
+.stone.p1{fill:var(--p1)}.stone.p2{fill:var(--p2);stroke:var(--p1);stroke-width:.05}
+.num{font:.42px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;pointer-events:none}
+.num.p1{fill:var(--p2)}.num.p2{fill:var(--p1)}
+.last{fill:none;stroke:var(--hi);stroke-width:.09}
+.wincell{fill:none;stroke:var(--win);stroke-width:.12}
+.heat{stroke:none;pointer-events:none}
+.heatnum{font:.32px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--fg);pointer-events:none}
+.argmax{fill:none;stroke:var(--fg);stroke-width:.1}
+.mark{font:.36px system-ui,sans-serif;text-anchor:middle;dominant-baseline:central;fill:var(--fg);pointer-events:none}
+.tacwin{fill:none;stroke:var(--win);stroke-width:.12}
+.tacfour{fill:none;stroke:var(--hi);stroke-width:.08;stroke-dasharray:.18 .12}
+#tracesvg{width:100%;height:90px;border:1px solid var(--line);margin-top:4px}
+#tracesvg[hidden]{display:none}
+#tracesvg .raw{fill:none;stroke:var(--mute);stroke-width:1;vector-effect:non-scaling-stroke}
+#tracesvg .root{fill:none;stroke:var(--heat);stroke-width:2;vector-effect:non-scaling-stroke}
+#tracesvg .cur{stroke:var(--hi);stroke-width:1;stroke-dasharray:3 2;vector-effect:non-scaling-stroke}
+#tracesvg .zero{stroke:var(--line);stroke-width:1;vector-effect:non-scaling-stroke}

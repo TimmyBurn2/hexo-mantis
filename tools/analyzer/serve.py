@@ -139,7 +139,7 @@ def run_server(infos: list[Any], args: Any) -> int:
     httpd = make_server(args.bind, args.port, analyst, render().encode("utf-8"))
     unsafe = "" if args.bind == "127.0.0.1" else "  (UNSAFE: not loopback — no auth, no TLS)"
     print(f"mantis analyzer on http://{args.bind}:{httpd.server_address[1]}/ — {len(infos)} engine row(s); "
-          f"Ctrl-C stops{unsafe}")
+          f"Ctrl-C stops{unsafe}", flush=True)
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
