@@ -10,6 +10,7 @@ from mantis._engine import Board
 from mantis.diagnostics.tactics import analyze as tactics_analyze
 
 from .engines import ANALYZER_GUMBEL_SEED, RawRead, Search
+from .instruments import sweep
 from .position import Position, build_board, position_record
 
 TERMINAL = "position is terminal"
@@ -84,11 +85,7 @@ def analyze(engine: Any, moves: list[tuple[int, int]], sims: int, *, symmetry: b
                                   else {"absent": "sims=0 (raw only)"})
         rec.update(raw=raw, search=search,
                    tactics=tactics_record(pos.board, engine.radius, raw["argmax"], search.get("argmax")))
-    if symmetry and pos.winner is None:
-        from .instruments import sweep
-        rec["symmetry"] = sweep(engine, moves)
-    else:
-        rec["symmetry"] = dict(NOT_REQUESTED)
+    rec["symmetry"] = sweep(engine, moves) if symmetry and pos.winner is None else dict(NOT_REQUESTED)
     rec["elapsed_ms"] = round((time.perf_counter() - t0) * 1000.0, 1)
     return rec
 
