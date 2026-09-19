@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .dispatch import Dispatcher
 from .engines import discover
+from .serve import run_server
 
 DEFAULT_BIND, DEFAULT_PORT, DEFAULT_TIMEOUT = "127.0.0.1", 8766, 120.0
 
@@ -57,8 +58,7 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         print(json.dumps(out["body"]["record"], indent=1))
         return 0
-    print("serve: the server lands with the page (ANALYZER-1 phase 2); `once` is available", file=sys.stderr)
-    return 2
+    return run_server(infos, args)
 
 
 __all__ = ["DEFAULT_BIND", "DEFAULT_PORT", "DEFAULT_TIMEOUT", "build_parser", "main"]
