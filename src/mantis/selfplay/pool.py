@@ -321,7 +321,7 @@ class WorkerPool:
 
     # actor-sync / recorder seam
     def sync_inference_weights(self, state_dict: dict[str, Any]) -> None:
-        """Forward a promoted state_dict to the bound inference server."""
+        """Forward the learner's state_dict to the bound inference server (ActorSync's sync, never a gate's)."""
         _sync_inference_weights(self, state_dict)
 
     def update_checkpoint_step(self, step: int) -> None:

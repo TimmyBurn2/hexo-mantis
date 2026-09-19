@@ -200,8 +200,7 @@ def inference_batch_timing(pool: Any) -> dict[str, Any]:
 
 
 def sync_inference_weights(pool: Any, state_dict: dict[str, Any]) -> None:
-    """Forward a promoted state_dict to the bound inference server — a mutating action rather
-    than a stat, so it gets its own forwarder."""
+    """Push the learner's state_dict (ActorSync's cadence sync, never a gate decision) to the server."""
     pool._inference_server.load_state_dict_safe(state_dict)
 
 
