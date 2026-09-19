@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12). run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; the redesign rows are R362's**. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -276,6 +276,31 @@ regimes (88- vs 32-ply games). `tools/bench_server.py` is in the tree (the real 
 budget + probe witnesses); the workstation CPU ratio reads collate/graph flat-to-falling in B and
 the supply cap B ≈ workers × leaf_batch / 2. **Step 3 is the box's, in run9's preflight window**
 (≈ 19 min, the command in the record); the architect designs after it. Nothing in run9 armed.
+(13) R361 (2026-09-19, dev + mirror + ONE tools-only box action; run8's stamp untouched): the register at
+R361 (next R362), A2 under R356's foot (the per-promotion cell's cost; one annotation already stood
+there), R356/R359/R360's Status lines amended. **THE BOX ACTION:** `tools/strix_follower.py --follow`
+gained `--promotions/--no-promotions` (default on = R356(a), pinned + mutation-checked; `0d6ee0ee`),
+cherry-picked onto the stamped lineage as the box branch `r361` (`08805676` = `5e25e40c` + that
+commit, `src/`+`crates/` byte-identical to `86308bc7`) and carried by bundle; the old `--follow` (pid
+3183447) stopped 06:14:58 UTC with no cell in flight, the new one (pid **3211513**, `--follow
+--no-promotions --cadence 15000 --poll-sec 300`) started **06:15:06 UTC at run8 step 8 851**; the
+launch script `/workspace/oc7/box_follower_run8.sh` carries the flag (its R358 copy kept as `.r358`).
+The two promotion cells already fired stand as receipts: **run8@3000 0.056 [0.031, 0.083], run8@6000
+0.0625 [0.038, 0.090]** (256/256, CONTENDED) — both below the parent's 0.111; the R356(c) reading is
+15k/30k. **THE CENSUS** (`docs/design/measurements/EVAL_COST_2026-09-19.md`; CARD-EVAL-REDESIGN
+carries the per-direction numbers): (i) self-play serves the LEARNER's weights every 2 steps
+(`ActorSync` → `InferenceServer.load_state_dict_safe`); promotion writes `best_model.pt` + the
+in-memory anchor, whose only consumers are the next round's `_best.pt` (verified by tensor hash:
+r2's best == r1's candidate), the resume path and the next run's parent — the gate is an instrument;
+(ii) run7 25 rounds = 50.0 h eval wall (gate 49 %, rung 34 %, two 4-h timeouts 16 %), gate game
+38 s at 93 plies, rung game 9.3 s at 63; GSPRT rejects 36 pairs mean; run8 2 rounds 4.35 h, both
+accepted (88, 48 pairs), gate game 40 s at 91 plies; the sealbot rung 0.657 ± 0.045 flat over run7;
+(iii) the GSPRT's long end is the (μ0+μ1)/2 = 0.57 midpoint — H0 0.50 buys −7 % pairs for 2 → 5 %
+false promotion of an equal candidate; (iv) rounds in flight 59 % of run7's wall, 33 % of run8's
+plus 39 % strix cells (72 % together); run8's trainer 999–1 069 steps/h alone, 682–724 in a round,
+356–415 in a cell. ETA (ESTIMATE): 15k ≈ 13:30–14:00 UTC 09-19, 30k ≈ 08:30–09:30 UTC 09-20. Gate
+sims 64 UNMEASURED. Two cards opened (CARD-EVAL-REDESIGN, CARD-EVAL-GATE-FIELDS-IN-STREAM); CARD-PERF-3
+carries R361(d)'s contended arm. No config touched; nothing in run9 armed.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -326,6 +351,16 @@ the supply cap B ≈ workers × leaf_batch / 2. **Step 3 is the box's, in run9's
   deselected all declared; 3a on the tip green with a writable `UV_CACHE_DIR` (the nine
   gate-runner tests that shell out to `uv run` red in a sandboxed shell without one, as recorded
   at the R358 exit). `dev` NOT pushed — the operator pushes.
+- R361 leg exit (2026-09-19): code in `tools/strix_follower.py` (the switch) and two one-line
+  docstring folds in `selfplay/pool.py` + `pool_hooks.py` (the sync hook said "a promoted state_dict";
+  it is the learner's — the docstring floor lowered by the one line folded); tests in
+  `tests/tools/test_strix_follower.py` (+2, one mutation-checked). Gates on the tip: 3a 4 977 passed /
+  8 skipped / 56 deselected (334 s, writable `UV_CACHE_DIR`); 3c collected 5 041 against the floor
+  4 862; 6, 7, 8, 9, 10, 11, 12 (rc 0, four rows deferred), 13, 14 (ruff, pyright 0, the ratchet AT
+  its floor on every measure after the one fold), 15, 16, 17 (over every file changed since
+  `8379073e`) green; 2a/2b/4/5, 3b and the slow tier NOT run (no crate touched, no integration- or
+  slow-marked test touched); gate 1 not run (the accepted cost). `dev` PUSHED on the operator's
+  in-session grant.
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
@@ -333,7 +368,10 @@ the supply cap B ≈ workers × leaf_batch / 2. **Step 3 is the box's, in run9's
 
 ## Provenance
 
-Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
+Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
+`r361` branch), the mirror's `events_run{7,8}_seg*.jsonl` (run8 pulled 06:05 UTC), the rounds'
+`eval_spool.work/<run>/*_{result.json,progress.txt}` copied off the box's disk, the spool `.pt`
+tensor hashes and the source files named in the record. Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
 `events_run8_seg0001.jsonl` (pulled 20:54 UTC). Item (11) derived 2026-09-18 on `dev` from `docs/design/measurements/PERF_A4_2026-09-11.md`, `git log`
 (`c888c3b7`, `41a5fea8`), `configs/run8.yaml`, `src/mantis/config/preflight_stamp.py` and this host
 (`torch.cuda.is_available()` False). Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
