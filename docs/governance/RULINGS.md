@@ -1,4 +1,4 @@
-# RULINGS — R23 to R360
+# RULINGS — R23 to R361
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R361.
+- Numbering continues from R346. The next ruling is R362.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,56 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R361 — EVAL COST, STOP THE BLEED: the per-promotion strix trigger is WITHDRAWN for run8 and every later run (measured 38 % of alone throughput during a cell; every run8 round has promoted) — cells fire at the 15 000-step points only; an EVAL CENSUS precedes any redesign (who consumes best_model, per-round pairs/stop reason/wall split/plies, the H0 = 0.52 long-end mechanism, eval wall share); pre-stated run9 directions the census confirms or kills; PERF-3's success line in BOTH regimes with a contended arm on step 3; run8 continues to 30k unchanged
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R360: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R361 — (a) The per-promotion strix trigger (R356(a)) is WITHDRAWN for
+> run8 and all later runs: measured 38 % of alone throughput during a
+> cell, and every run8 round has promoted. Cells fire at 15 000-step
+> points only. The R356(c) reading is unaffected (it is those points).
+> (b) EVAL CENSUS before any redesign: (i) who consumes best_model —
+> whether self-play serves the learner's live weights (CARD-SERVER-
+> OWNED-COPY) or the promoted net; (ii) for run7's r1–r25 and run8's
+> rounds: pairs played, GSPRT stop reason, wall split gate/rung, mean
+> eval plies; (iii) the H0 = 0.52 long-end mechanism — for each round the
+> candidate's observed rate vs H0; (iv) eval wall share of run wall,
+> run7 and run8. Numbers, not adjectives.
+> (c) Pre-stated directions the census can confirm or kill, for run9:
+> gate cadence 15 000; gate sims 64 (candidate vs anchor; strix cells stay
+> 256 — the reading is near the floor); the sealbot rung DELETED unless
+> the census shows it reading something strix does not; GSPRT H0 0.50 if
+> (iii) holds. If (i) says promotion selects nothing in the loop, the
+> gate becomes an instrument and runs at the cadence of the reading.
+> (d) PERF-3's success line is stated in BOTH regimes (alone, beside a
+> cell); step 3's bench gains a contended arm.
+> (e) Run8 continues to 30k unchanged; ETA re-read after (a) lands.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+ANNOTATION A1 under R356(a)'s foot (per-promotion cells: the architect's cost, measured 62 %
+throughput loss per cell) — one annotation already stood under R356's foot, so it lands as A2;
+(2) BOX (alias vast, tools-only over the stamped tree, `src/` byte-identical): the follower
+relaunched with the promotion trigger OFF, cadence 15 000 only — `--follow` had no switch, so one
+was added (`--promotions`/`--no-promotions`, default = today's behaviour, pinned) and bundled as the
+regime fix was; the relaunch time and run8's step go to STATE; (3) the EVAL CENSUS (the packet's
+§2) ORDERED, mirror only, no box hours; (4) PERF-3 step 3 (run9's preflight window) gains a
+CONTENDED arm: the same B-curve beside one strix cell; (5) nothing in run9 is armed; the redesign
+rows follow the census as R362. The packet's §2 ORDER (dev + mirror, ≤ 3 h): (b)(i) by symbol —
+the actor-sync path and what promotion writes, one paragraph, verify-at-HEAD; (b)(ii)–(iv) as a
+table from the event streams (`eval_round_complete`, gate rows), run7 seg0001–2 and run8 seg0001;
+the record `docs/design/measurements/EVAL_COST_2026-09-19.md`, STATE one line, report. No config
+touched.
+Grounds: run8 mirror 05:52 UTC 2026-09-19 (573 steps/h contended, rounds 7 700 / 7 973 s, cells
+1.1–1.3 h per promotion); `PERF3_2026-09-18.md` (1 222 vs 3 208 leaves/s); STRENGTH_RESEARCH §Q9
+(AZ/ELF/KataGo/MiniZero/strix eval practice).
+Amends: R356(a)'s "AND on every promotion" (withdrawn by (a); the cadence half and everything
+else in (a) stand); R359(e)'s "accepted at 15k + promotions" (the promotion half withdrawn);
+R360(b)'s step 3 and its success line, by (d) — a contended arm and the line in both regimes.
+Status: standing.
+
+---
 
 ### R360 — PERF-3 RE-AIMED, TWIN PREFLIGHT INHERITANCE: PERF-3 §2's baseline was F-47's pre-pipeline tree and A4-4 is at HEAD (annotated); PERF-3 is re-aimed at the cost-vs-fill curve in three steps — the mirror's event stream, F-47's harness in the tree as `tools/bench_server.py`, a 20-min standalone bench in run9's preflight window — with design only after step 3; the twin inherits a VESTED stamp differing in `run_id` and run paths alone, pinned; nothing in run9 is armed
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -72,7 +122,8 @@ written.
 Grounds: the R359 landing report (A4-4 on `dev` 2026-09-11; `PERF_A4_2026-09-11.md` §5; the
 workstation's torch is CPU-only; the harness was not in the tree).
 Annotates: R359(f)'s carried figures (A1 under R359's foot).
-Status: standing.
+Status: standing — (b)'s step-3 bench gains a CONTENDED arm (the same B-curve beside one strix
+cell) and PERF-3's success line is stated in BOTH regimes, by R361(d). (a), (c), (d) unchanged.
 
 ---
 
@@ -136,8 +187,9 @@ KataGo's upstream `KataGoMethods.md` (read 2026-09-18).
 Amends: R356(c)'s reading, by (b) — numeric only, a restatement; R358(f)'s queue, by (c).
 Status: standing — (f)'s carried §2 figures (GPU 52.8 % busy, the CPU and GPU halves never
 overlapping, the two-stage pipeline as the design to build) are F-47's PRE-PIPELINE tree; ANNOTATED
-under R359's foot (A1, in the annotations inventory) by R360(a), which re-aims PERF-3. (a)–(e)
-are unchanged.
+under R359's foot (A1, in the annotations inventory) by R360(a), which re-aims PERF-3. (e)'s
+"accepted at 15k + promotions" loses its promotion half to R361(a) — cells fire at the 15 000-step
+points only. (a)–(d) are unchanged.
 
 ---
 
@@ -380,7 +432,10 @@ full-arm mean reads 0.105–0.111 on run7, and the line as written passes on run
 R356's foot (A1, in the annotations inventory). (c)'s single-swap composition of run8 is AMENDED
 by R358(b): one more row, `train.augment: true`, rides as a setup correction under a stated arming
 condition (the LAW-18 draw counter), the σ swap and the parent unchanged. Everything else in (c)
-stands.
+stands. (a)'s "AND on every promotion" is WITHDRAWN by R361(a) for run8 and all later runs — a
+per-promotion cell was measured at 38 % of alone throughput and every run8 round promoted; cells
+fire at the 15 000-step points only, the receipt, the unit and the bridge cell unchanged;
+ANNOTATED under R356's foot (A2, in the annotations inventory).
 
 ---
 
@@ -4003,6 +4058,19 @@ witness: a QSigma wiring pin on dev, then on the shakedown ring's `is_full_searc
 of H(explicit) > 0.02 nats AND the one-hot share (H < 1e-3) < 25 % (run7: 0.0000 / ≈ 48 %). The
 error is the architect's, ledger.
 Ordered by: R357(a), appended 2026-09-18 by its landing session
+
+### ANNOTATION under R356's foot (A2) — "AND on every promotion" IS A PER-CELL THROUGHPUT COST THE CLAUSE DID NOT PRICE
+Corrects: the promotion half of (a)'s trigger only; the 15 000-step cadence, the equal-work unit,
+the sidecar receipt and the bridge cell stand
+Fact: a follower cell beside run8 holds the run at 1 222 served leaves/s against 3 208 alone
+(`PERF3_2026-09-18.md`: 38 %, a 62 % loss for the cell's 1.1–1.3 h), and run8's rounds have all
+promoted (r1 @3k, r2 @6k), so "on every promotion" was firing a cell per round on top of the
+cadence — the mirror read 573 steps/h contended on 2026-09-19 against ≈ 1 000 alone. R361(a)
+withdraws the promotion trigger for run8 and all later runs; the follower's `--follow` gained the
+switch (`--no-promotions`) and was relaunched on it. The cost was the architect's to price at
+R356(a); ledger. The packet numbered this A1; one annotation already stood under R356's foot, so it
+lands as A2.
+Ordered by: R361(a), appended 2026-09-19 by its landing session
 
 ### ANNOTATION under R355's foot (A4) — "the paper's Go pair (raw q, c_scale 1.0)" IS A GROUNDS CORRECTION
 Corrects: the grounds named for run8's σ pair in R355(d) (and R351(a), which R355 cites); nothing in
