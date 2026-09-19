@@ -115,6 +115,9 @@ def discover(dirs: list[Path]) -> list[EngineInfo]:
 class MantisEngine:
     """A stamped checkpoint as an engine: the run's decode, a cached quiescence-off tree for the net, a fresh head per search."""
 
+    raw_derivation = "quiescence-off tree, 1 leaf, the run's decode"
+    head_derivation = "DeployHeadPlayer, the run's own head; root_value includes its quiescence override"
+
     def __init__(self, info: EngineInfo, *, device: str, threads: int | None) -> None:
         ck = load_checkpoint(Path(info.path))
         cfg: dict[str, Any] = ck.config

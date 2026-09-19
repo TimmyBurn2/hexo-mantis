@@ -4,11 +4,14 @@ from __future__ import annotations
 from typing import Any
 
 from .analysis import analyze
-from .engines import MANTIS, SNAPSHOT_GAP, EngineInfo, EngineLoadError, MantisEngine
+from .engines import MANTIS, SNAPSHOT_GAP, STRIX, EngineInfo, EngineLoadError, MantisEngine
 from .instruments import trace
 from .position import PositionRefused, parse_moves
+from .strix import StrixEngine, StrixRefused, strix_info
 
 OPS = ("engines", "analyze", "trace")
+#: The Board strix's card is built with when no mantis engine is listed: the pinned rung's own fence.
+STRIX_FALLBACK_ENCODING = "gnn_axis_r8"
 
 
 def _refusal(seq: Any, status: int, reason: str) -> dict[str, Any]:
@@ -19,23 +22,33 @@ class Dispatcher:
     """Owns the engines (loaded on first use, cached) and answers one request at a time on the calling thread."""
 
     def __init__(self, infos: list[EngineInfo], *, device: str, threads: int | None, strix: bool = False) -> None:
-        self.infos = list(infos)
+        self.infos = list(infos) + ([strix_info()] if strix else [])
         self._by_id = {info.id: info for info in self.infos}
-        self._device, self._threads, self._strix = device, threads, strix
+        self._device, self._threads = device, threads
         self._loaded: dict[str, Any] = {}
 
     def rows(self) -> list[dict[str, Any]]:
-        """`/engines`: every row as a dict; a strix row carries its availability (phase 3)."""
+        """`/engines`: every row as a dict (a strix row's `note` is its availability)."""
         return [info.as_dict() for info in self.infos]
+
+    def _strix_encoding(self) -> str:
+        loaded = [e for e in self._loaded.values() if isinstance(e, MantisEngine)]
+        if loaded:
+            return loaded[0].encoding
+        first = next((i for i in self.infos if i.kind == MANTIS), None)
+        return self._engine(first).encoding if first is not None else STRIX_FALLBACK_ENCODING
 
     def _engine(self, info: EngineInfo) -> Any:
         if info.id in self._loaded:
             return self._loaded[info.id]
         if info.kind == SNAPSHOT_GAP:
             raise EngineLoadError(f"{info.id}: {info.note}")
-        if info.kind != MANTIS:
+        if info.kind == MANTIS:
+            engine: Any = MantisEngine(info, device=self._device, threads=self._threads)
+        elif info.kind == STRIX:
+            engine = StrixEngine(info, encoding=self._strix_encoding())
+        else:
             raise EngineLoadError(f"{info.id}: unknown engine kind {info.kind!r}")
-        engine: Any = MantisEngine(info, device=self._device, threads=self._threads)
         self._loaded[info.id] = engine
         return engine
 
@@ -66,7 +79,7 @@ class Dispatcher:
                 body: dict[str, Any] = {"record": analyze(engine, moves, sims, symmetry=bool(request.get("symmetry")))}
             else:
                 body = {"trace": trace(engine, moves, sims)}
-        except PositionRefused as exc:
+        except (PositionRefused, StrixRefused) as exc:
             return _refusal(seq, 400, str(exc))
         return {"status": 200, "body": {"seq": seq, "ok": True, **body}}
 
@@ -76,4 +89,4 @@ class Dispatcher:
         self._loaded.clear()
 
 
-__all__ = ["OPS", "Dispatcher"]
+__all__ = ["OPS", "STRIX_FALLBACK_ENCODING", "Dispatcher"]

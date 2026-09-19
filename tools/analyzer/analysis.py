@@ -14,28 +14,26 @@ from .instruments import sweep
 from .position import Position, build_board, position_record
 
 TERMINAL = "position is terminal"
-RAW_DERIVATION = "quiescence-off tree, 1 leaf, the run's decode"
-HEAD_DERIVATION = "DeployHeadPlayer, the run's own head; root_value includes its quiescence override"
 NOT_REQUESTED = {"absent": "not requested"}
 
 
-def raw_record(raw: RawRead) -> dict[str, Any]:
+def raw_record(raw: RawRead, derivation: str) -> dict[str, Any]:
     """The `raw` block: the net's value, the max-prior cell, every legal child's prior (never the returned move)."""
     ranked = sorted(raw.children, key=lambda c: -c[2])
     best = ranked[0][0]
     return {"value": round(raw.value, 4), "argmax": [int(best[0]), int(best[1])],
             "policy": [[int(c[0][0]), int(c[0][1]), round(float(c[2]), 4)] for c in ranked],
-            "ms": round(raw.ms, 1), "derivation": RAW_DERIVATION}
+            "ms": round(raw.ms, 1), "derivation": derivation}
 
 
-def search_record(s: Search, sims: int, seed: int = ANALYZER_GUMBEL_SEED) -> dict[str, Any]:
+def search_record(s: Search, sims: int, derivation: str, seed: int = ANALYZER_GUMBEL_SEED) -> dict[str, Any]:
     """The `search` block: the head's root value, move, children by visits, and the two counters."""
     ranked = sorted(s.children, key=lambda c: (-c[3], -c[2]))
     return {"sims": int(sims), "root_visits": s.root_visits, "seed": seed, "root_value": round(s.root_value, 4),
             "argmax": [s.argmax[0], s.argmax[1]],
             "children": [[int(c[0][0]), int(c[0][1]), round(float(c[2]), 4), int(c[3]), round(float(c[4]), 4)]
                          for c in ranked],
-            "quiescence_fires": s.quiescence_fires, "ms": round(s.ms, 1), "derivation": HEAD_DERIVATION}
+            "quiescence_fires": s.quiescence_fires, "ms": round(s.ms, 1), "derivation": derivation}
 
 
 def verdict(cls: str, cells: set[tuple[int, int]], argmax: tuple[int, int] | list[int]) -> str:
@@ -80,9 +78,9 @@ def analyze(engine: Any, moves: list[tuple[int, int]], sims: int, *, symmetry: b
         absent = {"absent": f"{TERMINAL} ({pos.winner} wins)"}
         rec.update(raw=absent, search=absent, tactics={"class": "terminal", "winner": pos.winner})
     else:
-        raw = raw_record(engine.raw_read(pos.board))
-        search: dict[str, Any] = (search_record(engine.search(pos.board, sims), sims) if sims >= 1
-                                  else {"absent": "sims=0 (raw only)"})
+        raw = raw_record(engine.raw_read(pos.board), engine.raw_derivation)
+        search: dict[str, Any] = (search_record(engine.search(pos.board, sims), sims, engine.head_derivation)
+                                  if sims >= 1 else {"absent": "sims=0 (raw only)"})
         rec.update(raw=raw, search=search,
                    tactics=tactics_record(pos.board, engine.radius, raw["argmax"], search.get("argmax")))
     rec["symmetry"] = sweep(engine, moves) if symmetry and pos.winner is None else dict(NOT_REQUESTED)
@@ -90,5 +88,5 @@ def analyze(engine: Any, moves: list[tuple[int, int]], sims: int, *, symmetry: b
     return rec
 
 
-__all__ = ["HEAD_DERIVATION", "RAW_DERIVATION", "TERMINAL", "analyze", "raw_record", "search_record",
+__all__ = ["TERMINAL", "analyze", "raw_record", "search_record",
            "tactics_record", "verdict"]

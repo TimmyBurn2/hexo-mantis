@@ -71,9 +71,9 @@ function setDeployChip(){const card=activeSlot().card,b=$('budget').querySelecto
 function drawAll(){drawBoard();S.slots.forEach(drawCard);drawHeader();}
 function drawCard(sl){sl.el.classList.toggle('active',sl===activeSlot());sl.el.querySelector('.slotno').textContent=String(S.slots.indexOf(sl));
   drawReadout(sl);drawChildren(sl);drawTactics(sl);drawPanels(sl);
-  const c=sl.card;sl.el.querySelector('.cardmeta').textContent=c?`${c.search_kind} · ${c.device} · ${c.threads} threads · radius ${c.radius}`:'';}
+  const c=sl.card;sl.el.querySelector('.cardmeta').textContent=c?`${c.search_kind} · ${c.device}${c.threads==null?'':' · '+c.threads+' threads'} · radius ${c.radius}`:'';}
 function drawHeader(){const c=activeSlot().card;
-  $('hdr').textContent=c?`${c.run_id} · ${c.step.toLocaleString()} · ${c.sha8||''} · ${c.search_kind} · ${c.device} · ${c.threads} threads · radius ${c.radius}`:'no engine loaded';
+  $('hdr').textContent=c?`${c.run_id} · ${c.step.toLocaleString()} · ${c.sha8||''} · ${c.search_kind} · ${c.device}${c.threads==null?'':' · '+c.threads+' threads'} · radius ${c.radius}`:'no engine loaded';
   const p=posCurrent()?S.pos:null;
   $('pos').textContent=p?`ply ${p.ply} · ${p.winner?p.winner+' won':p.to_move+' to move · '+p.moves_remaining+' left'} · ${p.legal} legal`:`ply ${S.ply}`;
   if(document.activeElement!==$('moves'))$('moves').value=fmt(cur());}

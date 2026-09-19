@@ -1,8 +1,8 @@
-"""The strix bot process (RUNG-2): runs INSIDE the vendored hexo-strix venv, imports no mantis,
-and speaks JSON lines — `load` {checkpoint, sims, m_actions, disable_forcing_solver?}, `select` {stones [[q, r, side]],
-to_move, moves_remaining} -> {move, legal, ms}, `quit`; an error is an {"error"} line. The
-position is rebuilt per request by `GameState.from_state`, TRANSLATED so a p1 stone sits at
-strix's fixed origin (the game is translation-invariant) and translated back."""
+"""The strix bot process (RUNG-2): runs INSIDE the vendored hexo-strix venv, imports no mantis, and speaks JSON
+lines — `load` {checkpoint, sims, m_actions, disable_forcing_solver?}; `select` {stones [[q, r, side]], to_move,
+moves_remaining} -> {move, legal, ms}; `analyze` (the same position, `sims?`) -> {move, legal, improved, visits,
+per_child_q, per_child_prior, raw_value, …} for ANALYZER-1; `quit`; an error is an {"error"} line. The position is
+rebuilt per request by `GameState.from_state`, TRANSLATED so a p1 stone sits at strix's fixed origin and back."""
 from __future__ import annotations
 
 import json
@@ -21,6 +21,7 @@ class Driver:
         self.torch: Any = None
         self.hexo_rs: Any = None
         self.game_config: Any = None
+        self.m_actions, self.solver_off = 0, False
 
     def load(self, req: dict[str, Any]) -> dict[str, Any]:
         import hexo_rs
@@ -60,9 +61,8 @@ class Driver:
         # R358(a): `disable_forcing_solver` False (the default) is the rung on record — strix's root VCF
         # solver ON, as in its own self-play, SPRT and eval; True is the NET-ONLY cell.
         solver_off = bool(req.get("disable_forcing_solver", False))
-        self.cfg = hexo_rs.MCTSConfig(n_simulations=int(req["sims"]), m_actions=int(req["m_actions"]),
-                                      c_visit=50, c_scale=1.0, disable_gumbel_noise=True,
-                                      disable_forcing_solver=solver_off)
+        self.m_actions, self.solver_off = int(req["m_actions"]), solver_off
+        self.cfg = self._mcts_config(int(req["sims"]))
         self.game_config = hexo_rs.GameConfig(int(req.get("win_length", 6)),
                                               int(req.get("placement_radius", 8)),
                                               int(req.get("max_moves", 300)))
@@ -78,9 +78,14 @@ class Driver:
             logits, values = self.model.forward_batch(batch)
         return [lg.tolist() for lg in logits], [float(v.item()) for v in values]
 
-    def select(self, req: dict[str, Any]) -> dict[str, Any]:
+    def _mcts_config(self, sims: int) -> Any:
+        return self.hexo_rs.MCTSConfig(n_simulations=int(sims), m_actions=self.m_actions, c_visit=50, c_scale=1.0,
+                                       disable_gumbel_noise=True, disable_forcing_solver=self.solver_off)
+
+    def _seat(self, req: dict[str, Any]) -> tuple[Any, list[tuple[int, int]], tuple[int, int]]:
+        """The request's position seated at strix's origin: `(game, legal cells translated back, origin)`."""
         if self.model is None:
-            raise RuntimeError("select before load")
+            raise RuntimeError(f"{req.get('op')} before load")
         stones = [(int(q), int(r), int(s)) for q, r, s in req["stones"]]
         p1 = [(q, r) for q, r, s in stones if s == 1]
         if not p1:
@@ -90,14 +95,32 @@ class Driver:
         to_move = "P1" if int(req["to_move"]) == 1 else "P2"
         game = self.hexo_rs.GameState.from_state(placed, to_move, int(req["moves_remaining"]),
                                                  self.game_config)
-        legal = [(int(q) + oq, int(r) + orr) for q, r in game.legal_moves()]
+        return game, [(int(q) + oq, int(r) + orr) for q, r in game.legal_moves()], (oq, orr)
+
+    def select(self, req: dict[str, Any]) -> dict[str, Any]:
+        game, legal, origin = self._seat(req)
         t0 = time.perf_counter()
         action, improved, visits, *_rest = self.hexo_rs.gumbel_mcts_with_diagnostics(
             game, self._eval_fn, self.cfg, seed=0)
         best = max(range(len(improved)), key=lambda i: improved[i])
         q, r = legal[best]
         return {"move": [q, r], "legal": [list(c) for c in legal], "ms": round((time.perf_counter() - t0) * 1000, 1),
-                "sims": int(sum(visits)), "origin": [oq, orr]}
+                "sims": int(sum(visits)), "origin": list(origin)}
+
+    def analyze(self, req: dict[str, Any]) -> dict[str, Any]:
+        """`select`'s seating, every root diagnostic strix exposes, the net's raw value; `sims` overrides the loaded budget."""
+        game, legal, origin = self._seat(req)
+        cfg = self._mcts_config(int(req["sims"])) if req.get("sims") is not None else self.cfg
+        _logits, values = self._eval_fn([game])
+        t0 = time.perf_counter()
+        _action, improved, visits, per_child_q, per_child_prior, *_rest = self.hexo_rs.gumbel_mcts_with_diagnostics(
+            game, self._eval_fn, cfg, seed=0)
+        best = max(range(len(improved)), key=lambda i: improved[i])
+        return {"move": list(legal[best]), "legal": [list(c) for c in legal],
+                "improved": [float(x) for x in improved], "visits": [int(x) for x in visits],
+                "per_child_q": [float(x) for x in per_child_q], "per_child_prior": [float(x) for x in per_child_prior],
+                "sims": int(sum(visits)), "origin": list(origin), "raw_value": float(values[0]),
+                "ms": round((time.perf_counter() - t0) * 1000, 1)}
 
 
 def main() -> int:
@@ -114,6 +137,8 @@ def main() -> int:
                 reply = driver.load(req)
             elif op == "select":
                 reply = driver.select(req)
+            elif op == "analyze":
+                reply = driver.analyze(req)
             elif op == "quit":
                 return 0
             else:
