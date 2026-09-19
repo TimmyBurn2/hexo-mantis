@@ -81,10 +81,19 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
-## Opened by R361 (EVAL COST: STOP THE BLEED, COUNT, THEN REDESIGN)
+## Opened by R361 (EVAL COST: STOP THE BLEED, COUNT, THEN REDESIGN); moved by R362 (RUN8 TO 30K, RUN9 EVAL ROWS)
 
-- **CARD-EVAL-REDESIGN — the census is READ (`docs/design/measurements/EVAL_COST_2026-09-19.md`);
-  the redesign rows are R362's, nothing in run9 armed.** What the census gives each pre-stated
+- **CARD-EVAL-REDESIGN — RULED by R362(c) 2026-09-19; the rows LANDED on `dev` the same day.**
+  Gate cadence 15 000 (run9's `train.eval_interval` mint row, recorded in
+  `docs/design/measurements/RUN9_PREREG_2026-09-19.md`, minted at 30k with the parent); the
+  sealbot rung DELETED in one commit with `sealbot_wr_abort`, `sealbot_wr_warn`, the ladder
+  state, `eval_channel_health` and `wr_sealbot` (contract v33, repo_design amendment R362(c));
+  gate sims 256 and the GSPRT 0.52/0.62 UNCHANGED (64 unmeasured; H0 0.50 withdrawn, R362(d));
+  the gate's rule fields on the stream (the card below). Gate = internal comparator and parent
+  selector; strix cells = external scale. What remains OPEN under this card: gate sims 64 as a
+  MEASURED cell (a bench in run9's preflight window beside PERF-3 step 3, not a census) — the one
+  pre-stated direction R362 neither adopted nor killed. The census's reading, kept for the
+  record: what the census gives each pre-stated
   direction (R361(c)): promotion selects NOTHING in the self-play loop — the actor runs the learner's
   weights on a 2-step cadence and the promoted net is only the next round's anchor and the next
   run's parent — so the gate is an instrument; gate cadence 15 000 returns ≈ 11–12 h of run7's 84
@@ -96,13 +105,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   for an equal candidate's false-promotion 2 % → 5 % — the long end is the (μ0+μ1)/2 = 0.57
   midpoint, not H0; gate sims 64 is UNMEASURED (the gate game is the unit that costs: 38–40 s at
   256/256 over 91–93 plies; a 64/64 cell's s/game is a bench, not a census).
-- **CARD-EVAL-GATE-FIELDS-IN-STREAM — the gate's rule fields reach no event row.** `pairs_played`,
-  `stopped`, `llr`, `wr_screen` live in the child's `eval_spool.work/<run>/<round>_result.json` and
-  the in-process routed result; the `eval_round_complete` JSONL row carries `wall_sec`, `games_total`,
-  `promoted`, `wr_sealbot`, `progress` and no `gate`, so a stream reader (the dashboard, the census)
-  cannot see how a round stopped without the spool. A producer change with its producer test; the
-  manifest's "routed `gate.*` fields" wording names the in-process result and reads as if it named
-  the row. CARDED 2026-09-19 by the census; not this packet's.
+- **CARD-EVAL-GATE-FIELDS-IN-STREAM — CLOSED 2026-09-19 (R362(c), the rung-deletion commit).**
+  `eval_round_complete.gate` now carries `{rule, pairs_played, stopped, llr, wr_confirm, n_pooled,
+  promoted, wall_sec}` (`mantis.eval.rounds.GATE_STREAM_FIELDS`), `null` when no gate ran, on the
+  success route and on the A-3 partial route; `wall_sec` is the gate BLOCK's own wall (measured in
+  the child, not read off the CUDA probe's phase marks, which carry no clock on a CPU child), so the
+  round's split is readable beside the row's own `wall_sec`. Producer test with its planted break:
+  `tests/eval/test_gate_fields_ride_the_round_complete_row.py`; the event manifest row names it.
+  Was: `pairs_played`, `stopped`, `llr` lived in the child's `<round>_result.json` and the
+  in-process routed result only, so a stream reader (the dashboard, the census) could not see how
+  a round stopped without the spool.
 
 ## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE); moved by R359 (READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED)
 

@@ -1,4 +1,4 @@
-# RULINGS — R23 to R361
+# RULINGS — R23 to R362
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R362.
+- Numbering continues from R346. The next ruling is R363.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,63 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R362 — RUN8 TO 30K PRE-STATED, RUN9 EVAL ROWS, THE GATE IS AN INSTRUMENT: promotion selects nothing in the loop (the gate's cost recorded: 59 % of run7's wall, 33 % of run8's); run8 runs to 30k regardless of the 15k reading, no mid-run re-mint; run9's eval rows FIXED — gate cadence 15 000 on the strix cell's checkpoint, the sealbot rung DELETED with its five consumers in one commit, gate sims and GSPRT bounds unchanged, the gate's rule fields on the stream; R361(c)'s H0 clause withdrawn (the zero-drift point is the 0.57 midpoint); run9's ONE training swap is ruled at 30k
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R361: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R362 — (a) Promotion selects nothing in the loop (ActorSync serves the
+> learner every 2 steps; best_model feeds only the next anchor, the
+> resume and the next parent). The gate is an INSTRUMENT. Its cost is
+> recorded: 59 % of run7's wall, 33 % of run8's; the sealbot half never
+> separated promoted from rejected rounds.
+> (b) run8 runs to 30k. The 3k/6k dip matches run7's 9k → 15k dip
+> (0.097 → 0.045 → 0.139 at 24k). The 15k reading is recorded, not
+> acted on; FALSIFIED requires both points (R359(b)). No mid-run
+> re-mint: the eval saving to 30k (≈ 2.7 h) does not pay the resume.
+> (c) run9 eval rows: gate cadence 15 000 on the strix cell's
+> checkpoint; sealbot rung deleted and its consumers (sealbot_wr_abort,
+> sealbot_wr_warn, ladder state, eval_channel_health, wr_sealbot)
+> retired in the same commit; gate sims and GSPRT bounds unchanged (64
+> unmeasured; H0 0.50 = 7 %); gate rule fields ride the JSONL stream.
+> Roles: gate = internal comparator and parent selector; strix cells =
+> external scale. (d) R361(c)'s H0 clause is withdrawn: the zero-drift
+> point is the midpoint, the architect's mechanism was wrong.
+> (e) The one training swap for run9 is ruled at 30k from R356(c)'s
+> three outcomes; the eval rows above ride beside it.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim,
+with ANNOTATION A1 under R361(c)'s foot (the H0 mechanism was the architect's; the zero-drift
+point is the (μ0+μ1)/2 = 0.57 midpoint); (2) run8 RUNS TO 30k regardless of the 15k reading —
+only an abort row stops it earlier; (3) run9's eval rows are FIXED as (c): cadence 15 000, the
+rung deleted with its consumers retired, gate 256/GSPRT unchanged, the gate fields in the
+stream — INSTRUMENT rows; run9's ONE training swap is ruled at 30k; (4) OWED on the box when
+ssh returns, read-only: the follower's liveness (pid 3211513), its chain log, the puller mirror
+fresh; a dead follower is relaunched with the same flags before 15k (tools-only, recorded);
+(5) dev work now, no box hours. The packet's §2 ORDER (≤ 1 day, while run8 runs): the rung
+deletion as ONE commit — the rung games, the five consumers, their schema rows and pins retired
+together, the protected-set census showing them gone, not orphaned; `train.eval_interval`
+15 000 as run9's fixed mint row (the packet spelled it "eval.gate.interval"; the eval-round
+cadence key is `train.eval_interval`, and the "P6b interval-equals-log pin" —
+`monitor.gate_interval == train.log_interval`, both 1000 — is a different key and is unmoved by
+it, so it is UPDATED BY NAME when run9's config is minted and never loosened); the gate rule
+fields (pairs, stop reason, llr, wall split) on `eval_round_complete` with a producer test and a
+manifest row, CARD-EVAL-GATE-FIELDS-IN-STREAM closed; the run9 prereg SKELETON with the eval
+rows fixed and the training-swap row BLANK BY DESIGN, labelled "ruled at 30k"; targeted tests,
+3a on the tip, the full sweep at leg exit, commit, report. A `configs/run9.yaml` is NOT minted
+by this leg: its warm start (the 30k parent's path and `net_hash`) and its training swap are
+the 30k ruling's, and a placeholder identity row would be a hand-varied config (R1/LAW-11);
+the eval rows are recorded as the mint deltas the 30k session replays.
+Grounds: `EVAL_COST_2026-09-19.md` (i)–(iv); run8 mirror 05:52 UTC 2026-09-19; `STRIX_RUN7_60K`
+(the 9k/15k/24k series).
+Amends: R361(c), by (c) and (d) — the pre-stated directions become the fixed rows (cadence
+15 000 confirmed; the rung DELETED, the census having shown it reads nothing strix does not;
+gate sims 64 NOT adopted, unmeasured; the H0 0.50 clause WITHDRAWN, annotated); R361(e) is
+confirmed by (b) with the no-re-mint sentence added.
+Status: standing.
+
+---
 
 ### R361 — EVAL COST, STOP THE BLEED: the per-promotion strix trigger is WITHDRAWN for run8 and every later run (measured 38 % of alone throughput during a cell; every run8 round has promoted) — cells fire at the 15 000-step points only; an EVAL CENSUS precedes any redesign (who consumes best_model, per-round pairs/stop reason/wall split/plies, the H0 = 0.52 long-end mechanism, eval wall share); pre-stated run9 directions the census confirms or kills; PERF-3's success line in BOTH regimes with a contended arm on step 3; run8 continues to 30k unchanged
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -81,7 +138,14 @@ Grounds: run8 mirror 05:52 UTC 2026-09-19 (573 steps/h contended, rounds 7 700 /
 Amends: R356(a)'s "AND on every promotion" (withdrawn by (a); the cadence half and everything
 else in (a) stand); R359(e)'s "accepted at 15k + promotions" (the promotion half withdrawn);
 R360(b)'s step 3 and its success line, by (d) — a contended arm and the line in both regimes.
-Status: standing.
+Status: standing — (c)'s pre-stated directions are RESOLVED by R362(c): gate cadence 15 000
+confirmed, the sealbot rung DELETED (the census: 0.657 ± 0.045 flat while strix swung 12 pp,
+separating nothing), gate sims 64 NOT adopted (unmeasured), and (c)'s "GSPRT H0 0.50 if (iii)
+holds" is WITHDRAWN by R362(d): the long end is real but its zero-drift point is the
+(μ0+μ1)/2 = 0.57 MIDPOINT, not H0 — the architect's mechanism was wrong and H0 0.50 buys −7 %
+pairs for a 2 % → 5 % false-promotion rate on an equal candidate; ANNOTATED under R361's foot
+(A1, in the annotations inventory). (a), (b), (d), (e) are unchanged; (e)'s "unchanged" gains
+R362(b)'s no-re-mint sentence.
 
 ---
 
@@ -4104,6 +4168,21 @@ one's. The stale carry was the architect's; the R359 landing session stopped at 
 and reported (CARD-PERF-3, STATE item 11), building nothing. R360(b) re-aims PERF-3 at the
 cost-vs-fill curve.
 Ordered by: R360(a), appended 2026-09-18 by its landing session
+
+### ANNOTATION under R361's foot (A1) — (c)'s "GSPRT H0 0.50 if (iii) holds" READ THE WRONG ZERO-DRIFT POINT
+Corrects: R361(c)'s H0 clause and the framing of R361(b)(iii) ("the H0 = 0.52 long-end
+mechanism"); nothing else in (a)–(e), and the census R361(b) ordered, which is what found it
+Fact: the GSPRT's zero-drift point is the MIDPOINT (μ0 + μ1)/2 = 0.57, not H0. A candidate
+whose true pair-score mean sits near 0.57 drifts nowhere and runs to `max_pairs`; run7's data
+agree (the four longest rounds read 0.601, 0.562, 0.503, 0.518; the 13 rejects at ≤ 0.50
+stopped in 16–48 pairs). H0 0.50 with H1 held is a small lever on that end: −7 % pairs over
+run7's 20 GSPRT rounds (≈ 124 games, ≈ 1.3 h of gate wall) for an equal candidate's
+false-promotion rate rising 2 % → 5 % and 8 % → 14 % at p 0.52; the gate's wall is in the
+games (38–40 s each at 256/256 over 91–93 plies), not in the pair count
+(`EVAL_COST_2026-09-19.md` §(iii), 4 000 simulated rounds per cell through the tree's own
+`gsprt_llr` / `gsprt_decision`). The mechanism was the architect's; R362(d) withdraws the
+clause and R362(c) keeps the GSPRT bounds at 0.52/0.62.
+Ordered by: R362(d), appended 2026-09-19 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
