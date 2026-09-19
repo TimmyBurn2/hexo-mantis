@@ -51,6 +51,17 @@ class EngineInfo:
 
 
 @dataclass(frozen=True)
+class HParams:
+    """The stamp's search knobs the head is built with (R1: every one read, none defaulted)."""
+
+    leaf_batch_size: int
+    c_visit: float
+    c_scale: float
+    q_rescale: bool
+    gumbel_m: int
+
+
+@dataclass(frozen=True)
 class RawRead:
     """The net's own read of a root: its value and the decoded priors over the legal children (visits all 0)."""
 
@@ -109,9 +120,9 @@ class MantisEngine:
         cfg: dict[str, Any] = ck.config
         try:
             sp = cfg["selfplay"]
-            self._hparams = dict(leaf_batch_size=int(sp["leaf_batch_size"]), c_visit=float(sp["c_visit"]),
-                                 c_scale=float(sp["c_scale"]), q_rescale=bool(sp["q_rescale"]),
-                                 gumbel_m=int(sp["gumbel_m"]))
+            self.hparams = HParams(leaf_batch_size=int(sp["leaf_batch_size"]), c_visit=float(sp["c_visit"]),
+                                   c_scale=float(sp["c_scale"]), q_rescale=bool(sp["q_rescale"]),
+                                   gumbel_m=int(sp["gumbel_m"]))
             self.deploy_sims = int(cfg["eval"]["gate"]["deploy_sims"])
         except (KeyError, TypeError) as exc:
             raise EngineLoadError(f"{info.id}: the stamp's config lacks {exc.args[0]!r}; nothing is defaulted here") from None
@@ -135,13 +146,13 @@ class MantisEngine:
             net, torch.device(device), encoding_spec=self.spec,
             fused_graph_caps=resolve_fused_graph_caps(cfg) if graph else None,
             inference_batching=resolve_inference_batching(cfg) if graph else None,
-            max_in_flight=self._hparams["leaf_batch_size"],
+            max_in_flight=self.hparams.leaf_batch_size,
             leaf_build_threads=resolve_leaf_build_threads(cfg) if graph else 1)
         self._expand: Callable[[MCTSTree, list[Board]], None] = (
             _graph_expand_fn(self.engine, self.spec) if graph else self._grid_expand)
         self._raw_tree = MCTSTree(quiescence_enabled=False)
-        self._raw_tree.configure_search(self.search_kind, self._hparams["c_visit"], self._hparams["c_scale"],
-                                        self._hparams["q_rescale"])
+        self._raw_tree.configure_search(self.search_kind, self.hparams.c_visit, self.hparams.c_scale,
+                                        self.hparams.q_rescale)
         self.card: dict[str, Any] = {
             "id": info.id, "run_id": ck.metadata.run_id, "step": int(ck.metadata.step), "sha8": info.sha8,
             "encoding": self.encoding, "radius": self.radius, "search_kind": self.search_kind,
@@ -168,8 +179,11 @@ class MantisEngine:
 
     def search(self, board: Board, sims: int) -> Search:
         """A fresh deploy head at `sims`; raises ValueError (the head's own) when the root has no children."""
+        hp = self.hparams
         player = build_candidate_player(self.engine, int(sims), spec=self.spec, search_kind=self.search_kind,
-                                        gumbel_seed=ANALYZER_GUMBEL_SEED, **self._hparams)
+                                        gumbel_seed=ANALYZER_GUMBEL_SEED, leaf_batch_size=hp.leaf_batch_size,
+                                        c_visit=hp.c_visit, c_scale=hp.c_scale, q_rescale=hp.q_rescale,
+                                        gumbel_m=hp.gumbel_m)
         player.new_game()
         t0 = time.perf_counter()
         move = player.select_move(board)
@@ -186,5 +200,5 @@ class MantisEngine:
         self.engine.close()
 
 
-__all__ = ["ANALYZER_GUMBEL_SEED", "MANTIS", "SNAPSHOT_GAP", "STRIX", "ChildInfo", "EngineInfo", "EngineLoadError",
+__all__ = ["ANALYZER_GUMBEL_SEED", "MANTIS", "SNAPSHOT_GAP", "STRIX", "ChildInfo", "EngineInfo", "EngineLoadError", "HParams",
            "MantisEngine", "RawRead", "Search", "discover"]
