@@ -1086,11 +1086,22 @@ entry" it widens to two.
 4. **The two head counters it added.** `DeployHeadPlayer.last_sims` and `StrixBot.last_sims`
    (each head's own count of the leaves the last search spent), so the receipt's budget column is
    read off the head, never tallied by the caller.
+5. **The unit, fixed by R363(c) (2026-09-20).** `book_v1_s20260625_p4` PAIRED — the follower's
+   unit — with opening index = match index: pair `m` (games `2m` and `2m+1`, colours swapped by the
+   challenger's alternating `firstPlayer`) plays opening `m` in the book's file order, a CONVENTION
+   BETWEEN OUR TWO BOTS because the server's challenge carries no opening field. Both bots
+   translate the opening onto the server's auto-placed origin and play its prefix unsearched
+   (`tools/ladder/openings.py`; the receipt is schema v2 with the opening and `book_stones` per
+   move; `--replay` re-derives the forced stones from the receipt's opening). §3's "server
+   openings" is thereby retired as a unit difference; the server's clock and the host's CPU remain.
+   The admission test is ONE 288-game IDLE cell beside a follower cell on the same checkpoint. The
+   64-sim `--preset play` R363 §0(5) allows is the ladder tool's own row, labelled on every receipt,
+   never a unit reading.
 ---
 
-### AMENDMENT — R<nnn>, ANALYZER-1: an interactive position analyzer is ADMITTED on the viewer's terms plus one loopback socket
+### AMENDMENT — R363, ANALYZER-1: an interactive position analyzer is ADMITTED on the viewer's terms plus one loopback socket
 
-**R<nnn>.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
+**R363.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
 criterion is coupling, not sockets, and every tool admitted so far happened to need neither.
 ANALYZER-1 is a position analyzer: a position in (typed, pasted, or a deep link), one or more
 engines' readings out. It needs a process, so it is the first admitted tool that LISTENS on a socket
@@ -1121,4 +1132,4 @@ are `docs/design/analyzer_design.md`.
    reads 32 / 128 / 256 / 512 sims = 1.7 / 3.3 / 5.6 / 11.7 s.
 5. **Contracts #11 and §4.7 are unchanged.** Nothing is emitted; nothing is read from a record.
 
-The ruling number is the operator's; `R<nnn>` is filled when it is issued.
+The ruling number is R363(d) (2026-09-20), which admitted the tool on these terms.

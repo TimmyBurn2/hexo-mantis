@@ -1,4 +1,4 @@
-# RULINGS — R23 to R362
+# RULINGS — R23 to R363
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R363.
+- Numbering continues from R346. The next ruling is R364.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,60 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R363 — 30K RECORDED, PARENT RULE FOR 45K, LADDER UNIT, ANALYZER ADMITTED: run8@30k 0.135 [0.097, 0.177] against the parent's 0.111 is INCONCLUSIVE by R356(c) and run8 runs to 45k, whose cell decides under the three-cell rule; a frozen gate is not a ranking (the anchor froze at 15k, r6–r10 rejected while strix and sealbot rose) — run9's PARENT RULE is PRE-STATED (the follower series 15k → 30k → 45k monotone non-decreasing on point estimates → the parent is 45k; otherwise the highest of the three whose CI contains the other two's points; the gate's best_model only if no strix triple exists) and run9's gate H1 is re-set from the measured per-15k gain; the LADDER unit is `book_v1_s20260625_p4` paired, admission ONE 288-game IDLE cell beside a follower cell on the same checkpoint; ANALYZER-1 admitted under R9 as amended, its first reading a GNN-2 witness; the LADDER-1 witnesses are the instrument's budget proof and its 2-distinct-games reading a finding about openings
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R362: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R363 — (a) run8@30k 0.135 [0.097, 0.177] vs parent 0.111: INCONCLUSIVE
+> by R356(c); run8 continues to 45k; its cell decides with the
+> three-cell rule. One-hot 27.4 % flat; entropy holds; reported.
+> (b) The gate's H1 = 0.62 exceeds the per-15k gain of this run; the
+> anchor froze at 15k (r6–r10 rejected while strix and sealbot rose).
+> A frozen gate is not a ranking. PARENT RULE for run9, pre-stated: if
+> the follower series 15k → 30k → 45k is monotone non-decreasing on point
+> estimates, the parent is 45k; otherwise the highest of the three
+> whose CI contains the other two's points; the gate's best_model is
+> the parent only if no strix triple exists. Run9's gate H1 is re-set
+> from the measured per-15k gain (a census item, ruled with the swap).
+> (c) LADDER unit = book_v1_s20260625_p4 paired — the follower's unit.
+> An opening needs no fairness; a pair does. Admission: one 288-game
+> IDLE cell beside a follower cell on the same checkpoint.
+> (d) ANALYZER-1 admitted under R9 as amended: a tool over immutable
+> checkpoints, loopback socket, no run watched. Its first reading is a
+> measurement: symmetry spread 0.146 over the 12 elements at run8@18k,
+> translation exact, argmax 12/12 — a GNN-2 witness, filed.
+> (e) The LADDER-1 witnesses (determinism 4/4, budget 512/turn,
+> receipts keyed by net hash) are the instrument's budget proof; the
+> reading (2 distinct games) is a finding about openings, not the bots.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, and
+the repo_design R9 amendment admitting ANALYZER-1 carries R363 where it said `R<nnn>` (docs-only);
+(2) the 45k PARENT RULE of (b) is PRE-STATED now — the 45k cell reads against it, not against a
+rule written after the reading; (3) the LADDER-1 unit is FIXED: `book_v1_s20260625_p4`, paired,
+opening index = match index, a convention between OUR two bots (the server's challenge carries no
+opening field, so both bots follow the same book prefix from the server's auto-placed origin);
+ONE 288-game cell (the parent vs strix, IDLE, on the VPS or the dev CPU) read beside the follower's
+0.111 cell is the admission test — NOT an instrument before that; (4) CARD-LADDER-SERVER-ASKS
+records the six server items as the OPERATOR'S, no ruling on them; (5) a CPU-HEAD PROFILE is
+ORDERED (dev, ≤ 2 h): the leaf-batch histogram and the forward ms of the CPU deploy head at 256
+sims — numbers before any design; a 64-sim "play" preset is ALLOWED as a config row for the
+ladder tool only, never a run row; (6) nothing in run9 is armed. The box is untouched and run8
+runs to 45k; `dev` is pushed so the record is one thing (the two reports it was read from
+disagreed on the push state).
+Grounds: `run8_00030000_6e45edb0.ckpt.strix256.json`; the RUN8 ring audits at 15k and 30k; the
+r1–r10 gate table; `LADDER_SHAKEDOWN_2026-09-19.md`; the ANALYZER-1 landing (`02f64442`).
+Amends: R362(c)'s roles line ("gate = internal comparator and parent selector") is QUALIFIED by
+(b) — run9's parent is chosen from the follower series under the pre-stated rule, and the gate's
+best_model is the parent only when no strix triple exists; R362(c)'s "GSPRT bounds unchanged" is
+QUALIFIED by (b) for run9's H1, re-set from the measured per-15k gain when the swap is ruled;
+R362(e)'s "ruled at 30k" MOVES to the 45k cell by (a) (the 30k reading is INCONCLUSIVE, whose
+pre-stated action is read 45k). R356(c)'s three-outcome reading is APPLIED, not moved, and
+R356(a)'s "no best is acted on before three cells agree" is given its form by (b).
+Status: standing.
+
+---
 
 ### R362 — RUN8 TO 30K PRE-STATED, RUN9 EVAL ROWS, THE GATE IS AN INSTRUMENT: promotion selects nothing in the loop (the gate's cost recorded: 59 % of run7's wall, 33 % of run8's); run8 runs to 30k regardless of the 15k reading, no mid-run re-mint; run9's eval rows FIXED — gate cadence 15 000 on the strix cell's checkpoint, the sealbot rung DELETED with its five consumers in one commit, gate sims and GSPRT bounds unchanged, the gate's rule fields on the stream; R361(c)'s H0 clause withdrawn (the zero-drift point is the 0.57 midpoint); run9's ONE training swap is ruled at 30k
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -88,7 +142,11 @@ Amends: R361(c), by (c) and (d) — the pre-stated directions become the fixed r
 15 000 confirmed; the rung DELETED, the census having shown it reads nothing strix does not;
 gate sims 64 NOT adopted, unmeasured; the H0 0.50 clause WITHDRAWN, annotated); R361(e) is
 confirmed by (b) with the no-re-mint sentence added.
-Status: standing.
+Status: standing — (c)'s roles line and its "GSPRT bounds unchanged" are QUALIFIED by R363(b)
+(run9's parent is chosen from the follower series under the pre-stated PARENT RULE, the gate's
+best_model only when no strix triple exists; run9's gate H1 is re-set from the measured per-15k
+gain when the swap is ruled); (e)'s "ruled at 30k" MOVES to the 45k cell by R363(a), the 30k
+reading having come in INCONCLUSIVE.
 
 ---
 

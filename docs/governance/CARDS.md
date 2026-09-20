@@ -81,9 +81,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
-## Opened by the LADDER-1 packet (2026-09-19, register head R362)
+## Opened by the LADDER-1 packet (2026-09-19, register head R362); moved by R363 (2026-09-20: the unit FIXED, the server items CARDED)
 
-- **CARD-LADDER-RUNG — OPENED 2026-09-19: design + shakedown LANDED; NOT an instrument of record.**
+- **CARD-LADDER-RUNG — OPENED 2026-09-19: design + shakedown LANDED; the UNIT FIXED by R363(c) 2026-09-20; NOT an instrument of record until its admission cell is read.**
   `tools/ladder_bot.py` on the `tools/ladder/` package (client, wire, backends, session, receipt;
   `tools/ladder/vps/` carries the unit file, the CPU build recipe and the README): one process per
   registered bot on a HeXO server's bot API, the stream held (presence and availability ARE the
@@ -114,6 +114,39 @@ Both were found by running the gate set rather than by reading it, and both are 
   read beside a follower cell on the same checkpoint — impossible as a distinct-game count until the
   opening question is answered — then R363 or later admits or refuses the rung. Not a series, not a
   promotion input, not in any prereg until then.
+  **R363(c)/(e), 2026-09-20 — the unit and the admission test.** The unit is `book_v1_s20260625_p4`
+  PAIRED, the follower's own: an opening needs no fairness, a pair does. Opening index = match index
+  (pair `m` = games `2m` and `2m+1`, colours swapped by the challenger's alternating `firstPlayer`,
+  both games on opening `m` in the book's FILE order — no seed, no permutation), a CONVENTION BETWEEN
+  OUR TWO BOTS because the server's challenge carries no opening field: both bots translate opening
+  `m` onto the server's auto-placed origin and play its prefix before searching (the second player's
+  first compound turn is plies 2–3 of the book; the first player's first compound turn is ply 4 plus
+  ONE searched stone), a board that leaves the prefix is off-book and searched, the receipt records
+  the opening (book, index, id, the stones it forced, where it went off-book) and `--replay` re-derives
+  the forced stones from the receipt's index. The witnesses (determinism 4/4, budget 512 per compound
+  turn, receipts keyed by net hash) are the instrument's BUDGET PROOF; the shakedown's reading (2
+  distinct games) is a finding about openings, not the bots. **Admission:** ONE 288-game cell, the
+  parent vs strix, IDLE (the VPS or the dev CPU), read beside the follower's parent cell 0.111
+  [0.073, 0.149] on the same checkpoint — then a ruling admits or refuses. Not an instrument before
+  that. The 64-sim "play" preset R363 §0(5) allows is the ladder tool's own row (`--preset play`),
+  labelled on the receipt and never a unit reading.
+- **CARD-LADDER-SERVER-ASKS — RECORDED 2026-09-20 (R363 §0(4)): the six server items are the
+  OPERATOR'S; no ruling on them.** What the shakedown and the client found on the deployed server
+  (`TimmyBurn2/HeXO` `deploy` @ 8166053) that only the server side can change, kept here so no session
+  re-derives them or rules on them: **(1)** `firstPlayer` is challenger|challenged|random where the
+  spec file (Hexo-Bot-Api 0.2.0) says host|guest; **(2)** a challenge carries no `rated` and every
+  bot game is unrated server-side (the spec says otherwise; whether bot games should rate is the
+  operator's); **(3)** `challengeCanceled` carries `reason` and `Challenge.status` includes `expired`,
+  neither in the spec; **(4)** a guest's `elo`/`profileId` are null, the spec has them non-null;
+  **(5)** the finished-game record's `moves[]` is racy within a compound turn (`appendMove` is
+  fire-and-forget) while `moveNumber` is right and starts at 2 — the receipt sorts by `moveNumber`;
+  **(6)** house bots (SealBot) refuse bot challenges ("played from the lobby dialog"), so a ladder
+  needs two stream bots. The seventh finding — no opening variety between two deterministic bots — is
+  NOT a server ask: R363(c) answered it on our side (the book prefix as a convention between our
+  bots). Items (1)–(4) close by updating the spec file or the server, (5) and (6) by the server;
+  none blocks the admission cell. The list was read off `LADDER_SHAKEDOWN_2026-09-19.md` §4 and the
+  card above; the packet's own enumeration was not in the text this session received, so an item
+  the operator meant differently is corrected here in one line.
 
 ## Opened by R361 (EVAL COST: STOP THE BLEED, COUNT, THEN REDESIGN); moved by R362 (RUN8 TO 30K, RUN9 EVAL ROWS)
 

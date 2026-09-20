@@ -531,10 +531,10 @@ before phase 2 lands may name `tools/analyzer/` but not the shim (gate 10 scans 
 
 ## 5. The `repo_design` amendment (phase 2's commit carries it; proposed text)
 
-> ### AMENDMENT — R<nnn>, ANALYZER-1: an interactive position analyzer is ADMITTED on the
+> ### AMENDMENT — R363, ANALYZER-1: an interactive position analyzer is ADMITTED on the
 > viewer's terms plus one loopback socket
 >
-> **R<nnn>.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
+> **R363.** §1 keeps display surfaces absent because each would WATCH A RUN: the R333(d)
 > criterion is coupling, not sockets, and every tool admitted so far happened to need neither.
 > ANALYZER-1 is a position analyzer: a position in (typed, pasted, or a deep link), one or more
 > engines' readings out. It needs a process, so it is the first admitted tool that opens a
