@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**; **R363 (2026-09-20, item 15): the 30k point is INCONCLUSIVE (0.135 [0.097, 0.177] against 0.111) and run8 runs to 45k, the run9 PARENT RULE is PRE-STATED before that cell (the follower series monotone → 45k; else the highest whose CI holds the other two; the gate's best_model only without a strix triple), the LADDER unit is FIXED as code (`book_v1_s20260625_p4` paired, opening index = match index), ANALYZER-1 is admitted under R9, and the CPU deploy head is PROFILED (per-leaf forward ≈ 20 ms flat in batch size: 5.0 s per stone at 256 sims, 8 threads, idle)**. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -375,6 +375,36 @@ RING AUDIT (rc 1): counter-threat 0.009 % PASS, residue 0/4 PASS, `h_full_median
 the shakedown 22.1 %) — reported, stops nothing (R359(b)); replay_ratio 3.61 (span 1.92 h), sym
 bin0/mean 0.999. Trainer at 30 699 (06:37 UTC), 943 steps/h over 12 h; the follower's next cadence
 cell is 45k; ETA 45k ≈ 21:40–22:40 UTC 2026-09-20, its cell's reading ≈ 1.4 h after.
+(15) R363 (2026-09-20, dev only; the box UNTOUCHED, run8 runs to 45k — the mirror read run8 at step 30 871 at
+06:49 UTC): the register at R363 (next R364), R362's Status line amended ((c)'s roles line and "GSPRT bounds
+unchanged" QUALIFIED, (e)'s "ruled at 30k" MOVED to 45k); the repo_design ANALYZER-1 amendment carries R363
+where it said `R<nnn>` (the design doc's quoted copy too). **THE 45k PARENT RULE IS PRE-STATED** in
+`RUN9_PREREG_2026-09-19.md` §1c, verbatim from R363(b), with the two points already on the record (15k 0.104,
+30k 0.135, the parent 0.111) — the 45k cell reads against it; the run8 prereg's §4 carries the 30k reading as
+INCONCLUSIVE. **THE LADDER UNIT IS CODE** (`tools/ladder/openings.py`, receipt schema v2): `book_v1_s20260625_p4`
+in FILE order, pair `m` (the m-th pair of `gameStart`s against one opponent in the session, both bots
+counting the same events, `--match-offset` for a resumed series) plays opening `m` translated onto the
+server's auto-placed origin — the second player's first compound turn is the book's plies 2–3 unsearched,
+the first player's is ply 4 plus ONE searched stone, a board off the prefix is searched and the receipt says
+where (`opening.off_book_at`); `book_stones` rides every move, `--replay` re-derives the forced stones from
+(opening, position) and names a disagreement (`book_misses`), the below-budget line is per searched stone;
+`--preset play` is the 64-sim row R363 §0(5) allows, on `search.preset` of every receipt, never a unit
+reading (in the profile below its argmax agreed with 256's in 58 of 101 positions — a different player, not
+a faster one). CARD-LADDER-RUNG carries the unit and the admission test (one 288-game IDLE cell beside the
+follower's parent cell); CARD-LADDER-SERVER-ASKS records the six server items as the operator's (the four
+spec-file lags, the racy `moves[]`, house bots refusing bot challenges — the opening-variety finding is not
+among them, R363(c) having answered it on our side). **THE CPU-HEAD PROFILE, READ** (`CPU_HEAD_PROFILE_2026-09-20.md`;
+the ladder's `MantisBackend` on run8@30k, `configs/run8.yaml`'s deploy seam — PUCT 256, `leaf_batch_size` 8,
+the batcher at 64 / 10 ms, eager — 101 stones over four book openings, plies 4–30, this workstation IDLE,
+8 torch threads): **5.0 s per stone median (10.0 s per compound turn)** and 1.23 s at 64 sims; the engine-
+boundary call is 99.3 % of the wall; the leaf-batch histogram is 8 leaves in 61 % of calls (81 % of leaves),
+1 leaf in 17 % (2.8 % of leaves; 728 cold-tree/root calls cost 16 s of 481); **the per-leaf forward is FLAT
+in batch size — 22.5 ms at 1 leaf, 19.8 ms per leaf at 8** (16.9 → 20.5 ms/leaf from 4–9 to 20–29 stones
+as the graphs grow: ≈ 470 nodes and ≈ 12 k edges per leaf under `gnn_axis_r8`) and **NOT moved by torch
+threads** (opening 0's 26 stones: 8 threads 4 551 ms per stone, 4 threads +16 %, 16 threads +20 %), so the
+head is bound by the forward itself, not by batching, fill or core count; the batcher's 10 ms deadline
+costs 7.98 ms per pop = 7.2 % of the wall (one submitter never reaches the 32-leaf wake), collate 0.32 ms
+per pop. Numbers, not a design: nothing is ordered on them.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
@@ -435,6 +465,14 @@ cell is 45k; ETA 45k ≈ 21:40–22:40 UTC 2026-09-20, its cell's reading ≈ 1.
   `8379073e`) green; 2a/2b/4/5, 3b and the slow tier NOT run (no crate touched, no integration- or
   slow-marked test touched); gate 1 not run (the accepted cost). `dev` PUSHED on the operator's
   in-session grant.
+- R363 leg exit (2026-09-20): code in `tools/ladder/` (new `openings.py`; `backends.py`, `receipt.py`,
+  `session.py`, `__init__.py`) and `tools/ladder_bot.py`, the VPS README; tests in `tests/tools/` (new
+  `test_ladder_openings.py` +7; backends +3, receipt +4 plants +1, session +1, bot +1). Gates on the tip:
+  3a 4 952 passed / 8 skipped / 56 deselected (341 s, writable `UV_CACHE_DIR`); 3c collected 5 016 against
+  the floor 4 862, 79 deselected all declared; 6, 7, 8, 9, 10, 11, 12 (rc 0, three rows deferred), 13, 14
+  (ruff, pyright 249 files 0 errors, the ratchet AT its floor on every measure), 15, 16, 17 green; 2a/2b/4/5,
+  3b and the slow tier NOT run (no crate touched, no integration- or slow-marked test touched); gate 1 not
+  run (the accepted cost). `dev` PUSHED on the packet's direction ("push so the record is one thing").
 - Commits on this line: one line each, empty bodies, zero trailers; interleaved with the
   OBSERVATORY session's (linear: their branch was rebased on `35c89657` and fast-forwarded);
   `dev` was pushed at `ba51fd46` for the resume, and the REPAIR-A4 leg (`d44f3459..` this commit)
@@ -442,7 +480,7 @@ cell is 45k; ETA 45k ≈ 21:40–22:40 UTC 2026-09-20, its cell's reading ≈ 1.
 
 ## Provenance
 
-Item (14) derived 2026-09-19 on `dev` at `ff5a43d8` from the commits named in it, the gate logs of that session, the mirror (`events_run8_seg0001.jsonl` pulled 09:42 UTC) and one read-only ssh to the box at 10:02 UTC (`ps -p 3211513`, `/workspace/oc7/chain_follower_run8.log`). Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
+Item (15) derived 2026-09-20 on `dev` from the R363 packet, the mirror (`events_run8_seg0001.jsonl` at 06:49 UTC, run8 at 30 871), the three profile JSONs in that session's scratchpad (8 / 16 / 4 threads) and the gate logs of the session; NO box contact. Item (14) derived 2026-09-19 on `dev` at `ff5a43d8` from the commits named in it, the gate logs of that session, the mirror (`events_run8_seg0001.jsonl` pulled 09:42 UTC) and one read-only ssh to the box at 10:02 UTC (`ps -p 3211513`, `/workspace/oc7/chain_follower_run8.log`). Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
 `r361` branch), the mirror's `events_run{7,8}_seg*.jsonl` (run8 pulled 06:05 UTC), the rounds'
 `eval_spool.work/<run>/*_{result.json,progress.txt}` copied off the box's disk, the spool `.pt`
 tensor hashes and the source files named in the record. Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
