@@ -1,4 +1,4 @@
-"""The bot's loop (LADDER-1 §1.2): hold the stream (that IS registration and presence), answer every move request through the backend in arrival order, accept challenges, write one receipt per finished game; the challenger arm issues paired challenges, first player alternating, and stops at its count."""
+"""The bot's loop (LADDER-1 §1.2): hold the stream (that IS registration and presence), answer every move request through the backend in arrival order — the book's stones first (R363(c): pair `m` against one opponent plays opening `m`, both bots counting the same `gameStart`s) — accept challenges, write one receipt per finished game; the challenger arm issues paired challenges, first player alternating, and stops at its count."""
 from __future__ import annotations
 
 import http.client
@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from ladder.client import ApiError, LadderClient, MoveRejected
+from ladder.openings import LadderOpening, forced_stones, ladder_opening
 from ladder.receipt import GameReceipt, write_receipt
 from ladder.wire import WireError, board_from_wire, move_response
 
@@ -42,6 +43,8 @@ class SessionOptions:
     reconnect_delay_sec: float = 5.0
     challenge_retry_sec: float = 10.0
     challenge_timeout_sec: float = 900.0
+    #: The pair index the FIRST pair against an opponent plays (a resumed series names where it left off).
+    match_offset: int = 0
 
 
 @dataclass
@@ -64,6 +67,8 @@ class Session:
         self.log, self.clock = log, clock
         self.summary = SessionSummary()
         self._games: dict[str, GameReceipt] = {}
+        self._openings: dict[str, LadderOpening] = {}
+        self._ordinals: dict[str, int] = {}
         self._account: dict[str, Any] = {}
         self._outgoing: str | None = None
         self._games_finished_for_plan = 0
@@ -114,6 +119,8 @@ class Session:
             self.log(f"ladder: {game_id} replayed on reconnect; keeping its receipt")
             return
         opponent = dict(event.get("opponent") or {})
+        opening = self._opening_for(str(opponent.get("profileId")))
+        self._openings[game_id] = opening
         self._games[game_id] = GameReceipt(
             server=self.options.server, game_id=game_id,
             bot={"name": self.backend.name, "backend": self.backend.backend, "net_hash": self.backend.net_hash,
@@ -121,9 +128,17 @@ class Session:
             opponent={"display_name": opponent.get("displayName"), "profile_id": opponent.get("profileId"),
                       "elo": opponent.get("elo")},
             side=str(event["side"]), time_control=dict(event.get("timeControl") or {}), rated=bool(event.get("rated")),
-            sims_configured=int(self.backend.sims), search=dict(self.backend.search), started=self.clock())
+            sims_configured=int(self.backend.sims), search=dict(self.backend.search), started=self.clock(),
+            opening=opening.to_record())
         self.backend.new_game(game_id)
-        self.log(f"ladder: {game_id} started, playing {event['side']} vs {opponent.get('displayName')}")
+        self.log(f"ladder: {game_id} started, playing {event['side']} vs {opponent.get('displayName')}, "
+                 f"opening {opening.index} of {opening.book}")
+
+    def _opening_for(self, opponent_id: str) -> LadderOpening:
+        """Pair `match_offset + n // 2` for the n-th game (0-based) against this opponent in this session: both bots count the same `gameStart`s, so the pair's two games share the opening without a word on the wire."""
+        ordinal = self._ordinals.get(opponent_id, 0)
+        self._ordinals[opponent_id] = ordinal + 1
+        return ladder_opening(self.options.match_offset + ordinal // 2)
 
     def _move(self, event: dict[str, Any]) -> None:
         game_id = str(event["gameId"])
@@ -138,7 +153,14 @@ class Session:
             board = board_from_wire(request["board"], encoding=self.backend.encoding)
         except WireError as exc:
             raise SessionError(f"{game_id} request {request_id}: the wire position does not replay: {exc}") from exc
-        turn = self.backend.select_turn(board)
+        cells = [(int(c["q"]), int(c["r"])) for c in request["board"]["cells"]]
+        forced = forced_stones(self._openings[game_id], cells)
+        if forced is None:
+            if receipt.off_book_at is None:
+                self.log(f"ladder: {game_id} request {request_id}: off-book after {len(cells)} stones; searching")
+            receipt.mark_off_book(stones=len(cells))
+            forced = ()
+        turn = self.backend.select_turn(board, forced)
         limit = request.get("time_limit")
         if limit is not None and turn.ms / 1000.0 > float(limit):
             self.log(f"ladder: {game_id} request {request_id}: thought {turn.ms / 1000.0:.1f} s against a "
@@ -157,12 +179,13 @@ class Session:
                 except ApiError as resign_exc:
                     self.log(f"ladder: {game_id}: resign refused: {resign_exc}")
             return
-        receipt.add_move(request_id=request_id, stones=len(request["board"]["cells"]), time_limit=limit,
-                         placements=turn.placements, sims=turn.sims, ms=turn.ms, server_date=result.server_date)
+        receipt.add_move(request_id=request_id, stones=len(cells), time_limit=limit, placements=turn.placements,
+                         sims=turn.sims, ms=turn.ms, server_date=result.server_date, book_stones=turn.book_stones)
 
     def _finish(self, event: dict[str, Any]) -> None:
         game_id = str(event["gameId"])
         receipt = self._games.pop(game_id, None)
+        self._openings.pop(game_id, None)
         winner, reason = event.get("winner"), str(event.get("reason"))
         if receipt is None:
             self.log(f"ladder: {game_id} finished ({reason}, winner {winner}) but its start was never seen; no receipt")

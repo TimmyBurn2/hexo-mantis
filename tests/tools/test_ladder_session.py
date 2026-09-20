@@ -1,4 +1,4 @@
-"""`tools/ladder/session.py` (LADDER-1 §1.2): register (hold the stream) -> play every move request through the backend -> report one receipt per game; the challenger arm issues the paired challenges."""
+"""`tools/ladder/session.py` (LADDER-1 §1.2): register (hold the stream) -> play every move request through the backend, the book's stones first (R363(c)) -> report one receipt per game; the challenger arm issues the paired challenges."""
 from __future__ import annotations
 
 import json
@@ -13,6 +13,8 @@ from _ladder_stub import TOKEN, base_url, serve
 _REPO = Path(__file__).resolve().parents[2]
 _FIXTURES = _REPO / "tests" / "fixtures" / "ladder"
 _NET = "a9a46c55bd1ceadb38145fef6527254d77d37900aebea4332def55ca75f56bfc"
+#: `book_v1_s20260625_p4` opening 0 is [[2, 2], [4, 1], [2, 0], [2, -1]]; relative to its first stone:
+_OPENING_0 = [[0, 0], [2, -1], [0, -2], [0, -3]]
 
 
 class _FakeBackend:
@@ -34,12 +36,15 @@ class _FakeBackend:
     def new_game(self, game_id: str) -> None:
         self.games.append(game_id)
 
-    def select_turn(self, board: Any):
+    def select_turn(self, board: Any, forced=()):
         from ladder.backends import TurnResult  # noqa: PLC0415 — the package is loaded by the `ladder` fixture
 
         stones = len(board.get_stones())
         self.seen.append(stones)
-        return TurnResult(placements=self.turns[stones], sims=8, ms=1.5)
+        scripted = self.turns.get(stones, ((9, 9), (9, 8)))
+        placements = tuple(forced) + tuple(scripted[len(forced):])
+        return TurnResult(placements=(placements[0], placements[1]), sims=8 * (2 - len(forced)) // 2, ms=1.5,
+                          book_stones=len(forced))
 
     def close(self) -> None:
         return None
@@ -62,13 +67,14 @@ def _posts(stub, suffix: str) -> list[tuple[str, Any]]:
 
 
 def test_every_move_request_is_answered_with_the_backends_turn_and_the_request_id(ladder, stub, tmp_path: Path) -> None:
+    """Game 1 (x): the recorded opponent's stones are not opening 0's, so the head goes off-book and searches; game 2 (o, the pair's second game, opening 0 again): plies 2–3 are the book's, unsearched."""
     backend = _FakeBackend({3: ((2, 0), (3, 0)), 7: ((-1, 0), (-2, 0)), 1: ((1, 0), (0, 1))})
     summary = _session(ladder, stub, backend, tmp_path).run()
     assert backend.games == ["g_7Qm2Kx", "g_second"]
     assert _posts(stub, "/move") == [
         ("/api/bot/game/g_7Qm2Kx/move", {"move": {"pieces": [{"q": 2, "r": 0}, {"q": 3, "r": 0}]}, "request_id": 1}),
         ("/api/bot/game/g_7Qm2Kx/move", {"move": {"pieces": [{"q": -1, "r": 0}, {"q": -2, "r": 0}]}, "request_id": 2}),
-        ("/api/bot/game/g_second/move", {"move": {"pieces": [{"q": 1, "r": 0}, {"q": 0, "r": 1}]}, "request_id": 1}),
+        ("/api/bot/game/g_second/move", {"move": {"pieces": [{"q": 2, "r": -1}, {"q": 0, "r": -2}]}, "request_id": 1}),
     ]
     assert summary.games == 2 and summary.wins == 1 and summary.losses == 1 and summary.aborted == 0
 
@@ -84,8 +90,13 @@ def test_a_finished_game_leaves_one_receipt_under_the_net_hash_with_its_moves_an
     assert [m["sims"] for m in receipt["moves"]] == [8, 8] and receipt["sims_configured"] == 4
     assert receipt["moves"][1]["time_limit"] == 45 and receipt["moves"][0]["server_date"] == "Sat, 19 Sep 2026 12:00:00 GMT"
     assert receipt["plies"] == 3 and receipt["moves_full"] == [[0, 0, "x"], [1, 0, "o"], [0, 1, "o"]]
+    assert receipt["opening"] == {"book": "book_v1_s20260625_p4", "index": 0, "opening_id": "0", "relative": _OPENING_0,
+                                  "off_book_at": 3}
+    assert [m["book_stones"] for m in receipt["moves"]] == [0, 0]
     second = ladder.receipt.read_receipt(tmp_path / "receipts" / "a9a46c55" / "g_second.json")
     assert second["result"]["outcome"] == "win" and second["plies"] is None and second["plies_seen"] == 3
+    assert second["opening"]["index"] == 0 and second["opening"]["off_book_at"] is None
+    assert [(m["book_stones"], m["sims"], m["placements"]) for m in second["moves"]] == [(2, 0, [[2, -1], [0, -2]])]
 
 
 def test_a_rejected_move_is_recorded_and_the_game_resigned_rather_than_left_on_the_clock(ladder, stub, tmp_path: Path) -> None:
@@ -141,3 +152,35 @@ def test_a_target_that_never_opens_is_a_named_failure_not_a_hang(ladder, stub, t
                        challenge_timeout_sec=0.1)
     with pytest.raises(ladder.session.SessionError, match="not-open"):
         session.run()
+
+
+def _series(path: Path, opponents: list[str]) -> None:
+    """One o-side game per entry: the origin on the wire, one move request, a finish — the forced plies 2–3 land in the POST."""
+    lines = []
+    for i, who in enumerate(opponents):
+        gid = f"g_{i}"
+        lines.append({"type": "gameStart", "gameId": gid, "side": "o", "opponent": {"profileId": who, "displayName": who, "elo": 1000},
+                      "timeControl": {"mode": "unlimited"}, "rated": False})
+        lines.append({"type": "moveRequest", "gameId": gid, "request": {"board": {"to_move": "o", "cells": [{"q": 0, "r": 0, "p": "x"}]},
+                                                                          "request_id": 1}})
+        lines.append({"type": "gameFinish", "gameId": gid, "winner": "x", "reason": "surrender"})
+    path.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
+
+
+def test_pair_m_against_one_opponent_plays_opening_m_counted_per_opponent_from_the_offset(ladder, tmp_path: Path) -> None:
+    """R363(c): opening index = match (pair) index — games 2m and 2m+1 share opening m; another opponent's game advances nothing; `match_offset` names where a resumed series left off."""
+    from mantis.arena.books import book_openings
+
+    book = book_openings("book_v1_s20260625_p4")
+    path = tmp_path / "stream.ndjson"
+    _series(path, ["p_them", "p_them", "p_other", "p_them", "p_them", "p_them"])
+    for stub in serve(path):
+        session = _session(ladder, stub, _FakeBackend({}), tmp_path, match_offset=5)
+        session.run()
+        posted = [b["move"]["pieces"] for _p, b in _posts(stub, "/move")]
+        expect_index = [5, 5, 5, 6, 6, 7]
+        for pieces, index in zip(posted, expect_index, strict=True):
+            q0, r0 = book[index].moves[0]
+            assert pieces == [{"q": q - q0, "r": r - r0} for q, r in book[index].moves[1:3]], index
+        receipts = sorted((tmp_path / "receipts" / "a9a46c55").glob("g_*.json"), key=lambda p: int(p.stem[2:]))
+        assert [ladder.receipt.read_receipt(r)["opening"]["index"] for r in receipts] == expect_index

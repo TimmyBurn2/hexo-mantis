@@ -1,4 +1,4 @@
-"""LADDER-1 (CARD-LADDER-RUNG): one process per registered bot on a HeXO server's bot API — hold the stream, answer every move request through ONE backend (`mantis` or `strix`), write a receipt per game; EVAL only, nothing here writes a ring; the token comes from `HEXO_TOKEN` alone; `--replay RECEIPT` is the determinism + budget witness."""
+"""LADDER-1 (CARD-LADDER-RUNG): one process per registered bot on a HeXO server's bot API — hold the stream, answer every move request through ONE backend (`mantis` or `strix`) from the book prefix R363(c) fixed (`book_v1_s20260625_p4` paired, opening index = match index), write a receipt per game; EVAL only, nothing here writes a ring; the token comes from `HEXO_TOKEN` alone; `--replay RECEIPT` is the determinism + budget witness."""
 from __future__ import annotations
 
 import argparse
@@ -43,19 +43,20 @@ def parse_time_control(text: str) -> dict[str, Any]:
 
 @dataclass
 class ReplayReport:
-    """What `--replay` found: the recorded moves and budgets reproduced or not (`mismatches`, `budget_misses`), and the turns recorded BELOW twice the configured sims (`below_budget`: a decided position — strix's root VCF solver answers in a few visits, mantis's PUCT tree stops once every path hits a terminal; measured live 2026-09-19 at 3 and 427 of 512 — reported, never a failure on its own; the replay must reproduce the count)."""
+    """What `--replay` found: the recorded moves and budgets reproduced or not (`mismatches`, `budget_misses`), the book stones re-derived from the receipt's opening or not (`book_misses`), and the turns recorded BELOW the configured sims for their searched stones (`below_budget`: a decided position — strix's root VCF solver answers in a few visits, mantis's PUCT tree stops once every path hits a terminal; measured live 2026-09-19 at 3 and 427 of 512 — reported, never a failure on its own; the replay must reproduce the count)."""
 
     game_id: str
     backend: str
     moves: int = 0
     mismatches: list[dict[str, Any]] = field(default_factory=list)
     budget_misses: list[dict[str, Any]] = field(default_factory=list)
+    book_misses: list[dict[str, Any]] = field(default_factory=list)
     below_budget: list[dict[str, Any]] = field(default_factory=list)
     ms_per_turn: list[float] = field(default_factory=list)
 
     @property
     def passed(self) -> bool:
-        return not self.mismatches and not self.budget_misses
+        return not self.mismatches and not self.budget_misses and not self.book_misses
 
 
 def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
@@ -65,14 +66,20 @@ def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
     if not full:
         raise ValueError(f"{receipt['game_id']}: no moves_full on the receipt; the positions cannot be rebuilt")
     report = ReplayReport(game_id=str(receipt["game_id"]), backend=str(receipt["bot"]["backend"]))
-    configured = 2 * int(receipt["sims_configured"])
+    opening = ladder.openings.LadderOpening.from_record(receipt["opening"])
     backend.new_game(str(receipt["game_id"]))
     for move in receipt["moves"]:
         stones = int(move["stones"])
         cells = [{"q": q, "r": r, "p": side} for q, r, side in full[:stones]]
         to_move = receipt["side"]
         board = ladder.wire.board_from_wire({"to_move": to_move, "cells": cells}, encoding=backend.encoding)
-        turn = backend.select_turn(board)
+        # The book stones come from the receipt's OPENING and the position, never from the recorded placements.
+        forced = ladder.openings.forced_stones(opening, [(int(q), int(r)) for q, r, _side in full[:stones]]) or ()
+        recorded_book = [list(c) for c in move["placements"][: int(move["book_stones"])]]
+        if len(forced) != int(move["book_stones"]) or [list(c) for c in forced] != recorded_book:
+            report.book_misses.append({"request_id": move["request_id"], "recorded": recorded_book,
+                                       "derived": [list(c) for c in forced]})
+        turn = backend.select_turn(board, forced)
         report.moves += 1
         report.ms_per_turn.append(float(turn.ms))
         replayed = [[q, r] for q, r in turn.placements]
@@ -82,10 +89,16 @@ def replay_receipt(receipt: dict[str, Any], backend: Any) -> ReplayReport:
         if int(turn.sims) != int(move["sims"]):
             report.budget_misses.append({"request_id": move["request_id"], "sims": int(turn.sims),
                                          "recorded": int(move["sims"])})
+        configured = (2 - len(forced)) * int(receipt["sims_configured"])
         if int(move["sims"]) < configured:
             report.below_budget.append({"request_id": move["request_id"], "sims": int(move["sims"]),
                                         "configured": configured})
     return report
+
+
+def ladder_presets() -> dict[str, int | None]:
+    """The presets the backends know (`unit`, `play`), read off the package so the CLI cannot drift from it."""
+    return dict(_load_ladder().backends.PRESET_SIMS)
 
 
 def _open_backend(args: argparse.Namespace, ladder: Any) -> Any:
@@ -94,8 +107,9 @@ def _open_backend(args: argparse.Namespace, ladder: Any) -> Any:
 
         if args.config is None or args.checkpoint is None:
             raise SystemExit("--backend mantis needs --config (the run's eval seam) and --checkpoint")
-        return ladder.backends.open_mantis(load_config(args.config), Path(args.checkpoint), threads=args.threads)
-    return ladder.backends.open_strix(sims=args.sims, threads=args.threads)
+        return ladder.backends.open_mantis(load_config(args.config), Path(args.checkpoint), threads=args.threads,
+                                           preset=args.preset)
+    return ladder.backends.open_strix(sims=args.sims, threads=args.threads, preset=args.preset)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -107,6 +121,11 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checkpoint", help="mantis: the stamped .ckpt to play")
     ap.add_argument("--sims", type=int, default=256, help="strix: sims per stone (the unit on record is 256)")
     ap.add_argument("--threads", type=int, default=None, help="torch threads for the backend (default: torch's)")
+    ap.add_argument("--preset", choices=sorted(ladder_presets()), default="unit",
+                    help="unit: the config's deploy_sims / --sims (the reading on record); play: 64 sims, R363 §0(5), "
+                         "labelled on every receipt, never a unit reading")
+    ap.add_argument("--match-offset", type=int, default=0,
+                    help="the pair index the first pair against an opponent plays (a resumed series names where it left off)")
     ap.add_argument("--no-open", action="store_true", help="hold the stream without taking challenges")
     ap.add_argument("--accept-from", help="comma-separated profile ids whose challenges are accepted; default any")
     ap.add_argument("--challenge", metavar="PROFILE_ID", help="issue paired challenges to this bot")
@@ -131,9 +150,10 @@ def main(argv: list[str] | None = None) -> int:
             backend.close()
         mean_ms = sum(report.ms_per_turn) / len(report.ms_per_turn) if report.ms_per_turn else 0.0
         print(f"replay {report.game_id} ({report.backend}): {report.moves} turn(s), {len(report.mismatches)} "
-              f"mismatch(es), {len(report.budget_misses)} budget miss(es), {len(report.below_budget)} below budget, "
-              f"{mean_ms / 1000.0:.2f} s/turn -> {'PASS' if report.passed else 'FAIL'}")
-        for row in report.mismatches + report.budget_misses + report.below_budget:
+              f"mismatch(es), {len(report.budget_misses)} budget miss(es), {len(report.book_misses)} book miss(es), "
+              f"{len(report.below_budget)} below budget, {mean_ms / 1000.0:.2f} s/turn -> "
+              f"{'PASS' if report.passed else 'FAIL'}")
+        for row in report.mismatches + report.budget_misses + report.book_misses + report.below_budget:
             print(f"  {row}")
         return 0 if report.passed else 1
 
@@ -150,7 +170,8 @@ def main(argv: list[str] | None = None) -> int:
     accept = None if args.accept_from is None else frozenset(p.strip() for p in args.accept_from.split(",") if p.strip())
     options = ladder.session.SessionOptions(
         server=args.server, work_dir=args.work_dir, open_for_challenges=not args.no_open, accept_from=accept,
-        challenge=plan, reconnect=not args.no_reconnect, challenge_timeout_sec=float(args.challenge_timeout_sec))
+        challenge=plan, reconnect=not args.no_reconnect, challenge_timeout_sec=float(args.challenge_timeout_sec),
+        match_offset=int(args.match_offset))
     backend = _open_backend(args, ladder)
     client = ladder.client.LadderClient(args.server, token)
     try:

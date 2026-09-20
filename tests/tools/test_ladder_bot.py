@@ -11,6 +11,9 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _NET = "a9a46c55bd1ceadb38145fef6527254d77d37900aebea4332def55ca75f56bfc"
+#: An opening whose plies 2–3 are the recorded opponent's and whose ply 4 is the receipt's first recorded stone.
+_OPENING = {"book": "book_v1_s20260625_p4", "index": 0, "opening_id": "0", "relative": [[0, 0], [1, 0], [0, 1], [2, 0]],
+            "off_book_at": None}
 
 
 @pytest.fixture(scope="module")
@@ -57,7 +60,7 @@ class _ReplayBackend:
     def new_game(self, game_id: str) -> None:
         return None
 
-    def select_turn(self, board: Any):
+    def select_turn(self, board: Any, forced=()):
         from ladder.backends import TurnResult  # noqa: PLC0415
 
         self.calls += 1
@@ -66,7 +69,9 @@ class _ReplayBackend:
         first, second = turns[stones]
         if self.flip and stones == 7:
             first, second = second, first
-        return TurnResult(placements=(first, second), sims=self.sims_per_turn, ms=2.0)
+        placements = tuple(forced) + (first, second)[len(forced):]
+        return TurnResult(placements=(placements[0], placements[1]), sims=self.sims_per_turn, ms=2.0,
+                          book_stones=len(forced))
 
     def close(self) -> None:
         return None
@@ -77,9 +82,11 @@ def _receipt(ladder, tmp_path: Path) -> Path:
         server="s", game_id="g_7Qm2Kx",
         bot={"name": f"mantis:{_NET[:8]}", "backend": "mantis", "net_hash": _NET, "display_name": "M", "profile_id": "p"},
         opponent={"display_name": "S", "profile_id": "q", "elo": 1000}, side="x", time_control={"mode": "unlimited"},
-        rated=False, sims_configured=4, search={}, started=0.0)
-    r.add_move(request_id=1, stones=3, time_limit=None, placements=((2, 0), (3, 0)), sims=8, ms=2.0, server_date=None)
-    r.add_move(request_id=2, stones=7, time_limit=None, placements=((-1, 0), (-2, 0)), sims=8, ms=2.0, server_date=None)
+        rated=False, sims_configured=4, search={}, started=0.0, opening=_OPENING)
+    r.add_move(request_id=1, stones=3, time_limit=None, placements=((2, 0), (3, 0)), sims=8, ms=2.0, server_date=None,
+               book_stones=1)
+    r.add_move(request_id=2, stones=7, time_limit=None, placements=((-1, 0), (-2, 0)), sims=8, ms=2.0, server_date=None,
+               book_stones=0)
     # HeXO x,y for wire q,r: x = q + r, y = -r.
     wire = [(0, 0, "a"), (1, 0, "b"), (0, 1, "b"), (2, 0, "a"), (3, 0, "a"), (1, -1, "b"), (2, -1, "b"),
             (-1, 0, "a"), (-2, 0, "a"), (4, 0, "b"), (5, 0, "b")]
@@ -93,6 +100,20 @@ def _receipt(ladder, tmp_path: Path) -> Path:
 def test_a_replay_that_reproduces_every_move_at_the_configured_budget_passes(bot_mod, ladder, tmp_path: Path) -> None:
     report = bot_mod.replay_receipt(ladder.receipt.read_receipt(_receipt(ladder, tmp_path)), _ReplayBackend())
     assert report.passed and report.moves == 2 and report.mismatches == [] and report.budget_misses == []
+    assert report.book_misses == [] and report.below_budget == []
+
+
+def test_the_replay_derives_the_book_stones_from_the_receipts_opening_and_names_a_disagreement(bot_mod, ladder, tmp_path: Path) -> None:
+    """R363(c): the forced stones are re-derived from (opening, position), never trusted from the recorded placements."""
+    body = ladder.receipt.read_receipt(_receipt(ladder, tmp_path))
+    body["opening"]["relative"][3] = [5, 5]
+    report = bot_mod.replay_receipt(body, _ReplayBackend())
+    assert report.book_misses == [{"request_id": 1, "recorded": [[2, 0]], "derived": [[5, 5]]}]
+    assert not report.passed
+    body["opening"]["relative"][3] = [2, 0]
+    body["moves"][0]["book_stones"] = 0
+    report = bot_mod.replay_receipt(body, _ReplayBackend())
+    assert report.book_misses == [{"request_id": 1, "recorded": [], "derived": [[2, 0]]}]
 
 
 def test_a_replay_that_diverges_names_the_move(bot_mod, ladder, tmp_path: Path) -> None:
@@ -116,8 +137,8 @@ def test_a_turn_recorded_below_the_configured_budget_is_reported_and_must_replay
     assert report.below_budget == [{"request_id": 2, "sims": 3, "configured": 8}]
 
     class _Short(_ReplayBackend):
-        def select_turn(self, board):
-            turn = super().select_turn(board)
+        def select_turn(self, board, forced=()):
+            turn = super().select_turn(board, forced)
             return turn if len(board.get_stones()) != 7 else type(turn)(placements=turn.placements, sims=3, ms=turn.ms)
 
     report = bot_mod.replay_receipt(body, _Short())

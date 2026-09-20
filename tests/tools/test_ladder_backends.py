@@ -87,6 +87,51 @@ def test_a_turn_is_two_distinct_legal_cells_and_the_heads_own_sims_count(ladder,
     assert turn.ms > 0
 
 
+def test_a_forced_book_stone_is_played_unsearched_and_only_the_rest_is_searched(ladder, mantis_backend) -> None:
+    """R363(c): the first player's first compound turn is ply 4 of the book plus ONE searched stone; a whole forced turn searches nothing."""
+    backend, _net_hash, _checkpoint = mantis_backend
+    backend.new_game("g_1")
+    board = Board.with_encoding_name(_ENC)
+    for q, r in [(0, 0), (1, 0), (0, 1)]:
+        board.apply_move(q, r)
+    turn = backend.select_turn(board, forced=((-1, 0),))
+    assert turn.placements[0] == (-1, 0) and turn.book_stones == 1
+    assert turn.sims == 12  # one searched stone at 12 leaves
+    assert board.is_legal(*turn.placements[1]) and turn.placements[1] != (-1, 0)
+    backend.new_game("g_2")
+    origin = Board.with_encoding_name(_ENC)
+    origin.apply_move(0, 0)
+    whole = backend.select_turn(origin, forced=((2, -1), (0, -2)))
+    assert whole.placements == ((2, -1), (0, -2)) and whole.book_stones == 2 and whole.sims == 0
+    assert backend.select_turn(_mid_game()).book_stones == 0
+
+
+def test_a_forced_stone_the_board_refuses_is_a_named_error_not_a_server_rejection(ladder, mantis_backend) -> None:
+    backend, _net_hash, _checkpoint = mantis_backend
+    backend.new_game("g_1")
+    with pytest.raises(ladder.backends.BackendError, match=r"\(0, 0\)"):
+        backend.select_turn(_mid_game(), forced=((0, 0),))
+
+
+def test_the_play_preset_is_64_sims_named_on_the_search_record_and_the_unit_is_the_configs(ladder, smoke_run_config, tmp_path: Path) -> None:
+    """R363 §0(5): a 64-sim "play" preset is the ladder tool's own row, never a unit reading."""
+    checkpoint, _net_hash = _tiny_checkpoint(tmp_path)
+    config = smoke_run_config("dev_example.yaml", eval={"gate": {"deploy_sims": 12}, "worker_device": "cpu"})
+    assert ladder.backends.PRESET_SIMS == {"unit": None, "play": 64}
+    play = ladder.backends.open_mantis(config, checkpoint, threads=1, preset="play")
+    try:
+        assert play.sims == 64 and play.search["sims"] == 64 and play.search["preset"] == "play"
+    finally:
+        play.close()
+    unit = ladder.backends.open_mantis(config, checkpoint, threads=1, preset="unit")
+    try:
+        assert unit.sims == 12 and unit.search["preset"] == "unit"
+    finally:
+        unit.close()
+    with pytest.raises(ladder.backends.BackendError, match="blitz"):
+        ladder.backends.open_mantis(config, checkpoint, threads=1, preset="blitz")
+
+
 def test_the_same_game_id_replays_to_the_same_turn(mantis_backend) -> None:
     backend, _net_hash, _checkpoint = mantis_backend
     backend.new_game("g_7Qm2Kx")
