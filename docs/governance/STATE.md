@@ -357,9 +357,24 @@ cadence cell `run8_00015000_5777cb58.ckpt.strix256.json` (equal-work 256/256, so
 (0.693, 0.778). The 15k RING AUDIT (`ring_audit … --bands RUN8_PREREG`, rc 1): counter-threat 0.031 %
 PASS, residue 0/8 PASS, `h_full_median` 0.209 PASS (mean 0.465), cap rate 0.88 % PASS,
 **`one_hot_share_full` 0.2745 MISS (band < 0.25; the shakedown read 22.1 %)** — a live-run miss is
-REPORTED and stops nothing (R359(b)); replay_ratio 3.10, sym bin0/mean 1.000. Trainer at 17 119
-(16:15 UTC), 1 099 steps/h alone; ETA 30k ≈ 05:45–07:15 UTC 2026-09-20, its cell's reading
-≈ 1.5 h after.
+REPORTED and stops nothing (R359(b)); replay_ratio 3.10, sym bin0/mean 1.000.
+**THE 30k POINT, read off the mirror 06:38 UTC 2026-09-20 — the R356(c) line reads INCONCLUSIVE:** the
+cadence cell `run8_00030000_6e45edb0.ckpt.strix256.json` (equal-work 256/256, solver ON, CONTENDED,
+05:04:06 → 06:29:07 UTC, 5 100 s, 17.7 s/game, median 39 plies, 0 fence findings) reads
+**0.135 [0.097, 0.177]**, 288 games, 39 W / 249 L / 0 D. Against the parent's 0.111 [0.073, 0.149]:
+NOT SUCCESS (< 0.161), NOT FALSIFIED (> 0.111 — the 15k half was met, the 30k half is not) →
+**INCONCLUSIVE, whose pre-stated action is READ 45k under the three-cell rule** (R356(c), R359(b));
+the run9 parent and training-swap ruling R362(e) hangs at 30k therefore waits on 45k unless the
+operator rules otherwise — an OPEN decision, not this session's. The series: 3k 0.056 · 6k 0.0625 ·
+15k 0.104 · 30k 0.135 (+2.4 pp over the parent, inside both CIs). The rounds since 15k ALL REJECTED
+by the GSPRT against the 15k anchor — r6 @18k 32 pairs 0.422, r7 @21k 40 pairs 0.469, r8 @24k 24 pairs
+0.458, r9 @27k 80 pairs 0.537, r10 @30k 32 pairs 0.391 (A-3 partial; its rung in flight at 06:38) —
+while the sealbot rung rose 0.764 → 0.752 → 0.806 → 0.830 (the census's finding, live). The 30k
+RING AUDIT (rc 1): counter-threat 0.009 % PASS, residue 0/4 PASS, `h_full_median` 0.200 PASS (mean
+0.463), cap rate 0.22 % PASS, **`one_hot_share_full` 0.2761 MISS** (band < 0.25; 15k read 0.2745,
+the shakedown 22.1 %) — reported, stops nothing (R359(b)); replay_ratio 3.61 (span 1.92 h), sym
+bin0/mean 0.999. Trainer at 30 699 (06:37 UTC), 943 steps/h over 12 h; the follower's next cadence
+cell is 45k; ETA 45k ≈ 21:40–22:40 UTC 2026-09-20, its cell's reading ≈ 1.4 h after.
 
 ## Exit facts — the R353 packet, 2026-09-14
 
