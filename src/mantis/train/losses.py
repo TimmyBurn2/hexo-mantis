@@ -1,3 +1,5 @@
+# >300 justify (R8): the policy CE, the hard target it rebuilds and the soft target that shares its
+# tail are ONE segment vocabulary and denominator contract — split, the two targets would disagree.
 """Shared loss computation for the Trainer + pretrain: the ragged policy CE, the binned value loss
 and the chain head; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
 from __future__ import annotations
@@ -189,6 +191,43 @@ def ragged_policy_ce_and_entropies(
         return values.mean()
 
     return _reduce(per_graph), _reduce(entropy_graph), _reduce(model_graph)
+
+
+def soft_policy_target(
+    policy_target: torch.Tensor,
+    legal_offsets: torch.Tensor,
+    explicit_mask: torch.Tensor,
+    tail_mass: torch.Tensor,
+    prior_probs: torch.Tensor,
+    temperature: float,
+) -> torch.Tensor:
+    """The auxiliary head's target (R366(b)): per graph the EXPLICIT entries of the searched target raised to `1/temperature`, renormalised over the explicit mass `1 - alpha`, the tail carried as the hard target rebuilds it (alpha over the DETACHED prior) — the temperature stays OFF the tail because run8@45k's alpha reads median 0.000 / p90 0.020 and `target^(1/4)` over the whole legal set put a median 40 % of the soft mass on ~500 tail nodes of ~1e-4 each, an artefact of the sparse row and not KataGo's semantics; detached throughout; Raises: ValueError — `temperature` not above 1 (at 1 the head learns the main head's own target and reads armed while dead)."""
+    if not math.isfinite(temperature) or temperature <= 1.0:
+        raise ValueError(f"soft_policy_target: temperature must be > 1, got {temperature!r}")
+    with torch.no_grad():
+        target = policy_target.to(torch.float32).reshape(-1)
+        explicit = explicit_mask.reshape(-1).to(torch.bool)
+        counts = legal_offsets[1:] - legal_offsets[:-1]
+        b = int(legal_offsets.shape[0]) - 1
+        seg = torch.repeat_interleave(
+            torch.arange(b, device=target.device, dtype=torch.long), counts,
+            output_size=int(target.shape[0]),
+        )
+        alpha = tail_mass.reshape(-1).to(torch.float32)
+        # The explicit half: t^(1/T) over the explicit nodes, renormalised to the explicit mass.
+        sharpened = torch.where(explicit & (target > 0),
+                                torch.exp(torch.log(target.clamp_min(1e-30)) / temperature),
+                                torch.zeros_like(target))
+        sharpened_sum = torch.zeros(b, device=target.device, dtype=target.dtype)
+        sharpened_sum.scatter_add_(0, seg, sharpened)
+        explicit_mass = (1.0 - alpha).clamp_min(0.0)
+        soft_explicit = sharpened * (explicit_mass / sharpened_sum.clamp_min(1e-30))[seg]
+        # The tail half: alpha over the detached prior, the hard target's own construction.
+        tail_prior = prior_probs.detach().to(torch.float32).reshape(-1) * (~explicit).to(torch.float32)
+        tail_denom = torch.zeros(b, device=target.device, dtype=target.dtype)
+        tail_denom.scatter_add_(0, seg, tail_prior)
+        soft_tail = tail_prior * (alpha / tail_denom.clamp_min(1e-12))[seg]
+        return soft_explicit + soft_tail
 
 
 def compute_chain_loss(

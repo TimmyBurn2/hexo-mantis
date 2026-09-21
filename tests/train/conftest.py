@@ -214,7 +214,7 @@ def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},
         # The tiny arch's own widths (v35): 4 x 128 over a 16 x 1 net is the drift the writer refuses.
-        "model": {"gnn": {"hidden": 16, "num_layers": 1}},
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
         "deploy": {"search": {"kind": "puct"}},
         "eval": _make_eval_block(),
         "train": _make_train_block(),
@@ -238,7 +238,7 @@ def make_full_train_hparams(**over: Any):
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
         checkpoint_interval=0, value_target="pure_outcome_z",
         policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
-        policy_loss_warmup_steps=0,
+        policy_loss_warmup_steps=0, aux_soft_policy=None,
     )
     base.update(over)
     return TrainHParams(**base)

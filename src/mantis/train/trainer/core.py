@@ -25,8 +25,10 @@ from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
+from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
 from mantis.encoding import resolve_from_config
 from mantis.model import (
+    SOFT_POLICY_ARCH_KINDS,
     ModelArch,
     amp_dtype_for,
     arch_from_spec_and_config,
@@ -44,6 +46,7 @@ from mantis.train.losses import (
     policy_loss_weight_at,
     ragged_policy_ce,
     ragged_policy_ce_and_entropies,
+    soft_policy_target,
 )
 
 _LOG = logging.getLogger(__name__)
@@ -86,11 +89,13 @@ class TrainHParams:
     ply_cap_value: float
     #: `train.policy_loss_weight_schedule.warmup_steps` (R350(b)(iii)); 0 is OFF.
     policy_loss_warmup_steps: int
+    #: `model.aux_soft_policy` (R366(b)) as `(temperature, weight)`; `None` is the explicit OFF.
+    aux_soft_policy: tuple[float, float] | None
 
     @classmethod
     def from_config(cls, config: Any) -> TrainHParams:
-        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section; every
-        member is REQUIRED, no flat-key fallback.
+        """Build hparams from a validated `RunConfig`-shaped mapping's `train` section (and the
+        `model.aux_soft_policy` rows); every member is REQUIRED, no flat-key fallback.
 
         Raises:
             ValueError: no `train` section, an unsupported value target, or a policy target that
@@ -106,11 +111,14 @@ class TrainHParams:
         if train["value_target"] != "pure_outcome_z":
             raise ValueError(f"train.value_target: unsupported {train['value_target']!r}")
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
-        fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps"}
+        fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps", "aux_soft_policy"}
         kwargs = {k: train[k] for k in fields}
+        # No `model` section = a pre-v36 mapping with no head; the trainer's cross-check holds the pair.
+        aux = resolve_aux_soft_policy(cfg) if isinstance(cfg.get("model"), dict) else None
         return cls(
             **kwargs,
             policy_loss_warmup_steps=int(train["policy_loss_weight_schedule"]["warmup_steps"]),
+            aux_soft_policy=None if aux is None else (aux.temperature, aux.weight),
         )
 
 
@@ -173,6 +181,15 @@ class Trainer:
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
+        # The head and its rows travel together (R366(b), the schema's rule restated where it trains).
+        self.soft_policy = type(self.arch).__name__ in SOFT_POLICY_ARCH_KINDS
+        if self.soft_policy != (self.hp.aux_soft_policy is not None):
+            raise ValueError(
+                f"Trainer: arch {type(self.arch).__name__} "
+                f"{'carries' if self.soft_policy else 'carries no'} auxiliary soft-policy head but "
+                f"model.aux_soft_policy is {self.hp.aux_soft_policy!r}; the rows and the head are "
+                "one fact (LAW-08)"
+            )
 
         # Off the DECLARED arch representation, no module sniff, no default (LAW-11).
         representation = self.arch.representation
@@ -361,6 +378,8 @@ class Trainer:
         policy_weight = policy_loss_weight_at(self.step, self.hp.policy_loss_warmup_steps)
         target_entropy_total = 0.0
         policy_entropy_total = 0.0
+        aux_total = 0.0
+        aux_kl_total = 0.0
         for make in parts:
             inputs = make()
             tail_alphas.extend(
@@ -370,9 +389,15 @@ class Trainer:
                           enabled=self._autocast_enabled):
                 # `forward_batch` is GnnNet's real method; `nn.Module.__getattr__` types dynamic
                 # attrs as Tensor | Module.
-                policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                    inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
-                    inputs.stone_mask, node_offsets=inputs.node_offsets)
+                aux_logits: torch.Tensor | None = None
+                if self.soft_policy:
+                    policy_logits, _value, bin_logits, aux_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
+                        inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                        inputs.stone_mask, node_offsets=inputs.node_offsets)
+                else:
+                    policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
+                        inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                        inputs.stone_mask, node_offsets=inputs.node_offsets)
                 if int(bin_logits.shape[0]) != int(inputs.n_graphs):
                     raise ValueError(
                         f"train_step_from_graph_batch: bin_logits has "
@@ -392,6 +417,13 @@ class Trainer:
                 # At weight 0 the policy term is LEFT OUT, not zeroed: a zero grad would still let
                 # AdamW's decoupled decay move the prior the warm-up holds. `policy_loss` stays the raw CE.
                 loss = value_loss if policy_weight == 0.0 else policy_weight * policy_loss + value_loss
+                aux_loss: torch.Tensor | None = None
+                aux_kl: torch.Tensor | None = None
+                if aux_logits is not None and self.hp.aux_soft_policy is not None:
+                    aux_loss, aux_kl = self._aux_soft_policy_terms(
+                        policy_logits, aux_logits, inputs, policy_denominator)
+                    if policy_weight != 0.0:
+                        loss = loss + self.hp.aux_soft_policy[1] * aux_loss
             # Without this guard one NaN/inf microbatch loss backwards into a NaN clip coefficient,
             # which writes NaN to EVERY weight while the run keeps reporting numbers. SKIPPED, not
             # zeroed — its gradient contribution is undefined — and counted, because a run dropping
@@ -415,13 +447,17 @@ class Trainer:
             loss_total += loss.item()
             policy_total += policy_loss.item()
             value_total += value_loss.item()
+            if aux_loss is not None and aux_kl is not None:
+                aux_total += aux_loss.item()
+                aux_kl_total += aux_kl.item()
             del inputs, policy_logits, bin_logits, policy_loss, value_loss, loss, target_entropy
-            del model_entropy
+            del model_entropy, aux_logits, aux_loss, aux_kl
 
         # THE STEP IS TAKEN ONLY IF THERE IS A GRADIENT TO TAKE IT WITH. Both ways there is not
         # used to advance the clock anyway: every micro-batch skipped (`.grad` stays zeroed, so
         # `clip_and_step` returns a finite `0.0` and accumulated momentum genuinely moves the
         # weights), and a non-finite gradient from a FINITE loss, reached by a different route.
+        head_norms = self._policy_head_grad_norms() if (contributing and self.soft_policy) else None
         if contributing == 0:
             grad_norm = float("nan")
             self.optimizer.zero_grad(set_to_none=True)
@@ -483,9 +519,62 @@ class Trainer:
                                   # R350(b)(iv)'s first line: KL(target || policy) = CE - H(target),
                                   # both reduced over the step's policy rows the same way.
                                   "policy_target_entropy": target_entropy_total,
-                                  "policy_kl_target_vs_prior": policy_total - target_entropy_total})
+                                  "policy_kl_target_vs_prior": policy_total - target_entropy_total,
+                                  # R366(b)'s LAW-18 rows: the aux CE, KL(hard || soft), the heads' grad norms.
+                                  **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
         return result
+
+    def _aux_soft_policy_terms(
+        self, policy_logits: torch.Tensor, aux_logits: torch.Tensor, inputs: Any,
+        policy_denominator: float,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """The aux head's CE against the soft target over this part's policy rows, and the DETACHED KL(hard || soft) reduced the same way (the planted break: a construction returning the hard target reads 0)."""
+        assert self.hp.aux_soft_policy is not None
+        temperature = self.hp.aux_soft_policy[0]
+        soft = soft_policy_target(
+            inputs.policy_target, inputs.legal_offsets, inputs.explicit_mask, inputs.tail_mass,
+            _segment_probs(policy_logits.detach(), inputs.legal_offsets), temperature)
+        aux_loss = ragged_policy_ce(
+            aux_logits, soft, inputs.legal_offsets,
+            full_search_mask=inputs.policy_row_weight, denominator=policy_denominator)
+        with torch.no_grad():
+            hard = _hard_target(policy_logits.detach(), inputs)
+            per_node = hard * (torch.log(hard.clamp_min(1e-12)) - torch.log(soft.clamp_min(1e-12)))
+            b = int(inputs.legal_offsets.shape[0]) - 1
+            counts = inputs.legal_offsets[1:] - inputs.legal_offsets[:-1]
+            seg = torch.repeat_interleave(
+                torch.arange(b, device=hard.device, dtype=torch.long), counts,
+                output_size=int(hard.shape[0]))
+            per_graph = torch.zeros(b, device=hard.device, dtype=hard.dtype)
+            per_graph.scatter_add_(0, seg, per_node)
+            mask = inputs.policy_row_weight.reshape(-1).to(per_graph.dtype)
+            aux_kl = (per_graph * mask).sum() / policy_denominator
+        return aux_loss, aux_kl
+
+    def _policy_head_grad_norms(self) -> dict[str, float]:
+        """The pre-clip L2 gradient norm over each policy head's OWN parameters — the twin's witness for the weight envelope (aux ≈ main), read before `clip_and_step`."""
+        base = self._base_model()
+        out: dict[str, float] = {}
+        for name in ("policy_head", "aux_policy_head"):
+            module: nn.Module = getattr(base, name)
+            grads = [p.grad.detach().float().norm() ** 2 for p in module.parameters() if p.grad is not None]
+            out[f"{name}_grad_norm"] = float(torch.stack(grads).sum().sqrt().item()) if grads else 0.0
+        return out
+
+    def _aux_soft_policy_block(
+        self, aux_total: float, aux_kl_total: float, head_norms: dict[str, float] | None,
+    ) -> dict[str, Any]:
+        """The `trainer_step` rows for the aux head; OMITTED on an arch without one (an absence, never a zero that reads as a measured head)."""
+        if not self.soft_policy or self.hp.aux_soft_policy is None:
+            return {}
+        return {
+            "aux_soft_policy_loss": aux_total,
+            "aux_soft_policy_kl_hard_vs_soft": aux_kl_total,
+            "aux_soft_policy_target_temperature": self.hp.aux_soft_policy[0],
+            "aux_soft_policy_weight": self.hp.aux_soft_policy[1],
+            **(head_norms or {}),
+        }
 
     def inference_state_dict(self) -> dict[str, torch.Tensor]:
         """The state_dict self-play / eval / promotion consume (EMA weights when EMA is on)."""
@@ -568,6 +657,28 @@ class Trainer:
             config_overrides=config_overrides, declared_keys=declared_keys,
             sink=sink, device=device,
         )
+
+
+def _segment_probs(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch.Tensor:
+    """The main head's per-graph softmax over its legal segments, float32 — the tail's prior."""
+    from mantis.train.losses import _segment_softmax
+
+    return _segment_softmax(logits.to(torch.float32), legal_offsets)
+
+
+def _hard_target(policy_logits: torch.Tensor, inputs: Any) -> torch.Tensor:
+    """The main head's target as `ragged_policy_ce` rebuilds it (explicit masses plus the tail over the detached prior), restated for the KL row, detached."""
+    probs = _segment_probs(policy_logits, inputs.legal_offsets)
+    b = int(inputs.legal_offsets.shape[0]) - 1
+    counts = inputs.legal_offsets[1:] - inputs.legal_offsets[:-1]
+    seg = torch.repeat_interleave(
+        torch.arange(b, device=probs.device, dtype=torch.long), counts,
+        output_size=int(probs.shape[0]))
+    tail_prior = probs * (1.0 - inputs.explicit_mask.reshape(-1).to(probs.dtype))
+    tail_denom = torch.zeros(b, device=probs.device, dtype=probs.dtype)
+    tail_denom.scatter_add_(0, seg, tail_prior)
+    scale = inputs.tail_mass.reshape(-1).to(probs.dtype) / tail_denom.clamp_min(1e-12)
+    return inputs.policy_target.to(probs.dtype).reshape(-1) + tail_prior * scale[seg]
 
 
 def _resolve_spec(config: Any):

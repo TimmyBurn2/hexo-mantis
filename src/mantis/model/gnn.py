@@ -229,7 +229,8 @@ def load_from_bc(
     """
     own_sd = net.state_dict()
     reinit_keys = _reinit_keys(list(own_sd), reinit)
-    missing = own_sd.keys() - bc_state_dict.keys()
+    # A head `reinit` names may be ABSENT from the source (R366(b): a fresh head the parent never had).
+    missing = own_sd.keys() - bc_state_dict.keys() - set(reinit_keys)
     unexpected = bc_state_dict.keys() - own_sd.keys()
     if missing or unexpected:
         raise RuntimeError(

@@ -16,7 +16,7 @@ import torch
 
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
+from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net
 from mantis.train.trainer.core import Trainer, TrainHParams
 
 GRAPH_ENCODING = "gnn_axis_v1"
@@ -141,7 +141,7 @@ def graph_hparams(**over: Any) -> TrainHParams:
         total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
         checkpoint_interval=0, value_target="pure_outcome_z",
         policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
-        policy_loss_warmup_steps=0,
+        policy_loss_warmup_steps=0, aux_soft_policy=None,
     )
     base.update(over)
     return TrainHParams(**base)
@@ -173,6 +173,27 @@ def tiny_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
     return Trainer(build_net(arch), graph_config(), arch=arch,
                    checkpoint_dir=Path(tmp_path) / "ckpt", device=torch.device("cpu"),
                    train_hparams=graph_hparams(**hp_over), sink=sink)
+
+
+def tiny_soft_policy_arch() -> GnnArchV2SoftPolicy:
+    a = tiny_graph_arch()
+    return GnnArchV2SoftPolicy(in_dim=a.in_dim, edge_dim=a.edge_dim, hidden=a.hidden, num_layers=a.num_layers,
+                               policy_hidden=a.policy_hidden, value_hidden=a.value_hidden)
+
+
+def soft_policy_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
+                              target_temperature: float = 4.0, weight: float = 4.0,
+                              **hp_over: Any) -> Trainer:
+    """A tiny `GnnNetV2SoftPolicy` trainer with `model.aux_soft_policy` ARMED (R366(b))."""
+    torch.manual_seed(seed)
+    arch = tiny_soft_policy_arch()
+    config = graph_config()
+    config["identity"]["arch_kind"] = "GnnArchV2SoftPolicy"
+    config["model"]["aux_soft_policy"] = {"target_temperature": target_temperature, "weight": weight}
+    hp_over.setdefault("checkpoint_interval", 0)
+    hp_over.setdefault("aux_soft_policy", (target_temperature, weight))
+    return Trainer(build_net(arch), config, arch=arch, checkpoint_dir=Path(tmp_path) / "ckpt_soft",
+                   device=torch.device("cpu"), train_hparams=graph_hparams(**hp_over), sink=sink)
 
 
 def ema_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,

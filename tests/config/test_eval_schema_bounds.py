@@ -111,7 +111,7 @@ def _payload(**eval_overrides: Any) -> dict:
         "run_id": "unit_test",
         "seed": 1,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "model": {"gnn": {"hidden": 128, "num_layers": 4}},
+        "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "eval": eval_block,
         "train": _train_block(),
         "deploy": {"search": {"kind": "puct"}},

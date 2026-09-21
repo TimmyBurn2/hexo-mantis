@@ -62,7 +62,21 @@ class GnnArchV2:
     representation: Literal["graph"] = "graph"
 
 
-ModelArch = GnnArch | GnnArchV2
+@dataclass(frozen=True)
+class GnnArchV2SoftPolicy:
+    """V2's trunk and heads plus an AUXILIARY SOFT-POLICY head (R366(b): a second policy head on the searched target at `model.aux_soft_policy.target_temperature`, KataGo's soft head in the sparse-row regime); served outputs are V2's exactly; a SIBLING with V2's field set, never a subclass, for `build_net`'s reason."""
+
+    in_dim: int
+    edge_dim: int
+    hidden: int = 128
+    num_layers: int = 4
+    policy_hidden: int = 128
+    value_hidden: int = 32
+    n_value_bins: int = 65
+    representation: Literal["graph"] = "graph"
+
+
+ModelArch = GnnArch | GnnArchV2 | GnnArchV2SoftPolicy
 
 
 class UnknownArchKind(ValueError):
@@ -80,13 +94,17 @@ ARCH_KINDS: dict[str, type] = {
 
     "GnnArch": GnnArch,
     "GnnArchV2": GnnArchV2,
+    "GnnArchV2SoftPolicy": GnnArchV2SoftPolicy,
 }
 
 #: Which kinds a representation admits — the pairing rule, stated for the arch side. `graph`
-#: admits TWO kinds since GnnNetV2 landed, which is exactly why a selector has to exist.
+#: admits several kinds since GnnNetV2 landed, which is exactly why a selector has to exist.
 ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
-    "graph": ("GnnArch", "GnnArchV2"),
+    "graph": ("GnnArch", "GnnArchV2", "GnnArchV2SoftPolicy"),
 }
+
+#: The kinds that carry the auxiliary soft-policy head (what `model.aux_soft_policy` is FOR).
+SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
 
 #: THE INCUMBENT KIND PER REPRESENTATION — a statement about HISTORY, not a default, which is
 #: why it is named and pinned rather than inlined: a default answers "what should we build when

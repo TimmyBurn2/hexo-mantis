@@ -25,6 +25,10 @@ model:
   gnn:
     hidden: 128
     num_layers: 4
+  # The auxiliary soft-policy head's rows (R366(b), v36): REQUIRED, `null` is the explicit OFF, and
+  # a mint arms it TOGETHER with `identity.arch_kind: GnnArchV2SoftPolicy` (the schema refuses either
+  # alone). Armed shape: {target_temperature: <float > 1>, weight: <float > 0>}.
+  aux_soft_policy: null
 deploy:
   search:
     kind: puct

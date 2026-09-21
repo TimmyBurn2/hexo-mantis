@@ -800,7 +800,7 @@ def strip_and_restamp(
         "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
         # Filled by the arch-scoped loop below with the stamped arch's own widths (v35).
-        "model": {},
+        "model": {"aux_soft_policy": None},
         # `puct` is the value that agrees with this payload's own
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
         "deploy": {"search": {"kind": "puct"}},

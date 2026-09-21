@@ -645,7 +645,7 @@ def test_reads_full_v1_envelope_via_field_map(tmp_path, full_graph_net, full_gra
         # process, and valued only by the re-calibration sitting.
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "model": {"gnn": {"hidden": 16, "num_layers": 1}},
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}, "aux_soft_policy": None},
         "eval": _make_eval_block(),
         # DERIVED from a MINTED config, not a restatement of the complete `train:` block.
         "train": load_config(

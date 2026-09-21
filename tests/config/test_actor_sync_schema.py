@@ -125,7 +125,7 @@ def _payload(*, train_over: dict | None = None, monitor_over: dict | None = None
         # re-calibration sitting under R282(b).
         "allocator_posture": None,
         "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-        "model": {"gnn": {"hidden": 128, "num_layers": 4}},
+        "model": {"gnn": {"hidden": 128, "num_layers": 4}, "aux_soft_policy": None},
         "eval": _eval_block(), "train": _train_block(**(train_over or {})),
         "deploy": {"search": {"kind": "puct"}},
         "selfplay": _selfplay_block(), "inference": _inference_block(),

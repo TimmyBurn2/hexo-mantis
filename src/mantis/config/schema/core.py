@@ -30,6 +30,10 @@ from mantis.util.constants import DRAW_RATE_WINDOW, PLY_CAP_RING_GAMES
 
 SCHEMA_VERSION = 1
 
+#: The arch kinds carrying the auxiliary soft-policy head — a copy of `mantis.model.arch`'s table
+#: (this package imports no torch), pinned equal by `tests/model/test_gnn_v2_soft_policy.py`.
+SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
+
 #: A finite ceiling for a timeout float that feeds `proc.join(timeout)` arithmetic:
 #: `multiprocessing.Process.join` raises `OverflowError` on `float("inf")`, so a floor-only
 #: bound is not a bound here. One day (86400.0 s) bounds one eval round or kill-grace.
@@ -467,6 +471,25 @@ class RunConfig(StrictModel):
                 "on it instead of MAX_CHILDREN_PER_NODE. Over the ceiling: "
                 + ", ".join(f"{k}={v}" for k, v in sorted(over.items()))
                 + " — lower the budget, or mint that side's search.kind='puct'."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _soft_policy_rows_pair_with_their_head(self) -> "RunConfig":
+        """`model.aux_soft_policy` is present iff `identity.arch_kind` carries the head (v36): rows with no head read armed while nothing consumes them, a head with no rows trains at values no file states; Raises: ValueError — the rows and the kind disagree either way."""
+        carries_head = self.identity.arch_kind in SOFT_POLICY_ARCH_KINDS
+        has_rows = self.model.aux_soft_policy is not None
+        if carries_head and not has_rows:
+            raise ValueError(
+                f"identity.arch_kind={self.identity.arch_kind!r} carries the auxiliary soft-policy "
+                "head but model.aux_soft_policy is null: the head's temperature and weight are "
+                "mint facts, never code-side defaults (R1)"
+            )
+        if has_rows and not carries_head:
+            raise ValueError(
+                f"model.aux_soft_policy is set but identity.arch_kind={self.identity.arch_kind!r} "
+                f"carries no soft-policy head (the kinds that do: {sorted(SOFT_POLICY_ARCH_KINDS)}); "
+                "a loss row with no head reads armed while nothing consumes it (LAW-08)"
             )
         return self
 

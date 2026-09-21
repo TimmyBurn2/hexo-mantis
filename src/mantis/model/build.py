@@ -1,7 +1,7 @@
 """`build_net` — the ONE model construction authority.
 
 Dispatch is on the declared arch dataclass, a closed union with no wildcard on the kind:
-`GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`. The arch travels on that dataclass and is
+`GnnArch` → `GnnNet`, `GnnArchV2` → `GnnNetV2`, `GnnArchV2SoftPolicy` → `GnnNetV2SoftPolicy`. The arch travels on that dataclass and is
 never inferred from module structure.
 
 `RepresentationMismatch` is defined in `arch`, the lowest layer that raises it, and
@@ -11,9 +11,15 @@ from __future__ import annotations
 
 import torch.nn as nn
 
-from mantis.model.arch import GnnArch, GnnArchV2, ModelArch, RepresentationMismatch
+from mantis.model.arch import (
+    GnnArch,
+    GnnArchV2,
+    GnnArchV2SoftPolicy,
+    ModelArch,
+    RepresentationMismatch,
+)
 from mantis.model.gnn import GnnNet
-from mantis.model.gnn_v2 import GnnNetV2
+from mantis.model.gnn_v2 import GnnNetV2, GnnNetV2SoftPolicy
 
 __all__ = ["build_net", "RepresentationMismatch"]
 
@@ -29,16 +35,18 @@ def build_net(arch: ModelArch) -> nn.Module:
         RepresentationMismatch: `arch` is neither `GnnArch` nor `GnnArchV2`.
     """
     net: nn.Module
-    # GnnArchV2 is tested first as a second line of defence: were V2 ever made a subclass of
-    # V1, `isinstance(arch, GnnArch)` would match it and silently build V1's net.
-    if isinstance(arch, GnnArchV2):
+    # The most-derived kinds are tested first as a second line of defence: were a later kind
+    # ever made a subclass of an earlier one, the earlier `isinstance` would silently build it.
+    if isinstance(arch, GnnArchV2SoftPolicy):
+        net = GnnNetV2SoftPolicy(arch)
+    elif isinstance(arch, GnnArchV2):
         net = GnnNetV2(arch)
     # The declared type is a closed union, but a caller can still pass a non-arch at runtime.
     elif isinstance(arch, GnnArch):  # pyright: ignore[reportUnnecessaryIsInstance]
         net = GnnNet(arch)
     else:
         raise RepresentationMismatch(
-            f"build_net: arch is neither GnnArch nor GnnArchV2 "
+            f"build_net: arch is none of GnnArch, GnnArchV2, GnnArchV2SoftPolicy "
             f"(got {type(arch).__name__})."
         )
     # THE declared instance, never a copy: a copy would be a second authority for the run's

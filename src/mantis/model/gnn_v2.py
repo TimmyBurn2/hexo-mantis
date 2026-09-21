@@ -15,11 +15,11 @@ from collections.abc import Callable
 import torch
 from torch import Tensor
 
-from mantis.model.arch import GnnArchV2
-from mantis.model.gine import RepresentationNetwork
+from mantis.model.arch import GnnArchV2, GnnArchV2SoftPolicy
+from mantis.model.gine import PolicyHead, RepresentationNetwork
 from mantis.model.gnn import GnnNet, _node_offsets_to_batch_vec, segment_mean_with_fallback
 
-__all__ = ["GnnNetV2", "RepresentationNetworkV2", "segment_max_with_fallback"]
+__all__ = ["GnnNetV2", "GnnNetV2SoftPolicy", "RepresentationNetworkV2", "segment_max_with_fallback"]
 
 
 def segment_max_with_fallback(
@@ -152,6 +152,24 @@ class GnnNetV2(GnnNet):
         Returns:
             `(policy_logits, value, bin_logits)`, as `GnnNet.forward_batch`.
         """
+        legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
+                                          node_offsets, trunk=trunk)
+        policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
+        value, bin_logits = self.value_head(pooled)
+        return policy_logits, value, bin_logits
+
+    def _readout(
+        self,
+        x: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+        legal_index: Tensor,
+        stone_mask: Tensor,
+        node_offsets: Tensor | None,
+        *,
+        trunk: Callable[..., Tensor] | None,
+    ) -> tuple[Tensor, Tensor]:
+        """The trunk pass and V2's readout, shared by every head set: `(legal_emb, pooled)`."""
         assert legal_index.dtype == torch.long, (
             f"legal_index must be int64 rows (the contract's legal_node_gather), got "
             f"{legal_index.dtype} — a bool mask here is the pre-R284 call shape"
@@ -165,7 +183,6 @@ class GnnNetV2(GnnNet):
         real_mask = self.real_mask_from_batch(stone_mask, legal_index)
         emb = (self.representation if trunk is None else trunk)(x, edge_index, edge_attr, ~real_mask)
         legal_emb = emb.index_select(0, legal_index)
-        policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
 
         batch_vec = _node_offsets_to_batch_vec(node_offsets, n_total)
         pooled = torch.cat(
@@ -175,8 +192,7 @@ class GnnNetV2(GnnNet):
             ),
             dim=-1,
         )
-        value, bin_logits = self.value_head(pooled)
-        return policy_logits, value, bin_logits
+        return legal_emb, pooled
 
     @torch.no_grad()
     def forward_single(
@@ -212,3 +228,30 @@ class GnnNetV2(GnnNet):
         )
         value, bin_logits = self.value_head(torch.cat((mean_part, max_part), dim=-1))
         return policy_logits, value.squeeze(0), bin_logits
+
+
+class GnnNetV2SoftPolicy(GnnNetV2):
+    """V2 plus the auxiliary soft-policy head (`aux_policy_head`, V2's `PolicyHead` shape over the same legal embeddings); `forward_batch`/`forward_single` serve V2's outputs exactly, only `forward_batch_heads` (the trainer's entry) evaluates it."""
+
+    def __init__(self, arch: GnnArchV2SoftPolicy) -> None:
+        super().__init__(arch)  # type: ignore[arg-type] — the field sets are identical by design
+        self.aux_policy_head = PolicyHead(self.representation.output_dim, arch.policy_hidden)
+
+    def forward_batch_heads(
+        self,
+        x: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+        legal_index: Tensor,
+        stone_mask: Tensor,
+        node_offsets: Tensor | None = None,
+        *,
+        trunk: Callable[..., Tensor] | None = None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        """`forward_batch`'s three outputs plus the aux head's `(num_legal_total,)` logits, one trunk pass."""
+        legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
+                                          node_offsets, trunk=trunk)
+        policy_logits = self.policy_head.mlp(legal_emb).squeeze(-1)
+        aux_logits = self.aux_policy_head.mlp(legal_emb).squeeze(-1)
+        value, bin_logits = self.value_head(pooled)
+        return policy_logits, value, bin_logits, aux_logits

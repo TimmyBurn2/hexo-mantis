@@ -50,6 +50,8 @@ CONSUMER_REGISTRY = {
                                   "arms the step-0 hash-equality witness (R350(b)(i))",
     "model.gnn.hidden": "declared_gnn_widths -> select_arch (GnnArch/GnnArchV2 `hidden`, the GINE trunk width) at every net build through arch_from_spec_and_config (v35; graph-scoped, ARCH_SCOPED_KEYS)",
     "model.gnn.num_layers": "declared_gnn_widths -> select_arch (`num_layers`, the GINE layer count; the JK-cat readout is num_layers x hidden wide) at every net build through arch_from_spec_and_config (v35)",
+    "model.aux_soft_policy.target_temperature": "resolve_aux_soft_policy -> TrainHParams.from_config (aux_soft_policy) -> Trainer._aux_soft_policy_terms -> losses.soft_policy_target (R366(b), v36; null = the explicit OFF, present iff identity.arch_kind carries the head)",
+    "model.aux_soft_policy.weight": "resolve_aux_soft_policy -> TrainHParams.from_config -> Trainer.train_step_from_graph_batch, the aux CE's weight in the step's loss; reported on trainer_step.aux_soft_policy_weight (LAW-18)",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",

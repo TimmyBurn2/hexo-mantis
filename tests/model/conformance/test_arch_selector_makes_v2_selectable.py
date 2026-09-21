@@ -36,6 +36,7 @@ from mantis.model import (
     ARCH_KINDS,
     ARCH_KINDS_BY_REPRESENTATION,
     INCUMBENT_ARCH_KIND,
+    SOFT_POLICY_ARCH_KINDS,
     GnnArch,
     GnnArchV2,
     UnknownArchKind,
@@ -389,6 +390,9 @@ def test_a_minted_arch_kind_row_is_honoured_by_the_production_entry_point(tmp_pa
     raw, _base = _graph_config_source()
     raw["run_id"] = "r330e-row-honoured"
     raw["identity"]["arch_kind"] = kind
+    # A kind that carries the soft-policy head is minted WITH its rows (v36's pairing rule).
+    if kind in SOFT_POLICY_ARCH_KINDS:
+        raw["model"]["aux_soft_policy"] = {"target_temperature": 4.0, "weight": 4.0}
     path = tmp_path / "with_row.yaml"
     path.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
     config = load_config(path)

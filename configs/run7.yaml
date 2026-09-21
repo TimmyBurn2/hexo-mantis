@@ -52,6 +52,7 @@ model:
   gnn:
     hidden: 128
     num_layers: 4
+  aux_soft_policy: null
 deploy:
   search:
     kind: puct

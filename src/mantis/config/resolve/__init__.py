@@ -16,6 +16,11 @@ from mantis.config.resolve.allocator_posture import (
     resolve_allocator_posture,
 )
 from mantis.config.resolve.amp import resolve_amp_dtype
+from mantis.config.resolve.aux_soft_policy import (
+    AuxSoftPolicySpec,
+    MissingAuxSoftPolicyError,
+    resolve_aux_soft_policy,
+)
 from mantis.config.resolve.bootstrap import (
     BootstrapNotFoundError,
     ResolvedBootstrap,
@@ -103,6 +108,8 @@ __all__ = [
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
+    "AuxSoftPolicySpec",
+    "MissingAuxSoftPolicyError",
     "GnnWidthsSpec",
     "MissingGnnWidthsError",
     "UncalibratedAllocatorPostureError",
@@ -121,6 +128,7 @@ __all__ = [
     "resolve_selfplay_search_kind",
     "resolve_actor_sync_cadence",
     "resolve_amp_dtype",
+    "resolve_aux_soft_policy",
     "resolve_bootstrap",
     "resolve_drain_caps",
     "resolve_draw_rate_abort",

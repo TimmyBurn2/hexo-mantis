@@ -15,7 +15,7 @@ import torch
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 import pytest
 
-from mantis.model import ARCH_KINDS, GnnArch, GnnArchV2, build_net
+from mantis.model import ARCH_KINDS, GnnArch, GnnArchV2, GnnArchV2SoftPolicy, build_net
 
 #: The payload contract: exactly what `load_model_snapshot` consumes, nothing else.
 _EXPECTED_KEYS = {"state_dict", "arch"}
@@ -87,6 +87,8 @@ _TINY = {
     GnnArch: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8, value_hidden=8),
     GnnArchV2: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
                     value_hidden=8),
+    GnnArchV2SoftPolicy: dict(in_dim=11, edge_dim=5, hidden=8, num_layers=1, policy_hidden=8,
+                              value_hidden=8),
 }
 
 

@@ -5,6 +5,7 @@ from mantis.config.schema.core import (
     ARCH_SCOPED_KEYS,
     OPERATIONAL_DEFAULT_KEYS,
     SCHEMA_VERSION,
+    SOFT_POLICY_ARCH_KINDS,
     ArchScopedKey,
     EvalConfig,
     GateConfig,
@@ -17,7 +18,7 @@ from mantis.config.schema.core import (
     operational_default_fields,
 )
 from mantis.config.schema.leaves import leaf_paths, nested_block
-from mantis.config.schema.model import GnnWidthsConfig, ModelConfig
+from mantis.config.schema.model import AuxSoftPolicyConfig, GnnWidthsConfig, ModelConfig
 from mantis.config.schema.monitor import (
     DiskGuardConfig,
     DrainCapsConfig,
@@ -36,7 +37,9 @@ __all__ = [
     "ARCH_SCOPED_KEYS",
     "OPERATIONAL_DEFAULT_KEYS",
     "SCHEMA_VERSION",
+    "SOFT_POLICY_ARCH_KINDS",
     "ArchScopedKey",
+    "AuxSoftPolicyConfig",
     "DiskGuardConfig",
     "DrainCapsConfig",
     "EvalConfig",
