@@ -204,6 +204,11 @@ CONSUMER_REGISTRY = {
     "train.fast_policy_weight": "resolve_fast_policy_weight -> run_declared_train_step fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # Every selfplay/mcts/playout_cap/inference leaf's live consumer is
     # SelfPlayHParams.from_config / InferenceHParams.from_config, reading the nested sections.
+    "train.heldout_gap.ring": "resolve_heldout_gap -> HeldoutSlice.open in mantis.run (the frozen slice's ring file; R366(c), v37; null = the explicit OFF)",
+    "train.heldout_gap.ring_sha256": "resolve_heldout_gap -> HeldoutSlice.open: file_sha256(ring) must equal it, else HeldoutSliceError (R3: the slice is pinned)",
+    "train.heldout_gap.batches": "resolve_heldout_gap -> HeldoutSlice.read: production samples per read through run_declared_eval_step",
+    "train.heldout_gap.seed": "resolve_heldout_gap -> HeldoutSlice.read: seed_sampler before every read, so the rows are the same rows (the freeze)",
+    "train.heldout_gap.interval": "resolve_heldout_gap -> StepCoordinator._run_heldout_gap: the read cadence in training steps; bounded below max_train_steps by RunConfig",
     "selfplay.n_workers": "SelfPlayHParams.from_config -> WorkerPool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.from_config -> runner leaf_batch_size",
     "selfplay.max_game_moves": "SelfPlayHParams.from_config -> runner max_moves_per_game",

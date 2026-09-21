@@ -125,6 +125,28 @@ def test_h_rows_are_the_reader_entropy_by_arm_with_the_one_hot_share(planted: Pa
     assert got["h_pooled_median"].value == pytest.approx(float(np.median(h)))
 
 
+def test_the_per_mr_rows_split_the_full_arm_share_and_count_the_tail_only_rows(tmp_path: Path) -> None:
+    """R366(c): the one-hot share at each stored `moves_remaining` over full-arm rows alone, and a planted α = 1.0 row is COUNTED, not hidden inside the share."""
+    mr2 = _board(_QUIET_SEQ)
+    quiet = _board(_QUIET_SEQ[:-1])
+    assert (int(quiet.moves_remaining), int(mr2.moves_remaining)) == (1, 2), "the two boards sit at the two mid-turn states"
+    rows = [
+        _row(quiet, [(5, 5, 1.0)], gid=0),
+        _row(quiet, [(5, 5, 0.6), (4, 4, 0.4)], gid=1),
+        _row(mr2, [(5, 5, 0.6), (4, 4, 0.4)], gid=2),
+        _row(mr2, [(4, 4, 0.5), (5, 5, 0.5)], gid=3),
+        _row(mr2, [(4, 4, 0.0)], gid=4, tail=1.0),
+        _row(quiet, [(4, 4, 1.0)], full=False, gid=5),
+    ]
+    path = tmp_path / "mr.ring.bin"
+    _write(path, rows)
+    got = {row.key: row for row in A.entropy_rows(R.load_ring(path))}
+    assert (got["one_hot_share_full_mr1"].value, got["one_hot_share_full_mr1"].n) == (pytest.approx(1 / 2), 2)
+    assert (got["one_hot_share_full_mr2"].value, got["one_hot_share_full_mr2"].n) == (pytest.approx(1 / 3), 3)
+    assert (got["tail_only_full"].value, got["tail_only_full"].n) == (1.0, 5)
+    assert got["one_hot_share_full"].value == pytest.approx(2 / 5), "the pooled share still counts the tail-only row as a one-hot"
+
+
 def test_cap_rate_draw_share_and_mean_abs_z_are_over_distinct_games(planted: Path) -> None:
     got = {row.key: row for row in A.outcome_rows(R.load_ring(planted))}
     assert got["cap_rate"].value == pytest.approx(1 / 5)

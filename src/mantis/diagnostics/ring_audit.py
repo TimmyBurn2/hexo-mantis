@@ -18,6 +18,7 @@ import numpy as np
 from mantis._engine import Board, MCTSTree
 from mantis.diagnostics import tactics as T
 from mantis.diagnostics.ring_reader import Ring, explicit_entropy, load_ring
+from mantis.util.constants import is_alpha_full
 
 #: A row with H(explicit) under this is a one-hot (R357(a)).
 ONE_HOT_H = 1e-3
@@ -212,13 +213,28 @@ def _stat_rows(prefix: str, h: np.ndarray, producer: str) -> list[Row]:
 
 
 def entropy_rows(ring: Ring) -> list[Row]:
-    """H(explicit) in nats by arm (`is_full_search`) and pooled, with the one-hot share beside each arm."""
+    """H(explicit) in nats by arm (`is_full_search`) and pooled, with the one-hot share beside each arm, the full arm's share split by `moves_remaining` (R366(c): PROBE-1's decomposer read mr 1 at 30–37 % against mr 2 at 15–20 % on every run8 ring) and its tail-only (α = 1.0) row count."""
     h = explicit_entropy(ring)
     producer = "ring_reader.explicit_entropy"
-    full, quick = h[ring.is_full_search != 0], h[ring.is_full_search == 0]
+    full_mask = ring.is_full_search != 0
+    full, quick = h[full_mask], h[~full_mask]
     pooled = [Row("h_pooled_median", float(np.median(h)), int(h.size), producer),
               Row("h_pooled_mean", float(h.mean()), int(h.size), producer)] if h.size else []
-    return _stat_rows("full", full, producer) + _stat_rows("quick", quick, producer) + pooled
+    return (_stat_rows("full", full, producer) + _stat_rows("quick", quick, producer) + pooled
+            + per_mr_rows(ring, h, full_mask, producer))
+
+
+def per_mr_rows(ring: Ring, h: np.ndarray, full_mask: np.ndarray, producer: str) -> list[Row]:
+    """`one_hot_share_full_mr<k>` over the full-arm rows at each stored `moves_remaining`, plus `tail_only_full` — the α = 1.0 rows the audited share counts as one-hots (H = 0), so a reader sees the conflation's size rather than trusting its absence."""
+    rows: list[Row] = []
+    for k in sorted({int(v) for v in ring.moves_remaining[full_mask]}):
+        sel = full_mask & (ring.moves_remaining == k)
+        rows.append(Row(f"one_hot_share_full_mr{k}", float((h[sel] < ONE_HOT_H).mean()), int(sel.sum()), producer,
+                        f"full-arm rows at moves_remaining {k} with H < {ONE_HOT_H:g}"))
+    tail_only = int(sum(1 for a in ring.tail_mass[full_mask] if is_alpha_full(float(a))))
+    rows.append(Row("tail_only_full", float(tail_only), int(full_mask.sum()), "tail_mass at alpha = 1.0 (util.constants.is_alpha_full)",
+                    "full-arm rows with no explicit mass, counted as one-hots by the share above"))
+    return rows
 
 
 def outcome_rows(ring: Ring) -> list[Row]:

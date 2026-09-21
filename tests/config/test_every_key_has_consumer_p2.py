@@ -190,6 +190,11 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.ply_cap_value": "SelfPlayHParams.from_config reads config['train']['ply_cap_value'] (cross-section)",
     "train.fast_policy_weight": "resolve_fast_policy_weight -> _build_graph_parts fast_policy_weight_provider -> losses.graph_policy_row_weights (R347(b))",
     # selfplay.* scalars
+    "train.heldout_gap.ring": "resolve_heldout_gap -> HeldoutSlice.open in mantis.run (the frozen slice's ring file; R366(c), v37; null = the explicit OFF)",
+    "train.heldout_gap.ring_sha256": "resolve_heldout_gap -> HeldoutSlice.open: file_sha256(ring) must equal it, else HeldoutSliceError (R3: the slice is pinned)",
+    "train.heldout_gap.batches": "resolve_heldout_gap -> HeldoutSlice.read: production samples per read through run_declared_eval_step",
+    "train.heldout_gap.seed": "resolve_heldout_gap -> HeldoutSlice.read: seed_sampler before every read, so the rows are the same rows (the freeze)",
+    "train.heldout_gap.interval": "resolve_heldout_gap -> StepCoordinator._run_heldout_gap: the read cadence in training steps; bounded below max_train_steps by RunConfig",
     "selfplay.n_workers": "SelfPlayHParams.n_workers -> pool worker count",
     "selfplay.leaf_batch_size": "SelfPlayHParams.leaf_batch_size -> runner leaf_batch_size ctor kwarg",
     "selfplay.max_game_moves": "SelfPlayHParams.max_moves_per_game -> runner max_moves_per_game ctor kwarg",

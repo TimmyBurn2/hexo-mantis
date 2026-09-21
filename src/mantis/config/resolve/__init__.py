@@ -64,6 +64,11 @@ from mantis.config.resolve.gnn_widths import (
     MissingGnnWidthsError,
     resolve_gnn_widths,
 )
+from mantis.config.resolve.heldout_gap import (
+    HeldoutGapSpec,
+    MissingHeldoutGapError,
+    resolve_heldout_gap,
+)
 from mantis.config.resolve.inference_batching import (
     InferenceBatchingSpec,
     MissingInferenceBatchingError,
@@ -111,7 +116,9 @@ __all__ = [
     "AuxSoftPolicySpec",
     "MissingAuxSoftPolicyError",
     "GnnWidthsSpec",
+    "HeldoutGapSpec",
     "MissingGnnWidthsError",
+    "MissingHeldoutGapError",
     "UncalibratedAllocatorPostureError",
     "UncalibratedFusedGraphCapsError",
     "UnvalidatedConfigError",
@@ -135,6 +142,7 @@ __all__ = [
     "resolve_eval_model_sims",
     "resolve_fused_graph_caps",
     "resolve_gnn_widths",
+    "resolve_heldout_gap",
     "resolve_inference_batching",
     "resolve_leaf_build_threads",
     "resolve_sample_threads",

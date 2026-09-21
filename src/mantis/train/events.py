@@ -379,3 +379,22 @@ def emit_iteration_complete_event(
 # production does not produce, which kept a second entry to the event stream alive. The pin
 # moved to `emit_iteration_complete_event`, where `target_integrity` actually lives.
 
+
+
+HELDOUT_GAP_EVENT = "heldout_gap"
+
+
+def heldout_gap_event(*, step: int, slice_: Any, heldout: dict[str, float],
+                      train_policy: float | None, train_value: float | None, train_steps: int,
+                      wall_ms: float) -> dict[str, Any]:
+    """R366(c)'s `heldout_gap` row: the frozen slice's forward-only losses, the mean train losses of the taken steps since the last read, and their gaps (`None` where no step fed the window)."""
+    gap_policy = None if train_policy is None else heldout["policy_loss"] - train_policy
+    gap_value = None if train_value is None else heldout["value_loss"] - train_value
+    return {
+        "event": HELDOUT_GAP_EVENT, "step": int(step), "ring": slice_.ring_path.name,
+        "ring_sha256": slice_.spec.ring_sha256, "rows": slice_.rows, "batches": slice_.spec.batches,
+        "seed": slice_.spec.seed, "interval": slice_.spec.interval, "read_index": slice_.reads,
+        "policy_loss": heldout["policy_loss"], "value_loss": heldout["value_loss"],
+        "train_policy_loss": train_policy, "train_value_loss": train_value, "train_steps": train_steps,
+        "gap_policy": gap_policy, "gap_value": gap_value, "wall_ms": round(wall_ms, 3),
+    }

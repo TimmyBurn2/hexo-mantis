@@ -165,6 +165,16 @@ class PlyCapAbortConfig(StrictModel):
         return self
 
 
+class HeldoutGapConfig(StrictModel):
+    """R366(c)'s in-run held-out witness (contract v37): every `interval` steps the trainer reads its forward-only policy/value loss over a FROZEN slice of `ring` (`batches` production samples under `seed`, re-seeded on every read so the rows are the same rows) and reports the gap against the train loss of the steps since the last read; `ring_sha256` pins the file (R3); `null` is the explicit OFF."""
+
+    ring: str = Field(min_length=1)
+    ring_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    batches: int = Field(ge=1)
+    seed: int
+    interval: int = Field(ge=1)
+
+
 class PolicyLossWeightScheduleConfig(StrictModel):
     """R350(b)(iii)'s value warm-up: policy weight 0 for the first `warmup_steps`, then 1; 0 is OFF."""
 
@@ -210,6 +220,8 @@ class TrainConfig(StrictModel):
     policy_loss_trough_abort: PolicyLossTroughAbortConfig | None = Field(default=...)
     # The ply-cap attractor halt's ARMING SURFACE (R352(c)), the same idiom.
     ply_cap_abort: PlyCapAbortConfig | None = Field(default=...)
+    # The held-out gap witness's ARMING SURFACE (R366(c), v37), the same idiom: `null` is OFF.
+    heldout_gap: HeldoutGapConfig | None = Field(default=...)
 
     # The step-coordinator knobs: builder literals and dataclass terminal defaults that decided
     # what the run IS while the minted config said nothing. FLAT `train.*` keys and NOT a

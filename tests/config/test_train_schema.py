@@ -52,6 +52,7 @@ VALID_TRAIN_PAYLOAD: dict = {
     "policy_loss_weight_schedule": {"warmup_steps": 0},
     "policy_loss_trough_abort": None,
     "ply_cap_abort": None,
+    "heldout_gap": None,
 }
 
 FIELD_NAMES = sorted(VALID_TRAIN_PAYLOAD)

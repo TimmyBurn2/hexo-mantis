@@ -57,6 +57,7 @@ from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec, resolve_draw_rate_abort
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
+from mantis.config.resolve.heldout_gap import resolve_heldout_gap
 from mantis.config.resolve.inference_batching import resolve_inference_batching
 from mantis.config.resolve.leaf_build_threads import resolve_leaf_build_threads
 from mantis.config.resolve.monitor import resolve_monitor_config
@@ -82,6 +83,7 @@ from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import RepresentationRouteError
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.emit import NullEventSink, emit_via
+from mantis.train.heldout import HeldoutSlice
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.heartbeat_watchdog import (
     MonitorLivenessSpec,
@@ -250,6 +252,26 @@ def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
     return resolve_actor_sync_cadence(config.train)
 
 
+def _derived_visit_capacity(config: Any) -> int:
+    """The ring's visit-slot geometry, DERIVED at composition from the config's sims regime through the same Rust authority the schema validator ran at load (it cannot raise on a validated config, no literal reappears here); the held-out slice (R366(c)) is built at the same geometry so the engine's own refusal names a foreign ring."""
+    from mantis._engine import derived_hexg_visit_capacity
+
+    sp = config.selfplay
+    pc = sp.playout_cap
+    return int(derived_hexg_visit_capacity(
+        n_simulations=sp.mcts.n_simulations,
+        standard_sims=pc.standard_sims,
+        fast_prob=pc.fast_prob,
+        fast_sims=pc.fast_sims,
+        full_search_prob=pc.full_search_prob,
+        n_sims_quick=pc.n_sims_quick,
+        n_sims_full=pc.n_sims_full,
+        leaf_batch_size=sp.leaf_batch_size,
+        gumbel_m=sp.gumbel_m,
+        search_kind=config.selfplay.search.kind,
+    ))
+
+
 def _select_buffer(config: Any, capacity: int) -> Any:
     """Select the replay buffer off `config.identity.representation`; an unknown or absent
     representation RAISES (LAW-11) — never sniffed off a live module, never defaulted.
@@ -268,26 +290,9 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     if representation == "graph":
         # Lazy with a stated reason: `mantis._engine` is not an edge on the design's `run` row,
         # and the extension module is the one import this root must not make unconditional.
-        from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
+        from mantis._engine import HexgBuffer
 
-        # The ring's visit-slot geometry is DERIVED at composition from the config's sims
-        # regime, through the same Rust authority the schema validator ran at load — so it
-        # cannot raise on a validated config, and no literal can reappear on this path.
-        sp = config.selfplay
-        pc = sp.playout_cap
-        visit_capacity = derived_hexg_visit_capacity(
-            n_simulations=sp.mcts.n_simulations,
-            standard_sims=pc.standard_sims,
-            fast_prob=pc.fast_prob,
-            fast_sims=pc.fast_sims,
-            full_search_prob=pc.full_search_prob,
-            n_sims_quick=pc.n_sims_quick,
-            n_sims_full=pc.n_sims_full,
-            leaf_batch_size=sp.leaf_batch_size,
-            gumbel_m=sp.gumbel_m,
-            search_kind=config.selfplay.search.kind,
-        )
-        buffer = HexgBuffer(capacity, config.identity.encoding, visit_capacity)
+        buffer = HexgBuffer(capacity, config.identity.encoding, _derived_visit_capacity(config))
         buffer.seed_sampler(config.seed)
         return buffer
     raise RepresentationRouteError(
@@ -823,6 +828,19 @@ def compose_run(
             )
             disk_guard.start()
 
+        # The held-out witness (R366(c)): the frozen slice is opened HERE, before the coordinator
+        # can step, so a missing or mis-hashed ring is a loud STARTUP failure; `null` opens nothing.
+        with _seam("HeldoutSlice"):
+            heldout_spec = resolve_heldout_gap(config.model_dump())
+            heldout = None
+            if heldout_spec is not None:
+                heldout = HeldoutSlice.open(
+                    heldout_spec, encoding=config.identity.encoding,
+                    visit_capacity=_derived_visit_capacity(config),
+                    capacity=int(resolve_coordinator_knobs(config.train).capacity))
+                _LOG.info("heldout_slice_opened ring=%s rows=%s batches=%s interval=%s",
+                          heldout.ring_path, heldout.rows, heldout_spec.batches, heldout_spec.interval)
+
         # RESERVED, NOT DEAD — the mixed-batch / pretrained-buffer path. `pretrained_buffer`,
         # `recent_buffer` and `bufs` are None here, so `train/batch_assembly.py` contributes
         # nothing while its config keys and resolver stamps stay live: a WIRING gap, not dead
@@ -842,7 +860,7 @@ def compose_run(
                 config=step_coordinator_cfg, full_config=config.model_dump(),
                 train_cfg={}, mixing_cfg={}, run_id=run_id,
                 sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,
-                heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync,
+                heartbeat_watchdog=run_safety.watchdog, actor_sync=actor_sync, heldout=heldout,
             )
         if resume_state is not None:
             # The last KICKED round travels with the ring: a resume at an exact eval_interval

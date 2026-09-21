@@ -542,6 +542,14 @@ class RunConfig(StrictModel):
                 f"({total}): a threshold the run never reaches is an invariant that can "
                 f"never fire — armed in the config, absent in effect"
             )
+        # The held-out witness's cadence must be reachable too (R366(c)): armed and never read is
+        # the phantom-input shape. `None` is the explicit OFF and is skipped.
+        heldout = self.train.heldout_gap
+        if heldout is not None and heldout.interval >= total:
+            raise ValueError(
+                f"train.heldout_gap.interval ({heldout.interval}) must be < train.max_train_steps "
+                f"({total}): a cadence the run never reaches is a witness that never reads"
+            )
         # The TWIN of the rule above, on the draw-rate abort's own step floor: `min_step >=
         # max_train_steps` audits ARMED while the abort can never fire. `None` is the EXPLICIT
         # disarmed posture and is skipped.

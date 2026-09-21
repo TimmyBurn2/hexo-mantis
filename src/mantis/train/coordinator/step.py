@@ -14,6 +14,7 @@ import dataclasses
 import logging
 import math
 import os
+import time
 from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any, cast
@@ -49,6 +50,7 @@ from mantis.train.events import (
     emit_axis_distribution,
     emit_iteration_complete_event,
     emit_training_step_event,
+    heldout_gap_event,
 )
 from mantis.train.lifecycle.watchdog import StallWatchdog, watchdog_snapshot_path
 from mantis.train.mixing import _steps_budget
@@ -147,6 +149,7 @@ class StepCoordinator:
         monitor_cfg: MonitorConfig,
         heartbeat_watchdog: Any = None,
         actor_sync: Any = None,
+        heldout: Any = None,
     ) -> None:
         self.trainer = trainer
         self.buffer = buffer
@@ -185,6 +188,9 @@ class StepCoordinator:
         # None is a unit-test affordance ONLY; production wiring is unconditional at the one
         # composition root.
         self.actor_sync = actor_sync
+        # The held-out witness (R366(c)); `None` is the config's explicit OFF, opened by `run.py`.
+        self.heldout = heldout
+        self._heldout_train_sums = [0.0, 0.0, 0]
         # Every PERIODIC checkpoint becomes a full resume bundle: the cadence stays the
         # trainer's, the ring and sidecar come from here because the trainer holds neither, and
         # one publisher keeps the stop legs from drifting. `trainer=None` is a test affordance.
@@ -548,6 +554,7 @@ class StepCoordinator:
             # `consec` window. Two knobs — narration (`log`) and arming (`gate`).
             axis_emitted = self._run_log_interval(cfg, loss_info) or axis_emitted
             hard_abort_fired = self._run_gate_interval(cfg) or hard_abort_fired
+            self._run_heldout_gap(loss_info)
 
             # Kicked INSIDE the burst: run once after the whole burst, a burst that stepped over
             # the exact multiple never satisfied the modulo and the round was SILENTLY SKIPPED.
@@ -619,6 +626,30 @@ class StepCoordinator:
             getattr(self.subsystems, "tb_writer", None), sink,
         )
         return axis is not None
+
+    def _run_heldout_gap(self, loss_info: dict[str, float]) -> bool:
+        """R366(c)'s witness at its own `interval` boundary: the frozen slice's forward-only loss against the mean train loss of the taken steps since the last read; `True` iff it read."""
+        if self.heldout is None:
+            return False
+        sums = self._heldout_train_sums
+        if math.isfinite(float(loss_info.get("grad_norm", math.nan))):
+            sums[0] += float(loss_info["policy_loss"])
+            sums[1] += float(loss_info["value_loss"])
+            sums[2] += 1
+        if self._train_step % int(self.heldout.spec.interval) != 0:
+            return False
+        started = time.monotonic()
+        read = self.heldout.read(
+            self.trainer, self._step_spec(), batch_size=self.config.batch_size,
+            caps_provider=self._microbatch_caps, sample_threads_provider=self._sample_threads,
+            fast_policy_weight_provider=self._fast_policy_weight)
+        n = int(sums[2])
+        emit_via(self._sink, heldout_gap_event(
+            step=self._train_step, slice_=self.heldout, heldout=read,
+            train_policy=sums[0] / n if n else None, train_value=sums[1] / n if n else None,
+            train_steps=n, wall_ms=(time.monotonic() - started) * 1000.0))
+        self._heldout_train_sums = [0.0, 0.0, 0]
+        return True
 
     def _run_gate_interval(self, cfg: StepCoordinatorConfig) -> bool:
         """Run the live-producer hard-abort gates and publish the `monitor_gates` summary at the

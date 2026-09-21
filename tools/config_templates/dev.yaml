@@ -97,6 +97,10 @@ train:
   draw_rate_abort: null
   policy_loss_trough_abort: null
   ply_cap_abort: null
+  # The held-out gap witness (R366(c), v37): every `interval` steps the trainer's forward-only loss
+  # over a frozen slice of `ring` against the train loss since the last read. `null` is OFF.
+  # Armed shape: {ring: <path>, ring_sha256: <64 hex>, batches: <int >=1>, seed: <int>, interval: <int >=1>}.
+  heldout_gap: null
   # ── the step-coordinator knobs (WPMINT Phase K-B — CARD-COORD-KNOBS, R78/R80) ────────
   # Until this phase these knobs were LITERALS inside `mantis.run._step_coordinator_config`
   # and terminal defaults on `StepCoordinatorConfig`: they decided what a run WAS while no
