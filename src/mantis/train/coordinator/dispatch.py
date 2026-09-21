@@ -321,8 +321,8 @@ def run_declared_eval_step(
 ) -> dict[str, float]:
     """One FORWARD-ONLY loss reading over `buffer`, through the declared graph route.
 
-    GRAPH ONLY, and the refusal is the point: BC pretrain is the only consumer and it is a graph
-    route. `augment` is fixed FALSE and `recency_weight` fixed 0.0, neither a knob — an augmented
+    GRAPH ONLY, and the refusal is the point: its consumers (BC pretrain, the held-out witness) are
+    graph routes. `augment` is fixed FALSE and `recency_weight` fixed 0.0, neither a knob — an augmented
     held-out batch measures positions the held-out set does not contain, and the BC ring carries no
     time ordering for a recency window to mean anything over.
 

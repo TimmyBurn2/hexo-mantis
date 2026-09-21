@@ -166,7 +166,7 @@ class PlyCapAbortConfig(StrictModel):
 
 
 class HeldoutGapConfig(StrictModel):
-    """R366(c)'s in-run held-out witness (contract v37): every `interval` steps the trainer reads its forward-only policy/value loss over a FROZEN slice of `ring` (`batches` production samples under `seed`, re-seeded on every read so the rows are the same rows) and reports the gap against the train loss of the steps since the last read; `ring_sha256` pins the file (R3); `null` is the explicit OFF."""
+    """The in-run held-out witness (v37): every `interval` steps a forward-only loss over a FROZEN slice of `ring` (`batches` samples under `seed`, re-seeded per read), reported against the train loss since the last read; `ring_sha256` pins the file; `null` is the explicit OFF."""
 
     ring: str = Field(min_length=1)
     ring_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")

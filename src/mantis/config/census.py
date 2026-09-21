@@ -51,7 +51,7 @@ def discovered_config_paths(repo_root: str | Path) -> list[str]:
 
 
 def production_configs(repo_root: str | Path) -> tuple[Path, ...]:
-    """Every config under `<repo_root>/configs` that is not exempt, as sorted absolute paths; Raises: ConfigCensusError — an exempt row names a file not on disk (a stale exemption excuses nothing and says so), or no config is left (an empty census binds no law)."""
+    """Every config under `<repo_root>/configs` that is not exempt, sorted absolute paths; Raises: ConfigCensusError — an exempt row names no file on disk, or no config is left (an empty census binds no law)."""
     root = Path(repo_root)
     present = discovered_config_paths(root)
     stale = sorted(exempt_config_paths() - set(present))

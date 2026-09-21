@@ -21,7 +21,7 @@ def sparse_tail(
     tail_mass: torch.Tensor,
     legal_offsets: torch.Tensor,
 ) -> torch.Tensor:
-    """The SPARSE Gumbel row's tail (R347(a)): each graph's `tail_mass` spread over its non-explicit legal nodes in proportion to the DETACHED `prior_probs` — the ONE construction the CE, the soft target and the KL row share; a graph whose legal set is entirely explicit has an empty tail (the clamp keeps the divide finite, the numerator is zero there)."""
+    """The SPARSE row's tail (R347(a)): `tail_mass` spread over the non-explicit legal nodes in proportion to the DETACHED prior — the ONE construction the CE, the soft target and the KL row share; an all-explicit graph has an empty tail."""
     b = int(legal_offsets.shape[0]) - 1
     seg = segment_ids(legal_offsets, total=int(prior_probs.shape[0]))
     tail_prior = prior_probs.detach() * (1.0 - explicit_mask.reshape(-1).to(prior_probs.dtype))
@@ -189,7 +189,7 @@ def soft_policy_target(
     prior_probs: torch.Tensor,
     temperature: float,
 ) -> torch.Tensor:
-    """The auxiliary head's target (R366(b)): per graph the EXPLICIT entries of the searched target raised to `1/temperature`, renormalised over the explicit mass `1 - alpha`, the tail carried as the hard target rebuilds it (alpha over the DETACHED prior) — the temperature stays OFF the tail because run8@45k's alpha reads median 0.000 / p90 0.020 and `target^(1/4)` over the whole legal set put a median 40 % of the soft mass on ~500 tail nodes of ~1e-4 each, an artefact of the sparse row and not KataGo's semantics; detached throughout; Raises: ValueError — `temperature` not above 1 (at 1 the head learns the main head's own target and reads armed while dead)."""
+    """The aux head's target, detached: the searched target's EXPLICIT entries at `1/temperature`, renormalised to the explicit mass, plus the hard target's own tail (the temperature stays OFF the tail — the measured reason is RUN10_PREREG §1a); Raises: ValueError — `temperature` not above 1 (at 1 the head reads armed while dead)."""
     if not math.isfinite(temperature) or temperature <= 1.0:
         raise ValueError(f"soft_policy_target: temperature must be > 1, got {temperature!r}")
     with torch.no_grad():

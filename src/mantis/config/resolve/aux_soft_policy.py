@@ -1,4 +1,4 @@
-"""`resolve_aux_soft_policy` — THE read path for `model.aux_soft_policy` (v36): the auxiliary soft-policy head's temperature and weight, or `None` for the explicit OFF; absence of the key is an error, never OFF."""
+"""`resolve_aux_soft_policy` — THE read path for `model.aux_soft_policy` (v36): temperature and weight, or `None` for the explicit OFF; an absent key is an error, never OFF."""
 from __future__ import annotations
 
 from collections.abc import Mapping

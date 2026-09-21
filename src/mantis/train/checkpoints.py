@@ -351,7 +351,6 @@ def _assemble_payload(
         payload["scaler_state"] = scaler_state
         payload["scheduler_state"] = scheduler_state
     if ema_state is not None:
-        # Written only when EMA is on: an absent key on an EMA-off stamp is the truthful shape.
         payload["ema_state"] = dict(ema_state)
     return payload
 
@@ -1266,7 +1265,7 @@ def resume_trainer(
 
 
 def _restore_ema_shadow(trainer: Any, ck: Checkpoint, path: Path, sink: Any) -> None:
-    """An EMA-on resume restores the shadow the stamp carries; a stamp without one re-seeds the shadow from the learner and SAYS SO (`ema_shadow_reseeded`, a discontinuity in the deploy weights, never silent)."""
+    """An EMA-on resume restores the stamp's shadow; a stamp without one re-seeds it from the learner and SAYS SO (`ema_shadow_reseeded`), never silently."""
     ema = getattr(trainer, "ema_model", None)
     if ema is None:
         return

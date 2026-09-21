@@ -76,7 +76,7 @@ def _collate_dump_target(config: Any) -> tuple[str, Any]:
 
 
 def served_copy(model: torch.nn.Module, arch: Any) -> torch.nn.Module:
-    """The server's own module (R366, CARD-SERVER-OWNED-COPY): a net of the DECLARED `arch` carrying `model`'s current weights on `model`'s device, or a deep copy when no arch is declared — a pool NEVER serves the module it was handed; Raises: RuntimeError — the arch and the weights disagree in shape."""
+    """The server's own module: a net of the DECLARED `arch` carrying `model`'s weights on its device, a deep copy when no arch is declared — a pool NEVER serves what it was handed; Raises: RuntimeError — the arch and the weights disagree in shape."""
     base = getattr(model, "_orig_mod", model)
     if arch is None:
         return copy_module.deepcopy(base)

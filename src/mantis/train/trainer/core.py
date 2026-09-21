@@ -184,7 +184,6 @@ class Trainer:
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
-        # The head and its rows travel together (R366(b), the schema's rule restated where it trains).
         self.soft_policy = type(self.arch).__name__ in SOFT_POLICY_ARCH_KINDS
         if self.soft_policy != (self.hp.aux_soft_policy is not None):
             raise ValueError(
@@ -517,7 +516,6 @@ class Trainer:
                                   # both reduced over the step's policy rows the same way.
                                   "policy_target_entropy": target_entropy_total,
                                   "policy_kl_target_vs_prior": policy_total - target_entropy_total,
-                                  # R366(b)'s LAW-18 rows: the aux CE, KL(hard || soft), the heads' grad norms.
                                   **self._aux_soft_policy_block(aux_total, aux_kl_total, head_norms)})
             self._maybe_periodic_checkpoint(result)
         return result
@@ -526,7 +524,7 @@ class Trainer:
         self, policy_logits: torch.Tensor, aux_logits: torch.Tensor, inputs: Any,
         policy_denominator: float,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """The aux head's CE against the soft target over this part's policy rows, and the DETACHED KL(hard || soft) reduced the same way (the planted break: a construction returning the hard target reads 0)."""
+        """The aux head's CE against the soft target over this part's policy rows, and the DETACHED KL(hard || soft) reduced the same way (a construction returning the hard target reads 0)."""
         assert self.hp.aux_soft_policy is not None
         temperature = self.hp.aux_soft_policy[0]
         prior = segment_softmax(policy_logits.detach().to(torch.float32), inputs.legal_offsets)
@@ -577,7 +575,7 @@ class Trainer:
         return self._base_model().state_dict()
 
     def actor_state_dict(self) -> dict[str, torch.Tensor]:
-        """The ACTORS' weights — what ActorSync writes into the server's own copy: ALWAYS the learner's, EMA on or off (R366(b): the actors serve the learner; deploy, gate and follower read the EMA)."""
+        """What ActorSync writes into the server's own copy: ALWAYS the learner's weights, EMA on or off (deploy, gate and follower read the EMA)."""
         return self._base_model().state_dict()
 
     def deploy_module(self) -> Any:

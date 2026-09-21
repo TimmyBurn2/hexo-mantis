@@ -25,7 +25,7 @@ class GnnWidthsSpec:
 
 
 def resolve_gnn_widths(full_config: Any) -> GnnWidthsSpec:
-    """Return the declared graph trunk widths; Raises: ArchScopedKeyOutsideItsArchError — a non-graph representation, refused first; MissingGnnWidthsError — no `model` section, no `gnn` block, or a member short."""
+    """The declared graph trunk widths; Raises: ArchScopedKeyOutsideItsArchError — a non-graph representation, refused first; MissingGnnWidthsError — no `model` section, no `gnn` block, or a member short."""
     refuse_outside_its_arch(full_config, _SECTION, _FIELD)
     if not isinstance(full_config, Mapping) or _SECTION not in full_config:
         raise MissingGnnWidthsError(

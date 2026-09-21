@@ -188,7 +188,6 @@ class StepCoordinator:
         # None is a unit-test affordance ONLY; production wiring is unconditional at the one
         # composition root.
         self.actor_sync = actor_sync
-        # The held-out witness (R366(c)); `None` is the config's explicit OFF, opened by `run.py`.
         self.heldout = heldout
         self._heldout_train_sums = [0.0, 0.0, 0]
         # Every PERIODIC checkpoint becomes a full resume bundle: the cadence stays the

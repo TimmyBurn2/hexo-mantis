@@ -142,7 +142,7 @@ def test_the_pairing_rule_partitions_the_kinds_across_the_representations(derive
 def test_the_selector_has_a_representation_with_a_REAL_choice(derived):
     """The vacuity guard this whole section needs. If every representation admitted exactly one
     kind, a selector would be indistinguishable from a lookup and every row below would pass
-    while proving nothing. `graph` admits two BECAUSE `GnnNetV2` landed."""
+    while proving nothing. `graph` admits more than one kind BECAUSE `GnnNetV2` and its soft-policy sibling landed."""
     choices = {r: len(k) for r, k in ARCH_KINDS_BY_REPRESENTATION.items()}
     derived("t10.choices_per_representation", choices)
     assert max(choices.values()) >= 2, (

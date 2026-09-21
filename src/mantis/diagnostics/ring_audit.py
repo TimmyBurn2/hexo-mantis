@@ -213,7 +213,7 @@ def _stat_rows(prefix: str, h: np.ndarray, producer: str) -> list[Row]:
 
 
 def entropy_rows(ring: Ring) -> list[Row]:
-    """H(explicit) in nats by arm (`is_full_search`) and pooled, with the one-hot share beside each arm, the full arm's share split by `moves_remaining` (R366(c): PROBE-1's decomposer read mr 1 at 30–37 % against mr 2 at 15–20 % on every run8 ring) and its tail-only (α = 1.0) row count."""
+    """H(explicit) in nats by arm (`is_full_search`) and pooled, the one-hot share beside each arm, the full arm's share split by `moves_remaining` (PROBE-1's decomposer) and its tail-only (α = 1.0) row count."""
     h = explicit_entropy(ring)
     producer = "ring_reader.explicit_entropy"
     full_mask = ring.is_full_search != 0
@@ -225,7 +225,7 @@ def entropy_rows(ring: Ring) -> list[Row]:
 
 
 def per_mr_rows(ring: Ring, h: np.ndarray, full_mask: np.ndarray, producer: str) -> list[Row]:
-    """`one_hot_share_full_mr<k>` over the full-arm rows at each stored `moves_remaining`, plus `tail_only_full` — the α = 1.0 rows the audited share counts as one-hots (H = 0), so a reader sees the conflation's size rather than trusting its absence."""
+    """`one_hot_share_full_mr<k>` over the full-arm rows per stored `moves_remaining`, plus `tail_only_full` — the α = 1.0 rows the share counts as one-hots, so the conflation's size is read, not assumed."""
     rows: list[Row] = []
     for k in sorted({int(v) for v in ring.moves_remaining[full_mask]}):
         sel = full_mask & (ring.moves_remaining == k)

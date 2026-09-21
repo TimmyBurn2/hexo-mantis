@@ -476,7 +476,7 @@ class RunConfig(StrictModel):
 
     @model_validator(mode="after")
     def _soft_policy_rows_pair_with_their_head(self) -> "RunConfig":
-        """`model.aux_soft_policy` is present iff `identity.arch_kind` carries the head (v36): rows with no head read armed while nothing consumes them, a head with no rows trains at values no file states; Raises: ValueError — the rows and the kind disagree either way."""
+        """`model.aux_soft_policy` is armed iff `identity.arch_kind` carries the head (v36): rows without a head read armed unconsumed, a head without rows trains at unstated values; Raises: ValueError — either way."""
         carries_head = self.identity.arch_kind in SOFT_POLICY_ARCH_KINDS
         has_rows = self.model.aux_soft_policy is not None
         if carries_head and not has_rows:

@@ -106,7 +106,7 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
     assert [row.name for row in disarmed.disarmed] == ["actor_lag", "draw_rate_collapse"], (
         "a production config with BOTH hard aborts disarmed must name those rows and only "
         "those rows. WPAX Phase D (R87 hunk 1): `dev_example.yaml` ships "
-        "`actor_lag_abort_enabled: false` at `:200` AND `train.draw_rate_abort: null` — the "
+        "`actor_lag_abort_enabled: false` AND `train.draw_rate_abort: null` — the "
         "second is R59's deliberate smoke disarm, made observable by the `null` spelling "
         "instead of inferable from an absent key. The 'and only those rows' bite is what "
         f"this expectation keeps; got {[row.name for row in disarmed.disarmed]}"
@@ -117,7 +117,7 @@ def test_arming_audit_fails_a_disarmed_production_config() -> None:
 
     armed = audit_arming(load_config(REPO_ROOT / "configs" / "run6.yaml"))
     assert list(armed.disarmed) == [], (
-        "configs/run6.yaml arms the actor-lag abort at `:203` (the R59 flip) — mode AUDIT "
+        "configs/run6.yaml arms the actor-lag abort (the R59 flip) — mode AUDIT "
         f"must be GREEN on it today; got {[row.name for row in armed.disarmed]}"
     )
     assert [row.name for row in armed.required] == [row.name for row in _required()], (

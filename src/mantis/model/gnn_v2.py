@@ -231,7 +231,7 @@ class GnnNetV2(GnnNet):
 
 
 class GnnNetV2SoftPolicy(GnnNetV2):
-    """V2 plus the auxiliary soft-policy head (`aux_policy_head`, V2's `PolicyHead` shape over the same legal embeddings); `forward_batch`/`forward_single` serve V2's outputs exactly, only `forward_batch_heads` (the trainer's entry) evaluates it."""
+    """V2 plus `aux_policy_head` (V2's `PolicyHead` shape over the same legal embeddings); `forward_batch`/`forward_single` serve V2's outputs exactly, only `forward_batch_heads` evaluates it."""
 
     def __init__(self, arch: GnnArchV2SoftPolicy) -> None:
         super().__init__(arch)  # type: ignore[arg-type] — the field sets are identical by design

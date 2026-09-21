@@ -67,7 +67,7 @@ class GnnArchV2:
 
 @dataclass(frozen=True)
 class GnnArchV2SoftPolicy:
-    """V2's trunk and heads plus an AUXILIARY SOFT-POLICY head (R366(b): a second policy head on the searched target at `model.aux_soft_policy.target_temperature`, KataGo's soft head in the sparse-row regime); served outputs are V2's exactly; a SIBLING with V2's field set, never a subclass, for `build_net`'s reason."""
+    """V2's trunk and heads plus an AUXILIARY SOFT-POLICY head trained at `model.aux_soft_policy`; served outputs are V2's exactly; a SIBLING with V2's field set, never a subclass, for `build_net`'s reason."""
 
     in_dim: int
     edge_dim: int
@@ -148,7 +148,7 @@ def gnn_widths_block(arch: Any) -> dict[str, int]:
 
 
 def declared_gnn_widths(config: Mapping[str, Any]) -> dict[str, int]:
-    """The `model.gnn` widths of a plain config mapping as arch-field kwargs, `{}` with no `model` block (a pre-v35 stamp); Raises: RepresentationMismatch — a `model` block whose `gnn` member is absent or short of a width; ArchScopedKeyOutsideItsArchError — the block on a non-graph config."""
+    """The `model.gnn` widths of a config mapping as arch-field kwargs, `{}` with no `model` block (a pre-v35 stamp); Raises: RepresentationMismatch — `gnn` absent or short; ArchScopedKeyOutsideItsArchError — a non-graph config."""
     if config.get(GNN_WIDTHS_BLOCK[0]) is None:
         return {}
     try:

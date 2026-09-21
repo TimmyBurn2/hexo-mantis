@@ -146,8 +146,6 @@ def init_trainer(
     # one, so this site carries no copy of that knowledge.
     cfg = dict(config)
     spec = resolve_from_config(cfg)
-    # The trunk's shape through its refusing read path (v35) BEFORE the build reads it: a fresh
-    # run states the shape it boots at, and a foreign-arch or shapeless config dies here by name.
     widths = resolve_gnn_widths(cfg)
     _LOG.info("net_shape hidden=%s num_layers=%s", widths.hidden, widths.num_layers)
     arch = arch_from_spec_and_config(spec, cfg)

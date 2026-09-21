@@ -498,12 +498,9 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         owner=None,
         source_pin=None,
         note=(
-            "The frozen-actor hard abort (exit 45). Armed on configs/run5.yaml since the "
-            "R59 flip; disarming it on a production config is the run3 failure mode "
-            "re-enabled. RETIRED 2026-09-16 (B-1: the server served the learner's own module, so "
-            "a self-copy's lag could never exceed the sync cadence) and RETURNED at R366 with "
-            "CARD-SERVER-OWNED-COPY: the actors serve a copy the sync writes, so between syncs "
-            "their weights ARE stale and the lag is a fact again."
+            "The frozen-actor hard abort (exit 45): the actors serve a copy the sync writes, so "
+            "between syncs their weights ARE stale and a lag past the threshold is a frozen sync "
+            "(its retirement and return are the register's, R366 / CARD-SERVER-OWNED-COPY)."
         ),
     ),
     ArmedAbort(

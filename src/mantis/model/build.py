@@ -32,7 +32,7 @@ def build_net(arch: ModelArch) -> nn.Module:
     nothing from the live module's structure.
 
     Raises:
-        RepresentationMismatch: `arch` is neither `GnnArch` nor `GnnArchV2`.
+        RepresentationMismatch: `arch` is not a kind this build has.
     """
     net: nn.Module
     # The most-derived kinds are tested first as a second line of defence: were a later kind
