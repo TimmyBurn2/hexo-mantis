@@ -1,5 +1,3 @@
-# >300 justify (R8): the policy CE, the hard target it rebuilds and the soft target that shares its
-# tail are ONE segment vocabulary and denominator contract — split, the two targets would disagree.
 """Shared loss computation for the Trainer + pretrain: the ragged policy CE, the binned value loss
 and the chain head; the trainer sums `policy_loss + value_loss` (`trainer/core.py`)."""
 from __future__ import annotations
@@ -13,25 +11,33 @@ import torch.nn as nn
 # Canonical stub-exported location — `torch.amp` itself does not re-export for type checkers.
 from torch.amp.grad_scaler import GradScaler
 
+from mantis.selfplay.graph_collate import segment_ids, segment_softmax, segment_sum
 from mantis.util.constants import is_alpha_full
 
 
-def _segment_softmax(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch.Tensor:
-    """Numerically-stable per-graph softmax over each graph's legal nodes: flat `[Lg_total]`
-    logits segmented by the `[B+1]` CSR `legal_offsets`, returning probs summing to 1 within each
-    segment. Vectorized (scatter_reduce_/scatter_add_), no Python per-graph loop."""
-    counts = legal_offsets[1:] - legal_offsets[:-1]
+def sparse_tail(
+    prior_probs: torch.Tensor,
+    explicit_mask: torch.Tensor,
+    tail_mass: torch.Tensor,
+    legal_offsets: torch.Tensor,
+) -> torch.Tensor:
+    """The SPARSE Gumbel row's tail (R347(a)): each graph's `tail_mass` spread over its non-explicit legal nodes in proportion to the DETACHED `prior_probs` — the ONE construction the CE, the soft target and the KL row share; a graph whose legal set is entirely explicit has an empty tail (the clamp keeps the divide finite, the numerator is zero there)."""
     b = int(legal_offsets.shape[0]) - 1
-    seg = torch.repeat_interleave(
-        torch.arange(b, device=logits.device, dtype=torch.long), counts,
-        output_size=int(logits.shape[0]),
-    )
-    seg_max = torch.full((b,), float("-inf"), dtype=logits.dtype, device=logits.device)
-    seg_max.scatter_reduce_(0, seg, logits, reduce="amax", include_self=False)
-    ex = torch.exp(logits - seg_max[seg])
-    denom = torch.zeros(b, dtype=logits.dtype, device=logits.device)
-    denom.scatter_add_(0, seg, ex)
-    return ex / denom[seg]
+    seg = segment_ids(legal_offsets, total=int(prior_probs.shape[0]))
+    tail_prior = prior_probs.detach() * (1.0 - explicit_mask.reshape(-1).to(prior_probs.dtype))
+    scale = tail_mass.reshape(-1).to(tail_prior.dtype) / segment_sum(tail_prior, seg, b).clamp_min(1e-12)
+    return tail_prior * scale[seg]
+
+
+def rebuild_sparse_target(
+    policy_target: torch.Tensor,
+    prior_probs: torch.Tensor,
+    explicit_mask: torch.Tensor,
+    tail_mass: torch.Tensor,
+    legal_offsets: torch.Tensor,
+) -> torch.Tensor:
+    """The hard policy target as the CE trains on it: the explicit masses plus `sparse_tail`."""
+    return policy_target.reshape(-1) + sparse_tail(prior_probs, explicit_mask, tail_mass, legal_offsets)
 
 
 def graph_policy_row_weights(
@@ -149,36 +155,18 @@ def ragged_policy_ce_and_entropies(
     if b == 0 or policy_logits.numel() == 0:
         zero = torch.zeros((), device=device, dtype=torch.float32)
         return zero, zero.clone(), zero.clone()
-    probs = _segment_softmax(policy_logits, legal_offsets)
+    probs = segment_softmax(policy_logits, legal_offsets)
     logp = torch.log(probs.clamp(min=1e-12))
-    counts = legal_offsets[1:] - legal_offsets[:-1]
-    seg = torch.repeat_interleave(
-        torch.arange(b, device=device, dtype=torch.long), counts
-    )
+    seg = segment_ids(legal_offsets, total=int(probs.shape[0]))
     target = policy_target
     if explicit_mask is not None and tail_mass is not None:
-        # DETACHED: the reconstructed tail is a target, not a term of the model.
-        tail_prior = probs.detach() * (
-            1.0 - explicit_mask.reshape(-1).to(probs.dtype)
-        )
-        tail_denom = torch.zeros(b, device=device, dtype=tail_prior.dtype)
-        tail_denom.scatter_add_(0, seg, tail_prior)
-        # A graph whose legal set is entirely explicit has an empty tail; the clamp keeps the
-        # divide finite and the numerator is zero there anyway.
-        scale = tail_mass.reshape(-1).to(tail_prior.dtype) / tail_denom.clamp_min(1e-12)
-        target = policy_target + tail_prior * scale[seg]
-    per_node = -(target * logp)  # (Lg,)
-    per_graph = torch.zeros(b, device=device, dtype=per_node.dtype)
-    per_graph.scatter_add_(0, seg, per_node)  # (B,)
+        target = rebuild_sparse_target(policy_target, probs, explicit_mask, tail_mass, legal_offsets)
+    per_graph = segment_sum(-(target * logp), seg, b)
     with torch.no_grad():
         t = target.detach()
-        entropy_node = -(t * torch.log(t.clamp(min=1e-12)))
-        entropy_graph = torch.zeros(b, device=device, dtype=entropy_node.dtype)
-        entropy_graph.scatter_add_(0, seg, entropy_node)
+        entropy_graph = segment_sum(-(t * torch.log(t.clamp(min=1e-12))), seg, b)
         p = probs.detach()
-        model_node = -(p * torch.log(p.clamp(min=1e-12)))
-        model_graph = torch.zeros(b, device=device, dtype=model_node.dtype)
-        model_graph.scatter_add_(0, seg, model_node)
+        model_graph = segment_sum(-(p * torch.log(p.clamp(min=1e-12))), seg, b)
 
     def _reduce(values: torch.Tensor) -> torch.Tensor:
         if full_search_mask is not None:
@@ -207,27 +195,16 @@ def soft_policy_target(
     with torch.no_grad():
         target = policy_target.to(torch.float32).reshape(-1)
         explicit = explicit_mask.reshape(-1).to(torch.bool)
-        counts = legal_offsets[1:] - legal_offsets[:-1]
         b = int(legal_offsets.shape[0]) - 1
-        seg = torch.repeat_interleave(
-            torch.arange(b, device=target.device, dtype=torch.long), counts,
-            output_size=int(target.shape[0]),
-        )
+        seg = segment_ids(legal_offsets, total=int(target.shape[0]))
         alpha = tail_mass.reshape(-1).to(torch.float32)
-        # The explicit half: t^(1/T) over the explicit nodes, renormalised to the explicit mass.
         sharpened = torch.where(explicit & (target > 0),
                                 torch.exp(torch.log(target.clamp_min(1e-30)) / temperature),
                                 torch.zeros_like(target))
-        sharpened_sum = torch.zeros(b, device=target.device, dtype=target.dtype)
-        sharpened_sum.scatter_add_(0, seg, sharpened)
         explicit_mass = (1.0 - alpha).clamp_min(0.0)
-        soft_explicit = sharpened * (explicit_mass / sharpened_sum.clamp_min(1e-30))[seg]
-        # The tail half: alpha over the detached prior, the hard target's own construction.
-        tail_prior = prior_probs.detach().to(torch.float32).reshape(-1) * (~explicit).to(torch.float32)
-        tail_denom = torch.zeros(b, device=target.device, dtype=target.dtype)
-        tail_denom.scatter_add_(0, seg, tail_prior)
-        soft_tail = tail_prior * (alpha / tail_denom.clamp_min(1e-12))[seg]
-        return soft_explicit + soft_tail
+        soft_explicit = sharpened * (explicit_mass / segment_sum(sharpened, seg, b).clamp_min(1e-30))[seg]
+        prior32 = prior_probs.detach().to(torch.float32).reshape(-1)
+        return soft_explicit + sparse_tail(prior32, explicit_mask, tail_mass, legal_offsets)
 
 
 def compute_chain_loss(

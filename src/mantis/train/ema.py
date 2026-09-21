@@ -44,6 +44,8 @@ class EmaModel:
             raise ValueError(f"EMA decay must be in [0, 1); got {decay}")
         self.decay: float = float(decay)
         base = _base_of(model)
+        #: The declared arch travels with the shadow as it does with the net (`build_net` plants it).
+        self.arch: Any = getattr(base, "arch", None)
         self._shadow: dict[str, torch.Tensor] = {
             name: tensor.detach().clone() for name, tensor in base.state_dict().items()
         }
@@ -85,6 +87,7 @@ class _EmaModuleView:
 
     def __init__(self, owner: EmaModel) -> None:
         self._owner = owner
+        self.arch = owner.arch
 
     def state_dict(self) -> dict[str, torch.Tensor]:
         return self._owner.state_dict()

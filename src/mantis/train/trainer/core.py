@@ -25,9 +25,9 @@ from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
 
 from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
+from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS
 from mantis.encoding import resolve_from_config
 from mantis.model import (
-    SOFT_POLICY_ARCH_KINDS,
     ModelArch,
     amp_dtype_for,
     arch_from_spec_and_config,
@@ -45,6 +45,10 @@ from mantis.train.losses import (
     policy_loss_weight_at,
     ragged_policy_ce,
     ragged_policy_ce_and_entropies,
+    rebuild_sparse_target,
+    segment_ids,
+    segment_softmax,
+    segment_sum,
     soft_policy_target,
 )
 from mantis.train.lr_schedule import FlooredCosineAnnealingLR
@@ -386,17 +390,11 @@ class Trainer:
             )
             with autocast(device_type=self.device.type, dtype=self.amp_dtype,
                           enabled=self._autocast_enabled):
-                # `forward_batch` is GnnNet's real method; `nn.Module.__getattr__` types dynamic
-                # attrs as Tensor | Module.
-                aux_logits: torch.Tensor | None = None
-                if self.soft_policy:
-                    policy_logits, _value, bin_logits, aux_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
-                        inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
-                        inputs.stone_mask, node_offsets=inputs.node_offsets)
-                else:
-                    policy_logits, _value, bin_logits = self.model.forward_batch(  # pyright: ignore[reportCallIssue]
-                        inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
-                        inputs.stone_mask, node_offsets=inputs.node_offsets)
+                # `forward_batch_heads` is GnnNet's real method; `nn.Module.__getattr__` types
+                # dynamic attrs as Tensor | Module.
+                policy_logits, _value, bin_logits, aux_logits = self.model.forward_batch_heads(  # pyright: ignore[reportCallIssue]
+                    inputs.x, inputs.edge_index, inputs.edge_attr, inputs.legal_index,
+                    inputs.stone_mask, node_offsets=inputs.node_offsets)
                 if int(bin_logits.shape[0]) != int(inputs.n_graphs):
                     raise ValueError(
                         f"train_step_from_graph_batch: bin_logits has "
@@ -456,7 +454,7 @@ class Trainer:
         # used to advance the clock anyway: every micro-batch skipped (`.grad` stays zeroed, so
         # `clip_and_step` returns a finite `0.0` and accumulated momentum genuinely moves the
         # weights), and a non-finite gradient from a FINITE loss, reached by a different route.
-        head_norms = self._policy_head_grad_norms() if (contributing and self.soft_policy) else None
+        head_norms = self._policy_head_grad_norms() if (contributing and len(self._base_model().policy_heads()) > 1) else None  # pyright: ignore[reportCallIssue]
         if contributing == 0:
             grad_norm = float("nan")
             self.optimizer.zero_grad(set_to_none=True)
@@ -531,22 +529,19 @@ class Trainer:
         """The aux head's CE against the soft target over this part's policy rows, and the DETACHED KL(hard || soft) reduced the same way (the planted break: a construction returning the hard target reads 0)."""
         assert self.hp.aux_soft_policy is not None
         temperature = self.hp.aux_soft_policy[0]
+        prior = segment_softmax(policy_logits.detach().to(torch.float32), inputs.legal_offsets)
         soft = soft_policy_target(
             inputs.policy_target, inputs.legal_offsets, inputs.explicit_mask, inputs.tail_mass,
-            _segment_probs(policy_logits.detach(), inputs.legal_offsets), temperature)
+            prior, temperature)
         aux_loss = ragged_policy_ce(
             aux_logits, soft, inputs.legal_offsets,
             full_search_mask=inputs.policy_row_weight, denominator=policy_denominator)
         with torch.no_grad():
-            hard = _hard_target(policy_logits.detach(), inputs)
+            hard = rebuild_sparse_target(inputs.policy_target.to(torch.float32), prior,
+                                         inputs.explicit_mask, inputs.tail_mass, inputs.legal_offsets)
             per_node = hard * (torch.log(hard.clamp_min(1e-12)) - torch.log(soft.clamp_min(1e-12)))
             b = int(inputs.legal_offsets.shape[0]) - 1
-            counts = inputs.legal_offsets[1:] - inputs.legal_offsets[:-1]
-            seg = torch.repeat_interleave(
-                torch.arange(b, device=hard.device, dtype=torch.long), counts,
-                output_size=int(hard.shape[0]))
-            per_graph = torch.zeros(b, device=hard.device, dtype=hard.dtype)
-            per_graph.scatter_add_(0, seg, per_node)
+            per_graph = segment_sum(per_node, segment_ids(inputs.legal_offsets, total=int(hard.shape[0])), b)
             mask = inputs.policy_row_weight.reshape(-1).to(per_graph.dtype)
             aux_kl = (per_graph * mask).sum() / policy_denominator
         return aux_loss, aux_kl
@@ -555,7 +550,7 @@ class Trainer:
         """The pre-clip L2 gradient norm over each policy head's OWN parameters — the twin's witness for the weight envelope (aux ≈ main), read before `clip_and_step`."""
         base = self._base_model()
         out: dict[str, float] = {}
-        for name in ("policy_head", "aux_policy_head"):
+        for name in base.policy_heads():  # pyright: ignore[reportCallIssue]
             module: nn.Module = getattr(base, name)
             grads = [p.grad.detach().float().norm() ** 2 for p in module.parameters() if p.grad is not None]
             out[f"{name}_grad_norm"] = float(torch.stack(grads).sum().sqrt().item()) if grads else 0.0
@@ -587,11 +582,7 @@ class Trainer:
 
     def deploy_module(self) -> Any:
         """The module-like object the eval candidate is snapshotted from: the learner's module when EMA is off, else a live view over the EMA shadow carrying the declared `arch`."""
-        if self.ema_model is None:
-            return self.model
-        view = self.ema_model.module
-        view.arch = self.arch  # type: ignore[attr-defined] — the snapshot reads `.arch` off its subject
-        return view
+        return self.model if self.ema_model is None else self.ema_model.module
 
     def _resolve_encoding_name(self) -> str | None:
         try:
@@ -669,28 +660,6 @@ class Trainer:
             config_overrides=config_overrides, declared_keys=declared_keys,
             sink=sink, device=device,
         )
-
-
-def _segment_probs(logits: torch.Tensor, legal_offsets: torch.Tensor) -> torch.Tensor:
-    """The main head's per-graph softmax over its legal segments, float32 — the tail's prior."""
-    from mantis.train.losses import _segment_softmax
-
-    return _segment_softmax(logits.to(torch.float32), legal_offsets)
-
-
-def _hard_target(policy_logits: torch.Tensor, inputs: Any) -> torch.Tensor:
-    """The main head's target as `ragged_policy_ce` rebuilds it (explicit masses plus the tail over the detached prior), restated for the KL row, detached."""
-    probs = _segment_probs(policy_logits, inputs.legal_offsets)
-    b = int(inputs.legal_offsets.shape[0]) - 1
-    counts = inputs.legal_offsets[1:] - inputs.legal_offsets[:-1]
-    seg = torch.repeat_interleave(
-        torch.arange(b, device=probs.device, dtype=torch.long), counts,
-        output_size=int(probs.shape[0]))
-    tail_prior = probs * (1.0 - inputs.explicit_mask.reshape(-1).to(probs.dtype))
-    tail_denom = torch.zeros(b, device=probs.device, dtype=probs.dtype)
-    tail_denom.scatter_add_(0, seg, tail_prior)
-    scale = inputs.tail_mass.reshape(-1).to(probs.dtype) / tail_denom.clamp_min(1e-12)
-    return inputs.policy_target.to(probs.dtype).reshape(-1) + tail_prior * scale[seg]
 
 
 def _resolve_spec(config: Any):

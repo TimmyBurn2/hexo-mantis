@@ -152,7 +152,7 @@ def _load_net(config: dict[str, Any], checkpoint: Path | None) -> tuple[torch.nn
     if ck.metadata.arch is None:
         raise ValueError(f"{checkpoint}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)
-    net.load_state_dict(ck.model_state)
+    net.load_state_dict(ck.model_state)  # the LEARNER's weights: the bench prices a shape, not a deploy net
     return net, net_param_hash(net)
 
 

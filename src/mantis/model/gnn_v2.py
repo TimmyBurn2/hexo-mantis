@@ -237,7 +237,10 @@ class GnnNetV2SoftPolicy(GnnNetV2):
         super().__init__(arch)  # type: ignore[arg-type] — the field sets are identical by design
         self.aux_policy_head = PolicyHead(self.representation.output_dim, arch.policy_hidden)
 
-    def forward_batch_heads(
+    def policy_heads(self) -> tuple[str, ...]:
+        return ("policy_head", "aux_policy_head")
+
+    def forward_batch_heads(  # type: ignore[override] — the aux slot is a Tensor here, never None
         self,
         x: Tensor,
         edge_index: Tensor,
@@ -247,7 +250,7 @@ class GnnNetV2SoftPolicy(GnnNetV2):
         node_offsets: Tensor | None = None,
         *,
         trunk: Callable[..., Tensor] | None = None,
-    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor | None]:
         """`forward_batch`'s three outputs plus the aux head's `(num_legal_total,)` logits, one trunk pass."""
         legal_emb, pooled = self._readout(x, edge_index, edge_attr, legal_index, stone_mask,
                                           node_offsets, trunk=trunk)

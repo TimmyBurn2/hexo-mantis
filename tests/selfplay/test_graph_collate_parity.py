@@ -25,7 +25,7 @@ from mantis.selfplay.graph_collate import (
     segment_softmax,
     stone_mask_from_batch,
 )
-from mantis.train.losses import _segment_softmax as train_segment_softmax
+from mantis.train.losses import segment_softmax as train_segment_softmax
 
 # The capture ran on CPU with `torch.set_num_threads(1)`; B-04/B-05 reproduce that regime.
 CAPTURE_TORCH_THREADS = 1
@@ -179,38 +179,16 @@ def _battery() -> list[tuple[str, torch.Tensor, torch.Tensor]]:
     return cases
 
 
-def test_segment_softmax_train_duplication_pin():
-    """The declared-duplication ruling made mechanical, in three legs: (i) numeric agreement of
-    `selfplay.graph_collate.segment_softmax` with `train.losses._segment_softmax` over the
-    property battery; (ii) normalized-AST equality of the two bodies; (iii) a mutation self-test
-    proving leg (ii) actually bites. FAIL on any leg = the two copies can drift silently."""
-    # (i) numeric agreement
+def test_train_reads_the_selfplay_segment_softmax_and_never_a_copy():
+    """§c.6's declared duplication is RESOLVED (R367(a)): `train.losses.segment_softmax` IS the selfplay authority, one object, so the two cannot drift."""
+    assert train_segment_softmax is segment_softmax
     for label, logits, offsets in _battery():
-        ours = segment_softmax(logits, offsets)
-        theirs = train_segment_softmax(logits, offsets)
-        assert torch.equal(ours, theirs), f"{label}: the two segment_softmax copies disagree"
+        probs = segment_softmax(logits, offsets)
         seg_sums = torch.stack([
-            ours[int(offsets[i]):int(offsets[i + 1])].sum()
-            for i in range(len(offsets) - 1)
+            probs[int(offsets[i]):int(offsets[i + 1])].sum() for i in range(len(offsets) - 1)
         ])
         assert torch.allclose(seg_sums, torch.ones_like(seg_sums), atol=1e-6), (
             f"{label}: per-segment probabilities must sum to 1"
         )
 
-    # (ii) normalized-AST equality of the two bodies
-    ours_body = _normalized_body(segment_softmax)
-    theirs_body = _normalized_body(train_segment_softmax)
-    assert ours_body == theirs_body, (
-        "selfplay.graph_collate.segment_softmax and train.losses._segment_softmax have "
-        "diverged; §c.6 rules them a declared, test-pinned duplication until train imports "
-        "the selfplay authority"
-    )
 
-    # (iii) mutation self-test — leg (ii) must bite on a one-token perturbation
-    mutated_src = inspect.getsource(train_segment_softmax).replace('"amax"', '"amin"')
-    assert mutated_src != inspect.getsource(train_segment_softmax), (
-        "mutation self-test could not perturb the source — the checker is not proven to bite"
-    )
-    assert _normalized_body(mutated_src) != ours_body, (
-        "the AST comparison does NOT bite: a mutated body compared equal"
-    )

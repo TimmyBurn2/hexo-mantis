@@ -1,4 +1,4 @@
-"""`resolve_gnn_widths` — the refusing front door for `model.gnn` (v35), run at every fresh boot before the build reads the block; the parse is restated here because this package imports no `mantis.model` (torch)."""
+"""`resolve_gnn_widths` — the ONE parser of `model.gnn` (v35): the refusing front door at every fresh boot, and what `mantis.model.declared_gnn_widths` wraps for the build and the stamp."""
 from __future__ import annotations
 
 from collections.abc import Mapping

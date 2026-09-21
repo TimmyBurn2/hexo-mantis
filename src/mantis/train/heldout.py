@@ -1,7 +1,6 @@
 """The held-out gap witness (R366(c)): a FROZEN slice of an older ring the run never trains on, read forward-only every `interval` steps against the train loss since the last read — the in-run reading of PROBE-1's C3-1 gap (run8: value 0.13 of 0.51 on 18 of 18 nets)."""
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -9,19 +8,11 @@ from typing import Any
 from mantis._engine import HexgBuffer
 from mantis.config.resolve.heldout_gap import HeldoutGapSpec
 from mantis.train.coordinator.dispatch import run_declared_eval_step
+from mantis.util.hashing import sha256_file
 
 
 class HeldoutSliceError(RuntimeError):
     """The declared ring is not the file the config names, or holds no row."""
-
-
-def file_sha256(path: Path) -> str:
-    """The sha256 hex digest of `path`, streamed."""
-    digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1 << 20), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
 
 
 class HeldoutSlice:
@@ -41,7 +32,7 @@ class HeldoutSlice:
         path = Path(spec.ring) if root is None else root / spec.ring
         if not path.exists():
             raise FileNotFoundError(f"train.heldout_gap.ring not found: {path}")
-        actual = file_sha256(path)
+        actual = sha256_file(path)
         if actual != spec.ring_sha256:
             raise HeldoutSliceError(
                 f"train.heldout_gap.ring {path} hashes sha256 {actual}, but the config declares "
@@ -70,4 +61,4 @@ class HeldoutSlice:
         return {"policy_loss": policy / self.spec.batches, "value_loss": value / self.spec.batches}
 
 
-__all__ = ["HeldoutSlice", "HeldoutSliceError", "file_sha256"]
+__all__ = ["HeldoutSlice", "HeldoutSliceError"]

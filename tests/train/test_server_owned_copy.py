@@ -151,6 +151,30 @@ def test_the_shadow_rides_the_envelope_and_a_resume_restores_it(tmp_path: Path) 
     assert off_ck.ema_state is None and deploy_state(off_ck)[1] == "learner"
 
 
+def test_every_deploy_reader_rebuilds_the_shadow_from_an_ema_stamp(tmp_path: Path) -> None:
+    """One deploy reader: the gate's anchor and the warm start's parent are the EMA shadow when the stamp carries one, never the learner."""
+    import _microbatch_harness as H  # noqa: PLC0415
+    from mantis.train.anchor import _build_anchor_model
+    from mantis.train.warmstart import BcWarmStart, WarmStartIdentityError, apply_bc_warm_start
+
+    buf = H.uniform_graph_buffer()
+    buf.seed_sampler(H.SEED)
+    trainer = H.ema_graph_trainer(tmp_path, sink=H.SpySink(), update_every=1)
+    for _ in range(2):
+        _step(trainer, buf)
+    path = trainer.save_checkpoint()
+    ema_hash = net_param_hash(trainer.deploy_module())
+    assert ema_hash != net_param_hash(trainer.model), "premise: the shadow and the learner differ"
+    anchor, _ck = _build_anchor_model(path, declared_encoding=None, device=torch.device("cpu"))
+    assert net_param_hash(anchor) == ema_hash
+    child = build_net(trainer.arch)
+    spec = lookup(_ENCODING)
+    with pytest.raises(WarmStartIdentityError, match="net_param_hash"):
+        apply_bc_warm_start(child, BcWarmStart(path, net_param_hash(trainer.model), ()), spec=spec)
+    apply_bc_warm_start(child, BcWarmStart(path, ema_hash, ()), spec=spec)
+    assert net_param_hash(child) == ema_hash
+
+
 def test_a_resume_from_a_shadowless_stamp_reseeds_and_says_so(tmp_path: Path) -> None:
     import _microbatch_harness as H  # noqa: PLC0415
 

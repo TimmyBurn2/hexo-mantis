@@ -28,6 +28,7 @@ from mantis.model import (
     build_net,
     declared_arch_kind,
     declared_gnn_widths,
+    gnn_widths_block,
     select_arch,
 )
 from mantis.train.bundle import atomic_write
@@ -146,7 +147,7 @@ _SYNTH_ARCH_SCOPED: dict[tuple[str, str], Callable[[ModelArch], dict[str, int]]]
     ("inference", "fused_graph_caps"): lambda _arch: {
         "max_fused_edges": 57149441, "max_fused_nodes": 1785921,
     },
-    ("model", "gnn"): lambda arch: {"hidden": int(arch.hidden), "num_layers": int(arch.num_layers)},
+    ("model", "gnn"): gnn_widths_block,
 }
 
 
@@ -1124,12 +1125,7 @@ def _refuse_identity_drift(
     Raises:
         ResumeIdentityMismatchError: any identity leaf differs, naming the leaf and both values.
     """
-    # The trunk's shape needs only the stamped arch (v35), so it is compared before the identity
-    # blocks are — a stamp with no identity block still refuses a launch that moves the widths.
     drift: list[str] = []
-    for field, value in declared_gnn_widths(effective_config).items():
-        if value != int(getattr(arch, field)):
-            drift.append(f"model.gnn.{field}: checkpoint={getattr(arch, field)!r}, resume={value!r}")
     baked_identity = (baked_config or {}).get("identity")
     effective_identity = effective_config.get("identity")
     if isinstance(baked_identity, dict) and isinstance(effective_identity, dict):
@@ -1141,6 +1137,12 @@ def _refuse_identity_drift(
             got = effective_identity.get(leaf, stamped.get(leaf))
             if _stamp_name(want) != _stamp_name(got):
                 drift.append(f"identity.{leaf}: checkpoint={want!r}, resume={got!r}")
+    # The trunk's shape (v35) needs only the stamped arch, so a stamp with no identity block is
+    # still held to it; a moved representation is named above before the widths are read.
+    if not drift:
+        for field, value in declared_gnn_widths(effective_config).items():
+            if value != int(getattr(arch, field)):
+                drift.append(f"model.gnn.{field}: checkpoint={getattr(arch, field)!r}, resume={value!r}")
     if drift:
         raise ResumeIdentityMismatchError(
             f"{path.name}: the resuming run's effective identity differs from the "

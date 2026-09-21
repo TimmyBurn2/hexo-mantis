@@ -21,7 +21,7 @@ from mantis.model import build_net
 from mantis.model.identity import net_param_hash
 from mantis.selfplay.inference_local import LocalInferenceEngine
 from mantis.train.bundle_receipts import CHECKPOINT_NAME_RE, stamped_checkpoints
-from mantis.train.checkpoints import load_checkpoint
+from mantis.train.checkpoints import deploy_state, load_checkpoint
 
 #: The Gumbel draw's seed for every analyzer search; a FRESH player per search is what makes an answer repeat.
 ANALYZER_GUMBEL_SEED = 0
@@ -161,7 +161,7 @@ class MantisEngine:
             raise EngineLoadError(f"{info.id}: representation {self.spec.representation!r}; this analyzer decodes graph only")
         self.radius = int(self.spec.legal_move_radius)
         net = build_net(ck.metadata.arch)
-        net.load_state_dict(ck.model_state)
+        net.load_state_dict(deploy_state(ck)[0])
         net.eval()
         if threads is not None:
             torch.set_num_threads(int(threads))

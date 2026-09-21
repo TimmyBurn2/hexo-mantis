@@ -3,12 +3,10 @@ from __future__ import annotations
 
 import torch
 
-from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS as SCHEMA_KINDS
 from mantis.encoding import lookup
 from mantis.eval.snapshot import load_model_snapshot, write_model_snapshot
 from mantis.model import (
     ARCH_KINDS,
-    SOFT_POLICY_ARCH_KINDS,
     GnnArch,
     GnnArchV2,
     GnnArchV2SoftPolicy,
@@ -40,10 +38,6 @@ def test_the_kind_is_a_sibling_that_dispatches_to_its_own_net() -> None:
     net = build_net(GnnArchV2SoftPolicy(**_W))
     assert type(net) is GnnNetV2SoftPolicy and isinstance(net, GnnNetV2)
     assert "aux_policy_head.mlp.0.weight" in net.state_dict()
-
-
-def test_the_schema_and_model_tables_of_soft_policy_kinds_agree() -> None:
-    assert SCHEMA_KINDS == SOFT_POLICY_ARCH_KINDS == frozenset({"GnnArchV2SoftPolicy"})
 
 
 def test_served_outputs_are_V2s_exactly_and_the_aux_head_is_inert_at_deploy() -> None:

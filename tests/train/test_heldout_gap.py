@@ -18,7 +18,8 @@ from mantis.config.schema import RunConfig
 from mantis.monitor.config import MonitorConfig
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import StepCoordinator
-from mantis.train.heldout import HeldoutSlice, HeldoutSliceError, file_sha256
+from mantis.train.heldout import HeldoutSlice, HeldoutSliceError
+from mantis.util.hashing import sha256_file
 from mantis.train.lifecycle.signals import ShutdownState
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -37,7 +38,7 @@ def _ring(path: Path, *, n: int = 32, visits: int = 128) -> HexgBuffer:
 
 
 def _spec(path: Path, **over: Any) -> HeldoutGapSpec:
-    base = dict(ring=str(path), ring_sha256=file_sha256(path), batches=2, seed=7, interval=2)
+    base = dict(ring=str(path), ring_sha256=sha256_file(path), batches=2, seed=7, interval=2)
     base.update(over)
     return HeldoutGapSpec(**base)
 

@@ -18,7 +18,7 @@ from mantis.model.dist65 import binned_value_loss, decode_binned_value, scalar_t
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import load_checkpoint
 from mantis.train.coordinator.dispatch import _build_graph_parts
-from mantis.train.losses import _segment_softmax, ragged_policy_ce
+from mantis.train.losses import ragged_policy_ce, segment_softmax
 
 SOFT_POLICY_TEMPERATURE = 4.0  # P-B1's target^(1/4), KataGo's T
 
@@ -43,7 +43,7 @@ def load_net(path: Path) -> Net:
     if ck.metadata.arch is None:
         raise RuntimeError(f"{path.name}: the stamp resolves no arch, so the net cannot be rebuilt")
     model = build_net(ck.metadata.arch)
-    model.load_state_dict(ck.model_state)
+    model.load_state_dict(ck.model_state)  # the LEARNER's weights: the probe reads the trained net, not a deploy view
     model.eval()
     return Net(path=path, step=int(ck.metadata.step), net_hash=net_param_hash(model), model=model,
                config=dict(ck.config), spec=lookup(str(ck.metadata.encoding_name)))
@@ -90,7 +90,7 @@ def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
     b = int(lo.shape[0]) - 1
     counts = lo[1:] - lo[:-1]
     seg = torch.repeat_interleave(torch.arange(b, dtype=torch.long), counts)
-    p = _segment_softmax(logits, lo)
+    p = segment_softmax(logits, lo)
     tail_prior = p * (1.0 - inputs.explicit_mask.reshape(-1).to(p.dtype))
     tail_denom = _per_graph_sum(tail_prior, seg, b)
     scale = inputs.tail_mass.reshape(-1).to(p.dtype) / tail_denom.clamp_min(1e-12)

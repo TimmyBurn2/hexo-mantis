@@ -19,7 +19,7 @@ import torch
 
 from mantis.train.events import GUMBEL_TAIL_MASS_KEY, tail_mass_block
 from mantis.train.losses import (
-    _segment_softmax,
+    segment_softmax,
     exclude_alpha_full_rows,
     graph_loss_denominators,
     graph_policy_row_weights,
@@ -56,7 +56,7 @@ def _rebuilt_target(f: dict[str, torch.Tensor], *, detached: bool) -> torch.Tens
     Deliberately a second expression of the rule: a reference reusing the shipped code could
     not tell the detached form from the non-detached one.
     """
-    probs = _segment_softmax(f["logits"], f["legal_offsets"])
+    probs = segment_softmax(f["logits"], f["legal_offsets"])
     prior = probs.detach() if detached else probs
     tail_prior = prior * (1.0 - f["explicit_mask"].to(prior.dtype))
     counts = f["legal_offsets"][1:] - f["legal_offsets"][:-1]
@@ -287,7 +287,7 @@ def test_the_target_entropy_makes_ce_minus_it_the_kl_to_the_prior() -> None:
         logits, f["policy_target"], f["legal_offsets"],
         explicit_mask=f["explicit_mask"], tail_mass=f["tail_mass"])
     target = _rebuilt_target(f, detached=True)
-    probs = _segment_softmax(f["logits"], f["legal_offsets"])
+    probs = segment_softmax(f["logits"], f["legal_offsets"])
     seg = torch.repeat_interleave(torch.arange(2), f["legal_offsets"][1:] - f["legal_offsets"][:-1])
     kl_nodes = target * (torch.log(target.clamp(min=1e-12)) - torch.log(probs.clamp(min=1e-12)))
     kl = torch.zeros(2).scatter_add_(0, seg, kl_nodes).mean()

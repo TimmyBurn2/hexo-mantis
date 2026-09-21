@@ -1,7 +1,6 @@
 """Reading 7's prerequisite: the uniform weight-average of a checkpoint span, written through the ONE writer with its derivation beside it."""
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
@@ -12,6 +11,7 @@ from mantis.config.loader import load_config
 from mantis.model import build_net
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import load_checkpoint, save_checkpoint
+from mantis.util.hashing import sha256_file
 
 
 def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, out_dir: Path) -> dict[str, Any]:
@@ -34,8 +34,8 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
         for k, v in state.items():
             acc[k] = v.clone() if k not in acc else (acc[k] + v if v.is_floating_point() else v)
         net = build_net(ck.metadata.arch)
-        net.load_state_dict(ck.model_state)
-        sources.append({"file": p.name, "step": int(ck.metadata.step), "file_sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+        net.load_state_dict(ck.model_state)  # the LEARNER's weights: the average is of the trained nets
+        sources.append({"file": p.name, "step": int(ck.metadata.step), "file_sha256": sha256_file(p),
                         "net_hash": net_param_hash(net)})
     assert arch is not None
     n = len(paths)
@@ -50,7 +50,7 @@ def average_checkpoints(paths: list[Path], *, config_path: Path, run_id: str, ou
                                                "corpus_sha256": config.get("corpus_sha256")})
     record = {"kind": "uniform weight average (SWA over stamped checkpoints)", "n": n, "sources": sources,
               "config": str(config_path), "checkpoint": written.name, "net_hash": net_param_hash(net),
-              "file_sha256": hashlib.sha256(written.read_bytes()).hexdigest()}
+              "file_sha256": sha256_file(written)}
     written.with_name(written.name + ".derivation.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     return record
 

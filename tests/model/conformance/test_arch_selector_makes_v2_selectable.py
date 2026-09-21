@@ -30,6 +30,7 @@ import torch
 import yaml
 
 from mantis.config.census import production_configs
+from mantis.config.schema.core import SOFT_POLICY_ARCH_KINDS
 from mantis.config.loader import discover_configs, load_config
 from mantis.encoding import lookup
 from mantis.model import (
@@ -37,7 +38,6 @@ from mantis.model import (
     ARCH_KINDS,
     ARCH_KINDS_BY_REPRESENTATION,
     INCUMBENT_ARCH_KIND,
-    SOFT_POLICY_ARCH_KINDS,
     GnnArch,
     GnnArchV2,
     UnknownArchKind,

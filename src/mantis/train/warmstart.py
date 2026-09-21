@@ -99,6 +99,7 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
     from mantis.model import build_net
     from mantis.train.checkpoints import (
         CHECKPOINT_SCHEMA_VERSION,
+        deploy_state,
         load_checkpoint,
         load_legacy_weights,
     )
@@ -115,8 +116,11 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
             f"{declared.checkpoint}: the artifact's stamp resolves no arch, so the net it "
             "carries cannot be rebuilt and its identity cannot be checked."
         )
+    # The parent is its DEPLOY net (the EMA shadow when the stamp carries one): the net the
+    # gate and the frontier measured, and the one `net_hash` was minted over (`strength_frontier`).
+    source_state, _weights = deploy_state(ck)
     source_net = build_net(ck.metadata.arch)
-    source_net.load_state_dict(ck.model_state)
+    source_net.load_state_dict(source_state)
     actual = net_param_hash(source_net)
     if actual != declared.net_hash:
         raise WarmStartIdentityError(
@@ -126,7 +130,7 @@ def apply_bc_warm_start(model: Any, declared: BcWarmStart, *, spec: Any) -> BcTr
             "it. Re-point the path, or re-mint the hash against the checkpoint of record."
         )
 
-    result = load_from_bc(model, dict(ck.model_state), reinit=declared.reinit)
+    result = load_from_bc(model, dict(source_state), reinit=declared.reinit)
     live = net_param_hash(model)
     if not declared.reinit and live != declared.net_hash:
         raise WarmStartIdentityError(

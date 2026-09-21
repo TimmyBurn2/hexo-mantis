@@ -714,6 +714,26 @@ def _check_semantic(
 
 # Hot-path output helpers — segmented softmax + stone mask, consumed by the InferenceServer
 # graph loop and the eval path. Here beside the resolver so both share ONE implementation.
+def segment_ids(legal_offsets: Any, *, total: int | None = None) -> Any:
+    """The `[Lg_total]` graph id of every legal node, from the `[B+1]` CSR `legal_offsets`."""
+    import torch
+
+    counts = legal_offsets[1:] - legal_offsets[:-1]
+    b = int(legal_offsets.shape[0]) - 1
+    return torch.repeat_interleave(
+        torch.arange(b, device=legal_offsets.device, dtype=torch.long), counts, output_size=total,
+    )
+
+
+def segment_sum(values: Any, seg: Any, num_graphs: int) -> Any:
+    """Per-graph sums of flat per-node `values` under the ids `seg`, `[B]`."""
+    import torch
+
+    out = torch.zeros(num_graphs, device=values.device, dtype=values.dtype)
+    out.scatter_add_(0, seg, values)
+    return out
+
+
 def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     """Numerically-stable per-graph softmax over each graph's legal nodes.
 
@@ -722,20 +742,14 @@ def segment_softmax(logits: Any, legal_offsets: Any) -> Any:
     """
     import torch
 
-    counts = legal_offsets[1:] - legal_offsets[:-1]
     b = int(legal_offsets.shape[0]) - 1
-    seg = torch.repeat_interleave(
-        torch.arange(b, device=logits.device, dtype=torch.long), counts,
-        output_size=int(logits.shape[0]),
-    )
+    seg = segment_ids(legal_offsets, total=int(logits.shape[0]))
     # per-segment max for stability; include_self=False is safe because EmptyLegalSet
     # guarantees every graph has at least one legal node.
     seg_max = torch.full((b,), float("-inf"), dtype=logits.dtype, device=logits.device)
     seg_max.scatter_reduce_(0, seg, logits, reduce="amax", include_self=False)
     ex = torch.exp(logits - seg_max[seg])
-    denom = torch.zeros(b, dtype=logits.dtype, device=logits.device)
-    denom.scatter_add_(0, seg, ex)
-    return ex / denom[seg]
+    return ex / segment_sum(ex, seg, b)[seg]
 
 
 def stone_mask_from_batch(batch: GraphBatch) -> Any:
@@ -788,6 +802,8 @@ __all__ = [
     "collate_graph_batch",
     "graph_wire_from_rust",
     "reset_semantic_canary",
+    "segment_ids",
     "segment_softmax",
+    "segment_sum",
     "stone_mask_from_batch",
 ]

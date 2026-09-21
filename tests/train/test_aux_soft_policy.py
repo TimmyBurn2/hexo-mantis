@@ -87,9 +87,8 @@ def test_the_planted_break_a_dead_soft_target_is_caught_by_the_producer_row(tmp_
     from mantis.train.trainer import core as core_module
 
     def dead_target(policy_target, legal_offsets, explicit_mask, tail_mass, prior_probs, temperature):
-        return core_module._hard_target(torch.log(prior_probs.clamp_min(1e-12)), type("I", (), {
-            "policy_target": policy_target, "legal_offsets": legal_offsets,
-            "explicit_mask": explicit_mask, "tail_mass": tail_mass})())
+        return core_module.rebuild_sparse_target(policy_target.to(torch.float32), prior_probs,
+                                                 explicit_mask, tail_mass, legal_offsets)
 
     monkeypatch.setattr(core_module, "soft_policy_target", dead_target)
     buf = H.uniform_graph_buffer()

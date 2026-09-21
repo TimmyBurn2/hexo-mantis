@@ -156,6 +156,26 @@ class GnnNet(nn.Module):
         value, bin_logits = self.value_head(pooled)
         return policy_logits, value, bin_logits
 
+    def forward_batch_heads(
+        self,
+        x: Tensor,
+        edge_index: Tensor,
+        edge_attr: Tensor,
+        legal_index: Tensor,
+        stone_mask: Tensor,
+        node_offsets: Tensor | None = None,
+        *,
+        trunk: Callable[..., Tensor] | None = None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor | None]:
+        """`forward_batch`'s three outputs plus the auxiliary policy logits — `None` on a net with one policy head; the trainer's ONE entry, so a head set is a subclass and never a branch."""
+        policy_logits, value, bin_logits = self.forward_batch(
+            x, edge_index, edge_attr, legal_index, stone_mask, node_offsets, trunk=trunk)
+        return policy_logits, value, bin_logits, None
+
+    def policy_heads(self) -> tuple[str, ...]:
+        """The attribute names of this net's policy heads, main first."""
+        return ("policy_head",)
+
     @torch.no_grad()
     def forward_single(
         self,

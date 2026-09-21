@@ -14,7 +14,6 @@ from mantis.model.arch import (
     ARCH_KINDS,
     ARCH_KINDS_BY_REPRESENTATION,
     INCUMBENT_ARCH_KIND,
-    SOFT_POLICY_ARCH_KINDS,
     GnnArch,
     GnnArchV2,
     GnnArchV2SoftPolicy,
@@ -24,6 +23,7 @@ from mantis.model.arch import (
     arch_from_spec_and_config,
     declared_arch_kind,
     declared_gnn_widths,
+    gnn_widths_block,
     select_arch,
 )
 from mantis.model.build import build_net
@@ -56,7 +56,6 @@ __all__ = [
     "GnnNet",
     "GnnNetV2",
     "GnnNetV2SoftPolicy",
-    "SOFT_POLICY_ARCH_KINDS",
     "ModelArch",
     "RepresentationMismatch",
     "UnknownArchKind",
@@ -64,6 +63,7 @@ __all__ = [
     "arch_from_spec_and_config",
     "declared_arch_kind",
     "declared_gnn_widths",
+    "gnn_widths_block",
     "binned_value_loss",
     "build_net",
     "decode_binned_value",

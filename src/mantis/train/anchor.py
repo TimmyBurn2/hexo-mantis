@@ -270,8 +270,9 @@ def _build_anchor_model(
     device: torch.device,
 ) -> tuple[torch.nn.Module, Any]:
     """Read an anchor through the ONE loader, build the net via `build_net(metadata.arch)` and
-    load its weights under the corruption guard. Returns `(model, Checkpoint)`, whose
-    `metadata.arch.representation` is the anchor's DECLARED representation."""
+    load its DEPLOY weights (`deploy_state`: the EMA shadow when the stamp carries one) under the
+    corruption guard. Returns `(model, Checkpoint)`, whose `metadata.arch.representation` is the
+    anchor's DECLARED representation."""
     from mantis.train import checkpoints as _ck
 
     raw = torch.load(path, weights_only=True, map_location="cpu")
@@ -285,7 +286,7 @@ def _build_anchor_model(
     if arch is None:
         raise AnchorLoadError(f"{path}: no arch resolved for the anchor — cannot rebuild the net.")
     model = build_net(arch).to(device)
-    _guarded_load_state_dict(model, ck.model_state)
+    _guarded_load_state_dict(model, _ck.deploy_state(ck)[0])
     model.eval()
     return model, ck
 

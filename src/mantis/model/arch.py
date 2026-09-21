@@ -3,15 +3,18 @@
 Arch metadata travels on these frozen dataclasses: a caller retains the declared arch and hands
 it to `build_net`, and nobody infers arch by reading attributes off a live `nn.Module` — that
 sniff is deleted and grep-gate-banned. `arch_from_spec_and_config` consumes a resolved encoding
-spec and a plain `Mapping`, importing NO `mantis.config`, so the model layer builds and tests
-without the config package; there is NO representation default. `RepresentationMismatch` is
-defined here, the lowest layer that raises it, and re-exported by `build` and the package.
+spec and a plain `Mapping`; the `model.gnn` parser and the soft-policy kinds table are the
+config package's (the `model -> config` edge, R367(a): one implementation per thing); there is
+NO representation default. `RepresentationMismatch` is defined here, the lowest layer that
+raises it, and re-exported by `build` and the package.
 """
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Literal
+
+from mantis.config.resolve.gnn_widths import MissingGnnWidthsError, resolve_gnn_widths
 
 Representation = Literal["graph"]
 
@@ -103,9 +106,6 @@ ARCH_KINDS_BY_REPRESENTATION: dict[str, tuple[str, ...]] = {
     "graph": ("GnnArch", "GnnArchV2", "GnnArchV2SoftPolicy"),
 }
 
-#: The kinds that carry the auxiliary soft-policy head (what `model.aux_soft_policy` is FOR).
-SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
-
 #: THE INCUMBENT KIND PER REPRESENTATION — a statement about HISTORY, not a default, which is
 #: why it is named and pinned rather than inlined: a default answers "what should we build when
 #: nobody said?", this answers "what has this tree always built?", a fact the conformance suite
@@ -142,20 +142,22 @@ _GRAPH_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
 )
 
 
+def gnn_widths_block(arch: Any) -> dict[str, int]:
+    """`arch`'s trunk widths as the `model.gnn` block a config carries — the inverse of `declared_gnn_widths`."""
+    return {field: int(getattr(arch, field)) for field in _GNN_WIDTH_FIELDS}
+
+
 def declared_gnn_widths(config: Mapping[str, Any]) -> dict[str, int]:
-    """The `model.gnn` widths of a plain config mapping as arch-field kwargs, `{}` with no `model` block; Raises: RepresentationMismatch — a `model` block whose `gnn` member is absent or short of a width."""
-    section, block = GNN_WIDTHS_BLOCK
-    model = config.get(section)
-    if model is None:
+    """The `model.gnn` widths of a plain config mapping as arch-field kwargs, `{}` with no `model` block (a pre-v35 stamp); Raises: RepresentationMismatch — a `model` block whose `gnn` member is absent or short of a width; ArchScopedKeyOutsideItsArchError — the block on a non-graph config."""
+    if config.get(GNN_WIDTHS_BLOCK[0]) is None:
         return {}
-    widths = model.get(block) if isinstance(model, Mapping) else None
-    if not isinstance(widths, Mapping) or any(f not in widths for f in _GNN_WIDTH_FIELDS):
+    try:
+        spec = resolve_gnn_widths(config)
+    except MissingGnnWidthsError as exc:
         raise RepresentationMismatch(
-            f"{section}.{block} must carry {list(_GNN_WIDTH_FIELDS)} on a graph config; got "
-            f"{widths!r}. A config that carries a `model` block names the trunk's shape in full "
-            "— the dataclass default stands in only for a mapping with no `model` block at all"
-        )
-    return {f: int(widths[f]) for f in _GNN_WIDTH_FIELDS}
+            f"{'.'.join(GNN_WIDTHS_BLOCK)} must carry {list(_GNN_WIDTH_FIELDS)} on a graph config: {exc}"
+        ) from exc
+    return {"hidden": spec.hidden, "num_layers": spec.num_layers}
 
 
 def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch:
