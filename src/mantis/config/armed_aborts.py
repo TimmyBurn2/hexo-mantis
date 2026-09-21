@@ -913,7 +913,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
 #: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them is
 #: the tool's job. Membership is audited BY NAME, so exempting the run an operator is about to
 #: mint is a red gate rather than a bookkeeping edit.
-PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml", "configs/run7.yaml", "configs/run8.yaml", "configs/run9.yaml")
+PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml", "configs/run7.yaml", "configs/run8.yaml", "configs/run9.yaml", "configs/run10.yaml")
 
 #: The OTHER half of the same authority: the two tuples must PARTITION the config set EXACTLY,
 #: and the tool hard-fails (rc 31) on either kind of drift — a config on disk named by neither

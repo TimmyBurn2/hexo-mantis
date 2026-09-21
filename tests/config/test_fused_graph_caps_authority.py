@@ -44,7 +44,7 @@ _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps
 #: The two configs whose value is the OPERATOR'S, minted at the box sitting from the calibration
 #: tool's output. `run6.yaml` joins run5 on run5's own grounds: a box-class config that already
 #: mints run5's `microbatch_caps` and is already excluded beside it; run7–run9 carry its caps.
-_PRODUCTION = ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml")
+_PRODUCTION = ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml")
 _NON_PRODUCTION = ("dev_example.yaml", "smoke_preflight_armed.yaml")
 
 

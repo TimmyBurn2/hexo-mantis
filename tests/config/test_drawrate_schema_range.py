@@ -238,7 +238,7 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     # The armed production configs, which CARRY the four pre-registered constants rather than
     # re-authoring them. The pin is on the MINTED file, so an in-place edit of its armed block reds
     # here; gate 12 audits it by name.
-    for production in ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml"):
+    for production in ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml"):
         armed = postures.pop(production, None)
         assert armed is not None, (
             f"configs/{production} is a declared PRODUCTION config and must ARM the draw-rate "
