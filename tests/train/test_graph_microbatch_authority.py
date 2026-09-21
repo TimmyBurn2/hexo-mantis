@@ -150,7 +150,7 @@ _CENSUS_BATCH_SIZE = 256
 #: BOTH production configs, so the arming/sizing witness covers the config actually being
 #: launched. The transfer is guarded: the censused (E, N) describe this batch verbatim only at
 #: `_CENSUS_BATCH_SIZE`, and the staleness guard inside the test re-derives that premise.
-_PRODUCTION_CAPPED = ("run6.yaml", "run7.yaml", "run8.yaml")
+_PRODUCTION_CAPPED = ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml")
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
@@ -409,4 +409,4 @@ def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory
     production config is EXCLUDED because its caps are fitted against a measured partition.
     """
     live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
-    assert live == sorted((*_NON_RUN5, "run6.yaml", "run7.yaml", "run8.yaml"))
+    assert live == sorted((*_NON_RUN5, "run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml"))
