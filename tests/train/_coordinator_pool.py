@@ -1,4 +1,4 @@
-"""The pool as `StepCoordinator.iteration_complete` reads it — ONE stub (R367(a)) whose ply-cap window is a SCRIPT over the games completed: `flags[i]` is game i's cap flag, and a pool built without flags reports an empty window."""
+"""The pool as `StepCoordinator.iteration_complete` reads it — ONE stub whose ply-cap window is a SCRIPT over the games completed (`flags[i]` is game i's cap flag; no flags, an empty window)."""
 from __future__ import annotations
 
 from types import SimpleNamespace

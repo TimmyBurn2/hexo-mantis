@@ -222,7 +222,7 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     for path in configs:
         cfg = load_config(path)
         block = cfg.train.draw_rate_abort
-        postures[path.name] = block
+        postures[path.relative_to(CONFIGS_DIR).as_posix()] = block
         resolved = resolve_draw_rate_abort(cfg.train)
         assert (resolved is None) == (block is None), (
             f"{path.name}: the ONE resolver must agree with the block it reads — a resolver "
@@ -238,8 +238,8 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
 
     # The armed production configs, which CARRY the four pre-registered constants rather than
     # re-authoring them. The pin is on the MINTED file, so an in-place edit of its armed block reds
-    # here; gate 12 audits it by name.
-    for production in (path.name for path in production_configs(CONFIGS_DIR.parent)):
+    # here; gate 12 audits every census member.
+    for production in (path.relative_to(CONFIGS_DIR).as_posix() for path in production_configs(CONFIGS_DIR.parent)):
         armed = postures.pop(production, None)
         assert armed is not None, (
             f"configs/{production} is a declared PRODUCTION config and must ARM the draw-rate "

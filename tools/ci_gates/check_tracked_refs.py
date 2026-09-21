@@ -38,7 +38,7 @@ SCAN_EXEMPT: dict[str, str] = {
 DISSOLVED_PATHS: dict[str, str] = {
     "docs/registers/": "dissolved by R346(e); governance moved to docs/governance/",
     "configs/run9.yaml": "deleted by R367 §0(4): the mint stood as run10's base (R365(a)) and the base "
-                         "is spent; STATE's items 16-18 name it as history",
+                         "is spent; STATE names it as history",
 }
 
 

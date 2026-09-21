@@ -18,7 +18,13 @@ from mantis.model.dist65 import binned_value_loss, decode_binned_value, scalar_t
 from mantis.model.identity import net_param_hash
 from mantis.train.checkpoints import load_checkpoint
 from mantis.train.coordinator.dispatch import _build_graph_parts
-from mantis.train.losses import ragged_policy_ce, segment_softmax
+from mantis.train.losses import (
+    ragged_policy_ce,
+    rebuild_sparse_target,
+    segment_ids,
+    segment_softmax,
+    segment_sum,
+)
 
 SOFT_POLICY_TEMPERATURE = 4.0  # P-B1's target^(1/4), KataGo's T
 
@@ -74,12 +80,6 @@ def sample_parts(buffer: HexgBuffer, config: dict[str, Any], spec: Any, *, batch
         fast_policy_weight_provider=lambda: float(config["train"]["fast_policy_weight"]))
 
 
-def _per_graph_sum(values: torch.Tensor, seg: torch.Tensor, b: int) -> torch.Tensor:
-    out = torch.zeros(b, dtype=values.dtype)
-    out.scatter_add_(0, seg, values)
-    return out
-
-
 @torch.no_grad()
 def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
     """Per graph: E[v], z, valid, mr, full-arm, α, policy CE, KL(p‖t), KL(t‖p), KL(t‖soft t), unsupported mass — the trainer's target, detached."""
@@ -88,17 +88,14 @@ def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
     logits = logits.to(torch.float32)
     lo = inputs.legal_offsets
     b = int(lo.shape[0]) - 1
-    counts = lo[1:] - lo[:-1]
-    seg = torch.repeat_interleave(torch.arange(b, dtype=torch.long), counts)
+    seg = segment_ids(lo, total=int(logits.shape[0]))
     p = segment_softmax(logits, lo)
-    tail_prior = p * (1.0 - inputs.explicit_mask.reshape(-1).to(p.dtype))
-    tail_denom = _per_graph_sum(tail_prior, seg, b)
-    scale = inputs.tail_mass.reshape(-1).to(p.dtype) / tail_denom.clamp_min(1e-12)
-    t = inputs.policy_target + tail_prior * scale[seg]
+    t = rebuild_sparse_target(inputs.policy_target, p, inputs.explicit_mask, inputs.tail_mass, lo)
     logp, logt = torch.log(p.clamp_min(1e-12)), torch.log(t.clamp_min(1e-12))
+    # The WHOLE-SET soft form PROBE-1 measured (the artefact the explicit-only trainer form replaced) — kept as read.
     soft = torch.exp(logt / SOFT_POLICY_TEMPERATURE) * (t > 0).to(t.dtype)
-    soft = soft / _per_graph_sum(soft, seg, b).clamp_min(1e-12)[seg]
-    unsupported = _per_graph_sum(p * ((t <= 0) & (p > 1e-6)).to(p.dtype), seg, b)
+    soft = soft / segment_sum(soft, seg, b).clamp_min(1e-12)[seg]
+    unsupported = segment_sum(p * ((t <= 0) & (p > 1e-6)).to(p.dtype), seg, b)
     ev = decode_binned_value(bins).reshape(-1)
     z = inputs.outcomes.reshape(-1).to(torch.float32)
     logbins = torch.log_softmax(bins.to(torch.float32), dim=-1)
@@ -108,10 +105,10 @@ def read_rows(model: torch.nn.Module, inputs: Any) -> dict[str, np.ndarray]:
         "ev": ev.numpy(), "z": z.numpy(), "valid": inputs.value_valid.reshape(-1).numpy().astype(bool),
         "mr": mr.numpy().astype(np.int64), "full": (inputs.policy_row_weight.reshape(-1) > 0).numpy(),
         "alpha": inputs.tail_mass.reshape(-1).numpy(), "value_ce": value_ce.numpy(),
-        "policy_ce": _per_graph_sum(-(t * logp), seg, b).numpy(),
-        "kl_prior_target": _per_graph_sum(p * (logp - logt), seg, b).numpy(),
-        "kl_target_prior": _per_graph_sum(t * (logt - logp), seg, b).numpy(),
-        "kl_target_soft": _per_graph_sum(t * (logt - torch.log(soft.clamp_min(1e-12))), seg, b).numpy(),
+        "policy_ce": segment_sum(-(t * logp), seg, b).numpy(),
+        "kl_prior_target": segment_sum(p * (logp - logt), seg, b).numpy(),
+        "kl_target_prior": segment_sum(t * (logt - logp), seg, b).numpy(),
+        "kl_target_soft": segment_sum(t * (logt - torch.log(soft.clamp_min(1e-12))), seg, b).numpy(),
         "unsupported_mass": unsupported.numpy(),
     }
 

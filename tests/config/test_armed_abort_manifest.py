@@ -568,8 +568,9 @@ def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> N
     """The audit half — the row is not merely well-formed, it is ARMED where it counts.
     `audit_arming` resolves `train.terminal_eval_enabled` on the real production config and
     reports the row DISARMED if it is not `True`."""
-    for name in (path.name for path in production_configs(REPO_ROOT)):
-        config = load_config(REPO_ROOT / "configs" / name)
+    for path in production_configs(REPO_ROOT):
+        name = path.relative_to(REPO_ROOT).as_posix()
+        config = load_config(path)
         audit = audit_arming(config)
         disarmed = [row.name for row in audit.disarmed]
         assert disarmed == [], (

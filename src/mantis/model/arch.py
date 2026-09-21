@@ -3,9 +3,9 @@
 Arch metadata travels on these frozen dataclasses: a caller retains the declared arch and hands
 it to `build_net`, and nobody infers arch by reading attributes off a live `nn.Module` — that
 sniff is deleted and grep-gate-banned. `arch_from_spec_and_config` consumes a resolved encoding
-spec and a plain `Mapping`; the `model.gnn` parser and the soft-policy kinds table are the
-config package's (the `model -> config` edge, R367(a): one implementation per thing); there is
-NO representation default. `RepresentationMismatch` is defined here, the lowest layer that
+spec and a plain `Mapping`; the `model.gnn` parser is the config package's, wrapped here (the
+`model -> config` edge, R367(a): one implementation per thing); there is NO representation
+default. `RepresentationMismatch` is defined here, the lowest layer that
 raises it, and re-exported by `build` and the package.
 """
 from __future__ import annotations

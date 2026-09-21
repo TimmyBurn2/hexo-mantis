@@ -1,11 +1,11 @@
-"""The composition seam's drivable trainer double — ONE copy for every root/wiring test (R367(a)); importable from any test directory through the root conftest's own path, no `sys.path` write."""
+"""The composition seam's drivable trainer double, ONE copy for every root/wiring test; importable from any test directory through the root conftest's own path."""
 from __future__ import annotations
 
 from typing import Any
 
 
 class DrivableTrainerStub:
-    """The composition seam's trainer double, the ONE copy (R367(a)): the declared entry points plus `device`, with `actor_sd` and `inference_sd` DISTINCT so a root that hands the deploy view to the actors reds; `on_step` fires after each step, `saves` records every checkpoint call."""
+    """The ONE trainer double (R367(a)): the declared entry points plus `device`; `actor_sd` and `inference_sd` are DISTINCT so a root that hands the deploy view to the actors reds."""
 
     def __init__(self, *, step: int = 0, grad_norm: float = 0.1, on_step: Any = None, model: Any = None) -> None:
         self.step = step

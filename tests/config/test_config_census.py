@@ -10,6 +10,10 @@ from mantis.config import census
 _REPO = Path(__file__).resolve().parents[2]
 
 
+def _exempt_names() -> tuple[str, ...]:
+    return tuple(Path(rel).relative_to("configs").as_posix() for rel in census.exempt_config_paths())
+
+
 def _tree(tmp_path: Path, names: tuple[str, ...]) -> Path:
     root = tmp_path / "tree"
     for name in names:
@@ -20,14 +24,12 @@ def _tree(tmp_path: Path, names: tuple[str, ...]) -> Path:
 
 
 def test_production_is_discovery_minus_the_exempt_rows(tmp_path: Path) -> None:
-    exempt = tuple(Path(rel).relative_to("configs").as_posix() for rel in census.exempt_config_paths())
-    root = _tree(tmp_path, (*exempt, "b.yaml", "a.yaml", "nested/c.yml"))
+    root = _tree(tmp_path, (*_exempt_names(), "b.yaml", "a.yaml", "nested/c.yml"))
     assert [p.relative_to(root / "configs").as_posix() for p in census.production_configs(root)] == ["a.yaml", "b.yaml", "nested/c.yml"]
 
 
 def test_a_config_that_lands_on_disk_joins_the_census_with_no_edit(tmp_path: Path) -> None:
-    exempt = tuple(Path(rel).relative_to("configs").as_posix() for rel in census.exempt_config_paths())
-    root = _tree(tmp_path, (*exempt, "a.yaml"))
+    root = _tree(tmp_path, (*_exempt_names(), "a.yaml"))
     before = census.production_configs(root)
     (root / "configs" / "minted_later.yaml").write_text("run_id: y\n", encoding="utf-8")
     assert census.production_configs(root) == (*before, root / "configs" / "minted_later.yaml")
@@ -40,10 +42,17 @@ def test_a_stale_exempt_row_refuses_by_name(tmp_path: Path) -> None:
 
 
 def test_an_empty_census_refuses(tmp_path: Path) -> None:
-    exempt = tuple(Path(rel).relative_to("configs").as_posix() for rel in census.exempt_config_paths())
-    root = _tree(tmp_path, exempt)
+    root = _tree(tmp_path, _exempt_names())
     with pytest.raises(census.ConfigCensusError, match="EMPTY"):
         census.production_configs(root)
+
+
+def test_an_exemption_is_a_ruling_event_so_the_exempt_set_is_pinned_by_name() -> None:
+    """The one escape the census leaves — a production config excused with a written reason — reds here: the exempt set is the ONE by-name list R367(a) permits, moved only with the ruling cited."""
+    assert census.exempt_config_paths() == frozenset({"configs/dev_example.yaml", "configs/smoke_preflight_armed.yaml"}), (
+        "an exemption is a ruling event; move this pin with the ruling cited (R367(a): the exempt "
+        "list's size plus the review gate is what stands between a config and an unaudited run)"
+    )
 
 
 def test_the_real_tree_has_a_census_and_every_exempt_row_carries_grounds() -> None:

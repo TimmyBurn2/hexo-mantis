@@ -7,10 +7,6 @@ defect, never a fixture artifact.
 """
 from __future__ import annotations
 
-import ast
-import inspect
-import textwrap
-from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -133,29 +129,6 @@ def test_stone_mask_bit_parity(payload_fields, hotpath_golden, single_threaded_t
     assert mask.dtype == expected.dtype == np.bool_
     assert np.array_equal(mask, expected), "stone mask drifted vs capture"
     assert int(mask.sum()) == int(expected.sum()) == 60
-
-
-def _normalized_body(fn_or_src: Callable[..., Any] | str) -> str:
-    """AST dump of a function's BODY with the docstring dropped.
-
-    Bodies only: the two copies may differ in name and in signature annotations, never in a
-    statement. `ast.dump` omits line/col attributes, so formatting and comments cannot mask or
-    manufacture a difference.
-    """
-    src = fn_or_src if isinstance(fn_or_src, str) else inspect.getsource(fn_or_src)
-    tree = ast.parse(textwrap.dedent(src))
-    fn = tree.body[0]
-    assert isinstance(fn, ast.FunctionDef), "expected a single top-level function definition"
-    body = list(fn.body)
-    if (body and isinstance(body[0], ast.Expr)
-            and isinstance(body[0].value, ast.Constant)
-            and isinstance(body[0].value.value, str)):
-        body = body[1:]
-    # Imports are stripped before comparison: the self-play copy defers `import torch` to call
-    # time so it stays importable without torch, which is a packaging difference rather than an
-    # algorithmic one. Every remaining statement is compared exactly.
-    body = [n for n in body if not isinstance(n, (ast.Import, ast.ImportFrom))]
-    return ast.dump(ast.Module(body=body, type_ignores=[]))
 
 
 def _battery() -> list[tuple[str, torch.Tensor, torch.Tensor]]:

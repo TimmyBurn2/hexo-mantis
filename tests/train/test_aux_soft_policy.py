@@ -113,6 +113,16 @@ def test_the_rows_are_omitted_on_an_arch_without_the_head(tmp_path) -> None:
     assert "aux_soft_policy_loss" not in event and "aux_policy_head_grad_norm" not in event
 
 
+def test_the_net_is_the_authority_for_its_heads_and_the_kinds_table_must_agree(tmp_path, monkeypatch) -> None:
+    """A kind listed as soft-policy whose net declares one head (or the reverse) is refused at construction — a head added on one side only would train no aux term while its rows read as measured (LAW-18)."""
+    import _microbatch_harness as H  # noqa: PLC0415
+    from mantis.model.gnn_v2 import GnnNetV2SoftPolicy
+
+    monkeypatch.setattr(GnnNetV2SoftPolicy, "policy_heads", lambda self: ("policy_head",))
+    with pytest.raises(ValueError, match="kinds table"):
+        H.soft_policy_graph_trainer(tmp_path)
+
+
 def test_the_head_and_its_rows_are_one_fact_at_the_trainer_and_at_the_schema(tmp_path) -> None:
     import _microbatch_harness as H  # noqa: PLC0415
 

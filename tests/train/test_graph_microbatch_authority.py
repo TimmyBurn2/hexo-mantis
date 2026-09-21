@@ -151,7 +151,7 @@ _CENSUS_BATCH_SIZE = 256
 #: Every production config (the census, R367(a)), so the arming/sizing witness covers the config
 #: actually being launched. The transfer is guarded: the censused (E, N) describe this batch
 #: verbatim only at `_CENSUS_BATCH_SIZE`, and the staleness guard inside the test re-derives that premise.
-_PRODUCTION_CAPPED = tuple(path.name for path in production_configs(_REPO))
+_PRODUCTION_CAPPED = tuple(path.relative_to(_CONFIGS).as_posix() for path in production_configs(_REPO))
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
@@ -376,7 +376,7 @@ def test_of2_9_leg2_no_tail_statement_lives_inside_the_accumulation_loop() -> No
                 "times per training step (MB-8)")
 
 
-_EXEMPT = tuple(sorted(Path(rel).name for rel in exempt_config_paths()))
+_EXEMPT = tuple(sorted(Path(rel).relative_to("configs").as_posix() for rel in exempt_config_paths()))
 
 
 @pytest.mark.parametrize("name", _EXEMPT)

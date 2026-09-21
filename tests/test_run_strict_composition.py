@@ -5,8 +5,8 @@ the actor-lag hard abort a shipped config arms, and five sibling arms substitute
 cadence, a `None` eval section, the literal encoding `"unknown"` and an empty `full_config`.
 One gate replaces all six.
 
->300 justify (R8): splitting the behavioural half out would fork a fourth copy of the drivable
-pool/trainer/buffer fakes, cross-test imports being barred.
+>300 justify (R8): the pool/buffer fakes, the AST census and the behavioural drives share one
+harness; split, the fakes would be copied and the census would read a tree it does not drive.
 """
 from __future__ import annotations
 

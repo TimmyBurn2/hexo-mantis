@@ -66,7 +66,7 @@ def test_every_committed_config_states_both_postures_and_states_them_disarmed(pa
         f"without a ruling."
     )
     floor = raw["eval"]["strength_floor"]
-    if path.name in _ARMED_STRENGTH_FLOOR:
+    if path.relative_to(_CONFIG_DIR).as_posix() in _ARMED_STRENGTH_FLOOR:
         assert isinstance(floor, dict), (
             f"{path.name} is in the RULED armed set (R326 / Δ10.5) and must carry a real "
             f"block; got {floor!r}. A ruled arming that silently reverted to `null` would "
@@ -89,7 +89,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
     cfg = load_config(path)
     assert resolve_ply_cap_adjudication(cfg.eval) is None
     floor = resolve_strength_floor(cfg.eval)
-    if path.name in _ARMED_STRENGTH_FLOOR:
+    if path.relative_to(_CONFIG_DIR).as_posix() in _ARMED_STRENGTH_FLOOR:
         assert floor is not None, (
             f"{path.name} is in the ruled armed set but its resolver still answers None — the "
             "value would be minted and inert, which is the silently-disabled-knob class R1 and "
@@ -102,7 +102,7 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
 #: Every production config arms `eval.strength_floor`: the census (R367(a)) is discovery minus the
 #: exempt rows, never a predicate over the property under test, so it cannot go vacuous on the
 #: event this suite exists to catch — a production config silently disarming.
-_ARMED_STRENGTH_FLOOR = frozenset(path.name for path in production_configs(_CONFIG_DIR.parent))
+_ARMED_STRENGTH_FLOOR = frozenset(path.relative_to(_CONFIG_DIR).as_posix() for path in production_configs(_CONFIG_DIR.parent))
 
 
 def _armed_config():

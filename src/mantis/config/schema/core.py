@@ -30,8 +30,8 @@ from mantis.util.constants import DRAW_RATE_WINDOW, PLY_CAP_RING_GAMES
 
 SCHEMA_VERSION = 1
 
-#: The arch kinds carrying the auxiliary soft-policy head (what `model.aux_soft_policy` is FOR);
-#: `mantis.model.arch` imports this, the one table.
+#: The arch kinds carrying the auxiliary soft-policy head (what `model.aux_soft_policy` is FOR) —
+#: the one table, read by the schema's pairing validator and the trainer's cross-check.
 SOFT_POLICY_ARCH_KINDS: frozenset[str] = frozenset({"GnnArchV2SoftPolicy"})
 
 #: A finite ceiling for a timeout float that feeds `proc.join(timeout)` arithmetic:

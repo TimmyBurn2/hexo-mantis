@@ -184,7 +184,13 @@ class Trainer:
         self._sink = sink
         self.arch: ModelArch = arch if arch is not None else self._derive_arch(config)
         self.hp = train_hparams if train_hparams is not None else TrainHParams.from_config(config)
-        self.soft_policy = type(self.arch).__name__ in SOFT_POLICY_ARCH_KINDS
+        self.soft_policy = len(self._base_model().policy_heads()) > 1  # pyright: ignore[reportCallIssue]
+        if self.soft_policy != (type(self.arch).__name__ in SOFT_POLICY_ARCH_KINDS):
+            raise ValueError(
+                f"Trainer: the net declares {self._base_model().policy_heads()!r} but the kinds table "  # pyright: ignore[reportCallIssue]
+                f"{'lists' if not self.soft_policy else 'does not list'} {type(self.arch).__name__}; a head "
+                "added on one side only would train no aux term while its rows read as measured (LAW-18)"
+            )
         if self.soft_policy != (self.hp.aux_soft_policy is not None):
             raise ValueError(
                 f"Trainer: arch {type(self.arch).__name__} "
@@ -558,7 +564,7 @@ class Trainer:
         self, aux_total: float, aux_kl_total: float, head_norms: dict[str, float] | None,
     ) -> dict[str, Any]:
         """The `trainer_step` rows for the aux head; OMITTED on an arch without one (an absence, never a zero that reads as a measured head)."""
-        if not self.soft_policy or self.hp.aux_soft_policy is None:
+        if self.hp.aux_soft_policy is None:
             return {}
         return {
             "aux_soft_policy_loss": aux_total,

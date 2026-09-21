@@ -125,7 +125,7 @@ class _Pool:
 
 
 class _Trainer(DrivableTrainerStub):
-    """The shared stub with a REAL directory and a `save_checkpoint` returning a REAL path: both signal-save legs write a resume sidecar BESIDE the checkpoint, so a fake returning None would leave the leg that makes the stop resumable unmeasured."""
+    """The shared stub with a REAL checkpoint path: both signal-save legs write a resume sidecar BESIDE the checkpoint, so a fake returning None would leave that leg unmeasured."""
 
     def __init__(self, on_step=None) -> None:
         super().__init__(on_step=on_step)
