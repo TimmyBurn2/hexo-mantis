@@ -60,7 +60,8 @@ CONSUMER_REGISTRY = {
     "eval.gate.sequential.beta": "sequential.llr_bounds -> the reject bound log(beta/(1-alpha))",
     "eval.gate.sequential.check_every_pairs": "sequential.run_sequential_gate's batch width after the first check",
     "eval.gate.sequential.min_pairs": "sequential.run_sequential_gate's first check (pairs played before any LLR is read)",
-    "eval.gate.sequential.max_pairs": "sequential.run_sequential_gate's ceiling, where the LLR's sign decides; also the book window's width (round_openings n_pairs)",
+    "eval.gate.sequential.max_pairs": "sequential.run_sequential_gate's ceiling, where at_max_pairs decides; also the book window's width (round_openings n_pairs)",
+    "eval.gate.sequential.at_max_pairs": "sequential.gsprt_decision's rule at the ceiling: the LLR's sign (run7/run8) or promote (R364(c), run9's regression guard)",
     "eval.max_plies":
         "run.py::compose_run -> build_eval_pipeline(max_plies=) -> RoundSpec.max_plies -> play_paired_match (every eval game's ply cap, its own row since 2026-09-15; the frontier driver composes the same row)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",

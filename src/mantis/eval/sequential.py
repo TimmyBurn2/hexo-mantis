@@ -15,11 +15,12 @@ SD_FLOOR = 0.05
 
 Stopped = Literal["accept", "reject", "max"]
 Decision = Literal["accept", "reject", "continue"]
+AtMaxPairs = Literal["sign", "promote"]
 
 
 @dataclass(frozen=True)
 class SequentialGateSpec:
-    """The rule's seven minted values. Raises: ValueError on a band that cannot stop."""
+    """The rule's eight minted values. Raises: ValueError on a band that cannot stop or an unknown cap rule."""
 
     mu0: float
     mu1: float
@@ -28,8 +29,11 @@ class SequentialGateSpec:
     check_every_pairs: int
     min_pairs: int
     max_pairs: int
+    at_max_pairs: AtMaxPairs
 
     def __post_init__(self) -> None:
+        if self.at_max_pairs not in ("sign", "promote"):
+            raise ValueError(f"sequential gate: at_max_pairs must be 'sign' or 'promote', got {self.at_max_pairs!r}")
         if not 0.0 < self.mu0 < self.mu1 < 1.0:
             raise ValueError(f"sequential gate: need 0 < mu0 < mu1 < 1, got mu0={self.mu0} mu1={self.mu1}")
         if not (0.0 < self.alpha < 1.0 and 0.0 < self.beta < 1.0):
@@ -67,13 +71,15 @@ def gsprt_llr(pair_scores: Sequence[float], mu0: float, mu1: float) -> float:
     return 0.5 * n * math.log((1.0 + (t - t0) ** 2) / (1.0 + (t - t1) ** 2))
 
 
-def gsprt_decision(llr: float, lower: float, upper: float, *, at_max: bool) -> Decision:
-    """`accept` at/above the upper bound, `reject` at/below the lower, else `continue`; at the maximum the SIGN decides."""
+def gsprt_decision(llr: float, lower: float, upper: float, *, at_max: bool, at_max_pairs: AtMaxPairs) -> Decision:
+    """`accept` at/above the upper bound, `reject` at/below the lower, else `continue`; at the maximum `at_max_pairs` decides — the LLR's SIGN, or `promote` (accept)."""
     if llr >= upper:
         return "accept"
     if llr <= lower:
         return "reject"
     if at_max:
+        if at_max_pairs == "promote":
+            return "accept"
         return "accept" if llr > 0.0 else "reject"
     return "continue"
 
@@ -94,7 +100,7 @@ def run_sequential_gate(
         checks += 1
         llr = gsprt_llr(pair_units(records), spec.mu0, spec.mu1)
         at_max = played >= spec.max_pairs
-        decision = gsprt_decision(llr, lower, upper, at_max=at_max)
+        decision = gsprt_decision(llr, lower, upper, at_max=at_max, at_max_pairs=spec.at_max_pairs)
         if decision == "continue":
             next_end = min(played + spec.check_every_pairs, spec.max_pairs)
             continue
@@ -107,6 +113,7 @@ def run_sequential_gate(
 
 __all__ = [
     "SD_FLOOR",
+    "AtMaxPairs",
     "SequentialGateSpec",
     "SequentialVerdict",
     "gsprt_decision",

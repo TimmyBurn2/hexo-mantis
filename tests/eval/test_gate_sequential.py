@@ -19,7 +19,7 @@ from mantis.eval.sequential import (
 
 def _spec(**over: object) -> SequentialGateSpec:
     base = dict(mu0=0.52, mu1=0.62, alpha=0.05, beta=0.10, check_every_pairs=8, min_pairs=16,
-                max_pairs=104)
+                max_pairs=104, at_max_pairs="sign")
     base.update(over)
     return SequentialGateSpec(**base)  # type: ignore[arg-type]
 
@@ -58,12 +58,22 @@ def test_the_bounds_are_walds() -> None:
 
 def test_the_decision_maps_the_llr_to_accept_reject_continue() -> None:
     lower, upper = llr_bounds(alpha=0.05, beta=0.10)
-    assert gsprt_decision(upper + 1e-9, lower, upper, at_max=False) == "accept"
-    assert gsprt_decision(lower - 1e-9, lower, upper, at_max=False) == "reject"
-    assert gsprt_decision(0.0, lower, upper, at_max=False) == "continue"
-    assert gsprt_decision(0.5, lower, upper, at_max=True) == "accept"
-    assert gsprt_decision(0.0, lower, upper, at_max=True) == "reject"
-    assert gsprt_decision(-0.5, lower, upper, at_max=True) == "reject"
+    assert gsprt_decision(upper + 1e-9, lower, upper, at_max=False, at_max_pairs="sign") == "accept"
+    assert gsprt_decision(lower - 1e-9, lower, upper, at_max=False, at_max_pairs="sign") == "reject"
+    assert gsprt_decision(0.0, lower, upper, at_max=False, at_max_pairs="sign") == "continue"
+    assert gsprt_decision(0.5, lower, upper, at_max=True, at_max_pairs="sign") == "accept"
+    assert gsprt_decision(0.0, lower, upper, at_max=True, at_max_pairs="sign") == "reject"
+    assert gsprt_decision(-0.5, lower, upper, at_max=True, at_max_pairs="sign") == "reject"
+
+
+def test_at_max_pairs_promote_accepts_an_undecided_candidate_at_the_cap_and_nowhere_else() -> None:
+    # R364(c): the cap promotes; the bounds still decide before it, and a reject is still a reject.
+    lower, upper = llr_bounds(alpha=0.05, beta=0.10)
+    assert gsprt_decision(-0.5, lower, upper, at_max=True, at_max_pairs="promote") == "accept"
+    assert gsprt_decision(0.0, lower, upper, at_max=True, at_max_pairs="promote") == "accept"
+    assert gsprt_decision(lower - 1e-9, lower, upper, at_max=True, at_max_pairs="promote") == "reject"
+    assert gsprt_decision(-0.5, lower, upper, at_max=False, at_max_pairs="promote") == "continue"
+    assert gsprt_decision(upper + 1e-9, lower, upper, at_max=False, at_max_pairs="promote") == "accept"
 
 
 class _Scripted:
@@ -101,6 +111,15 @@ def test_an_undecided_candidate_runs_to_max_pairs_in_batches_and_the_sign_decide
     assert verdict.checks == 12
 
 
+def test_under_promote_the_same_undecided_candidate_is_promoted_at_the_cap() -> None:
+    player = _Scripted([0.5, 0.75] * 52)
+    _records_, verdict = run_sequential_gate(player, _spec(mu0=0.5, mu1=0.75, at_max_pairs="promote"))
+    assert verdict.stopped == "max" and verdict.pairs_played == 104 and verdict.decision == "promote"
+    # a clearly worse candidate is still rejected, before the cap
+    _records_, verdict = run_sequential_gate(_Scripted([0.0] * 104), _spec(at_max_pairs="promote"))
+    assert verdict.decision == "reject" and verdict.stopped == "reject" and verdict.pairs_played == 16
+
+
 def test_the_last_batch_is_clipped_to_max_pairs() -> None:
     player = _Scripted([0.5, 0.75] * 52)
     _records_, verdict = run_sequential_gate(player, _spec(mu0=0.5, mu1=0.75, min_pairs=10,
@@ -115,6 +134,8 @@ def test_the_spec_refuses_a_band_that_cannot_stop() -> None:
         _spec(min_pairs=32, max_pairs=16)
     with pytest.raises(ValueError, match="check_every_pairs"):
         _spec(check_every_pairs=0)
+    with pytest.raises(ValueError, match="at_max_pairs"):
+        _spec(at_max_pairs="llr")
 
 
 _ENC = "gnn_axis_v1"
@@ -179,7 +200,7 @@ def test_the_worker_plays_the_sequential_gate_in_batches_and_reports_the_rule(tm
 
     monkeypatch.setattr(worker, "play_paired_match", _spy)
     seq = {"mu0": 0.52, "mu1": 0.62, "alpha": 0.05, "beta": 0.10,
-           "check_every_pairs": 1, "min_pairs": 2, "max_pairs": 3}
+           "check_every_pairs": 1, "min_pairs": 2, "max_pairs": 3, "at_max_pairs": "sign"}
     result = worker.run_round(_round_spec(tmp_path, seq))
 
     gate = result["gate"]

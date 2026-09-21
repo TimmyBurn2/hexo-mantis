@@ -214,6 +214,9 @@ class SequentialGateConfig(StrictModel):
     check_every_pairs: int = Field(ge=1)
     min_pairs: int = Field(ge=1)
     max_pairs: int = Field(ge=1)
+    # At `max_pairs` undecided: `sign` reads the LLR's sign (run7/run8's rule); `promote` promotes
+    # (R364(c) — the anchor follows the run unless the candidate is clearly worse, i.e. a reject).
+    at_max_pairs: Literal["sign", "promote"]
 
     @model_validator(mode="after")
     def _the_band_can_stop(self) -> "SequentialGateConfig":

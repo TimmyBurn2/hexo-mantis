@@ -55,6 +55,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "eval.gate.sequential.check_every_pairs": "sequential.run_sequential_gate (batch width)",
     "eval.gate.sequential.min_pairs": "sequential.run_sequential_gate (first check)",
     "eval.gate.sequential.max_pairs": "sequential.run_sequential_gate (ceiling; the book window's width)",
+    "eval.gate.sequential.at_max_pairs": "sequential.gsprt_decision (the rule at the ceiling: sign or promote)",
     "eval.max_plies":
         "run.py::compose_run -> build_eval_pipeline(max_plies=) -> RoundSpec.max_plies (every eval game's ply cap, its own row)",
     "eval.worker_kill_grace_sec": "pipeline.py terminate->kill grace",
