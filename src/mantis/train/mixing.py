@@ -5,7 +5,15 @@
 """
 from __future__ import annotations
 
+import math
 
-def _steps_budget(new_games: int, training_steps_per_game: float, max_train_burst: int) -> int:
-    """Per-round training-step budget from newly-completed self-play games."""
-    return min(max(1, round(new_games * training_steps_per_game)), max_train_burst)
+
+def _steps_budget(
+    new_games: int, training_steps_per_game: float, max_train_burst: int, carry: float,
+) -> tuple[int, float]:
+    """Per-burst training-step budget `(min(max(1, floor(carry + games * ratio)), burst), the fraction floored off)`."""
+    # The carry is what makes a fractional ratio hold long-run: 98 % of run8's bursts saw ONE new
+    # game, where a per-burst round() realised integers only (2.5 -> 2). The ceiling drops, never owes.
+    total = round(carry + new_games * training_steps_per_game, 9)  # 2.9999999999999996 floors to 3
+    want = math.floor(total)
+    return min(max(1, want), max_train_burst), total - want

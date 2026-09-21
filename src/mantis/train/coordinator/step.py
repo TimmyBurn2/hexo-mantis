@@ -199,6 +199,8 @@ class StepCoordinator:
         self._boot_step = self._train_step
         self._games_played = 0
         self.last_train_game_count = 0
+        # The step budget's fractional remainder in [0, 1); in-memory only (a resume restarts it).
+        self._steps_budget_carry = 0.0
         self._schedule_idx = 0
         self.last_warmup_log = 0.0
         self._last_loss_info: dict[str, float] | None = None
@@ -469,7 +471,9 @@ class StepCoordinator:
             return self._build_outcome(in_warmup=False, waiting_for_games=True, **base)
 
         # O6: compute the training-step budget + advance bookkeeping.
-        steps_budget = _steps_budget(new_games, cfg.training_steps_per_game, cfg.max_train_burst)
+        steps_budget, self._steps_budget_carry = _steps_budget(
+            new_games, cfg.training_steps_per_game, cfg.max_train_burst, self._steps_budget_carry,
+        )
         self.last_train_game_count = self._games_played
 
         loss_info: dict[str, float] = {}
