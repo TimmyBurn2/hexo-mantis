@@ -111,6 +111,12 @@ def _hexdist(a: tuple[int, int], b: tuple[int, int]) -> int:
 
 def reconstruct(ring: Ring, i: int) -> Board | None:
     """A `Board` holding row `i`'s stones with (to move, k) as stored, replayed in the legal cadence; None if none does."""
+    found = reconstruct_moves(ring, i)
+    return None if found is None else found[0]
+
+
+def reconstruct_moves(ring: Ring, i: int) -> tuple[Board, list[tuple[int, int]]] | None:
+    """`reconstruct` with the move list it replayed — the ONE cadence search shared by the board's and the sequence's readers."""
     stones = ring.row_stones(i)
     mover, k = int(ring.current_player[i]), int(ring.moves_remaining[i])
     ids = sorted({int(s["p"]) for s in stones})
@@ -143,7 +149,7 @@ def reconstruct(ring: Ring, i: int) -> Board | None:
             continue
         ring_mover = p1 if board.current_player == 1 else p2
         if ring_mover == mover and board.moves_remaining == k:
-            return board
+            return board, seq
     return None
 
 

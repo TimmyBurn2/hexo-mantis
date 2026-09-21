@@ -150,8 +150,7 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
 
 def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True,
                 radius: int | None = None) -> RungJob:
-    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False is R358(a)'s `<stem>:net_only`
-    rung, `radius` N is R365 E1's `<stem>:r<N>` rung (strix at the driver's placement_radius N, solver ON)."""
+    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False = `<stem>:net_only` (R358(a)), `radius` N = `<stem>:r<N>` (R365 E1)."""
     from mantis.bots import strix as _strix
 
     pin = _strix._pin()

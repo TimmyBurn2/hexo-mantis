@@ -35,9 +35,8 @@ DEFAULT_M_ACTIONS = 16
 #: R358(a): `<stem>:net_only` plays the pinned checkpoint with its root VCF solver OFF — a distinct
 #: instrument (the variant rides the regime key), never the rung on record, which loads solver ON.
 NET_ONLY_SUFFIX = ":net_only"
-#: R365 §0(3) (E1, the ruler-r6 cell): `<stem>:r<N>` plays the pinned checkpoint, solver ON, with the
-#: driver's `placement_radius` N — its own trained radius is 6, every reading on record rides the
-#: driver's default 8. A distinct instrument; the load line carries the key only on this variant.
+#: R365 E1: `<stem>:r<N>` plays the pinned checkpoint, solver ON, at the driver's `placement_radius` N
+#: (strix trained at 6; every reading on record rides the default 8); the load line carries the key only there.
 RADIUS_SUFFIX = ":r"
 
 #: Every fence finding is ALSO logged under this marker: the bot instance dies with the eval
@@ -219,10 +218,7 @@ def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
 
 
 def variant_radius(variant: str, *, stem: str) -> int | None:
-    """The `placement_radius` a `<stem>:r<N>` variant loads strix at; None for every other variant (the driver's 8).
-
-    Raises:
-        RungUnresolvable: a `:r` suffix that is not a positive integer."""
+    """The `placement_radius` a `<stem>:r<N>` variant loads strix at, None otherwise; Raises: RungUnresolvable on a malformed N."""
     if not variant.startswith(stem + RADIUS_SUFFIX):
         return None
     digits = variant[len(stem) + len(RADIUS_SUFFIX):]
@@ -248,10 +244,7 @@ def variant_solver(variant: str, *, stem: str) -> bool:
 
 
 def load_request(checkpoint: str, *, sims: int, variant: str, stem: str) -> dict[str, Any]:
-    """The driver's `load` line for one variant; `disable_forcing_solver` False is the rung on record.
-
-    `placement_radius` rides the line on a `<stem>:r<N>` variant ONLY, so every other variant's line is
-    byte-identical to the readings on record (the driver defaults the absent key to 8)."""
+    """The driver's `load` line for one variant; `placement_radius` rides it on `<stem>:r<N>` ONLY, every other line byte-identical to the record."""
     request = {"op": "load", "checkpoint": checkpoint, "sims": int(sims), "m_actions": DEFAULT_M_ACTIONS,
                "disable_forcing_solver": not variant_solver(variant, stem=stem)}
     radius = variant_radius(variant, stem=stem)
