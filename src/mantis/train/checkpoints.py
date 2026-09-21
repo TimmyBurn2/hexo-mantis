@@ -1124,29 +1124,23 @@ def _refuse_identity_drift(
     Raises:
         ResumeIdentityMismatchError: any identity leaf differs, naming the leaf and both values.
     """
-    baked_identity = (baked_config or {}).get("identity")
-    effective_identity = effective_config.get("identity")
-    if not isinstance(baked_identity, dict) or not isinstance(effective_identity, dict):
-        # Nothing to compare; `load_checkpoint`'s stamp-vs-config check still covers ENCODING.
-        return
-    # The artifact's side, read off the DECLARED dataclass: `type(arch).__name__` is exactly the
-    # discriminator `_arch_to_dict` serialises. `declared_arch_kind` reads the OTHER side.
-    stamped = {
-        "representation": arch.representation,
-        "arch_kind": type(arch).__name__,
-    }
+    # The trunk's shape needs only the stamped arch (v35), so it is compared before the identity
+    # blocks are — a stamp with no identity block still refuses a launch that moves the widths.
     drift: list[str] = []
-    for leaf in _IDENTITY_LEAVES:
-        want = baked_identity.get(leaf, stamped.get(leaf))
-        got = effective_identity.get(leaf, stamped.get(leaf))
-        if _stamp_name(want) != _stamp_name(got):
-            drift.append(f"identity.{leaf}: checkpoint={want!r}, resume={got!r}")
-    # The trunk's shape is the same fact one section over (v35): a launch `model.gnn` that disagrees
-    # with the stamped arch would re-stamp a shape the net does not have; no `model` block claims nothing.
-    effective_widths = declared_gnn_widths(effective_config)
-    for field, value in effective_widths.items():
+    for field, value in declared_gnn_widths(effective_config).items():
         if value != int(getattr(arch, field)):
             drift.append(f"model.gnn.{field}: checkpoint={getattr(arch, field)!r}, resume={value!r}")
+    baked_identity = (baked_config or {}).get("identity")
+    effective_identity = effective_config.get("identity")
+    if isinstance(baked_identity, dict) and isinstance(effective_identity, dict):
+        # The artifact's side, read off the DECLARED dataclass: `type(arch).__name__` is exactly the
+        # discriminator `_arch_to_dict` serialises. `declared_arch_kind` reads the OTHER side.
+        stamped = {"representation": arch.representation, "arch_kind": type(arch).__name__}
+        for leaf in _IDENTITY_LEAVES:
+            want = baked_identity.get(leaf, stamped.get(leaf))
+            got = effective_identity.get(leaf, stamped.get(leaf))
+            if _stamp_name(want) != _stamp_name(got):
+                drift.append(f"identity.{leaf}: checkpoint={want!r}, resume={got!r}")
     if drift:
         raise ResumeIdentityMismatchError(
             f"{path.name}: the resuming run's effective identity differs from the "

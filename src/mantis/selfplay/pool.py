@@ -9,6 +9,7 @@ construction, except `search_kind` and `buffer_composition`, which re-read the L
 """
 from __future__ import annotations
 
+import copy as copy_module
 import logging
 import threading
 import time
@@ -75,8 +76,10 @@ def _collate_dump_target(config: Any) -> tuple[str, Any]:
 
 
 def served_copy(model: torch.nn.Module, arch: Any) -> torch.nn.Module:
-    """A net of the DECLARED `arch` carrying `model`'s current weights, on `model`'s device — the server's own module (R366, CARD-SERVER-OWNED-COPY); Raises: RuntimeError — the arch and the weights disagree in shape."""
+    """The server's own module (R366, CARD-SERVER-OWNED-COPY): a net of the DECLARED `arch` carrying `model`'s current weights on `model`'s device, or a deep copy when no arch is declared — a pool NEVER serves the module it was handed; Raises: RuntimeError — the arch and the weights disagree in shape."""
     base = getattr(model, "_orig_mod", model)
+    if arch is None:
+        return copy_module.deepcopy(base)
     copy = build_net(arch)
     copy.load_state_dict(base.state_dict())
     device = next(base.parameters()).device if any(True for _ in base.parameters()) else torch.device("cpu")
@@ -106,10 +109,8 @@ class WorkerPool:
         so a mis-paired arch and config fail before any Rust runner exists. `sink`/`recorder`/
         `heartbeat` are injected with no-op defaults — declared seams, not silent failures.
         """
-        # THE SERVER-OWNED COPY (CARD-SERVER-OWNED-COPY, R366): the actors serve a net of the DECLARED
-        # arch seeded from `model`, which ActorSync writes and the learner never reads.
         self.learner = model
-        self.model = served_copy(model, arch) if arch is not None else model
+        self.model = served_copy(model, arch)
         self.config = config
         self.device = device
 

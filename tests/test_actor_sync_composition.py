@@ -81,7 +81,8 @@ class _Trainer:
         self.step = 0
         self.model = object()
         self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
+        self.inference_sd = {"w": "DEPLOY-SENTINEL"}
+        self.actor_sd = {"w": "ACTOR-SENTINEL"}
 
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         self.step += 1
@@ -96,7 +97,7 @@ class _Trainer:
         return self.inference_sd
 
     def actor_state_dict(self) -> dict:
-        return self.inference_sd
+        return self.actor_sd
 
     def deploy_module(self):
         return getattr(self, 'model', None)
@@ -158,9 +159,11 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
         "with the gate/promotion machinery ABSENT, sync must run unimpaired — zero pushes "
         "means actor sync still depends on something the deploy side provides (R49 breach)"
     )
-    assert all(sd is trainer.inference_sd for sd in pool.sync_payloads), (
-        "every push must carry trainer.inference_state_dict()'s result (EMA-aware weights)"
+    assert all(sd is trainer.actor_sd for sd in pool.sync_payloads), (
+        "every push carries trainer.actor_state_dict()'s result — the LEARNER's weights; the deploy "
+        "view (inference_state_dict, the EMA shadow when on) never reaches the actors (R366(b))"
     )
+    assert not any(sd is trainer.inference_sd for sd in pool.sync_payloads)
     assert pool.step_calls == sorted(set(pool.step_calls)), (
         f"recorded sync steps must be strictly increasing: {pool.step_calls}"
     )

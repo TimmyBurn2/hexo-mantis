@@ -28,6 +28,7 @@ from typing import Any, NamedTuple
 
 import torch
 
+from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
 from mantis.config.armed_aborts import (
     DISK_GUARD_LIVENESS_PROBE,
     DISK_SPACE_ABORT_RULE,
@@ -253,9 +254,7 @@ def _resolve_actor_sync_cadence_steps(config: RunConfig) -> int:
 
 
 def _derived_visit_capacity(config: Any) -> int:
-    """The ring's visit-slot geometry, DERIVED at composition from the config's sims regime through the same Rust authority the schema validator ran at load (it cannot raise on a validated config, no literal reappears here); the held-out slice (R366(c)) is built at the same geometry so the engine's own refusal names a foreign ring."""
-    from mantis._engine import derived_hexg_visit_capacity
-
+    """The ring's visit-slot geometry, derived from the config's sims regime through the Rust authority the schema validator already ran; the held-out slice is built at the same geometry so the engine's refusal names a foreign ring."""
     sp = config.selfplay
     pc = sp.playout_cap
     return int(derived_hexg_visit_capacity(
@@ -288,10 +287,6 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     """
     representation = config.identity.representation
     if representation == "graph":
-        # Lazy with a stated reason: `mantis._engine` is not an edge on the design's `run` row,
-        # and the extension module is the one import this root must not make unconditional.
-        from mantis._engine import HexgBuffer
-
         buffer = HexgBuffer(capacity, config.identity.encoding, _derived_visit_capacity(config))
         buffer.seed_sampler(config.seed)
         return buffer

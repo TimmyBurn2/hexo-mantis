@@ -134,8 +134,9 @@ run                          → train, eval, monitor, config, selfplay   # the 
                                NO new edge class: `build_run_collaborators` calls
                                `mantis.train.orchestrator.init_trainer` and
                                `mantis.selfplay.pool.WorkerPool`, both already inside this
-                               row, and the ONE lazy import (`mantis._engine`, in
-                               `_select_buffer`) keeps its stated DAG reason. ADDITIVE: this row registers the new
+                               row; `mantis._engine` is imported at the top like any other
+                               edge (R367 fix leg, F5.5: `selfplay.pool` already imported it
+                               unconditionally, so the former lazy sites guarded nothing). ADDITIVE: this row registers the new
                                node; it does not weaken the train↛eval ban above, which
                                stays verbatim (census-tested,
                                tests/test_run_composition.py::

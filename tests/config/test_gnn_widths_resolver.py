@@ -14,6 +14,7 @@ from mantis.model import GnnArchV2, arch_from_spec_and_config, build_net, declar
 from mantis.train.checkpoints import (
     CheckpointStampError,
     ResumeIdentityMismatchError,
+    _refuse_identity_drift,
     resume_trainer,
     save_checkpoint,
 )
@@ -100,3 +101,11 @@ def test_a_resume_whose_launch_moves_the_shape_is_refused_by_name(tmp_path: Path
         resume_trainer(Trainer, path, config_overrides=launch)
     trainer = resume_trainer(Trainer, path)
     assert (trainer.arch.hidden, trainer.arch.num_layers) == (8, 1)
+
+
+def test_the_shape_refusal_does_not_wait_on_an_identity_block(tmp_path: Path) -> None:
+    """A stamp with no `identity` block (pre-identity artefact) still refuses a launch that moves the widths: the shape check needs only the stamped arch."""
+    arch = _tiny(load_config(_REPO / "configs" / "dev_example.yaml").model_dump())
+    effective = {"identity": {"representation": "graph"}, "model": {"gnn": {"hidden": 192, "num_layers": 6}}}
+    with pytest.raises(ResumeIdentityMismatchError, match="model.gnn.hidden: checkpoint=8, resume=192"):
+        _refuse_identity_drift(tmp_path / "x.ckpt", {}, effective, arch)

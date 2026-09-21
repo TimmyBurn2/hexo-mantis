@@ -64,6 +64,19 @@ def test_the_pool_serves_its_own_copy_and_the_learner_never_reads_it() -> None:
     assert net_param_hash(learner) == before, "the sync writes the copy, not the learner"
 
 
+def test_a_pool_with_no_declared_arch_still_never_serves_the_module_it_was_handed() -> None:
+    """The test seam `arch=None` must not re-open the B-1 hazard: the served net is a copy either way."""
+    torch.manual_seed(1)
+    learner = build_net(_arch())
+    pool = WorkerPool(learner, _pool_cfg(), torch.device("cpu"),
+                      HexgBuffer(capacity=64, encoding=_ENCODING, visit_capacity=128), arch=None)
+    assert pool.model is not learner and pool.learner is learner
+    assert net_param_hash(pool.model) == net_param_hash(learner)
+    with torch.no_grad():
+        next(pool.model.parameters()).add_(1.0)
+    assert net_param_hash(pool.model) != net_param_hash(learner)
+
+
 def test_served_copy_refuses_weights_of_another_shape() -> None:
     torch.manual_seed(2)
     arch = _arch()

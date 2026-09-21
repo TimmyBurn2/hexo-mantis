@@ -23,7 +23,6 @@ import torch.optim as optim
 # Canonical stub-exported locations — `torch.amp` itself does not re-export for type checkers.
 from torch.amp.autocast_mode import autocast
 from torch.amp.grad_scaler import GradScaler
-from torch.optim.lr_scheduler import CosineAnnealingLR
 
 from mantis.config.resolve.aux_soft_policy import resolve_aux_soft_policy
 from mantis.encoding import resolve_from_config
@@ -48,6 +47,7 @@ from mantis.train.losses import (
     ragged_policy_ce_and_entropies,
     soft_policy_target,
 )
+from mantis.train.lr_schedule import FlooredCosineAnnealingLR
 
 _LOG = logging.getLogger(__name__)
 
@@ -113,8 +113,7 @@ class TrainHParams:
         _assert_policy_target_consistency(train, (cfg.get("selfplay") or {}).get("search") or {})
         fields = set(cls.__dataclass_fields__) - {"policy_loss_warmup_steps", "aux_soft_policy"}
         kwargs = {k: train[k] for k in fields}
-        # No `model` section = a pre-v36 mapping with no head; the trainer's cross-check holds the pair.
-        aux = resolve_aux_soft_policy(cfg) if isinstance(cfg.get("model"), dict) else None
+        aux = resolve_aux_soft_policy(cfg)
         return cls(
             **kwargs,
             policy_loss_warmup_steps=int(train["policy_loss_weight_schedule"]["warmup_steps"]),
@@ -255,8 +254,8 @@ class Trainer:
             t_max = self.hp.scheduler_t_max if self.hp.scheduler_t_max is not None else self.hp.total_steps
             if t_max is None:
                 raise ValueError("lr_schedule: cosine requires total_steps / scheduler_t_max.")
-            return CosineAnnealingLR(self.optimizer, T_max=max(1, int(t_max)),
-                                     eta_min=float(self.hp.eta_min), last_epoch=-1)
+            return FlooredCosineAnnealingLR(self.optimizer, T_max=max(1, int(t_max)),
+                                            eta_min=float(self.hp.eta_min), last_epoch=-1)
         raise ValueError(f"Unsupported lr_schedule: {schedule}")
 
     def _base_model(self) -> nn.Module:
