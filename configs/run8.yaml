@@ -50,6 +50,10 @@ identity:
     checkpoint: checkpoints/run7/run7_00042000_46fdb931.ckpt
     net_hash: a9a46c55bd1ceadb38145fef6527254d77d37900aebea4332def55ca75f56bfc
     reinit: []
+model:
+  gnn:
+    hidden: 128
+    num_layers: 4
 deploy:
   search:
     kind: puct

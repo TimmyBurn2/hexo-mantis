@@ -38,6 +38,7 @@ def _tiny_checkpoint(tmp_path: Path, encoding: str = _ENC) -> tuple[Path, str]:
     net = build_net(arch)
     config = _minimal_config() if encoding == _ENC else load_config(_REPO / "configs" / "run8.yaml").model_dump()
     assert config["identity"]["encoding"] == encoding
+    config["model"]["gnn"] = {"hidden": arch.hidden, "num_layers": arch.num_layers}
     path = save_checkpoint(model=net, optimizer=None, scaler=None, scheduler=None, step=0,
                            config=config, kind="weights",
                            metadata_kwargs={"encoding_name": encoding, "run_id": "tiny", "arch": arch},

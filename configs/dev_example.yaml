@@ -11,6 +11,10 @@ allocator_posture: expandable_segments
 identity:
   encoding: gnn_axis_v1
   representation: graph
+model:
+  gnn:
+    hidden: 128
+    num_layers: 4
 deploy:
   search:
     kind: puct

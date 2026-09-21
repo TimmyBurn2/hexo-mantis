@@ -54,6 +54,11 @@ from mantis.config.resolve.fused_graph_caps import (
     UncalibratedFusedGraphCapsError,
     resolve_fused_graph_caps,
 )
+from mantis.config.resolve.gnn_widths import (
+    GnnWidthsSpec,
+    MissingGnnWidthsError,
+    resolve_gnn_widths,
+)
 from mantis.config.resolve.inference_batching import (
     InferenceBatchingSpec,
     MissingInferenceBatchingError,
@@ -98,6 +103,8 @@ __all__ = [
     "PlyCapAdjudicationSpec",
     "ResolvedBootstrap",
     "StrengthFloorSpec",
+    "GnnWidthsSpec",
+    "MissingGnnWidthsError",
     "UncalibratedAllocatorPostureError",
     "UncalibratedFusedGraphCapsError",
     "UnvalidatedConfigError",
@@ -119,6 +126,7 @@ __all__ = [
     "resolve_draw_rate_abort",
     "resolve_eval_model_sims",
     "resolve_fused_graph_caps",
+    "resolve_gnn_widths",
     "resolve_inference_batching",
     "resolve_leaf_build_threads",
     "resolve_sample_threads",

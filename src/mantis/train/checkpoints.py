@@ -11,7 +11,7 @@ import dataclasses
 import datetime as _datetime
 import hashlib
 import logging
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -27,6 +27,7 @@ from mantis.model import (
     RepresentationMismatch,
     build_net,
     declared_arch_kind,
+    declared_gnn_widths,
     select_arch,
 )
 from mantis.train.bundle import atomic_write
@@ -128,14 +129,27 @@ _ARCH_KINDS = ARCH_KINDS
 #: fact about history, not a default. A legacy dict that does not fit its target raises.
 _LEGACY_BY_REPRESENTATION: dict[str, type] = {"graph": GnnArch}
 
-#: The NON-BINDING placeholder pair for each arch-scoped block, in a table so the splice stays a
-#: loop over `ARCH_SCOPED_KEYS` and a block added there without one fails loudly at the write.
-_SYNTH_ARCH_SCOPED: dict[tuple[str, str], dict[str, int]] = {
-    ("train", "microbatch_caps"): {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-    ("inference", "fused_graph_caps"): {
+#: The synthetic value of each arch-scoped block from the stamped arch (a loop over `ARCH_SCOPED_KEYS`,
+#: so a block added there without one fails loudly); the caps are NON-BINDING, the widths the arch's own.
+_SYNTH_ARCH_SCOPED: dict[tuple[str, str], Callable[[ModelArch], dict[str, int]]] = {
+    ("train", "microbatch_caps"): lambda _arch: {"max_edges": 100_000_000, "max_nodes": 4_000_000},
+    ("inference", "fused_graph_caps"): lambda _arch: {
         "max_fused_edges": 57149441, "max_fused_nodes": 1785921,
     },
+    ("model", "gnn"): lambda arch: {"hidden": int(arch.hidden), "num_layers": int(arch.num_layers)},
 }
+
+
+def _refuse_shape_lie(config: Mapping[str, Any], arch: ModelArch | None) -> None:
+    """Refuse a stamp whose config's `model.gnn` disagrees with the arch it stamps (v35: the config is the artifact's provenance); Raises: CheckpointStampError — a width differs from the stamped arch's."""
+    if arch is None:
+        return
+    for field, value in declared_gnn_widths(config).items():
+        if value != int(getattr(arch, field)):
+            raise CheckpointStampError(
+                f"the config's model.gnn.{field}={value} disagrees with the stamped arch's "
+                f"{field}={getattr(arch, field)}; a stamp names the shape its net has"
+            )
 
 
 def _arch_to_dict(arch: ModelArch) -> dict[str, Any]:
@@ -343,6 +357,7 @@ def _write_v2_payload(
     # 2. immutable stamp (unstampable → quarantine under the survive-run flag, else raise).
     try:
         metadata = _build_stamped_metadata(metadata_kwargs, step)
+        _refuse_shape_lie(config, metadata_kwargs.get("arch"))
     except CheckpointStampError:
         if not allow_quarantine:
             raise  # an unstampable save writes nothing.
@@ -784,6 +799,8 @@ def strip_and_restamp(
         # a property of the RUN the caps were fitted for, and this payload belongs to none.
         "allocator_posture": None,
         "identity": {"encoding": new_encoding, "representation": new_spec.representation},
+        # Filled by the arch-scoped loop below with the stamped arch's own widths (v35).
+        "model": {},
         # `puct` is the value that agrees with this payload's own
         # `train.policy_target: raw_visit_distribution` — the two are one decision.
         "deploy": {"search": {"kind": "puct"}},
@@ -875,9 +892,7 @@ def strip_and_restamp(
     # a config the schema then refuses.
     for key in ARCH_SCOPED_KEYS:
         if new_spec.representation == key.arch:
-            synth_config[key.section][key.field] = dict(
-                _SYNTH_ARCH_SCOPED[(key.section, key.field)]
-            )
+            synth_config[key.section][key.field] = _SYNTH_ARCH_SCOPED[(key.section, key.field)](arch)
     return _write_v2_payload(
         model_state=model_state,
         optimizer_state=None,
@@ -1099,6 +1114,12 @@ def _refuse_identity_drift(
         got = effective_identity.get(leaf, stamped.get(leaf))
         if _stamp_name(want) != _stamp_name(got):
             drift.append(f"identity.{leaf}: checkpoint={want!r}, resume={got!r}")
+    # The trunk's shape is the same fact one section over (v35): a launch `model.gnn` that disagrees
+    # with the stamped arch would re-stamp a shape the net does not have; no `model` block claims nothing.
+    effective_widths = declared_gnn_widths(effective_config)
+    for field, value in effective_widths.items():
+        if value != int(getattr(arch, field)):
+            drift.append(f"model.gnn.{field}: checkpoint={getattr(arch, field)!r}, resume={value!r}")
     if drift:
         raise ResumeIdentityMismatchError(
             f"{path.name}: the resuming run's effective identity differs from the "

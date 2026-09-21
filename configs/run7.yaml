@@ -48,6 +48,10 @@ identity:
     checkpoint: checkpoints/bc/run6_00006500_ca1afb71.ckpt
     net_hash: 2e72abd44ff13d47ec7de6ecf8824f99045c5b992b014f5063442dc7cded3f65
     reinit: []
+model:
+  gnn:
+    hidden: 128
+    num_layers: 4
 deploy:
   search:
     kind: puct

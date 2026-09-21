@@ -21,6 +21,7 @@ from mantis.model.arch import (
     UnknownArchKind,
     arch_from_spec_and_config,
     declared_arch_kind,
+    declared_gnn_widths,
     select_arch,
 )
 from mantis.model.build import build_net
@@ -57,6 +58,7 @@ __all__ = [
     "amp_dtype_for",
     "arch_from_spec_and_config",
     "declared_arch_kind",
+    "declared_gnn_widths",
     "binned_value_loss",
     "build_net",
     "decode_binned_value",

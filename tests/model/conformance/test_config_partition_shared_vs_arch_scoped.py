@@ -35,6 +35,7 @@ from mantis.config.resolve.arch_scope import (
     refuse_outside_its_arch,
 )
 from mantis.config.resolve.fused_graph_caps import resolve_fused_graph_caps
+from mantis.config.resolve.gnn_widths import resolve_gnn_widths
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
 from mantis.config.schema.core import ARCH_SCOPED_KEYS, RunConfig
 from mantis.config.schema.leaves import leaf_paths
@@ -85,6 +86,7 @@ class ArchScopedLeaf:
 READ_PATHS: dict[tuple[str, str], Any] = {
     ("train", "microbatch_caps"): resolve_microbatch_caps,
     ("inference", "fused_graph_caps"): resolve_fused_graph_caps,
+    ("model", "gnn"): resolve_gnn_widths,
 }
 
 

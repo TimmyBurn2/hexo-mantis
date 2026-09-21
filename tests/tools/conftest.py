@@ -192,6 +192,7 @@ def mint_analyzer_stamp(directory: Path, *, run_id: str = "an1", step: int = 7, 
     spec = lookup(cfg["identity"]["encoding"])
     arch = GnnArchV2(in_dim=int(spec.node_feat_dim), edge_dim=int(spec.edge_feat_dim), hidden=8, num_layers=1,
                      policy_hidden=8, value_hidden=8)
+    cfg["model"]["gnn"] = {"hidden": arch.hidden, "num_layers": arch.num_layers}
     return save_checkpoint(
         model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=step, config=cfg,
         metadata_kwargs={"encoding_name": cfg["identity"]["encoding"], "run_id": run_id, "arch": arch},

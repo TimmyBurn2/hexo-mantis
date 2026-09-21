@@ -17,6 +17,14 @@ allocator_posture: null
 identity:
   encoding: gnn_axis_v1
   representation: graph
+# The net's declared shape (contract v35). `gnn` is the graph trunk's widths, which every stamp
+# before v35 was built at as dataclass defaults no config could move; a size experiment moves
+# them HERE and nowhere else (`select_arch` is the one reader). Graph-scoped, like
+# `train.microbatch_caps`: required on a graph config, refused on any other.
+model:
+  gnn:
+    hidden: 128
+    num_layers: 4
 deploy:
   search:
     kind: puct

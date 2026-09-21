@@ -53,10 +53,16 @@ from test_config_partition_shared_vs_arch_scoped import CONFIGS
 #: is hashed, and no claim below depends on its value.
 _SEED = 20260830
 
-#: Widths for the diagnostic build — small enough for the default tier. The config does not
-#: carry them (no arch width key is a live `RunConfig` leaf, which is its own finding), so the
-#: dataclass defaults would otherwise make this a slow test for no gain.
-_WIDTHS = {"hidden": 8, "num_layers": 2, "policy_hidden": 8, "value_hidden": 8}
+#: Widths for the diagnostic build — small enough for the default tier; the trunk widths are the
+#: `model.gnn` leaves since v35 (before it this dict's flat keys were never read: every net was 4 × 128).
+_WIDTHS = {"hidden": 8, "num_layers": 2}
+_HEAD_WIDTHS = {"gnn_policy_hidden": 8, "gnn_value_hidden": 8}
+
+
+def _narrow(config) -> dict:
+    """The minted config's mapping with the diagnostic widths on `model.gnn` (v35) and the flat head-width keys beside them."""
+    dump = config.model_dump()
+    return {**dump, "model": {**dump["model"], "gnn": dict(_WIDTHS)}, **_HEAD_WIDTHS}
 
 
 class SelectorWentVacuous(ConformanceRefusal):
@@ -276,7 +282,7 @@ def test_a_minted_config_round_trips_through_the_selector_to_a_SERVED_batch(
     assert config.identity.representation == "graph"
     spec = lookup(config.identity.encoding)
     torch.manual_seed(_SEED)
-    arch = select_arch(spec, {**config.model_dump(), **_WIDTHS}, arch_kind=arch_kind)
+    arch = select_arch(spec, _narrow(config), arch_kind=arch_kind)
     assert type(arch) is ARCH_KINDS[arch_kind]
     net = build_net(arch).eval()
     policy, value = _serve(net, _batch(arch.in_dim, arch.edge_dim))
@@ -297,7 +303,7 @@ def test_the_round_trip_is_STABLE_across_two_builds_of_the_same_kind(diagnostic_
     digests, hashes = [], []
     for _ in range(2):
         torch.manual_seed(_SEED)
-        arch = select_arch(spec, {**config.model_dump(), **_WIDTHS}, arch_kind="GnnArchV2")
+        arch = select_arch(spec, _narrow(config), arch_kind="GnnArchV2")
         net = build_net(arch).eval()
         hashes.append(net_param_hash(net))
         digests.append(_digest(*_serve(net, _batch(arch.in_dim, arch.edge_dim))))
@@ -315,7 +321,7 @@ def test_the_two_kinds_are_DIFFERENT_functions_on_the_same_minted_config(diagnos
     served = {}
     for kind in ("GnnArch", "GnnArchV2"):
         torch.manual_seed(_SEED)
-        arch = select_arch(spec, {**config.model_dump(), **_WIDTHS}, arch_kind=kind)
+        arch = select_arch(spec, _narrow(config), arch_kind=kind)
         net = build_net(arch).eval()
         served[kind] = _digest(*_serve(net, _batch(arch.in_dim, arch.edge_dim)))
     assert served["GnnArch"] != served["GnnArchV2"], (

@@ -53,6 +53,10 @@ identity:
     checkpoint: checkpoints/run8/run8_00045000_3bdedf76.ckpt
     net_hash: 3aef78834b042d333400f12f6afb15e41cb716712f84386297bfbb1dd4126f42
     reinit: []
+model:
+  gnn:
+    hidden: 128
+    num_layers: 4
 deploy:
   search:
     kind: puct

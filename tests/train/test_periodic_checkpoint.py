@@ -264,6 +264,7 @@ def test_run5_config_produces_a_periodic_checkpoint_on_its_declared_route(
     here."""
     d = load_config(_REPO / "configs" / "run6.yaml").model_dump()
     d["train"]["checkpoint_interval"] = 2
+    d["model"]["gnn"] = {"hidden": _graph_arch().hidden, "num_layers": _graph_arch().num_layers}
     hp = TrainHParams.from_config(d)
     spec = resolve_step_spec(d)
     trainer = _graph_trainer(tmp_path, d, hp, spy_sink)

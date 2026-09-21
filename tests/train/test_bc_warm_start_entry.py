@@ -54,7 +54,7 @@ def _write_source(tmp_path: Path, arch: Any) -> tuple[Path, str]:
     net = build_net(arch)
     path = save_checkpoint(
         model=net, optimizer=None, scaler=None, scheduler=None, step=0,
-        config=minimal_config(), kind="weights",
+        config=minimal_config(arch), kind="weights",
         metadata_kwargs={"encoding_name": _ENC, "run_id": "bcsrc", "arch": arch},
         checkpoint_dir=tmp_path,
     )

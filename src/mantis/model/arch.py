@@ -111,14 +111,33 @@ def declared_arch_kind(config: Mapping[str, Any]) -> str | None:
         return None
     return identity.get("arch_kind")
 
-# Graph hparam config keys → GnnArch field names.
+#: THE ONE CONFIG BLOCK that sizes the graph trunk, `model.gnn.{hidden, num_layers}` (v35); a
+#: mapping with no `model` block at all (a strip's synthetic config) falls to the dataclass defaults.
+GNN_WIDTHS_BLOCK = ("model", "gnn")
+_GNN_WIDTH_FIELDS: tuple[str, ...] = ("hidden", "num_layers")
+
+# Flat head-width keys → GnnArch field names; no schema leaf carries them.
 _GRAPH_CONFIG_KEYS: tuple[tuple[str, str], ...] = (
-    ("gnn_hidden", "hidden"),
-    ("gnn_num_layers", "num_layers"),
     ("gnn_policy_hidden", "policy_hidden"),
     ("gnn_value_hidden", "value_hidden"),
     ("n_value_bins", "n_value_bins"),
 )
+
+
+def declared_gnn_widths(config: Mapping[str, Any]) -> dict[str, int]:
+    """The `model.gnn` widths of a plain config mapping as arch-field kwargs, `{}` with no `model` block; Raises: RepresentationMismatch — a `model` block whose `gnn` member is absent or short of a width."""
+    section, block = GNN_WIDTHS_BLOCK
+    model = config.get(section)
+    if model is None:
+        return {}
+    widths = model.get(block) if isinstance(model, Mapping) else None
+    if not isinstance(widths, Mapping) or any(f not in widths for f in _GNN_WIDTH_FIELDS):
+        raise RepresentationMismatch(
+            f"{section}.{block} must carry {list(_GNN_WIDTH_FIELDS)} on a graph config; got "
+            f"{widths!r}. A config that carries a `model` block names the trunk's shape in full "
+            "— the dataclass default stands in only for a mapping with no `model` block at all"
+        )
+    return {f: int(widths[f]) for f in _GNN_WIDTH_FIELDS}
 
 
 def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch:
@@ -142,6 +161,16 @@ def arch_from_spec_and_config(spec: Any, config: Mapping[str, Any]) -> ModelArch
             f"spec {getattr(spec, 'name', spec)!r} has no representation attribute "
             "— cannot infer a model arch (no dense-by-default, LAW-11)."
         )
+    # The read-path half of the arch partition for `model.gnn` (v35): a declared representation
+    # the spec does not have is refused before the widths are read.
+    identity = config.get("identity")
+    declared_rep = identity.get("representation") if isinstance(identity, Mapping) else None
+    if isinstance(declared_rep, str) and declared_rep != str(rep):
+        raise RepresentationMismatch(
+            f"the config declares identity.representation={declared_rep!r} but encoding "
+            f"{getattr(spec, 'name', '?')!r} is representation={rep!r}; the trunk widths under "
+            f"{'.'.join(GNN_WIDTHS_BLOCK)} are scoped to {rep!r} and are not read for another"
+        )
     declared = declared_arch_kind(config)
     if declared is not None:
         return select_arch(spec, config, arch_kind=declared)
@@ -163,8 +192,8 @@ def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> Mode
 
     Args:
         spec: a resolved encoding spec carrying `representation` and the geometry fields.
-        config: a plain config mapping; per-arch width/depth keys are read where present, and an
-            absent key falls to the dataclass field's own default, the sole default authority.
+        config: a plain config mapping; the trunk widths are read off its `model.gnn` block
+            (`declared_gnn_widths`); no `model` block at all falls to the dataclass default.
         arch_kind: a member of `ARCH_KINDS`, admitted by `spec.representation`.
 
     Raises:
@@ -208,7 +237,7 @@ def select_arch(spec: Any, config: Mapping[str, Any], *, arch_kind: str) -> Mode
                 f"representation='graph' (encoding {getattr(spec, 'name', '?')!r}) "
                 f"only ships a dist65 value head; got value_head_type={declared_vht!r}."
             )
-        kw: dict[str, Any] = {}
+        kw: dict[str, Any] = declared_gnn_widths(config)
         for cfg_key, field in _GRAPH_CONFIG_KEYS:
             if cfg_key in config and config[cfg_key] is not None:
                 kw[field] = config[cfg_key]

@@ -144,6 +144,7 @@ def _config():
         # re-calibration sitting under R282(b).
         "allocator_posture": None,
         "identity": {"encoding": ENCODING, "representation": _REPRESENTATION},
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}},
         "eval": _eval_block(),
         "train": _train_block(),
         "deploy": {"search": {"kind": "puct"}},

@@ -48,6 +48,8 @@ CONSUMER_REGISTRY = {
     "identity.warm_start.reinit": "resolve_bc_warm_start -> apply_bc_warm_start -> load_from_bc: "
                                   "the heads put back to fresh AFTER every tensor is copied; empty "
                                   "arms the step-0 hash-equality witness (R350(b)(i))",
+    "model.gnn.hidden": "declared_gnn_widths -> select_arch (GnnArch/GnnArchV2 `hidden`, the GINE trunk width) at every net build through arch_from_spec_and_config (v35; graph-scoped, ARCH_SCOPED_KEYS)",
+    "model.gnn.num_layers": "declared_gnn_widths -> select_arch (`num_layers`, the GINE layer count; the JK-cat readout is num_layers x hidden wide) at every net build through arch_from_spec_and_config (v35)",
     "eval.random_model_sims": "resolve_eval_model_sims (random floor) + sims regime-parity (O9) + emit",
     "eval.random_floor_games": "worker.py random-floor block game count",
     "eval.worker_device": "build_eval_pipeline child-process device",

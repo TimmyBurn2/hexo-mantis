@@ -213,6 +213,8 @@ def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph
         "run_id": run_id,
         "seed": 20260718,
         "identity": {"encoding": encoding, "representation": representation},
+        # The tiny arch's own widths (v35): 4 x 128 over a 16 x 1 net is the drift the writer refuses.
+        "model": {"gnn": {"hidden": 16, "num_layers": 1}},
         "deploy": {"search": {"kind": "puct"}},
         "eval": _make_eval_block(),
         "train": _make_train_block(),

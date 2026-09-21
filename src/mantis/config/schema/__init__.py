@@ -17,6 +17,7 @@ from mantis.config.schema.core import (
     operational_default_fields,
 )
 from mantis.config.schema.leaves import leaf_paths, nested_block
+from mantis.config.schema.model import GnnWidthsConfig, ModelConfig
 from mantis.config.schema.monitor import (
     DiskGuardConfig,
     DrainCapsConfig,
@@ -42,7 +43,9 @@ __all__ = [
     "GateConfig",
     "IdentityConfig",
     "InferenceConfig",
+    "GnnWidthsConfig",
     "MctsConfig",
+    "ModelConfig",
     "MonitorSchemaConfig",
     "PlayoutCapConfig",
     "PlyCapAdjudicationConfig",

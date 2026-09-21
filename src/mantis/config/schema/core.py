@@ -15,6 +15,7 @@ from typing import Literal
 from pydantic import Field, field_validator, model_serializer, model_validator
 
 from mantis.config.schema._base import StrictModel
+from mantis.config.schema.model import ModelConfig
 from mantis.config.schema.monitor import MonitorSchemaConfig
 from mantis.config.schema.search import DeployConfig
 from mantis.config.schema.selfplay import (
@@ -74,6 +75,11 @@ ARCH_SCOPED_KEYS: tuple[ArchScopedKey, ...] = (
         section="inference", field="fused_graph_caps", arch="graph",
         grounds="the members bound one FUSED GRAPH forward in edges and nodes; a grid round "
                 "builds no graph server, so a grid run has no fused forward to cap",
+    ),
+    ArchScopedKey(
+        section="model", field="gnn", arch="graph",
+        grounds="the members are the GRAPH trunk's hidden width and layer count, read by "
+                "`select_arch` for a graph arch alone; a grid net has no GINE trunk to size",
     ),
 )
 
@@ -327,6 +333,8 @@ class RunConfig(StrictModel):
     # refused at boot by `mantis.config.resolve.allocator_posture`.
     allocator_posture: Literal["default", "expandable_segments"] | None
     identity: IdentityConfig
+    # The net's declared shape (v35): the trunk widths were dataclass defaults no config could move.
+    model: ModelConfig
     # The deploy head's regime, split from the workers' by R351(c): the bar plays what will be deployed.
     deploy: DeployConfig
     eval: EvalConfig

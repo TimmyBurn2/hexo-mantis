@@ -30,6 +30,8 @@ def _nested(**train: object) -> dict:
     """The minted dev config's dump with `train.*` leaves replaced — a real nested launch."""
     cfg = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     cfg["train"].update(train)
+    # The tiny net's own widths (v35), so the stamp's config and its arch agree.
+    cfg["model"]["gnn"] = {"hidden": 16, "num_layers": 1}
     return cfg
 
 

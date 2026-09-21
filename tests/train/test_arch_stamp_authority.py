@@ -38,7 +38,10 @@ def _graph_config_dump() -> dict:
     for path in sorted(CONFIGS.glob("*.yaml")):
         cfg = load_config(path)
         if cfg.identity.representation == "graph":
-            return cfg.model_dump()
+            dump = cfg.model_dump()
+            # The tiny net's own widths (v35): the writer refuses a config claiming another shape.
+            dump["model"]["gnn"] = {"hidden": _TINY_GRAPH["hidden"], "num_layers": _TINY_GRAPH["num_layers"]}
+            return dump
     raise AssertionError("no shipped graph config")
 
 

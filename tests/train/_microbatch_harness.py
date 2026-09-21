@@ -159,8 +159,11 @@ def minted_config(name: str) -> dict[str, Any]:
 
 
 def graph_config() -> dict[str, Any]:
-    """`configs/dev_example.yaml` — graph, `gnn_axis_v1`, complete and schema-valid."""
-    return minted_config("dev_example.yaml")
+    """`configs/dev_example.yaml` — graph, `gnn_axis_v1`, complete and schema-valid — with `model.gnn` at the tiny arch's own widths (v35: the writer refuses a stamp claiming another shape)."""
+    config = minted_config("dev_example.yaml")
+    arch = tiny_graph_arch()
+    config["model"]["gnn"] = {"hidden": arch.hidden, "num_layers": arch.num_layers}
+    return config
 
 
 def tiny_graph_trainer(tmp_path: Path, *, sink: Any = None, seed: int = SEED,
