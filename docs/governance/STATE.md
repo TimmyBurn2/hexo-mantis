@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **run8 LIVE since 2026-09-18 16:55:34 UTC** on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**; **R363 (2026-09-20, item 15): the 30k point is INCONCLUSIVE (0.135 [0.097, 0.177] against 0.111) and run8 runs to 45k, the run9 PARENT RULE is PRE-STATED before that cell (the follower series monotone → 45k; else the highest whose CI holds the other two; the gate's best_model only without a strix triple), the LADDER unit is FIXED as code (`book_v1_s20260625_p4` paired, opening index = match index), ANALYZER-1 is admitted under R9, and the CPU deploy head is PROFILED (per-leaf forward ≈ 20 ms flat in batch size: 5.0 s per stone at 256 sims, 8 threads, idle); **the 45k point read 2026-09-21: 0.142 [0.104, 0.181], the series monotone, so the PARENT RULE names run8@45k — R364 is the operator's; the run continues (52 986 at 05:50 UTC), next cell 60k****. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **R364 (2026-09-21, item 16): run8's STOP is GRANTED to the box session (it was still LIVE at ≈ 53k at this writing, 8 h past its last pre-registered read) and run9 is ARMED on `dev` — `configs/run9.yaml` minted over run8's header (parent run8@45k, the DATA REGIME: window 500 000 / `training_steps_per_game` 2.4 in the envelope [2.0, 3.0] / burst 8, the gate a REGRESSION GUARD at H0 0.42 / H1 0.52 with the new `at_max_pairs: promote` leaf, cadence 36 000 steps = 15 000 games, `dirichlet_enabled: false` with its pin), the budget's remainder now CARRIED (the envelope's mechanism, verified quantised at HEAD), the prereg FILLED, the parameter-distance test READ, CARD-ARCH-D6 opened unarmed; the box order (STOP → PERF-3 step 3 → preflight → twin → witness → START → follower `--cadence 36000`) is the box session's on the pushed tip.** Before it: run8 LIVE since 2026-09-18 16:55:34 UTC on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**; **R363 (2026-09-20, item 15): the 30k point is INCONCLUSIVE (0.135 [0.097, 0.177] against 0.111) and run8 runs to 45k, the run9 PARENT RULE is PRE-STATED before that cell (the follower series monotone → 45k; else the highest whose CI holds the other two; the gate's best_model only without a strix triple), the LADDER unit is FIXED as code (`book_v1_s20260625_p4` paired, opening index = match index), ANALYZER-1 is admitted under R9, and the CPU deploy head is PROFILED (per-leaf forward ≈ 20 ms flat in batch size: 5.0 s per stone at 256 sims, 8 threads, idle); **the 45k point read 2026-09-21: 0.142 [0.104, 0.181], the series monotone, so the PARENT RULE names run8@45k — R364 is the operator's; the run continues (52 986 at 05:50 UTC), next cell 60k****. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -426,6 +426,65 @@ one narration alert (`loss_increase_window` at 50 000); self-play 53 084 games, 
 draws 0.5 %, ply-cap 0.53 %, served 3 193 leaves/s, batch fill 75 %; the 17 rounds' walls sum to 31.0 h = 51 % of the
 run's wall in flight (R361's census, live). The follower's next cadence cell is 60k: ETA 60k ≈ 13:15–14:00 UTC
 2026-09-21, its cell ≈ 1.6 h after; the puller mirror is fresh (05:50 UTC), the box itself was NOT contacted.
+
+(16) R364 (2026-09-21, dev + mirror; the box UNTOUCHED by this session — run8 read LIVE at 52 986 at 05:50 UTC
+and its stop is the box session's first act): the register at R364 (next R365), A1 under R363's foot ("read 45k"
+lacked "then stop"; the architect's; 8 h), R362's and R363's Status lines amended. **THE PARAMETER-DISTANCE TEST,
+READ** (`PARAM_DISTANCE_2026-09-21.md`; §0(7)): eighteen checkpoints off the mirror (the run7@42k parent as step 0,
+then 3k … 51k), 302 470 parameters in float64 — the 3k-step displacement ‖Δ‖ FLAT at 18.7–24.3 (the LR reads 9.97e-4
+at 51k, effectively flat), successive displacements nearly orthogonal (cos 0.13–0.20 from 6k to 30k, falling to
+0.03 by 51k), the cumulative path k^0.71 (between a random walk's 86 and a straight line's 353 at k = 17: 142),
+the distance to the running mean growing monotonically 10 → 78 (a drifting centre, not a noise ball, its growth
+slowing 6.3 → 1.3 per segment late), the weight norm +49 % (156.6 → 233.8; `representation` +19 %, `policy_head`
++62 %, **`value_head` +96 %**) — beside strix +4.8 pp (3k → 15k) then +3.1 then +0.7 and the gate's r6–r17 band
+0.31–0.54. What is ruled out: a small step, a settled centre. What is left open, the operator's for run10's LR:
+noise-spending LR vs the 100k-window's disjoint-data signature (which run9's window changes first). **THE MINT:**
+`configs/run9.yaml` from run8's header through `mint_config.py`, `config_diff --expect` MATCH on exactly eleven
+leaves (`run_id`, the warm start's two, `train.replay_capacity` 500 000, `train.training_steps_per_game` 2.4,
+`train.max_train_burst` 8, `train.eval_interval` 36 000, `eval.gate.sequential.mu0` 0.42 / `mu1` 0.52 /
+`at_max_pairs` promote, `selfplay.mcts.dirichlet_enabled` false), `--from-header` MATCH; the seed byte-equal.
+The parent's file sha256 `c4990d03…` (mirror copy), net `3aef7883…` read through the LAW-12 loader. **Why 2.4 and
+not 2.5:** run8's 45k ring reads replay_ratio 3.19 at 1.0 (256 samples per 80.3 positions per game), so 2.4
+predicts 7.7 and stays inside [7, 9] over run8's whole observed base-rate spread (3.02–3.61 → 7.2–8.7) while 2.5
+reads 7.6–9.0 and its 37 500-step cadence is not a checkpoint step; 2.4 × 15 000 = 36 000 exactly. The
+dispatcher's pick inside the envelope; the shakedown's `replay_ratio` says whether it stands (prereg §1b: outside
+[7, 9] → re-pick inside the envelope with its own preflight; unreachable → HALT). **THE KEY'S SEMANTICS AT HEAD,
+VERIFIED (R364 §0(3)):** `_steps_budget` was `min(max(1, round(games × ratio)), burst)` per burst with no remainder
+carried; run8's stream reads ONE new game on 98.0 % of its 52 141 bursts (two on 1.9 %, three on 0.05 %), so 2.5
+would have realised `round(2.5)` = 2 steps per game (≈ 6.4 reuse) and 2.6 three (≈ 9.6) — the envelope's target
+sat in a hole. `mantis.train.mixing._steps_budget` now carries the fraction (`floor(carry + games × ratio)`, the
+ceiling drops its excess, integer ratios unchanged so run8's 1.0 realises as before; in-memory, a resume restarts
+it at 0), pinned by `tests/train/test_steps_budget_carry.py` (+5). A correctness fix, not a second swap; the
+operator can veto it before the stamp (one commit). **THE GATE RULE (R364(c)) IS A LEAF:** `eval.gate.sequential.
+at_max_pairs` (`sign` | `promote`, contract v34, leaf count 151) — `gsprt_decision(..., at_max_pairs=)` promotes an
+undecided candidate at the 104-pair cap under `promote`, the bounds still decide before it, a reject is still a
+reject (`tests/eval/test_gate_sequential.py` +2 rules, the spec refusal widened); `run7.yaml` and `run8.yaml`
+RE-MINTED through their own headers with `sign` (byte-identical elsewhere; the box's run8 stamp predates the leaf
+and the loader tolerates it). Under 0.52/0.62 the two run8 cap rounds (r3 0.536, r16 0.524) were rejected by the
+sign; under run9's rule they promote. **R359(d)'s PIN LANDED:** `dirichlet_root_fires` on `RunnerStatsSnapshot`
+(counted at the PUCT arm's mix-in site; not a bridge field), `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`
+drives one worker with the rows ARMED — Gumbel 0 fires over a fully served 64-sim search, PUCT 2 — the second
+half proves the counter sees the lever. **THE PINS BY NAME:** `PRODUCTION_CONFIGS` + the gate-12 process test,
+the P6b count 5 → 6, the fused-caps / draw-rate / strength-floor / arch-kind / microbatch production sets, the
+undeclared-plant stem `run9` → `run10`. Gate 12 rc 0 (three rows deferred), gate 7 every config OK, gate 13 rc 0
+at v34. **THE PREREG** (`RUN9_PREREG_2026-09-19.md`, filled in place): the eleven rows with their why, the
+envelope and the dispatcher's rule, the reading at EQUAL GAMES (SUCCESS 30k-games ≥ 0.192; FALSIFIED 15k ≤ 0.142
+AND 30k ≤ 0.142; else read 45k-games THEN STOP; steps 36 000 / 72 000 / 108 000), the STOP LAW, box-hours beside
+every point, the run9 ring bands with **`one_hot_share_full` RE-STATED at < 0.30** (the parent's own rings read
+0.2705–0.2761 flat — at 0.25 the twin of a 27 % parent HALTs by construction; run7's 62–65 % collapse is still
+refused twofold) and **`replay_ratio ≥ 7.0` banded** (the ≤ 9 half read; the tool bands one operator per row) —
+the block PARSES and reads run8's 45k ring as expected (five PASS, `replay_ratio` 3.06 MISS, rc 1); the 4 h twin
+runs NO gate round (36 000 steps is 15 h away) and the regression-guard rule is exercised by the PREFLIGHT's
+terminal round. run8's prereg §4 carries the 45k reading and the stop. **CARDS:** CARD-ARCH-D6 OPENED (not armed;
+witness = the analyzer's symmetry spread per checkpoint, detector + conformance before any training),
+CARD-RUN9-STOP-LAW opened, CARD-RUN9-QUEUE (i) rides run9 / (ii) waits / (iv) queued, CARD-EVAL-REDESIGN moved
+(the regression guard), CARD-PERF-3 step 3's window fixed. **THE BOX ORDER** (prereg §5, the box session's, on
+the pushed tip): run8 STOP (one SIGTERM; the follower stopped with no cell in flight) → PERF-3 step 3 (≈ 40 min,
+B alone then the contended arm; numbers before design) → `make build.cuda` + the parent copied and sha-verified
+into `checkpoints/run8/` → run9 preflight → the stamp → the 4 h twin `--inherit-preflight` → the witness (QSigma
+pin, the six bands, `replay_ratio` 7–9 reported with the value that stands, sym bins, entropy) → START →
+`strix_follower.py --follow --no-promotions --cadence 36000`. Box-hours ESTIMATE before the shakedown: ≈ 16 h per
+15 000 games if games/h holds (2.4× the trainer's steps per game; the shakedown's games/h replaces it).
 
 ## Exit facts — the R353 packet, 2026-09-14
 
