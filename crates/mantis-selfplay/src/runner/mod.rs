@@ -85,6 +85,8 @@ pub struct RunnerStatsSnapshot {
     /// reader publishes the ABSENCE rather than a 0/0.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
+    /// Root Dirichlet applications (the PUCT arm's site); 0 under Gumbel — R359(d)'s pin, not a bridge field.
+    pub dirichlet_root_fires: u64,
     /// Moves whose exported policy target carried off-window (overflow) mass.
     pub export_offwindow_mass_moves: u64,
     /// Fatal-defect latch fire count (must read 0 in a healthy run).
@@ -142,6 +144,7 @@ pub struct SelfPlayRunner {
     pcr_quick_moves: Arc<AtomicU64>,
     gumbel_round_leaves: Arc<AtomicU64>,
     gumbel_rounds: Arc<AtomicU64>,
+    dirichlet_root_fires: Arc<AtomicU64>,
 
     export_offwindow_mass_moves: Arc<AtomicU64>,
     target_integrity_defects: Arc<AtomicU64>,
@@ -309,6 +312,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: Arc::new(AtomicU64::new(0)),
             gumbel_round_leaves: Arc::new(AtomicU64::new(0)),
             gumbel_rounds: Arc::new(AtomicU64::new(0)),
+            dirichlet_root_fires: Arc::new(AtomicU64::new(0)),
             export_offwindow_mass_moves: Arc::new(AtomicU64::new(0)),
             target_integrity_defects: Arc::new(AtomicU64::new(0)),
             inference_failures_total: Arc::new(AtomicU64::new(0)),
@@ -434,6 +438,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: self.pcr_quick_moves.load(Ordering::Relaxed),
             gumbel_round_leaves: self.gumbel_round_leaves.load(Ordering::Relaxed),
             gumbel_rounds: self.gumbel_rounds.load(Ordering::Relaxed),
+            dirichlet_root_fires: self.dirichlet_root_fires.load(Ordering::Relaxed),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.load(Ordering::Relaxed),
             target_integrity_defects: self.target_integrity_defects.load(Ordering::Relaxed),
             inference_failures_total: self.inference_failures_total.load(Ordering::Relaxed),
@@ -690,6 +695,7 @@ mod seam_roundtrip {
         r.pcr_quick_moves.store(38, Ordering::Relaxed);
         r.gumbel_round_leaves.store(39, Ordering::Relaxed);
         r.gumbel_rounds.store(40, Ordering::Relaxed);
+        r.dirichlet_root_fires.store(41, Ordering::Relaxed);
         r.export_offwindow_mass_moves.store(22, Ordering::Relaxed);
         r.target_integrity_defects.store(24, Ordering::Relaxed);
         r.worker_panics.store(25, Ordering::Relaxed);
@@ -711,6 +717,7 @@ mod seam_roundtrip {
             pcr_quick_moves: 38,
             gumbel_round_leaves: 39,
             gumbel_rounds: 40,
+            dirichlet_root_fires: 41,
             export_offwindow_mass_moves: 22,
             target_integrity_defects: 24,
             inference_failures_total: 36,

@@ -123,6 +123,7 @@ pub(crate) fn run_worker_thread(
         pcr_quick_moves,
         gumbel_round_leaves,
         gumbel_rounds,
+        dirichlet_root_fires,
         export_offwindow_mass_moves,
     } = stats;
     let WorkerAtomics {
@@ -203,6 +204,7 @@ pub(crate) fn run_worker_thread(
         pcr_quick_moves: &pcr_quick_moves,
         gumbel_round_leaves: &gumbel_round_leaves,
         gumbel_rounds: &gumbel_rounds,
+        dirichlet_root_fires: &dirichlet_root_fires,
         positions_generated: &positions_generated,
         export_offwindow_mass_moves: &export_offwindow_mass_moves,
     };

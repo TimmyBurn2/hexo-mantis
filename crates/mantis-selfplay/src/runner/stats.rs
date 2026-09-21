@@ -36,6 +36,8 @@ pub(crate) struct WorkerStats {
     /// cannot be told from one that has silently gone back to a leaf per round trip.
     pub(crate) gumbel_round_leaves: Arc<AtomicU64>,
     pub(crate) gumbel_rounds: Arc<AtomicU64>,
+    /// LAW-18 — root Dirichlet applications, counted at the PUCT arm's mix-in site (0 under Gumbel, R359(d)).
+    pub(crate) dirichlet_root_fires: Arc<AtomicU64>,
     // WP12-R Phase T target-integrity counters (LAW-18, DESIGN_T §3.6).
     pub(crate) export_offwindow_mass_moves: Arc<AtomicU64>,
 }

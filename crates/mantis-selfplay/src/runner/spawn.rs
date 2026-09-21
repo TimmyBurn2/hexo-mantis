@@ -111,6 +111,7 @@ impl SelfPlayRunner {
             pcr_quick_moves: self.pcr_quick_moves.clone(),
             gumbel_round_leaves: self.gumbel_round_leaves.clone(),
             gumbel_rounds: self.gumbel_rounds.clone(),
+            dirichlet_root_fires: self.dirichlet_root_fires.clone(),
             export_offwindow_mass_moves: self.export_offwindow_mass_moves.clone(),
         };
         let atomics_proto = WorkerAtomics {

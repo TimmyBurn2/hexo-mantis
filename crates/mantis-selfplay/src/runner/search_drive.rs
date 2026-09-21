@@ -55,6 +55,8 @@ pub(crate) struct MoveAccumulators<'a> {
     /// The Gumbel round's width; zero on a PUCT run, whose reader omits the mean.
     pub(crate) gumbel_round_leaves: &'a AtomicU64,
     pub(crate) gumbel_rounds: &'a AtomicU64,
+    /// Root Dirichlet applications; zero on a Gumbel run by construction (R359(d)).
+    pub(crate) dirichlet_root_fires: &'a AtomicU64,
     pub(crate) positions_generated: &'a AtomicUsize,
     pub(crate) export_offwindow_mass_moves: &'a AtomicU64,
 }
@@ -157,6 +159,8 @@ pub(crate) enum MoveOutcome {
 pub(crate) struct GumbelRoundCounters<'a> {
     pub(crate) round_leaves: &'a AtomicU64,
     pub(crate) rounds: &'a AtomicU64,
+    /// The PUCT arm's root-noise fires ride the same handle; the Gumbel arm never touches it.
+    pub(crate) dirichlet_root_fires: &'a AtomicU64,
 }
 
 /// How one inference round trip picks its leaves. `Batch(n)` is PUCT's: `n` descents from an
@@ -464,6 +468,7 @@ fn run_mcts_search(
                         rng,
                     );
                     tree.apply_dirichlet_to_root(&noise, dirichlet_epsilon);
+                    rounds.dirichlet_root_fires.fetch_add(1, Ordering::Relaxed);
                 }
             }
 
@@ -554,6 +559,7 @@ pub(crate) fn play_one_move(
         GumbelRoundCounters {
             round_leaves: accumulators.gumbel_round_leaves,
             rounds: accumulators.gumbel_rounds,
+            dirichlet_root_fires: accumulators.dirichlet_root_fires,
         },
     ) {
         McTSSearchResult::Completed(gs, sims_served) => {
