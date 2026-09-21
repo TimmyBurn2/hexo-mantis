@@ -82,7 +82,7 @@ def test_the_writer_refuses_a_stamp_whose_config_claims_another_shape(tmp_path: 
     dump = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     arch = _tiny(dump)
     kwargs = {"encoding_name": dump["identity"]["encoding"], "run_id": "shape", "arch": arch}
-    with pytest.raises(CheckpointStampError, match="model.gnn.hidden=128 disagrees"):
+    with pytest.raises(CheckpointStampError, match="model.gnn.hidden: stamped arch=8, config=128"):
         save_checkpoint(model=build_net(arch), optimizer=None, scaler=None, scheduler=None, step=0,
                         config=dump, metadata_kwargs=kwargs, checkpoint_dir=tmp_path, kind="weights")
     dump["model"]["gnn"] = {"hidden": 8, "num_layers": 1}

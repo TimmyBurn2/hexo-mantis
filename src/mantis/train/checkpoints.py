@@ -151,16 +151,19 @@ _SYNTH_ARCH_SCOPED: dict[tuple[str, str], Callable[[ModelArch], dict[str, int]]]
 }
 
 
+def _width_drift(config: Mapping[str, Any], arch: ModelArch, *, arch_side: str, config_side: str) -> list[str]:
+    """Every `model.gnn` width the config declares that the arch does not have, one `key: <arch_side>=…, <config_side>=…` row each (v35)."""
+    return [f"model.gnn.{field}: {arch_side}={getattr(arch, field)!r}, {config_side}={value!r}"
+            for field, value in declared_gnn_widths(config).items() if value != int(getattr(arch, field))]
+
+
 def _refuse_shape_lie(config: Mapping[str, Any], arch: ModelArch | None) -> None:
-    """Refuse a stamp whose config's `model.gnn` disagrees with the arch it stamps (v35: the config is the artifact's provenance); Raises: CheckpointStampError — a width differs from the stamped arch's."""
+    """Refuse a stamp whose config's `model.gnn` disagrees with the arch it stamps (the config is the artifact's provenance); Raises: CheckpointStampError — a width differs from the stamped arch's."""
     if arch is None:
         return
-    for field, value in declared_gnn_widths(config).items():
-        if value != int(getattr(arch, field)):
-            raise CheckpointStampError(
-                f"the config's model.gnn.{field}={value} disagrees with the stamped arch's "
-                f"{field}={getattr(arch, field)}; a stamp names the shape its net has"
-            )
+    drift = _width_drift(config, arch, arch_side="stamped arch", config_side="config")
+    if drift:
+        raise CheckpointStampError(f"a stamp names the shape its net has; {'; '.join(drift)}")
 
 
 def _arch_to_dict(arch: ModelArch) -> dict[str, Any]:
@@ -1140,9 +1143,7 @@ def _refuse_identity_drift(
     # The trunk's shape (v35) needs only the stamped arch, so a stamp with no identity block is
     # still held to it; a moved representation is named above before the widths are read.
     if not drift:
-        for field, value in declared_gnn_widths(effective_config).items():
-            if value != int(getattr(arch, field)):
-                drift.append(f"model.gnn.{field}: checkpoint={getattr(arch, field)!r}, resume={value!r}")
+        drift = _width_drift(effective_config, arch, arch_side="checkpoint", config_side="resume")
     if drift:
         raise ResumeIdentityMismatchError(
             f"{path.name}: the resuming run's effective identity differs from the "
