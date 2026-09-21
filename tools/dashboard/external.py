@@ -39,11 +39,14 @@ class ExternalPoint:
     path: str
     #: `"off"` when the sidecar says strix's root VCF solver was disabled (R358(a)'s net-only cell).
     solver: str = "on"
+    #: strix's placement_radius when the sidecar names one (R365 E1's ruler-r6 cell); None = the driver's 8.
+    radius: int | None = None
 
     @property
     def unit_label(self) -> str:
         label = f"{self.run_id} · {self.unit}: ours PUCT-{self.ours_sims} vs strix {self.strix_sims} sims"
-        return label + (", solver OFF" if self.solver == "off" else "")
+        label += ", solver OFF" if self.solver == "off" else ""
+        return label + ("" if self.radius is None else f", strix @ r{self.radius}")
 
 
 def _num(value: Any) -> float | None:
@@ -71,7 +74,7 @@ def parse_sidecar(path: Path, raw: Any) -> ExternalPoint | None:
         ci=(lo, hi) if lo is not None and hi is not None else None,
         eff_n=_int(raw.get("eff_n")), games=_int(raw.get("games")),
         net_hash=str(raw.get("net_hash", "?")), checkpoint=str(raw.get("checkpoint", path.name)),
-        path=str(path), solver=str(strix.get("solver", "on")),
+        path=str(path), solver=str(strix.get("solver", "on")), radius=_int(strix.get("radius")),
     )
 
 

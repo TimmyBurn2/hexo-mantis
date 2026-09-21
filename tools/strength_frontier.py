@@ -148,15 +148,20 @@ def base_round_spec(config: Any, *, work_dir: Path) -> RoundSpec:
     )
 
 
-def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True) -> RungJob:
-    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False is R358(a)'s `<stem>:net_only` rung."""
+def _strix_rung(config: Any, games: int, strix_sims: int, *, solver: bool = True,
+                radius: int | None = None) -> RungJob:
+    """The strix rung (RUNG-2) at `strix_sims` on the gate's book; `solver` False is R358(a)'s `<stem>:net_only`
+    rung, `radius` N is R365 E1's `<stem>:r<N>` rung (strix at the driver's placement_radius N, solver ON)."""
     from mantis.bots import strix as _strix
 
     pin = _strix._pin()
     if pin is None:
         raise FrontierCellError("vendor/pins.toml declares no [pins.hexo-strix]")
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
-    variant = stem if solver else stem + _strix.NET_ONLY_SUFFIX
+    if radius is not None and not solver:
+        raise FrontierCellError("a strix cell names strix_radius or strix_solver false, not both (no such variant)")
+    variant = stem + (f"{_strix.RADIUS_SUFFIX}{int(radius)}" if radius is not None
+                      else "" if solver else _strix.NET_ONLY_SUFFIX)
     return RungJob(name=STRIX, bot=STRIX, variant=variant, depth=None, opponent_sims=strix_sims,
                    opening_book=config.eval.gate.opening_book, deploy_matched=True, games=games,
                    bootstrap_resamples=_RUNG_BOOTSTRAP_RESAMPLES, bootstrap_ci_level=_CI_LEVEL,
@@ -207,7 +212,8 @@ def cell_spec(cell: Mapping[str, Any], base: RoundSpec, *, cell_dir: Path, confi
     if opponent == STRIX:
         if "strix_sims" not in cell:
             raise FrontierCellError(f"{cell['label']}: a strix cell names strix_sims (its sims per move)")
-        job = _strix_rung(config, games, int(cell["strix_sims"]), solver=bool(cell.get("strix_solver", True)))
+        job = _strix_rung(config, games, int(cell["strix_sims"]), solver=bool(cell.get("strix_solver", True)),
+                          radius=None if cell.get("strix_radius") is None else int(cell["strix_radius"]))
         return replace(base, **common, strix_model_sims=sims, rung_jobs=[_rung_on_cell_book(job, cell)])
     gate = replace(base.gate, run_gate=True, screen_games=games, confirm_games=0,
                    deploy_sims=sims, screen_confirm_lo=2.0, seed_base=seed_base,
@@ -319,7 +325,8 @@ def run_cell(cell: Mapping[str, Any], *, config: Any, base: RoundSpec, work_dir:
 def format_row(record: Mapping[str, Any]) -> str:
     """One summary line per cell."""
     cell = record["cell"]
-    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims", "strix_solver") if k in cell)
+    sigma = "".join(f" {k}={cell[k]}" for k in ("c_scale", "q_rescale", "strix_sims", "strix_solver", "strix_radius")
+                    if k in cell)
     head = f"{record['label']:<28} {cell['search_kind']:<6} {int(cell['sims']):>4}{sigma}"
     if record["rc"] != 0 or "readout" not in record:
         return f"{head}  FAILED rc={record['rc']} ({record['wall_sec']} s) {record.get('error', '')}"

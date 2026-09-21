@@ -35,6 +35,10 @@ DEFAULT_M_ACTIONS = 16
 #: R358(a): `<stem>:net_only` plays the pinned checkpoint with its root VCF solver OFF — a distinct
 #: instrument (the variant rides the regime key), never the rung on record, which loads solver ON.
 NET_ONLY_SUFFIX = ":net_only"
+#: R365 §0(3) (E1, the ruler-r6 cell): `<stem>:r<N>` plays the pinned checkpoint, solver ON, with the
+#: driver's `placement_radius` N — its own trained radius is 6, every reading on record rides the
+#: driver's default 8. A distinct instrument; the load line carries the key only on this variant.
+RADIUS_SUFFIX = ":r"
 
 #: Every fence finding is ALSO logged under this marker: the bot instance dies with the eval
 #: child, and `tools/strength_frontier.py` counts the lines into the cell record.
@@ -214,24 +218,44 @@ def locate_strix() -> tuple[Path, Path, Path, Path, dict[str, Any]]:
     return python, driver, tree, checkpoint, pin
 
 
+def variant_radius(variant: str, *, stem: str) -> int | None:
+    """The `placement_radius` a `<stem>:r<N>` variant loads strix at; None for every other variant (the driver's 8).
+
+    Raises:
+        RungUnresolvable: a `:r` suffix that is not a positive integer."""
+    if not variant.startswith(stem + RADIUS_SUFFIX):
+        return None
+    digits = variant[len(stem) + len(RADIUS_SUFFIX):]
+    if not digits.isdigit() or int(digits) < 1:
+        raise RungUnresolvable(rung=f"strix:{variant}", reason=(
+            f"{stem}{RADIUS_SUFFIX}<N> names a positive placement radius; got {digits!r}"))
+    return int(digits)
+
+
 def variant_solver(variant: str, *, stem: str) -> bool:
-    """Whether `variant` plays with the solver ON (the pinned stem, or the pin's name) or OFF (`<stem>:net_only`).
+    """Whether `variant` plays with the solver ON (the pinned stem, its name, or `<stem>:r<N>`) or OFF (`<stem>:net_only`).
 
     Raises:
         RungUnresolvable: a variant the pin does not name."""
-    if variant in (stem, PIN_NAME):
+    if variant in (stem, PIN_NAME) or variant_radius(variant, stem=stem) is not None:
         return True
     if variant == stem + NET_ONLY_SUFFIX:
         return False
     raise RungUnresolvable(rung=f"strix:{variant}", reason=(
-        f"the pin names {stem}; a strix rung plays the pinned checkpoint (solver ON) or "
-        f"{stem}{NET_ONLY_SUFFIX} (solver OFF, R358(a)) or nothing"))
+        f"the pin names {stem}; a strix rung plays the pinned checkpoint (solver ON), "
+        f"{stem}{NET_ONLY_SUFFIX} (solver OFF, R358(a)), {stem}{RADIUS_SUFFIX}<N> (the driver's "
+        "placement_radius N, R365 E1) or nothing"))
 
 
 def load_request(checkpoint: str, *, sims: int, variant: str, stem: str) -> dict[str, Any]:
-    """The driver's `load` line for one variant; `disable_forcing_solver` False is the rung on record."""
-    return {"op": "load", "checkpoint": checkpoint, "sims": int(sims), "m_actions": DEFAULT_M_ACTIONS,
-            "disable_forcing_solver": not variant_solver(variant, stem=stem)}
+    """The driver's `load` line for one variant; `disable_forcing_solver` False is the rung on record.
+
+    `placement_radius` rides the line on a `<stem>:r<N>` variant ONLY, so every other variant's line is
+    byte-identical to the readings on record (the driver defaults the absent key to 8)."""
+    request = {"op": "load", "checkpoint": checkpoint, "sims": int(sims), "m_actions": DEFAULT_M_ACTIONS,
+               "disable_forcing_solver": not variant_solver(variant, stem=stem)}
+    radius = variant_radius(variant, stem=stem)
+    return request if radius is None else {**request, "placement_radius": radius}
 
 
 def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
@@ -244,9 +268,10 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
     python, driver, cwd, checkpoint, pin = locate_strix()
     stem = str(pin["checkpoint"]).rsplit(".", 1)[0]
     solver_on = variant_solver(variant, stem=stem)
+    radius = variant_radius(variant, stem=stem)
     sims = int(opponent_sims)
     request = load_request(str(checkpoint), sims=sims, variant=variant, stem=stem)
-    name = f"strix_{stem}_s{sims}" + ("" if solver_on else "_nosolver")
+    name = f"strix_{stem}_s{sims}" + ("" if solver_on else "_nosolver") + ("" if radius is None else f"_r{radius}")
 
     def _factory() -> StrixBot:
         transport = DriverTransport(python, driver, cwd)
@@ -261,7 +286,7 @@ def resolve_strix(*, opponent_sims: int | None, variant: str) -> Any:
 
 __all__ = [
     "BUILD_SCRIPT", "CHECKPOINT_ABSENT_MARKER", "DEFAULT_M_ACTIONS", "DriverTransport", "FINDING_LOG_MARKER",
-    "NET_ONLY_SUFFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "SHA_MISMATCH_MARKER", "StrixBot", "Transport",
-    "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "load_request", "locate_strix", "resolve_strix",
-    "strix_availability", "variant_solver", "verify_checkpoint_sha",
+    "NET_ONLY_SUFFIX", "PIN_ABSENT_MARKER", "PIN_NAME", "RADIUS_SUFFIX", "SHA_MISMATCH_MARKER", "StrixBot",
+    "Transport", "VENDOR_ABSENT_MARKER", "VENV_ABSENT_MARKER", "load_request", "locate_strix", "resolve_strix",
+    "strix_availability", "variant_radius", "variant_solver", "verify_checkpoint_sha",
 ]
