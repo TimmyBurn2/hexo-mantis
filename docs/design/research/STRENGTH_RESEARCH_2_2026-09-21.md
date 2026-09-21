@@ -22,7 +22,8 @@ handoff, per RULINGS); R364 verbatim is not at HEAD; `configs/run9.yaml` unminte
 `docs/design/measurements/PARAM_DISTANCE_2026-09-21.md` is COMMITTED at `203e7060` and hashes sha256
 `60ca27c41b3ab2a20a34474d3b058e051813e7178e1afbce6c778577bf800905` at HEAD; every `4c6759b9cbe2eec4…`
 cite below is the pre-commit draft, content verified by P5's spot-checks (L7). `configs/run9.yaml` is
-minted at `61bd2fd1` and R364 is in the register at `b5a5f51e`; both were in flight when this packet ran.
+minted at `61bd2fd1` and R364 is in the register at `b5a5f51e`; both were in flight when this packet ran. Three
+absolute checkout paths the P0 pack carried are sanitised to `<worktree>` / `<main checkout>` (gate 17, rule 7).
 
 **HALT recommendation to the architect: NO** (P6's verdict, MEASURED STATE item 15 — full-span
 draws 0.5 % / ply-cap 0.53 % are measured-inert under the only "rows are wrong" candidate; better
@@ -94,7 +95,7 @@ kills it · interactions with run9's rows.
 # P0 CONTEXT PACK — PACKET RESEARCH-STRENGTH-2 (2026-09-21)
 
 Read this file fully, then read the files it names. No summaries of summaries: every item below
-IS the file, in the worktree `/home/tom/Work/HeXO/hexo-mantis-rs2` (branch `research-strength-2`,
+IS the file, in the worktree `<worktree>/hexo-mantis-rs2` (branch `research-strength-2`,
 HEAD `649852ddd7a9e367de3b0a00b87fc86297815824`, "ours at HEAD" = that tree). The 16-hex prefixes
 are sha256 of each file's content at that HEAD. Phase outputs go to `/tmp/rs2/` — you write ONLY
 your own assigned file there; this repo is READ-ONLY to you.
@@ -138,7 +139,7 @@ around stones (fence); ≈ 355 legal moves at radius 8 (F-51). 256-ply cap → `
   `training_steps_per_game 1.0`; `augment: true` (armed R358); warm start run7@42k; 65-bin
   value over pure outcome z; `ema.enabled: false`.
 - **`configs/run9.yaml` is NOT MINTED at HEAD** (the mint is in flight beside this packet; the
-  main checkout `/home/tom/Work/HeXO/hexo-mantis` carries uncommitted mint work — READ-ONLY to
+  main checkout `<worktree>/hexo-mantis` carries uncommitted mint work — READ-ONLY to
   you). What run9 IS, at HEAD: `docs/design/measurements/RUN9_PREREG_2026-09-19.md`
   (3e40594afb6a7320) — eval rows FIXED (eval_interval 15000 on the strix cell's checkpoint, sealbot
   rung DELETED, gate 256/GSPRT unchanged, gate fields on the stream), parent BLANK ruled at 45k,
@@ -163,7 +164,7 @@ The run9-relevant state, in reading order:
    0.142 vs parent 0.111), r1–r17 gate rounds (anchor frozen at 15k, r11–r17 all rejected),
    ring audits (`one_hot_share_full` ≈ 0.27 flat vs < 0.25 band; h_full 0.209 → 0.286;
    replay_ratio 3.0–3.6), shakedown8, EVAL-CENSUS prices. And
-   `/home/tom/Work/HeXO/hexo-mantis/docs/design/measurements/PARAM_DISTANCE_2026-09-21.md`
+   `<main checkout>/docs/design/measurements/PARAM_DISTANCE_2026-09-21.md`
    (sha256 4c6759b9cbe2eec4…; UNTRACKED in the MAIN checkout, not at worktree HEAD — the freshest
    record): the 18-checkpoint parameter-distance table (flat ‖Δ‖ ≈ 22/3k steps, cos(Δ,Δprev)
    0.15 → 0.03, weight norm +49 % with value head +96 %, strix + gate columns beside).
