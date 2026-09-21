@@ -81,6 +81,36 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R366 (RUN10: THE POLICY-CAPACITY RUN; 2026-09-21)
+
+- **CARD-PERF-4 — OPENED by R366(e), its own packet; NOTHING from it rides run10.** PERF-3 step 3 read
+  the CPU launch stage at 0.34–0.39 ms per leaf at EVERY batch size (`PERF3_2026-09-18.md` §step 3: alone
+  2 236 / 2 394 / 2 466 / 2 055 / 2 091 leaves/s at B 16 … 256, no knee, D-1 dead by its own falsifier), so
+  the stage is linear in B and is the bound. The design: a Rust-side collate + a pinned host buffer + a
+  single launch per pop (the fused graph as ONE H2D and ONE forward). `tools/bench_server.py` is its
+  falsifier (the same B-curve on the same box, IDLE and CONTENDED, R361(d)); the pre-registered success
+  line stays PERF-3's ≥ 1.4× on the same machine, and the determinism probe (the same-cell bf16 witness)
+  must read 0 — a faster server that serves different numbers is not the same server. Design only after a
+  ruling; the box work is a perf-host event, not run10's window.
+- **CARD-RUN10-SIZE-PARENT — the size conditional's UNPRICED PREMISE, the operator's ruling before any
+  re-mint arms `model.gnn: {hidden: 192, num_layers: 6}`.** R366 §0(2) states the conditional over "parent:
+  run8@45k (unchanged)", but a 6×192 `GnnNetV2` shares NO tensor shape with the 4×128 parent (`input_proj`
+  11→192, every conv 192→192, the JK-cat readout 6 × 192 = 1 152 wide into both heads against 512) and
+  `load_from_bc` is strict both ways — the warm start cannot land. The leaves exist (v35), the bench builds
+  the net from them (`bench_server.py` with no `--checkpoint` is a random-init net of the config's shape),
+  the bench runs in the window and is RECORDED either way (it prices run11's row); the ARMING waits on a
+  parent ruling: a fresh net, a BC pretrain at 6×192, or a net-growth transfer (a design in itself), and
+  with any of them "equal games vs 0.142" is a different comparison than run10's. Stated in
+  `RUN10_PREREG_2026-09-21.md` §2.
+- **CARD-RUN10-WEIGHT-ENVELOPE — the aux head's weight, minted 4 inside [2, 8], picked in the twin.**
+  The rule (R366 §0(2), prereg §1a): the SETTLED ratio `aux_policy_head_grad_norm / policy_head_grad_norm`
+  on `trainer_step` over the twin's window in [0.5, 2] → 4 stands; outside → re-pick inside [2, 8] by
+  re-mint with its own preflight; no value in the envelope reaching it → HALT. The CPU pre-read (prereg
+  §1b/§8) established the shape the twin will see: a FRESH head starts at ≈ ln(legal) ≈ 6.2 nats of CE
+  with its own gradient norm an order of magnitude above the trained main head's, so under `grad_clip`
+  1.0 the first steps' clipped update is mostly the aux head's — the witness is the settled ratio, never
+  the first steps'. Spent when the twin's reading is on the record.
+
 ## Opened by R365 (RUN9 NOT STARTED, PROBE-1, RUN10 DESIGNED FROM MEASUREMENTS; 2026-09-21)
 
 - **CARD-PROBE-1 — ORDERED by R365(b), dev + mirror, 0 box-h, ≤ 2 dev-days; the record is ONE file,
@@ -103,12 +133,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   the box in run10's preflight window, 1.5 bh — the weight-average of run8's 30k–51k checkpoints vs
   strix 256/256, 288 games (> 0.181 → EMA deploy rides run10, a server-owned copy its prerequisite;
   ≤ 0.142 → dead; between → the LR floor is run10's hypothesis instead). Order 1 → 2/3/5 (one mirror
-  pull) → 4 → 6; 7 at the box. Then R366 composes run10 under R365(c).
+  pull) → 4 → 6; 7 at the box. Then R366 composes run10 under R365(c). **READ 2026-09-21, rows 1–6 in
+  `PROBE1_2026-09-21.md` §8; SPENT by R366(a)–(b)** (the head admitted and built, the gap witness a
+  producer, the band re-derived, proof-as-target and the mid-turn premise dead, ARCH-D6 parked). Row 7,
+  the EMA cell, is run10's preflight window (prereg §2): the card's last open line.
 - **CARD-RUN10-RULE — R365(c), carried until run10's ruling applies it.** A change whose mechanism a
   PROBE-1 reading supports in our regime may ride run10 without being the single swap; run10 carries at
   most ONE un-probed hypothesis. Attribution before the run replaces attribution by the run. This amends
   R359(c)'s one-swap-per-run order for run10 only; every change still carries its own in-run producer
-  (LAW-18) before it is armed.
+  (LAW-18) before it is armed. **APPLIED by R366(b), 2026-09-21 — SPENT:** the probe-supported changes
+  riding together are the soft-policy head (reading 5), the data regime from run9's mint (reading 3's
+  witness beside it), the two conditionals (reading 7 and the bench); the ONE un-probed hypothesis is the
+  LR anneal. Each carries its producer (`RUN10_PREREG_2026-09-21.md` §3).
 - **CARD-E1-RULER-R6 — the cell R365 §0(3) ordered at the box, 1.2 bh; the tooling LANDED 2026-09-21
   (`d4804e58`).** The parent run8@45k (`3aef7883…`) at PUCT-256 vs strix 256 sims with the driver's
   `placement_radius` 6 (strix's own trained radius; every reading on record rides the driver's default
@@ -125,7 +161,11 @@ Both were found by running the gate set rather than by reading it, and both are 
   record**; strix at its trained radius is the stronger ruler. The series and the parent choice stand
   (every point shares the unit); a bar quoted "vs strix" without the radius does not. Whether the
   follower's unit MOVES to r6 (a re-read of the parent series, ≈ 3 × 1.2 bh) is R366's; the receipt is
-  mirrored, the card is READ and waits on that ruling.
+  mirrored, the card is READ and waits on that ruling. **R366(d), 2026-09-21: strix @ r8 STAYS the series
+  ruler; r6 is a QUALIFIER, read once per run at block end if the box allows (1.2 bh). Every vs-strix
+  citation on the record carries "strix @ r8" — the run8 series (0.104 / 0.135 / 0.142), the parent's
+  baseline and run10's bars (0.192 / 0.142) are all r8 numbers. The card is CLOSED as an order and stays
+  as the qualifier's statement.**
 
 ## Opened by R364 (RUN8 STOP, RUN9 = DATA REGIME, GATE AS REGRESSION GUARD; 2026-09-21)
 
@@ -260,7 +300,7 @@ Both were found by running the gate set rather than by reading it, and both are 
 
 ## Opened by R358 (RUN8 RE-MINT, THE NET-ONLY CELL, THE RUN9 QUEUE); moved by R359 (READINGS LANDED, QUEUE SOURCED, PERF-3 ISSUED)
 
-- **CARD-STRIX-NET-ONLY — READ 2026-09-18, SPENT by R359(a); ordered as the first box cell after run8's START (R358(a)).** The parent
+- **CARD-STRIX-NET-ONLY — READ 2026-09-18, SPENT by R359(a); CLOSED by R366(a) 2026-09-21 (its A1's training-side hypothesis READ by PROBE-1 reading 4: proof 2.30 % [1.88, 2.72], strict novelty 0/112 — proof-as-target is DEAD, F-53); ordered as the first box cell after run8's START (R358(a)).** The parent
   (`run7_00042000_46fdb931.ckpt`) at PUCT-256 vs strix 256 sims with its root VCF solver OFF, 288
   paired games, book_v1, both colours, CONTENDED labelled; read beside the same session's solver-ON
   256/256 cell. Tooling LANDED 2026-09-18: `tools/strix_follower.py --once <ckpt> --unit net_only`
@@ -313,7 +353,13 @@ Both were found by running the gate set rather than by reading it, and both are 
   un-armed and un-read.** The queue is re-ordered by measurement, not by list: PROBE-1 (CARD-PROBE-1)
   admits or kills (vii) by the KL line, the proof lane by the proof-rate line, size and reuse by the gap
   line; LR and EMA are decided by the EMA cell and the drift reading (R365(d)); run10 may carry every
-  probe-supported change together and at most one un-probed hypothesis (CARD-RUN10-RULE).
+  probe-supported change together and at most one un-probed hypothesis (CARD-RUN10-RULE). **R366(b),
+  2026-09-21: (vii) RIDES run10** (`identity.arch_kind: GnnArchV2SoftPolicy`, `model.aux_soft_policy` T 4
+  / weight 4 in [2, 8]; the target's temperature on the EXPLICIT entries with the tail carried, on a
+  measurement — the whole-set form put 40 % of the soft mass on a ~1e-4 tail); **(i) rides from run9's
+  mint** with the value-gap witness beside it; **(ii) IS run10's one hypothesis** as `scheduler_t_max`
+  108 000 / `eta_min` 1e-4 (cosine 1e-3 → 1e-4 over the block, not the queue's 2e-4 → 2e-5); (iv) prior
+  temperature, (v) sims and (vi) policy-surprise weighting STAY QUEUED; (iii) is dead (F-53).
 - **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets
   (ownership/score are Go quantities, no graph-native source, strix's q_head unmeasured); net size
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
@@ -360,6 +406,8 @@ Both were found by running the gate set rather than by reading it, and both are 
   sims never enter it) and every self-play harness in the tree either walks a pinned ladder
   (`worker_sweep`) or needs a preflight stamp, so it is NOT MEASURED and is priced as P-B3's own 3-h
   twin in run10's preflight window, not asserted.** The numbers: `PERF3_2026-09-18.md` §step 3.
+  **R366(e), 2026-09-21: the design phase is CARD-PERF-4 (its own packet); this card is SPENT — steps
+  1–3 read, nothing built, nothing rides run10.**
 
 ## Opened by R355 (REPAIR-A4)
 
@@ -373,7 +421,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   watchdog's live `actor_lag_sample` (LAW-18) and its fire arm, and `Cadence.STEP_LAG_THRESHOLD`
   stays with them, so the row returns as a one-line manifest edit the day this card lands. The
   repair: the server owns a COPY the sync writes and the learner never reads; then EMA (and its
-  shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit.
+  shadow in the checkpoint, B-7's deferred half) and the lag row return in one commit. **LANDED
+  2026-09-21 (R366(b), one commit): `mantis.selfplay.pool.served_copy` — the server serves a net of the
+  DECLARED arch seeded from the learner, `ActorSync` writes it from `Trainer.actor_state_dict` (the
+  LEARNER's weights, EMA on or off: the actors serve the learner), the learner never reads it (the hash
+  witness `tests/train/test_server_owned_copy.py`); the EMA shadow is the DEPLOY net —
+  `Trainer.inference_state_dict` / `deploy_module` for the gate's candidate and promotion, `ema_state`
+  on the envelope (`checkpoint_envelope.md`) for the follower's cell and the ladder bot (`deploy_state`,
+  `weights: ema` on the receipt), restored on resume (`ema_shadow_reseeded` when the stamp has none);
+  the B-1 refusal is deleted, `train.ema.enabled: true` mints, the `actor_lag` row is BACK in the
+  REQUIRED set. Whether EMA ARMS on run10 is the cell's (prereg §2). CLOSED.**
 - **CARD-STYLE-BACKLOG — the judgment half of the R346(f) census, held by the ratchet.** The
   mechanical half landed 2026-09-17 (63 stale R8 headers, nine three-line runs, the labelled
   separator rules, a cite-only line, a file-top banner). What is left is a POLICY call and

@@ -1,4 +1,4 @@
-# RULINGS — R23 to R365
+# RULINGS — R23 to R366
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R366.
+- Numbering continues from R346. The next ruling is R367.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,91 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R366 — RUN10: THE POLICY-CAPACITY RUN — PROBE-1 read (the policy UNDERFIT at KL(prior‖target) 6.58 nats on a flat 2.1-nat loss; the value head MEMORISES its window, gap 0.13 on 18/18; mid-turn value calibration not a defect; every solver proof already in the searched target, F-53; the D6 spread falls while strength rises; no batch-size knee — the CPU launch stage is the bound; strix @ r6 beats the parent by 6.2 pp more than at r8, so every bar is strix @ r8); run10 under R365(c) = the soft-policy head (admitted) + reuse 2.4 / window 500k (watched by the value-gap witness) + net 6×192 (conditional on a leaves/s bench) + EMA deploy (conditional on its cell), with ONE hypothesis, LR cosine 1e-3 → 1e-4 over the block; witnesses are producers (held-out gap, per-mr one-hot, KL median, aux loss), read on the twin and at every 36k point, the reading at equal games with bar 0.192; strix @ r8 stays the series ruler, r6 a qualifier; PERF-4 is its own packet, nothing perf rides run10
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R365: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R366 — (a) PROBE-1 read: the policy is UNDERFIT (KL(prior‖target)
+> 6.58 nats median; loss 2.1 flat; held-out gap 0.09); the value head
+> MEMORISES its window (gap 0.13, 18/18); mid-turn value calibration
+> is not a defect (ratio 1.00); the searched target already holds every
+> proof the solver finds (novelty 0/112; F-53); the D6 spread falls
+> while strength rises (ARCH-D6 parked); no batch-size knee exists
+> (D-1 dead; the CPU launch stage is the bound). E1: strix at r6 beats
+> the parent by 6.2 pp more than at r8 — every bar is strix@r8.
+> (b) run10 = the POLICY-CAPACITY run under R365(c): soft-policy head
+> (admitted), reuse 2.4 with window 500k (admitted, watched by the
+> value-gap witness), net 6×192 (admitted on the policy line; rides on
+> a ≤ 25 % leaves/s bench), EMA deploy (rides on its cell). ONE
+> hypothesis: LR cosine 1e-3 → 1e-4 over the block.
+> (c) Witnesses are producers, not bands alone: held-out gap, per-mr
+> one-hot, KL median, aux loss — read on the twin and at every
+> 36k-step point. Reading at equal games, bar 0.192, resolution stated.
+> (d) Unit: strix@r8 stays the series ruler; r6 is a qualifier, read
+> once per run at block end if the box allows.
+> (e) PERF-4 (CPU stage per leaf) is its own packet; nothing perf rides
+> run10.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim;
+CARD-STRIX-NET-ONLY is CLOSED (its A1's training-side hypothesis was READ by PROBE-1's proof-rate row,
+F-53) and CARD-E1-RULER-R6 carries "strix @ r8" as the qualifier on every vs-strix citation; (2) run10 is
+ARMED on `dev` over run9's mint (`configs/run10.yaml`, byte-equal elsewhere, asserted by `config_diff
+--expect` on TWELVE leaves; `RUN10_PREREG_2026-09-21.md`): the parent run8@45k unchanged, σ raw, augment
+on, reuse 2.4 / burst 8 / window 500 000, the gate as regression guard, `eval_interval` 36 000, dirichlet
+off — all run9's rows; NEW, probe-admitted: `identity.arch_kind: GnnArchV2SoftPolicy` with
+`model.aux_soft_policy {target_temperature 4, weight 4 in the ENVELOPE [2, 8]}` — a second policy head on
+the searched target's EXPLICIT entries at 1/T with the tail carried as the hard target's (the whole-set
+`target^(1/T)` was MEASURED to put a median 40 % of the soft mass on a ~1e-4 tail, an artefact of the
+sparse row; under the explicit-only construction KL(t‖soft) reads 0.27 nats median, 76 % of rows > 0.1,
+the admission line held), behind `identity.arch_kind` with the detector, the conformance suite, the
+LAW-18 rows (`aux_soft_policy_loss`, `aux_soft_policy_kl_hard_vs_soft`, the two heads' own pre-clip
+gradient norms) and the LAW-07 planted break before the mint; the weight picked in the twin so the aux
+head's gradient norm ≈ the main head's (outside the envelope → HALT); the fresh head named in
+`identity.warm_start.reinit`; NEW, the hypothesis: `train.scheduler_t_max` 108 000 / `train.eta_min`
+1e-4 (cosine 1e-3 → 1e-4 over 45k games × 2.4), pinned through the trainer's own scheduler, torch's
+periodic tail past the horizon DISCLOSED and held by the STOP LAW; CONDITIONAL, net size: `model.gnn
+{hidden 192, num_layers 6}` (contract v35 made the trunk's shape a mint fact; run10 mints 4×128) rides
+only if `bench_server` in the preflight window reads leaves/s at B 64 ≥ 0.75× the 4×128 net's, else
+run11's row — WITH THE PROBLEM THE PACKET DID NOT PRICE stated in the prereg §2: a 6×192 net shares no
+tensor with the 4×128 parent, so the conditional cannot ride the run8@45k warm start and its ARMING is
+withheld until the operator rules a parent for it; CONDITIONAL, EMA deploy: rides only if the EMA cell
+(the SWA net `run8swa_00051000_ae478dee.ckpt`, 288 games at 256/256, 1.5 bh in the window) reads > 0.181;
+its prerequisite CARD-SERVER-OWNED-COPY is BUILT — the inference server serves its own copy of the
+declared arch, ActorSync writes it from the LEARNER's weights EMA on or off, the learner never reads it
+(the hash witness), the EMA shadow is the DEPLOY net (the gate's candidate, promotion, `ema_state` on the
+envelope for the follower and the ladder bot, restored on resume), `train.ema.enabled: true` mints again
+and the `actor_lag` row RETURNS to the manifest's REQUIRED set; (3) the IN-RUN WITNESSES are producers
+before the mint: the held-out gap (`train.heldout_gap`, contract v37: a sha-pinned FROZEN slice of the
+parent's 45k ring the run never trains on, read forward-only every 3 000 steps against the train loss
+since the last read, `heldout_gap` on the stream, the freeze's planted break), the per-mr one-hot rows
+and the tail-only count on `ring_audit` (PROBE-1's decomposer), the KL row the trainer already carries,
+the aux-loss rows; bands for the twin: value gap ≤ 0.26 (2× run8's 0.13; above = memorising → reuse
+re-picked inside [2.0, 3.0] by re-mint), one-hot pooled < 0.30 / mr1 < 0.40 / mr2 < 0.24 (re-derived from
+run8's nineteen rings, never asserted), `replay_ratio` 7–9, the R357 witness and the A-2 bands; (4)
+PRE-REGISTERED at EQUAL GAMES, strix @ r8, 256/256, against the parent's 0.142 [0.104, 0.181]: SUCCESS
+30k-games ≥ 0.192; FALSIFIED 15k ≤ 0.142 AND 30k ≤ 0.142; else read 45k-games THEN STOP; E4's resolution
+statement beside every cell; (5) CARD-PERF-4 OPENED, not for run10: the CPU launch stage (0.34–0.39
+ms/leaf, linear in B) is the bound, a Rust-side collate + pinned buffer + single launch is the design,
+`bench_server` its falsifier, determinism probe 0 required; (6) the BOX ORDER is the prereg's §6 (a fresh
+instance: `make vendor`, the strix build, `build.cuda`, the parent AND its ring AND the SWA net copied
+and sha-verified, preflight, the size bench and the EMA cell in the window, the conditionals settled
+BEFORE the stamp — a re-mint for a conditional is its own preflight — the 4 h twin inheriting it, the
+witness, START, `strix_follower --follow --no-promotions --cadence 36000 --unit equal_work`).
+Grounds: `PROBE1_2026-09-21.md` rows 1–6; `PERF3_2026-09-18.md` step 3 (the B-curve); the E1 receipt;
+F-53; `PARAM_DISTANCE_2026-09-21.md` §2; R365(c); the soft-target measurement of 2026-09-21 (267
+full-arm rows of run8@45k's ring through the production sample, recorded in the prereg §1a and the
+contract's v36 row).
+Amends: R365(b)'s "R366 composes run10" is DISCHARGED by (b); R364(d)'s "LR waits on the parameter-
+distance test (run10)" and R365(d)'s "LR and EMA are decided by the EMA cell and the drift reading" are
+APPLIED — LR is (b)'s one hypothesis, EMA the cell's conditional; R359(c)'s queue order is REPLACED for
+run10 by measurement under R365(c) — (vii) rides, (i) rides from run9's mint, (ii) is the hypothesis,
+(iv)/(v)/(vi) stay queued; R355(e)'s B-1 refusal (`train.ema.enabled: true` refused until the server owns
+a copy) is DISCHARGED — the copy is built; CARD-STRIX-NET-ONLY's A1 is CLOSED by (a) (F-53).
+Status: standing.
+
+---
 
 ### R365 — RUN9 NOT STARTED, PROBE-1, RUN10 DESIGNED FROM MEASUREMENTS: a 288-game cell resolves ≥ 4 pp and the run's slope is +0.7 pp per 15k games, so a 60-box-hour run read at that resolution returns INCONCLUSIVE by construction (E4) — run9's mint stands as run10's base, the box is released, the mirror is the record; PROBE-1 precedes run10 (six 0-box-h readings on run8's mirrored checkpoints and rings — the one-hot decomposer, mr-bucketed calibration, the train-vs-held-out gap, offline proof rate/novelty/ms-per-root, KL(prior‖target), the D6 spread series — plus one 1.5 bh EMA cell in run10's preflight window, each with a pre-stated reading that admits or kills a named run10 change); RULE (c): a probe-supported change may ride run10 without being the single swap, run10 carries at most one un-probed hypothesis; ratified — the steps-budget carry, 2.4 in the envelope, the gate as regression guard; struck — the < 0.25 one-hot band; LR and EMA are decided by the EMA cell and the drift reading; the ledger names three carried statements
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -112,7 +197,11 @@ released"; the `one_hot_share_full < 0.30` band R364 §0's prereg RE-STATED is S
 R364(d)'s "LR waits on the parameter-distance test" is QUALIFIED by (d) — the walk statistics alone do
 not decide LR, the EMA cell and the drift reading do; R359(c)'s one-swap-per-run order is AMENDED by
 (c) for run10 — probe-supported changes may ride together, at most one un-probed hypothesis.
-Status: standing.
+Status: standing — (b)'s "R366 composes run10" DISCHARGED by R366(b); (d)'s LR/EMA clause APPLIED by
+R366(b) (LR the hypothesis, EMA the cell's conditional); the < 0.25 band (d) struck is RE-DERIVED by
+R366(c) from the decomposer as pooled < 0.30 / mr1 < 0.40 / mr2 < 0.24 (the decomposer found no
+tail-only row on any run8 ring, so the struck band's premise did not hold — the band was right on the
+number, struck on a conflation that does not occur in run8's regime).
 
 ---
 

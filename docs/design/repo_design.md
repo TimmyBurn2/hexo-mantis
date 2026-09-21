@@ -263,6 +263,17 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
   `optimizer_state`, `scaler_state`, `scheduler_state`, `config` (complete snapshot,
   schema-validated on write AND read), `metadata` = { `encoding_name` (required),
   `run_id`, `step`, `commit_sha`, `created_utc`, `arch`, `corpus_sha256?` }.
+
+  <!-- AMENDMENT (R366(b) / CARD-SERVER-OWNED-COPY, 2026-09-21): the payload gains ONE optional
+       key, `ema_state` — the EMA shadow, the same key set as `model_state`, written only when
+       `train.ema.enabled` is true (an EMA-off stamp carries no key, never a null). It is the
+       DEPLOY net: `deploy_state(ck)` hands a deploy reader (the frontier cell, the ladder bot)
+       the shadow when present and `model_state` otherwise, saying which; a resume restores it
+       into the trainer's `EmaModel`; an EMA-on resume from a shadowless stamp re-seeds and emits
+       `ema_shadow_reseeded`. What made it safe: the inference server serves its OWN copy of the
+       declared arch (`mantis.selfplay.pool.served_copy`), written by ActorSync from the LEARNER's
+       weights and never read by the learner, so the actors serve the learner while deploy, gate
+       and follower read the shadow (`docs/contracts/checkpoint_envelope.md`). -->
 - Stamps are written once at creation and are IMMUTABLE — no re-stamping from a loaded
   config, ever. An artifact that cannot be stamped cannot be written (save fails loud;
   quarantine path if the run must survive).
