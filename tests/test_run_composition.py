@@ -27,6 +27,7 @@ from mantis.config.resolve.composition import (
 from mantis.config.schema import RunConfig
 from mantis.monitor.config import MonitorConfig
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 _SRC = _REPO / "src" / "mantis"
@@ -195,38 +196,6 @@ class FakePoolNeverStarted:
         self.step_calls.append(int(step))
 
 
-class _DrivableTrainer:
-    """WPTS/TD-1 re-point (R90a): conforms to the DECLARED seam — typed entry points +
-    `device`; the dead `train_step` fake is gone with the card."""
-
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd: dict = {}
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
-
 class _DrivableBuffer:
     size = 1000
     capacity = 100_000
@@ -265,7 +234,7 @@ def test_compose_run_publishes_its_boot_identity_first_through_the_one_authority
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     config = _bounded(smoke_run_config)
     mantis_run.compose_run(
-        config=config, trainer=_DrivableTrainer(),
+        config=config, trainer=DrivableTrainerStub(),
         pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -302,7 +271,7 @@ def test_compose_run_calls_build_run_safety_once_and_starts_watchdog_after_pool(
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     handles = mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config), trainer=DrivableTrainerStub(),
         pool=pool, buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -338,7 +307,7 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("with_eval"))
     _patch_eval_side(monkeypatch)
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config, eval_enabled=True), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -348,7 +317,7 @@ def test_wired_sources_include_eval_round_iff_pipeline_built(
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _make_fake_build_run_safety("no_eval"))
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config), trainer=DrivableTrainerStub(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -394,7 +363,7 @@ def test_sink_and_heartbeat_are_threaded_to_pipeline_and_coordinator(
     _patch_eval_side(monkeypatch, captured)
 
     mantis_run.compose_run(
-        config=_bounded(smoke_run_config, eval_enabled=True), trainer=_DrivableTrainer(),
+        config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
         pool=FakePoolNeverStarted(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -421,7 +390,7 @@ def test_trainer_deferred_sink_is_bound_to_run_safety_sink(
         )
 
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
-    trainer = _DrivableTrainer()
+    trainer = DrivableTrainerStub()
     trainer._sink = mantis_run._DeferredSink()  # the production adapter, on the drivable fake
 
     mantis_run.compose_run(
@@ -513,7 +482,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     monkeypatch.setattr(mantis_run, "build_run_safety", _fake_build_run_safety)
     cfg = _bounded(smoke_run_config, alert_entropy_min=2.75)
     mantis_run.compose_run(
-        config=cfg, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(),
+        config=cfg, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -557,7 +526,7 @@ def test_compose_run_refuses_a_model_copy_the_LOADER_would_reject(
         )
 
     monkeypatch.setattr(mantis.run, "build_run_safety", _must_not_be_called)
-    trainer, pool = _DrivableTrainer(), FakePoolNeverStarted()
+    trainer, pool = DrivableTrainerStub(), FakePoolNeverStarted()
 
     with pytest.raises(UnvalidatedConfigError, match="must be < train.max_train_steps"):
         mantis.run.compose_run(
@@ -634,7 +603,7 @@ def test_the_launch_pin_reaches_the_anchor_resolver_from_the_warm_start_row(
     config = RunConfig.model_validate(base)
     assert config.identity.warm_start is not None
     mantis.run.compose_run(
-        config=config, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(_OrderSpy()),
+        config=config, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(_OrderSpy()),
         buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
         checkpoint_dir=str(tmp_path / "ckpt"),
     )
@@ -654,7 +623,7 @@ def test_no_warm_start_row_means_NO_LAUNCH_PIN(
     config = _bounded(smoke_run_config, eval_enabled=True)
     assert config.identity.warm_start is None, "the minted smoke config already carries a row"
     mantis.run.compose_run(
-        config=config, trainer=_DrivableTrainer(), pool=FakePoolNeverStarted(_OrderSpy()),
+        config=config, trainer=DrivableTrainerStub(), pool=FakePoolNeverStarted(_OrderSpy()),
         buffer=mk_graph_buffer(n_records=32), log_dir=str(tmp_path),
         checkpoint_dir=str(tmp_path / "ckpt"),
     )

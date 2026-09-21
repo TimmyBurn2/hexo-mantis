@@ -21,6 +21,8 @@ from mantis.train.coordinator import StepCoordinator
 from mantis.train.heldout import HeldoutSlice, HeldoutSliceError
 from mantis.util.hashing import sha256_file
 from mantis.train.lifecycle.signals import ShutdownState
+from _coordinator_pool import CoordinatorPoolStub
+from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "dev_example.yaml"
@@ -100,57 +102,20 @@ def test_two_reads_at_the_same_weights_are_the_same_rows_and_the_planted_break_i
     assert any(d != drifting[0] for d in drifting), "un-seeded reads must drift, or the freeze is not what pins them"
 
 
-class _Trainer:
+class _Trainer(DrivableTrainerStub):
+    """The drivable stub with a policy loss that RISES by step (so the gap has a sign) and the eval step the witness reads."""
+
     device = torch.device("cpu")
 
     def __init__(self) -> None:
-        self.step = 0
-        self.model = torch.nn.Linear(1, 1)
+        super().__init__(model=torch.nn.Linear(1, 1))
         self.bundle_publisher = None
 
-    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 2.0 + self.step, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "lr": 1e-3}
+    def loss_info(self) -> dict[str, float]:
+        return {**super().loss_info(), "policy_loss": 2.0 + self.step}
 
     def eval_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
         return {"loss": 3.0, "policy_loss": 2.5, "value_loss": 0.6}
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
-
-class _Pool:
-    """The pool as `iteration_complete` reads it (test_ply_cap_gate's stub, one game per step)."""
-
-    def __init__(self) -> None:
-        self.games_completed = 0
-        self.n_workers = 1
-        self.search_kind = "puct"
-        self.avg_game_length = 20.0
-        self.x_winrate = 0.5
-        self.o_winrate = 0.45
-        self.draw_rate = 0.05
-        self.draws = 1
-        self.sims_per_sec = 100.0
-        self.batch_fill_pct = 0.9
-        self.recent_move_histories: list = []
-
-    def start(self) -> None: ...
-    def stop(self) -> None: ...
-    def check_producer_health(self) -> None: ...
-    def buffer_composition(self) -> dict[str, Any]:
-        return {}
-    def pooled_draw_counts(self) -> tuple[int, int]:
-        return (0, 0)
-    def ply_cap_window_counts(self, window_games: int) -> tuple[int, int]:
-        return (0, 0)
-    def current_stride5_p90(self) -> int:
-        return 1
-    def runner_stats(self) -> Any:
-        return SimpleNamespace(mcts_mean_depth=5.0, mcts_mean_root_concentration=0.1, cluster_value_std_mean=0.0,
-                               cluster_policy_disagreement_mean=0.0, cluster_variance_sample_count=0)
-    def update_checkpoint_step(self, step: int) -> None: ...
 
 
 class _Sink:
@@ -179,7 +144,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
     buffer = SimpleNamespace(size=100, capacity=1000, resize=lambda n: None, save_to_path=lambda p: None,
                              sample_graph_batch=opened.buffer.sample_graph_batch)
     coord = StepCoordinator(
-        trainer=_Trainer(), buffer=buffer, pretrained_buffer=None, recent_buffer=None, pool=_Pool(),
+        trainer=_Trainer(), buffer=buffer, pretrained_buffer=None, recent_buffer=None, pool=CoordinatorPoolStub(search_kind="puct"),
         eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None), shutdown=ShutdownState(),
         eval_model=object(), bufs=None, config=config,

@@ -30,6 +30,7 @@ from mantis.config.emit import resolve_config
 from mantis.monitor.manifest import verify_manifest
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.monitor.manifest import DEFAULT_MANIFEST_PATH
+from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 #: The SHIPPED manifest, from its own module. Its path constant had zero references while three
@@ -123,40 +124,12 @@ class _Pool:
         return None
 
 
-class _Trainer:
-    """Drivable stand-in for the trainer at the injected seam, conforming to the DECLARED
-    train-step surface."""
+class _Trainer(DrivableTrainerStub):
+    """The shared stub with a REAL directory and a `save_checkpoint` returning a REAL path: both signal-save legs write a resume sidecar BESIDE the checkpoint, so a fake returning None would leave the leg that makes the stop resumable unmeasured."""
 
     def __init__(self, on_step=None) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.saves: list = []
-        self._on_step = on_step
-        # A REAL directory and a `save_checkpoint` returning a REAL path: both signal-save legs
-        # write a resume sidecar BESIDE the checkpoint, so a fake returning None would leave the
-        # leg that makes the stop resumable unmeasured.
+        super().__init__(on_step=on_step)
         self.checkpoint_dir = Path(tempfile.mkdtemp(prefix="mantis-root-lifecycle-"))
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        if self._on_step is not None:
-            self._on_step(self.step)
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return {}
-
-    def actor_state_dict(self) -> dict:
-        return {}
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
 
     def save_checkpoint(self, loss_info) -> Path:
         self.saves.append(loss_info)
@@ -329,7 +302,7 @@ def test_a_signal_mid_run_saves_then_exits(
             _installed(signal.SIGTERM)
             os.kill(os.getpid(), signal.SIGTERM)
 
-    trainer._on_step = _signal_at_first_step
+    trainer.on_step = _signal_at_first_step
     handles = mantis_run.compose_run(
         config=_bounded(smoke_run_config), trainer=trainer, pool=_Pool(),
         buffer=mk_graph_buffer(n_records=32),

@@ -33,6 +33,7 @@ from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _drivable import DrivableTrainerStub
 
 _CONFIGS = Path(__file__).resolve().parents[2] / "configs"
 _DEV = load_config(_CONFIGS / "dev_example.yaml")
@@ -120,41 +121,6 @@ class _ComposePool(_Pool):
     @games_completed.setter
     def games_completed(self, value: int) -> None:
         self._games = int(value)
-
-
-class _Trainer:
-    """The double conforms to the DECLARED seam (typed entry points + `device`); augment
-    observation lives on the sampler the dispatcher threads it to."""
-
-    def __init__(self, grad_norm: float = 0.1) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self._gn = grad_norm
-
-    def _loss(self) -> dict[str, float]:
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": self._gn,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return self._loss()
-
-    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        return self._loss()
-
-    def inference_state_dict(self) -> dict:
-        return {"w": "SENTINEL"}
-
-    def actor_state_dict(self) -> dict:
-        return {"w": "SENTINEL"}
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None: ...
 
 
 def _real_graph_ring(n_records: int = 8, capacity: int = 64):
@@ -252,7 +218,7 @@ def _composed_coordinator_config(tmp_path, monkeypatch, smoke_run_config, mk_gra
         eval_enabled=False, run_id="knob_wiring",
     )
     handles = mantis.run.compose_run(
-        config=config, trainer=_Trainer(), pool=_ComposePool(),
+        config=config, trainer=DrivableTrainerStub(), pool=_ComposePool(),
         # 32 records: above every distinguishable warmup floor (`min_buf_size: 29`), so no
         # mutated drive can wedge in warmup against a too-small real buffer.
         buffer=mk_graph_buffer(n_records=32),
@@ -375,7 +341,7 @@ def _coordinator(*, pretrained=None, bot=None, trainer=None, eval_pipeline=None,
     )
     pool, buffer, sink = _Pool(), _Buffer(), _Sink()
     coord = StepCoordinator(
-        trainer=trainer or _Trainer(), buffer=buffer, pretrained_buffer=pretrained,
+        trainer=trainer or DrivableTrainerStub(), buffer=buffer, pretrained_buffer=pretrained,
         recent_buffer=None, pool=pool, eval_pipeline=eval_pipeline,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
@@ -557,12 +523,12 @@ def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:
     consecutive breaches, and a `min_steps` beyond the drive keeps it silent — so each knob is
     the binding term in one drive and not the other. Shipped at `1e9` this gate can never fire,
     which is why it is a DEFERRED armed-abort row."""
-    quiet = _coordinator(trainer=_Trainer(grad_norm=0.5), hard_gn_threshold=1.0,
+    quiet = _coordinator(trainer=DrivableTrainerStub(grad_norm=0.5), hard_gn_threshold=1.0,
                          hard_gn_min_steps=1)
     _drive(quiet, steps=4, games=1)
     assert quiet.coord.shutdown.running is True, "a grad norm below the threshold must not fire"
 
-    loud = _coordinator(trainer=_Trainer(grad_norm=5.0), hard_gn_threshold=1.0,
+    loud = _coordinator(trainer=DrivableTrainerStub(grad_norm=5.0), hard_gn_threshold=1.0,
                         hard_gn_min_steps=3)
     _drive(loud, steps=4, games=1)
     assert loud.coord.shutdown.running is False
@@ -571,7 +537,7 @@ def test_the_grad_norm_knobs_decide_whether_the_hard_abort_fires() -> None:
         f"{loud.trainer.step}"
     )
 
-    patient = _coordinator(trainer=_Trainer(grad_norm=5.0), hard_gn_threshold=1.0,
+    patient = _coordinator(trainer=DrivableTrainerStub(grad_norm=5.0), hard_gn_threshold=1.0,
                            hard_gn_min_steps=10**6)
     _drive(patient, steps=4, games=1)
     assert patient.coord.shutdown.running is True, (

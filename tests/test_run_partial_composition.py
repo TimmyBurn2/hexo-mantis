@@ -27,6 +27,7 @@ import pytest
 import mantis.run as mantis_run
 from mantis.config.resolve.disk_guard import resolve_disk_guard
 from mantis.train.lifecycle.disk_guard import DiskGuard
+from _drivable import DrivableTrainerStub
 
 #: The bounded burst every drive runs; 3 is the smallest legal run at cadence 1.
 _DRIVE_STEPS = 3
@@ -128,38 +129,6 @@ class _PartiallyStartingPool(_Pool):
         self.stopped = True
 
 
-class _Trainer:
-    """Drivable stand-in for the trainer at the injected seam, conforming to the DECLARED
-    train-step surface (`train_step_from_graph_batch` / `_from_tensors`, R102)."""
-
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.saves: list = []
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return {}
-
-    def actor_state_dict(self) -> dict:
-        return {}
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        self.saves.append(loss_info)
-
-
 class _RecordedDiskGuard(DiskGuard):
     """The REAL guard with one observation point; every behaviour is `super()`'s."""
 
@@ -244,7 +213,7 @@ def test_a_pool_that_comes_up_halfway_and_then_raises_is_still_stopped(
 
     with pytest.raises(_PartialStartFailure) as wall:
         mantis_run.compose_run(
-            config=_bounded(smoke_run_config), trainer=_Trainer(), pool=pool,
+            config=_bounded(smoke_run_config), trainer=DrivableTrainerStub(), pool=pool,
             buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         )
@@ -283,7 +252,7 @@ def test_an_eval_pipeline_wall_names_its_seam_and_closes_the_sink(
 
     with pytest.raises(_EvalPipelineWall) as wall:
         mantis_run.compose_run(
-            config=_bounded(smoke_run_config, eval_enabled=True), trainer=_Trainer(),
+            config=_bounded(smoke_run_config, eval_enabled=True), trainer=DrivableTrainerStub(),
             pool=pool, buffer=mk_graph_buffer(n_records=32),
             log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
         )
@@ -325,7 +294,7 @@ def test_the_disk_guard_receives_exactly_what_its_resolver_resolved(
     )
 
     mantis_run.compose_run(
-        config=config, trainer=_Trainer(), pool=_Pool(),
+        config=config, trainer=DrivableTrainerStub(), pool=_Pool(),
         buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )

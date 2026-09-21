@@ -36,6 +36,7 @@ from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
 from mantis.monitor.config import MonitorConfig
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 _CONFIGS_DIR = _REPO / "configs"
@@ -127,41 +128,11 @@ class _Pool:
         self.step_calls.append(int(step))
 
 
-class _Trainer:
-    def __init__(self, step: int = 0) -> None:
-        self.step = step
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
-
-    # The double conforms to the DECLARED seam (typed entry points + `device`).
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
-
 class _SentinelTrainError(RuntimeError):
     """Module-private on purpose: O-S5 must not be able to pass on an unrelated exception."""
 
 
-class _ExplodingTrainer(_Trainer):
+class _ExplodingTrainer(DrivableTrainerStub):
     def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
         raise _SentinelTrainError("the drive failed")
 
@@ -180,7 +151,7 @@ class _Buffer:
         return None
 
     def sample_batch_with_pos(self, n: int, augment: bool):
-        # The grid route's sampler; rows are opaque to _Trainer.
+        # The grid route's sampler; rows are opaque to the trainer stub.
         return (None,) * 9
 
 
@@ -282,7 +253,7 @@ def test_an_unvalidated_config_is_ONE_named_error_before_any_subsystem_exists(
 
     with pytest.raises(UnvalidatedConfigError, match="schema-validated"):
         mantis.run.compose_run(
-            config=subject, trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+            config=subject, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=_Buffer(),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
         )
 
@@ -321,7 +292,7 @@ def test_compose_run_rejects_a_monitor_cfg_KEYWORD_at_call_time(tmp_path, smoke_
     reached the watchdog with `armed=False`."""
     with pytest.raises(TypeError, match="monitor_cfg"):
         mantis.run.compose_run(
-            config=smoke_run_config(), trainer=_Trainer(), pool=_Pool(), buffer=_Buffer(),
+            config=smoke_run_config(), trainer=DrivableTrainerStub(), pool=_Pool(), buffer=_Buffer(),
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
             # `eval_enabled=` is GONE from this call deliberately: CPython names the FIRST
             # unexpected keyword, so a second dead kwarg would break `match="monitor_cfg"`.
@@ -470,7 +441,7 @@ def test_the_composed_encoding_is_the_declared_and_REGISTERED_one(
     )
 
     mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
@@ -500,7 +471,7 @@ def test_full_config_carries_the_real_config_not_an_empty_dict(
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
 
@@ -601,7 +572,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representa
     `eval_interval=1000`), which have no config authority.
     """
     cfg = _bounded(name, factory=smoke_run_config)
-    pool, trainer = _Pool(), _Trainer()
+    pool, trainer = _Pool(), DrivableTrainerStub()
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
@@ -621,7 +592,7 @@ def test_a_bounded_real_config_drive_syncs_every_step_on_the_declared_representa
         f"cadence 1 must sync on every step: {pool.step_calls}"
     )
     assert len(pool.sync_payloads) == _DRIVE_STEPS
-    assert all(sd is trainer.inference_sd for sd in pool.sync_payloads)
+    assert all(sd is trainer.actor_sd for sd in pool.sync_payloads), "the actors receive the LEARNER's weights, never the deploy view"
 
 
 def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
@@ -634,7 +605,7 @@ def test_the_run_length_ceiling_is_ABSOLUTE_not_per_process(
     Superficially indistinguishable from the frozen actor, hence pinned by name.
     """
     cfg = _bounded(factory=smoke_run_config, steps=5)
-    pool, trainer = _Pool(), _Trainer(step=7)
+    pool, trainer = _Pool(), DrivableTrainerStub(step=7)
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(

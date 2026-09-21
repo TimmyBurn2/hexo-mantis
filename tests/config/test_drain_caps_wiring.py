@@ -24,6 +24,7 @@ import mantis.run
 from mantis.config.resolve.drain import DrainCapsSpec, resolve_drain_caps
 from mantis.eval.pipeline import drain_budget_sec
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from _drivable import DrivableTrainerStub
 
 #: One distinguishable value per key. None is a shipped value (900/3/14400/14400), and the
 #: safety factor divides nothing else here, so a stale or defaulted number cannot match.
@@ -84,33 +85,6 @@ class _Pool:
     def update_checkpoint_step(self, step: int) -> None: ...
 
 
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return {"w": "SENTINEL"}
-
-    def actor_state_dict(self) -> dict:
-        return {"w": "SENTINEL"}
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None: ...
-
-
 class _Buffer:
     size = 1000
     capacity = 100_000
@@ -166,7 +140,7 @@ def _composed_caps(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, **d
         allocator_posture="default",
     )
     mantis.run.compose_run(
-        config=config, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=config, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "logs"), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     assert "coordinator_cfg_caps" in captured, "the drive never reached build_eval_pipeline"

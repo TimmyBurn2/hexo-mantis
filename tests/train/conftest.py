@@ -228,20 +228,12 @@ def make_run_config(encoding: str = GRAPH_ENCODING, representation: str = "graph
     return config
 
 
-# Every TrainHParams field is required, so this factory layers overrides over a full set and a
-# test passes only the fields it cares about.
+# Every TrainHParams field is required, so the ONE factory (`_microbatch_harness.graph_hparams`)
+# layers overrides over a full set and a test passes only the fields it cares about.
 def make_full_train_hparams(**over: Any):
-    from mantis.train.trainer.core import TrainHParams
+    from _microbatch_harness import graph_hparams
 
-    base = dict(
-        lr=1e-3, weight_decay=1e-4, grad_clip=1.0, lr_schedule="cosine",
-        total_steps=1_000_000, scheduler_t_max=None, eta_min=5e-4,
-        checkpoint_interval=0, value_target="pure_outcome_z",
-        policy_target="raw_visit_distribution", draw_reward=-0.5, ply_cap_value=-0.5,
-        policy_loss_warmup_steps=0, aux_soft_policy=None,
-    )
-    base.update(over)
-    return TrainHParams(**base)
+    return graph_hparams(**over)
 
 
 @pytest.fixture

@@ -35,7 +35,7 @@ from mantis._engine import HexgBuffer
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
-from mantis.model import GnnArch, build_net
+from mantis.model import GnnArch, build_net, gnn_widths_block
 from mantis.train import checkpoints
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.dispatch import resolve_step_spec, run_declared_train_step
@@ -264,7 +264,7 @@ def test_run5_config_produces_a_periodic_checkpoint_on_its_declared_route(
     here."""
     d = load_config(_REPO / "configs" / "run6.yaml").model_dump()
     d["train"]["checkpoint_interval"] = 2
-    d["model"]["gnn"] = {"hidden": _graph_arch().hidden, "num_layers": _graph_arch().num_layers}
+    d["model"]["gnn"] = gnn_widths_block(_graph_arch())
     hp = TrainHParams.from_config(d)
     spec = resolve_step_spec(d)
     trainer = _graph_trainer(tmp_path, d, hp, spy_sink)

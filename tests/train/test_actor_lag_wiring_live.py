@@ -18,6 +18,7 @@ import mantis.run
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.subsystems import build_run_safety
+from _drivable import DrivableTrainerStub
 
 _STOP_STEP = 3
 
@@ -66,35 +67,6 @@ class _Pool:
         self.step_calls.append(int(step))
 
 
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
-
-    # The double conforms to the DECLARED seam: typed entry points + `device`.
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None: ...
-
-
 class _Buffer:
     size = 1000
     capacity = 100_000
@@ -124,7 +96,7 @@ def _compose_capturing_lag_fns(tmp_path, monkeypatch, smoke_run_config, mk_graph
     validator spans `cadence < threshold < max_train_steps`, so `_STOP_STEP` must stay >= 3.
     """
     captured: dict = {}
-    pool, trainer = _Pool(), _Trainer()
+    pool, trainer = _Pool(), DrivableTrainerStub()
     monitor_overrides: dict = {"actor_lag_threshold_steps": _STOP_STEP - 1}
     if abort_enabled is not None:
         monitor_overrides["actor_lag_abort_enabled"] = abort_enabled

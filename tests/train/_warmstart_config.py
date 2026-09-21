@@ -16,8 +16,9 @@ _REPO = Path(__file__).resolve().parents[2]
 def minimal_config(arch: Any = None) -> dict[str, Any]:
     """The shipped graph example config as a plain mapping; with `arch`, `model.gnn` at the arch's own widths (v35)."""
     from mantis.config.loader import load_config
+    from mantis.model import gnn_widths_block
 
     config = load_config(_REPO / "configs" / "smoke_preflight_armed.yaml").model_dump()
     if arch is not None:
-        config["model"]["gnn"] = {"hidden": int(arch.hidden), "num_layers": int(arch.num_layers)}
+        config["model"]["gnn"] = gnn_widths_block(arch)
     return config

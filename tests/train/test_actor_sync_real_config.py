@@ -16,6 +16,7 @@ from typing import Any
 import mantis.run
 from mantis.config.schema.core import RunConfig
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from _drivable import DrivableTrainerStub
 
 _CADENCE = 2
 _STOP_STEP = 6
@@ -82,34 +83,6 @@ class _Pool:
         self.step_calls.append(int(step))
 
 
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None: ...
-
-
 class _Buffer:
     size = 1000
     capacity = 100_000
@@ -151,7 +124,7 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
     import mantis.train.anchor as _anchor
 
     captured: dict = {}
-    pool, trainer = _Pool(), _Trainer()
+    pool, trainer = _Pool(), DrivableTrainerStub()
 
     def _capture(**kwargs):
         captured.update(kwargs)

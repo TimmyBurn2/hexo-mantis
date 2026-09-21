@@ -35,6 +35,7 @@ from mantis.monitor.heartbeat import DISK_SPACE_EXHAUSTED_EXIT_CODE
 from mantis.run import RunCollaborators
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
+from _drivable import DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 
@@ -113,38 +114,6 @@ class _Pool:
         return None
 
 
-class _Trainer:
-    def __init__(self, on_step=None) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.saves: list = []
-        self._on_step = on_step
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        if self._on_step is not None:
-            self._on_step(self.step)
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return {}
-
-    def actor_state_dict(self) -> dict:
-        return {}
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        self.saves.append(loss_info)
-
-
 class _Drive:
     """What one `main()` drive observed: its rc, and the live objects it composed."""
 
@@ -197,7 +166,7 @@ def _drive_main(tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer, reques
             "drive's premise is broken, so nothing below would be measuring the fix"
         )
 
-    trainer = _Trainer(on_step=_await_fire if wait_for_fire else None)
+    trainer = DrivableTrainerStub(on_step=_await_fire if wait_for_fire else None)
     out_dir = tmp_path / "out"
     collaborators = RunCollaborators(
         trainer=trainer, pool=_Pool(), buffer=mk_graph_buffer(n_records=32),

@@ -58,6 +58,7 @@ from mantis.train.coordinator import drain
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
+from _drivable import DrivableTrainerStub
 
 #: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
 #: plus the sections the route's resolvers read. The caps are the template's NON-BINDING pair.
@@ -178,41 +179,19 @@ class _Pool:
         return None
 
 
-class _Trainer:
-    """A trainer stand-in carrying a REAL declared arch + net: `resolve_anchor` builds the
-    anchor from `trainer.arch`, so a bare object cannot stand in once a pipeline is composed."""
+class _Trainer(DrivableTrainerStub):
+    """The shared stub carrying a REAL declared arch + net: `resolve_anchor` builds the anchor from `trainer.arch`, so a bare object cannot stand in once a pipeline is composed."""
 
     def __init__(self, on_step: Any = None) -> None:
-        self.step = 0
-        self.device = "cpu"
-        self.saves: list = []
-        self._on_step = on_step
         self.arch = GnnArch(in_dim=8, edge_dim=4, hidden=8, num_layers=1,
                             policy_hidden=8, value_hidden=8)
-        self.model = build_net(self.arch)
-
-    def train_step_from_tensors(self, *args: Any, **kwargs: Any) -> dict[str, float]:
-        self.step += 1
-        if self._on_step is not None:
-            self._on_step(self.step)
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs: Any) -> dict[str, float]:
-        return self.train_step_from_tensors()
+        super().__init__(on_step=on_step, model=build_net(self.arch))
 
     def inference_state_dict(self) -> dict:
         return self.model.state_dict()
 
     def actor_state_dict(self) -> dict:
         return self.model.state_dict()
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info: Any) -> None:
-        self.saves.append(loss_info)
 
 
 class _Buffer:

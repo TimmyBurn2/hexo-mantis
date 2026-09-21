@@ -41,6 +41,7 @@ from mantis.run import _step_coordinator_config  # RED anchor — the renamed bu
 from mantis.train.coordinator.config import StepCoordinatorConfig, pooled_draw_rate
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
+from _drivable import DrivableTrainerStub
 
 def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
     """A real graph ring the coordinator stubs sample through; cross-test imports are barred,
@@ -134,36 +135,6 @@ class _Pool:
         return None
 
 
-class _Trainer:
-    def __init__(self, step: int = 0) -> None:
-        self.step = step
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
-
-    # The double conforms to the DECLARED seam (typed entry points + `device`).
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
-
 class _Buffer:
 
     def __init__(self) -> None:
@@ -226,7 +197,7 @@ def _coordinator(*, config, pool, trainer=None):
     with a config, not about how one is composed."""
     shutdown, sink = ShutdownState(), _SpySink()
     coord = StepCoordinator(
-        trainer=trainer or _Trainer(), buffer=_Buffer(), pretrained_buffer=None,
+        trainer=trainer or DrivableTrainerStub(), buffer=_Buffer(), pretrained_buffer=None,
         recent_buffer=None, pool=pool, eval_pipeline=None,
         subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
@@ -268,7 +239,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
     monkeypatch.setattr(mantis.run, "build_run_safety", _fake_run_safety)
 
     handles = mantis.run.compose_run(
-        config=cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
     )
     runtime = handles.coordinator.config.draw_rate_abort
@@ -290,7 +261,7 @@ def test_the_audited_value_IS_the_value_the_coordinator_runs_on(
 
     disarmed_cfg = _bounded(smoke_run_config, block=None)
     handles = mantis.run.compose_run(
-        config=disarmed_cfg, trainer=_Trainer(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
+        config=disarmed_cfg, trainer=DrivableTrainerStub(), pool=_Pool(), buffer=mk_graph_buffer(n_records=32),
         log_dir=str(tmp_path / "off"), checkpoint_dir=str(tmp_path / "off_ckpt"),
     )
     assert handles.coordinator.config.draw_rate_abort is None, (

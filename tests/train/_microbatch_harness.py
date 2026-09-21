@@ -16,7 +16,7 @@ import torch
 
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
-from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net
+from mantis.model import GnnArch, GnnArchV2SoftPolicy, build_net, gnn_widths_block
 from mantis.train.trainer.core import Trainer, TrainHParams
 
 GRAPH_ENCODING = "gnn_axis_v1"
@@ -162,7 +162,7 @@ def graph_config() -> dict[str, Any]:
     """`configs/dev_example.yaml` — graph, `gnn_axis_v1`, complete and schema-valid — with `model.gnn` at the tiny arch's own widths (v35: the writer refuses a stamp claiming another shape)."""
     config = minted_config("dev_example.yaml")
     arch = tiny_graph_arch()
-    config["model"]["gnn"] = {"hidden": arch.hidden, "num_layers": arch.num_layers}
+    config["model"]["gnn"] = gnn_widths_block(arch)
     return config
 
 

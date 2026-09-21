@@ -14,6 +14,7 @@ from typing import Any
 
 import mantis.run
 import mantis.train.actor_sync  # noqa: F401 — import anchor
+from _drivable import DrivableTrainerStub
 
 _STOP_STEP = 5
 
@@ -76,36 +77,6 @@ class _SyncRecordingPool:
         self.step_calls.append(int(step))
 
 
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "DEPLOY-SENTINEL"}
-        self.actor_sd = {"w": "ACTOR-SENTINEL"}
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.actor_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None:
-        return None
-
-
 class _Buffer:
     size = 1000
     capacity = 100_000
@@ -124,7 +95,7 @@ def test_compose_run_syncs_actor_on_cadence_without_eval(
     still records cadence-consistent weight pushes and the actor's recorded step ends inside
     the cadence bound of the learner's."""
     pool = _SyncRecordingPool()
-    trainer = _Trainer()
+    trainer = DrivableTrainerStub()
 
     def _fake_build_run_safety(**kwargs):
         return SimpleNamespace(

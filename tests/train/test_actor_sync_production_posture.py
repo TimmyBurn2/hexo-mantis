@@ -14,6 +14,7 @@ from typing import Any
 
 import mantis.run
 from mantis.train.coordinator.config import StepCoordinatorConfig
+from _drivable import DrivableTrainerStub
 
 _STOP_STEP = 4
 
@@ -63,34 +64,6 @@ class _SyncRecordingPool:
 
     def update_checkpoint_step(self, step: int) -> None:
         self.step_calls.append(int(step))
-
-
-class _Trainer:
-    def __init__(self) -> None:
-        self.step = 0
-        self.model = object()
-        self.device = "cpu"
-        self.inference_sd = {"w": "SENTINEL"}
-
-    def train_step_from_tensors(self, *args, **kwargs) -> dict[str, float]:
-        self.step += 1
-        return {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, "grad_norm": 0.1,
-                "policy_entropy": 2.0, "value_accuracy": 0.5, "lr": 1e-3,
-                "opp_reply_loss": 0.0, "loss_total": 1.0}
-
-    def train_step_from_graph_batch(self, **kwargs) -> dict[str, float]:
-        return self.train_step_from_tensors()
-
-    def inference_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def actor_state_dict(self) -> dict:
-        return self.inference_sd
-
-    def deploy_module(self):
-        return getattr(self, 'model', None)
-
-    def save_checkpoint(self, loss_info) -> None: ...
 
 
 class _Buffer:
@@ -144,7 +117,7 @@ def test_actor_syncs_with_eval_enabled_the_posture_a_real_run_uses(
     tmp_path, monkeypatch, smoke_run_config, mk_graph_buffer
 ):
     """THE production-posture pin: sync observed by consequence rather than syntax."""
-    pool, trainer = _SyncRecordingPool(), _Trainer()
+    pool, trainer = _SyncRecordingPool(), DrivableTrainerStub()
     _install_harness(monkeypatch)
 
     handles = mantis.run.compose_run(
@@ -179,7 +152,7 @@ def test_sync_volume_does_not_depend_on_whether_the_deploy_side_exists(
     """Both postures must sync. A difference between them IS the coupling R49 forbids."""
     results = {}
     for label, eval_enabled in (("no_eval", False), ("with_eval", True)):
-        pool, trainer = _SyncRecordingPool(), _Trainer()
+        pool, trainer = _SyncRecordingPool(), DrivableTrainerStub()
         _install_harness(monkeypatch)
         mantis.run.compose_run(
             # The loop variable is a CONFIG delta, so one config is built per posture
