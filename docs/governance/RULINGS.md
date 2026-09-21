@@ -1,4 +1,4 @@
-# RULINGS — R23 to R366
+# RULINGS — R23 to R367
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R367.
+- Numbering continues from R346. The next ruling is R368.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,66 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R367 — DESIGN STANDARD + REVIEW GATE (standing: code and tests keyed to mechanisms, never to a run — no runN in a symbol, test, pin or tool; production pins a CENSUS of configs/, never a list edited per mint; one implementation per thing; a comment states what code cannot; no compatibility shim for a state the tree no longer has; every implementation leg ends with a FRESH read-only review whose findings are fixed before merge, the dispatcher never reviewing its own leg); run10's 6×192 size conditional WITHDRAWN — no shape-compatible parent exists, run11's build is a function-preserving expansion (CARD-NET-EXPAND); the soft-target construction, the weight envelope and the held-out witness RATIFIED as landed; PRICE LAW — any act with a price (rent, stop, destroy, spec) is the operator's, the architect recommends with cost and alternative stated, R365(a)'s "released" annotated; the box criterion for run10 (CPU-first, 3090-class suffices, admission = bench_server alone at B 64 ≥ 0.85 × 2 466 leaves/s); REVIEW-1 ORDERED on 51f40a18..19e8351d before the run10 mint is green; configs/run9.yaml DELETED
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R366: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R367 — (a) DESIGN STANDARD, standing: code and tests are keyed to
+> mechanisms, never to a run — no runN in a symbol, test, pin or tool;
+> production pins are a census of configs/, not a list edited per mint;
+> one implementation per thing; a comment states what code cannot; no
+> compatibility shims for a state the tree no longer has. A leg that
+> violates it is not done.
+> (b) REVIEW GATE, standing: every implementation leg ends with a fresh
+> review agent, read-only, against (a) plus correctness (budget,
+> determinism, seam contracts, LAW-07 breaks). Findings are fixed
+> before merge; the review is part of the leg's record. The dispatcher
+> does not review its own leg.
+> (c) run10's 6×192 conditional is withdrawn: no shape-compatible
+> parent exists. The policy-underfit reading stands; run11's build is a
+> function-preserving expansion (CARD-NET-EXPAND). run10's rows are
+> otherwise as minted: soft head (target over explicit mass, tail
+> carried — ratified as measured), reuse 2.4 / 500k, LR cosine to 1e-4
+> over 108k, EMA on its cell, gate as guard, held-out gap witness.
+> (d) PRICE LAW: any act with a price — rent, stop, destroy, spec — is
+> the operator's. The architect recommends with the cost and the
+> alternative stated. R365(a)'s "released" was a breach; annotated.
+> (e) Box criterion for run10: CPU-first (modern Ryzen ≥ 16 cores),
+> 3090-class GPU suffices; admission = bench_server alone at B 64
+> ≥ 0.85 × 2 466 leaves/s.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+ANNOTATION A1 under R365's foot ("released … destroyed" — a stop existed; a priced act ruled by the
+architect); (2) run10's size conditional is WITHDRAWN — CARD-RUN10-SIZE-PARENT is CLOSED into
+CARD-NET-EXPAND (run11): a function-preserving width/depth expansion behind the seam, with a conformance
+section proving output equality at expansion; `RUN10_PREREG_2026-09-21.md` §2 and §6 carry the withdrawal
+in place (R311(c)), the 6×192 bench leaves the preflight window and `bench_server` at the minted 4×128
+becomes the box ADMISSION under (e); (3) the soft-target construction (the temperature on the explicit
+entries, the tail carried), the weight envelope ([2, 8], picked in the twin on the settled ratio) and the
+held-out witness (`train.heldout_gap`, v37) as landed are RATIFIED; (4) `configs/run9.yaml` is DELETED
+and its by-name pins go with it (the mint stood as run10's base, R365(a); run10 is minted, so the base is
+spent); (5) REVIEW-1 is ORDERED on `51f40a18..19e8351d` under (b) — a fresh read-only agent against (a)
+plus correctness, the packet's §2 checklist (run-keyed artefacts, duplication, comments, extensibility,
+correctness, bloat), its report `docs/audits/REVIEW_2026-09-21.md`; the run10 mint is NOT green until its
+findings are fixed, one commit per finding class, then the exit sweep and the push; only then the box, on
+the operator's rent; (6) renting, stopping, destroying or re-speccing the box is the operator's under (d);
+the architect states the cost and the alternative.
+Grounds: the R366 leg report §1 (three premise failures: no shape-compatible parent for 6×192, no `model`
+section, the whole-set soft target an artefact — STATE item 18), §3 (the weight envelope's CPU pre-read);
+`PERF3_2026-09-18.md` step 3 (2 466 leaves/s at B 64, alone; the CPU launch stage the bound); operator
+direction 2026-09-21.
+Amends: R366(b)'s "net 6×192 (admitted on the policy line; rides on a ≤ 25 % leaves/s bench)" and R366
+§0(2)'s size conditional are WITHDRAWN by (c) — the leaves (v35) and the bench path stay, the row moves to
+run11 as CARD-NET-EXPAND; the R366 leg's by-name production pins (STATE item 18: "every by-name
+production pin names run10") are the class (a) forbids and become a census in REVIEW-1's fix leg;
+R365(a)'s "The box is released" is ANNOTATED under (d), the fact (the instance destroyed 2026-09-21)
+unchanged; R366 §0(6)'s "the size bench … in the preflight window" is REPLACED by (e)'s admission bench at
+the minted shape.
+Status: standing.
+
+---
 
 ### R366 — RUN10: THE POLICY-CAPACITY RUN — PROBE-1 read (the policy UNDERFIT at KL(prior‖target) 6.58 nats on a flat 2.1-nat loss; the value head MEMORISES its window, gap 0.13 on 18/18; mid-turn value calibration not a defect; every solver proof already in the searched target, F-53; the D6 spread falls while strength rises; no batch-size knee — the CPU launch stage is the bound; strix @ r6 beats the parent by 6.2 pp more than at r8, so every bar is strix @ r8); run10 under R365(c) = the soft-policy head (admitted) + reuse 2.4 / window 500k (watched by the value-gap witness) + net 6×192 (conditional on a leaves/s bench) + EMA deploy (conditional on its cell), with ONE hypothesis, LR cosine 1e-3 → 1e-4 over the block; witnesses are producers (held-out gap, per-mr one-hot, KL median, aux loss), read on the twin and at every 36k point, the reading at equal games with bar 0.192; strix @ r8 stays the series ruler, r6 a qualifier; PERF-4 is its own packet, nothing perf rides run10
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -116,7 +176,10 @@ APPLIED — LR is (b)'s one hypothesis, EMA the cell's conditional; R359(c)'s qu
 run10 by measurement under R365(c) — (vii) rides, (i) rides from run9's mint, (ii) is the hypothesis,
 (iv)/(v)/(vi) stay queued; R355(e)'s B-1 refusal (`train.ema.enabled: true` refused until the server owns
 a copy) is DISCHARGED — the copy is built; CARD-STRIX-NET-ONLY's A1 is CLOSED by (a) (F-53).
-Status: standing.
+Status: standing — (b)'s net 6×192 conditional and §0(2)'s size row WITHDRAWN by R367(c) (no shape-compatible
+parent exists; run11's build is a function-preserving expansion, CARD-NET-EXPAND); the soft-target
+construction, the weight envelope and the held-out witness as landed RATIFIED by R367 §0(3); the leg is
+not DONE under R367(a) until REVIEW-1's findings are fixed (R367(b), §0(5)).
 
 ---
 
@@ -4532,6 +4595,19 @@ deleted until run10's mint replays it; the eleven rows are not re-litigated. The
 window's box work), the mirror is the record.
 The omission was the architect's — the resolution premise was priced by no brief before the mint.
 Ordered by: R365(a), appended 2026-09-21 by its landing session
+
+### ANNOTATION under R365's foot (A1) — (a)'s "THE BOX IS RELEASED" WAS A PRICED ACT RULED BY THE ARCHITECT
+Corrects: the standing of the release clause in R365(a) and of §0(3)'s "the instance destroyed" as
+acts the architect could order; nothing in the fact (the instance WAS destroyed 2026-09-21 10:17 UTC
+after the E1 cell and PERF-3 step 3; the mirror is the record) and nothing in (b)–(e)
+Fact: run8 was already STOPPED (55 170, `shutdown_save`, 08:23:44 UTC) when the release was ordered —
+a stop existed, and holding the stopped instance at idle rent until run10's preflight was an
+alternative with a price of its own against the fresh instance's `make vendor` / strix build /
+`build.cuda` / parent + ring + SWA copy and sha-verify (the prereg's §6 sequence from zero). Neither
+price was stated beside the other; the clause ruled the destroy rather than recommending it. R367(d)
+states the rule: any act with a price — rent, stop, destroy, spec — is the operator's; the architect
+recommends with the cost and the alternative stated. The breach was the architect's.
+Ordered by: R367(d), appended 2026-09-21 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure

@@ -81,6 +81,24 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R367 (DESIGN STANDARD + REVIEW GATE; SIZE CONDITIONAL WITHDRAWN; PRICE LAW; 2026-09-21)
+
+- **CARD-NET-EXPAND — run11's build: a FUNCTION-PRESERVING width/depth expansion of the trunk behind the
+  seam, with a conformance section proving output equality at expansion.** OPENED by R367(c) from
+  CARD-RUN10-SIZE-PARENT (CLOSED below): no shape-compatible parent exists for a 6×192 `GnnNetV2`, so the
+  size row leaves run10 and returns as an EXPANSION — a wider/deeper net initialised FROM the 4×128 parent
+  so that its served outputs equal the parent's at the moment of expansion, behind the arch seam
+  (`identity.arch_kind` / `model.gnn`, v35) as a warm-start path rather than a new kind; the conformance
+  suite gains a section that builds the parent, expands it and asserts output equality on the fixture
+  batch. Design before code (R9): the expansion's mechanism and its identity proof are a design doc under
+  `docs/design/` first; the expanded shape's leaves/s is `bench_server`'s reading on the box (IDLE, B 64)
+  and is recorded before the row is armed. Not run10's; nothing perf rides it (R366(e)).
+- **CARD-REVIEW-1 — the R366 leg's review under R367(b), ORDERED on `51f40a18..19e8351d`.** A fresh
+  read-only agent against R367(a) plus correctness (budget, determinism, seam contracts, LAW-07 breaks),
+  the packet's §2 checklist; the report is `docs/audits/REVIEW_2026-09-21.md`; the fix leg lands one
+  commit per finding class; the run10 mint is not green until then. Spent when the report and the fix
+  leg are on the record.
+
 ## Opened by R366 (RUN10: THE POLICY-CAPACITY RUN; 2026-09-21)
 
 - **CARD-PERF-4 — OPENED by R366(e), its own packet; NOTHING from it rides run10.** PERF-3 step 3 read
@@ -92,7 +110,10 @@ Both were found by running the gate set rather than by reading it, and both are 
   line stays PERF-3's ≥ 1.4× on the same machine, and the determinism probe (the same-cell bf16 witness)
   must read 0 — a faster server that serves different numbers is not the same server. Design only after a
   ruling; the box work is a perf-host event, not run10's window.
-- **CARD-RUN10-SIZE-PARENT — the size conditional's UNPRICED PREMISE, the operator's ruling before any
+- **CARD-RUN10-SIZE-PARENT — CLOSED by R367(c) 2026-09-21 into CARD-NET-EXPAND (run11): the size
+  conditional is WITHDRAWN, no shape-compatible parent exists, and the ruling the card waited on is
+  that run11's build is a function-preserving expansion; the record below stands as the grounds.**
+  As opened: the size conditional's UNPRICED PREMISE, the operator's ruling before any
   re-mint arms `model.gnn: {hidden: 192, num_layers: 6}`.** R366 §0(2) states the conditional over "parent:
   run8@45k (unchanged)", but a 6×192 `GnnNetV2` shares NO tensor shape with the 4×128 parent (`input_proj`
   11→192, every conv 192→192, the JK-cat readout 6 × 192 = 1 152 wide into both heads against 512) and

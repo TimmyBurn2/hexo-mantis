@@ -76,6 +76,20 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
    verified repo state is repaired in place by whoever finds it, noted in one line, no loop
    (R311(c)); register text still corrects only by annotation.
    Reason: re-litigating falsified work and silent contract drift burned weeks before.
+10. **R10 design standard + review gate (R367(a)/(b)).** Code and tests are keyed to MECHANISMS,
+    never to a run: no `runN` in a symbol, test, pin or tool; production pins are a CENSUS of
+    `configs/` (discovered minus the exempt set), never a list edited per mint; one implementation
+    per thing; a comment states what code cannot; no compatibility shim for a state the tree no
+    longer has. Every implementation leg ends with a FRESH read-only review agent against this
+    rule plus correctness (budget, determinism, seam contracts, LAW-07 breaks); its findings are
+    fixed before merge, its report lives under docs/audits/, and the dispatcher never reviews its
+    own leg. A leg that violates either half is not done.
+    Reason: the run10 mint edited seven by-name pin sets and left a run-named schedule test
+    (R367 packet, 2026-09-21); the leg that wrote them ran its own exit sweep and no review.
+11. **R11 price law (R367(d)).** Renting, stopping, destroying or re-speccing the box is the
+    OPERATOR'S act. A session recommends it with the cost and the alternative stated; it never
+    orders or performs it (R365(a)'s "released" was the breach, annotated).
+    Reason: a destroyed instance is a fresh instance's full setup, paid again.
 
 ## Laws digest (full text: docs/governance/archive/laws.md)
 

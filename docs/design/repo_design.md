@@ -323,6 +323,14 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
        so there is no radius arm for a regime-parity test to assert. -->
 - Census pins (grep-gate tests) guard classes the type system can't reach; each names
   its bug class and its triage protocol.
+- AMENDMENT (R367(a)/(b), 2026-09-21), the DESIGN STANDARD: code and tests are keyed to
+  mechanisms, never to a run — no `runN` in a symbol, test, pin or tool; "production configs" is
+  a CENSUS (discovered `configs/` minus the exempt set, each exemption carrying its reason as
+  data), never a list edited per mint; one implementation per thing; a comment states what code
+  cannot; no compatibility shim for a state the tree no longer has. Every implementation leg
+  ends with a fresh read-only review against this bullet plus correctness (budget, determinism,
+  seam contracts, LAW-07 breaks); the report lives under `docs/audits/`; findings are fixed
+  before merge; the dispatcher does not review its own leg.
 - Rust: inline unit tests near code; invariant pins and cross-language goldens under
   `crates/*/tests/`; proptest for board invariants; goldens are f32-bit-exact where the
   contract is numeric identity.
