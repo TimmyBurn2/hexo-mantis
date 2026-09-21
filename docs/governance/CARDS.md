@@ -81,6 +81,24 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R364 (RUN8 STOP, RUN9 = DATA REGIME, GATE AS REGRESSION GUARD; 2026-09-21)
+
+- **CARD-ARCH-D6 — OPENED by R364(d), NOT ARMED; the lever after the knobs.** A D6-equivariant net
+  behind the capability seam (the arch selector, `identity.arch_kind`; `GnnArchV2` is the incumbent).
+  Witness BEFORE any training: the analyzer's symmetry spread per checkpoint (ANALYZER-1's first
+  reading, R363(d): run8@18k spreads 0.146 over the 12 elements on a CHECK position, translation exact,
+  argmax 12/12) — an equivariant net reads 0 by construction, and the detector that reads it is what
+  lands first; then a conformance test (the 24 × 12 D6-lossless positions of
+  `crates/mantis-graph/tests/d6_lossless.rs`, the net's outputs equal across the orbit to a stated
+  tolerance) before a single training step. Order: after the queue's knobs (CARD-RUN9-QUEUE: (i) rides run9; (ii) LR waits on
+  `PARAM_DISTANCE_2026-09-21.md`, run10's; (iv) prior temperature queued while one-hot is flat). Not a
+  run9 change; not a run10 change without its own ruling.
+- **CARD-RUN9-STOP-LAW — the rule R364(a) states, carried until run9's own stop discharges it.** A run
+  STOPS at its last pre-registered read unless a ruling extends it; run9's line says "read 45k-games
+  THEN STOP" (`RUN9_PREREG_2026-09-19.md` §3). Nothing in the config stops the run (`max_train_steps`
+  1 000 000, byte-equal by R364 §0(3)); the box session's SIGTERM does, once the deciding cell is read.
+  Grounds: run8 ran 8 h past 45k on an omission (A1 under R363's foot).
+
 ## Opened by the LADDER-1 packet (2026-09-19, register head R362); moved by R363 (2026-09-20: the unit FIXED, the server items CARDED)
 
 - **CARD-LADDER-RUNG — OPENED 2026-09-19: design + shakedown LANDED; the UNIT FIXED by R363(c) 2026-09-20; NOT an instrument of record until its admission cell is read.**
@@ -157,7 +175,14 @@ Both were found by running the gate set rather than by reading it, and both are 
   state, `eval_channel_health` and `wr_sealbot` (contract v33, repo_design amendment R362(c));
   gate sims 256 and the GSPRT 0.52/0.62 UNCHANGED (64 unmeasured; H0 0.50 withdrawn, R362(d));
   the gate's rule fields on the stream (the card below). Gate = internal comparator and parent
-  selector; strix cells = external scale. What remains OPEN under this card: gate sims 64 as a
+  selector; strix cells = external scale. **MOVED by R364(c), 2026-09-21: the gate is a REGRESSION
+  GUARD on run9** — H0 0.42 / H1 0.52 (the zero-drift point 0.47: an equal candidate drifts to
+  accept), cap 104, `eval.gate.sequential.at_max_pairs: promote` (contract v34 — the cap promotes; a
+  GSPRT reject is the one way the anchor stays; run7/run8's files re-minted with `sign`, what they
+  ran); the cadence 15 000 is GAMES (36 000 steps at 2.4); parent selection stays the strix triple
+  (R363(b) applied). Grounds: r6–r17 all rejected against the 15k anchor under 0.52/0.62 (two cap
+  rounds at 0.536 / 0.524 rejected by the sign) while strix rose 0.104 → 0.142 — a gate that cannot
+  resolve the run's gain selects nothing and cost 51 % of run8's wall. What remains OPEN under this card: gate sims 64 as a
   MEASURED cell (a bench in run9's preflight window beside PERF-3 step 3, not a census) — the one
   pre-stated direction R362 neither adopted nor killed. The census's reading, kept for the
   record: what the census gives each pre-stated
@@ -224,7 +249,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   (iv), (v). run9's mint also DROPS the `selfplay.mcts.dirichlet_*` rows (R359(d): inert on the
   Gumbel arm by code, so a cosmetic) with one pin that the Gumbel arm never applies Dirichlet.
   FALSIFIED run8 → run9 = parent + A-2 + augment with run7's σ (rescale): σ leaves, augmentation
-  stays (R358(b)).
+  stays (R358(b)). **R364(b), 2026-09-21: (i) RIDES run9** — `train.replay_capacity` 500 000,
+  `train.training_steps_per_game` 2.4 inside the envelope [2.0, 3.0] (predicted reuse 7.7; the
+  shakedown's `replay_ratio` decides whether it stands, `RUN9_PREREG_2026-09-19.md` §1b), `max_train_burst`
+  8, the budget's remainder now CARRIED (`mantis.train.mixing`, a correctness fix the envelope needed:
+  at HEAD one game per burst realised integers only); the `dirichlet_*` rows dropped to `false` with the
+  pin landed (`dirichlet_root_fires`, `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`).
+  (ii) LR WAITS on the parameter-distance test (READ: `PARAM_DISTANCE_2026-09-21.md` — the step flat,
+  the coherence falling 0.15 → 0.03, the weight norm +49 %; the call is the operator's, run10's).
+  (iv) prior temperature STAYS QUEUED (one-hot 27 % flat). The gate rows beside the swap: H0 0.42 /
+  H1 0.52, cap 104, `at_max_pairs: promote` (CARD-EVAL-REDESIGN).
 - **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets
   (ownership/score are Go quantities, no graph-native source, strix's q_head unmeasured); net size
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
@@ -257,7 +291,9 @@ Both were found by running the gate set rather than by reading it, and both are 
   **R361(d), 2026-09-19:** step 3 gains a CONTENDED arm — the same B-curve beside one strix cell —
   and the success line is stated in BOTH regimes (alone, beside a cell); the census measured the
   cell's cost in a second unit, run8's trainer at 356–415 steps/h inside a cell against 999–1 069
-  alone (`EVAL_COST_2026-09-19.md` §(iv)).
+  alone (`EVAL_COST_2026-09-19.md` §(iv)). **R364 §0(6), 2026-09-21:** step 3's window is FIXED — after
+  run8's stop, before run9's stamp, ≈ 40 min (B ∈ {16 … 256} alone, then the contended arm beside one
+  cell); numbers before any design; nothing from it rides run9.
 
 ## Opened by R355 (REPAIR-A4)
 

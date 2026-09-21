@@ -1,4 +1,4 @@
-# RULINGS — R23 to R363
+# RULINGS — R23 to R364
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R364.
+- Numbering continues from R346. The next ruling is R365.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,78 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R364 — RUN8 STOP, RUN9 = DATA REGIME, GATE AS REGRESSION GUARD: a run stops at its last pre-registered read unless a ruling extends it (run8 ran 8 h past 45k on the architect's omission, stopped now at ≈ 53k; +3.1 pp over the parent at 45k, a monotone triple, one-hot 27 % flat, 51 % of wall in a gate that cannot resolve the gain — σ + augment is the base, not a success by R356(c)); run9's PARENT = run8@45k, its ONE training swap the DATA REGIME (window 500 000, reuse held ≈ 8 by an envelope on `training_steps_per_game` measured on the shakedown), read at EQUAL GAMES with box-hours beside; the gate becomes a REGRESSION GUARD (H0 0.42 / H1 0.52, cap 104, promote on accept or cap; parent selection stays the strix triple); LR waits on the parameter-distance test, prior temperature stays queued, CARD-ARCH-D6 opened unarmed; STOP LAW for run9 — 30k games, or 45k on INCONCLUSIVE
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R363: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R364 — (a) A run STOPS at its last pre-registered read unless a ruling
+> extends it. run8 ran 8 h past 45k on the architect's omission; stopped
+> now at ≈ 53k. Its record: +3.1 pp over the parent at 45k (0.142), a
+> monotone triple, targets soft, one-hot 27 % flat, 51 % of wall in a
+> gate that cannot resolve the gain. σ + augment is the base; not a
+> success by R356(c).
+> (b) run9 PARENT = run8@45k (R363(b) applied). ONE training swap: the
+> DATA REGIME — window 500 000 rows, reuse held ≈ 8 (envelope on
+> training_steps_per_game, measured on the shakedown). Grounds: trainer
+> idle 92 % (F-44); reuse 3.2 vs 8.0 held on the same game; augmentation
+> is the overfitting guard. Read at EQUAL GAMES, box-hours beside.
+> (c) The gate becomes a REGRESSION GUARD: H0 0.42 / H1 0.52, cap 104,
+> promote on accept or cap; the anchor follows the run unless the
+> candidate is clearly worse. Parent selection stays the strix triple.
+> (d) LR waits on the parameter-distance test (run10). Prior temperature
+> stays queued (one-hot flat). CARD-ARCH-D6 opened as the lever after
+> knobs; not armed.
+> (e) STOP LAW for run9: 30k games, or 45k games on INCONCLUSIVE; no
+> further step without a ruling.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+ANNOTATION A1 under R363's foot ("read 45k" lacked "then stop"; the architect's; 8 h); (2) run8's
+STOP is GRANTED to the box session — one SIGTERM, `shutdown_save`, the bundle receipted; 45k is
+mirrored, its cell ran; (3) run9 is ARMED over run8's mint, byte-equal elsewhere and asserted by
+`config_diff --expect` on eleven leaves (`configs/run9.yaml`; `RUN9_PREREG_2026-09-19.md` filled):
+the warm start `run8_00045000_3bdedf76.ckpt` / net `3aef7883…`, `train.replay_capacity` 500 000,
+`train.training_steps_per_game` in the ENVELOPE [2.0, 3.0] set so the shakedown's measured
+`replay_ratio` reads 7–9 (minted 2.4, predicted 7.7; the dispatcher's pick, reported; outside the
+band → re-pick inside the envelope, a base rate no value reaches → HALT), `train.max_train_burst`
+raised to 8 to match — the key's semantics at HEAD were VERIFIED and found quantised (a per-burst
+`round()`, no remainder carried, one game per burst on 98 % of run8's bursts: 2.5 realised 2), so
+the budget now carries its fraction (`mantis.train.mixing`, pinned), a correctness fix and not a
+second swap; `train.eval_interval` = 15 000 GAMES in steps (2.4 × 15 000 = 36 000, a checkpoint step);
+the gate `mu0` 0.42 / `mu1` 0.52, cap 104, and the NEW leaf `eval.gate.sequential.at_max_pairs`
+(contract v34: `sign` is run7/run8's rule, re-minted through their headers; `promote` is run9's —
+promote on accept OR cap); `selfplay.mcts.dirichlet_enabled: false` with R359(d)'s pin landed
+(`dirichlet_root_fires` on the runner snapshot, 0 under Gumbel with the rows armed, > 0 under PUCT).
+(4) PRE-REGISTERED at EQUAL GAMES against the parent 0.142 [0.104, 0.181]: SUCCESS 30k-games ≥ 0.192;
+FALSIFIED 15k-games ≤ 0.142 AND 30k-games ≤ 0.142 → reuse dead, run10 = run9's parent at run8's
+rows; else INCONCLUSIVE → read 45k-games THEN STOP; box-hours per point beside every point. (5) The
+follower's cadence = 15 000 games in steps (36 000), 288 games, CONTENDED labelled. (6) PERF-3 step 3
+runs in the window after run8's stop and before run9's stamp (B ∈ {16 … 256} alone, then the contended
+arm beside one cell; ≈ 40 min; numbers before any design, nothing from it rides run9). (7) The
+parameter-distance test on run8's checkpoints is READ (`PARAM_DISTANCE_2026-09-21.md`: the 3k-step
+displacement flat at 19–24 under a flat LR, successive displacements nearly orthogonal with the
+coherence falling 0.15 → 0.03, the path k^0.71 between diffusive and ballistic, the weight norm +49 %
+with the value head's +96 %) — LR's place for run10 is the operator's call on those numbers. (8)
+CARD-ARCH-D6 OPENED (a D6-equivariant net behind the capability seam; witness = the analyzer's
+symmetry spread per checkpoint; detector + conformance before any training; NOT armed). The box order
+is `RUN9_PREREG_2026-09-19.md` §5: run8 STOP → PERF-3 step 3 → preflight → the twin inherits it → the
+4 h shakedown → the witness (QSigma pin, the ring bands with `one_hot_share_full` RE-STATED at < 0.30
+because the parent's own rings read 27 %, `replay_ratio` 7–9, sym bins, entropy) → START → the follower
+`--cadence 36000`.
+Grounds: run8 mirror read 05:50 UTC 09-21; the 45k receipt; the 45k ring audit; the r11–r17 gate
+table; STRENGTH_RESEARCH §Q2; F-44; the ANALYZER-1 symmetry reading.
+Amends: R362(c)'s "GSPRT bounds unchanged" is MOVED by (c) (H0 0.42 / H1 0.52, promote on accept or
+cap) and its "gate = internal comparator and parent selector" is settled — the gate is a regression
+guard, the parent is the strix triple's; R362(e) and R363(b)'s "H1 re-set from the measured per-15k
+gain" are DISCHARGED by (b) and (c) — the swap and the gate are ruled together, the gain (+3.1 pp
+then +0.7 pp) being below any H1 the gate could resolve; R363(a)'s "run8 continues to 45k" is
+ANNOTATED by (a) (A1 under R363's foot: it lacked "then stop"); R359(c)'s order is APPLIED — (i) the
+data regime rides run9, (ii) LR waits on (d), (iv) stays queued; R359(d) is DISCHARGED (the rows
+dropped, the pin landed).
+Status: standing.
+
+---
 
 ### R363 — 30K RECORDED, PARENT RULE FOR 45K, LADDER UNIT, ANALYZER ADMITTED: run8@30k 0.135 [0.097, 0.177] against the parent's 0.111 is INCONCLUSIVE by R356(c) and run8 runs to 45k, whose cell decides under the three-cell rule; a frozen gate is not a ranking (the anchor froze at 15k, r6–r10 rejected while strix and sealbot rose) — run9's PARENT RULE is PRE-STATED (the follower series 15k → 30k → 45k monotone non-decreasing on point estimates → the parent is 45k; otherwise the highest of the three whose CI contains the other two's points; the gate's best_model only if no strix triple exists) and run9's gate H1 is re-set from the measured per-15k gain; the LADDER unit is `book_v1_s20260625_p4` paired, admission ONE 288-game IDLE cell beside a follower cell on the same checkpoint; ANALYZER-1 admitted under R9 as amended, its first reading a GNN-2 witness; the LADDER-1 witnesses are the instrument's budget proof and its 2-distinct-games reading a finding about openings
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -85,7 +157,11 @@ QUALIFIED by (b) for run9's H1, re-set from the measured per-15k gain when the s
 R362(e)'s "ruled at 30k" MOVES to the 45k cell by (a) (the 30k reading is INCONCLUSIVE, whose
 pre-stated action is read 45k). R356(c)'s three-outcome reading is APPLIED, not moved, and
 R356(a)'s "no best is acted on before three cells agree" is given its form by (b).
-Status: standing.
+Status: standing — (a)'s "run8 continues to 45k; its cell decides" lacked "then stop" and run8 ran
+8 h past the read; ANNOTATED under R363's foot (A1) by R364(a), which states the rule (a run stops
+at its last pre-registered read) and grants the stop. (b)'s PARENT RULE is APPLIED by R364(b)
+(the triple monotone → run8@45k); its "H1 re-set from the measured per-15k gain" is DISCHARGED by
+R364(c) — the gate is re-set as a regression guard, the gain being below what it can resolve.
 
 ---
 
@@ -145,8 +221,11 @@ confirmed by (b) with the no-re-mint sentence added.
 Status: standing — (c)'s roles line and its "GSPRT bounds unchanged" are QUALIFIED by R363(b)
 (run9's parent is chosen from the follower series under the pre-stated PARENT RULE, the gate's
 best_model only when no strix triple exists; run9's gate H1 is re-set from the measured per-15k
-gain when the swap is ruled); (e)'s "ruled at 30k" MOVES to the 45k cell by R363(a), the 30k
-reading having come in INCONCLUSIVE.
+gain when the swap is ruled) and then MOVED by R364(c): the bounds are H0 0.42 / H1 0.52 with
+`at_max_pairs: promote` on run9 (a regression guard; run7/run8's 0.52/0.62 sign-at-max rule stands
+on their files), the cadence 15 000 is read in GAMES (36 000 steps at run9's 2.4); (e)'s "ruled at
+30k" MOVED to the 45k cell by R363(a) and was RULED there by R364(b): the parent run8@45k, the swap
+the data regime.
 
 ---
 
@@ -4241,6 +4320,17 @@ games (38–40 s each at 256/256 over 91–93 plies), not in the pair count
 `gsprt_llr` / `gsprt_decision`). The mechanism was the architect's; R362(d) withdraws the
 clause and R362(c) keeps the GSPRT bounds at 0.52/0.62.
 Ordered by: R362(d), appended 2026-09-19 by its landing session
+
+### ANNOTATION under R363's foot (A1) — (a)'s "run8 continues to 45k; its cell decides" LACKED "THEN STOP"
+Corrects: the omission in R363(a) and in the pre-stated action it applied (R356(c)/R359(b)'s
+"INCONCLUSIVE → read 45k"); nothing in (b)–(e), and the 45k reading itself, which stands
+Fact: no line on the record ordered run8 stopped once the 45k cell had read, so the run continued
+— 52 986 at the 05:50 UTC 09-21 read, ≈ 53k at the stop — 8 h of box past its last pre-registered
+point, in a gate that could not resolve the gain (r16 @48k ran to the 104-pair cap at 0.524 and
+was rejected by the sign; r17 @51k rejected at 32 pairs). The omission was the architect's. R364(a)
+states the rule (a run STOPS at its last pre-registered read unless a ruling extends it) and grants
+the stop; R364(e) writes the stop into run9's line ("read 45k-games THEN STOP").
+Ordered by: R364(a), appended 2026-09-21 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
