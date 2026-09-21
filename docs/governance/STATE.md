@@ -581,8 +581,18 @@ the fresh head's CE falls 5.7 → 2.5 over 60 steps and its own gradient norm 12
 pre-clip total norm 8–13 against `grad_clip` 1.0; the settled ratio is the twin's witness (CARD-RUN10-WEIGHT-ENVELOPE). CARDS: CARD-PERF-4, CARD-RUN10-SIZE-PARENT, CARD-RUN10-WEIGHT-ENVELOPE opened;
 CARD-STRIX-NET-ONLY and CARD-SERVER-OWNED-COPY CLOSED; CARD-PROBE-1, CARD-RUN10-RULE, CARD-PERF-3 SPENT;
 CARD-E1-RULER-R6 carries the qualifier; CARD-RUN9-QUEUE moved. `configs/run9.yaml` stays as minted (re-minted through
-its header at v35–v37, un-armed) — its deletion is the operator's. **Exit:** the full exit gate set on the leg's tip
-is recorded in the exit block below; `dev` is UNPUSHED by this session (a push is the operator's).
+its header at v35–v37, un-armed) — its deletion is the operator's. **Exit:** `make gates.exit` (`run_all.sh --with-slow`) on the
+leg's docs commit `e5b01d88` (the code tip is `6da4e4c3`; the two later commits are docs): 2a cargo test (1 960 s),
+2b, 4, 5, 3a default tier **5 046 passed / 8 skipped / 56 deselected** (361 s), the slow tier 5 passed, 3c
+**5 110 collected** against the floor 4 862, 7, 8, 9, 11, 12 (rc 0; three rows deferred, `actor_lag` REQUIRED and armed
+on all seven configs), 13, 14 (ruff, pyright 263 files 0 errors, the comment ratchet AT its floor — `comment_excess_lines`
+lowered 3405 → 3403 in-leg), 15, 16, 6, 10, 17 GREEN; 3b integration tier 47 passed / 2 skipped / **2 RED with ONE
+cause, the sandbox**: the real preflight's PARENT writes its stamp to `$XDG_STATE_HOME` (`~/.local/state/mantis/preflight`),
+read-only in this session's sandbox — `PreflightInternalError: OSError(30, 'Read-only file system')` with the CHILD burst
+at rc 0 on the new path (the served copy, the deploy view, the soft-policy kind all booted) — and both files re-run
+GREEN on the tip with a writable `XDG_STATE_HOME` (`tests/tools/test_preflight_child_convergence.py` +
+`test_preflight_pfc_cards.py`, 7 passed, 579 s); gate 1 not run (the accepted cost). `dev` is six commits ahead of
+`origin/dev` (the R365 commits were pushed by the operator meanwhile), UNPUSHED by this session (a push is the operator's).
 
 ## Exit facts — the R353 packet, 2026-09-14
 
