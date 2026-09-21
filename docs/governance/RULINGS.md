@@ -87,7 +87,12 @@ direction 2026-09-21.
 Amends: R366(b)'s "net 6×192 (admitted on the policy line; rides on a ≤ 25 % leaves/s bench)" and R366
 §0(2)'s size conditional are WITHDRAWN by (c) — the leaves (v35) and the bench path stay, the row moves to
 run11 as CARD-NET-EXPAND; the R366 leg's by-name production pins (STATE item 18: "every by-name
-production pin names run10") are the class (a) forbids and become a census in REVIEW-1's fix leg;
+production pin names run10") are the class (a) forbids and became a census in REVIEW-1's fix leg —
+which REVERSES the by-name binding of production configs (F-P2B's escape, N-1's silence, the
+`test_run5_is_bound_BY_NAME…` pin, all deleted with their rationale): production is every file
+under `configs/` that no exempt row names, an exemption is the ONE by-name act and carries its
+grounds as data, and the guard against "exempted with a written reason" is the exempt list's
+size (two rows) plus (b)'s review, not a pin an editor re-types per mint;
 R365(a)'s "The box is released" is ANNOTATED under (d), the fact (the instance destroyed 2026-09-21)
 unchanged; R366 §0(6)'s "the size bench … in the preflight window" is REPLACED by (e)'s admission bench at
 the minted shape.

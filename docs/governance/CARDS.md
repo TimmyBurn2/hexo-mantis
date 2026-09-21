@@ -93,11 +93,25 @@ Both were found by running the gate set rather than by reading it, and both are 
   batch. Design before code (R9): the expansion's mechanism and its identity proof are a design doc under
   `docs/design/` first; the expanded shape's leaves/s is `bench_server`'s reading on the box (IDLE, B 64)
   and is recorded before the row is armed. Not run10's; nothing perf rides it (R366(e)).
-- **CARD-REVIEW-1 — the R366 leg's review under R367(b), ORDERED on `51f40a18..19e8351d`.** A fresh
-  read-only agent against R367(a) plus correctness (budget, determinism, seam contracts, LAW-07 breaks),
-  the packet's §2 checklist; the report is `docs/audits/REVIEW_2026-09-21.md`; the fix leg lands one
-  commit per finding class; the run10 mint is not green until then. Spent when the report and the fix
-  leg are on the record.
+- **CARD-REVIEW-1 — LANDED 2026-09-21: the report `docs/audits/REVIEW_2026-09-21.md` (34 findings, six
+  classes) and the fix leg, one commit per class (F5 `a92feada`, F1 `95489040`, F4 `3d93447c`, F2 `596f9f91`,
+  F6 `548343f6`, F3 `7b33b38e`), its own REVIEW-2 at `docs/audits/REVIEW2_2026-09-21.md`; the disposition
+  is the report's §9.** Ordered by R367(b) on `51f40a18..19e8351d`. The one finding deferred with grounds:
+  F5.6 (the frozen slice's buffer is allocated at the training ring's capacity — a virtual reservation,
+  the loader writes only the file's rows; the fix is a header-reading constructor in the Rust bridge,
+  which this leg's range did not touch) rides CARD-MECHANISM-SWEEP.
+- **CARD-MECHANISM-SWEEP — the PRE-EXISTING inventory R367(a) now names, out of the R366 range and out of
+  the fix leg's scope (REVIEW-1 F1.6, F4.2, F2.1).** Measured by REVIEW-1 at `19e8351d`: `RUN5 = …/run6.yaml`
+  (a name that lies about its file) in four test modules; 32 test functions carrying a `runN` token in 16
+  files; ≈ 800 `run5`/`run6` identifier tokens across `src`/`tests`/`tools`; the analyzer tests' (under `tests/tools/`)
+  synthetic `"run9"` run ids; `crates/mantis-selfplay/tests/dirichlet_inert_on_gumbel.rs`'s run9 message;
+  `tests/config/test_every_key_has_consumer.py`'s at_max_pairs note; three more `hashlib.sha256(path.read_bytes())`
+  sites beside the one `sha256_file` (`bots/strix.py`, `diagnostics/fusion_calibrate.py`, `encoding/__init__.py`);
+  the 21 remaining private `_Pool`/`_Buffer` fakes of the composition tests (the trainer stub is one since
+  F2; the pool stub is one for the coordinator tests only); the nine full-config literal dicts whose
+  `model` line the fix leg left (each is a complete config a schema test owns); F5.6 above. Applied ON
+  CONTACT (R316(e)'s rule for comments, extended by R367(a)) — a leg that touches one of these files fixes
+  what it touches; no tree-wide pass is ordered.
 
 ## Opened by R366 (RUN10: THE POLICY-CAPACITY RUN; 2026-09-21)
 
