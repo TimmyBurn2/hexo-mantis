@@ -577,10 +577,22 @@ class Trainer:
         }
 
     def inference_state_dict(self) -> dict[str, torch.Tensor]:
-        """The state_dict self-play / eval / promotion consume (EMA weights when EMA is on)."""
+        """The DEPLOY weights — the gate's candidate, promotion, the checkpoint's deploy copy: the EMA shadow when EMA is on, else the learner's (R366(b), CARD-SERVER-OWNED-COPY)."""
         if self.ema_model is not None:
             return self.ema_model.state_dict()
         return self._base_model().state_dict()
+
+    def actor_state_dict(self) -> dict[str, torch.Tensor]:
+        """The ACTORS' weights — what ActorSync writes into the server's own copy: ALWAYS the learner's, EMA on or off (R366(b): the actors serve the learner; deploy, gate and follower read the EMA)."""
+        return self._base_model().state_dict()
+
+    def deploy_module(self) -> Any:
+        """The module-like object the eval candidate is snapshotted from: the learner's module when EMA is off, else a live view over the EMA shadow carrying the declared `arch`."""
+        if self.ema_model is None:
+            return self.model
+        view = self.ema_model.module
+        view.arch = self.arch  # type: ignore[attr-defined] — the snapshot reads `.arch` off its subject
+        return view
 
     def _resolve_encoding_name(self) -> str | None:
         try:
@@ -637,6 +649,7 @@ class Trainer:
             model=self.model, optimizer=self.optimizer, scaler=self.scaler,
             scheduler=self.scheduler, step=self.step, config=cfg,
             metadata_kwargs=metadata_kwargs, checkpoint_dir=self.checkpoint_dir, kind="full",
+            ema_state=None if self.ema_model is None else self.ema_model.state_dict(),
         )
 
     @classmethod

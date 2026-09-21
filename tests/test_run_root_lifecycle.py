@@ -152,6 +152,12 @@ class _Trainer:
     def inference_state_dict(self) -> dict:
         return {}
 
+    def actor_state_dict(self) -> dict:
+        return {}
+
+    def deploy_module(self):
+        return getattr(self, 'model', None)
+
     def save_checkpoint(self, loss_info) -> Path:
         self.saves.append(loss_info)
         path = self.checkpoint_dir / f"fake_{self.step:08d}_deadbeef.ckpt"

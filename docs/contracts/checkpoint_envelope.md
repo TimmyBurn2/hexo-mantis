@@ -24,7 +24,13 @@ makes a cross-lineage same-step collision structurally impossible.
 
 **Payload** — `schema_version: 2`, `kind: "full" | "weights"`, `model_state`, `metadata`,
 `config` (a complete snapshot; validated at LOAD as provenance, see below); `kind == "full"` additionally carries
-`optimizer_state`, `scaler_state`, `scheduler_state`.
+`optimizer_state`, `scaler_state`, `scheduler_state`. Since R366(b) (CARD-SERVER-OWNED-COPY) an EMA-on run's
+save also carries `ema_state` — the EMA shadow, the same key set as `model_state` (refused at load otherwise),
+the DEPLOY weights: `deploy_state(ck)` hands a deploy reader (`tools/strength_frontier.py`, the ladder bot) the
+shadow when present and the learner's `model_state` otherwise, saying which; a resume restores the shadow into
+the trainer's `EmaModel`, and a resume of an EMA-on config from a stamp with no `ema_state` re-seeds the shadow
+from the learner and emits `ema_shadow_reseeded` (a discontinuity in the deploy weights, never silent). The
+key is ABSENT on an EMA-off stamp — the truthful shape, not a `null`.
 
 **`metadata`** — `encoding_name` (REQUIRED, LAW-11, no fallback), `run_id`, `step`,
 `commit_sha` (`"unknown"` outside a git checkout — never blocks a write), `created_utc`

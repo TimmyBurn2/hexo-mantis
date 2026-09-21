@@ -97,7 +97,7 @@ class MantisBackend:
         from mantis.model import build_net
         from mantis.model.identity import net_param_hash
         from mantis.selfplay.inference_local import LocalInferenceEngine
-        from mantis.train.checkpoints import load_checkpoint
+        from mantis.train.checkpoints import deploy_state, load_checkpoint
 
         if threads is not None:
             torch.set_num_threads(int(threads))
@@ -109,7 +109,8 @@ class MantisBackend:
         if ck.metadata.arch is None:
             raise BackendError(f"{Path(checkpoint).name}: the stamp resolves no arch, so the net cannot be rebuilt")
         net = build_net(ck.metadata.arch)
-        net.load_state_dict(ck.model_state)
+        state, self.weights = deploy_state(ck)  # the EMA shadow when the stamp carries one (R366(b))
+        net.load_state_dict(state)
         net.to("cpu").eval()
         self.net_hash = net_param_hash(net)
         self.name = f"{self.backend}:{self.net_hash[:8]}"
@@ -134,7 +135,7 @@ class MantisBackend:
             "kind": self._search_kind, "sims": self.sims, "preset": preset, "device": "cpu",
             "torch_threads": torch.get_num_threads(),
             "encoding": self.encoding, "checkpoint": self.checkpoint.name, "step": self.step,
-            "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
+            "weights": self.weights, "leaf_batch_size": self._leaf_batch_size, "c_visit": self._c_visit, "c_scale": self._c_scale,
             "q_rescale": self._q_rescale, "gumbel_m": self._gumbel_m}
         self.seed: int | None = None
         self._head: Any = None

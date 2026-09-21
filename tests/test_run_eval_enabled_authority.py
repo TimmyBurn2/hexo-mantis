@@ -99,6 +99,12 @@ class _Trainer:
     def inference_state_dict(self) -> dict:
         return {}
 
+    def actor_state_dict(self) -> dict:
+        return {}
+
+    def deploy_module(self):
+        return getattr(self, 'model', None)
+
     def save_checkpoint(self, loss_info) -> None:
         return None
 

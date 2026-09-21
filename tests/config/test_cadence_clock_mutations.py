@@ -88,6 +88,9 @@ def test_the_battery_baseline_is_green_or_every_kill_below_is_meaningless() -> N
         # The BOUND rather than a cadence key.
         ("run too short for the draw-rate min_step", "train", "max_train_steps", 80_000,
          "draw_rate_collapse"),
+        # The actor-lag axis: the train-step clock, its threshold past the bound.
+        ("actor-lag threshold past the bound", "monitor", "actor_lag_threshold_steps",
+         900_000, "actor_lag"),
     ],
 )
 def test_ONE_key_reds_ONE_axis_in_that_axis_own_clock(

@@ -98,6 +98,16 @@ class Checkpoint:
     optimizer_state: dict | None = None
     scaler_state: dict | None = None
     scheduler_state: dict | None = None
+    #: The EMA shadow (R366(b), CARD-SERVER-OWNED-COPY): the DEPLOY weights when EMA is on, `None`
+    #: on a run with EMA off or a stamp written before the shadow rode the envelope.
+    ema_state: dict[str, torch.Tensor] | None = None
+
+
+def deploy_state(ck: Checkpoint) -> tuple[dict[str, torch.Tensor], str]:
+    """The weights a DEPLOY reader (the frontier cell, the ladder bot) rebuilds: `(state, "ema" | "learner")` — the EMA shadow when the stamp carries one, else the learner's."""
+    if ck.ema_state is not None:
+        return ck.ema_state, "ema"
+    return ck.model_state, "learner"
 
 
 @dataclass(frozen=True)
@@ -323,6 +333,7 @@ def _assemble_payload(
     optimizer_state: Any,
     scaler_state: Any,
     scheduler_state: Any,
+    ema_state: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "schema_version": CHECKPOINT_SCHEMA_VERSION,
@@ -335,6 +346,9 @@ def _assemble_payload(
         payload["optimizer_state"] = optimizer_state
         payload["scaler_state"] = scaler_state
         payload["scheduler_state"] = scheduler_state
+    if ema_state is not None:
+        # Written only when EMA is on: an absent key on an EMA-off stamp is the truthful shape.
+        payload["ema_state"] = dict(ema_state)
     return payload
 
 
@@ -350,6 +364,7 @@ def _write_v2_payload(
     checkpoint_dir: str | Path,
     kind: str,
     allow_quarantine: bool,
+    ema_state: Mapping[str, Any] | None = None,
 ) -> Path:
     global persist_errors_total
     # 1. config schema-validated on write — raises before any file exists.
@@ -368,6 +383,7 @@ def _write_v2_payload(
     # 3. assemble → content hash → provenance filename → persist-fatal write.
     payload = _assemble_payload(
         kind, model_state, metadata, config, optimizer_state, scaler_state, scheduler_state,
+        ema_state=ema_state,
     )
     sha8 = content_sha8(payload)
     cdir = Path(checkpoint_dir)
@@ -431,10 +447,11 @@ def save_checkpoint(
     checkpoint_dir: str | Path,
     kind: str = "full",
     allow_quarantine: bool = False,
+    ema_state: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write an envelope-v2 checkpoint `{run_id}_{step:08d}_{sha8}.ckpt`: schema-validates
     `config`, stamps metadata ONCE, content-hashes and persist-fatally writes. A weights save
-    carries model_state + metadata only."""
+    carries model_state + metadata only; `ema_state` rides either kind when EMA is on (R366(b))."""
     base_model = getattr(model, "_orig_mod", model)
     model_state = base_model.state_dict()
     if kind == "full":
@@ -454,6 +471,7 @@ def save_checkpoint(
         checkpoint_dir=checkpoint_dir,
         kind=kind,
         allow_quarantine=allow_quarantine,
+        ema_state=ema_state,
     )
 
 
@@ -594,6 +612,13 @@ def load_checkpoint(
     if not isinstance(kind, str):
         # The v2 writer always stamps kind ("full"/"weights"); a missing one is corruption.
         raise CheckpointStampError(f"{path.name}: v2 envelope missing its kind field.")
+    ema_state = payload.get("ema_state")
+    if ema_state is not None:
+        if not isinstance(ema_state, dict) or set(ema_state) != set(model_state):
+            raise CheckpointStampError(
+                f"{path.name}: ema_state does not carry the model_state's key set — the shadow "
+                "is the same net's weights or it is not a shadow")
+        _reject_killed_prefixes(ema_state)
 
     return Checkpoint(
         schema_version=CHECKPOINT_SCHEMA_VERSION,
@@ -604,6 +629,7 @@ def load_checkpoint(
         optimizer_state=payload.get("optimizer_state"),
         scaler_state=payload.get("scaler_state"),
         scheduler_state=payload.get("scheduler_state"),
+        ema_state=ema_state,
     )
 
 
@@ -1238,4 +1264,18 @@ def resume_trainer(
         trainer.step = ck.metadata.step
     else:
         trainer.step = ck.metadata.step
+    _restore_ema_shadow(trainer, ck, path, sink)
     return trainer
+
+
+def _restore_ema_shadow(trainer: Any, ck: Checkpoint, path: Path, sink: Any) -> None:
+    """An EMA-on resume restores the shadow the stamp carries; a stamp without one re-seeds the shadow from the learner and SAYS SO (`ema_shadow_reseeded`, a discontinuity in the deploy weights, never silent)."""
+    ema = getattr(trainer, "ema_model", None)
+    if ema is None:
+        return
+    if ck.ema_state is not None:
+        ema.load_state_dict(ck.ema_state)
+        return
+    _LOG.warning("ema_shadow_reseeded checkpoint=%s: no ema_state on the stamp; the shadow restarts "
+                 "at the learner's weights", path.name)
+    emit_via(sink, {"event": "ema_shadow_reseeded", "checkpoint": path.name, "step": int(ck.metadata.step)})

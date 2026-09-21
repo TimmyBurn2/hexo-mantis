@@ -205,6 +205,12 @@ class _Trainer:
     def inference_state_dict(self) -> dict:
         return self.model.state_dict()
 
+    def actor_state_dict(self) -> dict:
+        return self.model.state_dict()
+
+    def deploy_module(self):
+        return getattr(self, 'model', None)
+
     def save_checkpoint(self, loss_info: Any) -> None:
         self.saves.append(loss_info)
 

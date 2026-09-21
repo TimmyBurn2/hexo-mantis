@@ -27,6 +27,7 @@ from typing import Any
 # The exit-code AUTHORITY. Imported rather than re-typed: a literal here would be a second
 # place "which code does this abort use" is written.
 from mantis.monitor.heartbeat import (
+    ACTOR_LAG_EXIT_CODE,
     DISK_SPACE_EXHAUSTED_EXIT_CODE,
     DRAW_RATE_COLLAPSE_EXIT_CODE,
     PLY_CAP_ATTRACTOR_EXIT_CODE,
@@ -486,6 +487,25 @@ class AuditResult:
 
 #: The rows — the ONE authority for which aborts a production config must arm.
 MANIFEST: tuple[ArmedAbort, ...] = (
+    ArmedAbort(
+        name="actor_lag",
+        config_path="monitor.actor_lag_abort_enabled",
+        mechanism=Mechanism.CONFIG_BOOL,
+        cadence=Cadence.STEP_LAG_THRESHOLD,
+        cadence_paths=("monitor.actor_lag_threshold_steps",),
+        status=Status.REQUIRED,
+        exit_code=ACTOR_LAG_EXIT_CODE,
+        owner=None,
+        source_pin=None,
+        note=(
+            "The frozen-actor hard abort (exit 45). Armed on configs/run5.yaml since the "
+            "R59 flip; disarming it on a production config is the run3 failure mode "
+            "re-enabled. RETIRED 2026-09-16 (B-1: the server served the learner's own module, so "
+            "a self-copy's lag could never exceed the sync cadence) and RETURNED at R366 with "
+            "CARD-SERVER-OWNED-COPY: the actors serve a copy the sync writes, so between syncs "
+            "their weights ARE stale and the lag is a fact again."
+        ),
+    ),
     ArmedAbort(
         name="draw_rate_collapse",
         config_path="train.draw_rate_abort.threshold",

@@ -22,6 +22,7 @@ from mantis._engine import DEFAULT_CLUSTER_THRESHOLD, SelfPlayRunner
 from mantis.config.resolve.compile_trunk import resolve_compile_trunk
 from mantis.config.resolve.edge_geometry_check import resolve_edge_geometry_check
 from mantis.config.resolve.search import resolve_selfplay_search_kind
+from mantis.model import build_net
 from mantis.selfplay.buffers import ReplayFacade
 from mantis.selfplay.hparams import (
     SelfPlayHParams,
@@ -73,6 +74,15 @@ def _collate_dump_target(config: Any) -> tuple[str, Any]:
     return dump_dir, _context
 
 
+def served_copy(model: torch.nn.Module, arch: Any) -> torch.nn.Module:
+    """A net of the DECLARED `arch` carrying `model`'s current weights, on `model`'s device — the server's own module (R366, CARD-SERVER-OWNED-COPY); Raises: RuntimeError — the arch and the weights disagree in shape."""
+    base = getattr(model, "_orig_mod", model)
+    copy = build_net(arch)
+    copy.load_state_dict(base.state_dict())
+    device = next(base.parameters()).device if any(True for _ in base.parameters()) else torch.device("cpu")
+    return copy.to(device)
+
+
 class WorkerPool:
     """Runs concurrent self-play games on Rust-owned worker threads."""
 
@@ -96,7 +106,10 @@ class WorkerPool:
         so a mis-paired arch and config fail before any Rust runner exists. `sink`/`recorder`/
         `heartbeat` are injected with no-op defaults — declared seams, not silent failures.
         """
-        self.model = model
+        # THE SERVER-OWNED COPY (CARD-SERVER-OWNED-COPY, R366): the actors serve a net of the DECLARED
+        # arch seeded from `model`, which ActorSync writes and the learner never reads.
+        self.learner = model
+        self.model = served_copy(model, arch) if arch is not None else model
         self.config = config
         self.device = device
 
@@ -130,7 +143,7 @@ class WorkerPool:
         )
         self._runner = SelfPlayRunner(sp_config)
         self._inference_server = InferenceServer(
-            model, device, config,
+            self.model, device, config,
             batcher=self._runner.batcher,
             encoding_spec=spec,
             heartbeat=heartbeat,

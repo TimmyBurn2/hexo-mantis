@@ -41,7 +41,7 @@ from mantis.eval.snapshot import write_model_snapshot
 from mantis.model import arch_from_spec_and_config, build_net
 from mantis.model.identity import net_param_hash
 from mantis.monitor.game_record import iter_run_games
-from mantis.train.checkpoints import load_checkpoint
+from mantis.train.checkpoints import deploy_state, load_checkpoint
 from mantis.train.warmstart import apply_bc_warm_start, resolve_bc_warm_start
 from mantis.util.determinism import seed_everything
 
@@ -69,10 +69,12 @@ def _snapshot_from_checkpoint(path: Path, out: Path) -> dict[str, Any]:
     if ck.metadata.arch is None:
         raise FrontierCellError(f"{path}: the stamp resolves no arch, so the net cannot be rebuilt")
     net = build_net(ck.metadata.arch)
-    net.load_state_dict(ck.model_state)
+    # The DEPLOY weights (R366(b)): the EMA shadow when the stamp carries one, else the learner's.
+    state, weights = deploy_state(ck)
+    net.load_state_dict(state)
     sha = write_model_snapshot(net, out)
     return {"source": str(path), "step": ck.metadata.step, "net_hash": net_param_hash(net),
-            "tensors": len(ck.model_state), "snapshot_sha256": sha}
+            "tensors": len(state), "snapshot_sha256": sha, "weights": weights}
 
 
 def _snapshot_bc_tp(config: Any, out: Path) -> dict[str, Any]:

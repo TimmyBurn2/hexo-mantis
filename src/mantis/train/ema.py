@@ -66,6 +66,14 @@ class EmaModel:
         """Return a shallow-copied view of the shadow; the tensors are the EMA's own storage."""
         return dict(self._shadow)
 
+    def load_state_dict(self, state: Mapping[str, torch.Tensor]) -> None:
+        """Overwrite the shadow IN PLACE from a stamped `ema_state` (a resume, R366(b)); Raises: KeyError — the key sets differ (another net's shadow)."""
+        if set(state) != set(self._shadow):
+            raise KeyError(f"ema_state key set differs from the shadow's: missing={sorted(set(self._shadow) - set(state))} unexpected={sorted(set(state) - set(self._shadow))}")
+        with torch.no_grad():
+            for name, tensor in state.items():
+                self._shadow[name].copy_(tensor.to(self._shadow[name].device, self._shadow[name].dtype))
+
     @property
     def module(self) -> _EmaModuleView:
         """Return a module-like proxy over the shadow; it is not an `nn.Module` and has no forward."""

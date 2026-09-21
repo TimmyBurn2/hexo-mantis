@@ -688,7 +688,8 @@ def compose_run(
         with _seam("ActorSync"):
             actor_sync = ActorSync(
                 target=pool,
-                state_dict_fn=trainer.inference_state_dict,
+                # The LEARNER's weights, never the EMA's: the server owns its copy (R366(b)).
+                state_dict_fn=trainer.actor_state_dict,
                 step_fn=lambda: int(trainer.step),
                 cadence_steps=_resolve_actor_sync_cadence_steps(config),
                 sink=run_safety.sink,
@@ -856,7 +857,8 @@ def compose_run(
                 # is the only term that can see it in time.
                 subsystems=SimpleNamespace(gpu_monitor=None, disk_guard=disk_guard),
                 anchor_state=resolved_anchor, shutdown=shutdown,
-                eval_model=getattr(trainer, "model", None), bufs=None,
+                # The gate's candidate is the DEPLOY net: the EMA view when EMA is on (R366(b)).
+                eval_model=trainer.deploy_module(), bufs=None,
                 config=step_coordinator_cfg, full_config=config.model_dump(),
                 train_cfg={}, mixing_cfg={}, run_id=run_id,
                 sink=run_safety.sink, heartbeat=run_safety.heartbeat, monitor_cfg=monitor_cfg,

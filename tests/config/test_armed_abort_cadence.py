@@ -300,6 +300,8 @@ def test_the_verdict_publishes_the_clock_it_judged_each_row_in(run5) -> None:
         "the verdict must be the one the OWN-CLOCK comparison gives, not a step-clock "
         "comparison that happens to agree"
     )
+    lag = by_name["actor_lag"]
+    assert lag.clock is SampleClock.TRAIN_STEP and lag.period_steps == 1.0
     close_out = by_name["terminal_eval_broken"]
     assert close_out.clock is SampleClock.NO_STEP_CLOCK
     assert close_out.period_steps is None and close_out.bound_samples is None, (
@@ -324,6 +326,9 @@ def test_the_production_config_can_fire_every_armed_row_with_margin(run5) -> Non
     ), "run5 mints min_step as a multiple of gate_interval, so the fire lands on it exactly"
     assert by_name["draw_rate_collapse"].earliest_step < bound / 4.0, (
         "the anchor must clear the bound with real margin, not squeak past it"
+    )
+    assert by_name["actor_lag"].earliest_step == float(
+        run5.monitor.actor_lag_threshold_steps + 1
     )
     assert by_name["terminal_eval_broken"].earliest_step is None
 
@@ -397,7 +402,7 @@ def test_a_DISARMED_row_is_left_to_the_arming_audit_and_never_double_judged(run5
     disarmed["train"]["draw_rate_abort"] = None
     judged = audit_cadence(RunConfig.model_validate(disarmed))
     assert "draw_rate_collapse" not in [verdict.row.name for verdict in judged]
-    assert "terminal_eval_broken" in [verdict.row.name for verdict in judged], (
+    assert "actor_lag" in [verdict.row.name for verdict in judged], (
         "…and the OTHER armed rows are still judged, or the scope rule is just a skip"
     )
 
