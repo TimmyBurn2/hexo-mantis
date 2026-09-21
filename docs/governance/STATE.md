@@ -532,7 +532,10 @@ NOT run today (the packet's placement and budget). CARDS: CARD-PROBE-1, CARD-RUN
 (E1 READ), CARD-ARCH-D6 / RUN9-STOP-LAW / RUN9-QUEUE / PERF-3 moved. **What R366 owes:** run10's composition
 under R365(c) — the soft-policy head admitted, proof-as-target and the mid-turn value premise dead, the gap's
 witness pre-stated, the band's re-derivation (pooled < 0.30 or per-mr), the follower's unit (r8 stays or r6
-re-reads the series at ≈ 3 × 1.2 bh), the EMA cell in run10's window, LR by that cell and the drift reading.
+re-reads the series at ≈ 3 × 1.2 bh), the EMA cell in run10's window, LR by that cell and the drift reading. **Exit:** `make gates.exit` on the leg's tip (`23003bb9`) ALL GREEN 2026-09-21 12:00 UTC (1 h 42 min: default tier
+4 983 passed, integration 49 passed in 63 min, slow 5 passed; 5 047 collected against the 4 862 floor; pyright 0 errors on 258
+files, the comment ratchet AT its floor on every measure); `dev` is seven commits ahead of `origin/dev`, UNPUSHED by this
+session (a push is the operator's).
 
 ## Exit facts — the R353 packet, 2026-09-14
 
