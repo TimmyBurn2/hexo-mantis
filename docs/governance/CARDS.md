@@ -81,6 +81,52 @@ Both were found by running the gate set rather than by reading it, and both are 
   somewhere else. A vacuity test should assert the DEGRADE-WIDE behaviour without binding itself to
   the verdict of a scan whose pattern set it cannot see.
 
+## Opened by R365 (RUN9 NOT STARTED, PROBE-1, RUN10 DESIGNED FROM MEASUREMENTS; 2026-09-21)
+
+- **CARD-PROBE-1 — ORDERED by R365(b), dev + mirror, 0 box-h, ≤ 2 dev-days; the record is ONE file,
+  `docs/design/measurements/PROBE1_2026-09-21.md`.** Six readings on run8's mirrored checkpoints and
+  rings, each row carrying its instrument, n, number, the run10 change it admits or kills and its
+  PRE-STATED line (the packet's §2, copied into R365's entry): (1) the one-hot DECOMPOSER first — the
+  full-arm share with tail-only (α = 1.0) rows excluded, bucketed by `moves_remaining`, on the 3k/15k/
+  30k/45k/51k rings; the band is re-derived from it, never asserted (it corrects an instrument the others
+  read); (2) E3 mr-CALIBRATION — dist65 E[v] vs realised z bucketed mr = 1 / mr = 2 on run8@45k over
+  ≥ 20k ring positions (error(mr=1) ≥ 2× error(mr=2) → a named target, admits P-B4 / the proof lane,
+  kills C2; within CI → the premise closes); (3) C3-1 GAP — train-vs-held-out policy/value loss on the
+  18 checkpoints, held-out = a ring from a different step never sampled (gap < 0.1 nats, both high →
+  UNDERFIT, admits 6×192 and reuse; > 0.3 → OVERFIT, kills reuse-8, admits window/augment/LR floor;
+  between → report); (4) P-B2 PROOF RATE — the tactics solver at depth 6 / 2 000 nodes over ≥ 5k ring
+  roots: proof rate, novelty (proof ≠ target argmax), ms/root (≥ 3 % AND ≥ 5 % AND ≤ 50 ms → the
+  un-probed-hypothesis candidate; else dead, filed); (5) P-B1 KL — median KL(prior‖target) over full-arm
+  rows on 45k (< 0.02 nats → the soft-policy head is dead; ≥ 0.1 → admitted, queue (vii)); (6) the
+  SPREAD SERIES — the analyzer's symmetry spread over ≥ 12 positions × 18 checkpoints (falling while
+  strix rises → CARD-ARCH-D6 stays parked; flat/rising → admitted to run11's design); (7) the EMA CELL at
+  the box in run10's preflight window, 1.5 bh — the weight-average of run8's 30k–51k checkpoints vs
+  strix 256/256, 288 games (> 0.181 → EMA deploy rides run10, a server-owned copy its prerequisite;
+  ≤ 0.142 → dead; between → the LR floor is run10's hypothesis instead). Order 1 → 2/3/5 (one mirror
+  pull) → 4 → 6; 7 at the box. Then R366 composes run10 under R365(c).
+- **CARD-RUN10-RULE — R365(c), carried until run10's ruling applies it.** A change whose mechanism a
+  PROBE-1 reading supports in our regime may ride run10 without being the single swap; run10 carries at
+  most ONE un-probed hypothesis. Attribution before the run replaces attribution by the run. This amends
+  R359(c)'s one-swap-per-run order for run10 only; every change still carries its own in-run producer
+  (LAW-18) before it is armed.
+- **CARD-E1-RULER-R6 — the cell R365 §0(3) ordered at the box, 1.2 bh; the tooling LANDED 2026-09-21
+  (`d4804e58`).** The parent run8@45k (`3aef7883…`) at PUCT-256 vs strix 256 sims with the driver's
+  `placement_radius` 6 (strix's own trained radius; every reading on record rides the driver's default
+  8), 288 paired games, `book_v1_s20260625_p4`, the unit `ruler_r6` of `tools/strix_follower.py --once`
+  (variant `<stem>:r6`, sidecar `.strix256_r6.json`). Pre-stated reading (`STRENGTH_RESEARCH_2` E1):
+  within ± 4 pp of the r8 cell's 0.142 [0.104, 0.181] → the ruler is radius-stable and the caveat
+  drops; a move ≥ the CI half-width → "strix @ r8" becomes a stated unit qualifier on every follower
+  point and every bar priced in that unit. The instrument's own signature: at r6 every strix reply's
+  legal set is a strict subset of our r8 fence, so the bot's `fence disagreement` finding fires on
+  every strix move — recorded in the cell, gated by nothing, and it IS the change under test.
+  **READ 2026-09-21 09:40 UTC (`PROBE1_2026-09-21.md` §E1): 0.080 [0.049, 0.115]** (23–265–0, median 41
+  plies, 2 804 s, IDLE, 6 690 findings, 0 out-of-fence) against the r8 cell's 0.142 [0.104, 0.181] —
+  a −6.2 pp move, the CIs disjoint: **"strix @ r8" IS a unit qualifier on every follower point on the
+  record**; strix at its trained radius is the stronger ruler. The series and the parent choice stand
+  (every point shares the unit); a bar quoted "vs strix" without the radius does not. Whether the
+  follower's unit MOVES to r6 (a re-read of the parent series, ≈ 3 × 1.2 bh) is R366's; the receipt is
+  mirrored, the card is READ and waits on that ruling.
+
 ## Opened by R364 (RUN8 STOP, RUN9 = DATA REGIME, GATE AS REGRESSION GUARD; 2026-09-21)
 
 - **CARD-ARCH-D6 — OPENED by R364(d), NOT ARMED; the lever after the knobs.** A D6-equivariant net
@@ -92,12 +138,16 @@ Both were found by running the gate set rather than by reading it, and both are 
   `crates/mantis-graph/tests/d6_lossless.rs`, the net's outputs equal across the orbit to a stated
   tolerance) before a single training step. Order: after the queue's knobs (CARD-RUN9-QUEUE: (i) rides run9; (ii) LR waits on
   `PARAM_DISTANCE_2026-09-21.md`, run10's; (iv) prior temperature queued while one-hot is flat). Not a
-  run9 change; not a run10 change without its own ruling.
+  run9 change; not a run10 change without its own ruling. **R365(b), 2026-09-21:** the spread SERIES
+  (≥ 12 positions × run8's 18 checkpoints) is PROBE-1's reading 6, with its line pre-stated there —
+  spread falling while strix rises → this card stays parked; flat or rising → admitted to run11's design.
 - **CARD-RUN9-STOP-LAW — the rule R364(a) states, carried until run9's own stop discharges it.** A run
   STOPS at its last pre-registered read unless a ruling extends it; run9's line says "read 45k-games
   THEN STOP" (`RUN9_PREREG_2026-09-19.md` §3). Nothing in the config stops the run (`max_train_steps`
   1 000 000, byte-equal by R364 §0(3)); the box session's SIGTERM does, once the deciding cell is read.
-  Grounds: run8 ran 8 h past 45k on an omission (A1 under R363's foot).
+  Grounds: run8 ran 8 h past 45k on an omission (A1 under R363's foot). **R365(a), 2026-09-21: run9 is
+  NOT STARTED; the rule carries UNSPENT to run10's line** (run8's own stop — 08:23:44 UTC at 55 170, one
+  SIGTERM, `shutdown_save` — was the rule's first application).
 
 ## Opened by the LADDER-1 packet (2026-09-19, register head R362); moved by R363 (2026-09-20: the unit FIXED, the server items CARDED)
 
@@ -258,7 +308,12 @@ Both were found by running the gate set rather than by reading it, and both are 
   (ii) LR WAITS on the parameter-distance test (READ: `PARAM_DISTANCE_2026-09-21.md` — the step flat,
   the coherence falling 0.15 → 0.03, the weight norm +49 %; the call is the operator's, run10's).
   (iv) prior temperature STAYS QUEUED (one-hot 27 % flat). The gate rows beside the swap: H0 0.42 /
-  H1 0.52, cap 104, `at_max_pairs: promote` (CARD-EVAL-REDESIGN).
+  H1 0.52, cap 104, `at_max_pairs: promote` (CARD-EVAL-REDESIGN). **R365, 2026-09-21: run9 is NOT
+  STARTED (a 288-game cell cannot resolve the run's slope, E4); its mint stands as run10's base, (i)
+  un-armed and un-read.** The queue is re-ordered by measurement, not by list: PROBE-1 (CARD-PROBE-1)
+  admits or kills (vii) by the KL line, the proof lane by the proof-rate line, size and reuse by the gap
+  line; LR and EMA are decided by the EMA cell and the drift reading (R365(d)); run10 may carry every
+  probe-supported change together and at most one un-probed hypothesis (CARD-RUN10-RULE).
 - **PARKED by R358(e), one line each, not resurrected without a new measurement:** aux targets
   (ownership/score are Go quantities, no graph-native source, strix's q_head unmeasured); net size
   (strix is 6 % smaller and wins); curriculum (no ablation in any source, strix's r2 stage
@@ -293,7 +348,18 @@ Both were found by running the gate set rather than by reading it, and both are 
   cell's cost in a second unit, run8's trainer at 356–415 steps/h inside a cell against 999–1 069
   alone (`EVAL_COST_2026-09-19.md` §(iv)). **R364 §0(6), 2026-09-21:** step 3's window is FIXED — after
   run8's stop, before run9's stamp, ≈ 40 min (B ∈ {16 … 256} alone, then the contended arm beside one
-  cell); numbers before any design; nothing from it rides run9.
+  cell); numbers before any design; nothing from it rides run9. **R365 §0(3), 2026-09-21: the window
+  MOVED to "after run8's stop, before the box is released" (run9 not started) and READ — alone at 200-s
+  cells on the 45k parent: 2 236 / 2 394 / **2 466** / 2 055 / 2 091 leaves/s at B 16 / 32 / 64 / 128 / 256,
+  the CPU launch stage 0.34–0.39 ms per leaf at EVERY B, the probe exact across B; contended beside the
+  E1 strix cell: 593 / 984 / 1 326 / 1 101 / 1 039 (27–54 % of alone, the CPU stage per leaf doubled, the
+  device stage unchanged). THERE IS NO KNEE: batch size buys nothing above 64 and D-1 (fill-at-the-knee)
+  is DEAD by its own falsifier (1.10× from B 16 to the best cell; fill 100 % everywhere). The CPU stage is
+  the whole lever (R360(b)'s third candidate); design only after a ruling. The "bench_server at 128 sims"
+  arm the packet named has NO PRODUCER in the tool (`bench_server.py` measures the server per batch size;
+  sims never enter it) and every self-play harness in the tree either walks a pinned ladder
+  (`worker_sweep`) or needs a preflight stamp, so it is NOT MEASURED and is priced as P-B3's own 3-h
+  twin in run10's preflight window, not asserted.** The numbers: `PERF3_2026-09-18.md` §step 3.
 
 ## Opened by R355 (REPAIR-A4)
 
@@ -501,7 +567,7 @@ Records: `docs/design/measurements/MEASUREMENT_STARTPATH_2026-09-11.md`; falsifi
   ≈ 9 000) are EXCLUDED from the policy loss from run7's first step; the matrix's (a)–(c) are not
   taken. The three-row reconstruction R349(c) ordered stays OWED (owed section below).
 - **CARD-TRAINER-CADENCE — the architect's.** Steps/h ≡ games/h by `train.training_steps_per_game
-  1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle. The block is ≈ 22.6 h
+  1.0` / `max_train_burst 1` (6.6 draws per row); the trainer is 92 % idle (run6's regime — F-44's annotation, R365(e)). The block is ≈ 22.6 h
   at 1,105 steps/h. Raising the ratio halves the wall clock and doubles sample reuse — a regime
   decision, not a lever. INVESTIGATION-1 item 2 is re-aimed: "is the reuse ratio right" and the
   GPU step's own 156 ms (`index_add_` 22 %, GEMMs 16 %, 31 syncs) — not "why is the step 5 s".

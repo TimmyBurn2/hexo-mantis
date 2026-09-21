@@ -38,6 +38,15 @@ With a fraction s of pairs decided by the seat a paired WR cannot exceed 1 − s
 run7's 0.67–0.73 sits near the book's ceiling, not sealbot's. Against strix 12 % of pairs are
 seat-decided (a stronger side converts the bad seat too) — R353(e)'s "power loss, not a bias".
 
+> ANNOTATION (R365(e), 2026-09-21; the paragraph above is unedited). "≈ 0.78" is a POPULATION number,
+> not a constant of the book: 1 − s/2 is arithmetic on the sealbot RUNG's measured seat-decided
+> fraction (42–47 % over run7's rung pairs on `book_v1`). The same book reads other ceilings on other
+> populations — `STRIX_RUN7_60K_2026-09-17.md` §B.4's sealbot cells span 37–57 % seat-decided (a
+> ceiling 0.72–0.82) and its strix cells 16–28 % (0.86–0.92; this section's own 12 % reads 0.94). Quoted
+> as "the ≈ 0.78 book ceiling" at `STRIX_RUN7_60K` §B.4 and `STATE.md` (the 2026-09-15 rewrite, point 5)
+> it is the rung population's ceiling carried as the book's; each population's ceiling is its own
+> measured fraction (the audit: `STRENGTH_RESEARCH_2_2026-09-21.md` P5 List 2(a)).
+
 ## C. The strix points (cell A, as-shipped: ours PUCT-512 vs strix 128/m16, 288 games, the same book)
 
 | net | WR | CI | wins | plies med | s/game (beside the run) |

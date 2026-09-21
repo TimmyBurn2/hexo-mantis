@@ -1,4 +1,4 @@
-# RULINGS — R23 to R364
+# RULINGS — R23 to R365
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R365.
+- Numbering continues from R346. The next ruling is R366.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,87 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R365 — RUN9 NOT STARTED, PROBE-1, RUN10 DESIGNED FROM MEASUREMENTS: a 288-game cell resolves ≥ 4 pp and the run's slope is +0.7 pp per 15k games, so a 60-box-hour run read at that resolution returns INCONCLUSIVE by construction (E4) — run9's mint stands as run10's base, the box is released, the mirror is the record; PROBE-1 precedes run10 (six 0-box-h readings on run8's mirrored checkpoints and rings — the one-hot decomposer, mr-bucketed calibration, the train-vs-held-out gap, offline proof rate/novelty/ms-per-root, KL(prior‖target), the D6 spread series — plus one 1.5 bh EMA cell in run10's preflight window, each with a pre-stated reading that admits or kills a named run10 change); RULE (c): a probe-supported change may ride run10 without being the single swap, run10 carries at most one un-probed hypothesis; ratified — the steps-budget carry, 2.4 in the envelope, the gate as regression guard; struck — the < 0.25 one-hot band; LR and EMA are decided by the EMA cell and the drift reading; the ledger names three carried statements
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R364: the packet made its own §1 the canonical home and directed that it be copied verbatim
+here.
+
+> R365 — (a) run9 is not started. A 288-game cell resolves ≥ 4 pp; the
+> run's slope is +0.7 pp per 15k games; a 60-box-hour run read at that
+> resolution returns INCONCLUSIVE by construction (E4). Its mint stands
+> as run10's base. The box is released; the mirror is the record.
+> (b) PROBE-1 precedes run10: six readings on run8's mirrored
+> checkpoints and rings at 0 box-h — mr-bucketed value calibration
+> (E3), train-vs-held-out gap (C3-1), offline proof rate / novelty /
+> ms-per-root (P-B2), KL(prior‖target) median (P-B1), the one-hot
+> decomposer excluding tail-only rows, the D6 spread series (≥ 12
+> positions × 18 checkpoints) — plus one 1.5 bh EMA cell in run10's
+> preflight window. Each with a pre-stated reading that admits or kills
+> a named run10 change.
+> (c) RULE: a change whose mechanism a PROBE-1 reading supports in our
+> regime may ride run10 without being the single swap; run10 carries at
+> most one un-probed hypothesis. Attribution before the run replaces
+> attribution by the run.
+> (d) Ratified: the steps-budget carry (a correctness fix to the key
+> reuse turns), 2.4 inside the envelope, gate as regression guard.
+> Struck: the < 0.25 one-hot band (calibrated on one warm-up ring,
+> instrument conflates tail-only rows). LR and EMA are decided by the
+> EMA cell and the drift reading, not by the walk statistics alone.
+> (e) Ledger, the architect's: "trainer idle 92 %" carried from run6 as
+> run9's grounds; "0.78 ceiling" quoted as a book constant; run8's dip
+> "matching" run7's joined across instruments inside a ruling.
+
+What the forward ENACTS beyond the clauses (the packet's §0): (1) this entry lands verbatim, with
+ANNOTATION A2 under R364's foot (run9 not started; the mint stands as run10's base), F-44's "trainer
+idle 92 %" and `RUN7_EVAL_COST_2026-09-15.md`'s "0.78 ceiling" annotated by regime and population
+(P5 List 2 (b) and (a)), R362(b)'s "matches run7's dip" annotated as a cross-instrument join (A1
+under R362's foot; P5 own find 3) — all the architect's; (2) run9 is NOT stamped: its mint (`61bd2fd1`)
+and the budget-carry fix (`1da8a324`) stand as run10's base, `configs/run9.yaml` untouched until run10's
+mint replays it; the `one_hot_share_full` band is STRUCK from `RUN9_PREREG_2026-09-19.md` §3a until
+PROBE-1's decomposer re-derives it; (3) the BOX (alias `vast`), then release: run8 STOP if live →
+PERF-3 step 3's B-curve with `tools/bench_server.py` (alone, then contended beside the E1 cell,
+R361(d)) and the 128-sims arm (0.4 bh) → E1, the ruler-r6 cell: the parent run8@45k vs strix at
+`placement_radius` 6, 256/256, 288 games (1.2 bh) → the mirror receipted → the instance destroyed;
+box-hours recorded; (4) PROBE-1 ORDERED (the packet's §2): dev + mirror, 0 box-h, ≤ 2 dev-days, ONE
+record file `docs/design/measurements/PROBE1_2026-09-21.md`, each row carrying its instrument, n,
+number, the run10 change it admits or kills and its pre-stated line — order: the DECOMPOSER first (it
+corrects an instrument the others read: the one-hot share over full-arm rows with tail-only α = 1.0 rows
+excluded, bucketed by `moves_remaining`, on run8's 3k/15k/30k/45k/51k rings; the band is re-derived from
+it, never asserted) → E3 (dist65 E[v] vs realised z bucketed mr = 1 / mr = 2 on run8@45k over ≥ 20k
+ring positions; error(mr=1) ≥ 2× error(mr=2) → mid-turn structure is a named target, admits P-B4's λ /
+proof lane and kills C2's scalar head; within CI → the premise closes) / C3-1 (train-vs-held-out
+policy/value loss on run8's 18 checkpoints, held-out = a ring from a different step never sampled; gap
+< 0.1 nats with both high → UNDERFIT, admits size 6×192 and reuse; gap > 0.3 → OVERFIT, kills reuse-8,
+admits window/augment/LR floor; between → report) / P-B1 (median KL(prior‖target) over full-arm rows
+on 45k; < 0.02 nats → the soft-policy head is dead, ≥ 0.1 → admitted, queue (vii), for run10) — one
+mirror pull → P-B2 (the tactics solver at depth 6 / 2 000 nodes over ≥ 5k mirrored ring roots: proof
+rate, novelty = proof ≠ target argmax, ms/root; proof ≥ 3 % AND novelty ≥ 5 % AND ms/root ≤ 50 →
+proof-as-target is admitted as run10's un-probed-hypothesis candidate, else dead and filed) → the
+SPREAD SERIES (the analyzer's symmetry spread over ≥ 12 positions × 18 checkpoints; spread falling
+while strix rises → CARD-ARCH-D6 stays parked, flat or rising → admitted to run11's design) → the EMA
+CELL at the box in run10's preflight window (the weight-average of run8's 30k–51k checkpoints vs strix
+256/256, 288 games; > 0.181 → EMA deploy rides run10 with a server-owned copy as its prerequisite,
+≤ 0.142 → dead, between → the LR floor is run10's hypothesis instead); numbers reported with n and
+regime, then R366 composes run10; (5) the rule amendment R365(c) is stated in the clause; (6) hygiene:
+`PARAM_DISTANCE_2026-09-21.md` is RE-PINNED by sha — at HEAD it hashes sha256 `60ca27c41b3ab2a2…`
+(commit `203e7060`); the research packet cited the pre-commit `4c6759b9cbe2eec4…`, content verified by
+its own audit (P5 L7), and the file carries the re-pin — and E4's resolution statement lands in the
+prereg's unit section (`RUN9_PREREG_2026-09-19.md` §3).
+Grounds: `docs/design/research/STRENGTH_RESEARCH_2_2026-09-21.md` P6 ranks 1–8, P5 List 1 #1/#7 and
+List 2 (a)(b)(d) + own finds 1/2/4; `PARAM_DISTANCE_2026-09-21.md` §2 (sha256 `60ca27c4…` at HEAD);
+operator direction 2026-09-21.
+Amends: R364(b)'s run9 is NOT STARTED by (a) — the swap's reading it pre-registered is not taken; the
+mint and its rows survive as run10's base, un-armed; R364(e)'s STOP LAW carries to run10's line unspent;
+R364 §0(6)'s step-3 window MOVES from "before run9's stamp" to "after run8's stop, before the box is
+released"; the `one_hot_share_full < 0.30` band R364 §0's prereg RE-STATED is STRUCK by (d) with the
+< 0.25 band it replaced (the instrument conflates tail-only rows; the decomposer re-derives it);
+R364(d)'s "LR waits on the parameter-distance test" is QUALIFIED by (d) — the walk statistics alone do
+not decide LR, the EMA cell and the drift reading do; R359(c)'s one-swap-per-run order is AMENDED by
+(c) for run10 — probe-supported changes may ride together, at most one un-probed hypothesis.
+Status: standing.
+
+---
 
 ### R364 — RUN8 STOP, RUN9 = DATA REGIME, GATE AS REGRESSION GUARD: a run stops at its last pre-registered read unless a ruling extends it (run8 ran 8 h past 45k on the architect's omission, stopped now at ≈ 53k; +3.1 pp over the parent at 45k, a monotone triple, one-hot 27 % flat, 51 % of wall in a gate that cannot resolve the gain — σ + augment is the base, not a success by R356(c)); run9's PARENT = run8@45k, its ONE training swap the DATA REGIME (window 500 000, reuse held ≈ 8 by an envelope on `training_steps_per_game` measured on the shakedown), read at EQUAL GAMES with box-hours beside; the gate becomes a REGRESSION GUARD (H0 0.42 / H1 0.52, cap 104, promote on accept or cap; parent selection stays the strix triple); LR waits on the parameter-distance test, prior temperature stays queued, CARD-ARCH-D6 opened unarmed; STOP LAW for run9 — 30k games, or 45k on INCONCLUSIVE
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -103,7 +184,8 @@ then +0.7 pp) being below any H1 the gate could resolve; R363(a)'s "run8 continu
 ANNOTATED by (a) (A1 under R363's foot: it lacked "then stop"); R359(c)'s order is APPLIED — (i) the
 data regime rides run9, (ii) LR waits on (d), (iv) stays queued; R359(d) is DISCHARGED (the rows
 dropped, the pin landed).
-Status: standing.
+Status: standing — annotated, A2 under its foot (R365(a): run9 is NOT STARTED, its mint stands as run10's
+base; (b)'s pre-registered reading is not taken; (e)'s stop law carries to run10).
 
 ---
 
@@ -225,7 +307,8 @@ gain when the swap is ruled) and then MOVED by R364(c): the bounds are H0 0.42 /
 `at_max_pairs: promote` on run9 (a regression guard; run7/run8's 0.52/0.62 sign-at-max rule stands
 on their files), the cadence 15 000 is read in GAMES (36 000 steps at run9's 2.4); (e)'s "ruled at
 30k" MOVED to the 45k cell by R363(a) and was RULED there by R364(b): the parent run8@45k, the swap
-the data regime.
+the data regime; (b)'s "matches run7's dip" is ANNOTATED (A1 under its foot, R365(e)): a cross-instrument
+join, the "matches" ARGUED inside the ruling.
 
 ---
 
@@ -4331,6 +4414,35 @@ was rejected by the sign; r17 @51k rejected at 32 pairs). The omission was the a
 states the rule (a run STOPS at its last pre-registered read unless a ruling extends it) and grants
 the stop; R364(e) writes the stop into run9's line ("read 45k-games THEN STOP").
 Ordered by: R364(a), appended 2026-09-21 by its landing session
+
+### ANNOTATION under R362's foot (A1) — (b)'s "The 3k/6k dip matches run7's 9k → 15k dip" IS A CROSS-INSTRUMENT JOIN
+Corrects: the "matches" in R362(b); nothing in (a), (c)–(e), and the decision (b) carried — run8 ran
+to 30k regardless — which was taken and stands
+Fact: the two dips were read on two instruments. run8's 3k/6k dip (0.111 → 0.056) is the equal-work
+cell — ours PUCT-256 vs strix 256 sims, 288 paired games, CONTENDED. run7's 9k → 15k dip (0.097 →
+0.045, then 0.139 at 24k) is `STRIX_RUN7_60K_2026-09-17.md`'s cell A — ours PUCT-512 vs strix 128
+sims, the 2026-09-14 mint's unit (the annotations under R351's and R352's feet). The one point
+measured in both units is the parent's 0.111; the "matches" is an ARGUED narrative, not a measured
+join (P5 own find 3 of `STRENGTH_RESEARCH_2_2026-09-21.md`). The join was the architect's. What
+would close it: the instrument stated beside each number wherever the series is quoted, or one
+256/256 cell on a run7 mid-checkpoint (≈ 1.2 box-h, not ordered).
+Ordered by: R365(e), appended 2026-09-21 by its landing session
+
+### ANNOTATION under R364's foot (A2) — RUN9 IS NOT STARTED; THE MINT STANDS AS RUN10'S BASE
+Corrects: the standing of R364(b)'s run9 and of everything the entry's §0 (3)–(6) armed for its
+stamp; nothing in R364(a), (c), (d) or (e)'s rule, and nothing in the mint's rows, which survive
+Numbered A2 by the R365 packet: the R364 packet's A1 sits under R363's foot (the missing "then stop").
+Fact: run9 was minted (`61bd2fd1`), pre-registered and armed on `dev`, and NOT STAMPED. E4's
+arithmetic (`STRENGTH_RESEARCH_2_2026-09-21.md` P6 rank 1): the 288-paired-game cell's CI is ± 3.9 pp
+on 0.142 [0.104, 0.181], the last interval's slope +0.7 pp per 15k games, so the cell resolves ≥ 4 pp
+moves and cannot read the effect the run would be asked to show — a ≈ 60-box-hour run read in that
+unit returns INCONCLUSIVE by construction. R365(a) holds the run; the mint and the budget-carry fix
+(`1da8a324`, ratified by R365(d)) stand as run10's base; `configs/run9.yaml` is not re-minted and not
+deleted until run10's mint replays it; the eleven rows are not re-litigated. The box is released
+(run8 STOPPED 2026-09-21 08:23:44 UTC at 55 170, `shutdown_save`; the E1 cell and PERF-3 step 3 are the
+window's box work), the mirror is the record.
+The omission was the architect's — the resolution premise was priced by no brief before the mint.
+Ordered by: R365(a), appended 2026-09-21 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure

@@ -7,7 +7,7 @@ Repaired in place 2026-09-17 (R311(c), REPAIR-A4 step 10, ledger C-1/C-2/C-5): t
 block, the OPEN-card line, the exit block's box and push facts, dispatcher items (5) and (6); everything
 else is the 2026-09-15 rewrite and reads as of that date.
 
-## Current phase — **R364 (2026-09-21, item 16): run8's STOP is GRANTED to the box session (it was still LIVE at ≈ 53k at this writing, 8 h past its last pre-registered read) and run9 is ARMED on `dev` — `configs/run9.yaml` minted over run8's header (parent run8@45k, the DATA REGIME: window 500 000 / `training_steps_per_game` 2.4 in the envelope [2.0, 3.0] / burst 8, the gate a REGRESSION GUARD at H0 0.42 / H1 0.52 with the new `at_max_pairs: promote` leaf, cadence 36 000 steps = 15 000 games, `dirichlet_enabled: false` with its pin), the budget's remainder now CARRIED (the envelope's mechanism, verified quantised at HEAD), the prereg FILLED, the parameter-distance test READ, CARD-ARCH-D6 opened unarmed; the box order (STOP → PERF-3 step 3 → preflight → twin → witness → START → follower `--cadence 36000`) is the box session's on the pushed tip.** Before it: run8 LIVE since 2026-09-18 16:55:34 UTC on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**; **R363 (2026-09-20, item 15): the 30k point is INCONCLUSIVE (0.135 [0.097, 0.177] against 0.111) and run8 runs to 45k, the run9 PARENT RULE is PRE-STATED before that cell (the follower series monotone → 45k; else the highest whose CI holds the other two; the gate's best_model only without a strix triple), the LADDER unit is FIXED as code (`book_v1_s20260625_p4` paired, opening index = match index), ANALYZER-1 is admitted under R9, and the CPU deploy head is PROFILED (per-leaf forward ≈ 20 ms flat in batch size: 5.0 s per stone at 256 sims, 8 threads, idle); **the 45k point read 2026-09-21: 0.142 [0.104, 0.181], the series monotone, so the PARENT RULE names run8@45k — R364 is the operator's; the run continues (52 986 at 05:50 UTC), next cell 60k****. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
+## Current phase — **R365 (2026-09-21, item 17): run9 is NOT STARTED — a 288-game cell resolves ≥ 4 pp against a +0.7 pp/15k slope (E4), so its mint (`61bd2fd1`) and the budget-carry fix stand as RUN10'S BASE, un-armed; run8 STOPPED at 55 170 (08:23:44 UTC, `shutdown_save`), the box's last work RAN (PERF-3 step 3: no knee, the CPU launch stage owns every B; the E1 ruler-r6 cell: 0.080 [0.049, 0.115] against the r8 unit's 0.142 — "strix @ r8" is a unit qualifier) and the instance is RELEASED, the mirror the record; PROBE-1 is READ (`PROBE1_2026-09-21.md`, `tools/probe1.py`): no tail-only rows on any run8 ring and a 1.8× one-hot asymmetry mr 1 vs mr 2, the value head calibrated equally in both halves (E3 CLOSED), the value head's held-out gap 0.13 of 0.51 on all 18 nets beside a flat under-fit policy (REPORTED), proof-as-target DEAD (2.3 %, strict novelty 0/112, F-53), the soft-policy head ADMITTED (KL 6.6 ≫ 0.1), ARCH-D6 PARKED (the median spread falls 20 % while strix rises, the tail does not), the SWA net for the EMA cell BUILT for run10's preflight window; R366 composes run10 under R365(c).** Before it: R364 (item 16) had ARMED run9 on `dev` and granted run8's stop; R364 (2026-09-21, item 16): run8's STOP is GRANTED to the box session (it was still LIVE at ≈ 53k at this writing, 8 h past its last pre-registered read) and run9 is ARMED on `dev` — `configs/run9.yaml` minted over run8's header (parent run8@45k, the DATA REGIME: window 500 000 / `training_steps_per_game` 2.4 in the envelope [2.0, 3.0] / burst 8, the gate a REGRESSION GUARD at H0 0.42 / H1 0.52 with the new `at_max_pairs: promote` leaf, cadence 36 000 steps = 15 000 games, `dirichlet_enabled: false` with its pin), the budget's remainder now CARRIED (the envelope's mechanism, verified quantised at HEAD), the prereg FILLED, the parameter-distance test READ, CARD-ARCH-D6 opened unarmed; the box order (STOP → PERF-3 step 3 → preflight → twin → witness → START → follower `--cadence 36000`) is the box session's on the pushed tip.** Before it: run8 LIVE since 2026-09-18 16:55:34 UTC on the vested stamp (`c5d9e2fe…`, tree `86308bc7`; R358: σ + `train.augment: true` from the 42k parent), the shakedown witness PASSED and the ring audit PASSED all five bands with the two new rows READ; the strix follower chain runs beside it (parent solver ON → parent net_only → `--follow`), CONTENDED (dispatcher item 10 below); R359 landed the readings and the sourced queue (item 11); R360 re-aimed PERF-3 — steps 1–2 DONE on dev + mirror, step 3 is run9's preflight window — and made the twin's preflight inheritance code (item 12); **R361 (2026-09-19) withdrew the per-promotion strix trigger — the follower was relaunched `--no-promotions` at 06:15:06 UTC, run8 step 8 851 — and the EVAL CENSUS is READ (item 13): promotion selects nothing in the self-play loop, rounds cost the trainer 24–32 % while they run and strix cells 60–64 %, run7 spent 59 % of its wall in a round; **R362 (2026-09-19, item 14) RULED the rows: run8 runs to 30k regardless of the 15k reading, the sealbot rung is DELETED from the tree (contract v33), run9's eval rows are FIXED (cadence 15 000, gate 256/GSPRT unchanged, the gate's rule fields on the stream) and run9's ONE training swap and parent are ruled at 30k; the box's run8 stamp is untouched and still carries the retired rows, which the loader now tolerates**; **R363 (2026-09-20, item 15): the 30k point is INCONCLUSIVE (0.135 [0.097, 0.177] against 0.111) and run8 runs to 45k, the run9 PARENT RULE is PRE-STATED before that cell (the follower series monotone → 45k; else the highest whose CI holds the other two; the gate's best_model only without a strix triple), the LADDER unit is FIXED as code (`book_v1_s20260625_p4` paired, opening index = match index), ANALYZER-1 is admitted under R9, and the CPU deploy head is PROFILED (per-leaf forward ≈ 20 ms flat in batch size: 5.0 s per stone at 256 sims, 8 threads, idle); **the 45k point read 2026-09-21: 0.142 [0.104, 0.181], the series monotone, so the PARENT RULE names run8@45k — R364 is the operator's; the run continues (52 986 at 05:50 UTC), next cell 60k****. run7 STOPPED 2026-09-18 06:25 UTC at 83 482. The 2026-09-15 resume record follows as history
 
 **The leg on the record:** the R353 packet landed in full (below), then the operator's 2026-09-15
 questions — the run's checkup, WHY the eval is slow, sealbot's share, the book's ceiling — became
@@ -45,7 +45,8 @@ gate 1 not run (the accepted cost).
    → the 15k trainer net 0.045 [0.021, 0.073]** — the trainer peaked near 9k and regressed below
    its start by 15k; the gate held the 9k net (r4/r5 read 0.44–0.46 against it).
 5. The book: 42–47 % of rung pairs are seat-decided → a paired-WR ceiling ≈ 0.78; the readings sit
-   near the BOOK's ceiling (R353(e): a power loss; `book_v2` is the fix, carded).
+   near the BOOK's ceiling (R353(e): a power loss; `book_v2` is the fix, carded). [R365(e), 2026-09-21:
+   0.78 is the sealbot RUNG population's ceiling, not the book's — annotated at `RUN7_EVAL_COST` §B.]
 6. **Will it stop at 25k? No.** `max_train_steps` 1 000 000; 25 000 is only where two armed aborts
    go live. Stopping is one SIGTERM to the supervisor (save-then-exit); the block is a minimum.
 
@@ -485,6 +486,53 @@ into `checkpoints/run8/` → run9 preflight → the stamp → the 4 h twin `--in
 pin, the six bands, `replay_ratio` 7–9 reported with the value that stands, sym bins, entropy) → START →
 `strix_follower.py --follow --no-promotions --cadence 36000`. Box-hours ESTIMATE before the shakedown: ≈ 16 h per
 15 000 games if games/h holds (2.4× the trainer's steps per game; the shakedown's games/h replaces it).
+
+(17) R365 (2026-09-21, dev + mirror + the box's LAST session — run8 STOPPED and the instance RELEASED): the
+register at R365 (next R366), A2 under R364's foot (run9 not started, the mint = run10's base), A1 under R362's
+foot (the "matches run7's dip" join), R362's and R364's Status lines amended; F-44 annotated by regime (run6's
+92 % is unread at run8's mint and at 2.4 steps/game; its three forward uses pointed), the "≈ 0.78 book ceiling"
+annotated by population at `RUN7_EVAL_COST` §B (the rung's 42–47 %; strix cells read 0.86–0.92) with its uses at
+`STRIX_RUN7_60K` and the 2026-09-15 block pointed; `PARAM_DISTANCE` re-pinned (sha256 `60ca27c4…`, `203e7060`)
+in the register and in the research packet, which is now ON `dev` (`75f3627f`, one-file cherry-pick from
+`research-strength-2`); `RUN9_PREREG` carries the not-started header, E4's resolution statement in its unit
+section and the `one_hot_share_full` band STRUCK (five bands parse; run8's 45k ring reads them as before).
+**THE BOX, in order (branch `r365` = the `dev` tip `d4804e58` by bundle, `make build.cuda`, CUDA torch
+2.11+cu128):** run8's follower (pid 3211513, no cell in flight) SIGTERM 08:23:40 → run8's supervisor SIGTERM
+08:23:43 → `shutdown_save step=55170`, `terminal_eval_skipped reason=signal_stop`, `run8_00055170_34ff6c4e.ckpt`
++ bundle + resume + ring written and RECEIPTED by the puller (round r18 @54k was in flight and abandoned with
+the run; the record closed at 45k by R365(a)) → **PERF-3 step 3** (`PERF3_2026-09-18.md` §step 3): alone at
+200-s cells 2 236 / 2 394 / **2 466** / 2 055 / 2 091 leaves/s at B 16 … 256, the CPU launch stage 0.34–0.39
+ms/leaf at EVERY B, no knee, D-1 dead by its own falsifier (1.10×), the probe exact across B; contended beside
+the E1 cell 593 / 984 / 1 326 / 1 101 / 1 039 (27–54 %, the CPU stage doubled per leaf); the "128 sims" arm
+NOT MEASURED (no producer in the tool; P-B3's twin in run10's window) → **E1** (`tools/strix_follower.py --once
+… --unit ruler_r6`, the variant `<stem>:r6` landed at `d4804e58`): **0.080 [0.049, 0.115]**, 23–265–0, median
+41 plies, 2 804 s, IDLE, 6 690 fence findings and 0 out-of-fence — against the r8 unit's 0.142 [0.104, 0.181] a
+−6.2 pp move with disjoint CIs, so "strix @ r8" IS a unit qualifier on every follower point (the series and the
+parent choice stand, every point shares the unit; strix at its trained radius is the stronger ruler) → the mirror
+verified (rsync dry-run: run8 and run7 complete; the cell dirs, the bench JSONs, the scripts and every other
+run dir copied to `mantis-mirror/box-final-2026-09-21/`) → `vastai destroy instance 35883053` at 10:17 UTC, the
+host unreachable a minute later; the local puller unit stopped. Box-hours since
+the stop: 1.11 measured (0.33 bench alone + 0.78 E1 with the contended bench inside) of the packet's 1.6.
+**PROBE-1 READ** (`docs/design/measurements/PROBE1_2026-09-21.md`; the instrument `tools/probe1.py` +
+`tools/probe1/` on the production sample + collate, the cadence search, the bridged solver and the analyzer's
+sweep, pinned by `tests/tools/test_probe1.py`; `ring_audit.reconstruct_moves` exposes the ONE cadence
+sequence): (1) DECOMPOSER — ZERO tail-only rows on all 19 run8 rings (the conflation P5 posited is run7's,
+not run8's), the pooled share 25.7–28.4 % flat since 15k, **mr 1 rows one-hot 30–37 % vs mr 2 15–20 %** on
+every ring; (2) E3 — MAE ratio mr1/mr2 1.002 [0.983, 1.019], the reliability curves on each other bin for bin:
+CLOSED, one scalar suffices; (3) C3-1 — policy gap 0.09 ± 0.035 on a flat 2.1-nat loss, VALUE gap 0.13 (0.05–0.19,
+positive on all 18 nets) of 0.51, total 0.22: BETWEEN, reported, the value gap on the next ring named as run10's
+in-run reuse witness; (4) P-B2 — proof 2.30 % [1.88, 2.72] of 4 877 roots, 112/112 z-agreement, 4.5 ms/root,
+budget never binding, **strict novelty 0 of 112**: DEAD, F-53 filed; (5) P-B1 — median KL(prior‖target) 6.58
+(4.49 on supported rows; KL(target‖prior) 1.21; KL(target‖target^¼) 0.76) over 5 081 full-arm rows: ADMITTED
+(queue (vii)) under R365(c); (6) SPREAD — the median 0.122 → 0.097 first-six to last-six, −0.008 per 10k, the
+translation exact, four positions at 0.4–0.5 on every checkpoint: ARCH-D6 STAYS PARKED; (7) the SWA net
+`run8swa_00051000_ae478dee.ckpt` (net `61b09ba8…`, 8 sources 30k–51k, a fresh weights-only stamp with its
+derivation beside it, in the mirror root) BUILT for the EMA cell in run10's preflight window — the cell itself
+NOT run today (the packet's placement and budget). CARDS: CARD-PROBE-1, CARD-RUN10-RULE, CARD-E1-RULER-R6 opened
+(E1 READ), CARD-ARCH-D6 / RUN9-STOP-LAW / RUN9-QUEUE / PERF-3 moved. **What R366 owes:** run10's composition
+under R365(c) — the soft-policy head admitted, proof-as-target and the mid-turn value premise dead, the gap's
+witness pre-stated, the band's re-derivation (pooled < 0.30 or per-mr), the follower's unit (r8 stays or r6
+re-reads the series at ≈ 3 × 1.2 bh), the EMA cell in run10's window, LR by that cell and the drift reading.
 
 ## Exit facts — the R353 packet, 2026-09-14
 

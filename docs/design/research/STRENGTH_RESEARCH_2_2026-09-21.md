@@ -18,6 +18,12 @@ FALSIFIED ≤ 0.142 lines exist only in that same uncommitted rewrite (P5's wors
 pack's premises section flags three more: `handoff §5/§9` = NOT FOUND as a file (STATE.md is the
 handoff, per RULINGS); R364 verbatim is not at HEAD; `configs/run9.yaml` unminted at HEAD.
 
+**Re-pin, 2026-09-21 (R365 §0(6), by the landing session; one line, the phases below unedited):**
+`docs/design/measurements/PARAM_DISTANCE_2026-09-21.md` is COMMITTED at `203e7060` and hashes sha256
+`60ca27c41b3ab2a20a34474d3b058e051813e7178e1afbce6c778577bf800905` at HEAD; every `4c6759b9cbe2eec4…`
+cite below is the pre-commit draft, content verified by P5's spot-checks (L7). `configs/run9.yaml` is
+minted at `61bd2fd1` and R364 is in the register at `b5a5f51e`; both were in flight when this packet ran.
+
 **HALT recommendation to the architect: NO** (P6's verdict, MEASURED STATE item 15 — full-span
 draws 0.5 % / ply-cap 0.53 % are measured-inert under the only "rows are wrong" candidate; better
 rows exist, wrong rows do not).
