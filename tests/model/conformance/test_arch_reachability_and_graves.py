@@ -14,7 +14,7 @@ from pathlib import Path
 
 import pytest
 
-from mantis.config.loader import load_config
+from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
 from mantis.model import ARCH_KINDS, arch_from_spec_and_config
@@ -26,10 +26,6 @@ from test_config_partition_shared_vs_arch_scoped import CONFIGS
 REPO = Path(__file__).resolve().parents[3]
 MODEL_DIR = REPO / "src" / "mantis" / "model"
 GRAVE_GOODS = REPO / "tests" / "fixtures" / "model_graves" / "hexonet_grave_v1.json"
-
-#: Read from the manifest rather than named here, so this section cannot disagree with the
-#: gate's own authority on what "production" means.
-from mantis.config.armed_aborts import PRODUCTION_CONFIGS  # noqa: E402
 
 
 class CensusWentVacuous(ConformanceRefusal):
@@ -116,7 +112,7 @@ def consumers_of(name: str, defining_module: str, roots: tuple[Path, ...]) -> tu
 def selections() -> dict[str, str]:
     """Map every shipped config to the ARCH KIND the production entry point resolves."""
     out: dict[str, str] = {}
-    for path in sorted(CONFIGS.glob("*.yaml")):
+    for path in discover_configs(CONFIGS):
         config = load_config(path)
         spec = lookup(config.identity.encoding)
         arch = arch_from_spec_and_config(spec, config.model_dump())

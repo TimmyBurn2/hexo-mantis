@@ -208,7 +208,8 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
     encoding raises, never defaults (LAW-11/LAW-05).
 12. Armed-abort manifest audit (tools/ci_gates/preflight_mint.py --audit-only) — every
     `required` row of src/mantis/config/armed_aborts.py is armed in every production
-    config; deferred rows print loud and do not gate. The same tool's full mint preflight
+    config (the census: every configs/ file minus src/mantis/config/census.py's EXEMPT rows);
+    deferred rows print loud and do not gate. The same tool's full mint preflight
     (a real boot + burst) is MANUAL, invoked by no CI step.
 13. Contract-doc drift (tools/ci_gates/contract_doc_gate.py) — docs/contracts/run_config_schema.md
     may not cite a config key or a `mantis.*` symbol the shipped schema lacks, and its stated

@@ -364,8 +364,9 @@ ADDED (v7 → v8). `docs/contracts/run_config_schema.md` is the version authorit
     in place; a real arm that cannot be closed yet is registered with a named owner, never
     hidden in the justification hatch.
 12. Armed-abort manifest audit — every `required` row of the manifest
-    (`src/mantis/config/armed_aborts.py`) must be ARMED in every config the manifest binds
-    (`PRODUCTION_CONFIGS`), and every armed row must still be ABLE TO FIRE inside that config's
+    (`src/mantis/config/armed_aborts.py`) must be ARMED in every production config — the
+    census, `mantis.config.census.production_configs`: every file under `configs/` minus the
+    `EXEMPT_CONFIGS` rows, R367(a) — and every armed row must still be ABLE TO FIRE inside that config's
     own run. Read through the real loader; no boot, no burst, no GPU
     (`tools/ci_gates/preflight_mint.py --audit-only`). The second clause is R251 / ADJ-D22 and
     it is not a refinement of the first: `monitor.gate_interval: 1000000000` produces zero gate

@@ -38,6 +38,7 @@ import yaml
 
 import _microbatch_harness as H
 from mantis.monitor.config import MonitorConfig
+from mantis.config.census import exempt_config_paths, production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
 from mantis.config.resolve.microbatch import resolve_microbatch_caps
@@ -147,10 +148,10 @@ _RUN5_CENSUSED_NODES = 699_533
 _CENSUS_BATCH_SIZE = 256
 
 
-#: BOTH production configs, so the arming/sizing witness covers the config actually being
-#: launched. The transfer is guarded: the censused (E, N) describe this batch verbatim only at
-#: `_CENSUS_BATCH_SIZE`, and the staleness guard inside the test re-derives that premise.
-_PRODUCTION_CAPPED = ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml")
+#: Every production config (the census, R367(a)), so the arming/sizing witness covers the config
+#: actually being launched. The transfer is guarded: the censused (E, N) describe this batch
+#: verbatim only at `_CENSUS_BATCH_SIZE`, and the staleness guard inside the test re-derives that premise.
+_PRODUCTION_CAPPED = tuple(path.name for path in production_configs(_REPO))
 
 
 @pytest.mark.parametrize("name", _PRODUCTION_CAPPED)
@@ -375,10 +376,10 @@ def test_of2_9_leg2_no_tail_statement_lives_inside_the_accumulation_loop() -> No
                 "times per training step (MB-8)")
 
 
-_NON_RUN5 = ("dev_example.yaml", "smoke_preflight_armed.yaml")
+_EXEMPT = tuple(sorted(Path(rel).name for rel in exempt_config_paths()))
 
 
-@pytest.mark.parametrize("name", _NON_RUN5)
+@pytest.mark.parametrize("name", _EXEMPT)
 def test_of2_14_the_smoke_configs_caps_do_not_bind(name: str) -> None:
     """The non-production configs' caps do not bind, which the design claims by construction.
 
@@ -409,4 +410,4 @@ def test_of2_14_run5_is_excluded_deliberately_and_the_set_is_the_whole_directory
     production config is EXCLUDED because its caps are fitted against a measured partition.
     """
     live = sorted(p.relative_to(_CONFIGS).as_posix() for p in discover_configs(_CONFIGS))
-    assert live == sorted((*_NON_RUN5, "run10.yaml", "run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml"))
+    assert live == sorted((*_EXEMPT, *_PRODUCTION_CAPPED))

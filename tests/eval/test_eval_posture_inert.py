@@ -27,6 +27,7 @@ from typing import Any
 import pytest
 import yaml
 
+from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema.core import StrengthFloorConfig
 from mantis.config.resolve.eval_posture import (
@@ -98,10 +99,10 @@ def test_the_resolvers_return_none_except_where_a_ruling_armed_them(path) -> Non
         assert floor is None
 
 
-#: The configs a RULING has armed `eval.strength_floor` on. CLOSED and NAMED: it is widened only
-#: by a mint act with a ruling behind it, and it is NOT derived from the files, because a
-#: predicate over `configs/` would go vacuous on exactly the event this suite exists to catch.
-_ARMED_STRENGTH_FLOOR = frozenset({"run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml"})
+#: Every production config arms `eval.strength_floor`: the census (R367(a)) is discovery minus the
+#: exempt rows, never a predicate over the property under test, so it cannot go vacuous on the
+#: event this suite exists to catch — a production config silently disarming.
+_ARMED_STRENGTH_FLOOR = frozenset(path.name for path in production_configs(_CONFIG_DIR.parent))
 
 
 def _armed_config():
@@ -175,7 +176,7 @@ def test_the_production_round_spec_carries_what_the_config_states(tmp_path, monk
     )
     spec = _spec_from("run6.yaml", tmp_path)
     assert spec.ply_cap_adjudication is None
-    assert "run6.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise is the ruled armed set"
+    assert "run6.yaml" in _ARMED_STRENGTH_FLOOR, "this row's premise: its subject is a production config"
     assert spec.strength_floor is not None, (
         "run5's armed floor did not reach the round spec — minted and inert"
     )

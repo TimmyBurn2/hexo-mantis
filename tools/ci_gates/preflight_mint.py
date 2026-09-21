@@ -76,11 +76,10 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 
+from mantis.config import census
 from mantis.config.armed_aborts import (
     EARLIEST_FIRE_FRACTION,
-    EXEMPT_CONFIGS,
     MANIFEST,
-    PRODUCTION_CONFIGS,
     RUN_LENGTH_PATH,
     ArmedAbort,
     ArmingSurfaceMissingError,
@@ -92,7 +91,7 @@ from mantis.config.armed_aborts import (
     audit_cadence,
     exit_code_for_abort,
 )
-from mantis.config.loader import config_identity_sha256, discover_configs, load_config
+from mantis.config.loader import config_identity_sha256, load_config
 from mantis.config.preflight_stamp import clear_stamp, write_stamp
 from mantis.config.schema import RunConfig
 from mantis.diagnostics.mirror_receipts import MirrorReceiptsMissingError, await_mirror_receipts
@@ -242,43 +241,16 @@ def verify_source_pins(
 
 
 def _resolve_production_configs() -> list[Path]:
-    """PRODUCTION_CONFIGS holds repo-relative STRINGS (data); resolving them is ours."""
-    return [REPO_ROOT / rel for rel in PRODUCTION_CONFIGS]
-
-
-#: The manifest module may make no filesystem call, so DISCOVERY lives here.
-CONFIG_DIR_REL = "configs"
-
-
-def _discovered_configs() -> list[str]:
-    """Every config actually on disk, repo-relative — the scope check's left-hand side.
-
-    Discovery is `discover_configs`, the same call gate 7 makes, emitted relative to the repo root
-    INCLUDING subdirectory components: a second flat glob here let a disarmed config validate
-    under gate 7 and never be audited. It is also name-agnostic, because filtering by EXTENSION
-    while `load_config` filters by CONTENT leaves the launchable set strictly larger.
-    """
-    return sorted(path.relative_to(REPO_ROOT).as_posix()
-                  for path in discover_configs(REPO_ROOT / CONFIG_DIR_REL))
-
-
-def _config_declaration_drift() -> tuple[list[str], list[str], list[str]]:
-    """The two tuples must PARTITION `discover_configs(configs/)` — exactly the set gate 7
-    validates. Returns (undeclared, stale, overlapping); all three empty is the only legal state.
-
-    Deliberately not "audit every config in `configs/`": a bare discovery rule silently starts
-    binding a config nobody classified, whereas the partition keeps ONE authority for which
-    configs the law binds and makes its COMPLETENESS machine-checked, so "exempt" and "forgotten"
-    stop being the same observable. An UNDECLARED config is never audited — copying run5 with the
-    actor-lag abort flipped off audited rc 0 — a STALE one audits a file nobody will run, and an
-    overlapping one is two answers to one question.
-    """
-    present = set(_discovered_configs())
-    production = set(PRODUCTION_CONFIGS)
-    exempt = {rel for rel, _reason in EXEMPT_CONFIGS}
-    return (sorted(present - production - exempt),
-            sorted((production | exempt) - present),
-            sorted(production & exempt))
+    """The census (R367(a)): every config under `configs/` that no exempt row names — a config nobody
+    classified is AUDITED, never forgotten; Raises: PreflightManifestError — a stale exemption or an
+    empty census, the census's own words (rc 31)."""
+    try:
+        return list(census.production_configs(REPO_ROOT))
+    except census.ConfigCensusError as exc:
+        raise PreflightManifestError(
+            "the config census cannot be taken, so assertion (c)'s SCOPE is not knowable: "
+            f"{exc}\n  exemption reasons on record: {dict(census.EXEMPT_CONFIGS)}"
+        ) from exc
 
 
 def _audit_paths(named: Path | None) -> list[Path]:
@@ -500,29 +472,11 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
             "not just watched work):\n" + "\n".join(broken_trigger)
         )
     required = [row for row in MANIFEST if row.status is Status.REQUIRED]
-    if not required or not PRODUCTION_CONFIGS:
+    if not required:
         raise PreflightManifestError(
-            "the armed-abort manifest is vacuous: an empty required set audits every "
-            "config green, and an empty PRODUCTION_CONFIGS binds no config at all"
+            "the armed-abort manifest is vacuous: an empty required set audits every config green"
         )
-    undeclared, stale, overlapping = _config_declaration_drift()
-    if undeclared or stale or overlapping:
-        reasons = dict(EXEMPT_CONFIGS)
-        raise PreflightManifestError(
-            "the config declaration no longer partitions the configs/ tree, so assertion "
-            "(c)'s SCOPE is not knowable (MF-7; scope widened to gate 7's own discovery by "
-            "ADJ-13 F-1 and made name-agnostic by R75 — every path at any depth under "
-            "configs/ that is not a directory):\n"
-            f"  UNDECLARED (on disk, in neither tuple — NEVER audited): {undeclared}\n"
-            "    -> add each to PRODUCTION_CONFIGS (it gets audited) or to EXEMPT_CONFIGS "
-            "with a written reason (R59 permits deliberate disarming off the production "
-            "set). A config nobody declared is not exempt; it is forgotten.\n"
-            f"  STALE (declared, absent from disk): {stale}\n"
-            "    -> the declaration is auditing a file nobody will run; re-point or drop it.\n"
-            f"  IN BOTH TUPLES: {overlapping}\n"
-            f"  exemption reasons on record: {reasons}",
-            undeclared=undeclared, stale=stale, overlapping=overlapping,
-        )
+    _resolve_production_configs()
     # The scan's RESULT is what the report publishes. `source_pins_ok` used to be the literal
     # `True`, so deleting this call left the report claiming a scan that never ran, with the
     # whole default tier green. Both report fields are derived from `broken` / `scanned`.
@@ -624,7 +578,7 @@ def _audit_manifest_and_configs(paths: list[Path]) -> dict:
         "source_pins_ok": not broken,
         "source_pins_scanned": scanned,
         "audited_configs": [str(path) for path in paths],
-        "exempt_configs": [rel for rel, _reason in EXEMPT_CONFIGS],
+        "exempt_configs": sorted(census.exempt_config_paths()),
     }
 
 
@@ -987,8 +941,8 @@ def _run_audit(args, report: dict) -> None:
     if named is not None:
         _publish(named)
     # The manifest audit runs BEFORE anything indexes `paths`: it carries the vacuity guard,
-    # so an empty PRODUCTION_CONFIGS is rc 31 by name rather than an `IndexError` collapsing
-    # into an unnamed rc 1.
+    # so an empty census is rc 31 by name rather than an `IndexError` collapsing into an
+    # unnamed rc 1.
     report["manifest"] = _audit_manifest_and_configs(paths)
     if named is None:
         _publish(paths[0])

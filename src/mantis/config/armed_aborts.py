@@ -8,10 +8,10 @@
 ONE authority, and it is DATA: a typed frozen dataclass read by `import`, carrying its
 invariant in `__post_init__`, with no doc twin to drift from.
 
-THE LAYER BOUNDARY. This module makes ZERO filesystem calls. `PRODUCTION_CONFIGS` holds
-repo-relative STRINGS; resolving them against a repo root lives in
-`tools/ci_gates/preflight_mint.py`, because a shipped package that resolved one would be
-depending on an editable install. Pinned by `tests/config/test_armed_abort_manifest.py`.
+THE LAYER BOUNDARY. This module makes ZERO filesystem calls. WHICH configs the rows bind is
+`mantis.config.census.production_configs` — every config on disk that no exempt row names
+(R367(a)) — taken by `tools/ci_gates/preflight_mint.py` at point of use. Pinned by
+`tests/config/test_armed_abort_manifest.py`.
 
 A DEFERRED row prints loudly on every gate-12 run, gates nothing, and makes the flip to
 REQUIRED a one-field data edit.
@@ -600,7 +600,7 @@ MANIFEST: tuple[ArmedAbort, ...] = (
         status=Status.DEFERRED,
         exit_code=PLY_CAP_ATTRACTOR_EXIT_CODE,
         owner=("configs/run6.yaml — a finished run's record that mints null truthfully; the row "
-               "flips REQUIRED (one field) when that file leaves PRODUCTION_CONFIGS"),
+               "flips REQUIRED (one field) when that file leaves the config census"),
         source_pin=(
             "src/mantis/run.py",
             "ply_cap_abort=resolve_ply_cap_abort(config.train)",
@@ -910,47 +910,6 @@ MANIFEST: tuple[ArmedAbort, ...] = (
     ),
 )
 
-#: WHICH configs the law binds — one authority. Repo-relative strings only; resolving them is
-#: the tool's job. Membership is audited BY NAME, so exempting the run an operator is about to
-#: mint is a red gate rather than a bookkeeping edit.
-PRODUCTION_CONFIGS: tuple[str, ...] = ("configs/run6.yaml", "configs/run7.yaml", "configs/run8.yaml", "configs/run9.yaml", "configs/run10.yaml")
-
-#: The OTHER half of the same authority: the two tuples must PARTITION the config set EXACTLY,
-#: and the tool hard-fails (rc 31) on either kind of drift — a config on disk named by neither
-#: tuple, or a tuple naming a config that is not on disk. Exemption by ABSENCE made
-#: "deliberately exempt" and "nobody listed it" the same observable.
-#:
-#: Discovery is `mantis.config.loader.discover_configs`, shared by gates 7 and 12 and
-#: NAME-AGNOSTIC, so adding ANY file under `configs/` forces a declaration here or in
-#: `PRODUCTION_CONFIGS`; the deliberate cost is that `configs/` may hold only complete configs.
-#: A loadable config OUTSIDE `configs/` is still reachable without being discovered.
-#:
-#: `(repo-relative path, why it is exempt)`. The reason is data, printed by the tool on the
-#: failure path, so an exemption cannot be a bare path nobody can justify later.
-EXEMPT_CONFIGS: tuple[tuple[str, str], ...] = (
-    (
-        "configs/dev_example.yaml",
-        "developer template, never minted for a run; DISARMED by design (R59). R346(f) pruned "
-        "configs/ to run6 plus one smoke and this file was cut with the rest — it is BACK, and "
-        "the ground is LAW-07: ADJ-13 N-3 makes it the mutation corpus's M1 row, the one real "
-        "committed config that demonstrates gate 12 going RED on the real `configs/` tree. "
-        "With run5, the shakedown and the plain smoke gone it is the only disarmed config "
-        "left, so deleting it would leave the gate with no red-capability demonstration on "
-        "the tree it audits. Pinned by "
-        "`test_naming_a_DISARMED_config_is_AUDITED_and_never_ignored`.",
-    ),
-    (
-        "configs/smoke_preflight_armed.yaml",
-        "armed preflight-rehearsal smoke config (WPTS Phase F, R103): NOT a production run, "
-        "but unlike the R59 smokes it ARMS both required rows at burst-scale guard values so "
-        "mode PREFLIGHT can run a completed bounded burst off-run5. Exempt from the "
-        "every-production-config gate-12 sweep for the same reason the other smokes are; "
-        "`--config` still unions it into the audit set, and its live consumer is the burst "
-        "oracle in tests/tools/test_preflight_armed_smoke.py (LAW-08).",
-    ),
-)
-
-
 class ArmingSurfaceMissingError(AttributeError):
     """A row's `config_path` does not resolve on a real `RunConfig`.
 
@@ -1192,9 +1151,7 @@ def exit_code_for_abort(
 __all__ = [
     "DISK_SPACE_ABORT_RULE",
     "EARLIEST_FIRE_FRACTION",
-    "EXEMPT_CONFIGS",
     "MANIFEST",
-    "PRODUCTION_CONFIGS",
     "RUN_LENGTH_PATH",
     "TERMINAL_EVAL_BROKEN_ABORT_RULE",
     "ArmedAbort",

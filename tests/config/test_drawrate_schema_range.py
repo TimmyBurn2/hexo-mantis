@@ -17,6 +17,7 @@ from pydantic import ValidationError
 # `ruff --fix` re-sorts the `resolve.draw_rate` import into the third-party block while that
 # module does not exist; it sits here, with its `mantis.*` siblings, where it belongs.
 from mantis.config.loader import discover_configs, load_config
+from mantis.config.census import production_configs
 from mantis.config.resolve.draw_rate import resolve_draw_rate_abort  # RED anchor (R80)
 from mantis.config.schema import RunConfig
 from mantis.util.constants import DRAW_RATE_WINDOW
@@ -238,7 +239,7 @@ def test_every_config_states_its_draw_rate_posture_explicitly() -> None:
     # The armed production configs, which CARRY the four pre-registered constants rather than
     # re-authoring them. The pin is on the MINTED file, so an in-place edit of its armed block reds
     # here; gate 12 audits it by name.
-    for production in ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml"):
+    for production in (path.name for path in production_configs(CONFIGS_DIR.parent)):
         armed = postures.pop(production, None)
         assert armed is not None, (
             f"configs/{production} is a declared PRODUCTION config and must ARM the draw-rate "

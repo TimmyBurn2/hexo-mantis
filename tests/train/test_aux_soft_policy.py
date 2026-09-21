@@ -121,7 +121,7 @@ def test_the_head_and_its_rows_are_one_fact_at_the_trainer_and_at_the_schema(tmp
         H.soft_policy_graph_trainer(tmp_path, aux_soft_policy=None)
     with pytest.raises(ValueError, match="carries no auxiliary soft-policy head"):
         H.tiny_graph_trainer(tmp_path, aux_soft_policy=(4.0, 4.0))
-    config = load_config(_REPO / "configs" / "run9.yaml").model_dump()
+    config = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     config["model"]["aux_soft_policy"] = {"target_temperature": 4.0, "weight": 4.0}
     with pytest.raises(ValueError, match="carries no soft-policy head"):
         RunConfig.model_validate(config)

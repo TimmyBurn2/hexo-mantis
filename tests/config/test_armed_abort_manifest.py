@@ -26,12 +26,12 @@ from types import SimpleNamespace
 import pytest
 from mantis.config.armed_aborts import (  # RED-at-import anchor
     MANIFEST,
-    PRODUCTION_CONFIGS,
     ArmedAbort,
     Mechanism,
     Status,
     audit_arming,
 )
+from mantis.config.census import production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.schema import RunConfig
 
@@ -132,8 +132,8 @@ def test_the_audit_reads_the_CONFIG_not_the_config_FILENAME(smoke_run_config) ->
     through the blessed load/dump/validate factory, so both payloads are schema-valid."""
     run5_disarmed = smoke_run_config("run6.yaml", monitor={"actor_lag_abort_enabled": False})
     assert [row.name for row in audit_arming(run5_disarmed).disarmed] == ["actor_lag"], (
-        "run5 with the arming flipped OFF must fail the audit — the audit reads the "
-        "validated config object, never the path it came from"
+        "a production config with the arming flipped OFF must fail the audit — the audit reads "
+        "the validated config object, never the path it came from"
     )
     dev_armed = smoke_run_config(
         "dev_example.yaml",
@@ -202,15 +202,12 @@ def test_the_manifest_is_not_vacuous() -> None:
         "the manifest must carry at least one `required` row — with none, assertion (c) "
         "passes vacuously on a config with every abort disarmed"
     )
-    assert len(PRODUCTION_CONFIGS) >= 1, (
-        "PRODUCTION_CONFIGS must name at least one config — it is the single authority for "
-        "WHICH configs the law binds (R59 expresses smoke exemption by ABSENCE from it)"
+    production = production_configs(REPO_ROOT)
+    assert len(production) >= 1, (
+        "the config census must bind at least one config — it is the single authority for "
+        "WHICH configs the law binds (R367(a): every config on disk minus the exempt rows)"
     )
-    for rel in PRODUCTION_CONFIGS:
-        assert (REPO_ROOT / rel).is_file(), (
-            f"PRODUCTION_CONFIGS names {rel!r}, which does not exist. The tuple holds "
-            "repo-relative STRINGS (data); resolving them is the tool's (SF-4)"
-        )
+    assert all(path.is_file() for path in production)
     assert all(isinstance(row, ArmedAbort) for row in MANIFEST)
 
     run5 = load_config(REPO_ROOT / "configs" / "run6.yaml")
@@ -571,8 +568,8 @@ def test_the_terminal_eval_broken_row_is_armed_on_every_production_config() -> N
     """The audit half — the row is not merely well-formed, it is ARMED where it counts.
     `audit_arming` resolves `train.terminal_eval_enabled` on the real production config and
     reports the row DISARMED if it is not `True`."""
-    for name in PRODUCTION_CONFIGS:
-        config = load_config(REPO_ROOT / name)
+    for name in (path.name for path in production_configs(REPO_ROOT)):
+        config = load_config(REPO_ROOT / "configs" / name)
         audit = audit_arming(config)
         disarmed = [row.name for row in audit.disarmed]
         assert disarmed == [], (

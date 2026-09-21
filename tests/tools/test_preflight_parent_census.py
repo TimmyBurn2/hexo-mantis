@@ -6,7 +6,7 @@ applied to the sibling, in a non-frozen test.
 
 The split's one-authority constraints are pinned here too: the sibling never imports the tool
 (no cycle), never spec-loads anything (the tool is the only loader), and defines no
-`MANIFEST`/`PRODUCTION_CONFIGS`/`EXEMPT_CONFIGS` global, so the audit read path stays the
+`MANIFEST`/`EXEMPT_CONFIGS`/census global, so the audit read path stays the
 tool module's. The re-export block is drift-pinned: every top-level name the sibling defines
 is bound on the tool module as the same object.
 """
@@ -86,7 +86,7 @@ def test_the_parent_half_never_imports_the_tool_and_never_loads_modules() -> Non
 
 def test_the_parent_half_defines_no_manifest_global() -> None:
     """Prove the parent half defines no manifest global; a sibling-side one is a second read path."""
-    forbidden = {"MANIFEST", "PRODUCTION_CONFIGS", "EXEMPT_CONFIGS"}
+    forbidden = {"MANIFEST", "EXEMPT_CONFIGS", "production_configs"}
     for node in PARENT_TREE.body:
         targets: list[str] = []
         if isinstance(node, ast.Assign):

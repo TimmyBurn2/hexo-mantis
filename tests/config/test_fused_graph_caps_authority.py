@@ -25,6 +25,7 @@ import pytest
 import torch
 from pydantic import ValidationError
 
+from mantis.config.census import exempt_config_paths, production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.fused_graph_caps import (
     FusedGraphCapsSpec,
@@ -41,11 +42,10 @@ _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = _REPO / "configs"
 _READ_PATH = _REPO / "src" / "mantis" / "config" / "resolve" / "fused_graph_caps.py"
 
-#: The two configs whose value is the OPERATOR'S, minted at the box sitting from the calibration
-#: tool's output. `run6.yaml` joins run5 on run5's own grounds: a box-class config that already
-#: mints run5's `microbatch_caps` and is already excluded beside it; run7–run9 carry its caps.
-_PRODUCTION = ("run6.yaml", "run7.yaml", "run8.yaml", "run9.yaml", "run10.yaml")
-_NON_PRODUCTION = ("dev_example.yaml", "smoke_preflight_armed.yaml")
+#: The census (R367(a)): production is every config on disk that no exempt row names, so a mint
+#: joins these sets by landing under `configs/`, never by an edit here.
+_PRODUCTION = tuple(path.name for path in production_configs(_REPO))
+_NON_PRODUCTION = tuple(sorted(Path(rel).name for rel in exempt_config_paths()))
 
 
 def _all_config_names() -> list[str]:

@@ -23,11 +23,10 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
+from mantis.config import census
 from mantis.config.armed_aborts import (
     EARLIEST_FIRE_FRACTION,
-    EXEMPT_CONFIGS,
     MANIFEST,
-    PRODUCTION_CONFIGS,
     ArmedAbort,
     Mechanism,
     SampleClockNotDerivableError,
@@ -568,8 +567,8 @@ def _mini_tree(tmp_path: Path) -> Path:
     """A scratch root the real tool resolves as its own `REPO_ROOT`.
 
     The tool is the shipped file run as itself against a different tree. The tree carries
-    exactly what the audit path reads; `MANIFEST`, `PRODUCTION_CONFIGS` and `EXEMPT_CONFIGS`
-    still come from the installed package, so the rig varies the tree and never the manifest.
+    exactly what the audit path reads; `MANIFEST` and the census's exempt rows still come from
+    the installed package, so the rig varies the tree and never the manifest.
     """
     root = tmp_path / "tree"
     (root / "tools" / "ci_gates").mkdir(parents=True)
@@ -657,9 +656,9 @@ def test_the_report_publishes_the_pins_the_scan_ACTUALLY_covered(tmp_path) -> No
     assert manifest["source_pins_scanned"], "a scan that covered nothing is not a scan"
 
 
-def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
-    """A config sitting in `configs/` that NEITHER tuple declares fails the gate, so
-    "deliberately exempt" and "forgotten" stop being the same observable."""
+def test_a_config_nobody_declared_is_production_and_AUDITED(tmp_path) -> None:
+    """A config that lands under `configs/` with no declaration anywhere is production by the
+    census (R367(a)) and is audited: "forgotten" reads as "audited", never as "exempt"."""
     root = _mini_tree(tmp_path)
     rel = f"{_F1_PLANT_STEM}.yaml"
     plant = root / "configs" / rel
@@ -668,14 +667,15 @@ def test_a_config_declared_by_neither_tuple_fails_the_gate(tmp_path) -> None:
     assert "terminal_eval_enabled: false" in plant.read_text(), (
         "the planted config must really be disarmed, or this test is vacuous"
     )
+    assert root / "configs" / rel in census.production_configs(root)
     result = _mini_audit(root)
     output = result.stdout + result.stderr
-    assert result.returncode == 31, (
-        "a config on disk that neither tuple names must FAIL the gate — it was rc 0 before "
-        f"(never audited at all); got {result.returncode}\n{output[-3000:]}"
+    assert result.returncode == 30, (
+        "a disarmed config on disk that nobody declared must FAIL the audit as a production "
+        f"config — it was rc 0 before ADJ-13 (never audited at all); got {result.returncode}\n{output[-3000:]}"
     )
-    assert f"configs/{rel}" in output and "UNDECLARED" in output, (
-        f"the failure must name the undeclared config and say what to do; got {output[-2000:]}"
+    assert rel in output and "terminal_eval_broken" in output, (
+        f"the failure must name the config and the disarmed row; got {output[-2000:]}"
     )
 
 
@@ -683,30 +683,28 @@ def test_a_declaration_that_names_a_missing_config_fails_the_gate(tmp_path) -> N
     """A declaration naming a config absent from disk fails the gate, so a stale declaration is
     never silently tolerated."""
     root = _mini_tree(tmp_path)
-    victim = EXEMPT_CONFIGS[0][0]
+    victim = census.EXEMPT_CONFIGS[0][0]
     (root / victim).unlink()
     result = _mini_audit(root)
     output = result.stdout + result.stderr
     assert result.returncode == 31, (
-        f"a declaration naming an absent config must fail; got {result.returncode}\n"
+        f"an exemption naming an absent config must fail; got {result.returncode}\n"
         f"{output[-3000:]}"
     )
     assert "STALE" in output and victim in output, (
-        f"the failure must name the stale declaration; got {output[-2000:]}"
+        f"the failure must name the stale exemption; got {output[-2000:]}"
     )
 
 
-def test_the_declaration_partition_holds_on_the_REAL_tree() -> None:
-    """Every config on the tree that ships is declared by exactly one of the two tuples."""
-    undeclared, stale, overlapping = TOOL._config_declaration_drift()
-    assert (undeclared, stale, overlapping) == ([], [], []), (
-        "configs/*.yaml must be partitioned exactly by PRODUCTION_CONFIGS and "
-        f"EXEMPT_CONFIGS; undeclared={undeclared} stale={stale} overlapping={overlapping}"
-    )
-    assert set(TOOL._discovered_configs()) == set(PRODUCTION_CONFIGS) | {
-        rel for rel, _reason in EXEMPT_CONFIGS
-    }
-    assert all(reason.strip() for _rel, reason in EXEMPT_CONFIGS), (
+def test_the_census_holds_on_the_REAL_tree() -> None:
+    """Production is every config on disk minus the exempt rows (R367(a)); every exempt row is on
+    disk and carries a written reason; the tool's scope is exactly the census."""
+    production = census.production_configs(REPO_ROOT)
+    present = set(census.discovered_config_paths(REPO_ROOT))
+    assert production and census.exempt_config_paths() <= present
+    assert {path.relative_to(REPO_ROOT).as_posix() for path in production} == present - census.exempt_config_paths()
+    assert TOOL._resolve_production_configs() == list(production)
+    assert all(reason.strip() for _rel, reason in census.EXEMPT_CONFIGS), (
         "an exemption with no written reason is an exemption nobody can justify later — "
         "the reason is DATA and the tool prints it on the failure path"
     )
@@ -716,7 +714,7 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
     """`--config X` UNIONS with the production set rather than replacing it, so a disarmed
     production config is still audited when a different config is named."""
     root = _mini_tree(tmp_path)
-    production = root / PRODUCTION_CONFIGS[0]
+    production = _a_production_config(root)
     production.write_text(production.read_text().replace("terminal_eval_enabled: true",
                                                          "terminal_eval_enabled: false"))
     healthy = tmp_path / "healthy.yaml"
@@ -733,7 +731,7 @@ def test_naming_a_config_ADDS_scrutiny_and_never_replaces_the_production_set(tmp
         "naming a healthy config on the command line must NOT excuse the production set — "
         f"replace semantics returned 0 here; got {named.returncode}\n{output[-3000:]}"
     )
-    assert "terminal_eval_broken" in output and PRODUCTION_CONFIGS[0].split("/")[-1] in output, (
+    assert "terminal_eval_broken" in output and production.name in output, (
         f"the failure must still name the disarmed production config; got {output[-2000:]}"
     )
 
@@ -756,19 +754,22 @@ def test_both_modes_compute_the_audit_scope_from_the_same_function() -> None:
 def test_the_manifest_vacuity_guard_fires_before_anything_indexes_the_paths(
     monkeypatch, tmp_path,
 ) -> None:
-    """The manifest vacuity guard fires before anything indexes the paths, so an empty
-    production set is the named rc 31 rather than an IndexError collapsed to an unnamed rc 1."""
-    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", ())
+    """The manifest vacuity guard fires before anything indexes the paths, so an empty census
+    is the named rc 31 rather than an IndexError collapsed to an unnamed rc 1."""
+    root = _mini_tree(tmp_path)
+    for path in census.production_configs(root):
+        path.unlink()
+    monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     with pytest.raises(TOOL.PreflightManifestError) as caught:
         TOOL._audit_manifest_and_configs([])
-    assert caught.value.rc == 31 and "vacuous" in str(caught.value)
+    assert caught.value.rc == 31 and "EMPTY" in str(caught.value)
 
     report = TOOL._new_report("audit")
     args = SimpleNamespace(config=None, out_dir=None)
     with pytest.raises(TOOL.PreflightManifestError):
         TOOL._run_audit(args, report)
 
-    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS", tuple(PRODUCTION_CONFIGS))
+    monkeypatch.setattr(TOOL, "REPO_ROOT", REPO_ROOT)
     # The synthetic row restores this arm's subject — a manifest that HAS rows, none of them
     # REQUIRED. Filtering the shipped manifest down to its deferred rows now yields ().
     deferred_only = (_SYNTHETIC_DEFERRED,)
@@ -789,7 +790,7 @@ def test_an_interval_that_outruns_the_run_REDS_the_real_gate(tmp_path) -> None:
     """A `monitor.gate_interval` that outruns the run reds the real gate: a threshold whose gate
     boundaries fall past the end of the run is armed in the config and unread in the run."""
     root = _mini_tree(tmp_path)
-    production = root / PRODUCTION_CONFIGS[0]
+    production = _a_production_config(root)
     original = production.read_text()
     assert original.count("gate_interval: 1000\n") == 1, (
         "the rig rewrites exactly one key; if run5's gate_interval spelling moved, this "
@@ -1601,26 +1602,26 @@ def test_the_second_lag_sample_costs_a_full_file_interval_of_WALL_CLOCK(tmp_path
 # rather than the input that demonstrated the defect.
 
 #: The class boundary, not the demo input: every way a config can enter `configs/` that gate 7
-#: blesses and gate 12 could not see, each of them loadable and therefore required to be
-#: discovered. The stem is ASSERTED undeclared by its own row below rather than chosen and
-#: hoped for; the history in the docstrings still names `run6.yaml`, because that is what
-#: was demonstrated.
-_F1_PLANT_STEM = "run11"
+#: blesses, each of them loadable and therefore discovered and — under the census — audited. The
+#: stem is a name no mint will ever take, asserted absent from the tree by its own row below.
+_F1_PLANT_STEM = "planted_by_the_rig"
 _F1_PLANT_PATHS = (f"{_F1_PLANT_STEM}.yaml", f"{_F1_PLANT_STEM}.yml",
                    f"prod/{_F1_PLANT_STEM}.yaml", f"prod/nested/{_F1_PLANT_STEM}.yml",
                    f"{_F1_PLANT_STEM}.txt", f"{_F1_PLANT_STEM}.YAML",
                    f"{_F1_PLANT_STEM}.yaml.bak", ".yaml", f"{_F1_PLANT_STEM}.yamlx")
 
 
-def test_the_F1_plant_stem_is_declared_by_NEITHER_tuple() -> None:
-    """The premise every plant row rests on, asserted instead of assumed: the plant stem is
-    declared by NEITHER tuple."""
-    declared = {*PRODUCTION_CONFIGS, *(path for path, _why in EXEMPT_CONFIGS)}
-    collides = sorted(d for d in declared if Path(d).name.split(".")[0] == _F1_PLANT_STEM)
-    assert not collides, (
-        f"the F1 plant stem {_F1_PLANT_STEM!r} is declared by {collides} — a plant at a "
-        "DECLARED name tests rc 30 (disarmed) and not rc 31 (undeclared). Move the stem"
-    )
+def test_the_F1_plant_stem_is_on_no_exempt_row_and_on_no_file() -> None:
+    """The premise every plant row rests on, asserted instead of assumed: a plant is a NEW
+    production config, never an overwrite of a shipped one and never an exempt name."""
+    taken = {*census.exempt_config_paths(), *census.discovered_config_paths(REPO_ROOT)}
+    collides = sorted(d for d in taken if Path(d).name.split(".")[0] == _F1_PLANT_STEM)
+    assert not collides, f"the F1 plant stem {_F1_PLANT_STEM!r} collides with {collides}; move the stem"
+
+
+def _a_production_config(root: Path) -> Path:
+    """The first production config of `root`'s census — the rig's subject, derived at point of use."""
+    return census.production_configs(root)[0]
 
 
 def _plant_disarmed(root: Path, rel: str) -> Path:
@@ -1636,55 +1637,46 @@ def _plant_disarmed(root: Path, rel: str) -> Path:
 
 
 @pytest.mark.parametrize("rel", _F1_PLANT_PATHS)
-def test_an_undeclared_config_fails_the_gate_at_ANY_suffix_and_ANY_depth(tmp_path, rel) -> None:
-    """An undeclared config fails the gate at ANY suffix and ANY depth — `.yaml` alone would
-    pass against the old flat glob too, so the parametrisation IS the fix's evidence."""
+def test_a_planted_config_is_AUDITED_at_ANY_suffix_and_ANY_depth(tmp_path, rel) -> None:
+    """A disarmed config planted at ANY suffix and ANY depth is production by the census and
+    reds the audit — `.yaml` alone would pass against the old flat glob too, so the
+    parametrisation IS the evidence."""
     root = _mini_tree(tmp_path)
-    _plant_disarmed(root, rel)
+    planted = _plant_disarmed(root, rel)
+    assert planted in census.production_configs(root)
     result = _mini_audit(root)
     output = result.stdout + result.stderr
-    assert result.returncode == 31, (
-        f"a disarmed config at configs/{rel} must FAIL the gate; it was rc 0 for every "
+    assert result.returncode == 30, (
+        f"a disarmed config at configs/{rel} must FAIL the audit; it was rc 0 for every "
         f"shape but the flat `.yaml` before ADJ-13. got {result.returncode}\n{output[-3000:]}"
     )
-    assert f"configs/{rel}" in output and "UNDECLARED" in output, (
-        "the failure must name the undeclared config by the SAME relative path a declaration "
-        f"would use, subdirectory components included; got {output[-2000:]}"
+    assert Path(rel).name in output and "terminal_eval_broken" in output, (
+        f"the failure must name the planted config and the disarmed row; got {output[-2000:]}"
     )
 
 
-def test_a_declared_SUBDIRECTORY_config_is_audited_and_never_reported_STALE(
-    monkeypatch, tmp_path,
-) -> None:
-    """A declared SUBDIRECTORY config is discovered, its declaration resolves, and it is really
-    AUDITED — never reported STALE for a file the tool is looking straight at."""
+def test_a_SUBDIRECTORY_config_is_discovered_and_audited(monkeypatch, tmp_path) -> None:
+    """A subdirectory config is discovered, is production by the census, and is really AUDITED
+    through the tool's own scope function."""
     root = _mini_tree(tmp_path)
-    _plant_disarmed(root, "prod/run6.yaml")
+    rel = f"prod/{_F1_PLANT_STEM}.yaml"
+    planted = _plant_disarmed(root, rel)
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS",
-                        (*PRODUCTION_CONFIGS, "configs/prod/run6.yaml"))
 
-    assert "configs/prod/run6.yaml" in TOOL._discovered_configs(), (
-        "discovery must find a subdirectory config, or no declaration of it can ever be "
-        f"anything but STALE; got {TOOL._discovered_configs()}"
+    assert f"configs/{rel}" in census.discovered_config_paths(root), (
+        f"discovery must find a subdirectory config; got {census.discovered_config_paths(root)}"
     )
-    undeclared, stale, overlapping = TOOL._config_declaration_drift()
-    assert (undeclared, stale, overlapping) == ([], [], []), (
-        "a declared, present subdirectory config is a LEGAL state; it was reported STALE "
-        f"while sitting on disk. got undeclared={undeclared} stale={stale} "
-        f"overlapping={overlapping}"
-    )
+    assert planted in TOOL._resolve_production_configs()
     with pytest.raises(TOOL.PreflightArmingAuditError) as caught:
         TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
-    assert caught.value.rc == 30 and "run6.yaml" in str(caught.value), (
-        "…and the declaration must actually BIND it — a subdirectory config that is declared "
-        f"but not audited is the same hole wearing a declaration; got {caught.value!s}"
+    assert caught.value.rc == 30 and planted.name in str(caught.value), (
+        f"…and the census must actually BIND it; got {caught.value!s}"
     )
 
 
-#: Each of these files is loadable, therefore DISCOVERED, therefore UNDECLARED, therefore gate
-#: 12 is RED. The complement of an enumeration rather than another enumeration: an unknown
-#: suffix, a CASE variant, no suffix, a known suffix that is not final, and a dotfile.
+#: Each of these files is loadable, therefore DISCOVERED, therefore production, therefore gate
+#: 12 is RED when it is disarmed. The complement of an enumeration rather than another
+#: enumeration: an unknown suffix, a CASE variant, no suffix, a known suffix that is not final, and a dotfile.
 _F1_UNRECOGNISED = ("run6.txt", "run6.YAML", "run6", "run6.yaml.bak", "run6.YML", "run6.yamL",
                     ".yaml", "run6.yamlx")
 
@@ -1704,19 +1696,18 @@ def test_a_config_shaped_file_at_an_UNRECOGNISED_suffix_is_DISCOVERED_and_AUDITE
         f"{rel} must still LOAD — R75 declined the accept-set narrowing, so the protection has "
         "to come from the audit seeing it, not from the loader refusing it"
     )
-    assert relposix in TOOL._discovered_configs(), (
+    assert relposix in census.discovered_config_paths(root), (
         f"{rel} is loadable, so discovery MUST enumerate it — that is the shared-authority "
-        f"invariant, and its failure is ADJ-13 F-1; got {TOOL._discovered_configs()}"
+        f"invariant, and its failure is ADJ-13 F-1; got {census.discovered_config_paths(root)}"
     )
-    undeclared, _stale, _overlapping = TOOL._config_declaration_drift()
-    assert relposix in undeclared, (
-        f"{rel} is a launchable, disarmed config nobody declared; it must be UNDECLARED rather "
-        f"than silently exempt; got {undeclared}"
+    assert planted in TOOL._resolve_production_configs(), (
+        f"{rel} is a launchable, disarmed config nobody declared; the census binds it rather "
+        f"than silently exempting it; got {TOOL._resolve_production_configs()}"
     )
     result = _run_tool("--audit-only", cwd=root,
                        tool=root / "tools" / "ci_gates" / "preflight_mint.py")
-    assert result.returncode == 31, (
-        "gate 12 must go RED on a launchable config it cannot account for; got "
+    assert result.returncode == 30, (
+        "gate 12 must go RED on a launchable, disarmed config wherever it sits; got "
         f"{result.returncode}\n{(result.stdout + result.stderr)[-2000:]}"
     )
 
@@ -1806,23 +1797,22 @@ def test_there_is_NO_excluded_class_left_under_configs(monkeypatch, tmp_path) ->
     planted.append(notes)
 
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    discovered = TOOL._discovered_configs()
+    discovered = census.discovered_config_paths(root)
     authority = [path.relative_to(root).as_posix()
                  for path in discover_configs(root / "configs")]
     assert discovered == authority, (
         "gate 12's audit set IS the loader's discovery enumeration — not a copy of it and not "
         f"a second glob (R71). got {discovered} vs {authority}"
     )
-    undeclared, _stale, _overlapping = TOOL._config_declaration_drift()
+    production = TOOL._resolve_production_configs()
     for path in planted:
         rel = path.relative_to(root).as_posix()
         assert rel in discovered, (
             f"{rel} is under the audit root and is not a directory, so it is discovered — "
             f"there is no name-shaped exclusion left to hide behind; got {discovered}"
         )
-        assert rel in undeclared, (
-            f"{rel} is on disk and in neither declaration tuple; UNDECLARED is the only honest "
-            f"report. got {undeclared}"
+        assert path in production, (
+            f"{rel} is on disk and on no exempt row; production is the only honest report. got {production}"
         )
     shutil.copy2(REPO_ROOT / "tools" / "ci_gates" / "validate_configs.py",
                  root / "tools" / "ci_gates" / "validate_configs.py")
@@ -1877,7 +1867,7 @@ def test_a_REAL_directory_is_skipped_UNIFORMLY_and_never_by_its_name(tmp_path, m
     (root / "configs" / "adir.yaml" / "inner.yaml").write_text(RUN5.read_text())
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
 
-    discovered = TOOL._discovered_configs()
+    discovered = census.discovered_config_paths(root)
     assert "configs/adir.yaml" not in discovered, (
         f"a real directory is refused by read_text by TYPE, so it is skipped; got {discovered}"
     )
@@ -1896,9 +1886,10 @@ def test_gate_7_and_gate_12_enumerate_the_SAME_files_on_the_REAL_tree() -> None:
     gate7 = sorted(line[len("OK "):].strip() for line in result.stdout.splitlines()
                    if line.startswith("OK "))
     assert gate7, "gate 7 printing no OK line means this comparison has no subject"
-    assert gate7 == TOOL._discovered_configs(), (
+    gate12 = census.discovered_config_paths(REPO_ROOT)
+    assert gate7 == gate12, (
         "gate 7 validates a config gate 12 never audits (or the reverse) — one authority, "
-        f"two answers. gate7={gate7} gate12={TOOL._discovered_configs()}"
+        f"two answers. gate7={gate7} gate12={gate12}"
     )
 
 
@@ -1916,14 +1907,14 @@ def test_one_config_reached_two_ways_is_audited_ONCE_and_not_twice(tmp_path, mon
     monkeypatch.setattr(TOOL, "REPO_ROOT", root)
     named = TOOL._resolve_config_path(str(root / "configs" / "run6.yaml"))
     paths = TOOL._audit_paths(named)
-    assert len(paths) == len(set(paths)) == len(PRODUCTION_CONFIGS), (
+    assert len(paths) == len(set(paths)) == len(census.production_configs(root)), (
         "one config reached by two spellings must be ONE entry — a set of paths that "
         f"normalise differently is a set of spellings, not of configs; got {paths}"
     )
     # The expectation is DERIVED from the declaration at point of use; the subject stays
     # "two spellings collapse onto one".
-    others = sorted((root / rel).resolve() for rel in PRODUCTION_CONFIGS
-                    if rel != "configs/run6.yaml")
+    others = sorted(path.resolve() for path in census.production_configs(root)
+                    if path.name != "run6.yaml")
     assert paths == sorted([target, *others]), (
         f"…and both spellings must collapse onto the target; got {paths}"
     )
@@ -2383,99 +2374,6 @@ def test_b5as_two_conjuncts_are_each_INDEPENDENTLY_sufficient(tmp_path) -> None:
     )
 
 
-def test_run5_is_bound_BY_NAME_and_is_not_freely_exemptable(monkeypatch, tmp_path) -> None:
-    """run5 is bound BY NAME and is not freely exemptable: moving it to `EXEMPT_CONFIGS` with a
-    written reason keeps every structural check satisfied while the run ships unaudited."""
-    exempt = {rel for rel, _reason in EXEMPT_CONFIGS}
-    assert "configs/run6.yaml" in PRODUCTION_CONFIGS, (
-        "the config the operator is about to mint must be bound BY NAME — absence from this "
-        f"tuple is not a red gate, it is silence. got {PRODUCTION_CONFIGS}"
-    )
-    assert "configs/run6.yaml" not in exempt
-    assert "configs/run7.yaml" in PRODUCTION_CONFIGS and "configs/run7.yaml" not in exempt, (
-        "run7 is the config the operator is about to start (R351 mint) and is bound BY NAME "
-        f"for run6's reason. got {PRODUCTION_CONFIGS}"
-    )
-    assert "configs/run8.yaml" in PRODUCTION_CONFIGS and "configs/run8.yaml" not in exempt, (
-        "run8 is the config the operator is about to start (R356(c) mint) and is bound BY NAME "
-        f"for run6's reason. got {PRODUCTION_CONFIGS}"
-    )
-    assert "configs/run9.yaml" in PRODUCTION_CONFIGS and "configs/run9.yaml" not in exempt, (
-        "run9 is the config the operator is about to start (R364(b) mint) and is bound BY NAME "
-        f"for run6's reason. got {PRODUCTION_CONFIGS}"
-    )
-    assert "configs/run10.yaml" in PRODUCTION_CONFIGS and "configs/run10.yaml" not in exempt, (
-        "run10 is the config the operator is about to start (R366(b) mint) and is bound BY NAME "
-        f"for run6's reason. got {PRODUCTION_CONFIGS}"
-    )
-    assert PRODUCTION_CONFIGS == ("configs/run6.yaml", "configs/run7.yaml", "configs/run8.yaml", "configs/run9.yaml", "configs/run10.yaml"), (
-        "R346(f) took run5 and the shakedown config; run6 (a finished run's record), run7, run8, "
-        "run9 (minted, never started, R365(a)) and run10 are the whole production side. A member added "
-        f"without a by-name pin of its own is F-P2B's escape reopened, and an empty tuple is N-1's silence. got {PRODUCTION_CONFIGS}"
-    )
-
-    # …and the escape the pin exists to refuse, driven.
-    root = _mini_tree(tmp_path)
-    production = root / "configs" / "run6.yaml"
-    production.write_text(production.read_text().replace("terminal_eval_enabled: true",
-                                                         "terminal_eval_enabled: false"))
-    bare = _mini_audit(root)
-    assert bare.returncode == 30, (
-        "a disarmed run5 must fail gate 12 with NO --config in sight — this is the whole of "
-        f"gate 12's red-capability on the real tree (N-3); got {bare.returncode}\n"
-        f"{(bare.stdout + bare.stderr)[-2000:]}"
-    )
-
-    # The swap, exactly as an unwitting editor would write it: run6 moves to EXEMPT with a
-    # written reason and a config armed on both required rows takes its place.
-    smoke = root / "configs" / "dev_example.yaml"
-    # Armed on BOTH, so the escape cannot look closed by something other than the by-name pin:
-    # `min_step: 1` with `consec: 3` at this config's `gate_interval: 1000` reaches its third
-    # observation at step 3000, inside a 1,000,000-step run.
-    smoke_text = smoke.read_text(encoding="utf-8")
-    assert smoke_text.count("gate_interval: 1000\n") == 1, (
-        "the fixture reads exactly one interval key; if the promoted config's gate_interval "
-        f"spelling moved, the arming below is no longer the one the swap needs. got "
-        f"{smoke_text.count('gate_interval: 1000')} loose match(es)"
-    )
-    promoted_length = load_config(smoke).train.max_train_steps
-    assert 1 + 3 * 1000 < promoted_length, (
-        "…and the armed abort must be able to FIRE inside the promoted run, or the swap is "
-        f"refused for R251's reason instead of passing to expose the escape. got "
-        f"{promoted_length}"
-    )
-    smoke.write_text(smoke_text
-                     .replace("actor_lag_abort_enabled: false",
-                              "actor_lag_abort_enabled: true")
-                     .replace("draw_rate_abort: null",
-                              "draw_rate_abort:\n"
-                              "    threshold: 0.25\n"
-                              "    min_step: 1\n"
-                              "    N_pool_min: 50\n"
-                              "    consec: 3"), encoding="utf-8")
-    monkeypatch.setattr(TOOL, "PRODUCTION_CONFIGS",
-                        ("configs/dev_example.yaml",
-                         *[rel for rel in PRODUCTION_CONFIGS if rel != "configs/run6.yaml"]))
-    monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*[row for row in EXEMPT_CONFIGS
-                           if row[0] != "configs/dev_example.yaml"],
-                         ("configs/run6.yaml", "moved with a written reason")))
-    monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    assert TOOL._config_declaration_drift() == ([], [], []), (
-        "the swap keeps the partition EXACT — which is why no structural check catches it"
-    )
-    assert all(reason.strip() for _rel, reason in TOOL.EXEMPT_CONFIGS), (
-        "…and every exemption still carries a written reason, so that check does not catch "
-        "it either"
-    )
-    TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))  # green, run6 disarmed on disk
-    assert "actor_lag_abort_enabled: false" in production.read_text(), (
-        "THE ESCAPE: assertion (c) just passed while the config the operator is minting sits "
-        "on disk with its hard abort off. The only thing standing between that state and this "
-        "tree is the by-name pin at the top of this test."
-    )
-
-
 # Each block below states which conjunct of a shipped predicate it is the first witness to.
 
 #: (events, expected source, expected value). The witness ladder in `_step_ground_truth`, in
@@ -2540,23 +2438,6 @@ def test_b2s_positivity_conjunct_is_load_bearing_and_not_decoration(tmp_path) ->
         f"positivity floor is the only witness. got {block!r}"
     )
     assert block["failure"] == "PreflightLagFrozenError"
-
-
-def test_a_config_in_BOTH_tuples_fails_the_gate(monkeypatch, tmp_path) -> None:
-    """A config named by BOTH tuples fails the gate: "audited AND excused" is the arm an editor
-    trips by adding a row without removing the other."""
-    root = _mini_tree(tmp_path)
-    monkeypatch.setattr(TOOL, "REPO_ROOT", root)
-    monkeypatch.setattr(TOOL, "EXEMPT_CONFIGS",
-                        (*EXEMPT_CONFIGS, ("configs/run6.yaml", "excused as well as audited")))
-    assert TOOL._config_declaration_drift()[2] == ["configs/run6.yaml"], (
-        "a config in both tuples must be reported as OVERLAPPING"
-    )
-    with pytest.raises(TOOL.PreflightManifestError) as caught:
-        TOOL._audit_manifest_and_configs(TOOL._audit_paths(None))
-    assert caught.value.rc == 31 and "IN BOTH TUPLES" in str(caught.value), (
-        f"…and it must fail the GATE by name, not merely the helper; got {caught.value!s}"
-    )
 
 
 #: (value, armed, why). The threshold mechanism's type guard, which decides whether a value
@@ -2896,12 +2777,12 @@ def test_the_burst_tier_is_DERIVED_from_the_configs_OWN_floor_rows() -> None:
 
 def test_a_PRODUCTION_config_stamps_at_sync_lag_and_its_burst_is_a_PREFIX_of_the_run() -> None:
     """REVERSES the old pin (CARD-STAMP-FLOOR): the shortest legal burst is a `sync_lag` PREFIX."""
-    assert PRODUCTION_CONFIGS, "vacuous unless something is declared production"
+    production = census.production_configs(REPO_ROOT)
     required = [row.name for row in MANIFEST if row.status is Status.REQUIRED]
     assert "draw_rate_collapse" in required, "the draw-rate row must still be REQUIRED"
     assert TOOL.OVERRIDE_KEYS == (), "the burst mutates no config key"
-    for rel in PRODUCTION_CONFIGS:
-        config = _tier_config(REPO_ROOT / rel)
+    for path in production:
+        config = _tier_config(path)
         keys = [key for key, _value, _floor in TOOL._burst_floors(config)]
         assert TOOL.DRAW_RATE_FLOOR_KEY in keys, f"the tier still reads the draw-rate row: {keys}"
         minimum = TOOL._minimum_legal_burst(config)

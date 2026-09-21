@@ -216,9 +216,9 @@ def test_every_committed_production_config_still_passes_the_live_audit_with_a_li
 ) -> None:
     """Shape A must not newly refuse a mint. Every REQUIRED row stays armed on every config
     the manifest lists, given a producer that has run."""
-    from mantis.config.armed_aborts import PRODUCTION_CONFIGS
+    from mantis.config.census import production_configs
 
-    for rel in PRODUCTION_CONFIGS:
+    for rel in production_configs(Path(__file__).resolve().parents[2]):
         config = load_config(rel)
         live = audit_arming_live(config, probes={DISK_GUARD_LIVENESS_PROBE: lambda: True})
         assert not live.disarmed, f"{rel} newly reports {[r.name for r in live.disarmed]}"

@@ -7,6 +7,8 @@ import pytest
 import torch
 
 from mantis.config.loader import load_config
+from mantis.config.census import production_configs
+from mantis.config.loader import discover_configs
 from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
 from mantis.config.resolve.gnn_widths import MissingGnnWidthsError, resolve_gnn_widths
 from mantis.encoding import lookup
@@ -21,7 +23,8 @@ from mantis.train.checkpoints import (
 from mantis.train.trainer.core import Trainer, build_param_groups
 
 _REPO = Path(__file__).resolve().parents[2]
-_CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
+_CONFIGS = discover_configs(_REPO / "configs")
+_PRODUCTION = production_configs(_REPO)
 
 
 @pytest.mark.parametrize("path", _CONFIGS, ids=[p.name for p in _CONFIGS])
@@ -34,25 +37,26 @@ def test_every_shipped_config_states_its_shape_and_the_two_readers_agree(path: P
     assert (arch.hidden, arch.num_layers) == (spec.hidden, spec.num_layers)
 
 
-def test_the_shape_is_a_mint_row_the_build_honours() -> None:
-    """A config saying 6 × 192 builds a 6 × 192 net — the size conditional has a row to move."""
-    dump = load_config(_REPO / "configs" / "run9.yaml").model_dump()
+@pytest.mark.parametrize("path", _PRODUCTION, ids=[p.name for p in _PRODUCTION])
+def test_the_shape_is_a_mint_row_the_build_honours(path: Path) -> None:
+    """A production config re-minted to 6 × 192 builds a 6 × 192 net of its own declared kind — the shape is a row, not a constant."""
+    dump = load_config(path).model_dump()
     dump["model"]["gnn"] = {"hidden": 192, "num_layers": 6}
     arch = arch_from_spec_and_config(lookup(dump["identity"]["encoding"]), dump)
-    assert isinstance(arch, GnnArchV2) and (arch.hidden, arch.num_layers) == (192, 6)
+    assert type(arch).__name__ == dump["identity"]["arch_kind"] and (arch.hidden, arch.num_layers) == (192, 6)
     net = build_net(arch)
     assert net.representation.output_dim == 6 * 192
 
 
 def test_the_resolver_refuses_a_foreign_arch_before_it_reads_the_block() -> None:
-    dump = load_config(_REPO / "configs" / "run9.yaml").model_dump()
+    dump = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     dump["identity"]["representation"] = "grid"
     with pytest.raises(ArchScopedKeyOutsideItsArchError, match="ARCH-SCOPED"):
         resolve_gnn_widths(dump)
 
 
 def test_absence_is_a_named_error_at_every_level() -> None:
-    dump = load_config(_REPO / "configs" / "run9.yaml").model_dump()
+    dump = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     with pytest.raises(MissingGnnWidthsError, match="no `model` section"):
         resolve_gnn_widths({k: v for k, v in dump.items() if k != "model"})
     dump["model"]["gnn"] = {"hidden": 128}
@@ -61,7 +65,7 @@ def test_absence_is_a_named_error_at_every_level() -> None:
 
 
 def test_the_build_refuses_a_declared_representation_the_spec_does_not_have() -> None:
-    dump = load_config(_REPO / "configs" / "run9.yaml").model_dump()
+    dump = load_config(_REPO / "configs" / "dev_example.yaml").model_dump()
     dump["identity"]["representation"] = "grid"
     with pytest.raises(ValueError, match="identity.representation='grid'"):
         arch_from_spec_and_config(lookup(dump["identity"]["encoding"]), dump)

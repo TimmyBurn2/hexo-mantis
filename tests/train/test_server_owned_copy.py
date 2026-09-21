@@ -169,9 +169,11 @@ def test_a_resume_from_a_shadowless_stamp_reseeds_and_says_so(tmp_path: Path) ->
 
 def test_an_armed_ema_row_now_mints_and_the_lag_row_is_back() -> None:
     from mantis.config.armed_aborts import MANIFEST, Status
+    from mantis.config.census import production_configs
 
-    dump = load_config(_REPO / "configs" / "run9.yaml").model_dump()
-    dump["train"]["ema"] = {"enabled": True, "decay": 0.999, "update_every": 10}
-    assert RunConfig.model_validate(dump).train.ema.enabled is True
+    for path in production_configs(_REPO):
+        dump = load_config(path).model_dump()
+        dump["train"]["ema"] = {"enabled": True, "decay": 0.999, "update_every": 10}
+        assert RunConfig.model_validate(dump).train.ema.enabled is True, path.name
     rows = {row.name: row for row in MANIFEST}
     assert rows["actor_lag"].status is Status.REQUIRED

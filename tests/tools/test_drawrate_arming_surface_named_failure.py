@@ -17,10 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.census import EXEMPT_CONFIGS, production_configs
 from mantis.config.armed_aborts import (
-    EXEMPT_CONFIGS,
     MANIFEST,
-    PRODUCTION_CONFIGS,
     ArmedAbort,
     ArmingSurfaceMissingError,
     Status,
@@ -129,7 +128,7 @@ def test_an_explicitly_disarmed_block_reports_DISARMED_and_never_raises() -> Non
         "THE DISCLOSED RESIDUAL (§5.5), pinned so it is not rediscovered as a bug: a typo "
         "AFTER a legitimately-None segment reports 'disarmed' rather than raising, because "
         "the walk short-circuits before it can reach the bad segment. It is caught where it "
-        "gates — PRODUCTION_CONFIGS includes 'configs/run6.yaml' and run5 is ARMED, so the "
+        "gates — every production config is in the census and ARMED, so the "
         "walk reaches the leaf and the typo raises (the arm above)"
     )
 
@@ -145,7 +144,7 @@ def test_the_tool_maps_the_named_arm_to_rc_31_and_never_to_the_unnamed_rc_1(
     assert TOOL.PreflightManifestError.rc == 31 and TOOL.PreflightInternalError.rc == 1, (
         "harness precondition: the two codes this test distinguishes must be the shipped ones"
     )
-    assert PRODUCTION_CONFIGS and EXEMPT_CONFIGS, (
+    assert production_configs(REPO_ROOT) and EXEMPT_CONFIGS, (
         "harness precondition: the audit must have a scope, or it fails at the vacuity guard "
         "for an unrelated reason"
     )
