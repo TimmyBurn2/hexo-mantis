@@ -147,6 +147,6 @@ Each note names the ruling that authorised it; none of them re-opens its row.
 - **S-PREFUSE — HARNESS REMOVED, per R368(e) (2026-09-23); the refutation stands.** R336(a) records
   "S-PREFUSE REFUTED with HOT-14 re-opened": a worker-side pre-fuse of graph payloads was never
   adopted. The harness that proved and timed it — `crates/mantis-selfplay/tests/prefuse_concat_parity.rs`,
-  `tests/common/mod.rs::{corpus, concat_by_offset, fuse}` and the `queue_concat_cross_thread_pop40` arm of
-  `benches/queue_fuse_bench.rs` — leaves the tree in R368's Rust wave. It lived through `69e15329`; a HOT-14
+  `crates/mantis-selfplay/tests/common/mod.rs::{corpus, concat_by_offset, fuse}` and the
+  `queue_concat_cross_thread_pop40` arm of `crates/mantis-selfplay/benches/queue_fuse_bench.rs` — leaves the tree in R368's Rust wave. It lived through `69e15329`; a HOT-14
   re-litigation of a pre-fuse starts from that commit, under LAW-02.
