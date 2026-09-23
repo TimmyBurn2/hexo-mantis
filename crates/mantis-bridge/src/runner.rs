@@ -227,7 +227,11 @@ impl PySelfPlayRunner {
         let spec = encoding_name
             .as_deref()
             .and_then(mantis_encoding::lookup)
-            .expect("SelfPlayRunner::new validated the encoding_name resolves");
+            .ok_or_else(|| {
+                PyValueError::new_err(
+                    "SelfPlayRunner: encoding_name passed validation but does not resolve",
+                )
+            })?;
         let inner = Arc::new(runner);
         let batcher = PyInferenceBatcher::from_runner(spec, inner.graph_producer(), inner.clone());
         Ok(PySelfPlayRunner { inner, batcher })

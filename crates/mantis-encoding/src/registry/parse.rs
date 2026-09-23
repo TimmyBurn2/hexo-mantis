@@ -72,6 +72,11 @@ fn opt_int(table: &toml::Table, key: &str, errs: &mut Vec<String>) -> Option<i64
     }
 }
 
+/// A required field past the error gate: `None` there is a parser defect, named, never a panic.
+fn present<T>(value: Option<T>, name: &str, field: &str) -> Result<T, String> {
+    value.ok_or_else(|| format!("[encodings.{name}].{field}: None past the error gate"))
+}
+
 #[allow(clippy::too_many_lines)]
 pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String> {
     let table = body
@@ -297,37 +302,35 @@ pub(super) fn parse_one(name: &str, body: &Value) -> Result<RegistrySpec, String
         ));
     }
 
-    // All Some at this point.
     // SAFETY: allocated by Box::leak in registry::load();
     // stable for process lifetime — registry is one-shot init.
-    let plane_layout: &'static [&'static str] = Box::leak(plane_layout.unwrap().into_boxed_slice());
-    // SAFETY: allocated by Box::leak in registry::load();
-    // stable for process lifetime — registry is one-shot init.
+    let plane_layout: &'static [&'static str] =
+        Box::leak(present(plane_layout, name, "plane_layout")?.into_boxed_slice());
     let kept_plane_indices: &'static [usize] =
-        Box::leak(kept_plane_indices.unwrap().into_boxed_slice());
+        Box::leak(present(kept_plane_indices, name, "kept_plane_indices")?.into_boxed_slice());
 
     Ok(RegistrySpec {
         name: leak_str(name),
-        board_size: board_size.unwrap(),
-        trunk_size: trunk_size.unwrap(),
+        board_size: present(board_size, name, "board_size")?,
+        trunk_size: present(trunk_size, name, "trunk_size")?,
         cluster_window_size,
         cluster_threshold,
-        legal_move_radius: legal_move_radius.unwrap(),
-        n_planes: n_planes.unwrap(),
+        legal_move_radius: present(legal_move_radius, name, "legal_move_radius")?,
+        n_planes: present(n_planes, name, "n_planes")?,
         plane_layout,
-        policy_logit_count: policy_logit_count.unwrap(),
-        has_pass_slot: has_pass_slot.unwrap(),
-        is_multi_window: is_multi_window.unwrap(),
-        value_pool: value_pool.unwrap(),
-        policy_pool: policy_pool.unwrap(),
-        sym_table_id: leak_str(sym_table_id.unwrap()),
-        schema_version: schema_version.unwrap(),
-        notes: leak_str(notes.unwrap()),
+        policy_logit_count: present(policy_logit_count, name, "policy_logit_count")?,
+        has_pass_slot: present(has_pass_slot, name, "has_pass_slot")?,
+        is_multi_window: present(is_multi_window, name, "is_multi_window")?,
+        value_pool: present(value_pool, name, "value_pool")?,
+        policy_pool: present(policy_pool, name, "policy_pool")?,
+        sym_table_id: leak_str(present(sym_table_id, name, "sym_table_id")?),
+        schema_version: present(schema_version, name, "schema_version")?,
+        notes: leak_str(present(notes, name, "notes")?),
         kept_plane_indices,
-        n_source_planes: n_source_planes.unwrap(),
-        k_max: k_max.unwrap(),
-        n_chain_planes: n_chain_planes.unwrap(),
-        representation: representation.unwrap(),
+        n_source_planes: present(n_source_planes, name, "n_source_planes")?,
+        k_max: present(k_max, name, "k_max")?,
+        n_chain_planes: present(n_chain_planes, name, "n_chain_planes")?,
+        representation: present(representation, name, "representation")?,
         node_feat_dim,
         edge_feat_dim,
         win_length,
