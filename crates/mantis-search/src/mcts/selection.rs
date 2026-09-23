@@ -69,6 +69,32 @@ impl std::fmt::Display for ForcedChildOutOfRange {
 
 impl std::error::Error for ForcedChildOutOfRange {}
 
+/// Why `select_leaves_forced` refused: a foreign forced index, or a desynchronised descent.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForcedSelectionError {
+    /// A forced index the root does not own; refused before any descent touches the tree.
+    OutOfRange(ForcedChildOutOfRange),
+    /// A descent selected a child the board refuses.
+    Desync(SelectionDesync),
+}
+
+impl std::fmt::Display for ForcedSelectionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::OutOfRange(err) => err.fmt(f),
+            Self::Desync(err) => err.fmt(f),
+        }
+    }
+}
+
+impl std::error::Error for ForcedSelectionError {}
+
+impl From<SelectionDesync> for ForcedSelectionError {
+    fn from(err: SelectionDesync) -> Self {
+        Self::Desync(err)
+    }
+}
+
 // `parent_n.sqrt()` is loop-invariant across all children of one node, so the sqrtf is
 // evaluated once per descent level rather than K times.
 #[inline]
@@ -355,10 +381,16 @@ impl MCTSTree {
     /// only happen through a transposition. `forced_root_child` is CLEARED on every exit.
     ///
     /// # Errors
-    /// `SelectionDesync` — a selected child's `action_idx` decodes to a cell the board refuses.
-    /// `ForcedChildOutOfRange` cannot be returned here: an index outside the root's range is a
-    /// caller-side bookkeeping defect, so this fn takes the same validation rather than assuming it.
-    pub fn select_leaves_forced(&mut self, forced: &[u32]) -> Result<Vec<Board>, SelectionDesync> {
+    /// `ForcedSelectionError::OutOfRange` — an index the root does not own, checked for EVERY entry
+    /// before any descent; `::Desync` — a selected child's cell is one the board refuses.
+    pub fn select_leaves_forced(
+        &mut self,
+        forced: &[u32],
+    ) -> Result<Vec<Board>, ForcedSelectionError> {
+        for &child in forced {
+            self.check_forced_root_child(child)
+                .map_err(ForcedSelectionError::OutOfRange)?;
+        }
         self.pending.clear();
         let mut boards = Vec::with_capacity(forced.len());
         let mut pending_ids: FxHashSet<u32> = FxHashSet::default();
@@ -379,7 +411,7 @@ impl MCTSTree {
                         board.undo_move(diff);
                     }
                     self.forced_root_child = None;
-                    return Err(desync);
+                    return Err(desync.into());
                 }
             };
             self.depth_accum += leaf_depth as u64;

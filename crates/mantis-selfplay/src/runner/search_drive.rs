@@ -246,9 +246,9 @@ fn seam_or_shutdown(
 fn select_for(
     tree: &mut MCTSTree,
     selection: LeafSelection<'_>,
-) -> Result<Vec<Board>, mantis_search::mcts::SelectionDesync> {
+) -> Result<Vec<Board>, mantis_search::mcts::ForcedSelectionError> {
     match selection {
-        LeafSelection::Batch(n) => tree.select_leaves(n),
+        LeafSelection::Batch(n) => Ok(tree.select_leaves(n)?),
         LeafSelection::Round(children) => tree.select_leaves_forced(children),
     }
 }
@@ -275,9 +275,9 @@ fn infer_and_expand_graph(
     agg_trunk_sz: i32,
     infer: InferContext,
 ) -> Result<usize, InferenceSeamFailure> {
-    // A tree/board desync is a NAMED run-fatal seam failure, not a bare panic.
+    // A tree/board desync or a foreign forced child is a NAMED run-fatal seam failure, not a panic.
     let leaves = select_for(tree, selection)
-        .map_err(|desync| InferenceSeamFailure::new("graph", "selection", desync.to_string()))?;
+        .map_err(|err| InferenceSeamFailure::new("graph", "selection", err.to_string()))?;
     if leaves.is_empty() {
         return Ok(0);
     }

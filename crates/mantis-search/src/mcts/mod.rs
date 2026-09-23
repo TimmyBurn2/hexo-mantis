@@ -30,7 +30,7 @@ pub use completed_q::QSigma;
 pub use gumbel_mctx::MctxRootState;
 pub use kind::SearchKind;
 pub use node::{CachedPolicy, Node, TTEntry, MAX_NODES, VIRTUAL_LOSS_PENALTY};
-pub use selection::{ForcedChildOutOfRange, SelectionDesync};
+pub use selection::{ForcedChildOutOfRange, ForcedSelectionError, SelectionDesync};
 
 /// Maximum children created per leaf expansion: past this many legal moves only the top-K by NN
 /// policy prior are expanded, tie-broken by `window_flat_idx` for determinism. What K costs is the
@@ -208,18 +208,24 @@ impl MCTSTree {
         child: Option<u32>,
     ) -> Result<(), ForcedChildOutOfRange> {
         if let Some(idx) = child {
-            let root = &self.pool[0];
-            let first = root.first_child;
-            let end = first.saturating_add(u32::from(root.n_children));
-            if root.n_children == 0 || idx < first || idx >= end {
-                return Err(ForcedChildOutOfRange {
-                    child: idx,
-                    first_child: first,
-                    n_children: root.n_children,
-                });
-            }
+            self.check_forced_root_child(idx)?;
         }
         self.forced_root_child = child;
+        Ok(())
+    }
+
+    /// Refuse an index outside the root's child range; the one check every forcing path takes.
+    pub(crate) fn check_forced_root_child(&self, idx: u32) -> Result<(), ForcedChildOutOfRange> {
+        let root = &self.pool[0];
+        let first = root.first_child;
+        let end = first.saturating_add(u32::from(root.n_children));
+        if root.n_children == 0 || idx < first || idx >= end {
+            return Err(ForcedChildOutOfRange {
+                child: idx,
+                first_child: first,
+                n_children: root.n_children,
+            });
+        }
         Ok(())
     }
 

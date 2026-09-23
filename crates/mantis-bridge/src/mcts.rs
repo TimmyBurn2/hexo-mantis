@@ -12,6 +12,7 @@ use pyo3::prelude::*;
 
 use mantis_core::board::BOARD_SIZE;
 use mantis_core::Board;
+use mantis_search::mcts::ForcedSelectionError;
 use mantis_search::{LegalSetPolicy, MCTSTree, MctxRootState, QSigma, SearchKind};
 
 use crate::board::PyBoard;
@@ -210,16 +211,12 @@ impl PyMCTSTree {
         py: Python<'_>,
         children: Vec<u32>,
     ) -> PyResult<Vec<Py<PyBoard>>> {
-        for &child in &children {
-            if let Err(err) = self.inner.set_forced_root_child(Some(child)) {
-                // A refused index must not leave an earlier one armed on the tree.
-                let _ = self.inner.set_forced_root_child(None);
-                return Err(PyValueError::new_err(err.to_string()));
-            }
-        }
         let boards = py
             .detach(|| self.inner.select_leaves_forced(&children))
-            .map_err(|desync| SelectionDesync::new_err(desync.to_string()))?;
+            .map_err(|err| match err {
+                ForcedSelectionError::OutOfRange(err) => PyValueError::new_err(err.to_string()),
+                ForcedSelectionError::Desync(err) => SelectionDesync::new_err(err.to_string()),
+            })?;
         self.forced_root_child = None;
         self.pending_boards = boards.clone();
         boards

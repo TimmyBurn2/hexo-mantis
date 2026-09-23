@@ -1463,6 +1463,35 @@ fn a_forced_root_child_outside_the_roots_range_is_refused() {
 }
 
 #[test]
+fn select_leaves_forced_refuses_a_foreign_child_before_touching_the_tree() {
+    // Planted-break target: drop the range check in `select_leaves_forced` and this reds.
+    let mut tree = setup_expanded_root();
+    let first = tree.pool[0].first_child;
+    let past_end = first + u32::from(tree.pool[0].n_children);
+    let (sims, vl) = (tree.sim_count, tree.pool[0].virtual_loss_count);
+    for bad in [vec![past_end], vec![first, past_end], vec![u32::MAX]] {
+        let err = tree
+            .select_leaves_forced(&bad)
+            .expect_err("a foreign forced child must be refused");
+        assert!(
+            matches!(err, ForcedSelectionError::OutOfRange(e) if e.child == *bad.last().unwrap()),
+            "{err:?}"
+        );
+        assert_eq!(tree.forced_root_child, None, "no forced child left armed");
+        assert!(tree.pending.is_empty(), "no leaf left pending");
+        assert_eq!(tree.sim_count, sims, "no descent ran");
+        assert_eq!(
+            tree.pool[0].virtual_loss_count, vl,
+            "no virtual loss applied"
+        );
+    }
+    let leaves = tree
+        .select_leaves_forced(&[first])
+        .expect("an owned child descends");
+    assert_eq!(leaves.len(), 1);
+}
+
+#[test]
 fn a_root_with_no_children_accepts_no_forced_child_at_all() {
     let mut tree = MCTSTree::new(1.5);
     tree.new_game(Board::new());
