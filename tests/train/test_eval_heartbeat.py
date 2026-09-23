@@ -6,6 +6,8 @@ between-round gap can never false-fire the watchdog — round PROGRESS is bounde
 """
 from __future__ import annotations
 
+import threading
+
 import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
@@ -60,31 +62,29 @@ def test_monitor_config_carries_eval_round_deadline() -> None:
     assert cfg.heartbeat_deadline_eval_round_sec == 1800.0
 
 
-def test_poller_thread_beats_eval_round() -> None:
+def test_poller_thread_beats_eval_round(tmp_path) -> None:
     """The poller beats `"eval_round"` on every tick, idle or active: the source proves the
     enforcement thread is alive, and round progress is bounded separately."""
     registry = HeartbeatRegistry()
-    beats: list[str] = []
+    beat_eval_round = threading.Event()
     real_beat = registry.beat
 
     def _spy_beat(source: str) -> None:
-        beats.append(source)
+        if source == "eval_round":
+            beat_eval_round.set()
         real_beat(source)
 
     pipeline = mantis.eval.pipeline.build_eval_pipeline(
         leaf_batch_size=1, c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16, max_plies=128,
         eval_cfg=object(), coordinator_cfg_caps=object(), encoding="gnn_axis_v1",
-        run_id="test-run", spool_dir="/tmp/mantis-eval-heartbeat-test", game_record_dir=str("/tmp/mantis-eval-heartbeat-test") + "_games",
+        run_id="test-run", spool_dir=str(tmp_path / "spool"), game_record_dir=str(tmp_path / "games"),
         promotion=object(), sink=None, heartbeat=_spy_beat,
         # Inert in this drive, but the parameter carries no default so the decision is written.
         fused_graph_caps=None,
         inference_batching=None,
     )
     try:
-        import time
-
-        time.sleep(0.05)  # let the poller thread tick at least once while IDLE
-        assert "eval_round" in beats, (
+        assert beat_eval_round.wait(timeout=10.0), (
             "the poller thread must beat 'eval_round' even with no round in flight"
         )
     finally:
