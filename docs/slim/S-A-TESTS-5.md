@@ -291,3 +291,141 @@ depends: C2 slice finding on buffers.py::ReplayFacade.outcome_in_range_count (HA
 - tests/selfplay/test_graph_collate_adv.py (PZ-1, 511 lines) was read structurally (defs, helpers, ADV-3/A-18 rows) — its overlap with test_collate_check_rewrites_parity and test_graph_collate_edge_containment (same error classes on other shapes) was judged not strictly duplicate and not raised.
 - test_gnn_seam_smoke.py vs test_inference_server.py::test_wire_round_trips_to_assemble_and_completes overlap not evaluated; golden VALUES under tests/fixtures/selfplay were not re-validated (T9).
 - Some Δlines for merges (-18..-22, -24..-26) are the derived span of the removable copy, not a net after the shared helper is written.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+Probe: ONE batch worktree (scratchpad/wt/rev-tests5-A, detached at c244fd2) with all lane-A edits of -01, -02, -04, -05, -06 applied by an
+AST/line script that asserted the content of every range before cutting it. `-S` + isolating PYTHONPATH. `import mantis` OK. Collection
+2289/167 → 2287/167, ERROR lines byte-identical (sorted diff empty), and the only vanished node IDs are the two torch-free tests deleted in
+-06. `py_compile` on all 14 touched files OK. `uvx ruff --isolated --select F821,F841,F811` on them: "All checks passed" (no name left
+undefined in the torch-bound files, which is as far as a static probe reaches). Torch-free nearest tests (test_mcts_inference_roundtrip,
+test_graph_wire_adv, test_gil_release_on_native_calls, test_drain_row_shape_parity, which reads test_game_complete_delivery.py by path):
+30 passed. Gate 15 (r8_header_gate.py): green, with test_pool_surface.py at 287 lines and its header dropped. No Rust was touched, so
+`cargo check` was not run. `git diff --stat`: 14 files, +1 −117, so −116 net. Worktree removed.
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| 01 | PENDING-PROBE | A | −27 | torch-bound; static + gate 15 green |
+| 02 | PENDING-PROBE | A | −26 (scout −23) | torch-bound; blank separators counted |
+| 03 | CONFIRMED | B | −16 | pyproject `"tests/**"` ignores F401/F811 |
+| 04 | PENDING-PROBE | A | −9 | torch-bound; drain row-shape pin green |
+| 05 | CONFIRMED | A | −2 | probe green |
+| 06 | PENDING-PROBE | A | −52 (scout −40) | bridge half (−18) probe-green; selfplay half (−34) torch-bound |
+| 07 | CONFIRMED | B | −67 | battery drives the same 4 functions, all thresholds × winner codes |
+| 08 | CONFIRMED | C | −76 not a gain | the headline defect is verified; the remedy is REPLACE, net ≥ 0 |
+| 09 | CONFIRMED | B | −24 | |
+| 10 | CONFIRMED | B | −9 | |
+| 11 | CONFIRMED | B | −48 | the batching twin's spec carries `fused_graph_caps=_CAPS` |
+| 12 | CONFIRMED | B | ≤ −42 | the proxies differ only by a docstring |
+| 13 | CONFIRMED | B | −70 | coupled to S-A-RUST-3-02 (lane C) |
+| 14 | CONFIRMED | B | −16 | |
+| 15 | CONFIRMED | B | −7 | |
+| 16 | CONFIRMED | B | −6 | |
+| 17 | AMENDED | B | −36 (was −54) | j01 coverage row is not subsumed |
+| 18 | AMENDED | B | ≤ −41 (was ≤ −44) | only `_Opening` is identical |
+| 19 | AMENDED | B | ≤ −24 | the `_collate` pair is near-identical, not identical |
+| 20 | CONFIRMED | B | ≤ −104 | |
+| 21 | CONFIRMED | B | −48 | all 5 fakes AST-identical |
+| 22 | CONFIRMED | B | ≤ −35 | |
+| 23 | CONFIRMED | B | −4 | |
+| 24 | AMENDED | C | ≤ −14 | the two `_Pool` are NOT ≡ |
+| 25 | CONFIRMED | C | ≤ −153 | |
+| 26 | CONFIRMED | B | ≤ −32 | |
+| 27 | ARCHITECT | B/C | — | no owner in S-A-RUST-3 |
+| 28 | CONFIRMED | C | −8 | |
+| 29 | CONFIRMED | B | ≥ −12 | |
+| 30 | AMENDED | B | 0 here | the Δ is S-A-RUST-3-15's; count it once |
+| 31 | CONFIRMED | B | ≈ −20 | |
+
+### Per-finding notes
+S-A-TESTS-5-01 — PENDING-PROBE (torch-bound: test_pool_surface imports torch, so it errors at collection at HEAD too): the probe diff gives
+−27, matching the scout. `git grep -n -w` for each of the 5 names returns the definition plus this doc only. Gate 15 is green at 287
+lines. The file's third F401, the `BufferKindMismatch` name import, is still there after -01; it belongs to -03's 19. Gate 14's comment
+floor may fall.
+S-A-TESTS-5-02 — PENDING-PROBE (torch-bound: all four files import torch). Probe diff −26 = `_NO_CUDA`/`_GPU_ONLY` 10 + legal_mask 4+4 +
+`_a_board` 6 + `_RETIRED_2` 2; the scout left out the blank separators. `_a_board` is a plain function, not a `@pytest.fixture`, so no
+parameter injects it. Fix alongside: the comment "The REAL gather for the mask above" in test_inference_server.py::_hand_built_batch goes
+stale once the mask is removed, so reword it in the same edit.
+S-A-TESTS-5-03 — CONFIRMED: `uvx ruff --isolated --select F401,F811` over the 3 dirs → 19. pyproject.toml `[tool.ruff.lint.per-file-ignores]
+"tests/**"` lists F401 and F811, so this stays lane B.
+S-A-TESTS-5-04 — PENDING-PROBE (torch-bound). Probe diff −9. Production does not read these names:
+src/mantis/train/events.py::regime_gated_cluster_stats reads only `mcts_mean_root_concentration`, and every other `rstats.` read in
+events.py is a named attribute or a `getattr` of some other name (no `vars`/`asdict`). `push_many` hits in tests/fixtures/…/drain_goldens.json
+and tests/selfplay/conftest.py are the captured-recording names, not a call into the fake. test_drain_row_shape_parity (AST-reads
+test_game_complete_delivery.py) is green in the probe.
+S-A-TESTS-5-05 — CONFIRMED: at runtime `hasattr(MCTSTree,"root_children_info")` is False and `get_root_children_info` is True. The probe
+collapses the 3 lines to 1 and the test passes.
+S-A-TESTS-5-06 — PENDING-PROBE, split. The bridge rows (test_adv8_clean_input_passes −5, test_a_concurrent_reader_is_NOT_refused −13) are
+probe-green. The selfplay rows (collate exact duplicate −6, fg7_04 discarded −17, g09 −6, check17 `callable` −5) are torch-bound. Each pair was
+re-read via an AST print, and each subsumption holds (the collate pair is byte-identical apart from a docstring). Fold the survivor's
+diagnostic message into ::test_the_concurrent_reader_actually_OVERLAPS…'s bare `assert toucher.error is None`, because the deleted test
+carries the only explanation of the refusal. Gate 3: 5 112 → 5 106 ≥ floor 4 862, so no floor file moves. tier_declaration.txt has no
+row for any deleted test (its gil rows name other tests).
+S-A-TESTS-5-07 — CONFIRMED: test_instrumentation.py::test_pure_function_goldens calls `_compute_{stride5_metrics,colony_extension,
+longest_line,n_components}` on every case × {ct5,ct19} × {wc0,1,2} with EXACT float equality, which is stricter than the arms' `abs(…) < 1e-9`.
+G-08's input history is identical to the `seven_collinear_p1` row, and the G-06/G-15/G-15b values match the dump.
+S-A-TESTS-5-08 — CONFIRMED lane C; headline verified. Both test bodies write the emit themselves with `"representation": "dense"`. Production
+(inference_server.py) emits `"graph"` at both sites. `grep -rln first_inference tests/` finds only this file. R223
+(docs/governance/archive/rulings_register.md) names "tests/selfplay/test_lifecycle_events.py, 6 tests". −76 is not a slimming gain: LAW-07
+needs a real drive of the graph loop in their place.
+S-A-TESTS-5-09 — CONFIRMED: test_surface.py::test_all_specs_binding_matches_registered_set and ::test_registry_sha_shapes cover every
+assertion except the duplicate-name `len == 2` guard and `__doc__`, which is the scout's stated residue.
+S-A-TESTS-5-10 — CONFIRMED: ::test_any_field_change_changes_key covers `deploy_matched`, `model_sims` and 4 more fields. The
+`from_canonical` round trip covers equal-keys-equal.
+S-A-TESTS-5-11 — CONFIRMED: test_inference_batching_threaded's spec is built with `fused_graph_caps=_CAPS` and asserts `back == spec`. A
+dataclass `==` against an un-rehydrated dict is False, so fg6_08's isinstance check is implied. rounds.py::RoundSpec.to_dict is
+`dataclasses.asdict(self)`.
+S-A-TESTS-5-12 — CONFIRMED: a `diff` of the two proxy classes, names normalised, differs only by a docstring. Note: RULINGS.md R38 cites
+`tests/selfplay/test_pool_hparams_arms.py:196`, which now points at test_search_kind_property_reads_live_config. R38's subject is
+temperature tests, not this helper, so the finding is not ruling-named (see NEW-1).
+S-A-TESTS-5-13 — CONFIRMED lane B: the docstring reads "RED at HEAD (`507c23b`)" and the file shells out via subprocess grep. No
+docs/governance file cites the path (git grep: 0 live, 0 archive). The positive control pins the bridge sibling that S-A-RUST-3-02 (lane
+C) deletes, so -13 must move with S-A-RUST-3-02.
+S-A-TESTS-5-14 — CONFIRMED: in the loop, `shipped = _verdict(lambda: _check17_reference(...))` calls only the test's transcription, and its
+own comment says so.
+S-A-TESTS-5-15 — CONFIRMED: `InferenceServer.run` is `self._run_graph_loop()`, a single line.
+S-A-TESTS-5-16 — CONFIRMED: tests/selfplay/_retired_batch_fields.py::RETIRED_BATCH_FIELDS contains "node_coords". The frozenset has 5
+members. I did not re-derive the "seven-field tuple" DOC sub-claim.
+S-A-TESTS-5-17 — AMENDED: drop ::test_j01_census_covers_every_frozen_row. Its `assert len(_Q6_TABLE) >= 10` is AUDIT-1 F-49's deliberate
+FLOOR (its message: "a deleted hot-path function makes its parametrized row vanish rather than fail"), and no parametrized row can make
+that assertion. The other 4 rows stand. Δ −54 → −36.
+S-A-TESTS-5-18 — AMENDED: an AST compare with docstrings stripped finds `_Opening` identical ×4, `_board_factory` in 2 variants,
+`_regime_key` in 3 DISTINCT variants across 3 files, and `_FirstLegalBot` in 2 variants. Spans are 3+2+5 per file, so Δ is ≤ −41, less the
+parameters the variants need. legality_boundary is PZ-1, as the scout says.
+S-A-TESTS-5-19 — AMENDED: the two `_collate` helpers differ, since gather_order's takes and forwards `**kw`, so they are near-identical.
+`spec_for` raises LookupError, and a swap to `lookup` must keep any caller that catches it.
+S-A-TESTS-5-20 — CONFIRMED: `_cfg` and `_wire_for` are AST-identical; `_FakeGraphBatcher`, `_FiniteGraphNet` and `_hand_built_batch` differ,
+consistent with "near-verbatim, less the variants".
+S-A-TESTS-5-21 — CONFIRMED: `_ListSink`, `_TelemetryPool`, `_Buffer`, `_RStats` and `_emit` are all AST-identical. test_fusion_counters must
+then drop its R8 header (gate 15).
+S-A-TESTS-5-22 — CONFIRMED: the ASTs differ, as the scout states (config variants).
+S-A-TESTS-5-23 — CONFIRMED: `git grep -w pure_function_battery -- tests` shows the fixture injected by name in
+::test_pure_function_goldens and ::test_battery_covers_the_captured_shape. Removing it edits those signatures to `_BATTERY`.
+S-A-TESTS-5-24 — AMENDED: test_alpha_full_counter::_Pool (11 lines) and test_game_id_push::_Pool (14 lines) are NOT ≡ (distinct ASTs).
+Lane C via CARD-MECHANISM-SWEEP ("21 remaining private `_Pool`/`_Buffer` fakes", CARDS.md) stands.
+S-A-TESTS-5-25 — CONFIRMED lane C: test_drain_row_shape_parity.py::_FAKE_FILES lists both fake files by path; PZ-6 B-15 covers push_dense;
+test_pool_drain_parity is cited in falsified.md.
+S-A-TESTS-5-26 — CONFIRMED: grep shows three `next_graph_batch(8, 50)` → `submit_graph_inference_results` loops, in the three named tests.
+S-A-TESTS-5-27 — ARCHITECT: my `git grep -w <name> -- src tools` (the pyi excluded) gives 0 for all 16 names. S-A-RUST-3 did NOT raise
+these; its "Not covered" section deliberately leaves ~25 test-only bridge members out. The one covered part is the spec-less ctor arm,
+which is S-A-RUST-3-13 (lane B, blocked on the inference_server.py grid else-branch). `max_sims_per_search` is PZ-1 served-sims. Question:
+does a pyo3 export whose only Python caller is its own bridge test count as dead?
+S-A-TESTS-5-28 — CONFIRMED lane C: docs/governance/STATE.md cites test_qsigma_rescale_reaches_target, and CARDS.md holds
+CARD-MECHANISM-SWEEP.
+S-A-TESTS-5-29 — CONFIRMED: the same 5-pattern grep over the 3 dirs → 12.
+S-A-TESTS-5-30 — AMENDED: the drift is real. My check (AST of src/mantis/_engine.pyi vs `dir()` of every class) finds 4 pyi-only
+`*_PLANE` constants, RegistrySpec.{cluster_threshold,cluster_window_size} runtime-only, and SelfPlayRunner.{inference_failures_total,
+max_sims_per_search} runtime-only. The −8 is the same edit as S-A-RUST-3-15 (count it there). S-A-RUST-3-16 deletes this test file
+(−71, counted there). The missing members are S-A-RUST-3's DEFECT. Δ in this slice: 0.
+S-A-TESTS-5-31 — CONFIRMED: at runtime `hasattr(HexgBuffer,"outcome_in_range_count")` is False.
+Cross-slice: -13 → S-A-RUST-3-02; -27 → S-A-RUST-3-13 (ctor arm only; the rest unowned, see "Not covered" there); -30 → S-A-RUST-3-15,
+-16 and that file's DEFECTS stub-drift row.
+
+### Missed by the scout (optional, max 5)
+NEW-1 | DOC | C — docs/governance/RULINGS.md R38 cites `tests/selfplay/test_pool_hparams_arms.py:196` and
+`tests/selfplay/test_pool_hparams.py:145` as line pins. The :196 line is now test_search_kind_property_reads_live_config. It is a stale
+line pin in a standing ruling, correctable only by annotation (R9); Δ 0.
+
+### Tally: raised 31 | confirmed 21 | amended 5 | refuted 0 | pending 4 | architect 1
+Lane-A Δ (probe-measured, one batch diff): −116 net. −20 of it is probe-green (05 −2, 06-bridge −18); −96 is torch-bound PENDING
+(01 −27, 02 −26, 04 −9, 06-selfplay −34).
