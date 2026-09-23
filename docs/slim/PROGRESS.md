@@ -8,9 +8,10 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W1 exit** → W2. W1 all groups integrated; REVIEW-W1 filed (`docs/audits/REVIEW_W1_2026-09-23.md`, 0 must-fix,
-  should-fix fixed, one loop). W1 exit gates (`make gates`) RUNNING on cadcc367; run10 resolved MATCH at cadcc367.
-  W2 agents started from cadcc367.
+- Wave: **W2** (Rust). The W1 exit sweep on cadcc367 was VOIDED by an environmental /tmp tmpfs per-user quota
+  (3a: `OSError: [Errno 122] Disk quota exceeded`, from worktrees + cargo targets on tmpfs; 2a/2b/4/5 were green);
+  it re-runs on cadcc367 from an on-disk worktree `.wt/gates` (`.wt/` is in .git/info/exclude). Worktrees live
+  under `.wt/` from now on. W2: bridge/core/encoding/graph and selfplay groups integrated; the search group running.
 
 ## W0 — entry
 
@@ -52,6 +53,23 @@ agent reports kept for the review):
   tests/config/test_resolve_encoding.py, tests/arena/test_deploy_head.py, tests/data/_frozen_games.py,
   tests/fixtures/selfplay/pool/encoding_resolve.json) → W3/W5 grid residue; `buffer_persist.try_save_buffer` and
   its counter now fully unread → CORE-1-07 (W3).
+
+## W2 — Rust
+
+Integrated (commit subjects on the branch carry the row IDs):
+- RUST-3-16 DONE (one stub at the wheel path; pyright `stubPath`; the root wheel no longer ships a second
+  `_engine.pyi`). RUST-3-01/02/03/04/05/06/07/08/09/10/11/12/13/14/17/18 DONE; RUST-3-15 done-at-contact (W1);
+  TESTS-5-13 DONE with RUST-3-02; RUST-3-NEW-2 DONE. RUST-2-NEW-2 (spawn_mock_graph_games) still C: KEEP — four
+  Python tests use it as the sole mock producer (TESTS-5-27 rule).
+- RUST-2-01/03/04/05/06/07/08/09/10(helpers)/11/12/13/15 DONE; RUST-2-16 DONE via the RUST-3-10 family;
+  RUST-2-02 WIRED (positions_dropped can fire on the graph arm — LAW-18 row, event contract v4);
+  RUST-2-NEW-1 done-at-contact (W1); REVIEW-W1 note 3 DONE (the runner's forced-child pre-validation removed).
+  Still C: RUST-2-14 (sole caller is the oracle bank's o4b test), RUST-2-17 feature_len/policy_len (the inv19/inv23
+  pin subject), RUST-2-10's wide_board (oracle-bank feature).
+- unwrap/expect: production sites fixed in encoding (registry parser), bridge (runner ctor), selfplay (HEXG loader,
+  version_range, opening draw). CARD owed: hot-loop sites (core `Board::check_win`; selfplay queues/graph.rs 13
+  lock/condvar-poison expects, graph.rs position(), search_drive.rs 261/265/724) and a POISON STANCE for 9
+  lock-poison expects in selfplay runner (finalize.rs, mod.rs latch/stop/drain faces, spawn.rs, search_drive.rs:88).
 
 ## Ledger (row → done / refuted-at-contact / halted)
 
