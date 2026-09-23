@@ -323,3 +323,84 @@ none
 - docs/ were read only for what a new kind must edit (contracts, repo_design). Doc findings belong to D1/D3.
 - src/mantis/config/schema/core.py::ARCH_SCOPED_KEYS gaining a per-kind half, which would dissolve C1–C18,
   is not proposed. It changes what configs are accepted (null → absent) and adds schema lines.
+
+## Review
+reviewer: fresh read-only agent (not the author); no lane-A finding, so no DELETE-PROBE and no worktree was created.
+Reviewed at HEAD 7188aea. `git diff --stat 69e1532 HEAD` shows 6 files, all under docs/slim, so every subject is unchanged from the census base.
+
+| ID | verdict | lane | Δlines | note |
+|---|---|---|---|---|
+| S-L-SEAM-01 | AMENDED | C | −22 (was −24) | `build_net` still needs its own import line, and a second blank is needed before `def write_model_snapshot`. Adds a top-level eval→train edge on a PRIVATE symbol. The spool reader inherits the legacy no-kind→GnnArch arm. The refusal moves from the parent to the eval child |
+| S-L-SEAM-02 | ARCHITECT | C | −6 (confirmed) | Is "a stamp that predates `arch_kind`" the same history as "a config that predates `identity.arch_kind`" (R323 INCUMBENT_ARCH_KIND), or two facts that coincide today? |
+| S-L-SEAM-03 | ARCHITECT | C | −7 (confirmed) | This reverses REVIEW-2 G4.4's landed fix (deb16b8, "the table a cross-check and the net the authority"). Should the by-name cross-check stay as defence in depth? |
+| S-L-SEAM-04 | CONFIRMED | C | −17 (unprobed; torch-bound, protected suite) | Swapping the name sniff for ARCH_KINDS_BY_REPRESENTATION changes semantics inside PZ-1/PZ-2. The result is identical for all 3 kinds today |
+| S-L-SEAM-05 | CONFIRMED | B | −10 | Changes what reds. `build_net` plants `net.arch` (src/mantis/model/build.py) |
+| S-L-SEAM-06 | CONFIRMED | B | −8 | Test-floor move (tools/ci_gates/test_count_floor.txt). Module docstring line 4 must be reworded |
+
+### Leak list, re-derived
+Method (different from the scout's AST pass): a `tokenize` scan of every tracked .py/.rs/.yaml/.toml under src, tools, tests, crates and configs. Each hit is classed as a code, string or comment token against the kind vocabulary regex: the 3 arch classes, 3 net classes, RepresentationNetworkV2, the 2 buried nets, the 4 tables and their aliases, the `aux_soft_policy`/`soft_policy*` family, `__arch_type__` and `arch_kind`. Own scope was excluded (src/mantis/model/, tests/model/conformance/, the 3 own witness tests). Script and output are in the scratchpad (rev_seam/scan.py, scan.out).
+
+That found 87 files. A second pass took those files and grepped for branch shapes outside own scope: `isinstance`/`issubclass` on an arch or net class, `__name__ ==|in`, `startswith("Gnn`, `type(..) is Gnn*`, `in`/`[...]` on a kind table.
+- Branch sites in src: exactly `schema/core.py::_soft_policy_rows_pair_with_their_head` (A2) and `trainer/core.py::Trainer.__init__` (A3).
+- Branch sites in tests: A10 and A11. The remaining isinstance/type-is hits are premise asserts (a V1 fixture or the legacy-stamp→GnnArch fact). They are names-only and correctly left uncounted.
+- **Count HOLDS at 36**: A 11 · B 7 · C 18. Every row was matched to a scan hit, and the names-only 4 were confirmed by `git grep -n -E "GnnNet|GnnArch"` on the 4 files.
+- Rust: 0 confirmed. The crates .rs/.toml files are in the scan, with no hit.
+- Caveats, count unchanged:
+  - C18 (tests/train/test_aux_soft_policy.py) is the feature's own test, not a file forced by the REQUIRED key. It is misfiled but still a leak.
+  - docs/contracts/{run_config_schema,event_manifest}.md were also forced by the landing (gate 13 / the manifest). With docs in scope the count is 38.
+- **Worst three: agreed.** Trainer (A3+B5) is first, and the REQUIRED shared key (B1+C1–C18) second. Third is the discriminator restated (A4+A5), which PZ-2 already names as a seam member.
+
+### Last landing, re-derived
+`git log -S GnnArchV2SoftPolicy` puts the landing at `f000803`, followed by 6da4e4c, 3d93447 and 9548904.
+`git show --numstat --format= f000803`, split on `^src/mantis/model/|^tests/model/`, gives: own 9 +184/−20 · leak 30 +455/−27. All 30 leak paths were listed and match the scout's list exactly: 6 configs, 2 contract docs, 8 src files, 13 tests and 1 template.
+
+### Per-finding notes
+S-L-SEAM-01 — AMENDED.
+- `grep -n "dataclasses\|\bAny\b" src/mantis/eval/snapshot.py` → lines 17/36 and 20/32/41. Both imports are used only in the deleted span, so their −2 holds.
+- `from mantis.model import ARCH_KINDS, build_net` cannot become the checkpoints import "in place (0)": `build_net` stays. That costs +1 for a new `from mantis.train.checkpoints import _arch_from_dict, _arch_to_dict`, and +1 for the second blank that the deleted span carried. Net Δ is −22.
+- DUP question: no arch code moves into the trainer, server, arena or schema, and no runtime branch on arch is added.
+- Acyclicity was re-checked with my own condensed first-level AST graph: train reaches {_engine, config, encoding, model, monitor, selfplay, util}, and eval is not among them.
+- Three behaviour costs the scout did not state:
+  - the eval CHILD would import `mantis.train` at top level (today only pipeline.py does, lazily);
+  - a private `_`-name would be imported across packages (the anchor.py precedent is intra-package);
+  - `_arch_from_dict`'s legacy arm (no kind → GnnArch) would widen to spool files.
+- It rewrites a PZ-2-pinned identity test, so it stays lane C.
+
+S-L-SEAM-02 — ARCHITECT.
+- `grep -n "_ARCH_KINDS\b\|_LEGACY_BY_REPRESENTATION\|GnnArch\b" src/mantis/train/checkpoints.py` → the alias at 137 and the dict at 141. With comments 136 and 139–140 and blank 138, that is −6. There are 4 readers (185/189/221/224 for the alias, 194/228 for the dict), plus the docstring at 211 to reword.
+- Not stated by the scout: once readers use ARCH_KINDS directly, PK3 ("third registry", perf_floor's `from mantis.train.checkpoints import _ARCH_KINDS`) compares the shared table with itself. It should then be deleted, not re-pointed, and that is a test-floor move.
+
+S-L-SEAM-03 — ARCHITECT.
+- REVIEW2 G4.4's Fix text (docs/audits/REVIEW2_2026-09-21.md) keeps the table as the cross-check, and deb16b8 landed it. Deleting it reverses a landed review fix.
+- The scout's implication argument holds on every production path. `git grep -n "Trainer(" -- src tools` finds only orchestrator.py and pretrain/graph_route.py. Both build `arch` with `arch_from_spec_and_config` over the same config the schema validator pairs.
+- `grep -n SOFT_POLICY_ARCH_KINDS src/mantis/train/trainer/core.py` → the import at 28 and the check at 188–193, so −7 holds.
+- The pinning test's NAME ("…kinds_table_must_agree") also goes stale (0 Δ).
+
+S-L-SEAM-04 — CONFIRMED.
+- An AST dump of both `specs_for` (perf_floor 274–291, envelope 307–322) shows identical bodies apart from the refusal class, its message and the docstring.
+- Callers: envelope 330/335; perf_floor 472/506/535.
+- `wc -l` → envelope 494, so it stays over 300 and keeps its R8 header.
+- DUP question: the code stays in tests, and no pair is a parity-pinned oracle or twin.
+
+S-L-SEAM-05 — CONFIRMED.
+- `sed -n 80,110p` shows 3 identical kwargs rows. src/mantis/model/build.py::build_net ends `net.arch = arch`, so the test's two re-plants are redundant.
+- `git grep` of docs/governance (archive excluded) for `_TINY`/`test_snapshot_payload_keys` → 0, so it is not ruling-named. Lane B is right: it changes what reds.
+
+S-L-SEAM-06 — CONFIRMED.
+- `git grep -n "KNOWN_DENSE_HEADS_EXEMPT\|test_flatten_ban_p3"` → one other hit, docs/governance/archive/RULINGS_ACTIVE.md, a historical spot-check of the line. It is archive, not standing, so the lane does not change.
+- GRAVES carries a "HexTacToeNet" row (R346(f)).
+- The file is 99 lines, so there is no R8 effect. Gate 3 still moves the floor, so lane B.
+
+DEFECTS, all 5 re-checked:
+- (1) The ctor ban set `{"GnnNet","GnnNetV2","HexTacToeNet"}` lacks GnnNetV2SoftPolicy. The gap is latent: `git grep -n -E "\bGnnNet(V2)?(SoftPolicy)?\(" -- src tools tests ':!src/mantis/model'` finds docstrings only.
+- (2) A regex probe of `_RE_ISINSTANCE` on [GnnNetV2, GnnNetV2SoftPolicy, GnnNet] → [False, False, True]. It is confirmed, but narrower than stated: the NETS are subclasses (gnn_v2.py `class GnnNetV2(GnnNet)`), so an `isinstance(m, GnnNet)` sniff still catches V2 nets at runtime. The blind spot is a sniff that NAMES a V2 class.
+- (3) repo_design.md §3 says GnnArchV2 "is a subclass of GnnArch", but arch.py has `class GnnArchV2:` with no base. The doc confuses the ARCH siblings with the NET subclass chain.
+- (4) src/mantis/model/__init__.py opens "nets (GNN + CNN)". Confirmed.
+- (5) Evaluating `_ARCH_VOCABULARY` on the two aux leaves and `model.gnn.hidden` → [False, False, True]. Confirmed.
+
+### Missed by the scout
+- NEW-1 | names-only | — : tests/selfplay/test_graph_collate_masking_authority.py imports `mantis.model.gnn.GnnNet` and pins the collate contract against `GnnNet.forward_batch`'s signature alone. V1 stands in for every kind here, and none of the scout's names-only buckets lists it.
+- NEW-2 | DOC | B : tests/config/test_every_key_has_consumer{,_p2}.py CONSUMER_REGISTRY strings for `model.gnn.*` name "GnnArch/GnnArchV2" as the width consumers and omit GnnArchV2SoftPolicy. The strings are stale, and a new kind leaves them staler.
+- NEW-3 | DOC | B : the tests/encoding/test_encoding_round_trip.py module docstring still carries a DEFERRED "HexTacToeNet-forward leg" for a net R346(f) deleted.
+
+### Tally: raised 6 | confirmed 3 | amended 1 | refuted 0 | pending 0 | architect 2
