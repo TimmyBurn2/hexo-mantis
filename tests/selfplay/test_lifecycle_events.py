@@ -8,8 +8,8 @@ The six events (DESIGN §4.4):
   - runner_started        (pool.py:start())
   - workers_spawned        (pool.py:start())
   - game_loop_entered     (pool_drain.py:run_stats_loop)
-  - first_inference_enqueued (inference_server.py, dense + graph)
-  - first_inference_served   (inference_server.py, dense + graph)
+  - first_inference_enqueued (inference_server.py, graph loop)
+  - first_inference_served   (inference_server.py, graph retire)
   - first_record_drained   (pool_drain.py:run_stats_loop, first non-empty drain)
 
 `game_complete` (part iii) is NOT tested here — it has its own goldens (C-03/J-05) and its
@@ -21,10 +21,12 @@ import threading
 from collections import deque
 from typing import Any
 
-import pytest
+import torch
 
+import _fused_graph_harness as H
 from mantis._engine import DEFAULT_CLUSTER_THRESHOLD
 from mantis.selfplay import pool_drain
+from mantis.selfplay.inference_server import InferenceServer
 from mantis.selfplay.instrumentation import PoolInstrumentation
 
 
@@ -57,11 +59,6 @@ def test_runner_started_emits_on_pool_start() -> None:
     pool.encoding_spec = MagicMock()
     pool.encoding_spec.name = "test_enc"
     pool._stats_thread = None
-
-    def fake_start_thread():
-        def _stats_loop():
-            pass
-        pool._stats_thread = threading.Thread(target=_stats_loop, daemon=True)
 
     with patch.object(WorkerPool, "_stats_loop", lambda self: None):
         pool.start()
@@ -187,83 +184,40 @@ def test_first_record_drained_emits_on_first_non_empty_drain(monkeypatch) -> Non
     assert events[0]["representation"] == "dense"
 
 
-# first_inference_enqueued + first_inference_served (InferenceServer)
-# The inference server's dense/graph loops require heavy torch + batcher mocking to drive
-# end-to-end. The emit LOGIC is a one-shot flag guarded by `request_ids` non-empty (enqueued)
-# and `forward_count == 0` pre-increment (served). These tests drive the emit logic directly
-# by simulating the two sentinel transitions, which is the LAW-07 producer contract: the
-# producer fires → the event emits; kill the producer → the pin reds.
-def test_first_inference_enqueued_emits_once() -> None:
-    """LAW-07 producer test — `first_inference_enqueued` emits once on the first non-empty
-    batch. Drives the emit logic directly (the dense loop's torch path is integration-tested
-    elsewhere; this pins the producer's flag-guarded emit contract)."""
-    from mantis.selfplay.inference_server import InferenceServer
+# first_inference_enqueued + first_inference_served (InferenceServer._run_graph_loop)
+def _drive_graph_pops(monkeypatch, pops: list[list[int]]) -> tuple[_RecordingSink, Any]:
+    """Run the REAL graph loop over scripted pops (legal counts per graph) with a sink injected."""
+    import mantis.selfplay.graph_collate as collate_mod
 
+    monkeypatch.setattr(collate_mod, "collate_graph_batch", H.collate_from_payload)
     sink = _RecordingSink()
-    srv = InferenceServer.__new__(InferenceServer)
-    srv._sink = sink
-    srv._first_enqueued_emitted = False
-    srv._first_served_emitted = False
-
-    # Simulate the producer firing: first non-empty request_ids (dense path).
-    request_ids = [1, 2, 3, 4]
-    if not srv._first_enqueued_emitted:
-        srv._first_enqueued_emitted = True
-        if srv._sink is not None:
-            srv._sink.emit({
-                "event": "first_inference_enqueued",
-                "batch_size": len(request_ids),
-                "representation": "dense",
-            })
-
-    enqueued = sink.named("first_inference_enqueued")
-    assert len(enqueued) == 1, f"first_inference_enqueued must emit once; got {len(enqueued)}"
-    assert enqueued[0]["representation"] == "dense"
-    assert enqueued[0]["batch_size"] == 4
-
-    # Second "batch" — the flag must prevent a second emit.
-    if not srv._first_enqueued_emitted:
-        srv._first_enqueued_emitted = True
-        if srv._sink is not None:
-            srv._sink.emit({"event": "first_inference_enqueued", "batch_size": 2,
-                            "representation": "dense"})
-    assert len(sink.named("first_inference_enqueued")) == 1, "must emit exactly once (flag guard)"
+    batcher = H.ScriptedGraphBatcher(
+        [H.build_payload(counts, uid_base=1 + 1000 * i) for i, counts in enumerate(pops)]
+    )
+    server = InferenceServer(
+        H.SentinelGraphNet(), torch.device("cpu"), H.graph_cfg(),
+        batcher=batcher, encoding_spec=H.GRAPH_SPEC, sink=sink,
+    )
+    batcher.server = server
+    server.run()
+    assert batcher.failures == [], batcher.failures
+    assert len(batcher.results) == len(pops), "every scripted pop must be served"
+    return sink, batcher
 
 
-def test_first_inference_served_emits_once() -> None:
-    """LAW-07 producer test — `first_inference_served` emits once on the first successful
-    forward (after `_forward_count` increments from 0). Drives the emit logic directly."""
-    from mantis.selfplay.inference_server import InferenceServer
+def test_first_inference_enqueued_emits_once(monkeypatch) -> None:
+    """LAW-07 producer test — the graph loop emits `first_inference_enqueued` on its first pop only."""
+    sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
-    sink = _RecordingSink()
-    srv = InferenceServer.__new__(InferenceServer)
-    srv._sink = sink
-    srv._first_enqueued_emitted = False
-    srv._first_served_emitted = False
-    srv._forward_count = 0
+    assert sink.named("first_inference_enqueued") == [
+        {"event": "first_inference_enqueued", "batch_size": 3, "representation": "graph"},
+    ]
 
-    request_ids = [1, 2, 3, 4]
-    # Simulate the producer: first forward completes.
-    srv._forward_count += 1
-    if not srv._first_served_emitted:
-        srv._first_served_emitted = True
-        if srv._sink is not None:
-            srv._sink.emit({
-                "event": "first_inference_served",
-                "batch_size": len(request_ids),
-                "representation": "dense",
-            })
 
-    served = sink.named("first_inference_served")
-    assert len(served) == 1, f"first_inference_served must emit once; got {len(served)}"
-    assert served[0]["representation"] == "dense"
-    assert served[0]["batch_size"] == 4
+def test_first_inference_served_emits_once(monkeypatch) -> None:
+    """LAW-07 producer test — the retire stage emits `first_inference_served` on its first pop only."""
+    sink, _ = _drive_graph_pops(monkeypatch, [[3, 4, 5], [2, 2]])
 
-    # Second forward — flag must prevent re-emit.
-    srv._forward_count += 1
-    if not srv._first_served_emitted:
-        srv._first_served_emitted = True
-        if srv._sink is not None:
-            srv._sink.emit({"event": "first_inference_served", "batch_size": 2,
-                            "representation": "dense"})
-    assert len(sink.named("first_inference_served")) == 1, "must emit exactly once (flag guard)"
+    assert sink.named("first_inference_served") == [
+        {"event": "first_inference_served", "batch_size": 3, "representation": "graph"},
+    ]
