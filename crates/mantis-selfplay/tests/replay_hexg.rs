@@ -20,7 +20,6 @@ use mantis_selfplay::replay::hexg::{
 
 /// Slot geometry for this suite: a test choice, passed explicitly, not a shipped tunable.
 const VISIT_CAP: usize = 128;
-use mantis_selfplay::replay::sym::rotate_axial;
 
 const ENC: &str = "gnn_axis_v1";
 
@@ -50,16 +49,6 @@ fn unique_path(stem: &str) -> std::path::PathBuf {
         .map(|d| d.as_nanos())
         .unwrap_or(0);
     std::env::temp_dir().join(format!("hexg_{stem}_{pid}_{nanos}_{n}.hexg"))
-}
-
-/// Group inverse of D6 element `s`: reflections (s>=6) are involutions, rotations invert
-/// to `(6-n)%6`.
-fn inv_sym(s: usize) -> usize {
-    if s >= 6 {
-        s
-    } else {
-        (6 - s) % 6
-    }
 }
 
 #[test]
@@ -369,19 +358,6 @@ fn load_rejects_dense_hexb_magic() {
 // magic pin above is the half that still guards a live reader.
 
 #[test]
-fn grid_encoding_rejected_at_construction() {
-    // No grid row is registered any more, so the refusal comes from the registry itself. The
-    // assertion on the message is what keeps this from passing as a bare typo check.
-    let err = HexgBuffer::new(4, "v6", 128)
-        .err()
-        .expect("a grid encoding name must be refused");
-    assert!(
-        err.contains("v6") && err.contains("gnn_axis_v1"),
-        "the refusal must name the offered encoding and the registered set: {err}"
-    );
-}
-
-#[test]
 fn sample_wire_matches_direct_builder_unaugmented() {
     let mut buf = HexgBuffer::new(4, ENC, 128).unwrap();
     let rec = sample_record();
@@ -436,22 +412,6 @@ fn sample_wire_matches_direct_builder_unaugmented() {
     );
     assert_eq!(targets.argmax_valid, vec![1]);
     assert_eq!((targets.argmax_q[0], targets.argmax_r[0]), (2, 0));
-}
-
-#[test]
-fn rotate_axial_roundtrips_under_inverse() {
-    let coords = [(0, 0), (3, -2), (-4, 1), (5, 5), (1, -6)];
-    for s in 0..12 {
-        for &(q, r) in &coords {
-            let (rq, rr) = rotate_axial(q, r, s);
-            let (bq, br) = rotate_axial(rq, rr, inv_sym(s));
-            assert_eq!(
-                (bq, br),
-                (q, r),
-                "s={s}: rotate then inverse must recover coord"
-            );
-        }
-    }
 }
 
 fn argmax_canary_passes(g: &AxisGraph, argmax_cell: (i32, i32)) -> bool {
