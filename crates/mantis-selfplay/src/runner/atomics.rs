@@ -12,7 +12,7 @@ pub(crate) struct WorkerAtomics {
     pub(crate) running: Arc<AtomicBool>,
     /// Runner-owned model-version snapshot source (frozen
     /// `batcher.current_model_version()`); each move dedup-pushes it into
-    /// `version_seen`. Default 0 (no-NN) until WP7 wires the real setter.
+    /// `version_seen`. Default 0 (no-NN) until the bridge's `set_model_version` sets it.
     pub(crate) model_version: Arc<AtomicU64>,
     /// WP12-R Phase T fatal-defect latch (DESIGN_T §3.4): the graph-record
     /// dispatch stores a `TargetIntegrityError` message here, counts the fire,

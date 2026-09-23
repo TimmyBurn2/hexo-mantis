@@ -7,7 +7,7 @@
 //! (`new_full` + `configure_quiescence`, no interior_selector) and runs the outer game loop.
 //! `run_one_game` inits a fresh per-game `Board` (each worker OWNS its board, `Send + !Sync`),
 //! runs the per-move loop, honours the shutdown short-circuit — an in-progress game is DROPPED,
-//! never finalized as a partial draw — and dispatches the hoisted `is_graph` finalize branch.
+//! never finalized as a partial draw — and finalizes the game graph.
 //! Representation is resolved ONCE into a Copy `WorkerGeometry`, so the per-move hot path sees
 //! cheap integer locals.
 //!
@@ -80,8 +80,7 @@ struct WorkerMoveCfg {
 /// Per-game state outputs from `init_per_game_board`.
 struct PerGameInit {
     board: Board,
-    /// Per-game graph-record accumulator — `Vec::new()` (no alloc) for grid games;
-    /// only grows on the `is_graph` record branch.
+    /// Per-game graph-record accumulator.
     graph_records: Vec<GraphRecord>,
     move_history: Vec<(i32, i32)>,
     /// One `(sims, is_full_search)` per entry of `move_history`.
@@ -288,7 +287,7 @@ pub(crate) fn run_worker_thread(
 }
 
 /// Per-game loop body. Init board + per-game state, run the inner move loop, honour the shutdown
-/// short-circuit, then dispatch the hoisted `is_graph` finalize branch.
+/// short-circuit, then finalize the game graph.
 #[allow(clippy::too_many_arguments)]
 fn run_one_game(
     tree: &mut MCTSTree,
@@ -375,8 +374,7 @@ fn run_one_game(
             break;
         }
 
-        // Random-opening plies: skip MCTS + recording for the first `random_opening_plies`
-        // plies (skipped entirely for a seeded game).
+        // Random-opening plies: skip MCTS + recording for the first `random_opening_plies` plies.
         if board.ply.index() < init_ctx.random_opening_plies {
             let legal = board.legal_moves();
             if legal.is_empty() {
@@ -445,9 +443,8 @@ fn run_one_game(
     );
 }
 
-/// Per-game board + state initializer. Builds the board from the spec-derived `BoardGeometry`,
-/// pre-sizes the record vectors, dry-replays an optional seed prefix, samples per-game rotation,
-/// and resolves the playout cap.
+/// Per-game board + state initializer: the spec-geometry board, pre-sized record vectors and the
+/// game-level playout-cap draw.
 fn init_per_game_board(
     board_geometry: BoardGeometry,
     init_ctx: PerGameInitCtx,

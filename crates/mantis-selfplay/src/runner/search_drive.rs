@@ -1,8 +1,7 @@
 //! R8-justify: the per-move search phase (`play_one_move` -> `run_mcts_search` ->
-//! `infer_and_expand{,_graph}` -> `select_move`) plus its Copy arg-bundles is one unit;
+//! `infer_and_expand_graph` -> `select_move`) plus its Copy arg-bundles is one unit;
 //! splitting it would scatter the load-bearing target-policy build ORDER, which is EXACTLY:
-//! temperature-annealed visit policy -> optional completed-Q improved policy -> forced-win
-//! one-hot -> solver soft-inject.
+//! temperature-annealed visit policy -> optional completed-Q improved policy.
 //! The graph path is rotation-free at inference: the builder is passed no `sym_idx`,
 //! pinned by `crates/mantis-selfplay/tests/rotation_parity.rs`.
 
@@ -232,20 +231,14 @@ fn select_for(
     }
 }
 
-/// Selects leaves, encodes per-cluster state, submits to the dense inference queue,
-/// forward/inverse-scatters under the per-game symmetry, aggregates per-leaf policies, and runs
-/// `expand_and_backup`.
-///
-/// # Errors
-/// [`InferenceSeamFailure`] when a leaf inference FAILS on an OPEN queue. An empty leaf set is
-/// `Ok(0)`, search exhaustion rather than failure, and so is a failure arm reached with the
-/// queue already closed.
-/// GNN counterpart. Builds ONE axis graph per evaluated leaf (no reuse, no patching), submits
+/// Builds ONE axis graph per evaluated leaf (no reuse, no patching), submits
 /// the batch in ONE `submit_graphs_and_wait`, and expands against the BUILDER's per-leaf
 /// `window_center`. Rotation-free at inference.
 ///
 /// # Errors
-/// A build-guard trip or a graph-inference failure is a named [`InferenceSeamFailure`].
+/// A selection refusal, a build-guard trip or a leaf inference that FAILS on an OPEN queue is a
+/// named [`InferenceSeamFailure`]; an empty leaf set, or a failure after our own `stop()`, is
+/// `Ok(0)`.
 // `#[cold]`/`#[inline(never)]` are DELETED with the dense arm: they told LLVM to optimize this
 // as the unlikely branch, and it is now the only inference path there is.
 fn infer_and_expand_graph(
@@ -613,7 +606,7 @@ pub(crate) fn play_one_move(
             .fetch_add(1, Ordering::Relaxed);
     }
 
-    // ── Sample and apply move (ZOI-filtered legal set) ──
+    // ── Sample and apply move ──
     let Some(move_idx) = select_move(board, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng)
     else {
         return MoveOutcome::Break;
@@ -691,7 +684,7 @@ fn explore_gate_open(ply: usize, explore_moves: usize) -> bool {
     ply >= explore_moves
 }
 
-/// Per-move legal-move sampler. ZOI-filters when enabled, picks via Gumbel winner (post
+/// Per-move legal-move sampler. Picks via Gumbel winner (post
 /// exploration gate) or visit-count sampling, falls back to uniform random.
 #[allow(clippy::too_many_arguments)]
 fn select_move(

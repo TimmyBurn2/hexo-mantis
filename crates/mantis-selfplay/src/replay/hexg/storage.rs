@@ -19,8 +19,7 @@ impl HexgBuffer {
         (self.size, self.capacity, histogram)
     }
 
-    /// Grow the ring to `new_capacity`, preserving all records (linearise +
-    /// extend). The exact HEXB `resize_impl` pattern on the graph SoA strides.
+    /// Grow the ring to `new_capacity`, preserving all records (linearise + extend).
     pub fn resize_impl(&mut self, new_capacity: usize) -> Result<(), String> {
         if new_capacity <= self.capacity {
             return Err(format!(

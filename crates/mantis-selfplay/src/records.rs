@@ -10,10 +10,6 @@ use mantis_core::Board;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use rand::{rng, RngExt};
 
-// The ragged legal-set policy functions below are the no-drop counterparts of the dense
-// scatter-max path. That path is byte-identical for in-global-window cells; only off-window cells
-// covered by some cluster are additionally retained, in `overflow`.
-
 /// GNN counterpart of `aggregate_policy_ls`: the GNN policy head emits ONE probability per legal
 /// node directly, so this is a pure re-key of the ragged probs into the existing `LegalSetPolicy`
 /// no-drop consumer — in-window to `dense[slot]`, off-window (`policy_dst_slot ==
@@ -212,7 +208,7 @@ pub fn refuse_zero_visit_export(
 /// # Errors
 /// Returns [`TargetIntegrityError`] per the pinned order above — the caller latches it run-fatal,
 /// never a silent skip.
-#[allow(clippy::too_many_arguments)] // mirrors the dense record fns' spec-derived scalar surface
+#[allow(clippy::too_many_arguments)] // the record's spec-derived scalar surface
 pub fn record_position_graph(
     board: &Board,
     ls: &LegalSetPolicy,

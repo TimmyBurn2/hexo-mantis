@@ -36,8 +36,7 @@ pub struct WorkerGeometry {
 /// The kind dispatch is a **closed** `match spec.representation` with NO `_ =>`
 /// arm: a new `Representation` variant fails WP6 compilation loudly. There is no
 /// `None → v6` fallback — an absent spec is rejected as an error BEFORE this
-/// point (`SelfPlayRunner::new`, LAW-11). `is_graph` / `legal_set` are set from
-/// the arms (byte-identical to the frozen `worker_loop/mod.rs:168/176`).
+/// point (`SelfPlayRunner::new`, LAW-11).
 #[must_use]
 pub fn resolve_geometry(spec: &'static RegistrySpec) -> WorkerGeometry {
     match spec.representation {

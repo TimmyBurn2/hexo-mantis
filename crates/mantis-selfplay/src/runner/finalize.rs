@@ -6,8 +6,8 @@
 //! (`terminal_reason != 2`). The per-game push loop holds the results-queue lock ONCE across the
 //! whole game (frozen `:1689`) so every game's rows are CONTIGUOUS in the shared queue (observable
 //! only multi-worker; ported as a verbatim obligation). The terminal reason / outcome are read from
-//! `board.winner()` + `terminal_reason` (never re-derived from ply parity, LAW-03). Feeds the shared
-//! `VecDeque` result queues (the pyo3 `collect_data` drain is WP7); drop-oldest bumps `positions_dropped`.
+//! `board.winner()` + `terminal_reason` (never re-derived from ply parity, LAW-03). Drop-oldest
+//! past `results_queue_cap` bumps `positions_dropped`.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -22,10 +22,9 @@ use super::{GameResultRow, PositionStats};
 
 /// Per-game terminal handler (frozen `inner.rs:1624`; warm path).
 ///
-/// Classifies the outcome (winner / `terminal_reason` / `version_seen` range),
-/// reprojects + rotates per-row aux targets, pushes all rows into the shared
-/// results queue under ONE lock, bumps the win/draw counters, caps the queue at
-/// `results_queue_cap`, and pushes a single `recent_game_results` metadata row.
+/// Classifies the outcome (winner / `terminal_reason` / `version_seen` range), pushes all rows
+/// into the shared graph results queue under ONE lock, bumps the win/draw counters, caps the queue
+/// at `results_queue_cap`, and pushes a single `recent_game_results` metadata row.
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn finalize_game_graph(
     board: &Board,
@@ -69,8 +68,7 @@ pub(crate) fn finalize_game_graph(
         }
     };
     let (mv_min, mv_max, mv_distinct) = version_range(version_seen);
-    // Compound-move sampling weight — same `(plies+1)/2` (== `div_ceil(2)`)
-    // convention the dense drain applies to `plies` before push.
+    // Compound-move game length: `(plies+1)/2` (== `div_ceil(2)`).
     let game_length: u16 = plies.div_ceil(2).min(u16::MAX as usize) as u16;
 
     // R345(b)(6): ONE id for the whole game, taken before the loop. Taking it per record
@@ -111,7 +109,7 @@ pub(crate) fn finalize_game_graph(
         (mv_min, mv_max, mv_distinct),
     );
 
-    // Cap the graph results queue (parity with the dense backpressure drop).
+    // Cap the graph results queue: drop-oldest backpressure.
     if gq.len() > results_queue_cap {
         let to_drop = gq.len() - results_queue_cap;
         for _ in 0..to_drop {

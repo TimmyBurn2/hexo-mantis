@@ -2,9 +2,8 @@
 //! messages) are one cohesive port unit — splitting the builder from the queue it feeds would
 //! scatter the reason-travels story across files.
 //!
-//! Graph inference queue — the pure-Rust half of the parallel graph seam, pyo3/numpy stripped.
-//! A DISJOINT structure from the dense queue: its own queue, `Condvar` and waiter map, whose
-//! payload is the ragged `(LegalSetPolicy, f32)`; it never touches the dense pool.
+//! Graph inference queue — the pure-Rust half of the graph seam: its own queue, `Condvar` and
+//! waiter map, whose payload is the ragged `(LegalSetPolicy, f32)`.
 //!
 //! Reason-travels is honoured where the frozen code dropped a reason: `build_leaf_graph`
 //! returns `Result<AxisGraph, String>` rather than `.ok()`-swallowing to `None`, and
@@ -80,8 +79,7 @@ impl GraphInner {
         }
     }
 
-    /// Graph counterpart of the dense pop — same saturation threshold and timeout, on the
-    /// parallel graph queue.
+    /// Pop up to `batch_size` requests, waiting at most `max_wait_ms` for the saturation threshold.
     fn pop_graph_batch_blocking(
         &self,
         batch_size: usize,
@@ -359,8 +357,7 @@ impl GraphQueue {
         }
     }
 
-    /// Close the graph queue and wake all blocked waiters. Disjoint from the dense queue —
-    /// closing one leaves the other open.
+    /// Close the graph queue and wake all blocked waiters.
     pub fn close(&self) {
         self.inner.closed.store(true, Ordering::SeqCst);
         self.inner.queue_cv.notify_all();

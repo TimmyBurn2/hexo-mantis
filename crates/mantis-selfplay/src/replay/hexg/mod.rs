@@ -4,8 +4,8 @@
 //! capacity-derivation authority are one contract unit: the derivation IS the slot geometry, and
 //! splitting it from the struct it sizes would let the two drift apart.
 //!
-//! A PARALLEL ring beside the dense `ReplayBuffer`, storing a COMPACT whole-board record and
-//! rebuilding the axis graph plus aligning the policy target AT SAMPLE TIME on the native builder.
+//! The ring stores a COMPACT whole-board record and rebuilds the axis graph plus aligning the
+//! policy target AT SAMPLE TIME on the native builder.
 //! `sample_graph_batch_impl` D6-rotates the stored stone coords AND the visit-map keys by one
 //! uniform per-sample element, rebuilds, and aligns the rotated keys to the built legal nodes —
 //! one call emits graph and target together, so a desync is structurally impossible.
@@ -146,7 +146,7 @@ pub const HEXG_MAGIC: u32 = 0x4845_5847;
 /// shape and is refused by name, never re-parsed.
 pub const HEXG_VERSION: u32 = 2;
 
-/// Weight-bucket boundaries mirror `ReplayBuffer::weight_bucket`.
+/// The dashboard histogram bucket of an f16 slot weight.
 #[inline]
 pub(crate) fn weight_bucket(w_bits: u16) -> usize {
     let w = f16::from_bits(w_bits).to_f32();
@@ -192,8 +192,8 @@ pub struct GraphRecord {
     pub game_id: i64,
 }
 
-/// Graph-position replay ring, parallel to `ReplayBuffer`: fixed-slot SoA Vecs, ring overwrite by
-/// `head`, weighted rejection sampler and game-length weight schedule lifted verbatim from HEXB.
+/// Graph-position replay ring: fixed-slot SoA Vecs, ring overwrite by `head`, weighted rejection
+/// sampler.
 /// Fields are `pub` for the relocated HEXG oracle suite.
 pub struct HexgBuffer {
     pub capacity: usize,
