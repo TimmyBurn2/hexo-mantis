@@ -174,21 +174,6 @@ impl PyHexgBuffer {
             .map_err(PyValueError::new_err)
     }
 
-    /// Set the game-length weight schedule (identical semantics to `ReplayBuffer`).
-    pub fn set_weight_schedule(
-        &self,
-        py: Python<'_>,
-        thresholds: Vec<u16>,
-        weights: Vec<f32>,
-        default_weight: f32,
-    ) -> PyResult<()> {
-        py.detach(|| {
-            self.ring()
-                .set_weight_schedule_impl(thresholds, weights, default_weight)
-        })
-        .map_err(PyValueError::new_err)
-    }
-
     /// `(size, capacity, weight_histogram)` for dashboard display.
     pub fn get_buffer_stats(&self, py: Python<'_>) -> (usize, usize, Vec<u64>) {
         py.detach(|| self.ring().get_buffer_stats_impl())

@@ -42,5 +42,5 @@ and are RETIRED with the format. Live homes:
 
 - `crates/mantis-selfplay/src/replay/sym.rs` (`#[cfg(test)]`) — O-13.
 - `crates/mantis-selfplay/src/replay/schedule.rs` (`#[cfg(test)]`) — O-31
-  (bracket lookup + uniform).
+  (uniform).
 - `crates/mantis-selfplay/tests/replay_hexg.rs` — O-16..O-30.

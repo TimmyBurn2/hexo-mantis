@@ -80,11 +80,6 @@ class ReplayFacade:
         neither re-implemented nor swallowed here."""
         return self.raw.load_from_path(path)
 
-    def set_weight_schedule(
-        self, thresholds: list[int], weights: list[float], default_weight: float
-    ) -> None:
-        self.raw.set_weight_schedule(thresholds, weights, default_weight)
-
     def next_game_id(self) -> int:
         """Allocate the next buffer-global game id.
 

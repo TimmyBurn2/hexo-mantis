@@ -56,9 +56,6 @@ class _RecordingBuffer:
         self.other.append(("load_from_path", (path,)))
         return 3
 
-    def set_weight_schedule(self, thresholds, weights, default_weight) -> None:
-        self.other.append(("set_weight_schedule", (thresholds, weights, default_weight)))
-
 
 def test_kind_from_spec_closed_match() -> None:
     assert BufferKind.from_spec(_GRAPH_SPEC) is BufferKind.GRAPH
@@ -141,12 +138,10 @@ def test_passthrough_surface_forwards() -> None:
     facade.resize(99)
     facade.save_to_path("buffer.hexg")
     assert facade.load_from_path("buffer.hexg") == 3
-    facade.set_weight_schedule([1, 2], [0.5, 1.0], 1.0)
     assert rec.other == [
         ("resize", (99,)),
         ("save_to_path", ("buffer.hexg",)),
         ("load_from_path", ("buffer.hexg",)),
-        ("set_weight_schedule", ([1, 2], [0.5, 1.0], 1.0)),
     ]
 
 

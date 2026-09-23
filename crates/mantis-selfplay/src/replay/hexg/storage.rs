@@ -1,13 +1,10 @@
-//! HEXG ring storage mechanics — resize (linearise+extend), dashboard stats,
-//! weight schedule. Byte-for-byte parallel of `ReplayBuffer`'s `storage.rs`,
-//! specialised to the graph SoA strides. Ported with the FFI-binding strip
-//! (the error type becomes `Result<_, String>`; error strings preserved).
+//! HEXG ring storage mechanics — resize (linearise+extend) and dashboard stats on the graph SoA
+//! strides; the error type is `Result<_, String>`.
 
 use std::sync::atomic::Ordering;
 
 use half::f16;
 
-use super::super::schedule::{WeightBracket, WeightSchedule};
 use super::{HexgBuffer, MAX_STONES};
 
 impl HexgBuffer {
@@ -75,31 +72,6 @@ impl HexgBuffer {
 
         self.head = self.size;
         self.capacity = new_capacity;
-        Ok(())
-    }
-
-    /// Set the game-length weight schedule (identical to `ReplayBuffer`).
-    pub fn set_weight_schedule_impl(
-        &mut self,
-        thresholds: Vec<u16>,
-        weights: Vec<f32>,
-        default_weight: f32,
-    ) -> Result<(), String> {
-        if thresholds.len() != weights.len() {
-            return Err("thresholds and weights must have the same length".to_string());
-        }
-        let brackets: Vec<WeightBracket> = thresholds
-            .iter()
-            .zip(weights.iter())
-            .map(|(&t, &w)| WeightBracket {
-                max_moves: t,
-                weight: f16::from_f32(w).to_bits(),
-            })
-            .collect();
-        self.weight_schedule = WeightSchedule {
-            brackets,
-            default_weight: f16::from_f32(default_weight).to_bits(),
-        };
         Ok(())
     }
 }

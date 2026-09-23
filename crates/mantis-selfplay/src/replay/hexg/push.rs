@@ -6,8 +6,6 @@
 
 use std::sync::atomic::Ordering;
 
-use half::f16;
-
 use super::{weight_bucket, GraphRecord, HexgBuffer, MAX_STONES};
 
 /// Reject a tail mass that is not a probability at push time (R347(a)). α is the mass the
@@ -152,11 +150,7 @@ impl HexgBuffer {
         self.value_valid[slot] = u8::from(rec.value_valid);
         self.game_length[slot] = rec.game_length;
         self.game_ids[slot] = game_id;
-        self.weights[slot] = if rec.game_length == 0 {
-            f16::from_f32(1.0).to_bits()
-        } else {
-            self.weight_schedule.weight_for(rec.game_length)
-        };
+        self.weights[slot] = self.weight_schedule.weight_for();
 
         let new_bucket = weight_bucket(self.weights[slot]);
         self.weight_buckets[new_bucket].fetch_add(1, Ordering::Relaxed);
