@@ -1,7 +1,7 @@
 //! Encoding registry spec — full-schema record per `registry.toml`.
 //!
 //! The sole encoding record type. Per-Board construction never binds a spec into
-//! mantis-core; the dense kernels thread `&RegistrySpec` as a parameter.
+//! mantis-core; consumers thread `&RegistrySpec` as a parameter.
 
 mod validate;
 
@@ -178,13 +178,6 @@ impl RegistrySpec {
         self.trunk_size * self.trunk_size
     }
 
-    /// (board_size − 1) / 2 — board half-extent for axial→canvas mapping.
-    #[inline]
-    #[must_use]
-    pub fn half(&self) -> i32 {
-        (self.board_size as i32 - 1) / 2
-    }
-
     /// State plane stride = n_planes × n_cells.
     #[inline]
     #[must_use]
@@ -211,79 +204,5 @@ impl RegistrySpec {
     #[must_use]
     pub fn policy_stride(&self) -> usize {
         self.policy_logit_count
-    }
-
-    /// Kept-slot index of a source plane within `kept_plane_indices`.
-    /// Panics if the source plane is not retained by this encoding.
-    #[inline]
-    fn kept_slot_of(&self, src_plane: usize) -> usize {
-        self.kept_plane_indices
-            .iter()
-            .position(|&p| p == src_plane)
-            .unwrap_or_else(|| {
-                panic!(
-                    "encoding {:?} does not keep source plane {} (kept={:?})",
-                    self.name, src_plane, self.kept_plane_indices
-                )
-            })
-    }
-
-    /// Slice index of the current-player t0 stone plane (source plane 0), derived from the
-    /// registry so a plane-reorder cannot silently shift it.
-    #[inline]
-    #[must_use]
-    pub fn cur_stone_slot(&self) -> usize {
-        self.kept_slot_of(0)
-    }
-
-    /// Slice index of the opponent t0 stone plane (source plane 8). Slot 4 for
-    /// the v6 family (kept [0,1,2,3,8,…]), slot 1 for the 4-plane live set
-    /// (kept [0,8,16,17]).
-    #[inline]
-    #[must_use]
-    pub fn opp_stone_slot(&self) -> usize {
-        self.kept_slot_of(8)
-    }
-
-    /// Kept-slot indices of the history planes (source 1,2,3 / 9,10,11) the
-    /// encoding retains. Empty for the 4-plane live set (history dropped).
-    #[must_use]
-    pub fn history_planes(&self) -> Vec<usize> {
-        const HISTORY_SRC: [usize; 6] = [1, 2, 3, 9, 10, 11];
-        self.kept_plane_indices
-            .iter()
-            .enumerate()
-            .filter(|(_, &p)| HISTORY_SRC.contains(&p))
-            .map(|(slot, _)| slot)
-            .collect()
-    }
-
-    /// Kept-slot indices of the turn-phase planes (source 16,17) the encoding
-    /// retains. Non-empty only for the 4-plane live set.
-    #[must_use]
-    pub fn turn_phase_planes(&self) -> Vec<usize> {
-        const TURN_PHASE_SRC: [usize; 2] = [16, 17];
-        self.kept_plane_indices
-            .iter()
-            .enumerate()
-            .filter(|(_, &p)| TURN_PHASE_SRC.contains(&p))
-            .map(|(slot, _)| slot)
-            .collect()
-    }
-
-    /// Wire-format signature for cross-encoding compatibility checks.
-    ///
-    /// Two encodings are wire-identical when they produce byte-identical on-disk replay rows.
-    /// Every registry field outside this tuple affects training semantics but not stored bytes.
-    #[inline]
-    #[must_use]
-    pub fn wire_signature(&self) -> (usize, usize, usize, bool, &'static str) {
-        (
-            self.n_planes,
-            self.board_size,
-            self.policy_logit_count,
-            self.has_pass_slot,
-            self.sym_table_id,
-        )
     }
 }
