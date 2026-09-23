@@ -415,3 +415,107 @@ none
 - tools/viewer and tools/dashboard JavaScript/CSS/HTML assets were not scanned (`--format python,rust`); docs/ and tests/fixtures/ are out of scope.
 - No member test was run beyond one torch-free probe: `.venv/bin/python -m pytest -q -p no:cacheprovider tests/data/test_sources_metrics.py tests/monitor/test_sink.py tests/monitor/test_game_record.py tests/monitor/test_rotation_on_resume.py tests/config/test_regime_parity.py tests/config/test_regime_parity_p2.py tests/config/test_every_key_has_consumer.py tests/config/test_every_key_has_consumer_p2.py` → 66 passed, 1 failed (test_game_record.py::test_the_production_pool_is_BUILT_with_a_real_recorder: `mantis.run` imports torch). Every other witness is torch-dependent or a cargo test not run under the shared CPU budget.
 - R8 crossings are flagged only where the arithmetic is obvious; each lane-B merge must re-derive `wc -l` on every touched file.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+method: own tools, not the scout's — scratchpad/rv-ldup/idx.py (every top-level def/class and method, docstrings
+stripped, own name blanked, `ast.unparse` sha1) + q.py/d.py (group, PZ-filter via PZ.md glob list, Δ = −(Σspan − max
+span per exact group) + one import per touched file + stated header); rs.py (Rust fn brace-match, comments and
+whitespace stripped, fn name blanked, difflib ratio vs the largest copy); sinks.py (own spy-sink census: emit body,
+`named` body, `__init__`). MATCH = identical after that normalisation; NEAR = ratio stated.
+
+| ID | verdict | lane | Δlines | note |
+|---|---|---|---|---|
+| 01 | CONFIRMED | C | −332 (re-derived) | NEAR 0.95–1.00: batch literal, a `res` temp, layout; no member has `mod common;` today |
+| 02 | CONFIRMED | C | −36 | MATCH ×8 incl. common/mod.rs (private `fn`, needs `pub`) |
+| 03 | CONFIRMED | C | −58 | `search` NEAR 0.978 (c_scale + 2 literals); stub_policy, r8_board MATCH |
+| 04 | CONFIRMED | B | −18 | NEAR 0.84; semantically `from_stones(s, p, mr, len, None)` for non-empty s; fn is 21 lines (730–750) |
+| 05 | CONFIRMED | C | −20 | MATCH: same 10-kwarg map ×3; no arch code moves (search_kind, validator already in schema) |
+| 06 | CONFIRMED | C | −8 | MATCH (4 fields); pipeline.py already imports 3 `mantis.config.resolve.*` modules |
+| 07 | CONFIRMED | B | −12 | MATCH, 17 lines identical |
+| 08 | CONFIRMED | B | −9 | NEAR 0.94: param name, regex constant, docstring |
+| 09 | AMENDED | B | −11 | NEAR 0.66/0.81; `closed_shards()[0][0]` is not behaviour-exact (see note) |
+| 10 | CONFIRMED | B | −10 | MATCH |
+| 11 | AMENDED | C | −3 | lane B→C: src/mantis/encoding/__init__.py is PZ (src/mantis/encoding/**) and the card names the paths |
+| 12 | AMENDED | C | −305 (re-derived; −313 if 8 existing `_drivable` imports extend) | clone and Δ hold; lane B→C: open card names the subject (BRIEF: card-named → C) |
+| 13 | CONFIRMED | B | −298 (re-derived) | superset, not MATCH: 4 variants use `e['event']`, 10 have no `named`; home is NEW in tests/_drivable.py |
+| 14 | CONFIRMED | B | −260 (re-derived) | 6 MATCH groups as stated; PZ member test_drawrate_abort_threading excluded |
+| 15 | AMENDED | B | −101 (was −145) | only exact groups count; the ≥0.95 "near" copies carry different timeouts / process classes |
+| 16 | CONFIRMED | B | −157 (re-derived) | 17 exact non-PZ members; see NEW-1 |
+| 17 | AMENDED | B | −69 (was −77) | test_train_import_dag.py::_top_level_imports is NEAR 0.95, not a member |
+| 18 | PENDING-PROBE | A | −19 (probe; scout −17) | torch-bound: both member modules error at collection at HEAD |
+| 19 | CONFIRMED | B | −15 | MATCH |
+| 20 | CONFIRMED | B | −32 | MATCH (28/29, 6/8) |
+| 21 | CONFIRMED | B | −64 (re-derived) | MATCH ×5 pairs; all 3 modules already import torch, so the torch-importing home adds no coupling |
+| 22 | CONFIRMED | B | −26 | MATCH (13/13/15, 6/7) |
+| 23 | CONFIRMED | B (test-floor move) | −28 | MATCH ×4; both copies import the resolver from tests/config/_consumer_resolver.py, so it is one check; floor file reads 4862 |
+| 24 | CONFIRMED | B | −21 | closures differ by 0 lines inside the span; third is the inline form |
+| 25 | CONFIRMED | B | −83 (re-derived) | 11 MATCH pairs |
+| 26 | CONFIRMED | B | −37 | 4 MATCH groups |
+| 27 | CONFIRMED | B | −52 | 5 MATCH groups; the child-parity oracle shares only its stub net/board |
+| 28 | AMENDED | B | −50 | 9 of 10 pairs MATCH; `_receipt_everything`/`_receipt_run_dir` NEAR 0.99 |
+| 29 | CONFIRMED | C | −63 (re-derived) | 6 MATCH groups (_Opening ×4, deterministic_algorithms, drawrate trio, _graph_step) |
+
+### Per-finding notes
+S-L-DUP-01 — CONFIRMED: `rs.py` over the 11 → ratios 0.949–1.000 vs target_wire_carry.rs; the diffs are the pop batch literal (8/4/LEAF_BATCH/PROD_LEAF_BATCH), `let res =` vs a direct push, and a trailing comma. `grep -c "^mod common;"` → 0 in all 11, so 395 − 40 + 11 + 11 + 1 = −332 holds. Not an oracle; PZ glob crates/mantis-selfplay/tests/**.
+S-L-DUP-02 — CONFIRMED: `rs.py` → one normalised hash (49ec7a3e) for all 8, common/mod.rs included.
+S-L-DUP-03 — CONFIRMED: `rs.py` → `search` 0.978 (the `c_scale` param vs 50.0 and 0.1 literals); stub_policy and r8_board identical. PZ glob crates/mantis-search/tests/**.
+S-L-DUP-04 — CONFIRMED: from_stones guards the bbox with `if !stones.is_empty()` and sets `last_move`; fwm_board does neither. It equals `from_stones(.., None)` only for non-empty input, as the scout says. The crate's own `from_stones_tests` are `cfg(all(test, feature = "test-fixtures"))`, which confirms the cfg gate is the only barrier. Δ: 21-line fn → 3 = −18.
+S-L-DUP-05 — CONFIRMED: `git grep -A13 "derived_hexg_visit_capacity("` → the same 10 kwargs in schema/core.py, run.py and worker_sweep.py. DUP question: `search_kind` is a search knob, not a model arch, and the validator already sits in the schema, so nothing arch-specific moves. tests/test_run_buffer_route.py::_derived stays as the oracle (K-D17 spot-check below).
+S-L-DUP-06 — CONFIRMED: idx key a658a5899e shared by DrainCapsSpec and DrainCaps; `grep "^from mantis.config" eval/pipeline.py` → eval_posture, fused_graph_caps, inference_batching.
+S-L-DUP-07 — CONFIRMED: `diff` of lines 225–241 against 490–506 (indent stripped) → identical.
+S-L-DUP-08 — CONFIRMED: `diff` of the two `sed` ranges → param name (`record_dir` vs `log_dir`), `_SHARD_RE` vs `_SEGMENT_RE`, docstring.
+S-L-DUP-09 — AMENDED (claim): first_closed_shard returns at the first `shard_closed` row and never parses `bytes`. closed_shards parses `int(row.get("bytes", -1))` on EVERY row, so a malformed `bytes` field raises ValueError/TypeError where the halt read returns a path today. A shared reader needs that edge settled (or a reader that yields rows lazily). Lane B unchanged.
+S-L-DUP-10 — CONFIRMED: idx key a9ebb57faf for both; the test already imports from mantis.train.lifecycle.signals (line 33).
+S-L-DUP-11 — AMENDED: `git grep "hashlib.sha256(.*read_bytes())" -- src tools` → the 4 src sites plus tools/strix_follower.py, tools/select_balanced_book.py and tools/ci_gates/preflight_mint_parent.py (PZ), none of them card-named. Lane C for two reasons: src/mantis/encoding/__init__.py matches the PZ glob src/mantis/encoding/** (registry handshake, gate 8), and CARD-MECHANISM-SWEEP names the paths. worker_sweep.py::_sha256 keeps its OSError→None wrapper.
+S-L-DUP-12 — AMENDED (lane only): `q.py` → exactly the 11 exact groups and 27 members named; d.py → 326 removed over 21 files → −305. Per BRIEF ("a ruling or open card names the symbol/path" → C), CARD-MECHANISM-SWEEP ("the 21 remaining private `_Pool`/`_Buffer` fakes") makes this C. The card counts 21 fakes, the scout counts 74 classes. The dispatcher may keep B if card-ordered work is exempt.
+S-L-DUP-13 — CONFIRMED: `sinks.py` → 40 non-PZ top-level classes over 40 files, 352 lines; −352 + 14 + 40 = −298. Emit bodies: 39 `dict(event|payload)` plus 1 raw append (test_eval_round_observability, correctly excluded). Two amendments to the wording:
+- `named` has 3 forms: 26 `.get('event')`, 4 `e['event']` (KeyError on an event without the key; the superset silently skips it) and 10 absent.
+- tests/_drivable.py holds NO SpyEventSink today (`grep -n "class SpyEventSink" tests/_drivable.py` → none). The superset lives in tests/{train,monitor}/conftest.py, which are 2 of the 40.
+S-L-DUP-14 — CONFIRMED: idx groups `_RunnerStats` ×17 (16 + PZ), `_filled_hexg` ×13 (12 + PZ), `_fake_run_safety` ×5, `_mirrored` ×4, `_Trainer` ×3 and ×2. test_cluster_stat_wiring.py::_RunnerStats is NEAR 0.96 and correctly not listed. d.py → 282 removed over 22 files → −260.
+S-L-DUP-15 — AMENDED (Δ): the exact groups are `_promotion_hooks` ×4, `fake_mp` ×3, `_bounded` ×3, `_tiny_model` 2+2, FakeClock ×2 and `_FakeCtx` ×2 (reason_routes, terminal_eval_rc) → 111 removed, 7 files, −101. The "≥0.95" copies are not clones:
+- `_eval_cfg` defaults differ in `round_timeout_sec` (0.3 / 5.0 / 0.05) and `worker_kill_grace_sec`, which are the values the timeout-bound suites exist to set.
+- escalate's `_FakeCtx` builds `_RealisticFakeProcess`.
+- The `_FakeProcess` copies differ in their `join` signature.
+Merging those needs parameters (lane B, not counted).
+S-L-DUP-16 — CONFIRMED: 17 exact non-PZ members; PZ test_checkpoint_conformance and test_resume_wiring_integration fall in the same exact groups and are excluded as stated. d.py → −157.
+S-L-DUP-17 — AMENDED (Δ): exact groups `_code_text` ×4, `_called_name` ×3, and pairs of `_top_level_imports`, `_enclosing_defs`, `_call_sites` and `_root_name` → 15 members, 8 files, 80 removed → −69. tests/train/test_train_import_dag.py::_top_level_imports is NEAR 0.95 vs test_monitor_census.py.
+S-L-DUP-18 — PENDING-PROBE (torch-bound), probe in scratchpad/wt/rv-ldup-18:
+- Edit: deleted both fixtures + `import signal` (partial).
+- `python -S -c "import mantis"` → ok. `pytest --collect-only -q -m ''` → "2289 tests collected, 167 errors" before and after; ERROR lines identical (`diff` of `grep ^ERROR`). Both member modules are among the 167: they import mantis.run → torch.
+- `ruff check` on both → clean; r8_header_gate → 0 stale (partial goes 317 → 307, keeps its header); `cargo check --workspace --all-targets --locked` → Finished.
+- `git diff --stat` → 19 deletions (10 + 9, blank lines included).
+- Reasoning: the root autouse `_restore_signal_dispositions` is function-scoped and outer (conftest before module autouse), so the module copies are strictly nested. Zero effect is sound, but no member test can run here.
+S-L-DUP-19 — CONFIRMED: idx key 9956133785 (8/7 lines).
+S-L-DUP-20 — CONFIRMED: idx keys bdb789096b and 0164c2034a; 34 removed + 2 imports = −32. With -18, partial drops under 300, so its header goes.
+S-L-DUP-21 — CONFIRMED: 5 pair keys; d.py −64. The home tests/selfplay/_fused_graph_harness.py imports torch, and all three members already do (grep).
+S-L-DUP-22 — CONFIRMED: keys 4b4eccd978 (×3) and 8cd17886db (×2). The drain-parity oracle (PZ-6 push_dense) is untouched. No ruling or card cites the member files (`git grep` over RULINGS/CARDS/STATE/LAWS → none).
+S-L-DUP-23 — CONFIRMED: the name-blanked keys match for all 4 twins, and `_consumer_resolver` is imported by both files, so the p2 resolver self-test re-checks the same function. The contract doc's "mutation self-test in both copies" is test_bijection_bites_on_a_real_schema_mutation, present in both and untouched. test_count_floor.txt → 4862. Direction note: the p2 file calls itself the SC-A4 prereg oracle and a "rewrite of test_regime_parity.py"; deleting the originals' O9–O11 instead is equally valid and is the dispatcher's pick.
+S-L-DUP-24 — CONFIRMED: `diff <(sed -n 83,105p) <(sed -n 203,225p)` → only line 23 differs, and it lies outside the closure. The third copy (lines 183–195) is the same serve step inline.
+S-L-DUP-25/26/27 — CONFIRMED: q.py exact keys as listed. 25 → 103 removed / 20 files; 26 → 45 removed; 27 → 59 removed.
+S-L-DUP-28 — AMENDED: 9 MATCH keys. tests/diagnostics/test_mirror_receipts.py::_receipt_everything vs tests/tools/test_preflight_start_halts.py::_receipt_run_dir is NEAR 0.99, not identical.
+S-L-DUP-29 — CONFIRMED: 6 exact keys; 76 removed + 10 imports + 3 header = −63.
+
+### Top-10 by Δ, re-derived (d.py / rs.py; copies removed minus imports and headers)
+01 −332 ✓ · 12 −305 ✓ · 13 −298 ✓ · 14 −260 ✓ · 16 −157 ✓ · 15 −145 → **−101** · 25 −83 ✓ · 17 −77 → **−69** · 21 −64 ✓ · 29 −63 ✓.
+Revised raised sum ≈ −2 196 (was ≈ −2 248; still an upper bound, and the import lines overlap).
+
+### DELIBERATE spot-checks (4)
+- K-D8 holds: queue_fuse_reserve_parity.rs line 12 reads "The reference is a LOAD-BEARING transcription".
+- K-D16 holds, and it is not a clone at all: test_worker_sweep_reachability.py says check_import_dag "walks top-level statements only, and this walk must not".
+- K-D17 holds: `_derived` is the expected value in 4 asserts against `_select_buffer(...).visit_capacity`.
+- K-D23 holds: `rs.py` → drain_shutdown and search_seam_fatal producers score 0.75/0.79 against the canonical; they add `after: ThenDo, parked: Arc<AtomicBool>` and mock inference.
+
+### Overlaps with area scouts (same subject; for the cross-check, not double-counting)
+01/02 ↔ S-A-RUST-2-09, -10, -17, S-A-RUST-3-18 · 03 ↔ S-A-RUST-1-18 · 09 ↔ S-A-TOOLS-2-11 · 10 ↔ S-A-TESTS-7-05 ·
+11 ↔ S-A-CORE-1-20/-21/-32, S-A-CORE-3-14, S-A-TOOLS-2-12/-18 · 12/14/25 ↔ S-A-TESTS-7-01, S-A-TESTS-1-05, S-A-TESTS-2-03/-07,
+S-A-TESTS-4-21 · 13 ↔ S-A-TESTS-1-06, S-A-TESTS-2-01/-04, S-A-TESTS-5-21, S-A-TESTS-6-02, S-A-TESTS-7-08 · 15 ↔ S-A-TESTS-6-02/-13 ·
+16 ↔ S-A-TESTS-2-08, S-A-TESTS-4-20 · 17 ↔ S-A-TESTS-2-10, S-A-TESTS-3-06/-15, S-A-TESTS-7-04 · 18 ↔ S-A-TESTS-7-03, S-A-TESTS-2-16 ·
+19 ↔ S-A-TESTS-2-16 · 20 ↔ S-A-TESTS-7-02 · 21 ↔ S-A-TESTS-5-04/-20, S-A-TESTS-8-05 · 23 ↔ S-A-TESTS-4-01/-02 · 24 ↔ S-A-TESTS-5-05 ·
+26 ↔ S-A-TESTS-1-06, S-A-TESTS-6-02 · 27 ↔ S-A-TESTS-5-11, S-A-TESTS-6-04 · 29 ↔ S-A-TESTS-1-19, S-A-TESTS-8-11/-14.
+The "cross-test imports are barred" premise is refuted independently in S-A-TESTS-1/-2/-4/-7 and REVIEW2 G3.4. Bare-name helper modules are live: `import _microbatch_harness` ×28, `from _drivable import` ×15, `import _fused_graph_harness` ×7. So no proposed home is blocked by R5.
+
+### Missed by the scout
+NEW-1 | DUP | B | tests/train/conftest.py::_make_{eval,selfplay,monitor}_block and tests/train/test_launch_path_smoke.py::_{eval,selfplay,inference,monitor}_block are NEAR 0.95–1.00 to the S-L-DUP-16 builders (q.py). Not counted; they ride -16 on contact.
+
+### Tally: raised 29 | confirmed 22 | amended 6 (09, 11, 12, 15, 17, 28) | refuted 0 | pending 1 (18) | architect 0
