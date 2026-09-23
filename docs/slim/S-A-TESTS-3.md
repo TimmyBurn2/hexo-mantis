@@ -168,3 +168,95 @@ depends: a tools-slice decision to retire `tools/strix_follower.py::UNITS["ruler
 - Runtime behaviour of the 5 torch-dependent modules (not collectable here) and of every integration row. Torch-free status is also order-dependent in this venv (test_select_balanced_book collects in the full-slice run but errors alone), so it was not relied on.
 - Run-named symbols (`RUN5 = configs/run6.yaml` and `_mint_run5_*` in the process file; the analyzer tests' synthetic "run9" ids; configs named per test). CARD-MECHANISM-SWEEP carries them "on contact". Renames have no Δ, so they are not raised.
 - Placement: test_bridge_cache_keys.py and test_law13_no_target_cpu_in_committed_config.py test crates/pyproject/build files, not tools. Moving them has no Δ.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| 01 | AMENDED | B | −78 (−67 once S-A-TOOLS-2-01 lands) | subject mis-states one loader; overlaps 14 by one loader; R5 does not block a bare-name helper |
+| 02 | AMENDED | C (3 files) / B (15 files) | −106 total: ≈ −25 C, ≈ −81 B | only the two frozen oracles + the PZ-1 file are protected; overlaps 09 by 6 lines |
+| 03 | CONFIRMED | B | −59 | torch-bound at fixture setup; cannot be shown green here |
+| 04 | CONFIRMED | B | −36 | 10 copies re-derived; 15 would remove one `external` copy |
+| 05 | CONFIRMED | A | −5 (probe: 1 insertion, 6 deletions) | probe green on every step |
+| 06 | CONFIRMED | B | −9 (slice), −28 (tree) | token sets equivalent; tests-root helper is precedented |
+| 07 | CONFIRMED | C | −48 | bodies differ in more than run-id tags, but are equivalent in effect; R43 adjudication |
+| 08 | CONFIRMED | C | −33 | coverage is transitive (two tests together); torch-bound |
+| 09 | CONFIRMED | C | −6 | frozen oracle |
+| 10 | AMENDED | B | −8 | not PZ, no ruling or card cites it; re-aim is not net 0 (see note) |
+| 11 | CONFIRMED | C | −42 | STATE names both files; the XDG defect is confirmed |
+| 12 | AMENDED | B | −35 | not PZ, no governance cite; a fold within one file |
+| 13 | CONFIRMED | C | −14 | tier_declaration row under tools/ci_gates/** |
+| 14 | CONFIRMED | C | 0 (counted in S-A-TOOLS-2-01's −1 793) | no double count |
+| 15 | AMENDED | C | −39 | two fixtures lose their only users |
+
+### Per-finding notes
+S-A-TESTS-3-01 — AMENDED: own AST scan (top-level non-test defs calling `spec_from_file_location`, tests/tools) -> 35 helpers in 34 files, 33 outside conftest, matching the scout. Three changes:
+- `test_ladder_backends::_minimal_config` loads tests/train/_warmstart_config.py, not a tools/ module. The mechanism is the same, so the helper still takes it.
+- `test_audit_bootstrap_corpus::_load_tool` (12-line span) sits inside the file that 14/S-A-TOOLS-2-01 deletes. If that lands, 01 nets about −67.
+- S-A-TOOLS-2-07's −51 counts only the tools/ copies ("AST spans 13+13+12+13+12"), so `test_probe1::_package` is not double-counted.
+
+On placement: pyproject sets no `importmode`, so pytest runs in prepend mode. CALLERS §8 already lists 13 bare-name test helpers (tests/tools/_ladder_stub.py among them), and none writes sys.path. So R5 does not block a tests/tools helper module, and no REVIEW-2 note touches test loaders (`git grep REVIEW-2 docs/slim` -> seam items only). Lane B, not ARCHITECT.
+
+S-A-TESTS-3-02 — AMENDED (lane split): PZ.md names only test_drawrate_arming_surface_named_failure.py among tests/tools (`grep tests/tools PZ.md`). tools/ci_gates/** is the gates' subject, not these test files. `git grep` of docs/governance (archive excluded) for each gate self-test name -> 0, except test_gate_vacuity, which CARD-GATE17-LOCAL-COUPLING cites for an assertion, not for its loader.
+- Lane C: only test_preflight_mint.py (the census holder, "byte-frozen" per the test_preflight_parent_census.py docstring and R43), test_preflight_mint_process.py (R310 "Grants the frozen edit") and the PZ-1 file. Their loader spans are 14 + 7 + 7.
+- Lane B: the other 15 files ride 01's helper.
+- Overlap: the 14-line test_preflight_mint.py::_load_tool span contains 09's 6-line RED-anchor block.
+
+S-A-TESTS-3-03 — CONFIRMED: `diff` of the three `frontier` fixtures -> they differ only in the sys.modules name. The `base` fixtures differ only in naming configs/run6.yaml or configs/run7.yaml, and both configs carry `c_scale: 1.0` / `q_rescale: true` (grep). `pytest` on the trio -> 9 errors, ModuleNotFoundError torch (mantis.arena.regime -> util/device.py) at fixture setup, so the merged module cannot be shown green in this venv.
+
+S-A-TESTS-3-04 — CONFIRMED: own AST scan of module fixtures named reader/html/external -> dashboard.reader ×5, dashboard.html ×2, dashboard.external ×3; viewer.reader, viewer.html and analyzer.html stay local. The spans with blanks sum to 54, matching the scout.
+
+S-A-TESTS-3-05 — CONFIRMED: `git grep -n -w load_dashboard_package` (whole tree) -> the conftest def and its one call, plus docs/slim census text. In worktree scratchpad/wt/S-A-TESTS-3-rev-05 I dropped the def and pointed the fixture at `load_tools_package("dashboard")`. Probe results:
+- `-S` import mantis: ok.
+- collect-only: 2289 collected / 167 errors. The ERROR lines diff as identical to a HEAD run of the same recipe (167).
+- dashboard tests: 87 passed, 1 skipped.
+- gate 15: green.
+- gate 14 comment_lint: GREEN.
+- cargo check: Finished.
+- `git diff --stat`: 1 insertion(+), 6 deletions(-).
+- The worktree was removed. conftest.py stays at 224 lines, so it carries no R8 header.
+
+S-A-TESTS-3-06 — CONFIRMED: `git grep "^def _code_text" tests` -> 5 hits. The skip-token extraction is equivalent in all five: tests/config/test_armed_abort_manifest.py adds FSTRING_MIDDLE conditionally, and the others use `getattr(..., -1)`.
+- A tests-root helper is precedented: tests/config/test_coordinator_knobs_wiring.py does `from _drivable import`.
+- The tree-wide variant touches a file listed in the frozen census's PHASE_P_TEST_FILES. That census sweeps banned tokens only, so an import does not trip it.
+
+S-A-TESTS-3-07 — CONFIRMED (evidence amended): an AST unparse compare of the nine symbols ->
+- identical: `_P`, `_STEP_SEC`, `_SAMPLE_TS`, `_THRESHOLD`.
+- DIFF: `_SyncTarget`, `_real_syncs`, `_model_samples`, `_stream`, `_assertions`. `_C == 1`, so the default cadence is equal. `_real_syncs` also differs in the read-back: process parses the JSONL inline, while mint uses `_read`. The effect is equivalent.
+- The span is 1326–1375 (50 lines), matching the scout. It stays lane C: both files are frozen, so this goes to R43 adjudication.
+
+S-A-TESTS-3-08 — CONFIRMED: read the rc_46 and rc_48 bodies, test_the_failure_code_table_is_the_designs_table and test_armed_abort_manifest::test_the_terminal_eval_broken_row_is_required_and_imports_its_exit_code.
+- Coverage is TRANSITIVE: rc_46 pins the literal `(46, 47, 48)`, and the manifest test pins the authority `== 48`. Only rc_48 binds the TOOL tuple to the heartbeat constant in one assertion.
+- The file is torch-bound (it errors at collection in this venv), so this cannot be run here.
+
+S-A-TESTS-3-09 — CONFIRMED: `sed -n 40,60p tests/tools/test_preflight_mint.py` -> the `if not TOOL_PATH.is_file(): raise ModuleNotFoundError("RED anchor … IMPL owes C-2 …")` block, 6 lines. The tool is tracked. This is R310's "red-by-design is not a posture" shape, in a frozen oracle.
+
+S-A-TESTS-3-10 — AMENDED (lane C->B; defect CONFIRMED): registry_gate.sh `REG="crates/mantis-encoding/src/registry.toml"`. My scratchpad probe ran the gate against two plants:
+- crate-root plant: `gate 8: FAIL — expected registry at …/src/registry.toml … absent.` rc 1. That is the ABSENT arm.
+- src/ plant: the gate passes the existence check, then fails in the handshake on the tmp tree (`--no-sync` warning + Traceback), rc 1.
+
+`pytest tests/tools/test_registry_gate.py` -> 2 passed. `git grep "not yet ported"` -> only the test.
+- Why not C: `git grep test_registry_gate docs/governance` -> 0. The file is not in PZ, and CLAUDE.md's "its own LAW-07 mutation self-test" is the script's inline mutated-registry leg, not this file.
+- A re-aim is NOT net 0: an `rc != 0` assertion would pass on the tmp tree's environmental failure, so a real present-arm row needs a fixture. That is a design choice, so lane B (with a test-floor move if deleted).
+
+S-A-TESTS-3-11 — CONFIRMED: the three argv lists are identical (16 / preflight_budget_sec / 120). Only armed_smoke passes `env={…XDG_STATE_HOME…}`. pfc_cards' `_run_tool` and child_convergence's fixture inherit os.environ.
+- tests/conftest.py's XDG redirect is inside the non-autouse `preflight_stamped` fixture.
+- preflight_mint.py::_run_preflight calls `clear_stamp`, and `_stamp_pass` calls `write_stamp`. The XDG DEFECT is CONFIRMED.
+- STATE.md already records the symptom (the parent's stamp write failing read-only in a sandbox; both files "re-run GREEN … with a writable XDG_STATE_HOME") without naming it a defect.
+- Lane C also holds because STATE cites both files and armed_smoke is PZ-4's consumer.
+
+S-A-TESTS-3-12 — AMENDED (lane C->B): read `_run_gate` and `_repo_with`/`_gate` -> equivalent up to commit messages. `pytest tests/tools/test_artifact_gate.py` -> 13 passed. The file is not in PZ, and `git grep test_artifact_gate docs/governance` -> 0, so this is an ordinary within-file DUP fold (lane B). AST spans 24 / 22 / 17 / 3 match the scout.
+
+S-A-TESTS-3-13 — CONFIRMED: `git grep -l MANTIS_DASH_FIXTURE_EVENTS` -> the test, docs/design/observatory_design.md and docs/slim only. The dashboard run above SKIPPED it. tier_declaration.txt row 85 is `skip`. The file is 370 lines by `wc -l` and stays over 300 after the cut, so its R8 header stays.
+
+S-A-TESTS-3-14 — CONFIRMED: S-A-TOOLS-2.md 01 "Δlines: −1 793 (`wc -l` tool 1 124 + test file 654; A09 test AST span 15)". The test file is inside that figure, so its Δ is NOT added here. Remember that 01's loader row for this file vanishes with it.
+
+S-A-TESTS-3-15 — AMENDED (Δ): the AST spans are 9 + 16. `grep` of the file shows that the `follower` fixture (lines 27–29) and the `external` fixture (lines 37–41) are used ONLY by the two tests, so both become orphans. The Δ is ≈ −39 (27 + 5 + 7 with blanks), and 04's `external` count drops to 2.
+- `pytest` on the file -> passed (it was part of an 11-passed batch).
+- CARDS.md still carries CARD-E1-RULER-R6, and STATE records the cell as RUN (0.080) with "strix @ r8" as a unit qualifier. Retirement is the card's decision, so this stays lane C.
+
+### Missed by the scout (optional, max 5)
+- NEW-1 | DOC(PZ gap) | C — PZ.md's "still frozen" table omits tests/tools/test_preflight_mint.py and test_preflight_mint_process.py. Both are frozen by R43/R310 and the in-tree "byte-frozen oracle" text, so the dispatcher should add them to PZ-3.
+- NEW-2 | DEFECT — tests/tools/test_registry_gate.py's module docstring says "With no registry, the armed-stub path exits 0". The file's own test_hard_fail_when_registry_absent asserts the opposite, so the docstring is stale.
+
+### Tally: raised 15 | confirmed 10 | amended 5 | refuted 0 | pending 0 | architect 0
