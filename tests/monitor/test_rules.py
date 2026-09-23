@@ -41,14 +41,12 @@ def test_entropy_collapse_boundary() -> None:
 
 
 def test_selfplay_entropy_collapse_boundary_and_nonfinite_guard() -> None:
-    """O-21 — selfplay entropy fires below collapse_threshold_nats (1.5); NaN/inf are ignored (isfinite guard); the canonical field wins over the legacy fallback."""
+    """O-21 — selfplay entropy fires below collapse_threshold_nats (1.5); NaN/inf are ignored (isfinite guard)."""
     cfg = MonitorConfig()
-    assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": 1.49}, cfg) is not None
-    assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": 1.5}, cfg) is None
-    assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": float("nan")}, cfg) is None
-    assert check_selfplay_entropy_collapse({"selfplay_model_entropy_batch": float("inf")}, cfg) is None
-    # legacy fallback field
-    assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": 1.0}, cfg) is not None
+    assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": 1.49}, cfg) is not None
+    assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": 1.5}, cfg) is None
+    assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": float("nan")}, cfg) is None
+    assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": float("inf")}, cfg) is None
 
 
 def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
@@ -82,7 +80,7 @@ def test_headless_emitter_routes_training_alert_events_in_rule_order() -> None:
     payload = {
         "event": "training_step", "step": 500,
         "policy_entropy": 0.5,                       # < 1.0 → entropy_collapse
-        "selfplay_model_entropy_batch": 1.0,         # < 1.5 → selfplay_entropy_collapse
+        "policy_entropy_selfplay": 1.0,              # < 1.5 → selfplay_entropy_collapse
         "grad_norm": 25.0,                           # > 10.0 → grad_norm_spike
         "loss_total": 4.0,                           # window → 1,2,3,4 strictly up
     }

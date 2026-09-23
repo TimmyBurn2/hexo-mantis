@@ -3,10 +3,10 @@
 Two instruments, one class: something that never ran was indistinguishable from something that
 ran and found nothing.
 
-`check_selfplay_entropy_collapse` reads `selfplay_model_entropy_batch`, which no producer in
-`src/` writes, and falls back to `policy_entropy_selfplay`, which has none either — so the rule
-has never once been able to fire, while sitting in `WARN_RULE_NAMES` with no per-rule skip
-count. `mantis.encoding._registry_sha_handshake` returned after an INFO line when no on-disk
+`check_selfplay_entropy_collapse` once read a key no producer in `src/` writes and could not
+fire, while sitting in `WARN_RULE_NAMES` with no per-rule skip count; it now reads the live
+`policy_entropy_selfplay`, and every declared input must be a key `training_step` publishes.
+`mantis.encoding._registry_sha_handshake` returned after an INFO line when no on-disk
 `registry.toml` was found, and `mantis.run` installs no logging handler, so lastResort drops
 INFO; the skip means the stale-`.so` guard DID NOT RUN, a statement about the run's provenance.
 """
@@ -51,8 +51,32 @@ def test_every_WARN_rule_declares_the_input_its_verdict_depends_on() -> None:
     assert set(rules.WARN_RULE_SKIPS) == set(rules.WARN_RULE_NAMES)
 
 
+def _training_step(**measured: float) -> dict[str, Any]:
+    """A payload from the REAL `training_step` builder, so a rule reads the producer's own keys."""
+    from mantis.train.events import emit_training_step_event
+
+    loss_info = {"loss": 1.0, "policy_loss": 0.6, "value_loss": 0.4, **measured}
+    return emit_training_step_event(1, loss_info, _Sink())
+
+
+def test_every_declared_WARN_input_is_a_key_training_step_publishes() -> None:
+    """A declared input no producer writes is a phantom: the rule reads it and can never fire."""
+    declared = {key for keys in rules.WARN_RULE_INPUTS.values() for key in keys}
+    assert sorted(declared - set(_training_step())) == []
+
+
+def test_the_selfplay_rule_fires_on_the_producers_key_and_on_no_other() -> None:
+    """The rule reads the LIVE key; the same reading under any other name is not a measurement."""
+    payload = _training_step(policy_entropy_selfplay=0.5)
+    assert any("selfplay entropy" in m for m in _run(payload)), "the live reading did not fire"
+    renamed = {("selfplay_model_entropy_batch" if k == "policy_entropy_selfplay" else k): v
+               for k, v in payload.items()}
+    assert not any("selfplay entropy" in m for m in _run(renamed))
+    assert rules.WARN_RULE_SKIPS["selfplay_entropy_collapse"] == 1
+
+
 def test_the_selfplay_entropy_rule_counts_itself_as_UNABLE_TO_RUN() -> None:
-    """THE PIN. A production `training_step` payload carries neither of this rule's inputs."""
+    """THE PIN. A payload whose tail did not measure the selfplay entropy carries it as None."""
     _run({"loss_total": 1.0, "grad_norm": 0.5, "policy_entropy": None,
           "policy_entropy_selfplay": None, "step": 1})
     assert rules.WARN_RULE_SKIPS["selfplay_entropy_collapse"] == 1
@@ -69,7 +93,7 @@ def test_the_count_ACCUMULATES_so_a_permanently_dead_rule_is_visible() -> None:
 def test_a_rule_WITH_its_input_is_not_counted_as_skipped() -> None:
     """The control: a rule that ran and found nothing wrong must not be counted absent, or
     the number stops meaning anything."""
-    _run({"loss_total": 1.0, "grad_norm": 0.5, "selfplay_model_entropy_batch": 3.0, "step": 1})
+    _run({"loss_total": 1.0, "grad_norm": 0.5, "policy_entropy_selfplay": 3.0, "step": 1})
     assert rules.WARN_RULE_SKIPS["selfplay_entropy_collapse"] == 0
 
 

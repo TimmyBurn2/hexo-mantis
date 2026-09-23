@@ -35,7 +35,7 @@ WARN_RULE_NAMES: tuple[str, ...] = (
 #: R355(e) (B-4): the graph step now publishes `policy_entropy` and `policy_entropy_selfplay`.
 WARN_RULE_INPUTS: dict[str, tuple[str, ...]] = {
     "entropy_collapse": ("policy_entropy",),
-    "selfplay_entropy_collapse": ("selfplay_model_entropy_batch", "policy_entropy_selfplay"),
+    "selfplay_entropy_collapse": ("policy_entropy_selfplay",),
     "grad_norm_spike": ("grad_norm",),
     "loss_increase_window": (),
     "nonfinite_loss": ("loss_total",),
@@ -68,12 +68,9 @@ def check_entropy_collapse(payload: Mapping[str, Any], cfg: MonitorConfig) -> st
 def check_selfplay_entropy_collapse(
     payload: Mapping[str, Any], cfg: MonitorConfig
 ) -> str | None:
-    """Selfplay-stream entropy below ``collapse_threshold_nats``, preferring the canonical
-    ``selfplay_model_entropy_batch`` over the legacy ``policy_entropy_selfplay``. Non-finite values
-    are IGNORED: a NaN entropy is a missing measurement, not a collapse."""
-    ent_sp = payload.get(
-        "selfplay_model_entropy_batch", payload.get("policy_entropy_selfplay")
-    )
+    """``policy_entropy_selfplay`` below ``collapse_threshold_nats``. Non-finite values are
+    IGNORED: a NaN entropy is a missing measurement, not a collapse."""
+    ent_sp = payload.get("policy_entropy_selfplay")
     if (
         ent_sp is not None
         and isinstance(ent_sp, (int, float))
