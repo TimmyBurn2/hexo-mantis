@@ -19,7 +19,7 @@ use mantis_search::{QSigma, SearchKind};
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
 
-use super::{GameResultRow, WorkerResultRow};
+use super::GameResultRow;
 
 /// Per-worker geometry scalars resolved ONCE from the `RegistrySpec` at spawn
 /// time (D2). `Copy` (~32 B); passed by value to `run_worker_thread` and
@@ -61,14 +61,11 @@ pub(crate) struct ExplorationFlags {
     pub(crate) dirichlet_enabled: bool,
 }
 
-/// Per-worker channel/queue bundle — the inference-queue producer handles the
-/// worker submits to, plus the shared result queues it drains into. Replaces the
-/// frozen `WorkerChannels` (which bundled the single `InferenceBatcher`); the
-/// dense/graph inference queues are now the two disjoint pure-Rust handles (D4).
+/// Per-worker channel/queue bundle — the graph inference queue the worker submits to, plus the
+/// shared result queues it drains into.
 #[derive(Clone)]
 pub(crate) struct WorkerChannels {
     pub(crate) graph_queue: GraphQueue,
-    pub(crate) results_queue: Arc<Mutex<VecDeque<WorkerResultRow>>>,
     pub(crate) recent_game_results: Arc<Mutex<VecDeque<GameResultRow>>>,
     /// Graph-position results queue.
     pub(crate) graph_results_queue: Arc<Mutex<VecDeque<GraphRecord>>>,

@@ -1,6 +1,5 @@
-//! Finalize phase (WP6 D1) — `finalize_game_graph` (frozen `worker_loop/inner.rs:1624/1767`,
-//! dispatch branch `:571`). The in-src ply-cap unit test exists because `outcome` lives on
-//! `WorkerResultRow`, not `GameResultRow`, so the drain tuple cannot observe the value branch.
+//! Finalize phase — `finalize_game_graph` (frozen `worker_loop/inner.rs:1624/1767`, dispatch
+//! branch `:571`).
 //!
 //! Ports the §178 ply-cap value branch VERBATIM: the `winner == None` arm pays `ply_cap_value`
 //! when `terminal_reason == 2` else `draw_reward`; `value_valid` is the DRAW-MASK

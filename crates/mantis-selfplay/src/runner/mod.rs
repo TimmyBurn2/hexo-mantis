@@ -25,20 +25,6 @@ use mantis_encoding::{all_specs, lookup, RegistrySpec};
 use crate::queues::GraphQueue;
 use crate::replay::hexg::GraphRecord;
 
-/// Per-row training tuple produced by self-play workers. The P-04 pin destructures this carrier
-/// exhaustively, so a carrier-type change bites.
-pub type WorkerResultRow = (
-    Vec<f32>,
-    Vec<f32>,
-    Vec<f32>,
-    f32,
-    usize,
-    Vec<u8>,
-    bool,
-    u16,
-    u8,
-);
-
 /// One searched position of a sampled game: `(ply, root_value W/N, root_raw — Gumbel only,
 /// children as (cell, visits, q in the ROOT's view, prior) for every VISITED root child)`.
 pub type PositionStats = (u32, f32, Option<f32>, Vec<((i32, i32), u32, f32, f32)>);
@@ -112,7 +98,6 @@ pub struct SelfPlayRunner {
 
     graph_queue: GraphQueue,
 
-    results: Arc<Mutex<VecDeque<WorkerResultRow>>>,
     graph_results: Arc<Mutex<VecDeque<GraphRecord>>>,
     recent_game_results: Arc<Mutex<VecDeque<GameResultRow>>>,
 
@@ -288,7 +273,6 @@ impl SelfPlayRunner {
             config,
             visit_capacity,
             graph_queue,
-            results: Arc::new(Mutex::new(VecDeque::new())),
             graph_results: Arc::new(Mutex::new(VecDeque::new())),
             recent_game_results: Arc::new(Mutex::new(VecDeque::new())),
             running: Arc::new(AtomicBool::new(false)),
@@ -389,12 +373,6 @@ impl SelfPlayRunner {
     // Narrow pub read/drain faces the bridge producer pyclasses build over. None of these mutate
     // self beyond the drain queues they own.
 
-    /// Drain and return all buffered training rows since the last call, in FIFO push order.
-    pub fn drain_training_rows(&self) -> Vec<WorkerResultRow> {
-        let mut rows = self.results.lock().expect("results lock poisoned");
-        rows.drain(..).collect()
-    }
-
     /// Drain and return all buffered graph training records since the last call, FIFO.
     pub fn drain_graph_records(&self) -> Vec<GraphRecord> {
         let mut rows = self
@@ -480,7 +458,7 @@ mod seam_roundtrip {
 
     use crate::replay::hexg::GraphRecord;
 
-    use super::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig, WorkerResultRow};
+    use super::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig};
 
     /// Minimal valid runner: only the identity key is required, and no worker is started.
     fn runner() -> SelfPlayRunner {
@@ -489,53 +467,6 @@ mod seam_roundtrip {
             ..Default::default()
         })
         .expect("gnn_axis_v1 must resolve via the registry")
-    }
-
-    #[test]
-    fn drain_training_rows_returns_pushed_rows_then_empties() {
-        let r = runner();
-        assert!(
-            r.drain_training_rows().is_empty(),
-            "fresh runner has no training rows"
-        );
-
-        let row0: WorkerResultRow = (
-            vec![1.0, 2.0],
-            vec![3.0],
-            vec![0.5],
-            1.0,
-            7,
-            vec![9u8],
-            true,
-            4u16,
-            1u8,
-        );
-        let row1: WorkerResultRow = (
-            vec![-1.0],
-            vec![],
-            vec![0.25, 0.75],
-            -0.1,
-            3,
-            vec![],
-            false,
-            2u16,
-            0u8,
-        );
-        {
-            let mut q = r.results.lock().expect("results lock poisoned");
-            q.push_back(row0.clone());
-            q.push_back(row1.clone());
-        }
-
-        assert_eq!(
-            r.drain_training_rows(),
-            vec![row0, row1],
-            "drain returns the FIFO-ordered private rows"
-        );
-        assert!(
-            r.drain_training_rows().is_empty(),
-            "a second drain is empty (the queue was drained, not copied)"
-        );
     }
 
     #[test]

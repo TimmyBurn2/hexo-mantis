@@ -124,7 +124,6 @@ impl SelfPlayRunner {
         };
         let channels_proto = WorkerChannels {
             graph_queue: self.graph_queue.clone(),
-            results_queue: self.results.clone(),
             recent_game_results: self.recent_game_results.clone(),
             graph_results_queue: self.graph_results.clone(),
         };

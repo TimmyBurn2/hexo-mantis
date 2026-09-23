@@ -37,7 +37,7 @@ use super::search_drive::{
     play_one_move, FatalDefectLatch, InferContext, MoveAccumulators, MoveOutcome, MovePlayContext,
 };
 use super::stats::WorkerStats;
-use super::{GameResultRow, PositionStats, WorkerResultRow};
+use super::{GameResultRow, PositionStats};
 
 /// Per-game-init scalar context. `Copy`.
 #[derive(Clone, Copy)]
@@ -136,7 +136,6 @@ pub(crate) fn run_worker_thread(
     } = atomics;
     let WorkerChannels {
         graph_queue,
-        results_queue,
         recent_game_results,
         graph_results_queue,
     } = channels;
@@ -280,7 +279,6 @@ pub(crate) fn run_worker_thread(
             move_cfg,
             move_accumulators,
             fatal_latch,
-            &results_queue,
             &graph_results_queue,
             &recent_game_results,
             finalize_counters,
@@ -308,7 +306,6 @@ fn run_one_game(
     move_cfg: WorkerMoveCfg,
     move_accumulators: MoveAccumulators,
     fatal_latch: FatalDefectLatch,
-    _results_queue: &Mutex<VecDeque<WorkerResultRow>>,
     graph_results_queue: &Mutex<VecDeque<GraphRecord>>,
     recent_game_results: &Mutex<VecDeque<GameResultRow>>,
     finalize_counters: (
