@@ -13,13 +13,6 @@ license.workspace = true
 [dev-dependencies]
 criterion = { workspace = true }
 
-[features]
-# Native surface gate (parallelism_hint); ON by default. The wasm32 target needs
-# no feature at all: native-only items are target-gated, so
-# `cargo check -p mantis-graph --target wasm32-unknown-unknown` passes plain.
-default = ["native"]
-native = []
-
 [[bench]]
 name = "build_bench"
 harness = false

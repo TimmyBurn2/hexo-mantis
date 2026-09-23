@@ -1,5 +1,5 @@
 //! `mantis-graph` — axis-graph builder for the GNN encoding.
-//! >300 lines: verbatim single-file port of the frozen axis-graph builder; splitting is barred while the byte-parity gate stands (repo_design §8).
+//! >300 lines: one port of the oracle's single builder, kept whole so it diffs against it; tests/graph_parity.rs pins its bytes.
 //!
 //! ONE dep-free source compiled to native and wasm32, `std::thread`/`rayon`/PyO3-free so it
 //! crosses the wasm boundary clean. A FAITHFUL port of the Python oracle
@@ -7,7 +7,6 @@
 //! `docs/contracts/graph_wire.md` fixes at `node_feat_dim=11`; that Python builder stays the
 //! historical TEST ORACLE, never a production path. Byte-exact on the integer outputs, floats
 //! to <=1e-6 because features accumulate in f64 then cast to f32 as the oracle does.
-#![cfg_attr(not(feature = "native"), allow(dead_code))]
 #![allow(clippy::many_single_char_names)]
 // Deliberate, bounded integer work: axial coords pack into an i64 key, node ids are < ~1000
 // (measured max 897), slot math is the byte-parity port of `window_flat_idx_at_geom`.
@@ -997,14 +996,6 @@ fn verify_contract(g: &AxisGraph, n_stones: usize, n_legal: usize, params: &Buil
             slot_seen[slot as usize] = true;
         }
     }
-}
-
-#[cfg(all(feature = "native", not(target_arch = "wasm32")))]
-#[must_use]
-pub fn parallelism_hint() -> usize {
-    std::thread::available_parallelism()
-        .map(std::num::NonZeroUsize::get)
-        .unwrap_or(1)
 }
 
 #[cfg(test)]
