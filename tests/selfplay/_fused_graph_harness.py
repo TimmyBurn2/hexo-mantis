@@ -25,9 +25,17 @@ from mantis.selfplay.inference_server import InferenceServer
 GRAPH_SPEC = lookup("gnn_axis_v1")
 SEED = 20260817
 
-#: Node-feature width the collate stand-in reshapes against (registry `node_feat_dim`).
-NODE_FEAT_DIM = int(GRAPH_SPEC.node_feat_dim or 11)
-EDGE_FEAT_DIM = int(GRAPH_SPEC.edge_feat_dim or 5)
+
+def graph_dim(spec: Any, field: str) -> int:
+    """One graph dim off the registry row. Raises: LookupError when the row does not carry it."""
+    value = getattr(spec, field, None)
+    if value is None:
+        raise LookupError(f"registry row {spec.name!r} carries no {field}: not a graph row")
+    return int(value)
+
+
+NODE_FEAT_DIM = graph_dim(GRAPH_SPEC, "node_feat_dim")
+EDGE_FEAT_DIM = graph_dim(GRAPH_SPEC, "edge_feat_dim")
 
 
 def build_payload(

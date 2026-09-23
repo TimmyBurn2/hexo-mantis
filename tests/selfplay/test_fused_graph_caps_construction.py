@@ -84,8 +84,12 @@ def test_fg6_04_a_graph_engine_cannot_be_built_without_the_caps() -> None:
                             edge_dim=H.GRAPH_SPEC.edge_feat_dim, hidden=16, num_layers=1,
                             policy_hidden=16, value_hidden=16)).to(_CPU)
     net.eval()
-    with pytest.raises(TypeError):
-        LocalInferenceEngine(net, _CPU, encoding_spec=H.GRAPH_SPEC)  # type: ignore[call-arg]
+    with pytest.raises(TypeError, match=r"missing 1 required keyword-only argument: 'fused_graph_caps'"):
+        LocalInferenceEngine(  # type: ignore[call-arg]
+            net, _CPU, encoding_spec=H.GRAPH_SPEC,
+            inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
+            max_in_flight=8,
+        )
 
 
 def test_fg6_06_the_threaded_caps_reach_the_engines_own_server() -> None:
