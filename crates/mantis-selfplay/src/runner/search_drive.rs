@@ -101,8 +101,8 @@ impl FatalDefectLatch<'_> {
 #[allow(clippy::struct_excessive_bools)]
 pub(crate) struct MovePlayContext {
     pub(crate) leaf_batch_size: usize,
-    /// DERIVED HEXG visit capacity — `Some` iff this is a graph run.
-    pub(crate) visit_capacity: Option<usize>,
+    /// DERIVED HEXG visit capacity.
+    pub(crate) visit_capacity: usize,
     pub(crate) temp_threshold: usize,
     pub(crate) temp_min: f32,
     pub(crate) sigma: QSigma,
@@ -119,27 +119,6 @@ pub(crate) struct MovePlayContext {
     /// target's semantics all read this one field.
     pub(crate) search_kind: SearchKind,
     pub(crate) dirichlet_enabled: bool,
-    /// Absolute ply the organic play begins at. Gates Gumbel exploration RELATIVE to start.
-    pub(crate) game_start_ply: usize,
-}
-
-/// Per-move policy — the ragged legal-set policy.
-#[derive(Clone)]
-pub(crate) enum MovePolicy {
-    Ls(LegalSetPolicy),
-}
-
-impl MovePolicy {
-    /// Sample a move from `legal` proportional to this policy's mass at each coord
-    /// (the ragged variant uses the `1/n` no-coverage floor).
-    fn sample(&self, legal: &[(i32, i32)], board: &Board, trunk: i32) -> Option<(i32, i32)> {
-        match self {
-            MovePolicy::Ls(ls) => {
-                let floor = 1.0 / legal.len().max(1) as f32;
-                records::sample_policy_ls(ls, legal, board, trunk, floor)
-            }
-        }
-    }
 }
 
 /// Result of `play_one_move`: how the parent per-move loop should proceed.
@@ -421,20 +400,6 @@ fn run_mcts_search(
                 }
                 // The budget is the last word: a round is never allowed to overspend it.
                 round.truncate(budget - spent);
-                // A candidate the root does not own is a bookkeeping defect and takes the
-                // run-fatal exit, via the same range check every other forced descent takes.
-                for &child in &round {
-                    if let Err(err) = tree.set_forced_root_child(Some(child)) {
-                        let _ = tree.set_forced_root_child(None);
-                        return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
-                            "gumbel",
-                            "forced_root_child",
-                            err.to_string(),
-                        ));
-                    }
-                }
-                let _ = tree.set_forced_root_child(None);
-
                 let n = match infer_and_expand_graph(
                     tree,
                     LeafSelection::Round(&round),
@@ -606,7 +571,7 @@ pub(crate) fn play_one_move(
     } else {
         compute_move_temperature(compound_move, ctx.temp_threshold, ctx.temp_min)
     };
-    let policy = MovePolicy::Ls(tree.get_policy_ls(temperature, policy_stride));
+    let policy = tree.get_policy_ls(temperature, policy_stride);
 
     // Accumulate MCTS health stats once per search (not in the inner sim loop).
     {
@@ -634,7 +599,7 @@ pub(crate) fn play_one_move(
 
     // The target's semantics are the search kind's own answer — no second flag can disagree.
     let target_policy = if ctx.search_kind.completed_q_target() {
-        MovePolicy::Ls(tree.get_improved_policy_ls(policy_stride, ctx.sigma))
+        tree.get_improved_policy_ls(policy_stride, ctx.sigma)
     } else {
         policy.clone()
     };
@@ -642,24 +607,15 @@ pub(crate) fn play_one_move(
     let record_full_search = move_is_full_search;
 
     // The restored-mass fire-rate: this population used to be truncated by the coverage gate.
-    let MovePolicy::Ls(ls) = &target_policy;
-    if ls.overflow.values().any(|&p| p > 0.0) {
+    if target_policy.overflow.values().any(|&p| p > 0.0) {
         accumulators
             .export_offwindow_mass_moves
             .fetch_add(1, Ordering::Relaxed);
     }
 
     // ── Sample and apply move (ZOI-filtered legal set) ──
-    let Some(move_idx) = select_move(
-        board,
-        move_history,
-        &policy,
-        gumbel_state,
-        ctx,
-        agg_trunk_sz,
-        tree,
-        rng,
-    ) else {
+    let Some(move_idx) = select_move(board, &policy, gumbel_state, ctx, agg_trunk_sz, tree, rng)
+    else {
         return MoveOutcome::Break;
     };
 
@@ -687,10 +643,6 @@ pub(crate) fn play_one_move(
 
     // ── Record position (BEFORE apply_move) ──
     {
-        let visit_capacity = ctx.visit_capacity.expect(
-            "graph record dispatch requires the derived visit capacity — composed in \
-             SelfPlayRunner::new's graph arm (R255)",
-        );
         // The sparse row's support is the search's OWN visited-candidate set, read from the
         // tree: under Gumbel a visited candidate can carry LESS mass than an unvisited one.
         let explicit_support = if ctx.search_kind.stores_sparse_rows() {
@@ -708,7 +660,7 @@ pub(crate) fn play_one_move(
             agg_trunk_sz,
             record_full_search,
             graph_records_vec,
-            visit_capacity,
+            ctx.visit_capacity,
             explicit_support.as_ref(),
         ) {
             // A target-integrity defect is RUN-FATAL: latch the typed message and halt.
@@ -733,10 +685,10 @@ pub(crate) fn play_one_move(
     MoveOutcome::Played
 }
 
-/// deep start.
+/// Whether the Gumbel winner replaces visit sampling at this ply.
 #[inline]
-fn relative_explore_gate(ply: usize, game_start_ply: usize, explore_moves: usize) -> bool {
-    ply.saturating_sub(game_start_ply) >= explore_moves
+fn explore_gate_open(ply: usize, explore_moves: usize) -> bool {
+    ply >= explore_moves
 }
 
 /// Per-move legal-move sampler. ZOI-filters when enabled, picks via Gumbel winner (post
@@ -744,37 +696,37 @@ fn relative_explore_gate(ply: usize, game_start_ply: usize, explore_moves: usize
 #[allow(clippy::too_many_arguments)]
 fn select_move(
     board: &Board,
-    _move_history: &[(i32, i32)],
-    policy: &MovePolicy,
+    policy: &LegalSetPolicy,
     gumbel_state: Option<MctxRootState>,
     ctx: MovePlayContext,
     agg_trunk_sz: i32,
     tree: &MCTSTree,
     rng: &mut ThreadRng,
 ) -> Option<(i32, i32)> {
-    let full_legal = board.legal_moves();
-    if full_legal.is_empty() {
+    let legal = board.legal_moves();
+    if legal.is_empty() {
         return None;
     }
-
-    let legal = full_legal;
 
     // Gated on ply RELATIVE to game start. `gumbel_explore_moves` is the whole switch: the
     // action selection is the Sequential-Halving winner and the exploration comes from the
     // Gumbel draw, so "no visit sampling" is `gumbel_explore_moves: 0`.
     let use_gumbel_winner = gumbel_state.is_some()
-        && relative_explore_gate(
-            board.ply.index() as usize,
-            ctx.game_start_ply,
-            ctx.gumbel_explore_moves,
-        );
+        && explore_gate_open(board.ply.index() as usize, ctx.gumbel_explore_moves);
     // Mctx's final action: the highest-scoring of the MOST-VISITED children.
     let winner_pool = if use_gumbel_winner {
         gumbel_state.and_then(|state| state.best_action(tree, ctx.sigma))
     } else {
         None
     };
-    let sampled = |rng: &mut ThreadRng| match policy.sample(&legal, board, agg_trunk_sz) {
+    let floor = 1.0 / legal.len().max(1) as f32;
+    let sampled = |rng: &mut ThreadRng| match records::sample_policy_ls(
+        policy,
+        &legal,
+        board,
+        agg_trunk_sz,
+        floor,
+    ) {
         Some(idx) => idx,
         None => *legal.choose(rng).unwrap(),
     };
@@ -794,8 +746,42 @@ fn select_move(
 }
 
 #[cfg(test)]
+mod forced_round_tests {
+    use std::sync::atomic::{AtomicBool, AtomicU64};
+
+    use mantis_core::Board;
+    use mantis_search::{MCTSTree, VIRTUAL_LOSS_PENALTY};
+
+    use super::{infer_and_expand_graph, InferContext, LeafSelection};
+    use crate::queues::GraphQueue;
+
+    /// A round naming a child the root does not own is the named run-fatal seam failure, raised
+    /// by `select_leaves_forced`'s own range check before any leaf is submitted.
+    #[test]
+    fn a_foreign_round_child_is_a_named_selection_failure() {
+        let mut tree = MCTSTree::new_full(1.5, VIRTUAL_LOSS_PENALTY, 0.25);
+        tree.new_game(Board::new());
+        let (queue, version, running) =
+            (GraphQueue::new(), AtomicU64::new(0), AtomicBool::new(true));
+        let infer = InferContext {
+            graph_queue: &queue,
+            spec: mantis_encoding::lookup_or_panic("gnn_axis_v1"),
+            model_version: &version,
+            running: &running,
+        };
+        let err = infer_and_expand_graph(&mut tree, LeafSelection::Round(&[u32::MAX]), 19, infer)
+            .expect_err("a foreign forced child must be refused");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("failed at selection") && msg.contains("4294967295"),
+            "{msg}"
+        );
+    }
+}
+
+#[cfg(test)]
 mod explore_gate_tests {
-    use super::relative_explore_gate;
+    use super::explore_gate_open;
 
     /// The first-N-ply visit sampling IS this switch and needs no second key: the action
     /// selection is the Sequential-Halving winner, so `explore_moves: 0` opens the gate at the
@@ -804,7 +790,7 @@ mod explore_gate_tests {
     fn zero_explore_moves_takes_the_winner_from_the_first_ply() {
         for ply in 0..4 {
             assert!(
-                relative_explore_gate(ply, 0, 0),
+                explore_gate_open(ply, 0),
                 "at explore_moves 0 the gate is open at ply {ply}"
             );
         }
@@ -814,26 +800,11 @@ mod explore_gate_tests {
     #[test]
     fn the_shipped_value_samples_for_exactly_its_span() {
         for ply in 0..10 {
-            assert!(
-                !relative_explore_gate(ply, 0, 10),
-                "ply {ply} still samples"
-            );
+            assert!(!explore_gate_open(ply, 10), "ply {ply} still samples");
         }
         assert!(
-            relative_explore_gate(10, 0, 10),
+            explore_gate_open(10, 10),
             "the gate opens AT the span, not past it"
         );
-    }
-
-    /// RELATIVE to the game's own start, so a seeded deep-prefix game still explores.
-    #[test]
-    fn the_span_is_relative_to_the_games_start() {
-        assert!(
-            !relative_explore_gate(40, 35, 10),
-            "5 moves into a game started at ply 35"
-        );
-        assert!(relative_explore_gate(45, 35, 10), "and open 10 moves in");
-        // A start AFTER the ply saturates rather than wrapping.
-        assert!(!relative_explore_gate(3, 35, 1));
     }
 }

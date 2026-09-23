@@ -92,9 +92,8 @@ pub struct SelfPlayRunner {
     spec: &'static RegistrySpec,
     /// Runner config, with `standard_sims` already resolved to the effective budget.
     config: SelfPlayRunnerConfig,
-    /// HEXG visit-slot capacity, DERIVED once at composition from the sims regime. `None` on
-    /// grid runs — dense-362 records carry no visit slot; never a default.
-    visit_capacity: Option<usize>,
+    /// HEXG visit-slot capacity, DERIVED once at composition from the sims regime; never a default.
+    visit_capacity: usize,
 
     graph_queue: GraphQueue,
 
@@ -241,21 +240,19 @@ impl SelfPlayRunner {
 
         // Boot guard reading EXISTING keys only: capacity is DERIVED by the same authority the
         // mint-time validator calls, so this is defense in depth.
-        let visit_capacity = Some(
-            crate::replay::hexg::derived_visit_capacity(
-                config.n_simulations,
-                config.standard_sims,
-                config.fast_prob,
-                config.fast_sims,
-                config.full_search_prob,
-                config.n_sims_quick,
-                config.n_sims_full,
-                config.leaf_batch_size,
-                config.gumbel_m,
-                config.search_kind.as_config_str(),
-            )
-            .map_err(|e| format!("SelfPlayRunner: {e}"))?,
-        );
+        let visit_capacity = crate::replay::hexg::derived_visit_capacity(
+            config.n_simulations,
+            config.standard_sims,
+            config.fast_prob,
+            config.fast_sims,
+            config.full_search_prob,
+            config.n_sims_quick,
+            config.n_sims_full,
+            config.leaf_batch_size,
+            config.gumbel_m,
+            config.search_kind.as_config_str(),
+        )
+        .map_err(|e| format!("SelfPlayRunner: {e}"))?;
 
         // Bake the resolved budget so the workers read the effective value.
         config.standard_sims = effective_standard;

@@ -99,7 +99,7 @@ pub(crate) struct WorkerParams {
     pub(crate) search_stats_every: usize,
     /// DERIVED HEXG visit-slot capacity (R255/ADJ-D34) — composed once in
     /// `SelfPlayRunner::new`, never a default.
-    pub(crate) visit_capacity: Option<usize>,
+    pub(crate) visit_capacity: usize,
     /// Resolved (never `None` — LAW-11) encoding spec, used by the per-game board
     /// construction (`init_per_game_board`, R2).
     pub(crate) registry_spec: &'static RegistrySpec,

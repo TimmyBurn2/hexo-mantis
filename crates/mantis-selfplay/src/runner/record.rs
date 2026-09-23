@@ -5,11 +5,10 @@
 //! with the grid path (R346(f)).
 
 use mantis_core::Board;
+use mantis_search::LegalSetPolicy;
 
 use crate::records::{self, TargetIntegrityError};
 use crate::replay::hexg::GraphRecord;
-
-use super::search_drive::MovePolicy;
 
 /// Push ONE whole-board graph record for this decision.
 ///
@@ -20,20 +19,19 @@ use super::search_drive::MovePolicy;
 // `#[cold]`/`#[inline(never)]` are DELETED with the dense recorder they were paired against.
 pub(crate) fn record_position_graph_dispatch(
     board: &Board,
-    target_policy: &MovePolicy,
+    target_policy: &LegalSetPolicy,
     trunk_sz: i32,
     move_is_full_search: bool,
     graph_records_vec: &mut Vec<GraphRecord>,
     visit_capacity: usize,
     explicit_support: Option<&fxhash::FxHashSet<(i32, i32)>>,
 ) -> Result<(), TargetIntegrityError> {
-    let MovePolicy::Ls(ls) = target_policy;
     let current_player = board.current_player as i8;
     let moves_remaining = board.moves_remaining;
     let ply_index = board.ply.index() as u16;
     let rec = records::record_position_graph(
         board,
-        ls,
+        target_policy,
         trunk_sz,
         current_player,
         moves_remaining,

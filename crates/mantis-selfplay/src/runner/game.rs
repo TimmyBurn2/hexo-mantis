@@ -62,8 +62,7 @@ struct PerGameInitCtx {
 #[allow(clippy::struct_excessive_bools)]
 struct WorkerMoveCfg {
     leaf_batch_size: usize,
-    /// DERIVED HEXG visit capacity — `Some` iff this is a graph run.
-    visit_capacity: Option<usize>,
+    visit_capacity: usize,
     temp_threshold: usize,
     temp_min: f32,
     sigma: QSigma,
@@ -352,7 +351,6 @@ fn run_one_game(
         running,
     };
     let play_ctx = MovePlayContext {
-        game_start_ply: 0,
         leaf_batch_size,
         visit_capacity,
         temp_threshold,
