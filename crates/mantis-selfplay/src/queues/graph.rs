@@ -451,9 +451,7 @@ pub type LeafRequest = (Vec<(i64, i64, i64)>, i64, i64);
 /// The serial loop this replaces built its leaves on the calling thread while holding the GIL;
 /// the measured split at a 64-move board is a slope of 5.2 ms per leaf against a 2.4 ms
 /// round-trip intercept, so the whole of the eval path's cost is this loop. Each leaf touches
-/// only its own stone list. `std::thread::scope` with static chunking rather than a work-stealing
-/// pool, because rayon is absent from this workspace; `n_threads <= 1` runs the serial path IN
-/// THIS THREAD, the exact-parity control.
+/// only its own stone list; `n_threads <= 1` runs the serial path IN THIS THREAD.
 ///
 /// # Errors
 /// Returns the FIRST error in index order, so a build failure names the same position it named on
@@ -465,31 +463,10 @@ pub fn build_leaf_graphs_batch(
     trunk_size: i32,
     n_threads: usize,
 ) -> Result<Vec<AxisGraph>, String> {
-    if positions.is_empty() {
-        return Ok(Vec::new());
-    }
-    let build_one =
-        |p: &LeafRequest| build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size);
-    let threads = n_threads.max(1).min(positions.len());
-    if threads == 1 {
-        return positions.iter().map(build_one).collect();
-    }
-    let chunk = positions.len().div_ceil(threads);
-    let mut per_chunk: Vec<Result<Vec<AxisGraph>, String>> = Vec::new();
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = positions
-            .chunks(chunk)
-            .map(|slice| scope.spawn(move || slice.iter().map(build_one).collect()))
-            .collect();
-        for h in handles {
-            per_chunk.push(h.join().unwrap_or_else(|_| {
-                Err("graph request: a leaf-build worker thread panicked".to_string())
-            }));
-        }
-    });
-    let mut out = Vec::with_capacity(positions.len());
-    for chunk_result in per_chunk {
-        out.extend(chunk_result?);
-    }
-    Ok(out)
+    crate::par::map_in_order(
+        positions,
+        n_threads,
+        "graph request: a leaf-build worker thread panicked",
+        |p: &LeafRequest| build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size),
+    )
 }

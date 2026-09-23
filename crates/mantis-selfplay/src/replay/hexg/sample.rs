@@ -275,51 +275,18 @@ struct SampleOut {
 /// Rebuild + align every sampled record, across at most `n_threads` OS threads, returning the
 /// results IN INDEX ORDER. Measured on the run5 shape, `sample_ring` splits 1 221 ms of
 /// `build_axis_graph` against 163 ms of fuse and 2 ms of align — a serial loop over an
-/// embarrassingly parallel rebuild whose items touch only their own record. `std::thread::scope`
-/// with a chunked split rather than a work-stealing pool, because rayon is absent and adding it
-/// is a pins event; `n_threads <= 1` runs the serial path here, the exact-parity control.
+/// embarrassingly parallel rebuild whose items touch only their own record.
 fn build_and_align_batch(
     items: &[(GraphRecord, i64, usize)],
     params_base: &BuildParams,
     n_threads: usize,
 ) -> Result<Vec<SampleOut>, String> {
-    if items.is_empty() {
-        return Ok(Vec::new());
-    }
-    let threads = n_threads.max(1).min(items.len());
-    if threads == 1 {
-        return items
-            .iter()
-            .map(|it| build_and_align_one(it, params_base))
-            .collect();
-    }
-    let chunk = items.len().div_ceil(threads);
-    let mut per_chunk: Vec<Result<Vec<SampleOut>, String>> = Vec::new();
-    std::thread::scope(|scope| {
-        let handles: Vec<_> = items
-            .chunks(chunk)
-            .map(|slice| {
-                scope.spawn(move || {
-                    slice
-                        .iter()
-                        .map(|it| build_and_align_one(it, params_base))
-                        .collect()
-                })
-            })
-            .collect();
-        for h in handles {
-            // A panicking worker becomes the NAMED error the caller already handles, never a
-            // panic that would cross the FFI.
-            per_chunk.push(h.join().unwrap_or_else(|_| {
-                Err("HEXG sample: a rebuild worker thread panicked".to_string())
-            }));
-        }
-    });
-    let mut out = Vec::with_capacity(items.len());
-    for chunk_result in per_chunk {
-        out.extend(chunk_result?);
-    }
-    Ok(out)
+    crate::par::map_in_order(
+        items,
+        n_threads,
+        "HEXG sample: a rebuild worker thread panicked",
+        |it| build_and_align_one(it, params_base),
+    )
 }
 
 /// The per-record body: rotate, rebuild, align the visit map, check the mass.
