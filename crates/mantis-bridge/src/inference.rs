@@ -1,6 +1,6 @@
-// Exceeds the 300-line soft cap (R8): the 22-method `InferenceBatcher` Python surface and the
+// Exceeds the 300-line soft cap (R8): the `InferenceBatcher` Python surface and the
 // `GraphWire` pyclass it fuses are one auditable unit — splitting them scatters the graph seam.
-//! `InferenceBatcher` (a remap over the WP6 `DenseQueue` + `GraphQueue`) and the `GraphWire`
+//! `InferenceBatcher` (a remap over the `GraphQueue`) and the `GraphWire`
 //! pyclass. Behaviour-exact structural port of the frozen PyO3 surface: NAME and Python-facing
 //! method names PRESERVED, internals reimplemented over the already-`pub` queue API.
 //!

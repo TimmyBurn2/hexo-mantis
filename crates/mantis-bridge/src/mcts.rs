@@ -340,8 +340,7 @@ impl PyMCTSTree {
         board_size: Option<usize>,
     ) -> Bound<'py, PyArray1<f32>> {
         let bs = board_size.unwrap_or(self.board_size);
-        // The inner API takes `n_actions` (= policy_stride). The Python-side
-        // MCTSTree path is v6-only today, so bs²+1 is correct. Zero-copy return.
+        // The inner API takes `n_actions` (= policy_stride): the bs×bs window plus pass.
         let n_actions = bs * bs + 1;
         self.inner
             .get_policy(temperature, n_actions)
@@ -512,7 +511,7 @@ mod tests {
                 1,
                 "bridge caches leaf boards for the ls path"
             );
-            // n_actions for a v6 board = 19*19+1 = 362.
+            // n_actions for the 19×19 window = 19*19+1 = 362.
             let policies = vec![vec![1.0f32 / 362.0; 362]];
             let values = vec![0.0f32];
             t.expand_and_backup(py, policies, values).expect("expand");
