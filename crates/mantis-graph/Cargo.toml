@@ -12,6 +12,7 @@ license.workspace = true
 
 [dev-dependencies]
 criterion = { workspace = true }
+sha2 = "0.10"
 
 [[bench]]
 name = "build_bench"

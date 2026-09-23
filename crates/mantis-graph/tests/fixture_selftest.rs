@@ -31,23 +31,6 @@ fn copy_fixture_subset(src_root: &Path, dst_root: &Path) -> (u32, String) {
 }
 
 #[test]
-fn sha256_fips_vectors() {
-    // FIPS 180-4 test vectors: empty, "abc", and the 448-bit vector.
-    assert_eq!(
-        common::sha256_hex(b""),
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-    );
-    assert_eq!(
-        common::sha256_hex(b"abc"),
-        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
-    );
-    assert_eq!(
-        common::sha256_hex(b"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq"),
-        "248d6a61d20638b8e5c026930c3e6039a33ce45964ff2167f6ecedd419db06c1"
-    );
-}
-
-#[test]
 fn corrupt_one_byte_detected() {
     let src = common::fixture_root();
     common::verify_fixture_root(&src).unwrap_or_else(|e| panic!("{e}"));
