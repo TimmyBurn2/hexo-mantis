@@ -62,3 +62,33 @@ none
 - The archive bodies were not read end to end, by instruction, so they were not checked for internal consistency. That is frozen text, and it corrects only by annotation.
 - Git history before the shallow boundary (2026-09-19) was not examined, so freeze integrity is shown for this checkout's window only.
 - Whether full remote history keeps RULINGS_ACTIVE.md recoverable after a retirement was not verified, because the clone is shallow.
+
+## Review
+reviewer: fresh read-only agent (not the author); no lane-A deletions raised, so no delete-probe and no worktree was created
+| ID | verdict | lane | Δlines | note |
+|---|---|---|---|---|
+| S-A-DOCS-2-01 | AMENDED | C | -7722 (awk NR count; unchanged) | the ARCHITECT question stands. "Its one live citer is CARDS.md" is wrong: standing RULINGS.md::R271(b)–(d) (and R272(b)) name RULINGS_ACTIVE.md as the working index that is curated at session close, so a retirement ruling must annotate R271 as well as amend R346(e). The coordinate split is 26 + 1 + 3, not 27 + 3 |
+| S-A-DOCS-2-02 | CONFIRMED | C | 0 | KEEP-frozen. R271(a) and R346(e) are verbatim at HEAD. 321 of R23–R345, and the register's last header is R345 |
+
+### Per-finding notes
+S-A-DOCS-2-01 — AMENDED:
+- Sizes: `awk 'END{print NR}'` + `stat -c %s` over `git ls-files docs/governance/archive` -> 39/7722/106/9349 lines. Bytes match the table.
+- Citers: `git ls-files -z | xargs -0 grep -l -F RULINGS_ACTIVE` (excluding slim/archive) -> CARDS.md:1, AUDIT_2026-09-09.md:4 AND RULINGS.md:1. The RULINGS.md hit is R271 ("Status: standing [INLINE]"), and (b) reads "RULINGS_ACTIVE.md is the DERIVED working index; sessions seed from ACTIVE + laws.md + CLAUDE.md". (d) says ACTIVE is curated at session close. R272(b) extends that curation practice. R346(e) names "ACTIVE" in its freeze list. So the subject is ruling-named twice, and `grep -n R271` shows no annotation recording the supersession. Lane C holds.
+- Coordinates: a python sweep of CARDS.md with `\b[AR]:\d{2,5}(-\d+)?` -> 33 coordinates on 30 lines. Every one is in range and resolves by content. I re-read the 7 the heuristic flagged, and each shows the row's subject token at the coordinate. CARDS.md is the only file with coordinates.
+- The split: 3 are the F-816-34/35/36 rows (ruling column "none"; `git grep -c` -> CARDS 1 + ACTIVE 3/2/2, nowhere else). CARDS:976 cites A:3901 as "the stale line in the archive" itself, so it is not a swap to a ruling id; it would be deleted instead. That leaves 26 that can be swapped for a ruling id. CARDS:805 and CARDS:876 get theirs from the preceding lines of the same paragraph (R348(e)/R349; R227/R228/R267).
+- R267: the register's line "R267 REMAINS A GAP" (rulings_register.md) also carries the only-a-digest-line fact, so ACTIVE is not the sole record there.
+- Witness: tools/ci_gates/check_tracked_refs.py::TOKEN_RE matches `docs/governance/archive/RULINGS_ACTIVE.md`, and CARDS.md is inside GLOB_SCOPE's non-recursive `docs/governance/*.md`. The gate 10 run prints "scanning 17 file(s)", with no failures. The witness holds.
+S-A-DOCS-2-02 — CONFIRMED:
+- `.venv/bin/python -S` regex over RULINGS.md `^#{2,3} R(\d+)` -> 321 distinct ids in 23..345 (max 367). Over the register, `^#{1,3} R(\d+)` -> last = max = R345.
+- R271(a) "append-only VERBATIM ARCHIVE — never compressed, rewritten or pruned" and R346(e) "FROZEN into docs/governance/archive/ (one directory, one README, no tooling)" were both read at HEAD.
+- `git grep -E 'governance/archive|RULINGS_ACTIVE|rulings_register|archive/laws' -- ':!docs'` -> only CLAUDE.md:94 and README.md:38, both prose. No tool, test or src reader.
+- Gate 6: tools/ci_gates/artifact_gate.py::MAX_ADDED_BYTES = 1_000_000, so the files are at 76.1% and 70.2%, as the scout said.
+HANDOFF check:
+- CLAUDE.md:94 "Laws digest (full text: docs/governance/archive/laws.md)" is confirmed.
+- archive/laws.md still has LAW-10 x1 and `docs/registers/falsified.md` x2, while LAWS.md reads "LAW-10 DELETED by R347(d)". CARD-CLAUDEMD-REPOINT is CLOSED (CARDS.md).
+- The R346 Status cites `docs/audits/AUDIT_2026-09-09.md`, which `git ls-files docs/audits` shows only under archive/. All three handoffs stand.
+
+### Missed by the scout
+NEW-1 | DOC | C | subject: docs/governance/RULINGS.md::R271(b)–(d) (+R272(b)) | claim: this standing text directs sessions to seed from ACTIVE and curate it at session close, but R346(e) froze ACTIVE, and no annotation records that it was superseded | Δlines: 0 (annotation-only, register corrects only by annotation) | ARCHITECT: annotate R271(b)–(d) as superseded by R346(e), and name it in any ruling from S-A-DOCS-2-01?
+
+### Tally: raised 2 | confirmed 1 | amended 1 | refuted 0 | pending 0 | architect 1 (S-A-DOCS-2-01, plus NEW-1)
