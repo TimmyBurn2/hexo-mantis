@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v2
+- version: v3
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v1 — filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -11,6 +11,13 @@
   The same commit put the gate's rule fields on `eval_round_complete.gate` (see that row).
   v2 (R368, SLIM-FIX): `iteration_complete.search_levers` publishes the playout-cap and Gumbel
   round counters (the INSTRUMENT row below); the segment header carries `event-manifest-v2`.
+  v3 (R368, SLIM-FIX): the producer-less fields LEAVE the stream — `monitor_gates.buffer_save_errors_total`
+  (a counter no production path increments), `iteration_complete.corpus_selfplay_frac` (a constant
+  1.0) and twelve `training_step` rows no trainer tail fills (`loss_aux`, `loss_ownership`,
+  `loss_threat`, `loss_chain`, `avg_sigma`, `policy_entropy_pretrain`, `policy_entropy_recent`,
+  `policy_target_entropy`, `n_rows_policy_loss`, `n_rows_total`, `value_accuracy`,
+  `quiescence_fires_per_step`); a pre-v3 record still carries them as data. The three events'
+  top-level keys are now the checked rosters under "Published field rosters".
 
 ## Summary
 
@@ -127,7 +134,7 @@ a manifest row for a reading with no consumer is the phantom-input shape in reve
 | `trainer_step.policy_rows_excluded_alpha_full` | `train.coordinator.dispatch._build_graph_parts` via `train.losses.exclude_alpha_full_rows`, riding the step event's batch-composition block — R350(e): the count of rows whose tail mass is alpha = 1.0 (`util.constants.ALPHA_FULL_THRESHOLD`, the same authority `iteration_complete.gumbel_alpha_full` counts with) that left the policy loss and its denominator this step | `tests/train/test_sparse_gumbel_row_target.py::test_an_all_tail_sparse_row_is_admitted_stored_at_zero_and_trains_finite` |
 | `monitor_gates.policy_loss_reference`, `monitor_gates.policy_loss_window_means`, `monitor_gates.policy_loss_trough_delta_nats` | `train.coordinator.step.StepCoordinator._run_policy_loss_trough_gate` / `_emit_monitor_gates` — R350(b)(iv)'s halt reporting its live terms beside its `policy_loss_trough` counters: the first gate-window's mean policy loss (`None` until the first boundary), the ring of later window means (sized by `consec`), and the armed `delta_nats` (`None` on the explicit OFF) | `tests/train/test_policy_loss_trough_gate.py::test_the_halt_fires_on_the_trough_signature_through_the_one_channel` |
 | `monitor_gates.ply_cap_abort_rate`, `monitor_gates.ply_cap_window_games`, `monitor_gates.ply_cap_rate` | `train.coordinator.step.StepCoordinator._run_ply_cap_gate` / `_emit_monitor_gates`, reading `selfplay.pool.WorkerPool.ply_cap_window_counts` (the pool-wide ring `PoolInstrumentation._ply_cap_ring`, one flag per completed game) — R352(c)'s halt reporting its live terms beside its `ply_cap_attractor` counters: the armed rate and window (`None` on the explicit OFF) and the LAST windowed cap fraction the gate read (`None` while the window is still filling, never a 0.0). The gate is checked every training step; the boundary row carries its latest reading. The dashboard's ply-cap panel reads the windowed rate off `game_complete.terminal_reason` from game 0 instead, and these three keys for the armed terms | `tests/train/test_ply_cap_gate.py::test_the_halt_fires_at_the_first_step_past_min_step_whose_window_is_over_the_rate` (+ the planted break, `::test_the_planted_break_a_dead_producer_is_caught_by_the_producer_test`) |
-| `iteration_complete.mcts_quiescence_fires` | `train.events.emit_iteration_complete_event`, reading `selfplay.pool_hooks.RunnerStats.mcts_quiescence_fires` — the Rust runner's cumulative count since boot of backups on which `apply_quiescence` returned a verdict (`mantis-search/src/mcts/backup.rs`, the AtomicU64 the bridge snapshots), A-2's LAW-18 fire-rate (R355(a), read in run8's shakedown per R356's packet): an integer on every row a real runner fed, `None` on a snapshot with no producer; a reader diffs consecutive rows for a per-window rate. `training_step.quiescence_fires_per_step` stays `None` (its solver-delta half is DEFER/ARCH) — this is the one channel that carries the count | `tests/train/test_quiescence_fires_producer.py::test_the_payload_carries_the_cumulative_fire_count` |
+| `iteration_complete.mcts_quiescence_fires` | `train.events.emit_iteration_complete_event`, reading `selfplay.pool_hooks.RunnerStats.mcts_quiescence_fires` — the Rust runner's cumulative count since boot of backups on which `apply_quiescence` returned a verdict (`mantis-search/src/mcts/backup.rs`, the AtomicU64 the bridge snapshots), A-2's LAW-18 fire-rate (R355(a), read in run8's shakedown per R356's packet): an integer on every row a real runner fed, `None` on a snapshot with no producer; a reader diffs consecutive rows for a per-window rate. This is the one channel that carries the count | `tests/train/test_quiescence_fires_producer.py::test_the_payload_carries_the_cumulative_fire_count` |
 | `iteration_complete.search_levers` | `train.coordinator.step.StepCoordinator._target_integrity_report`, reading `selfplay.pool_hooks.RunnerStats` off the ONE snapshot the row carries, fed by the bridge getters `SelfPlayRunner.pcr_full_moves` / `pcr_quick_moves` / `gumbel_round_leaves` / `gumbel_rounds` over the runner's atomics (`mantis-selfplay/src/runner/search_drive.rs::play_one_move`, counted at the playout-cap DRAW and per sequential-halving round) — the LAW-18 fire rates of the two search levers the run arms (`selfplay.playout_cap.full_search_prob`, `selfplay.search.kind: gumbel`). Each counter is `{total, delta, per_position}` beside the block's own `positions_delta`, the `target_integrity` shape. `pcr_full_moves + pcr_quick_moves` counts every searched move (at `full_search_prob == 0` all of them land in `full`); `gumbel_round_leaves / gumbel_rounds` is the mean round width, published as its two terms and never as a quotient, and both are 0 on a PUCT run. `runner_stats` reads the four getters with NO default, so an engine without them raises rather than publishing zeros | `tests/selfplay/test_search_lever_counters.py::test_the_counters_reach_iteration_complete` (+ the real-runner producer rows `::test_the_real_runner_publishes_both_playout_cap_arms`, `::test_the_real_runner_publishes_the_gumbel_round_width`; Rust `crates/mantis-selfplay/tests/pcr_arm_matches_the_record.rs`) |
 | `iteration_complete.sym_draws` | `train.events.emit_iteration_complete_event`, reading the ring's `HexgBuffer.sym_draw_counts` (`mantis-selfplay/src/replay/hexg/sample.rs::draw_syms`, incremented on every per-sample D6 draw) — R358(b)'s arming condition for `train.augment: true`, the LAW-18 augmentation-group counter R266/R245(c) owed: `{bins: [12 ints], empty_skipped: int}`, cumulative since boot; one bin per `sym::N_SYMS` element, `empty_skipped` the draws that landed on an empty-board row and were left unrotated (its 25-cell fence is invariant under 4 of the 12 elements only). Under `augment: false` bin 0 carries every draw. `None` on a ring with no producer, never twelve zeros. Rides `iteration_complete` because that is the row the ring's other cumulative counters ride (`buffer_size`, `gumbel_alpha_full`); `trainer_step` carries the per-batch composition. Read by `mantis.diagnostics.ring_audit --events` as `sym_bin0_over_mean` (1.0 uniform, 12 a draw stuck on the identity) and by the dashboard's throughput panel as a share per element | `tests/train/test_augment_sym_counter.py::test_augment_true_populates_all_twelve_bins_and_bin_zero_is_under_twice_the_mean` (+ the control `::test_augment_false_puts_every_draw_in_bin_zero`, the row `::test_the_row_carries_the_bins_and_the_skips_read_off_the_real_ring`, the LAW-07 mutation `::test_a_planted_stuck_rng_reds_the_uniformity_band`; Rust `crates/mantis-selfplay/tests/replay_sym_counter.rs`) |
 | `iteration_complete.samples_consumed_total`, `iteration_complete.positions_produced_total` | `train.events.emit_iteration_complete_event`, reading the ring's `HexgBuffer.samples_consumed_total` (rows `sample_graph_batch_impl` handed the trainer since boot) and `selfplay.pool_hooks.RunnerStats.positions_generated` (the runner's positions since boot) off the ONE snapshot the row already carries — R358(c)'s replay-ratio pair on one row: `mantis.diagnostics.ring_audit --events` diffs the two over the ring's span and prints `replay_ratio` (Δsamples ÷ Δpositions) with the span's wall hours (run7's derived 3.6 against strix's 8.0 setpoint, RESEARCH-STRENGTH-1 §Q2). Both `None` where the source has no producer; both cumulative since BOOT, so a resumed run's pair restarts with the runner's | `tests/diagnostics/test_replay_ratio_producer.py::test_the_ratio_is_the_diff_of_the_pair_over_the_rings_span` (+ the absences `::test_rows_without_the_pair_are_not_measured_and_say_which_key_is_missing`, `::test_a_zero_position_delta_is_not_measured_never_a_division`; the row `tests/train/test_augment_sym_counter.py::test_the_row_carries_the_bins_and_the_skips_read_off_the_real_ring`) |
@@ -370,12 +377,22 @@ launch entry is not WP13-A's property) — they arm when the run wiring lands. E
 state is named per-gate in each `monitor_gates` event (checks/fires/skips/warns), so nothing
 is silently disabled.
 
+## Published field rosters
+
+The top-level keys each builder publishes, compared in BOTH directions against the real builders
+by `tests/train/test_event_rosters_match_the_contract.py`: a key published without a row here,
+or a row no builder publishes, reds. The sink adds `ts`.
+
+- `training_step` (`train.events.emit_training_step_event`): `event`, `step`, `loss_total`, `loss_policy`, `loss_value`, `policy_entropy`, `policy_entropy_selfplay`, `lr`, `grad_norm`
+- `iteration_complete` (`train.events.emit_iteration_complete_event`): `event`, `step`, `games_total`, `games_this_iter`, `games_per_hour`, `steps_per_hour`, `positions_per_hour`, `avg_game_length`, `win_rate_p0`, `win_rate_p1`, `draw_rate`, `sims_per_sec`, `buffer_size`, `buffer_capacity`, `batch_fill_pct`, `inference_batching`, `gumbel_alpha_full`, `mcts_mean_depth`, `mcts_quiescence_fires`, `samples_consumed_total`, `positions_produced_total`, `sym_draws`, `target_integrity`, `search_levers`, `mcts_root_concentration`
+- `monitor_gates` (`train.coordinator.step.StepCoordinator._emit_monitor_gates`): `event`, `step`, `gates`, `draw_rate_threshold`, `policy_loss_trough_delta_nats`, `policy_loss_reference`, `policy_loss_window_means`, `ply_cap_abort_rate`, `ply_cap_window_games`, `ply_cap_rate`, `watchdog_best_effort`, `warn_rule_skipped_absent`
+
 ## Event stream conventions
 
 - Every event is one JSON object per line; the event NAME travels under the `"event"` key;
   `ts` (wall clock) is stamped by the sink iff the producer did not supply one.
 - The first line of every segment is `run_segment_started` carrying
-  `{run_id, segment, pid, created_utc, contract: "event-manifest-v2"}` (`mantis.monitor.sink.EVENT_CONTRACT`).
+  `{run_id, segment, pid, created_utc, contract: "event-manifest-v3"}` (`mantis.monitor.sink.EVENT_CONTRACT`).
 - Log identity: one segment file per process start
   (`events_<run_id>_seg<NNNN>.jsonl`) — a JSONL file NEVER spans two run segments
   (§11 rotation-on-resume). The segment is claimed ATOMICALLY (`O_CREAT|O_EXCL` over
@@ -394,29 +411,23 @@ is silently disabled.
   must treat `None` as "no producer", never as zero. Symmetrically, a field that IS produced
   carries its value even when that value is `0.0` — a measured zero and an absent
   measurement are different facts and the payload distinguishes them.
-  **The `training_step` roster, all of it built by `mantis.train.events.measured` /
-  `measured_int`:** `quiescence_fires_per_step` (the solver-delta half is DEFER/ARCH; the
-  key is retained for schema stability), `policy_entropy`, `policy_entropy_pretrain`,
-  `policy_entropy_selfplay`, `policy_entropy_recent`, `policy_target_entropy`, `loss_aux`,
-  `loss_ownership`, `loss_threat`, `loss_chain`, `avg_sigma`, `value_accuracy`,
-  `n_rows_policy_loss`, `n_rows_total`. Of these the two trainer tails currently produce
-  `value_accuracy` (dense only) and `loss_chain` (dense, when `aux_chain_weight > 0`), and since
-  R355(e) (B-4) the GRAPH tail produces `policy_entropy` and `policy_entropy_selfplay` — ONE
-  measurement, the model's segment-softmax entropy over the step's policy rows reduced like the
-  CE (every graph-route row is a self-play ring row), carried in the now seven-key `loss_info`
-  so `check_entropy_collapse` / `check_selfplay_entropy_collapse` read a produced number; the
-  rest have no producer in a shipped run and are `None` on every step. ONE of them has the
-  quantity produced ONE EVENT OVER: `training_step.policy_target_entropy` stays `None` (the
-  seven-key `loss_info` contract does not carry it) while `trainer_step.policy_target_entropy`
-  carries the graph step's live reading (R350(b)(iv), the INSTRUMENT rows above) — a panel
-  wants the `trainer_step` field, and the `training_step` one is a stated gap, not a zero.
+  **The `training_step` measurements, built by `mantis.train.events.measured`:**
+  `policy_entropy` and `policy_entropy_selfplay`, which the GRAPH tail produces since R355(e)
+  (B-4) — ONE measurement, the model's segment-softmax entropy over the step's policy rows
+  reduced like the CE (every graph-route row is a self-play ring row), carried in the seven-key
+  `loss_info` so `check_entropy_collapse` / `check_selfplay_entropy_collapse` read a produced
+  number. Every other row the builder once carried had no producer and left the event at v3; a
+  field the real tail leaves `None` is refused by
+  `tests/train/test_training_step_absence.py::test_every_field_is_produced_by_the_real_tail`.
+  The target entropy is `trainer_step.policy_target_entropy` (R350(b)(iv), the INSTRUMENT rows
+  above), which the graph step does produce.
   **AUDIT-1 F-01 is the cost of not applying this rule here.** `policy_entropy` defaulted to
   `0.0`, every minted config sets `alert_entropy_min: 1.0`, and `check_entropy_collapse`
   therefore emitted `training_alert entropy_collapse "policy entropy 0.00 — possible mode
   collapse"` at every `log_interval` of every run — while a REAL collapse would have been
   the identical event. The three `policy_entropy_*` rows additionally defaulted to
   `float("nan")`, which `json.dumps` writes as the bare token `NaN`: not valid JSON.
-  Producer test: `tests/train/test_training_step_absence.py`, driven by the two REAL tails
+  Producer test: `tests/train/test_training_step_absence.py`, driven by the REAL graph tail
   rather than by an injected `loss_info` — the fake shape carrying `"policy_entropy": 2.0`
   is what let the defect ship past a LAW-07 row.
   **The `iteration_complete` rate roster (AUDIT-1 F-28/C07), same rule:** `games_per_hour`
@@ -495,7 +506,7 @@ is silently disabled.
 ## Trainer-side narration literals (delivered since F-R-P2B-2; catalog note, not rows)
 
 The production Trainer emits through the composed sink since the F-P4 sink threading
-(`run.py` builds it with a `_DeferredSink` bound to the channel beside the pool's). Three
+(`run.py` builds it with a `_DeferredSink` bound to the channel beside the pool's). Two
 literals ride the stream from the trainer itself; none is a gate/monitor INPUT, so none
 gets a `gates:` row — their producer tests live in pytest (LAW-07's half that applies):
 
@@ -503,12 +514,10 @@ gets a `gates:` row — their producer tests live in pytest (LAW-07's half that 
   emitted AFTER the write with the writer's returned path (R173 seam;
   `tests/train/test_periodic_checkpoint.py` + the composed-stream drive in
   `tests/test_run_launcher.py`).
-- `trainer_step` — the trainer's OWN per-step diagnostic row (dense and graph tails,
+- `trainer_step` — the trainer's OWN per-step diagnostic row (the graph tail,
   `trainer/core.py`). Deliberately a DISTINCT literal from `training_step`: the
   coordinator's `log_interval`-gated narration above owns that name and its one documented
   shape. `trainer_step` is per-step and ungated — at `max_train_steps: 1e6` that is ~1e6
   rows into one segment; the volume/retention posture is an open operator row
   (FINDINGS_F-P4), recorded here so a reader of this catalog knows the cadence is a
   decision still owed, not a contract.
-- `aux_chain_loss` — the chain-loss lever's per-step fire-rate leg (LAW-18), emitted only
-  when the lever is armed (`train.aux_chain_weight > 0`).

@@ -37,8 +37,8 @@ DROPPED: dict[str, str] = {
         "ratio. Filling this panel needs `iteration_complete.samples_consumed_total` beside "
         "`positions_produced_total`, cumulative, on one row.",
     "policy entropy / accuracy":
-        "NO PRODUCER. `training_step.policy_entropy` and `value_accuracy` are emitted as null "
-        "on every row of this record. Filling this panel needs the trainer to measure them.",
+        "NO PRODUCER for accuracy: no trainer tail measures a value accuracy, so `training_step` "
+        "carries none. Filling this panel needs the trainer to measure it.",
 }
 
 

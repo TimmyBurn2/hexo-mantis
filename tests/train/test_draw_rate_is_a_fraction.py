@@ -72,7 +72,7 @@ class _Buffer:
 def _emit(*, completed_now: int, games_played_snapshot: int) -> dict:
     sink = _Sink()
     emit_iteration_complete_event(
-        7, 0.0, games_played_snapshot, 0, _StraddlingPool(completed_now=completed_now),
+        7, games_played_snapshot, 0, _StraddlingPool(completed_now=completed_now),
         _Buffer(), {}, {}, 100_000, lambda: 10.0, lambda: 5.0, {}, _rstats(), sink, search_levers={},
     )
     events = [e for e in sink.events if e["event"] == "iteration_complete"]

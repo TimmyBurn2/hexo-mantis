@@ -729,12 +729,7 @@ class StepCoordinator:
     ) -> dict[str, Any]:
         """Build and emit the `training_step` event through the injected sink and return its
         payload (the WARN rules read it). Stays `log_interval`-gated: it is narration."""
-        payload = emit_training_step_event(
-            self._train_step, loss_info,
-            # `quiescence_fires_per_step` has no producer here: the field travels as None =
-            # NOT MEASURED, because a constant 0 would read as "quiescence never fires".
-            None, sink,
-        )
+        payload = emit_training_step_event(self._train_step, loss_info, sink)
         return payload
 
     def _emit_iteration_complete(self, cfg: StepCoordinatorConfig) -> None:
@@ -746,10 +741,9 @@ class StepCoordinator:
         boundary. Not called on the O2/O3 early returns.
         """
         sink = self._sink if self._sink is not None else NullEventSink()
-        w_pre = 0.0
         rstats_report, search_levers, rstats = self._target_integrity_report()
         emit_iteration_complete_event(
-            self._train_step, w_pre, self._games_played, self._last_iter_games,
+            self._train_step, self._games_played, self._last_iter_games,
             self.pool, self.buffer, self.full_config, self.full_config.get("mcts", {}),
             cfg.capacity, self._games_per_hour, self._steps_per_hour,
             rstats_report, rstats, sink, search_levers=search_levers,
@@ -915,9 +909,6 @@ class StepCoordinator:
             # Per-WARN-rule count of steps at which the rule could not run for want of its
             # input, else "never fires" and "healthy" are one observable. Module-attribute read.
             "warn_rule_skipped_absent": dict(_rules.WARN_RULE_SKIPS),
-            # The best-effort buffer-save swallows, counted and read live. A module-attribute
-            # read, never a from-import of the int.
-            "buffer_save_errors_total": int(_buffer_persist.buffer_save_errors_total),
         })
 
     def _watchdog_counters(self) -> dict[str, int] | None:

@@ -7,8 +7,8 @@ those two, and a pool counter that starts at zero and stays there until the firs
 observes a positive `positions_generated` delta. Every one of them reads as "the run is doing
 nothing" in the ONE channel — which is what a stalled run also looks like.
 
-`steps_per_hour` was already correct (`None` = NOT MEASURED, the same doctrine as
-`quiescence_fires_per_step`) and is the pattern the other four now follow.
+`steps_per_hour` was already correct (`None` = NOT MEASURED) and is the pattern the other four
+now follow.
 
 C06 is the same class one field over: `StepOutcome.games_per_hour` was built as a hard `0.0`
 by `_build_outcome`, had NO reader in `src/`, `tests/` or `tools/`, and sat beside a REAL
@@ -125,7 +125,7 @@ def _iteration_complete(pool: Any, *, gph: Any, sph: Any) -> dict[str, Any]:
         capacity = 1024
 
     emit_iteration_complete_event(
-        train_step=0, w_pre=0.0, games_played=0, last_iter_games=0, pool=pool,
+        train_step=0, games_played=0, last_iter_games=0, pool=pool,
         buffer=_Buffer(), config={}, mcts_config={}, capacity=1024,
         games_per_hour_fn=lambda: gph, steps_per_hour_fn=(lambda: sph) if sph is not None else None,
         target_integrity={}, rstats=_Rstats(), sink=_Sink(), search_levers={},

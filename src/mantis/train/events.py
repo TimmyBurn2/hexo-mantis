@@ -194,16 +194,9 @@ def measured(loss_info: Mapping[str, Any], key: str) -> float | None:
     return None if value is None else float(value)
 
 
-def measured_int(loss_info: Mapping[str, Any], key: str) -> int | None:
-    """`measured` for the integer counters — absence is `None`, not a count of zero."""
-    value = loss_info.get(key)
-    return None if value is None else int(value)
-
-
 def emit_training_step_event(
     train_step: int,
     loss_info: dict[str, float],
-    qfire_delta: int | None,
     sink: EventSink,
     early_game_probe: Any | None = None,
     trainer_model: Any | None = None,
@@ -216,7 +209,6 @@ def emit_training_step_event(
     carry. Stays `log_interval`-gated at the coordinator call site.
     """
     policy_entropy = measured(loss_info, "policy_entropy")
-    value_accuracy = measured(loss_info, "value_accuracy")
     grad_norm = measured(loss_info, "grad_norm")
     lr = measured(loss_info, "lr")
 
@@ -240,27 +232,11 @@ def emit_training_step_event(
         "loss_total": float(loss_info["loss"]),
         "loss_policy": float(loss_info["policy_loss"]),
         "loss_value": float(loss_info["value_loss"]),
-        # Every row below is `None` when its producer did not supply it. The three
-        # `policy_entropy_*` rows travelled as JSON `NaN` — not valid JSON at all — and the
-        # rest as `0.0`/`0`, indistinguishable from a measured zero.
-        "loss_aux": measured(loss_info, "opp_reply_loss"),
-        "loss_ownership": measured(loss_info, "ownership_loss"),
-        "loss_threat": measured(loss_info, "threat_loss"),
-        "loss_chain": measured(loss_info, "chain_loss"),
-        "avg_sigma": measured(loss_info, "avg_sigma"),
+        # `None` when the tail did not supply it, never a fabricated 0.0 or a JSON `NaN`.
         "policy_entropy": policy_entropy,
-        "policy_entropy_pretrain": measured(loss_info, "policy_entropy_pretrain"),
         "policy_entropy_selfplay": measured(loss_info, "policy_entropy_selfplay"),
-        "policy_entropy_recent": measured(loss_info, "policy_entropy_recent"),
-        "policy_target_entropy": measured(loss_info, "policy_target_entropy"),
-        "n_rows_policy_loss": measured_int(loss_info, "n_rows_policy_loss"),
-        "n_rows_total": measured_int(loss_info, "n_rows_total"),
-        "value_accuracy": value_accuracy,
         "lr": lr,
         "grad_norm": grad_norm,
-        # None = NOT MEASURED: no quiescence-counter producer exists. The key stays for
-        # schema stability but must never carry a fabricated 0.
-        "quiescence_fires_per_step": qfire_delta,
     }
     if probe_metrics:
         training_step_event.update(probe_metrics)
@@ -295,7 +271,6 @@ def _sym_draws(buffer: Any) -> dict[str, Any] | None:
 
 def emit_iteration_complete_event(
     train_step: int,
-    w_pre: float,
     games_played: int,
     last_iter_games: int,
     pool: PoolTelemetryLike,
@@ -344,7 +319,6 @@ def emit_iteration_complete_event(
         "sims_per_sec": pool.sims_per_sec,
         "buffer_size": buffer.size,
         "buffer_capacity": buffer.capacity,
-        "corpus_selfplay_frac": round(1.0 - w_pre, 4),
         "batch_fill_pct": pool.batch_fill_pct,
         # The inference batching instrument — the collector wait, the collate cost and the
         # served-batch occupancy DISTRIBUTION that `batch_fill_pct`'s single ratio cannot

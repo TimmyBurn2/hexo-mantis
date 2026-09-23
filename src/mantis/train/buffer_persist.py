@@ -13,12 +13,7 @@ from typing import Any
 
 _LOG = logging.getLogger(__name__)
 
-# Counted best-effort (WPCLEAN Phase RES, paying R-BUFFER-PERSIST-COUNTER): both swallow
-# arms below used to WARN uncounted, which left the LAST save of a run (the
-# "shutdown_signal" trigger) invisible to any observer. The count is deliberately NOT
-# `checkpoints.persist_errors_total`: that counter is the watchdog's `> 0` FATAL feed, and
-# this path is best-effort BY DESIGN (module docstring). Live consumer: the coordinator
-# publishes it in the `monitor_gates` LAW-18 payload (`buffer_save_errors_total`).
+# Best-effort save failures; deliberately NOT the FATAL `checkpoints.persist_errors_total`.
 buffer_save_errors_total = 0
 
 #: The canonical replay-buffer filename, in ONE place.

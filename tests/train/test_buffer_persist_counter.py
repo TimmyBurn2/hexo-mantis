@@ -4,17 +4,13 @@ The debt (WPSC DEBT_DOSSIER, from WP13-A): `try_save_buffer` swallowed save fail
 WARN, uncounted, outside every counters_fn — including on the SHUTDOWN save, the last save
 of a run. The closure: a module counter (`buffer_save_errors_total`), deliberately separate
 from `checkpoints.persist_errors_total` (the watchdog's `> 0` FATAL feed — this path is
-best-effort by design), with a live LAW-18 consumer in the coordinator's `monitor_gates`
-payload. Every arm below is driven, not asserted from source.
+best-effort by design). Every arm below is driven, not asserted from source.
 """
 from __future__ import annotations
-
-from types import SimpleNamespace
 
 import mantis.train.buffer_persist as buffer_persist
 import mantis.train.checkpoints as checkpoints
 from mantis.train.buffer_persist import try_save_buffer
-from mantis.train.coordinator.step import StepCoordinator
 
 
 class _SaveExplodes:
@@ -70,19 +66,3 @@ def test_disabled_persistence_stays_a_true_no_op(tmp_path, monkeypatch):
     try_save_buffer(_SaveExplodes(), {"buffer_persist": False}, "shutdown_signal")
     assert buffer_persist.buffer_save_errors_total == 0
 
-
-def test_monitor_gates_payload_reads_the_counter_live(monkeypatch):
-    """The LAW-08 consumer arm, and it must be a LIVE module-attribute read: the payload
-    reflects a count that moved AFTER import (a from-import of the int would freeze 0)."""
-    monkeypatch.setattr(buffer_persist, "buffer_save_errors_total", 7)
-    emitted: list[dict] = []
-    sink = SimpleNamespace(emit=emitted.append)
-    fake_coord = SimpleNamespace(
-        _train_step=1, _gate_stats={}, _policy_loss_reference=None,
-        _policy_loss_window_means=[], _ply_cap_rate=None,
-        _watchdog_counters=lambda: {},
-    )
-    cfg = SimpleNamespace(draw_rate_abort=None, policy_loss_trough_abort=None, ply_cap_abort=None)
-    StepCoordinator._emit_monitor_gates(fake_coord, cfg, sink)
-    assert emitted and emitted[0]["event"] == "monitor_gates"
-    assert emitted[0]["buffer_save_errors_total"] == 7

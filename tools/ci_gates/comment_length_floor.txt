@@ -3,9 +3,9 @@
 # takes a measure below its floor lowers the floor in the same commit; gate 14 says so.
 # Set by CLEANUP WAVE 2's tree-wide comment pass, measured on the tree it landed on.
 # The baseline it replaced, at b2e72de4, was 11711 / 1276 / 32405.
-comment_excess_lines 3385
+comment_excess_lines 3380
 banner_comment_lines 0
-docstring_excess_lines 13077
+docstring_excess_lines 13074
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
 private_docstring_excess_lines 1485

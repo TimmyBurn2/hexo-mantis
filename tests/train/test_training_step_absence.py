@@ -11,8 +11,8 @@ injects a hand-built `loss_info` carrying `"policy_entropy": 2.0` — a shape pr
 emits — so LAW-07's producer test was satisfied against a fiction. These rows drive the two
 REAL tails (`_graph_step` through the production dispatch, and `train_step_from_tensors`)
 and feed their ACTUAL return dicts to the builder. The graph tail PRODUCES `policy_entropy`
-since R355(e) (B-4); row one pins that it is a finite measurement the alert reads, and the
-unproduced rows still travel as `None`.
+since R355(e) (B-4); row one pins that it is a finite measurement the alert reads, and every
+row the payload carries is one the real tail PRODUCES: a field no tail fills leaves the event.
 """
 from __future__ import annotations
 
@@ -42,12 +42,7 @@ GUARANTEED = ("loss", "policy_loss", "value_loss", "grad_norm", "lr",
               "policy_entropy", "policy_entropy_selfplay")
 
 # The payload fields that carry `None` when their producer did not supply them.
-ABSENCE_CAPABLE = (
-    "loss_aux", "loss_ownership", "loss_threat", "loss_chain", "avg_sigma",
-    "policy_entropy", "policy_entropy_pretrain", "policy_entropy_selfplay",
-    "policy_entropy_recent", "policy_target_entropy", "n_rows_policy_loss",
-    "n_rows_total", "value_accuracy", "quiescence_fires_per_step",
-)
+ABSENCE_CAPABLE = ("policy_entropy", "policy_entropy_selfplay")
 
 
 def _real_graph_loss_info(tmp_path: Path) -> dict[str, float]:
@@ -101,7 +96,7 @@ def test_the_real_graph_tail_carries_its_measured_entropy_and_fires_only_below_t
     """THE PIN. `policy_entropy` was a fabricated 0.0 that fired the alert every log; now it is the
     graph tail's measurement, far above the minted floor here, and the alert is quiet for a REASON."""
     loss_info = _real_graph_loss_info(tmp_path)
-    payload = emit_training_step_event(0, loss_info, None, _NullSink())
+    payload = emit_training_step_event(0, loss_info, _NullSink())
     assert payload["policy_entropy"] == pytest.approx(loss_info["policy_entropy"])
     assert payload["policy_entropy"] > MINTED_ENTROPY_FLOOR
     assert "entropy_collapse" not in _alerts(payload)
@@ -114,45 +109,46 @@ def test_a_MEASURED_entropy_below_the_floor_still_fires(tmp_path: Path) -> None:
     the repair would have replaced a false alarm with a dead rule."""
     loss_info = dict(_real_graph_loss_info(tmp_path))
     loss_info["policy_entropy"] = MINTED_ENTROPY_FLOOR - 0.5
-    payload = emit_training_step_event(0, loss_info, None, _NullSink())
+    payload = emit_training_step_event(0, loss_info, _NullSink())
     assert payload["policy_entropy"] == pytest.approx(MINTED_ENTROPY_FLOOR - 0.5)
     assert "entropy_collapse" in _alerts(payload)
 
 
 # the rest of the family (F-28 INST-C02/C03)
 
-def test_every_unproduced_field_travels_as_None_never_a_fabricated_zero(
-    tmp_path: Path
-) -> None:
-    """`docs/contracts/event_manifest.md`: an unproduced field carries `None`. A constant 0
-    in the ONE channel reads as a measurement."""
-    loss_info = _real_graph_loss_info(tmp_path)
-    payload = emit_training_step_event(0, loss_info, None, _NullSink())
+def test_every_field_is_produced_by_the_real_tail(tmp_path: Path) -> None:
+    """A field the real tail leaves `None` on every step has no producer and must leave the event."""
+    payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), _NullSink())
+    unproduced = sorted(key for key, value in payload.items() if value is None)
+    assert unproduced == [], f"producer-less fields in `training_step`: {unproduced}"
+
+
+def test_an_absent_measurement_travels_as_None_never_a_fabricated_zero(tmp_path: Path) -> None:
+    """`docs/contracts/event_manifest.md`: an unproduced field carries `None`, never a 0."""
+    loss_info = dict(_real_graph_loss_info(tmp_path))
+    for key in ABSENCE_CAPABLE:
+        del loss_info[key]
+    payload = emit_training_step_event(0, loss_info, _NullSink())
     for key in ABSENCE_CAPABLE:
         assert key in payload, f"{key} vanished from the payload shape"
-        if key not in loss_info:
-            assert payload[key] is None, f"{key} = {payload[key]!r}, expected None (no producer)"
+        assert payload[key] is None, f"{key} = {payload[key]!r}, expected None (no producer)"
 
 
 def test_the_payload_is_valid_JSON_with_no_NaN(tmp_path: Path) -> None:
     """INST-C02. The three `policy_entropy_*` rows defaulted to `float('nan')`, which
     `json.dumps` writes as the bare token `NaN` — not valid JSON, and read back as a number
     by anything permissive. Absence is `null`."""
-    payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), None, _NullSink())
+    payload = emit_training_step_event(0, _real_graph_loss_info(tmp_path), _NullSink())
     text = json.dumps(payload, allow_nan=False)  # raises ValueError on any NaN/Inf
     assert "NaN" not in text
-    for key in ("policy_entropy_pretrain", "policy_entropy_recent"):
-        assert payload[key] is None
 
 
 def test_a_produced_field_is_carried_through_unchanged(tmp_path: Path) -> None:
     """The absence convention must not eat real readings: a produced key survives."""
     loss_info = dict(_real_graph_loss_info(tmp_path))
-    loss_info["n_rows_total"] = 4096
-    loss_info["avg_sigma"] = 0.0  # a MEASURED zero, which must NOT become None
-    payload = emit_training_step_event(0, loss_info, None, _NullSink())
-    assert payload["n_rows_total"] == 4096
-    assert payload["avg_sigma"] == 0.0 and payload["avg_sigma"] is not None
+    loss_info["policy_entropy_selfplay"] = 0.0  # a MEASURED zero, which must NOT become None
+    payload = emit_training_step_event(0, loss_info, _NullSink())
+    assert payload["policy_entropy_selfplay"] == 0.0
     assert math.isfinite(float(payload["loss_total"]))
 
 
