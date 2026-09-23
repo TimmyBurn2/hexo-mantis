@@ -160,3 +160,11 @@ def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
             f"{name} did not thread 1:1 into the stream: {block[name]} against {want}"
         )
         assert block[name]["per_position"] == pytest.approx(want / st.positions_generated)
+
+
+@pytest.mark.parametrize("missing", _LEVERS)
+def test_a_runner_without_a_lever_getter_is_refused_not_published_as_zero(missing: str) -> None:
+    """An engine lacking one lever getter raises in `runner_stats` instead of reporting a constant 0."""
+    runner = SimpleNamespace(**{name: 1 for name in _LEVERS if name != missing})
+    with pytest.raises(AttributeError, match=missing):
+        runner_stats(_Pool(runner))

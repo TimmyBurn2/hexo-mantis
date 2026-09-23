@@ -30,9 +30,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
+from mantis.train.coordinator.step import _SEARCH_LEVER_COUNTERS
 
-#: The search-lever getters `runner_stats` reads with no default; an engine without them raises.
-_LEVERS = {"pcr_full_moves": 0, "pcr_quick_moves": 0, "gumbel_round_leaves": 0, "gumbel_rounds": 0}
+_LEVERS = dict.fromkeys(_SEARCH_LEVER_COUNTERS, 0)
 
 _FIELDS = (
     "export_offwindow_mass_moves",
