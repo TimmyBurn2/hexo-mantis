@@ -26,10 +26,10 @@ gate 1 not run (the accepted cost).
 
 **The run (read 15:10–18:30 UTC, `RUN7_EVAL_COST_2026-09-15.md`):**
 
-1. START at 17:27:46 UTC 2026-09-14 on the vested stamp; supervisor pid 3094932; 32 workers; the
+1. START at 17:27:46 UTC 2026-09-14 on the vested stamp; the supervisor up; 32 workers; the
    puller (600 s) is a systemd user unit on the operator's machine; the dashboard and viewer are
-   generated ON THE BOX from the live run dir every 10 min (`/workspace/obs/`, loopback 8766,
-   reached by `ssh -N -L 8766:127.0.0.1:8766 vast` or the vast portal's cloudflared quick tunnel,
+   generated ON THE BOX from the live run dir every 10 min (the box's observatory dir, a loopback port,
+   reached by the operator's port-forward tunnel or the provider portal's quick tunnel,
    whose hostname changes on every restart).
 2. Rounds: r1 @3k 8 131 s promoted 0.733 · r2 @6k 12 816 s (under the A/B) not promoted 0.688 ·
    r3 @9k 12 483 s promoted 0.670 · **r4 @12k and r5 @18k KILLED at the 14 400 s bound, readings
@@ -156,7 +156,7 @@ through the refresh scripts); the phase-1 reader layer (the observatory's `reade
 (`docs/design/observatory_design.md`, `observatory_research.md`) stays as DASH-2's record; its
 measured reader advantage (run6: 3.0 s / 84 MB against the dashboard's 5.0 s / 729 MB) is on the
 DASH-2 card so phase 1 is revived from history, not rewritten, when the server is built. The
-worktree `/workspace/mantis-tt` exists only for the A/B's fixed arm.
+box's TT worktree exists only for the A/B's fixed arm.
 (6) REPAIR-A4 (R355) LANDED in three plans, `d44f3459..` up to and including the review-fix
 commits of 2026-09-17 (the tip is `git log dev`; 43 commits at this writing):
 A-2 + A-1 + the search-stats producer; the in-run repairs B-1..B-9, B-11, B-19, A-3, C-3; steps
@@ -179,11 +179,11 @@ share < 25 %; `mantis.diagnostics.ring_audit <ring> --bands <prereg>` is the sta
 **run7 STOPPED 2026-09-18 06:25:23 UTC** by operator direction ("stop run7 if we don't need it any
 more" — nothing on the record needed it: flat by its own gate since 42k, r13–r25 @48k–81k all
 `promoted: false`, r22 @72k completed), BEFORE the stamp rather than after it (R356(b)'s grant, one
-SIGTERM to supervisor pid 3127628, executed out of R357's ROUTE order on that direction): `shutdown_save
+SIGTERM to run7's supervisor, executed out of R357's ROUTE order on that direction): `shutdown_save
 step=83482`, `run7_00083482_01e6df4b.ckpt` + bundle + resume + ring written, `terminal_eval_skipped
 reason=signal_stop`, child rc 0, no round in flight (r25 @81k was the last, wall 4 211 s, rung 0.674;
 r26 never fired); the puller receipted the 83482 bundle on cycle 292. The card is idle. Run-ops on
-the box (fresh session, alias `vast`, R356 §5 7–13 + the four R357 deltas, the STOP step spent):
+the box (fresh session, the operator's box alias, R356 §5 7–13 + the four R357 deltas, the STOP step spent):
 preflight → parent copy + sha → stamp → 3 h shakedown → witness (§3) + audit (§3a) on the same ring →
 START → the follower's first cell. RESEARCH-STRENGTH runs in a web-enabled session beside it.
 (9) R358 (2026-09-18, `docs/design/research/STRENGTH_RESEARCH_2026-09-18.md` read): run8 is
@@ -205,13 +205,13 @@ debug). The NET-ONLY cell tooling: `tools/strix_driver.py` passes `disable_forci
 and select), the adapter's `<stem>:net_only` variant (a distinct rung by name, regime key and bot
 name `…_nosolver`), `tools/strix_follower.py --once <ckpt> --unit net_only` →
 `<ckpt>.strix256_nosolver.json` (`strix.solver: off` in the receipt; the dashboard labels the
-series "solver OFF"). Box order under R358 §6 (alias `vast`, the grant standing): preflight +
+series "solver OFF"). Box order under R358 §6 (the operator's box alias, the grant standing): preflight +
 `make build.cuda` + parent copy/sha may run NOW; stamp only once the mint commit is on `dev` →
 3 h shakedown, one contended round → witness (R357 §3(b), pin attached) → `ring_audit --bands
 <prereg> --events <events_run8_seg0001.jsonl>` on the same ring, five bands + the two new rows READ
 → START → follower `--once <parent> ` (solver ON) → `--once <parent> --unit net_only` →
 `--follow`; the cell's pre-stated reading is on CARD-STRIX-NET-ONLY; then PERF-3's packet.
-(10) THE BOX BLOCK, DONE 2026-09-18 (alias `vast`, the run tree `/workspace/hexo-mantis` on branch `r358`,
+(10) THE BOX BLOCK, DONE 2026-09-18 (the operator's box alias, the box's repo checkout on branch `r358`,
 carried by bundle — `dev` was NOT pushed at the time): `86308bc7` + `make build.cuda` (torch 2.11.0+cu128,
 CUDA True, the rebuilt bridge serves `sym_draw_counts`); the parent copied to `checkpoints/run7/` and
 sha-verified (`5750cca4…`); **run8 preflight PASS** 10:13–11:54 UTC (101-step burst, tier `sync_lag`,
@@ -229,10 +229,10 @@ bands)**: counter_threat_share 0.013 % (< 0.5 %; 3 of 23 245 block rows), quiesc
 h_full_median 0.270, one_hot_share_full 0.221, cap_rate 2.2 % (< 5 %; 1 179 games); READ:
 **replay_ratio 3.02** over the ring's span (1.13 h, positions 170 515 → 270 493, samples 467 712 →
 769 536), **sym_bin0_over_mean 0.998** (bins 62 780–63 868, 9 479 empty-board skips; augmentation is ON
-and uniform). **START 16:55:34 UTC**: supervisor pid 3182641 over `mantis.run` pid 3182650, out-dir
-`/workspace/runs/run8`, `bc_warmstart_loaded` net hash `a9a46c55…` verified over 50 tensors, 32 workers;
+and uniform). **START 16:55:34 UTC**: the supervisor over `mantis.run`, out-dir
+the box's run8 run dir, `bc_warmstart_loaded` net hash `a9a46c55…` verified over 50 tensors, 32 workers;
 the puller `mantis-puller-run8.service` (600 s) replaces run7's on the operator's machine. The follower
-chain (`/workspace/oc7/chain_follower_run8.sh`, work `/workspace/oc8/strix_follow`): the parent at 256/256
+chain (the box's `chain_follower_run8.sh`, work in the box's strix-follow dir): the parent at 256/256
 solver ON, then `--unit net_only`, then `--follow`; its first launch was killed after 90 s because the
 regime read IDLE beside the live trainer — a follower bug (heartbeat ages keyed by FILENAME; the stale
 `run8-preflight/logs/heartbeat_run8.json` overwrote the live one), fixed at `5e25e40c` (keyed by
@@ -245,7 +245,7 @@ findings): the parent at 256/256 with strix's solver **ON 0.111 [0.073, 0.149]**
 4 256 s) and **OFF 0.115 [0.076, 0.153]** (19:46:41 UTC, wall 5 682 s) — **Δ +0.3 pp, inside both
 CIs: the solver is not the gap** (CARD-STRIX-NET-ONLY's pre-stated rule; search-in-the-loop leaves the
 run9 queue until new evidence). The 256/256 solver-ON point is run8's baseline for R356(c)'s reading
-(the parent's as-shipped 512/128 point was 0.142). `--follow` is up (pid 3183447, 300 s polls): every
+(the parent's as-shipped 512/128 point was 0.142). `--follow` is up (300 s polls): every
 15 000-step save and every promotion fires one equal-work cell. run8 under the two cells ran at 369
 steps/h / 394 games/h (step 1 057 at 19:47 UTC, 2 h 52 min in) — the CONTENDED price, ≈ 35 % of the
 shakedown's rate; alone it should return to ≈ 1 000 steps/h. PERF-3 and R359 are the architect's next.
@@ -286,10 +286,10 @@ R361 (next R362), A2 under R356's foot (the per-promotion cell's cost; one annot
 there), R356/R359/R360's Status lines amended. **THE BOX ACTION:** `tools/strix_follower.py --follow`
 gained `--promotions/--no-promotions` (default on = R356(a), pinned + mutation-checked; `0d6ee0ee`),
 cherry-picked onto the stamped lineage as the box branch `r361` (`08805676` = `5e25e40c` + that
-commit, `src/`+`crates/` byte-identical to `86308bc7`) and carried by bundle; the old `--follow` (pid
-3183447) stopped 06:14:58 UTC with no cell in flight, the new one (pid **3211513**, `--follow
+commit, `src/`+`crates/` byte-identical to `86308bc7`) and carried by bundle; the old `--follow` process
+stopped 06:14:58 UTC with no cell in flight, the new one (`--follow
 --no-promotions --cadence 15000 --poll-sec 300`) started **06:15:06 UTC at run8 step 8 851**; the
-launch script `/workspace/oc7/box_follower_run8.sh` carries the flag (its R358 copy kept as `.r358`).
+box's launch script `box_follower_run8.sh` carries the flag (its R358 copy kept as `.r358`).
 The two promotion cells already fired stand as receipts: **run8@3000 0.056 [0.031, 0.083], run8@6000
 0.0625 [0.038, 0.090]** (256/256, CONTENDED) — both below the parent's 0.111; the R356(c) reading is
 15k/30k. **THE CENSUS** (`docs/design/measurements/EVAL_COST_2026-09-19.md`; CARD-EVAL-REDESIGN
@@ -307,7 +307,7 @@ plus 39 % strix cells (72 % together); run8's trainer 999–1 069 steps/h alone,
 sims 64 UNMEASURED. Two cards opened (CARD-EVAL-REDESIGN, CARD-EVAL-GATE-FIELDS-IN-STREAM); CARD-PERF-3
 carries R361(d)'s contended arm. No config touched; nothing in run9 armed.
 (14) R362 (2026-09-19, dev + the two READ-ONLY box checks §0(4) owed; no box hours, run8's stamp
-untouched): **THE BOX, read 10:02:49 UTC after two banner drops** — the follower pid 3211513 is
+untouched): **THE BOX, read 10:02:49 UTC after two banner drops** — the follower process is
 ALIVE (etime 3:47:43, `--follow --no-promotions --cadence 15000 --poll-sec 300`, HEAD `08805676`),
 its chain log ends at the R361(a) relaunch line with no cell fired since (15k not reached); the
 puller mirror is FRESH (`events_run8_seg0001.jsonl` at 09:42 UTC, run8 at **step 11 842**; r3 @9000
@@ -497,7 +497,7 @@ in the register and in the research packet, which is now ON `dev` (`75f3627f`, o
 `research-strength-2`); `RUN9_PREREG` carries the not-started header, E4's resolution statement in its unit
 section and the `one_hot_share_full` band STRUCK (five bands parse; run8's 45k ring reads them as before).
 **THE BOX, in order (branch `r365` = the `dev` tip `d4804e58` by bundle, `make build.cuda`, CUDA torch
-2.11+cu128):** run8's follower (pid 3211513, no cell in flight) SIGTERM 08:23:40 → run8's supervisor SIGTERM
+2.11+cu128):** run8's follower (no cell in flight) SIGTERM 08:23:40 → run8's supervisor SIGTERM
 08:23:43 → `shutdown_save step=55170`, `terminal_eval_skipped reason=signal_stop`, `run8_00055170_34ff6c4e.ckpt`
 + bundle + resume + ring written and RECEIPTED by the puller (round r18 @54k was in flight and abandoned with
 the run; the record closed at 45k by R365(a)) → **PERF-3 step 3** (`PERF3_2026-09-18.md` §step 3): alone at
@@ -510,7 +510,7 @@ NOT MEASURED (no producer in the tool; P-B3's twin in run10's window) → **E1**
 −6.2 pp move with disjoint CIs, so "strix @ r8" IS a unit qualifier on every follower point (the series and the
 parent choice stand, every point shares the unit; strix at its trained radius is the stronger ruler) → the mirror
 verified (rsync dry-run: run8 and run7 complete; the cell dirs, the bench JSONs, the scripts and every other
-run dir copied to `mantis-mirror/box-final-2026-09-21/`) → `vastai destroy instance 35883053` at 10:17 UTC, the
+run dir copied to `mantis-mirror/box-final-2026-09-21/`) → the provider instance destroyed at 10:17 UTC, the
 host unreachable a minute later; the local puller unit stopped. Box-hours since
 the stop: 1.11 measured (0.33 bench alone + 0.78 E1 with the contended bench inside) of the packet's 1.6.
 **PROBE-1 READ** (`docs/design/measurements/PROBE1_2026-09-21.md`; the instrument `tools/probe1.py` +
@@ -709,18 +709,18 @@ range `19e8351d..f088407e` net code −600 lines with the review reports +1 000 
 
 ## Provenance
 
-Item (19) derived 2026-09-21 on `dev` from the leg's commits, the two review reports, the gate log of the systemd unit `mantis-gates-r367` and `git status`; no box exists. The 45k read derived 2026-09-21 on `dev` from the mirror alone (`events_run8_seg0001.jsonl` at 05:50 UTC, the 45k/51k rings and `.strix256.json`, the game records under `logs/games/` for the per-round gate counts, `eval_ladder_state.json` for the rung), no box contact. Item (15) derived 2026-09-20 on `dev` from the R363 packet, the mirror (`events_run8_seg0001.jsonl` at 06:49 UTC, run8 at 30 871), the three profile JSONs in that session's scratchpad (8 / 16 / 4 threads) and the gate logs of the session; NO box contact. Item (14) derived 2026-09-19 on `dev` at `ff5a43d8` from the commits named in it, the gate logs of that session, the mirror (`events_run8_seg0001.jsonl` pulled 09:42 UTC) and one read-only ssh to the box at 10:02 UTC (`ps -p 3211513`, `/workspace/oc7/chain_follower_run8.log`). Item (13) derived 2026-09-19 on `dev` from the box (`/workspace/oc7/chain_follower_run8.log`, `ps`, the
+Item (19) derived 2026-09-21 on `dev` from the leg's commits, the two review reports, the gate log of the systemd unit `mantis-gates-r367` and `git status`; no box exists. The 45k read derived 2026-09-21 on `dev` from the mirror alone (`events_run8_seg0001.jsonl` at 05:50 UTC, the 45k/51k rings and `.strix256.json`, the game records under `logs/games/` for the per-round gate counts, `eval_ladder_state.json` for the rung), no box contact. Item (15) derived 2026-09-20 on `dev` from the R363 packet, the mirror (`events_run8_seg0001.jsonl` at 06:49 UTC, run8 at 30 871), the three profile JSONs in that session's scratchpad (8 / 16 / 4 threads) and the gate logs of the session; NO box contact. Item (14) derived 2026-09-19 on `dev` at `ff5a43d8` from the commits named in it, the gate logs of that session, the mirror (`events_run8_seg0001.jsonl` pulled 09:42 UTC) and one read-only remote read of the box at 10:02 UTC (the follower's process and its chain log). Item (13) derived 2026-09-19 on `dev` from the box (the follower's chain log, the process table, the
 `r361` branch), the mirror's `events_run{7,8}_seg*.jsonl` (run8 pulled 06:05 UTC), the rounds'
 `eval_spool.work/<run>/*_{result.json,progress.txt}` copied off the box's disk, the spool `.pt`
 tensor hashes and the source files named in the record. Item (12) derived 2026-09-18 on `dev` from the R360 commits, `PERF3_2026-09-18.md` and the mirror's
 `events_run8_seg0001.jsonl` (pulled 20:54 UTC). Item (11) derived 2026-09-18 on `dev` from `docs/design/measurements/PERF_A4_2026-09-11.md`, `git log`
 (`c888c3b7`, `41a5fea8`), `configs/run8.yaml`, `src/mantis/config/preflight_stamp.py` and this host
-(`torch.cuda.is_available()` False). Item (10) derived 2026-09-18 on the box (`/workspace/oc7/preflight_run8.log`, `preflight_shakedown8.log`,
+(`torch.cuda.is_available()` False). Item (10) derived 2026-09-18 on the box (the box's ops-dir logs `preflight_run8.log`, `preflight_shakedown8.log`,
 `shakedown8.launch.log`, `witness_shakedown8.log`, `run8_supervisor.log`, `chain_follower_run8.log`,
-`/workspace/runs/shakedown8/logs/events_shakedown8_seg0001.jsonl`). Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
+and the shakedown8 run dir's `events_shakedown8_seg0001.jsonl`). Item (9) and the R358 exit facts derived 2026-09-18 on `dev` at the R358 leg's exit commit, from
 `configs/run8.yaml`, `tools/config_diff.py`, the gate logs of that session and `docs/governance/RULINGS.md`.
 Everything below the heading otherwise: derived 2026-09-14 on `dev` at the leg's exit commit, from `configs/run7.yaml`, the box's
-`/workspace/runs/run7/logs/events_run7_seg0001.jsonl` and
-`eval_spool.work/run7/r000001_3000_progress.txt`, `/workspace/oc7/{run7_supervisor,chain_tt_ab}.log`,
+run7 run dir (`events_run7_seg0001.jsonl`) and
+`eval_spool.work/run7/r000001_3000_progress.txt`, the box's ops-dir logs `{run7_supervisor,chain_tt_ab}.log`,
 `tools/ci_gates/test_count_floor.txt`, `tools/ci_gates/comment_length_floor.txt` and
 `docs/governance/LAWS.md`. Ruling texts: `docs/governance/RULINGS.md`.
