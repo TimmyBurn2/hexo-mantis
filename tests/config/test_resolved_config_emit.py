@@ -1,12 +1,11 @@
-"""O6 — resolved-config emit (emit.ResolvedConfig.to_event_payload; B1 8-knob payload)
+"""O6 — resolved-config emit (emit.ResolvedConfig.to_event_payload; B1 7-knob payload)
 and O7 — death-of-merge census (grep-gate + mutation self-test).
 
 The merge/layer-reconstruct machinery is deleted; emit is thin per-knob (value, source)
-tagging. The payload carries EXACTLY the 7 schema leaves (source="file") plus the derived
-amp_dtype (source="derived") = 8 knobs (WPSC Phase 2 SC-A2: `selfplay.
+tagging. The payload carries EXACTLY the 6 schema leaves (source="file") plus the derived
+amp_dtype (source="derived") = 7 knobs (WPSC Phase 2 SC-A2: `selfplay.
 legal_move_radius_schedule` dropped out of the schema entirely, DESIGN_P2.md §5/§9 — no
-replacement leaf). The 7-key schema portion is identical to O15's CONSUMER_REGISTRY's
-original WP8 set (B1 — no phantom emit consumer).
+replacement leaf).
 """
 from pathlib import Path
 
@@ -17,7 +16,7 @@ from mantis.config.loader import load_config
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-_SEVEN_SCHEMA_LEAVES = {
+_SIX_SCHEMA_LEAVES = {
     "schema_version",
     "run_id",
     "seed",
@@ -35,7 +34,7 @@ def _run5() -> ResolvedConfig:
 def test_payload_event_and_seven_knob_key_set():
     payload = _run5().to_event_payload()
     assert payload["event"] == "resolved_config"
-    assert set(payload["knobs"]) == _SEVEN_SCHEMA_LEAVES | {"amp_dtype"}
+    assert set(payload["knobs"]) == _SIX_SCHEMA_LEAVES | {"amp_dtype"}
 
 
 def test_payload_pins_production_values():
@@ -58,7 +57,7 @@ def test_payload_pins_production_values():
 
 def test_schema_leaves_are_file_source_amp_is_derived():
     rc = _run5()
-    for leaf in _SEVEN_SCHEMA_LEAVES:
+    for leaf in _SIX_SCHEMA_LEAVES:
         assert rc.provenance(leaf).source == "file"
     assert rc.provenance("amp_dtype").source == "derived"
 

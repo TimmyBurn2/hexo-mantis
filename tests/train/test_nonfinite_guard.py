@@ -94,7 +94,7 @@ def test_a_healthy_step_counts_nothing_and_does_move_the_weights(tmp_path: Path)
     )
 
 
-def test_the_loss_info_contract_stays_five_keys(tmp_path: Path) -> None:
+def test_the_loss_info_contract_stays_seven_keys(tmp_path: Path) -> None:
     """The counters ride the EVENT, not the return: `loss_info` is a contract the coordinator's
     gates and checkpoint metadata pin."""
     trainer = H.tiny_graph_trainer(tmp_path, sink=H.SpySink())

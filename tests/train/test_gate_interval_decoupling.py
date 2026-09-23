@@ -350,8 +350,8 @@ def test_p6b_every_committed_config_mints_gate_interval_equal_to_its_log_interva
     which is how "this moved no armed value" is true rather than said.
 
     A PREREG BLANK wired to current behaviour: when the operator picks a real gate stride this
-    is expected to be RE-POINTED, not deleted. The count ratchets in BOTH directions so no
-    config slips past the sweep, and enumeration goes through the ONE discovery authority.
+    is expected to be RE-POINTED, not deleted. Enumeration goes through the ONE discovery
+    authority, so no config slips past the sweep.
     """
     configs = discover_configs(_REPO / "configs")
     assert configs, "discovery found no config, so this sweep asserts nothing"

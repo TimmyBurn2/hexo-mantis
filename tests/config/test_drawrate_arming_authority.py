@@ -27,8 +27,6 @@ from pathlib import Path
 
 import pytest
 
-# `ruff --fix` re-sorts the `resolve.draw_rate` import into the third-party block while that
-# module does not exist; it is placed here, with its `mantis.*` siblings, where it belongs.
 from mantis.config.armed_aborts import (  # RED anchor #3 — ArmingSurfaceMissingError (F-4)
     MANIFEST,
     ArmedAbort,

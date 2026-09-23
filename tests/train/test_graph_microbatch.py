@@ -432,7 +432,7 @@ def _drive_with_spies(tmp_path, m: int, *, checkpoint_interval: int = 1):
 @pytest.mark.parametrize("m", [1, 2, 4])
 def test_of2_4_one_optimizer_step_and_seven_keys_at_every_m(tmp_path, m: int) -> None:
     """ONE of everything per training step, at M in {1, 2, 4}, and the returned dict carries all
-    five keys at every M. The key-presence half is not decoration: the coordinator's grad-norm gate
+    seven keys at every M. The key-presence half is not decoration: the coordinator's grad-norm gate
     reads `float(loss_info.get("grad_norm", 0.0))`, so a branch returning a dict without
     `grad_norm` silently feeds an armed abort a `0.0` that always passes its threshold."""
     r = _drive_with_spies(tmp_path, m)
