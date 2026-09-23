@@ -1,56 +1,21 @@
 //! R355(d): a 1-in-N game's result row carries, per searched ply, the root as the search left
 //! it — the record the forced-move census could not read from the ring.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
+
+mod common;
 
 const PLY_CAP: usize = 6;
 const N_SIMS_QUICK: usize = 8;
 const N_SIMS_FULL: usize = 24;
 const ENCODING: &str = "gnn_axis_r8";
-
-fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(4, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
 
 fn drive(search_stats_every: usize, want_games: usize) -> Vec<GameResultRow> {
     let spec = lookup_or_panic(ENCODING);
@@ -72,7 +37,8 @@ fn drive(search_stats_every: usize, want_games: usize) -> Vec<GameResultRow> {
     })
     .expect("runner constructs at the drive's parameters");
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_producer(runner.graph_producer(), spec.policy_logit_count, served);
+    let producer =
+        common::spawn_uniform_producer(runner.graph_producer(), spec.policy_logit_count, served, 4);
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut games = Vec::new();

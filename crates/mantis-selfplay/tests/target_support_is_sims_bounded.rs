@@ -11,58 +11,23 @@
 //! A Gumbel row, the other kind, is SPARSE, so its width is the minted `selfplay.gumbel_m` and
 //! not the sims regime. Two row kinds, two bounds; this file measures the PUCT one.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_core::board::Cell;
 use mantis_core::{Board, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{QSigma, SearchKind, MAX_CHILDREN_PER_NODE};
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::GraphRecord;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
+
+mod common;
 
 const LEAF_BATCH: usize = 8;
 /// Small enough that the sim budget is FAR below the r8 legal-move count.
 const SIMS: usize = 24;
-
-fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(LEAF_BATCH, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
 
 /// Drive one worker under `kind` until `want` graph records are drained.
 fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
@@ -82,7 +47,12 @@ fn drive(kind: SearchKind, want: usize) -> Vec<GraphRecord> {
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_producer(runner.graph_producer(), spec.policy_logit_count, served);
+    let producer = common::spawn_uniform_producer(
+        runner.graph_producer(),
+        spec.policy_logit_count,
+        served,
+        LEAF_BATCH,
+    );
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);
     let mut rows = Vec::new();

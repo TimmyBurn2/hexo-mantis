@@ -22,17 +22,12 @@
 use mantis_graph::AxisGraph;
 use mantis_selfplay::queues::{build_leaf_graph, build_leaf_graphs_batch, LeafRequest};
 
+mod common;
+use common::splitmix64;
+
 const WIN_LENGTH: u8 = 6;
 const RADIUS: u16 = 6;
 const TRUNK: i32 = 19;
-
-fn splitmix64(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
 
 /// `n` distinct positions of VARYING stone count, so a chunked split is non-trivial and the
 /// chunks are not interchangeable. A corpus of identical positions cannot see a reordering.
@@ -75,23 +70,36 @@ fn assert_same(a: &AxisGraph, b: &AxisGraph, idx: usize) {
         a.n_nodes_checksum, b.n_nodes_checksum,
         "n_nodes_checksum differs at {idx}"
     );
-    assert_eq!(a.window_center, b.window_center, "window_center differs at {idx}");
-    assert_eq!(a.current_player, b.current_player, "current_player differs at {idx}");
-    assert_eq!(a.builder_impl, b.builder_impl, "builder_impl differs at {idx}");
+    assert_eq!(
+        a.window_center, b.window_center,
+        "window_center differs at {idx}"
+    );
+    assert_eq!(
+        a.current_player, b.current_player,
+        "current_player differs at {idx}"
+    );
+    assert_eq!(
+        a.builder_impl, b.builder_impl,
+        "builder_impl differs at {idx}"
+    );
 }
 
 #[test]
 fn parallel_leaf_build_is_bit_identical_to_serial_at_every_width() {
     let positions = corpus(37);
-    let serial = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 1)
-        .expect("serial build");
+    let serial =
+        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 1).expect("serial build");
     assert_eq!(serial.len(), positions.len());
     // Widths that do and do NOT divide the corpus evenly: an off-by-one in `div_ceil`
     // chunking shows up only on a ragged split.
     for threads in [2usize, 3, 4, 5, 8, 12, 37, 64] {
         let par = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, threads)
             .unwrap_or_else(|e| panic!("threaded build at {threads} failed: {e}"));
-        assert_eq!(par.len(), serial.len(), "length differs at {threads} threads");
+        assert_eq!(
+            par.len(),
+            serial.len(),
+            "length differs at {threads} threads"
+        );
         for (i, (a, b)) in serial.iter().zip(par.iter()).enumerate() {
             assert_same(a, b, i);
         }
@@ -103,11 +111,11 @@ fn the_batch_builder_agrees_with_the_one_shot_builder_position_by_position() {
     // The batch entry point must not become a second builder. Driven against
     // `build_leaf_graph` itself so a divergence in either path is visible here.
     let positions = corpus(11);
-    let batch = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 4)
-        .expect("threaded build");
+    let batch =
+        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 4).expect("threaded build");
     for (i, (stones, cp, mr)) in positions.iter().enumerate() {
-        let one = build_leaf_graph(stones, *cp, *mr, WIN_LENGTH, RADIUS, TRUNK)
-            .expect("one-shot build");
+        let one =
+            build_leaf_graph(stones, *cp, *mr, WIN_LENGTH, RADIUS, TRUNK).expect("one-shot build");
         assert_same(&one, &batch[i], i);
     }
 }
@@ -118,8 +126,8 @@ fn the_order_is_index_order_and_a_reordering_would_be_visible() {
     // "identical in order" is a real constraint rather than one satisfied by every
     // permutation. Without this row the parity test would pass over a shuffled result.
     let positions = corpus(9);
-    let graphs = build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 3)
-        .expect("threaded build");
+    let graphs =
+        build_leaf_graphs_batch(&positions, WIN_LENGTH, RADIUS, TRUNK, 3).expect("threaded build");
     for i in 0..graphs.len() {
         for j in (i + 1)..graphs.len() {
             assert!(
@@ -143,14 +151,17 @@ fn a_bad_position_returns_the_same_error_serial_and_threaded() {
     let serial_err = serial.expect_err("serial build must refuse current_player 0");
     let threaded_err = threaded.expect_err("threaded build must refuse current_player 0");
     assert!(serial_err.contains("current_player"), "{serial_err}");
-    assert_eq!(serial_err, threaded_err, "the threaded path renamed the failure");
+    assert_eq!(
+        serial_err, threaded_err,
+        "the threaded path renamed the failure"
+    );
 }
 
 #[test]
 fn an_empty_batch_is_empty_at_every_width() {
     for threads in [0usize, 1, 8] {
-        let out = build_leaf_graphs_batch(&[], WIN_LENGTH, RADIUS, TRUNK, threads)
-            .expect("empty build");
+        let out =
+            build_leaf_graphs_batch(&[], WIN_LENGTH, RADIUS, TRUNK, threads).expect("empty build");
         assert!(out.is_empty());
     }
 }

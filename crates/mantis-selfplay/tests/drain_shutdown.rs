@@ -17,6 +17,9 @@ use mantis_selfplay::queues::GraphQueue;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{GameResultRow, SelfPlayRunner, SelfPlayRunnerConfig};
 
+mod common;
+use common::splitmix64;
+
 const ENCODING: &str = "gnn_axis_r8";
 
 /// `terminal_reason` is field 4 of `GameResultRow`; `3` = organic draw.
@@ -26,14 +29,6 @@ fn has_false_draw(rows: &[GameResultRow]) -> bool {
 
 const MOCK_NN_SEED: u64 = 0x4D4F_434B_4E4E_0006;
 
-fn splitmix64_step(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// Deterministic policy+value from the leaf's legal coords, NORMALIZED (the segmented-softmax
 /// invariant `assemble_ls_from_gnn_probs` checks). The values are irrelevant to the shutdown
 /// invariant; only that the producer keeps the search fed so workers are genuinely mid-game.
@@ -41,17 +36,17 @@ fn mock_graph_infer(coords: &[(i32, i32)], seed: u64) -> (Vec<f32>, f32) {
     let mut s = seed;
     for &(q, r) in coords {
         s ^= (q as u32) as u64 | ((r as u32) as u64) << 32;
-        splitmix64_step(&mut s);
+        splitmix64(&mut s);
     }
     let mut raw = Vec::with_capacity(coords.len());
     for _ in 0..coords.len() {
-        let step = splitmix64_step(&mut s);
+        let step = splitmix64(&mut s);
         // Strictly positive so the normalization below can never divide by zero.
         raw.push((step >> 40) as f32 / 16_777_216.0_f32 + 1.0e-3);
     }
     let total: f32 = raw.iter().sum();
     let probs: Vec<f32> = raw.iter().map(|p| p / total).collect();
-    let vstep = splitmix64_step(&mut s);
+    let vstep = splitmix64(&mut s);
     let value = ((vstep % 2_000_001) as i64 - 1_000_000) as f32 / 1_000_000.0_f32;
     (probs, value)
 }

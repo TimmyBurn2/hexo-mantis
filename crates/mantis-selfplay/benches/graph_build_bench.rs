@@ -19,6 +19,10 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use mantis_graph::BUILDER_IMPL_NATIVE;
 use mantis_selfplay::queues::build_leaf_graph;
 
+#[path = "../tests/common/mod.rs"]
+mod common;
+use common::splitmix64;
+
 // Regime constants, fixed.
 const LEAF_CORPUS_SIZE: usize = 64;
 const LEAF_CORPUS_SEED: u64 = 0x6C65_6166_0006_0001;
@@ -30,15 +34,6 @@ const TRUNK_SIZE: i32 = 19;
 // legal set under the 19-trunk window.
 const COORD_HALF: i64 = 9;
 
-// Pinned splitmix64, canonical constants.
-fn splitmix64_step(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// One deterministic leaf request in `build_leaf_graph`'s argument shape.
 struct LeafRequest {
     stones: Vec<(i64, i64, i64)>,
@@ -49,7 +44,7 @@ struct LeafRequest {
 /// Draw an integer in `[lo, hi]` inclusive from the running splitmix64 stream.
 fn draw_range(s: &mut u64, lo: i64, hi: i64) -> i64 {
     let span = (hi - lo + 1) as u64;
-    lo + (splitmix64_step(s) % span) as i64
+    lo + (splitmix64(s) % span) as i64
 }
 
 /// Build the fixed 64-leaf corpus from one continuous splitmix64 stream, so the
@@ -81,11 +76,7 @@ fn build_leaf_corpus() -> Vec<LeafRequest> {
                 stones.push((q, r, player));
             }
         }
-        let current_player = if splitmix64_step(&mut s) & 1 == 0 {
-            1
-        } else {
-            -1
-        };
+        let current_player = if splitmix64(&mut s) & 1 == 0 { 1 } else { -1 };
         let moves_remaining = draw_range(&mut s, 1, 200);
         corpus.push(LeafRequest {
             stones,

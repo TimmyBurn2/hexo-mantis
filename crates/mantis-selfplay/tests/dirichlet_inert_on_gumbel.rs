@@ -1,54 +1,18 @@
 //! R359(d): the `dirichlet_*` rows are inert on the Gumbel arm BY CODE — witnessed by the drive's own fire counter (`dirichlet_root_fires`, LAW-18): 0 under Gumbel with the rows ARMED over a fully served search, > 0 under PUCT with the same rows, which is what makes the 0 a reading and not a gap.
 
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{RunnerStatsSnapshot, SelfPlayRunner, SelfPlayRunnerConfig};
+
+mod common;
 
 const N_SIMS: usize = 64;
 const ENCODING: &str = "gnn_axis_r8";
-
-/// A uniform-prior mock inference server on the graph queue: every requested leaf is answered.
-fn spawn_producer(queue: GraphQueue, n_actions: usize, served: Arc<AtomicUsize>) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(8, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
 
 /// One driven worker with the Dirichlet rows ARMED (`enabled: true`, the shipped α/ε) until `want_records` records land; the runner's counter snapshot.
 fn drive(kind: SearchKind, want_records: usize) -> RunnerStatsSnapshot {
@@ -71,7 +35,8 @@ fn drive(kind: SearchKind, want_records: usize) -> RunnerStatsSnapshot {
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_producer(runner.graph_producer(), spec.policy_logit_count, served);
+    let producer =
+        common::spawn_uniform_producer(runner.graph_producer(), spec.policy_logit_count, served, 8);
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(600);

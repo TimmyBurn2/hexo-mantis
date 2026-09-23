@@ -18,15 +18,15 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::derived_visit_capacity;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
+
+mod common;
 
 // `configs/run5.yaml`, selfplay block: named here so drift from the shipped regime is one diff.
 const PROD_SIMS: usize = 50;
@@ -40,45 +40,6 @@ const PROD_DIRICHLET_EPSILON: f32 = 0.25;
 const RANDOM_OPENING_PLIES: u32 = 120;
 /// Derived, never transcribed: what the drive above must record per game.
 const SEARCHED_PLIES: usize = PROD_PLY_CAP - RANDOM_OPENING_PLIES as usize;
-
-fn spawn_healthy_graph_producer(
-    queue: GraphQueue,
-    n_actions: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(PROD_LEAF_BATCH, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
 
 #[test]
 fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capacity() {
@@ -117,10 +78,11 @@ fn a_full_ply_cap_game_at_production_parameters_records_within_the_derived_capac
     .expect("production-parameter gnn runner constructs");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_healthy_graph_producer(
+    let producer = common::spawn_uniform_producer(
         runner.graph_producer(),
         spec.policy_logit_count,
         served.clone(),
+        PROD_LEAF_BATCH,
     );
 
     runner.start();

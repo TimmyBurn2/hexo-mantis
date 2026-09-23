@@ -15,57 +15,16 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_core::board::Board;
 use mantis_core::Cell;
 use mantis_encoding::lookup_or_panic;
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::replay::hexg::GraphRecord;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-/// Mock graph producer: uniform probs over each request's legal nodes, assembled by the
-/// PRODUCTION `assemble_ls_from_gnn_probs` (the shared producer both consumers reach).
-fn spawn_graph_producer(
-    queue: GraphQueue,
-    n_actions: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(4, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            let res =
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32));
-            ids.push(id);
-            results.push(res);
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
+mod common;
 
 /// Re-derive off-window-ness of a visit coord from the record's OWN stones (the rebuild
 /// board recomputes the identical bbox window centre — `Board::from_stones` contract).
@@ -110,7 +69,8 @@ fn s2w_drained_graph_records_carry_full_mass_visits_verbatim() {
     };
     let runner = SelfPlayRunner::new(cfg).expect("gnn runner must construct");
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_graph_producer(runner.graph_producer(), n_actions, served.clone());
+    let producer =
+        common::spawn_uniform_producer(runner.graph_producer(), n_actions, served.clone(), 4);
 
     runner.start();
     // Bounded wait for >=1 COMPLETED game, so drain returns finalized records.
@@ -187,7 +147,8 @@ fn ctr_export_offwindow_mass_moves_fires_on_a_dispersed_run() {
         "the counter must be VISIBLE at 0 when idle (LAW-18)"
     );
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_graph_producer(runner.graph_producer(), n_actions, served.clone());
+    let producer =
+        common::spawn_uniform_producer(runner.graph_producer(), n_actions, served.clone(), 4);
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(300);

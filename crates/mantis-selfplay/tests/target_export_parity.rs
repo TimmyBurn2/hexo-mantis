@@ -20,76 +20,12 @@ use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
 use mantis_selfplay::replay::hexg::{GraphRecord, HexgBuffer};
 
+mod common;
+use common::{fixture_text, floats, ints, pairs, scalar, value_of};
+
 const N_SIMS: usize = 50;
 const LEAF_BATCH: usize = 8;
 const PAIR_TOL: f64 = 1e-6;
-
-// Flat fixture reader, house pattern: no serde dep.
-fn fixture_text(name: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/eval_selfplay_parity")
-        .join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("fixture {} unreadable: {e}", path.display()))
-}
-
-fn value_of<'a>(src: &'a str, key: &str) -> &'a str {
-    let needle = format!("\"{key}\":");
-    let at = src
-        .find(&needle)
-        .unwrap_or_else(|| panic!("fixture key {key:?} absent"));
-    let rest = src[at + needle.len()..].trim_start();
-    if let Some(inner) = rest.strip_prefix('[') {
-        let end = inner
-            .find(']')
-            .unwrap_or_else(|| panic!("unterminated array for {key:?}"));
-        &inner[..end]
-    } else if let Some(inner) = rest.strip_prefix('"') {
-        let end = inner
-            .find('"')
-            .unwrap_or_else(|| panic!("unterminated string for {key:?}"));
-        &inner[..end]
-    } else {
-        let end = rest.find([',', '\n', '}']).unwrap_or(rest.len());
-        rest[..end].trim_end()
-    }
-}
-
-fn ints(src: &str, key: &str) -> Vec<i64> {
-    value_of(src, key)
-        .split(',')
-        .map(|t| {
-            t.trim()
-                .parse::<i64>()
-                .unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})"))
-        })
-        .collect()
-}
-
-fn floats(src: &str, key: &str) -> Vec<f64> {
-    value_of(src, key)
-        .split(',')
-        .map(|t| {
-            t.trim()
-                .parse::<f64>()
-                .unwrap_or_else(|e| panic!("{key:?}: {t:?} ({e})"))
-        })
-        .collect()
-}
-
-fn scalar(src: &str, key: &str) -> i64 {
-    let raw = value_of(src, key);
-    raw.trim()
-        .parse::<i64>()
-        .unwrap_or_else(|e| panic!("{key:?}: {raw:?} ({e})"))
-}
-
-fn pairs(flat: &[i64]) -> Vec<(i32, i32)> {
-    assert_eq!(flat.len() % 2, 0, "coord array must be pairs");
-    flat.chunks_exact(2)
-        .map(|c| (c[0] as i32, c[1] as i32))
-        .collect()
-}
 
 /// One fixture position, fully decoded + honesty-checked against a replayed board.
 struct Pos {

@@ -12,17 +12,12 @@ use mantis_selfplay::replay::hexg::{GraphRecord, GraphTargets, HexgBuffer};
 use mantis_selfplay::replay::sym::N_SYMS;
 use rand::RngExt;
 
+mod common;
+use common::splitmix64;
+
 const CAP: usize = 512;
 const VISIT_CAP: usize = 128;
 const SEED: u64 = 0x5AFE_0B1F_0000_0001;
-
-fn splitmix64(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
 
 /// A ring of deterministic positions wide enough that a chunked split is non-trivial.
 fn filled_buffer(n_records: usize) -> HexgBuffer {

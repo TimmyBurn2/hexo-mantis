@@ -19,18 +19,17 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_core::board::Board;
 use mantis_core::{Cell, Player};
 use mantis_encoding::lookup_or_panic;
 use mantis_search::{LegalSetPolicy, MCTSTree};
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::{
-    assemble_ls_from_gnn_probs, refuse_zero_visit_export, TargetIntegrityError,
-};
+use mantis_selfplay::records::{refuse_zero_visit_export, TargetIntegrityError};
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
+
+mod common;
 
 const NA: usize = 362; // gnn_axis_v1 policy stride (19*19 + 1)
 const TRUNK: i32 = 19;
@@ -171,45 +170,6 @@ fn an_unexpanded_root_is_refused_with_zero_children() {
 
 // PIN INDEPENDENCE: the end-to-end drive, with every inference HEALTHY
 
-fn spawn_healthy_graph_producer(
-    queue: GraphQueue,
-    n_actions: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(4, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
-
 #[test]
 fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     let spec = lookup_or_panic("gnn_axis_v1");
@@ -237,7 +197,8 @@ fn the_exporter_pin_stops_a_zero_visit_run_with_the_seam_never_firing() {
     assert_eq!(runner.stats_snapshot().target_integrity_defects, 0);
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_healthy_graph_producer(runner.graph_producer(), n_actions, served.clone());
+    let producer =
+        common::spawn_uniform_producer(runner.graph_producer(), n_actions, served.clone(), 4);
 
     runner.start();
     let deadline = Instant::now() + Duration::from_secs(120);

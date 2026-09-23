@@ -20,55 +20,16 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
 
 use mantis_encoding::lookup_or_panic;
 use mantis_search::SearchKind;
-use mantis_selfplay::queues::GraphQueue;
-use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 use mantis_selfplay::runner::{SelfPlayRunner, SelfPlayRunnerConfig};
 
-const LEAF_BATCH: usize = 8;
+mod common;
 
-fn spawn_counting_producer(
-    queue: GraphQueue,
-    n_actions: usize,
-    served: Arc<AtomicUsize>,
-) -> JoinHandle<()> {
-    thread::spawn(move || loop {
-        let batch = queue.pop_graph_batch(LEAF_BATCH, 5);
-        if batch.is_empty() {
-            if queue.is_closed() {
-                break;
-            }
-            continue;
-        }
-        let mut ids = Vec::with_capacity(batch.len());
-        let mut results = Vec::with_capacity(batch.len());
-        for (id, g) in batch {
-            let coords: Vec<(i32, i32)> = g
-                .legal_node_gather
-                .iter()
-                .map(|&row| {
-                    (
-                        g.node_coords[row as usize * 2],
-                        g.node_coords[row as usize * 2 + 1],
-                    )
-                })
-                .collect();
-            let n = coords.len();
-            let probs = vec![1.0f32 / n.max(1) as f32; n];
-            ids.push(id);
-            results.push(
-                assemble_ls_from_gnn_probs(n_actions, &probs, &g.policy_scatter_index.0, &coords)
-                    .map(|ls| (ls, 0.0f32)),
-            );
-        }
-        served.fetch_add(ids.len(), Ordering::Relaxed);
-        queue.submit_graph_results(&ids, results);
-    })
-}
+const LEAF_BATCH: usize = 8;
 
 /// Drive one worker on the GRAPH path until `want_records` searched plies are recorded.
 fn drive_graph(
@@ -92,10 +53,11 @@ fn drive_graph(
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_counting_producer(
+    let producer = common::spawn_uniform_producer(
         runner.graph_producer(),
         spec.policy_logit_count,
         served.clone(),
+        LEAF_BATCH,
     );
 
     runner.start();
@@ -159,10 +121,11 @@ fn drive_kind(
     .expect("runner constructs at the drive's parameters");
 
     let served = Arc::new(AtomicUsize::new(0));
-    let producer = spawn_counting_producer(
+    let producer = common::spawn_uniform_producer(
         runner.graph_producer(),
         spec.policy_logit_count,
         served.clone(),
+        LEAF_BATCH,
     );
 
     runner.start();

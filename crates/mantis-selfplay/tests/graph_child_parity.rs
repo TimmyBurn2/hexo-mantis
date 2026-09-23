@@ -19,6 +19,9 @@ use mantis_search::{MCTSTree, MAX_CHILDREN_PER_NODE, VIRTUAL_LOSS_PENALTY};
 use mantis_selfplay::queues::build_leaf_graph;
 use mantis_selfplay::records::assemble_ls_from_gnn_probs;
 
+mod common;
+use common::{fixture_text, floats, ints, pairs, scalar, value_of};
+
 /// Cross-language prior tolerance (DESIGN §b.3 P-1c). Measured at mint: the largest
 /// disagreement between this leg and the torch-f32 producer leg is 7.3e-10.
 const PRIOR_TOL: f64 = 1e-5;
@@ -28,70 +31,6 @@ const PRIOR_TOL: f64 = 1e-5;
 /// so `flat >= 361` is exactly "off-window" (the Python leg's `board.to_flat` test).
 const OFF_WINDOW_FLAT: usize = 361;
 
-// The fixtures are minted FLAT — every value a number, a short string or a flat array — so
-// this reader suffices and the crate needs no JSON dependency.
-
-fn fixture_text(name: &str) -> String {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../tests/fixtures/eval_selfplay_parity")
-        .join(name);
-    std::fs::read_to_string(&path)
-        .unwrap_or_else(|e| panic!("fixture {} unreadable: {e}", path.display()))
-}
-
-/// The raw text of the value that follows `"key":`. Panics (never defaults) on absence —
-/// a fixture that lost a key must fail loudly, not silently read a zero.
-fn value_of<'a>(src: &'a str, key: &str) -> &'a str {
-    let needle = format!("\"{key}\":");
-    let at = src
-        .find(&needle)
-        .unwrap_or_else(|| panic!("fixture key {key:?} absent"));
-    let rest = src[at + needle.len()..].trim_start();
-    if let Some(inner) = rest.strip_prefix('[') {
-        let end = inner
-            .find(']')
-            .unwrap_or_else(|| panic!("unterminated array for {key:?}"));
-        &inner[..end]
-    } else if let Some(inner) = rest.strip_prefix('"') {
-        let end = inner
-            .find('"')
-            .unwrap_or_else(|| panic!("unterminated string for {key:?}"));
-        &inner[..end]
-    } else {
-        let end = rest.find([',', '\n', '}']).unwrap_or(rest.len());
-        rest[..end].trim_end()
-    }
-}
-
-fn ints(src: &str, key: &str) -> Vec<i64> {
-    value_of(src, key)
-        .split(',')
-        .map(|t| {
-            t.trim()
-                .parse::<i64>()
-                .unwrap_or_else(|e| panic!("fixture {key:?}: {t:?} is not an integer ({e})"))
-        })
-        .collect()
-}
-
-fn floats(src: &str, key: &str) -> Vec<f64> {
-    value_of(src, key)
-        .split(',')
-        .map(|t| {
-            t.trim()
-                .parse::<f64>()
-                .unwrap_or_else(|e| panic!("fixture {key:?}: {t:?} is not a float ({e})"))
-        })
-        .collect()
-}
-
-fn scalar(src: &str, key: &str) -> i64 {
-    let raw = value_of(src, key);
-    raw.trim()
-        .parse::<i64>()
-        .unwrap_or_else(|e| panic!("fixture {key:?}: {raw:?} is not an integer ({e})"))
-}
-
 fn text<'a>(src: &'a str, key: &str) -> &'a str {
     value_of(src, key)
 }
@@ -100,13 +39,6 @@ fn text<'a>(src: &'a str, key: &str) -> &'a str {
 /// aligned `(coord, prior)` sequences rather than sets that print in the same order.
 fn packed(q: i32, r: i32) -> u32 {
     (((q + 32768) as u32) << 16) | ((r + 32768) as u32 & 0xFFFF)
-}
-
-fn pairs(flat: &[i64]) -> Vec<(i32, i32)> {
-    assert_eq!(flat.len() % 2, 0, "coord array must be pairs");
-    flat.chunks_exact(2)
-        .map(|c| (c[0] as i32, c[1] as i32))
-        .collect()
 }
 
 /// Run one fixture position through the production self-play path and assert the frozen

@@ -17,27 +17,21 @@ use mantis_selfplay::records::{
     assemble_ls_from_gnn_probs, finalize_graph_outcome, record_position_graph,
 };
 
+mod common;
+use common::splitmix64;
+
 // Pinned constants
 const WORKER_GOLDEN_SEED: u64 = 0xB0A2_D601_D000_0006;
 const N_ACTIONS: usize = 362;
 const TRUNK: i32 = 19;
 const HALF: i32 = 9;
 
-// Mock-NN splitmix64 stream
-fn splitmix64_step(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
-
 /// `fill_stream(seed, n)` = `n` unit logits `(step >> 40) as f32 / 2^24 ∈ [0,1)`.
 fn fill_stream(seed: u64, n: usize) -> Vec<f32> {
     let mut s = seed;
     let mut out = Vec::with_capacity(n);
     for _ in 0..n {
-        let step = splitmix64_step(&mut s);
+        let step = splitmix64(&mut s);
         out.push((step >> 40) as f32 / 16_777_216.0_f32);
     }
     out
