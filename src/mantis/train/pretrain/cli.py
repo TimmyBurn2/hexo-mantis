@@ -44,8 +44,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--steps", type=int, default=None,
                         help="Hard step budget (overrides epochs; for smoke runs)")
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints/pretrain")
-    parser.add_argument("--no-compile", action="store_true",
-                        help="Disable torch.compile even on CUDA")
     parser.add_argument("--resume", type=str, default=None,
                         help="Resume from a full pretrain checkpoint (restarts the cosine schedule)")
     parser.add_argument("--lr-peak", type=float, default=None,
@@ -59,8 +57,6 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                         help="Encoding (registry-routed). Registered: " + ", ".join(_registered))
     parser.add_argument("--filters", type=int, default=None, help="Trunk channel count")
     parser.add_argument("--res-blocks", type=int, default=None, help="Trunk depth")
-    parser.add_argument("--corpus-npz", type=str, default=None,
-                        help="Corpus NPZ path (default: registry resolve_corpus_path)")
     # the held-out stopping rule — ALL-OR-NONE, like the split that feeds it
     parser.add_argument("--heldout-hexg", type=str, default=None,
                         help="held-out .hexg ring; enables the held-out policy-loss stop")

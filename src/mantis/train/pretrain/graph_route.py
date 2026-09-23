@@ -171,9 +171,8 @@ def refuse_dense_arm_flags(supplied: dict[str, Any]) -> None:
     """Refuse any dense-arm CLI flag that the graph route would silently ignore.
 
     A flag that reads as though it set a width, a schedule or a freeze and in fact sets NOTHING
-    is a shadow flag. `--no-compile` is deliberately NOT in the set, because production does not
-    compile the graph net either. `supplied` maps flag name -> parsed value, where `None` or
-    `False` is "not supplied".
+    is a shadow flag. `supplied` maps flag name -> parsed value, where `None` or `False` is
+    "not supplied".
 
     Raises:
         GraphPretrainError: any supplied flag has no subject on the graph route.

@@ -19,6 +19,7 @@ import pytest
 import yaml
 
 from mantis.config import TrainConfig, load_config
+from mantis.encoding import all_specs
 from mantis.train.pretrain.cli import (
     SHADOWED_TRAIN_KEYS,
     _build_arg_parser,
@@ -92,6 +93,29 @@ def test_each_deleted_flag_is_REJECTED_rather_than_ignored(flag: str) -> None:
     assert flag not in _parser_option_strings()
     with pytest.raises(SystemExit):
         _build_arg_parser().parse_args(["--config", "x", "--encoding", "v6", flag, "1"])
+
+
+@pytest.mark.parametrize("flag", ["--corpus-npz", "--no-compile"])
+def test_a_parsed_but_unread_flag_is_REJECTED_rather_than_ignored(
+    flag: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Prove the dead corpus/compile flags exit non-zero naming themselves, never parse and vanish."""
+    graph = next(s.name for s in all_specs() if s.representation == "graph")
+    argv = ["--config", "x", "--encoding", graph, flag] + (["x"] if flag == "--corpus-npz" else [])
+    with pytest.raises(SystemExit) as exc:
+        _build_arg_parser().parse_args(argv)
+    assert exc.value.code != 0
+    assert f"unrecognized arguments: {flag}" in capsys.readouterr().err
+
+
+def test_every_parsed_flag_is_READ_by_the_cli() -> None:
+    """Prove every parser dest is read as `args.<dest>`, so a parsed-and-ignored flag lands red."""
+    tree = ast.parse(_CLI.read_text(encoding="utf-8"))
+    read = {n.attr for n in ast.walk(tree)
+            if isinstance(n, ast.Attribute) and isinstance(n.value, ast.Name)
+            and n.value.id == "args"}
+    dests = {a.dest for a in _build_arg_parser()._actions if a.dest != "help"}
+    assert sorted(dests - read) == [], "parsed but never read: the flag sets nothing"
 
 
 @pytest.mark.parametrize("path", _CONFIGS, ids=lambda p: p.name)
