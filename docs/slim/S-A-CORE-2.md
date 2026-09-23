@@ -284,3 +284,122 @@ depends: — (lane C: CARDS.md B-15 plus PZ-2 goldens)
 - graph_collate.py, collate_dump.py, instrumentation.py and pool_push.py (PZ) were only symbol-scanned, not read in full.
 - The 160 config leaves were spot-checked, not traced one by one: value_target, draw_reward/ply_cap_value, monitor axis/heartbeat/supervisor, eval worker_device/random_floor_games/concurrency/random_model_sims, total_steps/scheduler_t_max. Rust-side consumption of selfplay.* keys belongs to the R slices.
 - Nothing that imports torch was executed, so none of the lane-A items has a runtime probe here.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+Probe: ONE batch worktree (scratchpad/wt/rev-core2-A, detached at HEAD 605db86, which differs from 69e1532 by docs-only commits) carrying -06, -07, -08, -09 and -18 together (they are independent). Recipe per REVIEW_BRIEF (`-S` + isolating PYTHONPATH). Results: `import mantis` OK (path = the worktree's src); `pytest --collect-only -q -m ''` -> 2289 collected, 167 errors both before and after the edits; the sorted ERROR lines and the sorted test-id lists diff EMPTY. `cargo check --workspace --all-targets --locked` finished clean. `uvx ruff check` on the edited files passed. `tools/ci_gates/r8_header_gate.py` -> 0 stale. `tools/ci_gates/comment_lint.py` -> GREEN. `git diff --stat HEAD` -> 9 files, +6/-41 = -35 net. Two extra facts came out of the probe. First, `mantis/selfplay/__init__.py`'s eager imports make EVERY selfplay submodule torch-bound at import. A stub-package import (sys.modules['mantis.selfplay'] = a bare package) loads pool_hooks but NOT hparams or buffers, because those two import torch themselves. Second, every selfplay test nearest to -06/-07/-08 (test_pool_hparams, test_pool_hparams_arms, test_buffer_facade, test_pool_surface) is among the 167 HEAD collection errors.
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| S-A-CORE-2-01 | CONFIRMED | B | -2066 (wc -l, re-derived) | +NEW-1 (analysis extra); ordering with S-A-TOOLS-2-01 |
+| S-A-CORE-2-02 | CONFIRMED | B | -84 (scout) | generate.py is the only prod importer |
+| S-A-CORE-2-03 | CONFIRMED | C | ~-67 (scout; not probed, PZ + torch) | |
+| S-A-CORE-2-04 | AMENDED | B→C | -50 (scout) | the `engine.infer` site is in src/mantis/eval/worker.py, a PZ-glob file |
+| S-A-CORE-2-05 | CONFIRMED | C | -76 (scout) | CARDS B-15 "on contact" |
+| S-A-CORE-2-06 | PENDING-PROBE | A | -7 | torch-bound (hparams.py imports torch; nearest tests error at HEAD) |
+| S-A-CORE-2-07 | PENDING-PROBE | A | -12 (scout -11) | torch-bound; Δ amended: 2 more blank lines go |
+| S-A-CORE-2-08 | PENDING-PROBE | A | -4 (-3 src, -1 test) | torch-bound test; the field-set equality was checked off-pytest |
+| S-A-CORE-2-09 | CONFIRMED | A | -8 (-4 per twin) | twins test green; the owner comment names Rust items that do not exist |
+| S-A-CORE-2-10 | CONFIRMED | C | -9 (scout) | |
+| S-A-CORE-2-11 | CONFIRMED | C | -6 (scout) | |
+| S-A-CORE-2-12 | CONFIRMED | C | ≥-40 (scout) | |
+| S-A-CORE-2-13 | CONFIRMED | C | -35 (scout) | residual raise path is only `int(cfg_value)` on a garbage type |
+| S-A-CORE-2-14 | CONFIRMED | C | ~-14 (scout) | + ARCHITECT: stamped-config back-compat |
+| S-A-CORE-2-15 | CONFIRMED | B | -107 (scout) | own AST scan: 0 package-symbol imports |
+| S-A-CORE-2-16 | AMENDED | C | run.py -14; the -85 is GROSS, not net | leaf_build_threads has 4 readers, run_length 2 |
+| S-A-CORE-2-17 | CONFIRMED | C | -8 gross / ~-6 net (scout) | no test patches the late-bound names |
+| S-A-CORE-2-18 | CONFIRMED | A | -4 | 56 unique names, all resolvable |
+| S-A-CORE-2-19 | AMENDED | A (doc) + B (defaults) | -1 (doc, not probed) | dropping dataclass defaults changes the ctor signature |
+| S-A-CORE-2-20 | CONFIRMED | A | ~-3 (scout; DOC, not probed) | |
+| S-A-CORE-2-21 | CONFIRMED | B | -8 (scout) | equivalent on model_dump() dicts |
+| S-A-CORE-2-22 | CONFIRMED | B | -11 (scout) | |
+| S-A-CORE-2-23 | CONFIRMED | C | n/a (carded, not proposed) | |
+
+### Per-finding notes
+S-A-CORE-2-01 — CONFIRMED:
+- An AST walk of every tracked .py outside src/mantis/data for ImportFrom/Import of mantis.data* finds non-bootstrap importers only in tests/data/{test_corpus_io,test_data_loss_counters,test_sources_metrics}.py and tests/selfplay/test_game_complete_absence.py. `wc -l` of the 12 files -> 2066.
+- tests/data/test_no_identity_blind_board.py scans `_SRC.rglob("*.py")`, so a deletion only shrinks its census. It does not red.
+- CROSS-SLICE DEPENDENCY: tools/audit_bootstrap_corpus.py cites data/sources/human.py and data/generate.py six times. `"floor_source": "src/mantis/data/sources/human.py:115-119"` is EMITTED in its record, and tests/tools/test_audit_bootstrap_corpus.py cites it too, in a comment. S-A-TOOLS-2-01 proposes deleting that tool. If TOOLS-2-01 lands FIRST, -01's only path-string blocker disappears. If -01 lands first, the tool emits a provenance path that no longer exists, so it must be re-pointed. Sequence TOOLS-2-01 before -01, or make -01 depend on it.
+
+S-A-CORE-2-02 — CONFIRMED: the same AST walk -> mantis.env importers are env/__init__, tests/env/test_game_state.py and tests/util/test_b4_history_len_sot.py. `grep -n -w GameState src/mantis/data/generate.py` -> import + annotation + `GameState.from_board`. `grep -c "def test_" tests/env/test_game_state.py` -> 11.
+
+S-A-CORE-2-03 — CONFIRMED (lane C): `git grep -n -E "submit_and_wait|_h2d_staging|_traced_model|_feature_len\b|self\._shape\b" -- src tests tools` -> only inference_server.py itself plus the test_selfplay_census `_Q6_TABLE` row (tests/encoding/test_encoding_round_trip.py's `_shape` belongs to an unrelated class). is_graph_representation (read) returns True or raises. It never returns False.
+
+S-A-CORE-2-04 — AMENDED lane B→C:
+- `grep -o 'representation = "…"' crates/mantis-encoding/src/registry.toml` -> 2 × "graph", so the eval grid arm is unreachable. The subject stands.
+- Deleting `infer` leaves `engine.infer` at src/mantis/eval/worker.py::build_candidate_player, which pyright would flag. That file is in the PZ glob list, so the leg is lane C.
+- worker.py's two error strings also cite `LocalInferenceEngine.infer_batch` by name (NEW-3).
+
+S-A-CORE-2-05 — CONFIRMED (C): `git grep -n -w -E "get_temperature|quarter_cosine_temperature"` (whole tree) -> utils.py, the selfplay/__init__ re-export, CARDS.md:485 and a fixture-generator docstring only.
+
+S-A-CORE-2-06 — PENDING-PROBE (torch-bound):
+- The probe replaced the arm with a bare `is_graph_representation(spec)` + `PoolDims(0, 0, …)`.
+- Collection is identical, ruff is clean, hparams.py goes 287 -> 280.
+- The stub-package import of hparams -> `ModuleNotFoundError: torch`. test_pool_hparams_arms.py is a HEAD collection error.
+- `git grep -E "(setattr|monkeypatch).*(is_graph_representation|hparams)" -- tests` -> only `resolve_from_config` / `SelfPlayRunnerConfig` patches. Nothing forces the arm.
+
+S-A-CORE-2-07 — PENDING-PROBE (torch-bound), Δ AMENDED -11→-12:
+- Dropping the `_RAW_FOR` comment and definition leaves FOUR consecutive blank lines before `class ReplayFacade`, so two more lines go. Probe: buffers.py 116 -> 105, selfplay/__init__ -1.
+- buffers.py's own `__all__` entry and the two test import lines are edited in place.
+- comment_lint says docstring_excess_lines 13079 -> 13078, "ratchet the floor down in this commit". The gate is GREEN either way. tools/ci_gates/comment_length_floor.txt MAY move down (its allowed direction).
+- `git grep -n -w -E "BufferKindMismatch|_RAW_FOR"` -> no raise and no index/getattr anywhere.
+
+S-A-CORE-2-08 — PENDING-PROBE (torch-bound):
+- `git grep -n runner_encoding` (whole tree) -> the field + the test_pool_surface set literal. The only other hit is an unrelated Rust test filename substring.
+- The field's consumers (coordinator/step.py::_snapshot_counter, diagnostics/worker_sweep.py) read counters with getattr by fixed names. None of them is "runner_encoding".
+- After the edit, the RunnerStats dataclass fields (13, loaded through the stub package) EQUAL the AST-extracted RUNNER_STATS_FIELDS. test_pool_surface.py itself cannot collect without torch.
+
+S-A-CORE-2-09 — CONFIRMED (A, -8):
+- Runtime `hasattr(mantis._engine, …)` -> only HEX_AXES and WIN_LENGTH. `git grep -n -E "MY_STONE_PLANE|…" -- crates ':!*.pyi'` -> 0: no Rust item of those names exists at all, and crates/mantis-bridge/src/encoding.rs adds only HEX_AXES/WIN_LENGTH.
+- Probe: tests/bridge/test_engine_stub_twins_agree.py plus 7 torch-free config/encoding files -> 52 passed.
+- The pyi owner comment (`mantis_encoding::encode::{MY_STONE_PLANE, …}`, "The v6 source-plane indices") is stale in both twins. Trim it in the same commit (not counted in -8).
+- tools/hardcode_scan.py keeps them as scan-label strings (tools slice; harmless).
+
+S-A-CORE-2-10 — CONFIRMED (C): `git grep -n -w latest_replay_path -- src tools` -> the forwarder chain + monitor/game_recorder.py only. No `.latest_replay_path` read outside them.
+
+S-A-CORE-2-11 — CONFIRMED (C): `git grep -n -w WIN_AXES -- src tools tests` -> the definition, `__all__`, the re-export, the hardcode_scan strings and the one equality test.
+
+S-A-CORE-2-12 — CONFIRMED (C): an AST Call-node walk over src+tools -> the only reconcile_encoding call is emit.py:96 with stamp `None`. EncodingConflictError and EncodingResolution are constructed only inside encoding.py. normalize_* has no src/tools call.
+
+S-A-CORE-2-13 — CONFIRMED (C):
+- Read nsims.py + bots/resolve.py::resolve_bot. `_KNOWN_KINDS` equals `_KNOWN_OPPONENTS`, the kind check precedes the call, the call is guarded by `is not None`, and the return is discarded.
+- The only residual effect is `int(cfg_value)` raising on a non-numeric type.
+
+S-A-CORE-2-14 — CONFIRMED (C) + ARCHITECT:
+- `git grep -n -w value_target -- src tools configs` -> 6 configs, the template, the schema, trainer/core.py (field + unreachable assert) and the checkpoints.py literal. No attribute reader.
+- MISSED HAZARD: train/checkpoints.py re-validates the embedded config snapshot through `RunConfig.model_validate` (3 sites, `extra="forbid"`). Dropping the key would make every existing checkpoint's stamped config fail to load. That is a behaviour change beyond the minted-config HALT.
+- RULINGS.md also cites `train.value_target: pure_outcome_z`.
+
+S-A-CORE-2-15 — CONFIRMED (B):
+- My AST walk of every tracked .py found 0 `from mantis.selfplay import <non-submodule>`, 0 `import mantis.selfplay`, and 0 `mantis.selfplay.<non-submodule>` attribute reads.
+- `git grep -E "from mantis\.selfplay import [A-Z]" -- docs` (non-archive) -> 0.
+- Probe side-fact: the eager __init__ is exactly what makes torch-free submodules such as pool_hooks un-importable without torch. Lane B stands (import-order risk).
+
+S-A-CORE-2-16 — AMENDED (Δ):
+- AST Call walk -> resolve_leaf_build_threads is called from run.py AND tools/analyzer/engines.py, tools/ladder/backends.py and tools/strength_frontier.py. resolve_max_train_steps is called from run.py AND tools/ci_gates/preflight_mint_parent.py.
+- They are not one-reader forwarders. Dissolving them rewrites 7 call sites + 2 CONSUMER_REGISTRY strings + the contract-doc row, so -85 is a gross figure.
+- Only the run.py wrappers (-14) are forwarders of one. Lane C stands.
+
+S-A-CORE-2-17 — CONFIRMED (C): run.py imports `mantis.train.anchor` at top level. `git grep -n -E "setattr\([^)]*anchor" -- tests` -> only `resolve_anchor` is patched (test_run_composition, test_run_eval_enabled_authority), so early binding moves no test seam.
+
+S-A-CORE-2-18 — CONFIRMED (A, -4): an AST Counter over `__all__` -> the 4 names at two line pairs. Probe: `len(__all__)` 60→56, 56 unique, all resolvable. test_no_dead_resolver_export, test_radius_removed, test_config_discovery_authority, test_actor_sync_schema and both consumer-bijection files are green.
+
+S-A-CORE-2-19 — AMENDED: the stale docstring ("same R1-exception as `SelfPlayHParams`") and the stray `# diagnostics ns` are confirmed by grep; tests/config/test_docstring_debt_discharge.py records the discharge. That part is lane A DOC (-1). Dropping the `= default` values changes both dataclass constructor signatures and the field-ordering rules (kw_only), so split it out as lane B.
+
+S-A-CORE-2-20 — CONFIRMED (A DOC): `grep -n -i -E "grid|dense" src/mantis/selfplay/inference_local.py` -> the class docstring (19, 21, 29), close (103), and the `_infer_batch_graph` comment/message (156, 159). The last two go with -04 anyway.
+
+S-A-CORE-2-21 — CONFIRMED (B): both bodies read. On `model_dump()` dicts they are equivalent. `_flatten` additionally maps a non-dict root to `{"": node}` and `str()`s top-level keys, and neither caller relies on that. Cross-slice with tools.
+
+S-A-CORE-2-22 — CONFIRMED (B): `git grep -n -w required_env -- src tools tests` -> the definition + tests/tools/test_preflight_mint_process.py only. No non-archive governance hit.
+
+S-A-CORE-2-23 — CONFIRMED (C): CARDS.md names `push_dense` under B-15 "on contact". It is not proposed.
+
+### Missed by the scout
+- NEW-1 | CONFIG | B — pyproject.toml `analysis = ["matplotlib", "rich", "scipy"]`: `git grep -l -E "^\s*(import|from) (matplotlib|rich)" -- src tools` -> only data/corpus_{analysis,metrics,reporter}.py. With -01, matplotlib and rich lose every importer. Dropping them edits pyproject.toml + uv.lock (lane B; depends -01).
+- NEW-2 | DOC | A — both _engine.pyi twins' "wire-format geometry constants" comment names `mantis_encoding::encode::{MY_STONE_PLANE, …}` owners that exist nowhere in crates/. Fold into -09.
+- NEW-3 | DOC | C — src/mantis/eval/worker.py's two error-message strings cite `LocalInferenceEngine.infer_batch` and its dense arm by name. They go stale with -04 (C3 slice, PZ-glob file).
+- NEW-4 | DEFECT-adjacent (PARKED/-15) — because of selfplay/__init__'s eager imports, even torch-free selfplay submodules (pool_hooks) cannot be imported or tested without torch. That is why -06/-07/-08 cannot be probe-confirmed here.
+- NEW-5 | ARCHITECT (on -14) — does a schema-key retirement need a checkpoint-snapshot migration, given `RunConfig.model_validate(embedded_config)` in train/checkpoints.py?
+
+### Tally: raised 23 | confirmed 17 | amended 3 (-04, -16, -19) | refuted 0 | pending 3 (-06, -07, -08) | architect 0 (one question on -14)
+Lane-A Δ probe-measured: -35 net (-06 -7, -07 -12, -08 -4, -09 -8, -18 -4). Of that, the confirmed lane-A part is -12 (-09, -18). -23 is PENDING-PROBE (torch-bound).
