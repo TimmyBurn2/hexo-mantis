@@ -8,10 +8,10 @@
 #
 # `registry_sha_hex()` is chosen because it cannot be renamed or deleted without another
 # gate failing loudly in the same run. It is pinned in four places, by gates 2 and 3:
-#   tests/bridge/test_surface.py:29,73        (MODULE_FNS census + a value assertion)
-#   crates/mantis-bridge/src/encoding.rs:213  (registry_sha_hex_matches_raw_bytes)
-#   crates/mantis-bridge/python/mantis/_engine.pyi:650
-# NOTE: gate 8 (tools/ci_gates/registry_gate.sh:34) uses the sibling `registry_sha()` —
+#   tests/bridge/test_surface.py          (MODULE_FNS census + a value assertion)
+#   crates/mantis-bridge/src/encoding.rs  (registry_sha_hex_matches_raw_bytes)
+#   crates/mantis-bridge/python/mantis/_engine.pyi
+# NOTE: gate 8 (tools/ci_gates/registry_gate.sh) uses the sibling `registry_sha()` —
 # the raw 32-byte digest — NOT this hex form, so gate 8 is NOT what protects this symbol.
 # That distinction is recorded because getting it wrong is how a smoke check ends up
 # asserting a symbol nothing else holds down, which is exactly the failure this gate

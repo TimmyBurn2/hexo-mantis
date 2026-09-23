@@ -14,7 +14,7 @@ encoding-less dense fallback in `Board::to_tensor()`, now a PanicException; two 
 resolvers with terminal `return "v6"` arms, one of them on the TRAINING path; a
 `make_augmented_collate(..., encoding="v6")` signature default; `LocalInferenceEngine`'s ternary,
 whose `encoding_spec` is now a REQUIRED keyword-only parameter; and the pyo3 signature defaults
-on `ReplayBuffer.__new__` and `HexgBuffer.__new__` plus their `_engine.pyi` twins. The last two
+on `ReplayBuffer.__new__` and `HexgBuffer.__new__` plus their `_engine.pyi` lines. The last two
 were invisible until the Rust comment handling was fixed, an earlier draft having treated
 `#[pyo3(...)]` attributes as comments and blanked them.
 

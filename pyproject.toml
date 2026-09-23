@@ -97,6 +97,10 @@ select = ["E", "F", "W", "I", "UP", "B", "BLE", "PLE"]
 # The 100-column preference stays prose guidance for new code.
 ignore = ["E501"]
 
+[tool.ruff.lint.isort]
+# mantis._engine lives in the engine wheel's portion, outside src/, and is still first-party.
+known-first-party = ["mantis"]
+
 [tool.ruff.lint.per-file-ignores]
 # tests/ is an oracle-write corpus: files are edit-averse by frozen-oracle discipline, and
 # every code below is a zero-defect-value class there (style churn, unused-in-test noise,
@@ -119,3 +123,5 @@ include = ["src", "tools"]
 exclude = ["tools/strix_driver.py"]
 pythonVersion = "3.11"
 typeCheckingMode = "basic"
+# src/mantis is a regular package, so pyright never merges the wheel's namespace portion into it.
+stubPath = "crates/mantis-bridge/python"

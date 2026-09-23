@@ -14,10 +14,7 @@ from pathlib import Path
 from mantis.config.schema import RunConfig, leaf_paths
 
 _REPO = Path(__file__).resolve().parents[2]
-_STUBS = (
-    _REPO / "src" / "mantis" / "_engine.pyi",
-    _REPO / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi",
-)
+_STUB = _REPO / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi"
 
 
 #: The defaults present when this census landed. NOT an allowlist that grows: the census
@@ -83,22 +80,21 @@ def test_neither_engine_stub_defaults_a_parameter_that_shadows_a_config_key() ->
     #: `build_runner_config`, so the census must know both names.
     aliases = {"max_moves_per_game": "max_game_moves", "epsilon": "dirichlet_epsilon"}
     offenders: list[str] = []
-    for stub in _STUBS:
-        tree = ast.parse(stub.read_text(encoding="utf-8"), filename=str(stub))
-        for node in ast.walk(tree):
-            if not isinstance(node, ast.FunctionDef):
-                continue
-            args = node.args
-            positional = args.posonlyargs + args.args
-            pairs = list(zip(positional[len(positional) - len(args.defaults):], args.defaults))
-            pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
-            for arg, default in pairs:
-                name = aliases.get(arg.arg, arg.arg)
-                if name in leaves and isinstance(default, ast.Constant):
-                    offenders.append(
-                        f"{stub.relative_to(_REPO)}:{node.lineno} {node.name}({arg.arg}="
-                        f"{default.value!r})"
-                    )
+    tree = ast.parse(_STUB.read_text(encoding="utf-8"), filename=str(_STUB))
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        args = node.args
+        positional = args.posonlyargs + args.args
+        pairs = list(zip(positional[len(positional) - len(args.defaults):], args.defaults))
+        pairs += [(a, d) for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None]
+        for arg, default in pairs:
+            name = aliases.get(arg.arg, arg.arg)
+            if name in leaves and isinstance(default, ast.Constant):
+                offenders.append(
+                    f"{_STUB.relative_to(_REPO)}:{node.lineno} {node.name}({arg.arg}="
+                    f"{default.value!r})"
+                )
     unregistered = sorted({o.split(" ", 1)[1] for o in offenders} - REGISTERED_DEBT)
     assert not unregistered, (
         "a NEW bridge signature default shadows a config key:\n  " + "\n  ".join(unregistered) +

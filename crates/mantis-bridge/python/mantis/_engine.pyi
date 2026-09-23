@@ -1,11 +1,7 @@
 """Typed surface of the compiled mantis._engine extension (crates/mantis-bridge).
 
-Twin of src/mantis/_engine.pyi (the type-checker-visible copy in the editable src
-package). This copy ships in the mantis-engine wheel beside the compiled module and
-also keeps the PEP 420 namespace dir (python/mantis/) tracked so fresh clones build.
+The ONE stub: maturin installs it beside the module and pyright reads it through `stubPath`.
 >300 justify (R8): a 1:1 typed mirror of the compiled mantis._engine surface — its length is the bridge API's, and a module stub cannot be split.
-Keep both stubs identical when the bridge API changes.
-
 Checked against the runtime surface in both directions by
 tests/bridge/test_engine_stub_matches_runtime.py. Numpy arrays are typed as
 `numpy.ndarray` (dtype/shape documented in docstrings on the Rust side).

@@ -13,7 +13,7 @@ import pytest
 
 _REPO = Path(__file__).resolve().parents[2]
 _RUST_RUNNER = _REPO / "crates" / "mantis-selfplay" / "src" / "runner" / "mod.rs"
-_STUB = _REPO / "src" / "mantis" / "_engine.pyi"
+_STUB = _REPO / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi"
 _POOL_DRAIN = _REPO / "src" / "mantis" / "selfplay" / "pool_drain.py"
 _GOLDEN = _REPO / "tests" / "fixtures" / "selfplay" / "drain" / "drain_goldens.json"
 _FAKE_FILES = (

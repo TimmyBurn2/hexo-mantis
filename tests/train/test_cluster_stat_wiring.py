@@ -7,7 +7,7 @@ builder reds there; it stops one level short at both ends of the seam. The CALLE
 `StepCoordinator._emit_iteration_complete` hands the builder the config `is_graph_run` reads, and
 passing `{}` degrades absence into `cluster_variance_sample_count: 0` shipping in every
 `iteration_complete` of a graph run, for an instrument that does not exist on that arm. The TYPE
-AUTHORITY: both `_engine.pyi` twins are the only thing pyright reads for the FFI getters, so a
+AUTHORITY: the `_engine.pyi` stub is the only thing pyright reads for the FFI getters, so a
 stub still declaring one type-checks a consumer that fails at runtime.
 """
 from __future__ import annotations
@@ -208,18 +208,15 @@ def test_a_real_coordinator_emits_no_cluster_key_on_a_graph_run() -> None:
 # cluster-mean getter, both would be pins on a constant. That the fields do not come back
 # without their producers is asserted in `tests/selfplay/test_pool_surface.py`.
 def test_neither_engine_stub_declares_a_cluster_mean_getter() -> None:
-    """The two `_engine.pyi` twins are the ONLY type authority for the FFI getters — pyright
+    """The `_engine.pyi` stub is the ONLY type authority for the FFI getters — pyright
     reads the stub, never the compiled module — so a stub declaring a getter the engine no
     longer exposes is a phantom the checker blesses and every reader trusts.
-    FALSIFYING MUTATION: add either getter back to either twin."""
-    twins = (REPO_ROOT / "src" / "mantis" / "_engine.pyi",
-             REPO_ROOT / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi")
-
-    for twin in twins:
-        text = twin.read_text(encoding="utf-8")
-        for name in CLUSTER_MEANS:
-            assert f"def {name}(" not in text, (
-                f"{twin.relative_to(REPO_ROOT)} declares {name}, which the compiled engine no "
-                f"longer exposes (R346(f)) — a stub with no counterpart type-checks a consumer "
-                f"that gets None at runtime."
-            )
+    FALSIFYING MUTATION: add either getter back to the stub."""
+    stub = REPO_ROOT / "crates" / "mantis-bridge" / "python" / "mantis" / "_engine.pyi"
+    text = stub.read_text(encoding="utf-8")
+    for name in CLUSTER_MEANS:
+        assert f"def {name}(" not in text, (
+            f"{stub.relative_to(REPO_ROOT)} declares {name}, which the compiled engine no "
+            f"longer exposes (R346(f)) — a stub with no counterpart type-checks a consumer "
+            f"that gets None at runtime."
+        )
