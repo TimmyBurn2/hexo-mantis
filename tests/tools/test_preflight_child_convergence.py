@@ -10,6 +10,7 @@ INTEGRATION tier: a real ~30 s CPU boot + burst. No fakes — real tool, subproc
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tokenize
@@ -36,12 +37,14 @@ _COMPOSER_EVENTS = ("run_boot_identity", "resolved_config")
 def preflight_child(tmp_path_factory, preflight_budget_sec, preflight_harness_ceiling_sec):
     """Spawn ONE real preflight, shared by every assertion below."""
     out_dir = tmp_path_factory.mktemp("preflight_convergence")
+    state_home = tmp_path_factory.mktemp("preflight_state")
     proc = subprocess.run(
         [sys.executable, str(_TOOL), "--config", str(_CONFIG),
          "--burst-steps", str(_BURST_STEPS), "--out-dir", str(out_dir),
          "--timeout-sec", str(preflight_budget_sec), "--receipt-wait-sec", "120"],
         cwd=str(_REPO), capture_output=True, text=True,
         timeout=preflight_harness_ceiling_sec,
+        env={**os.environ, "XDG_STATE_HOME": str(state_home)},
     )
     return proc, out_dir
 
@@ -68,7 +71,9 @@ def _child_events(out_dir: Path) -> list[dict]:
             for line in segment.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
-def test_the_child_boots_green_with_no_device_flag_on_the_argv(preflight_child) -> None:
+def test_the_child_boots_green_with_no_device_flag_on_the_argv(
+    preflight_child, tmp_path_factory
+) -> None:
     """The child boots the CONFIG's own device, with no `--device` flag on the argv.
 
     Killer: restore the flag — a `--device cpu` invocation can then false-clear a cuda run's
@@ -83,6 +88,10 @@ def test_the_child_boots_green_with_no_device_flag_on_the_argv(preflight_child) 
     assert reports, f"no evidence report written:\n{tail}"
     report = json.loads(reports[-1].read_text())
     assert report["verdict"] == "pass" and report["child"]["rc"] == 0
+    stamp = Path(report["preflight_stamp"])
+    assert stamp.is_relative_to(tmp_path_factory.getbasetemp()), (
+        f"the green burst stamped {stamp}, outside the test's tmp tree: the host's store"
+    )
 
 
 def test_the_child_process_left_the_composition_roots_own_boot_events(preflight_child) -> None:

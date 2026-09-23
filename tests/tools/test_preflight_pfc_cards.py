@@ -30,6 +30,12 @@ def tool():
     return mod
 
 
+@pytest.fixture(autouse=True)
+def _isolated_stamp_store(monkeypatch, tmp_path):
+    """The tool clears and writes the preflight stamp store; a test must never touch the host's."""
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+
+
 def _run_tool(*argv: str) -> subprocess.CompletedProcess:
     return subprocess.run([sys.executable, str(TOOL_PATH), *argv],
                           capture_output=True, text=True, check=False, cwd=REPO_ROOT)
@@ -79,6 +85,10 @@ def test_a_foreign_run_ids_litter_does_not_trip_the_refusal(tmp_path, preflight_
                     "--out-dir", str(out), "--timeout-sec", str(preflight_budget_sec),
                     "--receipt-wait-sec", "120")
     assert res.returncode == 0, res.stdout + res.stderr
+    report = json.loads(sorted(out.glob("preflight_*.json"))[-1].read_text(encoding="utf-8"))
+    assert Path(report["preflight_stamp"]).is_relative_to(tmp_path), (
+        f"the green burst stamped {report['preflight_stamp']}, outside tmp_path: the host's store"
+    )
 
 
 @pytest.mark.integration
