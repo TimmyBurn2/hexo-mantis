@@ -23,10 +23,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+import torch
 
+import _microbatch_harness as H
 from mantis.config.loader import load_config, parse_config_yaml
+from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import RunConfig
+from mantis.model import state_dict_param_hash
+from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.ema import MissingEmaConfigError, resolve_ema_config
+from mantis.train.trainer.core import Trainer
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = sorted((_REPO / "configs").glob("*.yaml"))
@@ -97,8 +103,6 @@ def test_the_schema_REFUSES_the_flat_keys_the_dead_reader_looked_for() -> None:
 def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
     """End of the chain: the arming key moves the object it names. Without this the key could
     be read, registered and consumed by a line that does nothing."""
-    import torch
-
     from mantis.encoding import lookup
     from mantis.model import build_net, select_arch
     from mantis.train.ema import build_ema_model
@@ -111,7 +115,42 @@ def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
     assert enabled
     ema = build_ema_model(net, decay=decay)
     assert ema.decay == pytest.approx(0.5)
+    seeded = {n: t.clone() for n, t in ema.state_dict().items()}
     with torch.no_grad():
         for p in net.parameters():
             p.add_(1.0)
-    ema.update_parameters(net)  # the shadow moves — the lever is not inert
+    ema.update_parameters(net)
+    shadow = ema.state_dict()
+    for name, _ in net.named_parameters():
+        assert torch.allclose(shadow[name], seeded[name] + 0.5), f"{name}: the shadow did not mix at decay 0.5"
+
+
+def _one_real_step(trainer: Trainer) -> None:
+    buf = H.uniform_graph_buffer()
+    buf.seed_sampler(H.SEED)
+    replay = H.ReplayWireBuffer(buf, 8)
+    run_declared_train_step(
+        trainer, replay, H.GSPEC, batch_size=8, augment=False, recency_weight=0.0, recent_buffer=None,
+        caps_provider=lambda: MicrobatchCapsSpec(*H.non_binding_caps(replay.wire)),
+        sample_threads_provider=lambda: 1, fast_policy_weight_provider=lambda: 0.0)
+    assert trainer.step == 1, "premise: the drive took exactly one optimizer step"
+
+
+def test_an_ARMED_trainer_moves_its_shadow_on_a_real_step(tmp_path: Path) -> None:
+    """Prove the armed trainer builds the shadow and a real training step updates it."""
+    trainer = H.ema_graph_trainer(tmp_path, update_every=1)
+    assert trainer.ema_model is not None, "an armed config built no EMA"
+    seeded = state_dict_param_hash(trainer.ema_model.state_dict())
+    _one_real_step(trainer)
+    assert state_dict_param_hash(trainer.ema_model.state_dict()) != seeded, "the step never updated the shadow"
+
+
+def test_a_DISARMED_trainer_builds_no_shadow_and_deploys_the_learner(tmp_path: Path) -> None:
+    """Prove the declared OFF builds no EMA and the deploy weights stay the learner's after a step."""
+    trainer = H.tiny_graph_trainer(tmp_path)
+    assert resolve_ema_config(H.graph_config())[0] is False, "premise: the fixture declares EMA off"
+    assert trainer.ema_model is None, "a disarmed config built an EMA"
+    _one_real_step(trainer)
+    assert trainer.ema_model is None
+    learner = state_dict_param_hash(trainer.model.state_dict())
+    assert state_dict_param_hash(trainer.inference_state_dict()) == learner
