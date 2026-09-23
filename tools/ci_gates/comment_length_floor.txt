@@ -9,4 +9,4 @@ docstring_excess_lines 13024
 # 2026-09-17 (R355 step 12, C-15/C-16): two measures added at their measured values — the private-
 # docstring and Rust-doc halves of the judgment backlog (CARD-STYLE-BACKLOG). Down-only, like the rest.
 private_docstring_excess_lines 1484
-rust_doc_excess_lines 2610
+rust_doc_excess_lines 2609

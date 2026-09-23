@@ -133,14 +133,7 @@ impl GraphQueue {
     /// any caller with no spec in hand; the runner sources the version from the spec.
     #[must_use]
     pub fn new() -> Self {
-        Self::with_contract_version(1)
-    }
-
-    /// A queue speaking `contract_version`. A non-1 value makes every `submit_graph_and_wait`
-    /// reject its graph loud — the batch-level die-loud handshake.
-    #[must_use]
-    pub fn with_contract_version(contract_version: u32) -> Self {
-        Self::with_contract_version_and_supply(contract_version, 0)
+        Self::with_contract_version_and_supply(1, 0)
     }
 
     /// A queue that also knows the run's achievable supply (`n_workers x leaf_batch_size`),
@@ -303,7 +296,10 @@ impl GraphQueue {
             if self.inner.closed.load(Ordering::SeqCst) {
                 return Err("graph batcher closed while request was waiting".to_string());
             }
-            guard = waiter.cv.wait(guard).expect("graph waiter condvar poisoned");
+            guard = waiter
+                .cv
+                .wait(guard)
+                .expect("graph waiter condvar poisoned");
         }
     }
 
@@ -472,9 +468,8 @@ pub fn build_leaf_graphs_batch(
     if positions.is_empty() {
         return Ok(Vec::new());
     }
-    let build_one = |p: &LeafRequest| {
-        build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size)
-    };
+    let build_one =
+        |p: &LeafRequest| build_leaf_graph(&p.0, p.1, p.2, win_length, radius, trunk_size);
     let threads = n_threads.max(1).min(positions.len());
     if threads == 1 {
         return positions.iter().map(build_one).collect();
