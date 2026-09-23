@@ -20,6 +20,7 @@ import pytest
 from pydantic import ValidationError
 
 from mantis._engine import max_stones
+from mantis.config.loader import discover_configs
 
 
 def test_the_ceiling_is_read_from_the_engine_and_is_not_typed_in_the_schema() -> None:
@@ -82,7 +83,7 @@ def test_every_shipped_graph_config_is_inside_the_ceiling(smoke_run_config) -> N
     A relation that refused a shipped config would be a regression, not a guard — this is the
     assertion that tells the two apart, and it is the same shape the value-pool census takes."""
     configs_dir = pathlib.Path(__file__).resolve().parents[2] / "configs"
-    names = sorted(p.name for p in configs_dir.glob("*.yaml"))
+    names = [p.relative_to(configs_dir).as_posix() for p in discover_configs(configs_dir)]
     assert names, f"no shipped configs found under {configs_dir}; this census is vacuous"
     checked = 0
     for name in names:

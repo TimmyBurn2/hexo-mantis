@@ -23,6 +23,7 @@ import yaml
 
 from mantis.config import load_config
 from mantis.config.emit import RESOLVED_CONFIG_FILENAME, write_resolved_config
+from mantis.config.loader import discover_configs
 from mantis.config.schema import (
     ARCH_SCOPED_KEYS,
     OPERATIONAL_DEFAULT_KEYS,
@@ -79,7 +80,9 @@ def _value_at(node: object, dotted: str) -> object:
     return node
 
 
-@pytest.mark.parametrize("name", sorted(p.name for p in CONFIGS.glob("*.yaml")))
+@pytest.mark.parametrize(
+    "name", [p.relative_to(CONFIGS).as_posix() for p in discover_configs(CONFIGS)]
+)
 def test_the_record_states_every_leaf_the_shipped_file_left_to_a_default(
     name: str, tmp_path: Path
 ) -> None:

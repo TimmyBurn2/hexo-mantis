@@ -21,6 +21,7 @@ from pathlib import Path
 
 import pytest
 
+from mantis.config.loader import discover_configs
 from mantis.data import bootstrap_encode
 from mantis.data.bootstrap_encode import (
     CorpusEncodeError,
@@ -337,6 +338,6 @@ def test_NOTHING_under_src_imports_the_encoder() -> None:
 
 def test_no_config_key_selects_the_encoder() -> None:
     """Prove no shipped config names this artifact producer."""
-    for cfg in sorted((_REPO / "configs").glob("*.yaml")):
+    for cfg in discover_configs(_REPO / "configs"):
         text = cfg.read_text(encoding="utf-8")
-        assert "bootstrap_encode" not in text, f"{cfg.name} names the encoder"
+        assert "bootstrap_encode" not in text, f"{cfg.relative_to(_REPO)} names the encoder"
