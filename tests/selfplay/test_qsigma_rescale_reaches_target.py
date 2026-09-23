@@ -10,6 +10,7 @@ from mantis._engine import Board, MCTSTree
 from mantis.config.loader import load_config
 from mantis.selfplay.hparams import SelfPlayHParams
 
+_REPO = Path(__file__).resolve().parents[2]
 _STRIDE = 19 * 19 + 1
 # The ring stores no Q (FORCED_MOVE_CENSUS §"What the record cannot answer"), so the two candidates'
 # Q's are PLANTED through the real backup on one fixed root and read back in the root's view.
@@ -19,7 +20,7 @@ _ROWS = {"dq_0.01": (0.105, 0.095), "dq_0.2": (0.2, 0.0)}
 
 
 def _hparams(config: str) -> SelfPlayHParams:
-    return SelfPlayHParams.from_config(load_config(Path("configs") / config).model_dump())
+    return SelfPlayHParams.from_config(load_config(_REPO / "configs" / config).model_dump())
 
 
 def _root_board() -> Board:

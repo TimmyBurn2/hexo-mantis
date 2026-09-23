@@ -13,6 +13,7 @@ R81/R86 condition: not self-satisfying, no unrelated casualty.
 """
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Mapping
 
 import pytest
@@ -23,11 +24,13 @@ from mantis.encoding.resolvers import MissingEncodingError
 from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.hparams import resolve_pool_encoding
 
+_REPO = Path(__file__).resolve().parents[2]
+
 
 def _run5_dump() -> dict[str, Any]:
     """The real production config, through the real loader — no hand-built stand-in.
     R64 posture: the oracle resolves what run5 resolves."""
-    return load_config("configs/run6.yaml").model_dump()
+    return load_config(_REPO / "configs" / "run6.yaml").model_dump()
 
 
 # the seam TD-4 named

@@ -11,6 +11,7 @@ from mantis.diagnostics import ring_audit as A
 from mantis.diagnostics import ring_reader as R
 
 _ENCODING = "gnn_axis_r8"
+_PREREG = Path(__file__).resolve().parents[2] / "docs/design/measurements/RUN8_PREREG_2026-09-17.md"
 # P2 holds a capped five on the q axis; P1 (the mover, k = 1) must block (5, 0): the tactics
 # oracle reads ('block', {(5, 0)}) and the rest of the stones make no line of their own.
 _BLOCK_SEQ = [(-1, 0), (0, 0), (1, 0), (3, 4), (-3, 3), (2, 0), (3, 0), (2, -4), (-2, 6), (4, 0),
@@ -172,13 +173,12 @@ def test_the_planted_ring_exits_1_naming_the_poisoned_row(planted: Path, tmp_pat
 
 
 def test_a_clean_ring_passes_the_run8_bands(clean: Path, capsys) -> None:
-    prereg = Path("docs/design/measurements/RUN8_PREREG_2026-09-17.md")
-    assert A.main([str(clean), "--bands", str(prereg)]) == 0
+    assert A.main([str(clean), "--bands", str(_PREREG)]) == 0
     assert "ring_audit: PASS" in capsys.readouterr().out
 
 
 def test_the_prereg_carries_the_five_run8_bands() -> None:
-    bands = A.load_bands(Path("docs/design/measurements/RUN8_PREREG_2026-09-17.md"))
+    bands = A.load_bands(_PREREG)
     assert bands == {
         "counter_threat_share": ("lt", 0.005), "quiescence_residue": ("le", 0.0),
         "h_full_median": ("gt", 0.02), "one_hot_share_full": ("lt", 0.25), "cap_rate": ("lt", 0.05),
