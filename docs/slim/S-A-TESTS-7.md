@@ -225,3 +225,99 @@ none
 - Bodies of tests/monitor/test_supervisor{,_config_witness,_signal_posture,_spawn_contract}.py, test_arm_exec_trampoline.py and tests/test_run_pdeathsig.py read at helper/outline level only (LAW-16, lane C either way).
 - tests/test_fixtures_manifest.py (PZ goldens) and tests/test_line_endings.py read at outline level; no deletion probes run (reviewer's job).
 - Assertion-level overlaps with no count change were left out (e.g. strict's burst-parser half vs the launcher flag-set census; eval_enabled's run.py CLI half; meta_ci's ci.yml needles vs the orphan census — ci.yml is suspended, R348(a)).
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| S-A-TESTS-7-01 | AMENDED | C | ≤ -341 (gross upper bound) | spans re-derived (437); the variant knobs and per-file imports are not netted; tests/train/_coordinator_pool.py is a second hoist target |
+| S-A-TESTS-7-02 | CONFIRMED | C | -68 gross | twins except for root's `stop_calls` and `_bounded`'s eval_enabled; BYTE-FROZEN false |
+| S-A-TESTS-7-03 | CONFIRMED | C | -21 | the two local fixtures are identical; the root autouse wraps them |
+| S-A-TESTS-7-04 | CONFIRMED | B | ≈ -56 gross | byte copies apart from docstrings and one message |
+| S-A-TESTS-7-05 | AMENDED | C | smaller than -68 | `_spawn_supervisor` and `_reap` are NOT same-body |
+| S-A-TESTS-7-06 | PENDING-PROBE | A | -11 | torch-bound |
+| S-A-TESTS-7-07 | PENDING-PROBE | A | -7 | torch-bound; `_Buffer()` has 3 drive sites, not 2 |
+| S-A-TESTS-7-08 | CONFIRMED | A | -26 | probe green |
+| S-A-TESTS-7-09 | CONFIRMED | B | -41; collected -1 | the sibling is strictly stronger |
+| S-A-TESTS-7-10 | CONFIRMED | B | -26; collected -2 | |
+| S-A-TESTS-7-11 | CONFIRMED | B | -15; collected -7 | design choice stands |
+| S-A-TESTS-7-12 | CONFIRMED | B | -14; collected -1 | |
+| S-A-TESTS-7-13 | CONFIRMED | B | -14; collected -1 | |
+| S-A-TESTS-7-14 | AMENDED | B | -43; collected -4 | test_rules.py is torch-bound here, not "green here" |
+| S-A-TESTS-7-15 | CONFIRMED | C | -69 | inert arms shown |
+| S-A-TESTS-7-16 | CONFIRMED | B | -23; collected -1 | |
+| S-A-TESTS-7-17 | CONFIRMED | C | -11; collected -2 | residual noted |
+| S-A-TESTS-7-18 | CONFIRMED | C | -3 | no live subclass hook |
+| S-A-TESTS-7-19 | CONFIRMED | C | -20 | |
+| S-A-TESTS-7-20 | AMENDED | B | -13 (not re-derived) | the regex hits 13 lines in the named files, not 16 |
+| S-A-TESTS-7-21 | CONFIRMED | B | 0 | 8 matching lines in 6 files; REVIEW2 G3.4 is the precedent |
+
+### Per-finding notes
+S-A-TESTS-7-01 — AMENDED: an AST span script (scratchpad rv7_spans.py) gave 437 lines for the 16 defs, the scout's number, and all 7 pools share the same 10-method set. But one shared stub must carry the variants the copies differ by: started/stopped recorders, `on_start`, raise-on-unstarted-stop and the sync recorder. Each file also gains an import line. So -341 is a gross upper bound. A hoist should also reconcile with the existing shared `tests/train/_coordinator_pool.py::CoordinatorPoolStub`, so there are not two shared pool doubles. The lane C grounds hold: CARDS.md CARD-MECHANISM-SWEEP names "the 21 remaining private `_Pool`/`_Buffer` fakes of the composition tests", to be applied ON CONTACT.
+S-A-TESTS-7-02 — CONFIRMED: an AST-extract diff of the four helpers (partial vs root_lifecycle) shows the only deltas are docstrings, root's `stop()`/`stop_calls` recorder, and `_bounded` (partial uses `over.setdefault("eval_enabled", False)`, root hard-codes `eval_enabled=False`). Partial's form is the superset. `git log --date=short` shows test_run_partial_composition.py added 46c49d9 (2026-09-19) and test_run_root_lifecycle.py edited after that in 857187a, 596f9f9 and deb16b8 (all 2026-09-21), so "BYTE-FROZEN" is false. Δ is gross: the shared module's own imports and docstring are not netted, and they are partly offset by imports freed in partial.
+S-A-TESTS-7-03 — CONFIRMED: the diff of the two local `restore_signal_dispositions` bodies is empty. Root `tests/conftest.py::_restore_signal_dispositions` is an autouse fixture with function scope whose docstring says restore-AROUND nests. `grep -n "signal\."` in partial → lines 45 and 48 only, both in the fixture, so `import signal` goes too.
+S-A-TESTS-7-04 — CONFIRMED: diffing one_authority against main_authority and import_authority, `_called_name`, `_root_name`, `_rel` and `_call_sites` are identical. `_func` differs by its error message only, `_enclosing_defs` and `_production_sources` by docstring only. The signature choice for `_call_sites` (the module-global rebind) keeps this lane B.
+S-A-TESTS-7-05 — AMENDED: an AST-extract diff shows two helpers are not the same body.
+- `_spawn_supervisor` differs deliberately: the witness passes an optional `--config` plus `extra`, and its comment bars any harness flag because `overrides` is asserted. The posture copy passes fixed `--stale-after-sec`, `--poll-interval-sec`, `--kill-grace-sec` and `--max-relaunches` flags.
+- `_reap` differs: the posture copy `killpg`s the session, while trampoline and pdeathsig use a plain `kill` behind an `_alive` guard.
+
+Only `_alive` (×3; the differences are a None-guard and docstrings), `_ppid_of`≡`_ppid_of_pid` and `_events` (×2) are twins. Δ is below -68: the `_spawn_supervisor` pair leaves scope, and `_reap` needs a union flag. Lane C (LAW-16).
+S-A-TESTS-7-06 — PENDING-PROBE (torch-bound). Probe in worktree wt/S-A-TESTS-7-rev (batched with -07 and -08) with the `-S` + isolating PYTHONPATH recipe:
+- `import mantis` ok;
+- `--collect-only -m ''` → "2289 tests collected, 167 errors" (baseline, no new ERROR);
+- `cargo check --workspace --all-targets --locked` rc 0.
+
+tests/test_run_composition.py errors at collection on torch at HEAD too, so no row of it could be run. `git grep -w _DrivableBuffer` → the definition only. Δ -11 from `git diff`.
+S-A-TESTS-7-07 — PENDING-PROBE (torch-bound; same probe; Δ -7 from `git diff`). What was checked:
+- `git grep "isinstance\([^)]*(Like|Protocol)\b" -- src` → 0, so no runtime Protocol check could require the fake methods.
+- `sample_batch_with_pos` and `train_step_from_tensors(` have no call site in src, only the Protocol declarations in coordinator/config.py.
+- Correction: `_Buffer()` has THREE drives, not two (lines 256, 295 and 612). The third is the ceiling-DONE drive, which runs zero steps.
+
+Side note: the dispatch.py header and docstring still describe a grid arm and `_grid_step`, which no code implements. The scout's HANDOFF already names this.
+S-A-TESTS-7-08 — CONFIRMED (probe green). Checks:
+- Injection by fixture name: `git grep -w mutable_counter -- .` (whole tree, not just imports) → the definition only; `git grep "getfixturevalue|usefixtures" -- tests/monitor` → 0.
+- `.has(` / `.first` → 0 uses; `CallSpy(` is only ever called with no arguments; `from conftest import` → 0 (one prose mention).
+- `MINTED_CONFIGS` → the definition plus one docstring, which the probe reworded (0 net).
+
+Probe results:
+- tests/monitor/{test_persist_fatal,test_supervisor,test_heartbeat,test_sink,test_best_effort}.py + tests/test_exit_code_table_census.py → 74 passed.
+- ruff on the 4 edited files → clean.
+- comment_lint GREEN, with docstring_excess_lines 13079→13078: tools/ci_gates/comment_length_floor.txt may be lowered by 1.
+- gate 15 → 0 stale.
+- No test deleted, so the gate 3 floor does not move.
+
+Δ -26 (monitor conftest -25, tests/conftest.py -1).
+S-A-TESTS-7-09 — CONFIRMED: both rows read. The sibling's `_drive` wraps the REAL `build_run_safety` (`_recording_build`) and asserts `eval_pipeline` is/is not None as well as `eval_round` ∈/∉ wired. The composition row makes the same ∈/∉ assertion through a FAKE build_run_safety. "Same dev_example config" is loose: the composition row uses the fixture default. The subsumption holds anyway. Test-floor move.
+S-A-TESTS-7-10 — CONFIRMED: strict pins the exact 8-tuple of parameters. o16 walks `SCHEMA_CENSUS` and asserts `is_required()` for every non-exempt field, and its comment names eval_enabled and run_id. The authority row's top-level-placement assertion is also covered by `extra="forbid"` on every minted config (gate 7).
+S-A-TESTS-7-11 — CONFIRMED: the docstring reads as a spent migration ("zero-behaviour mint (§6)"). Its glob also covers EXEMPT configs, unlike the R10 census. Keep or drop is a design choice (lane B).
+S-A-TESTS-7-12 — CONFIRMED: `grep -c "config OK" src/mantis/run.py` → 0, so the row is a grave.
+S-A-TESTS-7-13 — CONFIRMED: test_armed_abort_manifest.py asserts `audit_arming(run6).disarmed == []`, and armed_aborts.py has `actor_lag` as REQUIRED/CONFIG_BOOL on `monitor.actor_lag_abort_enabled`. Together these imply the strict predicate.
+S-A-TESTS-7-14 — AMENDED:
+- (a) The test_sink row uses the same `sink_mod.json` monkeypatch and the same `== before + 1` as persist_fatal's producer test (manifest row `persist_fatal`).
+- (b) test_sink.py:74 (missing-key row) and :126 (concurrency row) assert `persist_errors_total == 0`.
+- (c) The success row reads `get("snapshot") == 0` on a label never incremented.
+- (d) The row asserts only stdlib `math.isfinite`.
+
+Correction: tests/monitor/test_rules.py ERRORs at collection here (torch), so the "(all torch-free, green here)" witness note is wrong for (d).
+S-A-TESTS-7-15 — CONFIRMED. The mutation arms can never fail:
+- `heartbeat_fn_mut = None; if heartbeat_fn_mut is not None:` (lines 46-48) and `pool_heartbeat_mut = None` (82-84) are constant-false branches.
+- The assertions after them (age 10.0 at t=20 after a beat at t=10) follow from `HeartbeatRegistry` arithmetic alone, so no production mutation can red them.
+- `if heartbeat_fn is not None` (40) is constant-true, and the row calls `reg.beat` directly, touching no producer.
+
+`bind_makes_it_live` asserts `bound` + selfplay_drain age 1.0, which is exactly `forwards_beat[selfplay_drain]`. No producer-manifest row names this file: the `producer_test:` grep lists none. A grep of docs/governance, docs/design, docs/contracts and tools for these test names → 0.
+S-A-TESTS-7-16 — CONFIRMED: the row's id-set half is implied by `test_shipped_manifest_every_row_resolves` (with `test_dead_producer_symbol_bites`). Its `hasattr(events, …)` half is a grave, which is a lane B choice.
+S-A-TESTS-7-17 — CONFIRMED (lane C), with a residual: test_exit_code_table_census.py ties every constant to the design table, including row 42's two names. The literal 42/43 pins additionally bite a COORDINATED doc-row + constant change, which the census cannot see. The census docstring already calls a hand list a second authority, so this is subsumption by design intent. It is lane C because of the LAW-16 rc contract.
+S-A-TESTS-7-18 — CONFIRMED: `git grep "(DrivableTrainerStub)"` → 4 subclasses (root_lifecycle `_Trainer`, strict `_ExplodingTrainer`, train/test_heldout_gap `_Trainer`, train/test_terminal_eval_rc `_Trainer`). Only `_ExplodingTrainer` overrides `train_step_from_tensors` (`git grep "def train_step_from_tensors" -- tests`), and -07 removes that override. So the forward is no live hook, and depends -07 is correct. The other tests/train trainers with a tensors method are standalone classes with their own graph method; that is the HANDOFF to the train slice.
+S-A-TESTS-7-19 — CONFIRMED: the fixture-name grep over tests/monitor → only test_persist_fatal.py (16 hits), which is the manifest's `persist_fatal` producer test, hence lane C.
+S-A-TESTS-7-20 — AMENDED: the scout's regex over the 10 named files → 13 lines, not 16. Δ -13 was not re-derived. This is on-contact work only (R316(e)).
+S-A-TESTS-7-21 — CONFIRMED: the regex matches 8 lines in 6 in-slice files, not "7 hits": one_authority and partial each match on lines 2 and 3. The other points:
+- CLAUDE.md rule 5 bars `sys.path` writes and a `tests` package, not cross-test imports.
+- tests/_drivable.py and tests/train/_coordinator_pool.py are bare-name helper modules reached through pytest's prepend rootdir insertion. `git grep -E "sys\.path\.(insert|append)|sys\.path *=" -- tests src tools` → string literals inside tests only.
+- docs/audits/REVIEW2_2026-09-21.md G3.4 already ruled this exact premise false for test_run_strict_composition.py, fixed in deb16b8. This finding extends a landed ruling.
+- test_run_pdeathsig.py's hit is a docstring "Harness shape" line, not an R8 header.
+
+### Missed by the scout
+NEW-1 | DUP | B — tests/train/_coordinator_pool.py::CoordinatorPoolStub is already a shared pool double. If -01 hoists a second `DrivablePoolStub` into tests/_drivable.py, the tree has two shared pool doubles. Reconcile them in the same leg.
+
+### Tally: raised 21 | confirmed 15 | amended 4 | refuted 0 | pending 2 | architect 0
+Lane-A Δ probe-measured: -44 total (4 files, +4/-48). -26 is CONFIRMED (-08); -18 is PENDING-PROBE, torch-bound (-06 -11, -07 -7). No worktree remains.
