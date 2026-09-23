@@ -128,7 +128,7 @@ def _iteration_complete(pool: Any, *, gph: Any, sph: Any) -> dict[str, Any]:
         train_step=0, w_pre=0.0, games_played=0, last_iter_games=0, pool=pool,
         buffer=_Buffer(), config={}, mcts_config={}, capacity=1024,
         games_per_hour_fn=lambda: gph, steps_per_hour_fn=(lambda: sph) if sph is not None else None,
-        target_integrity={}, rstats=_Rstats(), sink=_Sink(),
+        target_integrity={}, rstats=_Rstats(), sink=_Sink(), search_levers={},
     )
     assert len(events) == 1, events
     return events[0]

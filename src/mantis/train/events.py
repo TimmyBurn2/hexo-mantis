@@ -308,9 +308,11 @@ def emit_iteration_complete_event(
     target_integrity: Mapping[str, Any],
     rstats: Any,
     sink: EventSink,
+    *,
+    search_levers: Mapping[str, Any],
 ) -> None:
     """Build and emit `iteration_complete`, the per-coordinator-step counter payload (NOT `log_interval`-gated);
-    `rstats` is passed IN so both blocks read the ONE snapshot and cannot straddle a game boundary."""
+    `rstats` is passed IN so every block reads the ONE snapshot and cannot straddle a game boundary."""
     # Each of the three is `None` when its inputs were not measured: a rate over zero elapsed
     # time, a mean over zero completed games, and a product of either are all absences, and
     # each used to be published as a hard `0.0`, which reads as a measured stall.
@@ -369,6 +371,9 @@ def emit_iteration_complete_event(
         # denominator. Nested so they travel together and cannot crosswire; built by the
         # coordinator, which owns the previous boundary's readings.
         "target_integrity": dict(target_integrity),
+        # The playout-cap draw and the Gumbel round width, in the same {total, delta,
+        # per_position} shape: a lever under test logs its own fire rate in-run.
+        "search_levers": dict(search_levers),
     }
     iteration_complete_event.update(regime_gated_cluster_stats(rstats, _puct_regime))
     emit_via(sink, iteration_complete_event)

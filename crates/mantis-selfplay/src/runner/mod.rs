@@ -81,8 +81,8 @@ pub struct RunnerStatsSnapshot {
     /// every move counts `full`.
     pub pcr_full_moves: u64,
     pub pcr_quick_moves: u64,
-    /// The Gumbel round's WIDTH as the two terms of a mean. BOTH zero on a PUCT run, whose
-    /// reader publishes the ABSENCE rather than a 0/0.
+    /// The Gumbel round's WIDTH as the two terms of a mean, published as terms and never as a
+    /// quotient: BOTH are zero on a PUCT run.
     pub gumbel_round_leaves: u64,
     pub gumbel_rounds: u64,
     /// Root Dirichlet applications (the PUCT arm's site); 0 under Gumbel — R359(d)'s pin, not a bridge field.

@@ -88,6 +88,11 @@ _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
 )
 _POSITIONS_COUNTER = "positions_generated"
+#: The playout-cap draw's two arms and the Gumbel round-width terms, published beside the
+#: target-integrity block over the same snapshot and the same `positions_delta`.
+_SEARCH_LEVER_COUNTERS: tuple[str, ...] = (
+    "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
+)
 
 # The draw-rate ring has no depth constant: a literal clipped every schema-legal `consec` above
 # it into unfireable-in-effect, so capacity is derived at the point of use. Plain `#` — this
@@ -235,7 +240,7 @@ class StepCoordinator:
         # The previous `iteration_complete` boundary's counter readings, so the payload can
         # publish an INTERVAL delta beside the cumulative total. Seeded at 0 (pool start).
         self._last_target_counters: dict[str, int] = dict.fromkeys(
-            (*_TARGET_INTEGRITY_COUNTERS, _POSITIONS_COUNTER), 0,
+            (*_TARGET_INTEGRITY_COUNTERS, *_SEARCH_LEVER_COUNTERS, _POSITIONS_COUNTER), 0,
         )
         # The TERMINAL round's outcome, latched set-once by `drain._record_terminal_outcome`
         # and read by the composition root.
@@ -742,18 +747,18 @@ class StepCoordinator:
         """
         sink = self._sink if self._sink is not None else NullEventSink()
         w_pre = 0.0
-        rstats_report, rstats = self._target_integrity_report()
+        rstats_report, search_levers, rstats = self._target_integrity_report()
         emit_iteration_complete_event(
             self._train_step, w_pre, self._games_played, self._last_iter_games,
             self.pool, self.buffer, self.full_config, self.full_config.get("mcts", {}),
             cfg.capacity, self._games_per_hour, self._steps_per_hour,
-            rstats_report, rstats, sink,
+            rstats_report, rstats, sink, search_levers=search_levers,
         )
         self._last_iter_games = self._games_played
 
-    def _target_integrity_report(self) -> tuple[dict[str, Any], Any]:
-        """The target-integrity counters as an `iteration_complete` block, and the `RunnerStats`
-        snapshot they were built from.
+    def _target_integrity_report(self) -> tuple[dict[str, Any], dict[str, Any], Any]:
+        """The target-integrity and search-lever counters as two `iteration_complete` blocks,
+        and the `RunnerStats` snapshot both were built from.
 
         Each counter publishes its cumulative `total`, its INTERVAL `delta` and a `per_position`
         rate over the denominator published beside it. An idle lever stays VISIBLE at 0, which
@@ -765,16 +770,19 @@ class StepCoordinator:
         positions_delta = (None if positions is None
                            else positions - self._last_target_counters[_POSITIONS_COUNTER])
         report: dict[str, Any] = {"positions_delta": positions_delta}
-        for name in _TARGET_INTEGRITY_COUNTERS:
-            total = _snapshot_counter(rstats, name)
-            delta = None if total is None else total - self._last_target_counters[name]
-            report[name] = {"total": total, "delta": delta,
-                            "per_position": _fire_rate(delta, positions_delta)}
-            if total is not None:
-                self._last_target_counters[name] = total
+        levers: dict[str, Any] = {"positions_delta": positions_delta}
+        for block, names in ((report, _TARGET_INTEGRITY_COUNTERS),
+                             (levers, _SEARCH_LEVER_COUNTERS)):
+            for name in names:
+                total = _snapshot_counter(rstats, name)
+                delta = None if total is None else total - self._last_target_counters[name]
+                block[name] = {"total": total, "delta": delta,
+                               "per_position": _fire_rate(delta, positions_delta)}
+                if total is not None:
+                    self._last_target_counters[name] = total
         if positions is not None:
             self._last_target_counters[_POSITIONS_COUNTER] = positions
-        return report, rstats
+        return report, levers, rstats
 
     def _games_per_hour(self) -> float | None:
         """Games per hour over the run clock, or `None` before the clock has advanced — a rate

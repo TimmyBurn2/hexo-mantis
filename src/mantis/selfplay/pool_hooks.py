@@ -116,6 +116,11 @@ class RunnerStats:
     mcts_quiescence_fires: int
     mcts_mean_depth: float
     mcts_mean_root_concentration: float
+    # The playout-cap draw's two arms and the Gumbel round-width terms (LAW-18 fire rates).
+    pcr_full_moves: int
+    pcr_quick_moves: int
+    gumbel_round_leaves: int
+    gumbel_rounds: int
     # Target-integrity counters: an idle lever stays VISIBLE at 0.
     export_offwindow_mass_moves: int = 0
     target_integrity_defects: int = 0
@@ -140,11 +145,9 @@ class InferenceStats:
 
 
 def runner_stats(pool: Any) -> RunnerStats:
-    """Snapshot the runner's counters and scalars.
+    """Snapshot the runner's counters; the search levers are read with no `getattr` default.
 
-    Defaults via `getattr` cover engine builds pre-dating an individual counter. Fifteen fields
-    left with the arms they measured: the engine exposes no getter for any of them, so each would
-    have snapshotted its wheel-compat default forever, publishing a fabricated reading.
+    Raises: AttributeError: the runner has no search-lever getter.
     """
     r = pool._runner
     return RunnerStats(
@@ -159,6 +162,10 @@ def runner_stats(pool: Any) -> RunnerStats:
         mcts_mean_root_concentration=float(
             getattr(r, "mcts_mean_root_concentration", 0.0)
         ),
+        pcr_full_moves=int(r.pcr_full_moves),
+        pcr_quick_moves=int(r.pcr_quick_moves),
+        gumbel_round_leaves=int(r.gumbel_round_leaves),
+        gumbel_rounds=int(r.gumbel_rounds),
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),

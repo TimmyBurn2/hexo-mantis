@@ -19,7 +19,7 @@ def _rstats() -> RunnerStats:
     return RunnerStats(
         games_completed=0, positions_generated=0, x_wins=0, o_wins=0, draws=0,
         model_version=0, mcts_quiescence_fires=0, mcts_mean_depth=5.0,
-        mcts_mean_root_concentration=0.1,
+        mcts_mean_root_concentration=0.1, pcr_full_moves=0, pcr_quick_moves=0, gumbel_round_leaves=0, gumbel_rounds=0,
     )
 
 
@@ -73,7 +73,7 @@ def _emit(*, completed_now: int, games_played_snapshot: int) -> dict:
     sink = _Sink()
     emit_iteration_complete_event(
         7, 0.0, games_played_snapshot, 0, _StraddlingPool(completed_now=completed_now),
-        _Buffer(), {}, {}, 100_000, lambda: 10.0, lambda: 5.0, {}, _rstats(), sink,
+        _Buffer(), {}, {}, 100_000, lambda: 10.0, lambda: 5.0, {}, _rstats(), sink, search_levers={},
     )
     events = [e for e in sink.events if e["event"] == "iteration_complete"]
     assert len(events) == 1, f"expected one iteration_complete, got {len(events)}"

@@ -34,7 +34,7 @@ def _iteration_complete(rstats: Any) -> dict[str, Any]:
         train_step=0, w_pre=0.0, games_played=0, last_iter_games=0, pool=_Pool(),
         buffer=_Buffer(), config={}, mcts_config={}, capacity=1024,
         games_per_hour_fn=lambda: None, steps_per_hour_fn=None,
-        target_integrity={}, rstats=rstats, sink=_Sink(),
+        target_integrity={}, rstats=rstats, sink=_Sink(), search_levers={},
     )
     assert len(events) == 1, events
     return events[0]
@@ -43,7 +43,7 @@ def _iteration_complete(rstats: Any) -> dict[str, Any]:
 def _snapshot(fires: int) -> RunnerStats:
     return RunnerStats(games_completed=3, positions_generated=90, x_wins=1, o_wins=2, draws=0,
                        model_version=1, mcts_quiescence_fires=fires, mcts_mean_depth=2.5,
-                       mcts_mean_root_concentration=0.4)
+                       mcts_mean_root_concentration=0.4, pcr_full_moves=0, pcr_quick_moves=0, gumbel_round_leaves=0, gumbel_rounds=0)
 
 
 def test_the_runner_snapshot_carries_the_counter_by_name() -> None:

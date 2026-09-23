@@ -21,6 +21,9 @@ from types import SimpleNamespace
 
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 
+#: The search-lever getters `runner_stats` reads with no default; an engine without them raises.
+_LEVERS = {"pcr_full_moves": 0, "pcr_quick_moves": 0, "gumbel_round_leaves": 0, "gumbel_rounds": 0}
+
 
 class _Pool:
     def __init__(self, runner: object) -> None:
@@ -30,7 +33,8 @@ class _Pool:
 def test_runner_stats_threads_the_inference_seam_counter() -> None:
     # DISTINCT values across the two conjuncts' counters: equal ones would be satisfied by a
     # crosswire, which is the only interesting way this can be wrong.
-    runner = SimpleNamespace(inference_failures_total=4, target_integrity_defects=9)
+    runner = SimpleNamespace(inference_failures_total=4, target_integrity_defects=9,
+                             **_LEVERS)
     st = runner_stats(_Pool(runner))
     assert isinstance(st, RunnerStats)
     assert st.inference_failures_total == 4, (
@@ -48,5 +52,5 @@ def test_the_idle_seam_counter_is_visible_at_zero() -> None:
     """The seam latch is run-fatal, so this reads 0 in every run that survives. That
     permanent zero is the posture — it is what distinguishes "no inference has failed" from
     a field with no producer at all."""
-    st = runner_stats(_Pool(SimpleNamespace()))
+    st = runner_stats(_Pool(SimpleNamespace(**_LEVERS)))
     assert st.inference_failures_total == 0

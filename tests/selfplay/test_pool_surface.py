@@ -77,6 +77,8 @@ RUNNER_STATS_FIELDS = {
     "games_completed", "positions_generated", "x_wins", "o_wins", "draws",
     "model_version", "mcts_quiescence_fires", "mcts_mean_depth",
     "mcts_mean_root_concentration",
+    # The playout-cap draw's two arms and the Gumbel round-width terms (LAW-18).
+    "pcr_full_moves", "pcr_quick_moves", "gumbel_round_leaves", "gumbel_rounds",
     # WP12-R Phase T target-integrity counters (LAW-18; the byte-frozen oracle
     # bank fixes these names — see tests/selfplay/test_target_law18_counters.py).
     "export_offwindow_mass_moves", "target_integrity_defects",

@@ -31,6 +31,9 @@ from types import SimpleNamespace
 
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 
+#: The search-lever getters `runner_stats` reads with no default; an engine without them raises.
+_LEVERS = {"pcr_full_moves": 0, "pcr_quick_moves": 0, "gumbel_round_leaves": 0, "gumbel_rounds": 0}
+
 _FIELDS = (
     "export_offwindow_mass_moves",
     "target_integrity_defects",
@@ -46,6 +49,7 @@ def test_runner_stats_threads_the_target_integrity_counters() -> None:
     runner = SimpleNamespace(
         export_offwindow_mass_moves=5,
         target_integrity_defects=9,
+        **_LEVERS,
     )
     st = runner_stats(_Pool(runner))
     assert isinstance(st, RunnerStats)
@@ -57,7 +61,7 @@ def test_runner_stats_threads_the_target_integrity_counters() -> None:
 
 
 def test_idle_counters_are_visible_at_zero() -> None:
-    st = runner_stats(_Pool(SimpleNamespace()))
+    st = runner_stats(_Pool(SimpleNamespace(**_LEVERS)))
     for f in _FIELDS:
         assert getattr(st, f) == 0, (
             f"idle counter {f!r} must be VISIBLE at 0 (a disabled/idle lever stays "

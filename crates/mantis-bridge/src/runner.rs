@@ -340,6 +340,25 @@ impl PySelfPlayRunner {
         self.snapshot().max_sims_per_search
     }
 
+    /// Moves whose playout-cap draw picked the FULL budget (every move at `full_search_prob == 0`).
+    #[getter]
+    pub fn pcr_full_moves(&self) -> u64 {
+        self.snapshot().pcr_full_moves
+    }
+    #[getter]
+    pub fn pcr_quick_moves(&self) -> u64 {
+        self.snapshot().pcr_quick_moves
+    }
+    /// Leaves served by Gumbel rounds; over `gumbel_rounds`, the mean round width (0 under PUCT).
+    #[getter]
+    pub fn gumbel_round_leaves(&self) -> u64 {
+        self.snapshot().gumbel_round_leaves
+    }
+    #[getter]
+    pub fn gumbel_rounds(&self) -> u64 {
+        self.snapshot().gumbel_rounds
+    }
+
     #[getter]
     pub fn export_offwindow_mass_moves(&self) -> u64 {
         self.snapshot().export_offwindow_mass_moves
