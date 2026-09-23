@@ -29,7 +29,7 @@ hexo-mantis/
 ├── Makefile                    # thin: build / test / test.integration / bench /
 │                               #   bench.baseline / check.wasm / vendor / clean
 ├── crates/
-│   ├── mantis-core/            # board, hex geometry, rules, Ply/Turn vocabulary types
+│   ├── mantis-core/            # board, hex geometry, rules, the Ply vocabulary type
 │   ├── mantis-graph/           # dep-free axis-graph builder; native + wasm32 targets
 │   ├── mantis-encoding/        # registry.toml + spec + validators
 │   ├── mantis-search/          # MCTS (PUCT + Gumbel), completed-Q, tactics solver
@@ -709,7 +709,7 @@ is a deviation from this file and it lands as an amendment in the same commit as
    per-position search stats (contract #11), and the page states that gap in words on every
    self-play game rather than drawing an empty heatmap; a games directory with no game of the
    run is REFUSED, never rendered as an empty list. Facts the page derives — the owner of a ply
-   (`Ply::turn`'s mapping) and the six-in-a-row through the completing stone (`HEX_AXES`,
+   (the ply-to-turn mapping) and the six-in-a-row through the completing stone (`HEX_AXES`,
    `WIN_LENGTH`) — are derived in Python and checked against every record's own `result` and
    `termination` at build time; a disagreement is printed as a FINDING and carried on the page.
 4. **Measured at landing:** run6's 38 988 games (35 287 self-play, 3 701 eval-channel games
@@ -889,8 +889,8 @@ that lands as an amendment in the commit that moves them, rather than as drift.
 5. **The omitted-prior counters are PER-SEARCH.** They were process-global statics, so a
    bracketed measurement around one search admitted every other search in the process — a
    wrong number rather than a flaky one, and the conformance suite held a serialising mutex
-   to work around it. The counters now live on `MCTSTree`; the process-wide totals stay, fed
-   from the same one call site, because the bridge publishes them as the run-wide aggregate.
+   to work around it. The counters now live on `MCTSTree`. AMENDED (SLIM-FIX, R368(d)): the
+   bridge no longer exports the process-wide totals — no Python reader ever consumed them.
 
 ---
 

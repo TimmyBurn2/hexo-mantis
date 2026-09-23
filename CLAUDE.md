@@ -9,7 +9,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 ## Map
 
 - Cargo.toml + pyproject.toml — cargo workspace and uv project root (src-layout).
-- crates/mantis-core — board, hex geometry, rules, Ply/Turn vocabulary types.
+- crates/mantis-core — board, hex geometry, rules, the Ply vocabulary type.
 - crates/mantis-graph — dep-free axis-graph builder (native + wasm32), sits below
   mantis-encoding in the DAG; `make check.wasm` targets it (and mantis-encoding if it
   becomes wasm-targeted).

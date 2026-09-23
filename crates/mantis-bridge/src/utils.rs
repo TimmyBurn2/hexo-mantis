@@ -4,9 +4,7 @@
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-use mantis_search::{
-    omitted_prior_stats, pool_overflow_count, take_omitted_prior_stats, take_pool_overflow_count,
-};
+use mantis_search::{pool_overflow_count, take_pool_overflow_count};
 use mantis_selfplay::records::finalize_graph_outcome;
 
 /// Read the process-wide MCTS pool-overflow counter without resetting.
@@ -22,22 +20,6 @@ pub(crate) fn mcts_pool_overflow_count() -> u64 {
 #[pyfunction]
 pub(crate) fn take_mcts_pool_overflow_count() -> u64 {
     take_pool_overflow_count()
-}
-
-/// `(omitted_prior_mass_micros, expansions_that_omitted, total_expansions)` — how much prior
-/// mass the Top-K child cap drops, the quantity that says whether the cap costs the search.
-///
-/// Mass is fixed-point (x 1e6): there is no atomic f32, and a threaded float sum would not be
-/// reproducible even if there were.
-#[pyfunction]
-pub(crate) fn mcts_omitted_prior_stats() -> (u64, u64, u64) {
-    omitted_prior_stats()
-}
-
-/// Atomically read-and-reset all three, to bracket a measurement window.
-#[pyfunction]
-pub(crate) fn take_mcts_omitted_prior_stats() -> (u64, u64, u64) {
-    take_omitted_prior_stats()
 }
 
 /// The `(outcome, value_valid)` a graph training row carries, from THE authority — exposed so a
@@ -106,8 +88,6 @@ pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(mcts_max_armed_sims_gumbel, m)?)?;
     m.add_function(wrap_pyfunction!(mcts_pool_overflow_count, m)?)?;
     m.add_function(wrap_pyfunction!(take_mcts_pool_overflow_count, m)?)?;
-    m.add_function(wrap_pyfunction!(mcts_omitted_prior_stats, m)?)?;
-    m.add_function(wrap_pyfunction!(take_mcts_omitted_prior_stats, m)?)?;
     m.add_function(wrap_pyfunction!(graph_row_outcome, m)?)?;
     Ok(())
 }

@@ -98,7 +98,7 @@ pub struct Board {
     /// Whose turn it is.
     pub current_player: Player,
     /// How many moves the current player still has to place this turn: 1 on ply 0, then 2.
-    /// A within-turn count — deliberately a bare `u8`, not a Ply/Turn index.
+    /// A within-turn count — deliberately a bare `u8`, not a Ply index.
     pub moves_remaining: u8,
     /// Total half-moves placed so far.
     pub ply: Ply,
