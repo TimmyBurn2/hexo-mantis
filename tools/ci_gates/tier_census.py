@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import ast
 import sys
+import tempfile
 from pathlib import Path
 
 #: Markers that REMOVE a test from at least one tier the repo runs. `parametrize` and friends
@@ -138,23 +139,17 @@ def self_test() -> int:
         bad += 0 if ok else 1
         print(f"  [{'OK' if ok else 'SELF-TEST FAILED'}] {name}: {got}")
     empty_refused = False
-    try:
-        load_declaration(_empty_declaration())
-    except ValueError:
-        empty_refused = True
+    with tempfile.TemporaryDirectory() as tmp:
+        empty = Path(tmp) / "empty_declaration.txt"
+        empty.write_text("# only a comment\n", encoding="utf-8")
+        try:
+            load_declaration(empty)
+        except ValueError:
+            empty_refused = True
     print(f"  [{'OK' if empty_refused else 'SELF-TEST FAILED'}] an empty declaration is refused")
     bad += 0 if empty_refused else 1
     print("self-test: all controls fire" if not bad else f"self-test: {bad} DID NOT FIRE")
     return bad
-
-
-def _empty_declaration() -> Path:
-    import tempfile
-
-    handle = tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8")
-    handle.write("# only a comment\n")
-    handle.close()
-    return Path(handle.name)
 
 
 def main(argv: list[str] | None = None) -> int:

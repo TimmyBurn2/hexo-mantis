@@ -14,6 +14,7 @@ the tree-wide twin, plus gate 3c's missing third arm: `tree_floor <= collected`.
 from __future__ import annotations
 
 import importlib.util
+import os
 import subprocess
 from pathlib import Path
 
@@ -162,6 +163,14 @@ def test_the_tools_own_self_test_fires_every_control() -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "all controls fire" in proc.stdout
     assert "SELF-TEST FAILED" not in proc.stdout
+
+
+
+def test_the_self_test_leaves_no_file_in_the_temp_dir(tmp_path: Path) -> None:
+    proc = subprocess.run(["python3", str(TOOL_PATH), "--self-test"], capture_output=True,
+                          text=True, cwd=REPO_ROOT, env={**os.environ, "TMPDIR": str(tmp_path)})
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert list(tmp_path.iterdir()) == [], "the self-test leaked a temp file"
 
 
 # gate 3c carries it, and gained its third count arm
