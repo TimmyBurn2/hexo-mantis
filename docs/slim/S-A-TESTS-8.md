@@ -180,3 +180,127 @@ depends: —
 - Deliberate twins, not raised: the in-suite tier census (`_SLOW_TIER_MEMBERS`, marker_census) vs tools/ci_gates/tier_census.py + tier_declaration.txt, both declared twins and cross-checked by tests/tools/test_tier_census.py; and test_net_param_hash_promotion's stability control, which the golden implies but which is a PZ-1 pinning test.
 - Merging test_amp_dtype.py into test_one_amp_dtype_authority.py was weighed and dropped: it would make the torch-free census torch-dependent.
 - The six separate "walk src/**/*.py and ast.parse" loops across tests/model, each 3–5 lines, were not costed.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed.
+Reviewed at HEAD af4d37e. `git diff --stat 69e1532 HEAD -- tests src tools crates` is empty, so every subject is unchanged from the census base.
+Roster guard: test_conformance_roster_guard.py compares the ENCODING registry roster (`_corpus.roster_names` vs `encoding.all_specs()`). It enumerates no refusal class or helper by name. `git grep -n -E "getmembers|__subclasses__|vars\(|globals\(\)" -- tests/model` → no enumeration of test-module names. So no dead subject here is roster-guarded.
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| 01a `_ARCH_ATTRS` | CONFIRMED | A | −1 (probe diff) | probe green: collect 2289/167 (= baseline), test_arch_ban 5 passed |
+| 01b `registered_abort` | PENDING-PROBE | A | 0 (probe diff: 3+/3−) | torch-bound: test_gine_bf16_drift errors at collection. The AST census was re-derived as unchanged |
+| 02 | CONFIRMED | C | −39 (unprobed; lane C) | not roster-guarded. Only def hits outside docs/slim |
+| 03 | CONFIRMED | C | −20 | implied by graves `set(pairs) == set(ARCH_KINDS)`. Test-floor move (tools/ci_gates/test_count_floor.txt). Touches an S-L-SEAM (b) row-2 census test |
+| 04 | AMENDED | C | not derivable (the scout's −15 bound fails) | the two walkers recognise DIFFERENT shapes, so a merge changes what each census sees |
+| 05 | CONFIRMED | C | ≈ −40 (bound) | makes CARDS' R349(a) closure text ("the four collate sites") stale. It can be annotated only |
+| 06 | AMENDED | C | ≈ −10 (was −21) | the three per-tier refusal messages must survive as parameters |
+| 07 | AMENDED | C | ≈ −13 standalone (−18 only if it shares 05's new root module) | the RNG draw order must be kept |
+| 08 | AMENDED | C | −17 | config_for's refusal message is written for the partition tier and must be generalised |
+| 09 | AMENDED | C | −31 (was −41), tests −3 (was −4) | (d) REFUTED: it is the ONLY V2 arch-handle pin |
+| 10 | CONFIRMED | B | −19 | no path citation outside docs/slim |
+| 11 | CONFIRMED | B | ≈ −20 | AST-identical bodies (sans docstring) |
+| 12 | CONFIRMED | C | ≈ −7 (bound) | the CPU pairs loop carries one extra assert that the helper must keep |
+| 13 | CONFIRMED | C | 0 | all five texts re-derived as stale |
+| 14 | CONFIRMED | A | 0 | docstring clause only (DOC; no delete-probe required) |
+
+### Per-finding notes
+S-A-TESTS-8-01 — split verdict.
+- 01a CONFIRMED. `git grep -n -w _ARCH_ATTRS` → only the def (test_arch_ban.py:19) plus docs/slim. `_RE_ATTR`/`_RE_HASATTR` re-type the names inline.
+- 01a DELETE-PROBE, worktree scratchpad/wt/tests8-01 at HEAD, with the `-S` + isolating PYTHONPATH recipe:
+  - `import mantis` resolves to the worktree src;
+  - collect-only → `2289 tests collected, 167 errors` (= baseline);
+  - `pytest tests/model/test_arch_ban.py` → 5 passed;
+  - `git diff --stat` → `2 files changed, 3 insertions(+), 4 deletions(-)`.
+- cargo check was not run. The subjects are Python test modules, and `git grep -E "test_arch_ban|test_gine_bf16_drift" -- crates tools Makefile` → 0, so no include_str!, bench or gate reaches them.
+- 01b PENDING-PROBE (torch-bound). I dropped the tuple element and its two row literals. An AST re-run of `test_every_gating_row_still_asserts_its_registered_threshold`'s census gives `[0.001953125, 0.4]` both at HEAD and in the worktree: the 4.0e-1 comes from the separate `assert policy_null_max > 4.0e-1`. Collection is unchanged. The row itself cannot run without torch.
+
+S-A-TESTS-8-02 — CONFIRMED (lane C by PZ-1).
+- `git grep -n -w <name> -- ':!docs/slim'` → exactly the def for all five. The three classes are at test_legal_move_coverage_boundary.py:48/52/56.
+- No dynamic use: no `__subclasses__`/getmembers anywhere in tests or tools, and conformance/conftest.py defines only `derived`.
+- The `Board` import is used only in a docstring (harness:11/88), so F401 is real.
+
+S-A-TESTS-8-03 — CONFIRMED.
+- The selector's set comprehension is ⊆ ARCH_KINDS by construction, so its equality is one-directional: every kind has an `isinstance(arch, K)` substring.
+- graves::test_the_dispatch_census_and_the_arch_kind_registry_agree asserts `set(pairs) == set(ARCH_KINDS)` over If-test isinstance nodes with an assigned-Call body. That is strictly stronger, except for the literal receiver name `arch` and the whitespace, which are not a claim.
+- The `derived("t10.*")` keys have no consumer: `git grep -E "t10\.|t11\." -- ':!tests/model/conformance' ':!docs/slim'` → 0.
+- No governance or tools citation of the test name. Floor file tools/ci_gates/test_count_floor.txt (4862) moves.
+
+S-A-TESTS-8-04 — AMENDED (Δ not derivable; still lane C). The two walkers are not one reading of the chain:
+- `perf_floor::arch_kinds_dispatched` collects EVERY `isinstance(_, Name|Tuple)` Call inside build_net, whatever the branch body.
+- `graves::dispatch_pairs` records a kind only for an `ast.If` whose test is isinstance(_, Name) AND whose body holds an `x = Call(...)` Assign.
+- The planted breaks (PB-T7a and the negative control) use `return B()` bodies (`sed -n 300,332p test_arch_states_its_perf_floor.py`), which `dispatch_pairs` would read as ZERO kinds. A merged walker must carry both arms, or the planted sources must be rewritten, and either changes which mutation reds which census.
+- The envelope docstring's "two walkers … two authorities" is about re-walking inside the envelope module, which it avoids by importing. The scout's bound of the survivor gaining "≈5 lines" is unsupported.
+
+S-A-TESTS-8-05 — CONFIRMED.
+- `git grep -n "board.current_player, board.moves_remaining, board.ply, True, 0.0, True, 8" -- tests` → exactly the 5 files.
+- `git grep -n -F "stone_mask[: int(batch.n_stones.sum())] = True" -- tests` → 4.
+- `graph_collate.py::stone_mask_from_batch`'s docstring states the per-graph layout `[stones | legal | dummy]`. The prefix mask is therefore right only at B=1, and every site samples 1.
+- Ruling contact is real: CARDS.md (the R349(a) closure) names "the four collate sites in the model oracles". That governance text goes stale and is corrected by annotation only.
+- `_corpus` imports torch nowhere at module scope today. The shared collate helper must keep torch lazy. Moot for tier membership, because the roster guard already fails collection on torch.
+
+S-A-TESTS-8-06 — AMENDED.
+- The shape claim holds (read both bodies).
+- The Δ does not. Of the envelope body's 18 lines, 6 are the three tier-specific messages, which state each tier's reason and interpolate `missing`/`stray`. They must be passed in, as templates or callables, alongside three exception classes.
+- The floor checker is called at 6 sites and the envelope checker at 2, so thin per-module wrappers must stay. Net ≈ −10.
+- If S-L-SEAM-02 lands, its review deletes PK3, one of the floor call sites.
+
+S-A-TESTS-8-07 — AMENDED.
+- The bodies are identical apart from seeding and the returned keys.
+- `_batch` seeds INSIDE, right before `randn`, and the `_star_graph` callers seed before the call. A shared helper must take the seed as an optional argument so the draw stays bit-identical.
+- A new tests/-root module costs its own `from __future__` / `import torch` / docstring. Standalone ≈ −13.
+
+S-A-TESTS-8-08 — AMENDED.
+- `grep -n -w` confirms: `_config_source` has only the `"graph"` call (via `_graph_config_source`, 3 sites: 98/374/396), and `SelectorWentVacuous` is raised once and matched by no `pytest.raises`.
+- `config_for`'s refusal reads "…the cross-arch reachability of an arch-scoped key cannot be executed…". That would mis-describe a selector failure, so its message must be made tier-neutral (an in-place edit in the partition module, 0 Δ).
+
+S-A-TESTS-8-09 — AMENDED.
+- (a) implied: the round-trip row is parametrised over `ARCH_KINDS_BY_REPRESENTATION["graph"]` and asserts `type(arch) is ARCH_KINDS[arch_kind]` through `select_arch`. Together with test_arch_v2_dispatch's `not issubclass(GnnArchV2, GnnArch)`, that implies both isinstance asserts.
+- (b) implied: the selector asserts `type(arch) is ARCH_KINDS[…]` per `discover_configs` file, and graves asserts `set(pairs) == set(ARCH_KINDS)`. Together they give `set(nets_selected()) == set(selected)`.
+- (c) implied, by W_ID1 plus golden_holds.
+- (d) REFUTED:
+  - test_build_net_arch_handle.py::_archs builds only `gnn_axis_v1`/`gnn_axis_r8` and asserts `all(isinstance(a, GnnArch) …)`, so V1 only.
+  - `git grep -n -E "\.arch is |net\.arch\b" -- tests` shows no other test pins `build_net(V2).arch is V2`, or its absence from the state dict.
+  - A mutation that moves `net.arch = arch` inside the V1 branch reds only (d).
+  - The scout's alternative (parametrise the handle file over ARCH_KINDS, then delete (d)) is a different, lane-B change that raises the count.
+- Net −31, tests −3, floor move. There are no governance citations of any of the four names.
+
+S-A-TESTS-8-10 — CONFIRMED (B).
+- `sed -n 28,52p` shows a 3-line comment, `_COLLATE` and a 15-line fixture. The selfplay conftest side is session-scoped `_payload_bank`/`collate_expectations`/`payload_fields`.
+- `git grep -l test_pmask_gather_parity -- ':!docs/slim'` → 0, so the file can move without breaking a citation.
+- Hoisting to tests/conftest.py makes those session fixtures global. That is a design choice (B).
+
+S-A-TESTS-8-11 — CONFIRMED (B).
+- An AST dump of both `deterministic_algorithms`, docstrings stripped, compares equal (spans 63–81 and 28–47; both `@contextlib.contextmanager`).
+- The docs/governance hits for the name are `torch.use_deterministic_algorithms`, not this symbol.
+- Note: `_bf16_parity` backs the PZ file test_bf16_parity_nulldist.py (PZ list). Lane B holds only if that file stays unedited, as proposed.
+
+S-A-TESTS-8-12 — CONFIRMED (C; nulldist is PZ).
+- The ulp arithmetic is identical (nulldist `_bf16_ulp` vs drift's inline `quarter` block).
+- The pair loops (nulldist 331–339 vs 403–410) differ: the CPU loop carries an extra `assert bp.median_form(...) == 0.0`, which a shared helper must keep.
+- Drift's `assert ulp_p90 == 1.953125e-3` stays in place, so the census is unaffected.
+
+S-A-TESTS-8-13 — CONFIRMED.
+- (a) arch.py::ARCH_KINDS has 3 rows (96–101) against "exactly two kinds" (no_second_arch_kind_table:59).
+- (b) partition:139–141 says "absent until the run6 mint writes it".
+- (c) `git grep amp_dtype -- configs` → 0. There is no config leaf, and the message at test_one_amp_dtype_authority.py:64–65 names one.
+- (d) follows from 02.
+- (e) `widths = {**_WIDTHS, "in_dim", "edge_dim"}` never holds `n_value_bins`, and dist65.py::N_VALUE_BINS = 65.
+
+S-A-TESTS-8-14 — CONFIRMED. The docstring still says "the two soft-policy kind tables agree", and `git show 3d93447 -- tests/model/test_gnn_v2_soft_policy.py` shows that test deleted. This is a docstring edit with 0 Δ; the file is torch-bound.
+
+### Defect claims
+- D1 grave self-test — CONFIRMED. `test_the_grave_guard_can_FIRE` re-types the `if name in classes: raise GraveDisturbed` branch inline inside `pytest.raises`. It never calls `test_a_GRAVE_stays_dead`'s body or a shared checker, so a broken guard (or the `dispatch_census()` and USED-names arms) stays green. `_names_used` alone has a real self-test (test_the_consumer_census_counts_USES_and_not_MENTIONS).
+- D2 arch-kind-table self-test — CONFIRMED. `test_the_census_can_actually_SEE_a_table` parses its own planted file and calls only `_dict_key_strings`, restating the `>= _MIN_KEYS_TO_JUDGE` predicate. `_arch_keyed_dict_literals` walks the hard-coded `_SRC`, and the census test asserts only `not incomplete`, never that `found` is non-empty. A walk that finds nothing passes both.
+- D3 SoftPolicy round-trip — CONFIRMED, and the scout's open question is now closed. test_arch_v2_dispatch.py:80 parametrises `[_V1, _V2]`. No test calls `_arch_to_dict`/`_arch_from_dict` on a GnnArchV2SoftPolicy: `git grep -E "_arch_(to|from)_dict" -- tests` → test_arch_v2_dispatch plus a message string in perf_floor. The checkpoint tests that mention soft policy set `"aux_soft_policy": None` (test_checkpoint_conformance.py:648, test_resume_wiring_integration.py:129, train/conftest.py:217). test_gnn_v2_soft_policy round-trips through the eval snapshot serializer, a different path (S-L-SEAM-01).
+
+### Cross-check with S-L-SEAM
+No double count.
+- 06 depends on S-L-SEAM-04 (the `specs_for` pair) and does not re-raise it.
+- S-L-SEAM-06 (flatten_ban) and A7/A8 are absent from this file's findings.
+- 03 deletes one of the three census readers that S-L-SEAM (b) row 2 lists as reasons to KEEP the isinstance chain. The chain stays parsed by the two AST walkers, so that row's argument survives.
+
+### Missed by the scout
+None raised. The R8 re-checks hold: after all proposals, test_arch_selector stays > 300 (403 − 20 − 18 − 17 − 12 → 336) and test_gnn_v2_witnesses stays > 300 (354 − 15 − 18 − 7 → 314), so both keep their headers.
+
+### Tally: raised 14 | confirmed 8 (01a counted within 01) | amended 5 (04, 06, 07, 08, 09) | refuted 0 whole (09(d) refuted inside 09) | pending 1 (01b) | architect 0
