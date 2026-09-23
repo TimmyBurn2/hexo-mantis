@@ -140,7 +140,11 @@ fn decrement_pending(counter: &AtomicUsize, by: usize) {
 }
 
 /// Rust-owned blocking inference batcher exposed to Python — the fused-model NN face.
-#[pyclass(name = "InferenceBatcher", module = "mantis._engine")]
+#[pyclass(
+    name = "InferenceBatcher",
+    module = "mantis._engine",
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub struct PyInferenceBatcher {
     graph: GraphQueue,

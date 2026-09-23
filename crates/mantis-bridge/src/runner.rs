@@ -56,7 +56,11 @@ fn derived_mean_f32(accum: u64, count: u64) -> f32 {
 
 /// Configuration builder for [`PySelfPlayRunner`] — a thin POD over the pure-Rust
 /// [`SelfPlayRunnerConfig`]. Killed knobs are ABSENT, shapes are spec-derived.
-#[pyclass(name = "SelfPlayRunnerConfig", module = "mantis._engine")]
+#[pyclass(
+    name = "SelfPlayRunnerConfig",
+    module = "mantis._engine",
+    skip_from_py_object
+)]
 #[derive(Clone)]
 pub struct PySelfPlayRunnerConfig {
     inner: SelfPlayRunnerConfig,
