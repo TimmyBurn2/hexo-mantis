@@ -226,7 +226,8 @@ impl PyRegistrySpec {
         self.inner
     }
 
-    /// Construct from a `&'static RegistrySpec`, so Rust callers need no Python boundary.
+    /// Construct from a `&'static RegistrySpec`, so Rust tests need no Python boundary.
+    #[cfg(test)]
     pub(crate) fn from_static(spec: &'static RustRegistrySpec) -> Self {
         PyRegistrySpec { inner: spec }
     }

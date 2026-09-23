@@ -144,7 +144,6 @@ fn decrement_pending(counter: &AtomicUsize, by: usize) {
 #[derive(Clone)]
 pub struct PyInferenceBatcher {
     graph: GraphQueue,
-    feature_len: usize,
     policy_len: usize,
     is_graph: bool,
     representation: &'static str,
@@ -165,7 +164,6 @@ impl PyInferenceBatcher {
     #[allow(clippy::too_many_arguments)]
     fn from_parts(
         graph: GraphQueue,
-        feature_len: usize,
         policy_len: usize,
         is_graph: bool,
         representation: &'static str,
@@ -177,7 +175,6 @@ impl PyInferenceBatcher {
     ) -> Self {
         PyInferenceBatcher {
             graph,
-            feature_len,
             policy_len,
             is_graph,
             representation,
@@ -203,7 +200,6 @@ impl PyInferenceBatcher {
         let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
         Self::from_parts(
             graph,
-            spec.state_stride(),
             spec.policy_stride(),
             is_graph,
             spec.representation.as_str(),
@@ -279,11 +275,9 @@ impl PyInferenceBatcher {
         let _ = pool_size; // no feature-buffer pool over the WP6 queues (dropped).
         let spec_static: Option<&'static RegistrySpec> =
             encoding_spec.as_ref().map(PyRegistrySpec::inner);
-        let (feature_len, policy_len) = match (feature_len, policy_len, spec_static) {
-            (Some(f), Some(p), _) => (f, p),
-            (None, None, Some(spec)) => (spec.state_stride(), spec.policy_stride()),
-            (Some(f), None, Some(spec)) => (f, spec.policy_stride()),
-            (None, Some(p), Some(spec)) => (spec.state_stride(), p),
+        let policy_len = match (feature_len, policy_len, spec_static) {
+            (Some(_), Some(p), _) | (_, Some(p), Some(_)) => p,
+            (_, None, Some(spec)) => spec.policy_stride(),
             (None, _, None) | (_, None, None) => {
                 return Err(PyValueError::new_err(
                     "InferenceBatcher: encoding_spec required when feature_len/policy_len omitted \
@@ -297,7 +291,6 @@ impl PyInferenceBatcher {
             spec_static.map_or((0, 0, 0, 1), graph_params);
         Ok(Self::from_parts(
             GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
-            feature_len,
             policy_len,
             is_graph,
             representation,
@@ -883,16 +876,14 @@ mod tests {
     }
 
     #[test]
-    fn a_spec_batcher_derives_both_shapes_from_the_spec() {
-        // The sibling of `graph_batcher_reads_graph_params` on the DERIVED widths. A graph row's
-        // `state_stride` is 0 — read from the spec so that stays a derivation, not a literal.
+    fn a_spec_batcher_derives_its_policy_width_from_the_spec() {
+        // The sibling of `graph_batcher_reads_graph_params` on the DERIVED policy width.
         let spec = gnn_spec();
         let b =
             PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(spec)), None, None, None, 0)
                 .expect("a graph batcher constructs");
         assert!(b.is_graph);
         assert_eq!(b.representation, "graph");
-        assert_eq!(b.feature_len, spec.state_stride());
         assert_eq!(b.policy_len, spec.policy_stride());
         assert_eq!(b.policy_len, 362, "the graph action space is 19*19 + 1");
     }
@@ -902,7 +893,6 @@ mod tests {
         // Two DISTINCT widths, neither any registered row's, so a crosswire cannot look plausible.
         let b = PyInferenceBatcher::new(None, Some(777), Some(362), None, 0)
             .expect("explicit lens construct");
-        assert_eq!(b.feature_len, 777);
         assert_eq!(b.policy_len, 362);
     }
 

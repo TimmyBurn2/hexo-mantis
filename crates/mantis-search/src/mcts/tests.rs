@@ -1400,7 +1400,7 @@ fn desynchronised_root() -> MCTSTree {
 }
 
 #[test]
-fn a_child_pointing_at_an_occupied_cell_is_an_ERR_not_a_panic() {
+fn a_child_pointing_at_an_occupied_cell_is_an_err_not_a_panic() {
     let mut tree = desynchronised_root();
     let err = tree
         .select_leaves(1)
@@ -1534,7 +1534,7 @@ fn a_short_policy_batch_gives_the_dropped_leaves_their_virtual_loss_back() {
 }
 
 #[test]
-fn a_FULL_batch_is_unaffected_by_the_unwind() {
+fn a_full_batch_is_unaffected_by_the_unwind() {
     // The control: the ordinary path must not lose a leaf or an update.
     let (mut tree, _a, _b) = setup_two_child_tree(1.5);
     tree.pool[0].n_visits = 1;

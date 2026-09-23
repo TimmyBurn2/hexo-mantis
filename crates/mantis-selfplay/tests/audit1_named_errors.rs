@@ -47,7 +47,7 @@ fn config_with(sims: usize) -> SelfPlayRunnerConfig {
 }
 
 #[test]
-fn a_sim_budget_the_pool_cannot_serve_is_refused_at_BOOT() {
+fn a_sim_budget_the_pool_cannot_serve_is_refused_at_boot() {
     // THE PIN. Before this, a config armed at 2000 booted fine and halted the run at the
     // first move that crossed the bound — a panic inside `finish_expansion`, mid self-play.
     let err = SelfPlayRunner::new(config_with(2000))
@@ -115,6 +115,7 @@ fn a_zero_or_negative_dirichlet_alpha_is_refused_when_the_noise_is_armed() {
 // F-38: the buffer constructor
 
 #[test]
+#[allow(non_snake_case)] // the name is cited verbatim by docs/slim/S-A-RUST-2.md
 fn an_unknown_encoding_is_an_ERR_naming_the_registered_set() {
     let err = HexgBuffer::new(8, "nope", 64)
         .err()

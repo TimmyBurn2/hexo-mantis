@@ -49,9 +49,10 @@ fn compact_stones(n: usize) -> StoneList {
 /// explodes — the exact geometry a dense table must refuse, and the reason the budget is not a
 /// fixed cell count.
 fn scattered_stones(span: i32) -> StoneList {
-    StoneList { stones: vec![(0, 0, 1), (span, span, -1)] }
+    StoneList {
+        stones: vec![(0, 0, 1), (span, span, -1)],
+    }
 }
-
 
 #[test]
 fn a_compact_position_takes_the_dense_arm() {
@@ -116,13 +117,19 @@ fn the_dense_index_answers_exactly_what_the_hash_map_answers() {
             }
         }
         // Vacuity control: a comparison that never found a node would agree trivially.
-        assert!(hits >= n_real, "every node must be reachable through the index (n={n})");
-        assert!(probed > hits, "the probe set must include cells with no node");
+        assert!(
+            hits >= n_real,
+            "every node must be reachable through the index (n={n})"
+        );
+        assert!(
+            probed > hits,
+            "the probe set must include cells with no node"
+        );
     }
 }
 
 #[test]
-fn a_scattered_position_has_NO_dense_index_to_probe() {
+fn a_scattered_position_has_no_dense_index_to_probe() {
     // The other side of `coord_index_probe`'s `Option`: `None` means the builder took the hash
     // arm, and a test that could not tell the two apart would pass on either.
     let g = build_axis_graph(&scattered_stones(4000), &params());
@@ -141,8 +148,14 @@ fn the_two_arms_build_the_same_graph() {
     let outside = build_axis_graph(&scattered_stones(4000), &params());
     let n_in = inside.num_nodes() - 1;
     let n_out = outside.num_nodes() - 1;
-    assert!(axis_index_is_dense(&inside.node_coords, n_in), "the near pair must be dense");
-    assert!(!axis_index_is_dense(&outside.node_coords, n_out), "the far pair must not be");
+    assert!(
+        axis_index_is_dense(&inside.node_coords, n_in),
+        "the near pair must be dense"
+    );
+    assert!(
+        !axis_index_is_dense(&outside.node_coords, n_out),
+        "the far pair must not be"
+    );
     // Two stones far apart have disjoint radius-balls, so each contributes the same local
     // structure the near pair's stones do when they are far enough not to overlap. The invariant
     // asserted here is the one that matters for the fallback: the arm changes the LOOKUP, never
@@ -152,7 +165,10 @@ fn the_two_arms_build_the_same_graph() {
         outside.edge_index.src.len() % 2,
         "both arms emit edges in pairs"
     );
-    assert!(outside.num_edges() > 0, "the hash arm must still build a real graph");
+    assert!(
+        outside.num_edges() > 0,
+        "the hash arm must still build a real graph"
+    );
 }
 
 #[test]
@@ -170,7 +186,10 @@ fn the_budget_is_per_node_so_the_table_stays_linear_on_an_unbounded_board() {
             > DENSE_INDEX_CELLS_PER_NODE.saturating_mul(ns),
         "the budget must scale with the node count"
     );
-    assert!(axis_index_is_dense(&gl.node_coords, nl), "a bigger cluster is still dense");
+    assert!(
+        axis_index_is_dense(&gl.node_coords, nl),
+        "a bigger cluster is still dense"
+    );
 }
 
 #[test]
@@ -187,5 +206,9 @@ fn the_empty_board_still_builds_through_the_fallback_shaped_path() {
     // must still come out.
     let g = build_axis_graph(&StoneList { stones: Vec::new() }, &params());
     assert_eq!(g.n_stones, 0);
-    assert_eq!(g.legal_node_gather.len(), 25, "the opening legal set is the 5x5 region");
+    assert_eq!(
+        g.legal_node_gather.len(),
+        25,
+        "the opening legal set is the 5x5 region"
+    );
 }
