@@ -144,6 +144,21 @@ def test_exempt_register_ships_empty() -> None:
         assert len(sha) == 64, f"exemption for {path} must pin the blob sha256"
 
 
+def test_a_correctly_recorded_exemption_matches_and_exempts() -> None:
+    """The row's recorded sha must be the kind the gate computes, or no exemption can ever match."""
+    text = "path = /root/x\n"
+    hits = GATE.scan_text("p.txt", text)
+    assert hits, "the planted host path must hit before an exemption can be tested"
+    sha = GATE.content_sha256(text)
+    assert len(sha) == 64, "the gate must compute the 64-hex sha256 the register pins"
+    row = ("p.txt", "/root/", sha, "planted")
+    violations, matched = GATE.apply_exemptions("p.txt", text, hits, (row,))
+    assert violations == [] and matched == {0}, "a correctly-recorded exemption did not exempt"
+    stale = ("p.txt", "/root/", "0" * 64, "planted")
+    violations, matched = GATE.apply_exemptions("p.txt", text, hits, (stale,))
+    assert violations == hits and matched == set(), "a stale sha must not exempt"
+
+
 def test_file_level_hatch_is_confined_to_the_two_pattern_files() -> None:
     """THE GUARD ON THE BIG HAMMER: `rule7-gate: file-ok` silences a WHOLE file, so exactly two
     may carry it — the pattern register and this oracle, planted literals by construction. It

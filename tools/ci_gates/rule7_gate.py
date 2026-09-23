@@ -29,6 +29,7 @@ runs on EVERY invocation.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import subprocess
 import sys
@@ -105,7 +106,7 @@ PATTERNS: dict[str, tuple[str, str]] = {
     ),
 }
 
-#: Registered, owned exemptions: (path, matched-substring, blob sha256, grounds). NOT an escape
+#: Registered, owned exemptions: (path, matched-substring, content_sha256, grounds). NOT an escape
 #: hatch — each asserts "this IS host content, it is tracked, and it cannot be removed here".
 #: SELF-EXPIRING TWO WAYS: an entry whose substring stops matching fails the gate, and so does one
 #: whose recorded sha no longer matches the file, so an exemption can never be inherited by
@@ -241,6 +242,34 @@ def _read_text(path: Path) -> str | None:
         return raw.decode("utf-8")
     except UnicodeDecodeError:
         return None
+
+
+def content_sha256(text: str) -> str:
+    """The sha256 an EXEMPT row pins: of the file's bytes, independent of git's object format."""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def apply_exemptions(
+    rel: str,
+    text: str,
+    hits: list[tuple[str, int, str, str, str]],
+    exempt: tuple[tuple[str, str, str, str], ...],
+) -> tuple[list[tuple[str, int, str, str, str]], set[int]]:
+    """Split `hits` into (unexempted violations, indices of `exempt` rows that matched)."""
+    blob = content_sha256(text) if (exempt and hits) else ""
+    violations: list[tuple[str, int, str, str, str]] = []
+    matched: set[int] = set()
+    for hit in hits:
+        i = next(
+            (k for k, (p, sub, sha, _r) in enumerate(exempt)
+             if p == rel and sub in hit[3] and sha == blob),
+            None,
+        )
+        if i is None:
+            violations.append(hit)
+        else:
+            matched.add(i)
+    return violations, matched
 
 
 def _git(*args: str) -> str:
@@ -487,20 +516,9 @@ def main() -> int:
         if has_file_escape(text):
             file_hatched.append(rel)
             continue
-        file_hits = scan_text(rel, text)
-        # One `hash-object` per FILE, and only when the register is non-empty.
-        blob = _git("hash-object", rel).strip() if (EXEMPT and file_hits) else ""
-        for hit in file_hits:
-            _, _lineno, _name, matched, _why = hit
-            i = next(
-                (k for k, (p, sub, sha, _r) in enumerate(EXEMPT)
-                 if p == rel and sub in matched and sha == blob),
-                None,
-            )
-            if i is not None:
-                matched_exempt.add(i)
-                continue
-            violations.append(hit)
+        file_violations, file_matched = apply_exemptions(rel, text, scan_text(rel, text), EXEMPT)
+        violations.extend(file_violations)
+        matched_exempt |= file_matched
 
     rc = 0
     if args.full_tree and scanned < MIN_FULL_TREE_FILES:
@@ -529,7 +547,7 @@ def main() -> int:
             "sanitize the artifact.\nIf the site names a pattern without being one, say so in "
             f"place:\n    <comment> {ESCAPE_TOKEN} <why>\n"
             "If it is real host content that cannot be removed here, it goes in EXEMPT with "
-            "grounds and the blob sha -- never in the escape hatch."
+            "grounds and the content sha256 -- never in the escape hatch."
         )
         rc = 1
 
