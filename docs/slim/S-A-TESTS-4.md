@@ -324,3 +324,73 @@ depends: —
 - Line-level review was not done for the biggest behavioural suites: test_allocator_posture_authority.py (87 tests), test_armed_abort_manifest.py, test_armed_abort_cadence.py, test_inference_batch_reachability.py, test_consumer_citation_arrows.py, test_preflight_stamp.py and test_audit_cli.py. Only their outlines were checked for duplication against siblings. For the PZ files among them (test_drawrate_*, test_config_census, test_mint_*), proposals would be lane C in any case.
 - The literal payload in test_schema.py could not be diffed against dev_example torch-free.
 - The deliberately-different 57 strings between the two CONSUMER_REGISTRY copies were not audited.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| S-A-TESTS-4-01 | CONFIRMED | C | −59 | o9/o10/o11 AST-equal to test_regime_parity.py; o12 covered; contract row cites the path |
+| S-A-TESTS-4-02 | CONFIRMED | C | −79 | `_SIX == _SEVEN` (6 names); the pins test differs only by helper spelling |
+| S-A-TESTS-4-03 | ARCHITECT | C | −336 if ruled | a deliberate twin that the contract doc names twice |
+| S-A-TESTS-4-04 | CONFIRMED | B | −80 | census emulated torch-free: green over 30 models; the covering test is torch-bound |
+| S-A-TESTS-4-05 | CONFIRMED | B | −32 | all 30 census models strict; the covering test is torch-bound |
+| S-A-TESTS-4-06 | CONFIRMED | B | −41 | 14 of 14 strings identical in BOTH registries; only dev.yaml template exists |
+| S-A-TESTS-4-07 | CONFIRMED | B | −6 | validates its own `_payload()` |
+| S-A-TESTS-4-08 | CONFIRMED | B | −10 | covering test_example_config_validates is a superset but torch-bound |
+| S-A-TESTS-4-09 | CONFIRMED | B | −24 | same `match="no-op"` branch; bound rows exist |
+| S-A-TESTS-4-10 | CONFIRMED | B | −12 | 64 vs 96 only; family rides S-A-CORE-2-13 (C) |
+| S-A-TESTS-4-11 | CONFIRMED | B | ≈ −59 | covering file test_resolver_agreement.py is torch-bound |
+| S-A-TESTS-4-12 | CONFIRMED | B | −19 | inputs differ (marker-only vs `_gnn_state()`), but it is the same branch |
+| S-A-TESTS-4-13 | CONFIRMED | B | −17 | `EncodingSpec is _engine.RegistrySpec` → True |
+| S-A-TESTS-4-14 | CONFIRMED | C | −234 | R289(q) (archive RULINGS_ACTIVE) holds the path |
+| S-A-TESTS-4-15 | CONFIRMED | B | −52 | 17 items, matches S-A-CORE-3-05 |
+| S-A-TESTS-4-16 | CONFIRMED | B | −142 | test_b4 imports mantis.env.game_state at module scope, so the whole file rides S-A-CORE-2-02 |
+| S-A-TESTS-4-17 | CONFIRMED | C | −489 max | `_frozen_games` read only by test_sources_metrics; PZ glob |
+| S-A-TESTS-4-18 | AMENDED | A (`_grid_state`) + C (`_BASELINE_KNOWN_BAD`) | −14 probe (−7 + −7) | probe green; half is in PZ glob `tests/config/test_mint_*.py` |
+| S-A-TESTS-4-19 | CONFIRMED | B | −48 | hparams.py still says "same R1-exception"; the oracle passes |
+| S-A-TESTS-4-20 | AMENDED → ARCHITECT | C | −395 (scout, unprobed) | the card lists these files for their `model` line, not as a merge; gate-15 header coupling missed |
+| S-A-TESTS-4-21 | CONFIRMED | C | −52 | `_RunnerStats`, `_fake_run_safety` AST-equal; both files torch-bound |
+| S-A-TESTS-4-22 | CONFIRMED | B | −10 | `run5`, `_revalidated` AST-equal |
+| S-A-TESTS-4-23 | CONFIRMED | C | −7 | the sibling makes the same no-raise call and adds the caplog assert |
+| S-A-TESTS-4-24 | CONFIRMED | B | ≤ −13 | 9 files, 13 lines, re-counted |
+| S-A-TESTS-4-25 | CONFIRMED | C | −35 | `_ANCHOR_PATHS == {}`; rides S-A-CORE-1-24 |
+| S-A-TESTS-4-26 | CONFIRMED | C | −38 | the p2 copy has no such test (count 0) |
+| S-A-TESTS-4-27 | CONFIRMED | C | 0 | the 4th `RUN5 =` site is tests/tools/test_preflight_mint_process.py (out of slice), which matches the card's "four" |
+
+### Per-finding notes
+S-A-TESTS-4-01 — CONFIRMED: an AST body compare (a scratchpad script, docstrings stripped) found identical bodies: p2 o9/o10/o11 == test_regime_parity.py test_o9/o10/o11. o12's `model_fields` asserts are test_selfplay_schema.py::test_selfplay_has_no_legal_move_radius_field. Its `hasattr` asserts on the instance follow from the model_fields check. `grep` of docs/contracts/run_config_schema.md → the "regime parity" row cites `test_regime_parity_p2.py`, which leaves gate 10 and a PZ doc edit, so lane C.
+S-A-TESTS-4-02 — CONFIRMED: `_SEVEN_SCHEMA_LEAVES == _SIX_SCHEMA_LEAVES` → True (6 names). The pins test differs from ::test_payload_pins_production_values only by `_run5_payload()` vs `_run5().to_event_payload()`. The contract "resolved-config emit" row cites the path.
+S-A-TESTS-4-03 — ARCHITECT: may the second CONSUMER_REGISTRY be retired? run_config_schema.md names "two independently-maintained copies" in the "every schema leaf key" row and "in both copies" in the "every-key-has-consumer bijection" row. Re-derived: 160/160, same key set, 103 identical strings.
+S-A-TESTS-4-04 — CONFIRMED (torch-bound witness): I exec'd test_schema.py's own `_schema_census(RunConfig)` without its three torch imports and took the three `*_ROW` constants by AST from their source files. The census holds 30 models, including Train/Selfplay/Mcts/PlayoutCap/Inference/MonitorSchema/DrainCaps/DiskGuard. The o16 default census replayed on it gives bad=[] and seen==exempt. Collect-only → 7 subject tests. test_schema.py itself cannot run here.
+S-A-TESTS-4-05 — CONFIRMED (torch-bound witness): the same census → every model is `StrictModel` with `extra == "forbid"` (nonstrict=[]). Collect-only → 9 subjects. The claim is structural-implies-behaviour; the behavioural witnesses (::test_top_level/nested_unknown_key_rejected) are torch-bound too.
+S-A-TESTS-4-06 — CONFIRMED: loading the three modules → `_NEW_LEAF_CONSUMERS` has 14 entries, identical to registry a (14) and to registry b (14). `ls tools/config_templates` → dev.yaml, so the `("dev.yaml", "grid.yaml")` loop arm is dead.
+S-A-TESTS-4-07 — CONFIRMED: `awk` of the test → `payload = _payload()` plus two literal asserts. ::test_valid_payload_still_loads_after_bounds_added does `RunConfig.model_validate(_payload())`. The contract doc cites the file, which stays.
+S-A-TESTS-4-08 — CONFIRMED: the AST compare shows test_example_config_validates = the same two statements plus a `representation == "graph"` assert, so it is a superset. It is torch-bound, so a torch-free host loses the only dev_example load test in tests/config.
+S-A-TESTS-4-09 — CONFIRMED: `grep match=` → `"no-op"` at both ::test_quick_equal_to_full_now_raises_no_op and ::test_equal_quick_and_full_sims_raises. Bound rows `("dirichlet_epsilon", 1.1)` and `("temperature_threshold_compound_moves", -1)` are in test_mcts_playout_cap_schema.py's tables.
+S-A-TESTS-4-10 — CONFIRMED: the AST compare shows the bodies differ only by 64 vs 96. `git grep "resolve_eval_model_sims(...) =="` → 8 sites across 5 files. S-A-CORE-2-13 is DEAD|C and has no review section yet.
+S-A-TESTS-4-11 — CONFIRMED: no_fallback::…mapping_without_version is AST-equal to agreement::…still_raises_missing. The agreement parametrize carries None and {}. agreement imports `mantis.train.anchor` (torch), so the covering file cannot run here. Collect → 9 subjects − 2 moved rows = −7.
+S-A-TESTS-4-12 — CONFIRMED with a nuance: r328c_07 feeds a marker-only dict with the default `strict`. The default is False (resolvers.py signature), so `strict=False` in round_trip is a no-op. round_trip's extra `representation == "graph"` is a registry property. r328c_06 loops the stamped V1 and R8 over a marker, which covers stamp-beats.
+S-A-TESTS-4-13 — CONFIRMED: `.venv/bin/python -c "…EncodingSpec is _engine.RegistrySpec"` → True. test_registered_names_absence.py::test_name_set_is_the_compiled_all_specs_set exists. Collect → 3 items.
+S-A-TESTS-4-14 — CONFIRMED lane C: `git grep -i "cpu_budget\|R289(q)" -- docs/governance` → archive/RULINGS_ACTIVE.md: R289(q) "held the path reserved". `wc -l` → 136+98. Collect → 11.
+S-A-TESTS-4-15 — CONFIRMED: collect → 17 flat/axial/cell items, which equals S-A-CORE-3-05's count (DEAD|B).
+S-A-TESTS-4-16 — CONFIRMED: test_b4_history_len_sot.py imports `mantis.env.game_state` at module scope, so the file cannot outlive S-A-CORE-2-02. HISTORY_LEN then survives only in constants.py, the util/__init__ example and hardcode_scan (a handoff already noted). Collect → 11+2.
+S-A-TESTS-4-17 — CONFIRMED: `wc -l` → 89/142/209/49. `git grep -E "_frozen_games" -- tests src tools` → test_sources_metrics.py:12 only. This CONTRADICTS S-A-CORE-2-01's conftest line ("bare-name helper for bootstrap tests"), and that line is wrong. Collect → 25. It is lane C because of the PZ glob `tests/data/_frozen_games.py`.
+S-A-TESTS-4-18 — AMENDED: probe worktree scratchpad/wt/rev-tests4-18 (removed). Both symbols were dropped, including `_BASELINE_KNOWN_BAD`'s `#:` doc-comment line. Results: `import mantis` OK (the path shows the WT src first); collect → "2289 tests collected, 167 errors" (baseline unchanged, no test deleted); the 2 files → 21 passed; gate 10 rc 0; gate 15 "0 stale"; `uvx ruff --select F` clean; `cargo check --workspace --all-targets --locked` Finished. `git diff --stat` → 14 deletions (7+7), not −10. test_mint_header_roundtrip.py matches PZ glob `tests/config/test_mint_*.py`, so that half is lane C and only `_grid_state` (−7) stays lane A. Neither file crosses the R8 cap (228, 166).
+S-A-TESTS-4-19 — CONFIRMED: `grep -n "R1-exception" src/mantis/selfplay/hparams.py` → the InferenceHParams docstring. test_docstring_debt_discharge.py passed in my targeted run, so the oracle is blind to it. Collect → 2.
+S-A-TESTS-4-20 — AMENDED → ARCHITECT: CARDS.md CARD-MECHANISM-SWEEP inventories "the nine full-config literal dicts whose `model` line the fix leg left (each is a complete config a schema test owns)". It cards the stale `model` line on contact. It does NOT card a merge, and its parenthetical asserts R1 ownership of each complete literal. So the "already carded" basis fails; the merge is a new proposal. Question: may a schema test's owned complete literal become `dev_example.yaml` + a scalar delta? Spot check: test_schema_strict's `_payload` validated dump vs dev_example → exactly 5 leaves (allocator_posture, eval.random_floor_games, run_id, seed, selfplay.n_workers). MISSED coupling: test_eval_schema_bounds.py is 307 lines, so dropping its ~75-line builder takes it under 300 and its R8 header must go (gate 15).
+S-A-TESTS-4-21 — CONFIRMED: AST-equal `_RunnerStats` and `_fake_run_safety`. The card names "the 21 remaining private `_Pool`/`_Buffer` fakes". The knobs docstring's "cross-test imports are barred" must be rewritten in the same leg. Both files are torch-bound, so this is unprobed here.
+S-A-TESTS-4-22 — CONFIRMED: `run5` and `_revalidated` are AST-equal across the two files. The conftest `production_config` is used 27 times elsewhere in tests/config ("unused-here" = unused in these two files).
+S-A-TESTS-4-23 — CONFIRMED: the bodies differ by path only, and the sibling adds the caplog SKIPPED assert. Lane C (gate-8 seam).
+S-A-TESTS-4-24 — CONFIRMED: `git grep -c` → 9 files, 13 lines. conftest line 1 reads "loads the live run5".
+S-A-TESTS-4-25 — CONFIRMED: `_ANCHOR_PATHS` → `{}`. Rides S-A-CORE-1-24 (DEAD|C, "operator-sign-off-locked"). Collect → 3.
+S-A-TESTS-4-26 — CONFIRMED lane C: `grep -c` of the OPTIONAL-descent test in the _p2 copy → 0. The contract row's "in both copies" never held for this property, so the row edit is needed either way. test_one_schema_leaf_walker.py::_Fixture carries `optional_block: _Inner | None`.
+S-A-TESTS-4-27 — CONFIRMED: `git grep "^RUN5 = "` → 3 slice files + tests/tools/test_preflight_mint_process.py.
+
+### Missed by the scout (optional, max 5)
+NEW-1 | coupling | -20 drops tests/config/test_eval_schema_bounds.py (307 lines, `wc -l`) under the R8 cap, so its justification header must be removed in the same leg (gate 15). -07 alone leaves it at 301.
+NEW-2 | DOC | B | tests/encoding/test_resolvers_no_fallback.py docstring: "currently silently resolve to the v6 default" names a retired encoding. It dies with -11; if -11 is not taken, fix on contact.
+NEW-3 | cross-slice | S-A-CORE-2-01's conftest callers line says `_frozen_games` serves the bootstrap tests. `git grep` shows test_sources_metrics.py is its only reader, so -17's reading is the correct one.
+Couplings re-checked: tier_declaration.txt slice rows = train_device_authority ×2, audit_cli, util/test_device ×2, and no finding touches them. Floor file = 4862, and test_count_ratchet_down.txt is absent. Contract-doc citations (gate 10) exist for -01/-02/-03 and are ruled lane C. Governance docs cite no finding subject by test name (`git grep -F` for each name over docs/tools/src/crates → docs/slim only).
+Torch-free run of the touched files: 534 passed, 1 failed. The failure is tests/data/test_bootstrap_split_and_truncation.py::test_the_policy_DENOMINATOR…, which fails from a function-scope `import torch` via mantis.train.losses. That is environmental and not a subject.
+
+### Tally: raised 27 | confirmed 24 | amended 2 (-18, -20) | refuted 0 | pending 0 | architect 2 (-03, -20)
