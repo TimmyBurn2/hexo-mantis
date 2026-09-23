@@ -22,7 +22,7 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import runner_stats
 from mantis.train.coordinator.step import StepCoordinator
@@ -173,7 +173,7 @@ def _coordinator(full_config: dict[str, Any]):
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=cfg,
         full_config=full_config, train_cfg={}, mixing_cfg={}, sink=sink,
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
     )
     return coord, cfg, sink
 

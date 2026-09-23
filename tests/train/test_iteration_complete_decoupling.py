@@ -19,7 +19,7 @@ import pytest
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
@@ -195,7 +195,7 @@ def _make_coordinator(*, pool=None, config=None):
         shutdown=ShutdownState(), eval_model=object(), bufs=None,
         config=config or _make_config(),
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer, sink=sink)
 

@@ -15,7 +15,7 @@ from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.heldout_gap import HeldoutGapSpec, MissingHeldoutGapError, resolve_heldout_gap
 from mantis.config.schema import RunConfig
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import StepCoordinator
 from mantis.train.heldout import HeldoutSlice, HeldoutSliceError
@@ -151,7 +151,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
         full_config={"identity": {"encoding": _ENC, "representation": "graph"},
                      "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000}, "fast_policy_weight": 0.0},
                      "selfplay": {"n_workers": 1}},
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(), heldout=opened)
+        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(), heldout=opened)
     for _ in range(4):
         coord.pool.games_completed += 1
         coord.step()

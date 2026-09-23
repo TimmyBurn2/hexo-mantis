@@ -23,7 +23,7 @@ import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator import drain
 from mantis.train.coordinator.config import StepCoordinatorConfig
@@ -221,7 +221,7 @@ def _make_coordinator(*, eval_pipeline=None, config=None):
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), bufs=None,
         config=config or _make_config(), full_config=_GRAPH_FULL_CONFIG, train_cfg={}, mixing_cfg={},
-        sink=sink, monitor_cfg=MonitorConfig(),
+        sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,
                            shutdown=shutdown, sink=sink, eval_pipeline=eval_pipeline)

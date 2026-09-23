@@ -27,7 +27,7 @@ import torch
 
 from mantis.encoding import lookup
 from mantis.model import arch_from_spec_and_config, build_net
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.rules import emit_training_step_alerts
 from mantis.train.events import emit_training_step_event
 
@@ -72,7 +72,7 @@ def _alerts(payload: dict[str, Any]) -> list[str]:
             fired.append(dict(event))
 
     emit_training_step_alerts(
-        payload, MonitorConfig(alert_entropy_min=MINTED_ENTROPY_FLOOR), [], sink=_Sink()
+        payload, monitor_config(alert_entropy_min=MINTED_ENTROPY_FLOOR), [], sink=_Sink()
     )
     return [e["rule"] for e in fired]
 

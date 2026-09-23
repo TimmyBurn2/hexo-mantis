@@ -15,7 +15,7 @@ from mantis.config.resolve.policy_loss_trough import (
     PolicyLossTroughAbortSpec,
     resolve_policy_loss_trough_abort,
 )
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.rules import check_policy_loss_trough
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
@@ -172,7 +172,7 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
                      "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
                                "fast_policy_weight": 0.0},
                      "selfplay": {"n_workers": 1}},
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 

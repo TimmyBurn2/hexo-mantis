@@ -20,7 +20,7 @@ import pytest
 # LIVE producer for the draw-rate rule's input (torch-free stdlib module).
 from mantis.train.coordinator.config import pooled_draw_rate
 
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.rules import (
     check_draw_rate_collapse,
     check_entropy_collapse,
@@ -33,7 +33,7 @@ from mantis.monitor.rules import (
 
 def test_entropy_collapse_boundary() -> None:
     """O-21 — combined-stream entropy fires strictly BELOW alert_entropy_min (1.0)."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     assert check_entropy_collapse({"policy_entropy": 0.99}, cfg) is not None
     assert check_entropy_collapse({"policy_entropy": 1.0}, cfg) is None   # not < 1.0
     assert check_entropy_collapse({"policy_entropy": 1.01}, cfg) is None
@@ -42,7 +42,7 @@ def test_entropy_collapse_boundary() -> None:
 
 def test_selfplay_entropy_collapse_boundary_and_nonfinite_guard() -> None:
     """O-21 — selfplay entropy fires below collapse_threshold_nats (1.5); NaN/inf are ignored (isfinite guard)."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": 1.49}, cfg) is not None
     assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": 1.5}, cfg) is None
     assert check_selfplay_entropy_collapse({"policy_entropy_selfplay": float("nan")}, cfg) is None
@@ -51,7 +51,7 @@ def test_selfplay_entropy_collapse_boundary_and_nonfinite_guard() -> None:
 
 def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
     """O-21 — fires strictly ABOVE alert_grad_norm_max (10.0), and on any NON-FINITE norm."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     assert check_grad_norm_spike({"grad_norm": 10.01}, cfg) is not None
     assert check_grad_norm_spike({"grad_norm": 10.0}, cfg) is None      # not > 10.0
     assert check_grad_norm_spike({"grad_norm": float("nan")}, cfg) is not None
@@ -65,7 +65,7 @@ def test_grad_norm_spike_boundary_and_nonfinite_fires() -> None:
 
 def test_loss_increase_window_strictly_increasing() -> None:
     """O-21 — fires only when the last (window+1) losses are all strictly increasing; a window of exactly `n` (3) samples is too short to fire."""
-    cfg = MonitorConfig()  # alert_loss_increase_window == 3
+    cfg = monitor_config()  # alert_loss_increase_window == 3
     assert check_loss_increase_window([1.0, 2.0, 3.0], cfg) is None          # len == n
     assert check_loss_increase_window([1.0, 2.0, 3.0, 4.0], cfg) is not None  # 4 strictly up
     assert check_loss_increase_window([1.0, 2.0, 2.0, 4.0], cfg) is None      # a plateau breaks it
@@ -74,7 +74,7 @@ def test_loss_increase_window_strictly_increasing() -> None:
 
 def test_headless_emitter_routes_training_alert_events_in_rule_order() -> None:
     """O-21 — the headless emitter fires the 4 warn rules and routes ONE `training_alert` event per fired rule through the INJECTED sink (structlog is dead), rule order preserved, and returns the fired messages."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     sink = _RecordingSink()
     loss_window: list[float] = [1.0, 2.0, 3.0]  # caller-owned deque tail
     payload = {
@@ -96,7 +96,7 @@ def test_headless_emitter_routes_training_alert_events_in_rule_order() -> None:
 
 def test_headless_emitter_nonfinite_grad_norm_fires_through_the_sink() -> None:
     """Item 6 — a NaN grad_norm must reach the event stream as a grad_norm_spike alert."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     sink = _RecordingSink()
     payload = {"event": "training_step", "step": 1, "grad_norm": float("nan"),
                "policy_entropy": 5.0}
@@ -108,7 +108,7 @@ def test_headless_emitter_nonfinite_grad_norm_fires_through_the_sink() -> None:
 
 def test_a_nonfinite_loss_fires_its_own_rule_and_stays_out_of_the_window() -> None:
     """Item 6 — the two halves together, and they are in tension by design."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     sink = _RecordingSink()
     window: list[float] = []
     payload = {"event": "training_step", "step": 1, "loss_total": float("nan"),
@@ -123,7 +123,7 @@ def test_a_nonfinite_loss_fires_its_own_rule_and_stays_out_of_the_window() -> No
 
 def test_a_finite_loss_does_not_fire_the_nonfinite_rule() -> None:
     """Mutation self-test: the rule must be silent on healthy training, or it reports nothing."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     sink = _RecordingSink()
     window: list[float] = []
     emit_training_step_alerts(

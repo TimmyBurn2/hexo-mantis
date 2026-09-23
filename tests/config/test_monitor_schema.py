@@ -5,6 +5,8 @@ field copy onto `mantis.monitor.config.MonitorConfig`, asserted as field-name eq
 the two field sets, so renaming a field on EITHER struct alone breaks this suite."""
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 from pydantic import ValidationError
 
@@ -16,8 +18,7 @@ from mantis.config.schema import (
 )
 from mantis.monitor.config import MonitorConfig
 
-# Every value is the CURRENT `MonitorConfig` dataclass default, minted verbatim for zero
-# behaviour change.
+# A complete, valid 1:1 section at the values the runtime dataclass once carried as defaults.
 VALID_MONITOR_SCALARS: dict = {
     "alert_entropy_min": 1.0, "collapse_threshold_nats": 1.5, "alert_grad_norm_max": 10.0,
     "alert_loss_increase_window": 3, "axis_warn": 0.45, "axis_alert": 0.50,
@@ -185,6 +186,14 @@ def test_monitor_schema_scalar_fields_equal_monitor_config_dataclass_fields():
         f"schema-only: {schema_fields - dataclass_fields}; "
         f"dataclass-only: {dataclass_fields - schema_fields}"
     )
+
+
+def test_MonitorConfig_carries_NO_default_so_the_schema_field_is_the_one_authority():
+    """Prove no `MonitorConfig` field carries a code-side default beside its schema field."""
+    defaulted = [f.name for f in dataclasses.fields(MonitorConfig)
+                 if f.default is not dataclasses.MISSING
+                 or f.default_factory is not dataclasses.MISSING]
+    assert defaulted == [], f"code-side defaults beside the schema's: {defaulted}"
 
 
 def test_resolve_monitor_config_round_trips_every_field_unchanged():

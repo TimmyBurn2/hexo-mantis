@@ -37,7 +37,7 @@ import torch
 import yaml
 
 import _microbatch_harness as H
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.config.census import exempt_config_paths, production_configs
 from mantis.config.loader import discover_configs, load_config
 from mantis.config.resolve.arch_scope import ArchScopedKeyOutsideItsArchError
@@ -78,7 +78,7 @@ def test_of2_8_run5s_own_config_reaches_the_split_through_its_own_route(tmp_path
     full_config["train"]["microbatch_caps"] = {"max_edges": bind_e, "max_nodes": bind_n}
 
     coord = StepCoordinator(
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         trainer=None, buffer=None, pretrained_buffer=None, recent_buffer=None, pool=None,
         eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=None,
         eval_model=None, bufs=None,

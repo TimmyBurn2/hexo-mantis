@@ -21,7 +21,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.actor_sync import resolve_actor_sync_cadence  # RED-at-import anchor
 from mantis.config.resolve import resolve_monitor_config
 from mantis.config.schema import RunConfig, SCHEMA_VERSION, TrainConfig, MonitorSchemaConfig
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIGS = ("dev_example.yaml", "run6.yaml", "smoke_preflight_armed.yaml")
@@ -208,7 +208,7 @@ def test_resolve_monitor_config_copies_the_lag_fields() -> None:
 def test_runtime_monitor_config_carries_the_smoke_posture() -> None:
     """The established monitor pattern: schema REQUIRED, runtime dataclass carries the
     smoke value — threshold 100 (inert at cadence 1), abort False (config arms it)."""
-    runtime = MonitorConfig()
+    runtime = monitor_config()
     assert runtime.actor_lag_threshold_steps == 100
     assert runtime.actor_lag_abort_enabled is False
 

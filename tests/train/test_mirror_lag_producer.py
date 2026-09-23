@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import _microbatch_harness as H
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.train.bundle import complete_bundles
 from mantis.train.bundle_receipts import bundle_member_paths
 from mantis.train.coordinator.step import StepCoordinator
@@ -18,7 +18,7 @@ from mantis.util.mirror_receipts import write_receipt
 def _coordinator(tmp_path: Path, sink: H.SpySink) -> StepCoordinator:
     trainer = H.tiny_graph_trainer(tmp_path, sink=sink)
     return StepCoordinator(
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         trainer=trainer, buffer=H.uniform_graph_buffer(8), pretrained_buffer=None,
         recent_buffer=None, pool=None, eval_pipeline=None, subsystems=None,
         anchor_state=None, shutdown=ShutdownState(), eval_model=None, bufs=None,

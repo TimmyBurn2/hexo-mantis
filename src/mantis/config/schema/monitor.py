@@ -1,7 +1,7 @@
 """A same-named, same-typed schema field for every `mantis.monitor.config.MonitorConfig` field,
-minted at its current dataclass default, plus the four live-consumed drain / terminal-eval hard
-caps — nested under `monitor.drain` because they gate the same close-out machinery as the
-heartbeat fields rather than the trainer's step loop.
+the ONE default authority (the dataclass carries none), plus the four live-consumed drain /
+terminal-eval hard caps — nested under `monitor.drain` because they gate the same close-out
+machinery as the heartbeat fields rather than the trainer's step loop.
 """
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ class DrainCapsConfig(StrictModel):
 
 
 class MonitorSchemaConfig(StrictModel):
-    """Every `MonitorConfig` field, same name and type, minted at its dataclass default;
+    """Every `MonitorConfig` field, same name and type, and the only place one has a default;
     `gate_interval`, `drain` and `disk_guard` are schema-only, which is what legitimates
     `resolve_monitor_config`'s three enumerated drops."""
 

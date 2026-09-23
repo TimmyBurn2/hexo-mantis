@@ -36,7 +36,7 @@ from mantis.config.resolve.draw_rate import (  # RED anchor (R80) — the ONE re
     DrawRateAbortSpec,
     resolve_draw_rate_abort,
 )
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config  # RED anchor — the renamed builder (R73)
 from mantis.train.coordinator.config import StepCoordinatorConfig, pooled_draw_rate
 from mantis.train.coordinator.step import StepCoordinator
@@ -204,7 +204,7 @@ def _coordinator(*, config, pool, trainer=None):
         shutdown=shutdown, eval_model=object(), bufs=None, config=config,
         # Unit drives declare the grid identity their _Buffer fake serves.
         full_config=_GRAPH_FULL_CONFIG, train_cfg={}, mixing_cfg={}, sink=sink,
-        heartbeat=None, monitor_cfg=MonitorConfig(),
+        heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 

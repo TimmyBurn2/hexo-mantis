@@ -34,7 +34,7 @@ from mantis.config.resolve.run_length import (  # RED-at-import anchor: module a
 )
 from mantis.config.schema import RunConfig
 from mantis.encoding import lookup
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from _drivable import DrivableTrainerStub
 
@@ -296,7 +296,7 @@ def test_compose_run_rejects_a_monitor_cfg_KEYWORD_at_call_time(tmp_path, smoke_
             log_dir=str(tmp_path), checkpoint_dir=str(tmp_path / "ckpt"),
             # `eval_enabled=` is GONE from this call deliberately: CPython names the FIRST
             # unexpected keyword, so a second dead kwarg would break `match="monitor_cfg"`.
-            monitor_cfg=MonitorConfig(),
+            monitor_cfg=monitor_config(),
         )
 
 

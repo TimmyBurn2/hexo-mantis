@@ -20,7 +20,7 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import RunnerStats
 from mantis.train.coordinator.step import StepCoordinator
@@ -184,7 +184,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=monitor_config(),
     )
     for snapshot in snapshots:
         pool.current = snapshot

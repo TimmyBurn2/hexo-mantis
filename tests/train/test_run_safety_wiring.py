@@ -18,6 +18,7 @@ from types import SimpleNamespace
 import pytest
 
 from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
     HEARTBEAT_SOURCES,
     HeartbeatRegistry,
@@ -165,7 +166,7 @@ def test_every_monitor_config_field_has_a_live_consumer() -> None:
 def test_monitor_config_is_frozen_with_no_lenient_from_dict() -> None:
     """`MonitorConfig` is FROZEN, with no lenient `from_dict` ignoring unknown keys."""
     assert dataclasses.is_dataclass(MonitorConfig)
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     with pytest.raises(dataclasses.FrozenInstanceError):
         cfg.alert_grad_norm_max = 0.99  # type: ignore[misc]
     assert not hasattr(MonitorConfig, "from_dict"), "the lenient from_dict must not survive"
@@ -216,7 +217,7 @@ def test_build_run_safety_wires_the_heartbeat_into_every_declared_source(tmp_pat
         wired_sources=HEARTBEAT_SOURCES,
         # The lag-fn kwargs and `monitor_cfg` are REQUIRED; this row is about heartbeat
         # wiring, so an explicit default-valued MonitorConfig is the honest subject.
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     try:

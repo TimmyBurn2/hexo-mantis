@@ -23,7 +23,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.eval.promote import DeployTagHooks, apply_gate_decision  # RED-at-import anchor
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.actor_sync import ActorSync
 from mantis.train.coordinator import drain
@@ -229,7 +229,7 @@ def test_eval_kick_fields_deploy_tag_model_not_actor_weights(tmp_path) -> None:
         anchor_state=SimpleNamespace(best_model=sentinel_tag, best_model_step=42),
         shutdown=ShutdownState(), eval_model=object(), bufs=None,
         config=_kick_config(), full_config={}, train_cfg={}, mixing_cfg={},
-        sink=None, monitor_cfg=MonitorConfig(),
+        sink=None, monitor_cfg=monitor_config(),
     )
     recorder = _AttrReadRecorder(sentinel_actor)
     coord.pool = recorder          # any pool read during the kick is recorded

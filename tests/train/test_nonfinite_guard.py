@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import torch
 
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.rules import check_grad_norm_spike, check_nonfinite_loss
 
 import _microbatch_harness as H  # the shared graph-step harness (rootdir-relative)
@@ -116,24 +116,24 @@ def test_the_counters_reach_the_event_stream(tmp_path: Path) -> None:
 @pytest.mark.parametrize("value", [float("nan"), float("inf"), float("-inf")])
 def test_a_nonfinite_grad_norm_fires_the_instability_alert(value: float) -> None:
     """Reversed: this used to be pinned as "must never trip"."""
-    assert check_grad_norm_spike({"grad_norm": value}, MonitorConfig()) is not None
+    assert check_grad_norm_spike({"grad_norm": value}, monitor_config()) is not None
 
 
 def test_a_finite_grad_norm_below_the_bar_still_does_not_fire() -> None:
     """Mutation half: the rule must not have become `always fire`."""
-    assert check_grad_norm_spike({"grad_norm": 0.5}, MonitorConfig()) is None
-    assert check_grad_norm_spike({}, MonitorConfig()) is None, (
+    assert check_grad_norm_spike({"grad_norm": 0.5}, monitor_config()) is None
+    assert check_grad_norm_spike({}, monitor_config()) is None, (
         "an ABSENT grad_norm is a missing reading, not a bad one — it must stay silent"
     )
 
 
 @pytest.mark.parametrize("value", [float("nan"), float("inf")])
 def test_a_nonfinite_loss_fires_its_rule(value: float) -> None:
-    assert check_nonfinite_loss({"loss_total": value}, MonitorConfig()) is not None
+    assert check_nonfinite_loss({"loss_total": value}, monitor_config()) is not None
 
 
 def test_a_finite_or_absent_loss_does_not_fire_the_nonfinite_rule() -> None:
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     assert check_nonfinite_loss({"loss_total": 3.0}, cfg) is None
     assert check_nonfinite_loss({}, cfg) is None
     assert check_nonfinite_loss({"loss_total": True}, cfg) is None, (

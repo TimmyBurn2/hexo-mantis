@@ -23,7 +23,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
@@ -242,7 +242,7 @@ def _make_coordinator(*, pool=None, config=None, eval_pipeline=None, heartbeat=N
         config=config or _make_config(),
         full_config=_GRAPH_FULL_CONFIG,
         train_cfg={}, mixing_cfg={},
-        sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or MonitorConfig(),
+        sink=sink, heartbeat=heartbeat, monitor_cfg=monitor_cfg or monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer,
                            shutdown=shutdown, sink=sink, eval_pipeline=eval_pipeline)

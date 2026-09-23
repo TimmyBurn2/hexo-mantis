@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 
 import mantis.monitor.rules as rules
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ class _Sink:
 
 
 def _run(payload: dict[str, Any]) -> list[str]:
-    return rules.emit_training_step_alerts(payload, MonitorConfig(), [], sink=_Sink())
+    return rules.emit_training_step_alerts(payload, monitor_config(), [], sink=_Sink())
 
 
 

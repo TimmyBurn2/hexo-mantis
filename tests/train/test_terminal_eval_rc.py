@@ -51,7 +51,7 @@ from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import RunCollaborators, _step_coordinator_config
 from mantis.train.coordinator import drain
@@ -299,7 +299,7 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=_tiny_model(), bufs=None, config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 

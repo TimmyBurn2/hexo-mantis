@@ -25,7 +25,7 @@ from mantis.config.resolve.composition import (
     revalidate_run_config,
 )
 from mantis.config.schema import RunConfig
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from _drivable import DrivableTrainerStub
 
@@ -488,7 +488,7 @@ def test_compose_run_resolves_monitor_cfg_from_a_real_config_monitor_section(
     )
     assert captured["monitor_cfg"] is not None
     assert captured["monitor_cfg"].alert_entropy_min == 2.75
-    assert captured["monitor_cfg"] != MonitorConfig()  # not the bare-default fallback
+    assert captured["monitor_cfg"] != monitor_config()  # not the bare-default fallback
 
 
 # ── RED-TEAM F-3 — the composition root RE-VALIDATES, it does not merely type-check ───────

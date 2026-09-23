@@ -13,7 +13,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.ply_cap import PlyCapAbortSpec, resolve_ply_cap_abort
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.rules import check_ply_cap_attractor
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.instrumentation import PoolInstrumentation
@@ -162,7 +162,7 @@ def _harness(flags: list[int], spec: PlyCapAbortSpec | None, *, gate_interval: i
                      "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
                                "fast_policy_weight": 0.0},
                      "selfplay": {"n_workers": 1}},
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)
 

@@ -7,7 +7,7 @@ between-round gap can never false-fire the watchdog — round PROGRESS is bounde
 from __future__ import annotations
 
 import mantis.eval.pipeline  # noqa: F401 — RED-at-import anchor
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import (
     HEARTBEAT_SOURCES,
     WATCHDOG_STALL_EXIT_CODE,
@@ -53,7 +53,7 @@ def test_eval_round_is_a_registered_heartbeat_source() -> None:
 
 def test_monitor_config_carries_eval_round_deadline() -> None:
     """`MonitorConfig.heartbeat_deadline_eval_round_sec` is minted at 1800.0."""
-    cfg = MonitorConfig()
+    cfg = monitor_config()
     assert hasattr(cfg, "heartbeat_deadline_eval_round_sec"), (
         "MonitorConfig must gain heartbeat_deadline_eval_round_sec"
     )
@@ -100,7 +100,7 @@ def test_build_run_safety_arms_eval_round_deadline(tmp_path) -> None:
         wired_sources=["train_step", "inference_dispatch", "selfplay_drain", "eval_round"],
         # The default instance is passed EXPLICITLY: reaching it through an absent kwarg also
         # silently disarmed the actor-lag abort.
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         actor_ckpt_step_fn=lambda: 0, learner_step_fn=lambda: 0,
     )
     run_safety.watchdog._sink = sink  # route the arm-log through our spy without a real JSONL

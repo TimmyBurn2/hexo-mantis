@@ -23,7 +23,7 @@ from mantis.monitor.heartbeat import (
     PERSIST_FATAL_EXIT_CODE,
     WATCHDOG_STALL_EXIT_CODE,
 )
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.train.subsystems import build_run_safety
 
 
@@ -181,7 +181,7 @@ def test_build_run_safety_wires_actor_lag_from_monitor_config(tmp_path, monkeypa
         buffer=SimpleNamespace(save_to_path=lambda p: None),
         buffer_persist_path=tmp_path / "replay_buffer.bin",
         wired_sources=list(HEARTBEAT_SOURCES),
-        monitor_cfg=MonitorConfig(actor_lag_threshold_steps=77,
+        monitor_cfg=monitor_config(actor_lag_threshold_steps=77,
                                   actor_lag_abort_enabled=True),
         exit_fn=codes.append,
         actor_ckpt_step_fn=lambda: 123,

@@ -16,7 +16,7 @@ from mantis import _engine
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 from mantis.train.coordinator.step import StepCoordinator
@@ -146,7 +146,7 @@ def test_the_counters_reach_iteration_complete(drive: _Drive) -> None:
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), bufs=None, config=config,
         full_config={}, sink=SimpleNamespace(emit=lambda e: events.append(dict(e))),
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
     )
     coord._emit_iteration_complete(config)
     (payload,) = [e for e in events if e["event"] == "iteration_complete"]

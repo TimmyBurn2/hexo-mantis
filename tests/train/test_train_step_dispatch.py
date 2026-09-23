@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 import torch
 
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis._engine import HexgBuffer
 from mantis.encoding import lookup
 from mantis.encoding.resolvers import MissingEncodingError
@@ -138,7 +138,7 @@ class _RecordingTypedTrainer:
 
 def _coordinator(trainer, buffer, full_config, cfg=None, **over) -> StepCoordinator:
     return StepCoordinator(
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         trainer=trainer, buffer=buffer, pretrained_buffer=over.pop("pretrained_buffer", None),
         recent_buffer=over.pop("recent_buffer", None), pool=over.pop("pool", _Pool()),
         eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=ShutdownState(),

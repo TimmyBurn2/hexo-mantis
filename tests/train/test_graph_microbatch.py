@@ -28,7 +28,7 @@ import pytest
 import torch
 
 import _microbatch_harness as H
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.config.resolve.microbatch import (
     MicrobatchCapsSpec,
     MissingMicrobatchCapsError,
@@ -602,7 +602,7 @@ def _coordinator(full_config: dict, trainer: Any, buffer: Any) -> StepCoordinato
     exercise are `None`; the ONE fake is the step config, a namespace rather than the frozen
     `StepCoordinatorConfig`, and `_run_training_step` reads only three fields off it."""
     return StepCoordinator(
-        monitor_cfg=MonitorConfig(),
+        monitor_cfg=monitor_config(),
         trainer=trainer, buffer=buffer, pretrained_buffer=None, recent_buffer=None,
         pool=None, eval_pipeline=None, subsystems=None, anchor_state=None, shutdown=None,
         eval_model=None, bufs=None,

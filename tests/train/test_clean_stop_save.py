@@ -36,7 +36,7 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
 from mantis.config.resolve.draw_rate import DrawRateAbortSpec
-from mantis.monitor.config import MonitorConfig
+from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import HEARTBEAT_SOURCES, PERSIST_FATAL_EXIT_CODE, HeartbeatRegistry
 from mantis.run import _step_coordinator_config, launch_run
 from mantis.train import checkpoints
@@ -239,7 +239,7 @@ def _harness(*, trainer: _Trainer, config: StepCoordinatorConfig, pool: _Pool | 
         shutdown=shutdown, eval_model=object(), bufs=None,
         config=config,
         full_config=_GRAPH_FULL_CONFIG,
-        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=MonitorConfig(),
+        train_cfg={}, mixing_cfg={}, sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, shutdown=shutdown, sink=sink)
 
