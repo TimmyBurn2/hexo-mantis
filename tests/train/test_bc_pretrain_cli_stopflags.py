@@ -13,14 +13,21 @@ from pathlib import Path
 
 import pytest
 
-from mantis.train.pretrain.cli import _build_arg_parser  # noqa: PLC2701
+from mantis.encoding import all_specs
+from mantis.train.pretrain.cli import _build_arg_parser, pretrain  # noqa: PLC2701
+
+_CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
+
+
+def _argv(**kw) -> list[str]:
+    base = ["--config", str(_CONFIG)]
+    for k, v in kw.items():
+        base += [f"--{k.replace('_', '-')}", str(v)]
+    return base
 
 
 def _args(**kw):
-    base = ["--config", "configs/run6.yaml"]
-    for k, v in kw.items():
-        base += [f"--{k.replace('_', '-')}", str(v)]
-    return _build_arg_parser().parse_args(base)
+    return _build_arg_parser().parse_args(_argv(**kw))
 
 
 @pytest.mark.parametrize("supplied", [
@@ -38,6 +45,10 @@ def test_a_PARTIAL_stopping_rule_is_refused(supplied: dict) -> None:
     flags = (args.heldout_hexg, args.eval_every, args.patience, args.min_delta)
     assert any(f is not None for f in flags)
     assert not all(f is not None for f in flags), "this row's subject must be a PARTIAL set"
+    graph = next(s.name for s in all_specs() if s.representation == "graph")
+    with pytest.raises(SystemExit) as exc:
+        pretrain(_argv(encoding=graph, corpus_hexg="x.hexg", **supplied))
+    assert "all-or-none" in str(exc.value), f"refused for the wrong reason: {exc.value}"
 
 
 def test_the_FULL_stopping_rule_parses() -> None:
