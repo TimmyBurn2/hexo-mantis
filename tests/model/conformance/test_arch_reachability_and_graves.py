@@ -185,27 +185,34 @@ def test_every_shipped_config_selects_a_net_build_net_can_construct(derived):
     )
 
 
-@pytest.mark.parametrize("name", sorted(GRAVES))
-def test_a_GRAVE_stays_dead(name, derived):
-    """A buried arch is absent from the package, the dispatch, and every module's USED names.
-    Docstrings are exempt by construction, so a grave can carry its own epitaph."""
-    classes = net_classes()
+def check_grave(name: str, *, grounds: str, classes: dict[str, str], dispatch: frozenset[str],
+                roots: tuple[Path, ...]) -> None:
+    """Refuse a buried `name` that is defined, dispatched or USED under `roots`; Raises: GraveDisturbed."""
     if name in classes:
         raise GraveDisturbed(
             f"{name} is defined again under src/mantis/model/ ({classes[name]}). Grounds for "
-            f"the burial: {GRAVES[name]}. A resurrection is a ruling — and it must prove "
+            f"the burial: {grounds}. A resurrection is a ruling — and it must prove "
             "bit-identity against the grave goods before it claims to be the same net."
         )
-    assert name not in dispatch_census(), f"{name} is back in build_net's dispatch"
-    for root in (REPO / "src", REPO / "tools", REPO / "tests"):
+    if name in dispatch:
+        raise GraveDisturbed(f"{name} is back in build_net's dispatch")
+    for root in roots:
         for path in sorted(root.rglob("*.py")):
             try:
                 tree = ast.parse(path.read_text(encoding="utf-8"))
             except SyntaxError:
                 continue
-            assert name not in _names_used(tree), (
-                f"{name} is USED at {path.relative_to(REPO).as_posix()}; the grave is disturbed"
-            )
+            if name in _names_used(tree):
+                rel = path.relative_to(root.parent).as_posix()
+                raise GraveDisturbed(f"{name} is USED at {rel}; the grave is disturbed")
+
+
+@pytest.mark.parametrize("name", sorted(GRAVES))
+def test_a_GRAVE_stays_dead(name, derived):
+    """A buried arch is absent from the package, the dispatch, and every module's USED names.
+    Docstrings are exempt by construction, so a grave can carry its own epitaph."""
+    check_grave(name, grounds=GRAVES[name], classes=net_classes(), dispatch=dispatch_census(),
+                roots=(REPO / "src", REPO / "tools", REPO / "tests"))
     derived(f"t11.grave.{name}", GRAVES[name])
 
 
@@ -229,17 +236,21 @@ def test_the_GRAVE_GOODS_are_on_disk_and_describe_what_was_buried(derived):
     ), "the transitive grave must be labelled as one, not presented as its own finding"
 
 
-def test_the_grave_guard_can_FIRE(derived):
-    """The grave guard fires against a name that IS live, so the fence is shown to bite."""
+@pytest.mark.parametrize("route", ["defined", "dispatched", "used"])
+def test_the_grave_guard_can_FIRE(route, tmp_path):
+    """Each route of `check_grave` fires on a planted disturbance, so the fence is shown to bite."""
     live = "GnnNet"
-    assert live in net_classes(), "the control name is not live; this proves nothing"
+    assert live in net_classes() and live in dispatch_census(), "the control name is not live"
+    planted = tmp_path / "planted"
+    planted.mkdir()
+    (planted / "mod.py").write_text(f"{live}()\n", encoding="utf-8")
+    inputs = {
+        "defined": dict(classes=net_classes(), dispatch=frozenset(), roots=()),
+        "dispatched": dict(classes={}, dispatch=dispatch_census(), roots=()),
+        "used": dict(classes={}, dispatch=frozenset(), roots=(planted,)),
+    }[route]
     with pytest.raises(GraveDisturbed, match=live):
-        classes = net_classes()
-        if live in classes:
-            raise GraveDisturbed(
-                f"{live} is defined again under src/mantis/model/ ({classes[live]}). Grounds "
-                "for the burial: (control)."
-            )
+        check_grave(live, grounds="(control)", **inputs)
 
 
 def test_the_consumer_census_counts_USES_and_not_MENTIONS():
