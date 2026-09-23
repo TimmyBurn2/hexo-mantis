@@ -153,3 +153,129 @@ none
 - game_record.md, preflight_report.md, graph_wire.md, registry.md and replay_persist.md were only spot-checked by symbol resolution (all names resolved or are named as deleted). graph_wire.md's "13 per-array getters" was not counted.
 - Gate 13 was not run clean (torch is absent); its 28 flagged symbols were resolved by AST instead.
 - docs/slim/ was skipped (census output).
+
+## Review
+reviewer: fresh read-only agent (not the author); no lane-A finding, so no delete-probe and no worktree was created (the worktrees listed at the end of review belong to other reviewers and were left alone)
+
+| ID | verdict | lane | Δlines | note |
+|---|---|---|---|---|
+| 01 | CONFIRMED | C | −674 | spans re-measured; "91 %" is a byte share, by lines it is 92.8 % |
+| 02 | AMENDED | C | 0 | the "4 988 vs floor" item is not a disagreement: the floor STATE states is the tree's |
+| 03 | CONFIRMED | C | −313 | own splitter, same 33 blocks; CARD-E1-RULER-R6 may also be sweepable |
+| 04 | AMENDED | C | −9 | the reverse set has 11 markers, not 10 (7 named in RULINGS + 4 in no governance doc) |
+| 05 | CONFIRMED | C | −36 | (iv): "F-01..F-52" is dated, not wrong; "1661 lines" is still correct at HEAD |
+| 06 | CONFIRMED | C | 0 | |
+| 07 | CONFIRMED | C | 0 | plus NEW-1 in the same paragraph |
+| 08 | CONFIRMED | C | −17 | gate 10's docs/governance glob floor (4) survives a delete (5 files left) |
+| 09 | CONFIRMED | C | −272 | |
+| 10 | AMENDED | C | 0 | 6 cited paths are missing, not 4 |
+| 11 | CONFIRMED | C | 0 | (ii) has a 4th caller site; (iii) the loader was renamed and moved, not deleted |
+| 12 | CONFIRMED | C | 0 | |
+| 13 | CONFIRMED | C | follows S-A-CORE-1-02 | |
+| 14 | AMENDED | C | −36 only if the latest `\| vN \|` row is kept | gate 13 reads the version table and reds without it |
+
+### Per-finding notes
+S-A-DOCS-1-01 — CONFIRMED.
+- Command: per-span `sed -n A,Bp | wc -lc` over STATE, with dated lines counted by a `2026-..-..|R3NN` grep.
+- Result: 11–595 is 585 lines / 57 264 B (90 of those lines dated). 638–726 is 89 lines / 9 110 B. Line 10 is 7 093 B, of which 1 645 B come before "Before it:". The whole file is 726 lines / 79 023 B.
+- My definition of "dated history": a section or item whose subject is a completed, dated leg (R353…R366, the 09-15 resume, the Holds, the A/B), as opposed to where the run is now.
+- On that definition, 674 of 726 lines (92.8 %) and 71 822 of 79 023 bytes (90.9 %) are history. The scout's "91 %" is the byte figure.
+- The span includes the 8-line §"Protected set, laws, cards". Its law-count sentence is current, but its cards half is the R353 leg's history. A rewrite keeps about one line of it, so the net stays about −673.
+
+S-A-DOCS-1-02 — AMENDED.
+- Confirmed:
+  - "run7 is LIVE" opens §Dispatcher state, while item (8) records "run7 STOPPED 2026-09-18".
+  - `grep -c '^# delta:'` gives run7 35 against the heading's 41, and run10 44.
+  - The comment ratchet in §Exit facts is 3 451 / 13 387 / 1 530 / 2 677. `comment_length_floor.txt` has 3385 / 13079 / 1485 / 2676. The stated numbers exceed the down-only floors, so they are stale.
+  - The header's "reads as of 2026-09-15" does not hold, because the items run to 2026-09-21.
+- Changed: the §Exit facts line reads "4 988 collected against the committed floor 4 862". Its floor equals `test_count_floor.txt` (4862), so it agrees with the tree. Only the collected count is dated (5 112 per item 19), and it cannot be re-derived here because torch is absent.
+- Also: "the Protected-set line is fine" holds only for the law count.
+
+S-A-DOCS-1-03 — CONFIRMED.
+- Command: an awk splitter (one block = one top-level `- **` bullet up to the next blank line or `## `), with each block's first status word taken from anywhere in the block, not only the headline.
+- Result: over the scout's 33 names it gives 313 lines, after dropping two false pattern matches (CARD-CHECKER-THREAD-GIL and the RQ-7 row).
+- A headline-only scan finds 30 blocks. That is a different set, which shows the classification is a reading, not a regex.
+- Possible omission: CARD-E1-RULER-R6 (21 lines) carries a "READ 2026-09-21", and STATE records that its cell ran. Whether to sweep it is the ruling's call.
+
+S-A-DOCS-1-04 — AMENDED (the count only).
+- Forward check: for each of the 7 markers, `git grep -l -F` over src, tests, tools, crates, configs, pyproject.toml and Makefile. Only MINT-RESOLVE-PARENT-CONJUNCT hits. The Δ of −9 (2+2+2+1+1+1) re-reads correctly off the section.
+- Reverse check: `git grep -h -o 'CARD-…'` over the code tree, each token then tested with `grep -F` against CARDS.md. It finds exactly the scout's 11 names. The claim's "10 markers … 4 of those 10" should read 11: 7 are named in RULINGS and 4 in no governance doc.
+- A truncated token, CARD-PREFLIGHT-CHILD, also sits in tests/tools/test_preflight_pfc_cards.py.
+
+S-A-DOCS-1-05 — CONFIRMED.
+- Commands and results:
+  - `grep -E 'const|static'` for MAX_CHILDREN_PER_NODE gives `crates/mantis-search/src/mcts/mod.rs` = 1024. The CARDS run6 hold says "= 192".
+  - `ls configs/run9.yaml` gives no such file.
+  - The OC7 headline still reads "BLOCKING", while its body reads "DISCRIMINATED … HOST, not code".
+  - `git grep -n PYRIGHT-STRICT pyproject.toml` finds the marker on a different line from the one cited.
+  - The run6 section, from its header to the next header, is 36 lines.
+- Two notes on (iv):
+  - "(`F-01`..`F-52` at this writing; derive the last row from the file)" dates itself and tells the reader to derive the last row, so it is dated rather than wrong.
+  - The "1661 lines" matches `wc -l` of the archived AUDIT-2 at HEAD. It is a transcribed count, but a correct one.
+
+S-A-DOCS-1-06 — CONFIRMED.
+- `git grep -i 'aggregate_cluster_values_min\|MINPIN\|min_pin'` over crates, src, tests and tools gives 0 hits.
+- registry.toml has `value_pool = "none"` in both rows. `ValuePool::Min` still exists as a legal spec variant, but nothing uses it.
+- F-43's annotation cites run.py:528 and 538. `git grep '_DeferredSink()' src/mantis/run.py` puts the two sites elsewhere in the file.
+
+S-A-DOCS-1-07 — CONFIRMED.
+- Command: `grep -o '^### R[0-9]+' | sort -n | uniq`, compared with `comm` against `seq 23 367`.
+- Result: 344 headings over 343 distinct numbers; only R227 and R228 are missing. For R23–R345 there are 322 headings over 321 numbers; the one duplicate number is R279 and its R279(g)-ANNEX.
+- The coverage note's own premise ("every number from R23 to R345 … except R227 and R228") also yields 321, not the "322 numbers" it states. So the note contradicts itself as well as the tree.
+- (ii) `ls docs/audits/archive/` shows AUDIT_2026-09-09.md only there, while R346's Status line cites the pre-move path.
+- (iii) R271's block ends "Status: standing [INLINE]". The only other R271 mention in RULINGS is R272's ratification heading. No amendment note exists.
+
+S-A-DOCS-1-08 — CONFIRMED.
+- `git grep -l COMMS_STYLE` gives: the file itself, the two frozen archive files, and docs/slim. CLAUDE.md does not name it.
+- Gate 10's `GLOB_SCOPE` sets a floor of 4 `.md` files for docs/governance. Deleting this file leaves 5, so gate 10 stays green.
+
+S-A-DOCS-1-09 — CONFIRMED.
+- `git grep -l -F AUDIT_2026-09-11 -- . ':!docs/slim'` gives 0 files.
+- By name, "AUDIT-3" appears only in CARDS, RULINGS, the frozen AUDIT-2 and the file itself.
+- `wc -l` gives 272.
+
+S-A-DOCS-1-10 — AMENDED (the count only).
+- Command: every `docs/…\.md` token extracted from the frozen audit, each checked with `git ls-files --error-unmatch`.
+- Result: 6 are missing. They are the scout's 4 plus two top-level docs/ spec files that the scout's subdirectory-only pattern could not match.
+- The keep-frozen verdict and Δ0 are unchanged.
+
+S-A-DOCS-1-11 — CONFIRMED.
+- (i) An AST read of EvalBrokenReason gives 8 members, ABANDONED included. "seven" appears at eval_instrument.md (twice) and in event_manifest.md's rc-48 paragraph.
+- (ii) `git grep -w build_candidate_player` also finds tools/ladder/backends.py.
+- (iii) The doc's `_UniqueKeyLoader` is not gone. It is now the public `UniqueKeyLoader` in `src/mantis/util/yaml_io.py` (renamed and moved), so the repair is a rename in the table.
+- (iv) An AST read of `ARCH_KINDS` gives 3 kinds.
+
+S-A-DOCS-1-12 — CONFIRMED.
+- Command: a yaml load of producer_manifest (16 ids) against a regex over the doc's §"Shipped rows (WP13-A)" table.
+- Result: the same 6 ids appear in the doc but not in the manifest.
+- `resolved_config` is absent from the whole doc. The other manifest ids missing from that table (heartbeat.*, actor_lag, target_integrity_counters, terminal_eval_broken, warn.*) are named elsewhere in the doc.
+- tests/monitor/test_manifest_contract.py and tests/monitor/test_monitor_census.py read the yaml, never the doc.
+
+S-A-DOCS-1-13 — CONFIRMED.
+- Command: `git grep -n -w <key> -- src` for all seven roster names, plus a dict-literal and subscript writer regex.
+- Result: the only hits are in src/mantis/train/events.py, all of them reads or payload assembly. No writer exists. The finding moves with S-A-CORE-1-02.
+
+S-A-DOCS-1-14 — AMENDED.
+- The counts are right: 37 rows and 59 946 B.
+- The risk the scout named is not the real one. Gate 13 READS this table:
+  - `_TABLE_VERSION_RE` parses the `| vN |` rows.
+  - The gate reds on "no version-table rows parsed".
+  - It also reds when the `- version: vN` header differs from max(row), with the message "the table is the authority — a row lands when a version does".
+- A collapse to one pointer line reds gate 13 unless the latest `| vN |` row is kept. Shortening the rows keeps it green. Either way it amends the stated design of a gate: a gate-13 design choice under lane C, not a doc trim.
+
+DEFECT (gate 17 / STATE) — CONFIRMED in kind, with a different count.
+- `rule7_gate.py --full-tree` gives rc 0, "no host content". It also prints loudly that the operator-term supplement is absent and that the scan ran at the TRACKED FLOOR only.
+- My own kind-only scan of STATE finds 21 lines (the classes overlap):
+  - box-local absolute run-tree paths: 11
+  - a port-forward or remote-shell invocation: 2
+  - the rental provider's name or host alias: 5
+  - process ids: 6
+  - an instance id: 1
+- The scout's 15 draws a narrower class boundary. Most of these lines sit inside the history spans that 01 would remove.
+
+Handoff PZ-6: CONFIRMED. `git grep -l -F CARD-EXEMPT-CONFIGS-OPERATOR-CONFIRM` over the code tree gives 0.
+
+### Missed by the scout
+NEW-1 | DOC | C — the RULINGS §Coverage note says "Four entries record an absence rather than a decision", then names five: R24, R29, R32, R33 and R267 (`sed -n 30,36p RULINGS.md`). Δ0; the fix is an annotation.
+
+### Tally: raised 14 | confirmed 10 | amended 4 | refuted 0 | pending 0 | architect 0 (+1 NEW)
