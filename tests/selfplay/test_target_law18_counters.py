@@ -32,7 +32,7 @@ from types import SimpleNamespace
 from mantis.selfplay.pool_hooks import RunnerStats, runner_stats
 from mantis.train.coordinator.step import _SEARCH_LEVER_COUNTERS
 
-_LEVERS = dict.fromkeys(_SEARCH_LEVER_COUNTERS, 0)
+_LEVERS = dict.fromkeys((*_SEARCH_LEVER_COUNTERS, "positions_dropped"), 0)
 
 _FIELDS = (
     "export_offwindow_mass_moves",

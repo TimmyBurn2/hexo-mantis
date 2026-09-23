@@ -85,6 +85,8 @@ RUNNER_STATS_FIELDS = {
     # The SEAM conjunct of the same class the two above guard: a leaf inference that FAILED,
     # counted separately from the record-dispatch refusals so the two stay distinguishable.
     "inference_failures_total",
+    # Graph rows the results-queue cap dropped before a drain read them.
+    "positions_dropped",
     # Worker threads that died by panic — a lifecycle counter, a DIFFERENT family from the
     # target-integrity latches beside it, which is why it is kept out of that tuple.
     "worker_panics",

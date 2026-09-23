@@ -82,10 +82,11 @@ GATE_NAMES: tuple[str, ...] = (
 )
 
 #: The target-integrity counters plus the RECORDED-POSITION counter their fire rate is taken
-#: over, all read off the one `RunnerStats` snapshot. `inference_failures_total` rides here
-#: because it is the seam conjunct of the same defect class and is only useful read beside them.
+#: over, all read off the one `RunnerStats` snapshot. `inference_failures_total` (the seam
+#: conjunct) and `positions_dropped` (rows the queue cap discarded) ride here as data-loss rates.
 _TARGET_INTEGRITY_COUNTERS: tuple[str, ...] = (
     "export_offwindow_mass_moves", "target_integrity_defects", "inference_failures_total",
+    "positions_dropped",
 )
 _POSITIONS_COUNTER = "positions_generated"
 #: The playout-cap draw's two arms and the Gumbel round-width terms, published beside the

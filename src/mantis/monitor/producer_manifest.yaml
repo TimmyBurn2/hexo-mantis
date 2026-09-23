@@ -205,7 +205,9 @@ gates:
       the same two symbols as the others. It rides HERE rather than in a block of its
       own because the two conjuncts are only useful read together: advanced with
       target_integrity_defects at 0 means the run died at the seam before any target was
-      built.
+      built. positions_dropped (R368) is the fifth: graph rows the results-queue cap discarded,
+      read with no getattr default and pinned by
+      tests/selfplay/test_positions_dropped_counter.py.
     producer_test: tests/train/test_target_counter_events.py::test_iteration_complete_carries_the_target_integrity_fire_rates
 
   # ── Q3: the inference batching instrument (iteration_complete, LAW-18) ────────────

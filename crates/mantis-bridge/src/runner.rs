@@ -314,6 +314,10 @@ impl PySelfPlayRunner {
     pub fn draws(&self) -> u64 {
         self.snapshot().draws
     }
+    #[getter]
+    pub fn positions_dropped(&self) -> u64 {
+        self.snapshot().positions_dropped
+    }
 
     pub fn get_win_stats(&self) -> (u64, u64, u64) {
         let s = self.snapshot();

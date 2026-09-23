@@ -1,6 +1,6 @@
 # Contract: event manifest
 
-- version: v3
+- version: v4
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
 - status: v3 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
@@ -18,6 +18,8 @@
   `policy_target_entropy`, `n_rows_policy_loss`, `n_rows_total`, `value_accuracy`,
   `quiescence_fires_per_step`); a pre-v3 record still carries them as data. The three events'
   top-level keys are now the checked rosters under "Published field rosters".
+  v4 (R368, SLIM-FIX): `iteration_complete.target_integrity.positions_dropped` publishes the graph
+  rows the results-queue cap (`selfplay.results_queue_cap`) discarded before a drain read them.
 
 ## Summary
 
@@ -263,6 +265,11 @@ RESULT producer that row `sealbot_wr_warn` was pending on.
   the R250 absence rule does not apply (mapping re-derived from code, R256). A DECREASE is
   emitted as measured and never clamped: the atomics are monotonic, so a negative delta is a
   wiring bug and a `max(0, …)` would hide it (the `actor_lag_negative` precedent below).
+  `positions_dropped` counts graph rows the drop-oldest cap in
+  `mantis-selfplay/src/runner/finalize.rs::finalize_game_graph` discarded before any drain read
+  them — training data the run generated and lost. It is 0 while the drain keeps up; its
+  `per_position` is the share of recorded positions lost. `runner_stats` reads the getter with NO
+  default. Producer test: `tests/selfplay/test_positions_dropped_counter.py`.
 - `iteration_complete.inference_batching` is the Q3 in-run batching instrument (LAW-18),
   and `iteration_complete.batch_fill_pct` gains the manifest row it shipped without.
   `batch_fill_pct` has published a mean batch occupancy on every `iteration_complete` since

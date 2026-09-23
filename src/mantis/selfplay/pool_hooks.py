@@ -128,6 +128,8 @@ class RunnerStats:
     # permanent 0 is the posture rather than an unproduced field. `int = 0` rather than the
     # `None` wheel-compat default, because the value is a COUNT a live engine always supplies.
     inference_failures_total: int = 0
+    # Graph rows the results-queue cap dropped before a drain read them: lost training data.
+    positions_dropped: int = 0
     # Worker threads that died by panic: non-zero means self-play HALTED rather than slowed.
     worker_panics: int = 0
     # Vestigial `None` slot, kept so kwarg constructions do not break; the live spec cross-check
@@ -145,9 +147,9 @@ class InferenceStats:
 
 
 def runner_stats(pool: Any) -> RunnerStats:
-    """Snapshot the runner's counters; the search levers are read with no `getattr` default.
+    """Snapshot the runner's counters; the search levers and the drop count have no `getattr` default.
 
-    Raises: AttributeError: the runner has no search-lever getter.
+    Raises: AttributeError: the runner has no search-lever or `positions_dropped` getter.
     """
     r = pool._runner
     return RunnerStats(
@@ -169,6 +171,7 @@ def runner_stats(pool: Any) -> RunnerStats:
         export_offwindow_mass_moves=int(getattr(r, "export_offwindow_mass_moves", 0)),
         target_integrity_defects=int(getattr(r, "target_integrity_defects", 0)),
         inference_failures_total=int(getattr(r, "inference_failures_total", 0)),
+        positions_dropped=int(r.positions_dropped),
         worker_panics=int(getattr(r, "worker_panics", 0)),
     )
 
