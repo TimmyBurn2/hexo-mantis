@@ -4,6 +4,31 @@ Tree: `origin/dev` = `69e153296c6d8245456d08ab5ddb6a0749e47c67` (2026-09-21 22:5
 Census branch: `claude/slim-scout-census-v3i2hj` (the platform's branch; the packet's `slim` is this one).
 Register at HEAD: `### R358` present; the head entry is R367 (the packet snapshot said R358 — verified newer).
 
+## 0. Entry and baseline (dispatcher, 2026-09-23)
+
+- `git fetch`; `origin/dev` = `69e153296c6d8245456d08ab5ddb6a0749e47c67`, tip 2026-09-21 22:53:17 +0200,
+  subject "docs(state): R367 exit facts - the full exit gate set on f088407e 21 GREEN …". `### R358` present
+  in docs/governance/RULINGS.md at that tip (no HALT); head entry R367.
+- Toolchain: uv 0.8.17, rustc/cargo 1.97.1 (the rust-toolchain.toml pin, via rustup 1.29.0), CPython 3.11.15,
+  node 22.22.2 (mise ABSENT, so gate 14's pyright would refuse rc 2), npx/uvx present, maturin absent (uv builds
+  it). Host: 4 CPUs, 15 GiB.
+- `uv sync`: **FAILED** (rc 1, 4 s) — `torch==2.11.0+cpu` from download-r2.pytorch.org: tunnel error; the
+  environment's network policy denies the pytorch wheel hosts (download.pytorch.org too). PyPI, npm and cargo's
+  registry are reachable. `uv sync --no-install-package torch` rc 0 in 35 s (engine built). A PyPI torch install
+  into the venv was refused by the session's permission layer; no torch in this census.
+- `import mantis` OK; `pytest --collect-only -q -m ''`: 2 289 collected, 167 collection errors (all torch).
+- Default pytest tier (`pytest -m "not integration and not slow" --continue-on-collection-errors`), torch-free
+  subset only: **2 127 passed, 58 failed, 20 skipped, 30 deselected, 223 errors; wall 166 s.** All 58 failures
+  re-run with long tracebacks: 53 name torch directly (in-process or a `python -m` child), 5 are
+  tests/tools/test_contract_doc_gate.py (gate 13's symbol resolver cannot import torch-bound modules). The box's
+  record for the full tier is 5 047 passed (STATE, R367 exit facts).
+- `cargo test --workspace --locked`: **559 passed, 0 failed, 3 ignored, 71 result lines; wall 2 292 s** — run
+  while 20 census agents shared the 4 CPUs, so the wall is an upper bound, not a figure.
+- Consequence for the fix phase: this container cannot run the Python gate set (no torch → gates 3a/3b/3c, 12,
+  13 and the manifest verifier false-red; gate 14's pyright refuses without mise). The fix phase runs its gate
+  where torch installs (the box, or a host whose network policy admits the pytorch index). Cargo gates (2, 4, 5)
+  run here.
+
 ## 1. Size (BEFORE)
 
 Unit: text lines from `git diff --numstat <empty-tree> HEAD` (git's own count; binary files count 0 and are
