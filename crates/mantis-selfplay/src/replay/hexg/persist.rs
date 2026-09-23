@@ -340,6 +340,11 @@ impl<'a> Cursor<'a> {
     fn bytes(&mut self, n: usize) -> Result<&'a [u8], String> {
         self.take(n)
     }
+    fn array<const N: usize>(&mut self) -> Result<[u8; N], String> {
+        let s = self.take(N)?;
+        s.try_into()
+            .map_err(|_| format!("HEXG load: a {N}-byte field read {} bytes", s.len()))
+    }
     fn u8(&mut self) -> Result<u8, String> {
         Ok(self.take(1)?[0])
     }
@@ -347,25 +352,21 @@ impl<'a> Cursor<'a> {
         Ok(self.take(1)?[0] as i8)
     }
     fn u16(&mut self) -> Result<u16, String> {
-        Ok(u16::from_le_bytes(self.take(2)?.try_into().unwrap()))
+        Ok(u16::from_le_bytes(self.array()?))
     }
     fn i16(&mut self) -> Result<i16, String> {
-        Ok(i16::from_le_bytes(self.take(2)?.try_into().unwrap()))
+        Ok(i16::from_le_bytes(self.array()?))
     }
     fn u32(&mut self) -> Result<u32, String> {
-        Ok(u32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        Ok(u32::from_le_bytes(self.array()?))
     }
     fn f32(&mut self) -> Result<f32, String> {
-        Ok(f32::from_le_bytes(self.take(4)?.try_into().unwrap()))
+        Ok(f32::from_le_bytes(self.array()?))
     }
     fn u64(&mut self) -> Result<u64, String> {
-        Ok(u64::from_le_bytes(
-            self.take(std::mem::size_of::<u64>())?.try_into().unwrap(),
-        ))
+        Ok(u64::from_le_bytes(self.array()?))
     }
     fn i64(&mut self) -> Result<i64, String> {
-        Ok(i64::from_le_bytes(
-            self.take(std::mem::size_of::<i64>())?.try_into().unwrap(),
-        ))
+        Ok(i64::from_le_bytes(self.array()?))
     }
 }

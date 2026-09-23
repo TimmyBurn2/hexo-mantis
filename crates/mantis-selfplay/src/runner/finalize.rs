@@ -121,12 +121,9 @@ pub(crate) fn finalize_game_graph(
 
 /// Collapse `version_seen` into `(min, max, distinct)` (frozen `:1675`).
 fn version_range(version_seen: &[u64]) -> (u64, u64, u32) {
-    if version_seen.is_empty() {
-        (0, 0, 0)
-    } else {
-        let mn = *version_seen.iter().min().unwrap();
-        let mx = *version_seen.iter().max().unwrap();
-        (mn, mx, version_seen.len() as u32)
+    match (version_seen.iter().min(), version_seen.iter().max()) {
+        (Some(&mn), Some(&mx)) => (mn, mx, version_seen.len() as u32),
+        _ => (0, 0, 0),
     }
 }
 

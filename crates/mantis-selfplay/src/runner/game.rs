@@ -376,11 +376,9 @@ fn run_one_game(
 
         // Random-opening plies: skip MCTS + recording for the first `random_opening_plies` plies.
         if board.ply.index() < init_ctx.random_opening_plies {
-            let legal = board.legal_moves();
-            if legal.is_empty() {
+            let Some(&(mq, mr)) = board.legal_moves().choose(rng) else {
                 break;
-            }
-            let (mq, mr) = *legal.choose(rng).unwrap();
+            };
             if board.apply_move(mq, mr).is_err() {
                 break;
             }
