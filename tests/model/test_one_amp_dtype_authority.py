@@ -22,6 +22,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+from _registry_nets import banned_net_names
+
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 #: The authority itself, and the only file allowed to name a `torch.<dtype>` beside autocast.
 _AUTHORITY = "model/amp.py"
@@ -85,24 +87,39 @@ def test_no_autocast_dtype_is_a_torch_literal() -> None:
     )
 
 
-def test_no_net_is_constructed_outside_the_one_builder() -> None:
-    """F-31's second half. `tests/model/_bf16_parity.py` called `GnnNet(build_arch())` directly
-    — the only direct net ctor outside `mantis.model` — so the parity net carried no `.arch`
-    handle and was not the object production builds. `build_net` is the ONE authority."""
+def _direct_net_ctors(roots: tuple[Path, ...], base: Path) -> list[str]:
+    """`rel:line -> Net(...)` for every direct net-class call under `roots`, outside `src/mantis/model/`."""
+    nets = banned_net_names() | {"GnnNet", "GnnNetV2", "HexTacToeNet"}
     offenders: list[str] = []
-    for root in (_SRC, _SRC.parents[1] / "tests"):
+    for root in roots:
         for path in sorted(root.rglob("*.py")):
-            rel = str(path.relative_to(_SRC.parents[1]))
+            rel = str(path.relative_to(base))
             if rel.startswith("src/mantis/model/"):
                 continue  # the builder and the net definitions themselves
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
             for node in ast.walk(tree):
                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) \
-                        and node.func.id in {"GnnNet", "GnnNetV2", "HexTacToeNet"}:
+                        and node.func.id in nets:
                     offenders.append(f"{rel}:{node.lineno} -> {node.func.id}(...)")
+    return offenders
+
+
+def test_no_net_is_constructed_outside_the_one_builder() -> None:
+    """F-31's second half. `tests/model/_bf16_parity.py` called `GnnNet(build_arch())` directly
+    — the only direct net ctor outside `mantis.model` — so the parity net carried no `.arch`
+    handle and was not the object production builds. `build_net` is the ONE authority."""
+    offenders = _direct_net_ctors((_SRC, _SRC.parents[1] / "tests"), _SRC.parents[1])
     assert not offenders, (
         f"a net constructed outside `mantis.model.build_net`: {offenders}. `build_net` is what "
         "attaches the declared `.arch` handle every artifact writer reads (the "
         "arch-travels-with-the-model convention), so a direct ctor produces a net production "
         "cannot snapshot or stamp."
     )
+
+
+def test_the_ctor_census_bites_a_direct_ctor_of_EVERY_registered_net(tmp_path: Path) -> None:
+    """Mutation self-test: a planted direct ctor of each net `build_net` returns is an offender."""
+    nets = sorted(banned_net_names())
+    (tmp_path / "mut.py").write_text("".join(f"{n}(arch)\n" for n in nets), encoding="utf-8")
+    found = _direct_net_ctors((tmp_path,), tmp_path)
+    assert [f.rsplit("-> ", 1)[1] for f in found] == [f"{n}(...)" for n in nets], found

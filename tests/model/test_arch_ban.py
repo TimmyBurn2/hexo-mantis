@@ -13,16 +13,21 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
+from _registry_nets import banned_net_names
+
 _SRC = Path(__file__).resolve().parents[2] / "src" / "mantis"
 _MODEL = _SRC / "model"
 
 _ARCH_ATTRS = ("in_channels", "filters", "out_features", "board_size")
 _ALLOWED_RECEIVERS = {"self", "arch", "spec"}
 
+_NETS = "|".join(re.escape(n) for n in sorted(banned_net_names(), key=len, reverse=True))
 # (a) isinstance recovering representation from a net class.
-_RE_ISINSTANCE = re.compile(r"isinstance\s*\([^)]*\b(GnnNet|HexTacToeNet)\b")
-# (b) type(...).__name__ == "GnnNet"|"HexTacToeNet".
-_RE_TYPENAME = re.compile(r"type\s*\([^)]*\)\.__name__\s*==\s*[\"'](GnnNet|HexTacToeNet)[\"']")
+_RE_ISINSTANCE = re.compile(rf"isinstance\s*\([^)]*\b({_NETS})\b")
+# (b) type(...).__name__ == "<net class>".
+_RE_TYPENAME = re.compile(rf"type\s*\([^)]*\)\.__name__\s*==\s*[\"']({_NETS})[\"']")
 # (c) attribute read of an arch hyperparam off a live module (receiver not self/arch/spec).
 _RE_ATTR = re.compile(r"\b(\w+)\.(in_channels|filters|out_features|board_size)\b")
 # (d) hasattr(m, <arch-attr>) probing a module for arch.
@@ -119,3 +124,12 @@ def test_census_bites_planted_attr_and_isinstance(tmp_path: Path) -> None:
     (tmp_path / "c.py").write_text('def h(cfg):\n    return cfg.get("representation", "grid")\n')
     viols = find_arch_sniffs(tmp_path)
     assert len(viols) >= 3, viols
+
+
+@pytest.mark.parametrize("net", sorted(banned_net_names()))
+def test_census_bites_a_planted_sniff_on_EVERY_net_class(net: str, tmp_path: Path) -> None:
+    """Every net the registry builds is banned by name, so a later kind's sniff cannot slip past."""
+    (tmp_path / "a.py").write_text(f"def f(m):\n    return isinstance(m, {net})\n", encoding="utf-8")
+    (tmp_path / "b.py").write_text(f'def g(m):\n    return type(m).__name__ == "{net}"\n', encoding="utf-8")
+    viols = find_arch_sniffs(tmp_path)
+    assert len(viols) == 2, viols
