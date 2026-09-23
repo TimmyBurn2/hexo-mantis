@@ -1,9 +1,9 @@
 // Exceeds the 300-line soft cap: the Board state core (types, ctors, mutators,
 // window helpers, Clone) ports as one line-auditable unit with its in-file tests.
-use std::cell::{Cell as StdCell, UnsafeCell};
-use fxhash::{FxHashMap, FxHashSet};
 use super::super::zobrist::ZobristTable;
 use crate::ply::Ply;
+use fxhash::{FxHashMap, FxHashSet};
+use std::cell::{Cell as StdCell, UnsafeCell};
 
 /// Captures everything mutated by one `apply_move_tracked` call so `undo_move` can reverse it
 /// in O(1) with no HashMap scan. All fields are private: the only constructor is
@@ -152,8 +152,7 @@ pub struct Board {
     /// Per-board cluster connectivity threshold: two stones share a cluster iff their
     /// `hex_distance` is <= this. Default 5 (v6 wire format); wide-window corpora use 8.
     pub(crate) cluster_threshold: i32,
-    /// Per-board cluster window side length, used by `get_cluster_views()` for its 2-plane
-    /// snapshots. Default `BOARD_SIZE` (19, v6 wire format).
+    /// Per-board window side length (the graph trunk size). Default `BOARD_SIZE`.
     pub(crate) cluster_window_size: usize,
 }
 
@@ -219,25 +218,9 @@ impl Board {
         }
     }
 
-    /// Override the cluster connectivity threshold. Affects only `get_clusters()` /
-    /// `get_cluster_views()`; legal-move expansion is unchanged.
-    pub fn set_cluster_threshold(&mut self, threshold: i32) {
-        self.cluster_threshold = threshold;
-    }
-
     /// Current cluster threshold (default 5 = v6 wire-format).
     pub fn cluster_threshold(&self) -> i32 {
         self.cluster_threshold
-    }
-
-    /// Override the cluster window side length, used by `get_cluster_views()` to size the
-    /// 2-plane snapshot. Caller must use an odd value >= 7; enforced by debug_assert.
-    pub fn set_cluster_window_size(&mut self, size: usize) {
-        debug_assert!(
-            size >= 7 && size % 2 == 1,
-            "cluster_window_size must be odd and >= 7; got {size}"
-        );
-        self.cluster_window_size = size;
     }
 
     /// Current cluster window side length (default 19 = v6 wire-format).
@@ -313,7 +296,12 @@ impl Board {
     /// `(trunk_sz, half)` once, and `#[inline]` folds the bounds check into the caller.
     #[inline]
     pub fn window_flat_idx_at_geom(
-        q: i32, r: i32, cq: i32, cr: i32, trunk_sz: i32, half: i32,
+        q: i32,
+        r: i32,
+        cq: i32,
+        cr: i32,
+        trunk_sz: i32,
+        half: i32,
     ) -> usize {
         let wq = q - cq + half;
         let wr = r - cr + half;
@@ -322,11 +310,6 @@ impl Board {
         } else {
             usize::MAX
         }
-    }
-
-    /// Returns the cell at (q, r).
-    pub fn get_cell(&self, q: i32, r: i32) -> Cell {
-        self.cells.get(&(q, r)).copied().unwrap_or(Cell::Empty)
     }
 
     /// Axial coordinates (q, r) from a window-relative flat index; dispatches via
@@ -376,10 +359,18 @@ impl Board {
         // Bounding box FIRST so `window_flat_idx` sees the final bbox, which keeps the
         // Zobrist hash position-deterministic (same stone set -> same centre -> same hash).
         if self.has_stones {
-            if q < self.min_q { self.min_q = q; }
-            if q > self.max_q { self.max_q = q; }
-            if r < self.min_r { self.min_r = r; }
-            if r > self.max_r { self.max_r = r; }
+            if q < self.min_q {
+                self.min_q = q;
+            }
+            if q > self.max_q {
+                self.max_q = q;
+            }
+            if r < self.min_r {
+                self.min_r = r;
+            }
+            if r > self.max_r {
+                self.max_r = r;
+            }
         } else {
             self.min_q = q;
             self.max_q = q;
@@ -388,7 +379,10 @@ impl Board {
             self.has_stones = true;
         }
 
-        let player_idx = match self.current_player { Player::One => 0, Player::Two => 1 };
+        let player_idx = match self.current_player {
+            Player::One => 0,
+            Player::Two => 1,
+        };
 
         let cell = match self.current_player {
             Player::One => Cell::P1,
@@ -514,7 +508,10 @@ impl Clone for Board {
             has_stones: self.has_stones,
             action_anchors: self.action_anchors,
             action_anchors_count: self.action_anchors_count,
-            legal_cache: UnsafeCell::new(FxHashSet::with_capacity_and_hasher(cap, Default::default())),
+            legal_cache: UnsafeCell::new(FxHashSet::with_capacity_and_hasher(
+                cap,
+                Default::default(),
+            )),
             cache_dirty: StdCell::new(true),
             legal_move_radius: self.legal_move_radius,
             cluster_threshold: self.cluster_threshold,
@@ -575,11 +572,7 @@ mod from_stones_tests {
     #[test]
     fn from_stones_sets_expected_state() {
         // A P1 3-in-a-row along the E axis, off-origin so the bbox is non-trivial.
-        let stones = [
-            ((2, 1), Cell::P1),
-            ((3, 1), Cell::P1),
-            ((4, 1), Cell::P1),
-        ];
+        let stones = [((2, 1), Cell::P1), ((3, 1), Cell::P1), ((4, 1), Cell::P1)];
         let b = Board::from_stones(&stones, Player::Two, 2, 7, Some((4, 1)));
 
         // cells present.
@@ -600,7 +593,10 @@ mod from_stones_tests {
 
         // mark_cache_dirty => legal_moves_set rebuilds against the planted stones.
         let legal = b.legal_moves_set();
-        assert!(!legal.is_empty(), "legal set must rebuild from planted stones");
+        assert!(
+            !legal.is_empty(),
+            "legal set must rebuild from planted stones"
+        );
         assert!(!legal.contains(&(2, 1)), "occupied cell is not legal");
         assert!(legal.contains(&(5, 1)), "empty neighbour must be legal");
     }
@@ -611,10 +607,16 @@ mod from_stones_tests {
         let six: Vec<((i32, i32), Cell)> =
             (0..WIN_LENGTH as i32).map(|q| ((q, 0), Cell::P1)).collect();
         let win = Board::from_stones(&six, Player::One, 1, 11, Some((5, 0)));
-        assert!(win.check_win(), "6-in-a-row with last_move on the line is a win");
+        assert!(
+            win.check_win(),
+            "6-in-a-row with last_move on the line is a win"
+        );
 
         let no_last = Board::from_stones(&six, Player::One, 1, 11, None);
-        assert!(!no_last.check_win(), "check_win reads last_move; None => not a win");
+        assert!(
+            !no_last.check_win(),
+            "check_win reads last_move; None => not a win"
+        );
     }
 
     #[test]
@@ -645,7 +647,11 @@ mod geometry_tests {
         assert_eq!(b.cluster_window_size(), 9);
         assert_eq!(
             b.geometry(),
-            BoardGeometry { legal_move_radius: 4, cluster_threshold: 7, cluster_window_size: 9 }
+            BoardGeometry {
+                legal_move_radius: 4,
+                cluster_threshold: 7,
+                cluster_window_size: 9
+            }
         );
     }
 

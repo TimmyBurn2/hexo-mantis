@@ -26,14 +26,13 @@
 //!   ply 1+: each player places exactly 2 stones before the turn passes.
 
 mod moves;
-mod threats;
 pub mod state;
+mod threats;
 pub mod zobrist;
 
 pub use state::{
-    Board, BoardGeometry, Cell, MoveDiff, Player,
-    BOARD_SIZE, HALF, HEX_AXES, TOTAL_CELLS,
-    hex_distance,
+    hex_distance, Board, BoardGeometry, Cell, MoveDiff, Player, BOARD_SIZE, HALF, HEX_AXES,
+    TOTAL_CELLS,
 };
 // Re-export the win-rule length so downstream users (the search crate's
 // backup path) reference `WIN_LENGTH - 1` instead of a bare `5`.
@@ -108,7 +107,10 @@ mod tests {
         assert_eq!(b.legal_move_count(), 25);
         b.apply_move(0, 0).unwrap();
         // The default-radius hex ball around (0,0), minus the one occupied cell.
-        assert_eq!(b.legal_move_count(), hex_ball_cells(DEFAULT_LEGAL_MOVE_RADIUS) - 1);
+        assert_eq!(
+            b.legal_move_count(),
+            hex_ball_cells(DEFAULT_LEGAL_MOVE_RADIUS) - 1
+        );
     }
 
     #[test]
@@ -315,16 +317,6 @@ mod tests {
             !legal.contains(&(0, 6)),
             "(0,6) at distance 6 must NOT be legal"
         );
-
-        // The cluster threshold boundary is inclusive: two stones exactly 5 apart stay one
-        // cluster.
-        b.apply_move(5, 0).unwrap();
-        let clusters = b.get_clusters();
-        assert_eq!(
-            clusters.len(),
-            1,
-            "stones 5 apart must remain in one cluster"
-        );
     }
 
     #[test]
@@ -369,28 +361,6 @@ mod tests {
         let legal_clone: std::collections::HashSet<(i32, i32)> =
             cloned.legal_moves().into_iter().collect();
         assert!(legal_clone.contains(&(6, 0)));
-    }
-
-    #[test]
-    fn cluster_threshold_splits_at_distance_six() {
-        // Two colonies at axial distance 6 must split under the default threshold of 5. Seeded
-        // by direct `cells` insertion because the radius cap blocks placement that far out.
-        let mut b = Board::new();
-        b.cells.insert((0, 0), state::Cell::P1);
-        b.cells.insert((0, 1), state::Cell::P1);
-        b.cells.insert((6, 0), state::Cell::P1);
-        b.cells.insert((6, -1), state::Cell::P1);
-        b.has_stones = true;
-        b.mark_cache_dirty();
-        let clusters = b.get_clusters();
-        assert_eq!(
-            clusters.len(),
-            2,
-            "stones at axial distance 6 must split into 2 clusters under threshold=5 (was 1 under threshold=8)"
-        );
-        for c in &clusters {
-            assert_eq!(c.len(), 2, "each colony has 2 stones");
-        }
     }
 
     #[test]

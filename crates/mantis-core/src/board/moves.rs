@@ -1,32 +1,7 @@
 // Exceeds the 300-line soft cap: legal-move/win/threat rules port as one
 // line-auditable unit together with their in-file oracle test suite.
-use std::cell::RefCell;
-
-use super::state::{hex_distance, Board, Cell, Player, HEX_AXES};
+use super::state::{Board, Cell, Player, HEX_AXES};
 use fxhash::FxHashSet;
-
-/// Per-thread reusable scratch buffers for the `get_clusters()` BFS partition, replacing three
-/// per-call Vec allocations. Thread-local because `Board::clone` is itself on the search hot
-/// path, so a per-Board scratch would need skip-on-clone treatment and survive nothing.
-struct ClusterScratch {
-    stones: Vec<(i32, i32)>,
-    visited: Vec<bool>,
-    queue: Vec<usize>,
-}
-
-impl ClusterScratch {
-    fn new() -> Self {
-        Self {
-            stones: Vec::new(),
-            visited: Vec::new(),
-            queue: Vec::new(),
-        }
-    }
-}
-
-thread_local! {
-    static CLUSTER_SCRATCH_TLS: RefCell<ClusterScratch> = RefCell::new(ClusterScratch::new());
-}
 
 /// Stones in a row required to win; re-exported so search says `WIN_LENGTH - 1`, not a bare 5.
 pub const WIN_LENGTH: usize = 6;
@@ -524,65 +499,6 @@ impl Board {
             }
         }
         vec![]
-    }
-
-    /// Partition all placed stones into clusters where two stones share one iff their
-    /// `hex_distance` is at most `self.cluster_threshold`. Consumed by `get_cluster_views()`.
-    pub fn get_clusters(&self) -> Vec<Vec<(i32, i32)>> {
-        let mut clusters: Vec<Vec<(i32, i32)>> = Vec::new();
-        if self.cells.is_empty() {
-            return clusters;
-        }
-
-        let threshold = self.cluster_threshold;
-
-        CLUSTER_SCRATCH_TLS.with(|scratch| {
-            let mut s = scratch.borrow_mut();
-            let ClusterScratch {
-                stones,
-                visited,
-                queue,
-            } = &mut *s;
-
-            // Refill the thread-local scratch from this Board's stones.
-            // `clear` + `extend` reuses the existing allocation when capacity
-            // suffices; `visited.resize(.., false)` zeroes only the in-use
-            // prefix (still O(n) but no allocation when n ≤ capacity).
-            stones.clear();
-            stones.extend(self.cells.keys().copied());
-            visited.clear();
-            visited.resize(stones.len(), false);
-            queue.clear();
-
-            for i in 0..stones.len() {
-                if visited[i] {
-                    continue;
-                }
-                let mut cluster = Vec::new();
-                queue.push(i);
-                visited[i] = true;
-
-                while let Some(curr) = queue.pop() {
-                    cluster.push(stones[curr]);
-                    for j in 0..stones.len() {
-                        if !visited[j]
-                            && hex_distance(
-                                stones[curr].0,
-                                stones[curr].1,
-                                stones[j].0,
-                                stones[j].1,
-                            ) <= threshold
-                        {
-                            visited[j] = true;
-                            queue.push(j);
-                        }
-                    }
-                }
-                clusters.push(cluster);
-            }
-        });
-
-        clusters
     }
 }
 

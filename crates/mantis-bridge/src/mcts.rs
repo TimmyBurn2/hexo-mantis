@@ -170,13 +170,6 @@ impl PyMCTSTree {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    /// Search statistics since the last `new_game()`, as `(mean_depth, root_concentration)`:
-    /// average leaf depth across all simulations, and max child visits / total root visits in
-    /// [0.0, 1.0]. Both 0.0 before any simulations; call after search completes, not during.
-    pub fn last_search_stats(&self) -> (f32, f32) {
-        self.inner.last_search_stats()
-    }
-
     /// Reset the tree for a new game starting from `board`, re-using the pre-allocated pool.
     pub fn new_game(&mut self, board: &PyBoard) {
         self.board_size = BOARD_SIZE;
@@ -366,12 +359,6 @@ impl PyMCTSTree {
         self.inner.reset();
     }
 
-    /// Run `n` simulations using uniform priors and value=0 (no neural network).
-    /// Used for CPU-only MCTS throughput benchmarking.
-    pub fn run_simulations_cpu_only(&mut self, n: usize) {
-        self.inner.run_simulations_cpu_only(n);
-    }
-
     /// Mix Dirichlet noise into the root node's priors (self-play only), after the first
     /// `expand_and_backup` has expanded the root. `noise` is a list of floats of length
     /// `root_n_children()`; `epsilon` the mixing weight (default 0.25 per AlphaZero).
@@ -507,16 +494,6 @@ mod tests {
         let board = PyBoard::new();
         t.new_game(&board);
         assert_eq!(t.forced_root_child(), None);
-    }
-
-    #[test]
-    fn cpu_only_simulations_visit_root() {
-        let mut t = PyMCTSTree::new(1.5, 1.0, 0.0, true, 0.3);
-        t.run_simulations_cpu_only(16);
-        assert!(
-            t.root_visits() > 0,
-            "cpu-only sims must accumulate root visits"
-        );
     }
 
     #[test]

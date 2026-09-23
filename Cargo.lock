@@ -450,7 +450,6 @@ checksum = "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53"
 name = "mantis-bridge"
 version = "0.1.0"
 dependencies = [
- "half",
  "mantis-core",
  "mantis-encoding",
  "mantis-graph",
@@ -581,7 +580,6 @@ version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "778da78c64ddc928ebf5ad9df5edf0789410ff3bdbf3619aed51cd789a6af1e2"
 dependencies = [
- "half",
  "libc",
  "ndarray",
  "num-complex",

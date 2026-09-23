@@ -144,8 +144,7 @@ def _longest_straight_run(stones: list[tuple[int, int]]) -> int:
 
 
 def _components(stones: list[tuple[int, int]], cluster_threshold: int) -> int:
-    """Connected components of ``stones`` under `axial_distance <= cluster_threshold`, the same
-    connectivity as the engine's `get_clusters`: BFS flood-fill, applied per-player here."""
+    """Connected components of ``stones`` under `axial_distance <= cluster_threshold`, by BFS."""
     pts = list(set(stones))
     n = len(pts)
     if n == 0:
@@ -201,7 +200,7 @@ def _compute_n_components(
 ) -> int:
     """Return PER-PLAYER (winner) ``n_components`` for a finished game: the WINNER's component
     count on a decisive game, and the max of the two on a draw. Connectivity edge iff
-    `axial_distance <= cluster_threshold`, the engine's `get_clusters` convention."""
+    `axial_distance <= cluster_threshold`."""
     if not move_history:
         return 0
     p1, p2 = _split_players(move_history)

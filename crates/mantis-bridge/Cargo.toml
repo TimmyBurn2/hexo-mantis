@@ -18,11 +18,8 @@ mantis-search = { path = "../mantis-search" }
 mantis-selfplay = { path = "../mantis-selfplay" }
 # numpy marshaling (`into_pyarray`/`PyReadonlyArray` on the dense + GraphWire paths).
 # Crate-local: numpy is ABSENT workspace-wide by design (root [workspace.dependencies]
-# is out of scope — CI gate 6). Versions pinned to the frozen engine: numpy 0.28
-# (matches pyo3 0.28), half 2 (matches mantis-selfplay). The `half` feature bridges
-# f16-bit ReplayBuffer push borrows to numpy `float16`.
-numpy = { version = "0.28", features = ["half"] }
-half = "2"
+# is out of scope — CI gate 6). numpy 0.28 matches pyo3 0.28.
+numpy = "0.28"
 
 [dev-dependencies]
 # DEV-ONLY test-fixtures (Resolved-3): the `Board::from_stones` static-position builder

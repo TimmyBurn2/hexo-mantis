@@ -160,11 +160,6 @@ impl PyRegistrySpec {
     pub fn contract_version(&self) -> Option<u32> {
         self.inner.contract_version
     }
-    /// Required native builder tag the resolver asserts (graph only). = 1.
-    #[getter]
-    pub fn builder_impl_required(&self) -> Option<u8> {
-        self.inner.builder_impl_required
-    }
 
     /// Alias for `policy_logit_count`.
     #[getter]
