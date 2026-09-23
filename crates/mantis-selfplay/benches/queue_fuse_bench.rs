@@ -19,10 +19,9 @@ use criterion::{black_box, criterion_group, criterion_main, BatchSize, Criterion
 use mantis_graph::AxisGraph;
 use mantis_selfplay::queues::{build_leaf_graph, GraphWire};
 
-// The same `concat_by_offset` the parity proof pins byte-identical to the whole-batch fuse;
-// timing a second copy would be timing unverified code.
 #[path = "../tests/common/mod.rs"]
 mod common;
+use common::splitmix64;
 
 /// Achieved batch at twelve workers was 39.29 of 64; 40 is that, rounded to the batch the
 /// pop actually hands the fuse.
@@ -40,14 +39,6 @@ const TRUNK_SIZE: i32 = 19;
 /// The ledger's measured mean fused edges per pop, and the band the corpus must land in.
 const LEDGER_MEAN_FUSED_EDGES: usize = 1_203_310;
 const SHAPE_BAND: f64 = 0.20;
-
-fn splitmix64(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    z ^ (z >> 31)
-}
 
 fn draw_range(s: &mut u64, lo: i64, hi: i64) -> i64 {
     lo + (splitmix64(s) % ((hi - lo + 1) as u64)) as i64
@@ -179,46 +170,6 @@ criterion_group! {
     targets = queue_fuse_from_axis_graphs_pop40
 }
 
-/// Bench the server-side concat, which is what a worker-side fuse would leave behind.
-///
-/// The server still touches every byte — `concat_by_offset` memcpys the bulk arrays and
-/// rebases the index and offset arrays — so the saving is `fuse − concat` on the server
-/// thread, not the whole fuse. Benched cross-thread and read as a pair with the arm above.
-fn queue_concat_cross_thread_pop40(c: &mut Criterion) {
-    let (want_tx, want_rx) = mpsc::channel::<u64>();
-    let (parts_tx, parts_rx) = mpsc::channel::<Vec<mantis_selfplay::queues::GraphWireArrays>>();
-    // The builder thread does what a worker would: build its slice and fuse it, so this arm
-    // receives already-fused wire written by another core.
-    let builder = thread::spawn(move || {
-        while let Ok(seed) = want_rx.recv() {
-            let graphs = build_pop_corpus_seeded(seed);
-            // 5 workers x 8 graphs — the pop composition `n_workers 12` most often produces.
-            let parts: Vec<_> = graphs.chunks(8).map(common::fuse).collect();
-            if parts_tx.send(parts).is_err() {
-                break;
-            }
-        }
-    });
-
-    let mut seed = CORPUS_SEED;
-    c.bench_function("queue_concat_cross_thread_pop40", |b| {
-        b.iter_batched(
-            || {
-                seed = seed.wrapping_add(1);
-                want_tx.send(seed).expect("builder thread alive");
-                parts_rx.recv().expect("builder thread produced a pop")
-            },
-            |parts| {
-                let joined = common::concat_by_offset(black_box(parts));
-                black_box(&joined);
-            },
-            BatchSize::LargeInput,
-        );
-    });
-    drop(want_tx);
-    let _ = builder.join();
-}
-
 criterion_group! {
     name = cross_thread;
     config = Criterion::default()
@@ -226,6 +177,6 @@ criterion_group! {
         // The setup builds a whole pop per sample, and the number wanted is a ratio against
         // the arm above rather than a tight CI of its own.
         .sample_size(30);
-    targets = queue_fuse_cross_thread_pop40, queue_concat_cross_thread_pop40
+    targets = queue_fuse_cross_thread_pop40
 }
 criterion_main!(benches, cross_thread);

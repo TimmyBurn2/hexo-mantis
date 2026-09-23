@@ -39,6 +39,8 @@ DISSOLVED_PATHS: dict[str, str] = {
     "docs/registers/": "dissolved by R346(e); governance moved to docs/governance/",
     "configs/run9.yaml": "deleted by R367 §0(4): the mint stood as run10's base (R365(a)) and the base "
                          "is spent; STATE names it as history",
+    "crates/mantis-selfplay/tests/prefuse_concat_parity.rs": "deleted by R368(e)/(k) with the "
+                         "refuted S-PREFUSE harness; falsified.md names its last commit",
 }
 
 

@@ -6,8 +6,7 @@
 //! 1.35 GB/s of output: every array is reserved from a sizing pass, `edge_index` is
 //! one `2E` buffer written once rather than a src/dst pair plus a terminal concat, and
 //! the widening `u32 -> i64 + offset` runs through `extend` over a `TrustedLen`
-//! iterator. Byte-equality with the previous write path is pinned by
-//! `tests/queue_fuse_reserve_parity.rs`, which carries that path transcribed.
+//! iterator; `tests/queue_fuse_pin.rs` pins the fused arrays against frozen inputs.
 //!
 //! Single-read is a type guarantee: `take()` moves every array out exactly once and a
 //! second call is the named error `WireAlreadyConsumed`. The `-1` off-window sentinel
