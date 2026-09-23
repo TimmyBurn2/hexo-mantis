@@ -96,14 +96,20 @@ fn miri_clone_shares_no_cache() {
 fn miri_nested_shared_borrows() {
     let mut b = Board::new();
     b.apply_move(0, 0).unwrap();
-    let g1 = b.legal_moves_set();
-    let g2 = b.legal_moves_set();
-    assert_eq!(g1.len(), g2.len());
-    // Read through both references while both are live.
-    for mv in g1.iter() {
-        assert!(g2.contains(mv));
-    }
-    drop(g1);
+    let g2 = {
+        let g1 = b.legal_moves_set();
+        let g2 = b.legal_moves_set();
+        assert!(
+            std::ptr::eq(g1, g2),
+            "both borrows must alias the ONE cache"
+        );
+        // Read through both references while both are live.
+        for mv in g1.iter() {
+            assert!(g2.contains(mv));
+        }
+        g2
+    };
+    // g1's borrow has ended at the block; g2, which borrows the board rather than g1, still reads.
     assert_eq!(g2.len(), one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS));
 }
 
