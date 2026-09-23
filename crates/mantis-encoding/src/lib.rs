@@ -24,26 +24,3 @@ pub use registry::{
     all_specs, lookup, lookup_or_panic, parse_encoding_toml, registry_sha, registry_sha_hex,
 };
 pub use spec::{PolicyPool, RegistrySpec, Representation, ValuePool};
-
-/// THE ENCODING AUDIT IS NOT HERE EITHER (AUDIT-1 F-45). `audit.rs` was a Rust "reference"
-/// port of the Python audit's §1 census and §6 cross-table, labelled as such, reached by
-/// nothing but its own test and wrapped by no bridge export — a second implementation of the
-/// invariant `mantis.encoding.audit` (the live CLI, the one gate 8 defers to) enforces, with
-/// no cross-language parity check between them. The live one is kept.
-///
-/// Crate identity pin (WP0 DAG marker, retained).
-pub const CRATE_NAME: &str = "mantis-encoding";
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_name_pinned() {
-        assert_eq!(super::CRATE_NAME, "mantis-encoding");
-    }
-
-    #[test]
-    fn dag_deps_compile() {
-        assert_eq!(mantis_core::CRATE_NAME, "mantis-core");
-        assert_eq!(mantis_graph::CRATE_NAME, "mantis-graph");
-    }
-}

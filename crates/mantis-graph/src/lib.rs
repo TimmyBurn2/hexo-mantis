@@ -38,8 +38,6 @@ pub const BUILDER_IMPL_NATIVE: u8 = 1;
 /// cells have NO dense action slot. `i32`/-1 because the deploy policy path is ragged
 /// per-legal-node, so this field is training/probe metadata and a u16 cannot carry -1.
 pub const OFF_WINDOW_SLOT: i32 = -1;
-/// Crate identity pin — asserted by downstream DAG-pin tests.
-pub const CRATE_NAME: &str = "mantis-graph";
 
 // Coordinate keys are packed i64; SipHash is overkill for the ~30k point-lookups per position,
 // and a tiny FNV-1a keeps the core dependency list EMPTY. Never fed untrusted input.
@@ -1012,11 +1010,6 @@ pub fn parallelism_hint() -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn crate_name_pinned() {
-        assert_eq!(CRATE_NAME, "mantis-graph");
-    }
 
     #[test]
     fn payload_types_default_construct() {

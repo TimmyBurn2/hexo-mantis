@@ -9,13 +9,3 @@ pub mod ply;
 
 pub use board::{Board, BoardGeometry, Cell, MoveDiff, Player};
 pub use ply::Ply;
-
-pub const CRATE_NAME: &str = "mantis-core";
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_name_pinned() {
-        assert_eq!(super::CRATE_NAME, "mantis-core");
-    }
-}

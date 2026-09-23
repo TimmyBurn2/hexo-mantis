@@ -26,19 +26,3 @@ pub use mcts::{
 };
 pub use tactics::{Budget, Outcome, ProofResult, TacticalConfig, TacticalSolver};
 pub use temperature::{compute_move_temperature, ply_to_compound_move};
-
-pub const CRATE_NAME: &str = "mantis-search";
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn crate_name_pinned() {
-        assert_eq!(super::CRATE_NAME, "mantis-search");
-    }
-
-    #[test]
-    fn dag_deps_compile() {
-        assert_eq!(mantis_core::CRATE_NAME, "mantis-core");
-        assert_eq!(mantis_encoding::CRATE_NAME, "mantis-encoding");
-    }
-}
