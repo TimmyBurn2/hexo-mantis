@@ -226,3 +226,141 @@ depends: S-A-RUST-1-09, -10, -11
 - pool_overflow.rs versus search_kind_conformance.rs::a_search_at_the_gumbel_ceiling_still_fits_the_pool; perspective_parity.rs versus the policy.rs tests; tactics/eval.rs tests; tt.rs tests beyond the Bound/generation ones.
 - Frozen or PZ-by-design material was read only enough to exclude it: completed_q.rs, golden_tests.rs, parity_tests.rs, mctx_parity.rs, seq_halving.rs, search_kind_conformance.rs.
 - No cargo test was run, so no row was probed green. The reviewer probes.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+Probe worktree: scratchpad/wt/S-A-RUST-1-A (detached HEAD, shared CARGO_TARGET_DIR), removed at the end. Lane-A edits were applied and measured FIRST (diff stat
+`3 files changed, 2 insertions(+), 20 deletions(-)`). Exploratory re-derivation edits for -02/-03/-04 were then stacked in the same tree; they are evidence only, not lane-A Δ.
+Python probe steps are N/A for this slice's lane-A rows: neither subject is a pyo3 export (the bridge registers no `is_covered`), so the prebuilt `_engine` is unaffected.
+Rust test deletions (-03, -08, -09, -10, -11, -12) lower the `cargo test` count but not the gate-3 pytest floor (tools/ci_gates/test_count_floor.txt is pytest-only).
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| -01 | CONFIRMED | A | −17 (probe) | the fn plus its preceding blank separator (16 + 1). The module-doc line 3 and the lib.rs re-export are reworded in place |
+| -02 | CONFIRMED | C | −11 (scout; the probe compiled green) | removing all 10 lines and the closing `}` compiles workspace-wide, all targets |
+| -03 | CONFIRMED | B | −207 (scout) | probe reproduces `with_policy is never used`. ARCHITECT: retire the deferred net-policy seam? |
+| -04 | CONFIRMED | B | about −24 (scout) | probe reproduces `Upper never constructed` and `bound never read` |
+| -05 | CONFIRMED | C | −26 (scout) | both callers are PZ tests |
+| -06 | CONFIRMED | B | −38 in slice (scout) | depends on S-A-RUST-3 (bridge pyfunctions + both .pyi twins); needs a repo_design amendment-5 edit |
+| -07 | AMENDED | B | −6 prod (scout) | the witness re-expression is not equivalent (see note) |
+| -08 | CONFIRMED | C | −41 (scout) | depends on S-A-RUST-3 (bridge pymethod, both .pyi twins, the roundtrip-test leg) |
+| -09 | CONFIRMED | C | −243 (wc -l) | overlap is partial for the gnn_axis_r8 instrument aborts; R155 names leg 1 |
+| -10 | AMENDED | C | −53 (spans re-read) | the golden pins the same parameters but not every tested point |
+| -11 | CONFIRMED | C | about −49 (scout) | sampler superset verified; policy.rs blend test not re-compared |
+| -12 | CONFIRMED | C | −28 (scout) | refusal-list superset verified |
+| -13 | CONFIRMED | B | about −25 (scout) | non-blank counts 33 and 28 re-derived |
+| -14 | CONFIRMED | B | about −12 (scout) | 7 rewind loops re-derived |
+| -15 | AMENDED | C | small (scout) | policy.rs has 17 matching lines, not 18 |
+| -16 | CONFIRMED | B | −15 (scout) | the CRATE_NAME pattern exists in all 5 crates |
+| -17 | CONFIRMED | A | −1 (probe) | orphan `//!` line; the other three items are rewords |
+| -18 | CONFIRMED | C | 0 | stale paths and asserted line numbers re-derived |
+
+### Per-finding notes
+S-A-RUST-1-01 — CONFIRMED:
+- Callers: `git grep -n -w is_covered` (the whole tree) finds the def, the module-doc line 3, the lib.rs:18 re-export and frozen docs/design/archive/measurements R153 prose only. There are zero hits in docs/governance.
+- Probe: the fn was deleted in WT, the re-export narrowed to `pub use legal_set::LegalSetPolicy;` and the module doc reworded. Results:
+  - `cargo check --workspace --all-targets --locked`: 0 errors, and no new warning (only the pre-existing 2 non_snake_case in mcts/tests.rs).
+  - `cargo test -p mantis-search --locked --lib -- ls_prior tactics::tt legal_set`: 11 passed.
+  - `rustfmt --check` is clean.
+- Δ: −17, because the trailing blank separator goes too. The reworded doc must also fix "they cross" → "it crosses".
+- legal_set.rs (67 lines) stays under 300, so there is no R8 header.
+
+S-A-RUST-1-02 — CONFIRMED:
+- `git grep -n -E "selection_overlap_count|max_depth_observed"` → 10 lines, all decl/init/reset (mod.rs) or writes (selection.rs:157-158, :296, :390).
+- Exploratory probe: the 10 lines and the `if depth > …` closing brace were deleted → `cargo check --workspace --all-targets` 0 errors. So nothing reads them, the bridge and tests included.
+- Lane C stands (mcts/mod.rs is on the PZ glob).
+
+S-A-RUST-1-03 — CONFIRMED:
+- Probe: `#[cfg_attr(not(test), allow(dead_code))]` was stripped and `tactics::{ordering,search,tt}` made pub(crate). Workspace all-targets: 0 errors. `cargo check -p mantis-search --lib` → `associated function with_policy is never used`.
+- tactics/mod.rs doc: "net-policy ordering … deferred".
+- ARCHITECT: is the deferred net-policy ordering seam retired, or still planned?
+- Removes 2 Rust tests.
+
+S-A-RUST-1-04 — CONFIRMED:
+- Same probe, with the `#[allow(dead_code)]` on Slot.bound stripped → `variant Upper is never constructed`, `field bound is never read`.
+- `pub mod tt` makes Bound publicly reachable, but the pub(crate) narrowing compiled workspace-wide, so there is no outside user.
+- Lane B (store_bound signature). It is the same deferred-seam question as -03 (the "quiet-move alpha-beta body" is deferred).
+
+S-A-RUST-1-05 — CONFIRMED: `git grep -n -E "expand_and_backup_ls\b"` finds these callers:
+- tests/r153_leg2_ls_target_mass.rs:100 (PZ)
+- mantis-selfplay/tests/target_sign_integrity.rs:123 (PZ)
+- the worker.py error string
+- repo_design.md:919, which names the BRIDGE pymethod `MCTSTree.expand_and_backup_ls` as already removed (R346(f) amendment). It does not keep the Rust fn.
+
+S-A-RUST-1-06 — CONFIRMED:
+- `git grep -n -E "OMITTED_PRIOR_…|mcts_omitted_prior_stats|\bomitted_prior_stats\b"` → Python hits are the two .pyi twins only.
+- search_kind_conformance.rs:177-196 calls the METHOD `tree.omitted_prior_stats()` (mod.rs:268), not the free fn. So the scratchpad CALLERS.md §9 line claiming conformance uses the free fn is wrong, and the scout is right.
+- Cross-slice dependency: the bridge utils.rs pyfunctions and both .pyi twins are S-A-RUST-3's. Neither side lands alone. repo_design amendment 5 ("the bridge publishes them as the run-wide aggregate") needs an amendment (R9).
+
+S-A-RUST-1-07 — AMENDED (the witness plan):
+- `truncated` is `n_legal > cap`. `children.len() == cap` also holds when n_legal == cap, so the test reads (backup.rs in-src test, mcts/tests.rs among others) must assert against each test's known n_legal, not `children.len()` alone.
+- The rest is 0-line visibility narrowing. Lane B stands.
+
+S-A-RUST-1-08 — CONFIRMED:
+- `git grep -n -E "get_policy\b"` (the ls/loss names excluded) → one Python caller, tests/bridge/test_mcts_inference_roundtrip.py:48. The bridge mcts.rs:32 lifecycle doc also names get_policy.
+- Cross-slice dependency on S-A-RUST-3 (the pymethod and both .pyi twins).
+- Removes 3 in-src Rust tests.
+
+S-A-RUST-1-09 — CONFIRMED (lane C):
+- `wc -l` → 243.
+- Assertions re-read, and the overlap holds for the product assertions:
+  - leg 1's per-row `dropped_mass <= TOL` = leg 2's `assert_no_dropped_mass`, over v1 via LsAt and r8 via Ls.
+  - leg 1's `exported <= 1+TOL` = leg 2's `measure` (abort 2).
+- The overlap is PARTIAL for the instrument aborts. Leg 1 asserts abort 1 (>361 legal) and abort 3 (determinism) for BOTH gnn_axis_v1 and gnn_axis_r8; leg 2 asserts them for gnn_axis_v1 only.
+- Ruling: RULINGS.md R155 is standing and names leg 1 ("leg 1's gnn_axis_v1 zero stays labeled non-production forever").
+- Removes 1 cargo test.
+
+S-A-RUST-1-10 — AMENDED (claim detail; lane C stands):
+- `grep "^[0-9]*,15,0.0500"` on the golden CSV → plies 0,1,2,3,4,6,8,12,16,24,30,48. Under `ply_to_compound_move` (div_ceil) these are cm 0,1,1,2,2,3,4,6,8,12,15,24, checked at the same 1e-6 tolerance.
+- Pinned by the golden: cm 0 → 1.0, cm 15 → floor, cm 24 → floor, and cosine at cm 3 and 12.
+- NOT pinned: cm 7 (the formula test) and cm 16, 20, 115 (the past-threshold test). The behaviour class is covered; the exact points are not.
+- R38 names a "temperature_schedule debt row", but that ruling is about the Python tests tests/selfplay/test_pool_hparams*.py, not this file.
+- Spans 22–30 / 32–41 / 43–53 / 72–90 were re-read: −53. Removes 4 cargo tests.
+
+S-A-RUST-1-11 — CONFIRMED:
+- dirichlet_parity.rs::sample_dirichlet_sums_to_one_and_is_nonneg (α 0.3, n ∈ {1,2,5,24,50}, 10 draws each: len, ≥0, |sum−1|<1e-5) is a superset of dirichlet.rs's two tests (α 0.3, n 25, 20 draws, the same 1e-5).
+- `git grep -n -E "moves_remaining == 1|is_intermediate" -- crates` → search_drive.rs:461 plus the test's local fn only. There is no source-text pin (rotation_parity's include_str! does not assert it).
+- The policy.rs blend test vs apply_dirichlet_to_root_blends_linearly was NOT independently re-compared.
+
+S-A-RUST-1-12 — CONFIRMED:
+- kind.rs refusal list {"", legacy, mctx, PUCT, gumbel_mcts, true} ⊂ conformance's list, which adds "gumbel ".
+- The completed_q_target asserts are identical. Only `only_the_gumbel_kind_stores_a_sparse_row` is unique.
+- Removes 3 cargo tests.
+
+S-A-RUST-1-13 — CONFIRMED: `sed -n 326,361p | grep -c .` → 33; `sed -n 462,489p` → 28. Both fns are pub(crate), so the merge is crate-internal.
+
+S-A-RUST-1-14 — CONFIRMED: `grep -c "while let Some(diff) = diffs.pop()" selection.rs` → 7.
+
+S-A-RUST-1-15 — AMENDED (count): `git grep -c -E` over non-test crates → policy.rs 17, backup.rs 3, selection.rs 2, bridge 3, search_drive.rs 2. Lane C stands (policy.rs is PZ).
+
+S-A-RUST-1-16 — CONFIRMED:
+- `git grep -n -w CRATE_NAME -- crates` → a const plus a pin test in every crate. mantis-selfplay/src/lib.rs:23 reads mantis_search::CRATE_NAME.
+- mantis_encoding is used only by lib.rs's test and 3 tests/*.rs.
+- This is a workspace-wide pattern, so it is lane B.
+
+S-A-RUST-1-17 — CONFIRMED:
+- Probe: the orphan `//! fields; the algorithmic wins are all present.` was deleted → −1, and green (the same probe run as -01).
+- `wc -l` of registry.toml → 120, so the bench's `registry.toml:160-190` cannot exist. The reword should also cite the whole path crates/mantis-encoding/src/registry.toml (CLAUDE.md map rule).
+- Gate 14: comment_lint.py measures `.rs`. The comment measure only falls, so tools/ci_gates/comment_length_floor.txt MAY be lowered and never has to rise.
+- The selection.rs doc-misplacement item was not re-derived.
+
+S-A-RUST-1-18 — CONFIRMED:
+- `git grep -n "docs/design/measurements/"` → r153_target_mass.rs:6 and r153_leg2:7. Only docs/design/archive/measurements exists.
+- `git grep -c "records.rs:468-479"` → 1 each in r153_target_mass.rs, r153_leg2, target_export_stage1.rs.
+
+DEFECT select_leaves_forced — AMENDED (reach):
+- The body stores `Some(child)` unchecked, and the doc is self-contradictory ("cannot be returned here … takes the same validation"). So the latent contract defect is CONFIRMED.
+- The scout's reach claim is wrong. The bridge pymethod (bridge mcts.rs `select_leaves_forced`) pre-validates each child through `set_forced_root_child` and raises ValueError before descending. The only other caller, search_drive.rs:252, passes `MctxRootState::round_batch` output, which is derived from the root's own children.
+- No live path reaches it today. The hazard is the unchecked `pub` fn itself.
+
+DEFECT sample_dirichlet — CONFIRMED:
+- dirichlet.rs:21 `Gamma::new(..).expect(..)` has production caller search_drive.rs:465. In Rust, alpha is guarded only by `debug_assert!`.
+- The practical reach is low: the Python schema validates `dirichlet_alpha: float = Field(gt=0)` (config/schema/selfplay.py).
+
+DEFECT non_snake_case — CONFIRMED: probe cargo check → mcts/tests.rs:1403 and :1508 are the only mantis-search warnings.
+
+### Missed by the scout (optional, max 5)
+NEW-1 | SIMPLIFY | B | crates/mantis-search/src/tactics/mod.rs::{pub mod ordering, search, tt} | narrowing all three to pub(crate) compiled workspace --all-targets with 0 errors (exploratory probe), so no cross-crate user exists | Δ 0
+NEW-2 | DOC | — | scratchpad CALLERS.md §9 (not a repo file) | it attributes search_kind_conformance.rs's read of the METHOD `MCTSTree::omitted_prior_stats` to the free fn `mantis_search::omitted_prior_stats` | dispatcher index fix only
+
+### Tally: raised 18 | confirmed 15 | amended 3 (-07, -10, -15) | refuted 0 | pending 0 | architect 0 (one question folded into -03/-04) — defects: 3 raised, 2 confirmed, 1 amended (reach)
