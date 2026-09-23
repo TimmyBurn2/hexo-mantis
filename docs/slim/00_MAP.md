@@ -706,3 +706,18 @@ Path-string consumers:
 - No pre-commit config; no other workflow than .github/workflows/ci.yml.
 - `__all__` re-exports: 91 src files carry `__all__`; a symbol may be live only via a package re-export (grep the bare name, not the module path). Tests pinning export sets: tests/encoding/test_no_dead_resolver_export.py, tests/train/test_no_phantom_seam_member.py, tests/config/test_config_discovery_authority.py, tests/model/conformance/test_arch_reachability_and_graves.py (graves = names that must stay ABSENT).
 Per-tool citation counts (file-level `git grep -l -F <basename>`; docs/tests/code): audit_bootstrap_corpus 2/2/0 · bench_server 10/1/0 · mirror_pull 4/2/0 · pytest_step_summary 0/0/ci.yml only · hardcode_scan 0/1/2(src encoding audit) · gen_mctx_parity_fixtures 0/1/2(crates) · select_balanced_book 0/1/2 · probe1.py 4/0(loaded as package)/2 · position_analyzer 2/0/Makefile · all ci_gates/*.py have a run_all.sh or lint_gate.sh/test_count_gate.sh caller except preflight_mint_parent.py (loaded by preflight_mint.py) and pytest_step_summary.py (ci.yml only).
+
+## 5. Corrections to §3/§4 found by scouts and reviewers (the tables above are left as the map agents wrote them)
+
+- §4 (PyO3 exports): `crates/mantis-search/tests/search_kind_conformance.rs` calls the METHOD
+  `tree.omitted_prior_stats()`, not the free function (S-A-RUST-1 review).
+- §4 (PyO3 exports): `SelfPlayRunner.max_sims_per_search` has no reader in src/ or tools/, only
+  tests/bridge/test_runner_derived_means.py (S-A-TESTS-5).
+- §3 PZ-6 names a CARD in-source marker that no longer exists in the tree (S-A-DOCS-1); PZ-6 also says "the 28
+  floors" — tools/bench_floors.toml has 23 `[floor.<bench_id>]` tables (S-A-DOCS-4 review).
+- §3 PZ-3 (frozen) omits tests/tools/test_preflight_mint.py and tests/tools/test_preflight_mint_process.py, which
+  R310 names as frozen (S-A-TESTS-3 review).
+- §3 PZ-2: R321's adopted design doc `plan/SEAM_V1_DESIGN.md` was never tracked; "own scope" in S-L-SEAM is read from
+  R321's text and PZ.md (map agent + S-L-SEAM).
+- §3 globs protect `tools/ci_gates/**` and `tools/config_templates/**` whole; PZ's stated ground names only the ratchet
+  floor files. Whether to narrow the glob is S-A-TOOLS-1 review NEW-2 (ARCHITECT).
