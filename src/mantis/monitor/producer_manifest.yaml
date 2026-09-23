@@ -1,4 +1,4 @@
-# Seam-7 producer manifest (contract: docs/contracts/event_manifest.md, v1).
+# Seam-7 producer manifest (contract: docs/contracts/event_manifest.md).
 #
 # ONE row per HEADLESS gate/monitor input. Display panels do NOT exist here — the old
 # `monitoring/dashboard_manifest.yaml` panel half died with the dashboards; what survives

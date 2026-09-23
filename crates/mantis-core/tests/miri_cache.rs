@@ -109,7 +109,7 @@ fn miri_nested_shared_borrows() {
         }
         g2
     };
-    // g1's borrow has ended at the block; g2, which borrows the board rather than g1, still reads.
+    // The ptr::eq above is the proof both borrows alias the one cache; g2 outlives g1's block.
     assert_eq!(g2.len(), one_stone_legal_count(DEFAULT_LEGAL_MOVE_RADIUS));
 }
 

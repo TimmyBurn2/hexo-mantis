@@ -2,7 +2,7 @@
 
 - version: v3
 - owner: `mantis.monitor` (`manifest.py` + `producer_manifest.yaml`)
-- status: v1 — filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
+- status: v3 — first filled by the run-safety subsystem port (WP13-A); the eval-pipeline rows
   (`eval_round` heartbeat, `eval_round_wall`/`eval_broken`) landed at WP11-A. R362(c)
   (2026-09-19) DELETED the sealbot rung and its consumers: the `sealbot_wr_warn` row, the
   `sealbot_wr_gate_skipped` / `sealbot_wr_series_restarted` / `eval_channel_health` /

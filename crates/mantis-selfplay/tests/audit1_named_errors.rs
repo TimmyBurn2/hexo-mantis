@@ -114,8 +114,7 @@ fn a_zero_or_negative_dirichlet_alpha_is_refused_when_the_noise_is_armed() {
 // F-38: the buffer constructor
 
 #[test]
-#[allow(non_snake_case)] // the name is cited verbatim by docs/slim/S-A-RUST-2.md
-fn an_unknown_encoding_is_an_ERR_naming_the_registered_set() {
+fn an_unknown_encoding_is_an_err_naming_the_registered_set() {
     let err = HexgBuffer::new(8, "nope", 64)
         .err()
         .expect("'nope' is not registered");
