@@ -233,14 +233,7 @@ class TacticalSolver:
 # InferenceBatcher (the fused-model NN face over the graph queue)
 # --------------------------------------------------------------------------- #
 class InferenceBatcher:
-    def __init__(
-        self,
-        encoding_spec: RegistrySpec | None = None,
-        feature_len: int | None = None,
-        policy_len: int | None = None,
-        pool_size: int | None = None,
-        max_in_flight: int = 0,
-    ) -> None: ...
+    def __init__(self, encoding_spec: RegistrySpec, max_in_flight: int = 0) -> None: ...
     @property
     def graph_max_in_flight(self) -> int: ...
     @property

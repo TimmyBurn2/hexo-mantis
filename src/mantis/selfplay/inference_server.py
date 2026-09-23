@@ -432,10 +432,7 @@ class InferenceServer(threading.Thread):
             self._feature_len = wire_channels * board_size * board_size
             self._shape = (wire_channels, board_size, board_size)
 
-            self._batcher = batcher or InferenceBatcher(
-                feature_len=self._feature_len,
-                policy_len=self._policy_len,
-            )
+            self._batcher = batcher or InferenceBatcher(encoding_spec=self.encoding_spec)
             self._stop_event = threading.Event()
             self._weights_lock = threading.Lock()
             self._forward_count = 0

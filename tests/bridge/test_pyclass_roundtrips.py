@@ -63,7 +63,7 @@ def test_mcts_and_inference_batcher_construct():
     """Smoke: both remain constructible (depth coverage in O20)."""
     assert _engine.MCTSTree().root_visits() == 0
     spec = _engine.RegistrySpec.from_registry("gnn_axis_v1")
-    ib = _engine.InferenceBatcher(feature_len=0, policy_len=spec.policy_stride)
+    ib = _engine.InferenceBatcher(encoding_spec=spec)
     assert ib.policy_len_py == spec.policy_stride
     assert ib.representation_py == "graph"
     ib.close()

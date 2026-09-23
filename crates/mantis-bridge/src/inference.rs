@@ -149,7 +149,6 @@ fn decrement_pending(counter: &AtomicUsize, by: usize) {
 pub struct PyInferenceBatcher {
     graph: GraphQueue,
     policy_len: usize,
-    is_graph: bool,
     representation: &'static str,
     graph_win_length: u8,
     graph_radius: u16,
@@ -169,7 +168,6 @@ impl PyInferenceBatcher {
     fn from_parts(
         graph: GraphQueue,
         policy_len: usize,
-        is_graph: bool,
         representation: &'static str,
         graph_win_length: u8,
         graph_radius: u16,
@@ -180,7 +178,6 @@ impl PyInferenceBatcher {
         PyInferenceBatcher {
             graph,
             policy_len,
-            is_graph,
             representation,
             graph_win_length,
             graph_radius,
@@ -200,12 +197,10 @@ impl PyInferenceBatcher {
         graph: GraphQueue,
         runner: Arc<SelfPlayRunner>,
     ) -> Self {
-        let is_graph = spec.is_graph();
         let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
         Self::from_parts(
             graph,
             spec.policy_stride(),
-            is_graph,
             spec.representation.as_str(),
             win_length,
             radius,
@@ -215,20 +210,10 @@ impl PyInferenceBatcher {
         )
     }
 
-    /// Graph seam guard: a grid batcher raises `RepresentationMismatch`. The ONE place
-    /// `in_flight_graphs` is locked — no caller may re-introduce a bare `.lock().expect(...)`.
+    /// The ONE place `in_flight_graphs` is locked — no caller may re-introduce a bare
+    /// `.lock().expect(...)`.
     fn lock_in_flight(&self) -> MutexGuard<'_, HashMap<u64, InFlightGraph>> {
         lock_or_recover(&self.in_flight_graphs, &self.lock_recoveries)
-    }
-
-    fn require_graph(&self) -> PyResult<()> {
-        if !self.is_graph {
-            return Err(PyValueError::new_err(
-                "RepresentationMismatch: graph seam method called on a grid InferenceBatcher \
-                 (construct with a representation=\"graph\" encoding spec)",
-            ));
-        }
-        Ok(())
     }
 
     /// Drop the in-flight metadata for `ids` and wake+fail their still-pending graph waiters.
@@ -243,67 +228,39 @@ impl PyInferenceBatcher {
     }
 }
 
-/// Resolve the graph build params from a spec: a graph spec `.expect`s its `Some` fields, since
-/// a missing one is a registry desync, and a grid spec returns the inert `(0, 0, 0, 1)`.
+/// Resolve the graph build params from a spec; a missing `Some` field is a registry desync.
 fn graph_params(spec: &'static RegistrySpec) -> (u8, u16, i32, u32) {
-    if spec.is_graph() {
-        (
-            spec.win_length
-                .expect("validate guarantees win_length for a graph spec") as u8,
-            spec.graph_radius
-                .expect("validate guarantees graph_radius for a graph spec") as u16,
-            spec.trunk_size as i32,
-            spec.contract_version
-                .expect("validate guarantees contract_version for a graph spec"),
-        )
-    } else {
-        (0, 0, 0, 1)
-    }
+    (
+        spec.win_length
+            .expect("validate guarantees win_length for a graph spec") as u8,
+        spec.graph_radius
+            .expect("validate guarantees graph_radius for a graph spec") as u16,
+        spec.trunk_size as i32,
+        spec.contract_version
+            .expect("validate guarantees contract_version for a graph spec"),
+    )
 }
 
 #[pymethods]
 impl PyInferenceBatcher {
-    /// Construct a batcher. Width precedence: explicit kwargs > `encoding_spec` derivation >
-    /// error; `pool_size` is accepted for signature compat but inert. `max_in_flight` declares
-    /// the most graphs callers can ever have queued at once and the collector's saturation
-    /// threshold derives from it — `0` is UNDECLARED, not a supply of zero.
+    /// Construct a batcher over `encoding_spec`. `max_in_flight` declares the most graphs
+    /// callers can ever have queued at once and the collector's saturation threshold derives
+    /// from it — `0` is UNDECLARED, not a supply of zero.
     #[new]
-    #[pyo3(signature = (encoding_spec = None, feature_len = None, policy_len = None, pool_size = None, max_in_flight = 0))]
-    pub fn new(
-        encoding_spec: Option<PyRegistrySpec>,
-        feature_len: Option<usize>,
-        policy_len: Option<usize>,
-        pool_size: Option<usize>,
-        max_in_flight: usize,
-    ) -> PyResult<Self> {
-        let _ = pool_size; // no feature-buffer pool over the WP6 queues (dropped).
-        let spec_static: Option<&'static RegistrySpec> =
-            encoding_spec.as_ref().map(PyRegistrySpec::inner);
-        let policy_len = match (feature_len, policy_len, spec_static) {
-            (Some(_), Some(p), _) | (_, Some(p), Some(_)) => p,
-            (_, None, Some(spec)) => spec.policy_stride(),
-            (None, _, None) | (_, None, None) => {
-                return Err(PyValueError::new_err(
-                    "InferenceBatcher: encoding_spec required when feature_len/policy_len omitted \
-                     (the legacy v6 fallback arms are retired)",
-                ));
-            }
-        };
-        let representation = spec_static.map_or("graph", |s| s.representation.as_str());
-        let is_graph = spec_static.is_some_and(|s| s.is_graph());
-        let (win_length, radius, trunk_size, contract_version) =
-            spec_static.map_or((0, 0, 0, 1), graph_params);
-        Ok(Self::from_parts(
+    #[pyo3(signature = (encoding_spec, max_in_flight = 0))]
+    pub fn new(encoding_spec: PyRegistrySpec, max_in_flight: usize) -> Self {
+        let spec = encoding_spec.inner();
+        let (win_length, radius, trunk_size, contract_version) = graph_params(spec);
+        Self::from_parts(
             GraphQueue::with_contract_version_and_supply(contract_version, max_in_flight),
-            policy_len,
-            is_graph,
-            representation,
+            spec.policy_stride(),
+            spec.representation.as_str(),
             win_length,
             radius,
             trunk_size,
             contract_version,
             ModelVersionSrc::Own(Arc::new(AtomicU64::new(0))),
-        ))
+        )
     }
 
     /// Times the in-flight-graph lock was recovered from poisoning; STAYS ZERO in a healthy run.
@@ -352,7 +309,6 @@ impl PyInferenceBatcher {
         current_player: i64,
         moves_remaining: i64,
     ) -> PyResult<()> {
-        self.require_graph()?;
         build_leaf_graph(
             &stones,
             current_player,
@@ -373,7 +329,6 @@ impl PyInferenceBatcher {
     }
 
     pub fn spawn_mock_graph_games(&self, n_games: usize) -> PyResult<()> {
-        self.require_graph()?;
         let (win_length, radius, trunk_size) = (
             self.graph_win_length,
             self.graph_radius,
@@ -411,7 +366,6 @@ impl PyInferenceBatcher {
         batch_size: usize,
         max_wait_ms: u64,
     ) -> PyResult<(Vec<u64>, PyGraphWire)> {
-        self.require_graph()?;
         if batch_size == 0 {
             return Err(PyValueError::new_err("batch_size must be > 0"));
         }
@@ -479,7 +433,6 @@ impl PyInferenceBatcher {
         legal_offsets: PyReadonlyArray1<i64>,
         values: PyReadonlyArray1<f32>,
     ) -> PyResult<()> {
-        self.require_graph()?;
         let n = request_ids.len();
         if values.len() != n {
             return Err(PyValueError::new_err(format!(
@@ -558,7 +511,6 @@ impl PyInferenceBatcher {
         request_ids: Vec<u64>,
         error_msg: String,
     ) -> PyResult<()> {
-        self.require_graph()?;
         self.fail_remaining_graph_ids(&request_ids, &error_msg);
         Ok(())
     }
@@ -597,7 +549,6 @@ impl PyInferenceBatcher {
         positions: Vec<(Vec<(i64, i64, i64)>, i64, i64)>,
         n_threads: usize,
     ) -> PyResult<Vec<(Vec<f32>, Vec<((i32, i32), f32)>, f32, (i32, i32))>> {
-        self.require_graph()?;
         let (win_length, radius, trunk_size) = (
             self.graph_win_length,
             self.graph_radius,
@@ -831,14 +782,7 @@ mod tests {
 
     #[test]
     fn seam_survives_a_poisoned_in_flight_lock_and_reports() {
-        let b = PyInferenceBatcher::new(
-            Some(PyRegistrySpec::from_static(gnn_spec())),
-            None,
-            None,
-            None,
-            0,
-        )
-        .expect("graph batcher constructs");
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
         assert_eq!(
             b.lock_recoveries(),
             0,
@@ -883,40 +827,15 @@ mod tests {
     fn a_spec_batcher_derives_its_policy_width_from_the_spec() {
         // The sibling of `graph_batcher_reads_graph_params` on the DERIVED policy width.
         let spec = gnn_spec();
-        let b =
-            PyInferenceBatcher::new(Some(PyRegistrySpec::from_static(spec)), None, None, None, 0)
-                .expect("a graph batcher constructs");
-        assert!(b.is_graph);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(spec), 0);
         assert_eq!(b.representation, "graph");
         assert_eq!(b.policy_len, spec.policy_stride());
         assert_eq!(b.policy_len, 362, "the graph action space is 19*19 + 1");
     }
 
     #[test]
-    fn explicit_lens_without_spec_construct() {
-        // Two DISTINCT widths, neither any registered row's, so a crosswire cannot look plausible.
-        let b = PyInferenceBatcher::new(None, Some(777), Some(362), None, 0)
-            .expect("explicit lens construct");
-        assert_eq!(b.policy_len, 362);
-    }
-
-    #[test]
-    fn no_spec_no_lens_errors() {
-        assert!(PyInferenceBatcher::new(None, None, None, None, 0).is_err());
-        assert!(PyInferenceBatcher::new(None, Some(777), None, None, 0).is_err());
-    }
-
-    #[test]
     fn graph_batcher_reads_graph_params() {
-        let b = PyInferenceBatcher::new(
-            Some(PyRegistrySpec::from_static(gnn_spec())),
-            None,
-            None,
-            None,
-            0,
-        )
-        .expect("graph batcher constructs");
-        assert!(b.is_graph);
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
         assert_eq!(b.representation, "graph");
         // These used to restate the row's own geometry by hand in the test whose subject is
         // that the batcher READS the row, so an r8 row could land with this pin asserting 6.
@@ -935,21 +854,11 @@ mod tests {
 
     #[test]
     fn model_version_own_bump_and_get() {
-        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0).unwrap();
+        let b = PyInferenceBatcher::new(PyRegistrySpec::from_static(gnn_spec()), 0);
         assert_eq!(b.model_version(), 0);
         assert_eq!(b.bump_model_version(), 1);
         assert_eq!(b.bump_model_version(), 2);
         assert_eq!(b.model_version(), 2);
-    }
-
-    #[test]
-    fn a_specless_batcher_rejects_graph_seam_methods() {
-        // Constructed from explicit widths and NO spec, so `is_graph` is false.
-        let b = PyInferenceBatcher::new(None, Some(8), Some(4), None, 0)
-            .expect("explicit widths construct");
-        assert!(b.require_graph().is_err());
-        assert!(b.check_graph_request(vec![(0, 0, 1)], 1, 2).is_err());
-        assert!(b.spawn_mock_graph_games(1).is_err());
     }
 
     /// GraphWire single-read `take()` latch: takeable once, second acquisition raises
