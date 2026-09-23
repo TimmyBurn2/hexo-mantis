@@ -25,8 +25,8 @@ stamped `.ckpt` carries `config`, `metadata.arch`, `metadata.encoding_name`, `st
 helpers (`resolve_fused_graph_caps`, `resolve_inference_batching`, `resolve_leaf_build_threads`,
 `resolve_deploy_search_kind`) take a plain mapping, and `stamped_checkpoints(dir)`
 (`src/mantis/train/bundle_receipts.py`) already walks a directory for stamped names. `Board`
-exposes the tactical oracle (`winning_moves`, `threat_moves`, `forced_win_move(depth)`,
-`get_threats`, `find_winning_line`, `is_legal`) and `mantis.diagnostics.tactics.analyze` gives
+exposes the tactical oracle (`winning_moves`, `forced_win_move(depth)`,
+`find_winning_line`, `is_legal`; `threat_moves`/`get_threats` since removed, unused) and `mantis.diagnostics.tactics.analyze` gives
 the census vocabulary (`RowTactics.forced(k)` → `win | block | lost1 | quiet` with the cells).
 
 **The board is drawn.** `tools/viewer/html.py` carries the hex SVG (axial → pointy-top), stones
@@ -94,7 +94,7 @@ every edit, the search lands seconds later — and the page shows the search as 
    all-zero visits; under gumbel it is a seeded Gumbel SAMPLE. The raw argmax is `max(prior)`
    over `get_root_children_info()` rows, always.
 6. **Player numbering**: the engine's `current_player`, `winner()`, `get_stones()` and
-   `winning_moves(player)` use 1 / −1; `get_threats()` uses 0 / 1; the viewer's `owner()` 0 / 1.
+   `winning_moves(player)` use 1 / −1; the viewer's `owner()` 0 / 1.
    The record uses the game record's own strings `"p1"` / `"p2"` and ONE mapping table.
 7. **Gumbel's draw** is seeded from `gumbel_seed` mixed with the player's game and move
    counters, so only a FRESH player repeats an answer. A search builds a fresh player.

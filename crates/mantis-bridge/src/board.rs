@@ -1,5 +1,5 @@
-// Exceeds the 300-line soft cap (R8): the PyBoard surface plus the inlined threat-viewer
-// scanner are one auditable unit; splitting them adds a module file for one private helper.
+// Exceeds the 300-line soft cap (R8): the PyBoard pymethod surface ports as one auditable unit
+// with its tests; splitting a pyclass's methods across files scatters the Python face.
 //! Python-visible Board wrapper over `mantis_core::Board`, which carries plain geometry and NO
 //! encoding ref — so this wrapper HOLDS the encoding binding and `with_encoding_name` sets it.
 //! `Board` is `Send + !Sync`; single-thread Python ownership is the bridge's synchronization.
@@ -95,12 +95,6 @@ impl PyBoard {
         self.inner.find_winning_line()
     }
 
-    /// CF-1 terminal value from the side-to-move's perspective at a `check_win()` leaf: `+1.0`
-    /// when `moves_remaining == 1` (winner still to move), `-1.0` when it is 2 (flipped to loser).
-    pub fn terminal_value_to_move(&self) -> f32 {
-        self.inner.terminal_value_to_move()
-    }
-
     // Forcing-move primitives over the tested win-detection logic. `player`: 1 = P1, -1 = P2.
 
     /// Count empty legal cells completing a 6 for `player`; `>= 3` is a forced win next turn.
@@ -124,12 +118,6 @@ impl PyBoard {
         Ok(self
             .inner
             .has_player_long_run(player_from_i8(player)?, min_len))
-    }
-
-    /// Cells that, if `player` plays them, create ≥1 immediate winning move. In-engine, so a
-    /// Python caller pays ONE FFI hop.
-    pub fn threat_moves(&self, player: i8) -> PyResult<Vec<(i32, i32)>> {
-        Ok(self.inner.threat_moves(player_from_i8(player)?))
     }
 
     /// The immediate move for the SIDE TO MOVE that proves a within-turn forced win, or None.
@@ -184,18 +172,6 @@ impl PyBoard {
         self.inner.ply.index()
     }
 
-    /// Override the per-Board legal-move radius cap; `ValueError` on an encoding-bound board.
-    pub fn set_legal_move_radius(&mut self, radius: i32) -> PyResult<()> {
-        if self.encoding.is_some() {
-            return Err(PyValueError::new_err(
-                "set_legal_move_radius after with_encoding_name is not supported; \
-                 use registry (Board.with_encoding_name) instead of overriding post-construction",
-            ));
-        }
-        self.inner.set_legal_move_radius(radius);
-        Ok(())
-    }
-
     pub fn legal_move_radius(&self) -> i32 {
         self.inner.legal_move_radius()
     }
@@ -215,23 +191,6 @@ impl PyBoard {
     #[getter]
     pub fn size(&self) -> usize {
         self.encoding.map_or(BOARD_SIZE, |s| s.board_size)
-    }
-
-    /// Threat cells as (q, r, level, player) tuples — EMPTY cells within threatening windows.
-    pub fn get_threats(&self) -> Vec<(i32, i32, u8, u8)> {
-        let mut stones = std::collections::HashMap::new();
-        for (&(q, r), &cell) in self.inner.cells_iter() {
-            let player = match cell {
-                Cell::P1 => 0u8,
-                Cell::P2 => 1u8,
-                Cell::Empty => continue,
-            };
-            stones.insert((q, r), player);
-        }
-        threats::get_threats(&stones)
-            .into_iter()
-            .map(|t| (t.q, t.r, t.level, t.player))
-            .collect()
     }
 
     /// Returns a list of all stones on the board as (q, r, player).
@@ -317,304 +276,6 @@ impl PyBoard {
     }
 }
 
-// Threat-viewer scanner (inlined; dropped from mantis-core): scans all three hex axes for
-// length-6 windows where one player has N >= 3 stones and the rest are empty. Viewer only.
-mod threats {
-    use std::collections::HashMap;
-
-    // The window length IS the game's win length and the axis set IS the board's, so a literal
-    // here would drift from the rule `Board::player_wins` enforces.
-    use mantis_core::board::{HEX_AXES, WIN_LENGTH as WIN_LEN};
-
-    /// Endpoint-bounded line for `scan_line` (axes (1,0) and (0,1)).
-    #[derive(Clone, Copy, Debug)]
-    struct ScanLineParams {
-        start: (i32, i32),
-        end: (i32, i32),
-        axis: (i32, i32),
-    }
-
-    /// Bbox-walking line for `scan_line_general` (axis (1,-1)).
-    #[derive(Clone, Copy, Debug)]
-    struct ScanLineGeneralParams {
-        start: (i32, i32),
-        axis: (i32, i32),
-        bbox_min: (i32, i32),
-        bbox_max: (i32, i32),
-    }
-
-    /// A single threat cell: an empty cell within a threatening window.
-    #[derive(Debug, Clone, Copy)]
-    pub(super) struct ThreatCell {
-        pub q: i32,
-        pub r: i32,
-        pub level: u8,  // 3=warning, 4=forced, 5=critical
-        pub player: u8, // 0 or 1
-    }
-
-    /// Scan the board for threat cells. `stones` maps (q, r) -> player (0 or 1).
-    pub(super) fn get_threats<S: ::std::hash::BuildHasher>(
-        stones: &HashMap<(i32, i32), u8, S>,
-    ) -> Vec<ThreatCell> {
-        if stones.is_empty() {
-            return Vec::new();
-        }
-
-        let mut min_q = i32::MAX;
-        let mut max_q = i32::MIN;
-        let mut min_r = i32::MAX;
-        let mut max_r = i32::MIN;
-        for &(q, r) in stones.keys() {
-            if q < min_q {
-                min_q = q;
-            }
-            if q > max_q {
-                max_q = q;
-            }
-            if r < min_r {
-                min_r = r;
-            }
-            if r > max_r {
-                max_r = r;
-            }
-        }
-        let margin = WIN_LEN as i32;
-        min_q -= margin;
-        max_q += margin;
-        min_r -= margin;
-        max_r += margin;
-
-        let mut best: HashMap<(i32, i32, u8), u8> = HashMap::new();
-
-        for &(dq, dr) in &HEX_AXES {
-            if dq == 1 && dr == 0 {
-                for r in min_r..=max_r {
-                    scan_line(
-                        stones,
-                        &mut best,
-                        ScanLineParams {
-                            start: (min_q, r),
-                            end: (max_q, r),
-                            axis: (dq, dr),
-                        },
-                    );
-                }
-            } else if dq == 0 && dr == 1 {
-                for q in min_q..=max_q {
-                    scan_line(
-                        stones,
-                        &mut best,
-                        ScanLineParams {
-                            start: (q, min_r),
-                            end: (q, max_r),
-                            axis: (dq, dr),
-                        },
-                    );
-                }
-            } else {
-                // (1, -1): lines indexed by s = q+r, with q ranging and r = s - q.
-                let min_s = min_q + min_r;
-                let max_s = max_q + max_r;
-                for s in min_s..=max_s {
-                    let start_q = min_q;
-                    let start_r = s - start_q;
-                    scan_line_general(
-                        stones,
-                        &mut best,
-                        ScanLineGeneralParams {
-                            start: (start_q, start_r),
-                            axis: (dq, dr),
-                            bbox_min: (min_q, min_r),
-                            bbox_max: (max_q, max_r),
-                        },
-                    );
-                }
-            }
-        }
-
-        best.into_iter()
-            .map(|((q, r, player), level)| ThreatCell {
-                q,
-                r,
-                level,
-                player,
-            })
-            .collect()
-    }
-
-    fn scan_line<S: ::std::hash::BuildHasher>(
-        stones: &HashMap<(i32, i32), u8, S>,
-        best: &mut HashMap<(i32, i32, u8), u8>,
-        params: ScanLineParams,
-    ) {
-        let ScanLineParams {
-            start: (start_q, start_r),
-            end: (end_q, end_r),
-            axis: (dq, dr),
-        } = params;
-
-        let (line_start_q, line_start_r, steps) = if dq == 1 && dr == 0 {
-            (start_q, start_r, (end_q - start_q + 1) as usize)
-        } else {
-            (start_q, start_r, (end_r - start_r + 1) as usize)
-        };
-
-        if steps < WIN_LEN {
-            return;
-        }
-
-        for w in 0..=(steps - WIN_LEN) {
-            let wq = line_start_q + (w as i32) * dq;
-            let wr = line_start_r + (w as i32) * dr;
-            check_window(stones, best, wq, wr, dq, dr);
-        }
-    }
-
-    fn scan_line_general<S: ::std::hash::BuildHasher>(
-        stones: &HashMap<(i32, i32), u8, S>,
-        best: &mut HashMap<(i32, i32, u8), u8>,
-        params: ScanLineGeneralParams,
-    ) {
-        let ScanLineGeneralParams {
-            start: (start_q, start_r),
-            axis: (dq, dr),
-            bbox_min: (min_q, min_r),
-            bbox_max: (max_q, max_r),
-        } = params;
-
-        let mut steps = 0usize;
-        loop {
-            let q = start_q + (steps as i32) * dq;
-            let r = start_r + (steps as i32) * dr;
-            if q < min_q || q > max_q || r < min_r || r > max_r {
-                break;
-            }
-            steps += 1;
-        }
-
-        if steps < WIN_LEN {
-            return;
-        }
-
-        for w in 0..=(steps - WIN_LEN) {
-            let wq = start_q + (w as i32) * dq;
-            let wr = start_r + (w as i32) * dr;
-            check_window(stones, best, wq, wr, dq, dr);
-        }
-    }
-
-    fn check_window<S: ::std::hash::BuildHasher>(
-        stones: &HashMap<(i32, i32), u8, S>,
-        best: &mut HashMap<(i32, i32, u8), u8>,
-        wq: i32,
-        wr: i32,
-        dq: i32,
-        dr: i32,
-    ) {
-        let mut p0_count = 0u8;
-        let mut p1_count = 0u8;
-        let mut empties: [(i32, i32); WIN_LEN] = [(0, 0); WIN_LEN];
-        let mut n_empties = 0usize;
-
-        for i in 0..WIN_LEN {
-            let cq = wq + (i as i32) * dq;
-            let cr = wr + (i as i32) * dr;
-            match stones.get(&(cq, cr)) {
-                Some(&0) => p0_count += 1,
-                Some(&1) => p1_count += 1,
-                None => {
-                    empties[n_empties] = (cq, cr);
-                    n_empties += 1;
-                }
-                _ => {}
-            }
-        }
-
-        if p1_count == 0 && p0_count >= 3 {
-            let level = p0_count; // 3=warning, 4=forced, 5=critical
-            for &(eq, er) in empties.iter().take(n_empties) {
-                let entry = best.entry((eq, er, 0)).or_insert(0);
-                if level > *entry {
-                    *entry = level;
-                }
-            }
-        }
-
-        if p0_count == 0 && p1_count >= 3 {
-            let level = p1_count;
-            for &(eq, er) in empties.iter().take(n_empties) {
-                let entry = best.entry((eq, er, 1)).or_insert(0);
-                if level > *entry {
-                    *entry = level;
-                }
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn empty_board_no_threats() {
-            let stones: HashMap<(i32, i32), u8> = HashMap::new();
-            assert!(get_threats(&stones).is_empty());
-        }
-
-        #[test]
-        fn threat_forced_two_gaps() {
-            // Line: O O O _ O along axis (1,0) at r=0 — 4 P1 stones at q=0,1,2,4.
-            let mut stones = HashMap::new();
-            stones.insert((0, 0), 1u8);
-            stones.insert((1, 0), 1u8);
-            stones.insert((2, 0), 1u8);
-            stones.insert((4, 0), 1u8);
-
-            let threats = get_threats(&stones);
-            let forced: Vec<_> = threats
-                .iter()
-                .filter(|t| t.level == 4 && t.player == 1)
-                .collect();
-            assert!(forced.iter().any(|t| t.q == 3 && t.r == 0));
-            assert!(forced.iter().any(|t| t.q == 5 && t.r == 0));
-            assert!(!forced.iter().any(|t| t.q == 0 && t.r == 0));
-        }
-
-        #[test]
-        fn critical_threat_five_in_row() {
-            let mut stones = HashMap::new();
-            for q in 0..5 {
-                stones.insert((q, 0), 0u8);
-            }
-            let threats = get_threats(&stones);
-            let critical: Vec<_> = threats
-                .iter()
-                .filter(|t| t.level == 5 && t.player == 0)
-                .collect();
-            assert!(critical.iter().any(|t| t.q == 5 && t.r == 0));
-            assert!(critical.iter().any(|t| t.q == -1 && t.r == 0));
-        }
-
-        #[test]
-        fn nw_axis_threats() {
-            // 4 stones along NW axis (1,-1): (0,0),(1,-1),(2,-2),(3,-3) for player 0.
-            let mut stones = HashMap::new();
-            for i in 0..4 {
-                stones.insert((i, -i), 0u8);
-            }
-            let threats = get_threats(&stones);
-            let forced: Vec<_> = threats
-                .iter()
-                .filter(|t| t.level == 4 && t.player == 0)
-                .collect();
-            assert!(!forced.is_empty());
-            for f in &forced {
-                assert!(!stones.contains_key(&(f.q, f.r)));
-            }
-        }
-    }
-}
-
 /// Register the `Board` pyclass into `_engine`. Called by Slice ASM.
 pub(crate) fn register(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyBoard>()?;
@@ -681,18 +342,6 @@ mod tests {
     }
 
     #[test]
-    fn radius_guard_fires_when_bound() {
-        // The radius override is the guard that remains, and an encoding-bound board refuses it.
-        let mut b = PyBoard::with_encoding_name("gnn_axis_v1").expect("registered");
-        assert!(b.set_legal_move_radius(4).is_err());
-        let mut free = PyBoard::new();
-        assert!(
-            free.set_legal_move_radius(4).is_ok(),
-            "the guard is about the BINDING, not the value — an unbound board still accepts it"
-        );
-    }
-
-    #[test]
     fn apply_move_and_win_primitives() {
         let mut b = PyBoard::new();
         assert!(b.apply_move(0, 0).is_ok());
@@ -723,29 +372,5 @@ mod tests {
         let b = PyBoard::from_inner(inner);
         assert!(b.encoding.is_none());
         assert_eq!(b.inner_ref().moves_remaining, 1);
-    }
-
-    #[test]
-    fn get_threats_surfaces_open_line() {
-        // A clean P1 3-in-a-row along E, with P2 fillers far off the line.
-        let mut b = PyBoard::new();
-        b.apply_move(0, 0).unwrap(); // P1 opening single -> P2 turn (mr 2)
-        b.apply_move(0, 12).unwrap(); // P2 filler
-        b.apply_move(1, 12).unwrap(); // P2 filler -> P1 turn (mr 2)
-        b.apply_move(1, 0).unwrap(); // P1
-        b.apply_move(2, 0).unwrap(); // P1 -> P1 now has (0,0),(1,0),(2,0)
-                                     // P1 is player id 0; an open-window 3-in-a-row is level 3+.
-        let empty = PyBoard::new();
-        assert!(empty.get_threats().is_empty(), "empty board has no threats");
-        let threats = b.get_threats();
-        assert!(
-            threats
-                .iter()
-                .any(|&(_, _, level, player)| level >= 3 && player == 0),
-            "expected a P1 (id 0) warning/forced threat, got {threats:?}"
-        );
-        for &(q, r, _, _) in &threats {
-            assert_eq!(b.get(q, r), 0, "threat cell ({q},{r}) must be empty");
-        }
     }
 }
