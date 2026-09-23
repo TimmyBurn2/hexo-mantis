@@ -19,6 +19,7 @@ import hashlib
 import json
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -64,6 +65,7 @@ def test_unknown_book_id_is_a_named_error(tmp_path):
 
 
 def test_book_v1_reproducible_from_minter_args(tmp_path):
+    """The minter, run twice on book_v1's recorded args, writes the packaged book byte for byte."""
     out_a = tmp_path / "a.json"
     out_b = tmp_path / "b.json"
     args = ["--seed", "20260625", "--plies", "4", "--n", "512"]
@@ -80,6 +82,10 @@ def test_book_v1_reproducible_from_minter_args(tmp_path):
     assert out_a.read_bytes() == out_b.read_bytes(), (
         "identical --seed/--plies/--n/--out args must reproduce byte-identical output"
     )
+    with (_PACKAGED_BOOKS_DIR / "manifest.toml").open("rb") as handle:
+        entry = tomllib.load(handle)["books"][_BOOK_V1_ID]
+    assert out_a.read_bytes() == (_PACKAGED_BOOKS_DIR / entry["file"]).read_bytes()
+    assert hashlib.sha256(out_a.read_bytes()).hexdigest() == entry["sha256"]
 
 
 def test_openings_are_legal_move_sequences():
