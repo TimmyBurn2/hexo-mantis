@@ -24,6 +24,15 @@ def test_the_makefile_dispatches_exactly_the_declared_target_set():
     }
 
 
+
+def test_no_recipe_hard_codes_uv_where_the_makefile_defines_UV():
+    """A literal `uv` in a recipe is unreachable by `make UV=...`."""
+    text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    assert re.search(r"^UV \?= ", text, flags=re.MULTILINE), "the Makefile no longer defines UV"
+    literal = [line for line in text.splitlines()
+               if line.startswith("\t") and re.search(r"(?<![\w$(])uv (run|sync)\b", line)]
+    assert not literal, f"recipe lines hard-code `uv` instead of `$(UV)`: {literal}"
+
 def test_integration_tier_reachable_from_make():
     text = (REPO_ROOT / "Makefile").read_text()
     m = re.search(r"^test\.integration:\n((?:\t.*\n)+)", text, flags=re.MULTILINE)

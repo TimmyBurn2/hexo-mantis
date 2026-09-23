@@ -50,17 +50,17 @@ gates.exit:
 #   make dashboard EVENTS=<run>/events.jsonl OUT=/tmp/run.html [LADDER=<run>/eval_ladder_state.json]
 #                  [EXTERNAL="<run>/checkpoints <parent-run>/checkpoints"]  # strix sidecars (R356(d))
 dashboard:
-	UV_NO_SYNC=1 uv run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
+	UV_NO_SYNC=1 $(UV) run python tools/run_dashboard.py --events "$(EVENTS)" --out "$(OUT)" \
 	  $(if $(LADDER),--ladder-state "$(LADDER)",) $(foreach d,$(EXTERNAL),--external-points "$(d)")
 
 #   make viewer RUNS="run6=<mirror>/run6/logs/games shakedown7=<mirror>/shakedown7/logs/games" OUT=<dir>
 viewer:
-	UV_NO_SYNC=1 uv run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
+	UV_NO_SYNC=1 $(UV) run python tools/game_viewer.py $(foreach r,$(RUNS),--run "$(r)") --out "$(OUT)" --title "$(or $(TITLE),mantis game viewer)"
 
 #   make analyzer CHECKPOINTS="<mirror>/run8/checkpoints <mirror>/run7/checkpoints" [STRIX=1] [PORT=8766] [DEVICE=cuda] [THREADS=8]
 #   loopback only by default (ANALYZER-1); open http://127.0.0.1:$(PORT)/ or tunnel it with ssh -L
 analyzer:
-	UV_NO_SYNC=1 uv run python tools/position_analyzer.py serve $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(DEVICE),--device "$(DEVICE)",) $(if $(THREADS),--threads "$(THREADS)",)
+	UV_NO_SYNC=1 $(UV) run python tools/position_analyzer.py serve $(foreach d,$(CHECKPOINTS),--checkpoints "$(d)") $(if $(STRIX),--strix,) $(if $(PORT),--port "$(PORT)",) $(if $(DEVICE),--device "$(DEVICE)",) $(if $(THREADS),--threads "$(THREADS)",)
 
 bench:
 	cargo bench -p mantis-core --bench smoke_bench --locked -- --warm-up-time 0.5 --measurement-time 1
