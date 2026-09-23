@@ -205,3 +205,89 @@ none
 - tools/ci_gates/preflight_mint.py and preflight_mint_parent.py were read in part: the preflight_mint.py docstring, the re-export block, the audit/preflight/main paths, and the parent's first 200 lines. The rest was checked only by the AST symbol census (no unreferenced top-level name) and the re-export census, which tests/tools/test_preflight_parent_census.py pins. Frozen-oracle context: many internals are asserted by byte-frozen tests, so slimming there is lane C by default.
 - Gates were not run where they need torch (7, 12, 13), node/pyright (14), cargo (2, 4, 5) or a fresh clone (1). ci.yml was not executed; remote CI is suspended.
 - Whether test_preflight_mint.py is still byte-frozen (03's EXEMPT grounds) cannot be settled from the tree: history is grafted at 46c49d9.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| 01 | CONFIRMED | A | 0 (probe: 2 ins / 2 del) | probe green; bench count 6 (5 non-smoke), 23 floor rows |
+| 02 | CONFIRMED | C | 0 | 3 stale "seven/eight" sites in run_all.sh |
+| 03 | CONFIRMED | C | ≈0 (−11 if gate_01 cite block dropped) | every cite re-resolved independently |
+| 04 | CONFIRMED | C | 0 | docstring vs `_WIDE_FALLBACKS` / full-tree widening / A+M sizing / R7-not-R8 |
+| 05 | CONFIRMED | C | ≈0 | 5 untracked doc names, 0 tracked; `remediation`/`wppre-scratch` absent from origin |
+| 06 | CONFIRMED | C | −3 (orphan) | 4 production configs all mint 1373143/56645 |
+| 07 | CONFIRMED | C | ≤ −367 (upper bound) | outside gate 14's `.py`/`.rs` scope |
+| 08 | CONFIRMED | C | 0 | `target/`, `dist/` unreachable under TOKEN_RE's roots |
+| 09 | CONFIRMED | C | −5 | forwarder; the monkeypatch at test line 137 is inert |
+| 10 | AMENDED | C | −39 (not −40) | R8 header is 3 lines, not 4; docstring mentions need rewording too |
+| 11 | CONFIRMED | C | −31 | ruling-named ("empty-EXEMPT deviation" ratified); file stays >300 lines, keeps header |
+| 12 | CONFIRMED | C | −7 | a `cap` parameter on `_excess` |
+| 13 | CONFIRMED (KEEP) | C | 0 | jscpd 0 clones; the `_justified` pair differs in its comment-lead set |
+| 14 | CONFIRMED | B | −3 | ARCHITECT/operator (workflow file) |
+| 15 | AMENDED → ARCHITECT | C | −258 | deleting it presumes R348(a)'s "until the operator re-enables it" never happens |
+| 16 | AMENDED | C | −17 (not unlocked by 15 alone) | arm 3 also serves any shallow clone that has no dev ref |
+
+### Per-finding notes
+S-A-TOOLS-1-01 — CONFIRMED: `awk` over `[[bench]]` names in crates/*/Cargo.toml -> 6 (smoke, board, build, mcts, graph_build, queue_fuse); `ls crates/*/benches` -> the same 6 files, so there are no auto-discovered extras; `grep -c '^\[floor\.' tools/bench_floors.toml` -> 23. DELETE-PROBE in scratchpad/wt/rev-a-tools-1-01 (the two numbers dropped from the Makefile comment):
+- `import mantis` ok.
+- collect -> "2289 tests collected, 167 errors" (= baseline).
+- tests/test_meta_ci.py + tests/tools/{test_local_gate_runner,test_gate_vacuity,test_tier_census}.py -> 55 passed, 1 failed. The failure is test_the_slow_tier_actually_selects_the_slow_tests, which fails identically at HEAD in the main checkout: torch ModuleNotFoundError in its subprocess collect.
+- gate 10 `check_tracked_refs.py` rc 0.
+- cargo check was skipped: no Rust or Cargo file was touched.
+- diff --stat "1 file changed, 2 insertions(+), 2 deletions(-)".
+- The worktree was removed.
+S-A-TOOLS-1-02 — CONFIRMED: `grep -n -E "\beight\b|\bseven\b" tools/ci_gates/run_all.sh` -> 3 comment lines.
+S-A-TOOLS-1-03 — CONFIRMED. Each cite was re-resolved with its own grep:
+- `MODULE_FNS` sits at test_surface.py 31, and the hex assertion at 75.
+- `fn registry_sha_hex_matches_raw_bytes` is at encoding.rs 300.
+- `def registry_sha_hex` is at crates/…/_engine.pyi 563, and in the unnamed twin src/mantis/_engine.pyi at 564.
+- the registry_gate.sh `registry_sha()` assert is at 36.
+- `RELAUNCH_BUDGET_EXIT_CODE` is at supervise.py 44, and `def maybe_sync` at actor_sync.py 58.
+- `git show 2649e0b -- tests/tools/conftest.py | grep R43` -> "-is an R43 event".
+- `git ls-files` counts: tools/*.py 78, tests/*.py 483, src/*.py 187, crates/*.rs 136; 172 `.py`/`.rs` files are over 300 lines; 1078 tracked files.
+- preflight_mint.py's "F-B1 closure: … into the child block and" is followed directly by "# Ordered AFTER", so the comment really is truncated.
+- `ls configs/` has no run5.
+S-A-TOOLS-1-04 — CONFIRMED: `sed -n 1,16p` against `grep -n "_WIDE_FALLBACKS\|ls-files\|status\[0\] in"` shows the fallback tuple, the full-tree `ls-files` widening, and `status[0] in ("A","M")`.
+S-A-TOOLS-1-05 — CONFIRMED: `grep -c "Main branch" CLAUDE.md` -> 0. `git ls-remote --heads origin` shows neither branch. `git ls-files | grep -c -i` -> 0 for all 5 doc names, and `git grep -l` places each one exactly as the scout says.
+S-A-TOOLS-1-06 — CONFIRMED:
+- `sed -n 150,156p` shows the bot-corpus comment directly above `value_target`, and `git grep -i "bot.?(mix|frac|corpus)" -- src/mantis/config` -> none.
+- registry.toml: gnn_axis_v1 radius 6, gnn_axis_r8 radius 8.
+- `grep -A2 "^  fused_graph_caps:"` on run6/7/8/10 -> all 1373143/56645.
+S-A-TOOLS-1-07 — CONFIRMED: an independent awk run-excess count reproduces the scout's figures. Each bash file comes out +1 because the awk counts the shebang (test_count_gate.sh 94/132, lint_gate.sh 60/80, run_all.sh 45/57). dev.yaml 82/121, ci.yml 34/58 and Makefile 6/23 are exact. comment_lint.py's `in_scope` requires `.py`/`.rs`.
+S-A-TOOLS-1-08 — CONFIRMED: TOKEN_RE's alternation `(?:src|tests|tools|configs|crates|docs|vendor)/` fixes the first path segment, so `token.startswith(("target/","dist/"))` cannot hold. `token_ok` does no rewriting before the whitelist test.
+S-A-TOOLS-1-09 — CONFIRMED: `git grep -n -w find_violations` -> only tests/tools/test_silent_encoding_gate.py 45 and 137. `main()` calls `scan()` directly, so the setattr on 137 is inert (its sibling setattr on `scan` does the work).
+S-A-TOOLS-1-10 — AMENDED:
+- The same six ranges total 36 lines (`sed -n '…' | wc -l`).
+- The R8 header is lines 2–4, which is 3 lines. That gives −39, not −40.
+- Line 2's header and the docstring (lines 21, 29) also name the register and would need rewording.
+- `git grep KNOWN_DEBT -- docs/governance ':!…/archive'` -> 0, so the lane C comes from the glob only, not from a ruling.
+- Test-floor move: 3 tests.
+S-A-TOOLS-1-11 — CONFIRMED:
+- `git hash-object Makefile | wc -c` -> 40.
+- The test requires `len(sha) == 64`.
+- The gate matches on `sha == blob`, where blob is `_git("hash-object", rel)`.
+- RULINGS.md's ratification of R281's execution names "the empty-EXEMPT deviation", so the item is ruling-named and lane C on two counts.
+- The same ranges total 32 lines; net −31. rule7_gate.py (552 lines) stays over the cap, so its header stays.
+S-A-TOOLS-1-12 — CONFIRMED: `sed -n 153,161p` and `231,245p` show the same loop, differing only in `CAP` versus `1`. tests/tools/test_comment_lint.py pins `_rust_doc_excess` by behaviour, not by body, and the name survives.
+S-A-TOOLS-1-13 — CONFIRMED (KEEP): `npx jscpd@4 … tools/ci_gates` -> "0 exact clones in 19 files". `diff` of encoding_io_gate `_justified` against rule7_gate `_justified` -> the comment-lead sets differ (`#` versus `#,/,;,-` plus a non-blank guard), so they are not verbatim.
+S-A-TOOLS-1-14 — CONFIRMED: `sed -n 1,10p ci.yml`. The ci-repair comment is lines 4–6 (−3). Lines 7–8 are the AUDIT-1 F-52 note and stay, and `branches:` is an in-place edit. registry_gate.sh line 2 says "ARMED as of WP7".
+S-A-TOOLS-1-15 — AMENDED to ARCHITECT:
+- `wc -l` -> 258 total.
+- `git grep -F pytest_step_summary` -> ci.yml 74 and 79 only.
+- test_meta_ci has 3 tests that read ci.yml: pins_tiers, every_ci_gate_script (via `_ci_run_commands`) and lint_and_type_gate. The 4th, gate_01, reads the script instead.
+- run_all.sh already has `--only SUBSTRING`, so the scout's re-enable route exists.
+- CLAUDE.md records CI as suspended "until the operator re-enables it" (R348(a)). Deleting the workflow is an operator decision, not a slimming one.
+S-A-TOOLS-1-16 — AMENDED: `git rev-parse --is-shallow-repository` -> true for this very checkout, which arm 1 rescues only because origin/dev was already fetched. Any shallow single-branch clone with no dev ref reaches arm 3 whether ci.yml exists or not. So "depends: 15" does not make the arm dead. The −17 is unlocked only by an architect call on shallow clones. tests/tools/test_test_count_gate.py::test_a_shallow_checkout_recovers_the_ref_by_fetching pins the arm.
+DEFECTS re-derived:
+- (rule7 sha width) CONFIRMED, as in 11.
+- (tier_census leak) CONFIRMED by a run: `TMPDIR=<scratch> tier_census.py --self-test` -> "all controls fire", and 1 file was left in the scratch TMPDIR after one run.
+- (Makefile `uv run`) CONFIRMED: `grep -n "uv run\|\$(UV) run" Makefile` -> dashboard/viewer/analyzer use a literal `uv run`, while test/test.integration use `$(UV) run`.
+- (floor slack 4862 vs 5112) NOT RE-MEASURABLE here: torch is absent (2289 collected + 167 errors). A floor below the live count is also the ratchet's design, since it moves only by commit. Read it as slack, not a defect.
+PZ lane-C calls: PZ's glob list protects `tools/ci_gates/**` and `tools/config_templates/**` WHOLE, so every lane-C call above is correct by the glob. PZ's stated ground ("incl. test_count_floor.txt and comment_length_floor.txt: the ratchets move one way only") names only the two floor files. Ruling-named members found here: rule7_gate EXEMPT (11). No ruling names KNOWN_DEBT (10) or the other gates' comments.
+Makefile target set: no finding adds or removes a target, so tests/test_meta_ci.py::test_the_makefile_dispatches_exactly_the_declared_target_set is untouched. run_all.sh opt-ins (`--with-fresh-sync`, `--with-slow`, `--only`) were verified with `grep -n -- "--only|--with-"`. No finding removes an opt-in path.
+
+### Missed by the scout (optional, max 5)
+NEW-1 | DEFECT (style) | C — tools/ci_gates/tier_census.py::_empty_declaration: `import tempfile` sits inside the function. That breaks CLAUDE.md's imports-at-top rule, whose one exception is an optional dependency, and tempfile is stdlib. Fix it with the leak, using TemporaryDirectory or an unlink; Δ ≈ 0.
+NEW-2 | ARCHITECT | C — PZ's ground covers only the ratchet members of tools/ci_gates/**. Should the glob narrow to those members plus gate check logic, so that comment-only DOC rewords (02–06, 08's docstring) can move to lane A on contact?
+
+### Tally: raised 16 | confirmed 13 (01 lane A, probe-green) | amended 3 (10, 15→ARCHITECT, 16) | refuted 0 | pending 0 | architect 3 (14, 15, NEW-2)
