@@ -8,8 +8,9 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 - Host: the operator's desktop (not a Claude environment; `CLAUDE_CODE_ENVIRONMENT_NAME` unset). AMD Ryzen 7
   3700X, 16 threads, 46 GiB, flags `avx2` only (no `avx512_bf16`, no `amx`). torch 2.11.0+cpu, `mantis._engine` OK.
 - origin/dev = 69e1532 at W0 entry (no moved commits; no rebase).
-- Wave: **W1** (correctness). Leg: W1 implementation; four of five agent groups integrated. Next step: integrate
-  the train/model test group (7, 8, 9, 10, 11, 14, 27, 29, 30, 35, 36), then W1's fresh review, then the wave-exit gates.
+- Wave: **W1 exit** → W2. W1 all groups integrated; REVIEW-W1 filed (`docs/audits/REVIEW_W1_2026-09-23.md`, 0 must-fix,
+  should-fix fixed, one loop). W1 exit gates (`make gates`) RUNNING on cadcc367; run10 resolved MATCH at cadcc367.
+  W2 agents started from cadcc367.
 
 ## W0 — entry
 
@@ -19,7 +20,7 @@ Resume from THIS file after any stop, never from memory. Updated at every leg ex
 | `uv sync` + `import torch, mantis._engine` | GREEN |
 | git fetch / origin/dev | 69e1532, nothing to rebase |
 | host record | above |
-| BEFORE sweep (`make gates.exit`, own worktree at 1e8d6d6, own venv) | RUNNING |
+| BEFORE sweep (`make gates.exit`, own worktree at 1e8d6d6, own venv) | ALL GREEN, 20 gates incl. slow. Walls (s, under concurrent agent load): 2a 2817, 2b 7, 4 0, 5 31, 3a 384, 3b 3373, slow 5, 3c 4, 7 1, 8 0, 9 0, 11 0, 12 0, 13 2, 14 11, 15 1, 16 1, 6 0, 10 0, 17 1 (≈ 1 h 50 min). The slow tier is 5 s: it stays here at W8 |
 | R368 landed | 9ee503d7 |
 | test_count_floor 4862 → 5112 (collected at base) | 1fbddf17 |
 | re-probe of the 30 PENDING-PROBE rows | DONE: 29 GREEN, 1 AMENDED (TESTS-5-06 Δ −48), 0 RED — `docs/slim/REPROBE.md`. CORE-1-08 must edit `tests/train/test_trainer_seam_conformance.py`'s `GridRouteBufferLike` import + SEAM_MATRIX row in the same commit |
@@ -43,6 +44,8 @@ agent reports kept for the review):
   sites (tests/arena/test_book_geometry_pairing.py, tests/test_run_eval_enabled_authority.py,
   tests/train/{test_arch_stamp_authority,test_bc_graph_reroute,test_ema_lever_is_reachable,
   test_pretrain_cli_states_no_training_knob}.py) → W5; two conformance sites are out of scope (R368(h)).
+- 7, 8, 9, 10, 11, 14, 27, 29, 30, 35, 36 DONE (27 repaired as no-defaults MonitorConfig: importing the schema
+  from monitor would cycle config ↔ monitor).
 - 2, 31, 32, 33, 34 DONE; 37 REFUTED-AT-CONTACT (no mark on any non-test helper, AST scan of tests/; the six
   `@_LINUX_ONLY` marks sit on test functions and deselect under a forced platform).
 - Residue for later waves: `v6_live2_ls` outside tests/eval (src/mantis/encoding/audit_sections.py,
