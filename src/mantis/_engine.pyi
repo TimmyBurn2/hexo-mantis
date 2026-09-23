@@ -3,12 +3,12 @@
 Twin of crates/mantis-bridge/python/mantis/_engine.pyi (the wheel-shipped copy): this
 copy makes the extension visible to type checkers against the editable src package —
 a regular package shadows namespace portions, so the wheel copy alone is not seen.
->300 justify (R8): a 1:1 typed mirror of the compiled mantis._engine surface (11 pyclasses + free functions) — its length is the bridge API's, and a module stub cannot be split.
+>300 justify (R8): a 1:1 typed mirror of the compiled mantis._engine surface — its length is the bridge API's, and a module stub cannot be split.
 Keep both stubs identical when the bridge API changes. Invisible to the runtime
 importer (.pyi files are never imported); the real module is the compiled .so.
 
-Generated for the WP7 assembly: 11 pyclasses + 4 free fns + 3 module fns +
-WireAlreadyConsumed, all resolving on `mantis._engine`. Numpy arrays are typed as
+Checked against the runtime surface in both directions by
+tests/bridge/test_engine_stub_matches_runtime.py. Numpy arrays are typed as
 `numpy.ndarray` (dtype/shape documented in docstrings on the Rust side).
 """
 
@@ -81,6 +81,10 @@ class RegistrySpec:
     def board_size(self) -> int: ...
     @property
     def trunk_size(self) -> int: ...
+    @property
+    def cluster_window_size(self) -> int | None: ...
+    @property
+    def cluster_threshold(self) -> int | None: ...
     @property
     def legal_move_radius(self) -> int: ...
     @property
@@ -429,17 +433,14 @@ class SelfPlayRunner:
     def gumbel_round_leaves(self) -> int: ...
     @property
     def gumbel_rounds(self) -> int: ...
-    # R249 (ADJ-D32): `None` at zero samples — a mean over nothing is not a
-    # measurement. The event builder DROPS a None mean rather than publishing it.
+    @property
+    def max_sims_per_search(self) -> int: ...
     @property
     def export_offwindow_mass_moves(self) -> int: ...
-    # R256/ADJ-D37: proven forced wins swallowed by the LS coverage gate while the
-    # injecting lever was armed. Emitted on the GRAPH arm only; omitted elsewhere.
     @property
     def target_integrity_defects(self) -> int: ...
-    # Item 10(b) (R250): the DENSE record path's K histogram. Bucket i counts
-    # positions with K == i + 1; the LAST bucket guards every K outside that range.
-    # All-zero on a graph run, where the event builder omits the field entirely.
+    @property
+    def inference_failures_total(self) -> int: ...
     @property
     def worker_panics(self) -> int: ...
     def drain_game_results(
@@ -586,17 +587,8 @@ def derived_hexg_visit_capacity(
 
 
 # ── wire-format geometry constants (AUDIT-1 F-42) ──────────────────────────────────────
-# The v6 source-plane indices, the hex axis table and the win length, exported so Python
-# READS them instead of typing a second copy beside the Rust owner. Owners:
-# `mantis_encoding::encode::{MY_STONE_PLANE, OPP_STONE_PLANE, MOVES_REMAINING_PLANE,
-# PLY_PARITY_PLANE}` and `mantis_core::board::{HEX_AXES, WIN_LENGTH,
-# DEFAULT_CLUSTER_THRESHOLD}`. Before these existed Python pinned Python and Rust pinned a
-# literal, with nothing pinning across the FFI; the cross-check is
-# `tests/encoding/test_geometry_crosses_the_ffi.py`.
-MY_STONE_PLANE: int
-OPP_STONE_PLANE: int
-MOVES_REMAINING_PLANE: int
-PLY_PARITY_PLANE: int
+# Owners `mantis_core::board::{HEX_AXES, WIN_LENGTH, DEFAULT_CLUSTER_THRESHOLD}`; the
+# cross-check is `tests/encoding/test_geometry_crosses_the_ffi.py`.
 HEX_AXES: tuple[tuple[int, int], tuple[int, int], tuple[int, int]]
 WIN_LENGTH: int
 DEFAULT_CLUSTER_THRESHOLD: int
