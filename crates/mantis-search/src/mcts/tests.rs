@@ -1470,6 +1470,8 @@ fn select_leaves_forced_refuses_a_foreign_child_before_touching_the_tree() {
     let past_end = first + u32::from(tree.pool[0].n_children);
     let (sims, vl) = (tree.sim_count, tree.pool[0].virtual_loss_count);
     for bad in [vec![past_end], vec![first, past_end], vec![u32::MAX]] {
+        tree.set_forced_root_child(Some(first))
+            .expect("an owned child arms");
         let err = tree
             .select_leaves_forced(&bad)
             .expect_err("a foreign forced child must be refused");

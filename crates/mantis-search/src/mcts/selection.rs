@@ -388,8 +388,10 @@ impl MCTSTree {
         forced: &[u32],
     ) -> Result<Vec<Board>, ForcedSelectionError> {
         for &child in forced {
-            self.check_forced_root_child(child)
-                .map_err(ForcedSelectionError::OutOfRange)?;
+            if let Err(e) = self.check_forced_root_child(child) {
+                self.forced_root_child = None;
+                return Err(ForcedSelectionError::OutOfRange(e));
+            }
         }
         self.pending.clear();
         let mut boards = Vec::with_capacity(forced.len());
