@@ -13,16 +13,19 @@ a measurement of V1 wearing a V2 label.
 from __future__ import annotations
 
 import dataclasses
+import io
 
 import pytest
 import torch
 
-from mantis.model import GnnArch, GnnArchV2, GnnNet, GnnNetV2, build_net
+from mantis.eval.snapshot import _arch_to_plain_dict, _plain_dict_to_arch
+from mantis.model import ARCH_KINDS, GnnArch, GnnArchV2, GnnNet, GnnNetV2, build_net
 from mantis.model.arch import RepresentationMismatch
 from mantis.train.checkpoints import _arch_from_dict, _arch_to_dict
 
-_V2 = GnnArchV2(in_dim=11, edge_dim=5, hidden=8, num_layers=2, policy_hidden=8, value_hidden=8)
-_V1 = GnnArch(in_dim=11, edge_dim=5, hidden=8, num_layers=2, policy_hidden=8, value_hidden=8)
+_WIDTHS = dict(in_dim=11, edge_dim=5, hidden=8, num_layers=2, policy_hidden=8, value_hidden=8)
+_V2 = GnnArchV2(**_WIDTHS)
+_V1 = GnnArch(**_WIDTHS)
 
 
 def test_GnnArchV2_is_a_SIBLING_of_GnnArch_and_not_a_subclass() -> None:
@@ -77,10 +80,23 @@ def test_the_declared_arch_is_the_HANDLE_the_built_net_carries() -> None:
     )
 
 
-@pytest.mark.parametrize("arch", [_V1, _V2])
-def test_every_arch_ROUND_TRIPS_through_the_checkpoint_serializer(arch) -> None:
-    """What goes into the checkpoint serializer comes back as itself, for every arch."""
-    assert _arch_from_dict(_arch_to_dict(arch)) == arch
+_SERIALIZERS = {
+    "checkpoint": (_arch_to_dict, _arch_from_dict),
+    "snapshot": (_arch_to_plain_dict, _plain_dict_to_arch),
+}
+
+
+@pytest.mark.parametrize("serializer", sorted(_SERIALIZERS))
+@pytest.mark.parametrize("kind", sorted(ARCH_KINDS))
+def test_every_arch_ROUND_TRIPS_through_both_arch_serializers(kind: str, serializer: str) -> None:
+    """Every registered kind comes back as itself from both serializers, through a weights-only load."""
+    arch = ARCH_KINDS[kind](**_WIDTHS)
+    to_dict, from_dict = _SERIALIZERS[serializer]
+    buf = io.BytesIO()
+    torch.save(to_dict(arch), buf)
+    buf.seek(0)
+    back = from_dict(torch.load(buf, weights_only=True))
+    assert type(back) is type(arch) and back == arch
 
 
 def test_a_V2_STAMP_does_NOT_rehydrate_as_V1() -> None:
