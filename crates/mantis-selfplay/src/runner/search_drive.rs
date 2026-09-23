@@ -462,11 +462,20 @@ fn run_mcts_search(
             if dirichlet_enabled && !is_intermediate_ply && tree.pool[0].is_expanded() {
                 let n_ch = tree.pool[0].n_children as usize;
                 if n_ch > 0 {
-                    let noise = mantis_search::mcts::dirichlet::sample_dirichlet(
+                    let noise = match mantis_search::mcts::dirichlet::sample_dirichlet(
                         dirichlet_alpha,
                         n_ch,
                         rng,
-                    );
+                    ) {
+                        Ok(noise) => noise,
+                        Err(err) => {
+                            return McTSSearchResult::InferenceFailed(InferenceSeamFailure::new(
+                                "puct",
+                                "dirichlet_noise",
+                                err.to_string(),
+                            ))
+                        }
+                    };
                     tree.apply_dirichlet_to_root(&noise, dirichlet_epsilon);
                     rounds.dirichlet_root_fires.fetch_add(1, Ordering::Relaxed);
                 }

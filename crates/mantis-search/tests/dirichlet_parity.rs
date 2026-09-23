@@ -42,7 +42,7 @@ fn sample_dirichlet_sums_to_one_and_is_nonneg() {
     let mut rng = rand::rng();
     for &n in &[1_usize, 2, 5, 24, 50] {
         for _ in 0..10 {
-            let v = sample_dirichlet(0.3, n, &mut rng);
+            let v = sample_dirichlet(0.3, n, &mut rng).expect("valid alpha");
             assert_eq!(v.len(), n, "sample_dirichlet returned wrong length");
             for &x in &v {
                 assert!(

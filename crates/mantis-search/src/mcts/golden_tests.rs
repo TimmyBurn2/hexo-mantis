@@ -53,7 +53,8 @@ fn s4_puct_dirichlet_bits() -> Vec<u32> {
 
     let n_ch = tree.pool[0].n_children as usize;
     let mut rng = StdRng::seed_from_u64(S4_DIRICHLET_SEED);
-    let noise = crate::mcts::dirichlet::sample_dirichlet(S4_DIRICHLET_ALPHA, n_ch, &mut rng);
+    let noise = crate::mcts::dirichlet::sample_dirichlet(S4_DIRICHLET_ALPHA, n_ch, &mut rng)
+        .expect("S4 alpha is valid");
     tree.apply_dirichlet_to_root(&noise, S4_DIRICHLET_EPSILON);
 
     let first = tree.pool[0].first_child as usize;

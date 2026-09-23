@@ -86,9 +86,8 @@ fn the_shipped_sims_regimes_are_all_inside_the_bound() {
 
 #[test]
 fn a_zero_or_negative_dirichlet_alpha_is_refused_when_the_noise_is_armed() {
-    // F-38. `sample_dirichlet` builds `Gamma::new(alpha, 1.0).expect(...)`, and the guards
-    // above it are `debug_assert!` — absent from the shipped `.so`. Only pydantic's `gt=0`
-    // protected a MINTED config.
+    // `sample_dirichlet` refuses such an alpha only at the first noised root, mid-game;
+    // boot is where the config key can still be named.
     for bad in [0.0f32, -1.0, f32::NAN] {
         let cfg = SelfPlayRunnerConfig {
             dirichlet_enabled: true,

@@ -234,8 +234,7 @@ impl SelfPlayRunner {
         if config.fast_prob > 0.0 && config.fast_sims == 0 {
             return Err("SelfPlayRunner: fast_sims must be > 0 when fast_prob > 0".to_string());
         }
-        // `sample_dirichlet` builds `Gamma::new(alpha, 1.0).expect(...)` behind `debug_assert!`
-        // guards dead in the shipped `.so`, so only pydantic's `gt=0` protected a MINTED config.
+        // `sample_dirichlet` refuses such an alpha only at the first noised root; boot names the key.
         // NaN-SAFE AND CLIPPY-CLEAN: `x <= 0.0` is FALSE for NaN and `!(x > 0.0)` trips
         // `clippy::neg_cmp_op_on_partial_ord`, while `partial_cmp` says it explicitly.
         if config.dirichlet_enabled
@@ -243,8 +242,7 @@ impl SelfPlayRunner {
         {
             return Err(format!(
                 "SelfPlayRunner: dirichlet_alpha must be > 0 when dirichlet_enabled, got {} \
-                 — the Gamma distribution behind the root noise cannot be built otherwise, \
-                 and the guard inside `sample_dirichlet` is a debug_assert (absent in release)",
+                 — the Gamma distribution behind the root noise cannot be built otherwise",
                 config.dirichlet_alpha
             ));
         }
