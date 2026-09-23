@@ -175,10 +175,4 @@ impl GraphWire {
     pub fn take(&mut self) -> Result<GraphWireArrays, WireAlreadyConsumed> {
         self.arrays.take().ok_or(WireAlreadyConsumed)
     }
-
-    /// Whether the arrays are still present.
-    #[must_use]
-    pub fn is_available(&self) -> bool {
-        self.arrays.is_some()
-    }
 }

@@ -248,9 +248,9 @@ pub struct HexgBuffer {
 
 impl HexgBuffer {
     /// Create a graph-position ring with `capacity` records and `visit_capacity` visit slots each.
-    /// `encoding` MUST be a `representation == "graph"` spec, since the rebuild `BuildParams` come
-    /// from its graph fields, and `visit_capacity` is the DERIVED slot geometry — no default, no
-    /// literal, and a value the format cannot store is a LOUD error.
+    /// The rebuild `BuildParams` come from the spec's graph fields, and `visit_capacity` is the
+    /// DERIVED slot geometry — no default, no literal, and a value the format cannot store is a
+    /// LOUD error.
     pub fn new(capacity: usize, encoding: &str, visit_capacity: usize) -> Result<Self, String> {
         // `lookup_or_panic` ran BEFORE this function's own `Result` checks, so an unknown encoding
         // name reached Python as a `PanicException` while every other refusal is a named error.
@@ -261,12 +261,6 @@ impl HexgBuffer {
             known.sort_unstable();
             format!("HexgBuffer: unknown encoding {encoding:?}; registered: {known:?}")
         })?;
-        if !spec.is_graph() {
-            return Err(format!(
-                "HexgBuffer requires a graph encoding; '{encoding}' is representation=grid \
-                 (use ReplayBuffer for dense encodings)"
-            ));
-        }
         // `capacity` was UNBOUNDED at the FFI: zero panics on the first push, and a huge value
         // wraps the slot-geometry product or aborts inside `handle_alloc_error` — the one exit
         // `panic = "unwind"` cannot convert into a Python exception. Both are refused by name.

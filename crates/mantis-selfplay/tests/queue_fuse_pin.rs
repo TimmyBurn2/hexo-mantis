@@ -264,9 +264,7 @@ fn single_graph_local_equals_global() {
 fn take_is_single_read() {
     let (graphs, _locals) = read_input();
     let mut wire = GraphWire::from_axis_graphs(&graphs, 1);
-    assert!(wire.is_available());
     let _first = wire.take().expect("first take ok");
-    assert!(!wire.is_available());
     let second = wire.take();
     assert_eq!(second, Err(WireAlreadyConsumed), "second take is the named error");
 }
