@@ -31,6 +31,8 @@ from typing import Any
 
 import pytest
 
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
@@ -191,16 +193,13 @@ def _drive(route: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Driv
             final_eval_drain_timeout_sec=2.0, eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=2.0, terminal_eval_hard_cap_sec=2.0,
         ),
-        encoding="v6_live2_ls", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
-        # The pipeline resolves the fused-forward memory bound ONCE in the parent and carries
-        # it to every `RoundSpec` — the eval child is a SECOND allocator on the same card that
-        # no in-process bound can see. `None` is the GRID arm, written out rather than omitted.
-        fused_graph_caps=None,
-        inference_batching=None,
+        encoding="gnn_axis_v1", run_id="oracle_test_run", spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
         promotion=DeployTagHooks(
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt", run_id="oracle_test_run",
-            encoding="v6_live2_ls", save_anchor=lambda *a, **k: None,
+            encoding="gnn_axis_v1", save_anchor=lambda *a, **k: None,
             guarded_load=lambda *a, **k: None,
         ),
         sink=sink,

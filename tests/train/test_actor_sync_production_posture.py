@@ -108,7 +108,7 @@ def _install_harness(monkeypatch):
         _anchor, "resolve_anchor",
         lambda **_kw: SimpleNamespace(
             best_model=None, best_model_step=None,
-            best_model_path=None, representation="grid",
+            best_model_path=None, representation="graph",
         ),
     )
 

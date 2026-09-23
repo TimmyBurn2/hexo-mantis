@@ -47,7 +47,7 @@ class _RecordingHooks:
             anchor_state=self.anchor,
             best_model_path=tmp_path / "best_model.pt",
             run_id="oracle_test_run",
-            encoding="v6_live2_ls",
+            encoding="gnn_axis_v1",
             save_anchor=self._save_anchor,
             guarded_load=self._guarded_load,
         )

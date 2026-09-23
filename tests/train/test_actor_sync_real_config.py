@@ -142,7 +142,7 @@ def _drive(monkeypatch, *, eval_enabled: bool = True):
     monkeypatch.setattr(
         _anchor, "resolve_anchor",
         lambda **_kw: SimpleNamespace(best_model=None, best_model_step=None,
-                                      best_model_path=None, representation="grid"),
+                                      best_model_path=None, representation="graph"),
     )
     return captured, pool, trainer, _real_run_config()
 

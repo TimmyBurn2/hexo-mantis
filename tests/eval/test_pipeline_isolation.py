@@ -14,6 +14,7 @@ and that it carries no checkpoint-envelope keys.
 from __future__ import annotations
 
 import ast
+import json
 import multiprocessing
 import time
 from pathlib import Path
@@ -22,10 +23,13 @@ from typing import Any
 import pytest
 import torch
 
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
-from mantis.encoding import lookup
+from mantis.encoding import lookup, normalize_encoding_name
+from mantis.eval.rounds import RoundSpec
 from mantis.model import GnnArch, build_net
 
 _GSPEC = lookup("gnn_axis_v1")
@@ -64,7 +68,7 @@ def _promotion_hooks(tmp_path: Path) -> DeployTagHooks:
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         best_model_path=tmp_path / "best_model.pt",
         run_id="oracle_test_run",
-        encoding="v6_live2_ls",
+        encoding="gnn_axis_v1",
         save_anchor=lambda *a, **k: None,
         guarded_load=lambda *a, **k: None,
     )
@@ -81,16 +85,14 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             eval_final_drain_hard_cap_sec=5.0,
             terminal_eval_hard_cap_sec=5.0,
         ),
-        encoding="v6_live2_ls",
+        encoding="gnn_axis_v1",
         max_plies=128,
         c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
         run_id="oracle_test_run",
         spool_dir=spool_dir, game_record_dir=str(spool_dir) + "_games",
         promotion=_promotion_hooks(tmp_path),
-        # The parent resolves the fused-forward memory bound ONCE and carries it to every
-        # `RoundSpec`; `None` is the GRID arm, which `v6_live2_ls` here takes.
-        fused_graph_caps=None,
-        inference_batching=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
     kwargs.update(overrides)
     return kwargs
@@ -200,6 +202,12 @@ def test_worker_spawned_with_spawn_context(fake_mp, tmp_path) -> None:
         pipeline.run_evaluation(_tiny_model(), 1000, None, full_config={}, best_model_step=None)
         assert requested.get("name") == "spawn"
         assert ctx.process_calls, "no subprocess was ever requested via the spawn context"
+        # The parent never resolves the encoding; the child's `lookup` on this spec is its validator.
+        spec_path = Path(ctx.process_calls[0]["args"][0])
+        carried = RoundSpec.from_dict(json.loads(spec_path.read_text(encoding="utf-8")))
+        assert carried.encoding == "gnn_axis_v1"
+        assert lookup(normalize_encoding_name(carried.encoding)).representation == "graph"
+        assert carried.fused_graph_caps is not None and carried.inference_batching is not None
     finally:
         pipeline.stop()
 

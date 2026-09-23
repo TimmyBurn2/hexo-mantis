@@ -16,6 +16,8 @@ from typing import Any
 
 import pytest
 
+from mantis.config.resolve.fused_graph_caps import FusedGraphCapsSpec
+from mantis.config.resolve.inference_batching import InferenceBatchingSpec
 from mantis.config.schema import EvalConfig, GateConfig
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
@@ -43,7 +45,7 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             final_eval_drain_timeout_sec=5.0, eval_final_drain_safety_factor=1.0,
             eval_final_drain_hard_cap_sec=5.0, terminal_eval_hard_cap_sec=5.0,
         ),
-        encoding="v6_live2_ls",
+        encoding="gnn_axis_v1",
         max_plies=128,
         c_visit=50.0, c_scale=1.0, q_rescale=True, search_kind="puct", gumbel_m=16,
         run_id="q3_mp_ctx_whitelist",
@@ -52,12 +54,12 @@ def _pipeline_kwargs(tmp_path: Path, **overrides: Any) -> dict:
             anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
             best_model_path=tmp_path / "best_model.pt",
             run_id="q3_mp_ctx_whitelist",
-            encoding="v6_live2_ls",
+            encoding="gnn_axis_v1",
             save_anchor=lambda *a, **k: None,
             guarded_load=lambda *a, **k: None,
         ),
-        fused_graph_caps=None,
-        inference_batching=None,
+        fused_graph_caps=FusedGraphCapsSpec(max_fused_edges=57149441, max_fused_nodes=1785921),
+        inference_batching=InferenceBatchingSpec(inference_batch_size=64, inference_max_wait_ms=10),
     )
     kwargs.update(overrides)
     return kwargs
