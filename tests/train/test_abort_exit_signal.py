@@ -352,15 +352,15 @@ def test_a_signal_handler_stop_is_a_clean_stop() -> None:
     assert h.shutdown.running is False and h.shutdown.abort_rule is None
 
 
-@pytest.mark.parametrize("rule", ["grad_norm_hard_abort", "sealbot_wr_abort"])
-def test_an_abort_with_no_authored_code_resolves_to_None(rule: str) -> None:
-    """Both rules share `_fire_hard_abort` with the draw-rate gate and neither has an authored exit
-    code. Parametrized over both because they fail differently under the tempting wrong fix: a
-    `dict.get(rule, DEFAULT)` fabricates a number, and a raise turns an un-carded abort into a
-    crash at the boundary."""
-    # The premise is narrower than it once was: a rule may now HAVE a manifest row (a DEFERRED
-    # one) while still having no authored exit code, and the code is the subject.
+@pytest.mark.parametrize(("rule", "has_row"), [("grad_norm_hard_abort", True),
+                                              ("an_abort_rule_with_no_manifest_row", False)])
+def test_an_abort_with_no_authored_code_resolves_to_None(rule: str, has_row: bool) -> None:
+    """A live rule whose row carries no code, and a name with NO row, both resolve to None.
+
+    Every fired rule has a row, so an unregistered name witnesses the no-row branch; a default
+    code would fabricate a number, and a raise would crash an un-carded abort at the boundary."""
     row = [candidate for candidate in MANIFEST if candidate.name == rule]
+    assert bool(row) is has_row, f"premise: {rule!r} {'has' if has_row else 'has no'} manifest row"
     assert all(candidate.exit_code is None for candidate in row), (
         "the premise: this rule has NO AUTHORED EXIT CODE. A row may exist for it — "
         "grad_norm_hard_abort gained a DEFERRED one at WPMINT Phase K-B — but a code "
