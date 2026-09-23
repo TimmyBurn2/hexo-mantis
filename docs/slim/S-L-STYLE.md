@@ -258,3 +258,108 @@ none
 - Rust: `--lib --bins` only. Unwraps in benches/, tests/ and `#[cfg(test)]` modules are excluded by construction. Build scripts and doctests were not linted. rustfmt conformance was not measured (it is on-contact and ungated by rule).
 - pyright was not run. tools/strix_driver.py runs in an external venv; only its inner-import count is included.
 - The per-line site lists are in scratchpad/lstyle/census.json, scratchpad/lstyle/clippy.txt and scratchpad/lstyle/doc501.txt. They are not reproduced here by design.
+
+## Review
+reviewer: fresh read-only agent (not the author). No lane-A deletion was raised, so no delete-probe was needed and no worktree was created. HEAD is 1c4bfc5, and `git diff --stat 69e1532 HEAD -- src tools tests crates` is empty, so the code under review is the tree the scout measured. My own scripts are in scratchpad/rev-lstyle/{r.py,rs.py,cite.py,c2.py,dup.py}.
+
+### Re-measure by class (mine vs the scout's)
+| class | my command | result |
+|---|---|---|
+| 1 banners / file-top prose | `comment_lint.py --measure`; r.py's first-comment-before-code scan; grep of `^//[^/!]` | banner 0: MATCH. Prose blocks DIFFER: 4 files / 9 lines vs 3 / 6. The scout missed tests/diagnostics/test_worker_sweep_determinism.py (NEW-1) |
+| 2 narrative runs | `comment_lint.py --measure` -> 3385; c2.py re-splits the same runs with the gate's own `rust_comment_spans`/`_own_line` | total MATCH. Rust `///` runs 1771: MATCH. R8 header runs 326 vs 330. Remainder 1288 vs 127+1157=1284. The narrative/invariant split is NOT RE-DERIVED (it is a heuristic) |
+| 3 docstrings / Rust docs | `--measure` | 13079 / 1485 / 2676: MATCH. 11594 = 13079−1485: MATCH. The 816 section lines and 1353 two-line runs are NOT RE-DERIVED |
+| 4 ruling cites | `--measure` -> 393; cite.py uses my own regex (R12+ with an optional clause, LAW-, F-n[-n], ADJ-, RQ-, AUDIT-, WP, CARD-) over tokenize comments, `ast.get_docstring` and Rust `//`, `///`, `//!`, and skips R8-marker lines | gate figure 393: MATCH. Broad figure DIFFERS within ~1%: 1171 vs 1165 (comments 326 vs 338, Rust doc 112 vs 91, docstrings 733 vs 736). Both are regex-dependent. The 111 R1–R11 cites are NOT RE-DERIVED |
+| 5 docstrings / Raises | `ruff check --isolated --target-version py311 --select D1 --statistics` per tree; `--preview --select DOC501` | src 36/147/18 + 39 + 11: MATCH. tools 21/24/53 + 19 + 5: MATCH. DOC501 145 + 67 = 212: MATCH. Tests "155 public helpers" DIFFERS: I find 137 public, non-`test*`, undocumented module-level functions (99 fixtures, 38 helpers); the scout does not state its rule. 106 / 37 / 21 are NOT RE-DERIVED |
+| 6 hints | `ruff --select ANN --ignore ANN401`; `--select ANN201,ANN204 src tools` | src 60, tools 14, tests 4946, 1174 hidden fixes, 2 public (coordinates.py::axial_distance, resolve/encoding.py `__init__`): MATCH. 1969 test functions/fixtures is NOT RE-DERIVED |
+| 7 broad except | r.py AST (ExceptHandler on Exception/BaseException, `noqa` on the line); `ruff --select BLE001 --ignore-noqa` | 58 (39/7/12), 53 noqa, bare 0: MATCH. Ruff without noqa gives 48 (31/5/12); the gap is ruff's own re-raise/`logger.exception` exemption. The context split is NOT RE-DERIVED |
+| 8 encoding-less IO | r.py runs gate 16's `is_unsafe`/`_justified` over every tracked `.py` file, split by scope, `os.open` receiver and PZ glob; plus AST `text=True`/`universal_newlines=True` calls with no `encoding` and no `**kw` | src 15 = 7 non-PZ + 6 PZ + 2 `os.open`: MATCH. tests function scope 211 (13 PZ), module scope 1: MATCH. subprocess 86 (tests 73, tools 10, src 3), PZ 12: MATCH. DIFFERS on the scout's "8 in tools/ci_gates": it is 9 (artifact_gate 2, check_tracked_refs 1, comment_lint 2, preflight_mint 2, rule7_gate 2), and the tenth is tools/mirror_pull.py |
+| 9 non-top imports | `ruff --select PLC0415`; r.py AST split; dup.py | 100/40/638: MATCH. AST 107/40/663 with an identical breakdown (src mantis 73, torch 17, optional deps 8, stdlib 5, 3p 4; tools 28+1 local, torch 3, 3p 5, stdlib 3; tests mantis 444, stdlib 149, torch 30, other 40): MATCH. Duplicate test imports: 10 identical statements + 11 whose every name is already top-imported = 21: MATCH |
+| 10 Rust unwrap/expect | rs.py, a separate method from clippy: `crates/*/src/**` minus benches/, tests/ and build.rs, `#[cfg(test)]` items brace-stripped, cfg(test)-only module files (mcts/{golden_tests,parity_tests,tests}.rs) dropped, `//` tails removed | 64 sites in 13 files (unwrap 29, expect 35); PZ 32 in 4 files (registry/parse.rs 18, runner/mod.rs 6, search_drive.rs 5, replay/hexg/mod.rs 3); non-PZ 32 in 9: MATCH. The per-kind split is NOT RE-DERIVED |
+| carve-outs | gate 15 | 172 justified, 0 stale: MATCH. The marker and pragma families are NOT RE-DERIVED |
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| S-L-STYLE-01 | AMENDED | A→B | 0 (no lane-A delete; no probe applies) | count MATCH; all 5 files sit inside S-A-CORE-2-01's PACK deletion; this is a behaviour fix, not slimming |
+| S-L-STYLE-02 | CONFIRMED | C | 0 | 6 real PZ sites + 2 `os.open`: MATCH |
+| S-L-STYLE-03 | AMENDED | B (+C for the gate half) | 0 | 211 MATCH; widening gate 16 edits tools/ci_gates/** (PZ glob) |
+| S-L-STYLE-04 | AMENDED | B (+C for 9 sites) | 0 | 86 MATCH; tools/ci_gates holds 9, not 8, and those 9 are PZ-6 |
+| S-L-STYLE-05 | AMENDED | B→C | ≤ −352 (census upper bound, not probe-measured) | R316(e) bars a cleanup pass; ARCHITECT |
+| S-L-STYLE-06 | CONFIRMED | C | ≤ −393 (upper bound) | PZ + R316(e) |
+| S-L-STYLE-07 | AMENDED | B→C | ≤ −4161 (upper bound) | CARD-STYLE-BACKLOG makes it the architect's call, "on contact, never as a pass"; two floor rows move, not one |
+| S-L-STYLE-08 | AMENDED | B→C | ≤ −3514 R346(f)-scoped (scout: −10778) | the scout's bound counts 7264 test-docstring lines it says are not APIs; ARCHITECT |
+| S-L-STYLE-09 | AMENDED | B→C | 0 | broad count 1171 vs 1165; R346(f) names the class and CARD-STYLE-BACKLOG kept 256 cites |
+| S-L-STYLE-10 | CONFIRMED | B | ≤ −21 (AST statement count, not probe-measured) | PLC0415 and the dup count MATCH |
+| S-L-STYLE-11 | AMENDED | B (census only) | 0 | 32 MATCH; named error types add lines net (out of slimming scope); the count is an upper bound |
+| S-L-STYLE-12 | AMENDED | B→C | 0 | every adoption edits tools/ci_gates/** (PZ-6) or pyproject's ruff select |
+
+### Per-finding notes
+S-L-STYLE-01 — AMENDED:
+- My check: r.py (gate 16's `is_unsafe` over `git ls-files 'src/*.py'`) -> non-PZ real 7, in corpus_analysis, corpus_io, corpus_metrics, generate and human_seeding.
+- The count is right, but three things change the finding:
+  1. All five files are inside docs/slim/S-A-CORE-2.md's S-A-CORE-2-01 PACK, which deletes src/mantis/data/ except bootstrap_encode.py. If that lands, the 7 sites vanish, so this depends on S-A-CORE-2-01.
+  2. Adding `encoding=` changes decoding on a non-UTF-8 locale. That is its purpose, and it makes this a behaviour fix with Δ0. BRIEF puts behaviour changes out of scope, and the change is not SIMPLIFY in the BRIEF's sense.
+  3. Lane A is the probed-deletion lane.
+- Belongs in DEFECTS, or lane B sequenced after S-A-CORE-2-01.
+
+S-L-STYLE-02 — CONFIRMED: same scan -> PZ real 6 (eval/pipeline 2, eval/worker 2, train/anchor 1, encoding/audit_sections 1) plus train/bundle `os.open` 2.
+
+S-L-STYLE-03 — AMENDED:
+- r.py -> tests function scope 198 non-PZ + 13 PZ = 211.
+- Fixing the sites is lane B.
+- "Widening gate 16" edits tools/ci_gates/encoding_io_gate.py. PZ.md's glob list includes tools/ci_gates/**, so that half is lane C.
+
+S-L-STYLE-04 — AMENDED:
+- r.py AST -> 86 total; tools PZ 9, tools non-PZ 1.
+- `git grep -n "text=True\|universal_newlines=True" -- 'tools/*.py' | grep -v encoding=` -> 9 lines in tools/ci_gates, 1 in tools/mirror_pull.py.
+- The 9 are PZ-6, so lane C for them.
+
+S-L-STYLE-05 — AMENDED to C:
+- c2.py -> the non-Rust-doc, non-R8 remainder is 1288 lines, consistent with the scout's 1284. The split is heuristic, so the −352 is an upper bound.
+- rulings_register.md R316(e) is verbatim "Applied on contact, never as a cleanup pass". CLAUDE.md admits only R346(f)'s wave-2 pass as an exception.
+- The class is ruling-named, so it is lane C and needs an ordering ruling (ARCHITECT Q1). The scout already names this as BLOCKER 1 but files the block under B.
+
+S-L-STYLE-06 — CONFIRMED.
+
+S-L-STYLE-07 — AMENDED to C:
+- CARDS.md CARD-STYLE-BACKLOG: "whether a private symbol may carry a multi-line docstring is the architect's call" and "Also on contact, never as a pass".
+- c2.py shows 1771 of `comment_excess_lines` are Rust `///`/`//!` runs. Trimming Rust docs therefore lowers two floor rows (`rust_doc_excess_lines` and `comment_excess_lines`), not one.
+
+S-L-STYLE-08 — AMENDED:
+- The −10778 bound includes 7264 test-docstring prose lines. The scout itself says test functions are not APIs, and R346(f) (RULINGS.md R346 (f)) reads "one-line docstrings on public APIs".
+- The R346(f)-scoped bound is ≤ −3514 (10778 − 7264).
+- The class is also ruling-named and on-contact, so lane C / ARCHITECT.
+
+S-L-STYLE-09 — AMENDED to C:
+- cite.py -> 1171 lines vs 1165. `--measure` 393: MATCH.
+- R346(f) itself says "no ruling numbers", and CARD-STYLE-BACKLOG records 256 cites REVIEWED and KEPT. The class is ruling-named, so lane C.
+
+S-L-STYLE-10 — CONFIRMED:
+- dup.py -> 21 = 10 exact + 11 name-subset re-imports.
+- Removing an import line moves no collected test, so the gate-3 floor is untouched.
+- The "stdlib hoists are MECHANICAL" call carries ARCHITECT Q2.
+
+S-L-STYLE-11 — AMENDED:
+- rs.py -> 32 non-PZ in 9 files: MATCH.
+- The fix adds lines net (named error types), which BRIEF puts out of slimming scope, so this is census only.
+- CLAUDE.md permits `expect()` "in startup invariants when its message names the invariant". The scout applied no carve-out, so 64 and 32 are upper bounds.
+
+S-L-STYLE-12 — AMENDED to C: every adoption touches tools/ci_gates/** (a PZ glob, PZ-6 ratchets) or pyproject.toml's ruff select, so it is ruling territory. R98 is already cited by the scout.
+
+DEFECT 1 (`os.open` false positive) — REFUTED as a defect:
+- tests/tools/test_encoding_io_gate.py::test_known_limitation_any_dot_open_is_flagged_regardless_of_receiver pins it deliberately: `assert GATE.is_unsafe(_first_call("os.open(path, flags)")) is True`.
+- That test's docstring is "Record the deliberate over-approximation … the one counter-example, `os.open` in `src/`, is out of scope".
+- The scout's count correction (2 non-sites in bundle.py) still stands.
+
+DEFECT 2 (`_RULING` under-measures) — CONFIRMED:
+- `grep -n "^_RULING" -A2 tools/ci_gates/comment_lint.py` -> `R\d{1,3}\([a-z]\)` requires a clause letter.
+- `measure_source` feeds only comment texts to it, never docstrings.
+
+### Missed by the scout
+- NEW-1 | DOC/class 1 | C (R316(e) on contact): tests/diagnostics/test_worker_sweep_determinism.py is 214 lines (`wc -l`). It carries a 3-line file-top prose block outside its docstring, "ONE CLAIM with two halves deliberately not split", which is justification-shaped on an under-cap file. Gate 15's marker regex misses it because it has no cap token, and the scout's carve-out heuristic likely swallowed it on the words "planted break".
+- NEW-2 | DOC | B: the docstring of test_known_limitation_any_dot_open_is_flagged_regardless_of_receiver says "the one counter-example, `os.open` in `src/`". `git grep -n "os\.open(" -- src` -> 4 calls. src/mantis/monitor/game_record.py and src/mantis/monitor/sink.py pass gate 16 only because `POSITIONAL_ENCODING[("open", True)] = 2` reads their third positional argument (mode `0o644`) as `encoding`. The result is right by accident: they are fd opens.
+
+### ARCHITECT
+- Q1: Does the slimming phase get an R346(f)-style ruling ordering a comment/docstring pass (S-L-STYLE-05/07/08/09, NEW-1)? Without one, R316(e) keeps these on-contact only.
+- Q2: Is R336(e)'s "(standards on contact)", from the rustfmt ruling, general? If it is, the "MECHANICAL" batches for classes 8 and 9 (S-L-STYLE-01/03/04/10) also need an ordering ruling.
+
+### Tally: raised 12 (+2 defects) | confirmed 3 (02, 06, 10) + DEFECT 2 | amended 9 (01, 03, 04, 05, 07, 08, 09, 11, 12) | refuted 0 findings, DEFECT 1 | pending 0 | architect 2 (Q1, Q2) | new 2
