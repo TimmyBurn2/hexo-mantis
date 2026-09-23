@@ -217,3 +217,60 @@ none
 - The body of test_heartbeat_watchdog.py rows 200–545, test_sparse_gumbel_row_target.py, test_server_owned_copy.py, test_nonfinite_guard.py, test_periodic_bundle.py and the resume_* PZ files beyond their outlines. All are PZ or contract-cited (lane C), so I only scanned their helpers for duplicates.
 - Nothing was executed except 3 torch-free modules (16 passed with `--noconftest`) and the resolver probes. The coordinator-drive equivalences in 01, 03 and 06–07 are unexecuted and must be probed where torch is available.
 - The terminal_eval_rc `main()` harness (lines 330–853) is read in outline only. Its `_Pool` and `_FakeEvalPipeline` are carded fakes.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+Probe: ONE batch worktree (scratchpad/wt/rev-tests2-A, detached at af4d37e) carrying 09+13+16+17a together; removed at the end.
+Recipe result: `import mantis` OK from the worktree src; `pytest --collect-only -q -m ''` = "2289 tests collected, 167 errors", same as
+baseline. That recipe CANNOT see this slice: tests/train is ONE directory-level error ("ERROR tests/train - ModuleNotFoundError: torch",
+via tests/train/conftest.py), so every tests/train edit is invisible to it. Second route used: `--noconftest -p conftest` with the
+worktree's tests/ on PYTHONPATH, which loads the ROOT conftest (so the autouse `_restore_signal_dispositions` is live) and skips the torch
+conftest. Of the 9 edited modules, 7 import torch themselves (collection error at HEAD too); only test_orphan_workers_census +
+test_parent_death_signal ran: 9 passed at HEAD, 9 passed in the worktree. cargo check skipped: the diff touches only tests/train/*.py.
+Worktree diff: `git diff --shortstat` = 9 files, 5 insertions(+), 55 deletions(-) (net -50).
+
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| 01 | CONFIRMED | B | -257 (wc -l); -3 tests | each assertion mapped to a target_counter row (below) |
+| 02 | CONFIRMED | B | -168; -4 tests; -3 tier rows (95–97) | covering rows ran live here and PASSED; not ruling-named |
+| 03 | CONFIRMED | B | ≤ -76 gross (scout) | 10 slice files define a builder, 9 after the stage45 exclusion; conftest::mk_graph_buffer exists |
+| 04 | CONFIRMED | B | -93 gross (scout) | own AST hash (docstrings stripped): heldout/ply/trough `_Sink` one group, seam/target_counter `_SpySink` one group |
+| 05 | CONFIRMED | B | ≈ -36 (scout) | 10 tests/train files define `_GRAPH_FULL_CONFIG`, 4 of them in the slice |
+| 06 | CONFIRMED | B | -55 gross (scout) | seam/target_counter `_Trainer` are AST-identical; `DrivableTrainerStub.loss_info` has the same dict except `grad_norm` is an attribute |
+| 07 | CONFIRMED | B | -32 (trough case) | trough `_Pool` methods = CoordinatorPoolStub's minus `ply_cap_window_counts`; bodies NOT executed (torch) |
+| 08 | NOT RE-DERIVED | B/C | — | only the lane split was checked (PZ glob `tests/train/test_resume_*.py`). The AST identity was not re-run (budget), so this is NOT confirmed |
+| 09 | PENDING-PROBE (torch-bound) | A | -7 (scout -5: + 2 separator blanks) | twin tests/monitor/test_supervisor.py::test_exit_code_equality_pin PASSED live |
+| 10 | CONFIRMED | B | -21 (scout) | + R8 consequence missed, see NEW-1 |
+| 11 | CONFIRMED | B | -5 | the rows at the call sites call `_games_per_hour`, so the callable check is implied |
+| 12 | CONFIRMED | B | -6 | the parametrize asserts lr/batch_size/eta_min against run6.yaml's own values |
+| 13 | PENDING-PROBE (torch-bound) | A | -11 (scout -10: + 1 blank) | no reader anywhere (`git grep DEAD_FLAGS`, whole repo, substring) |
+| 14 | AMENDED | B | -26 (scout) | claim text wrong, see note |
+| 15 | CONFIRMED | B | -12 + edits (scout) | + H1 addendum; + R8 consequence (NEW-1) |
+| 16 | AMENDED + PENDING-PROBE | A | -21 (scout -15) | orphan half probe-green; lifecycle half torch-bound; `import pytest` also becomes unused |
+| 17a | PENDING-PROBE (5 of 7 files torch-bound) | A | -11 | orphan + parent_death lines probe-green; see the sig_mod trap below |
+| 17c | CONFIRMED | C | -7 | own ruff run reproduces all 19 names |
+| 18 | AMENDED | C | -23 (scout) | the spy_sink sub-item is DUP, not DEAD |
+| 19 | AMENDED | B | undetermined | spans 31/22 and distinct hashes verified; "about -20 net" is an estimate, not a derived figure |
+| 20 | REFUTED | — | 0 | the needle rows cover comments that neither the literal test nor gate 17 covers |
+| 21 | CONFIRMED (mark only) | B | 0 | — |
+
+### Per-finding notes
+S-A-TESTS-2-01 — CONFIRMED: read both files → carries_the_inference_seam_counter (key, 3 slots) ⊂ target_counter::…carries_the_target_integrity_fire_rates (`_COUNTERS` includes inference_failures_total; checks all slots); its total/delta ⊂ ::the_delta_is_the_interval_change (200→260). idle ⊂ ::an_idle_lever_stays_visible_at_zero (loops over every counter: total 0, delta 0, per_position 0.0). distinct ⊂ ::do_not_crosswire (seam 222 vs defects 333, which catches seam→defects leakage too). The only citer is the docstring pointer in tests/selfplay/test_inference_seam_counter.py. No tier row and no governance citation (`git grep` over the whole repo).
+S-A-TESTS-2-02 — CONFIRMED: ran `pytest -rA tests/test_run_pdeathsig.py` + trampoline::test_a_direct_launch… here → supervised-SIGKILL, UNSTAMPED-survives, HANDLES-sigterm and direct-launch all PASSED. The 4 pdeathsig FAILs are torch-import (mantis.run), unrelated. signals.py: the gate calls `arm_parent_death_signal()` with its default signal and returns that value through `_record`, so `assert armed` pins the Linux True path and the SIGKILL default. Residual: the off-Linux `return False` arm loses its only pin, which never executes on the Linux hosts anyway. Ruling check: `git grep -i "parent_death_signal|pdeathsig|F-816-14"` over docs/governance/docs/contracts/docs/design → CARDS rows and R300(d) (archived text) close F-816-14's SIGKILL leg on a GPU measurement and name no test path. LAW-16 names the lifecycle subsystem, not this file, so lane B, not C. The 3 tier rows must go in the same commit (the 4th row is unmarked).
+S-A-TESTS-2-09 — PENDING-PROBE: the module imports torch transitively, so it errors at collection even with --noconftest. The worktree edit (test + `WATCHDOG_STALL_EXIT_CODE,` + the SELFPLAY import line) is ruff F401/F821 clean. Δ is -7 because deleting a mid-file def also removes its 2 separator blanks.
+S-A-TESTS-2-10 — CONFIRMED: census::test_monitor_mantis_imports… flags any top-level `mantis.*` outside {util, encoding, monitor}, which includes mantis.eval. train_import_dag bans mantis.eval/arena under train/**. The top-level-only semantics are the same.
+S-A-TESTS-2-13 — PENDING-PROBE: the pretrain cli module imports torch (collection error at HEAD with --noconftest). The removal (2 comment lines + 8-line dict + 1 blank) is ruff-clean.
+S-A-TESTS-2-14 — AMENDED: the claim that `_config_encoding` is "a test-local copy of a veneer that no longer exists" is inaccurate. src/mantis/train/checkpoints.py::_config_encoding EXISTS at HEAD (it returns the raw `identity.encoding` or None, with no resolution and no raise). The test helper copies no src veneer: it is a 1-line alias of `resolve_from_config(...).name`. The covering test names exist (grep in tests/encoding). The partial-merge verdict and lane B stand.
+S-A-TESTS-2-15 — CONFIRMED: dispatch.py::run_declared_train_step = `if representation == "graph":` then raise. `git grep train_step_from_tensors -- src tools` → the config.py protocol member, dispatch.py's module docstring AND a comment in src/mantis/train/coordinator/step.py, all dead text, to be added to H1. The seam and target_counter `_Trainer.train_step_from_graph_batch` delegate to their own `train_step_from_tensors`, so the double edit is an inline, not a deletion.
+S-A-TESTS-2-16 — AMENDED Δ + PENDING-PROBE: autouse tests/conftest.py::_restore_signal_dispositions saves and restores exactly SIGINT+SIGTERM, the same as both local fixtures. Teardown order relative to monkeypatch is unchanged. After the fixture goes, test_orphan_workers_census has no `pytest` use left, so `import pytest` goes too (ruff F401 in the worktree), plus blank-line tidy → -21. Orphan half: 9 passed at HEAD and in the worktree through the root-conftest route. Lifecycle half: torch-bound. Note: test_lifecycle_contract.py is the LAW-16 contract file and docs/contracts/event_manifest.md cites 2 of its OTHER rows. No asserted line changes, so lane A holds.
+S-A-TESTS-2-17 — 17a PENDING-PROBE / 17c CONFIRMED: `uvx ruff check --select F401,F811` → the same 19 names. TRAP: the line `from mantis.train.lifecycle import signals as sig_mod` occurs TWICE in test_orphan_workers_census. Only the first (test_second_signal…) is unused, and the second (test_mutation_disabled_teardown…) is live. My first text-matched removal produced F821. Remove it by position, not by text.
+S-A-TESTS-2-18 — AMENDED (class): `git grep -w` confirms the definition only for _LADDER_RUNGS and trainer_accesses; `_Clock.advance` has no `.advance(` call. spy_sink in test_resume_owned_paths IS read, by parameter injection, and its emit/named are identical to tests/train/conftest.py::SpyEventSink (`.get("event")`, minus `has`). So it is a shadowing DUP, not DEAD. Lane C stands (PZ glob).
+S-A-TESTS-2-20 — REFUTED: `grep -n -i "users|/home" tools/ci_gates/rule7_gate.py` → the only home pattern is `/home/[A-Za-z_]…`, and there is NO `/Users/` pattern. The needle rows scan raw source (`_WARMSTART_SRC`), comments included. test_no_absolute_path_literal… sees string literals only. A `/Users/x` comment, or a `/home/…` comment (like the one quoted in the row's own docstring), is caught by these rows alone.
+S-A-TESTS-2-03/04/05/06/07/19 — own AST hash with docstrings stripped (a different tool from the scout's script): the groups reproduce. All stay lane B: they are test-helper merges that add no runtime arch branch.
+
+### Missed by the scout (optional, max 5)
+NEW-1 | R8/gate 15 | B — test_run_safety_wiring.py (312) falls below 300 if 09+10 land (-7 plus about -21), so its ">300 justify (R8)" docstring line must go in the same commit. test_train_step_dispatch.py (314) does the same under 15+03 (its line-1 header).
+NEW-2 | DOC | C (H1 addendum) — a comment in src/mantis/train/coordinator/step.py still names the dead `train_step_from_tensors` entry point, beside dispatch.py's docstring.
+NEW-3 | env — the "collected 5112" figure cannot be re-derived here (torch absent). Arithmetic on the scout's number: 01 -3, 02 -4, 09 -1, 10 -1, 11 -1, 12 -1, 14 -6 (+3 re-homed), 15 -1 → -18 gross, -15 net → about 5097, still above the 4862 floor, so the floor file does not move. Only 02 touches tier_declaration.txt (rows 95–97, the 3 skipif rows).
+
+### Tally: raised 22 (01–21, 17 split a/c) | confirmed 12 (01 02 03 04 05 06 07 10 11 12 15 21) + 17c | amended 4 (14 16 18 19) | refuted 1 (20) | pending 4 (09 13 16 17a; 16 also amended) | architect 0 | not re-derived 1 (08)

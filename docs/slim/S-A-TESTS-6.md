@@ -151,3 +151,81 @@ none
 - The bulk of test_eval_selfplay_child_parity.py (581 lines) beyond the rows named above.
 - test_eval_posture_inert.py, test_acceptance_witness.py, test_fusion_calibrate_refusals.py / test_fusion_margin_is_measured.py, test_tactics.py, test_ring_reader.py, test_eval_child_memory.py vs test_eval_child_memory_reader.py, and test_mirror_receipts.py: headers and test lists only.
 - None of the 54 torch-dependent files was executed (environment). No reviewer probe was run for the A-lane rows.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| T6-01 | AMENDED | C | −1 210 (−1 246 + 36 relocated) | relocation also carries `_REPO` + `_SCAN_ROOTS`; gate 10 + tier census red measured |
+| T6-02 | CONFIRMED | B | up to −480 | spans reproduced 637 / 157 |
+| T6-03 | CONFIRMED | C | up to −198 | spans reproduced 170 + 75 − 47 |
+| T6-04 | CONFIRMED | C | −146 + row | gate 10 red measured (2 rows); sims 4 vs 1 is a real condition, so a parametrize row is needed, not a bare delete |
+| T6-05 | CONFIRMED | B | −29 | the "three rows above are HEAD's pins" comment goes stale with it |
+| T6-06 | AMENDED | B | smaller, unmeasured | `"env key" not in reason` is asserted ONLY here; the dead part is the post-`return` branch |
+| T6-07 | CONFIRMED | B | −23 | |
+| T6-08 | AMENDED | B | −21 −3 asserts | a third vacuous `wr_sealbot` assert: test_round_completion_error.py |
+| T6-09 | PENDING-PROBE | A | −27 | torch-bound |
+| T6-10 | AMENDED | A −10 (pending) / B −22 | −10 (A) | F811 half → B: pyproject declares "the deliberate re-import idiom"; gate 14 is not a witness |
+| T6-11 | CONFIRMED | C | −8 | |
+| T6-12 | CONFIRMED | B | ≈ −6 | |
+| T6-13 | PENDING-PROBE | A | −6 | torch-bound; `rung:sealbot_d5` is test data, not prose (drop from subject) |
+
+### Per-finding notes
+Probe recipe (REVIEW_BRIEF, `-S` + isolating PYTHONPATH). Worktree rev-tests6-A carries T6-09, T6-10 and T6-13 edits: `import mantis` ok. Full-tree `--collect-only -m ''`: HEAD 2289 collected / 167 errors, probe 2289 / 167, `diff` of the sorted ERROR lines empty. All 13 edited files `ast.parse` clean. `uvx ruff --isolated --select F401,F811,F841,F821,E9` over them: clean. gate 15: 0 stale. gate 10: rc 0. comment_lint: GREEN, but the floors FALL (docstring_excess 13079→13073, private_docstring_excess 1485→1481), so tools/ci_gates/comment_length_floor.txt moves in the landing commit. cargo check was not run because no probe touched Rust. Worktree rev-tests6-C `git rm`s the 3 sealbot test files + test_rung_seat_off_window.py.
+S-A-TESTS-6-01 — AMENDED:
+- Uniqueness check: `git grep -n -E "sys\.path" -- tests tools` returns 2 code censuses besides this one, test_preflight_mint.py and test_preflight_parent_census.py, both tool-scoped. No gate script checks sys.path. So the adapter-file test is the ONLY src+tools+tests LAW-17 census, and it must move.
+- Relocation cost: it needs `_REPO` and `_SCAN_ROOTS` too, which adds 2 lines to the 34.
+- Probe rev-tests6-C: check_tracked_refs.py rc 1 on eval_instrument.md (lines citing test_sealbot_{adapter,resolve,vendored}.py). tier_census.py: "0 undeclared, 3 stale" (tier_declaration.txt rows 22–24). Collected 2289→2257 (−32).
+- Lane C stands (R362(c) item 3: "deleting it is a separate decision nobody has taken").
+S-A-TESTS-6-02 — CONFIRMED: an AST span/hash script reproduces sum 637, kept 157, net −480. `_eval_cfg` has 7 distinct bodies across 8 files, so the copies do differ by values, as claimed.
+- docs/audits/REVIEW2_2026-09-21.md G3.4 already finds "cross-test imports are evidently not barred". That supports the scout's reading of the "house convention" comments.
+- Also weigh pyproject.toml's tests/** grounds ("an oracle-write corpus: files are edit-averse"). Lane B.
+S-A-TESTS-6-03 — CONFIRMED: `_round_spec` 6 copies / 170 lines and `_net` 7 / 75 reproduced. PZ.md rows (1-in-1, gate pair statistics, strength_floor) name test_f816_37_instrument, test_gate_sequential and test_strength_floor_*, so lane C.
+S-A-TESTS-6-04 — CONFIRMED (C):
+- Both bodies use `build_candidate_player` → 8-ply loop against RandomBot → a non-empty off-window list. The sims differ (4 vs 1), which is a search-depth condition, so the merge must be a parametrize row, not a plain delete.
+- The rung-sims assert maps to test_strix_rung_sims.py::test_the_strix_rung_tool_threads_its_sims_through_the_same_lookup (`_model_sims_for_kind(spec,"strix") == 256`).
+- Probe: gate 10 reds on eval_instrument.md, two rows for this file.
+- The path is also cited in docs/governance/archive/{RULINGS_ACTIVE,rulings_register}.md. Those files are frozen and gate 10 does not scan them, so there is nothing to do there.
+S-A-TESTS-6-05 — CONFIRMED:
+- (a) test_resolve_nsims.py::test_unknown_opponent_raises: `"mystery"` vs `"nnue"`, same ValueError arm.
+- (b) the parametrized pre_existing_green covers `pytest.raises(ValueError)` for random and sealbot with None.
+- (c) the `[random]` row of test_every_bot_kind… is the same pass-through spy and `(kind,128) in calls`.
+- No external citation of the 3 names (`git grep -l <name> -- ':!docs/slim'` → the file only). Torch-free, so if it lands the file can be run here.
+S-A-TESTS-6-06 — AMENDED:
+- `_ENV_KEYS == {"sealbot": …}`, so the block after `return` is unreachable. That part is right.
+- The subsumption claim is wrong. `grep -n "env key" tests/bots/*.py` finds the `"env key" not in reason` assertion ONLY in test_protocol.py. test_sealbot_resolve checks `"MANTIS_BOT_"` alone, and src/mantis/bots/protocol.py still says "env key" in prose, so the regression is plausible.
+- Correct scope: delete the unreachable branch. The whole test goes only if the "env key" check first moves into test_sealbot_refusal_reason_names_exactly_its_own_missing_step.
+S-A-TESTS-6-07 — CONFIRMED:
+- The worker guard is `_assert_policy_pool_implemented` then `_assert_value_pool_implemented`, so the empty-fire census covers both census rows.
+- child_parity's synthesis (value_pool "none", implemented) vs this file's "min" (implemented): both reach only the policy message. The claimed ORDERING is exercised by neither, which is not a loss.
+S-A-TESTS-6-08 — AMENDED:
+- The wire spelling is covered by test_eval_broken_reason_enum.py:83 (`EvalBrokenReason(member.value) is member`), together with this file's own `.value == "round_timeout"`.
+- wall_sec is covered by the sibling's `complete["wall_sec"] == 12.5`.
+- The shipped-plan row is covered by src/mantis/diagnostics/worker_sweep.py `if sampler_interval_sec >= round_sec` inside load_plan, plus test_worker_sweep_plan loading the same toml.
+- MISSED: tests/eval/test_round_completion_error.py also asserts `result.get("wr_sealbot") is None`, so there are 3 vacuous sites, not 2.
+- `git grep -c wr_sealbot -- src tools` → tools/dashboard/{strength,tier2,tier3}.py still read it (historical run records). The test asserts stay vacuous because there is no producer.
+S-A-TESTS-6-09 — PENDING-PROBE (torch-bound):
+- `git grep -n -w _openings_at` → the def only. The AST shows no decorator, and no test takes it as a parameter.
+- Probe: deleted lines 89–115, diff −27. Every collect/gate step is green.
+- The file errors at collection at HEAD (torch), so its tests cannot be shown green.
+S-A-TESTS-6-10 — AMENDED:
+- The ruff re-run reproduces 21 findings.
+- Probe: the F401 half (8 lines + 2 blank followers) = −10, the F841 `ack` edit = 0 net, and the F811 half = −22 (11 re-imports + 11 blanks; the 3 anchor lines only lose their `# noqa … does not exist yet` text).
+- tests/eval/test_resolver_wiring.py after the F811 edit: `8 passed`. The other edited files are torch-bound, so the lane-A half is PENDING.
+- The F811 half moves to lane B. pyproject.toml `[tool.ruff.lint.per-file-ignores] "tests/**"` ignores F401/F811/F841 and names "the deliberate re-import idiom", so which import to keep is a design choice. For the same reason the scout's witness (gate 14) is REFUTED: ruff does not check these codes over tests/.
+S-A-TESTS-6-11 — CONFIRMED:
+- test_the_grid_arm_is_the_serial_width asserts `leaf_build_threads` is an IfExp with orelse 1 in run.py.
+- `git grep -c v6_live2_ls -- tests/eval` → 16 in 8 files.
+- Lane C follows S-A-CORE-3-12.
+S-A-TESTS-6-12 — CONFIRMED: the AST body hash of `plan` is identical in authority, markers and verdicts (3-line span each). A new conftest is structural, so lane B.
+S-A-TESTS-6-13 — PENDING-PROBE (torch-bound):
+- Probe edits: test_round_events docstring drops `wr_sealbot` and the RED-at-import line + blank (−2); test_aggregate_regime clause (0); the test_eval_concurrency_row message (−1); test_promote_call_site comment 4→1 (−3). Net −6, and the collect/gate steps are green.
+- `git grep rung_concurrency -- src`: only the RoundSpec field and checkpoints.py's retired-key list. So the message's config-key and file citations are stale, as claimed.
+- AMEND: the test_eval_child_memory.py `rung:sealbot_d5` hits are a phase-label tuple the test iterates, i.e. data, not prose. Remove them from this DOC subject.
+
+### Missed by the scout (optional, max 5)
+- NEW-1 | DOC | B: the stale "house convention" / "cross-test imports are barred" reasons in tests/eval/test_escalate_join_timeout_bound.py (R8 header + fixture comment), test_round_completion_error.py and test_eval_broken_reason_routes.py (R8 header). This is the class REVIEW2 G3.4 rated should-fix, and gate 15 accepts a false reason. Lands with T6-02. Out-of-slice siblings in tests/config → T4.
+- NEW-2 | DOC | C: pyproject.toml's tests/** ruff and pyright exclusions are grounded on "frozen-oracle discipline". PZ-3 says no freeze manifest exists at HEAD, and LAWS.md LAW-14's annotation cites those grounds. So the grounds are governance-linked. Architect call.
+- NEW-3 | TEST | B: test_promote_reason_guard.py::_result still seeds `"wr_sealbot": 0.6`. This is dead-key data (the scout names it in prose only). It goes with T6-08.
+
+### Tally: raised 13 | confirmed 7 | amended 4 | refuted 0 | pending 2 (+ T6-10's lane-A half) | architect 0
