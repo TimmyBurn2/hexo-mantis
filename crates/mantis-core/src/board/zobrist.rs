@@ -21,6 +21,13 @@ const fn splitmix64(mut x: u64) -> u64 {
     x
 }
 
+/// Advance a splitmix64 stream and return its draw: the one seeded PRNG the tests share.
+pub fn splitmix64_next(state: &mut u64) -> u64 {
+    let z = splitmix64(*state);
+    *state = state.wrapping_add(0x9e3779b97f4a7c15);
+    z
+}
+
 /// Produce a 128-bit pseudo-random value from a 64-bit seed using two
 /// independent splitmix64 streams (different additive constants).
 const fn splitmix128(seed: u64) -> u128 {

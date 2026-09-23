@@ -5,6 +5,7 @@
 //! reshaped region with the same cardinality would have passed those. This
 //! was once a launch blocker — hence the explicit set-equality pin.
 
+use mantis_core::board::zobrist::splitmix64_next;
 use mantis_core::board::Board;
 use std::collections::BTreeSet;
 
@@ -26,7 +27,10 @@ fn empty_board_legal_moves_are_5x5_axial_rect() {
     // Fresh board: exact SET equality.
     let b = Board::new();
     let got: BTreeSet<(i32, i32)> = b.legal_moves_set().iter().copied().collect();
-    assert_eq!(got, expected, "fresh-board legal set must be the exact 5×5 axial rectangle");
+    assert_eq!(
+        got, expected,
+        "fresh-board legal set must be the exact 5×5 axial rectangle"
+    );
 
     // After a full undo of a random game the same exact set must be restored
     // (exercises the rebuild path, not the ctor-seeded cache: undo marks the
@@ -37,13 +41,7 @@ fn empty_board_legal_moves_are_5x5_axial_rect() {
     for _ in 0..17 {
         let legal = b.legal_moves();
         assert!(!legal.is_empty());
-        // splitmix64
-        s = s.wrapping_add(0x9e3779b97f4a7c15);
-        let mut z = s;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-        z ^= z >> 31;
-        let (q, r) = legal[(z as usize) % legal.len()];
+        let (q, r) = legal[(splitmix64_next(&mut s) as usize) % legal.len()];
         diffs.push(b.apply_move_tracked(q, r).expect("legal move"));
     }
     while let Some(d) = diffs.pop() {

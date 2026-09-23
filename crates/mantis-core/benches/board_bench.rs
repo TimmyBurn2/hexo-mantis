@@ -12,18 +12,8 @@ use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion};
 use mantis_core::board::Board;
 use std::hint::black_box;
 
-// Helpers
-
-/// Build a board with `n_stones` placed by always picking the lexicographic-minimum
-/// legal move.  Guaranteed collision-free and deterministic.
-fn board_with_n_stones(n_stones: usize) -> Board {
-    let mut b = Board::new();
-    for _ in 0..n_stones {
-        let mv = *b.legal_moves_set().iter().min().expect("no legal moves");
-        b.apply_move(mv.0, mv.1).expect("apply failed");
-    }
-    b
-}
+mod common;
+use common::board_with_n_stones;
 
 // 1. Win detection: last-move-anchored HashMap scan
 

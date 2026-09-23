@@ -12,15 +12,8 @@
 //! rejected at compile time, pinned by the `compile_fail,E0502` doctest on
 //! `legal_moves_set`).
 
+use mantis_core::board::zobrist::splitmix64_next as splitmix;
 use mantis_core::board::{hex_ball_cells, Board, DEFAULT_LEGAL_MOVE_RADIUS};
-
-fn splitmix(s: &mut u64) -> u64 {
-    *s = s.wrapping_add(0x9e3779b97f4a7c15);
-    let mut z = *s;
-    z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-    z ^ (z >> 31)
-}
 
 /// 200-step splitmix64-scripted interleaving of apply_move_tracked / undo_move /
 /// legal_moves_set / legal_move_count on one board (deterministic, no fs, no proptest).

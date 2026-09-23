@@ -786,13 +786,7 @@ mod tests {
             if legal.is_empty() {
                 break;
             }
-            // splitmix64
-            s = s.wrapping_add(0x9e3779b97f4a7c15);
-            let mut z = s;
-            z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-            z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-            z ^= z >> 31;
-            let idx = (z as usize) % legal.len();
+            let idx = (crate::board::zobrist::splitmix64_next(&mut s) as usize) % legal.len();
             let (q, r) = legal[idx];
             let _ = board.apply_move(q, r);
         }
