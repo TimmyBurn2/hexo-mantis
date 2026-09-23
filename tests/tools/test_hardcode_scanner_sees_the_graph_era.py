@@ -28,14 +28,23 @@ def test_the_target_set_is_derived_from_the_live_registry() -> None:
 
     targets = {int(v) for v in H._HARDCODE_TARGETS}
     for spec in all_specs():
-        for field in ("board_size", "policy_logit_count", "n_chain_planes",
+        for field in ("board_size", "policy_logit_count",
                       "node_feat_dim", "edge_feat_dim", "win_length", "graph_radius"):
-            value = getattr(spec, field, None)
+            value = getattr(spec, field)
             if isinstance(value, int) and not isinstance(value, bool) and value >= 3:
                 assert value in targets, (
                     f"{spec.name}.{field} = {value} is a registry geometry value the scanner "
                     "does not look for — the dense-era blind spot, back"
                 )
+
+
+def test_every_scanned_field_is_a_live_registry_attribute() -> None:
+    """A field name the spec lacks must be loud, not a target silently never read."""
+    from mantis.encoding import all_specs
+
+    for spec in all_specs():
+        dead = [f for f in H._REGISTRY_FIELDS if not hasattr(spec, f)]
+        assert not dead, f"the scanner reads fields RegistrySpec {spec.name} lacks: {dead}"
 
 
 @pytest.mark.parametrize("value", [6, 11, 362, 3])

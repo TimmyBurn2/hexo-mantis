@@ -27,6 +27,14 @@ if TYPE_CHECKING:
 _DEFAULT_HITS_DUMP: Path | None = None
 
 
+#: RegistrySpec attributes read strictly, so a field the spec drops is an AttributeError, never a silent skip.
+_REGISTRY_FIELDS: tuple[str, ...] = (
+    "board_size", "trunk_size", "n_planes", "policy_logit_count", "n_source_planes",
+    "legal_move_radius", "cluster_window_size", "cluster_threshold", "k_max",
+    "node_feat_dim", "edge_feat_dim", "win_length", "graph_radius", "win_axes",
+)
+
+
 def _registry_targets() -> tuple[str, ...]:
     """The values this scanner looks for, DERIVED from the live registry.
 
@@ -45,13 +53,8 @@ def _registry_targets() -> tuple[str, ...]:
     except ImportError:  # the scanner runs without the extension in some contexts
         return ("19", "8", "6", "11", "362", "3")
     for spec in all_specs():
-        for field in (
-            "board_size", "trunk_size", "n_planes", "policy_logit_count", "n_source_planes",
-            "legal_move_radius", "cluster_window_size", "cluster_threshold", "k_max",
-            "n_chain_planes", "node_feat_dim", "edge_feat_dim", "win_length", "graph_radius",
-            "win_axes",
-        ):
-            v = getattr(spec, field, None)
+        for field in _REGISTRY_FIELDS:
+            v = getattr(spec, field)
             if isinstance(v, int) and not isinstance(v, bool) and v >= 3:
                 values.add(v)
     return tuple(str(v) for v in sorted(values, reverse=True))
