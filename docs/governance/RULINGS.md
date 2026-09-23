@@ -1,4 +1,4 @@
-# RULINGS — R23 to R367
+# RULINGS — R23 to R368
 
 One entry per ruling. From R346 these entries are **canonical**: an entry here is what the
 ruling means, and it is what a session cites. The verbatim pre-R346 wording is frozen in
@@ -7,7 +7,7 @@ place to go when an entry is not enough, not a competing authority.
 
 **Conventions this file carries forward.**
 
-- Numbering continues from R346. The next ruling is R368.
+- Numbering continues from R346. The next ruling is R369.
 - A ruling corrects only by ANNOTATION, never by silent edit. Where a later ruling moved an
   earlier one, the entry's `Status` line says so and the `Decision` carries the corrected fact
   with the correction named. Nothing here rewrites history into having always been right.
@@ -34,6 +34,144 @@ no section in the register (their text lives in an operator addendum that is not
 repository), **R33** is superseded in full by R37, and **R267** is a documented GAP whose text is
 still owed. **R279(g)-ANNEX** carries its own entry, as it did its own register section. That is
 323 entries over 322 numbers.
+
+### R368 — SLIM-FIX (standing: the SLIM-SCOUT census accepted as the work list, every PENDING-PROBE row re-probed on a torch host before it lands; PROTECTION BINDS THE INVARIANT, NOT THE FILE — LAWS.md's eleven invariants held by their implementing symbols and pinning tests, other code in the same file changes under the normal legs, a card never protects code, a freeze is a manifest row, a reding test or gate or a ruling naming the file; CORRECTNESS FIRST — the census's defects and gate holes land before any slimming, each proven by a planted break, the test-count floor raised to the base's collected count; R367(a) ORDERED on the census — grid/dense residue, the phantom protocol members, run-named symbols and duplicated helpers go, the dense drain oracle re-based on graph goldens; DECIDED DELETIONS — wpa_positions.json, the unread value_probes, RULINGS_ACTIVE.md, CARDS' closed rows, configs/run6–8, the sealbot adapter, the old corpus pipeline, the S-PREFUSE harness; STATE rewritten to current facts; ONE COMMENT RULE with one sanctioned pass over cites and narrative runs; schema keys, minted rows, the CI workflow and hot-path refactors OUT of this phase; RUN10 SAFETY — 69e1532 is run10's validated base and nothing moves its resolved config, stamp format or numerics before run10 STARTs; SEAM-2 recorded, its implementation after run10 STARTs; the queue disposed)
+Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
+R346–R367: the packet made its own canonical block the home and directed that it be copied verbatim
+here.
+
+> R368 — SLIM-FIX.
+> (a) The SLIM-SCOUT census (docs/slim/ at 1e8d6d6) is ACCEPTED as the
+> work list. Its figures come from a host without torch; every
+> PENDING-PROBE row is re-probed on a torch host before it lands.
+> (b) PROTECTION BINDS THE INVARIANT, NOT THE FILE. The protected set is
+> LAWS.md's eleven invariants, each held by its implementing symbols and
+> pinning tests (00_MAP §3, PZ-1). Other code in the same file changes
+> under the normal legs, the invariant's pinning tests green before and
+> after. Editing a listed symbol still needs a ruling that names it. The
+> same holds for seam members, ruling-named code and tools/ci_gates/**.
+> A ruling that named code protects it only while it still directs that
+> code to exist. A card never protects code; the leg that touches it
+> updates the card. A freeze is a manifest row, a test or gate that reds
+> on the edit, or a ruling naming the file; a header calling itself
+> frozen is a claim, corrected on contact.
+> (c) CORRECTNESS FIRST. The 01_DEFECTS witness and gate holes land before
+> any slimming, each proven by a planted break. A repair may extend a
+> protected witness, never narrow one. The test-count floor is raised to
+> the collected count at the base, so every later test deletion lowers it
+> in its own commit.
+> (d) R367(a) is ORDERED on the census, not merely permitted:
+> - grid/dense residue goes: arms, flags, stubs, pins, and the phantom
+>   protocol members TrainerLike.train_step_from_tensors and
+>   GridRouteBufferLike;
+> - run-named symbols and pins go;
+> - duplicated helpers become one: sha256 onto util.hashing; the second
+>   CONSUMER_REGISTRY, once set-equality with the survivor is printed;
+> - the dense drain oracle is re-based on graph goldens captured after
+>   (c), and a planted drain defect must red them.
+> (e) DECIDED DELETIONS. Generators of live goldens stay.
+> - tests/fixtures/graph_parity/wpa_positions.json and its manifest rows;
+>   the re-pin is granted, and the row names the sha and the commit the
+>   file lived in;
+> - the unread value_probes files and their changelog;
+> - docs/governance/archive/RULINGS_ACTIVE.md, a derived index that was
+>   never authority (R271 and R346(e) annotated);
+> - CARDS.md's closed rows;
+> - configs/run6.yaml, run7.yaml and run8.yaml, on R367's run9 precedent;
+>   tests binding them re-point to the census;
+> - the sealbot adapter, vendor script, patch and pin (no production
+>   caller since R362; strix is the ruler), with find_vendor_root moved
+>   first;
+> - src/mantis/data's old corpus pipeline, except what the kept audit tool
+>   imports;
+> - the S-PREFUSE harness of a refuted optimisation, with falsified.md
+>   pointing at its commit.
+> (f) STATE.md is rewritten to current facts, as its own header requires.
+> Each dropped class of paragraph names where it lives: a ruling, a
+> measurement record or a commit. Box-local specifics leave the tree,
+> sanitized forward (R281(b)); history is not rewritten.
+> (g) ONE COMMENT RULE replaces three. A comment or docstring states what
+> the code cannot: one line, more only for an invariant. It carries no
+> ruling, card or finding numbers except in carve-out markers (pinned
+> bands, planted-break markers, armed-value provenance, licence
+> attribution).
+> - ONE sanctioned pass covers exactly two classes, cites and narrative
+>   runs. It runs after gate 14 learns to measure both (bare R-numbers and
+>   docstrings included), with floors that only fall.
+> - Docstring length, missing docstrings and Raises: stay on contact.
+> - Gate 16 widens to zero across the tree.
+> - Broad excepts and Rust unwrap/expect on production paths are
+>   correctness classes: classified; production sites fixed; hot-loop
+>   sites carded with LAW-09's bench.
+> (h) OUT OF THIS PHASE:
+> - schema keys and minted rows (a key retirement needs a loader witness
+>   over every mirrored parent stamp; carded);
+> - the suspended CI workflow (the operator's switch);
+> - hot-path refactors in search, graph build and collate (dead-code
+>   removal there is in);
+> - tests/model/conformance/**, except defect 10's repair and stale text.
+> (i) RUN10 SAFETY. dev 69e1532 is run10's validated base. Until run10
+> STARTs, no leg changes run10's resolved config (config_diff by value
+> against the base), the stamp or checkpoint format, or trainer, search or
+> eval numerics. Deleting code that is unreachable by structure is not
+> such a change. run10 launches from a later dev tip only if every merge
+> since carries the full gate set green, slow tier included; otherwise it
+> launches from 69e1532. Renting stays the operator's (R367(d)).
+> (j) SEAM-2 RECORDED. The seam holds for a plain kind: one forced edit,
+> zero after L-SEAM-05 and SEAM-2. It fails R321's bar for a kind that
+> brings its own head, objective and config rows: the soft-policy landing
+> touched 30 files outside its scope, the trainer and schema among them.
+> L-SEAM-01..04 fold into SEAM-2. Its design packet follows this phase;
+> its implementation merges only after run10 STARTs.
+> (k) QUEUE DISPOSITIONS
+> - AQ-X1: imports decide; message text follows.
+> - AQ-PHANTOM: by (d).
+> - AQ-CARD-FAKES and AQ-LIFECYCLE: a card or a citation protects a file's
+>   existence and its assertion, not its helpers; hoist.
+> - AQ-ORACLE: by (b).
+> - AQ-SHA and AQ-P2: by (d).
+> - AQ-BF16: merge, with a planted fp16 swap reding before and after.
+> - AQ-SEALBOT and DOCS-4-08: by (e).
+> - AQ-FLOORS28: the count is removed and derived at point of use.
+> - AQ-POOL-HPARAMS: keep one; R38 annotated.
+> - AQ-STYLE: by (g).
+> - CORE-2-14: by (h).
+> - RUST-3-16: one stub, at the path the built wheel installs, checked
+>   against the runtime surface.
+> - TOOLS-1-14/-15: keep.
+> - TOOLS-1 NEW-2: by (b).
+> - TESTS-5-27: a test-only pyo3 export stays only while its Python test
+>   is the sole coverage of that binding.
+> - CORE-1-24: delete; the resolver's detector stays.
+> - RUST-2-12/-13: delete.
+> - Every other lane-C row is re-laned under (b) at its wave's entry.
+> (l) LEDGER, architect's: SLIM-SCOUT's "resolve to paths and symbols" let
+> the map protect whole files, so 217 rows went to lane C; and it set no
+> concurrency cap, so twenty agents spent the usage window.
+
+What the forward ENACTS beyond the clauses: (1) this entry lands verbatim as the first commit of the
+SLIM-FIX branch (cut from the census branch `claude/slim-scout-census-v3i2hj` @ 1e8d6d6), with the
+annotations it orders under R271's, R346's, R38's and R334's feet and the S-PREFUSE pointer in
+falsified.md's scope annotations; (2) the fixture re-pins (e) grants are made in
+`tests/fixtures/manifest.toml` / `graph_parity/manifest.tsv` rows that name the removed file's sha and
+the commit it lived in; (3) the work runs in waves W0–W8 (entry, correctness, Rust, Python src, tools,
+tests + fixtures, docs + configs, the style pass, close), each wave a leg under R367(b) with its own fresh
+read-only review, its durable resume point `docs/slim/PROGRESS.md` until W8 removes `docs/slim/`; (4) at
+packet exit, with the full gate set green including the slow tier, the branch fast-forwards `dev`;
+the box and every priced act stay the operator's (R367(d)).
+Grounds: the SLIM-SCOUT census on `claude/slim-scout-census-v3i2hj` @ 1e8d6d6 (`docs/slim/00_MAP.md`,
+`01_DEFECTS.md`, `LEDGER.md` and the 24 scout files); operator direction 2026-09-23.
+Amends: R367(a) is ORDERED on the census by (d), not merely permitted; R271(b)–(d)'s seeding from
+RULINGS_ACTIVE.md and R346(e)'s "ACTIVE … FROZEN into docs/governance/archive/" are ANNOTATED by (e) — the
+index is deleted, the register and RULINGS.md unchanged; R38's two line pins are ANNOTATED by (k)
+AQ-POOL-HPARAMS — one of the two killed-knob tests survives; R334's RUN6 SUCCESS WITNESS rung
+`sealbot_d5` is ANNOTATED by (e) — the adapter is deleted, strix is the ruler; the three comment rules
+the census's AQ-STYLE names (R316(e), R346(f)'s comment clause, R336(e)'s on-contact clause) are REPLACED
+by (g)'s one rule and its one sanctioned pass; the protected set of R346(d) is READ by (b) as invariants
+held by symbols and pinning tests, never as whole files.
+Status: standing.
+
+---
 
 ### R367 — DESIGN STANDARD + REVIEW GATE (standing: code and tests keyed to mechanisms, never to a run — no runN in a symbol, test, pin or tool; production pins a CENSUS of configs/, never a list edited per mint; one implementation per thing; a comment states what code cannot; no compatibility shim for a state the tree no longer has; every implementation leg ends with a FRESH read-only review whose findings are fixed before merge, the dispatcher never reviewing its own leg); run10's 6×192 size conditional WITHDRAWN — no shape-compatible parent exists, run11's build is a function-preserving expansion (CARD-NET-EXPAND); the soft-target construction, the weight envelope and the held-out witness RATIFIED as landed; PRICE LAW — any act with a price (rent, stop, destroy, spec) is the operator's, the architect recommends with cost and alternative stated, R365(a)'s "released" annotated; the box criterion for run10 (CPU-first, 3090-class suffices, admission = bench_server alone at B 64 ≥ 0.85 × 2 466 leaves/s); REVIEW-1 ORDERED on 51f40a18..19e8351d before the run10 mint is green; configs/run9.yaml DELETED
 Decision: verbatim below. This entry breaks the <= 10-line convention on the same authority as
@@ -1682,7 +1820,7 @@ Grounds: operator direction. The era's object is stated in (a); the burden of pr
 removal to retention.
 Status: standing — (i)'s AUDIT-2 filing is DISCHARGED (`docs/audits/AUDIT_2026-09-09.md`,
 `428f3c8`), and (e)'s census/stamp/mirror/sync deletion is a verified NO-OP: that tooling never
-existed in this repository.
+existed in this repository; (e)'s frozen ACTIVE ANNOTATED — A1 under its foot (R368(e): deleted).
 
 ---
 
@@ -1821,7 +1959,7 @@ under a misleading name, RENAME them to behavior-named form; if they reference n
 DELETE them with a log row. No new schema entity is invented either way.
 Grounds: the row is void at HEAD, so the only live question is whether the tests pin real
 behaviour.
-Status: standing — resolves ADJ-02; amends SC-B7.
+Status: standing — resolves ADJ-02; amends SC-B7; ANNOTATED — A1 under its foot (R368(k): the line pins are stale, one of the two tests survives)
 
 ### R39 — recon reuse and Phase 1 ratification
 Decision: Phase 0 recon is COMPLETE and REUSABLE — targets T-A..T-F are not re-run, and stage
@@ -3842,7 +3980,7 @@ Status: standing [RECOVERED VERBATIM]
 Decision: (a) The rulings register is the append-only VERBATIM ARCHIVE — never compressed, rewritten or pruned; only recovery-provenance fills and status annotations touch it. (b) RULINGS_ACTIVE.md is the DERIVED working index; sessions seed from ACTIVE + laws.md + CLAUDE.md and consult the register at point of use, and absence from ACTIVE claims no forward force and deletes nothing — ACTIVE is never authority and the register wins on conflict. (c) A ruling stating a durable rule GRADUATES into laws.md or CLAUDE.md by normal amendment commit, its ACTIVE row collapsing to a pointer and then dropping.
 (d) ACTIVE is curated at session close by the register-pen holder, one log line per curation. (e) The 14 single-ruling batch headers may be normalized in one mechanical docs commit, zero substance.
 Grounds: an index that can be mistaken for authority is how a governance record drifts.
-Status: standing [INLINE]
+Status: standing; (b)–(d) ANNOTATED — A1 under its foot (R368(e): RULINGS_ACTIVE.md deleted) [INLINE]
 
 ### R272 — R271 execution ratified
 Decision: (a) The census, both foot appends, the 14-header normalization and the seed-range corrections are accepted as landed, and R262's [SUMMARY-ONLY] fidelity call is CORRECT and standing — a mission's application of a ruling is a rendering, not the ruling. (b) The R259 restore and the R23-R31 authority qualification are ratified, and the practice joins R271(d): every curation SPOT-CHECKS at least 5 index lines against verbatim register text, and an index line may never claim more than its ruling. (c) Two config-cited BLOCKING values are pinned to the prereg batch with their evidence — checkpoint_interval (run5.yaml mints 0, not a legal production posture) and random_floor_games (mints 0) — both authored, both operator-owed. (d) The dispatcher's R119 restraint on the armed R147 value was correct behavior, on the record.
@@ -4190,7 +4328,7 @@ Status: standing [INLINE]
 ### R334 — REPAIR-3 ratified; F-11 ARMED as SHAPE A; the RUN6 SUCCESS WITNESS pre-registered in shape
 Decision: Ratifies REPAIR-3 (P7's one walker replacing seven hand copies; P9's two reverted deletions on ruling grounds; the slow tier at packet exit; DASH-1 with seven live panels and two banked) and executes the held merge and push so `dev == origin/dev` before any measurement. ARMS F-11 as SHAPE A: the arming predicate gains a producer-liveness operand with gate 12 untouched, plus `poll_once` reading the guard's own counters as a last-emit age for mid-run death; SHAPE B is REJECTED in its form because a monitor thread on a relaunch-class stall code is a crash loop into a filling volume. F-32 takes SHAPE A at the run6 mint with the pin DERIVED from `identity.warm_start` — one source, no hand-synced twin. F-18 takes option (i), the cross-crate pin against mantis-core's independent implementation. Pre-registers PERF-TRANCHE-2's six items with bars written BEFORE each A/B. Pre-registers the RUN6 SUCCESS WITNESS in shape: rounds complete from round one; a checkpoint beats sealbot_d5 at fixed nodes with a CI excluding 0.5; Elo against pinned external rungs slopes upward over the first third.
 Grounds: N and the slope bar are operator prereg rows, so the witness is fixed in shape and left open in value.
-Status: standing [INLINE]
+Status: standing; the witness's sealbot_d5 rung ANNOTATED — A1 under its foot (R368(e): the adapter is deleted) [INLINE]
 
 ### R335 — SCOUT-2 accepted; KLENT refused as a bundle; PERF-TRANCHE-3 ordered
 Decision: Accepts SCOUT-2 as evidence and DISPOSES its six §6 contradictions by FOUR DIFFERENT INSTRUMENTS chosen by each document's status: an append-only annotation for the register row (F-43), one disclosed in-place line each for the two working docs, and an annotation for the input document. REFUSES KLENT as a bundle on COVERAGE, explicitly not stability: |A| is 3-15x outside the tested envelope, the cross-iteration buffer was never validated, epochs-per-buffer is unreported; lambda-returns is the first ablation candidate, reverse-KL second, and entropy normalization is a PRECONDITION on ever arming an entropy term rather than a fix. Fixes the served-sims overshoot AT CAUSE before the mint (53.46 served at 50 configured; a search stops at exactly N). Proposes `playout_cap` DISARMED for the run6 mint. Orders PERF-TRANCHE-3 in five severable legs and requires the RUN6 SUCCESS WITNESS's instrument PROVEN before step 1.
@@ -4613,6 +4751,42 @@ price was stated beside the other; the clause ruled the destroy rather than reco
 states the rule: any act with a price — rent, stop, destroy, spec — is the operator's; the architect
 recommends with the cost and the alternative stated. The breach was the architect's.
 Ordered by: R367(d), appended 2026-09-21 by its landing session
+
+### ANNOTATION under R271's foot (A1) — (b)–(d)'s DERIVED INDEX IS DELETED
+Corrects: R271(b)'s "sessions seed from ACTIVE + laws.md + CLAUDE.md", (c)'s "its ACTIVE row collapsing
+to a pointer" and (d)'s curation of ACTIVE, and R272(b)'s spot-check of index lines; nothing in (a) or (e)
+Fact: `docs/governance/archive/RULINGS_ACTIVE.md` was a derived index that was never authority — (b)
+says so itself — and R346(e) froze it with no further curation. R368(e) deletes it. A session seeds from
+RULINGS.md (canonical from R346), LAWS.md and CLAUDE.md; the verbatim register in the archive is
+untouched and still wins on the pre-R346 wording.
+Ordered by: R368(e), appended 2026-09-23 by its landing session
+
+### ANNOTATION under R346's foot (A1) — (e)'s "ACTIVE … FROZEN into docs/governance/archive/" IS SUPERSEDED FOR ACTIVE ONLY
+Corrects: the ACTIVE member of (e)'s frozen set; the old register, the sitting records, laws.md and the
+archive README stay frozen as (e) directs
+Fact: RULINGS_ACTIVE.md is deleted by R368(e) — a frozen derived index is a second copy of the register
+that nobody curates and a reader can mistake for authority (R271(b)'s own warning). Its text remains in
+git history at `69e15329`.
+Ordered by: R368(e), appended 2026-09-23 by its landing session
+
+### ANNOTATION under R38's foot (A1) — THE TWO LINE PINS ARE STALE, AND ONE OF THE TWO TESTS GOES
+Corrects: the coordinates `tests/selfplay/test_pool_hparams_arms.py:196` and
+`tests/selfplay/test_pool_hparams.py:145`, and the survival of both killed-knob tests; nothing in R38's
+holding (rename a test that pins real behaviour, delete one that pins nothing)
+Fact: the `:196` coordinate now lands on an unrelated test; derive coordinates at point of use (R98). The
+two files carried the same recording proxy and the same killed-knob assertion; R368(k) AQ-POOL-HPARAMS
+keeps ONE — `test_pool_hparams.py::test_killed_and_relocated_fields_never_reach_the_runner`, the wider
+of the two (killed AND relocated fields) — and the arms-file copy goes in the tests wave.
+Ordered by: R368(k), appended 2026-09-23 by its landing session
+
+### ANNOTATION under R334's foot (A1) — THE RUN6 SUCCESS WITNESS'S `sealbot_d5` RUNG HAS NO ADAPTER
+Corrects: the executability in-tree of R334's witness clause "a checkpoint beats sealbot_d5 at fixed
+nodes"; nothing in the F-11, F-32 or F-18 clauses
+Fact: the sealbot rung left the gate with R362 and has had no production caller since; R368(e) deletes the
+adapter, its vendor build script, patch and pin. The witness was spent with run6 (stopped under R350);
+strix is the series ruler (R366). A reading against sealbot_d5 is restorable from git history
+(`69e15329`), never from the tree.
+Ordered by: R368(e), appended 2026-09-23 by its landing session
 
 ### ANNOTATION under LAW-10 (in laws.md) — GRID-ERA
 Corrects: LAW-10's applicability, not its criterion structure
