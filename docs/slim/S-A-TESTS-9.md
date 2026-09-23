@@ -167,3 +167,72 @@ depends: T5/C2 owner of `push_dense` (HANDOFF)
 - The contents of the large data files (wpa_positions.json, manifest.tsv C-rows, mctx_parity_v1.json, board golden, npz/bin blobs): I did not read them, per the slice brief. Only headers and top-level keys were read.
 - Whether the off-tree captures (the migration workspace, the old-side `wp/` banks) still exist: that is outside the repo.
 - Rust readers were verified statically, and no cargo test was run (to save CPU). Torch-dependent Python readers were verified by static reference plus collection. They error here on `No module named 'torch'`, which is expected in this environment.
+
+## Review
+reviewer: fresh read-only agent (not the author); probes in throwaway worktrees, removed
+| ID | verdict | lane | Δlines (probe-measured for lane A) | note |
+|---|---|---|---|---|
+| S-A-TESTS-9-01 | CONFIRMED | C | -938 (probe numstat, lane C; +15 170 B npz) | green delete-probe. Kept by the manifest's recorded "decision to revisit", and tests/fixtures/** is PZ-3 |
+| S-A-TESTS-9-02 | CONFIRMED | C | -41 (probe numstat, lane C) | green delete-probe |
+| S-A-TESTS-9-03 | CONFIRMED | C | -124 772 (probe numstat, lane C; the manifest.tsv sha re-pin is net 0) | green delete-probe including the mantis-graph suite. R334(d)/(iii) names the recapture |
+| S-A-TESTS-9-04 | AMENDED | C | -54 (probe numstat, lane C) | also moves the gate-14 floor: docstring_excess_lines 13079 → 13061 |
+| S-A-TESTS-9-05 | AMENDED | B → C | -5 (a) + in-place rewrites (not probed) | manifest.toml is inside the tests/fixtures/** PZ glob |
+| S-A-TESTS-9-06 | AMENDED | C | not derivable before B-15 (redump ≈ -3 682, not -3 686) | collect_data_input.npz is not dense-only, and one witness was missed |
+
+### Per-finding notes
+S-A-TESTS-9-01 — CONFIRMED (lane C)
+- Search: `rg -l -F <basename>` over the whole tree (hidden files included, docs/slim excluded) for decoded_v, metrics.json, probe_set_v1 and negatives_v1. Every hit is in manifest.toml or value_probes/CHANGELOG.md.
+- Directory readers: `rg -n 'value_probes'` finds 4 readers. All of them build fixed filenames (dist65_golden.json, `_FWD / f"{name}.pt"`, `_KEYS_DIR / f"{name}.txt"`, and ANCHOR_KEYS_FILE); none globs the directory. `rg rglob|glob(|iterdir|os.walk|read_dir … | rg fixture` → no generic fixture-root reader.
+- Delete-probe (one batch worktree for 01–04):
+  - The deletions: the 4 files, their 4 rows, and the 6-line CORRECTED note.
+  - `import mantis` OK.
+  - Collection gives `2289 collected, 167 errors`, the same as HEAD run with the same recipe in the same worktree. `diff` of the ERROR lines is identical.
+  - `pytest tests/test_fixtures_manifest.py tests/test_line_endings.py tests/selfplay/test_target_export_parity.py tests/tools/test_silent_encoding_gate.py` → 90 passed. The line-endings census is 41 ≥ 40 with 02.
+  - `cargo check --workspace --all-targets --locked` green.
+- Gates: gate 10 clean; gate 15 clean (172/172, 0 stale); gate 16 clean. Gate 6 is vacuous by design here: an uncommitted D-status change, and the gate checks only A/R adds.
+- Δ is from the probe numstat: 27 + 234 + 651 + 26 manifest lines = 938.
+- Lane C stands on two grounds: the PZ-3 freeze (a re-mint needs a grant) and the manifest's recorded keep-choice.
+- Once 01 lands, `git ls-files '*.jsonl'` → empty. These two are the only tracked jsonl.
+
+S-A-TESTS-9-02 — CONFIRMED (lane C)
+- `rg -l -F 'value_probes/CHANGELOG'` → manifest.toml only.
+- CHANGELOG.md itself lists `small_{cnn_scalar,cnn_dist65,cnn_aux_chain,gnn}.pt`, but `git ls-files …/forward` shows only small_gnn.pt.
+- Same batch probe, green. Δ = 36 + 5-line row = -41.
+
+S-A-TESTS-9-03 — CONFIRMED (lane C)
+- `rg -n 'header_value|header_ids|\.files|verify_file|corpus' crates/mantis-graph/`: the header keys actually read are endianness, total_cases, class_counts, sentinel_cases, raw_subset and schema. Nothing reads corpus_file or corpus_sha256.
+- The corpus is reached only by the generic F-row loop at graph_parity.rs::manifest_and_fixture_files_valid.
+- Probe: deleted the file, the F-row and the 2 corpus header lines, then re-pinned the manifest.tsv sha in manifest.toml.
+  - `cargo test -p mantis-graph --locked` → graph_parity 5 passed, fixture_selftest 6, d6_lossless 3, dense_index_fallback 8, unit 9.
+  - tests/test_fixtures_manifest.py passes on the re-pin.
+- Δ = 124 769 + 3 (probe numstat).
+- The ruling tie is real: live RULINGS.md does not name the file. The archive's RULINGS_ACTIVE.md R334(d) and the frozen .gitattributes comment both do: "(iii) rides lane C's golden recapture".
+
+S-A-TESTS-9-04 — AMENDED (lane C unchanged; side effect added)
+- `rg -l 'temperature_parity' -g '*.py'` → only the generator itself, so no Python reader of the CSV exists and the docstring's claim is false.
+- Batch probe green, including `cargo test -p mantis-search --test temperature_parity_golden` → 1 passed.
+- MISSED: `comment_lint.py --measure` gives docstring_excess_lines 13061 in the probe worktree against 13079 in the main checkout. The gate does not red (it prints a note), but tools/ci_gates/comment_length_floor.txt must be lowered in the same commit.
+- Deleting the generator leaves two pointers dangling:
+  - the header of crates/mantis-search/tests/temperature_parity_golden.rs, which is not gate-10 scope;
+  - the sha-pinned CSV line 1, "(see gen_temperature_parity_golden.py)", which has to be re-pinned to fix.
+
+S-A-TESTS-9-05 — AMENDED (lane B → C)
+Every claim re-derived:
+- (a) The WPMAIN block has no row under it, test_minted_config_remint.py is absent, and `test_the_frozen_wpmain_baseline_set_is_gone_and_stays_gone` exists.
+- (b) `wc -c` gives 30 254 + 26 642 B. `_FIXTURE_BYTE_BUDGET = 131072`.
+- (c) `grep -i allow artifact_gate.py` → empty.
+- (d) Only gnn_axis_v1.txt and small_gnn.pt exist.
+The lane still changes: manifest.toml sits inside the PZ glob `tests/fixtures/**` (PZ-3 freeze member), and BRIEF says protected contact forces lane C. The comments move no sha. See ARCHITECT.
+
+S-A-TESTS-9-06 — AMENDED (lane C unchanged; subject and witness corrected)
+1. collect_data_input.npz is NOT dense-only. Both `run_drain` factories request it on every call: test_pool_drain_parity.py::run_drain (the rows go into `_build_pool` even when `is_graph=True`, which test_graph_drain_push_rows uses) and test_pool_drain_arms.py::run_drain. Deleting it means reworking the graph-side harness too.
+2. Missed witness: tests/selfplay/test_game_complete_absence.py reads `golden["variants"]["dense_5s_crossed"]["events"]`, so dropping the dense variants reds it unless it is re-based.
+3. Δ: an indent-preserving redump of drain_goldens.json with the dense variants popped gives 1 173 lines, not 1 169. That puts the Δ at about -3 682. The `_npz` map also still lists all 5 variants. Net remains underivable until B-15.
+
+### Missed by the scout
+- NEW-1 | TEST-side effect | C: 01+02+06 together red `tests/test_line_endings.py` (39 < 40), and 04 lowers the gate-14 `docstring_excess_lines` floor. Both floor files must move in the same commits. The scout gave only the first.
+
+### ARCHITECT
+- 05: is tests/fixtures/manifest.toml COMMENT text a "non-canonical working doc" repairable in place under R311(c)? The manifest's own CORRECTED IN PLACE note is the precedent. Or is the whole file frozen with its rows under PZ-3?
+
+### Tally: raised 6 | confirmed 3 | amended 3 | refuted 0 | pending 0 | architect 1 (on 05)
