@@ -162,14 +162,14 @@ def test_the_arming_event_is_not_a_config_key_and_cannot_be_disabled() -> None:
 
 @pytest.mark.integration
 def test_a_real_boot_writes_the_arming_event_into_the_runs_own_jsonl(
-    tmp_path, smoke_run_config,
+    tmp_path, smoke_run_config, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Prove a real composed boot leaves the arming event in the run's own event segment on disk.
 
     The gate is driven first so the latch is populated, exactly as `main` does.
     """
-    signals_mod._LAST_DECISION = None
-    os.environ.pop(PARENT_DEATH_PPID_ENV, None)
+    monkeypatch.setattr(signals_mod, "_LAST_DECISION", None, raising=False)
+    monkeypatch.delenv(PARENT_DEATH_PPID_ENV, raising=False)
     assert arm_parent_death_if_supervised() is False
 
     config = smoke_run_config("smoke_preflight_armed.yaml", train={"max_train_steps": 16})

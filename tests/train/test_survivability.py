@@ -46,7 +46,7 @@ class _InitTrainerSpy:
     ids=["resume-target-forwarded", "fresh-run-forwards-none"],
 )
 def test_build_run_collaborators_forwards_the_resume_target(
-    monkeypatch: pytest.MonkeyPatch, passed: str | None, expected: str | None,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, passed: str | None, expected: str | None,
 ) -> None:
     """`checkpoint_path` REACHES `init_trainer`, which is the resume dispatch. The `None` case
     is the mutation half: a hardcoded path passes the first case and fails this one."""
@@ -57,7 +57,7 @@ def test_build_run_collaborators_forwards_the_resume_target(
 
     config = _minted_config()
     mantis_run.build_run_collaborators(
-        config=config, out_dir=_tmp_out_dir(), checkpoint_path=passed)
+        config=config, out_dir=tmp_path, checkpoint_path=passed)
 
     assert spy.kwargs is not None, "init_trainer was never called"
     assert "checkpoint_path" in spy.kwargs, (
@@ -261,9 +261,3 @@ def _minted_config() -> Any:
     base = load_config(str(REPO_ROOT / "configs" / "smoke_preflight_armed.yaml")).model_dump()
     base["allocator_posture"] = "default"
     return RunConfig.model_validate(base)
-
-
-def _tmp_out_dir() -> Path:
-    import tempfile
-
-    return Path(tempfile.mkdtemp(prefix="mantis-survivability-"))
