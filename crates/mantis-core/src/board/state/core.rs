@@ -523,10 +523,10 @@ impl Clone for Board {
 // while it stays auto-Send. The crate's three `unsafe` expressions each rest on INV-1..INV-4;
 // a fourth touching the cache is a review failure.
 
-// Test-fixture builder, feature `test-fixtures`, OFF by default, so production behaviour is
-// byte-untouched. Downstream test/bench targets use it for positions the public `apply_move`
-// cadence cannot reach.
-#[cfg(feature = "test-fixtures")]
+// Test-fixture builder: this crate's own tests get it free via `cfg(test)`; downstream
+// test/bench targets opt in with feature `test-fixtures`. Neither cfg holds in a release
+// build, so production behaviour is byte-untouched.
+#[cfg(any(test, feature = "test-fixtures"))]
 impl Board {
     /// Test-only static-position builder: plants `stones`, recomputes the bbox, marks the
     /// cache dirty and sets the turn-structure fields explicitly. `last_move` is `Some(..)`

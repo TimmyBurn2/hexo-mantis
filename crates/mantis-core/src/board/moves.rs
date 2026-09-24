@@ -505,7 +505,6 @@ impl Board {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ply::Ply;
 
     #[test]
     fn test_count_winning_moves_empty_board() {
@@ -644,25 +643,7 @@ mod tests {
 
     /// Build a static position with explicit side-to-move + turn-phase, bbox included.
     fn fwm_board(stones: &[((i32, i32), Cell)], player: Player, mr: u8) -> Board {
-        let mut b = Board::new();
-        let (mut lq, mut hq, mut lr, mut hr) = (i32::MAX, i32::MIN, i32::MAX, i32::MIN);
-        for &((q, r), c) in stones {
-            b.cells.insert((q, r), c);
-            lq = lq.min(q);
-            hq = hq.max(q);
-            lr = lr.min(r);
-            hr = hr.max(r);
-        }
-        b.has_stones = true;
-        b.min_q = lq;
-        b.max_q = hq;
-        b.min_r = lr;
-        b.max_r = hr;
-        b.mark_cache_dirty();
-        b.current_player = player;
-        b.moves_remaining = mr;
-        b.ply = Ply::new(stones.len() as u32);
-        b
+        Board::from_stones(stones, player, mr, stones.len() as u32, None)
     }
 
     #[test]
