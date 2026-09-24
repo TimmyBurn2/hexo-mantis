@@ -46,9 +46,8 @@ class LocalInferenceEngine:
         self.model = model
         self.device = device
         self.encoding_spec: EncodingSpec = encoding_spec
-        # Representation comes from the BOUND SPEC; the frozen original's model-object sniff is
-        # deleted repo-wide.
-        self._is_graph = is_graph_representation(self.encoding_spec)
+        # A closed match: a grid or unknown representation raises rather than defaulting dense.
+        is_graph_representation(self.encoding_spec)
         # `1` is the SERIAL path and the exact-parity control: this layer must not invent a host
         # reservation, and a self-play worker is already one of `n_workers` threads.
         self._leaf_build_threads = max(1, int(leaf_build_threads))
@@ -59,39 +58,38 @@ class LocalInferenceEngine:
         self._collate_dump = collate_dump
         self._graph_batcher = None
         self._graph_server = None
-        if self._is_graph:
-            from mantis._engine import InferenceBatcher
-            from mantis.selfplay.inference_server import InferenceServer
+        from mantis._engine import InferenceBatcher
+        from mantis.selfplay.inference_server import InferenceServer
 
-            if inference_batching is None:
-                raise ValueError(
-                    "LocalInferenceEngine: `inference_batching=None`, and there is no literal "
-                    "to fall back to here (R1/LAW-11). Resolve it in the parent through "
-                    "`mantis.config.resolve.inference_batching` and thread it in."
-                )
-
-            # THREADED, never guessed: the collector's saturation threshold derives from it.
-            self._graph_batcher = InferenceBatcher(
-                encoding_spec=self.encoding_spec, max_in_flight=max_in_flight)
-            # `InferenceHParams.from_config` reads `config["inference"]` and this caller has no
-            # `RunConfig`, so the rest are dataclass defaults handed explicitly.
-            self._graph_server = InferenceServer(
-                model, device,
-                {"inference": {
-                    # THREADED, never hardcoded — the batching geometry, same rule as the caps.
-                    "inference_batch_size": inference_batching.inference_batch_size,
-                    "inference_max_wait_ms": inference_batching.inference_max_wait_ms,
-                }},
-                batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
-                # THREADED, never hardcoded: a cap written here would be a SECOND authority over
-                # one byte budget, on the one construction path with no config to be the first.
-                fused_graph_caps=fused_graph_caps,
-                # Threaded for the caps' reason: the rate and dump target are properties of the
-                # PATH this engine serves, which the server cannot know.
-                collate_check_period=self._collate_check_period,
-                collate_dump=self._collate_dump,
+        if inference_batching is None:
+            raise ValueError(
+                "LocalInferenceEngine: `inference_batching=None`, and there is no literal "
+                "to fall back to here (R1/LAW-11). Resolve it in the parent through "
+                "`mantis.config.resolve.inference_batching` and thread it in."
             )
-            self._graph_server.start()
+
+        # THREADED, never guessed: the collector's saturation threshold derives from it.
+        self._graph_batcher = InferenceBatcher(
+            encoding_spec=self.encoding_spec, max_in_flight=max_in_flight)
+        # `InferenceHParams.from_config` reads `config["inference"]` and this caller has no
+        # `RunConfig`, so the rest are dataclass defaults handed explicitly.
+        self._graph_server = InferenceServer(
+            model, device,
+            {"inference": {
+                # THREADED, never hardcoded — the batching geometry, same rule as the caps.
+                "inference_batch_size": inference_batching.inference_batch_size,
+                "inference_max_wait_ms": inference_batching.inference_max_wait_ms,
+            }},
+            batcher=self._graph_batcher, encoding_spec=self.encoding_spec,
+            # THREADED, never hardcoded: a cap written here would be a SECOND authority over
+            # one byte budget, on the one construction path with no config to be the first.
+            fused_graph_caps=fused_graph_caps,
+            # Threaded for the caps' reason: the rate and dump target are properties of the
+            # PATH this engine serves, which the server cannot know.
+            collate_check_period=self._collate_check_period,
+            collate_dump=self._collate_dump,
+        )
+        self._graph_server.start()
 
     def close(self) -> None:
         """Stop the graph `InferenceServer` thread. Idempotent, and also invoked best-effort from
