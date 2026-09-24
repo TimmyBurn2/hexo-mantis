@@ -12,13 +12,18 @@ import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 import mantis.run as mantis_run
+from mantis.config.census import production_configs
+from mantis.config.loader import load_config, parse_config_yaml
 from mantis.run import compose_run
 from _drivable import DrivablePoolStub, DrivableTrainerStub
 
 _REPO = Path(__file__).resolve().parents[1]
 _RUN_PY = _REPO / "src" / "mantis" / "run.py"
 _TOOL_PY = _REPO / "tools" / "ci_gates" / "preflight_mint.py"
+_PRODUCTION = production_configs(_REPO)
 
 _DRIVE_STEPS = 3
 
@@ -111,3 +116,12 @@ def test_no_cli_switch_on_either_caller_can_reach_the_eval_posture() -> None:
             f"{path.relative_to(_REPO)} declares {offenders}: no CLI switch may reach the "
             "eval posture (O-10's ban, R64)"
         )
+
+
+@pytest.mark.parametrize("path", _PRODUCTION, ids=[p.name for p in _PRODUCTION])
+def test_every_production_config_declares_eval_enabled_true(path: Path) -> None:
+    """Every production config declares `eval_enabled` in its own text, and declares it True."""
+    raw = parse_config_yaml(path)
+    assert "eval_enabled" in raw, f"{path.name} does not declare eval_enabled explicitly"
+    assert raw["eval_enabled"] is True, f"{path.name} declares eval_enabled={raw['eval_enabled']!r}"
+    assert load_config(path).eval_enabled is True, f"{path.name} loads with eval_enabled off"
