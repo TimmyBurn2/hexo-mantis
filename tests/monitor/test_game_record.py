@@ -16,6 +16,7 @@ from mantis.monitor.game_record import (
     GameRecordWriter,
     iter_run_games,
     read_shard,
+    run_shard_paths,
     seat_result,
     selfplay_record,
 )
@@ -333,6 +334,21 @@ def test_an_hour_rotation_KEEPS_the_writers_own_segment(tmp_path: Path, monkeypa
     assert [r["game_id"] for r in iter_run_games(tmp_path, "testrun")] == [
         "g0001", "g0003", "g0002",
     ], "shard order is (segment, hour): the writer first, in its own time order"
+
+
+def test_run_shard_paths_is_the_one_shard_enumeration(tmp_path: Path) -> None:
+    """The shard list every reader builds on: this run's shards only, (segment, hour) order."""
+    for name in ("games_testrun_seg0002_2026090810.jsonl",
+                 "games_testrun_seg0001_2026090811.jsonl",
+                 "games_testrun_seg0001_2026090810.jsonl",
+                 "games_other_seg0009_2026090810.jsonl",
+                 "games_testrun_index.jsonl"):
+        (tmp_path / name).write_text("", encoding="utf-8")
+    assert [p.name for p in run_shard_paths(tmp_path, "testrun")] == [
+        "games_testrun_seg0001_2026090810.jsonl",
+        "games_testrun_seg0001_2026090811.jsonl",
+        "games_testrun_seg0002_2026090810.jsonl",
+    ], "segment first, then hour; another run's shards and the index are not this run's"
 
 
 def test_a_shard_torn_MID_CHARACTER_is_still_only_one_skipped_line(tmp_path: Path) -> None:

@@ -226,16 +226,21 @@ def read_shard(path: Path | str) -> tuple[list[dict[str, Any]], int]:
     return records, skipped
 
 
-def iter_run_games(record_dir: Path | str, run_id: str) -> Iterator[dict[str, Any]]:
-    """Every game of `run_id`, in shard order (segment, then hour, then file order)."""
+def run_shard_paths(record_dir: Path | str, run_id: str) -> list[Path]:
+    """`run_id`'s shard files under `record_dir`, in (segment, hour, name) order — the read side of `shard_filename`."""
     directory = Path(record_dir)
-    shards: list[tuple[int, str, Path]] = []
+    found: list[tuple[int, str, Path]] = []
     if directory.is_dir():
         for entry in directory.iterdir():
             match = _SHARD_RE.match(entry.name)
             if match is not None and match.group("run") == run_id:
-                shards.append((int(match.group("seg")), match.group("hour"), entry))
-    for _segment, _hour, path in sorted(shards):
+                found.append((int(match.group("seg")), match.group("hour"), entry))
+    return [path for _segment, _hour, path in sorted(found)]
+
+
+def iter_run_games(record_dir: Path | str, run_id: str) -> Iterator[dict[str, Any]]:
+    """Every game of `run_id`, in shard order (segment, then hour, then file order)."""
+    for path in run_shard_paths(record_dir, run_id):
         records, _skipped = read_shard(path)
         yield from records
 

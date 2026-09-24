@@ -1,16 +1,13 @@
 """Build one run's viewer data from its GAME-RECORD-1 shards: a light index and per-shard games."""
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from mantis.monitor.game_record import read_shard
+from mantis.monitor.game_record import read_shard, run_shard_paths
 
 from .hexlogic import owner, win_line
-
-_SHARD_RE = re.compile(r"^games_(?P<run>.+)_seg(?P<seg>\d+)_(?P<hour>\d{10})\.jsonl$")
 
 
 class EmptyGameRecord(RuntimeError):
@@ -72,16 +69,6 @@ def _arms(game: dict[str, Any]) -> tuple[str, dict[str, int]] | None:
     return "".join(chars), per_arm
 
 
-def _shard_paths(games_dir: Path, run_id: str) -> list[Path]:
-    found: list[tuple[int, str, Path]] = []
-    if games_dir.is_dir():
-        for entry in games_dir.iterdir():
-            match = _SHARD_RE.match(entry.name)
-            if match is not None and match.group("run") == run_id:
-                found.append((int(match.group("seg")), match.group("hour"), entry))
-    return [path for _seg, _hour, path in sorted(found)]
-
-
 def build_run(games_dir: Path | str, run_id: str) -> RunData:
     """Read every shard of `run_id` under `games_dir` into a `RunData`.
 
@@ -91,7 +78,7 @@ def build_run(games_dir: Path | str, run_id: str) -> RunData:
     shards: list[ShardData] = []
     findings: list[str] = []
     skipped_total = 0
-    for shard_no, path in enumerate(_shard_paths(Path(games_dir), run_id)):
+    for shard_no, path in enumerate(run_shard_paths(games_dir, run_id)):
         records, skipped = read_shard(path)
         skipped_total += skipped
         shard = ShardData(name=path.name, skipped=skipped)
