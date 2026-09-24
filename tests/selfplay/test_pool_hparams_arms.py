@@ -7,9 +7,7 @@ from typing import Any
 
 import pytest
 
-from mantis import _engine
 from mantis.config.resolve.search import MissingSearchKindError
-from mantis.selfplay import hparams as hparams_mod
 from mantis.selfplay.pool import WorkerPool
 from mantis.selfplay.hparams import (
     PoolDims,
@@ -17,6 +15,7 @@ from mantis.selfplay.hparams import (
     build_runner_config,
     resolve_pool_encoding,
 )
+from test_pool_hparams import record_runner_config_factory
 
 BASE_SELFPLAY: dict[str, Any] = {
     "n_workers": 7, "leaf_batch_size": 12, "max_game_moves": 200,
@@ -68,44 +67,11 @@ def cfg(
     }
 
 
-class _RecordingRunnerConfig:
-    """Proxy over the REAL Rust config, recording ctor kwargs + post-ctor attribute sets: the
-    Rust config exposes getters for post-ctor attributes only, so the ctor-kwarg dict is the
-    ONLY observable of the config->runner wire.
-    """
-
-    def __init__(self, **kwargs: Any) -> None:
-        object.__setattr__(self, "recorded_kwargs", dict(kwargs))
-        object.__setattr__(self, "recorded_attrs", {})
-        object.__setattr__(self, "real", _engine.SelfPlayRunnerConfig(**kwargs))
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        self.recorded_attrs[name] = value
-        setattr(self.real, name, value)
-
-    def __getattr__(self, name: str) -> Any:
-        return getattr(object.__getattribute__(self, "real"), name)
-
-
 @pytest.fixture
 def assemble(monkeypatch):
-    """Factory → the `_RecordingRunnerConfig` produced by assembling one config dict."""
-    built: list[_RecordingRunnerConfig] = []
-
-    class _Factory(_RecordingRunnerConfig):
-        def __init__(self, **kwargs: Any) -> None:
-            super().__init__(**kwargs)
-            built.append(self)
-
-    monkeypatch.setattr(hparams_mod, "SelfPlayRunnerConfig", _Factory)
-
-    def build(config: dict[str, Any]) -> _RecordingRunnerConfig:
-        hp = SelfPlayHParams.from_config(config)
-        enc = resolve_pool_encoding(config, arch=None)
-        build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
-        return built[-1]
-
-    return build
+    """The recording proxy shared with the assembly-golden suite (test_pool_hparams), under
+    this suite's shorter name."""
+    return record_runner_config_factory(monkeypatch)
 
 
 # effective-sims resolution + the one hard error with no schema equivalent
@@ -226,14 +192,6 @@ def test_pool_dims_derivation_golden(assemble, encoding: str, expected: PoolDims
     enc = resolve_pool_encoding(config, arch=None)
     _, dims = build_runner_config(hp, spec_dims=enc, encoding_name=enc.encoding_name)
     assert dims == expected
-
-
-def test_killed_knobs_are_never_read(assemble) -> None:
-    """Killed self-play knobs assemble cleanly and neither name reaches the Rust config."""
-    config = cfg(selfplay={"legal_move_radius_jitter": True})
-    recorded = assemble(config)
-    assert "legal_move_radius_jitter" not in recorded.recorded_kwargs
-    assert "interior_selector" not in recorded.recorded_attrs
 
 
 def test_hparams_round_trip_is_json_stable() -> None:

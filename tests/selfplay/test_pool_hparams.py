@@ -10,6 +10,7 @@ Three captured ctor kwargs deliberately do not cross and are asserted absent: th
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 import pytest
@@ -49,9 +50,8 @@ class RecordingRunnerConfig:
         return getattr(object.__getattribute__(self, "real"), name)
 
 
-@pytest.fixture
-def record_runner_config(monkeypatch):
-    """Return a factory building the RecordingRunnerConfig for an assembled `config`."""
+def record_runner_config_factory(monkeypatch) -> Callable[[dict[str, Any]], RecordingRunnerConfig]:
+    """Patch `hparams` to build the recording proxy; return the one-config assembly factory."""
     built: list[RecordingRunnerConfig] = []
 
     class _Factory(RecordingRunnerConfig):
@@ -73,6 +73,12 @@ def record_runner_config(monkeypatch):
         return built[-1]
 
     return build
+
+
+@pytest.fixture
+def record_runner_config(monkeypatch):
+    """The recording factory, as the golden suite's fixture."""
+    return record_runner_config_factory(monkeypatch)
 
 
 @pytest.mark.parametrize("case", ["full_config", "minimal_config"])
