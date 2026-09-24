@@ -38,8 +38,7 @@ hexo-mantis/
 ├── src/mantis/                 # the one Python package (installed, src-layout)
 │   ├── encoding/               # delegating shim over _engine registry + resolvers + audit
 │   ├── config/                 # schema (pydantic, extra=forbid) + per-knob resolvers
-│   ├── env/                    # thin GameState wrapper over _engine
-│   ├── data/                   # corpus generation, IO, metrics, augmentation LUTs
+│   ├── data/                   # bootstrap_encode: the graph BC corpus producer
 │   ├── model/                  # nets (GNN + CNN), dist65 value codec, build_net authority
 │   ├── train/                  # trainer, step coordinator, lifecycle (signals/watchdog/
 │   │                           #   disk guard/shutdown-save), pretrain, checkpoint IO (ONE)
@@ -117,12 +116,11 @@ diagnostics                  → SINK, not leaf: may import anything BELOW `run`
                                test_worker_sweep_reachability.py`), because R309(g) requires that
                                no trainer step be executable before the mint.
 encoding                     → _engine only
-env                          → encoding
 config                       → encoding, util
-data                         → encoding, env, util
+data                         → encoding
 model                        → encoding, config          # dist65 codec lives HERE
-bots                         → encoding, env, model
-selfplay                     → encoding, env, model, config, util, monitor(events only)
+bots                         → encoding, model
+selfplay                     → encoding, model, config, util, monitor(events only)
 monitor                      → encoding, util            # headless; imports NO torch
 train                        → all above except eval     # eval reached via injected callable
 eval, arena                  → all above except train's internals; checkpoint IO via the

@@ -12,11 +12,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# R41 (WPSC SC-B7): the three lazily-imported analysis/instrumentation deps and ONLY
-# those — corpus_metrics/corpus_reporter/corpus_analysis (matplotlib, rich) and
-# selfplay instrumentation's spearmanr (scipy). structlog is deliberately absent:
-# nothing imports it (WP10 swapped it for stdlib logging).
-analysis = ["matplotlib", "rich", "scipy"]
+# The one lazily-imported instrumentation dep: selfplay instrumentation's spearmanr (scipy).
+analysis = ["scipy"]
 # R348(a): CUDA torch is an EXTRA, never the default. `uv sync` alone installs the CPU wheel
 # (the WP9 parity regime); `uv sync --extra cuda` swaps the same pin to the cu128 index. The
 # box's declared-device halt (preflight rc 17) is the authority that a CUDA run got a CUDA
@@ -88,7 +85,7 @@ target-version = "py311"
 # WPCLEAN Phase LT (R98): every selected rule is ZERO at HEAD over src/ + tools/ and gated
 # by tools/ci_gates/lint_gate.sh — an advisory rule nobody reads is the fog CARD-LINT-GATE
 # was ratified to end. PLE joins the select with a named catch (PLE0303, a live
-# TypeError-in-waiting in data/sources/base.py, fixed same-phase).
+# TypeError-in-waiting, fixed same-phase).
 select = ["E", "F", "W", "I", "UP", "B", "BLE", "PLE"]
 # BLE = flake8-blind-except: `except Exception:` without re-raise is banned over src/ and tools/
 # (repo_design §11 "except Exception: pass is lint-banned").

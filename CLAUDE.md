@@ -22,7 +22,7 @@ before proposing ANY optimization or experiment. Law text: docs/governance/LAWS.
 - crates/mantis-search — MCTS (PUCT + Gumbel), completed-Q, tactics solver.
 - crates/mantis-selfplay — runner, worker loop, inference queues, replay buffers.
 - crates/mantis-bridge — ALL PyO3 lives here; maturin builds mantis._engine (abi3).
-- src/mantis/ — the ONE Python package: encoding, config, env, data, model, train,
+- src/mantis/ — the ONE Python package: encoding, config, data, model, train,
   selfplay, eval, arena, bots, monitor (HEADLESS ONLY), diagnostics, util, deploy
   (RESERVED, empty until post-cutover).
 - tests/ — SINGLE collection root, mirrors src/mantis + crates; tests/fixtures carries

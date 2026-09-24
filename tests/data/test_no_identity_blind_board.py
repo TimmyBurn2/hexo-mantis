@@ -11,10 +11,10 @@ corpus — registry threshold 8 — were computed under a rule that corpus never
 THE THREADED FORM (`Board.with_encoding_name`) is what the surviving sites use; the census
 below is the standing guard that no new site reverts to the blind one.
 
-FOUR OF THE SIX SITES ARE NOW DELETED OUTRIGHT (R346(f)): `data/replay.py`'s two replayers,
-`data/corpus_metrics.py` and `train/pretrain/dataset.py` went with the grid path, and the
-three grid encodings this file used to measure geometry against (`v6`, `v6w25`,
-`v6_live2_ls`) left the registry with them. The per-replayer rows and the
+ALL SIX SITES ARE NOW DELETED OUTRIGHT: `data/replay.py`'s two replayers and
+`train/pretrain/dataset.py` went with the grid path, the other three with the old corpus
+pipeline, and the three grid encodings this file used to measure geometry against (`v6`,
+`v6w25`, `v6_live2_ls`) left the registry with them. The per-replayer rows and the
 `_game_winner_from_replay` grave are retired for the same reason — a grave over a module
 that no longer exists is not a guard, it is an import error waiting for a reader. What
 remains is the property that outlived the subject: the census, its self-test, and the

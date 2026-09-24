@@ -3,9 +3,6 @@
 Three places where they did not: the six investigation metrics read 0 when the lever was off or
 the game recorded no moves; an unrecognised winner code resolved to a measured DRAW; and
 `_watchdog_counters` returned `{}` for both "armed, nothing failed" and "no watchdog wired".
-
-The `data_loss_counters` sibling is deliberately untouched: its registry always exists and is
-always counting, so an empty snapshot from it is a true "nothing was lost".
 """
 from __future__ import annotations
 
@@ -116,17 +113,3 @@ def test_an_ARMED_watchdog_with_nothing_to_report_still_reports_an_empty_mapping
     assert _Coord(live).counters() == {}
     live.counters.increment("mirror_failed")
     assert _Coord(live).counters() == {"mirror_failed": 1}
-
-
-def test_the_data_loss_counters_sibling_is_deliberately_UNCHANGED() -> None:
-    """The asymmetry is a decision: `PIPELINE_COUNTERS` always exists and is always counting,
-    so `{}` from it is a true "nothing was lost" — and a registry no producer feeds would be
-    the opposite, an always-empty mapping reading as a measurement."""
-    from mantis.data import loss_counters
-
-    assert loss_counters.PIPELINE_COUNTERS.snapshot() is not None
-    assert isinstance(loss_counters.PIPELINE_COUNTERS.snapshot(), dict)
-    assert not hasattr(loss_counters, "REPLAY_COUNTERS"), (
-        "the deleted registry came back without its producers — an always-empty snapshot "
-        "reading as 'nothing was lost' is precisely the absence C05 is about"
-    )

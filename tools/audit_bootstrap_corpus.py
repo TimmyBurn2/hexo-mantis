@@ -37,8 +37,7 @@ and the declared winner must hold a six-run in the final position. KNOWN LIMIT: 
 undetectable by a win-line check.
 
 DEDUPE: there is NO in-repo ``game_hash`` producer for the human corpus — a human game's identity
-is the source UUID filename stem, and the only hash-of-moves in the repo hashes BOT games. So
-without ``--in-repo-corpus`` the leg reports NO IN-REPO REFERENCE AVAILABLE; with it, the leg
+is the source UUID filename stem, and nothing in the repo hashes a game's moves. So without ``--in-repo-corpus`` the leg reports NO IN-REPO REFERENCE AVAILABLE; with it, the leg
 derives a comparable key on BOTH sides via ``derived_move_key`` and labels the result DERIVED.
 
 Exit codes: 0 clean · 2 sha256 verification failure · 3 contract violation · 4 usage/IO error.
@@ -79,7 +78,7 @@ I32_MAX = 2**31 - 1
 #: crates/mantis-core/src/board/state/core.rs:40-42 and board/zobrist.rs:77-81. The window
 #: SLIDES — this is a reporting reference, never a rejection bound.
 NOMINAL_WINDOW_HALF = 9
-#: src/mantis/data/sources/human.py:115-119 — the in-repo ingestion filter's move floor, in PLIES,
+#: The retired in-repo human ingestion filter's move floor, in PLIES,
 #: and the same floor recorded below as selection bias (b).
 DECLARED_MIN_PLIES = 20
 #: The ply caps truncation is measured against, in PLIES. Both are REPORTING references — this
@@ -373,8 +372,8 @@ def parse_record(obj: object, where: str) -> dict[str, Any]:
         if not isinstance(mv, list) or len(mv) != 2:  # pyright: ignore[reportUnknownArgumentType]
             raise ContractViolation(
                 f"{where}: moves[{i}] must be a 2-element [q, r] array; found "
-                f"{_describe_moves(raw_moves)}. The in-repo human corpus uses "
-                "{'x': q, 'y': r} objects (src/mantis/data/sources/human.py:85); if the "
+                f"{_describe_moves(raw_moves)}. The human corpus JSON cache uses "
+                "{'x': q, 'y': r} objects (the retired in-repo reader's format); if the "
                 "dataset does too, amend the contract block -- this tool will not coerce."
             )
         q: object = mv[0]  # pyright: ignore[reportUnknownVariableType]
@@ -740,8 +739,8 @@ def derived_move_key(moves: list[tuple[int, int]]) -> str:
 
 
 def _in_repo_move_keys(corpus_dir: Path) -> tuple[list[str], list[str]]:
-    """Derive move keys from the in-repo human corpus JSON cache, whose ``moves[i].x`` /
-    ``moves[i].y`` ARE the axial (q, r) (src/mantis/data/sources/human.py:85)."""
+    """Derive move keys from the human corpus JSON cache, whose ``moves[i].x`` / ``moves[i].y``
+    ARE the axial (q, r)."""
     keys: list[str] = []
     skipped: list[str] = []
     for path in sorted(corpus_dir.glob("*.json")):
@@ -787,10 +786,8 @@ def dedupe_leg(records: list[dict[str, Any]], corpus_dir: Path | None) -> dict[s
         "dataset_distinct_derived_move_key": len(set(derived)),
         "dataset_duplicate_derived_move_key": len(derived) - len(set(derived)),
         "in_repo_game_hash_producer": (
-            "ABSENT -- human corpus identity is the source UUID filename stem "
-            "(src/mantis/data/sources/human.py:98); the only hash-of-moves in the repo is "
-            "src/mantis/data/generate.py:147-150, which hashes BOT games for use as a "
-            "filename and is non-canonical under F-06"
+            "ABSENT -- human corpus identity is the source UUID filename stem, and nothing "
+            "in the repo hashes a game's moves"
         ),
     }
     if corpus_dir is None:
@@ -857,7 +854,7 @@ def selection_biases(records: list[dict[str, Any]], conv: dict[str, Any]) -> lis
                 "min_plies_found": min(ply_counts) if ply_counts else None,
                 "games_below_declared_floor": below,
                 "declared_floor_plies": DECLARED_MIN_PLIES,
-                "floor_source": "src/mantis/data/sources/human.py:115-119",
+                "floor_source": "the retired in-repo human ingestion filter",
             },
         },
     ]
@@ -924,8 +921,7 @@ def build_report(
     if conv["draws"]:
         violations.append(
             f"{conv['draws']} record(s) carry winner == 0 (a draw). mantis-core's Player has "
-            "no draw member (core.rs:59-64) and GameRecord.winner is +1/-1 only "
-            "(data/sources/base.py:20) -- a draw is unmappable. R247 predicted zero draw "
+            "no draw member (core.rs:59-64) -- a draw is unmappable. R247 predicted zero draw "
             "mass; this is the measurement disagreeing with it."
         )
     if conv["winner_outside_mapped_domain"]:

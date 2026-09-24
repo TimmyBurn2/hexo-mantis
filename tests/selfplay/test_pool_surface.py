@@ -96,7 +96,7 @@ INFERENCE_STATS_FIELDS = {"forward_count", "total_requests", "encoding_spec"}
 # The import DAG selfplay is allowed. `mantis.eval` / `mantis.train` / `mantis.bots` are absent BY
 # CONSTRUCTION: promotion is a callee surface and every outward collaborator is injected.
 ALLOWED_MANTIS_ROOTS = {
-    "mantis._engine", "mantis.encoding", "mantis.env", "mantis.model", "mantis.config",
+    "mantis._engine", "mantis.encoding", "mantis.model", "mantis.config",
     "mantis.monitor", "mantis.util", "mantis.selfplay",
 }
 FORBIDDEN_MANTIS_ROOTS = {"mantis.eval", "mantis.train", "mantis.bots"}

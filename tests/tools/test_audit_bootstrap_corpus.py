@@ -228,8 +228,7 @@ def test_the_dedupe_leg_labels_a_supplied_reference_as_derived(tmp_path: Path):
     ds = _write_dataset(tmp_path, [shared, _decisive_p1_game("only-in-dataset")])
     repo_corpus = tmp_path / "human"
     repo_corpus.mkdir()
-    # in-repo human corpus shape: moves[i].x / moves[i].y ARE the axial (q, r)
-    # (src/mantis/data/sources/human.py:85).
+    # human corpus cache shape: moves[i].x / moves[i].y ARE the axial (q, r)
     moves = shared["moves"]
     assert isinstance(moves, list)
     (repo_corpus / "uuid-1.json").write_text(
@@ -323,7 +322,7 @@ def test_an_object_form_move_list_is_refused_and_names_the_in_repo_alternative(
     assert _run(ds, out) == EXIT_CONTRACT
     err = capsys.readouterr().err
     assert "list of objects with keys ['x', 'y']" in err
-    assert "human.py:85" in err        # points the operator at the in-repo alternative
+    assert "the retired in-repo reader's format" in err  # names the object form's origin
     assert not out.exists()
 
 
