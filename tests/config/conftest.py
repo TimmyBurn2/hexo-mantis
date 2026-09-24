@@ -20,7 +20,7 @@ def production_config(smoke_run_config):
     (LAW-03). The NAME is unchanged — its users answer "the production config", while the
     factory answers "a config derived from any of the minted ones". The delegation goes
     through pytest's own fixture mechanism rather than `from conftest import ...`, because
-    the bare module name `conftest` resolves to THIS file, not the root one (R5 bars the
-    `sys.path` write that would fix that).
+    the bare module name `conftest` resolves to THIS file, not the root one, and no
+    `sys.path` write may bridge that.
     """
     return smoke_run_config("run6.yaml")
