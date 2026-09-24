@@ -15,7 +15,7 @@ import pytest
 import torch
 
 from _monitor_config import monitor_config
-from mantis._engine import HexgBuffer
+from _graph_drive import filled_hexg
 from mantis.encoding import lookup
 from mantis.encoding.resolvers import MissingEncodingError
 from mantis.model import GnnArch, build_net
@@ -48,18 +48,6 @@ def _coord_cfg(**over: Any) -> StepCoordinatorConfig:
     )
     base.update(over)
     return StepCoordinatorConfig(**base)
-
-
-def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real HexgBuffer fed through the real graph push path (stones, policy, current_player,
-    moves_remaining, ply_index, is_full_search, outcome, value_valid, game_length)."""
-    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        policy = [(2, 0, 0.6), (1, 1, 0.4)]
-        outcome = 1.0 if i % 2 == 0 else -1.0
-        hb.push_graph_position(stones, policy, 1, 30, 2 + i, True, outcome, True, 10 + i)
-    return hb
 
 
 def _tiny_graph_trainer(tmp_path, mk_config) -> Trainer:
@@ -146,7 +134,7 @@ def test_graph_train_step_end_to_end_from_coordinator(tmp_path, mk_config) -> No
     """A REAL gradient step executes through step() → the straight self-play arm → the declared
     dispatcher → `train_step_from_graph_batch`, on the graph representation."""
     trainer = _tiny_graph_trainer(tmp_path, mk_config)
-    coord = _coordinator(trainer, _graph_buffer(), mk_config(GRAPH_ENCODING, "graph"))
+    coord = _coordinator(trainer, filled_hexg(), mk_config(GRAPH_ENCODING, "graph"))
     out = coord.step()
     assert out.in_warmup is False and out.waiting_for_games is False
     assert out.steps_run >= 1
@@ -161,7 +149,7 @@ def test_graph_step_advances_trainer_step_counter(tmp_path, mk_config) -> None:
     trainer = _tiny_graph_trainer(tmp_path, mk_config)
     before = trainer.step
     run_declared_train_step(
-        trainer, _graph_buffer(), _GSPEC,
+        trainer, filled_hexg(), _GSPEC,
         batch_size=4, augment=False, recency_weight=0.0,
         caps_provider=_NON_BINDING_CAPS,
         sample_threads_provider=lambda: 1,
@@ -176,7 +164,7 @@ def test_unknown_representation_raises_named_error() -> None:
         representation = "voxel"
 
     with pytest.raises(RepresentationRouteError, match="voxel"):
-        run_declared_train_step(_RecordingTypedTrainer(), _graph_buffer(), _AlienSpec(),
+        run_declared_train_step(_RecordingTypedTrainer(), filled_hexg(), _AlienSpec(),
                                 batch_size=2, augment=False, recency_weight=0.0,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
@@ -208,14 +196,14 @@ def test_missing_graph_entry_point_dies_loud_on_the_graph_route() -> None:
             pass
 
     with pytest.raises(AttributeError, match="train_step_from_graph_batch"):
-        run_declared_train_step(_HalfTrainer(), _graph_buffer(), _GSPEC,
+        run_declared_train_step(_HalfTrainer(), filled_hexg(), _GSPEC,
                                 batch_size=2, augment=False, recency_weight=0.0,
                                 caps_provider=_NON_BINDING_CAPS, sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
 
 
 def test_graph_arm_threads_recency_weight_as_recent_frac() -> None:
-    real = _graph_buffer()
+    real = filled_hexg()
     seen: list[dict[str, Any]] = []
 
     class _RecordingHexg:
@@ -262,7 +250,7 @@ def test_the_caps_provider_is_invoked_exactly_once_per_graph_step() -> None:
         invoked.append(1)
         return _NON_BINDING_CAPS()
 
-    run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
+    run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0, caps_provider=_counting,
                             sample_threads_provider=lambda: 1,
                             fast_policy_weight_provider=lambda: 0.0)
@@ -279,7 +267,7 @@ def test_the_sample_threads_provider_is_invoked_exactly_once_per_graph_step() ->
         invoked.append(1)
         return 1
 
-    run_declared_train_step(rec, _graph_buffer(), _GSPEC, batch_size=2, augment=False,
+    run_declared_train_step(rec, filled_hexg(), _GSPEC, batch_size=2, augment=False,
                             recency_weight=0.0,
                             caps_provider=_NON_BINDING_CAPS,
                             sample_threads_provider=_counting,

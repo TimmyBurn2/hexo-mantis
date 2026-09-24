@@ -20,27 +20,17 @@ from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.config.schema import ARCH_SCOPED_KEYS
 from mantis.encoding import lookup
-from mantis._engine import HexgBuffer
 from mantis.model import GnnArch, build_net
 from mantis.train.coordinator.dispatch import run_declared_train_step
 from mantis.train.checkpoints import CHECKPOINT_SCHEMA_VERSION, resume_trainer
 from mantis.train.lifecycle.signals import ShutdownState, install_signal_handlers
 from mantis.train.loop import run_training_loop
 from mantis.train.trainer.core import Trainer
+from _graph_drive import filled_hexg
 
 pytestmark = pytest.mark.integration
 
 ENCODING = "gnn_axis_v1"
-
-
-def _synthetic_ring(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the smoke steps through — the production sampler, not a stub."""
-    hb = HexgBuffer(capacity, ENCODING, 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
 
 
 def _eval_block():
@@ -166,7 +156,7 @@ def test_launch_path_smoke(tmp_path, full_train_hparams):
     hp = full_train_hparams(checkpoint_interval=0)
     tr = Trainer(net, config, arch=arch, checkpoint_dir=tmp_path, train_hparams=hp)
 
-    ring = _synthetic_ring()
+    ring = filled_hexg()
     caps = config["train"]["microbatch_caps"]
 
     # run ≈2 steps through run_training_loop, then request save-then-exit

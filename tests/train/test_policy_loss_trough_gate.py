@@ -20,7 +20,7 @@ from mantis.monitor.rules import check_policy_loss_trough
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-from mantis._engine import HexgBuffer
+from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
 
 _CONFIG = Path(__file__).resolve().parents[2] / "configs" / "dev_example.yaml"
 
@@ -57,15 +57,6 @@ def test_the_resolver_returns_none_on_the_explicit_off_and_the_spec_otherwise() 
     armed = SimpleNamespace(policy_loss_trough_abort=SimpleNamespace(delta_nats=0.2, consec=3,
                                                                      max_step=5000))
     assert resolve_policy_loss_trough_abort(armed) == PolicyLossTroughAbortSpec(0.2, 3, 5000)
-
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
 
 
 class _RunnerStats:
@@ -127,7 +118,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
-        self._hexg = _filled_hexg()
+        self._hexg = filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -168,10 +159,7 @@ def _harness(script, spec: PolicyLossTroughAbortSpec | None, *, gate_interval: i
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=object(), config=config,
-        full_config={"identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-                     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-                               "fast_policy_weight": 0.0},
-                     "selfplay": {"n_workers": 1}},
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=None, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)

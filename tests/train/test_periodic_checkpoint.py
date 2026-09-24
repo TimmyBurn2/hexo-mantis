@@ -30,7 +30,7 @@ import pytest
 import torch
 
 from _monitor_config import monitor_config
-from mantis._engine import HexgBuffer
+from _graph_drive import filled_hexg
 from mantis.config.loader import load_config
 from mantis.config.resolve.microbatch import MicrobatchCapsSpec
 from mantis.encoding import lookup
@@ -137,17 +137,6 @@ def _calls_in(fn: Any, receiver: str, attr: str) -> int:
     return n
 
 
-def _graph_buffer(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real HexgBuffer fed through the real graph push path."""
-    hb = HexgBuffer(capacity, GRAPH_ENCODING, 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        policy = [(2, 0, 0.6), (1, 1, 0.4)]
-        outcome = 1.0 if i % 2 == 0 else -1.0
-        hb.push_graph_position(stones, policy, 1, 30, 2 + i, True, outcome, True, 10 + i)
-    return hb
-
-
 def _graph_arch() -> GnnArch:
     return GnnArch(in_dim=_GSPEC.node_feat_dim, edge_dim=_GSPEC.edge_feat_dim, hidden=16,
                    num_layers=1, policy_hidden=16, value_hidden=16)
@@ -164,7 +153,7 @@ def _drive_graph(trainer: Trainer, spec: Any, n_steps: int) -> None:
     """`n_steps` REAL gradient updates through the REAL declared dispatcher, the route the
     burst loop takes. Reachability: the tail calls the resolver UNCONDITIONALLY, so it is an
     executed statement on every step; whether it WRITES is the predicate under test."""
-    buffer = _graph_buffer()
+    buffer = filled_hexg()
     for _ in range(n_steps):
         run_declared_train_step(trainer, buffer, spec, batch_size=4, augment=False,
                                 recency_weight=0.0,
@@ -396,7 +385,7 @@ def test_terminus_holds_two_artefacts_and_leg_three_stays_exactly_once(
                              spy_sink)
     coord = StepCoordinator(
         monitor_cfg=monitor_config(),
-        trainer=trainer, buffer=_graph_buffer(),
+        trainer=trainer, buffer=filled_hexg(),
         pool=_Pool(), eval_pipeline=None, subsystems=None, anchor_state=None,
         shutdown=ShutdownState(), eval_model=None, config=_coord_cfg(),
         full_config=full_config, sink=spy_sink,

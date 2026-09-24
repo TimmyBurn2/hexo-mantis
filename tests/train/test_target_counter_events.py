@@ -28,8 +28,6 @@ the counter VALUES.
 """
 from __future__ import annotations
 
-from mantis._engine import HexgBuffer
-
 import dataclasses
 import inspect
 from types import SimpleNamespace
@@ -38,6 +36,7 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
+from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.selfplay.pool_hooks import RunnerStats
@@ -45,29 +44,6 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.events import emit_iteration_complete_event, emit_training_step_event
 from mantis.train.lifecycle.signals import ShutdownState
 from pathlib import Path
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through; cross-test imports are barred,
-    so each file that needs one builds it."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
-#: plus the sections the route's own resolvers read. The caps are the template's NON-BINDING
-#: pair — nothing here exercises a split.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
-
 
 _REPO = Path(__file__).resolve().parents[2]
 _DEV_CONFIG = load_config(_REPO / "configs" / "dev_example.yaml")
@@ -168,7 +144,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
-        self._hexg = _filled_hexg()
+        self._hexg = filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -216,7 +192,7 @@ def _drive(*snapshots: RunnerStats) -> list[dict]:
         pool=pool, eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(), config=config,
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     for snapshot in snapshots:

@@ -51,6 +51,7 @@ from mantis.encoding import lookup
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
 from mantis.model import GnnArch, build_net
+from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
 from _monitor_config import monitor_config
 from mantis.monitor.heartbeat import DRAW_RATE_COLLAPSE_EXIT_CODE
 from mantis.run import RunCollaborators, _step_coordinator_config
@@ -59,28 +60,6 @@ from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.disk_guard import DiskGuard
 from mantis.train.lifecycle.signals import ShutdownState
 from _drivable import DrivableTrainerStub
-
-#: The declaration a `StepCoordinator` reads on the graph route: the identity it dispatches on
-#: plus the sections the route's resolvers read. The caps are the template's NON-BINDING pair.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
-
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """A real graph ring the coordinator stubs sample through (R5 bars cross-test imports,
-    so each file that needs one builds it)."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
 
 _REPO = Path(__file__).resolve().parents[2]
 _SRC = _REPO / "src" / "mantis"
@@ -198,7 +177,7 @@ class _Buffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
-        self._hexg = _filled_hexg()
+        self._hexg = filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -298,7 +277,7 @@ def _make_coordinator(*, eval_pipeline: Any, sink: _SpySink,
         pool=pool, eval_pipeline=eval_pipeline, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=shutdown, eval_model=_tiny_model(), config=config,
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, shutdown=shutdown, sink=sink)

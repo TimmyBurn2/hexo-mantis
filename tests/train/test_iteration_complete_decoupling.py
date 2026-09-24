@@ -7,8 +7,6 @@ mcts/cluster block become one atomic read instead of two that could straddle a g
 """
 from __future__ import annotations
 
-from mantis._engine import HexgBuffer
-
 import dataclasses
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,31 +15,12 @@ from typing import Any
 from mantis.config.loader import load_config
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
 from mantis.config.resolve.drain import resolve_drain_caps
+from _graph_drive import GRAPH_FULL_CONFIG, filled_hexg
 from _monitor_config import monitor_config
 from mantis.run import _step_coordinator_config
 from mantis.train.coordinator.config import StepCoordinatorConfig
 from mantis.train.coordinator.step import StepCoordinator
 from mantis.train.lifecycle.signals import ShutdownState
-
-def _filled_hexg(n_records: int = 8, capacity: int = 64) -> HexgBuffer:
-    """Build a real graph ring the coordinator stubs sample through."""
-    hb = HexgBuffer(capacity, "gnn_axis_v1", 128)
-    for i in range(n_records):
-        stones = [(0, 0, 1), (1, 0, -1), (0, 1, 1)][: 2 + (i % 2)]
-        hb.push_graph_position(stones, [(2, 0, 0.6), (1, 1, 0.4)], 1, 30, 2 + i, True,
-                               1.0 if i % 2 == 0 else -1.0, True, 10 + i)
-    return hb
-
-
-
-#: What a `StepCoordinator` reads on the graph route: the dispatch identity plus the sections
-#: its resolvers read. The caps are the NON-BINDING pair — nothing here exercises a split.
-_GRAPH_FULL_CONFIG: dict = {
-    "identity": {"encoding": "gnn_axis_v1", "representation": "graph"},
-    "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000},
-              "fast_policy_weight": 0.0},
-    "selfplay": {"n_workers": 1},
-}
 
 
 # Constants derived from the minted config — no hand-restated knobs.
@@ -133,7 +112,7 @@ class _FakeBuffer:
     def __init__(self) -> None:
         self.size = 1000
         self.capacity = 100_000
-        self._hexg = _filled_hexg()
+        self._hexg = filled_hexg()
 
     def resize(self, n: int) -> None:
         self.capacity = n
@@ -192,7 +171,7 @@ def _make_coordinator(*, pool=None, config=None):
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None),
         shutdown=ShutdownState(), eval_model=object(),
         config=config or _make_config(),
-        full_config=_GRAPH_FULL_CONFIG,
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, monitor_cfg=monitor_config(),
     )
     return SimpleNamespace(coord=coord, pool=pool, trainer=trainer, buffer=buffer, sink=sink)

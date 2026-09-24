@@ -23,6 +23,7 @@ from mantis.util.hashing import sha256_file
 from mantis.train.lifecycle.signals import ShutdownState
 from _coordinator_pool import CoordinatorPoolStub
 from _drivable import DrivableTrainerStub
+from _graph_drive import GRAPH_FULL_CONFIG
 
 _REPO = Path(__file__).resolve().parents[2]
 _CONFIG = _REPO / "configs" / "dev_example.yaml"
@@ -148,9 +149,7 @@ def test_the_coordinator_reads_the_slice_at_its_own_cadence_and_reports_the_gap(
         eval_pipeline=None, subsystems=SimpleNamespace(gpu_monitor=None),
         anchor_state=SimpleNamespace(best_model=None, best_model_step=None), shutdown=ShutdownState(),
         eval_model=object(), config=config,
-        full_config={"identity": {"encoding": _ENC, "representation": "graph"},
-                     "train": {"microbatch_caps": {"max_edges": 100_000_000, "max_nodes": 4_000_000}, "fast_policy_weight": 0.0},
-                     "selfplay": {"n_workers": 1}},
+        full_config=GRAPH_FULL_CONFIG,
         sink=sink, heartbeat=None, monitor_cfg=monitor_config(), heldout=opened)
     for _ in range(4):
         coord.pool.games_completed += 1
