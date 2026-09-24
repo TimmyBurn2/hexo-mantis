@@ -1,0 +1,215 @@
+{
+ "allocator_posture": "expandable_segments",
+ "deploy": {
+  "search": {
+   "kind": "puct"
+  }
+ },
+ "eval": {
+  "concurrency": 8,
+  "gate": {
+   "bootstrap_resamples": 1000,
+   "confirm_games": 128,
+   "deploy_sims": 256,
+   "min_distinct_per_pair": 10,
+   "opening_book": "book_v1_s20260625_p4",
+   "promotion_winrate": 0.55,
+   "screen_confirm_lo": 0.5,
+   "screen_games": 80,
+   "seed_base": 20260625,
+   "sequential": {
+    "alpha": 0.05,
+    "at_max_pairs": "promote",
+    "beta": 0.1,
+    "check_every_pairs": 8,
+    "max_pairs": 104,
+    "min_pairs": 16,
+    "mu0": 0.42,
+    "mu1": 0.52
+   },
+   "stride": 1
+  },
+  "max_plies": 256,
+  "ply_cap_adjudication": null,
+  "random_floor_games": 20,
+  "random_model_sims": 96,
+  "round_timeout_sec": 14400.0,
+  "strength_floor": {
+   "min_decisive_rate": 0.25,
+   "min_winrate": 0.0,
+   "probe_games": 4
+  },
+  "worker_device": "cuda",
+  "worker_kill_grace_sec": 10.0
+ },
+ "eval_enabled": true,
+ "identity": {
+  "arch_kind": "GnnArchV2SoftPolicy",
+  "encoding": "gnn_axis_r8",
+  "representation": "graph",
+  "warm_start": {
+   "checkpoint": "checkpoints/run8/run8_00045000_3bdedf76.ckpt",
+   "net_hash": "3aef78834b042d333400f12f6afb15e41cb716712f84386297bfbb1dd4126f42",
+   "reinit": [
+    "aux_policy_head"
+   ]
+  }
+ },
+ "inference": {
+  "compile_trunk": true,
+  "edge_geometry_check": "checker_thread",
+  "fused_graph_caps": {
+   "max_fused_edges": 1373143,
+   "max_fused_nodes": 56645
+  },
+  "inference_batch_size": 64,
+  "inference_max_wait_ms": 10
+ },
+ "model": {
+  "aux_soft_policy": {
+   "target_temperature": 4.0,
+   "weight": 4.0
+  },
+  "gnn": {
+   "hidden": 128,
+   "num_layers": 4
+  }
+ },
+ "monitor": {
+  "actor_lag_abort_enabled": true,
+  "actor_lag_threshold_steps": 100,
+  "alert_entropy_min": 1.0,
+  "alert_grad_norm_max": 10.0,
+  "alert_loss_increase_window": 3,
+  "axis_alert": 0.5,
+  "axis_warn": 0.45,
+  "collapse_threshold_nats": 1.5,
+  "disk_guard": {
+   "fail_gb": 5.0,
+   "interval_sec": 60.0,
+   "warn_gb": 10.0
+  },
+  "drain": {
+   "eval_final_drain_hard_cap_sec": 14400.0,
+   "eval_final_drain_safety_factor": 3.0,
+   "final_eval_drain_timeout_sec": 900.0,
+   "terminal_eval_hard_cap_sec": 14400.0
+  },
+  "gate_interval": 1000,
+  "heartbeat_close_out_deadline_sec": 14400.0,
+  "heartbeat_deadline_eval_round_sec": 1800.0,
+  "heartbeat_deadline_inference_dispatch_sec": 1800.0,
+  "heartbeat_deadline_selfplay_drain_sec": 1800.0,
+  "heartbeat_deadline_train_step_sec": 1800.0,
+  "heartbeat_file_interval_sec": 15.0,
+  "heartbeat_fire_effect_timeout_sec": 30.0,
+  "heartbeat_poll_interval_sec": 5.0,
+  "supervisor_kill_grace_sec": 120.0,
+  "supervisor_max_relaunches": 5,
+  "supervisor_poll_interval_sec": 30.0,
+  "supervisor_stale_after_sec": 900.0
+ },
+ "run_id": "run10",
+ "schema_version": 1,
+ "seed": 20260914,
+ "selfplay": {
+  "c_scale": 1.0,
+  "c_visit": 50.0,
+  "gumbel_explore_moves": 10,
+  "gumbel_m": 16,
+  "leaf_batch_size": 8,
+  "log_investigation_metrics": true,
+  "max_game_moves": 256,
+  "mcts": {
+   "c_puct": 1.5,
+   "dirichlet_alpha": 0.3,
+   "dirichlet_enabled": false,
+   "dirichlet_epsilon": 0.25,
+   "fpu_reduction": 0.25,
+   "n_simulations": 320,
+   "quiescence_blend_2": 0.3,
+   "quiescence_enabled": true
+  },
+  "n_workers": 32,
+  "playout_cap": {
+   "fast_prob": 0.0,
+   "fast_sims": 50,
+   "full_search_prob": 0.25,
+   "n_sims_full": 320,
+   "n_sims_quick": 64,
+   "standard_sims": 0,
+   "temp_min": 0.5,
+   "temperature_threshold_compound_moves": 0
+  },
+  "q_rescale": false,
+  "random_opening_plies": 0,
+  "results_queue_cap": 10000,
+  "search": {
+   "kind": "gumbel"
+  },
+  "search_stats_every": 8
+ },
+ "train": {
+  "actor_sync_cadence_steps": 2,
+  "augment": true,
+  "batch_size": 256,
+  "checkpoint_interval": 3000,
+  "device": "cuda",
+  "draw_rate_abort": {
+   "N_pool_min": 50,
+   "consec": 3,
+   "min_step": 25000,
+   "threshold": 0.25
+  },
+  "draw_reward": -0.5,
+  "ema": {
+   "decay": 0.999,
+   "enabled": false,
+   "update_every": 10
+  },
+  "eta_min": 0.0001,
+  "eval_interval": 36000,
+  "fast_policy_weight": 0.0,
+  "grad_clip": 1.0,
+  "hard_gn_min_steps": 3,
+  "hard_gn_threshold": 1000000000.0,
+  "heldout_gap": {
+   "batches": 12,
+   "interval": 3000,
+   "ring": "checkpoints/run8/run8_00045000_3bdedf76.ckpt.ring.bin",
+   "ring_sha256": "2a3c4e57815b962a81773e170903153015f42f31d445ecb85563096e6468eba3",
+   "seed": 20260921
+  },
+  "log_interval": 1000,
+  "lr": 0.001,
+  "lr_schedule": "cosine",
+  "max_train_burst": 8,
+  "max_train_steps": 1000000,
+  "microbatch_caps": {
+   "max_edges": 4500000,
+   "max_nodes": 170000
+  },
+  "min_buf_size": 4096,
+  "ply_cap_abort": {
+   "min_step": 3000,
+   "rate": 0.5,
+   "window_games": 600
+  },
+  "ply_cap_value": -0.5,
+  "policy_loss_trough_abort": null,
+  "policy_loss_weight_schedule": {
+   "warmup_steps": 0
+  },
+  "policy_target": "completed_improved_policy",
+  "recency_weight": 0.0,
+  "replay_capacity": 500000,
+  "replay_capacity_schedule": [],
+  "scheduler_t_max": 108000,
+  "selfplay_stall_timeout_sec": 1800.0,
+  "terminal_eval_enabled": true,
+  "total_steps": 1000000,
+  "training_steps_per_game": 2.4,
+  "value_target": "pure_outcome_z",
+  "weight_decay": 0.0001
+ }
+}
