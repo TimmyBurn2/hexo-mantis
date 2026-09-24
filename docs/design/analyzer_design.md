@@ -1,7 +1,8 @@
 # ANALYZER — an interactive position analyzer over the engine: analysis, design, plan (2026-09-19)
 
-Status: **proposal for a ruling** (ANALYZER-1); the code is on branch `worktree-analyzer` awaiting the ruling number and the ff. No producer, no
-gate moved. Read together with `docs/design/repo_design.md` §1 and its R333(d) / R352(g)
+Status: **LANDED** (ANALYZER-1, R363(d), commit `02f64442`); `tools/analyzer/` is tracked and
+`make analyzer` dispatches it. No producer, no gate moved. Read together with
+`docs/design/repo_design.md` §1 and its R333(d) / R352(g)
 amendments, `docs/design/observatory_research.md` §"Takes and rejects" and
 `docs/design/observatory_design.md` §2.4–2.7 (the display conventions this reuses),
 `docs/governance/CARDS.md` (DASH-2) and R344(d). Revised 2026-09-19 after an independent
