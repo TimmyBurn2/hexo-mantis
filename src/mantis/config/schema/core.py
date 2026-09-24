@@ -317,6 +317,21 @@ class EvalConfig(StrictModel):
     gate: GateConfig
 
 
+def derived_visit_capacity(config: "RunConfig") -> int:
+    """The HEXG ring's visit-slot capacity from a config's sims regime. Raises: ValueError."""
+    from mantis._engine import derived_hexg_visit_capacity
+
+    sp = config.selfplay
+    pc = sp.playout_cap
+    return int(derived_hexg_visit_capacity(
+        n_simulations=sp.mcts.n_simulations, standard_sims=pc.standard_sims,
+        fast_prob=pc.fast_prob, fast_sims=pc.fast_sims,
+        full_search_prob=pc.full_search_prob, n_sims_quick=pc.n_sims_quick,
+        n_sims_full=pc.n_sims_full, leaf_batch_size=sp.leaf_batch_size,
+        gumbel_m=sp.gumbel_m, search_kind=sp.search.kind,
+    ))
+
+
 class RunConfig(StrictModel):
     """Top-level run config: explicit, complete, schema_version-pinned. There is deliberately NO
     ``legal_move_radius``/``legal_move_radius_schedule`` field anywhere on this tree — the encoding
@@ -582,23 +597,8 @@ class RunConfig(StrictModel):
         """
         if self.identity.representation != "graph":
             return self
-        from mantis._engine import derived_hexg_visit_capacity
-
-        sp = self.selfplay
-        pc = sp.playout_cap
         try:
-            derived_hexg_visit_capacity(
-                n_simulations=sp.mcts.n_simulations,
-                standard_sims=pc.standard_sims,
-                fast_prob=pc.fast_prob,
-                fast_sims=pc.fast_sims,
-                full_search_prob=pc.full_search_prob,
-                n_sims_quick=pc.n_sims_quick,
-                n_sims_full=pc.n_sims_full,
-                leaf_batch_size=sp.leaf_batch_size,
-                gumbel_m=sp.gumbel_m,
-                search_kind=self.selfplay.search.kind,
-            )
+            derived_visit_capacity(self)
         except ValueError as exc:
             raise ValueError(
                 "the selfplay sims regime cannot be honored by the HEXG graph record "

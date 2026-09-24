@@ -28,7 +28,7 @@ from typing import Any, NamedTuple
 
 import torch
 
-from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
+from mantis._engine import HexgBuffer
 from mantis.config.armed_aborts import (
     DISK_GUARD_LIVENESS_PROBE,
     DISK_SPACE_ABORT_RULE,
@@ -70,6 +70,7 @@ from mantis.config.resolve.policy_loss_trough import (
 from mantis.config.resolve.run_length import resolve_max_train_steps
 from mantis.config.resolve.search import resolve_deploy_search_kind
 from mantis.config.schema import RunConfig
+from mantis.config.schema.core import derived_visit_capacity
 from mantis.eval.errors import EvalBrokenReason
 from mantis.eval.pipeline import DrainCaps, build_eval_pipeline
 from mantis.eval.promote import DeployTagHooks
@@ -238,24 +239,6 @@ def _stop_pool_if_start_attempted(pool: Any, *, start_attempted: bool) -> Callab
     return _stop
 
 
-def _derived_visit_capacity(config: Any) -> int:
-    """The ring's visit-slot geometry from the config's sims regime, through the Rust authority the schema validator already ran; the held-out slice is built at the same geometry."""
-    sp = config.selfplay
-    pc = sp.playout_cap
-    return int(derived_hexg_visit_capacity(
-        n_simulations=sp.mcts.n_simulations,
-        standard_sims=pc.standard_sims,
-        fast_prob=pc.fast_prob,
-        fast_sims=pc.fast_sims,
-        full_search_prob=pc.full_search_prob,
-        n_sims_quick=pc.n_sims_quick,
-        n_sims_full=pc.n_sims_full,
-        leaf_batch_size=sp.leaf_batch_size,
-        gumbel_m=sp.gumbel_m,
-        search_kind=config.selfplay.search.kind,
-    ))
-
-
 def _select_buffer(config: Any, capacity: int) -> Any:
     """Select the replay buffer off `config.identity.representation`; an unknown or absent
     representation RAISES (LAW-11) — never sniffed off a live module, never defaulted.
@@ -272,7 +255,7 @@ def _select_buffer(config: Any, capacity: int) -> Any:
     """
     representation = config.identity.representation
     if representation == "graph":
-        buffer = HexgBuffer(capacity, config.identity.encoding, _derived_visit_capacity(config))
+        buffer = HexgBuffer(capacity, config.identity.encoding, derived_visit_capacity(config))
         buffer.seed_sampler(config.seed)
         return buffer
     raise RepresentationRouteError(
@@ -817,7 +800,7 @@ def compose_run(
             if heldout_spec is not None:
                 heldout = HeldoutSlice.open(
                     heldout_spec, encoding=config.identity.encoding,
-                    visit_capacity=_derived_visit_capacity(config),
+                    visit_capacity=derived_visit_capacity(config),
                     capacity=int(resolve_coordinator_knobs(config.train).capacity))
                 _LOG.info("heldout_slice_opened ring=%s rows=%s batches=%s interval=%s",
                           heldout.ring_path, heldout.rows, heldout_spec.batches, heldout_spec.interval)

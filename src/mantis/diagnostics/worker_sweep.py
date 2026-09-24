@@ -55,6 +55,7 @@ from mantis.config.resolve.allocator_posture import (
     read_live_allocator_conf,
 )
 from mantis.config.resolve.coordinator import resolve_coordinator_knobs
+from mantis.config.schema.core import derived_visit_capacity
 from mantis.diagnostics.eval_child_memory import (
     GROWING,
     PLATEAU,
@@ -646,18 +647,9 @@ def _select_sweep_buffer(config: Any, spec: Any, capacity: int) -> Any:
     # run-fatal route's exception on a path no run takes.
     kind = BufferKind.from_spec(spec)
     if kind is BufferKind.GRAPH:
-        from mantis._engine import HexgBuffer, derived_hexg_visit_capacity
+        from mantis._engine import HexgBuffer
 
-        sp = config.selfplay
-        pc = sp.playout_cap
-        visit_capacity = derived_hexg_visit_capacity(
-            n_simulations=sp.mcts.n_simulations, standard_sims=pc.standard_sims,
-            fast_prob=pc.fast_prob, fast_sims=pc.fast_sims,
-            full_search_prob=pc.full_search_prob, n_sims_quick=pc.n_sims_quick,
-            n_sims_full=pc.n_sims_full, leaf_batch_size=sp.leaf_batch_size,
-            gumbel_m=sp.gumbel_m, search_kind=config.selfplay.search.kind,
-        )
-        return HexgBuffer(capacity, config.identity.encoding, visit_capacity)
+        return HexgBuffer(capacity, config.identity.encoding, derived_visit_capacity(config))
 
 
 def build_sweep_net(config: Any, arch: Any, device: torch.device) -> Any:
