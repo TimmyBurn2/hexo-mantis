@@ -105,7 +105,7 @@ def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
     be read, registered and consumed by a line that does nothing."""
     from mantis.encoding import lookup
     from mantis.model import build_net, select_arch
-    from mantis.train.ema import build_ema_model
+    from mantis.train.ema import EmaModel
 
     arch = select_arch(lookup("gnn_axis_v1"), {}, arch_kind="GnnArch")
     net = build_net(arch)
@@ -113,7 +113,7 @@ def test_the_trainer_builds_an_ema_model_only_when_the_config_arms_it() -> None:
         {"train": {"ema": {"enabled": True, "decay": 0.5, "update_every": 1}}},
     )
     assert enabled
-    ema = build_ema_model(net, decay=decay)
+    ema = EmaModel(net, decay=decay)
     assert ema.decay == pytest.approx(0.5)
     seeded = {n: t.clone() for n, t in ema.state_dict().items()}
     with torch.no_grad():

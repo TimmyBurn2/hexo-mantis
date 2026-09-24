@@ -112,7 +112,7 @@ CONSUMER_REGISTRY: dict[str, str] = {
     "train.ply_cap_abort.window_games": "step.py::_run_ply_cap_gate -> pool.ply_cap_window_counts(window_games): the last N completed games the cap fraction is read over; below N games the gate makes no observation",
     "train.ply_cap_abort.min_step": "check_ply_cap_attractor's step floor (gates the FIRE, never the observation); the manifest's TRAIN_STEP_FLOOR cadence reads it",
     "train.policy_loss_weight_schedule.warmup_steps": "TrainHParams.from_config -> Trainer.train_step_from_graph_batch via policy_loss_weight_at (the VALUE WARM-UP, R350(b)(iii); 0 is OFF; the BC route refuses a non-zero value)",
-    "train.ema.decay": "resolve_ema_config -> build_ema_model(decay=...) -> EmaModel mixing rate",
+    "train.ema.decay": "resolve_ema_config -> EmaModel(decay=...) mixing rate",
     "train.ema.update_every": "resolve_ema_config -> Trainer.ema_update_every (the optimizer-step stride the EMA shadow updates on)",
     "train.max_train_steps":
         "resolve_max_train_steps -> compose_run -> StepCoordinatorConfig.stop_step",

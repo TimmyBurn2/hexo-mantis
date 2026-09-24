@@ -15,8 +15,6 @@ from typing import Any
 
 import torch
 
-DEFAULT_DECAY = 0.999
-
 #: The members `train.ema` must carry. Read by key; absent is an error.
 _EMA_MEMBERS: tuple[str, ...] = ("enabled", "decay", "update_every")
 
@@ -38,7 +36,7 @@ class EmaModel:
     verbatim so the EMA state stays `load_state_dict`-compatible.
     """
 
-    def __init__(self, model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> None:
+    def __init__(self, model: torch.nn.Module, decay: float) -> None:
         if not (0.0 <= decay < 1.0):
             raise ValueError(f"EMA decay must be in [0, 1); got {decay}")
         self.decay: float = float(decay)
@@ -95,11 +93,6 @@ class _EmaModuleView:
         for t in self._owner._shadow.values():
             if t.dtype.is_floating_point:
                 yield t
-
-
-def build_ema_model(model: torch.nn.Module, decay: float = DEFAULT_DECAY) -> EmaModel:
-    """Construct an EMA wrapper (fresh shadow storage) around `model`."""
-    return EmaModel(model, decay=decay)
 
 
 def resolve_ema_config(config: Mapping[str, Any]) -> tuple[bool, float, int]:

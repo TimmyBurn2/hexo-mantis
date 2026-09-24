@@ -222,12 +222,12 @@ class Trainer:
         )
         self.scheduler = self._build_scheduler()
 
-        from mantis.train.ema import build_ema_model, resolve_ema_config
+        from mantis.train.ema import EmaModel, resolve_ema_config
         # The block is REQUIRED and read as given: a `{}` fallback made an absent block
         # indistinguishable from a declared OFF, which is how a lever stays silently disabled.
         _ema_enabled, _ema_decay, self.ema_update_every = resolve_ema_config(config)
         self.ema_model = (
-            build_ema_model(getattr(self.model, "_orig_mod", self.model), decay=_ema_decay)
+            EmaModel(getattr(self.model, "_orig_mod", self.model), decay=_ema_decay)
             if _ema_enabled else None
         )
 
