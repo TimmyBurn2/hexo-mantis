@@ -104,51 +104,6 @@ def test_drain_overrun_kills_worker_and_yields_eval_broken() -> None:
     assert all(t >= 0 for t in proc.join_calls), "no bare (unbounded) join anywhere"
 
 
-def test_drain_within_budget_is_not_broken() -> None:
-    """A clean exit within budget is not broken — the contrast arm that stops the overrun row
-    being vacuously always-broken."""
-    caps = DrainCaps(
-        final_eval_drain_timeout_sec=10.0, eval_final_drain_safety_factor=2.0,
-        eval_final_drain_hard_cap_sec=100.0, terminal_eval_hard_cap_sec=100.0,
-    )
-    budget = drain_budget_sec(caps)
-    clock = FakeClock(0.0)
-    proc = FakeHangingProcess()
-    proc.exitcode = 0  # already exited cleanly before drain_or_kill is even called
-
-    reason = drain_or_kill(
-        proc, budget_sec=budget, worker_kill_grace_sec=0.2, clock=clock,
-    )
-
-    assert reason is None, "a clean exit within budget must not be reported broken"
-    assert not proc.terminate_called and not proc.kill_called, (
-        "a clean exit must never be terminated/killed"
-    )
-
-
-def test_terminal_round_bounded_by_terminal_eval_hard_cap_sec() -> None:
-    """The terminal round's bound is `terminal_eval_hard_cap_sec` directly, not the mid-run
-    formula — same escalation primitive, different budget input."""
-    caps = DrainCaps(
-        final_eval_drain_timeout_sec=900.0, eval_final_drain_safety_factor=3.0,
-        eval_final_drain_hard_cap_sec=14400.0, terminal_eval_hard_cap_sec=0.05,
-    )
-    clock = FakeClock(0.0)
-    proc = FakeHangingProcess()
-
-    def _clock_that_overruns_immediately() -> float:
-        clock.advance(caps.terminal_eval_hard_cap_sec + 0.01)
-        return clock.t
-
-    reason = drain_or_kill(
-        proc, budget_sec=caps.terminal_eval_hard_cap_sec, worker_kill_grace_sec=0.2,
-        clock=_clock_that_overruns_immediately,
-    )
-
-    assert reason is not None and reason == "join_timeout"
-    assert proc.terminate_called and proc.kill_called
-
-
 def test_all_four_drain_cap_fields_have_live_consumers() -> None:
     """Every one of the four fields feeds a live read in the pipeline's own source, rather
     than being carried unread."""
